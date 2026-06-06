@@ -5,6 +5,7 @@ import { DragDropEngine } from './dragdrop.js';
 import { ToolsManager } from './toolsManager.js';
 import { Calendar } from './calendar.js';
 import { SidePanel } from './hamburger.js';
+import { applyBackupToStorage } from './backup.js';
 import { DEFAULT_CATEGORIES, normalizeCategories } from './categories.js';
 
 function countHiddenFromBoard(items) {
@@ -174,16 +175,21 @@ class Application {
             reader.onload = async (event) => {
                 try {
                     const parsedBackup = JSON.parse(event.target.result);
-                    if (parsedBackup.matrix_database) {
-                        localStorage.setItem('matrix_database', JSON.stringify(parsedBackup.matrix_database));
+                    if (!parsedBackup.matrix_database && !parsedBackup.matrix_custom_categories) {
+                        alert('Import Aborted: Not a Magic Lists backup file (missing matrix_database).');
+                        return;
                     }
-                    if (parsedBackup.matrix_custom_categories) {
-                        localStorage.setItem('matrix_custom_categories', JSON.stringify(parsedBackup.matrix_custom_categories));
-                    }
-                    alert("System Restore Successful.");
+                    applyBackupToStorage(parsedBackup);
+                    const itemCount = parsedBackup.matrix_database?.items?.length ?? 0;
+                    const token = parsedBackup.matrix_database?.auth?.admin_token;
+                    const tokenNote = token
+                        ? ' Admin session restored from backup.'
+                        : ' Log in with your admin token to see private notes.';
+                    alert(`Restore successful (${itemCount} items).${tokenNote}`);
                     window.location.reload();
                 } catch (err) {
-                    alert("Import Aborted: Invalid JSON file.");
+                    console.error('[Import]', err);
+                    alert('Import Aborted: Invalid or unsupported backup file.');
                 }
             };
             reader.readAsText(file);
