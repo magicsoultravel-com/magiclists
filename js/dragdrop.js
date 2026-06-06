@@ -183,13 +183,24 @@ export const DragDropEngine = {
             h: Math.max(FREEFORM_MIN_H, h)
         });
 
+        const isScrollbarGrip = (el, clientX) => {
+            if (!el || el.scrollHeight <= el.clientHeight) return false;
+            const scrollbarWidth = el.offsetWidth - el.clientWidth;
+            if (scrollbarWidth <= 0) return false;
+            const rect = el.getBoundingClientRect();
+            return clientX >= rect.right - scrollbarWidth - 2;
+        };
+
         const onDragMove = (e) => {
             if (!dragActive) return;
             const dx = e.clientX - dragActive.startX;
             const dy = e.clientY - dragActive.startY;
-            if (!dragActive.moved && (Math.abs(dx) > dragThreshold || Math.abs(dy) > dragThreshold)) {
+            if (!dragActive.moved) {
+                if (Math.abs(dx) <= dragThreshold && Math.abs(dy) <= dragThreshold) return;
                 dragActive.moved = true;
+                dragActive.card.classList.add('is-freeform-dragging');
             }
+            e.preventDefault();
             const x = Math.max(0, dragActive.origX + dx);
             const y = Math.max(0, dragActive.origY + dy);
             dragActive.card.style.left = `${x}px`;
@@ -310,7 +321,9 @@ export const DragDropEngine = {
                 const onDragZone = e.target.closest('.card-drag-zone');
                 if (!onDragGutter && !onDragZone) return;
 
-                e.preventDefault();
+                const scrollHost = e.target.closest('.card-body');
+                if (scrollHost && isScrollbarGrip(scrollHost, e.clientX)) return;
+
                 e.stopPropagation();
                 dragActive = {
                     card,
@@ -320,7 +333,6 @@ export const DragDropEngine = {
                     origY: parseFloat(card.style.top) || 0,
                     moved: false
                 };
-                card.classList.add('is-freeform-dragging');
                 document.addEventListener('mousemove', onDragMove);
                 document.addEventListener('mouseup', onDragUp);
             });

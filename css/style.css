@@ -1756,32 +1756,8 @@ textarea.form-input {
     cursor: text;
 }
 
-#app-canvas.view-freeform .card-body.card-drag-zone .expanded-checklist,
-#app-canvas.view-freeform .card-body.card-drag-zone .expanded-links {
-    cursor: grab;
-}
-
-#app-canvas.view-freeform .card-body.card-drag-zone .step-row--display {
-    cursor: grab;
-}
-
 #app-canvas.view-freeform .card-body.card-drag-zone .step-text.card-inline-edit {
     cursor: text;
-}
-
-/* Expanded body: clicks on gaps pass through to .card-body for dragging */
-#app-canvas.view-freeform .mini-card.expanded .card-body > * {
-    pointer-events: none;
-}
-
-#app-canvas.view-freeform .mini-card.expanded .card-body .card-inline-edit,
-#app-canvas.view-freeform .mini-card.expanded .card-body .step-check,
-#app-canvas.view-freeform .mini-card.expanded .card-body .step-delete-btn,
-#app-canvas.view-freeform .mini-card.expanded .card-body .step-collapse-btn,
-#app-canvas.view-freeform .mini-card.expanded .card-body .step-nest-controls,
-#app-canvas.view-freeform .mini-card.expanded .card-body .step-nest-controls *,
-#app-canvas.view-freeform .mini-card.expanded .card-body a.quicklink-anchor-row {
-    pointer-events: auto;
 }
 
 #app-canvas.view-freeform .mini-card.expanded .step-row--display .step-text {
@@ -1859,6 +1835,7 @@ textarea.form-input {
 
 #app-canvas.view-freeform .mini-card.is-freeform-dragging {
     cursor: grabbing;
+    user-select: none;
 }
 
 #app-canvas.view-freeform .ff-chrome {
@@ -1882,9 +1859,21 @@ textarea.form-input {
     width: 12px;
 }
 
+#app-canvas.view-freeform .ff-drag-gutter--top {
+    left: 12px;
+    right: 12px;
+    top: 0;
+    height: 10px;
+}
+
 #app-canvas.view-freeform .mini-card:hover .ff-drag-gutter--edge,
 #app-canvas.view-freeform .mini-card.is-freeform-dragging .ff-drag-gutter--edge {
     background: linear-gradient(to right, rgba(255, 255, 255, 0.1), transparent);
+}
+
+#app-canvas.view-freeform .mini-card:hover .ff-drag-gutter--top,
+#app-canvas.view-freeform .mini-card.is-freeform-dragging .ff-drag-gutter--top {
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.1), transparent);
 }
 
 #app-canvas.view-freeform .ff-resize {

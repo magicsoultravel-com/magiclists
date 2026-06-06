@@ -421,6 +421,12 @@ export const UI = {
             gutter.title = 'Drag to move';
             chrome.insertBefore(gutter, chrome.firstChild);
         }
+        if (!chrome.querySelector('.ff-drag-gutter--top')) {
+            const topGutter = document.createElement('span');
+            topGutter.className = 'ff-drag-gutter ff-drag-gutter--top';
+            topGutter.title = 'Drag to move';
+            chrome.appendChild(topGutter);
+        }
         if (!chrome.querySelector('.ff-resize-se')) {
             chrome.insertAdjacentHTML('beforeend', `
                 <span class="ff-resize ff-resize-n" data-axis="n" title="Resize"></span>
@@ -714,6 +720,7 @@ export const UI = {
         const visibilityBadgeColor = item.visibility === 'public' ? '#10b981' : '#f59e0b';
         
         const typeBadgeHtml = this.buildChecklistBadgeHtml(item, isQuickLinkType);
+        const bodyDragClass = card.dataset.freeform === '1' ? '' : ' card-drag-zone';
 
         card.innerHTML = `
             <div class="card-header card-drag-zone">
@@ -723,7 +730,7 @@ export const UI = {
                     canDelete: canEdit && card.classList.contains('expanded')
                 })}
             </div>
-            <div class="card-body card-drag-zone">
+            <div class="card-body${bodyDragClass}">
                 ${bodyHtml}
                 ${checklistHtml}
                 ${quickLinksHtml}
