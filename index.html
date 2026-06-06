@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Matrix Workspace Engine</title>
+    <link rel="stylesheet" href="./css/style.css?v=dev_1.8.5">
+    <link rel="stylesheet" href="./css/tools.css?v=dev_1.0.0">
+    <link rel="stylesheet" href="./css/calendar.css?v=dev_1.1.0">
+</head>
+<body>
+
+    <div id="workspace-shell" class="workspace-shell">
+        <aside id="side-panel" class="side-panel" aria-label="Side panel">
+            <div class="side-panel-toolbar">
+                <button type="button" id="nav-panel-toggle" class="btn btn-icon" title="Show/hide panel" aria-label="Toggle side panel" aria-expanded="true">☰</button>
+            </div>
+            <div class="nav-drawer-section nav-drawer-section--compact">
+                <div class="collapsable-header list-row--header" id="quick-actions-header">
+                    <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Quick actions</span>
+                </div>
+                <div class="collapsable-section" id="quick-actions-section">
+                    <div id="quick-actions-zone" class="quick-actions-grid"></div>
+                </div>
+            </div>
+
+            <div class="nav-drawer-section nav-drawer-section--compact">
+                <div class="collapsable-header list-row--header" id="view-section-header">
+                    <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>View</span>
+                </div>
+                <div class="collapsable-section" id="view-section">
+                    <div id="filter-controls"></div>
+                </div>
+            </div>
+
+            <div id="sidebar-stats-section" class="nav-drawer-section nav-drawer-section--compact">
+                <div class="collapsable-header list-row--header" id="status-panel-header">
+                    <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Status</span>
+                </div>
+                <div class="collapsable-section" id="status-panel">
+                    <div class="sidebar-status-item">
+                        <div class="collapsable-header list-row--header" id="objects-status-header">
+                            <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Objects</span>
+                            <span id="objects-count-badge" class="status-badge">0</span>
+                        </div>
+                        <div id="objects-status-detail" class="collapsable-section collapsed sidebar-status-detail">
+                            <div class="list-row--muted">
+                                <span>Visible</span>
+                                <span id="objects-visible-count">0</span>
+                            </div>
+                            <div class="list-row--muted">
+                                <span>Hidden</span>
+                                <span id="objects-hidden-count">0</span>
+                            </div>
+                            <div id="objects-hidden-list" class="hidden-items-list"></div>
+                        </div>
+                    </div>
+                    <div class="sidebar-status-item">
+                        <div class="collapsable-header list-row--header" id="categories-status-header">
+                            <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Categories</span>
+                            <span id="categories-count-badge" class="status-badge">0</span>
+                        </div>
+                        <div id="categories-status-detail" class="collapsable-section collapsed sidebar-status-detail">
+                            <div class="list-row--muted">
+                                <span>Active</span>
+                                <span id="categories-active-count">0</span>
+                            </div>
+                            <div class="list-row--muted">
+                                <span>Hidden</span>
+                                <span id="categories-hidden-count">0</span>
+                            </div>
+                            <div id="categories-hidden-list" class="hidden-items-list"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="nav-drawer-section nav-drawer-section--compact">
+                <div class="collapsable-header list-row--header" id="tools-section-header">
+                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Tools</span>
+                </div>
+                <div class="collapsable-section collapsed" id="tools-section">
+                    <div id="toolbox-dropdown" class="toolbox-list"></div>
+                </div>
+            </div>
+
+            <div id="auth-zone" class="nav-drawer-section"></div>
+            <input type="file" id="system-import-file-picker" accept=".json" class="is-hidden">
+        </aside>
+
+        <div id="workspace-main" class="workspace-main">
+            <header id="control-bar">
+                <div id="digital-clock" class="logo-zone logo-zone--clock">
+                    <span id="clock-date" class="clock-chip clock-chip--date">—</span>
+                    <span id="clock-time" class="clock-chip clock-chip--time">—</span>
+                    <button type="button" id="btn-freeform-reset" class="btn btn--compact btn--icon is-hidden" title="Reset freeform layout" aria-label="Reset freeform layout"></button>
+                </div>
+            </header>
+
+            <main id="app-canvas">
+                <div class="system-status-msg">Loading workspace…</div>
+            </main>
+        </div>
+    </div>
+
+    <button type="button" id="fab-create" class="fab-create is-hidden" title="New note" aria-label="New note">+</button>
+
+    <footer id="system-footer"></footer>
+
+    <div id="editor-overlay" class="overlay is-hidden">
+        <div class="modal">
+            <div class="toolbar editor-toolbar">
+                <button type="button" id="modal-delete-btn" class="card-act card-act--danger is-hidden" title="Delete" aria-label="Delete"></button>
+                <span class="editor-toolbar-spacer" aria-hidden="true"></span>
+                <button type="button" id="modal-calendar-toggle" class="card-act card-act--cal" title="Show on calendar" aria-label="Toggle calendar"></button>
+                <button type="button" id="modal-save-btn" class="card-act card-act--save" title="Save" aria-label="Save"></button>
+                <button type="button" id="modal-close-btn" class="card-act card-act--close" title="Close" aria-label="Close"></button>
+            </div>
+            <div id="modal-form-mount" class="modal-body"></div>
+        </div>
+    </div>
+
+    <div id="tools-overlay" class="overlay overlay--tools is-hidden">
+        <div class="modal modal--tools">
+            <div class="toolbar toolbar--end tools-toolbar">
+                <button type="button" id="tools-close-btn" class="card-act card-act--close" title="Close" aria-label="Close"></button>
+            </div>
+            <div id="tools-form-mount" class="modal-body"></div>
+        </div>
+    </div>
+
+    <script type="module" src="./js/app.js?v=dev_1.7.8"></script>
+</body>
+</html>

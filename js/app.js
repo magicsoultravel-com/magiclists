@@ -1,0 +1,362 @@
+﻿import { API } from './api.js';
+import { UI, ACTION_ICONS } from './ui.js';
+import { Editor } from './editor.js';
+import { DragDropEngine } from './dragdrop.js';
+import { ToolsManager } from './toolsManager.js';
+import { Calendar } from './calendar.js';
+import { SidePanel } from './hamburger.js';
+import { DEFAULT_CATEGORIES, normalizeCategories } from './categories.js';
+
+function countHiddenFromBoard(items) {
+    return items.filter(item => UI.isHiddenFromBoard(item)).length;
+}
+
+const AppState = {
+    user: { isLoggedIn: false, token: null },
+    items: [],
+    categories: [...DEFAULT_CATEGORIES],
+    hiddenCategories: JSON.parse(localStorage.getItem('matrix_hidden_categories') || '[]'),
+    expandedCards: JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}'),
+    viewSettings: { 
+        sortBy: localStorage.getItem('matrix_preferred_view') || 'columns', 
+        currentView: 'active' 
+    }
+};
+
+class Application {
+    async init() {
+        this.checkAuthSession();
+        Editor.init();
+        await ToolsManager.init(() => AppState.items);
+        Calendar.init();
+        this.renderControlBar();
+        this.loadCategoriesStore();
+        await this.syncDataStore();
+        this.setupCoreListeners();
+        SidePanel.init(AppState);
+        SidePanel.setupStatusClickHandlers();
+        this.startClockLoop();
+        this.setupFreeformResetButton();
+        this.updateFreeformResetVisibility();
+        this.setupBackupInterface();
+        this.setupFab();
+    }
+
+    checkAuthSession() {
+        const cachedToken = localStorage.getItem('admin_token');
+        if (cachedToken) {
+            AppState.user.isLoggedIn = true;
+            AppState.user.token = cachedToken;
+        } else {
+            AppState.user.isLoggedIn = false;
+            AppState.user.token = null;
+        }
+    }
+
+    loadCategoriesStore() {
+        const storedCats = localStorage.getItem('matrix_custom_categories');
+        if (storedCats) {
+            try { 
+                AppState.categories = normalizeCategories(JSON.parse(storedCats));
+            } catch (e) {}
+        }
+    }
+
+    async syncDataStore() {
+        try {
+            const data = await API.fetchItems(AppState.user.token);
+            AppState.items = data.items;
+            
+            UI.render(document.getElementById('app-canvas'), AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.expandedCards);
+            
+            this.updateWorkspaceCounter();
+            DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+        } catch (err) {
+            console.error("[Fatal Sync Failure] Data sync broken:", err);
+        }
+    }
+
+    updateWorkspaceCounter() {
+        SidePanel.updateStatus(AppState.items, AppState.categories, AppState.hiddenCategories);
+    }
+
+    renderControlBar() {
+        const filterControls = document.getElementById('filter-controls');
+        const mode = AppState.viewSettings.sortBy;
+        if (filterControls) {
+            filterControls.innerHTML = `
+                <button class="btn btn--compact btn--icon ${mode === 'list' ? 'active' : ''}" id="btn-view-list" title="List view" aria-label="List view">${ACTION_ICONS.viewList}</button>
+                <button class="btn btn--compact btn--icon ${mode === 'columns' ? 'active' : ''}" id="btn-view-cols" title="Columns view" aria-label="Columns view">${ACTION_ICONS.viewCols}</button>
+                <button class="btn btn--compact btn--icon ${mode === 'freeform' ? 'active' : ''}" id="btn-view-free" title="Freeform view" aria-label="Freeform view">${ACTION_ICONS.viewFree}</button>
+            `;
+            document.getElementById('btn-view-list').addEventListener('click', () => this.switchViewMode('list'));
+            document.getElementById('btn-view-cols').addEventListener('click', () => this.switchViewMode('columns'));
+            document.getElementById('btn-view-free').addEventListener('click', () => this.switchViewMode('freeform'));
+            this.updateViewToggleState();
+        }
+
+        this.renderQuickActions();
+        this.updateFabVisibility();
+        this.updateFreeformResetVisibility();
+
+        const authZone = document.getElementById('auth-zone');
+        if (authZone) {
+            if (AppState.user.isLoggedIn) {
+                authZone.innerHTML = '';
+            } else {
+                authZone.innerHTML = `<button class="btn btn--compact btn--block" id="btn-auth-login">Login</button>`;
+                document.getElementById('btn-auth-login').addEventListener('click', () => this.executeLoginPrompt());
+            }
+        }
+    }
+
+    renderQuickActions() {
+        const zone = document.getElementById('quick-actions-zone');
+        if (!zone) return;
+
+        if (!AppState.user.isLoggedIn) {
+            zone.innerHTML = '';
+            return;
+        }
+
+        zone.innerHTML = `
+            <button type="button" class="btn btn--compact btn--icon" id="btn-add-category" title="Add category" aria-label="Add category">${ACTION_ICONS.category}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="btn-export-db" title="Export backup" aria-label="Export backup">${ACTION_ICONS.export}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="btn-import-db" title="Import backup" aria-label="Import backup">${ACTION_ICONS.import}</button>
+            <button type="button" class="btn btn--compact btn--icon btn--icon-danger" id="btn-auth-logout" title="Logout" aria-label="Logout">${ACTION_ICONS.logout}</button>
+        `;
+        document.getElementById('btn-add-category').addEventListener('click', () => this.executeAddCategoryPrompt());
+        document.getElementById('btn-export-db').addEventListener('click', () => this.executeDataBackupExport());
+        document.getElementById('btn-import-db').addEventListener('click', () => document.getElementById('system-import-file-picker').click());
+        document.getElementById('btn-auth-logout').addEventListener('click', () => this.executeLogout());
+    }
+
+    setupFab() {
+        const fab = document.getElementById('fab-create');
+        if (!fab) return;
+        fab.addEventListener('click', () => {
+            if (!AppState.user.isLoggedIn) {
+                this.executeLoginPrompt();
+                return;
+            }
+            Editor.open(null, AppState.categories);
+        });
+    }
+
+    updateFabVisibility() {
+        const fab = document.getElementById('fab-create');
+        fab?.classList.toggle('is-hidden', !AppState.user.isLoggedIn);
+    }
+
+    executeDataBackupExport() {
+        const databasePayload = localStorage.getItem('matrix_database');
+        const customCategoriesPayload = localStorage.getItem('matrix_custom_categories');
+        const backupPackage = {
+            timestamp: Math.floor(Date.now() / 1000),
+            matrix_database: databasePayload ? JSON.parse(databasePayload) : null,
+            matrix_custom_categories: customCategoriesPayload ? JSON.parse(customCategoriesPayload) : null
+        };
+        const blob = new Blob([JSON.stringify(backupPackage, null, 2)], { type: 'application/json' });
+        const virtualLink = document.createElement('a');
+        virtualLink.href = URL.createObjectURL(blob);
+        virtualLink.download = `matrix_workspace_backup_${Math.floor(Date.now()/1000)}.json`;
+        virtualLink.click();
+        URL.revokeObjectURL(virtualLink.href);
+    }
+
+    setupBackupInterface() {
+        const filePicker = document.getElementById('system-import-file-picker');
+        if (!filePicker) return;
+        filePicker.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                try {
+                    const parsedBackup = JSON.parse(event.target.result);
+                    if (parsedBackup.matrix_database) {
+                        localStorage.setItem('matrix_database', JSON.stringify(parsedBackup.matrix_database));
+                    }
+                    if (parsedBackup.matrix_custom_categories) {
+                        localStorage.setItem('matrix_custom_categories', JSON.stringify(parsedBackup.matrix_custom_categories));
+                    }
+                    alert("System Restore Successful.");
+                    window.location.reload();
+                } catch (err) {
+                    alert("Import Aborted: Invalid JSON file.");
+                }
+            };
+            reader.readAsText(file);
+        });
+    }
+
+    executeAddCategoryPrompt() {
+        if (!AppState.user.isLoggedIn) return;
+        const nameInput = prompt("Enter Unique New Category Label Name:");
+        if (!nameInput || !nameInput.trim()) return;
+        const cleanName = nameInput.trim();
+        if (AppState.categories.map(c => c.name.toLowerCase()).includes(cleanName.toLowerCase())) {
+            alert("Conflict: That category tag layout already exists.");
+            return;
+        }
+        const colorInput = prompt("Enter custom category color HEX string:", "#64748b");
+        const cleanColor = colorInput && colorInput.trim() ? colorInput.trim() : "#64748b";
+        AppState.categories.push({ name: cleanName, color: cleanColor });
+        localStorage.setItem('matrix_custom_categories', JSON.stringify(AppState.categories));
+        this.syncDataStore();
+    }
+
+    executeLoginPrompt() {
+        const secretInput = prompt("Enter Admin Security Token Code:");
+        if (secretInput) {
+            localStorage.setItem('admin_token', secretInput.trim());
+            this.checkAuthSession();
+            this.renderControlBar();
+            this.syncDataStore();
+        }
+    }
+
+    executeLogout() {
+        localStorage.removeItem('admin_token');
+        AppState.user.isLoggedIn = false;
+        AppState.user.token = null;
+        this.renderControlBar();
+        this.updateFreeformResetVisibility();
+        this.syncDataStore();
+    }
+
+    switchViewMode(mode) {
+        AppState.viewSettings.sortBy = mode;
+        localStorage.setItem('matrix_preferred_view', mode);
+        window.dispatchEvent(new CustomEvent('view:mode_changed', { detail: mode }));
+        this.updateViewToggleState();
+        this.updateFreeformResetVisibility();
+        this.syncDataStore();
+    }
+
+    updateViewToggleState() {
+        const mode = AppState.viewSettings.sortBy;
+        document.getElementById('btn-view-list')?.classList.toggle('active', mode === 'list');
+        document.getElementById('btn-view-cols')?.classList.toggle('active', mode === 'columns');
+        document.getElementById('btn-view-free')?.classList.toggle('active', mode === 'freeform');
+    }
+
+    setupFreeformResetButton() {
+        const btn = document.getElementById('btn-freeform-reset');
+        if (btn) btn.innerHTML = ACTION_ICONS.layoutReset;
+        btn?.addEventListener('click', () => {
+            if (AppState.viewSettings.sortBy !== 'freeform') return;
+            UI.resetFreeformLayout();
+            this.syncDataStore();
+        });
+    }
+
+    updateFreeformResetVisibility() {
+        const btn = document.getElementById('btn-freeform-reset');
+        if (!btn) return;
+        const show = AppState.viewSettings.sortBy === 'freeform' && AppState.user.isLoggedIn;
+        btn.classList.toggle('is-hidden', !show);
+    }
+
+    startClockLoop() {
+        const dateEl = document.getElementById('clock-date');
+        const timeEl = document.getElementById('clock-time');
+        if (!dateEl || !timeEl) return;
+        const tick = () => {
+            const now = new Date();
+            timeEl.textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            const weekday = now.toLocaleDateString('en-US', { weekday: 'short' });
+            const dateString = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            dateEl.textContent = `${weekday}, ${dateString}`;
+        };
+        tick();
+        setInterval(tick, 60000);
+    }
+
+    setupCoreListeners() {
+        window.addEventListener('item:selected_for_edit', (e) => {
+            if (!AppState.user.isLoggedIn) {
+                alert("Authorization Blocked: Admin privileges required to edit workspace resources.");
+                return;
+            }
+            Editor.open(e.detail, AppState.categories);
+        });
+
+        window.addEventListener('item:mutation_requested', async (e) => {
+            if (!AppState.user.isLoggedIn) return;
+            const success = await API.saveItem(e.detail, AppState.user.token);
+            if (success) {
+                await this.syncDataStore();
+            }
+        });
+
+        window.addEventListener('board:visibility_changed', async () => {
+            UI.render(document.getElementById('app-canvas'), AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories);
+            this.updateWorkspaceCounter();
+            DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+        });
+
+        window.addEventListener('calendar:items_changed', (e) => {
+            const sourceItem = Editor.activeItem || e.detail;
+            if (sourceItem?.id) {
+                const idx = AppState.items.findIndex(i => i.id === sourceItem.id);
+                if (idx !== -1) {
+                    AppState.items[idx] = {
+                        ...AppState.items[idx],
+                        hideFromCalendar: sourceItem.hideFromCalendar === true
+                    };
+                }
+            }
+            if (Calendar.isActive()) {
+                Calendar.items = AppState.items;
+                Calendar.refresh();
+            }
+        });
+
+        window.addEventListener('item:deletion_requested', async (e) => {
+            if (!AppState.user.isLoggedIn) return;
+            const success = await API.deleteItem(e.detail, AppState.user.token);
+            if (success) await this.syncDataStore();
+        });
+
+        window.addEventListener('calendar:add_note', (e) => {
+            const defaultDate = e.detail;
+            const newItem = {
+                id: `item_${Math.floor(Date.now() / 1000)}`,
+                owner_id: "admin",
+                visibility: "private",
+                type: "note",
+                title: "",
+                content: "",
+                status: "active",
+                categories: [],
+                backgroundColor: "",
+                startDateTime: defaultDate.toISOString(),
+                endDateTime: "",
+                isRecurring: false,
+                hideFromCalendar: false,
+                hiddenFromBoard: false
+            };
+            Editor.open(newItem, AppState.categories);
+        });
+
+        window.addEventListener('category:show_requested', (e) => {
+            const catName = e.detail?.name;
+            if (catName) {
+                AppState.hiddenCategories = AppState.hiddenCategories.filter(c => c !== catName);
+                localStorage.setItem('matrix_hidden_categories', JSON.stringify(AppState.hiddenCategories));
+                window.dispatchEvent(new CustomEvent('categories:toggled'));
+                this.syncDataStore();
+            }
+        });
+
+        window.addEventListener('category:order_changed', (e) => {
+            AppState.categories = e.detail || AppState.categories;
+            this.syncDataStore();
+        });
+    }
+}
+
+const CoreApp = new Application();
+document.addEventListener('DOMContentLoaded', () => CoreApp.init());
+
