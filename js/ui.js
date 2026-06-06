@@ -345,11 +345,11 @@ export const UI = {
             : '';
         return `<div class="card-actions">
             <button type="button" class="card-act card-act--toggle" title="${expandTitle}" aria-label="${expandTitle}">${expandIcon}</button>
-            ${frontBtnHtml}
             <button type="button" class="card-act card-act--cal ${calHidden ? 'is-off' : 'is-on'}" title="${calTitle}" aria-label="Toggle calendar">${CARD_ICONS.calendar}</button>
             <button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>
             <button type="button" class="card-act card-act--edit" title="Edit note" aria-label="Edit note">${CARD_ICONS.edit}</button>
             ${deleteBtnHtml}
+            ${frontBtnHtml}
         </div>`;
     },
 
@@ -469,17 +469,51 @@ export const UI = {
         this.applyFreeformSize(card);
     },
 
-    toggleCardExpanded(card, item, ctx) {
+    getCardRenderContext(item, activeCategories) {
+        const targetCatName = (item.categories && item.categories.length > 0) ? item.categories[0] : '';
+        const isQuickLinkType = isQuickLinksCategory(targetCatName);
+        const matchedCat = activeCategories.find(c => c.name?.toLowerCase() === targetCatName.toLowerCase());
+        const categoryColor = matchedCat ? matchedCat.color : '#64748b';
+        return { targetCatName, categoryColor, isQuickLinkType };
+    },
+
+    updateFreeformCard(card, item, { expanded, dimensions = null } = {}) {
+        if (card.dataset.freeform !== '1') return;
         const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
-        const willExpand = !card.classList.contains('expanded');
-        expandedCards[item.id] = willExpand;
+        expandedCards[item.id] = expanded;
         localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
 
+        const activeCategories = readStoredCategories();
+        const { targetCatName, categoryColor, isQuickLinkType } = this.getCardRenderContext(item, activeCategories);
+
+        if (expanded) {
+            card.classList.remove('compact');
+            card.classList.add('expanded');
+            this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+        } else {
+            card.classList.remove('expanded');
+            card.classList.add('compact');
+            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+        }
+
+        if (dimensions) {
+            this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
+        } else {
+            this.applyFreeformSize(card);
+        }
+    },
+
+    toggleCardExpanded(card, item, ctx) {
+        const willExpand = !card.classList.contains('expanded');
+
         if (card.dataset.freeform === '1') {
-            this.setFreeformCardExpanded(card, item.id, willExpand);
-            this.setupFreeformChrome(card);
+            this.updateFreeformCard(card, item, { expanded: willExpand });
             return;
         }
+
+        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
+        expandedCards[item.id] = willExpand;
+        localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
 
         if (willExpand) {
             card.classList.remove('compact');
@@ -521,11 +555,7 @@ export const UI = {
         const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
         const isExpanded = expandedCards[item.id] === true;
 
-        if (freeform) {
-            card.classList.toggle('expanded', isExpanded);
-            card.classList.toggle('compact', !isExpanded);
-            this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
-        } else if (isExpanded) {
+        if (isExpanded) {
             card.classList.remove('compact');
             card.classList.add('expanded');
             this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
@@ -569,7 +599,7 @@ export const UI = {
         card.innerHTML = `
             <div class="card-header">
                 <div class="mini-card-title" title="${titleAttr}">${this.escapeHTML(fullTitle)}</div>
-                ${this.buildCardActionsHtml(item, isExpanded)}
+                ${this.buildCardActionsHtml(item, isExpanded, { freeform: card.dataset.freeform === '1' })}
             </div>
             <div class="mini-card-meta compact">
                 <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
@@ -865,22 +895,6 @@ export const UI = {
         card.closest('#app-canvas')?.querySelectorAll('.mini-card.is-freeform-front').forEach((other) => {
             if (other !== card) other.classList.remove('is-freeform-front');
         });
-    },
-
-    setFreeformCardExpanded(card, itemId, expanded, { applySize = true } = {}) {
-        if (card.dataset.freeform !== '1') return;
-        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
-        expandedCards[itemId] = expanded;
-        localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
-        card.classList.toggle('expanded', expanded);
-        card.classList.toggle('compact', !expanded);
-        const toggleBtn = card.querySelector('.card-act--toggle');
-        if (toggleBtn) {
-            toggleBtn.title = expanded ? 'Collapse note' : 'Expand note';
-            toggleBtn.setAttribute('aria-label', toggleBtn.title);
-            toggleBtn.innerHTML = expanded ? CARD_ICONS.collapse : CARD_ICONS.expand;
-        }
-        if (applySize) this.applyFreeformSize(card);
     },
 
     getCollapsedCategories() {

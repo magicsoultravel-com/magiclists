@@ -278,8 +278,10 @@ export const DragDropEngine = {
                     if (card.classList.contains('compact')) {
                         const itemMatch = currentItems.find(i => i.id === card.dataset.id);
                         if (itemMatch) {
-                            UI.setFreeformCardExpanded(card, itemMatch.id, true, { applySize: false });
-                            UI.applyFreeformDimensions(card, startW, startH);
+                            UI.updateFreeformCard(card, itemMatch, {
+                                expanded: true,
+                                dimensions: { w: startW, h: startH }
+                            });
                         }
                     }
                     resizeActive = {

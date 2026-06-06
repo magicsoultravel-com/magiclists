@@ -1692,16 +1692,29 @@ textarea.form-input {
     position: absolute;
     cursor: grab;
     box-sizing: border-box;
+    margin: 0 !important;
+}
+
+/* Compact freeform tiles: same rules as list/columns (.mini-card.compact) */
+#app-canvas.view-freeform .mini-card.compact {
+    width: 96px !important;
+}
+
+/* Expanded freeform: fixed box from resize; inner content scrolls */
+#app-canvas.view-freeform .mini-card.expanded {
     display: flex !important;
     flex-direction: column;
     align-items: stretch;
     gap: 0.25rem;
-    padding: 0.35rem 0.45rem !important;
     overflow: hidden !important;
+    max-height: none !important;
+    min-height: unset !important;
+    height: auto;
     width: auto !important;
+    padding: 0.6rem !important;
 }
 
-#app-canvas.view-freeform .mini-card .card-header {
+#app-canvas.view-freeform .mini-card.expanded .card-header {
     flex: 0 0 auto;
     min-width: 0;
 }
@@ -1712,42 +1725,21 @@ textarea.form-input {
     word-break: break-word;
 }
 
-#app-canvas.view-freeform .mini-card.compact .mini-card-title {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-#app-canvas.view-freeform .mini-card.compact .card-content-preview,
-#app-canvas.view-freeform .mini-card.compact .expanded-checklist,
-#app-canvas.view-freeform .mini-card.compact .expanded-links,
-#app-canvas.view-freeform .mini-card.compact .checklist-done-divider,
-#app-canvas.view-freeform .mini-card.compact .checklist-done-block,
-#app-canvas.view-freeform .mini-card.compact .mini-card-meta {
-    display: none !important;
-}
-
-#app-canvas.view-freeform .mini-card.compact {
-    overflow: hidden !important;
-    gap: 0 !important;
-}
-
-#app-canvas.view-freeform .mini-card .card-content-preview,
-#app-canvas.view-freeform .mini-card .expanded-checklist,
-#app-canvas.view-freeform .mini-card .expanded-links,
-#app-canvas.view-freeform .mini-card .compact-links {
+#app-canvas.view-freeform .mini-card.expanded .card-content-preview,
+#app-canvas.view-freeform .mini-card.expanded .expanded-checklist,
+#app-canvas.view-freeform .mini-card.expanded .expanded-links {
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
 }
 
-#app-canvas.view-freeform .mini-card:not(.is-freeform-resizing) .card-content-preview,
-#app-canvas.view-freeform .mini-card:not(.is-freeform-resizing) .expanded-checklist {
+#app-canvas.view-freeform .mini-card.expanded:not(.is-freeform-resizing) .card-content-preview,
+#app-canvas.view-freeform .mini-card.expanded:not(.is-freeform-resizing) .expanded-checklist {
     overflow-x: hidden;
     overflow-y: auto;
 }
 
-#app-canvas.view-freeform .mini-card .card-content-preview {
+#app-canvas.view-freeform .mini-card.expanded .card-content-preview {
     font-size: 0.62rem;
     line-height: 1.35;
     white-space: pre-wrap;
@@ -1755,11 +1747,11 @@ textarea.form-input {
     word-break: break-word;
 }
 
-#app-canvas.view-freeform .mini-card .expanded-checklist {
+#app-canvas.view-freeform .mini-card.expanded .expanded-checklist {
     font-size: 0.6rem;
 }
 
-#app-canvas.view-freeform .mini-card .mini-card-meta {
+#app-canvas.view-freeform .mini-card.expanded .mini-card-meta {
     flex: 0 0 auto;
     margin-top: auto;
 }
