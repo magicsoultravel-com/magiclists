@@ -344,12 +344,12 @@ export const UI = {
             ? `<button type="button" class="card-act card-act--danger card-act--delete" title="Delete note" aria-label="Delete note">${CARD_ICONS.close}</button>`
             : '';
         return `<div class="card-actions">
+            ${frontBtnHtml}
             <button type="button" class="card-act card-act--toggle" title="${expandTitle}" aria-label="${expandTitle}">${expandIcon}</button>
             <button type="button" class="card-act card-act--cal ${calHidden ? 'is-off' : 'is-on'}" title="${calTitle}" aria-label="Toggle calendar">${CARD_ICONS.calendar}</button>
             <button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>
             <button type="button" class="card-act card-act--edit" title="Edit note" aria-label="Edit note">${CARD_ICONS.edit}</button>
             ${deleteBtnHtml}
-            ${frontBtnHtml}
         </div>`;
     },
 
@@ -713,12 +713,12 @@ export const UI = {
                     canDelete: canEdit && card.classList.contains('expanded')
                 })}
             </div>
-            <div class="card-body">
+            <div class="card-body card-drag-zone">
                 ${bodyHtml}
                 ${checklistHtml}
                 ${quickLinksHtml}
             </div>
-            <div class="mini-card-meta expanded">
+            <div class="mini-card-meta expanded card-drag-zone">
                 <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
                 ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
                 ${typeBadgeHtml}
@@ -735,6 +735,61 @@ export const UI = {
         this.finalizeFreeformCard(card);
     },
 
+    caretAtEdge(el, edge) {
+        const sel = window.getSelection();
+        if (!sel?.rangeCount) return true;
+        const range = sel.getRangeAt(0);
+        if (!el.contains(range.startContainer)) return false;
+        const probe = range.cloneRange();
+        probe.selectNodeContents(el);
+        if (edge === 'start') {
+            probe.setEnd(range.startContainer, range.startOffset);
+            return probe.toString().length === 0;
+        }
+        probe.setStart(range.endContainer, range.endOffset);
+        return probe.toString().length === 0;
+    },
+
+    focusInlineEdit(el, edge = 'end') {
+        if (!el) return;
+        el.focus();
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(edge === 'start');
+        const sel = window.getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+    },
+
+    getExpandedInlineEditSequence(card) {
+        const fields = [];
+        const title = card.querySelector('[data-field="title"].card-inline-edit');
+        const content = card.querySelector('[data-field="content"].card-inline-edit');
+        if (title) fields.push(title);
+        if (content) fields.push(content);
+        card.querySelectorAll('[data-field="step-text"].card-inline-edit').forEach((el) => fields.push(el));
+        return fields;
+    },
+
+    handleInlineEditArrowNav(e, card, fieldEl) {
+        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return false;
+        const fields = this.getExpandedInlineEditSequence(card);
+        const idx = fields.indexOf(fieldEl);
+        if (idx < 0) return false;
+
+        if (e.key === 'ArrowDown' && this.caretAtEdge(fieldEl, 'end') && idx < fields.length - 1) {
+            e.preventDefault();
+            this.focusInlineEdit(fields[idx + 1], 'start');
+            return true;
+        }
+        if (e.key === 'ArrowUp' && this.caretAtEdge(fieldEl, 'start') && idx > 0) {
+            e.preventDefault();
+            this.focusInlineEdit(fields[idx - 1], 'end');
+            return true;
+        }
+        return false;
+    },
+
     attachExpandedCardInteractions(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
         const refresh = () => {
             this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
@@ -744,7 +799,9 @@ export const UI = {
             card.querySelectorAll('.card-inline-edit').forEach((el) => {
                 el.addEventListener('click', (e) => e.stopPropagation());
                 el.addEventListener('mousedown', (e) => e.stopPropagation());
-                el.addEventListener('keydown', (e) => e.stopPropagation());
+                el.addEventListener('keydown', (e) => {
+                    if (!this.handleInlineEditArrowNav(e, card, el)) e.stopPropagation();
+                });
                 el.addEventListener('blur', () => {
                     const field = el.dataset.field;
                     if (field === 'title') {
