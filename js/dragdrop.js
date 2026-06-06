@@ -274,11 +274,14 @@ export const DragDropEngine = {
                 if (resizeHandle) {
                     e.preventDefault();
                     e.stopPropagation();
+                    const { w: startW, h: startH } = UI.readFreeformCardSize(card);
                     if (card.classList.contains('compact')) {
                         const itemMatch = currentItems.find(i => i.id === card.dataset.id);
-                        if (itemMatch) UI.setFreeformCardExpanded(card, itemMatch.id, true);
+                        if (itemMatch) {
+                            UI.setFreeformCardExpanded(card, itemMatch.id, true, { applySize: false });
+                            UI.applyFreeformDimensions(card, startW, startH);
+                        }
                     }
-                    const { w: startW, h: startH } = UI.readFreeformCardSize(card);
                     resizeActive = {
                         card,
                         axis: resizeHandle.dataset.axis || 'se',
@@ -296,7 +299,7 @@ export const DragDropEngine = {
                     return;
                 }
 
-                if (e.target.closest('.card-actions, .step-check, .quicklink-anchor-row, .card-inline-edit, .step-nest-controls, .expanded-checklist, .card-content-preview, .ff-resize, a, button, input, textarea, [contenteditable]')) {
+                if (e.target.closest('.card-actions, .step-check, .step-delete-btn, .quicklink-anchor-row, .card-inline-edit, .step-nest-controls, .expanded-checklist, .card-content-preview, .ff-resize, a, button, input, textarea, [contenteditable]')) {
                     return;
                 }
 

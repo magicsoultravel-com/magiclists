@@ -99,16 +99,6 @@ class Application {
         this.renderQuickActions();
         this.updateFabVisibility();
         this.updateFreeformResetVisibility();
-
-        const authZone = document.getElementById('auth-zone');
-        if (authZone) {
-            if (AppState.user.isLoggedIn) {
-                authZone.innerHTML = '';
-            } else {
-                authZone.innerHTML = `<button class="btn btn--compact btn--block" id="btn-auth-login">Login</button>`;
-                document.getElementById('btn-auth-login').addEventListener('click', () => this.executeLoginPrompt());
-            }
-        }
     }
 
     renderQuickActions() {
@@ -116,7 +106,8 @@ class Application {
         if (!zone) return;
 
         if (!AppState.user.isLoggedIn) {
-            zone.innerHTML = '';
+            zone.innerHTML = `<button type="button" class="btn btn--compact btn--block" id="btn-auth-login">Login</button>`;
+            document.getElementById('btn-auth-login')?.addEventListener('click', () => this.executeLoginPrompt());
             return;
         }
 

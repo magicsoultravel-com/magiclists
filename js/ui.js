@@ -2,7 +2,7 @@ import { isQuickLinksCategory, readStoredCategories } from './categories.js';
 import { applyCardTheme } from './cardTheme.js';
 
 export const FREEFORM_DEFAULT_W = 96;
-export const FREEFORM_DEFAULT_H = 65;
+export const FREEFORM_DEFAULT_H = 56;
 export const FREEFORM_EXPANDED_W = 196;
 export const FREEFORM_MIN_W = 72;
 export const FREEFORM_MIN_H = 56;
@@ -440,6 +440,13 @@ export const UI = {
         localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
     },
 
+    applyFreeformDimensions(card, w, h) {
+        card.style.setProperty('width', `${w}px`, 'important');
+        card.style.setProperty('height', `${h}px`, 'important');
+        card.style.setProperty('min-height', `${h}px`, 'important');
+        card.style.setProperty('max-height', `${h}px`, 'important');
+    },
+
     applyFreeformSize(card) {
         if (card.dataset.freeform !== '1') return;
         const saved = this.getFreeformSizes()[card.dataset.id];
@@ -453,11 +460,7 @@ export const UI = {
             w = FREEFORM_DEFAULT_W;
             h = FREEFORM_DEFAULT_H;
         }
-
-        card.style.setProperty('width', `${w}px`, 'important');
-        card.style.setProperty('height', `${h}px`, 'important');
-        card.style.setProperty('min-height', `${h}px`, 'important');
-        card.style.setProperty('max-height', `${h}px`, 'important');
+        this.applyFreeformDimensions(card, w, h);
     },
 
     finalizeFreeformCard(card) {
@@ -604,11 +607,14 @@ export const UI = {
                 const collapseControl = !isDoneSection && hasKids
                     ? `<button type="button" class="step-collapse-btn" data-collapse-key="${this.escapeAttr(collapseKey)}" title="${isCollapsed ? 'Expand group' : 'Collapse group'}" aria-label="${isCollapsed ? 'Expand group' : 'Collapse group'}">${isCollapsed ? '▶' : '▼'}</button>`
                     : '<span class="step-collapse-spacer" aria-hidden="true"></span>';
-                const nestControls = canEdit && !isDoneSection ? `
+                const nestControls = canEdit ? `
                     <span class="step-nest-controls">
                         <button type="button" class="card-act step-outdent-btn" title="Outdent" aria-label="Outdent"${level === 0 ? ' disabled' : ''}>‹</button>
                         <button type="button" class="card-act step-indent-btn" title="Indent" aria-label="Indent"${level >= 4 ? ' disabled' : ''}>›</button>
                     </span>` : '';
+                const deleteBtn = canEdit && step.completed
+                    ? `<button type="button" class="card-act card-act--danger step-delete-btn" title="Delete item" aria-label="Delete item">${CARD_ICONS.close}</button>`
+                    : '';
                 const textHtml = canEdit
                     ? `<span class="step-text card-inline-edit ${step.completed ? 'completed' : ''}" contenteditable="plaintext-only" spellcheck="false" data-field="step-text" data-step-id="${step.id}">${this.escapeHTML(step.text)}</span>`
                     : `<span class="step-text ${step.completed ? 'completed' : ''}">${this.escapeHTML(step.text)}</span>`;
@@ -618,6 +624,7 @@ export const UI = {
                         <input type="checkbox" class="step-check" ${step.completed ? 'checked' : ''}>
                         ${textHtml}
                         ${nestControls}
+                        ${deleteBtn}
                     </div>
                 `;
             });
@@ -775,6 +782,20 @@ export const UI = {
                     refresh();
                 });
             });
+
+            card.querySelectorAll('.step-delete-btn').forEach((btn) => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const row = btn.closest('.step-row--display');
+                    const stepId = row?.dataset.stepId;
+                    if (!stepId || !item.steps) return;
+                    const step = item.steps.find((s) => s.id === stepId);
+                    if (!step?.completed) return;
+                    item.steps = item.steps.filter((s) => s.id !== stepId);
+                    window.dispatchEvent(new CustomEvent('item:mutation_requested', { detail: item }));
+                    refresh();
+                });
+            });
         }
     },
 
@@ -818,7 +839,7 @@ export const UI = {
     },
 
     saveFreeformSizeFromCard(card) {
-        if (card.dataset.freeform !== '1' || !card.classList.contains('expanded')) return;
+        if (card.dataset.freeform !== '1') return;
         const { w, h } = this.readFreeformCardSize(card);
         this.saveFreeformSize(card.dataset.id, w, h);
     },
@@ -846,7 +867,7 @@ export const UI = {
         });
     },
 
-    setFreeformCardExpanded(card, itemId, expanded) {
+    setFreeformCardExpanded(card, itemId, expanded, { applySize = true } = {}) {
         if (card.dataset.freeform !== '1') return;
         const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
         expandedCards[itemId] = expanded;
@@ -859,7 +880,7 @@ export const UI = {
             toggleBtn.setAttribute('aria-label', toggleBtn.title);
             toggleBtn.innerHTML = expanded ? CARD_ICONS.collapse : CARD_ICONS.expand;
         }
-        this.applyFreeformSize(card);
+        if (applySize) this.applyFreeformSize(card);
     },
 
     getCollapsedCategories() {
