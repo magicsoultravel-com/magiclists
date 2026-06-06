@@ -305,6 +305,8 @@ export const DragDropEngine = {
                     return;
                 }
 
+                if (!e.target.closest('.card-drag-zone')) return;
+
                 e.preventDefault();
                 e.stopPropagation();
                 dragActive = {

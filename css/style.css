@@ -693,16 +693,30 @@ body {
     border-bottom: 1px solid var(--border-color);
     margin-bottom: 0.25rem;
     display: flex !important;
-    justify-content: space-between !important;
     align-items: center !important;
+    gap: 0.2rem;
+    min-width: 0;
+    overflow: hidden;
 }
 
+.column-header .grab-handle--col {
+    flex-shrink: 0;
+}
+
+.column-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 
 .column-header-actions {
     display: inline-flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.2rem;
     flex-shrink: 0;
+    margin-left: auto;
 }
 
 .column-collapse-btn {
@@ -1108,7 +1122,7 @@ body {
     background: var(--border-color);
 }
 
-.checklist-done-block .step-row--done {
+.expanded-checklist .step-row--done {
     opacity: 0.82;
 }
 
@@ -1690,14 +1704,38 @@ textarea.form-input {
 
 #app-canvas.view-freeform .mini-card {
     position: absolute;
-    cursor: grab;
+    cursor: default;
     box-sizing: border-box;
     margin: 0 !important;
+}
+
+#app-canvas.view-freeform .card-drag-zone {
+    cursor: grab;
+}
+
+#app-canvas.view-freeform .card-drag-zone:active {
+    cursor: grabbing;
 }
 
 /* Compact freeform tiles: same rules as list/columns (.mini-card.compact) */
 #app-canvas.view-freeform .mini-card.compact {
     width: 96px !important;
+    display: flex;
+    flex-direction: column;
+}
+
+#app-canvas.view-freeform .mini-card.compact .card-header {
+    flex: 0 0 auto;
+}
+
+#app-canvas.view-freeform .mini-card.compact .mini-card-meta.compact {
+    display: flex !important;
+    flex: 0 0 auto;
+    margin-top: auto;
+}
+
+#app-canvas.view-freeform .mini-card.compact .compact-links {
+    display: none;
 }
 
 /* Expanded freeform: fixed box from resize; inner content scrolls */
@@ -1769,31 +1807,42 @@ textarea.form-input {
 
 #app-canvas.view-freeform .ff-resize {
     position: absolute;
-    width: 7px;
-    height: 7px;
+    width: 10px;
+    height: 10px;
     pointer-events: auto;
     opacity: 0;
+    z-index: 6;
 }
 
 #app-canvas.view-freeform .mini-card:hover .ff-resize,
 #app-canvas.view-freeform .mini-card.is-freeform-resizing .ff-resize {
-    opacity: 0.55;
+    opacity: 0.45;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
 }
 
 #app-canvas.view-freeform .ff-resize-n,
 #app-canvas.view-freeform .ff-resize-s {
     left: 50%;
     transform: translateX(-50%);
-    width: 14px;
-    height: 5px;
+    width: 28px;
+    height: 8px;
 }
 
 #app-canvas.view-freeform .ff-resize-e,
 #app-canvas.view-freeform .ff-resize-w {
     top: 50%;
     transform: translateY(-50%);
-    width: 5px;
-    height: 14px;
+    width: 8px;
+    height: 28px;
+}
+
+#app-canvas.view-freeform .ff-resize-nw,
+#app-canvas.view-freeform .ff-resize-ne,
+#app-canvas.view-freeform .ff-resize-sw,
+#app-canvas.view-freeform .ff-resize-se {
+    width: 12px;
+    height: 12px;
 }
 
 #app-canvas.view-freeform .ff-resize-n { top: 0; cursor: n-resize; }
@@ -1846,14 +1895,6 @@ textarea.form-input {
 
 .category-name {
     max-width: 58px !important;
-}
-
-.column-header {
-    gap: 0.35rem;
-}
-
-.column-title {
-    flex: 1;
 }
 
 .canvas-column.is-category-dragging {

@@ -572,12 +572,8 @@ export const UI = {
         const fullTitle = item.title || '';
         const titleAttr = this.escapeHTML(fullTitle).replace(/"/g, '&quot;');
 
-        let typeBadgeHtml = '';
-        if (!isQuickLinkType && item.type === 'checklist' && item.steps && item.steps.length > 0) {
-            const completedCount = item.steps.filter(s => s.completed).length;
-            typeBadgeHtml = `<span class="checklist-badge">☑️ ${completedCount}/${item.steps.length}</span>`;
-        }
-        
+        const typeBadgeHtml = this.buildChecklistBadgeHtml(item, isQuickLinkType);
+
         let quickLinksHtml = '';
         if (isQuickLinkType && item.steps && item.steps.length > 0) {
             const activeLinks = item.steps.filter(step => step.completed);
@@ -597,11 +593,11 @@ export const UI = {
         
         const isExpanded = false;
         card.innerHTML = `
-            <div class="card-header">
+            <div class="card-header card-drag-zone">
                 <div class="mini-card-title" title="${titleAttr}">${this.escapeHTML(fullTitle)}</div>
                 ${this.buildCardActionsHtml(item, isExpanded, { freeform: card.dataset.freeform === '1' })}
             </div>
-            <div class="mini-card-meta compact">
+            <div class="mini-card-meta compact card-drag-zone">
                 <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
                 ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
                 ${typeBadgeHtml}
@@ -622,51 +618,48 @@ export const UI = {
         return !!localStorage.getItem('admin_token');
     },
 
+    buildChecklistBadgeHtml(item, isQuickLinkType) {
+        if (isQuickLinkType || item.type !== 'checklist' || !item.steps?.length) return '';
+        const completedCount = item.steps.filter((s) => s.completed).length;
+        return `<span class="checklist-badge">☑️ ${completedCount}/${item.steps.length}</span>`;
+    },
+
     buildExpandedChecklistHtml(item, canEdit) {
         const collapsedKeys = this.getChecklistCollapsedKeys();
         const { active, done } = partitionChecklistSteps(item.steps);
         let html = '<div class="expanded-checklist">';
 
-        const renderRows = (steps, isDoneSection) => {
-            const rows = isDoneSection
-                ? steps.map(step => ({ step, hasKids: false, isCollapsed: false, collapseKey: `${item.id}:${step.id}` }))
-                : buildVisibleChecklistSteps(steps, item.id, collapsedKeys);
-
-            rows.forEach(({ step, hasKids, isCollapsed, collapseKey }) => {
-                const level = isDoneSection ? 0 : getStepLevel(step);
-                const collapseControl = !isDoneSection && hasKids
-                    ? `<button type="button" class="step-collapse-btn" data-collapse-key="${this.escapeAttr(collapseKey)}" title="${isCollapsed ? 'Expand group' : 'Collapse group'}" aria-label="${isCollapsed ? 'Expand group' : 'Collapse group'}">${isCollapsed ? '▶' : '▼'}</button>`
-                    : '<span class="step-collapse-spacer" aria-hidden="true"></span>';
-                const nestControls = canEdit ? `
-                    <span class="step-nest-controls">
-                        <button type="button" class="card-act step-outdent-btn" title="Outdent" aria-label="Outdent"${level === 0 ? ' disabled' : ''}>‹</button>
-                        <button type="button" class="card-act step-indent-btn" title="Indent" aria-label="Indent"${level >= 4 ? ' disabled' : ''}>›</button>
-                    </span>` : '';
-                const deleteBtn = canEdit && step.completed
-                    ? `<button type="button" class="card-act card-act--danger step-delete-btn" title="Delete item" aria-label="Delete item">${CARD_ICONS.close}</button>`
-                    : '';
-                const textHtml = canEdit
-                    ? `<span class="step-text card-inline-edit ${step.completed ? 'completed' : ''}" contenteditable="plaintext-only" spellcheck="false" data-field="step-text" data-step-id="${step.id}">${this.escapeHTML(step.text)}</span>`
-                    : `<span class="step-text ${step.completed ? 'completed' : ''}">${this.escapeHTML(step.text)}</span>`;
-                html += `
-                    <div class="step-row step-row--display${isDoneSection ? ' step-row--done' : ''}" data-step-id="${step.id}" data-level="${level}" style="padding-left:${level * 0.45}rem">
-                        ${collapseControl}
-                        <input type="checkbox" class="step-check" ${step.completed ? 'checked' : ''}>
-                        ${textHtml}
-                        ${nestControls}
-                        ${deleteBtn}
-                    </div>
-                `;
-            });
+        const renderRow = (step, { hasKids = false, isCollapsed = false, collapseKey = '', isDoneSection = false } = {}) => {
+            const level = isDoneSection ? 0 : getStepLevel(step);
+            const collapseControl = !isDoneSection && hasKids
+                ? `<button type="button" class="step-collapse-btn" data-collapse-key="${this.escapeAttr(collapseKey)}" title="${isCollapsed ? 'Expand group' : 'Collapse group'}" aria-label="${isCollapsed ? 'Expand group' : 'Collapse group'}">${isCollapsed ? '▶' : '▼'}</button>`
+                : '<span class="step-collapse-spacer" aria-hidden="true"></span>';
+            const nestControls = canEdit ? `
+                <span class="step-nest-controls">
+                    <button type="button" class="card-act step-outdent-btn" title="Outdent" aria-label="Outdent"${level === 0 ? ' disabled' : ''}>‹</button>
+                    <button type="button" class="card-act step-indent-btn" title="Indent" aria-label="Indent"${level >= 4 ? ' disabled' : ''}>›</button>
+                </span>` : '';
+            const deleteBtn = canEdit && step.completed
+                ? `<button type="button" class="card-act card-act--danger step-delete-btn" title="Delete item" aria-label="Delete item">${CARD_ICONS.close}</button>`
+                : '';
+            const textHtml = canEdit
+                ? `<span class="step-text card-inline-edit ${step.completed ? 'completed' : ''}" contenteditable="plaintext-only" spellcheck="false" data-field="step-text" data-step-id="${step.id}">${this.escapeHTML(step.text)}</span>`
+                : `<span class="step-text ${step.completed ? 'completed' : ''}">${this.escapeHTML(step.text)}</span>`;
+            html += `
+                <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}" data-step-id="${step.id}" data-level="${level}" style="padding-left:${level * 0.45}rem">
+                    ${collapseControl}
+                    <input type="checkbox" class="step-check" ${step.completed ? 'checked' : ''}>
+                    ${textHtml}
+                    ${nestControls}
+                    ${deleteBtn}
+                </div>
+            `;
         };
 
-        renderRows(active, false);
-        if (done.length) {
-            html += '<div class="checklist-done-divider"><span>Done</span></div>';
-            html += '<div class="checklist-done-block">';
-            renderRows(done, true);
-            html += '</div>';
-        }
+        buildVisibleChecklistSteps(active, item.id, collapsedKeys)
+            .forEach((row) => renderRow(row.step, row));
+        done.forEach((step) => renderRow(step, { isDoneSection: true }));
+
         html += '</div>';
         return html;
     },
@@ -710,8 +703,10 @@ export const UI = {
         
         const visibilityBadgeColor = item.visibility === 'public' ? '#10b981' : '#f59e0b';
         
+        const typeBadgeHtml = this.buildChecklistBadgeHtml(item, isQuickLinkType);
+
         card.innerHTML = `
-            <div class="card-header">
+            <div class="card-header card-drag-zone">
                 ${titleHtml}
                 ${this.buildCardActionsHtml(item, card.classList.contains('expanded'), {
                     freeform: card.dataset.freeform === '1',
@@ -724,6 +719,7 @@ export const UI = {
             <div class="mini-card-meta expanded">
                 <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
                 ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
+                ${typeBadgeHtml}
             </div>
         `;
 
