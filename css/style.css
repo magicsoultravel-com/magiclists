@@ -675,16 +675,18 @@ body {
 
 /* Individual Column - fixed width, 2 cards per row inside */
 .canvas-column {
-    width: 220px !important;
-    min-width: 220px !important;
-    max-width: 220px !important;
+    width: 212px !important;
+    min-width: 212px !important;
+    max-width: 212px !important;
     background-color: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: 6px;
-    padding: 0.5rem;
+    padding: 0.4rem;
     display: grid !important;
     grid-template-columns: 1fr 1fr !important;
-    gap: 0.5rem !important;
+    gap: 0.35rem !important;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 .column-header {
@@ -743,9 +745,11 @@ body {
 
 .column-hide-btn {
     cursor: pointer;
-    font-size: 1rem;
+    font-size: 0.9rem;
+    line-height: 1;
     font-weight: bold;
     opacity: 0.6;
+    flex-shrink: 0;
     transition: opacity 0.2s;
 }
 
@@ -1949,12 +1953,34 @@ textarea.form-input {
 }
 
 .canvas-column {
-    width: 192px !important;
-    min-width: 192px !important;
-    max-width: 192px !important;
+    width: 212px !important;
+    min-width: 212px !important;
+    max-width: 212px !important;
     gap: 0.35rem !important;
     padding: 0.4rem !important;
+    box-sizing: border-box;
+    overflow: hidden;
     transition: transform 0.16s ease, opacity 0.16s ease, outline-color 0.16s ease;
+}
+
+/* Cards inside category columns must fill grid cells, not use list-view fixed width */
+.canvas-column .mini-card.compact,
+.canvas-column .mini-card.expanded {
+    width: 100% !important;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+
+.canvas-column .mini-card.expanded .card-header,
+.canvas-column .mini-card.expanded .card-body,
+.canvas-column .mini-card.expanded .card-content-preview {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.canvas-column .column-header {
+    width: 100%;
+    box-sizing: border-box;
 }
 
 #app-canvas.view-list .mini-card {
