@@ -409,20 +409,30 @@ export const UI = {
     },
 
     setupFreeformChrome(card) {
-        if (card.querySelector('.ff-chrome')) return;
-        const chrome = document.createElement('div');
-        chrome.className = 'ff-chrome';
-        chrome.innerHTML = `
-            <span class="ff-resize ff-resize-n" data-axis="n" title="Resize"></span>
-            <span class="ff-resize ff-resize-s" data-axis="s" title="Resize"></span>
-            <span class="ff-resize ff-resize-e" data-axis="e" title="Resize"></span>
-            <span class="ff-resize ff-resize-w" data-axis="w" title="Resize"></span>
-            <span class="ff-resize ff-resize-nw" data-axis="nw" title="Resize"></span>
-            <span class="ff-resize ff-resize-ne" data-axis="ne" title="Resize"></span>
-            <span class="ff-resize ff-resize-sw" data-axis="sw" title="Resize"></span>
-            <span class="ff-resize ff-resize-se" data-axis="se" title="Resize"></span>
-        `;
-        card.appendChild(chrome);
+        let chrome = card.querySelector('.ff-chrome');
+        if (!chrome) {
+            chrome = document.createElement('div');
+            chrome.className = 'ff-chrome';
+            card.appendChild(chrome);
+        }
+        if (!chrome.querySelector('.ff-drag-gutter--edge')) {
+            const gutter = document.createElement('span');
+            gutter.className = 'ff-drag-gutter ff-drag-gutter--edge';
+            gutter.title = 'Drag to move';
+            chrome.insertBefore(gutter, chrome.firstChild);
+        }
+        if (!chrome.querySelector('.ff-resize-se')) {
+            chrome.insertAdjacentHTML('beforeend', `
+                <span class="ff-resize ff-resize-n" data-axis="n" title="Resize"></span>
+                <span class="ff-resize ff-resize-s" data-axis="s" title="Resize"></span>
+                <span class="ff-resize ff-resize-e" data-axis="e" title="Resize"></span>
+                <span class="ff-resize ff-resize-w" data-axis="w" title="Resize"></span>
+                <span class="ff-resize ff-resize-nw" data-axis="nw" title="Resize"></span>
+                <span class="ff-resize ff-resize-ne" data-axis="ne" title="Resize"></span>
+                <span class="ff-resize ff-resize-sw" data-axis="sw" title="Resize"></span>
+                <span class="ff-resize ff-resize-se" data-axis="se" title="Resize"></span>
+            `);
+        }
     },
 
     readFreeformCardSize(card) {

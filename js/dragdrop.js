@@ -301,11 +301,14 @@ export const DragDropEngine = {
                     return;
                 }
 
-                if (e.target.closest('.card-actions, .step-check, .step-delete-btn, .step-collapse-btn, .quicklink-anchor-row, .card-inline-edit, .step-nest-controls, .ff-resize, a, button, input, textarea')) {
-                    return;
-                }
+                const interactive = e.target.closest(
+                    '.card-actions, .step-check, .step-delete-btn, .step-collapse-btn, .quicklink-anchor-row, .card-inline-edit, .step-nest-controls, .ff-resize, a, button, input, textarea'
+                );
+                if (interactive) return;
 
-                if (!e.target.closest('.card-drag-zone')) return;
+                const onDragGutter = e.target.closest('.ff-drag-gutter');
+                const onDragZone = e.target.closest('.card-drag-zone');
+                if (!onDragGutter && !onDragZone) return;
 
                 e.preventDefault();
                 e.stopPropagation();
