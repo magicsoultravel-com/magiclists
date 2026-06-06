@@ -1,5 +1,6 @@
 // js/toolsManager.js
 import { CARD_ICONS } from './ui.js';
+import { TOOLS_REGISTRY } from './tools/registry.js';
 
 function escapeHtml(str) {
     if (!str) return '';
@@ -45,11 +46,6 @@ export const ToolsManager = {
         this.renderDropdownMenu();
     },
 
-    getApiBasePath() {
-        const pagePath = window.location.pathname.replace(/\/[^/]*$/, '/');
-        return `${pagePath}api/tools-list.php`;
-    },
-
     getToolsBasePath() {
         const appScript = document.querySelector('script[type="module"][src*="app.js"]');
         if (appScript?.src) {
@@ -60,27 +56,7 @@ export const ToolsManager = {
     },
 
     async loadRegistry() {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2500);
-
-        try {
-            const response = await fetch(`${this.getApiBasePath()}?t=${Date.now()}`, {
-                signal: controller.signal
-            });
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            const data = await response.json();
-            if (!Array.isArray(data)) {
-                throw new Error('Invalid tools list response');
-            }
-            this.registry = data;
-        } catch (error) {
-            console.error('[ToolsManager] Failed to load tools registry:', error);
-            this.registry = [];
-        } finally {
-            clearTimeout(timeoutId);
-        }
+        this.registry = Array.isArray(TOOLS_REGISTRY) ? TOOLS_REGISTRY : [];
     },
 
     getToolMeta(toolId) {
@@ -89,7 +65,7 @@ export const ToolsManager = {
 
     renderDropdownMenu() {
         if (!this.registry.length) {
-            this.dropdown.innerHTML = '<p class="tool-msg">No tools available. Check api/tools-list.php and js/tools/.</p>';
+            this.dropdown.innerHTML = '<p class="tool-msg">No tools available. Run node scripts/build-tools-list.mjs after adding tools.</p>';
             return;
         }
 

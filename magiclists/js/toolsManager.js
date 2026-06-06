@@ -1,5 +1,6 @@
 // js/toolsManager.js
 import { getToolIcon } from './tool-icons.js';
+import { TOOLS_REGISTRY } from './tools/registry.js';
 
 function escapeHtml(str) {
     if (!str) return '';
@@ -33,11 +34,6 @@ export const ToolsManager = {
         this.renderDropdownMenu();
     },
 
-    getApiBasePath() {
-        const pagePath = window.location.pathname.replace(/\/[^/]*$/, '/');
-        return `${pagePath}api/tools-list.php`;
-    },
-
     getToolsBasePath() {
         const appScript = document.querySelector('script[type="module"][src*="app.js"]');
         if (appScript?.src) {
@@ -48,27 +44,13 @@ export const ToolsManager = {
     },
 
     async loadRegistry() {
-        try {
-            const response = await fetch(`${this.getApiBasePath()}?t=${Date.now()}`);
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-            }
-            const data = await response.json();
-            if (!Array.isArray(data)) {
-                throw new Error('Invalid tools list response');
-            }
-            this.registry = data;
-        } catch (error) {
-            console.warn('[ToolsManager] Could not load tools from server:', error);
-            this.registry = [];
-            this.dropdown.innerHTML = '<p class="tool-msg tool-msg--error">Tools list unavailable. Ensure api/tools-list.php is deployed.</p>';
-        }
+        this.registry = Array.isArray(TOOLS_REGISTRY) ? TOOLS_REGISTRY : [];
     },
 
     renderDropdownMenu() {
         if (!this.registry.length) {
             if (!this.dropdown.innerHTML) {
-                this.dropdown.innerHTML = '<p class="tool-msg">No tools found in js/tools/</p>';
+                this.dropdown.innerHTML = '<p class="tool-msg">No tools available. Run node scripts/build-tools-list.mjs after adding tools.</p>';
             }
             return;
         }

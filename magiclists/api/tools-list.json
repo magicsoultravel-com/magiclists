@@ -1,0 +1,50 @@
+[
+  {
+    "id": "calendar",
+    "label": "Calendar",
+    "order": 0,
+    "icon": "calendar",
+    "wide": false,
+    "mountClass": ""
+  },
+  {
+    "id": "calculator",
+    "label": "Calculator",
+    "order": 1,
+    "icon": "calculator",
+    "wide": false,
+    "mountClass": ""
+  },
+  {
+    "id": "converter",
+    "label": "Unit Converter",
+    "order": 2,
+    "icon": "converter",
+    "wide": false,
+    "mountClass": ""
+  },
+  {
+    "id": "timezone",
+    "label": "Timezone",
+    "order": 3,
+    "icon": "timezone",
+    "wide": false,
+    "mountClass": ""
+  },
+  {
+    "id": "globe-tz",
+    "label": "Global TZ",
+    "order": 4,
+    "icon": "globe-tz",
+    "wide": false,
+    "mountClass": ""
+  },
+  {
+    "id": "globe",
+    "label": "Globe",
+    "order": 5,
+    "icon": "globe",
+    "wide": false,
+    "mountClass": ""
+  }
+]
