@@ -301,7 +301,7 @@ export const DragDropEngine = {
                     return;
                 }
 
-                if (e.target.closest('.card-actions, .step-check, .step-delete-btn, .quicklink-anchor-row, .card-inline-edit, .step-nest-controls, .expanded-checklist, .card-content-preview, .ff-resize, a, button, input, textarea, [contenteditable]')) {
+                if (e.target.closest('.card-actions, .card-body, .step-check, .step-delete-btn, .quicklink-anchor-row, .card-inline-edit, .step-nest-controls, .ff-resize, a, button, input, textarea, [contenteditable]')) {
                     return;
                 }
 

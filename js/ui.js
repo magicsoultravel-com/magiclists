@@ -713,9 +713,11 @@ export const UI = {
                     canDelete: canEdit && card.classList.contains('expanded')
                 })}
             </div>
-            ${bodyHtml}
-            ${checklistHtml}
-            ${quickLinksHtml}
+            <div class="card-body">
+                ${bodyHtml}
+                ${checklistHtml}
+                ${quickLinksHtml}
+            </div>
             <div class="mini-card-meta expanded">
                 <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
                 ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}

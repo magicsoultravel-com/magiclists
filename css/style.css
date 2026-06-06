@@ -814,23 +814,44 @@ body {
     height: auto !important;
     min-height: unset !important;
     max-height: min(72vh, 680px) !important;
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
+    overflow: hidden !important;
     display: flex;
     flex-direction: column;
     align-items: stretch;
+    gap: 0.3rem;
+}
+
+.mini-card.expanded .card-header,
+.mini-card.expanded .mini-card-meta.expanded {
+    flex: 0 0 auto;
+}
+
+.mini-card.expanded .card-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
     gap: 0.3rem;
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 
-.mini-card.expanded::-webkit-scrollbar {
+.mini-card.expanded .card-body::-webkit-scrollbar {
     width: 5px;
 }
 
-.mini-card.expanded::-webkit-scrollbar-thumb {
+.mini-card.expanded .card-body::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.22);
     border-radius: 4px;
+}
+
+.mini-card.expanded .card-content-preview,
+.mini-card.expanded .expanded-checklist,
+.mini-card.expanded .expanded-links {
+    flex: 0 0 auto;
+    overflow: visible;
 }
 
 /* Card Header */
@@ -1097,9 +1118,9 @@ body {
 }
 
 .expanded-checklist {
-    margin: 0.35rem 0;
-    padding-left: 0.4rem;
-    border-left: 2px solid var(--border-color);
+    margin: 0;
+    padding: 0;
+    border: none;
 }
 
 .checklist-done-divider {
@@ -1763,18 +1784,9 @@ textarea.form-input {
     word-break: break-word;
 }
 
-#app-canvas.view-freeform .mini-card.expanded .card-content-preview,
-#app-canvas.view-freeform .mini-card.expanded .expanded-checklist,
-#app-canvas.view-freeform .mini-card.expanded .expanded-links {
+#app-canvas.view-freeform .mini-card.expanded .card-body {
     flex: 1 1 auto;
     min-height: 0;
-    overflow: hidden;
-}
-
-#app-canvas.view-freeform .mini-card.expanded:not(.is-freeform-resizing) .card-content-preview,
-#app-canvas.view-freeform .mini-card.expanded:not(.is-freeform-resizing) .expanded-checklist {
-    overflow-x: hidden;
-    overflow-y: auto;
 }
 
 #app-canvas.view-freeform .mini-card.expanded .card-content-preview {
