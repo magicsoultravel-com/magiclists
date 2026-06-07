@@ -39,6 +39,8 @@ export const SidePanel = {
         this.bindCollapsable('quick-actions-header', 'quick-actions-section');
         this.bindCollapsable('view-section-header', 'view-section');
         this.bindCollapsable('notes-list-section-header', 'notes-list-section', false, '.sidebar-notes-list-sort');
+        this.bindCollapsable('notes-list-active-header', 'notes-list-active-section');
+        this.bindCollapsable('notes-list-archived-header', 'notes-list-archived-section', true);
         this.bindCollapsable('status-panel-header', 'status-panel');
         this.bindCollapsable('objects-status-header', 'objects-status-detail', true);
         this.bindCollapsable('categories-status-header', 'categories-status-detail', true);
@@ -163,35 +165,47 @@ export const SidePanel = {
         });
     },
 
-    updateNotesList(items) {
-        const zone = document.getElementById('notes-list-zone');
+    renderNotesListZone(zoneId, listItems, allItems, { archived = false } = {}) {
+        const zone = document.getElementById(zoneId);
         if (!zone) return;
 
-        if (!items?.length) {
-            zone.innerHTML = `<div class="sidebar-notes-list-empty">No notes yet</div>`;
+        if (!listItems?.length) {
+            zone.innerHTML = `<div class="sidebar-notes-list-empty">${archived ? 'No archived notes' : 'No active notes'}</div>`;
             return;
         }
 
-        const sorted = this.sortNotesForList(items);
-        zone.innerHTML = sorted.map(item => {
+        const sorted = this.sortNotesForList(listItems);
+        zone.innerHTML = sorted.map((item) => {
             const accent = resolveNoteColor(item.backgroundColor);
             const accentStyle = ` style="--note-accent:${this.escapeAttr(accent)}"`;
             const dateLabel = UI.formatNoteListDate(item);
             const title = this.escapeHTML(item.title || 'Untitled');
             return `
-            <button type="button" class="sidebar-notes-list-item has-note-color" data-id="${this.escapeAttr(item.id)}" title="${title}"${accentStyle}>
+            <button type="button" class="sidebar-notes-list-item has-note-color${archived ? ' is-archived' : ''}" data-id="${this.escapeAttr(item.id)}" title="${title}"${accentStyle}>
                 <span class="sidebar-notes-list-date">${this.escapeHTML(dateLabel)}</span>
                 <span class="sidebar-notes-list-item-title">${title}</span>
             </button>`;
         }).join('');
 
-        zone.querySelectorAll('.sidebar-notes-list-item').forEach(btn => {
+        zone.querySelectorAll('.sidebar-notes-list-item').forEach((btn) => {
             btn.addEventListener('click', () => {
-                const item = items.find(entry => entry.id === btn.dataset.id);
+                const item = allItems.find((entry) => entry.id === btn.dataset.id);
                 if (!item) return;
                 window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: item }));
             });
         });
+    },
+
+    updateNotesList(items) {
+        const allItems = items || [];
+        const activeItems = allItems.filter((item) => item.status !== 'archived');
+        const archivedItems = allItems.filter((item) => item.status === 'archived');
+
+        document.getElementById('notes-active-count')?.textContent = String(activeItems.length);
+        document.getElementById('notes-archived-count')?.textContent = String(archivedItems.length);
+
+        this.renderNotesListZone('notes-list-active-zone', activeItems, allItems);
+        this.renderNotesListZone('notes-list-archived-zone', archivedItems, allItems, { archived: true });
     },
 
     escapeAttr(str) {
@@ -206,6 +220,7 @@ export const SidePanel = {
 
     updateObjectsStatus(items) {
         const visible = items.filter(item => {
+            if (item.status === 'archived') return false;
             try {
                 const hiddenIds = JSON.parse(localStorage.getItem('matrix_hidden_board_ids') || '[]');
                 return !hiddenIds.includes(item.id) && !item.hiddenFromBoard;

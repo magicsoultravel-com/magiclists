@@ -16,7 +16,7 @@ export const Editor = {
         this.mountZone = document.getElementById('modal-form-mount');
         this.calendarToggleBtn = document.getElementById('modal-calendar-toggle');
         this.saveBtn = document.getElementById('modal-save-btn');
-        this.deleteBtn = document.getElementById('modal-delete-btn');
+        this.archiveBtn = document.getElementById('modal-archive-btn');
         this.approveBtn = document.getElementById('modal-approve-btn');
 
         document.getElementById('modal-close-btn')?.addEventListener('click', () => this.closeAndSave());
@@ -28,7 +28,7 @@ export const Editor = {
         this.saveBtn?.addEventListener('click', commitAndClose);
         this.approveBtn?.addEventListener('click', commitAndClose);
         this.calendarToggleBtn?.addEventListener('click', () => this.toggleCalendarVisibility());
-        this.deleteBtn?.addEventListener('click', () => this.emitDeleteAction());
+        this.archiveBtn?.addEventListener('click', () => this.emitArchiveAction());
         this.overlay?.addEventListener('mousedown', (e) => {
             if (e.target !== this.overlay) return;
             this.closeAndSave();
@@ -330,10 +330,10 @@ export const Editor = {
         const isExistingItem = item.created_at !== undefined;
         const createdLabel = this.formatCreatedDate(item.created_at);
         const sizeLabel = computeNoteSizeKb(item);
-        this.deleteBtn?.classList.toggle('is-hidden', !isExistingItem);
+        this.archiveBtn?.classList.toggle('is-hidden', !isExistingItem);
         this.saveBtn.innerHTML = CARD_ICONS.save;
         document.getElementById('modal-close-btn').innerHTML = CARD_ICONS.close;
-        if (this.deleteBtn) this.deleteBtn.innerHTML = CARD_ICONS.close;
+        this.updateArchiveToggleUI();
         this.updateCalendarToggleUI();
         const warningLightHtml = '';
         const startParts = this.parseStoredDateTime(item.startDateTime || '');
@@ -420,6 +420,7 @@ export const Editor = {
                 el.addEventListener('change', () => {
                     this.markInteracted();
                     this.updateEditorSizeLabel();
+                    if (id === 'edit-status') this.updateArchiveToggleUI();
                     this.triggerAutoSave();
                 });
             }
@@ -508,12 +509,31 @@ export const Editor = {
         this.closeAndSave();
     },
     
-    emitDeleteAction() {
+    updateArchiveToggleUI() {
+        if (!this.archiveBtn || !this.activeItem) return;
+        const isArchived = this.activeItem.status === 'archived';
+        this.archiveBtn.innerHTML = isArchived ? CARD_ICONS.unarchive : CARD_ICONS.archive;
+        this.archiveBtn.title = isArchived ? 'Restore to active' : 'Archive note';
+        this.archiveBtn.setAttribute('aria-label', this.archiveBtn.title);
+        this.archiveBtn.classList.toggle('card-act--archive-on', isArchived);
+    },
+
+    emitArchiveAction() {
+        if (!this.activeItem) return;
+        const isArchived = this.activeItem.status === 'archived';
         const label = this.activeItem.title?.trim() || 'this note';
-        if (confirm(`Delete "${label}"? You can undo afterwards.`)) {
-            window.dispatchEvent(new CustomEvent('item:deletion_requested', { detail: this.activeItem.id }));
-            this.close();
-        }
+        const verb = isArchived ? 'Restore' : 'Archive';
+        if (!confirm(`${verb} "${label}"? You can undo afterwards.`)) return;
+
+        this.markInteracted();
+        const beforeItem = JSON.parse(JSON.stringify(this.activeItem));
+        const data = this.collectFormData();
+        data.status = isArchived ? 'active' : 'archived';
+
+        window.dispatchEvent(new CustomEvent('item:mutation_requested', {
+            detail: { item: data, beforeItem, preserveView: false }
+        }));
+        this.close();
     },
     
     escapeQuotes(str) { return str ? str.replace(/"/g, '&quot;') : ''; }

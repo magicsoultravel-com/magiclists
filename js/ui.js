@@ -22,6 +22,8 @@ export const CARD_ICONS = {
     close: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>',
     color: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M6 1.8c-2.3 0-4.2 1.7-4.2 3.9 0 1.4.9 2.5 2.1 3.1L4.8 10h2.4l.9-1.2c1.2-.6 2.1-1.7 2.1-3.1C10.2 3.5 8.3 1.8 6 1.8z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><circle cx="4.4" cy="4.8" r="0.75" fill="currentColor"/><circle cx="6.2" cy="3.8" r="0.65" fill="currentColor" opacity="0.75"/><circle cx="7.5" cy="5.2" r="0.6" fill="currentColor" opacity="0.55"/></svg>',
     delete: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3 3.2h6M4.2 3.2V2.4h3.6v.8M4.4 5v4.2M7.6 5v4.2M3.8 3.2l.5 6.3h3.4l.5-6.3" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    archive: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 4.4h7.6v5.4H2.2z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M2 4.4h8V3.5H7.5L6.7 2.5H5.3L4.5 3.5H2v.9z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M5 6.2v2.2M7 6.2v2.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
+    unarchive: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 5.8h7.6v4H2.2z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M2 5.8h8V4.9H7.5L6.7 3.9H5.3L4.5 4.9H2v.9z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M6 3.2V6.4M6 3.2 4.6 4.6M6 3.2 7.4 4.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     bringFront: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.4" y="4.6" width="7.2" height="5.2" rx="0.55" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M3.4 2.4h7.2v5.2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
 
@@ -155,6 +157,10 @@ export const UI = {
         return this.getLocalHiddenIds().includes(item.id);
     },
 
+    isArchived(item) {
+        return item?.status === 'archived';
+    },
+
     hideFromBoard(item) {
         if (localStorage.getItem('admin_token')) {
             this.emitItemMutation(
@@ -219,7 +225,7 @@ export const UI = {
     },
 
     getVisibleItems(items) {
-        return items.filter(item => !this.isHiddenFromBoard(item));
+        return items.filter((item) => !this.isHiddenFromBoard(item) && !this.isArchived(item));
     },
 
     captureScrollState(canvas) {
@@ -775,8 +781,6 @@ export const UI = {
         card.classList.remove('note-surface');
         const fullTitle = item.title || '';
         const titleAttr = this.escapeHTML(fullTitle).replace(/"/g, '&quot;');
-        const typeBadgeHtml = this.buildChecklistBadgeHtml(item, isQuickLinkType);
-
         let quickLinksHtml = '';
         if (isQuickLinkType && item.steps && item.steps.length > 0) {
             const activeLinks = item.steps.filter(step => step.completed);
@@ -804,7 +808,6 @@ export const UI = {
             <div class="mini-card-meta compact${dragZone}">
                 <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
                 ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
-                ${typeBadgeHtml}
             </div>
             ${quickLinksHtml ? `<div class="compact-links">${quickLinksHtml}</div>` : ''}
         `;
@@ -823,25 +826,21 @@ export const UI = {
         return !!localStorage.getItem('admin_token');
     },
 
-    buildChecklistBadgeHtml(item, isQuickLinkType) {
-        if (isQuickLinkType || item.type !== 'checklist' || !item.steps?.length) return '';
-        const completedCount = item.steps.filter((s) => s.completed).length;
-        return `<span class="checklist-badge">☑️ ${completedCount}/${item.steps.length}</span>`;
-    },
-
     buildExpandedChecklistHtml(item, canEdit) {
         const collapsedKeys = this.getChecklistCollapsedKeys();
         const { active, done } = partitionChecklistSteps(item.steps);
         let html = '<div class="expanded-checklist">';
 
         const renderRow = (step, { hasKids = false, isCollapsed = false, collapseKey = '', isDoneSection = false } = {}) => {
-            const level = isDoneSection ? 0 : getStepLevel(step);
+            const level = getStepLevel(step);
             const collapseControl = !isDoneSection && hasKids
                 ? `<button type="button" class="step-collapse-btn" data-collapse-key="${this.escapeAttr(collapseKey)}" title="${isCollapsed ? 'Expand group' : 'Collapse group'}" aria-label="${isCollapsed ? 'Expand group' : 'Collapse group'}">${isCollapsed ? '▶' : '▼'}</button>`
                 : '<span class="step-collapse-spacer" aria-hidden="true"></span>';
-            const dragHandle = canEdit && !isDoneSection
-                ? '<span class="grab-handle grab-handle--step" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>'
-                : '';
+            const dragHandle = !canEdit
+                ? ''
+                : isDoneSection
+                    ? '<span class="grab-handle grab-handle--step grab-handle--spacer" aria-hidden="true">⋮⋮</span>'
+                    : '<span class="grab-handle grab-handle--step" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>';
             const nestControls = canEdit ? `
                     <button type="button" class="card-act step-outdent-btn" title="Outdent" aria-label="Outdent"${level === 0 ? ' disabled' : ''}>‹</button>
                     <button type="button" class="card-act step-indent-btn" title="Indent" aria-label="Indent"${level >= 4 ? ' disabled' : ''}>›</button>` : '';
@@ -854,8 +853,8 @@ export const UI = {
             html += `
                 <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}" data-step-id="${step.id}" data-level="${level}" style="padding-left:${level * 0.45}rem">
                     <div class="step-row-leading">
-                        ${dragHandle}
                         ${collapseControl}
+                        ${dragHandle}
                         <input type="checkbox" class="step-check" ${step.completed ? 'checked' : ''}>
                     </div>
                     ${textHtml}
@@ -911,7 +910,6 @@ export const UI = {
         
         const visibilityBadgeColor = item.visibility === 'public' ? '#10b981' : '#f59e0b';
         
-        const typeBadgeHtml = this.buildChecklistBadgeHtml(item, isQuickLinkType);
         const dragZone = this.freeformDragZoneClass(card);
         const createdLabel = this.formatCreatedDate(item.created_at);
         const createdHtml = createdLabel ? `<span class="created-date" title="Created">${createdLabel}</span>` : '';
@@ -929,7 +927,6 @@ export const UI = {
             <div class="mini-card-meta expanded${dragZone}">
                 <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
                 ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
-                ${typeBadgeHtml}
                 ${sizeHtml}
                 ${createdHtml}
             </div>

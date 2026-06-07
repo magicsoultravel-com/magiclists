@@ -91,7 +91,24 @@
                     </span>
                 </div>
                 <div class="collapsable-section" id="notes-list-section">
-                    <div id="notes-list-zone" class="sidebar-notes-list"></div>
+                    <div class="sidebar-notes-group">
+                        <div class="collapsable-header list-row--header sidebar-notes-subheader" id="notes-list-active-header">
+                            <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Active</span>
+                            <span id="notes-active-count" class="status-badge">0</span>
+                        </div>
+                        <div class="collapsable-section" id="notes-list-active-section">
+                            <div id="notes-list-active-zone" class="sidebar-notes-list"></div>
+                        </div>
+                    </div>
+                    <div class="sidebar-notes-group">
+                        <div class="collapsable-header list-row--header sidebar-notes-subheader" id="notes-list-archived-header">
+                            <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Archived</span>
+                            <span id="notes-archived-count" class="status-badge">0</span>
+                        </div>
+                        <div class="collapsable-section collapsed" id="notes-list-archived-section">
+                            <div id="notes-list-archived-zone" class="sidebar-notes-list"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
             </div>
@@ -131,7 +148,7 @@
     <div id="editor-overlay" class="overlay is-hidden">
         <div class="modal">
             <div class="toolbar editor-toolbar">
-                <button type="button" id="modal-delete-btn" class="card-act card-act--danger is-hidden" title="Delete" aria-label="Delete"></button>
+                <button type="button" id="modal-archive-btn" class="card-act card-act--archive is-hidden" title="Archive note" aria-label="Archive note"></button>
                 <span class="editor-toolbar-spacer" aria-hidden="true"></span>
                 <button type="button" id="modal-calendar-toggle" class="card-act card-act--cal" title="Show on calendar" aria-label="Toggle calendar"></button>
                 <button type="button" id="modal-save-btn" class="card-act card-act--save" title="Save" aria-label="Save"></button>

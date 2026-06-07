@@ -400,20 +400,6 @@ class Application {
             }
         });
 
-        window.addEventListener('item:deletion_requested', async (e) => {
-            if (!AppState.user.isLoggedIn) return;
-            const itemId = e.detail;
-            const item = AppState.items.find((i) => i.id === itemId);
-            if (!item) return;
-
-            const success = await API.deleteItem(itemId, AppState.user.token);
-            if (!success) return;
-
-            const label = item.title?.trim() || 'note';
-            UndoManager.recordItemDeletion(item, `Delete "${label}"`);
-            await this.syncDataStore();
-        });
-
         window.addEventListener('calendar:add_note', (e) => {
             const defaultDate = e.detail;
             const newItem = {

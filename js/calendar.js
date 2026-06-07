@@ -122,6 +122,7 @@ export const Calendar = {
         const events = [];
         
         this.items.forEach(item => {
+            if (item.status === 'archived') return;
             if (item.hideFromCalendar || this.isItemCalendarHidden(item.id)) return;
             const itemCategory = item.categories?.[0] || '';
             if (this.hiddenCategories.includes(itemCategory)) return;

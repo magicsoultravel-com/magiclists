@@ -234,7 +234,7 @@
 .step-row-leading {
     display: flex;
     align-items: flex-start;
-    gap: 0.28rem;
+    gap: 0.14rem;
     flex-shrink: 0;
 }
 
@@ -289,7 +289,7 @@
     width: 11px;
     height: 11px;
     margin-top: 0.12rem;
-    margin-left: -0.08rem;
+    margin-left: 0;
     flex-shrink: 0;
 }
 
@@ -1377,7 +1377,7 @@ body {
     background: var(--card-border-subtle);
 }
 
-.expanded-checklist .step-row--done {
+.expanded-checklist .step-row--done .step-text.completed {
     opacity: 0.82;
 }
 
@@ -2018,6 +2018,39 @@ textarea.form-input {
     color: var(--accent);
 }
 
+.sidebar-notes-group {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.sidebar-notes-group + .sidebar-notes-group {
+    margin-top: 0.15rem;
+    padding-top: 0.12rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.sidebar-notes-subheader {
+    padding: 0.1rem 0.2rem;
+    min-height: 0;
+}
+
+.sidebar-notes-subheader .collapsable-heading {
+    font-size: 0.58rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.sidebar-notes-subheader .status-badge {
+    font-size: 0.52rem;
+    min-width: 1rem;
+    padding: 0 0.2rem;
+}
+
+#notes-list-section > .sidebar-notes-group .sidebar-notes-list {
+    max-height: min(28vh, 220px);
+}
+
 .sidebar-notes-list {
     display: flex;
     flex-direction: column;
@@ -2027,6 +2060,10 @@ textarea.form-input {
     overflow-x: hidden;
     overflow-y: auto;
     padding: 0.15rem 0.2rem 0.25rem;
+}
+
+.sidebar-notes-list-item.is-archived {
+    opacity: 0.78;
 }
 
 .sidebar-notes-list-empty {
@@ -2109,12 +2146,21 @@ textarea.form-input {
 .grab-handle--step {
     font-size: 0.48rem;
     line-height: 1;
-    padding: 0 0.05rem;
-    margin-top: 0.1rem;
+    width: 0.42rem;
+    padding: 0;
+    margin-top: 0.12rem;
+    margin-right: -0.06rem;
     color: var(--text-muted);
     opacity: 0;
     cursor: grab;
     transition: opacity 0.12s ease, color 0.12s ease;
+}
+
+.grab-handle--step.grab-handle--spacer {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    cursor: default;
 }
 
 .step-row--display:hover .grab-handle--step,
@@ -2545,6 +2591,14 @@ textarea.form-input {
 
 .editor-toolbar .card-act--danger:hover {
     color: #fca5a5;
+}
+
+.editor-toolbar .card-act--archive:hover {
+    color: #fcd34d;
+}
+
+.editor-toolbar .card-act--archive.card-act--archive-on:hover {
+    color: #86efac;
 }
 
 #editor-overlay .modal-body {
