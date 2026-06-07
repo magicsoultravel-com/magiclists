@@ -1,10 +1,18 @@
 import { API } from './api.js';
 import { categoryKey, readStoredCategories } from './categories.js';
 import {
+    GRID_MAX_CELLS_H,
+    GRID_MAX_CELLS_W,
+    GRID_MIN_CELLS_H,
+    GRID_MIN_CELLS_W,
+    cellsToPx,
+    clampGridSize,
+    pxToCells,
+    snapPx
+} from './grid.js';
+import {
     UI,
     itemHasCategory,
-    FREEFORM_DEFAULT_W,
-    FREEFORM_DEFAULT_H,
     FREEFORM_MIN_W,
     FREEFORM_MIN_H
 } from './ui.js';
@@ -18,6 +26,11 @@ export const DragDropEngine = {
 
         if (canvas.classList.contains('view-freeform')) {
             this.initFreeformInteractions(canvas, currentItems);
+            return;
+        }
+
+        if (canvas.classList.contains('view-grid')) {
+            this.initGridInteractions(canvas, currentItems);
             return;
         }
 
@@ -304,6 +317,182 @@ export const DragDropEngine = {
                         origY: parseFloat(card.style.top) || 0,
                         origW: startW,
                         origH: startH
+                    };
+                    card.classList.add('is-freeform-resizing');
+                    card.dataset.skipExpand = '1';
+                    document.addEventListener('mousemove', onResizeMove);
+                    document.addEventListener('mouseup', onResizeUp);
+                    return;
+                }
+
+                const interactive = e.target.closest(
+                    '.card-actions, .step-check, .step-delete-btn, .step-collapse-btn, .quicklink-anchor-row, .card-inline-edit, .step-nest-controls, .step-row-actions, .expanded-checklist-add-btn, .ff-resize, a, button, input, textarea'
+                );
+                if (interactive) return;
+
+                const onDragGutter = e.target.closest('.ff-drag-gutter');
+                const onDragZone = e.target.closest('.card-drag-zone');
+                if (!onDragGutter && !onDragZone) return;
+
+                const scrollHost = e.target.closest('.card-body');
+                if (scrollHost && isScrollbarGrip(scrollHost, e.clientX)) return;
+
+                e.stopPropagation();
+                dragActive = {
+                    card,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    origX: parseFloat(card.style.left) || 0,
+                    origY: parseFloat(card.style.top) || 0,
+                    moved: false
+                };
+                document.addEventListener('mousemove', onDragMove);
+                document.addEventListener('mouseup', onDragUp);
+            });
+        });
+    },
+
+    initGridInteractions(canvas, currentItems = []) {
+        const surface = canvas.querySelector('.grid-canvas-surface') || canvas;
+        const cards = surface.querySelectorAll('.mini-card');
+        let dragActive = null;
+        let resizeActive = null;
+        const dragThreshold = 4;
+
+        const clampGridPx = (w, h, expanded) => {
+            const gw = pxToCells(w, { min: expanded ? 6 : GRID_MIN_CELLS_W, max: GRID_MAX_CELLS_W });
+            const gh = pxToCells(h, { min: expanded ? 4 : GRID_MIN_CELLS_H, max: GRID_MAX_CELLS_H });
+            const clamped = clampGridSize(gw, gh, { expanded });
+            return {
+                gw: clamped.gw,
+                gh: clamped.gh,
+                w: cellsToPx(clamped.gw),
+                h: cellsToPx(clamped.gh)
+            };
+        };
+
+        const isScrollbarGrip = (el, clientX) => {
+            if (!el || el.scrollHeight <= el.clientHeight) return false;
+            const scrollbarWidth = el.offsetWidth - el.clientWidth;
+            if (scrollbarWidth <= 0) return false;
+            const rect = el.getBoundingClientRect();
+            return clientX >= rect.right - scrollbarWidth - 2;
+        };
+
+        const onDragMove = (e) => {
+            if (!dragActive) return;
+            const dx = e.clientX - dragActive.startX;
+            const dy = e.clientY - dragActive.startY;
+            if (!dragActive.moved) {
+                if (Math.abs(dx) <= dragThreshold && Math.abs(dy) <= dragThreshold) return;
+                dragActive.moved = true;
+                dragActive.card.classList.add('is-freeform-dragging');
+            }
+            e.preventDefault();
+            const x = snapPx(Math.max(0, dragActive.origX + dx));
+            const y = snapPx(Math.max(0, dragActive.origY + dy));
+            dragActive.card.style.left = `${x}px`;
+            dragActive.card.style.top = `${y}px`;
+        };
+
+        const onDragUp = () => {
+            if (!dragActive) return;
+            const { card, moved } = dragActive;
+            card.classList.remove('is-freeform-dragging');
+            if (moved) {
+                card.dataset.skipExpand = '1';
+                const x = snapPx(parseFloat(card.style.left) || 0);
+                const y = snapPx(parseFloat(card.style.top) || 0);
+                card.style.left = `${x}px`;
+                card.style.top = `${y}px`;
+                UI.saveGridPosition(card.dataset.id, x, y);
+                UI.maybeExpandGridSurface(card);
+            }
+            dragActive = null;
+            document.removeEventListener('mousemove', onDragMove);
+            document.removeEventListener('mouseup', onDragUp);
+        };
+
+        const onResizeMove = (e) => {
+            if (!resizeActive) return;
+            const { card, axis, startX, startY, origX, origY, origW, origH, expanded } = resizeActive;
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            let nextX = origX;
+            let nextY = origY;
+            let nextW = origW;
+            let nextH = origH;
+
+            if (axis.includes('e')) nextW = origW + dx;
+            if (axis.includes('w')) {
+                nextW = origW - dx;
+                nextX = origX + dx;
+            }
+            if (axis.includes('s')) nextH = origH + dy;
+            if (axis.includes('n')) {
+                nextH = origH - dy;
+                nextY = origY + dy;
+            }
+
+            const clamped = clampGridPx(nextW, nextH, expanded);
+            if (axis.includes('w')) nextX = origX + (origW - clamped.w);
+            if (axis.includes('n')) nextY = origY + (origH - clamped.h);
+
+            nextX = snapPx(Math.max(0, nextX));
+            nextY = snapPx(Math.max(0, nextY));
+
+            card.style.left = `${nextX}px`;
+            card.style.top = `${nextY}px`;
+            UI.applyGridDimensions(card, clamped.gw, clamped.gh);
+        };
+
+        const onResizeUp = () => {
+            if (!resizeActive) return;
+            const { card } = resizeActive;
+            card.classList.remove('is-freeform-resizing');
+            const x = snapPx(parseFloat(card.style.left) || 0);
+            const y = snapPx(parseFloat(card.style.top) || 0);
+            card.style.left = `${x}px`;
+            card.style.top = `${y}px`;
+            UI.saveGridPosition(card.dataset.id, x, y);
+            UI.saveGridSizeFromCard(card);
+            UI.maybeExpandGridSurface(card);
+            card.dataset.skipExpand = '1';
+            resizeActive = null;
+            document.removeEventListener('mousemove', onResizeMove);
+            document.removeEventListener('mouseup', onResizeUp);
+        };
+
+        cards.forEach(card => {
+            card.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
+
+                const resizeHandle = e.target.closest('.ff-resize');
+                if (resizeHandle) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const { gw, gh, w: startW, h: startH } = UI.readGridCardSize(card);
+                    const expanded = card.classList.contains('expanded');
+                    if (card.classList.contains('compact')) {
+                        const itemMatch = currentItems.find(i => i.id === card.dataset.id);
+                        if (itemMatch) {
+                            UI.updateGridCard(card, itemMatch, {
+                                expanded: true,
+                                dimensions: { gw, gh }
+                            });
+                        }
+                    }
+                    resizeActive = {
+                        card,
+                        axis: resizeHandle.dataset.axis || 'se',
+                        startX: e.clientX,
+                        startY: e.clientY,
+                        origX: parseFloat(card.style.left) || 0,
+                        origY: parseFloat(card.style.top) || 0,
+                        origW: startW,
+                        origH: startH,
+                        expanded: true
                     };
                     card.classList.add('is-freeform-resizing');
                     card.dataset.skipExpand = '1';

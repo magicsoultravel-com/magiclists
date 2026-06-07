@@ -1,5 +1,18 @@
 import { isQuickLinksCategory, readStoredCategories } from './categories.js';
 import { applyCardTheme } from './cardTheme.js';
+import {
+    GRID_CELL,
+    GRID_CARD_CELLS_W,
+    GRID_DEFAULT_CANVAS,
+    GRID_EXPANDED_DEFAULT,
+    GRID_SIZE_PRESETS,
+    cellsToPx,
+    clampGridSize,
+    presetForLevel,
+    readGridDefaultLevel,
+    snapPx,
+    writeGridDefaultLevel
+} from './grid.js';
 
 export const FREEFORM_DEFAULT_W = 96;
 export const FREEFORM_DEFAULT_H = 56;
@@ -28,6 +41,7 @@ export const ACTION_ICONS = {
     viewList: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 3.2h7.6M2.2 6h7.6M2.2 8.8h7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
     viewCols: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.6" y="2.2" width="3.6" height="7.6" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.8" y="2.2" width="3.6" height="7.6" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.95"/></svg>',
     viewFree: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.5" y="2" width="3.2" height="2.6" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="7.3" y="2" width="3.2" height="3.8" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="2.8" y="7.2" width="4.4" height="2.8" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
+    viewGrid: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 2.2h3.2v3.2H2.2V2.2zm4.4 0h3.2v3.2H6.6V2.2zM2.2 6.6h3.2v3.2H2.2V6.6zm4.4 0h3.2v3.2H6.6V6.6z" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
     category: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="1.4" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.7" y="1.4" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="1.4" y="6.7" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.7" y="6.7" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/></svg>',
     export: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.6v5.8M3.7 5.1 6 7.4 8.3 5.1" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.2 10.4h7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
     import: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 10.4V4.6M3.7 6.9 6 4.6 8.3 6.9" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.2 10.4h7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
@@ -289,6 +303,7 @@ export const UI = {
 
         const viewClass = viewMode === 'columns' ? 'view-columns'
             : viewMode === 'freeform' ? 'view-freeform'
+            : viewMode === 'grid' ? 'view-grid'
             : 'view-list';
         canvas.className = viewClass;
 
@@ -353,6 +368,51 @@ export const UI = {
                     this.initFreeformCardStack(card, index);
                     canvas.appendChild(card);
                 });
+        } else if (viewMode === 'grid') {
+            const surface = document.createElement('div');
+            surface.className = 'grid-canvas-surface';
+            const positions = this.getGridPositions();
+            const extent = this.computeGridCanvasExtent(visibleItems, positions);
+            surface.style.width = `${extent.w}px`;
+            surface.style.height = `${extent.h}px`;
+
+            let autoX = GRID_CELL;
+            let autoY = GRID_CELL;
+            const defaultLevel = readGridDefaultLevel();
+            const defaultPreset = presetForLevel(defaultLevel);
+            const stepX = cellsToPx(GRID_CARD_CELLS_W) + GRID_CELL;
+
+            [...visibleItems]
+                .sort((a, b) => {
+                    const aTime = Number(a.created_at || a.updated_at || 0);
+                    const bTime = Number(b.created_at || b.updated_at || 0);
+                    return aTime - bTime;
+                })
+                .forEach((item, index) => {
+                    const card = this.createCardComponent(item, activeCategories, { grid: true });
+                    const saved = positions[item.id];
+                    const savedSize = this.getGridSizes()[item.id];
+                    if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+                        card.style.left = `${saved.x}px`;
+                        card.style.top = `${saved.y}px`;
+                    } else {
+                        card.style.left = `${autoX}px`;
+                        card.style.top = `${autoY}px`;
+                        autoX += stepX;
+                        if (autoX > extent.w - cellsToPx(GRID_CARD_CELLS_W) - GRID_CELL) {
+                            autoX = GRID_CELL;
+                            autoY += cellsToPx(defaultPreset.gh) + GRID_CELL;
+                        }
+                    }
+                    if (!savedSize) {
+                        this.saveGridSize(item.id, defaultPreset.gw, defaultPreset.gh);
+                    }
+                    card.removeAttribute('draggable');
+                    this.applyGridSize(card);
+                    this.initFreeformCardStack(card, index);
+                    surface.appendChild(card);
+                });
+            canvas.appendChild(surface);
         } else {
             [...visibleItems].sort((a, b) => {
                 const aTime = Number(a.created_at || a.updated_at || 0);
@@ -464,7 +524,7 @@ export const UI = {
 
         editBtn?.addEventListener('mousedown', (e) => {
             e.stopPropagation();
-            if (card.dataset.freeform === '1') this.raiseFreeformCard(card);
+            if (card.dataset.freeform === '1' || card.dataset.grid === '1') this.raiseFloatingCard(card);
         });
 
         editBtn?.addEventListener('click', (e) => {
@@ -613,6 +673,11 @@ export const UI = {
             return;
         }
 
+        if (card.dataset.grid === '1') {
+            this.updateGridCard(card, item, { expanded: willExpand });
+            return;
+        }
+
         expandedCards[item.id] = willExpand;
         localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
 
@@ -627,18 +692,19 @@ export const UI = {
         );
     },
 
-    createCardComponent(item, activeCategories, { freeform = false } = {}) {
+    createCardComponent(item, activeCategories, { freeform = false, grid = false } = {}) {
         const card = document.createElement('div');
         card.classList.add('mini-card');
         card.classList.add('compact');
         
         const hasSession = !!localStorage.getItem('admin_token');
-        if (hasSession && !freeform) {
+        if (hasSession && !freeform && !grid) {
             card.setAttribute('draggable', 'true');
         }
         
         card.dataset.id = item.id;
         if (freeform) card.dataset.freeform = '1';
+        if (grid) card.dataset.grid = '1';
 
         const targetCatName = (item.categories && item.categories.length > 0) ? item.categories[0] : '';
         const isQuickLinkType = isQuickLinksCategory(targetCatName);
@@ -666,8 +732,8 @@ export const UI = {
             this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
         }
 
-        if (freeform) {
-            card.addEventListener('mousedown', () => this.raiseFreeformCard(card));
+        if (freeform || grid) {
+            card.addEventListener('mousedown', () => this.raiseFloatingCard(card));
         }
 
         return card;
@@ -683,7 +749,6 @@ export const UI = {
     renderCompactCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
         const fullTitle = item.title || '';
         const titleAttr = this.escapeHTML(fullTitle).replace(/"/g, '&quot;');
-
         const typeBadgeHtml = this.buildChecklistBadgeHtml(item, isQuickLinkType);
 
         let quickLinksHtml = '';
@@ -724,6 +789,7 @@ export const UI = {
             isQuickLinkType
         });
         this.finalizeFreeformCard(card);
+        this.finalizeGridCard(card);
     },
 
     canEditInline() {
@@ -858,6 +924,7 @@ export const UI = {
         });
         this.attachExpandedCardInteractions(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
         this.finalizeFreeformCard(card);
+        this.finalizeGridCard(card);
     },
 
     refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
@@ -1084,19 +1151,169 @@ export const UI = {
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
     },
 
+    getGridPositions() {
+        try {
+            return JSON.parse(localStorage.getItem('matrix_grid_positions') || '{}');
+        } catch {
+            return {};
+        }
+    },
+
+    saveGridPosition(itemId, x, y) {
+        const positions = this.getGridPositions();
+        positions[itemId] = { x: snapPx(x), y: snapPx(y) };
+        localStorage.setItem('matrix_grid_positions', JSON.stringify(positions));
+    },
+
+    getGridSizes() {
+        try {
+            return JSON.parse(localStorage.getItem('matrix_grid_sizes') || '{}');
+        } catch {
+            return {};
+        }
+    },
+
+    saveGridSize(itemId, gw, gh) {
+        const sizes = this.getGridSizes();
+        sizes[itemId] = clampGridSize(gw, gh);
+        localStorage.setItem('matrix_grid_sizes', JSON.stringify(sizes));
+    },
+
+    readGridCardSize(card) {
+        const gw = parseInt(card.dataset.gridGw, 10) || GRID_CARD_CELLS_W;
+        const gh = parseInt(card.dataset.gridGh, 10) || 1;
+        return { gw, gh, w: cellsToPx(gw), h: cellsToPx(gh) };
+    },
+
+    saveGridSizeFromCard(card) {
+        if (card.dataset.grid !== '1') return;
+        const { gw, gh } = this.readGridCardSize(card);
+        this.saveGridSize(card.dataset.id, gw, gh);
+    },
+
+    maybeExpandGridSurface(card) {
+        const surface = card?.closest('.grid-canvas-surface');
+        if (!surface) return;
+        const left = parseFloat(card.style.left) || 0;
+        const top = parseFloat(card.style.top) || 0;
+        const right = left + card.offsetWidth + GRID_CELL * 4;
+        const bottom = top + card.offsetHeight + GRID_CELL * 4;
+        const curW = parseFloat(surface.style.width) || GRID_DEFAULT_CANVAS;
+        const curH = parseFloat(surface.style.height) || GRID_DEFAULT_CANVAS;
+        if (right > curW) surface.style.width = `${right}px`;
+        if (bottom > curH) surface.style.height = `${bottom}px`;
+    },
+
+    resetGridLayout() {
+        localStorage.removeItem('matrix_grid_positions');
+        localStorage.removeItem('matrix_grid_sizes');
+        window.dispatchEvent(new CustomEvent('board:visibility_changed'));
+    },
+
+    setGridDefaultLevel(level) {
+        if (!GRID_SIZE_PRESETS[level]) return;
+        writeGridDefaultLevel(level);
+        document.querySelectorAll('.grid-level-btn').forEach((btn) => {
+            btn.classList.toggle('active', parseInt(btn.dataset.level, 10) === level);
+        });
+    },
+
+    computeGridCanvasExtent(items, positions = {}) {
+        let maxX = GRID_DEFAULT_CANVAS;
+        let maxY = GRID_DEFAULT_CANVAS;
+        const defaultLevel = readGridDefaultLevel();
+        const preset = presetForLevel(defaultLevel);
+
+        items.forEach((item) => {
+            const pos = positions[item.id];
+            const size = this.getGridSizes()[item.id] || preset;
+            const x = pos?.x ?? GRID_CELL;
+            const y = pos?.y ?? GRID_CELL;
+            maxX = Math.max(maxX, x + cellsToPx(size.gw) + GRID_CELL * 4);
+            maxY = Math.max(maxY, y + cellsToPx(size.gh) + GRID_CELL * 4);
+        });
+        return { w: maxX, h: maxY };
+    },
+
+    syncGridCompactLevelClass(card, gh) {
+        if (card.dataset.grid !== '1' || !card.classList.contains('compact')) return;
+        card.classList.toggle('compact--minimal', gh <= 1);
+        card.classList.toggle('compact--grid-s', gh === 2);
+        card.classList.toggle('compact--grid-m', gh === 3);
+        card.classList.toggle('compact--grid-l', gh >= 4);
+    },
+
+    applyGridDimensions(card, gw, gh) {
+        const w = cellsToPx(gw);
+        const h = cellsToPx(gh);
+        card.style.setProperty('width', `${w}px`, 'important');
+        card.style.setProperty('height', `${h}px`, 'important');
+        card.style.setProperty('min-height', `${h}px`, 'important');
+        card.style.setProperty('max-height', `${h}px`, 'important');
+        card.dataset.gridGw = String(gw);
+        card.dataset.gridGh = String(gh);
+        this.syncGridCompactLevelClass(card, gh);
+    },
+
+    applyGridSize(card) {
+        if (card.dataset.grid !== '1') return;
+        const saved = this.getGridSizes()[card.dataset.id];
+        const defaultLevel = readGridDefaultLevel();
+        const preset = presetForLevel(defaultLevel);
+        const isExpanded = card.classList.contains('expanded');
+
+        let gw;
+        let gh;
+        if (isExpanded) {
+            gw = saved?.gw && saved.gw >= 6 ? saved.gw : GRID_EXPANDED_DEFAULT.gw;
+            gh = saved?.gh && saved.gh >= 4 ? saved.gh : GRID_EXPANDED_DEFAULT.gh;
+        } else {
+            gw = saved?.gw ?? preset.gw;
+            gh = saved?.gh ?? preset.gh;
+        }
+        const clamped = clampGridSize(gw, gh, { expanded: isExpanded });
+        this.applyGridDimensions(card, clamped.gw, clamped.gh);
+    },
+
+    finalizeGridCard(card) {
+        if (card.dataset.grid !== '1') return;
+        this.setupFreeformChrome(card);
+        this.applyGridSize(card);
+    },
+
+    updateGridCard(card, item, { expanded, dimensions = null } = {}) {
+        if (card.dataset.grid !== '1') return;
+        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
+        expandedCards[item.id] = expanded;
+        localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
+
+        const activeCategories = readStoredCategories();
+        const { targetCatName, categoryColor, isQuickLinkType } = this.getCardRenderContext(item, activeCategories);
+
+        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+
+        if (dimensions) {
+            this.applyGridDimensions(card, dimensions.gw, dimensions.gh);
+            this.saveGridSize(item.id, dimensions.gw, dimensions.gh);
+        } else {
+            this.applyGridSize(card);
+        }
+    },
+
     initFreeformCardStack(card, orderIndex = 0) {
-        if (card.dataset.freeform !== '1') return;
+        if (card.dataset.freeform !== '1' && card.dataset.grid !== '1') return;
         const z = orderIndex + 1;
         card.style.setProperty('z-index', String(z), 'important');
         if (z >= freeformStackSeq) freeformStackSeq = z + 1;
     },
 
-    raiseFreeformCard(card) {
-        if (!card || card.dataset.freeform !== '1') return;
+    raiseFloatingCard(card) {
+        if (!card || (card.dataset.freeform !== '1' && card.dataset.grid !== '1')) return;
         freeformStackSeq += 1;
         card.style.setProperty('z-index', String(freeformStackSeq), 'important');
         card.classList.add('is-freeform-front');
-        card.closest('#app-canvas')?.querySelectorAll('.mini-card.is-freeform-front').forEach((other) => {
+        const root = card.closest('#app-canvas, .grid-canvas-surface');
+        root?.querySelectorAll('.mini-card.is-freeform-front').forEach((other) => {
             if (other !== card) other.classList.remove('is-freeform-front');
         });
     },
