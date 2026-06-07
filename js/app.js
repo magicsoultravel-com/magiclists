@@ -361,10 +361,12 @@ class Application {
             else AppState.items.push(item);
 
             if (preserveView) {
-                const canvas = document.getElementById('app-canvas');
-                UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
-                if (AppState.viewSettings.sortBy === 'freeform') {
-                    DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+                if (!detail?.skipRerender) {
+                    const canvas = document.getElementById('app-canvas');
+                    UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
+                    if (AppState.viewSettings.sortBy === 'freeform') {
+                        DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+                    }
                 }
                 this.updateWorkspaceCounter();
                 return;

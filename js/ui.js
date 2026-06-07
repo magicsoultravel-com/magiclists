@@ -241,16 +241,37 @@ export const UI = {
         return JSON.parse(JSON.stringify(item));
     },
 
-    emitItemMutation(item, { preserveView = false, beforeItem = null } = {}) {
+    emitItemMutation(item, { preserveView = false, beforeItem = null, skipRerender = false } = {}) {
         window.dispatchEvent(new CustomEvent('item:mutation_requested', {
-            detail: { item, preserveView, beforeItem }
+            detail: { item, preserveView, beforeItem, skipRerender }
         }));
     },
 
-    mutateItem(item, mutator, { preserveView = false } = {}) {
+    mutateItem(item, mutator, { preserveView = false, skipRerender = false } = {}) {
         const beforeItem = this.snapshotItem(item);
         mutator(item);
-        this.emitItemMutation(item, { preserveView, beforeItem });
+        this.emitItemMutation(item, { preserveView, beforeItem, skipRerender });
+    },
+
+    syncInlineFieldToItem(el, item) {
+        const field = el.dataset.field;
+        if (field === 'title') {
+            item.title = el.textContent.trim();
+        } else if (field === 'content') {
+            item.content = el.textContent;
+        } else if (field === 'step-text') {
+            const step = item.steps?.find(s => s.id === el.dataset.stepId);
+            if (step) step.text = el.textContent;
+        }
+    },
+
+    commitFocusedInlineField(card, item) {
+        const active = document.activeElement;
+        if (!active || !card.contains(active) || !active.classList.contains('card-inline-edit')) return;
+        this.mutateItem(item, () => {
+            this.syncInlineFieldToItem(active, item);
+        }, { preserveView: true, skipRerender: true });
+        active.dataset.skipBlurSave = '1';
     },
 
     buildNoteSizeHtml(item) {
@@ -442,6 +463,25 @@ export const UI = {
         </div>`;
     },
 
+    attachCardActionButton(btn, handler) {
+        if (!btn) return;
+        let handledByMouse = false;
+        btn.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            e.stopPropagation();
+            handledByMouse = true;
+            handler(e);
+        });
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (handledByMouse) {
+                handledByMouse = false;
+                return;
+            }
+            handler(e);
+        });
+    },
+
     attachCardActions(card, item, ctx) {
         const actions = card.querySelector('.card-actions');
         if (!actions) return;
@@ -459,29 +499,21 @@ export const UI = {
             return false;
         };
 
-        toggleBtn?.addEventListener('click', (e) => {
-            e.stopPropagation();
+        this.attachCardActionButton(toggleBtn, () => {
             if (consumeSkipExpand()) return;
             if (ctx) this.toggleCardExpanded(card, item, ctx);
         });
 
-        calBtn?.addEventListener('click', (e) => {
-            e.stopPropagation();
+        this.attachCardActionButton(calBtn, () => {
             this.toggleCardCalendar(item, calBtn);
         });
 
-        hideBtn?.addEventListener('click', (e) => {
-            e.stopPropagation();
+        this.attachCardActionButton(hideBtn, () => {
             this.hideFromBoard(item);
         });
 
-        editBtn?.addEventListener('mousedown', (e) => {
-            e.stopPropagation();
+        this.attachCardActionButton(editBtn, () => {
             if (card.dataset.freeform === '1') this.raiseFreeformCard(card);
-        });
-
-        editBtn?.addEventListener('click', (e) => {
-            e.stopPropagation();
             if (consumeSkipExpand()) return;
             if (!localStorage.getItem('admin_token')) return;
             window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: item }));
@@ -935,12 +967,40 @@ export const UI = {
         return false;
     },
 
+    handleChecklistEnter(card, item, el, refresh) {
+        el.dataset.skipBlurSave = '1';
+        const stepId = el.dataset.stepId;
+        this.syncInlineFieldToItem(el, item);
+        const newStep = this.createBlankChecklistStep();
+        this.mutateItem(item, (it) => {
+            if (it.type !== 'checklist') it.type = 'checklist';
+            if (!it.steps) it.steps = [];
+            const idx = it.steps.findIndex(s => s.id === stepId);
+            const insertAt = idx >= 0 ? idx + 1 : it.steps.length;
+            it.steps.splice(insertAt, 0, newStep);
+            reorderStepsByCompletion(it.steps);
+        }, { preserveView: true });
+        refresh();
+        requestAnimationFrame(() => {
+            const newEl = card.querySelector(`[data-step-id="${newStep.id}"]`);
+            if (newEl) this.focusInlineEdit(newEl, 'start');
+        });
+    },
+
     attachExpandedCardInteractions(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
         const refresh = () => {
             this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
         };
 
         if (this.canEditInline()) {
+            card.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
+                const active = document.activeElement;
+                if (!active?.classList?.contains('card-inline-edit') || !card.contains(active)) return;
+                if (active === e.target || active.contains(e.target)) return;
+                this.commitFocusedInlineField(card, item);
+            }, true);
+
             card.querySelectorAll('.card-inline-edit').forEach((el) => {
                 el.addEventListener('click', (e) => e.stopPropagation());
                 el.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -951,20 +1011,28 @@ export const UI = {
                         document.execCommand('undo');
                         return;
                     }
+                    if (el.dataset.field === 'step-text' && e.key === 'Enter') {
+                        if (e.shiftKey) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            document.execCommand('insertLineBreak');
+                            return;
+                        }
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.handleChecklistEnter(card, item, el, refresh);
+                        return;
+                    }
                     if (!this.handleInlineEditArrowNav(e, card, el)) e.stopPropagation();
                 });
                 el.addEventListener('blur', () => {
-                    const field = el.dataset.field;
-                    this.mutateItem(item, (it) => {
-                        if (field === 'title') {
-                            it.title = el.textContent.trim();
-                        } else if (field === 'content') {
-                            it.content = el.textContent;
-                        } else if (field === 'step-text') {
-                            const step = it.steps?.find(s => s.id === el.dataset.stepId);
-                            if (step) step.text = el.textContent.trim();
-                        }
-                    }, { preserveView: true });
+                    if (el.dataset.skipBlurSave) {
+                        delete el.dataset.skipBlurSave;
+                        return;
+                    }
+                    this.mutateItem(item, () => {
+                        this.syncInlineFieldToItem(el, item);
+                    }, { preserveView: true, skipRerender: true });
                 });
             });
         }
