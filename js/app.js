@@ -10,6 +10,7 @@ import { DEFAULT_CATEGORIES, normalizeCategories } from './categories.js';
 import { UndoManager, historyLabelForItem } from './undo.js';
 import { DesktopBackground } from './desktopBackground.js';
 import { ChromeBackground } from './chromeBackground.js';
+import { ClockStyle } from './clockStyle.js';
 import { randomNoteColor } from './colorPicker.js';
 
 function countHiddenFromBoard(items) {
@@ -49,7 +50,7 @@ class Application {
         this.setupCoreListeners();
         SidePanel.init(AppState);
         SidePanel.setupStatusClickHandlers();
-        this.startClockLoop();
+        ClockStyle.init();
         this.setupFreeformResetButton();
         this.updateFreeformResetVisibility();
         this.setupBackupInterface();
@@ -328,21 +329,6 @@ class Application {
         if (!btn) return;
         const show = AppState.viewSettings.sortBy === 'freeform' && AppState.user.isLoggedIn;
         btn.classList.toggle('is-hidden', !show);
-    }
-
-    startClockLoop() {
-        const dateEl = document.getElementById('clock-date');
-        const timeEl = document.getElementById('clock-time');
-        if (!dateEl || !timeEl) return;
-        const tick = () => {
-            const now = new Date();
-            timeEl.textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-            const weekday = now.toLocaleDateString('en-US', { weekday: 'short' });
-            const dateString = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            dateEl.textContent = `${weekday}, ${dateString}`;
-        };
-        tick();
-        setInterval(tick, 60000);
     }
 
     setupCoreListeners() {

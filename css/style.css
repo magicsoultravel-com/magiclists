@@ -2137,7 +2137,8 @@ textarea.form-input {
 }
 
 #btn-desktop-bg,
-#btn-chrome-bg {
+#btn-chrome-bg,
+#btn-clock-style {
     min-width: 30px;
     min-height: 30px;
     padding: 0.25rem;
@@ -2206,6 +2207,198 @@ textarea.form-input {
 
 .clock-chip--date {
     text-transform: uppercase;
+}
+
+.clock-display {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.clock-analog {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    color: #f8fafc;
+}
+
+.clock-analog-face {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* Clock style variants */
+#digital-clock[data-clock-style="analog"] .clock-chip {
+    display: none;
+}
+
+#digital-clock[data-clock-style="analog"] .clock-analog {
+    display: inline-flex;
+}
+
+#digital-clock[data-clock-style="compact"] .clock-chip--date {
+    display: none;
+}
+
+#digital-clock[data-clock-style="compact"] .clock-chip--time {
+    min-width: 148px;
+    letter-spacing: 0.01em;
+}
+
+#digital-clock[data-clock-style="retro"] .clock-chip {
+    background: rgba(0, 20, 8, 0.72);
+    border-color: rgba(34, 197, 94, 0.35);
+    color: #4ade80;
+    font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+    text-shadow: 0 0 8px rgba(74, 222, 128, 0.45);
+    box-shadow: inset 0 0 12px rgba(34, 197, 94, 0.08);
+}
+
+#digital-clock[data-clock-style="retro"] .clock-chip--time {
+    font-size: 0.88rem;
+    font-weight: 500;
+}
+
+#digital-clock[data-clock-style="military"] .clock-chip--time {
+    font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+    min-width: 96px;
+}
+
+#digital-clock[data-clock-style="digital-seconds"] .clock-chip--time {
+    min-width: 104px;
+}
+
+/* Clock style picker popover */
+.clock-style-popover {
+    position: fixed;
+    z-index: 320;
+    width: min(280px, calc(100vw - 16px));
+    padding: 0.45rem;
+    background: rgba(20, 20, 24, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.48);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.clock-style-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    max-height: min(420px, calc(100vh - 24px));
+    overflow-y: auto;
+}
+
+.clock-style-option {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    width: 100%;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-main);
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.clock-style-option:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.clock-style-option.is-selected {
+    background: rgba(99, 102, 241, 0.12);
+    border-color: rgba(99, 102, 241, 0.35);
+}
+
+.clock-style-preview {
+    flex-shrink: 0;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 72px;
+    min-height: 38px;
+    padding: 0.3rem 0.35rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.035);
+    font-size: 0.58rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    color: #f8fafc;
+    overflow: hidden;
+}
+
+.clock-style-preview-date {
+    opacity: 0.75;
+    text-transform: uppercase;
+    font-size: 0.5rem;
+    letter-spacing: 0.02em;
+}
+
+.clock-style-preview-time {
+    font-size: 0.68rem;
+    font-weight: 500;
+}
+
+.clock-style-preview--compact {
+    flex-direction: row;
+    font-size: 0.52rem;
+    white-space: nowrap;
+    gap: 0.15rem;
+}
+
+.clock-style-preview--analog {
+    padding: 0.15rem;
+    color: #f8fafc;
+}
+
+.clock-style-preview-face {
+    width: 34px;
+    height: 34px;
+    display: block;
+}
+
+.clock-style-preview--retro {
+    background: rgba(0, 20, 8, 0.72);
+    border-color: rgba(34, 197, 94, 0.35);
+    color: #4ade80;
+    font-family: ui-monospace, 'Cascadia Code', 'Consolas', monospace;
+    text-shadow: 0 0 6px rgba(74, 222, 128, 0.4);
+}
+
+.clock-style-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    min-width: 0;
+    flex: 1;
+}
+
+.clock-style-label {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--text-main);
+}
+
+.clock-style-desc {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.clock-style-check {
+    flex-shrink: 0;
+    font-size: 0.82rem;
+    color: var(--accent);
+    opacity: 0.9;
 }
 
 #app-canvas.view-list,
@@ -2814,6 +3007,11 @@ textarea.form-input {
 
     .clock-chip--date {
         display: none;
+    }
+
+    #digital-clock[data-clock-style="compact"] .clock-chip--time {
+        min-width: 120px;
+        font-size: 0.74rem;
     }
 
     #editor-overlay {
