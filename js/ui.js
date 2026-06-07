@@ -6,6 +6,7 @@ import {
     GRID_SIZE_PRESETS,
     cellsToPx,
     clampGridSize,
+    computeExtentFromOccupied,
     packGridItems,
     placementRect,
     presetForLevel,
@@ -372,7 +373,12 @@ export const UI = {
         } else if (viewMode === 'grid') {
             const surface = document.createElement('div');
             surface.className = 'grid-canvas-surface';
-            const viewportW = Math.max(canvas.clientWidth || 0, 320);
+            const viewportW = Math.max(
+                canvas.clientWidth
+                || document.getElementById('workspace-main')?.clientWidth
+                || window.innerWidth - 260,
+                320
+            );
             const positions = this.getGridPositions();
             const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
             const defaultPreset = presetForLevel(readGridDefaultLevel());
@@ -697,23 +703,28 @@ export const UI = {
     },
 
     applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
-        if (card.dataset.grid !== '1') {
+        const isGrid = card.dataset.grid === '1';
+        if (!isGrid) {
             card.classList.add('card-state-changing');
         }
         if (expanded) {
             card.classList.remove('compact');
-            card.classList.add('expanded', 'card-animate-expand');
+            if (!isGrid) card.classList.add('expanded', 'card-animate-expand');
+            else card.classList.add('expanded');
             this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
         } else {
             card.classList.remove('expanded', 'card-animate-expand');
-            card.classList.add('compact', 'card-animate-collapse');
+            if (!isGrid) card.classList.add('compact', 'card-animate-collapse');
+            else card.classList.add('compact');
             this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
         }
-        const cleanup = () => {
-            card.classList.remove('card-state-changing', 'card-animate-expand', 'card-animate-collapse');
-        };
-        card.addEventListener('animationend', cleanup, { once: true });
-        setTimeout(cleanup, 400);
+        if (!isGrid) {
+            const cleanup = () => {
+                card.classList.remove('card-state-changing', 'card-animate-expand', 'card-animate-collapse');
+            };
+            card.addEventListener('animationend', cleanup, { once: true });
+            setTimeout(cleanup, 400);
+        }
     },
 
     toggleGridCard(card, item, ctx) {
@@ -730,6 +741,7 @@ export const UI = {
         if (isMinimized) {
             this.setGridMinimized(item.id, false);
             this.applyGridSize(card);
+            this.resolveGridCardPlacement(card);
             this.syncGridToggleIcon(card);
             return;
         }
@@ -752,8 +764,8 @@ export const UI = {
             const compact = this.getGridCompactSizes()[item.id] || presetForLevel(readGridDefaultLevel());
             this.applyGridDimensions(card, compact.gw, 1);
         }
+        this.resolveGridCardPlacement(card);
         this.syncGridToggleIcon(card);
-        this.syncGridSurfaceFromCards(card.closest('.grid-canvas-surface'));
     },
 
     syncGridToggleIcon(card) {

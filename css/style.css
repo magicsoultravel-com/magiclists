@@ -2132,7 +2132,7 @@ textarea.form-input {
 .grid-canvas-surface {
     position: relative;
     min-width: 100%;
-    min-height: 100%;
+    min-height: 0;
     background-color: #111114;
     background-image:
         linear-gradient(to right, rgba(255, 255, 255, 0.045) 1px, transparent 1px),
@@ -2355,6 +2355,24 @@ textarea.form-input {
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
     transform: none !important;
     transition: none !important;
+}
+
+#app-canvas.view-grid .mini-card {
+    transition: none !important;
+    animation: none !important;
+}
+
+#app-canvas.view-grid .mini-card.card-animate-expand,
+#app-canvas.view-grid .mini-card.card-animate-collapse,
+#app-canvas.view-grid .mini-card.card-state-changing {
+    animation: none !important;
+    transition: none !important;
+}
+
+#app-canvas.view-grid .mini-card.is-freeform-dragging {
+    opacity: 0.92;
+    outline: 1px dashed rgba(255, 255, 255, 0.2);
+    outline-offset: 2px;
 }
 
 .canvas-column {

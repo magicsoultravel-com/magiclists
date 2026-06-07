@@ -9,7 +9,6 @@ import {
     cellsToPx,
     clampGridSize,
     collectOccupiedFromCards,
-    placementRect,
     pxToCells,
     resolveGridPosition,
     snapPx
@@ -469,23 +468,28 @@ export const DragDropEngine = {
 
         const onResizeUp = () => {
             if (!resizeActive) return;
-            const { card, origX, origY, origW, origH } = resizeActive;
+            const { card, origX, origY, origW, origH, expanded } = resizeActive;
             card.classList.remove('is-freeform-resizing');
 
-            const { gw, gh, w, h } = UI.readGridCardSize(card);
+            let { gw, gh } = UI.readGridCardSize(card);
             let x = snapPx(parseFloat(card.style.left) || 0);
             let y = snapPx(parseFloat(card.style.top) || 0);
-            const occupied = readOccupied(card);
-            const rect = placementRect(x, y, gw, gh);
+            let occupied = readOccupied(card);
 
             if (!canPlaceAt(x, y, gw, gh, occupied, card.dataset.id)) {
-                const fallbackGw = pxToCells(origW, { min: GRID_MIN_CELLS_W, max: GRID_MAX_CELLS_W });
-                const fallbackGh = pxToCells(origH, { min: GRID_MIN_CELLS_H, max: GRID_MAX_CELLS_H });
+                const fallback = clampGridSize(
+                    pxToCells(origW, { min: expanded ? 6 : GRID_MIN_CELLS_W, max: GRID_MAX_CELLS_W }),
+                    pxToCells(origH, { min: expanded ? 4 : GRID_MIN_CELLS_H, max: GRID_MAX_CELLS_H }),
+                    { expanded }
+                );
+                gw = fallback.gw;
+                gh = fallback.gh;
                 x = origX;
                 y = origY;
-                UI.applyGridDimensions(card, fallbackGw, fallbackGh);
+                UI.applyGridDimensions(card, gw, gh);
             }
 
+            occupied = readOccupied(card);
             const resolved = resolveGridPosition(x, y, gw, gh, occupied, card.dataset.id, viewportW());
             card.style.left = `${resolved.x}px`;
             card.style.top = `${resolved.y}px`;

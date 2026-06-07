@@ -405,6 +405,15 @@ class Application {
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         });
 
+        let gridResizeTimer = null;
+        window.addEventListener('resize', () => {
+            if (AppState.viewSettings.sortBy !== 'grid') return;
+            clearTimeout(gridResizeTimer);
+            gridResizeTimer = setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('board:visibility_changed'));
+            }, 180);
+        });
+
         window.addEventListener('calendar:items_changed', (e) => {
             const sourceItem = Editor.activeItem || e.detail;
             if (sourceItem?.id) {
