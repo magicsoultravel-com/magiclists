@@ -313,7 +313,7 @@ export const DragDropEngine = {
                 }
 
                 const interactive = e.target.closest(
-                    '.card-actions, .step-check, .step-delete-btn, .step-collapse-btn, .quicklink-anchor-row, .card-inline-edit, .step-nest-controls, .ff-resize, a, button, input, textarea'
+                    '.card-actions, .step-check, .step-delete-btn, .step-collapse-btn, .quicklink-anchor-row, .card-inline-edit, .step-nest-controls, .step-row-actions, .ff-resize, a, button, input, textarea'
                 );
                 if (interactive) return;
 

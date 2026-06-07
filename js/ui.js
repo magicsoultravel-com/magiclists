@@ -653,23 +653,25 @@ export const UI = {
                 ? `<button type="button" class="step-collapse-btn" data-collapse-key="${this.escapeAttr(collapseKey)}" title="${isCollapsed ? 'Expand group' : 'Collapse group'}" aria-label="${isCollapsed ? 'Expand group' : 'Collapse group'}">${isCollapsed ? '▶' : '▼'}</button>`
                 : '<span class="step-collapse-spacer" aria-hidden="true"></span>';
             const nestControls = canEdit ? `
-                <span class="step-nest-controls">
                     <button type="button" class="card-act step-outdent-btn" title="Outdent" aria-label="Outdent"${level === 0 ? ' disabled' : ''}>‹</button>
-                    <button type="button" class="card-act step-indent-btn" title="Indent" aria-label="Indent"${level >= 4 ? ' disabled' : ''}>›</button>
-                </span>` : '';
+                    <button type="button" class="card-act step-indent-btn" title="Indent" aria-label="Indent"${level >= 4 ? ' disabled' : ''}>›</button>` : '';
             const deleteBtn = canEdit && step.completed
-                ? `<button type="button" class="card-act card-act--danger step-delete-btn" title="Delete item" aria-label="Delete item">${CARD_ICONS.close}</button>`
+                ? `<button type="button" class="card-act card-act--danger step-delete-btn" title="Remove item" aria-label="Remove item">${CARD_ICONS.close}</button>`
                 : '';
             const textHtml = canEdit
                 ? `<span class="step-text card-inline-edit ${step.completed ? 'completed' : ''}" contenteditable="plaintext-only" spellcheck="false" data-field="step-text" data-step-id="${step.id}">${this.escapeHTML(step.text)}</span>`
                 : `<span class="step-text ${step.completed ? 'completed' : ''}">${this.escapeHTML(step.text)}</span>`;
             html += `
                 <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}" data-step-id="${step.id}" data-level="${level}" style="padding-left:${level * 0.45}rem">
-                    ${collapseControl}
-                    <input type="checkbox" class="step-check" ${step.completed ? 'checked' : ''}>
+                    <div class="step-row-leading">
+                        ${collapseControl}
+                        <input type="checkbox" class="step-check" ${step.completed ? 'checked' : ''}>
+                    </div>
                     ${textHtml}
-                    ${nestControls}
-                    ${deleteBtn}
+                    <div class="step-row-actions">
+                        ${canEdit ? `<span class="step-nest-controls">${nestControls}</span>` : ''}
+                        ${deleteBtn}
+                    </div>
                 </div>
             `;
         };

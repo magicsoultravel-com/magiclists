@@ -156,8 +156,14 @@ export const Editor = {
                 return cat ? [cat] : [];
             })(),
             backgroundColor: finalBgColor,
-            startDateTime: document.getElementById('edit-start-datetime')?.value || '',
-            endDateTime: document.getElementById('edit-end-datetime')?.value || '',
+            startDateTime: this.combineDateTime(
+                document.getElementById('edit-start-date')?.value || '',
+                document.getElementById('edit-start-time')?.value || ''
+            ),
+            endDateTime: this.combineDateTime(
+                document.getElementById('edit-end-date')?.value || '',
+                document.getElementById('edit-end-time')?.value || ''
+            ),
             isRecurring: document.getElementById('edit-recurring')?.value === 'yes',
             hideFromCalendar: this.activeItem.hideFromCalendar === true,
             hiddenFromBoard: this.activeItem.hiddenFromBoard === true
@@ -215,50 +221,112 @@ export const Editor = {
         if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
     },
     
+    formatLocalDate(date = new Date()) {
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    },
+
+    formatLocalTime(date = new Date()) {
+        const pad = (n) => String(n).padStart(2, '0');
+        return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    },
+
+    parseStoredDateTime(value) {
+        if (!value) return { date: '', time: '' };
+        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return { date: value, time: '' };
+        if (value.includes('T')) {
+            const [date, timePart] = value.split('T');
+            return { date: date || '', time: timePart ? timePart.slice(0, 5) : '' };
+        }
+        const parsed = new Date(value);
+        if (!Number.isNaN(parsed.getTime())) {
+            return { date: this.formatLocalDate(parsed), time: this.formatLocalTime(parsed) };
+        }
+        return { date: '', time: '' };
+    },
+
+    combineDateTime(date, time) {
+        if (!date) return '';
+        return time ? `${date}T${time}` : date;
+    },
+
+    bindDateInputDefaults(dateId, timeId, { defaultTimeOnFocus = true } = {}) {
+        const dateEl = document.getElementById(dateId);
+        const timeEl = document.getElementById(timeId);
+        if (!dateEl) return;
+
+        dateEl.addEventListener('focus', () => {
+            if (!dateEl.value) dateEl.value = this.formatLocalDate();
+        });
+        if (!timeEl || !defaultTimeOnFocus) return;
+        timeEl.addEventListener('focus', () => {
+            if (!timeEl.value && dateEl.value) timeEl.value = this.formatLocalTime();
+        });
+    },
+
     showDatePickerForStep(rowElement, currentStart, currentEnd) {
         const modal = document.createElement('div');
         modal.className = 'date-picker-modal';
-        
+        const now = new Date();
+        const isNew = !currentStart;
+        const startParts = this.parseStoredDateTime(currentStart);
+        const endParts = this.parseStoredDateTime(currentEnd);
+        const startDateVal = startParts.date || (isNew ? this.formatLocalDate(now) : '');
+        const startTimeVal = startParts.time || (isNew ? this.formatLocalTime(now) : '');
+        const endDateVal = endParts.date;
+        const endTimeVal = endParts.time;
+
         modal.innerHTML = `
             <h4 class="section-title">Set Line Date</h4>
             <div class="form-group">
-                <label>Start Date & Time</label>
-                <input type="datetime-local" id="step-start-datetime" class="form-input" value="${currentStart || ''}">
+                <label>Start</label>
+                <div class="datetime-input-row">
+                    <input type="date" id="step-start-date" class="form-input" value="${startDateVal}">
+                    <input type="time" id="step-start-time" class="form-input form-input--optional-time" value="${startTimeVal}" step="60">
+                </div>
             </div>
             <div class="form-group">
-                <label>End Date & Time (Optional)</label>
-                <input type="datetime-local" id="step-end-datetime" class="form-input" value="${currentEnd || ''}">
+                <label>End (optional)</label>
+                <div class="datetime-input-row">
+                    <input type="date" id="step-end-date" class="form-input" value="${endDateVal}">
+                    <input type="time" id="step-end-time" class="form-input form-input--optional-time" value="${endTimeVal}" step="60">
+                </div>
             </div>
             <div class="form-actions">
                 <button class="btn btn--flex-1" id="step-date-clear">Clear</button>
                 <button class="btn btn--accent active btn--grow" id="step-date-save">Save</button>
             </div>
         `;
-        
+
         document.body.appendChild(modal);
-        
-        const startInput = document.getElementById('step-start-datetime');
-        const endInput = document.getElementById('step-end-datetime');
-        
-        // Auto-focus end date after start date is set
-        startInput.addEventListener('change', () => {
-            if (startInput.value && !endInput.value) {
-                endInput.value = startInput.value;
+
+        const startDateInput = document.getElementById('step-start-date');
+        const startTimeInput = document.getElementById('step-start-time');
+        const endDateInput = document.getElementById('step-end-date');
+        const endTimeInput = document.getElementById('step-end-time');
+
+        this.bindDateInputDefaults('step-start-date', 'step-start-time');
+        this.bindDateInputDefaults('step-end-date', 'step-end-time');
+
+        startDateInput.addEventListener('change', () => {
+            if (startDateInput.value && !endDateInput.value) {
+                endDateInput.value = startDateInput.value;
             }
-            endInput.focus();
         });
-        
+
         document.getElementById('step-date-save').addEventListener('click', () => {
-            const startVal = startInput.value;
-            const endVal = endInput.value;
-            rowElement.dataset.startDateTime = startVal;
-            rowElement.dataset.endDateTime = endVal;
+            const startVal = this.combineDateTime(startDateInput.value, startTimeInput.value);
+            const endVal = this.combineDateTime(endDateInput.value, endTimeInput.value);
+            if (startVal) rowElement.dataset.startDateTime = startVal;
+            else delete rowElement.dataset.startDateTime;
+            if (endVal) rowElement.dataset.endDateTime = endVal;
+            else delete rowElement.dataset.endDateTime;
             this.updateStepDateIcon(rowElement, startVal);
             modal.remove();
             this.markInteracted();
             this.triggerAutoSave();
         });
-        
+
         document.getElementById('step-date-clear').addEventListener('click', () => {
             delete rowElement.dataset.startDateTime;
             delete rowElement.dataset.endDateTime;
@@ -267,11 +335,6 @@ export const Editor = {
             this.markInteracted();
             this.triggerAutoSave();
         });
-        
-        // If start already has a value, focus end on open
-        if (startInput.value && !endInput.value) {
-            endInput.focus();
-        }
     },
     
     updateStepDateIcon(rowElement, hasDate) {
@@ -298,12 +361,14 @@ export const Editor = {
         this.deleteBtn?.classList.toggle('is-hidden', !isExistingItem);
         this.saveBtn.innerHTML = CARD_ICONS.save;
         document.getElementById('modal-close-btn').innerHTML = CARD_ICONS.close;
-        if (this.deleteBtn) this.deleteBtn.innerHTML = CARD_ICONS.delete;
+        if (this.deleteBtn) this.deleteBtn.innerHTML = CARD_ICONS.close;
         this.updateCalendarToggleUI();
         const hasHiddenSteps = item.type === 'note' && item.steps && item.steps.length > 0;
         const warningLightHtml = hasHiddenSteps
             ? `<div class="warning-banner">⚠️ This note contains ${item.steps.length} hidden checklist items from a previous state. Switch type to re-activate.</div>`
             : '';
+        const startParts = this.parseStoredDateTime(item.startDateTime || '');
+        const endParts = this.parseStoredDateTime(item.endDateTime || '');
         const colorSwatchesHtml = NOTE_COLOR_PRESETS.map(preset => {
             const isNone = preset.value === '';
             const selected = (item.backgroundColor || '') === preset.value;
@@ -337,11 +402,17 @@ export const Editor = {
                         </div>
                         <div class="form-group form-group--compact">
                             <label>Start</label>
-                            <input type="datetime-local" id="edit-start-datetime" class="form-input" value="${item.startDateTime || ''}">
+                            <div class="datetime-input-row">
+                                <input type="date" id="edit-start-date" class="form-input" value="${startParts.date}">
+                                <input type="time" id="edit-start-time" class="form-input form-input--optional-time" value="${startParts.time}" step="60" title="Optional — leave blank for date only">
+                            </div>
                         </div>
                         <div class="form-group form-group--compact">
                             <label>End</label>
-                            <input type="datetime-local" id="edit-end-datetime" class="form-input" value="${item.endDateTime || ''}">
+                            <div class="datetime-input-row">
+                                <input type="date" id="edit-end-date" class="form-input" value="${endParts.date}">
+                                <input type="time" id="edit-end-time" class="form-input form-input--optional-time" value="${endParts.time}" step="60" title="Optional — leave blank for date only">
+                            </div>
                         </div>
                         <div class="form-group form-group--compact">
                             <label>Category</label>
@@ -388,7 +459,7 @@ export const Editor = {
             </div>
         `;
         
-        const inputs = ['edit-title', 'edit-type', 'edit-visibility', 'edit-status', 'edit-category', 'edit-content', 'edit-start-datetime', 'edit-end-datetime', 'edit-recurring'];
+        const inputs = ['edit-title', 'edit-type', 'edit-visibility', 'edit-status', 'edit-category', 'edit-content', 'edit-start-date', 'edit-start-time', 'edit-end-date', 'edit-end-time', 'edit-recurring'];
         inputs.forEach(id => {
             const el = document.getElementById(id);
             if (el) {
@@ -410,6 +481,8 @@ export const Editor = {
         });
         
         this.setupColorPalette(item);
+        this.bindDateInputDefaults('edit-start-date', 'edit-start-time');
+        this.bindDateInputDefaults('edit-end-date', 'edit-end-time');
         this.syncEditorTheme(item.backgroundColor || '');
         this.bindCollapsable('config-section-header', 'config-section');
         this.bindCollapsable('content-section-header', 'content-section');
@@ -688,14 +761,18 @@ export const Editor = {
         const hasDate = !!(step && (step.startDateTime || step.endDateTime));
         
         row.innerHTML = `
-            <div class="grab-handle">⋮⋮</div>
-            <button type="button" class="step-collapse-btn step-collapse-btn--edit" style="visibility:hidden" aria-hidden="true">▼</button>
-            <input type="checkbox" class="step-check" ${step && step.completed ? 'checked' : ''}>
+            <div class="step-row-leading">
+                <div class="grab-handle">⋮⋮</div>
+                <button type="button" class="step-collapse-btn step-collapse-btn--edit" style="visibility:hidden" aria-hidden="true">▼</button>
+                <input type="checkbox" class="step-check" ${step && step.completed ? 'checked' : ''}>
+            </div>
             <textarea class="form-input step-text input-grow" rows="1" placeholder="Checklist item...">${step ? this.escapeQuotes(step.text) : ''}</textarea>
-            <button type="button" class="card-act step-outdent-btn" title="Outdent" aria-label="Outdent"${level === 0 ? ' disabled' : ''}>‹</button>
-            <button type="button" class="card-act step-indent-btn" title="Indent" aria-label="Indent"${level >= 4 ? ' disabled' : ''}>›</button>
-            <button type="button" class="card-act step-date-btn${hasDate ? ' btn--date-on is-on' : ''}" title="Set date">${CARD_ICONS.calendar}</button>
-            <button type="button" class="card-act card-act--danger remove-row-btn" title="Remove">${CARD_ICONS.delete}</button>
+            <div class="step-row-actions">
+                <button type="button" class="card-act step-outdent-btn" title="Outdent" aria-label="Outdent"${level === 0 ? ' disabled' : ''}>‹</button>
+                <button type="button" class="card-act step-indent-btn" title="Indent" aria-label="Indent"${level >= 4 ? ' disabled' : ''}>›</button>
+                <button type="button" class="card-act step-date-btn${hasDate ? ' btn--date-on is-on' : ''}" title="Set date">${CARD_ICONS.calendar}</button>
+                <button type="button" class="card-act card-act--danger remove-row-btn" title="Remove" aria-label="Remove">${CARD_ICONS.close}</button>
+            </div>
         `;
         
         const textarea = row.querySelector('.step-text');

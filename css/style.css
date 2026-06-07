@@ -228,6 +228,22 @@
     margin-left: -0.12rem;
     gap: 0.28rem;
     font-size: 0.65rem;
+    min-width: 0;
+}
+
+.step-row-leading {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.28rem;
+    flex-shrink: 0;
+}
+
+.step-row-actions {
+    display: flex;
+    align-items: flex-start;
+    gap: 2px;
+    flex-shrink: 0;
+    margin-left: auto;
 }
 
 .step-collapse-btn,
@@ -250,11 +266,17 @@
 }
 
 .step-row--edit {
-    align-items: center;
+    align-items: flex-start;
     margin-bottom: 0;
     padding: 0.5rem;
     background: #202026;
     border-radius: 6px;
+    min-width: 0;
+}
+
+.step-row--edit .step-row-leading {
+    align-items: center;
+    gap: 0.25rem;
 }
 
 .step-row .step-check {
@@ -282,6 +304,8 @@
 }
 
 .step-row--display .step-text {
+    flex: 1 1 auto;
+    min-width: 0;
     word-wrap: break-word;
     overflow-wrap: break-word;
 }
@@ -454,10 +478,6 @@ body {
     opacity: 0.85;
 }
 
-.step-row--display .step-delete-btn {
-    margin-left: 1px;
-}
-
 .step-nest-controls {
     display: flex;
     flex-shrink: 0;
@@ -466,7 +486,8 @@ body {
     transition: opacity 0.15s ease;
 }
 
-.step-row--display:hover .step-nest-controls {
+.step-row--display:hover .step-nest-controls,
+.step-row--display:focus-within .step-nest-controls {
     opacity: 1;
 }
 
@@ -1781,7 +1802,8 @@ textarea.form-input {
 }
 
 #app-canvas.view-freeform .mini-card.expanded .step-row--display .step-text {
-    flex: 0 1 auto;
+    flex: 1 1 auto;
+    min-width: 0;
     max-width: 100%;
 }
 
@@ -2226,6 +2248,24 @@ textarea.form-input {
     visibility: hidden;
 }
 
+.datetime-input-row {
+    display: flex;
+    gap: 0.35rem;
+    align-items: center;
+}
+
+.datetime-input-row .form-input {
+    min-width: 0;
+}
+
+.datetime-input-row .form-input[type="date"] {
+    flex: 1 1 auto;
+}
+
+.form-input--optional-time {
+    flex: 0 0 5.5rem;
+}
+
 #editor-overlay .step-row--edit {
     padding: 0.25rem 0.3rem;
     gap: 0.25rem;
@@ -2237,10 +2277,16 @@ textarea.form-input {
 }
 
 #editor-overlay .step-row--edit .step-text {
+    flex: 1 1 auto;
+    min-width: 0;
     min-height: 24px;
     padding: 0.15rem 0.25rem;
     font-size: 0.66rem;
     max-height: none;
+}
+
+#editor-overlay .step-row-actions {
+    padding-top: 0.05rem;
 }
 
 .step-collapse-btn--edit {
