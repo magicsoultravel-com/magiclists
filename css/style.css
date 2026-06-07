@@ -617,10 +617,29 @@ body {
     transition: opacity 0.15s ease, color 0.12s ease, background 0.12s ease;
 }
 
-.mini-card.expanded:hover .expanded-checklist-add-btn,
-.mini-card.expanded:focus-within .expanded-checklist-add-btn {
+.note-surface:hover .expanded-checklist-add-btn,
+.note-surface:focus-within .expanded-checklist-add-btn {
     opacity: 1;
     pointer-events: auto;
+}
+
+/* Shared inline + modal note editing surface */
+.note-surface .card-content-preview {
+    font-size: 0.66rem;
+    line-height: 1.35;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.note-surface .mini-card-title {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.note-surface .expanded-checklist {
+    font-size: 0.6rem;
 }
 
 .expanded-checklist-add-btn:hover {
@@ -1127,71 +1146,78 @@ body {
     color: #fca5a5;
 }
 
-/* Custom note background — auto contrast */
-.mini-card.has-custom-bg {
+/* Custom note background — auto contrast (inline cards + modal editor) */
+.has-custom-bg {
     color: var(--card-fg);
 }
 
-.mini-card.has-custom-bg .mini-card-title,
-.mini-card.has-custom-bg .card-content-preview,
-.mini-card.has-custom-bg .step-text,
-.mini-card.has-custom-bg .quicklink-anchor-row,
-.mini-card.has-custom-bg .expanded-links,
-.mini-card.has-custom-bg .expanded-links.empty,
-.mini-card.has-custom-bg .checklist-done-divider span {
+.has-custom-bg .mini-card-title,
+.has-custom-bg .card-content-preview,
+.has-custom-bg .step-text,
+.has-custom-bg .quicklink-anchor-row,
+.has-custom-bg .expanded-links,
+.has-custom-bg .expanded-links.empty,
+.has-custom-bg .checklist-done-divider span {
     color: var(--card-fg) !important;
 }
 
-.mini-card.has-custom-bg .mini-card-meta,
-.mini-card.has-custom-bg .category-name,
-.mini-card.has-custom-bg .checklist-badge,
-.mini-card.has-custom-bg .more-links-badge {
+.has-custom-bg .mini-card-meta,
+.has-custom-bg .category-name,
+.has-custom-bg .checklist-badge,
+.has-custom-bg .more-links-badge,
+.has-custom-bg .editor-created-date,
+.has-custom-bg .editor-note-size {
     color: var(--card-muted) !important;
 }
 
-.mini-card.has-custom-bg .mini-card-meta.expanded {
+.has-custom-bg .mini-card-meta.expanded,
+.has-custom-bg .editor-meta-row--footer {
     border-top-color: var(--card-border-subtle);
 }
 
-.mini-card.has-custom-bg .step-text.completed {
+.has-custom-bg .step-text.completed {
     color: var(--card-muted);
     opacity: 0.82;
 }
 
-.mini-card.has-custom-bg .quicklink-anchor-row {
+.has-custom-bg .quicklink-anchor-row {
     color: var(--card-link);
 }
 
-.mini-card.has-custom-bg .card-inline-edit:empty::before {
+.has-custom-bg .card-inline-edit:empty::before {
     color: var(--card-placeholder);
 }
 
-.mini-card.has-custom-bg .card-inline-edit:focus {
+.has-custom-bg .card-inline-edit:focus {
     background: var(--card-focus-bg);
     box-shadow: 0 0 0 1px var(--card-focus-ring);
 }
 
-.mini-card.has-custom-bg .card-act {
+.has-custom-bg .card-act {
     color: var(--card-action-fg);
 }
 
-.mini-card.has-custom-bg .card-act:hover {
+.has-custom-bg .card-act:hover {
     color: var(--card-fg);
 }
 
-.mini-card.card-theme-light .card-act--cal.is-on {
+.has-custom-bg .grab-handle--step {
+    color: var(--card-muted);
+}
+
+.card-theme-light .card-act--cal.is-on {
     color: #047857;
 }
 
-.mini-card.card-theme-light .card-act--cal.is-off {
+.card-theme-light .card-act--cal.is-off {
     color: #b45309;
 }
 
-.mini-card.card-theme-dark .card-act--cal.is-on {
+.card-theme-dark .card-act--cal.is-on {
     color: #6ee7b7;
 }
 
-.mini-card.card-theme-dark .card-act--cal.is-off {
+.card-theme-dark .card-act--cal.is-off {
     color: #fbbf24;
 }
 
@@ -1217,14 +1243,14 @@ body {
     font-size: 0.6rem;
 }
 
-/* Make all text white */
-.mini-card-meta,
-.mini-card-meta.compact,
-.mini-card-meta.expanded,
-.category-name,
-.checklist-badge,
-.card-content-preview,
-.step-row--display .step-text {
+/* Default note text (overridden inside .has-custom-bg) */
+.mini-card:not(.has-custom-bg) .mini-card-meta,
+.mini-card:not(.has-custom-bg) .mini-card-meta.compact,
+.mini-card:not(.has-custom-bg) .mini-card-meta.expanded,
+.mini-card:not(.has-custom-bg) .category-name,
+.mini-card:not(.has-custom-bg) .checklist-badge,
+.mini-card:not(.has-custom-bg) .card-content-preview,
+.mini-card:not(.has-custom-bg) .step-row--display .step-text {
     color: var(--text-main) !important;
 }
 
@@ -2451,7 +2477,6 @@ textarea.form-input {
 
 #editor-overlay .modal.has-custom-bg {
     border-color: var(--card-border-subtle);
-    color: var(--card-fg);
 }
 
 .editor-toolbar {
@@ -2464,17 +2489,9 @@ textarea.form-input {
     border-bottom: 1px solid var(--border-color);
 }
 
-#editor-overlay .modal.has-custom-bg .editor-toolbar {
+#editor-overlay .has-custom-bg .editor-toolbar {
     background: var(--card-toolbar-bg);
     border-bottom-color: var(--card-border-subtle);
-}
-
-#editor-overlay .modal.has-custom-bg .editor-toolbar .card-act {
-    color: var(--card-action-fg);
-}
-
-#editor-overlay .modal.has-custom-bg .editor-toolbar .card-act:hover {
-    color: var(--card-fg);
 }
 
 .editor-toolbar-spacer {
@@ -2528,7 +2545,6 @@ textarea.form-input {
 .editor-note-header .mini-card-title {
     font-size: 0.72rem;
     font-weight: 500;
-    line-height: 1.35;
     padding: 0.1rem 0.05rem;
 }
 
@@ -2540,43 +2556,32 @@ textarea.form-input {
     min-height: 0;
 }
 
-#editor-overlay .editor-note-body .card-content-preview {
-    font-size: 0.66rem;
-    line-height: 1.35;
-}
-
-#editor-overlay .editor-note-shell:hover .expanded-checklist-add-btn,
-#editor-overlay .editor-note-shell:focus-within .expanded-checklist-add-btn {
-    opacity: 1;
-    pointer-events: auto;
-}
-
 .editor-panel {
     border: 1px solid var(--border-color);
     border-radius: 4px;
     overflow: hidden;
 }
 
-#editor-overlay .modal.has-custom-bg .editor-panel {
+#editor-overlay .has-custom-bg .editor-panel {
     border-color: var(--card-border-subtle);
 }
 
-#editor-overlay .modal.has-custom-bg .form-group--compact label,
-#editor-overlay .modal.has-custom-bg .collapsable-heading {
+#editor-overlay .has-custom-bg .form-group--compact label,
+#editor-overlay .has-custom-bg .collapsable-heading {
     color: var(--card-muted);
 }
 
-#editor-overlay .modal.has-custom-bg .form-input {
+#editor-overlay .has-custom-bg .form-input {
     background: var(--card-input-bg);
     color: var(--card-fg);
     border-color: var(--card-border-subtle);
 }
 
-#editor-overlay .modal.has-custom-bg .form-input::placeholder {
+#editor-overlay .has-custom-bg .form-input::placeholder {
     color: var(--card-placeholder);
 }
 
-#editor-overlay .modal.has-custom-bg .editor-panel .collapsable-header {
+#editor-overlay .has-custom-bg .editor-panel .collapsable-header {
     background: var(--card-panel-bg);
 }
 
@@ -2690,80 +2695,8 @@ textarea.form-input {
     flex: 0 0 5.5rem;
 }
 
-#editor-overlay .step-row--edit {
-    padding: 0.25rem 0.3rem;
-    gap: 0.25rem;
-}
-
-#editor-overlay .step-row--edit .step-check {
-    width: 12px;
-    height: 12px;
-}
-
-#editor-overlay .step-row--edit .step-text {
-    flex: 1 1 auto;
-    min-width: 0;
-    min-height: 24px;
-    padding: 0.15rem 0.25rem;
-    font-size: 0.66rem;
-    max-height: none;
-    white-space: pre-wrap;
-}
-
 #editor-overlay .step-row-actions {
     padding-top: 0.05rem;
-}
-
-.step-collapse-btn--edit {
-    flex-shrink: 0;
-    width: 12px;
-    height: 12px;
-    padding: 0;
-    border: none;
-    background: transparent;
-    color: var(--text-muted);
-    font-size: 0.5rem;
-    line-height: 1;
-    cursor: pointer;
-}
-
-.step-collapse-btn--edit:hover {
-    color: var(--text-main);
-}
-
-#editor-overlay .grab-handle {
-    font-size: 0.55rem;
-    padding: 0 0.1rem;
-}
-
-#editor-overlay .step-indent-btn,
-#editor-overlay .step-outdent-btn {
-    min-width: 16px;
-    width: 16px;
-    height: 16px;
-    padding: 0;
-    font-size: 0.65rem;
-    line-height: 1;
-    flex-shrink: 0;
-}
-
-.step-date-btn,
-.remove-row-btn {
-    width: 18px;
-    min-width: 18px;
-    height: 18px;
-    padding: 0;
-    flex-shrink: 0;
-}
-
-#editor-overlay .step-date-btn.btn--date-on {
-    color: #86efac;
-}
-
-#editor-overlay .remove-row-btn {
-    font-size: 0.7rem;
-    line-height: 1;
-    color: #fca5a5;
 }
 
 #modal-calendar-toggle {

@@ -772,6 +772,7 @@ export const UI = {
     },
 
     renderCompactCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
+        card.classList.remove('note-surface');
         const fullTitle = item.title || '';
         const titleAttr = this.escapeHTML(fullTitle).replace(/"/g, '&quot;');
         const typeBadgeHtml = this.buildChecklistBadgeHtml(item, isQuickLinkType);
@@ -879,6 +880,7 @@ export const UI = {
     },
 
     renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
+        card.classList.add('note-surface');
         const canEdit = this.canEditInline();
         const fullTitle = item.title || '';
         const titleAttr = this.escapeHTML(fullTitle).replace(/"/g, '&quot;');
@@ -1040,14 +1042,17 @@ export const UI = {
         };
 
         if (this.canEditInline() || localOnly) {
-            root.addEventListener('mousedown', (e) => {
-                if (e.button !== 0) return;
-                const active = document.activeElement;
-                if (!active?.classList?.contains('card-inline-edit') || !root.contains(active)) return;
-                if (active === e.target || active.contains(e.target)) return;
-                applyMutate(() => this.syncInlineFieldToItem(active, item));
-                active.dataset.skipBlurSave = '1';
-            }, true);
+            if (!root.dataset.noteInteractionsBound) {
+                root.dataset.noteInteractionsBound = '1';
+                root.addEventListener('mousedown', (e) => {
+                    if (e.button !== 0) return;
+                    const active = document.activeElement;
+                    if (!active?.classList?.contains('card-inline-edit') || !root.contains(active)) return;
+                    if (active === e.target || active.contains(e.target)) return;
+                    applyMutate(() => this.syncInlineFieldToItem(active, item));
+                    active.dataset.skipBlurSave = '1';
+                }, true);
+            }
 
             root.querySelectorAll('.card-inline-edit').forEach((el) => {
                 el.addEventListener('click', (e) => e.stopPropagation());
@@ -1188,44 +1193,55 @@ export const UI = {
         const list = root.querySelector('.expanded-checklist');
         if (!list) return;
 
-        let draggedRow = null;
-
-        const getActiveRows = () => [...list.querySelectorAll('.step-row--display:not(.step-row--done)')];
-
-        getActiveRows().forEach((row) => {
+        root.querySelectorAll('.step-row--display:not(.step-row--done)').forEach((row) => {
             row.setAttribute('draggable', 'true');
-            row.addEventListener('dragstart', (e) => {
-                if (!e.target.closest('.grab-handle--step')) {
-                    e.preventDefault();
-                    return;
-                }
-                draggedRow = row;
-                row.classList.add('is-dragging');
-                e.dataTransfer.effectAllowed = 'move';
-            });
-            row.addEventListener('dragend', () => {
-                draggedRow = null;
-                row.classList.remove('is-dragging');
-            });
         });
 
-        list.addEventListener('dragover', (e) => {
+        if (root.dataset.checklistDragBound) return;
+        root.dataset.checklistDragBound = '1';
+
+        let draggedRow = null;
+
+        const getList = () => root.querySelector('.expanded-checklist');
+        const getActiveRows = () => [...(getList()?.querySelectorAll('.step-row--display:not(.step-row--done)') || [])];
+
+        root.addEventListener('dragstart', (e) => {
+            const row = e.target.closest('.step-row--display:not(.step-row--done)');
+            if (!row || !root.contains(row)) return;
+            if (!e.target.closest('.grab-handle--step')) {
+                e.preventDefault();
+                return;
+            }
+            draggedRow = row;
+            row.classList.add('is-dragging');
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', row.dataset.stepId || 'step');
+        });
+
+        root.addEventListener('dragend', (e) => {
+            e.target.closest('.step-row--display')?.classList.remove('is-dragging');
+            draggedRow = null;
+        });
+
+        root.addEventListener('dragover', (e) => {
             if (!draggedRow) return;
+            const activeList = getList();
+            if (!activeList?.contains(draggedRow)) return;
             e.preventDefault();
             const siblings = getActiveRows().filter((row) => row !== draggedRow);
             const nextSibling = siblings.find((sibling) => {
                 const box = sibling.getBoundingClientRect();
                 return e.clientY <= box.top + box.height / 2;
             });
-            if (nextSibling) list.insertBefore(draggedRow, nextSibling);
+            if (nextSibling) activeList.insertBefore(draggedRow, nextSibling);
             else {
-                const firstDone = list.querySelector('.step-row--done');
-                if (firstDone) list.insertBefore(draggedRow, firstDone);
-                else list.appendChild(draggedRow);
+                const firstDone = activeList.querySelector('.step-row--done');
+                if (firstDone) activeList.insertBefore(draggedRow, firstDone);
+                else activeList.appendChild(draggedRow);
             }
         });
 
-        list.addEventListener('drop', (e) => {
+        root.addEventListener('drop', (e) => {
             e.preventDefault();
             if (!draggedRow) return;
             applyMutate((it) => {

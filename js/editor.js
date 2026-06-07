@@ -342,7 +342,7 @@ export const Editor = {
 
         this.mountZone.innerHTML = `
             ${warningLightHtml}
-            <div class="editor-note-shell">
+            <div class="editor-note-shell note-surface">
                 <div class="editor-note-header">
                     <div class="mini-card-title card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-field="title" data-placeholder="Title…">${UI.escapeHTML(item.title || '')}</div>
                 </div>
