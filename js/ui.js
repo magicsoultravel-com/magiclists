@@ -2,13 +2,14 @@ import { isQuickLinksCategory, readStoredCategories } from './categories.js';
 import { applyCardTheme } from './cardTheme.js';
 import {
     GRID_CELL,
-    GRID_CARD_CELLS_W,
-    GRID_DEFAULT_CANVAS,
     GRID_EXPANDED_DEFAULT,
     GRID_SIZE_PRESETS,
     cellsToPx,
     clampGridSize,
+    packGridItems,
+    placementRect,
     presetForLevel,
+    resolveGridPosition,
     readGridDefaultLevel,
     snapPx,
     writeGridDefaultLevel
@@ -371,47 +372,53 @@ export const UI = {
         } else if (viewMode === 'grid') {
             const surface = document.createElement('div');
             surface.className = 'grid-canvas-surface';
+            const viewportW = Math.max(canvas.clientWidth || 0, 320);
             const positions = this.getGridPositions();
-            const extent = this.computeGridCanvasExtent(visibleItems, positions);
+            const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
+            const defaultPreset = presetForLevel(readGridDefaultLevel());
+
+            const { placements, extent } = packGridItems(visibleItems, {
+                viewportW,
+                positions,
+                getSize: (id) => this.getGridDisplaySize(id, {
+                    expanded: expandedCards[id] === true,
+                    preset: defaultPreset
+                })
+            });
+
             surface.style.width = `${extent.w}px`;
             surface.style.height = `${extent.h}px`;
 
-            let autoX = GRID_CELL;
-            let autoY = GRID_CELL;
-            const defaultLevel = readGridDefaultLevel();
-            const defaultPreset = presetForLevel(defaultLevel);
-            const stepX = cellsToPx(GRID_CARD_CELLS_W) + GRID_CELL;
+            let positionsDirty = false;
+            visibleItems.forEach((item, index) => {
+                const card = this.createCardComponent(item, activeCategories, { grid: true });
+                const pos = placements[item.id];
+                card.style.left = `${pos.x}px`;
+                card.style.top = `${pos.y}px`;
 
-            [...visibleItems]
-                .sort((a, b) => {
-                    const aTime = Number(a.created_at || a.updated_at || 0);
-                    const bTime = Number(b.created_at || b.updated_at || 0);
-                    return aTime - bTime;
-                })
-                .forEach((item, index) => {
-                    const card = this.createCardComponent(item, activeCategories, { grid: true });
-                    const saved = positions[item.id];
-                    const savedSize = this.getGridSizes()[item.id];
-                    if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
-                        card.style.left = `${saved.x}px`;
-                        card.style.top = `${saved.y}px`;
-                    } else {
-                        card.style.left = `${autoX}px`;
-                        card.style.top = `${autoY}px`;
-                        autoX += stepX;
-                        if (autoX > extent.w - cellsToPx(GRID_CARD_CELLS_W) - GRID_CELL) {
-                            autoX = GRID_CELL;
-                            autoY += cellsToPx(defaultPreset.gh) + GRID_CELL;
-                        }
-                    }
-                    if (!savedSize) {
-                        this.saveGridSize(item.id, defaultPreset.gw, defaultPreset.gh);
-                    }
-                    card.removeAttribute('draggable');
-                    this.applyGridSize(card);
-                    this.initFreeformCardStack(card, index);
-                    surface.appendChild(card);
+                const saved = positions[item.id];
+                if (!saved || saved.x !== pos.x || saved.y !== pos.y) {
+                    positionsDirty = true;
+                }
+
+                if (!this.getGridCompactSizes()[item.id]) {
+                    this.saveGridCompactSize(item.id, defaultPreset.gw, defaultPreset.gh);
+                }
+
+                card.removeAttribute('draggable');
+                this.applyGridSize(card);
+                this.initFreeformCardStack(card, index);
+                surface.appendChild(card);
+            });
+
+            if (positionsDirty) {
+                const nextPositions = { ...positions };
+                visibleItems.forEach((item) => {
+                    nextPositions[item.id] = placements[item.id];
                 });
+                localStorage.setItem('matrix_grid_positions', JSON.stringify(nextPositions));
+            }
+
             canvas.appendChild(surface);
         } else {
             [...visibleItems].sort((a, b) => {
@@ -509,8 +516,22 @@ export const UI = {
         toggleBtn?.addEventListener('click', (e) => {
             e.stopPropagation();
             if (consumeSkipExpand()) return;
+            if (card.dataset.grid === '1') {
+                this.toggleGridCard(card, item, ctx);
+                return;
+            }
             if (ctx) this.toggleCardExpanded(card, item, ctx);
         });
+
+        if (card.dataset.grid === '1') {
+            card.addEventListener('dblclick', (e) => {
+                if (e.target.closest('.card-actions, .ff-resize, .ff-drag-gutter, a, button, input, textarea, .card-inline-edit')) return;
+                if (card.classList.contains('expanded')) return;
+                e.preventDefault();
+                e.stopPropagation();
+                this.toggleGridMinimal(card, item);
+            });
+        }
 
         calBtn?.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -646,8 +667,39 @@ export const UI = {
         }
     },
 
+    resolveGridCardPlacement(card) {
+        const surface = card?.closest('.grid-canvas-surface');
+        if (!surface || card.dataset.grid !== '1') return;
+        const canvas = surface.closest('#app-canvas');
+        const viewportW = Math.max(canvas?.clientWidth || 0, 320);
+        const { gw, gh } = this.readGridCardSize(card);
+        const occupied = [...surface.querySelectorAll('.mini-card')]
+            .filter((other) => other !== card)
+            .map((other) => {
+                const size = this.readGridCardSize(other);
+                const x = parseFloat(other.style.left) || 0;
+                const y = parseFloat(other.style.top) || 0;
+                return { id: other.dataset.id, ...placementRect(x, y, size.gw, size.gh) };
+            });
+        const resolved = resolveGridPosition(
+            parseFloat(card.style.left) || 0,
+            parseFloat(card.style.top) || 0,
+            gw,
+            gh,
+            occupied,
+            card.dataset.id,
+            viewportW
+        );
+        card.style.left = `${resolved.x}px`;
+        card.style.top = `${resolved.y}px`;
+        this.saveGridPosition(card.dataset.id, resolved.x, resolved.y);
+        this.syncGridSurfaceFromCards(surface);
+    },
+
     applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
-        card.classList.add('card-state-changing');
+        if (card.dataset.grid !== '1') {
+            card.classList.add('card-state-changing');
+        }
         if (expanded) {
             card.classList.remove('compact');
             card.classList.add('expanded', 'card-animate-expand');
@@ -664,17 +716,70 @@ export const UI = {
         setTimeout(cleanup, 400);
     },
 
+    toggleGridCard(card, item, ctx) {
+        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
+        const isExpanded = expandedCards[item.id] === true;
+        const isMinimized = this.isGridMinimized(item.id);
+
+        if (isExpanded) {
+            this.setGridMinimized(item.id, false);
+            this.updateGridCard(card, item, { expanded: false });
+            return;
+        }
+
+        if (isMinimized) {
+            this.setGridMinimized(item.id, false);
+            this.applyGridSize(card);
+            this.syncGridToggleIcon(card);
+            return;
+        }
+
+        this.updateGridCard(card, item, { expanded: true });
+    },
+
+    toggleGridMinimal(card, item) {
+        if (card.dataset.grid !== '1' || card.classList.contains('expanded')) return;
+
+        if (this.isGridMinimized(item.id)) {
+            this.setGridMinimized(item.id, false);
+            this.applyGridSize(card);
+        } else {
+            const { gw, gh } = this.readGridCardSize(card);
+            if (gh > 1) {
+                this.saveGridCompactSize(item.id, gw, gh);
+            }
+            this.setGridMinimized(item.id, true);
+            const compact = this.getGridCompactSizes()[item.id] || presetForLevel(readGridDefaultLevel());
+            this.applyGridDimensions(card, compact.gw, 1);
+        }
+        this.syncGridToggleIcon(card);
+        this.syncGridSurfaceFromCards(card.closest('.grid-canvas-surface'));
+    },
+
+    syncGridToggleIcon(card) {
+        const btn = card.querySelector('.card-act--toggle');
+        if (!btn) return;
+        const isExpanded = card.classList.contains('expanded');
+        const isMinimized = this.isGridMinimized(card.dataset.id);
+        let title = 'Expand note';
+        let icon = CARD_ICONS.expand;
+        if (isExpanded) {
+            title = 'Collapse note';
+            icon = CARD_ICONS.collapse;
+        } else if (isMinimized) {
+            title = 'Restore saved size';
+        }
+        btn.title = title;
+        btn.setAttribute('aria-label', title);
+        btn.innerHTML = icon;
+    },
+
     toggleCardExpanded(card, item, ctx) {
         const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
         const willExpand = expandedCards[item.id] !== true;
 
         if (card.dataset.freeform === '1') {
             this.updateFreeformCard(card, item, { expanded: willExpand });
-            return;
-        }
-
-        if (card.dataset.grid === '1') {
-            this.updateGridCard(card, item, { expanded: willExpand });
             return;
         }
 
@@ -1165,18 +1270,90 @@ export const UI = {
         localStorage.setItem('matrix_grid_positions', JSON.stringify(positions));
     },
 
-    getGridSizes() {
+    getGridCompactSizes() {
         try {
-            return JSON.parse(localStorage.getItem('matrix_grid_sizes') || '{}');
+            const raw = localStorage.getItem('matrix_grid_compact_sizes');
+            if (raw) return JSON.parse(raw);
+            const legacy = localStorage.getItem('matrix_grid_sizes');
+            if (!legacy) return {};
+            const parsed = JSON.parse(legacy);
+            const compact = {};
+            Object.entries(parsed).forEach(([id, size]) => {
+                if (size.gh < 4 && size.gw < 6) compact[id] = size;
+            });
+            return compact;
         } catch {
             return {};
         }
     },
 
-    saveGridSize(itemId, gw, gh) {
-        const sizes = this.getGridSizes();
+    getGridExpandedSizes() {
+        try {
+            const raw = localStorage.getItem('matrix_grid_expanded_sizes');
+            if (raw) return JSON.parse(raw);
+            const legacy = localStorage.getItem('matrix_grid_sizes');
+            if (!legacy) return {};
+            const parsed = JSON.parse(legacy);
+            const expanded = {};
+            Object.entries(parsed).forEach(([id, size]) => {
+                if (size.gh >= 4 || size.gw >= 6) expanded[id] = size;
+            });
+            return expanded;
+        } catch {
+            return {};
+        }
+    },
+
+    getGridMinimizedMap() {
+        try {
+            return JSON.parse(localStorage.getItem('matrix_grid_minimized') || '{}');
+        } catch {
+            return {};
+        }
+    },
+
+    isGridMinimized(itemId) {
+        return this.getGridMinimizedMap()[itemId] === true;
+    },
+
+    setGridMinimized(itemId, minimized) {
+        const map = this.getGridMinimizedMap();
+        if (minimized) map[itemId] = true;
+        else delete map[itemId];
+        localStorage.setItem('matrix_grid_minimized', JSON.stringify(map));
+    },
+
+    saveGridCompactSize(itemId, gw, gh) {
+        const sizes = this.getGridCompactSizes();
         sizes[itemId] = clampGridSize(gw, gh);
-        localStorage.setItem('matrix_grid_sizes', JSON.stringify(sizes));
+        localStorage.setItem('matrix_grid_compact_sizes', JSON.stringify(sizes));
+        if (gh > 1) this.setGridMinimized(itemId, false);
+    },
+
+    saveGridExpandedSize(itemId, gw, gh) {
+        const sizes = this.getGridExpandedSizes();
+        sizes[itemId] = clampGridSize(gw, gh, { expanded: true });
+        localStorage.setItem('matrix_grid_expanded_sizes', JSON.stringify(sizes));
+    },
+
+    getGridDisplaySize(itemId, { expanded = false, preset = null } = {}) {
+        const defaultPreset = preset || presetForLevel(readGridDefaultLevel());
+        const compact = this.getGridCompactSizes()[itemId] || defaultPreset;
+
+        if (expanded) {
+            const saved = this.getGridExpandedSizes()[itemId];
+            return clampGridSize(
+                saved?.gw ?? GRID_EXPANDED_DEFAULT.gw,
+                saved?.gh ?? GRID_EXPANDED_DEFAULT.gh,
+                { expanded: true }
+            );
+        }
+
+        if (this.isGridMinimized(itemId)) {
+            return { gw: compact.gw, gh: 1 };
+        }
+
+        return clampGridSize(compact.gw, compact.gh);
     },
 
     readGridCardSize(card) {
@@ -1188,24 +1365,38 @@ export const UI = {
     saveGridSizeFromCard(card) {
         if (card.dataset.grid !== '1') return;
         const { gw, gh } = this.readGridCardSize(card);
-        this.saveGridSize(card.dataset.id, gw, gh);
+        const id = card.dataset.id;
+        if (card.classList.contains('expanded')) {
+            this.saveGridExpandedSize(id, gw, gh);
+            return;
+        }
+        if (gh <= 1) {
+            this.setGridMinimized(id, true);
+            return;
+        }
+        this.saveGridCompactSize(id, gw, gh);
     },
 
-    maybeExpandGridSurface(card) {
-        const surface = card?.closest('.grid-canvas-surface');
+    syncGridSurfaceFromCards(surface) {
         if (!surface) return;
-        const left = parseFloat(card.style.left) || 0;
-        const top = parseFloat(card.style.top) || 0;
-        const right = left + card.offsetWidth + GRID_CELL * 4;
-        const bottom = top + card.offsetHeight + GRID_CELL * 4;
-        const curW = parseFloat(surface.style.width) || GRID_DEFAULT_CANVAS;
-        const curH = parseFloat(surface.style.height) || GRID_DEFAULT_CANVAS;
-        if (right > curW) surface.style.width = `${right}px`;
-        if (bottom > curH) surface.style.height = `${bottom}px`;
+        const canvas = surface.closest('#app-canvas');
+        const viewportW = Math.max(canvas?.clientWidth || 0, 320);
+        const occupied = [...surface.querySelectorAll('.mini-card')].map((card) => {
+            const { gw, gh } = this.readGridCardSize(card);
+            const x = parseFloat(card.style.left) || 0;
+            const y = parseFloat(card.style.top) || 0;
+            return { id: card.dataset.id, ...placementRect(x, y, gw, gh) };
+        });
+        const extent = computeExtentFromOccupied(occupied, viewportW);
+        surface.style.width = `${extent.w}px`;
+        surface.style.height = `${extent.h}px`;
     },
 
     resetGridLayout() {
         localStorage.removeItem('matrix_grid_positions');
+        localStorage.removeItem('matrix_grid_compact_sizes');
+        localStorage.removeItem('matrix_grid_expanded_sizes');
+        localStorage.removeItem('matrix_grid_minimized');
         localStorage.removeItem('matrix_grid_sizes');
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
     },
@@ -1218,22 +1409,6 @@ export const UI = {
         });
     },
 
-    computeGridCanvasExtent(items, positions = {}) {
-        let maxX = GRID_DEFAULT_CANVAS;
-        let maxY = GRID_DEFAULT_CANVAS;
-        const defaultLevel = readGridDefaultLevel();
-        const preset = presetForLevel(defaultLevel);
-
-        items.forEach((item) => {
-            const pos = positions[item.id];
-            const size = this.getGridSizes()[item.id] || preset;
-            const x = pos?.x ?? GRID_CELL;
-            const y = pos?.y ?? GRID_CELL;
-            maxX = Math.max(maxX, x + cellsToPx(size.gw) + GRID_CELL * 4);
-            maxY = Math.max(maxY, y + cellsToPx(size.gh) + GRID_CELL * 4);
-        });
-        return { w: maxX, h: maxY };
-    },
 
     syncGridCompactLevelClass(card, gh) {
         if (card.dataset.grid !== '1' || !card.classList.contains('compact')) return;
@@ -1257,28 +1432,16 @@ export const UI = {
 
     applyGridSize(card) {
         if (card.dataset.grid !== '1') return;
-        const saved = this.getGridSizes()[card.dataset.id];
-        const defaultLevel = readGridDefaultLevel();
-        const preset = presetForLevel(defaultLevel);
         const isExpanded = card.classList.contains('expanded');
-
-        let gw;
-        let gh;
-        if (isExpanded) {
-            gw = saved?.gw && saved.gw >= 6 ? saved.gw : GRID_EXPANDED_DEFAULT.gw;
-            gh = saved?.gh && saved.gh >= 4 ? saved.gh : GRID_EXPANDED_DEFAULT.gh;
-        } else {
-            gw = saved?.gw ?? preset.gw;
-            gh = saved?.gh ?? preset.gh;
-        }
-        const clamped = clampGridSize(gw, gh, { expanded: isExpanded });
-        this.applyGridDimensions(card, clamped.gw, clamped.gh);
+        const { gw, gh } = this.getGridDisplaySize(card.dataset.id, { expanded: isExpanded });
+        this.applyGridDimensions(card, gw, gh);
     },
 
     finalizeGridCard(card) {
         if (card.dataset.grid !== '1') return;
         this.setupFreeformChrome(card);
         this.applyGridSize(card);
+        this.syncGridToggleIcon(card);
     },
 
     updateGridCard(card, item, { expanded, dimensions = null } = {}) {
@@ -1290,14 +1453,22 @@ export const UI = {
         const activeCategories = readStoredCategories();
         const { targetCatName, categoryColor, isQuickLinkType } = this.getCardRenderContext(item, activeCategories);
 
+        if (expanded) {
+            this.setGridMinimized(item.id, false);
+        }
+
         this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, isQuickLinkType);
 
         if (dimensions) {
             this.applyGridDimensions(card, dimensions.gw, dimensions.gh);
-            this.saveGridSize(item.id, dimensions.gw, dimensions.gh);
+            if (expanded) this.saveGridExpandedSize(item.id, dimensions.gw, dimensions.gh);
+            else this.saveGridCompactSize(item.id, dimensions.gw, dimensions.gh);
         } else {
             this.applyGridSize(card);
         }
+
+        this.resolveGridCardPlacement(card);
+        this.syncGridToggleIcon(card);
     },
 
     initFreeformCardStack(card, orderIndex = 0) {

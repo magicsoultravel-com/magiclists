@@ -5,9 +5,13 @@ import {
     GRID_MAX_CELLS_W,
     GRID_MIN_CELLS_H,
     GRID_MIN_CELLS_W,
+    canPlaceAt,
     cellsToPx,
     clampGridSize,
+    collectOccupiedFromCards,
+    placementRect,
     pxToCells,
+    resolveGridPosition,
     snapPx
 } from './grid.js';
 import {
@@ -359,6 +363,13 @@ export const DragDropEngine = {
         let resizeActive = null;
         const dragThreshold = 4;
 
+        const viewportW = () => Math.max(canvas.clientWidth || 0, 320);
+
+        const readOccupied = (excludeCard = null) => collectOccupiedFromCards(
+            [...surface.querySelectorAll('.mini-card')].filter((c) => c !== excludeCard),
+            (card) => UI.readGridCardSize(card)
+        );
+
         const clampGridPx = (w, h, expanded) => {
             const gw = pxToCells(w, { min: expanded ? 6 : GRID_MIN_CELLS_W, max: GRID_MAX_CELLS_W });
             const gh = pxToCells(h, { min: expanded ? 4 : GRID_MIN_CELLS_H, max: GRID_MAX_CELLS_H });
@@ -401,12 +412,21 @@ export const DragDropEngine = {
             card.classList.remove('is-freeform-dragging');
             if (moved) {
                 card.dataset.skipExpand = '1';
-                const x = snapPx(parseFloat(card.style.left) || 0);
-                const y = snapPx(parseFloat(card.style.top) || 0);
-                card.style.left = `${x}px`;
-                card.style.top = `${y}px`;
-                UI.saveGridPosition(card.dataset.id, x, y);
-                UI.maybeExpandGridSurface(card);
+                const { gw, gh } = UI.readGridCardSize(card);
+                const occupied = readOccupied(card);
+                const resolved = resolveGridPosition(
+                    parseFloat(card.style.left) || 0,
+                    parseFloat(card.style.top) || 0,
+                    gw,
+                    gh,
+                    occupied,
+                    card.dataset.id,
+                    viewportW()
+                );
+                card.style.left = `${resolved.x}px`;
+                card.style.top = `${resolved.y}px`;
+                UI.saveGridPosition(card.dataset.id, resolved.x, resolved.y);
+                UI.syncGridSurfaceFromCards(surface);
             }
             dragActive = null;
             document.removeEventListener('mousemove', onDragMove);
@@ -449,15 +469,30 @@ export const DragDropEngine = {
 
         const onResizeUp = () => {
             if (!resizeActive) return;
-            const { card } = resizeActive;
+            const { card, origX, origY, origW, origH } = resizeActive;
             card.classList.remove('is-freeform-resizing');
-            const x = snapPx(parseFloat(card.style.left) || 0);
-            const y = snapPx(parseFloat(card.style.top) || 0);
-            card.style.left = `${x}px`;
-            card.style.top = `${y}px`;
-            UI.saveGridPosition(card.dataset.id, x, y);
+
+            const { gw, gh, w, h } = UI.readGridCardSize(card);
+            let x = snapPx(parseFloat(card.style.left) || 0);
+            let y = snapPx(parseFloat(card.style.top) || 0);
+            const occupied = readOccupied(card);
+            const rect = placementRect(x, y, gw, gh);
+
+            if (!canPlaceAt(x, y, gw, gh, occupied, card.dataset.id)) {
+                const fallbackGw = pxToCells(origW, { min: GRID_MIN_CELLS_W, max: GRID_MAX_CELLS_W });
+                const fallbackGh = pxToCells(origH, { min: GRID_MIN_CELLS_H, max: GRID_MAX_CELLS_H });
+                x = origX;
+                y = origY;
+                UI.applyGridDimensions(card, fallbackGw, fallbackGh);
+            }
+
+            const resolved = resolveGridPosition(x, y, gw, gh, occupied, card.dataset.id, viewportW());
+            card.style.left = `${resolved.x}px`;
+            card.style.top = `${resolved.y}px`;
+
+            UI.saveGridPosition(card.dataset.id, resolved.x, resolved.y);
             UI.saveGridSizeFromCard(card);
-            UI.maybeExpandGridSurface(card);
+            UI.syncGridSurfaceFromCards(surface);
             card.dataset.skipExpand = '1';
             resizeActive = null;
             document.removeEventListener('mousemove', onResizeMove);
