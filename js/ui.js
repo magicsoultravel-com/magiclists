@@ -179,6 +179,28 @@ export function computeNoteSizeKb(item) {
     return kb < 10 ? kb.toFixed(1) : String(Math.round(kb));
 }
 
+/** UTF-16 estimate of all keys on this origin — cheap O(n) scan, no network. */
+export function getLocalStorageUsedBytes() {
+    let chars = 0;
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+        const value = localStorage.getItem(key);
+        chars += key.length + (value?.length ?? 0);
+    }
+    return chars * 2;
+}
+
+export function formatStorageSize(bytes) {
+    if (!bytes) return '0 KB';
+    const kb = bytes / 1024;
+    if (kb < 0.1) return '<0.1 KB';
+    if (kb < 10) return `${kb.toFixed(1)} KB`;
+    if (kb < 1024) return `${Math.round(kb)} KB`;
+    const mb = kb / 1024;
+    return mb < 10 ? `${mb.toFixed(1)} MB` : `${Math.round(mb)} MB`;
+}
+
 export function attachAutoGrow(textarea, { maxHeight = 120 } = {}) {
     if (!textarea) return;
     textarea.classList.add('input-grow');
@@ -974,9 +996,14 @@ export const UI = {
     refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor) {
         const body = card.querySelector('.card-body');
         const scrollTop = body?.scrollTop ?? 0;
+        const pendingFocusStepId = card.dataset.pendingFocusStepId;
         this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
         const newBody = card.querySelector('.card-body');
         if (newBody) newBody.scrollTop = scrollTop;
+        if (pendingFocusStepId) {
+            card.dataset.pendingFocusStepId = pendingFocusStepId;
+            this.focusPendingChecklistStep(card);
+        }
     },
 
     caretAtEdge(el, edge) {
@@ -1034,26 +1061,26 @@ export const UI = {
         return false;
     },
 
-    handleChecklistEnter(root, item, el, refresh, { applyMutate } = {}) {
-        const mutate = applyMutate || ((mutator) => {
-            this.mutateItem(item, mutator, { preserveView: true });
-        });
-        el.dataset.skipBlurSave = '1';
-        const stepId = el.dataset.stepId;
-        this.syncInlineFieldToItem(el, item);
+    insertChecklistStep(root, item, refresh, applyMutate, { afterStepId = null } = {}) {
         const newStep = this.createBlankChecklistStep();
-        mutate((it) => {
+        applyMutate((it) => {
             if (it.type !== 'checklist') it.type = 'checklist';
             if (!it.steps) it.steps = [];
-            const idx = it.steps.findIndex(s => s.id === stepId);
-            const insertAt = idx >= 0 ? idx + 1 : it.steps.length;
-            it.steps.splice(insertAt, 0, newStep);
+            if (afterStepId) {
+                const idx = it.steps.findIndex((s) => s.id === afterStepId);
+                it.steps.splice(idx >= 0 ? idx + 1 : it.steps.length, 0, newStep);
+            } else {
+                it.steps.push(newStep);
+            }
             reorderStepsByCompletion(it.steps);
-        });
+        }, { persist: false });
 
         root.dataset.pendingFocusStepId = newStep.id;
         refresh();
+        this.focusPendingChecklistStep(root);
+    },
 
+    focusPendingChecklistStep(root) {
         const focusNewStep = () => {
             const pendingId = root.dataset.pendingFocusStepId;
             if (!pendingId) return false;
@@ -1071,15 +1098,25 @@ export const UI = {
         });
     },
 
+    handleChecklistEnter(root, item, el, refresh, { applyMutate } = {}) {
+        el.dataset.skipBlurSave = '1';
+        this.syncInlineFieldToItem(el, item);
+        this.insertChecklistStep(root, item, refresh, applyMutate, { afterStepId: el.dataset.stepId });
+    },
+
     attachNoteBodyInteractions(root, item, {
         refresh = () => {},
         localOnly = false,
         onChange = () => {},
         stopMousedownPropagation = false
     } = {}) {
-        const applyMutate = (mutator) => {
-            this.mutateItem(item, mutator, { preserveView: true, skipRerender: true, localOnly });
-            if (localOnly) onChange();
+        const applyMutate = (mutator, { persist = !localOnly } = {}) => {
+            if (persist) {
+                this.mutateItem(item, mutator, { preserveView: true, skipRerender: true, localOnly });
+                if (localOnly) onChange();
+            } else {
+                mutator(item);
+            }
         };
 
         if (this.canEditInline() || localOnly) {
@@ -1136,18 +1173,7 @@ export const UI = {
 
             root.querySelector('.expanded-checklist-add-btn')?.addEventListener('click', (e) => {
                 e.stopPropagation();
-                applyMutate((it) => {
-                    if (it.type !== 'checklist') it.type = 'checklist';
-                    if (!it.steps) it.steps = [];
-                    it.steps.push(this.createBlankChecklistStep());
-                    reorderStepsByCompletion(it.steps);
-                });
-                refresh();
-                requestAnimationFrame(() => {
-                    const fields = root.querySelectorAll('[data-field="step-text"].card-inline-edit');
-                    const last = fields[fields.length - 1];
-                    if (last) this.focusInlineEdit(last, 'end');
-                });
+                this.insertChecklistStep(root, item, refresh, applyMutate);
             });
 
             root.querySelectorAll('.step-row--display').forEach((row) => {

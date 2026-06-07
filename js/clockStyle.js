@@ -8,8 +8,64 @@ export const CLOCK_STYLES = [
     { id: 'analog', label: 'Analog', desc: 'Station clock with date' },
     { id: 'compact', label: 'Compact', desc: 'Date & time inline' },
     { id: 'military', label: '24-hour', desc: 'Military time' },
-    { id: 'retro', label: 'Retro LED', desc: 'Glowing display' }
+    { id: 'retro', label: 'Retro LED', desc: 'Glowing display' },
+    { id: 'segment', label: '7-segment', desc: 'Classic 88 display' }
 ];
+
+const SEG_POS = {
+    a: [3, 1, 10, 2],
+    b: [12, 3, 2, 7],
+    c: [12, 12, 2, 7],
+    d: [3, 20, 10, 2],
+    e: [1, 12, 2, 7],
+    f: [1, 3, 2, 7],
+    g: [3, 10.5, 10, 2]
+};
+
+const DIGIT_ON = {
+    '0': 'abcdef',
+    '1': 'bc',
+    '2': 'abdeg',
+    '3': 'abcdg',
+    '4': 'bcfg',
+    '5': 'acdfg',
+    '6': 'acdefg',
+    '7': 'abc',
+    '8': 'abcdefg',
+    '9': 'abcdfg'
+};
+
+function segmentRects(activeSegs, { ghost = false } = {}) {
+    return 'abcdefg'.split('').map((seg) => {
+        const [x, y, w, h] = SEG_POS[seg];
+        const lit = activeSegs.includes(seg);
+        if (ghost) {
+            return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="0.8" class="seg seg--ghost"/>`;
+        }
+        if (!lit) return '';
+        return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="0.8" class="seg seg--on"/>`;
+    }).join('');
+}
+
+function segmentDigitSvg(char, sizeClass = '') {
+    if (char === ':') {
+        return `<svg class="seg-colon ${sizeClass}" viewBox="0 0 6 24" aria-hidden="true"><circle cx="3" cy="7" r="1.6" class="seg seg--on"/><circle cx="3" cy="17" r="1.6" class="seg seg--on"/></svg>`;
+    }
+    const on = DIGIT_ON[char] || '';
+    return `<svg class="seg-digit ${sizeClass}" viewBox="0 0 16 24" aria-hidden="true">${segmentRects('abcdefg', { ghost: true })}${segmentRects(on)}</svg>`;
+}
+
+function renderSegmentRow(str, sizeClass = '') {
+    return str.split('').map((char) => segmentDigitSvg(char, sizeClass)).join('');
+}
+
+function formatSegmentTime(now) {
+    const h = now.getHours() % 12 || 12;
+    const m = now.getMinutes();
+    const s = now.getSeconds();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
 
 const ANALOG_MARKS = Array.from({ length: 12 }, (_, i) => {
     const angle = (i * 30 - 90) * (Math.PI / 180);
@@ -43,7 +99,7 @@ function formatTime(now, style) {
     if (style === 'military') {
         return `${pad(h)}:${pad(m)}:${pad(s)}`;
     }
-    if (style === 'digital-seconds') {
+    if (style === 'digital-seconds' || style === 'segment') {
         return now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     }
     return now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
@@ -86,6 +142,9 @@ function previewMarkup(style, now) {
             <span class="clock-style-preview-departure-date">${date}</span>
         </span>`;
     }
+    if (style === 'segment') {
+        return `<span class="clock-style-preview clock-style-preview--segment"><span class="clock-style-preview-segment-row">${renderSegmentRow(formatSegmentTime(now), 'seg-digit--preview')}</span></span>`;
+    }
     const time = formatTime(now, style === 'compact' ? 'digital' : style);
     const date = formatDate(now, style);
     if (style === 'compact') {
@@ -103,6 +162,7 @@ export const ClockStyle = {
     timeEl: null,
     analogEl: null,
     analogDateEl: null,
+    segmentTimeEl: null,
     triggerBtn: null,
     popover: null,
     intervalId: null,
@@ -117,6 +177,7 @@ export const ClockStyle = {
         this.timeEl = document.getElementById('clock-time');
         this.analogEl = document.getElementById('clock-analog');
         this.analogDateEl = document.getElementById('clock-analog-date');
+        this.segmentTimeEl = document.getElementById('clock-segment-time');
         if (!this.zone || !this.dateEl || !this.timeEl) return;
 
         const analogFaceMount = this.analogEl?.querySelector('.clock-departure-face');
@@ -174,6 +235,15 @@ export const ClockStyle = {
             return;
         }
 
+        if (style === 'segment') {
+            if (this.segmentTimeEl) {
+                const segmentStr = formatSegmentTime(now);
+                this.segmentTimeEl.innerHTML = renderSegmentRow(segmentStr);
+                this.segmentTimeEl.setAttribute('aria-label', segmentStr);
+            }
+            return;
+        }
+
         const timeStr = formatTime(now, style);
         const dateStr = formatDate(now, style);
 
@@ -226,6 +296,11 @@ export const ClockStyle = {
                 updateAnalogHands(preview?.querySelector('.clock-style-preview-face'), now);
                 const dateEl = preview?.querySelector('.clock-style-preview-departure-date');
                 if (dateEl) dateEl.textContent = formatStationDate(now);
+                return;
+            }
+            if (style === 'segment') {
+                const row = preview?.querySelector('.clock-style-preview-segment-row');
+                if (row) row.innerHTML = renderSegmentRow(formatSegmentTime(now), 'seg-digit--preview');
                 return;
             }
             if (!preview) return;

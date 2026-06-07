@@ -107,6 +107,10 @@
             </div>
             </div>
 
+            <footer id="side-panel-footer" class="side-panel-footer" aria-label="Storage usage">
+                <span id="sidebar-storage-size" class="sidebar-storage-size">—</span>
+            </footer>
+
             <input type="file" id="system-import-file-picker" accept=".json" class="is-hidden">
         </aside>
 
@@ -128,10 +132,15 @@
                     <div id="clock-display" class="clock-display">
                         <span id="clock-date" class="clock-chip clock-chip--date">—</span>
                         <span id="clock-time" class="clock-chip clock-chip--time">—</span>
-                        <div id="clock-analog" class="clock-analog" aria-hidden="true">
+                        <div id="clock-analog" class="clock-analog">
                             <div class="clock-departure">
                                 <div class="clock-departure-face"></div>
                                 <span id="clock-analog-date" class="clock-departure-date"></span>
+                            </div>
+                        </div>
+                        <div id="clock-segment" class="clock-segment">
+                            <div class="clock-segment-board">
+                                <div id="clock-segment-time" class="clock-segment-time" role="timer" aria-live="off"></div>
                             </div>
                         </div>
                     </div>

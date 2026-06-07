@@ -295,7 +295,9 @@ export const Editor = {
         const focusField = active?.dataset?.field;
         const focusStepId = active?.dataset?.stepId;
 
+        const pendingFocusStepId = body.dataset.pendingFocusStepId;
         body.innerHTML = UI.buildNoteBodyHtml(this.activeItem, { canEdit: true, alwaysShowChecklist: true });
+        if (pendingFocusStepId) body.dataset.pendingFocusStepId = pendingFocusStepId;
         UI.attachNoteBodyInteractions(body, this.activeItem, {
             refresh: () => this.refreshEditorNoteBody(),
             localOnly: true,
@@ -307,15 +309,9 @@ export const Editor = {
         });
         body.scrollTop = scrollTop;
 
-        const pendingFocusStepId = body.dataset.pendingFocusStepId;
-        if (pendingFocusStepId) {
-            const pendingEl = body.querySelector(
-                `[data-field="step-text"][data-step-id="${pendingFocusStepId}"]`
-            );
-            if (pendingEl) {
-                UI.focusInlineEdit(pendingEl, 'start');
-                return;
-            }
+        if (body.dataset.pendingFocusStepId) {
+            UI.focusPendingChecklistStep(body);
+            return;
         }
 
         if (!focusField) return;

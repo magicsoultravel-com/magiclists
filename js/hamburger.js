@@ -1,4 +1,4 @@
-import { ACTION_ICONS, CARD_ICONS, UI } from './ui.js';
+import { ACTION_ICONS, CARD_ICONS, UI, formatStorageSize, getLocalStorageUsedBytes } from './ui.js';
 import { resolveNoteColor } from './colorPicker.js';
 
 const NOTES_LIST_SORT_KEY = 'matrix_notes_list_sort';
@@ -21,8 +21,18 @@ export const SidePanel = {
         const stored = localStorage.getItem('matrix_panel_collapsed');
         const collapsed = stored === 'true';
         this.setCollapsed(collapsed, false);
+        this.updateStorageFooter();
 
         this.toggleBtn?.addEventListener('click', () => this.toggle());
+    },
+
+    updateStorageFooter() {
+        const el = document.getElementById('sidebar-storage-size');
+        if (!el) return;
+        const bytes = getLocalStorageUsedBytes();
+        const label = formatStorageSize(bytes);
+        el.textContent = label;
+        el.title = `Local storage used by magicNotes (${label})`;
     },
 
     moveBrand(collapsed, animate = true) {

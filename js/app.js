@@ -158,6 +158,7 @@ class Application {
     updateWorkspaceCounter() {
         SidePanel.updateCategories(AppState.categories, AppState.hiddenCategories);
         SidePanel.updateNotesList(AppState.items);
+        SidePanel.updateStorageFooter();
     }
 
     renderControlBar() {
