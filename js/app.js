@@ -7,6 +7,7 @@ import { Calendar } from './calendar.js';
 import { SidePanel } from './hamburger.js';
 import { applyBackupToStorage } from './backup.js';
 import { DEFAULT_CATEGORIES, normalizeCategories } from './categories.js';
+import { UndoManager } from './undo.js';
 
 function countHiddenFromBoard(items) {
     return items.filter(item => UI.isHiddenFromBoard(item)).length;
@@ -41,6 +42,50 @@ class Application {
         this.updateFreeformResetVisibility();
         this.setupBackupInterface();
         this.setupFab();
+        this.setupUndo();
+    }
+
+    setupUndo() {
+        const undoBtn = document.getElementById('btn-undo');
+        const redoBtn = document.getElementById('btn-redo');
+        if (undoBtn) undoBtn.innerHTML = ACTION_ICONS.undo;
+        if (redoBtn) redoBtn.innerHTML = ACTION_ICONS.redo;
+
+        UndoManager.init({
+            getToken: () => AppState.user.token,
+            isEnabled: () => AppState.user.isLoggedIn,
+            onRestore: (item, { preserveView = false } = {}) => this.restoreItem(item, preserveView),
+            onRemove: (itemId) => this.removeItemFromWorkspace(itemId)
+        });
+    }
+
+    async removeItemFromWorkspace(itemId) {
+        AppState.items = AppState.items.filter((i) => i.id !== itemId);
+        if (Editor.activeItem?.id === itemId) Editor.close();
+        await this.syncDataStore();
+    }
+
+    async restoreItem(item, preserveView = false) {
+        const idx = AppState.items.findIndex((i) => i.id === item.id);
+        if (idx >= 0) AppState.items[idx] = item;
+        else AppState.items.push(item);
+
+        if (Editor.activeItem?.id === item.id && !Editor.overlay?.classList.contains('is-hidden')) {
+            Editor.activeItem = JSON.parse(JSON.stringify(item));
+            Editor.renderForm();
+            Editor.updateEditorSizeLabel();
+        }
+
+        if (preserveView) {
+            const canvas = document.getElementById('app-canvas');
+            UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
+            if (AppState.viewSettings.sortBy === 'freeform') {
+                DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+            }
+            this.updateWorkspaceCounter();
+            return;
+        }
+        await this.syncDataStore();
     }
 
     checkAuthSession() {
@@ -99,6 +144,7 @@ class Application {
         this.renderQuickActions();
         this.updateFabVisibility();
         this.updateFreeformResetVisibility();
+        UndoManager.updateToolbar();
     }
 
     renderQuickActions() {
@@ -217,6 +263,7 @@ class Application {
         localStorage.removeItem('admin_token');
         AppState.user.isLoggedIn = false;
         AppState.user.token = null;
+        UndoManager.clear();
         this.renderControlBar();
         this.updateFreeformResetVisibility();
         this.syncDataStore();
@@ -328,8 +375,16 @@ class Application {
 
         window.addEventListener('item:deletion_requested', async (e) => {
             if (!AppState.user.isLoggedIn) return;
-            const success = await API.deleteItem(e.detail, AppState.user.token);
-            if (success) await this.syncDataStore();
+            const itemId = e.detail;
+            const item = AppState.items.find((i) => i.id === itemId);
+            if (!item) return;
+
+            const success = await API.deleteItem(itemId, AppState.user.token);
+            if (!success) return;
+
+            const label = item.title?.trim() || 'note';
+            UndoManager.recordItemDeletion(`Deleted "${label}"`, item);
+            await this.syncDataStore();
         });
 
         window.addEventListener('calendar:add_note', (e) => {

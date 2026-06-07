@@ -536,6 +536,20 @@ body {
     background: #5b52e8;
 }
 
+.history-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    margin-right: 0.15rem;
+    padding-right: 0.35rem;
+    border-right: 1px solid var(--border-color);
+}
+
+.history-controls .btn--icon:disabled {
+    opacity: 0.28;
+    cursor: default;
+}
+
 .editor-fab {
     position: absolute;
     right: 0.85rem;

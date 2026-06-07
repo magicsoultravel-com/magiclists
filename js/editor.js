@@ -7,6 +7,7 @@ import {
     partitionChecklistSteps,
     reorderStepsByCompletion
 } from './ui.js';
+import { UndoManager } from './undo.js';
 
 const NOTE_COLOR_PRESETS = [
     { value: '', label: 'Default' },
@@ -834,10 +835,16 @@ export const Editor = {
         
         row.querySelector('.remove-row-btn').addEventListener('click', () => {
             this.markInteracted();
+            const itemBefore = JSON.parse(JSON.stringify(this.collectFormData()));
             row.remove();
             this.updateDoneSectionVisibility();
             this.updateLineCounter();
+            const itemAfter = JSON.parse(JSON.stringify(this.collectFormData()));
             this.triggerAutoSave();
+            UndoManager.recordItemChange(itemBefore, itemAfter, {
+                preserveView: false,
+                label: 'Remove checklist item'
+            });
         });
         
         row.querySelector('.step-check').addEventListener('change', () => {
@@ -914,7 +921,8 @@ export const Editor = {
     },
     
     emitDeleteAction() {
-        if (confirm(`Are you absolutely sure you want to permanently delete "${this.activeItem.title}"?`)) {
+        const label = this.activeItem.title?.trim() || 'this note';
+        if (confirm(`Delete "${label}"? You can undo afterwards.`)) {
             window.dispatchEvent(new CustomEvent('item:deletion_requested', { detail: this.activeItem.id }));
             this.close();
         }
