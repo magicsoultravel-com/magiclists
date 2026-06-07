@@ -1,4 +1,7 @@
-const GRID_SLOTS = 15;
+const GRID_SLOTS = 16;
+const USER_SLOTS = 4;
+const USER_PALETTE_KEY = 'matrix_user_palette';
+const LONG_PRESS_MS = 500;
 
 /** Shared default for desktop, chrome, and note reset. */
 export const THEME_DEFAULT_COLOR = '#121214';
@@ -18,7 +21,8 @@ export const PALETTE_UNIFIED = [
     { value: '#0c4a6e', label: 'Sky' },
     { value: '#4a044e', label: 'Plum' },
     { value: '#14532d', label: 'Green' },
-    { value: '#27272a', label: 'Zinc' }
+    { value: '#27272a', label: 'Zinc' },
+    { value: '#3f3f46', label: 'Gray' }
 ];
 
 export const PALETTE_NOTE = PALETTE_UNIFIED;
@@ -43,12 +47,73 @@ function escapeAttr(str) {
 
 function normalizeHex(value) {
     if (!value) return '';
-    return /^#[0-9a-fA-F]{6}$/.test(value) ? value : '';
+    const v = String(value).trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) return v;
+    if (/^[0-9a-fA-F]{6}$/.test(v)) return `#${v}`;
+    return '';
 }
 
-function isPresetColor(value, presets) {
-    const normalized = (value || '').toLowerCase();
-    return presets.some((preset) => preset.value.toLowerCase() === normalized);
+function readUserPalette() {
+    try {
+        const raw = localStorage.getItem(USER_PALETTE_KEY);
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+            const slots = parsed.slice(0, USER_SLOTS).map((c) => normalizeHex(c) || '');
+            while (slots.length < USER_SLOTS) slots.push('');
+            return slots;
+        }
+    } catch {
+        /* ignore */
+    }
+    return Array(USER_SLOTS).fill('');
+}
+
+function saveUserPalette(slots) {
+    try {
+        localStorage.setItem(USER_PALETTE_KEY, JSON.stringify(slots.slice(0, USER_SLOTS)));
+    } catch {
+        /* ignore */
+    }
+}
+
+function hexToHsv(hex) {
+    const n = normalizeHex(hex);
+    if (!n) return { h: 240, s: 80, v: 90 };
+    const r = parseInt(n.slice(1, 3), 16) / 255;
+    const g = parseInt(n.slice(3, 5), 16) / 255;
+    const b = parseInt(n.slice(5, 7), 16) / 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const d = max - min;
+    let h = 0;
+    const s = max === 0 ? 0 : (d / max) * 100;
+    const v = max * 100;
+    if (d !== 0) {
+        switch (max) {
+            case r: h = ((g - b) / d + (g < b ? 6 : 0)) * 60; break;
+            case g: h = ((b - r) / d + 2) * 60; break;
+            default: h = ((r - g) / d + 4) * 60; break;
+        }
+    }
+    return { h, s, v };
+}
+
+function hsvToHex(h, s, v) {
+    const hh = ((h % 360) + 360) % 360;
+    const ss = Math.max(0, Math.min(100, s)) / 100;
+    const vv = Math.max(0, Math.min(100, v)) / 100;
+    const c = vv * ss;
+    const x = c * (1 - Math.abs(((hh / 60) % 2) - 1));
+    const m = vv - c;
+    let r = 0; let g = 0; let b = 0;
+    if (hh < 60) { r = c; g = x; }
+    else if (hh < 120) { r = x; g = c; }
+    else if (hh < 180) { g = c; b = x; }
+    else if (hh < 240) { g = x; b = c; }
+    else if (hh < 300) { r = x; b = c; }
+    else { r = c; b = x; }
+    const toByte = (n) => Math.round((n + m) * 255).toString(16).padStart(2, '0');
+    return `#${toByte(r)}${toByte(g)}${toByte(b)}`;
 }
 
 export const ColorPicker = {
@@ -56,8 +121,12 @@ export const ColorPicker = {
     anchor: null,
     onSelect: null,
     presets: [],
+    userPalette: [],
     outsideHandler: null,
     keyHandler: null,
+    subPicker: null,
+    subDragCleanup: null,
+    align: 'end',
 
     ensurePopover() {
         if (!this.popover) {
@@ -70,7 +139,29 @@ export const ColorPicker = {
         return this.popover;
     },
 
+    closeSubPicker({ persist = false } = {}) {
+        if (this.subDragCleanup) {
+            this.subDragCleanup();
+            this.subDragCleanup = null;
+        }
+        if (this.subPicker?.cleanup) {
+            this.subPicker.cleanup();
+        }
+        if (persist && this.subPicker?.slotIndex != null && this.subPicker.lastHex) {
+            const slots = readUserPalette();
+            slots[this.subPicker.slotIndex] = this.subPicker.lastHex;
+            saveUserPalette(slots);
+            this.userPalette = slots;
+            this.refreshUserTiles();
+        }
+        if (this.subPicker?.el) {
+            this.subPicker.el.classList.add('is-hidden');
+        }
+        this.subPicker = null;
+    },
+
     close() {
+        this.closeSubPicker({ persist: true });
         if (!this.popover) return;
         this.popover.classList.add('is-hidden');
         this.anchor?.setAttribute('aria-expanded', 'false');
@@ -86,56 +177,74 @@ export const ColorPicker = {
         }
     },
 
-    open({ anchor, presets = PALETTE_NOTE, value = '', onSelect, align = 'end', allowCustom = true }) {
+    open({ anchor, presets = PALETTE_NOTE, value = '', onSelect, align = 'end' }) {
         if (!anchor || typeof onSelect !== 'function') return;
         this.close();
 
         this.anchor = anchor;
         this.onSelect = onSelect;
+        this.align = align;
         this.presets = presets.slice(0, GRID_SLOTS);
         while (this.presets.length < GRID_SLOTS) {
             this.presets.push({ value: '#26262b', label: 'Color' });
         }
+        this.userPalette = readUserPalette();
 
         const popover = this.ensurePopover();
-        const current = value || '';
-        const customSelected = allowCustom && current && !isPresetColor(current, this.presets);
-        const customValue = customSelected ? current : '#4f46e5';
+        const current = (value || '').toLowerCase();
 
-        const tilesHtml = this.presets.map((preset) => {
-            const selected = current.toLowerCase() === (preset.value || '').toLowerCase();
+        const presetHtml = this.presets.map((preset) => {
+            const selected = current === (preset.value || '').toLowerCase();
             const isNone = preset.value === '';
             const style = isNone ? '' : ` style="--tile:${preset.value}"`;
             return `<button type="button" class="color-picker-tile${isNone ? ' color-picker-tile--none' : ''}${selected ? ' is-selected' : ''}" data-color="${escapeAttr(preset.value)}" title="${escapeAttr(preset.label)}" aria-label="${escapeAttr(preset.label)}"${style}></button>`;
         }).join('');
 
-        const customHtml = allowCustom
-            ? `<label class="color-picker-tile color-picker-tile--custom${customSelected ? ' is-selected' : ''}" title="Custom color" aria-label="Custom color">
-                    <span class="color-picker-wheel" aria-hidden="true"></span>
-                    <input type="color" class="color-picker-native" value="${escapeAttr(customValue)}">
-               </label>`
-            : '<span class="color-picker-tile color-picker-tile--spacer" aria-hidden="true"></span>';
+        const userHtml = this.userPalette.map((color, index) => {
+            const filled = !!color;
+            const selected = filled && current === color.toLowerCase();
+            if (filled) {
+                return `<button type="button" class="color-picker-tile color-picker-tile--user${selected ? ' is-selected' : ''}" data-user-slot="${index}" data-color="${escapeAttr(color)}" title="Custom color ${index + 1}" aria-label="Custom color ${index + 1}" style="--tile:${color}"></button>`;
+            }
+            return `<button type="button" class="color-picker-tile color-picker-tile--user color-picker-tile--user-empty" data-user-slot="${index}" title="Add custom color" aria-label="Add custom color">
+                <span class="color-picker-wheel" aria-hidden="true"></span>
+            </button>`;
+        }).join('');
 
-        popover.innerHTML = `<div class="color-picker-grid">${tilesHtml}${customHtml}</div>`;
+        popover.innerHTML = `<div class="color-picker-body">
+            <div class="color-picker-grid">${presetHtml}${userHtml}</div>
+            <div class="color-picker-subpanel is-hidden" role="dialog" aria-label="Pick a custom color">
+                <div class="color-picker-sv" tabindex="0" aria-label="Saturation and brightness">
+                    <span class="color-picker-sv-cursor" aria-hidden="true"></span>
+                </div>
+                <input type="range" class="color-picker-hue" min="0" max="360" value="240" aria-label="Hue">
+                <div class="color-picker-preview" aria-hidden="true"></div>
+            </div>
+        </div>`;
+
+        const body = popover.querySelector('.color-picker-body');
+        const subpanel = popover.querySelector('.color-picker-subpanel');
 
         popover.querySelectorAll('.color-picker-tile[data-color]').forEach((btn) => {
             btn.addEventListener('mousedown', (e) => e.stopPropagation());
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                this.closeSubPicker();
                 onSelect(btn.dataset.color || '');
                 this.close();
             });
         });
 
-        const nativeInput = popover.querySelector('.color-picker-native');
-        nativeInput?.addEventListener('mousedown', (e) => e.stopPropagation());
-        nativeInput?.addEventListener('input', (e) => {
-            e.stopPropagation();
-            const hex = normalizeHex(nativeInput.value);
-            if (!hex) return;
-            onSelect(hex);
-            popover.querySelectorAll('.color-picker-tile.is-selected').forEach((el) => el.classList.remove('is-selected'));
-            nativeInput.closest('.color-picker-tile')?.classList.add('is-selected');
+        popover.querySelectorAll('.color-picker-tile--user').forEach((btn) => {
+            btn.addEventListener('mousedown', (e) => e.stopPropagation());
+            this.attachUserSlotHandlers(btn, body, subpanel, onSelect);
+        });
+
+        body.addEventListener('mousedown', (e) => {
+            if (!this.subPicker) return;
+            if (subpanel.contains(e.target)) return;
+            if (e.target.closest('.color-picker-tile--user')) return;
+            this.closeSubPicker({ persist: true });
         });
 
         popover.classList.remove('is-hidden');
@@ -147,11 +256,216 @@ export const ColorPicker = {
             this.close();
         };
         this.keyHandler = (e) => {
-            if (e.key === 'Escape') this.close();
+            if (e.key !== 'Escape') return;
+            if (this.subPicker) {
+                this.closeSubPicker({ persist: true });
+                e.stopPropagation();
+                return;
+            }
+            this.close();
         };
         requestAnimationFrame(() => {
             document.addEventListener('mousedown', this.outsideHandler, true);
             document.addEventListener('keydown', this.keyHandler);
+        });
+    },
+
+    attachUserSlotHandlers(btn, body, subpanel, onSelect) {
+        let longPressTimer = null;
+        let longPressFired = false;
+
+        const clearLongPress = () => {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+        };
+
+        const openEdit = () => {
+            const slotIndex = Number(btn.dataset.userSlot);
+            const color = btn.dataset.color || '#4f46e5';
+            this.openSubPicker(body, subpanel, btn, slotIndex, color);
+        };
+
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (longPressFired) {
+                longPressFired = false;
+                return;
+            }
+            const color = btn.dataset.color;
+            if (color) {
+                onSelect(color);
+                this.close();
+                return;
+            }
+            openEdit();
+        });
+
+        btn.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            if (!btn.dataset.color) return;
+            openEdit();
+        });
+
+        btn.addEventListener('pointerdown', (e) => {
+            if (!btn.dataset.color) return;
+            longPressFired = false;
+            clearLongPress();
+            longPressTimer = setTimeout(() => {
+                longPressFired = true;
+                openEdit();
+            }, LONG_PRESS_MS);
+        });
+
+        btn.addEventListener('pointerup', clearLongPress);
+        btn.addEventListener('pointercancel', clearLongPress);
+        btn.addEventListener('pointerleave', clearLongPress);
+    },
+
+    refreshUserTiles() {
+        if (!this.popover) return;
+        this.userPalette.forEach((color, index) => {
+            const btn = this.popover.querySelector(`[data-user-slot="${index}"]`);
+            if (!btn) return;
+            const filled = !!color;
+            btn.classList.toggle('color-picker-tile--user-empty', !filled);
+            btn.classList.remove('is-selected');
+            if (filled) {
+                btn.dataset.color = color;
+                btn.style.setProperty('--tile', color);
+                btn.title = `Custom color ${index + 1}`;
+                btn.setAttribute('aria-label', `Custom color ${index + 1}`);
+                btn.innerHTML = '';
+            } else {
+                delete btn.dataset.color;
+                btn.style.removeProperty('--tile');
+                btn.title = 'Add custom color';
+                btn.setAttribute('aria-label', 'Add custom color');
+                btn.innerHTML = '<span class="color-picker-wheel" aria-hidden="true"></span>';
+            }
+        });
+        this.positionPopover(this.anchor, this.align);
+    },
+
+    openSubPicker(body, subpanel, anchorTile, slotIndex, initialColor = '#4f46e5') {
+        this.closeSubPicker({ persist: true });
+
+        const sv = subpanel.querySelector('.color-picker-sv');
+        const hueInput = subpanel.querySelector('.color-picker-hue');
+        const preview = subpanel.querySelector('.color-picker-preview');
+        const cursor = subpanel.querySelector('.color-picker-sv-cursor');
+
+        const startHsv = hexToHsv(initialColor);
+        let { h, s, v } = startHsv;
+
+        const applyColor = (hex) => {
+            const normalized = normalizeHex(hex);
+            if (!normalized) return;
+            this.subPicker.lastHex = normalized;
+            preview.style.background = normalized;
+            this.onSelect?.(normalized);
+            this.updateSelection(normalized);
+        };
+
+        const syncUi = () => {
+            const hex = hsvToHex(h, s, v);
+            sv.style.setProperty('--sv-hue', `${h}deg`);
+            hueInput.value = String(Math.round(h));
+            const rect = sv.getBoundingClientRect();
+            const x = (s / 100) * rect.width;
+            const y = (1 - v / 100) * rect.height;
+            cursor.style.left = `${x}px`;
+            cursor.style.top = `${y}px`;
+            applyColor(hex);
+        };
+
+        const setFromSvEvent = (clientX, clientY) => {
+            const rect = sv.getBoundingClientRect();
+            const x = Math.max(0, Math.min(rect.width, clientX - rect.left));
+            const y = Math.max(0, Math.min(rect.height, clientY - rect.top));
+            s = (x / rect.width) * 100;
+            v = (1 - y / rect.height) * 100;
+            syncUi();
+        };
+
+        const onHueInput = () => {
+            h = Number(hueInput.value);
+            syncUi();
+        };
+
+        const onSvPointerDown = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setFromSvEvent(e.clientX, e.clientY);
+            const onMove = (ev) => setFromSvEvent(ev.clientX, ev.clientY);
+            const onUp = () => {
+                document.removeEventListener('pointermove', onMove);
+                document.removeEventListener('pointerup', onUp);
+                this.closeSubPicker({ persist: true });
+            };
+            document.addEventListener('pointermove', onMove);
+            document.addEventListener('pointerup', onUp);
+            this.subDragCleanup = () => {
+                document.removeEventListener('pointermove', onMove);
+                document.removeEventListener('pointerup', onUp);
+            };
+        };
+
+        const onSubpanelClick = (e) => e.stopPropagation();
+
+        hueInput.addEventListener('input', onHueInput);
+        sv.addEventListener('pointerdown', onSvPointerDown);
+        subpanel.addEventListener('mousedown', onSubpanelClick);
+
+        this.subPicker = {
+            el: subpanel,
+            slotIndex,
+            lastHex: normalizeHex(initialColor) || '#4f46e5',
+            cleanup: () => {
+                hueInput.removeEventListener('input', onHueInput);
+                sv.removeEventListener('pointerdown', onSvPointerDown);
+                subpanel.removeEventListener('mousedown', onSubpanelClick);
+            }
+        };
+
+        subpanel.classList.remove('is-hidden');
+
+        const tileRect = anchorTile.getBoundingClientRect();
+        const bodyRect = body.getBoundingClientRect();
+        const panelW = 148;
+        const panelH = 132;
+        let left = tileRect.left - bodyRect.left;
+        let top = tileRect.bottom - bodyRect.top + 6;
+        if (left + panelW > bodyRect.width) left = Math.max(0, bodyRect.width - panelW);
+        if (top + panelH > bodyRect.height + 48) {
+            top = tileRect.top - bodyRect.top - panelH - 6;
+        }
+        subpanel.style.left = `${left}px`;
+        subpanel.style.top = `${top}px`;
+
+        syncUi();
+        this.positionPopover(this.anchor, this.align);
+    },
+
+    updateSelection(hex) {
+        if (!this.popover) return;
+        const normalized = (hex || '').toLowerCase();
+        this.popover.querySelectorAll('.color-picker-tile.is-selected').forEach((el) => {
+            el.classList.remove('is-selected');
+        });
+        const presetMatch = [...this.popover.querySelectorAll('.color-picker-tile[data-color]:not([data-user-slot])')].find(
+            (el) => (el.dataset.color || '').toLowerCase() === normalized
+        );
+        if (presetMatch) {
+            presetMatch.classList.add('is-selected');
+            return;
+        }
+        this.userPalette.forEach((color, index) => {
+            if (color && color.toLowerCase() === normalized) {
+                const btn = this.popover.querySelector(`[data-user-slot="${index}"][data-color]`);
+                btn?.classList.add('is-selected');
+            }
         });
     },
 

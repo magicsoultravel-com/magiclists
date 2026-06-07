@@ -11,7 +11,7 @@ import { UndoManager, historyLabelForItem } from './undo.js';
 import { DesktopBackground } from './desktopBackground.js';
 import { ChromeBackground } from './chromeBackground.js';
 import { ClockStyle } from './clockStyle.js';
-import { randomNoteColor } from './colorPicker.js';
+import { ColorPicker, PALETTE_NOTE, randomNoteColor } from './colorPicker.js';
 
 function countHiddenFromBoard(items) {
     return items.filter(item => UI.isHiddenFromBoard(item)).length;
@@ -272,11 +272,20 @@ class Application {
             alert("Conflict: That category tag layout already exists.");
             return;
         }
-        const colorInput = prompt("Enter custom category color HEX string:", "#64748b");
-        const cleanColor = colorInput && colorInput.trim() ? colorInput.trim() : "#64748b";
-        AppState.categories.push({ name: cleanName, color: cleanColor });
-        localStorage.setItem('matrix_custom_categories', JSON.stringify(AppState.categories));
-        this.syncDataStore();
+        const addBtn = document.getElementById('btn-add-category');
+        if (!addBtn) return;
+        ColorPicker.open({
+            anchor: addBtn,
+            presets: PALETTE_NOTE,
+            value: '#64748b',
+            align: 'end',
+            onSelect: (color) => {
+                const cleanColor = color && color.trim() ? color.trim() : '#64748b';
+                AppState.categories.push({ name: cleanName, color: cleanColor });
+                localStorage.setItem('matrix_custom_categories', JSON.stringify(AppState.categories));
+                this.syncDataStore();
+            }
+        });
     }
 
     executeLoginPrompt() {

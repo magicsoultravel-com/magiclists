@@ -203,19 +203,19 @@ export const SidePanel = {
 
             if (variant === 'hidden') {
                 return `
-                <div class="sidebar-notes-list-item--row has-note-color"${accentStyle}>
-                    <button type="button" class="sidebar-notes-list-item-body" data-id="${this.escapeAttr(item.id)}" title="${title}">
-                        <span class="sidebar-notes-list-date">${this.escapeHTML(dateLabel)}</span>
+                <div class="sidebar-notes-list-item has-note-color sidebar-notes-list-item--with-act"${accentStyle}>
+                    <button type="button" class="sidebar-notes-list-item-main" data-id="${this.escapeAttr(item.id)}" title="${title}">
                         <span class="sidebar-notes-list-item-title">${title}</span>
+                        <span class="sidebar-notes-list-date">${this.escapeHTML(dateLabel)}</span>
                     </button>
-                    <button type="button" class="sidebar-list-action-btn unhide-btn" data-id="${this.escapeAttr(item.id)}" title="Unhide" aria-label="Unhide">${CARD_ICONS.show}</button>
+                    <button type="button" class="card-act card-act--show unhide-btn" data-id="${this.escapeAttr(item.id)}" title="Unhide" aria-label="Unhide">${CARD_ICONS.show}</button>
                 </div>`;
             }
 
             return `
             <button type="button" class="sidebar-notes-list-item has-note-color${variant === 'archived' ? ' is-archived' : ''}" data-id="${this.escapeAttr(item.id)}" title="${title}"${accentStyle}>
-                <span class="sidebar-notes-list-date">${this.escapeHTML(dateLabel)}</span>
                 <span class="sidebar-notes-list-item-title">${title}</span>
+                <span class="sidebar-notes-list-date">${this.escapeHTML(dateLabel)}</span>
             </button>`;
         }).join('');
 
@@ -227,7 +227,7 @@ export const SidePanel = {
             });
         });
 
-        zone.querySelectorAll('.sidebar-notes-list-item-body[data-id]').forEach((btn) => {
+        zone.querySelectorAll('.sidebar-notes-list-item-main[data-id]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const item = allItems.find((entry) => entry.id === btn.dataset.id);
                 if (!item) return;
@@ -280,11 +280,9 @@ export const SidePanel = {
 
             if (hidden) {
                 return `
-                <div class="sidebar-notes-list-item--row sidebar-notes-list-item--category has-note-color"${accentStyle}>
-                    <span class="sidebar-notes-list-item-body sidebar-notes-list-item--label">
-                        <span class="sidebar-notes-list-item-title">${title}</span>
-                    </span>
-                    <button type="button" class="sidebar-list-action-btn show-category-btn" data-category="${this.escapeAttr(catName)}" title="Show" aria-label="Show">${CARD_ICONS.show}</button>
+                <div class="sidebar-notes-list-item sidebar-notes-list-item--category sidebar-notes-list-item--with-act has-note-color"${accentStyle}>
+                    <span class="sidebar-notes-list-item-title">${title}</span>
+                    <button type="button" class="card-act card-act--show show-category-btn" data-category="${this.escapeAttr(catName)}" title="Show" aria-label="Show">${CARD_ICONS.show}</button>
                 </div>`;
             }
 
