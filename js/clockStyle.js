@@ -5,7 +5,7 @@ const STORAGE_KEY = 'matrix_clock_style';
 export const CLOCK_STYLES = [
     { id: 'digital', label: 'Digital', desc: 'Hours & minutes' },
     { id: 'digital-seconds', label: 'With seconds', desc: 'Live ticking seconds' },
-    { id: 'analog', label: 'Analog', desc: 'Classic clock face' },
+    { id: 'analog', label: 'Analog', desc: 'Station clock with date' },
     { id: 'compact', label: 'Compact', desc: 'Date & time inline' },
     { id: 'military', label: '24-hour', desc: 'Military time' },
     { id: 'retro', label: 'Retro LED', desc: 'Glowing display' }
@@ -56,6 +56,13 @@ function formatDate(now, style) {
     return `${weekday}, ${dateString}`;
 }
 
+function formatStationDate(now) {
+    const weekday = now.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = now.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+    return `${weekday} · ${day} ${month}`;
+}
+
 function setHandRotation(svg, selector, degrees) {
     const hand = svg?.querySelector(selector);
     if (hand) hand.setAttribute('transform', `rotate(${degrees} 50 50)`);
@@ -73,7 +80,11 @@ function updateAnalogHands(svg, now) {
 
 function previewMarkup(style, now) {
     if (style === 'analog') {
-        return `<span class="clock-style-preview clock-style-preview--analog">${analogSvgHtml('clock-style-preview-face')}</span>`;
+        const date = formatStationDate(now);
+        return `<span class="clock-style-preview clock-style-preview--analog clock-style-preview--departure">
+            ${analogSvgHtml('clock-style-preview-face')}
+            <span class="clock-style-preview-departure-date">${date}</span>
+        </span>`;
     }
     const time = formatTime(now, style === 'compact' ? 'digital' : style);
     const date = formatDate(now, style);
@@ -91,6 +102,7 @@ export const ClockStyle = {
     dateEl: null,
     timeEl: null,
     analogEl: null,
+    analogDateEl: null,
     triggerBtn: null,
     popover: null,
     intervalId: null,
@@ -104,10 +116,12 @@ export const ClockStyle = {
         this.dateEl = document.getElementById('clock-date');
         this.timeEl = document.getElementById('clock-time');
         this.analogEl = document.getElementById('clock-analog');
+        this.analogDateEl = document.getElementById('clock-analog-date');
         if (!this.zone || !this.dateEl || !this.timeEl) return;
 
-        if (this.analogEl && !this.analogEl.innerHTML.trim()) {
-            this.analogEl.innerHTML = analogSvgHtml();
+        const analogFaceMount = this.analogEl?.querySelector('.clock-departure-face');
+        if (analogFaceMount && !analogFaceMount.innerHTML.trim()) {
+            analogFaceMount.innerHTML = analogSvgHtml();
         }
 
         this.currentStyle = this.readStored();
@@ -156,6 +170,7 @@ export const ClockStyle = {
 
         if (style === 'analog') {
             updateAnalogHands(this.analogEl?.querySelector('.clock-analog-face'), now);
+            if (this.analogDateEl) this.analogDateEl.textContent = formatStationDate(now);
             return;
         }
 
@@ -207,12 +222,13 @@ export const ClockStyle = {
         this.popover.querySelectorAll('.clock-style-option').forEach((btn) => {
             const style = btn.dataset.style;
             const preview = btn.querySelector('.clock-style-preview');
-            if (!preview || style === 'analog') {
-                if (style === 'analog') {
-                    updateAnalogHands(preview?.querySelector('.clock-style-preview-face'), now);
-                }
+            if (style === 'analog') {
+                updateAnalogHands(preview?.querySelector('.clock-style-preview-face'), now);
+                const dateEl = preview?.querySelector('.clock-style-preview-departure-date');
+                if (dateEl) dateEl.textContent = formatStationDate(now);
                 return;
             }
+            if (!preview) return;
             const time = formatTime(now, style === 'compact' ? 'digital' : style);
             const date = formatDate(now, style);
             if (style === 'compact') {

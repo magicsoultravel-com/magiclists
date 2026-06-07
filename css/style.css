@@ -2236,15 +2236,54 @@ textarea.form-input {
     display: none;
     align-items: center;
     justify-content: center;
-    width: 38px;
-    height: 38px;
-    color: #f8fafc;
+}
+
+.clock-departure {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 72px;
+    padding: 0.38rem 0.55rem 0.32rem;
+    border-radius: 8px;
+    border: 1px solid rgba(212, 168, 83, 0.3);
+    background: linear-gradient(180deg, rgba(36, 30, 22, 0.92) 0%, rgba(16, 14, 12, 0.96) 100%);
+    box-shadow:
+        inset 0 1px 0 rgba(232, 196, 124, 0.1),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+        0 2px 10px rgba(0, 0, 0, 0.28);
+}
+
+.clock-departure-face {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    color: #f0e6d0;
+    filter: drop-shadow(0 0 5px rgba(232, 196, 124, 0.18));
 }
 
 .clock-analog-face {
     width: 100%;
     height: 100%;
     display: block;
+}
+
+.clock-departure-date {
+    margin-top: 0.22rem;
+    padding-top: 0.24rem;
+    width: 100%;
+    border-top: 1px solid rgba(212, 168, 83, 0.22);
+    text-align: center;
+    font-family: ui-serif, Georgia, 'Times New Roman', serif;
+    font-size: 0.56rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #e8c47c;
+    text-shadow: 0 0 8px rgba(232, 196, 124, 0.28);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
 }
 
 /* Clock style variants */
@@ -2374,14 +2413,35 @@ textarea.form-input {
 }
 
 .clock-style-preview--analog {
-    padding: 0.15rem;
-    color: #f8fafc;
+    flex-direction: column;
+    gap: 0.12rem;
+    width: auto;
+    min-width: 68px;
+    padding: 0.28rem 0.35rem 0.22rem;
+    color: #f0e6d0;
+    border-color: rgba(212, 168, 83, 0.28);
+    background: linear-gradient(180deg, rgba(36, 30, 22, 0.92) 0%, rgba(16, 14, 12, 0.96) 100%);
 }
 
 .clock-style-preview-face {
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
     display: block;
+    filter: drop-shadow(0 0 4px rgba(232, 196, 124, 0.15));
+}
+
+.clock-style-preview-departure-date {
+    width: 100%;
+    padding-top: 0.14rem;
+    border-top: 1px solid rgba(212, 168, 83, 0.2);
+    font-family: ui-serif, Georgia, 'Times New Roman', serif;
+    font-size: 0.44rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #e8c47c;
+    text-align: center;
+    white-space: nowrap;
 }
 
 .clock-style-preview--retro {
@@ -3024,6 +3084,21 @@ textarea.form-input {
 
     .clock-chip--date {
         display: none;
+    }
+
+    .clock-departure {
+        min-width: 64px;
+        padding: 0.3rem 0.42rem 0.26rem;
+    }
+
+    .clock-departure-face {
+        width: 34px;
+        height: 34px;
+    }
+
+    .clock-departure-date {
+        font-size: 0.5rem;
+        letter-spacing: 0.12em;
     }
 
     #digital-clock[data-clock-style="compact"] .clock-chip--time {
