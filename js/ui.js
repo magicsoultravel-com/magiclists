@@ -606,7 +606,7 @@ export const UI = {
                 onSelect: (color) => {
                     this.mutateItem(item, (it) => {
                         it.backgroundColor = color || THEME_DEFAULT_COLOR;
-                    }, { preserveView: true });
+                    }, { preserveView: true, skipRerender: true });
                     this.applyItemCardTheme(card, item);
                 }
             });

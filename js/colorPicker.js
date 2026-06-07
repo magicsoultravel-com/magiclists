@@ -190,7 +190,15 @@ export const ColorPicker = {
             btn.setAttribute('aria-label', 'Add custom color');
             btn.innerHTML = '<span class="color-picker-wheel" aria-hidden="true"></span>';
         }
-        this.positionPopover(this.anchor, this.align);
+        if (this.subPicker?.el && !this.subPicker.el.classList.contains('is-hidden')) {
+            const activeTile = this.popover?.querySelector(`[data-user-slot="${this.subPicker.slotIndex}"]`);
+            const body = this.popover?.querySelector('.color-picker-body');
+            if (activeTile && body) {
+                this.positionSubPicker(this.subPicker.el, activeTile, body);
+            }
+        } else {
+            this.positionPopover(this.anchor, this.align);
+        }
     },
 
     close() {
@@ -478,6 +486,12 @@ export const ColorPicker = {
 
         subpanel.classList.remove('is-hidden');
 
+        this.positionSubPicker(subpanel, anchorTile, body);
+        syncUi();
+    },
+
+    positionSubPicker(subpanel, anchorTile, body) {
+        if (!subpanel || !anchorTile || !body) return;
         const tileRect = anchorTile.getBoundingClientRect();
         const bodyRect = body.getBoundingClientRect();
         const panelW = 148;
@@ -490,13 +504,11 @@ export const ColorPicker = {
         }
         subpanel.style.left = `${left}px`;
         subpanel.style.top = `${top}px`;
-
-        syncUi();
-        this.positionPopover(this.anchor, this.align);
     },
 
     positionPopover(anchor, align = 'end') {
         if (!this.popover || !anchor) return;
+        if (!anchor.isConnected) return;
         const rect = anchor.getBoundingClientRect();
         const gap = 8;
         const margin = 8;
