@@ -36,8 +36,8 @@ export const ACTION_ICONS = {
     logout: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M4.6 2.1H3.1v7.8h1.5" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/><path d="M6.8 6 10 6M10 6 8.4 4.4M10 6 8.4 7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     undo: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.4 5.6H7.2a2.4 2.4 0 1 1 0 4.8H6.6M3.4 5.6 5.1 3.9M3.4 5.6 5.1 7.3" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     redo: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M8.6 5.6H4.8a2.4 2.4 0 0 0 0 4.8h.6M8.6 5.6 6.9 3.9M8.6 5.6 6.9 7.3" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    sortAlpha: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.1 9.1V2.7M2.1 2.7h2.5M3.8 5.4H2.1" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.8 8.9h3.8M6.8 6.5h2.6M6.8 4.1h3.8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    sortDate: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.8" y="2.6" width="8.4" height="7.4" rx="0.7" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M1.8 5.2h8.4M3.9 1.6v1.5M8.1 1.6v1.5" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
+    sortAlpha: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M1.8 3.2h3.4M1.8 8.4h3.4M1.8 3.2l3.4 5.2" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.4 3v6M7.5 4.1l0.9-1.1 0.9 1.1M7.5 7.9l0.9 1.1 0.9-1.1" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    sortDate: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><circle cx="4.8" cy="6" r="3.1" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M4.8 4.4V6l1.3 0.9" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.2 3v6M8.3 4.1l0.9-1.1 0.9 1.1M8.3 7.9l0.9 1.1 0.9-1.1" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     desktopBg: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="2.2" width="9.2" height="6.8" rx="0.7" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M2.2 8.4h7.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/><circle cx="4.1" cy="5.4" r="1.1" fill="currentColor" opacity="0.85"/><circle cx="6.6" cy="4.6" r="0.85" fill="currentColor" opacity="0.65"/><circle cx="8.1" cy="6.2" r="0.75" fill="currentColor" opacity="0.5"/></svg>',
     chromeBg: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.3" y="1.8" width="3.6" height="8.4" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="5.5" y="1.8" width="5.2" height="2.4" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="5.5" y="5" width="5.2" height="5.2" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>'
 };
@@ -1190,48 +1190,25 @@ export const UI = {
     },
 
     attachChecklistDrag(root, item, applyMutate, refresh) {
-        const list = root.querySelector('.expanded-checklist');
-        if (!list) return;
-
-        root.querySelectorAll('.step-row--display:not(.step-row--done)').forEach((row) => {
-            row.setAttribute('draggable', 'true');
-        });
-
+        if (!root.querySelector('.expanded-checklist')) return;
         if (root.dataset.checklistDragBound) return;
         root.dataset.checklistDragBound = '1';
 
-        let draggedRow = null;
+        const DRAG_THRESHOLD = 4;
+        let activeDrag = null;
 
         const getList = () => root.querySelector('.expanded-checklist');
         const getActiveRows = () => [...(getList()?.querySelectorAll('.step-row--display:not(.step-row--done)') || [])];
 
-        root.addEventListener('dragstart', (e) => {
-            const row = e.target.closest('.step-row--display:not(.step-row--done)');
-            if (!row || !root.contains(row)) return;
-            if (!e.target.closest('.grab-handle--step')) {
-                e.preventDefault();
-                return;
-            }
-            draggedRow = row;
-            row.classList.add('is-dragging');
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', row.dataset.stepId || 'step');
-        });
-
-        root.addEventListener('dragend', (e) => {
-            e.target.closest('.step-row--display')?.classList.remove('is-dragging');
-            draggedRow = null;
-        });
-
-        root.addEventListener('dragover', (e) => {
-            if (!draggedRow) return;
+        const reorderAt = (clientY) => {
+            const draggedRow = activeDrag?.row;
             const activeList = getList();
-            if (!activeList?.contains(draggedRow)) return;
-            e.preventDefault();
+            if (!draggedRow || !activeList?.contains(draggedRow)) return;
+
             const siblings = getActiveRows().filter((row) => row !== draggedRow);
             const nextSibling = siblings.find((sibling) => {
                 const box = sibling.getBoundingClientRect();
-                return e.clientY <= box.top + box.height / 2;
+                return clientY <= box.top + box.height / 2;
             });
             if (nextSibling) activeList.insertBefore(draggedRow, nextSibling);
             else {
@@ -1239,20 +1216,59 @@ export const UI = {
                 if (firstDone) activeList.insertBefore(draggedRow, firstDone);
                 else activeList.appendChild(draggedRow);
             }
-        });
+        };
 
-        root.addEventListener('drop', (e) => {
+        const finishDrag = () => {
+            if (!activeDrag) return;
+            const { row, moved } = activeDrag;
+            row.classList.remove('is-dragging');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            if (moved) {
+                applyMutate((it) => {
+                    const activeIds = getActiveRows().map((r) => r.dataset.stepId);
+                    const doneSteps = it.steps.filter((step) => step.completed);
+                    const activeSteps = activeIds
+                        .map((id) => it.steps.find((step) => step.id === id))
+                        .filter(Boolean);
+                    it.steps = [...activeSteps, ...doneSteps];
+                });
+                refresh();
+            }
+            activeDrag = null;
+        };
+
+        const onMove = (e) => {
+            if (!activeDrag) return;
+            if (!activeDrag.moved) {
+                const dx = Math.abs(e.clientX - activeDrag.startX);
+                const dy = Math.abs(e.clientY - activeDrag.startY);
+                if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
+                activeDrag.moved = true;
+                activeDrag.row.classList.add('is-dragging');
+            }
             e.preventDefault();
-            if (!draggedRow) return;
-            applyMutate((it) => {
-                const activeIds = getActiveRows().map((row) => row.dataset.stepId);
-                const doneSteps = it.steps.filter((step) => step.completed);
-                const activeSteps = activeIds
-                    .map((id) => it.steps.find((step) => step.id === id))
-                    .filter(Boolean);
-                it.steps = [...activeSteps, ...doneSteps];
-            });
-            refresh();
+            reorderAt(e.clientY);
+        };
+
+        const onUp = () => finishDrag();
+
+        root.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            const handle = e.target.closest('.grab-handle--step');
+            if (!handle || !root.contains(handle)) return;
+            const row = handle.closest('.step-row--display:not(.step-row--done)');
+            if (!row) return;
+            e.preventDefault();
+            e.stopPropagation();
+            activeDrag = {
+                row,
+                startX: e.clientX,
+                startY: e.clientY,
+                moved: false
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
         });
     },
 

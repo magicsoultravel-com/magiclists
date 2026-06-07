@@ -120,6 +120,7 @@ export const DragDropEngine = {
 
         cards.forEach(card => {
             card.addEventListener('dragstart', (e) => {
+                if (e.target.closest('.grab-handle--step')) return;
                 if (card.classList.contains('expanded')) {
                     e.preventDefault();
                     return;
@@ -319,7 +320,7 @@ export const DragDropEngine = {
                 }
 
                 const interactive = e.target.closest(
-                    '.card-actions, .step-check, .step-delete-btn, .step-collapse-btn, .quicklink-anchor-row, .card-inline-edit, .step-nest-controls, .step-row-actions, .expanded-checklist-add-btn, .ff-resize, a, button, input, textarea'
+                    '.card-actions, .step-check, .step-delete-btn, .step-collapse-btn, .quicklink-anchor-row, .card-inline-edit, .step-nest-controls, .step-row-actions, .grab-handle--step, .expanded-checklist-add-btn, .ff-resize, a, button, input, textarea'
                 );
                 if (interactive) return;
 
