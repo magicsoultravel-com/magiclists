@@ -39,6 +39,10 @@ export function migrateImportedDatabase(db, categories = []) {
     const names = normalizeCategories(categories, { keepEmpty: true }).map((c) => c.name);
     return {
         ...db,
+        auth: {
+            admin_token: 'dev-admin-secret-2026',
+            ...(db.auth || {})
+        },
         settings: {
             ...(db.settings || {}),
             categories: names.length ? names : (db.settings?.categories || [])
@@ -57,10 +61,28 @@ export function applyBackupToStorage(parsedBackup) {
     }
 
     if (parsedBackup.matrix_database) {
+        let existingDb = null;
+        try {
+            const raw = localStorage.getItem('matrix_database');
+            existingDb = raw ? JSON.parse(raw) : null;
+        } catch {
+            /* ignore */
+        }
+
         const db = migrateImportedDatabase(parsedBackup.matrix_database, categories);
+        if (!Array.isArray(parsedBackup.matrix_database.items) && Array.isArray(existingDb?.items)) {
+            db.items = existingDb.items.map(migrateImportedItem);
+        }
+
         localStorage.setItem('matrix_database', JSON.stringify(db));
         if (db.auth?.admin_token) {
             localStorage.setItem('admin_token', db.auth.admin_token);
+        }
+        if (!categories.length && Array.isArray(db.settings?.categories) && db.settings.categories.length) {
+            localStorage.setItem(
+                'matrix_custom_categories',
+                JSON.stringify(normalizeCategories(db.settings.categories, { keepEmpty: true }))
+            );
         }
     }
 

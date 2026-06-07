@@ -343,7 +343,8 @@ export const UI = {
         const scrollState = this.captureScrollState(canvas);
         canvas.innerHTML = '';
 
-        const visibleItems = this.getVisibleItems(items);
+        const safeItems = Array.isArray(items) ? items : [];
+        const visibleItems = this.getVisibleItems(safeItems);
 
         let activeCategories = readStoredCategories();
 
@@ -353,8 +354,8 @@ export const UI = {
         canvas.className = resolvedMode === 'freeform' ? 'view-freeform' : 'view-columns';
 
         if (visibleItems.length === 0) {
-            const hiddenCount = items.length - visibleItems.length;
-            if (items.length > 0 && hiddenCount === items.length) {
+            const hiddenCount = safeItems.length - visibleItems.length;
+            if (safeItems.length > 0 && hiddenCount === safeItems.length) {
                 canvas.innerHTML = `<div class="system-status-msg">All objects are hidden. Use the footer to restore them.</div>`;
             } else {
                 canvas.innerHTML = `<div class="system-status-msg">Workspace clean. Click "+ New" to commit an entity.</div>`;

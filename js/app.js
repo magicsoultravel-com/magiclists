@@ -114,23 +114,41 @@ class Application {
     loadCategoriesStore() {
         const storedCats = localStorage.getItem('matrix_custom_categories');
         if (storedCats) {
-            try { 
-                AppState.categories = normalizeCategories(JSON.parse(storedCats));
-            } catch (e) {}
+            try {
+                const parsed = normalizeCategories(JSON.parse(storedCats), { keepEmpty: true });
+                if (parsed.length) AppState.categories = parsed;
+            } catch {
+                /* ignore */
+            }
+        }
+
+        if (!AppState.categories?.length) {
+            const db = API._getLocalDB();
+            AppState.categories = normalizeCategories(db.settings?.categories || []);
+            localStorage.setItem('matrix_custom_categories', JSON.stringify(AppState.categories));
         }
     }
 
     async syncDataStore() {
+        const canvas = document.getElementById('app-canvas');
         try {
             const data = await API.fetchItems(AppState.user.token);
-            AppState.items = data.items;
-            
-            UI.render(document.getElementById('app-canvas'), AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.expandedCards);
-            
-            this.updateWorkspaceCounter();
+            AppState.items = Array.isArray(data?.items) ? data.items : [];
+
+            if (AppState.items.length === 0 && !data?.write_access && (data?.total_items || 0) > 0) {
+                canvas.innerHTML = `<div class="system-status-msg">Notes are in local storage but require admin login. Use Quick actions → Login (default dev token: dev-admin-secret-2026).</div>`;
+            } else {
+                UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories);
+            }
+
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         } catch (err) {
-            console.error("[Fatal Sync Failure] Data sync broken:", err);
+            console.error('[Fatal Sync Failure] Data sync broken:', err);
+            if (canvas) {
+                canvas.innerHTML = `<div class="system-status-msg">Failed to load workspace data. Try importing a backup or clearing site storage.</div>`;
+            }
+        } finally {
+            this.updateWorkspaceCounter();
         }
     }
 
