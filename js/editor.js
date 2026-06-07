@@ -35,13 +35,16 @@ export const Editor = {
         this.calendarToggleBtn = document.getElementById('modal-calendar-toggle');
         this.saveBtn = document.getElementById('modal-save-btn');
         this.deleteBtn = document.getElementById('modal-delete-btn');
+        this.approveBtn = document.getElementById('modal-approve-btn');
 
         document.getElementById('modal-close-btn')?.addEventListener('click', () => this.closeAndSave());
-        this.saveBtn?.addEventListener('click', () => {
+        const commitAndClose = () => {
             this.markInteracted();
             this.autoSave();
             this.closeAndSave();
-        });
+        };
+        this.saveBtn?.addEventListener('click', commitAndClose);
+        this.approveBtn?.addEventListener('click', commitAndClose);
         this.calendarToggleBtn?.addEventListener('click', () => this.toggleCalendarVisibility());
         this.deleteBtn?.addEventListener('click', () => this.emitDeleteAction());
     },
@@ -73,9 +76,12 @@ export const Editor = {
         if (this.activeItem.hideFromCalendar === undefined) {
             this.activeItem.hideFromCalendar = false;
         }
+        this.syncEditorTheme('');
         this.renderForm();
         this.updateCalendarToggleUI();
-        this.overlay.classList.remove('is-hidden'); const modal = this.overlay.querySelector('.modal'); if (modal) { modal.classList.add('modal--editor'); }
+        this.overlay.classList.remove('is-hidden');
+        const modal = this.overlay.querySelector('.modal');
+        if (modal) modal.classList.add('modal--editor');
     },
     
     markInteracted() {
@@ -288,6 +294,7 @@ export const Editor = {
                 return `<option value="${this.escapeQuotes(catName)}" ${selected ? 'selected' : ''}>${catName}</option>`;
             }).join('');
         const isExistingItem = item.created_at !== undefined;
+        const createdLabel = this.formatCreatedDate(item.created_at);
         this.deleteBtn?.classList.toggle('is-hidden', !isExistingItem);
         this.saveBtn.innerHTML = CARD_ICONS.save;
         document.getElementById('modal-close-btn').innerHTML = CARD_ICONS.close;
@@ -306,6 +313,7 @@ export const Editor = {
         this.mountZone.innerHTML = `
             ${warningLightHtml}
             <input type="text" id="edit-title" class="form-input form-input--title" placeholder="${isExistingItem ? 'Edit title' : 'New title'}" value="${this.escapeQuotes(item.title)}">
+            ${createdLabel ? `<div class="editor-created-date">Created ${createdLabel}</div>` : ''}
 
             <div class="editor-panel">
                 <div class="collapsable-header" id="config-section-header">
@@ -451,7 +459,14 @@ export const Editor = {
 
     syncEditorTheme(backgroundColor) {
         const modal = this.overlay?.querySelector('.modal');
-        applyCardTheme(modal, backgroundColor || '', { paintBackground: !!backgroundColor });
+        applyCardTheme(modal, backgroundColor || '', { paintBackground: true });
+    },
+
+    formatCreatedDate(timestamp) {
+        if (!timestamp) return '';
+        const d = new Date(Number(timestamp) * 1000);
+        if (Number.isNaN(d.getTime())) return '';
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     },
 
     setupColorPalette(item) {
@@ -460,7 +475,7 @@ export const Editor = {
         const custom = document.getElementById('edit-bg-color-custom');
         if (!palette || !hidden) return;
 
-        const selectColor = (value) => {
+        const selectColor = (value, { silent = false } = {}) => {
             hidden.value = value;
             palette.querySelectorAll('.color-swatch').forEach(btn => {
                 btn.classList.toggle('is-selected', btn.dataset?.color === value || btn.classList.contains('color-swatch--custom') && value && !NOTE_COLOR_PRESETS.some(p => p.value === value));
@@ -473,8 +488,10 @@ export const Editor = {
                 customWrap.classList.toggle('is-selected', isCustom);
             }
             this.syncEditorTheme(value);
-            this.markInteracted();
-            this.triggerAutoSave();
+            if (!silent) {
+                this.markInteracted();
+                this.triggerAutoSave();
+            }
         };
 
         palette.querySelectorAll('.color-swatch[data-color]').forEach(btn => {
@@ -490,12 +507,7 @@ export const Editor = {
             this.triggerAutoSave();
         });
 
-        const current = item.backgroundColor || '';
-        if (current && !NOTE_COLOR_PRESETS.some(p => p.value === current)) {
-            palette.querySelectorAll('.color-swatch[data-color]').forEach(b => b.classList.remove('is-selected'));
-            palette.querySelector('.color-swatch--custom')?.classList.add('is-selected');
-            if (custom) custom.value = current;
-        }
+        selectColor(item.backgroundColor || '', { silent: true });
     },
 
     getChecklistContainers() {

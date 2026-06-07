@@ -515,6 +515,26 @@ body {
     background: #5b52e8;
 }
 
+.editor-fab {
+    position: absolute;
+    right: 0.85rem;
+    bottom: 0.85rem;
+    z-index: 12;
+}
+
+.editor-created-date {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    margin: -0.15rem 0 0.35rem;
+}
+
+.created-date {
+    margin-left: auto;
+    color: var(--text-muted) !important;
+    font-size: 0.56rem;
+    white-space: nowrap;
+}
+
 /* ==========================================================================
    2. PERSISTENT TOP APP BAR
    ========================================================================== */
@@ -1937,10 +1957,6 @@ textarea.form-input {
     transition: none !important;
 }
 
-#app-canvas.view-freeform .card-act--front:hover {
-    color: #93c5fd;
-}
-
 .canvas-column {
     width: 212px !important;
     min-width: 212px !important;
@@ -2012,6 +2028,7 @@ textarea.form-input {
 }
 
 #editor-overlay .modal {
+    position: relative;
     width: min(520px, 96vw);
     max-width: none;
     max-height: 92vh;

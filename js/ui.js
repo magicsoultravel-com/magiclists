@@ -332,24 +332,16 @@ export const UI = {
         return colWrapper;
     },
 
-    buildCardActionsHtml(item, isExpanded = false, { freeform = false, canDelete = false } = {}) {
+    buildCardActionsHtml(item, isExpanded = false) {
         const calHidden = this.isHiddenFromCalendar(item);
         const calTitle = calHidden ? 'Hidden from calendar — click to show' : 'Shown on calendar — click to hide';
         const expandTitle = isExpanded ? 'Collapse note' : 'Expand note';
         const expandIcon = isExpanded ? CARD_ICONS.collapse : CARD_ICONS.expand;
-        const frontBtnHtml = freeform
-            ? `<button type="button" class="card-act card-act--front" title="Bring to front" aria-label="Bring to front">${CARD_ICONS.bringFront}</button>`
-            : '';
-        const deleteBtnHtml = canDelete
-            ? `<button type="button" class="card-act card-act--danger card-act--delete" title="Delete note" aria-label="Delete note">${CARD_ICONS.close}</button>`
-            : '';
         return `<div class="card-actions">
-            ${frontBtnHtml}
             <button type="button" class="card-act card-act--toggle" title="${expandTitle}" aria-label="${expandTitle}">${expandIcon}</button>
             <button type="button" class="card-act card-act--cal ${calHidden ? 'is-off' : 'is-on'}" title="${calTitle}" aria-label="Toggle calendar">${CARD_ICONS.calendar}</button>
             <button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>
             <button type="button" class="card-act card-act--edit" title="Edit note" aria-label="Edit note">${CARD_ICONS.edit}</button>
-            ${deleteBtnHtml}
         </div>`;
     },
 
@@ -358,20 +350,22 @@ export const UI = {
         if (!actions) return;
 
         const toggleBtn = actions.querySelector('.card-act--toggle');
-        const frontBtn = actions.querySelector('.card-act--front');
         const calBtn = actions.querySelector('.card-act--cal');
         const hideBtn = actions.querySelector('.card-act--hide');
         const editBtn = actions.querySelector('.card-act--edit');
-        const deleteBtn = actions.querySelector('.card-act--delete');
+
+        const consumeSkipExpand = () => {
+            if (card.dataset.skipExpand) {
+                delete card.dataset.skipExpand;
+                return true;
+            }
+            return false;
+        };
 
         toggleBtn?.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (consumeSkipExpand()) return;
             if (ctx) this.toggleCardExpanded(card, item, ctx);
-        });
-
-        frontBtn?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.bringFreeformCardToFront(card);
         });
 
         calBtn?.addEventListener('click', (e) => {
@@ -384,19 +378,16 @@ export const UI = {
             this.hideFromBoard(item);
         });
 
-        editBtn?.addEventListener('click', (e) => {
+        editBtn?.addEventListener('mousedown', (e) => {
             e.stopPropagation();
-            if (!localStorage.getItem('admin_token')) return;
-            window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: item }));
+            if (card.dataset.freeform === '1') this.raiseFreeformCard(card);
         });
 
-        deleteBtn?.addEventListener('click', (e) => {
+        editBtn?.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (consumeSkipExpand()) return;
             if (!localStorage.getItem('admin_token')) return;
-            const label = item.title?.trim() || 'this note';
-            if (confirm(`Permanently delete "${label}"?`)) {
-                window.dispatchEvent(new CustomEvent('item:deletion_requested', { detail: item.id }));
-            }
+            window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: item }));
         });
     },
 
@@ -520,14 +511,14 @@ export const UI = {
     },
 
     toggleCardExpanded(card, item, ctx) {
-        const willExpand = !card.classList.contains('expanded');
+        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
+        const willExpand = expandedCards[item.id] !== true;
 
         if (card.dataset.freeform === '1') {
             this.updateFreeformCard(card, item, { expanded: willExpand });
             return;
         }
 
-        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
         expandedCards[item.id] = willExpand;
         localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
 
@@ -581,7 +572,18 @@ export const UI = {
             this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
         }
 
+        if (freeform) {
+            card.addEventListener('mousedown', () => this.raiseFreeformCard(card));
+        }
+
         return card;
+    },
+
+    formatCreatedDate(timestamp) {
+        if (!timestamp) return '';
+        const d = new Date(Number(timestamp) * 1000);
+        if (Number.isNaN(d.getTime())) return '';
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     },
 
     renderCompactCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
@@ -611,7 +613,7 @@ export const UI = {
         card.innerHTML = `
             <div class="card-header card-drag-zone">
                 <div class="mini-card-title" title="${titleAttr}">${this.escapeHTML(fullTitle)}</div>
-                ${this.buildCardActionsHtml(item, isExpanded, { freeform: card.dataset.freeform === '1' })}
+                ${this.buildCardActionsHtml(item, isExpanded)}
             </div>
             <div class="mini-card-meta compact card-drag-zone">
                 <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
@@ -721,14 +723,13 @@ export const UI = {
         
         const typeBadgeHtml = this.buildChecklistBadgeHtml(item, isQuickLinkType);
         const bodyDragClass = card.dataset.freeform === '1' ? '' : ' card-drag-zone';
+        const createdLabel = this.formatCreatedDate(item.created_at);
+        const createdHtml = createdLabel ? `<span class="created-date" title="Created">${createdLabel}</span>` : '';
 
         card.innerHTML = `
             <div class="card-header card-drag-zone">
                 ${titleHtml}
-                ${this.buildCardActionsHtml(item, card.classList.contains('expanded'), {
-                    freeform: card.dataset.freeform === '1',
-                    canDelete: canEdit && card.classList.contains('expanded')
-                })}
+                ${this.buildCardActionsHtml(item, true)}
             </div>
             <div class="card-body${bodyDragClass}">
                 ${bodyHtml}
@@ -739,6 +740,7 @@ export const UI = {
                 <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
                 ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
                 ${typeBadgeHtml}
+                ${createdHtml}
             </div>
         `;
 
@@ -959,7 +961,7 @@ export const UI = {
         if (z >= freeformStackSeq) freeformStackSeq = z + 1;
     },
 
-    bringFreeformCardToFront(card) {
+    raiseFreeformCard(card) {
         if (!card || card.dataset.freeform !== '1') return;
         freeformStackSeq += 1;
         card.style.setProperty('z-index', String(freeformStackSeq), 'important');
