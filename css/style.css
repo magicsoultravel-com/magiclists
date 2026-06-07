@@ -1524,13 +1524,46 @@ body {
 
 .color-picker-subpanel {
     position: absolute;
+    inset: 0;
     z-index: 2;
-    width: 148px;
-    padding: 0.45rem;
-    background: rgba(16, 16, 20, 0.98);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    display: flex;
+    flex-direction: column;
+    padding: 0.4rem;
+    background: rgba(16, 16, 20, 0.99);
     border-radius: 8px;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.color-picker-back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    margin: 0 0 0.35rem;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-main);
+    font-size: 0.85rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.color-picker-back:hover {
+    border-color: rgba(255, 255, 255, 0.24);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.color-picker-back-icon {
+    display: block;
+    margin-top: -1px;
+}
+
+.color-picker-subpanel-content {
+    flex: 1;
+    min-height: 0;
 }
 
 .color-picker-sv {
@@ -3373,4 +3406,69 @@ textarea.form-input {
         grid-template-columns: 1fr;
     }
 
+}
+
+.rich-text s,
+.rich-text strike,
+.rich-text del {
+    text-decoration: line-through;
+    opacity: 0.75;
+}
+
+.rich-text b,
+.rich-text strong {
+    font-weight: 600;
+}
+
+.rich-text i,
+.rich-text em {
+    font-style: italic;
+}
+
+.editor-note-shell {
+    font-size: calc(1em * var(--editor-zoom, 1));
+}
+
+.format-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    flex-wrap: wrap;
+}
+
+.format-btn {
+    min-width: 26px;
+    min-height: 26px;
+    padding: 0 0.35rem;
+    font-size: 0.68rem;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.04);
+    color: inherit;
+    cursor: pointer;
+}
+
+.format-btn:hover {
+    background: rgba(79, 70, 229, 0.12);
+}
+
+.format-btn--ghost {
+    font-size: 0.58rem;
+    padding: 0 0.4rem;
+}
+
+.format-toolbar-sep {
+    width: 1px;
+    height: 18px;
+    margin: 0 0.15rem;
+    background: var(--border-color);
+}
+
+.editor-panel--format .collapsable-section {
+    padding: 0.3rem 0.35rem 0.35rem;
+}
+
+.format-toolbar .card-act {
+    width: 26px;
+    height: 26px;
 }

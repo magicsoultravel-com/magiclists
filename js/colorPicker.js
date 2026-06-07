@@ -156,6 +156,7 @@ export const ColorPicker = {
         if (this.subPicker?.el) {
             this.subPicker.el.classList.add('is-hidden');
         }
+        this.popover?.querySelector('.color-picker-body')?.classList.remove('color-picker-body--editing');
         this.subPicker = null;
     },
 
@@ -189,15 +190,6 @@ export const ColorPicker = {
             btn.title = 'Add custom color';
             btn.setAttribute('aria-label', 'Add custom color');
             btn.innerHTML = '<span class="color-picker-wheel" aria-hidden="true"></span>';
-        }
-        if (this.subPicker?.el && !this.subPicker.el.classList.contains('is-hidden')) {
-            const activeTile = this.popover?.querySelector(`[data-user-slot="${this.subPicker.slotIndex}"]`);
-            const body = this.popover?.querySelector('.color-picker-body');
-            if (activeTile && body) {
-                this.positionSubPicker(this.subPicker.el, activeTile, body);
-            }
-        } else {
-            this.positionPopover(this.anchor, this.align);
         }
     },
 
@@ -254,17 +246,24 @@ export const ColorPicker = {
         }).join('');
 
         popover.innerHTML = `<div class="color-picker-body">
-            <div class="color-picker-grid color-picker-grid--presets">${presetHtml}</div>
-            <div class="color-picker-divider" aria-hidden="true"></div>
-            <div class="color-picker-grid color-picker-grid--user">${userHtml}</div>
+            <div class="color-picker-main">
+                <div class="color-picker-grid color-picker-grid--presets">${presetHtml}</div>
+                <div class="color-picker-divider" aria-hidden="true"></div>
+                <div class="color-picker-grid color-picker-grid--user">${userHtml}</div>
+            </div>
             <div class="color-picker-subpanel is-hidden" role="dialog" aria-label="Pick a custom color">
-                <div class="color-picker-sv" tabindex="0" aria-label="Saturation and brightness">
-                    <span class="color-picker-sv-cursor" aria-hidden="true"></span>
-                </div>
-                <input type="range" class="color-picker-hue" min="0" max="360" value="240" aria-label="Hue">
-                <div class="color-picker-hex-row">
-                    <div class="color-picker-preview" aria-hidden="true"></div>
-                    <input type="text" class="color-picker-hex" maxlength="7" spellcheck="false" autocomplete="off" aria-label="Hex color" inputmode="text">
+                <button type="button" class="color-picker-back" aria-label="Back to color grid">
+                    <span class="color-picker-back-icon" aria-hidden="true">←</span>
+                </button>
+                <div class="color-picker-subpanel-content">
+                    <div class="color-picker-sv" tabindex="0" aria-label="Saturation and brightness">
+                        <span class="color-picker-sv-cursor" aria-hidden="true"></span>
+                    </div>
+                    <input type="range" class="color-picker-hue" min="0" max="360" value="240" aria-label="Hue">
+                    <div class="color-picker-hex-row">
+                        <div class="color-picker-preview" aria-hidden="true"></div>
+                        <input type="text" class="color-picker-hex" maxlength="7" spellcheck="false" autocomplete="off" aria-label="Hex color" inputmode="text">
+                    </div>
                 </div>
             </div>
         </div>`;
@@ -286,13 +285,6 @@ export const ColorPicker = {
         popover.querySelectorAll('.color-picker-tile--user').forEach((btn) => {
             btn.addEventListener('mousedown', (e) => e.stopPropagation());
             this.attachUserSlotHandlers(btn, body, subpanel, onSelect);
-        });
-
-        body.addEventListener('mousedown', (e) => {
-            if (!this.subPicker) return;
-            if (subpanel.contains(e.target)) return;
-            if (e.target.closest('.color-picker-tile--user')) return;
-            this.closeSubPicker({ persist: true });
         });
 
         popover.classList.remove('is-hidden');
@@ -457,6 +449,12 @@ export const ColorPicker = {
 
         const onSubpanelClick = (e) => e.stopPropagation();
 
+        const backBtn = subpanel.querySelector('.color-picker-back');
+        const onBack = (e) => {
+            e.stopPropagation();
+            this.closeSubPicker({ persist: true });
+        };
+
         const onHexChange = () => commitHex();
         const onHexKeydown = (e) => {
             if (e.key === 'Enter') {
@@ -470,6 +468,7 @@ export const ColorPicker = {
         hexInput.addEventListener('keydown', onHexKeydown);
         sv.addEventListener('pointerdown', onSvPointerDown);
         subpanel.addEventListener('mousedown', onSubpanelClick);
+        backBtn?.addEventListener('click', onBack);
 
         this.subPicker = {
             el: subpanel,
@@ -481,29 +480,13 @@ export const ColorPicker = {
                 hexInput.removeEventListener('keydown', onHexKeydown);
                 sv.removeEventListener('pointerdown', onSvPointerDown);
                 subpanel.removeEventListener('mousedown', onSubpanelClick);
+                backBtn?.removeEventListener('click', onBack);
             }
         };
 
+        body.classList.add('color-picker-body--editing');
         subpanel.classList.remove('is-hidden');
-
-        this.positionSubPicker(subpanel, anchorTile, body);
         syncUi();
-    },
-
-    positionSubPicker(subpanel, anchorTile, body) {
-        if (!subpanel || !anchorTile || !body) return;
-        const tileRect = anchorTile.getBoundingClientRect();
-        const bodyRect = body.getBoundingClientRect();
-        const panelW = 148;
-        const panelH = 154;
-        let left = tileRect.left - bodyRect.left;
-        let top = tileRect.bottom - bodyRect.top + 6;
-        if (left + panelW > bodyRect.width) left = Math.max(0, bodyRect.width - panelW);
-        if (top + panelH > bodyRect.height + 48) {
-            top = tileRect.top - bodyRect.top - panelH - 6;
-        }
-        subpanel.style.left = `${left}px`;
-        subpanel.style.top = `${top}px`;
     },
 
     positionPopover(anchor, align = 'end') {

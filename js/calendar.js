@@ -2,6 +2,7 @@ import { Holidays } from './holidays.js';
 import { readStoredCategories } from './categories.js';
 import { CARD_ICONS } from './ui.js';
 import { resolveNoteColor } from './colorPicker.js';
+import { stripRichText } from './richText.js';
 
 export const Calendar = {
     overlay: null,
@@ -159,7 +160,7 @@ export const Calendar = {
                     if (targetTime >= startTime && targetTime <= endTime) {
                         events.push({
                             id: `${item.id}_step_${step.id}`,
-                            title: `${step.completed ? '✓' : '☐'} ${item.title}: ${step.text}`,
+                            title: stripRichText(`${step.completed ? '✓' : '☐'} ${item.title}: ${step.text}`),
                             color: this.getNoteColor(item),
                             backgroundColor: resolveNoteColor(item.backgroundColor),
                             isStep: true,
@@ -195,7 +196,7 @@ export const Calendar = {
             if (targetTime >= startTime && targetTime <= endTime) {
                 events.push({
                     id: item.id,
-                    title: item.title,
+                    title: stripRichText(item.title || ''),
                     color: this.getNoteColor(item),
                     backgroundColor: resolveNoteColor(item.backgroundColor),
                     isStep: false,

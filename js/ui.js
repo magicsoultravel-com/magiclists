@@ -1,6 +1,12 @@
 import { readStoredCategories } from './categories.js';
 import { applyCardTheme } from './cardTheme.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor, THEME_DEFAULT_COLOR } from './colorPicker.js';
+import { hasRichMarkup, sanitizeRichHtml, stripRichText } from './richText.js';
+
+const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
+const EDITOR_ZOOM_MIN = 0.85;
+const EDITOR_ZOOM_MAX = 1.25;
+const EDITOR_ZOOM_STEP = 0.05;
 
 export const FREEFORM_DEFAULT_W = 96;
 export const FREEFORM_DEFAULT_H = 56;
@@ -27,6 +33,14 @@ export const CARD_ICONS = {
     bringFront: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.4" y="4.6" width="7.2" height="5.2" rx="0.55" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M3.4 2.4h7.2v5.2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
 
+export const FORMAT_ICONS = {
+    bold: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3.2 2.2h3.4a2.2 2.2 0 0 1 0 4.4H3.2V2.2zm0 4.2h3.8a2.2 2.2 0 0 1 0 4.4H3.2V6.4z" fill="currentColor"/></svg>',
+    italic: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M5.2 2.2h3.6M6.4 2.2 4.4 9.8M3.2 9.8h3.6" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>',
+    strike: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 6h7.6M4.2 3.2h4.8a2 2 0 0 1 0 4M4.2 8.8h4.4a2 2 0 0 0 0-4" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
+    smaller: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><text x="1.5" y="9" font-size="6" fill="currentColor" font-family="system-ui,sans-serif">A</text><path d="M8 8.5l2.5 1.5" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
+    larger: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><text x="1" y="9.5" font-size="8" fill="currentColor" font-family="system-ui,sans-serif">A</text><path d="M8.5 7.5l2.5 2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>'
+};
+
 export const ACTION_ICONS = {
     layoutReset: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 2.8h3.2M2.2 2.8V6M2.2 2.8l2.4 2.4M9.8 9.2H6.6M9.8 9.2V5.8M9.8 9.2 7.4 6.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><rect x="4.2" y="4.2" width="3.6" height="3.6" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
     viewList: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 3.2h7.6M2.2 6h7.6M2.2 8.8h7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
@@ -51,10 +65,10 @@ export function itemHasCategory(item) {
 }
 
 export function deriveNoteTitle({ title = '', content = '', steps = [] } = {}) {
-    const trimmedTitle = String(title || '').trim();
+    const trimmedTitle = stripRichText(title).trim();
     if (trimmedTitle) return trimmedTitle;
 
-    const contentLine = String(content || '')
+    const contentLine = stripRichText(content)
         .trim()
         .split(/\r?\n/)
         .map((line) => line.trim())
@@ -62,7 +76,7 @@ export function deriveNoteTitle({ title = '', content = '', steps = [] } = {}) {
     if (contentLine) return contentLine.slice(0, 72);
 
     for (const step of steps || []) {
-        const text = String(step?.text || '').trim();
+        const text = stripRichText(step?.text || '').trim();
         if (!text) continue;
         const label = text.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
         return (label || text).slice(0, 72);
@@ -76,23 +90,23 @@ export function createNoteId() {
 }
 
 export function noteHasSavableContent({ title = '', content = '', steps = [] } = {}) {
-    if (String(title || '').trim()) return true;
-    if (String(content || '').trim()) return true;
-    return (steps || []).some((step) => String(step?.text || '').trim());
+    if (stripRichText(title).trim()) return true;
+    if (stripRichText(content).trim()) return true;
+    return (steps || []).some((step) => stripRichText(step?.text || '').trim());
 }
 
 export function normalizeItemForSave(item) {
     if (!item) return item;
 
     const content = String(item.content || '');
-    const steps = (item.steps || []).filter((step) => String(step?.text || '').trim());
-    const trimmedTitle = String(item.title || '').trim();
+    const steps = (item.steps || []).filter((step) => stripRichText(step?.text || '').trim());
+    const hasTitle = stripRichText(item.title || '').trim();
 
     return {
         ...item,
         steps,
         type: steps.length > 0 ? 'checklist' : 'note',
-        title: trimmedTitle || deriveNoteTitle({ content, steps })
+        title: hasTitle ? item.title : deriveNoteTitle({ content, steps })
     };
 }
 
@@ -340,6 +354,16 @@ export const UI = {
 
     syncInlineFieldToItem(el, item) {
         const field = el.dataset.field;
+        if (el.classList.contains('rich-text--edit')) {
+            const val = sanitizeRichHtml(el.innerHTML);
+            if (field === 'title') item.title = val;
+            else if (field === 'content') item.content = val;
+            else if (field === 'step-text') {
+                const step = item.steps?.find(s => s.id === el.dataset.stepId);
+                if (step) step.text = val;
+            }
+            return;
+        }
         if (field === 'title') {
             item.title = el.textContent.trim();
         } else if (field === 'content') {
@@ -348,6 +372,16 @@ export const UI = {
             const step = item.steps?.find(s => s.id === el.dataset.stepId);
             if (step) step.text = el.textContent;
         }
+    },
+
+    renderRichHtml(str) {
+        if (!str) return '';
+        return hasRichMarkup(str) ? sanitizeRichHtml(str) : this.escapeHTML(str);
+    },
+
+    canInlineEditText(text, { richEdit = false } = {}) {
+        if (richEdit) return true;
+        return !hasRichMarkup(text);
     },
 
     commitFocusedInlineField(card, item) {
@@ -822,7 +856,7 @@ export const UI = {
         }
 
         if (freeform) {
-            card.addEventListener('mousedown', () => this.raiseFreeformCard(card));
+            card.addEventListener('mousedown', () => this.raiseFreeformCard(card), true);
         }
 
         this.syncCardDraggable(card);
@@ -844,23 +878,31 @@ export const UI = {
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     },
 
-    buildNoteBodyHtml(item, { canEdit = false, alwaysShowChecklist = false } = {}) {
+    buildNoteBodyHtml(item, { canEdit = false, alwaysShowChecklist = false, richEdit = false } = {}) {
         let html = '';
-        const hasContent = item.content && item.content.trim();
+        const hasContent = stripRichText(item.content || '').trim();
         const showContent = hasContent
             || (canEdit && item.type === 'note')
             || (canEdit && alwaysShowChecklist);
         if (showContent) {
-            html += canEdit
-                ? `<div class="card-content-preview card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-field="content" data-placeholder="Add note…">${this.escapeHTML(item.content || '')}</div>`
-                : `<div class="card-content-preview">${this.escapeHTML(item.content)}</div>`;
+            const content = item.content || '';
+            const rich = hasRichMarkup(content);
+            if (canEdit && (richEdit || this.canInlineEditText(content, { richEdit }))) {
+                const inner = richEdit ? sanitizeRichHtml(content) : this.escapeHTML(content);
+                const ce = richEdit ? 'true' : 'plaintext-only';
+                const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
+                html += `<div class="card-content-preview card-inline-edit${richClasses}" contenteditable="${ce}" spellcheck="false" data-field="content" data-placeholder="Add note…">${inner}</div>`;
+            } else {
+                const richClass = rich ? ' rich-text' : '';
+                html += `<div class="card-content-preview${richClass}">${this.renderRichHtml(content)}</div>`;
+            }
         }
 
         const showChecklist = (alwaysShowChecklist && canEdit)
             || (!alwaysShowChecklist && (canEdit || (item.type === 'checklist' && item.steps && item.steps.length > 0)));
         if (showChecklist) {
             if (!item.steps) item.steps = [];
-            html += this.buildExpandedChecklistHtml(item, canEdit);
+            html += this.buildExpandedChecklistHtml(item, canEdit, { richEdit });
         }
         return html;
     },
@@ -869,13 +911,41 @@ export const UI = {
         return str ? str.replace(/"/g, '&quot;') : '';
     },
 
-    buildNoteTitleHtml(item, canEdit) {
+    buildNoteTitleHtml(item, canEdit, { richEdit = false } = {}) {
         const fullTitle = item.title || '';
-        const titleAttr = this.escapeHTML(fullTitle).replace(/"/g, '&quot;');
-        if (canEdit) {
-            return `<div class="mini-card-title card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-field="title" data-placeholder="Title…">${this.escapeHTML(fullTitle)}</div>`;
+        const titleAttr = this.escapeAttr(stripRichText(fullTitle));
+        const rich = hasRichMarkup(fullTitle);
+
+        if (canEdit && (richEdit || this.canInlineEditText(fullTitle, { richEdit }))) {
+            const inner = richEdit ? sanitizeRichHtml(fullTitle) : this.escapeHTML(fullTitle);
+            const ce = richEdit ? 'true' : 'plaintext-only';
+            const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
+            return `<div class="mini-card-title card-inline-edit${richClasses}" contenteditable="${ce}" spellcheck="false" data-field="title" data-placeholder="Title…">${inner}</div>`;
         }
-        return `<div class="mini-card-title" title="${titleAttr}">${this.escapeHTML(fullTitle)}</div>`;
+
+        const richClass = rich ? ' rich-text' : '';
+        return `<div class="mini-card-title${richClass}" title="${titleAttr}">${this.renderRichHtml(fullTitle)}</div>`;
+    },
+
+    buildNoteFormatPanelHtml() {
+        return `
+            <div class="editor-panel editor-panel--format">
+                <div class="collapsable-header" id="format-section-header">
+                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Formatting</span>
+                </div>
+                <div class="collapsable-section collapsed" id="format-section">
+                    <div class="format-toolbar">
+                        <button type="button" class="format-btn card-act" data-format-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold">${FORMAT_ICONS.bold}</button>
+                        <button type="button" class="format-btn card-act" data-format-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic">${FORMAT_ICONS.italic}</button>
+                        <button type="button" class="format-btn card-act" data-format-cmd="strikeThrough" title="Strikethrough (Ctrl+Shift+S)" aria-label="Strikethrough">${FORMAT_ICONS.strike}</button>
+                        <span class="format-toolbar-sep" aria-hidden="true"></span>
+                        <button type="button" class="format-btn card-act" data-zoom="down" title="Smaller text" aria-label="Smaller text">${FORMAT_ICONS.smaller}</button>
+                        <button type="button" class="format-btn card-act" data-zoom="up" title="Larger text" aria-label="Larger text">${FORMAT_ICONS.larger}</button>
+                        <button type="button" class="format-btn card-act format-btn--ghost" data-zoom="reset" title="Reset text size" aria-label="Reset text size">Reset</button>
+                    </div>
+                </div>
+            </div>
+        `;
     },
 
     buildNoteMetaFooterHtml(item, { mode = 'inline', targetCatName = '', visibilityBadgeColor = '#f59e0b' } = {}) {
@@ -968,6 +1038,8 @@ export const UI = {
         canEdit = false,
         alwaysShowChecklist = false,
         showConfig = false,
+        showFormat = false,
+        richEdit = false,
         toolbarHtml = '',
         toolbarDragZone = '',
         footerDragZone = '',
@@ -979,11 +1051,13 @@ export const UI = {
         endParts = {},
         bodyId = ''
     } = {}) {
-        const titleHtml = this.buildNoteTitleHtml(item, canEdit);
+        const titleHtml = this.buildNoteTitleHtml(item, canEdit, { richEdit });
         const bodyHtml = this.buildNoteBodyHtml(item, {
             canEdit,
-            alwaysShowChecklist: alwaysShowChecklist || canEdit
+            alwaysShowChecklist: alwaysShowChecklist || canEdit,
+            richEdit
         });
+        const formatHtml = showFormat ? this.buildNoteFormatPanelHtml() : '';
         const configHtml = showConfig
             ? this.buildNoteConfigPanelHtml(item, { categoryOptionsHtml, startParts, endParts })
             : '';
@@ -1000,6 +1074,7 @@ export const UI = {
                 <div class="editor-note-header">
                     ${titleHtml}
                 </div>
+                ${formatHtml}
                 ${configHtml}
                 <div class="card-body editor-note-body"${bodyIdAttr}>
                     ${bodyHtml}
@@ -1040,8 +1115,57 @@ export const UI = {
         });
     },
 
+    getEditorZoom() {
+        const stored = parseFloat(localStorage.getItem(EDITOR_ZOOM_KEY));
+        if (!Number.isFinite(stored)) return 1;
+        return Math.min(EDITOR_ZOOM_MAX, Math.max(EDITOR_ZOOM_MIN, stored));
+    },
+
+    setEditorZoom(shell, zoom) {
+        const clamped = Math.min(EDITOR_ZOOM_MAX, Math.max(EDITOR_ZOOM_MIN, zoom));
+        localStorage.setItem(EDITOR_ZOOM_KEY, String(clamped));
+        shell?.style?.setProperty('--editor-zoom', String(clamped));
+        return clamped;
+    },
+
+    applyFormatCommand(cmd) {
+        const el = document.activeElement;
+        if (!el?.classList?.contains('rich-text--edit')) return false;
+        document.execCommand(cmd, false, null);
+        return true;
+    },
+
+    bindFormatPanel(shell, { onChange = () => {} } = {}) {
+        if (!shell) return;
+        this.bindCollapsable('format-section-header', 'format-section', true);
+        this.setEditorZoom(shell, this.getEditorZoom());
+
+        shell.querySelectorAll('[data-format-cmd]').forEach((btn) => {
+            btn.addEventListener('mousedown', (e) => e.preventDefault());
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (this.applyFormatCommand(btn.dataset.formatCmd)) onChange();
+            });
+        });
+
+        shell.querySelectorAll('[data-zoom]').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const action = btn.dataset.zoom;
+                const current = this.getEditorZoom();
+                if (action === 'reset') this.setEditorZoom(shell, 1);
+                else if (action === 'up') this.setEditorZoom(shell, current + EDITOR_ZOOM_STEP);
+                else if (action === 'down') this.setEditorZoom(shell, current - EDITOR_ZOOM_STEP);
+            });
+        });
+    },
+
     bindNoteEditorShell(root, item, {
         showConfig = false,
+        showFormat = false,
+        richEdit = false,
         localOnly = false,
         refresh = () => {},
         onChange = () => {},
@@ -1058,7 +1182,8 @@ export const UI = {
             refresh,
             localOnly,
             onChange,
-            stopMousedownPropagation
+            stopMousedownPropagation,
+            richEdit
         };
         const header = shell.querySelector('.editor-note-header');
         const body = shell.querySelector('.editor-note-body');
@@ -1070,6 +1195,8 @@ export const UI = {
                 el.addEventListener('input', onChange);
             });
         }
+
+        if (showFormat) this.bindFormatPanel(shell, { onChange });
 
         if (!showConfig) return;
 
@@ -1094,14 +1221,15 @@ export const UI = {
     renderCompactCard(card, item, activeCategories, targetCatName, categoryColor) {
         card.classList.remove('note-surface');
         const fullTitle = item.title || '';
-        const titleAttr = this.escapeHTML(fullTitle).replace(/"/g, '&quot;');
+        const titleAttr = this.escapeAttr(stripRichText(fullTitle));
+        const richClass = hasRichMarkup(fullTitle) ? ' rich-text' : '';
         const visibilityBadgeColor = item.visibility === 'public' ? '#10b981' : '#f59e0b';
         
         const isExpanded = false;
         const dragZone = this.freeformDragZoneClass(card);
         card.innerHTML = `
             <div class="card-header${dragZone}">
-                <div class="mini-card-title" title="${titleAttr}">${this.escapeHTML(fullTitle)}</div>
+                <div class="mini-card-title${richClass}" title="${titleAttr}">${this.renderRichHtml(fullTitle)}</div>
                 ${this.buildCardActionsHtml(item, isExpanded)}
             </div>
             <div class="mini-card-meta compact${dragZone}">
@@ -1123,7 +1251,7 @@ export const UI = {
         return !!localStorage.getItem('admin_token');
     },
 
-    buildExpandedChecklistHtml(item, canEdit) {
+    buildExpandedChecklistHtml(item, canEdit, { richEdit = false } = {}) {
         const collapsedKeys = this.getChecklistCollapsedKeys();
         const { active, done } = partitionChecklistSteps(item.steps);
         let html = '<div class="expanded-checklist">';
@@ -1144,9 +1272,18 @@ export const UI = {
             const deleteBtn = canEdit
                 ? `<button type="button" class="card-act card-act--danger step-delete-btn" title="Remove item" aria-label="Remove item">${CARD_ICONS.close}</button>`
                 : '';
-            const textHtml = canEdit
-                ? `<span class="step-text card-inline-edit ${step.completed ? 'completed' : ''}" contenteditable="plaintext-only" spellcheck="false" data-field="step-text" data-step-id="${step.id}">${this.escapeHTML(step.text)}</span>`
-                : `<span class="step-text ${step.completed ? 'completed' : ''}">${this.escapeHTML(step.text)}</span>`;
+            const stepText = step.text || '';
+            const stepRich = hasRichMarkup(stepText);
+            let textHtml;
+            if (canEdit && (richEdit || this.canInlineEditText(stepText, { richEdit }))) {
+                const inner = richEdit ? sanitizeRichHtml(stepText) : this.escapeHTML(stepText);
+                const ce = richEdit ? 'true' : 'plaintext-only';
+                const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
+                textHtml = `<span class="step-text card-inline-edit${richClasses} ${step.completed ? 'completed' : ''}" contenteditable="${ce}" spellcheck="false" data-field="step-text" data-step-id="${step.id}">${inner}</span>`;
+            } else {
+                const richClass = stepRich ? ' rich-text' : '';
+                textHtml = `<span class="step-text${richClass} ${step.completed ? 'completed' : ''}">${this.renderRichHtml(stepText)}</span>`;
+            }
             html += `
                 <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}" data-step-id="${step.id}" data-level="${level}" style="padding-left:${level * 0.45}rem">
                     <div class="step-row-leading">
@@ -1322,7 +1459,8 @@ export const UI = {
         refresh = () => {},
         localOnly = false,
         onChange = () => {},
-        stopMousedownPropagation = false
+        stopMousedownPropagation = false,
+        richEdit = false
     } = {}) {
         const applyMutate = (mutator, { persist = !localOnly } = {}) => {
             if (persist) {
@@ -1351,7 +1489,35 @@ export const UI = {
                 if (stopMousedownPropagation) {
                     el.addEventListener('mousedown', (e) => e.stopPropagation());
                 }
+                el.addEventListener('focus', () => {
+                    const card = root.closest('.mini-card');
+                    if (card?.dataset.freeform === '1') this.raiseFreeformCard(card);
+                });
                 el.addEventListener('keydown', (e) => {
+                    if (el.classList.contains('rich-text--edit')) {
+                        const mod = e.ctrlKey || e.metaKey;
+                        if (mod && e.key === 'b') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            document.execCommand('bold');
+                            if (localOnly) onChange();
+                            return;
+                        }
+                        if (mod && e.key === 'i') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            document.execCommand('italic');
+                            if (localOnly) onChange();
+                            return;
+                        }
+                        if (mod && e.shiftKey && (e.key === 's' || e.key === 'S')) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            document.execCommand('strikeThrough');
+                            if (localOnly) onChange();
+                            return;
+                        }
+                    }
                     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
                         e.preventDefault();
                         e.stopPropagation();

@@ -1,5 +1,6 @@
 ﻿import { applyCardTheme } from './cardTheme.js';
 import { ColorPicker, PALETTE_NOTE, randomNoteColor, resolveNoteColor } from './colorPicker.js';
+import { sanitizeRichHtml, stripRichText } from './richText.js';
 import { CARD_ICONS, UI, computeNoteSizeKb, createNoteId, noteHasSavableContent, normalizeItemForSave } from './ui.js';
 
 export const Editor = {
@@ -165,18 +166,29 @@ export const Editor = {
         if (!this.activeItem || !this.mountZone) return;
         const titleEl = this.mountZone.querySelector('[data-field="title"]');
         const contentEl = this.mountZone.querySelector('[data-field="content"]');
-        if (titleEl) this.activeItem.title = titleEl.textContent.trim();
-        if (contentEl) this.activeItem.content = contentEl.textContent;
+        if (titleEl) {
+            this.activeItem.title = titleEl.classList.contains('rich-text--edit')
+                ? sanitizeRichHtml(titleEl.innerHTML)
+                : titleEl.textContent.trim();
+        }
+        if (contentEl) {
+            this.activeItem.content = contentEl.classList.contains('rich-text--edit')
+                ? sanitizeRichHtml(contentEl.innerHTML)
+                : contentEl.textContent;
+        }
         this.mountZone.querySelectorAll('[data-field="step-text"]').forEach((el) => {
             const step = this.activeItem.steps?.find((s) => s.id === el.dataset.stepId);
-            if (step) step.text = el.textContent;
+            if (!step) return;
+            step.text = el.classList.contains('rich-text--edit')
+                ? sanitizeRichHtml(el.innerHTML)
+                : el.textContent;
         });
     },
 
     collectFormData() {
         this.syncActiveItemFromDom();
         const finalBgColor = resolveNoteColor(document.getElementById('edit-bg-color-value')?.value);
-        const steps = (this.activeItem.steps || []).filter((step) => step.text?.trim());
+        const steps = (this.activeItem.steps || []).filter((step) => stripRichText(step.text || '').trim());
 
         const data = {
             ...this.activeItem,
@@ -299,11 +311,16 @@ export const Editor = {
         const focusStepId = active?.dataset?.stepId;
 
         const pendingFocusStepId = body.dataset.pendingFocusStepId;
-        body.innerHTML = UI.buildNoteBodyHtml(this.activeItem, { canEdit: true, alwaysShowChecklist: true });
+        body.innerHTML = UI.buildNoteBodyHtml(this.activeItem, {
+            canEdit: true,
+            alwaysShowChecklist: true,
+            richEdit: true
+        });
         if (pendingFocusStepId) body.dataset.pendingFocusStepId = pendingFocusStepId;
         UI.attachNoteBodyInteractions(body, this.activeItem, {
             refresh: () => this.refreshEditorNoteBody(),
             localOnly: true,
+            richEdit: true,
             onChange: () => {
                 this.markInteracted();
                 this.updateEditorSizeLabel();
@@ -345,6 +362,8 @@ export const Editor = {
             canEdit: true,
             alwaysShowChecklist: true,
             showConfig: true,
+            showFormat: true,
+            richEdit: true,
             metaMode: 'modal',
             categoryOptionsHtml,
             startParts,
@@ -360,6 +379,8 @@ export const Editor = {
 
         UI.bindNoteEditorShell(this.mountZone, item, {
             showConfig: true,
+            showFormat: true,
+            richEdit: true,
             localOnly: true,
             refresh: () => this.refreshEditorNoteBody(),
             onChange: onEditorChange,

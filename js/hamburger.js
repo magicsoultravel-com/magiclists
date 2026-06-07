@@ -1,5 +1,6 @@
 import { ACTION_ICONS, CARD_ICONS, UI, formatStorageSize, getLocalStorageUsedBytes } from './ui.js';
 import { resolveNoteColor } from './colorPicker.js';
+import { stripRichText } from './richText.js';
 
 const NOTES_LIST_SORT_KEY = 'matrix_notes_list_sort';
 const BRAND_TRANSITION_MS = 240;
@@ -255,7 +256,7 @@ export const SidePanel = {
             const accent = resolveNoteColor(item.backgroundColor);
             const accentStyle = ` style="--note-accent:${this.escapeAttr(accent)}"`;
             const dateLabel = UI.formatNoteListDate(item);
-            const title = this.escapeHTML(item.title || 'Untitled');
+            const title = this.escapeHTML(stripRichText(item.title || '') || 'Untitled');
 
             if (variant === 'hidden') {
                 return `
