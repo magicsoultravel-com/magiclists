@@ -1,5 +1,6 @@
 import { isQuickLinksCategory, readStoredCategories } from './categories.js';
 import { applyCardTheme } from './cardTheme.js';
+import { ColorPicker, PALETTE_NOTE, resolveNoteColor, THEME_DEFAULT_COLOR } from './colorPicker.js';
 
 export const FREEFORM_DEFAULT_W = 96;
 export const FREEFORM_DEFAULT_H = 56;
@@ -19,6 +20,7 @@ export const CARD_ICONS = {
     edit: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M8.2 1.8l2 2-6.4 6.4H1.8V8.2L8.2 1.8z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/></svg>',
     save: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 6.2l2.6 2.6L9.8 3.8" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     close: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>',
+    color: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M6 1.8c-2.3 0-4.2 1.7-4.2 3.9 0 1.4.9 2.5 2.1 3.1L4.8 10h2.4l.9-1.2c1.2-.6 2.1-1.7 2.1-3.1C10.2 3.5 8.3 1.8 6 1.8z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><circle cx="4.4" cy="4.8" r="0.75" fill="currentColor"/><circle cx="6.2" cy="3.8" r="0.65" fill="currentColor" opacity="0.75"/><circle cx="7.5" cy="5.2" r="0.6" fill="currentColor" opacity="0.55"/></svg>',
     delete: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3 3.2h6M4.2 3.2V2.4h3.6v.8M4.4 5v4.2M7.6 5v4.2M3.8 3.2l.5 6.3h3.4l.5-6.3" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     bringFront: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.4" y="4.6" width="7.2" height="5.2" rx="0.55" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M3.4 2.4h7.2v5.2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
@@ -36,7 +38,8 @@ export const ACTION_ICONS = {
     redo: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M8.6 5.6H4.8a2.4 2.4 0 0 0 0 4.8h.6M8.6 5.6 6.9 3.9M8.6 5.6 6.9 7.3" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     sortAlpha: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.1 9.1V2.7M2.1 2.7h2.5M3.8 5.4H2.1" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.8 8.9h3.8M6.8 6.5h2.6M6.8 4.1h3.8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
     sortDate: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.8" y="2.6" width="8.4" height="7.4" rx="0.7" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M1.8 5.2h8.4M3.9 1.6v1.5M8.1 1.6v1.5" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    desktopBg: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="2.2" width="9.2" height="6.8" rx="0.7" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M2.2 8.4h7.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/><circle cx="4.1" cy="5.4" r="1.1" fill="currentColor" opacity="0.85"/><circle cx="6.6" cy="4.6" r="0.85" fill="currentColor" opacity="0.65"/><circle cx="8.1" cy="6.2" r="0.75" fill="currentColor" opacity="0.5"/></svg>'
+    desktopBg: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="2.2" width="9.2" height="6.8" rx="0.7" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M2.2 8.4h7.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/><circle cx="4.1" cy="5.4" r="1.1" fill="currentColor" opacity="0.85"/><circle cx="6.6" cy="4.6" r="0.85" fill="currentColor" opacity="0.65"/><circle cx="8.1" cy="6.2" r="0.75" fill="currentColor" opacity="0.5"/></svg>',
+    chromeBg: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.3" y="1.8" width="3.6" height="8.4" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="5.5" y="1.8" width="5.2" height="2.4" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="5.5" y="5" width="5.2" height="5.2" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>'
 };
 
 export function itemHasCategory(item) {
@@ -464,6 +467,7 @@ export const UI = {
         const expandIcon = isExpanded ? CARD_ICONS.collapse : CARD_ICONS.expand;
         return `<div class="card-actions">
             <button type="button" class="card-act card-act--toggle" title="${expandTitle}" aria-label="${expandTitle}">${expandIcon}</button>
+            <button type="button" class="card-act card-act--color" title="Note color" aria-label="Note color" aria-haspopup="dialog">${CARD_ICONS.color}</button>
             <button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>
             <button type="button" class="card-act card-act--edit" title="Edit note" aria-label="Edit note">${CARD_ICONS.edit}</button>
         </div>`;
@@ -493,6 +497,7 @@ export const UI = {
         if (!actions) return;
 
         const toggleBtn = actions.querySelector('.card-act--toggle');
+        const colorBtn = actions.querySelector('.card-act--color');
         const hideBtn = actions.querySelector('.card-act--hide');
         const editBtn = actions.querySelector('.card-act--edit');
 
@@ -509,6 +514,24 @@ export const UI = {
             if (ctx) this.toggleCardExpanded(card, item, ctx);
         });
 
+        this.attachCardActionButton(colorBtn, () => {
+            if (card.dataset.freeform === '1') this.raiseFreeformCard(card);
+            card.dataset.skipExpand = '1';
+            if (!localStorage.getItem('admin_token')) return;
+            ColorPicker.open({
+                anchor: colorBtn,
+                presets: PALETTE_NOTE,
+                value: resolveNoteColor(item.backgroundColor),
+                align: 'end',
+                onSelect: (color) => {
+                    this.mutateItem(item, (it) => {
+                        it.backgroundColor = color || THEME_DEFAULT_COLOR;
+                    }, { preserveView: true });
+                    this.applyItemCardTheme(card, item);
+                }
+            });
+        });
+
         this.attachCardActionButton(hideBtn, () => {
             this.hideFromBoard(item);
         });
@@ -522,11 +545,10 @@ export const UI = {
     },
 
     applyItemCardTheme(card, item) {
-        if (item.backgroundColor) {
-            card.style.backgroundColor = item.backgroundColor;
-            card.style.borderColor = 'rgba(255,255,255,0.15)';
-        }
-        applyCardTheme(card, item.backgroundColor || '');
+        const color = resolveNoteColor(item.backgroundColor);
+        card.style.backgroundColor = color;
+        card.style.borderColor = 'rgba(255,255,255,0.15)';
+        applyCardTheme(card, color);
     },
 
     setupFreeformChrome(card) {
@@ -686,12 +708,8 @@ export const UI = {
         const matchedCat = activeCategories.find(c => c.name?.toLowerCase() === targetCatName.toLowerCase());
         const categoryColor = matchedCat ? matchedCat.color : '#64748b';
 
-        if (item.backgroundColor) {
-            this.applyItemCardTheme(card, item);
-        } else {
-            applyCardTheme(card, '');
-            card.style.borderLeftColor = categoryColor;
-        }
+        this.applyItemCardTheme(card, item);
+        card.style.borderLeftColor = categoryColor;
 
         const cardCtx = { activeCategories, targetCatName, categoryColor, isQuickLinkType };
         const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
@@ -820,6 +838,9 @@ export const UI = {
             const collapseControl = !isDoneSection && hasKids
                 ? `<button type="button" class="step-collapse-btn" data-collapse-key="${this.escapeAttr(collapseKey)}" title="${isCollapsed ? 'Expand group' : 'Collapse group'}" aria-label="${isCollapsed ? 'Expand group' : 'Collapse group'}">${isCollapsed ? '▶' : '▼'}</button>`
                 : '<span class="step-collapse-spacer" aria-hidden="true"></span>';
+            const dragHandle = canEdit && !isDoneSection
+                ? '<span class="grab-handle grab-handle--step" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>'
+                : '';
             const nestControls = canEdit ? `
                     <button type="button" class="card-act step-outdent-btn" title="Outdent" aria-label="Outdent"${level === 0 ? ' disabled' : ''}>‹</button>
                     <button type="button" class="card-act step-indent-btn" title="Indent" aria-label="Indent"${level >= 4 ? ' disabled' : ''}>›</button>` : '';
@@ -832,6 +853,7 @@ export const UI = {
             html += `
                 <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}" data-step-id="${step.id}" data-level="${level}" style="padding-left:${level * 0.45}rem">
                     <div class="step-row-leading">
+                        ${dragHandle}
                         ${collapseControl}
                         <input type="checkbox" class="step-check" ${step.completed ? 'checked' : ''}>
                     </div>
@@ -1155,7 +1177,67 @@ export const UI = {
                     refresh();
                 });
             });
+
+            if (this.canEditInline() || localOnly) {
+                this.attachChecklistDrag(root, item, applyMutate, refresh);
+            }
         }
+    },
+
+    attachChecklistDrag(root, item, applyMutate, refresh) {
+        const list = root.querySelector('.expanded-checklist');
+        if (!list) return;
+
+        let draggedRow = null;
+
+        const getActiveRows = () => [...list.querySelectorAll('.step-row--display:not(.step-row--done)')];
+
+        getActiveRows().forEach((row) => {
+            row.setAttribute('draggable', 'true');
+            row.addEventListener('dragstart', (e) => {
+                if (!e.target.closest('.grab-handle--step')) {
+                    e.preventDefault();
+                    return;
+                }
+                draggedRow = row;
+                row.classList.add('is-dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            row.addEventListener('dragend', () => {
+                draggedRow = null;
+                row.classList.remove('is-dragging');
+            });
+        });
+
+        list.addEventListener('dragover', (e) => {
+            if (!draggedRow) return;
+            e.preventDefault();
+            const siblings = getActiveRows().filter((row) => row !== draggedRow);
+            const nextSibling = siblings.find((sibling) => {
+                const box = sibling.getBoundingClientRect();
+                return e.clientY <= box.top + box.height / 2;
+            });
+            if (nextSibling) list.insertBefore(draggedRow, nextSibling);
+            else {
+                const firstDone = list.querySelector('.step-row--done');
+                if (firstDone) list.insertBefore(draggedRow, firstDone);
+                else list.appendChild(draggedRow);
+            }
+        });
+
+        list.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (!draggedRow) return;
+            applyMutate((it) => {
+                const activeIds = getActiveRows().map((row) => row.dataset.stepId);
+                const doneSteps = it.steps.filter((step) => step.completed);
+                const activeSteps = activeIds
+                    .map((id) => it.steps.find((step) => step.id === id))
+                    .filter(Boolean);
+                it.steps = [...activeSteps, ...doneSteps];
+            });
+            refresh();
+        });
     },
 
     attachExpandedCardInteractions(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
@@ -1217,6 +1299,7 @@ export const UI = {
     resetFreeformLayout() {
         localStorage.removeItem('matrix_freeform_positions');
         localStorage.removeItem('matrix_freeform_sizes');
+        localStorage.removeItem('matrix_expanded_cards');
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
     },
 

@@ -1,6 +1,7 @@
 import { Holidays } from './holidays.js';
 import { readStoredCategories } from './categories.js';
 import { CARD_ICONS } from './ui.js';
+import { resolveNoteColor } from './colorPicker.js';
 
 export const Calendar = {
     overlay: null,
@@ -159,7 +160,7 @@ export const Calendar = {
                             id: `${item.id}_step_${step.id}`,
                             title: `${step.completed ? '✓' : '☐'} ${item.title}: ${step.text}`,
                             color: this.getNoteColor(item),
-                            backgroundColor: item.backgroundColor,
+                            backgroundColor: resolveNoteColor(item.backgroundColor),
                             isStep: true,
                             parentId: item.id,
                             stepId: step.id
@@ -195,7 +196,7 @@ export const Calendar = {
                     id: item.id,
                     title: item.title,
                     color: this.getNoteColor(item),
-                    backgroundColor: item.backgroundColor,
+                    backgroundColor: resolveNoteColor(item.backgroundColor),
                     isStep: false,
                     parentId: item.id
                 });

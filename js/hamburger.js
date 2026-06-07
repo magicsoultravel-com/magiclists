@@ -1,4 +1,5 @@
 import { ACTION_ICONS, CARD_ICONS, UI } from './ui.js';
+import { resolveNoteColor } from './colorPicker.js';
 
 const NOTES_LIST_SORT_KEY = 'matrix_notes_list_sort';
 
@@ -173,12 +174,12 @@ export const SidePanel = {
 
         const sorted = this.sortNotesForList(items);
         zone.innerHTML = sorted.map(item => {
-            const accent = item.backgroundColor || '';
-            const accentStyle = accent ? ` style="--note-accent:${this.escapeAttr(accent)}"` : '';
+            const accent = resolveNoteColor(item.backgroundColor);
+            const accentStyle = ` style="--note-accent:${this.escapeAttr(accent)}"`;
             const dateLabel = UI.formatNoteListDate(item);
             const title = this.escapeHTML(item.title || 'Untitled');
             return `
-            <button type="button" class="sidebar-notes-list-item${accent ? ' has-note-color' : ''}" data-id="${this.escapeAttr(item.id)}" title="${title}"${accentStyle}>
+            <button type="button" class="sidebar-notes-list-item has-note-color" data-id="${this.escapeAttr(item.id)}" title="${title}"${accentStyle}>
                 <span class="sidebar-notes-list-date">${this.escapeHTML(dateLabel)}</span>
                 <span class="sidebar-notes-list-item-title">${title}</span>
             </button>`;

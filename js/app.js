@@ -9,6 +9,8 @@ import { applyBackupToStorage } from './backup.js';
 import { DEFAULT_CATEGORIES, normalizeCategories } from './categories.js';
 import { UndoManager, historyLabelForItem } from './undo.js';
 import { DesktopBackground } from './desktopBackground.js';
+import { ChromeBackground } from './chromeBackground.js';
+import { randomNoteColor } from './colorPicker.js';
 
 function countHiddenFromBoard(items) {
     return items.filter(item => UI.isHiddenFromBoard(item)).length;
@@ -36,6 +38,7 @@ const AppState = {
 class Application {
     async init() {
         DesktopBackground.init();
+        ChromeBackground.init();
         this.checkAuthSession();
         Editor.init();
         await ToolsManager.init(() => AppState.items);
@@ -422,7 +425,7 @@ class Application {
                 content: "",
                 status: "active",
                 categories: [],
-                backgroundColor: "",
+                backgroundColor: randomNoteColor(),
                 startDateTime: defaultDate.toISOString(),
                 endDateTime: "",
                 isRecurring: false,

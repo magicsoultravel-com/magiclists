@@ -1,17 +1,6 @@
 ﻿import { applyCardTheme } from './cardTheme.js';
+import { ColorPicker, PALETTE_NOTE, randomNoteColor, resolveNoteColor } from './colorPicker.js';
 import { CARD_ICONS, UI, computeNoteSizeKb } from './ui.js';
-
-const NOTE_COLOR_PRESETS = [
-    { value: '', label: 'Default' },
-    { value: '#1e293b', label: 'Slate' },
-    { value: '#312e81', label: 'Indigo' },
-    { value: '#134e4a', label: 'Teal' },
-    { value: '#365314', label: 'Olive' },
-    { value: '#78350f', label: 'Amber' },
-    { value: '#7f1d1d', label: 'Rose' },
-    { value: '#4c1d95', label: 'Violet' },
-    { value: '#1e3a5f', label: 'Navy' }
-];
 
 export const Editor = {
     overlay: null,
@@ -40,6 +29,10 @@ export const Editor = {
         this.approveBtn?.addEventListener('click', commitAndClose);
         this.calendarToggleBtn?.addEventListener('click', () => this.toggleCalendarVisibility());
         this.deleteBtn?.addEventListener('click', () => this.emitDeleteAction());
+        this.overlay?.addEventListener('mousedown', (e) => {
+            if (e.target !== this.overlay) return;
+            this.closeAndSave();
+        });
     },
     
     open(item = null, categoriesList = []) {
@@ -58,7 +51,7 @@ export const Editor = {
             content: "",
             status: "active",
             categories: [],
-            backgroundColor: "",
+            backgroundColor: randomNoteColor(),
             startDateTime: "",
             endDateTime: "",
             isRecurring: false,
@@ -70,7 +63,7 @@ export const Editor = {
         if (this.activeItem.hideFromCalendar === undefined) {
             this.activeItem.hideFromCalendar = false;
         }
-        this.syncEditorTheme('');
+        this.syncEditorTheme(resolveNoteColor(this.activeItem.backgroundColor));
         this.renderForm();
         this.updateCalendarToggleUI();
         this.overlay.classList.remove('is-hidden');
@@ -174,7 +167,7 @@ export const Editor = {
 
     collectFormData() {
         this.syncActiveItemFromDom();
-        const finalBgColor = document.getElementById('edit-bg-color-value')?.value || '';
+        const finalBgColor = resolveNoteColor(document.getElementById('edit-bg-color-value')?.value);
         const steps = (this.activeItem.steps || []).filter((step) => step.text?.trim());
 
         const data = {
@@ -215,6 +208,12 @@ export const Editor = {
     },
 
     closeAndSave() {
+        if (this.autoSaveTimer) {
+            clearTimeout(this.autoSaveTimer);
+            this.autoSaveTimer = null;
+        }
+        if (this.activeItem) this.syncActiveItemFromDom();
+
         if (this.hasUserInteracted) {
             const currentData = this.collectFormData();
             const hasContent = currentData.title.trim() !== "" || currentData.content.trim() !== "" || 
@@ -339,12 +338,6 @@ export const Editor = {
         const warningLightHtml = '';
         const startParts = this.parseStoredDateTime(item.startDateTime || '');
         const endParts = this.parseStoredDateTime(item.endDateTime || '');
-        const colorSwatchesHtml = NOTE_COLOR_PRESETS.map(preset => {
-            const isNone = preset.value === '';
-            const selected = (item.backgroundColor || '') === preset.value;
-            return `<button type="button" class="color-swatch${isNone ? ' color-swatch--none' : ''}${selected ? ' is-selected' : ''}" data-color="${preset.value}" title="${preset.label}" aria-label="${preset.label}"${isNone ? '' : ` style="--swatch:${preset.value}"`}></button>`;
-        }).join('');
-
         const bodyHtml = UI.buildNoteBodyHtml(item, { canEdit: true, alwaysShowChecklist: true });
 
         this.mountZone.innerHTML = `
@@ -352,10 +345,6 @@ export const Editor = {
             <div class="editor-note-shell">
                 <div class="editor-note-header">
                     <div class="mini-card-title card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-field="title" data-placeholder="Title…">${UI.escapeHTML(item.title || '')}</div>
-                </div>
-                <div class="editor-meta-row">
-                    ${createdLabel ? `<span class="editor-created-date">Created ${createdLabel}</span>` : ''}
-                    <span class="editor-note-size" title="Note content size">${sizeLabel} KB</span>
                 </div>
 
             <div class="editor-panel editor-panel--config">
@@ -399,13 +388,11 @@ export const Editor = {
                         </div>
                         <div class="form-group form-group--compact form-group--color">
                             <label>Card color</label>
-                            <input type="hidden" id="edit-bg-color-value" value="${this.escapeQuotes(item.backgroundColor || '')}">
-                            <div class="color-palette" id="edit-color-palette">
-                                ${colorSwatchesHtml}
-                                <label class="color-swatch color-swatch--custom" title="Custom color">
-                                    <input type="color" id="edit-bg-color-custom" value="${item.backgroundColor || '#26262b'}">
-                                </label>
-                            </div>
+                            <input type="hidden" id="edit-bg-color-value" value="${this.escapeQuotes(resolveNoteColor(item.backgroundColor))}">
+                            <button type="button" id="edit-color-trigger" class="color-picker-trigger" title="Choose card color" aria-label="Choose card color" aria-haspopup="dialog">
+                                <span class="color-picker-trigger-dot"></span>
+                                <span class="color-picker-trigger-label">Choose color</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -414,6 +401,10 @@ export const Editor = {
             <div class="card-body editor-note-body" id="editor-note-body">
                 ${bodyHtml}
             </div>
+                <div class="editor-meta-row editor-meta-row--footer">
+                    ${createdLabel ? `<span class="editor-created-date">Created ${createdLabel}</span>` : '<span></span>'}
+                    <span class="editor-note-size" title="Note content size">${sizeLabel} KB</span>
+                </div>
             </div>
         `;
         
@@ -437,7 +428,7 @@ export const Editor = {
         this.setupColorPalette(item);
         this.bindDateInputDefaults('edit-start-date', 'edit-start-time');
         this.bindDateInputDefaults('edit-end-date', 'edit-end-time');
-        this.syncEditorTheme(item.backgroundColor || '');
+        this.syncEditorTheme(resolveNoteColor(item.backgroundColor));
         this.bindCollapsable('config-section-header', 'config-section', true);
         this.bindEditorNoteInteractions();
     },
@@ -483,44 +474,32 @@ export const Editor = {
     },
 
     setupColorPalette(item) {
-        const palette = document.getElementById('edit-color-palette');
+        const trigger = document.getElementById('edit-color-trigger');
         const hidden = document.getElementById('edit-bg-color-value');
-        const custom = document.getElementById('edit-bg-color-custom');
-        if (!palette || !hidden) return;
+        if (!trigger || !hidden) return;
 
         const selectColor = (value, { silent = false } = {}) => {
-            hidden.value = value;
-            palette.querySelectorAll('.color-swatch').forEach(btn => {
-                btn.classList.toggle('is-selected', btn.dataset?.color === value || btn.classList.contains('color-swatch--custom') && value && !NOTE_COLOR_PRESETS.some(p => p.value === value));
-            });
-            if (custom && value) custom.value = value;
-            if (custom && !value) custom.value = '#26262b';
-            const customWrap = palette.querySelector('.color-swatch--custom');
-            if (customWrap) {
-                const isCustom = value && !NOTE_COLOR_PRESETS.some(p => p.value === value);
-                customWrap.classList.toggle('is-selected', isCustom);
-            }
-            this.syncEditorTheme(value);
+            const color = resolveNoteColor(value);
+            hidden.value = color;
+            ColorPicker.updateTriggerPreview(trigger, color);
+            this.syncEditorTheme(color);
             if (!silent) {
                 this.markInteracted();
                 this.triggerAutoSave();
             }
         };
 
-        palette.querySelectorAll('.color-swatch[data-color]').forEach(btn => {
-            btn.addEventListener('click', () => selectColor(btn.dataset.color || ''));
+        selectColor(resolveNoteColor(item.backgroundColor), { silent: true });
+        trigger.addEventListener('click', (e) => {
+            e.stopPropagation();
+            ColorPicker.open({
+                anchor: trigger,
+                presets: PALETTE_NOTE,
+                value: hidden.value || '',
+                align: 'start',
+                onSelect: (color) => selectColor(color)
+            });
         });
-
-        custom?.addEventListener('input', () => {
-            palette.querySelectorAll('.color-swatch[data-color]').forEach(b => b.classList.remove('is-selected'));
-            palette.querySelector('.color-swatch--custom')?.classList.add('is-selected');
-            hidden.value = custom.value;
-            this.syncEditorTheme(custom.value);
-            this.markInteracted();
-            this.triggerAutoSave();
-        });
-
-        selectColor(item.backgroundColor || '', { silent: true });
     },
 
     collectAndSave() {
