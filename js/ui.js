@@ -869,6 +869,9 @@ export const UI = {
 
         buildVisibleChecklistSteps(active, item.id, collapsedKeys)
             .forEach((row) => renderRow(row.step, row));
+        if (active.length > 0 && done.length > 0) {
+            html += '<div class="checklist-done-divider" role="separator" aria-hidden="true"></div>';
+        }
         done.forEach((step) => renderRow(step, { isDoneSection: true }));
 
         if (canEdit) {

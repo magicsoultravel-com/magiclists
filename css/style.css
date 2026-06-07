@@ -1090,19 +1090,34 @@ body {
     white-space: normal;
 }
 
-/* Card quick actions — top-right overlay, no chrome */
+/* Card quick actions — top-right overlay, no chrome (expand is first in DOM → corner via row-reverse) */
 .card-actions {
     position: absolute;
-    top: 2px;
-    right: 2px;
+    top: 0;
+    right: 1px;
     z-index: 8;
     display: flex;
+    flex-direction: row-reverse;
     align-items: center;
-    gap: 2px;
+    gap: 1px;
     padding: 0;
     opacity: 0;
     background: none;
     pointer-events: none;
+}
+
+.mini-card.compact .card-actions {
+    top: -1px;
+    right: 0;
+    gap: 0;
+}
+
+.mini-card.compact .card-header {
+    padding-right: 0.1rem;
+}
+
+.mini-card.compact .mini-card-title {
+    padding-right: 0.15rem;
 }
 
 .mini-card:hover .card-actions,
@@ -1164,8 +1179,7 @@ body {
 .has-custom-bg .step-text,
 .has-custom-bg .quicklink-anchor-row,
 .has-custom-bg .expanded-links,
-.has-custom-bg .expanded-links.empty,
-.has-custom-bg .checklist-done-divider span {
+.has-custom-bg .expanded-links.empty {
     color: var(--card-fg) !important;
 }
 
@@ -1351,23 +1365,16 @@ body {
 }
 
 .checklist-done-divider {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    margin: 0.35rem 0 0.2rem;
-    font-size: 0.56rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--text-muted);
+    flex: 0 0 auto;
+    width: 100%;
+    height: 1px;
+    margin: 0.28rem 0 0.18rem;
+    background: var(--border-color);
+    border: none;
 }
 
-.checklist-done-divider::before,
-.checklist-done-divider::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--border-color);
+.has-custom-bg .checklist-done-divider {
+    background: var(--card-border-subtle);
 }
 
 .expanded-checklist .step-row--done {
