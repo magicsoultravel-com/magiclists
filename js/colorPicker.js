@@ -1,8 +1,6 @@
 const GRID_SLOTS = 16;
 const USER_SLOTS = 4;
 const USER_PALETTE_KEY = 'matrix_user_palette';
-const LONG_PRESS_MS = 500;
-
 /** Shared default for desktop, chrome, and note reset. */
 export const THEME_DEFAULT_COLOR = '#121214';
 
@@ -181,8 +179,8 @@ export const ColorPicker = {
             this.userPalette[slotIndex] = color;
             btn.dataset.color = color;
             btn.style.setProperty('--tile', color);
-            btn.title = `Custom color ${slotIndex + 1}`;
-            btn.setAttribute('aria-label', `Custom color ${slotIndex + 1}`);
+            btn.title = `Edit custom color ${slotIndex + 1}`;
+            btn.setAttribute('aria-label', `Edit custom color ${slotIndex + 1}`);
             btn.innerHTML = '';
         } else {
             this.userPalette[slotIndex] = '';
@@ -192,7 +190,6 @@ export const ColorPicker = {
             btn.setAttribute('aria-label', 'Add custom color');
             btn.innerHTML = '<span class="color-picker-wheel" aria-hidden="true"></span>';
         }
-        this.syncSelection();
         this.positionPopover(this.anchor, this.align);
     },
 
@@ -241,7 +238,7 @@ export const ColorPicker = {
             const filled = !!color;
             const selected = filled && current === color.toLowerCase();
             if (filled) {
-                return `<button type="button" class="color-picker-tile color-picker-tile--user${selected ? ' is-selected' : ''}" data-user-slot="${index}" data-color="${escapeAttr(color)}" title="Custom color ${index + 1}" aria-label="Custom color ${index + 1}" style="--tile:${color}"></button>`;
+                return `<button type="button" class="color-picker-tile color-picker-tile--user${selected ? ' is-selected' : ''}" data-user-slot="${index}" data-color="${escapeAttr(color)}" title="Edit custom color ${index + 1}" aria-label="Edit custom color ${index + 1}" style="--tile:${color}"></button>`;
             }
             return `<button type="button" class="color-picker-tile color-picker-tile--user color-picker-tile--user-empty" data-user-slot="${index}" title="Add custom color" aria-label="Add custom color">
                 <span class="color-picker-wheel" aria-hidden="true"></span>
@@ -249,7 +246,9 @@ export const ColorPicker = {
         }).join('');
 
         popover.innerHTML = `<div class="color-picker-body">
-            <div class="color-picker-grid">${presetHtml}${userHtml}</div>
+            <div class="color-picker-grid color-picker-grid--presets">${presetHtml}</div>
+            <div class="color-picker-divider" aria-hidden="true"></div>
+            <div class="color-picker-grid color-picker-grid--user">${userHtml}</div>
             <div class="color-picker-subpanel is-hidden" role="dialog" aria-label="Pick a custom color">
                 <div class="color-picker-sv" tabindex="0" aria-label="Saturation and brightness">
                     <span class="color-picker-sv-cursor" aria-hidden="true"></span>
@@ -312,57 +311,24 @@ export const ColorPicker = {
     },
 
     attachUserSlotHandlers(btn, body, subpanel, onSelect) {
-        let longPressTimer = null;
-        let longPressFired = false;
-
-        const clearLongPress = () => {
-            if (longPressTimer) {
-                clearTimeout(longPressTimer);
-                longPressTimer = null;
-            }
-        };
-
-        const openEdit = () => {
-            const slotIndex = Number(btn.dataset.userSlot);
-            const color = btn.dataset.color || this.selectedColor || '#4f46e5';
-            this.openSubPicker(body, subpanel, btn, slotIndex, color);
-        };
-
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (longPressFired) {
-                longPressFired = false;
-                return;
+            const slotIndex = Number(btn.dataset.userSlot);
+            if (this.subPicker?.slotIndex === slotIndex) return;
+            this.closeSubPicker({ persist: true });
+            const slotColor = btn.dataset.color;
+            if (slotColor) {
+                this.previewColor(slotColor, onSelect);
             }
-            const color = btn.dataset.color;
-            if (color) {
-                if (this.subPicker?.slotIndex === Number(btn.dataset.userSlot)) return;
-                this.closeSubPicker({ persist: true });
-                this.selectColor(color, onSelect);
-                return;
-            }
-            openEdit();
+            const initial = slotColor || this.selectedColor || '#4f46e5';
+            this.openSubPicker(body, subpanel, btn, slotIndex, initial);
         });
+    },
 
-        btn.addEventListener('dblclick', (e) => {
-            e.stopPropagation();
-            if (!btn.dataset.color) return;
-            openEdit();
-        });
-
-        btn.addEventListener('pointerdown', (e) => {
-            if (!btn.dataset.color) return;
-            longPressFired = false;
-            clearLongPress();
-            longPressTimer = setTimeout(() => {
-                longPressFired = true;
-                openEdit();
-            }, LONG_PRESS_MS);
-        });
-
-        btn.addEventListener('pointerup', clearLongPress);
-        btn.addEventListener('pointercancel', clearLongPress);
-        btn.addEventListener('pointerleave', clearLongPress);
+    previewColor(color, onSelect) {
+        const normalized = normalizeHex(color);
+        if (!normalized) return;
+        onSelect?.(normalized);
     },
 
     selectColor(color, onSelect) {
@@ -420,7 +386,7 @@ export const ColorPicker = {
             this.subPicker.lastHex = normalized;
             preview.style.background = normalized;
             this.updateUserTile(slotIndex, normalized);
-            this.selectColor(normalized, this.onSelect);
+            this.previewColor(normalized, this.onSelect);
         };
 
         const syncUi = () => {

@@ -1440,8 +1440,21 @@ body {
 .color-picker-grid {
     display: grid;
     grid-template-columns: repeat(4, 32px);
-    grid-template-rows: repeat(5, 32px);
     gap: 0.38rem;
+}
+
+.color-picker-grid--presets {
+    grid-template-rows: repeat(4, 32px);
+}
+
+.color-picker-grid--user {
+    grid-template-rows: 32px;
+}
+
+.color-picker-divider {
+    height: 1px;
+    margin: 0.4rem 0;
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .color-picker-tile {
