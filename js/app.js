@@ -281,10 +281,26 @@ class Application {
 
         window.addEventListener('item:mutation_requested', async (e) => {
             if (!AppState.user.isLoggedIn) return;
-            const success = await API.saveItem(e.detail, AppState.user.token);
-            if (success) {
-                await this.syncDataStore();
+            const detail = e.detail;
+            const item = detail?.preserveView ? detail.item : detail;
+            const preserveView = detail?.preserveView === true;
+            if (!item?.id) return;
+            const success = await API.saveItem(item, AppState.user.token);
+            if (!success) return;
+
+            const idx = AppState.items.findIndex((i) => i.id === item.id);
+            if (idx !== -1) AppState.items[idx] = item;
+
+            if (preserveView) {
+                const canvas = document.getElementById('app-canvas');
+                UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
+                if (AppState.viewSettings.sortBy === 'freeform') {
+                    DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+                }
+                this.updateWorkspaceCounter();
+                return;
             }
+            await this.syncDataStore();
         });
 
         window.addEventListener('board:visibility_changed', async () => {

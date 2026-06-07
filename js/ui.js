@@ -106,6 +106,22 @@ export function buildVisibleChecklistSteps(steps, itemId, collapsedKeys = {}) {
     return visible;
 }
 
+export function computeNoteSizeKb(item) {
+    if (!item) return '0';
+    const payload = {
+        title: item.title || '',
+        content: item.content || '',
+        steps: item.steps || [],
+        type: item.type || 'note',
+        categories: item.categories || []
+    };
+    const bytes = new TextEncoder().encode(JSON.stringify(payload)).length;
+    if (bytes === 0) return '0';
+    const kb = bytes / 1024;
+    if (kb < 0.1) return '<0.1';
+    return kb < 10 ? kb.toFixed(1) : String(Math.round(kb));
+}
+
 export function attachAutoGrow(textarea, { maxHeight = 120 } = {}) {
     if (!textarea) return;
     textarea.classList.add('input-grow');
@@ -195,8 +211,72 @@ export const UI = {
         return items.filter(item => !this.isHiddenFromBoard(item));
     },
 
+    captureScrollState(canvas) {
+        if (!canvas) return null;
+        return {
+            canvasScrollTop: canvas.scrollTop,
+            cardBodies: [...canvas.querySelectorAll('.mini-card[data-id]')].map((card) => ({
+                id: card.dataset.id,
+                scrollTop: card.querySelector('.card-body')?.scrollTop ?? 0
+            }))
+        };
+    },
+
+    restoreScrollState(canvas, state) {
+        if (!canvas || !state) return;
+        canvas.scrollTop = state.canvasScrollTop ?? 0;
+        state.cardBodies?.forEach(({ id, scrollTop }) => {
+            const card = canvas.querySelector(`.mini-card[data-id="${id}"]`);
+            const body = card?.querySelector('.card-body');
+            if (body) body.scrollTop = scrollTop;
+        });
+    },
+
+    emitItemMutation(item, { preserveView = false } = {}) {
+        window.dispatchEvent(new CustomEvent('item:mutation_requested', {
+            detail: preserveView ? { item, preserveView: true } : item
+        }));
+    },
+
+    buildNoteSizeHtml(item) {
+        const kb = computeNoteSizeKb(item);
+        return `<span class="note-size" title="Note content size">${kb} KB</span>`;
+    },
+
+    createBlankChecklistStep() {
+        return {
+            id: `step_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+            text: '',
+            completed: false,
+            level: 0,
+            startDateTime: '',
+            endDateTime: ''
+        };
+    },
+
+    updateSingleCard(canvas, item, hiddenCategories = []) {
+        if (!canvas || !item?.id) return false;
+        const card = canvas.querySelector(`.mini-card[data-id="${item.id}"]`);
+        if (!card) return false;
+
+        const scrollState = this.captureScrollState(canvas);
+        const activeCategories = readStoredCategories()
+            .filter((cat) => !hiddenCategories.includes(cat.name));
+        const { targetCatName, categoryColor, isQuickLinkType } = this.getCardRenderContext(item, activeCategories);
+
+        if (card.classList.contains('expanded')) {
+            this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+        } else {
+            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+        }
+
+        this.restoreScrollState(canvas, scrollState);
+        return true;
+    },
+
     render(canvas, items, viewMode, hiddenCategories = []) {
         if (!canvas) return;
+        const scrollState = this.captureScrollState(canvas);
         canvas.innerHTML = '';
 
         const visibleItems = this.getVisibleItems(items);
@@ -280,6 +360,8 @@ export const UI = {
                 canvas.appendChild(this.createCardComponent(item, activeCategories));
             });
         }
+
+        this.restoreScrollState(canvas, scrollState);
     },
 
     createColumnStructure(categoryName, catColor, columnItems, activeCategories) {
@@ -493,21 +575,31 @@ export const UI = {
         const activeCategories = readStoredCategories();
         const { targetCatName, categoryColor, isQuickLinkType } = this.getCardRenderContext(item, activeCategories);
 
-        if (expanded) {
-            card.classList.remove('compact');
-            card.classList.add('expanded');
-            this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
-        } else {
-            card.classList.remove('expanded');
-            card.classList.add('compact');
-            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
-        }
+        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, isQuickLinkType);
 
         if (dimensions) {
             this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
         } else {
             this.applyFreeformSize(card);
         }
+    },
+
+    applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
+        card.classList.add('card-state-changing');
+        if (expanded) {
+            card.classList.remove('compact');
+            card.classList.add('expanded', 'card-animate-expand');
+            this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+        } else {
+            card.classList.remove('expanded', 'card-animate-expand');
+            card.classList.add('compact', 'card-animate-collapse');
+            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+        }
+        const cleanup = () => {
+            card.classList.remove('card-state-changing', 'card-animate-expand', 'card-animate-collapse');
+        };
+        card.addEventListener('animationend', cleanup, { once: true });
+        setTimeout(cleanup, 400);
     },
 
     toggleCardExpanded(card, item, ctx) {
@@ -522,15 +614,15 @@ export const UI = {
         expandedCards[item.id] = willExpand;
         localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
 
-        if (willExpand) {
-            card.classList.remove('compact');
-            card.classList.add('expanded');
-            this.renderExpandedCard(card, item, ctx.activeCategories, ctx.targetCatName, ctx.categoryColor, ctx.isQuickLinkType);
-        } else {
-            card.classList.remove('expanded');
-            card.classList.add('compact');
-            this.renderCompactCard(card, item, ctx.activeCategories, ctx.targetCatName, ctx.categoryColor, ctx.isQuickLinkType);
-        }
+        this.applyCardExpandCollapse(
+            card,
+            item,
+            willExpand,
+            ctx.activeCategories,
+            ctx.targetCatName,
+            ctx.categoryColor,
+            ctx.isQuickLinkType
+        );
     },
 
     createCardComponent(item, activeCategories, { freeform = false } = {}) {
@@ -680,6 +772,10 @@ export const UI = {
             .forEach((row) => renderRow(row.step, row));
         done.forEach((step) => renderRow(step, { isDoneSection: true }));
 
+        if (canEdit) {
+            html += `<button type="button" class="expanded-checklist-add-btn" title="Add checklist item" aria-label="Add checklist item">+</button>`;
+        }
+
         html += '</div>';
         return html;
     },
@@ -701,7 +797,8 @@ export const UI = {
         }
         
         let checklistHtml = '';
-        if (!isQuickLinkType && item.type === 'checklist' && item.steps && item.steps.length > 0) {
+        if (!isQuickLinkType && item.type === 'checklist' && (canEdit || (item.steps && item.steps.length > 0))) {
+            if (!item.steps) item.steps = [];
             checklistHtml = this.buildExpandedChecklistHtml(item, canEdit);
         }
         
@@ -727,6 +824,7 @@ export const UI = {
         const bodyDragClass = card.dataset.freeform === '1' ? '' : ' card-drag-zone';
         const createdLabel = this.formatCreatedDate(item.created_at);
         const createdHtml = createdLabel ? `<span class="created-date" title="Created">${createdLabel}</span>` : '';
+        const sizeHtml = this.buildNoteSizeHtml(item);
 
         card.innerHTML = `
             <div class="card-header card-drag-zone">
@@ -742,6 +840,7 @@ export const UI = {
                 <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
                 ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
                 ${typeBadgeHtml}
+                ${sizeHtml}
                 ${createdHtml}
             </div>
         `;
@@ -754,6 +853,14 @@ export const UI = {
         });
         this.attachExpandedCardInteractions(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
         this.finalizeFreeformCard(card);
+    },
+
+    refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
+        const body = card.querySelector('.card-body');
+        const scrollTop = body?.scrollTop ?? 0;
+        this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+        const newBody = card.querySelector('.card-body');
+        if (newBody) newBody.scrollTop = scrollTop;
     },
 
     caretAtEdge(el, edge) {
@@ -813,7 +920,7 @@ export const UI = {
 
     attachExpandedCardInteractions(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
         const refresh = () => {
-            this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+            this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
         };
 
         if (this.canEditInline()) {
@@ -833,12 +940,27 @@ export const UI = {
                         const step = item.steps?.find(s => s.id === el.dataset.stepId);
                         if (step) step.text = el.textContent.trim();
                     }
-                    window.dispatchEvent(new CustomEvent('item:mutation_requested', { detail: item }));
+                    this.emitItemMutation(item, { preserveView: true });
                 });
             });
         }
 
-        if (!isQuickLinkType && item.type === 'checklist' && item.steps) {
+        if (!isQuickLinkType && item.type === 'checklist') {
+            if (!item.steps) item.steps = [];
+
+            card.querySelector('.expanded-checklist-add-btn')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                item.steps.push(this.createBlankChecklistStep());
+                reorderStepsByCompletion(item.steps);
+                this.emitItemMutation(item, { preserveView: true });
+                refresh();
+                requestAnimationFrame(() => {
+                    const fields = card.querySelectorAll('[data-field="step-text"].card-inline-edit');
+                    const last = fields[fields.length - 1];
+                    if (last) this.focusInlineEdit(last, 'end');
+                });
+            });
+
             card.querySelectorAll('.step-row--display').forEach((row) => {
                 const checkbox = row.querySelector('.step-check');
                 const stepId = row.dataset.stepId;
@@ -846,8 +968,9 @@ export const UI = {
                     e.stopPropagation();
                     const step = item.steps.find(s => s.id === stepId);
                     if (!step) return;
+                    row.classList.add('step-row--animating');
                     moveStepOnCompletionChange(item.steps, step, checkbox.checked);
-                    window.dispatchEvent(new CustomEvent('item:mutation_requested', { detail: item }));
+                    this.emitItemMutation(item, { preserveView: true });
                     refresh();
                 });
             });
@@ -859,7 +982,7 @@ export const UI = {
                     const step = item.steps.find(s => s.id === row?.dataset.stepId);
                     if (!step) return;
                     step.level = Math.min(4, getStepLevel(step) + 1);
-                    window.dispatchEvent(new CustomEvent('item:mutation_requested', { detail: item }));
+                    this.emitItemMutation(item, { preserveView: true });
                     refresh();
                 });
             });
@@ -871,7 +994,7 @@ export const UI = {
                     const step = item.steps.find(s => s.id === row?.dataset.stepId);
                     if (!step) return;
                     step.level = Math.max(0, getStepLevel(step) - 1);
-                    window.dispatchEvent(new CustomEvent('item:mutation_requested', { detail: item }));
+                    this.emitItemMutation(item, { preserveView: true });
                     refresh();
                 });
             });
@@ -898,7 +1021,7 @@ export const UI = {
                     const step = item.steps.find((s) => s.id === stepId);
                     if (!step?.completed) return;
                     item.steps = item.steps.filter((s) => s.id !== stepId);
-                    window.dispatchEvent(new CustomEvent('item:mutation_requested', { detail: item }));
+                    this.emitItemMutation(item, { preserveView: true });
                     refresh();
                 });
             });

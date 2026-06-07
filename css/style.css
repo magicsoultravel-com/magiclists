@@ -543,17 +543,107 @@ body {
     z-index: 12;
 }
 
-.editor-created-date {
+.editor-meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: -0.15rem 0 0.35rem;
     font-size: 0.62rem;
     color: var(--text-muted);
-    margin: -0.15rem 0 0.35rem;
+}
+
+.editor-created-date,
+.editor-note-size {
+    font-size: inherit;
+    color: inherit;
+}
+
+.created-date,
+.note-size {
+    color: var(--text-muted) !important;
+    font-size: 0.56rem;
+    white-space: nowrap;
 }
 
 .created-date {
     margin-left: auto;
-    color: var(--text-muted) !important;
-    font-size: 0.56rem;
-    white-space: nowrap;
+}
+
+.note-size {
+    margin-left: 0.25rem;
+}
+
+.expanded-checklist-add-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    margin: 0.35rem auto 0.1rem;
+    padding: 0;
+    border: 1px dashed var(--border-color);
+    border-radius: 50%;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.expanded-checklist-add-btn:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: rgba(79, 70, 229, 0.08);
+    transform: scale(1.05);
+}
+
+.step-row--display.step-row--animating {
+    animation: stepCheckFade 0.28s ease;
+}
+
+@keyframes stepCheckFade {
+    from { opacity: 0.45; transform: translateY(-2px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.mini-card.card-animate-expand {
+    animation: cardExpandIn 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mini-card.card-animate-collapse {
+    animation: cardCollapseIn 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes cardExpandIn {
+    from {
+        opacity: 0.72;
+        transform: scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes cardCollapseIn {
+    from {
+        opacity: 0.85;
+        transform: scale(1.02);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+.mini-card.card-state-changing {
+    transition: max-height 0.32s ease, padding 0.32s ease, width 0.32s ease, box-shadow 0.25s ease;
+}
+
+.mini-card.card-state-changing .card-body {
+    transition: opacity 0.22s ease;
 }
 
 /* ==========================================================================
@@ -2047,6 +2137,16 @@ textarea.form-input {
     align-items: stretch;
     justify-content: center;
     padding: 2.5vh 1rem;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.28s ease, visibility 0.28s ease;
+}
+
+#editor-overlay.is-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
 }
 
 #editor-overlay .modal {
@@ -2059,6 +2159,14 @@ textarea.form-input {
     background: #18181c;
     border-color: #35353c;
     border-radius: 6px;
+    transform: translateY(10px) scale(0.97);
+    opacity: 0;
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
+}
+
+#editor-overlay.is-open .modal {
+    transform: translateY(0) scale(1);
+    opacity: 1;
 }
 
 #editor-overlay .modal.has-custom-bg {

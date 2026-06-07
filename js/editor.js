@@ -2,6 +2,7 @@
 import {
     CARD_ICONS,
     attachAutoGrow,
+    computeNoteSizeKb,
     levelListHasDescendants,
     partitionChecklistSteps,
     reorderStepsByCompletion
@@ -82,6 +83,32 @@ export const Editor = {
         this.overlay.classList.remove('is-hidden');
         const modal = this.overlay.querySelector('.modal');
         if (modal) modal.classList.add('modal--editor');
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => this.overlay?.classList.add('is-open'));
+        });
+    },
+
+    animateEditorClose(done) {
+        if (!this.overlay) {
+            done();
+            return;
+        }
+        this.overlay.classList.remove('is-open');
+        let finished = false;
+        const finish = () => {
+            if (finished) return;
+            finished = true;
+            this.overlay.classList.add('is-hidden');
+            done();
+        };
+        const timer = setTimeout(finish, 320);
+        const onEnd = (e) => {
+            if (e.target !== this.overlay) return;
+            clearTimeout(timer);
+            this.overlay.removeEventListener('transitionend', onEnd);
+            finish();
+        };
+        this.overlay.addEventListener('transitionend', onEnd);
     },
     
     markInteracted() {
@@ -189,6 +216,16 @@ export const Editor = {
         return data;
     },
     
+    resetEditorState() {
+        this.mountZone.innerHTML = '';
+        this.syncEditorTheme('');
+        this.activeItem = null;
+        this.draggedRow = null;
+        this.hasUserInteracted = false;
+        this.isNewUnsavedNote = false;
+        if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
+    },
+
     closeAndSave() {
         if (this.hasUserInteracted) {
             const currentData = this.collectFormData();
@@ -199,26 +236,12 @@ export const Editor = {
                 this.autoSave();
             }
         }
-        
-        this.overlay.classList.add('is-hidden');
-        this.mountZone.innerHTML = '';
-        this.syncEditorTheme('');
-        this.activeItem = null;
-        this.draggedRow = null;
-        this.hasUserInteracted = false;
-        this.isNewUnsavedNote = false;
-        if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
+
+        this.animateEditorClose(() => this.resetEditorState());
     },
     
     close() {
-        this.overlay.classList.add('is-hidden');
-        this.mountZone.innerHTML = '';
-        this.syncEditorTheme('');
-        this.activeItem = null;
-        this.draggedRow = null;
-        this.hasUserInteracted = false;
-        this.isNewUnsavedNote = false;
-        if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
+        this.animateEditorClose(() => this.resetEditorState());
     },
     
     formatLocalDate(date = new Date()) {
@@ -358,6 +381,7 @@ export const Editor = {
             }).join('');
         const isExistingItem = item.created_at !== undefined;
         const createdLabel = this.formatCreatedDate(item.created_at);
+        const sizeLabel = computeNoteSizeKb(item);
         this.deleteBtn?.classList.toggle('is-hidden', !isExistingItem);
         this.saveBtn.innerHTML = CARD_ICONS.save;
         document.getElementById('modal-close-btn').innerHTML = CARD_ICONS.close;
@@ -378,7 +402,10 @@ export const Editor = {
         this.mountZone.innerHTML = `
             ${warningLightHtml}
             <input type="text" id="edit-title" class="form-input form-input--title" placeholder="${isExistingItem ? 'Edit title' : 'New title'}" value="${this.escapeQuotes(item.title)}">
-            ${createdLabel ? `<div class="editor-created-date">Created ${createdLabel}</div>` : ''}
+            <div class="editor-meta-row">
+                ${createdLabel ? `<span class="editor-created-date">Created ${createdLabel}</span>` : ''}
+                <span class="editor-note-size" title="Note content size">${sizeLabel} KB</span>
+            </div>
 
             <div class="editor-panel">
                 <div class="collapsable-header" id="config-section-header">
@@ -465,10 +492,12 @@ export const Editor = {
             if (el) {
                 el.addEventListener('input', () => {
                     this.markInteracted();
+                    this.updateEditorSizeLabel();
                     this.triggerAutoSave();
                 });
                 el.addEventListener('change', () => {
                     this.markInteracted();
+                    this.updateEditorSizeLabel();
                     this.triggerAutoSave();
                 });
             }
@@ -540,6 +569,17 @@ export const Editor = {
         const d = new Date(Number(timestamp) * 1000);
         if (Number.isNaN(d.getTime())) return '';
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    },
+
+    updateEditorSizeLabel() {
+        const el = document.querySelector('.editor-note-size');
+        if (!el) return;
+        try {
+            const data = this.collectFormData();
+            el.textContent = `${computeNoteSizeKb(data)} KB`;
+        } catch {
+            /* form not ready */
+        }
     },
 
     setupColorPalette(item) {
