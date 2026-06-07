@@ -201,8 +201,10 @@ export const SidePanel = {
         const activeItems = allItems.filter((item) => item.status !== 'archived');
         const archivedItems = allItems.filter((item) => item.status === 'archived');
 
-        document.getElementById('notes-active-count')?.textContent = String(activeItems.length);
-        document.getElementById('notes-archived-count')?.textContent = String(archivedItems.length);
+        const activeCountEl = document.getElementById('notes-active-count');
+        const archivedCountEl = document.getElementById('notes-archived-count');
+        if (activeCountEl) activeCountEl.textContent = String(activeItems.length);
+        if (archivedCountEl) archivedCountEl.textContent = String(archivedItems.length);
 
         this.renderNotesListZone('notes-list-active-zone', activeItems, allItems);
         this.renderNotesListZone('notes-list-archived-zone', archivedItems, allItems, { archived: true });
