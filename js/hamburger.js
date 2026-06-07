@@ -1,14 +1,19 @@
-import { CARD_ICONS } from './ui.js';
+import { ACTION_ICONS, CARD_ICONS } from './ui.js';
+
+const NOTES_LIST_SORT_KEY = 'matrix_notes_list_sort';
 
 export const SidePanel = {
     panel: null,
     toggleBtn: null,
     appState: null,
+    notesListSort: null,
+    notesListSortBound: false,
 
     init(appState) {
         this.appState = appState;
         this.panel = document.getElementById('side-panel');
         this.toggleBtn = document.getElementById('nav-panel-toggle');
+        this.notesListSort = this.readNotesListSort();
 
         const stored = localStorage.getItem('matrix_panel_collapsed');
         if (stored === 'true') {
@@ -32,13 +37,15 @@ export const SidePanel = {
     setupStatusClickHandlers() {
         this.bindCollapsable('quick-actions-header', 'quick-actions-section');
         this.bindCollapsable('view-section-header', 'view-section');
+        this.bindCollapsable('notes-list-section-header', 'notes-list-section', false, '.sidebar-notes-list-sort');
         this.bindCollapsable('status-panel-header', 'status-panel');
         this.bindCollapsable('objects-status-header', 'objects-status-detail', true);
         this.bindCollapsable('categories-status-header', 'categories-status-detail', true);
         this.bindCollapsable('tools-section-header', 'tools-section', true);
+        this.setupNotesListSortControls();
     },
 
-    bindCollapsable(headerId, sectionId, startCollapsed = false) {
+    bindCollapsable(headerId, sectionId, startCollapsed = false, ignoreSelector = null) {
         const header = document.getElementById(headerId);
         const section = document.getElementById(sectionId);
         if (!header || !section) return;
@@ -49,10 +56,140 @@ export const SidePanel = {
             toggle?.classList.add('collapsed');
         }
 
-        header.addEventListener('click', () => {
+        header.addEventListener('click', (e) => {
+            if (ignoreSelector && e.target.closest(ignoreSelector)) return;
             section.classList.toggle('collapsed');
             toggle?.classList.toggle('collapsed');
         });
+    },
+
+    readNotesListSort() {
+        try {
+            const stored = JSON.parse(localStorage.getItem(NOTES_LIST_SORT_KEY) || 'null');
+            if (stored?.field === 'title' || stored?.field === 'date') {
+                return {
+                    field: stored.field,
+                    dir: stored.dir === 'asc' ? 'asc' : 'desc'
+                };
+            }
+        } catch {
+            /* ignore */
+        }
+        return { field: 'date', dir: 'desc' };
+    },
+
+    writeNotesListSort(sort) {
+        this.notesListSort = sort;
+        localStorage.setItem(NOTES_LIST_SORT_KEY, JSON.stringify(sort));
+        this.updateNotesListSortButtons();
+    },
+
+    setupNotesListSortControls() {
+        if (this.notesListSortBound) return;
+        const titleBtn = document.getElementById('notes-sort-title');
+        const dateBtn = document.getElementById('notes-sort-date');
+        if (!titleBtn || !dateBtn) return;
+
+        titleBtn.innerHTML = `${ACTION_ICONS.sortAlpha}<span class="sidebar-sort-arrow" aria-hidden="true"></span>`;
+        dateBtn.innerHTML = `${ACTION_ICONS.sortDate}<span class="sidebar-sort-arrow" aria-hidden="true"></span>`;
+        this.notesListSortBound = true;
+        this.updateNotesListSortButtons();
+
+        titleBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const current = this.readNotesListSort();
+            if (current.field === 'title') {
+                this.writeNotesListSort({ field: 'title', dir: current.dir === 'asc' ? 'desc' : 'asc' });
+            } else {
+                this.writeNotesListSort({ field: 'title', dir: 'asc' });
+            }
+            if (this.appState?.items) this.updateNotesList(this.appState.items);
+        });
+
+        dateBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const current = this.readNotesListSort();
+            if (current.field === 'date') {
+                this.writeNotesListSort({ field: 'date', dir: current.dir === 'asc' ? 'desc' : 'asc' });
+            } else {
+                this.writeNotesListSort({ field: 'date', dir: 'desc' });
+            }
+            if (this.appState?.items) this.updateNotesList(this.appState.items);
+        });
+    },
+
+    updateNotesListSortButtons() {
+        const sort = this.readNotesListSort();
+        const titleBtn = document.getElementById('notes-sort-title');
+        const dateBtn = document.getElementById('notes-sort-date');
+        if (!titleBtn || !dateBtn) return;
+
+        titleBtn.classList.toggle('is-active', sort.field === 'title');
+        dateBtn.classList.toggle('is-active', sort.field === 'date');
+
+        const titleArrow = titleBtn.querySelector('.sidebar-sort-arrow');
+        const dateArrow = dateBtn.querySelector('.sidebar-sort-arrow');
+        if (titleArrow) {
+            titleArrow.textContent = sort.field === 'title' ? (sort.dir === 'asc' ? '↑' : '↓') : '';
+        }
+        if (dateArrow) {
+            dateArrow.textContent = sort.field === 'date' ? (sort.dir === 'asc' ? '↑' : '↓') : '';
+        }
+
+        titleBtn.title = sort.field === 'title'
+            ? `Sorted by title (${sort.dir === 'asc' ? 'A→Z' : 'Z→A'})`
+            : 'Sort by title';
+        dateBtn.title = sort.field === 'date'
+            ? `Sorted by date (${sort.dir === 'asc' ? 'oldest first' : 'newest first'})`
+            : 'Sort by date';
+    },
+
+    sortNotesForList(items) {
+        const sort = this.readNotesListSort();
+        const dir = sort.dir === 'asc' ? 1 : -1;
+        return [...items].sort((a, b) => {
+            if (sort.field === 'title') {
+                const left = (a.title || '').trim().toLowerCase();
+                const right = (b.title || '').trim().toLowerCase();
+                const emptyRank = (value) => (value ? 0 : 1);
+                const rank = emptyRank(left) - emptyRank(right);
+                if (rank !== 0) return rank * dir;
+                return left.localeCompare(right) * dir;
+            }
+            const leftTime = Number(a.updated_at || a.created_at || 0);
+            const rightTime = Number(b.updated_at || b.created_at || 0);
+            return (leftTime - rightTime) * dir;
+        });
+    },
+
+    updateNotesList(items) {
+        const zone = document.getElementById('notes-list-zone');
+        if (!zone) return;
+
+        if (!items?.length) {
+            zone.innerHTML = `<div class="sidebar-notes-list-empty">No notes yet</div>`;
+            return;
+        }
+
+        const sorted = this.sortNotesForList(items);
+        zone.innerHTML = sorted.map(item => `
+            <button type="button" class="sidebar-notes-list-item" data-id="${this.escapeAttr(item.id)}" title="${this.escapeHTML(item.title || 'Untitled')}">
+                <span class="sidebar-notes-list-item-title">${this.escapeHTML(item.title || 'Untitled')}</span>
+            </button>
+        `).join('');
+
+        zone.querySelectorAll('.sidebar-notes-list-item').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const item = items.find(entry => entry.id === btn.dataset.id);
+                if (!item) return;
+                window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: item }));
+            });
+        });
+    },
+
+    escapeAttr(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     },
 
     updateStatus(items, categories, hiddenCategories) {

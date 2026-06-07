@@ -33,7 +33,9 @@ export const ACTION_ICONS = {
     import: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 10.4V4.6M3.7 6.9 6 4.6 8.3 6.9" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.2 10.4h7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
     logout: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M4.6 2.1H3.1v7.8h1.5" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/><path d="M6.8 6 10 6M10 6 8.4 4.4M10 6 8.4 7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     undo: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.4 5.6H7.2a2.4 2.4 0 1 1 0 4.8H6.6M3.4 5.6 5.1 3.9M3.4 5.6 5.1 7.3" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    redo: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M8.6 5.6H4.8a2.4 2.4 0 0 0 0 4.8h.6M8.6 5.6 6.9 3.9M8.6 5.6 6.9 7.3" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    redo: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M8.6 5.6H4.8a2.4 2.4 0 0 0 0 4.8h.6M8.6 5.6 6.9 3.9M8.6 5.6 6.9 7.3" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    sortAlpha: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.1 9.1V2.7M2.1 2.7h2.5M3.8 5.4H2.1" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.8 8.9h3.8M6.8 6.5h2.6M6.8 4.1h3.8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
+    sortDate: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.8" y="2.6" width="8.4" height="7.4" rx="0.7" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M1.8 5.2h8.4M3.9 1.6v1.5M8.1 1.6v1.5" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>'
 };
 
 export function itemHasCategory(item) {
@@ -335,10 +337,8 @@ export const UI = {
 
         activeCategories = activeCategories.filter(cat => !hiddenCategories.includes(cat.name));
 
-        const viewClass = viewMode === 'columns' ? 'view-columns'
-            : viewMode === 'freeform' ? 'view-freeform'
-            : 'view-list';
-        canvas.className = viewClass;
+        const resolvedMode = viewMode === 'freeform' ? 'freeform' : 'columns';
+        canvas.className = resolvedMode === 'freeform' ? 'view-freeform' : 'view-columns';
 
         if (visibleItems.length === 0) {
             const hiddenCount = items.length - visibleItems.length;
@@ -350,7 +350,7 @@ export const UI = {
             return;
         }
 
-        if (viewMode === 'columns') {
+        if (resolvedMode === 'columns') {
             activeCategories.forEach(catObj => {
                 const categoryName = typeof catObj === 'string' ? catObj : catObj.name;
                 const catColor = catObj.color || '#64748b';
@@ -368,7 +368,7 @@ export const UI = {
                 .forEach(item => {
                     canvas.appendChild(this.createCardComponent(item, activeCategories));
                 });
-        } else if (viewMode === 'freeform') {
+        } else if (resolvedMode === 'freeform') {
             const positions = this.getFreeformPositions();
             let autoX = 8;
             let autoY = 8;
@@ -401,14 +401,6 @@ export const UI = {
                     this.initFreeformCardStack(card, index);
                     canvas.appendChild(card);
                 });
-        } else {
-            [...visibleItems].sort((a, b) => {
-                const aTime = Number(a.created_at || a.updated_at || 0);
-                const bTime = Number(b.created_at || b.updated_at || 0);
-                return aTime - bTime;
-            }).forEach(item => {
-                canvas.appendChild(this.createCardComponent(item, activeCategories));
-            });
         }
 
         this.restoreScrollState(canvas, scrollState);

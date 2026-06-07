@@ -22,7 +22,7 @@ const AppState = {
     viewSettings: {
         sortBy: (() => {
             const preferred = localStorage.getItem('matrix_preferred_view') || 'columns';
-            if (preferred === 'grid') {
+            if (preferred === 'grid' || preferred === 'list') {
                 localStorage.setItem('matrix_preferred_view', 'columns');
                 return 'columns';
             }
@@ -131,6 +131,7 @@ class Application {
 
     updateWorkspaceCounter() {
         SidePanel.updateStatus(AppState.items, AppState.categories, AppState.hiddenCategories);
+        SidePanel.updateNotesList(AppState.items);
     }
 
     renderControlBar() {
@@ -138,11 +139,9 @@ class Application {
         const mode = AppState.viewSettings.sortBy;
         if (filterControls) {
             filterControls.innerHTML = `
-                <button class="btn btn--compact btn--icon ${mode === 'list' ? 'active' : ''}" id="btn-view-list" title="List view" aria-label="List view">${ACTION_ICONS.viewList}</button>
                 <button class="btn btn--compact btn--icon ${mode === 'columns' ? 'active' : ''}" id="btn-view-cols" title="Columns view" aria-label="Columns view">${ACTION_ICONS.viewCols}</button>
                 <button class="btn btn--compact btn--icon ${mode === 'freeform' ? 'active' : ''}" id="btn-view-free" title="Freeform view" aria-label="Freeform view">${ACTION_ICONS.viewFree}</button>
             `;
-            document.getElementById('btn-view-list').addEventListener('click', () => this.switchViewMode('list'));
             document.getElementById('btn-view-cols').addEventListener('click', () => this.switchViewMode('columns'));
             document.getElementById('btn-view-free').addEventListener('click', () => this.switchViewMode('freeform'));
             this.updateViewToggleState();
@@ -287,7 +286,6 @@ class Application {
 
     updateViewToggleState() {
         const mode = AppState.viewSettings.sortBy;
-        document.getElementById('btn-view-list')?.classList.toggle('active', mode === 'list');
         document.getElementById('btn-view-cols')?.classList.toggle('active', mode === 'columns');
         document.getElementById('btn-view-free')?.classList.toggle('active', mode === 'freeform');
     }
