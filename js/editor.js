@@ -294,6 +294,17 @@ export const Editor = {
         });
         body.scrollTop = scrollTop;
 
+        const pendingFocusStepId = body.dataset.pendingFocusStepId;
+        if (pendingFocusStepId) {
+            const pendingEl = body.querySelector(
+                `[data-field="step-text"][data-step-id="${pendingFocusStepId}"]`
+            );
+            if (pendingEl) {
+                UI.focusInlineEdit(pendingEl, 'start');
+                return;
+            }
+        }
+
         if (!focusField) return;
         const focusEl = focusStepId
             ? body.querySelector(`[data-field="step-text"][data-step-id="${focusStepId}"]`)

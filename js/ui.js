@@ -1022,10 +1022,24 @@ export const UI = {
             it.steps.splice(insertAt, 0, newStep);
             reorderStepsByCompletion(it.steps);
         });
+
+        root.dataset.pendingFocusStepId = newStep.id;
         refresh();
+
+        const focusNewStep = () => {
+            const pendingId = root.dataset.pendingFocusStepId;
+            if (!pendingId) return false;
+            const newEl = root.querySelector(
+                `[data-field="step-text"].card-inline-edit[data-step-id="${pendingId}"]`
+            );
+            if (!newEl) return false;
+            delete root.dataset.pendingFocusStepId;
+            this.focusInlineEdit(newEl, 'start');
+            return true;
+        };
+
         requestAnimationFrame(() => {
-            const newEl = root.querySelector(`[data-step-id="${newStep.id}"]`);
-            if (newEl) this.focusInlineEdit(newEl, 'start');
+            if (!focusNewStep()) requestAnimationFrame(() => focusNewStep());
         });
     },
 
