@@ -773,7 +773,7 @@ export const UI = {
         done.forEach((step) => renderRow(step, { isDoneSection: true }));
 
         if (canEdit) {
-            html += `<button type="button" class="expanded-checklist-add-btn" title="Add checklist item" aria-label="Add checklist item">+</button>`;
+            html += `<button type="button" class="card-act expanded-checklist-add-btn" title="Add checklist item" aria-label="Add checklist item">+</button>`;
         }
 
         html += '</div>';
