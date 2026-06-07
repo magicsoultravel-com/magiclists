@@ -12,6 +12,7 @@
 
     <div id="workspace-shell" class="workspace-shell">
         <aside id="side-panel" class="side-panel" aria-label="Side panel">
+            <div id="side-panel-brand-host" class="side-panel-brand-host"></div>
             <div class="side-panel-scroll">
             <div class="nav-drawer-section nav-drawer-section--compact">
                 <div class="collapsable-header list-row--header" id="quick-actions-header">
@@ -93,7 +94,7 @@
                 <div class="collapsable-section" id="notes-list-section">
                     <div class="sidebar-notes-group">
                         <div class="collapsable-header list-row--header sidebar-notes-subheader" id="notes-list-active-header">
-                            <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Active</span>
+                            <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>active</span>
                             <span id="notes-active-count" class="status-badge">0</span>
                         </div>
                         <div class="collapsable-section" id="notes-list-active-section">
@@ -102,7 +103,7 @@
                     </div>
                     <div class="sidebar-notes-group">
                         <div class="collapsable-header list-row--header sidebar-notes-subheader" id="notes-list-archived-header">
-                            <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Archived</span>
+                            <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>archived</span>
                             <span id="notes-archived-count" class="status-badge">0</span>
                         </div>
                         <div class="collapsable-section collapsed" id="notes-list-archived-section">
@@ -118,9 +119,11 @@
 
         <div id="workspace-main" class="workspace-main">
             <header id="control-bar">
+                <div id="control-bar-brand-host" class="control-bar-brand-host is-visible">
                 <div class="control-bar-brand">
                     <button type="button" id="nav-panel-toggle" class="btn btn-icon control-bar-menu-btn" title="Show/hide panel" aria-label="Toggle side panel" aria-expanded="true">☰</button>
                     <div id="app-brand" class="app-brand">magicNotes</div>
+                </div>
                 </div>
                 <div id="digital-clock" class="logo-zone logo-zone--clock">
                     <div id="history-controls" class="history-controls is-hidden">

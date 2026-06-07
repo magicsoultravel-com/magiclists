@@ -17,14 +17,27 @@ export const SidePanel = {
         this.notesListSort = this.readNotesListSort();
 
         const stored = localStorage.getItem('matrix_panel_collapsed');
-        if (stored === 'true') {
-            this.setCollapsed(true);
-        }
+        const collapsed = stored === 'true';
+        this.setCollapsed(collapsed);
 
         this.toggleBtn?.addEventListener('click', () => this.toggle());
     },
 
+    moveBrand(collapsed) {
+        const brand = document.querySelector('.control-bar-brand');
+        const sidebarHost = document.getElementById('side-panel-brand-host');
+        const controlHost = document.getElementById('control-bar-brand-host');
+        if (!brand || !sidebarHost || !controlHost) return;
+        const target = collapsed ? controlHost : sidebarHost;
+        if (brand.parentElement !== target) {
+            target.appendChild(brand);
+        }
+        sidebarHost.classList.toggle('is-visible', !collapsed);
+        controlHost.classList.toggle('is-visible', collapsed);
+    },
+
     setCollapsed(collapsed) {
+        this.moveBrand(collapsed);
         this.panel?.classList.toggle('is-collapsed', collapsed);
         this.toggleBtn?.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         localStorage.setItem('matrix_panel_collapsed', collapsed ? 'true' : 'false');
