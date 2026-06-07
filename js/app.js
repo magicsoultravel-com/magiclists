@@ -19,9 +19,16 @@ const AppState = {
     categories: [...DEFAULT_CATEGORIES],
     hiddenCategories: JSON.parse(localStorage.getItem('matrix_hidden_categories') || '[]'),
     expandedCards: JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}'),
-    viewSettings: { 
-        sortBy: localStorage.getItem('matrix_preferred_view') || 'columns', 
-        currentView: 'active' 
+    viewSettings: {
+        sortBy: (() => {
+            const preferred = localStorage.getItem('matrix_preferred_view') || 'columns';
+            if (preferred === 'grid') {
+                localStorage.setItem('matrix_preferred_view', 'columns');
+                return 'columns';
+            }
+            return preferred;
+        })(),
+        currentView: 'active'
     }
 };
 
@@ -39,8 +46,7 @@ class Application {
         SidePanel.setupStatusClickHandlers();
         this.startClockLoop();
         this.setupFreeformResetButton();
-        this.setupGridControls();
-        this.updateLayoutResetVisibility();
+        this.updateFreeformResetVisibility();
         this.setupBackupInterface();
         this.setupFab();
         this.setupUndo();
@@ -135,19 +141,16 @@ class Application {
                 <button class="btn btn--compact btn--icon ${mode === 'list' ? 'active' : ''}" id="btn-view-list" title="List view" aria-label="List view">${ACTION_ICONS.viewList}</button>
                 <button class="btn btn--compact btn--icon ${mode === 'columns' ? 'active' : ''}" id="btn-view-cols" title="Columns view" aria-label="Columns view">${ACTION_ICONS.viewCols}</button>
                 <button class="btn btn--compact btn--icon ${mode === 'freeform' ? 'active' : ''}" id="btn-view-free" title="Freeform view" aria-label="Freeform view">${ACTION_ICONS.viewFree}</button>
-                <button class="btn btn--compact btn--icon ${mode === 'grid' ? 'active' : ''}" id="btn-view-grid" title="Grid view" aria-label="Grid view">${ACTION_ICONS.viewGrid}</button>
             `;
             document.getElementById('btn-view-list').addEventListener('click', () => this.switchViewMode('list'));
             document.getElementById('btn-view-cols').addEventListener('click', () => this.switchViewMode('columns'));
             document.getElementById('btn-view-free').addEventListener('click', () => this.switchViewMode('freeform'));
-            document.getElementById('btn-view-grid').addEventListener('click', () => this.switchViewMode('grid'));
             this.updateViewToggleState();
-            this.updateGridControlsVisibility();
         }
 
         this.renderQuickActions();
         this.updateFabVisibility();
-        this.updateLayoutResetVisibility();
+        this.updateFreeformResetVisibility();
         UndoManager.updateToolbar();
     }
 
@@ -269,8 +272,7 @@ class Application {
         AppState.user.token = null;
         UndoManager.clear();
         this.renderControlBar();
-        this.updateLayoutResetVisibility();
-        this.updateGridControlsVisibility();
+        this.updateFreeformResetVisibility();
         this.syncDataStore();
     }
 
@@ -279,8 +281,7 @@ class Application {
         localStorage.setItem('matrix_preferred_view', mode);
         window.dispatchEvent(new CustomEvent('view:mode_changed', { detail: mode }));
         this.updateViewToggleState();
-        this.updateLayoutResetVisibility();
-        this.updateGridControlsVisibility();
+        this.updateFreeformResetVisibility();
         this.syncDataStore();
     }
 
@@ -289,53 +290,23 @@ class Application {
         document.getElementById('btn-view-list')?.classList.toggle('active', mode === 'list');
         document.getElementById('btn-view-cols')?.classList.toggle('active', mode === 'columns');
         document.getElementById('btn-view-free')?.classList.toggle('active', mode === 'freeform');
-        document.getElementById('btn-view-grid')?.classList.toggle('active', mode === 'grid');
     }
 
     setupFreeformResetButton() {
         const btn = document.getElementById('btn-freeform-reset');
         if (btn) btn.innerHTML = ACTION_ICONS.layoutReset;
         btn?.addEventListener('click', () => {
-            const mode = AppState.viewSettings.sortBy;
-            if (mode === 'freeform') {
-                UI.resetFreeformLayout();
-            } else if (mode === 'grid') {
-                UI.resetGridLayout();
-            } else {
-                return;
-            }
+            if (AppState.viewSettings.sortBy !== 'freeform') return;
+            UI.resetFreeformLayout();
             this.syncDataStore();
         });
     }
 
-    updateLayoutResetVisibility() {
+    updateFreeformResetVisibility() {
         const btn = document.getElementById('btn-freeform-reset');
         if (!btn) return;
-        const mode = AppState.viewSettings.sortBy;
-        const show = AppState.user.isLoggedIn && (mode === 'freeform' || mode === 'grid');
+        const show = AppState.viewSettings.sortBy === 'freeform' && AppState.user.isLoggedIn;
         btn.classList.toggle('is-hidden', !show);
-        btn.title = mode === 'grid' ? 'Reset grid layout' : 'Reset freeform layout';
-        btn.setAttribute('aria-label', btn.title);
-    }
-
-    setupGridControls() {
-        const section = document.getElementById('grid-controls-section');
-        if (!section) return;
-        section.querySelectorAll('.grid-level-btn').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                const level = parseInt(btn.dataset.level, 10);
-                if (!level) return;
-                UI.setGridDefaultLevel(level);
-            });
-        });
-        UI.setGridDefaultLevel(parseInt(localStorage.getItem('matrix_grid_default_level') || '3', 10));
-    }
-
-    updateGridControlsVisibility() {
-        const section = document.getElementById('grid-controls-section');
-        if (!section) return;
-        const show = AppState.viewSettings.sortBy === 'grid' && AppState.user.isLoggedIn;
-        section.classList.toggle('is-hidden', !show);
     }
 
     startClockLoop() {
@@ -403,15 +374,6 @@ class Application {
             UI.render(document.getElementById('app-canvas'), AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories);
             this.updateWorkspaceCounter();
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
-        });
-
-        let gridResizeTimer = null;
-        window.addEventListener('resize', () => {
-            if (AppState.viewSettings.sortBy !== 'grid') return;
-            clearTimeout(gridResizeTimer);
-            gridResizeTimer = setTimeout(() => {
-                window.dispatchEvent(new CustomEvent('board:visibility_changed'));
-            }, 180);
         });
 
         window.addEventListener('calendar:items_changed', (e) => {
