@@ -687,7 +687,8 @@ body {
     word-break: break-word;
 }
 
-.note-surface .expanded-checklist {
+.note-surface .expanded-checklist,
+.note-surface .expanded-links {
     font-size: 0.6rem;
 }
 
@@ -1127,9 +1128,38 @@ body {
 }
 
 .mini-card.expanded .card-content-preview,
-.mini-card.expanded .expanded-checklist {
+.mini-card.expanded .expanded-checklist,
+.mini-card.expanded .expanded-links {
     flex: 0 0 auto;
     overflow: visible;
+}
+
+.expanded-links {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.62rem;
+}
+
+.expanded-links.empty {
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.quicklink-anchor-row {
+    color: var(--accent);
+    text-decoration: none;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.quicklink-anchor-row:hover {
+    text-decoration: underline;
+}
+
+.has-custom-bg .expanded-links,
+.has-custom-bg .expanded-links.empty {
+    color: var(--card-muted);
 }
 
 /* Card Header */
@@ -1265,7 +1295,8 @@ body {
 }
 
 .has-custom-bg .mini-card-meta.expanded,
-.has-custom-bg .editor-meta-row--footer {
+.has-custom-bg .editor-meta-row--footer,
+.has-custom-bg .editor-meta-row--inline {
     border-top-color: var(--card-border-subtle);
 }
 
@@ -3153,6 +3184,10 @@ textarea.form-input {
     gap: 0.25rem;
     padding: 0;
     min-height: 0;
+}
+
+#editor-overlay .editor-meta-row--inline {
+    border-top: 1px solid var(--border-color);
 }
 
 .editor-panel {

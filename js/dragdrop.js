@@ -125,7 +125,7 @@ export const DragDropEngine = {
                     e.preventDefault();
                     return;
                 }
-                if (e.target.closest('.card-inline-edit, .card-actions, .card-body, .expanded-checklist, button, input, textarea, a')) {
+                if (e.target.closest('.card-inline-edit, .card-actions, .card-body, .editor-note-body, .expanded-checklist, button, input, textarea, a')) {
                     e.preventDefault();
                     return;
                 }
@@ -328,7 +328,7 @@ export const DragDropEngine = {
                 const onDragZone = e.target.closest('.card-drag-zone');
                 if (!onDragGutter && !onDragZone) return;
 
-                const scrollHost = e.target.closest('.card-body');
+                const scrollHost = e.target.closest('.editor-note-body') || e.target.closest('.card-body');
                 if (scrollHost && isScrollbarGrip(scrollHost, e.clientX)) return;
 
                 e.stopPropagation();

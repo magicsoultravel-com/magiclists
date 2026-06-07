@@ -364,13 +364,6 @@ class Application {
             if (idx >= 0) AppState.items[idx] = item;
             else AppState.items.push(item);
 
-            const canvas = document.getElementById('app-canvas');
-            const existingCard = canvas?.querySelector(`.mini-card[data-id="${item.id}"]`);
-            if (existingCard) {
-                UI.revealNoteOnBoard(item, AppState.hiddenCategories);
-                return;
-            }
-
             await this.syncDataStore();
             requestAnimationFrame(() => {
                 const card = document.getElementById('app-canvas')?.querySelector(`.mini-card[data-id="${item.id}"]`);

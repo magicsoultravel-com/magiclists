@@ -124,7 +124,9 @@ export const Editor = {
 
         this.isNewUnsavedNote = false;
         this.activeItem = currentData;
-        window.dispatchEvent(new CustomEvent('item:mutation_requested', { detail: currentData }));
+        window.dispatchEvent(new CustomEvent('item:mutation_requested', {
+            detail: { item: currentData, preserveView: true }
+        }));
         return true;
     },
 
@@ -197,7 +199,7 @@ export const Editor = {
                 document.getElementById('edit-end-date')?.value || '',
                 document.getElementById('edit-end-time')?.value || ''
             ),
-            isRecurring: document.getElementById('edit-recurring')?.value === 'yes',
+            isRecurring: this.activeItem.isRecurring === true,
             hideFromCalendar: this.activeItem.hideFromCalendar === true,
             hiddenFromBoard: this.activeItem.hiddenFromBoard === true
         };
@@ -297,11 +299,20 @@ export const Editor = {
         const focusStepId = active?.dataset?.stepId;
 
         const pendingFocusStepId = body.dataset.pendingFocusStepId;
-        body.innerHTML = UI.buildNoteBodyHtml(this.activeItem, { canEdit: true, alwaysShowChecklist: true });
+        const categoryField = document.getElementById('edit-category');
+        const activeCategory = categoryField?.value?.trim() || this.activeItem.categories?.[0] || '';
+        const isQuickLink = UI.isQuickLinkCategory(activeCategory);
+        body.innerHTML = UI.buildNoteBodySectionHtml(this.activeItem, {
+            canEdit: true,
+            alwaysShowChecklist: true,
+            isQuickLinkType: false,
+            showQuickLinksPreview: isQuickLink
+        });
         if (pendingFocusStepId) body.dataset.pendingFocusStepId = pendingFocusStepId;
         UI.attachNoteBodyInteractions(body, this.activeItem, {
             refresh: () => this.refreshEditorNoteBody(),
             localOnly: true,
+            isQuickLinkType: false,
             onChange: () => {
                 this.markInteracted();
                 this.updateEditorSizeLabel();
@@ -320,31 +331,6 @@ export const Editor = {
             ? body.querySelector(`[data-field="step-text"][data-step-id="${focusStepId}"]`)
             : this.mountZone.querySelector(`[data-field="${focusField}"]`);
         if (focusEl) UI.focusInlineEdit(focusEl, 'end');
-    },
-
-    bindEditorNoteInteractions() {
-        if (!this.mountZone || !this.activeItem) return;
-        const options = {
-            refresh: () => this.refreshEditorNoteBody(),
-            localOnly: true,
-            onChange: () => {
-                this.markInteracted();
-                this.updateEditorSizeLabel();
-                this.triggerAutoSave();
-            }
-        };
-        const header = this.mountZone.querySelector('.editor-note-header');
-        const body = document.getElementById('editor-note-body');
-        if (header) UI.attachNoteBodyInteractions(header, this.activeItem, options);
-        if (body) UI.attachNoteBodyInteractions(body, this.activeItem, options);
-
-        this.mountZone.querySelectorAll('.card-inline-edit').forEach((el) => {
-            el.addEventListener('input', () => {
-                this.markInteracted();
-                this.updateEditorSizeLabel();
-                this.triggerAutoSave();
-            });
-        });
     },
 
     renderForm() {
@@ -372,50 +358,31 @@ export const Editor = {
             categoryOptionsHtml,
             startParts,
             endParts,
-            bodyId: 'editor-note-body'
+            bodyId: 'editor-note-body',
+            isQuickLinkType: UI.isQuickLinkCategory(activeCategory)
         });
-        
-        const inputs = ['edit-visibility', 'edit-status', 'edit-category', 'edit-start-date', 'edit-start-time', 'edit-end-date', 'edit-end-time', 'edit-recurring'];
-        inputs.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                el.addEventListener('input', () => {
-                    this.markInteracted();
-                    this.updateEditorSizeLabel();
-                    this.triggerAutoSave();
-                });
-                el.addEventListener('change', () => {
-                    this.markInteracted();
-                    this.updateEditorSizeLabel();
-                    if (id === 'edit-status') this.updateArchiveToggleUI();
-                    this.triggerAutoSave();
-                });
-            }
+
+        const onEditorChange = () => {
+            this.markInteracted();
+            this.updateEditorSizeLabel();
+            this.triggerAutoSave();
+        };
+
+        UI.bindNoteEditorShell(this.mountZone, item, {
+            showConfig: true,
+            localOnly: true,
+            refresh: () => this.refreshEditorNoteBody(),
+            onChange: onEditorChange,
+            onConfigChange: onEditorChange,
+            onStatusChange: () => this.updateArchiveToggleUI(),
+            bindDateDefaults: (dateId, timeId) => this.bindDateInputDefaults(dateId, timeId),
+            setupColorPalette: () => this.setupColorPalette(item),
+            isQuickLinkType: false
         });
-        
-        this.setupColorPalette(item);
-        this.bindDateInputDefaults('edit-start-date', 'edit-start-time');
-        this.bindDateInputDefaults('edit-end-date', 'edit-end-time');
+
+        document.getElementById('edit-category')?.addEventListener('change', () => this.refreshEditorNoteBody());
+
         this.syncEditorTheme(resolveNoteColor(item.backgroundColor));
-        this.bindCollapsable('config-section-header', 'config-section', true);
-        this.bindEditorNoteInteractions();
-    },
-    
-    bindCollapsable(headerId, sectionId, startCollapsed = false) {
-        const header = document.getElementById(headerId);
-        const section = document.getElementById(sectionId);
-        if (!header || !section) return;
-
-        const toggle = header.querySelector('.collapsable-toggle');
-        if (startCollapsed) {
-            section.classList.add('collapsed');
-            toggle?.classList.add('collapsed');
-        }
-
-        header.addEventListener('click', () => {
-            section.classList.toggle('collapsed');
-            toggle?.classList.toggle('collapsed');
-        });
     },
 
     syncEditorTheme(backgroundColor) {

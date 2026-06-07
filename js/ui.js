@@ -303,7 +303,7 @@ export const UI = {
             canvasScrollTop: canvas.scrollTop,
             cardBodies: [...canvas.querySelectorAll('.mini-card[data-id]')].map((card) => ({
                 id: card.dataset.id,
-                scrollTop: card.querySelector('.card-body')?.scrollTop ?? 0
+                scrollTop: (card.querySelector('.editor-note-body') || card.querySelector('.card-body'))?.scrollTop ?? 0
             }))
         };
     },
@@ -313,7 +313,7 @@ export const UI = {
         canvas.scrollTop = state.canvasScrollTop ?? 0;
         state.cardBodies?.forEach(({ id, scrollTop }) => {
             const card = canvas.querySelector(`.mini-card[data-id="${id}"]`);
-            const body = card?.querySelector('.card-body');
+            const body = card?.querySelector('.editor-note-body') || card?.querySelector('.card-body');
             if (body) body.scrollTop = scrollTop;
         });
     },
@@ -404,6 +404,8 @@ export const UI = {
         } else {
             this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
         }
+        this.applyItemCardTheme(card, item);
+        card.style.borderLeftColor = categoryColor;
 
         this.restoreScrollState(canvas, scrollState);
         return true;
@@ -842,7 +844,25 @@ export const UI = {
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     },
 
-    buildNoteBodyHtml(item, { canEdit = false, alwaysShowChecklist = false } = {}) {
+    isQuickLinkCategory(categoryName) {
+        return String(categoryName || '').trim().toLowerCase() === 'quick links';
+    },
+
+    buildExpandedLinksHtml(item) {
+        const activeLinks = (item.steps || []).filter((step) => step.completed && String(step.text || '').trim());
+        if (!activeLinks.length) {
+            return '<div class="expanded-links empty">No active links. Check boxes in editor to display.</div>';
+        }
+        const linksMarkup = activeLinks.map((link) => {
+            let url = link.text.trim();
+            if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+            const cleanLabel = link.text.replace(/^(https?:\/\/)?(www\.)?/, '');
+            return `<a href="${this.escapeAttr(url)}" target="_blank" rel="noopener noreferrer" class="quicklink-anchor-row" title="Navigate to ${this.escapeAttr(url)}">${this.escapeHTML(cleanLabel)}</a>`;
+        }).join('');
+        return `<div class="expanded-links">${linksMarkup}</div>`;
+    },
+
+    buildNoteBodyHtml(item, { canEdit = false, alwaysShowChecklist = false, isQuickLinkType = false } = {}) {
         let html = '';
         const hasContent = item.content && item.content.trim();
         const showContent = hasContent
@@ -854,11 +874,25 @@ export const UI = {
                 : `<div class="card-content-preview">${this.escapeHTML(item.content)}</div>`;
         }
 
-        const showChecklist = (alwaysShowChecklist && canEdit)
-            || (!alwaysShowChecklist && (canEdit || (item.type === 'checklist' && item.steps && item.steps.length > 0)));
+        const showChecklist = !isQuickLinkType && (
+            (alwaysShowChecklist && canEdit)
+            || (!alwaysShowChecklist && (canEdit || (item.type === 'checklist' && item.steps && item.steps.length > 0)))
+        );
         if (showChecklist) {
             if (!item.steps) item.steps = [];
             html += this.buildExpandedChecklistHtml(item, canEdit);
+        }
+        return html;
+    },
+
+    buildNoteBodySectionHtml(item, {
+        showQuickLinksPreview = false,
+        isQuickLinkType = false,
+        ...bodyOptions
+    } = {}) {
+        const html = this.buildNoteBodyHtml(item, { ...bodyOptions, isQuickLinkType });
+        if (showQuickLinksPreview || isQuickLinkType) {
+            return html + this.buildExpandedLinksHtml(item);
         }
         return html;
     },
@@ -975,12 +1009,16 @@ export const UI = {
         categoryOptionsHtml = '',
         startParts = {},
         endParts = {},
-        bodyId = ''
+        bodyId = '',
+        isQuickLinkType = false
     } = {}) {
         const titleHtml = this.buildNoteTitleHtml(item, canEdit);
-        const bodyHtml = this.buildNoteBodyHtml(item, {
+        const quickLinkCat = isQuickLinkType;
+        const bodyHtml = this.buildNoteBodySectionHtml(item, {
             canEdit,
-            alwaysShowChecklist: alwaysShowChecklist || canEdit
+            alwaysShowChecklist: alwaysShowChecklist || canEdit,
+            isQuickLinkType: quickLinkCat && metaMode === 'inline',
+            showQuickLinksPreview: quickLinkCat
         });
         const configHtml = showConfig
             ? this.buildNoteConfigPanelHtml(item, { categoryOptionsHtml, startParts, endParts })
@@ -1016,32 +1054,79 @@ export const UI = {
         localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
     },
 
-    revealNoteOnBoard(item, hiddenCategories = []) {
-        if (!item?.id) return false;
-        this.markNoteExpanded(item.id);
+    revealNoteOnBoard(item) {
+        if (!item?.id) return;
+        window.dispatchEvent(new CustomEvent('editor:reveal_on_board', { detail: item }));
+    },
 
-        const canvas = document.getElementById('app-canvas');
-        if (!canvas) return false;
+    bindCollapsable(headerId, sectionId, startCollapsed = false) {
+        const header = document.getElementById(headerId);
+        const section = document.getElementById(sectionId);
+        if (!header || !section) return;
 
-        const activeCategories = readStoredCategories()
-            .filter((cat) => !hiddenCategories.includes(cat.name));
-        const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
-        let card = canvas.querySelector(`.mini-card[data-id="${item.id}"]`);
-
-        if (card) {
-            if (!card.classList.contains('expanded')) {
-                this.applyCardExpandCollapse(card, item, true, activeCategories, targetCatName, categoryColor);
-            } else {
-                this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
-            }
-            requestAnimationFrame(() => {
-                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            });
-            return true;
+        const toggle = header.querySelector('.collapsable-toggle');
+        if (startCollapsed) {
+            section.classList.add('collapsed');
+            toggle?.classList.add('collapsed');
         }
 
-        window.dispatchEvent(new CustomEvent('editor:reveal_on_board', { detail: item }));
-        return false;
+        header.addEventListener('click', () => {
+            section.classList.toggle('collapsed');
+            toggle?.classList.toggle('collapsed');
+        });
+    },
+
+    bindNoteEditorShell(root, item, {
+        showConfig = false,
+        localOnly = false,
+        refresh = () => {},
+        onChange = () => {},
+        onConfigChange = () => {},
+        onStatusChange = () => {},
+        bindDateDefaults = null,
+        setupColorPalette = null,
+        stopMousedownPropagation = false,
+        isQuickLinkType = false
+    } = {}) {
+        const shell = root?.querySelector?.('.editor-note-shell') || root;
+        if (!shell || !item) return;
+
+        const interactionOptions = {
+            refresh,
+            localOnly,
+            onChange,
+            stopMousedownPropagation,
+            isQuickLinkType
+        };
+        const header = shell.querySelector('.editor-note-header');
+        const body = shell.querySelector('.editor-note-body');
+        if (header) this.attachNoteBodyInteractions(header, item, interactionOptions);
+        if (body) this.attachNoteBodyInteractions(body, item, interactionOptions);
+
+        if (localOnly && onChange) {
+            shell.querySelectorAll('.card-inline-edit').forEach((el) => {
+                el.addEventListener('input', onChange);
+            });
+        }
+
+        if (!showConfig) return;
+
+        ['edit-visibility', 'edit-status', 'edit-category', 'edit-start-date', 'edit-start-time', 'edit-end-date', 'edit-end-time'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.addEventListener('input', onConfigChange);
+            el.addEventListener('change', () => {
+                onConfigChange();
+                if (id === 'edit-status' && onStatusChange) onStatusChange();
+            });
+        });
+
+        if (bindDateDefaults) {
+            bindDateDefaults('edit-start-date', 'edit-start-time');
+            bindDateDefaults('edit-end-date', 'edit-end-time');
+        }
+        this.bindCollapsable('config-section-header', 'config-section', true);
+        if (setupColorPalette) setupColorPalette(item);
     },
 
     renderCompactCard(card, item, activeCategories, targetCatName, categoryColor) {
@@ -1143,7 +1228,8 @@ export const UI = {
             footerDragZone: dragZone,
             metaMode: 'inline',
             targetCatName,
-            visibilityBadgeColor
+            visibilityBadgeColor,
+            isQuickLinkType: this.isQuickLinkCategory(targetCatName)
         });
 
         this.attachCardActions(card, item, {
@@ -1151,7 +1237,11 @@ export const UI = {
             targetCatName,
             categoryColor
         });
-        this.attachExpandedCardInteractions(card, item, activeCategories, targetCatName, categoryColor);
+        this.bindNoteEditorShell(card, item, {
+            refresh: () => this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor),
+            stopMousedownPropagation: card.dataset.freeform === '1',
+            isQuickLinkType: this.isQuickLinkCategory(targetCatName)
+        });
         this.finalizeFreeformCard(card);
         this.syncCardDraggable(card);
     },
@@ -1207,7 +1297,8 @@ export const UI = {
 
     handleInlineEditArrowNav(e, root, fieldEl) {
         if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return false;
-        const fields = this.getInlineEditSequence(root);
+        const sequenceRoot = fieldEl.closest('.editor-note-shell') || root;
+        const fields = this.getInlineEditSequence(sequenceRoot);
         const idx = fields.indexOf(fieldEl);
         if (idx < 0) return false;
 
@@ -1271,7 +1362,8 @@ export const UI = {
         refresh = () => {},
         localOnly = false,
         onChange = () => {},
-        stopMousedownPropagation = false
+        stopMousedownPropagation = false,
+        isQuickLinkType = false
     } = {}) {
         const applyMutate = (mutator, { persist = !localOnly } = {}) => {
             if (persist) {
@@ -1331,7 +1423,7 @@ export const UI = {
             });
         }
 
-        if (root.querySelector('.expanded-checklist')) {
+        if (!isQuickLinkType && root.querySelector('.expanded-checklist')) {
             if (!item.steps) item.steps = [];
 
             root.querySelector('.expanded-checklist-add-btn')?.addEventListener('click', (e) => {
@@ -1500,21 +1592,6 @@ export const UI = {
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
         });
-    },
-
-    attachExpandedCardInteractions(card, item, activeCategories, targetCatName, categoryColor) {
-        const refresh = () => {
-            this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
-        };
-        const shell = card.querySelector('.editor-note-shell') || card;
-        const header = shell.querySelector('.editor-note-header');
-        const body = shell.querySelector('.editor-note-body');
-        const interactionOptions = {
-            refresh,
-            stopMousedownPropagation: card.dataset.freeform === '1'
-        };
-        if (header) this.attachNoteBodyInteractions(header, item, interactionOptions);
-        if (body) this.attachNoteBodyInteractions(body, item, interactionOptions);
     },
 
     getChecklistCollapsedKeys() {
