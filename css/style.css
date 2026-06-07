@@ -1533,6 +1533,10 @@ body {
     border-radius: 8px;
 }
 
+.color-picker-subpanel.is-hidden {
+    pointer-events: none;
+}
+
 .color-picker-back {
     display: inline-flex;
     align-items: center;
@@ -3427,6 +3431,45 @@ textarea.form-input {
 
 .editor-note-shell {
     font-size: calc(1em * var(--editor-zoom, 1));
+}
+
+.editor-body-convert-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 0.45rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.editor-convert-btn {
+    font-size: 0.62rem;
+    padding: 0.2rem 0.45rem;
+    min-height: 24px;
+}
+
+.editor-convert-btn--ghost {
+    margin-left: auto;
+    opacity: 0.85;
+}
+
+.editor-convert-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.form-group--checkbox .checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.72rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.form-group--checkbox input[type="checkbox"] {
+    margin: 0;
 }
 
 .format-toolbar {

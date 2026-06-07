@@ -1,6 +1,13 @@
 import { readStoredCategories } from './categories.js';
 import { applyCardTheme } from './cardTheme.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor, THEME_DEFAULT_COLOR } from './colorPicker.js';
+import {
+    contentHasConvertibleText,
+    convertChecklistToContent,
+    convertContentToChecklist,
+    SOFT_BREAK,
+    stepsHaveConvertibleText
+} from './noteBodyConversion.js';
 import { hasRichMarkup, sanitizeRichHtml, stripRichText } from './richText.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
@@ -376,7 +383,42 @@ export const UI = {
 
     renderRichHtml(str) {
         if (!str) return '';
-        return hasRichMarkup(str) ? sanitizeRichHtml(str) : this.escapeHTML(str);
+        const prepared = String(str).replace(/\u2028/g, '<br>');
+        return hasRichMarkup(prepared) ? sanitizeRichHtml(prepared) : this.escapeHTML(prepared);
+    },
+
+    prepareContentForEdit(content) {
+        const prepared = String(content || '').replace(/\u2028/g, '<br>');
+        return hasRichMarkup(prepared) ? sanitizeRichHtml(prepared) : this.escapeHTML(prepared);
+    },
+
+    resolveEditorBodyLayoutUnchecked(item) {
+        if (stripRichText(item?.content || '').trim()) return 'content';
+        if (stepsHaveConvertibleText(item?.steps)) return 'checklist';
+        return 'both';
+    },
+
+    syncItemBodyFromDom(root, item) {
+        root?.querySelectorAll('.card-inline-edit').forEach((el) => {
+            const field = el.dataset.field;
+            if (field === 'title' || field === 'content' || field === 'step-text') {
+                this.syncInlineFieldToItem(el, item);
+            }
+        });
+    },
+
+    insertTextAtCaret(el, text) {
+        if (!el) return;
+        el.focus();
+        const sel = window.getSelection();
+        if (!sel?.rangeCount) return;
+        const range = sel.getRangeAt(0);
+        if (!el.contains(range.startContainer)) return;
+        range.deleteContents();
+        range.insertNode(document.createTextNode(text));
+        range.collapse(false);
+        sel.removeAllRanges();
+        sel.addRange(range);
     },
 
     canInlineEditText(text, { richEdit = false } = {}) {
@@ -878,17 +920,47 @@ export const UI = {
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     },
 
+    buildNoteBodyConvertBarHtml(item, { canEdit = false } = {}) {
+        if (!canEdit) return '';
+        const layout = item.editorBodyLayout || 'both';
+        const canToChecklist = contentHasConvertibleText(item.content);
+        const canToContent = stepsHaveConvertibleText(item.steps);
+        const showBothBtn = layout !== 'both';
+        return `
+            <div class="editor-body-convert-bar" role="toolbar" aria-label="Convert note body">
+                <button type="button" class="card-act editor-convert-btn" data-convert="to-checklist" title="Move content into checklist items" aria-label="To checklist"${canToChecklist ? '' : ' disabled'}>To checklist</button>
+                <button type="button" class="card-act editor-convert-btn" data-convert="to-content" title="Move checklist into note content" aria-label="To notes"${canToContent ? '' : ' disabled'}>To notes</button>
+                ${showBothBtn ? '<button type="button" class="card-act editor-convert-btn editor-convert-btn--ghost" data-convert="show-both" title="Show content and checklist together" aria-label="Show both">Show both</button>' : ''}
+            </div>
+        `;
+    },
+
     buildNoteBodyHtml(item, { canEdit = false, alwaysShowChecklist = false, richEdit = false } = {}) {
         let html = '';
+        const layout = item.editorBodyLayout || 'both';
         const hasContent = stripRichText(item.content || '').trim();
-        const showContent = hasContent
-            || (canEdit && item.type === 'note')
-            || (canEdit && alwaysShowChecklist);
+
+        let showContent;
+        let showChecklist;
+        if (canEdit) {
+            showContent = layout !== 'checklist'
+                && (hasContent || layout === 'both' || layout === 'content');
+            showChecklist = layout !== 'content'
+                && (layout === 'both' || layout === 'checklist' || (item.steps && item.steps.length > 0));
+        } else {
+            showContent = !!hasContent;
+            showChecklist = item.type === 'checklist' && item.steps && item.steps.length > 0;
+        }
+
+        if (canEdit) {
+            html += this.buildNoteBodyConvertBarHtml(item, { canEdit });
+        }
+
         if (showContent) {
             const content = item.content || '';
-            const rich = hasRichMarkup(content);
+            const rich = hasRichMarkup(content) || content.includes('\u2028');
             if (canEdit && (richEdit || this.canInlineEditText(content, { richEdit }))) {
-                const inner = richEdit ? sanitizeRichHtml(content) : this.escapeHTML(content);
+                const inner = richEdit ? this.prepareContentForEdit(content) : this.escapeHTML(content.replace(/\u2028/g, '\n'));
                 const ce = richEdit ? 'true' : 'plaintext-only';
                 const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
                 html += `<div class="card-content-preview card-inline-edit${richClasses}" contenteditable="${ce}" spellcheck="false" data-field="content" data-placeholder="Add note…">${inner}</div>`;
@@ -898,8 +970,6 @@ export const UI = {
             }
         }
 
-        const showChecklist = (alwaysShowChecklist && canEdit)
-            || (!alwaysShowChecklist && (canEdit || (item.type === 'checklist' && item.steps && item.steps.length > 0)));
         if (showChecklist) {
             if (!item.steps) item.steps = [];
             html += this.buildExpandedChecklistHtml(item, canEdit, { richEdit });
@@ -1028,6 +1098,12 @@ export const UI = {
                                 <span class="color-picker-trigger-label">Choose color</span>
                             </button>
                         </div>
+                        <div class="form-group form-group--compact form-group--checkbox">
+                            <label class="checkbox-row">
+                                <input type="checkbox" id="edit-show-both-panes" ${(item.editorBodyLayout || 'both') === 'both' ? 'checked' : ''}>
+                                <span>Show content and checklist together</span>
+                            </label>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -1135,6 +1211,79 @@ export const UI = {
         return true;
     },
 
+    bindBodyConvertBar(shell, item, {
+        refresh = () => {},
+        localOnly = false,
+        onChange = () => {}
+    } = {}) {
+        if (!shell || shell.dataset.convertBound) return;
+        shell.dataset.convertBound = '1';
+
+        shell.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-convert]');
+            if (!btn || !shell.contains(btn) || btn.disabled) return;
+            e.preventDefault();
+            e.stopPropagation();
+
+            const action = btn.dataset.convert;
+            const applyMutate = (mutator, { persist = !localOnly } = {}) => {
+                if (persist) {
+                    this.mutateItem(item, mutator, { preserveView: true, skipRerender: true, localOnly });
+                    if (localOnly) onChange();
+                } else {
+                    mutator(item);
+                    if (localOnly) onChange();
+                }
+            };
+
+            const syncAndNormalize = (it) => {
+                this.syncItemBodyFromDom(shell, it);
+                Object.assign(it, normalizeItemForSave(it));
+            };
+
+            if (action === 'to-checklist') {
+                if (!contentHasConvertibleText(item.content)) return;
+                applyMutate((it) => {
+                    syncAndNormalize(it);
+                    convertContentToChecklist(it, () => this.createBlankChecklistStep());
+                    Object.assign(it, normalizeItemForSave(it));
+                });
+            } else if (action === 'to-content') {
+                if (!stepsHaveConvertibleText(item.steps)) return;
+                applyMutate((it) => {
+                    syncAndNormalize(it);
+                    convertChecklistToContent(it);
+                    Object.assign(it, normalizeItemForSave(it));
+                });
+            } else if (action === 'show-both') {
+                applyMutate((it) => {
+                    syncAndNormalize(it);
+                    it.editorBodyLayout = 'both';
+                });
+            } else {
+                return;
+            }
+
+            const bothEl = document.getElementById('edit-show-both-panes');
+            if (bothEl) {
+                bothEl.checked = item.editorBodyLayout === 'both';
+            }
+
+            refresh();
+
+            const body = shell.querySelector('.editor-note-body');
+            requestAnimationFrame(() => {
+                if (action === 'to-checklist') {
+                    const first = body?.querySelector('[data-field="step-text"].card-inline-edit');
+                    if (first) this.focusInlineEdit(first, 'start');
+                } else if (action === 'to-content') {
+                    const content = body?.querySelector('[data-field="content"].card-inline-edit');
+                    if (content) this.focusInlineEdit(content, 'start');
+                }
+            });
+        });
+    },
+
     bindFormatPanel(shell, { onChange = () => {} } = {}) {
         if (!shell) return;
         this.bindCollapsable('format-section-header', 'format-section', true);
@@ -1197,8 +1346,20 @@ export const UI = {
         }
 
         if (showFormat) this.bindFormatPanel(shell, { onChange });
+        this.bindBodyConvertBar(shell, item, { refresh, localOnly, onChange });
 
         if (!showConfig) return;
+
+        const bothPanesEl = document.getElementById('edit-show-both-panes');
+        bothPanesEl?.addEventListener('change', () => {
+            if (bothPanesEl.checked) {
+                item.editorBodyLayout = 'both';
+            } else {
+                item.editorBodyLayout = this.resolveEditorBodyLayoutUnchecked(item);
+            }
+            onConfigChange();
+            refresh();
+        });
 
         ['edit-visibility', 'edit-status', 'edit-category', 'edit-start-date', 'edit-start-time', 'edit-end-date', 'edit-end-time'].forEach((id) => {
             const el = document.getElementById(id);
@@ -1522,6 +1683,13 @@ export const UI = {
                         e.preventDefault();
                         e.stopPropagation();
                         document.execCommand('undo');
+                        return;
+                    }
+                    if (el.dataset.field === 'content' && e.key === 'Enter') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this.insertTextAtCaret(el, e.shiftKey ? SOFT_BREAK : '\n');
+                        if (localOnly) onChange();
                         return;
                     }
                     if (el.dataset.field === 'step-text' && e.key === 'Enter') {

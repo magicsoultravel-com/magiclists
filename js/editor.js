@@ -213,7 +213,12 @@ export const Editor = {
             ),
             isRecurring: this.activeItem.isRecurring === true,
             hideFromCalendar: this.activeItem.hideFromCalendar === true,
-            hiddenFromBoard: this.activeItem.hiddenFromBoard === true
+            hiddenFromBoard: this.activeItem.hiddenFromBoard === true,
+            editorBodyLayout: (() => {
+                const bothEl = document.getElementById('edit-show-both-panes');
+                if (bothEl?.checked) return 'both';
+                return UI.resolveEditorBodyLayoutUnchecked(this.activeItem);
+            })()
         };
         return normalizeItemForSave(data);
     },

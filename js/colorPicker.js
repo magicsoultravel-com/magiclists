@@ -271,15 +271,17 @@ export const ColorPicker = {
         const body = popover.querySelector('.color-picker-body');
         const subpanel = popover.querySelector('.color-picker-subpanel');
 
-        popover.querySelectorAll('.color-picker-presets .color-picker-tile[data-color]').forEach((btn) => {
-            btn.addEventListener('mousedown', (e) => e.stopPropagation());
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.closeSubPicker({ persist: true });
-                const color = btn.dataset.color || '';
-                this.selectColor(color, onSelect);
-                this.close();
-            });
+        const presetGrid = popover.querySelector('.color-picker-grid--presets');
+        presetGrid?.addEventListener('mousedown', (e) => {
+            if (e.target.closest('.color-picker-tile[data-color]')) e.stopPropagation();
+        });
+        presetGrid?.addEventListener('click', (e) => {
+            const btn = e.target.closest('.color-picker-tile[data-color]');
+            if (!btn) return;
+            e.stopPropagation();
+            this.closeSubPicker({ persist: true });
+            this.selectColor(btn.dataset.color || '', onSelect);
+            this.close();
         });
 
         popover.querySelectorAll('.color-picker-tile--user').forEach((btn) => {
