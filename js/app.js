@@ -1,5 +1,5 @@
 ﻿import { API } from './api.js';
-import { UI, ACTION_ICONS } from './ui.js';
+import { UI, ACTION_ICONS, createNoteId } from './ui.js';
 import { Editor } from './editor.js';
 import { DragDropEngine } from './dragdrop.js';
 import { ToolsManager } from './toolsManager.js';
@@ -102,14 +102,16 @@ class Application {
     }
 
     checkAuthSession() {
-        const cachedToken = localStorage.getItem('admin_token');
-        if (cachedToken) {
+        const cachedToken = localStorage.getItem('admin_token')?.trim() || '';
+        const validToken = API._getLocalDB().auth?.admin_token || '';
+        if (cachedToken && cachedToken === validToken) {
             AppState.user.isLoggedIn = true;
             AppState.user.token = cachedToken;
-        } else {
-            AppState.user.isLoggedIn = false;
-            AppState.user.token = null;
+            return;
         }
+        if (cachedToken) localStorage.removeItem('admin_token');
+        AppState.user.isLoggedIn = false;
+        AppState.user.token = null;
     }
 
     loadCategoriesStore() {
@@ -213,7 +215,11 @@ class Application {
 
     updateFabVisibility() {
         const fab = document.getElementById('fab-create');
-        fab?.classList.toggle('is-hidden', !AppState.user.isLoggedIn);
+        if (!fab) return;
+        fab.classList.remove('is-hidden');
+        const needsLogin = !AppState.user.isLoggedIn;
+        fab.title = needsLogin ? 'New note (login required)' : 'New note';
+        fab.setAttribute('aria-label', fab.title);
     }
 
     executeDataBackupExport() {
@@ -350,7 +356,10 @@ class Application {
         });
 
         window.addEventListener('item:mutation_requested', async (e) => {
-            if (!AppState.user.isLoggedIn) return;
+            if (!AppState.user.isLoggedIn) {
+                alert('Login required to save notes. Use Quick actions → Login.');
+                return;
+            }
             const detail = e.detail;
             const item = detail?.item ?? detail;
             const preserveView = detail?.preserveView === true;
@@ -364,7 +373,10 @@ class Application {
                     : null;
 
             const success = await API.saveItem(item, AppState.user.token);
-            if (!success) return;
+            if (!success) {
+                alert('Could not save note. Log in with the correct admin token (default dev: dev-admin-secret-2026).');
+                return;
+            }
 
             if (beforeSnapshot) {
                 UndoManager.recordItemChange(beforeSnapshot, item, {
@@ -416,7 +428,7 @@ class Application {
         window.addEventListener('calendar:add_note', (e) => {
             const defaultDate = e.detail;
             const newItem = {
-                id: `item_${Math.floor(Date.now() / 1000)}`,
+                id: createNoteId(),
                 owner_id: "admin",
                 visibility: "private",
                 type: "note",

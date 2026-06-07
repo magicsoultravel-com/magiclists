@@ -71,6 +71,10 @@ export function deriveNoteTitle({ title = '', content = '', steps = [] } = {}) {
     return 'Untitled';
 }
 
+export function createNoteId() {
+    return `item_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
 export function noteHasSavableContent({ title = '', content = '', steps = [] } = {}) {
     if (String(title || '').trim()) return true;
     if (String(content || '').trim()) return true;
@@ -700,25 +704,45 @@ export const UI = {
 
         if (dimensions) {
             this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
-        } else {
+        } else if (expanded) {
             this.applyFreeformSize(card);
         }
     },
 
     applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor) {
+        const isFreeform = card.dataset.freeform === '1';
         card.classList.add('card-state-changing');
+
+        const cleanup = () => {
+            card.classList.remove('card-state-changing', 'card-animate-expand', 'card-animate-collapse');
+        };
+
         if (expanded) {
             card.classList.remove('compact');
             card.classList.add('expanded', 'card-animate-expand');
             this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
-        } else {
-            card.classList.remove('expanded', 'card-animate-expand');
-            card.classList.add('compact', 'card-animate-collapse');
-            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
+            card.addEventListener('animationend', cleanup, { once: true });
+            setTimeout(cleanup, 400);
+            return;
         }
-        const cleanup = () => {
-            card.classList.remove('card-state-changing', 'card-animate-expand', 'card-animate-collapse');
-        };
+
+        if (isFreeform) {
+            card.classList.add('card-animate-collapse');
+            const finishCollapse = () => {
+                card.classList.remove('expanded', 'card-animate-expand', 'card-animate-collapse');
+                card.classList.add('compact');
+                this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
+                cleanup();
+                this.applyFreeformSize(card);
+            };
+            card.addEventListener('animationend', finishCollapse, { once: true });
+            setTimeout(finishCollapse, 400);
+            return;
+        }
+
+        card.classList.remove('expanded', 'card-animate-expand');
+        card.classList.add('compact', 'card-animate-collapse');
+        this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
         card.addEventListener('animationend', cleanup, { once: true });
         setTimeout(cleanup, 400);
     },

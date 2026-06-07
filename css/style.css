@@ -392,7 +392,7 @@ body {
     border-right: 1px solid var(--border-color);
     overflow: hidden;
     font-size: 0.66rem;
-    transition: width 0.2s ease, padding 0.2s ease, opacity 0.15s ease;
+    transition: width 0.24s cubic-bezier(0.22, 1, 0.36, 1), padding 0.24s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
 }
 
 .side-panel-brand-host {
@@ -401,27 +401,33 @@ body {
     padding: 0 0 0.35rem;
     margin-bottom: 0.15rem;
     border-bottom: 1px solid var(--border-color);
+    opacity: 0;
+    transform: translateY(-4px);
+    transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .side-panel-brand-host.is-visible {
     display: block;
+    opacity: 1;
+    transform: translateY(0);
 }
 
 .side-panel-brand-host .control-bar-brand {
     padding: 0 0.05rem;
 }
 
-.side-panel-brand-host .app-brand {
-    font-size: 0.95rem;
-}
-
 .control-bar-brand-host {
     display: none;
     flex-shrink: 0;
+    opacity: 0;
+    transform: translateX(-6px);
+    transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .control-bar-brand-host.is-visible {
     display: block;
+    opacity: 1;
+    transform: translateX(0);
 }
 
 .side-panel-scroll {
@@ -688,24 +694,13 @@ body {
 }
 
 .mini-card.card-animate-collapse {
-    animation: cardCollapseIn 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+    animation: cardExpandIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) reverse forwards;
 }
 
 @keyframes cardExpandIn {
     from {
         opacity: 0.72;
         transform: scale(0.96);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
-}
-
-@keyframes cardCollapseIn {
-    from {
-        opacity: 0.85;
-        transform: scale(1.02);
     }
     to {
         opacity: 1;
@@ -799,10 +794,24 @@ body {
     gap: 0.45rem;
     flex-shrink: 0;
     min-width: 0;
+    transition: gap 0.22s ease, opacity 0.22s ease;
+}
+
+.control-bar-brand.is-brand-animating {
+    pointer-events: none;
 }
 
 .control-bar-menu-btn {
     flex-shrink: 0;
+    transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
+}
+
+.control-bar-brand.is-in-sidebar .control-bar-menu-btn {
+    transform: scale(0.94);
+}
+
+.control-bar-brand.is-in-header .control-bar-menu-btn {
+    transform: scale(1);
 }
 
 .app-brand {
@@ -812,6 +821,12 @@ body {
     color: var(--text-main);
     flex-shrink: 0;
     line-height: 1;
+    transition: font-size 0.24s cubic-bezier(0.22, 1, 0.36, 1), letter-spacing 0.24s ease, opacity 0.22s ease;
+}
+
+.control-bar-brand.is-in-sidebar .app-brand {
+    font-size: 0.95rem;
+    letter-spacing: -0.025em;
 }
 
 #filter-controls .btn.active {

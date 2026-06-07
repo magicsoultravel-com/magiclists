@@ -2,6 +2,7 @@ import { ACTION_ICONS, CARD_ICONS, UI } from './ui.js';
 import { resolveNoteColor } from './colorPicker.js';
 
 const NOTES_LIST_SORT_KEY = 'matrix_notes_list_sort';
+const BRAND_TRANSITION_MS = 240;
 
 export const SidePanel = {
     panel: null,
@@ -9,6 +10,7 @@ export const SidePanel = {
     appState: null,
     notesListSort: null,
     notesListSortBound: false,
+    brandAnim: null,
 
     init(appState) {
         this.appState = appState;
@@ -18,26 +20,70 @@ export const SidePanel = {
 
         const stored = localStorage.getItem('matrix_panel_collapsed');
         const collapsed = stored === 'true';
-        this.setCollapsed(collapsed);
+        this.setCollapsed(collapsed, false);
 
         this.toggleBtn?.addEventListener('click', () => this.toggle());
     },
 
-    moveBrand(collapsed) {
+    moveBrand(collapsed, animate = true) {
         const brandWrap = document.querySelector('.control-bar-brand');
         const sidebarHost = document.getElementById('side-panel-brand-host');
         const controlHost = document.getElementById('control-bar-brand-host');
         if (!brandWrap || !sidebarHost || !controlHost) return;
+
         const target = collapsed ? controlHost : sidebarHost;
+        const fromRect = animate ? brandWrap.getBoundingClientRect() : null;
+
+        sidebarHost.classList.toggle('is-visible', !collapsed);
+        controlHost.classList.toggle('is-visible', collapsed);
+
         if (brandWrap.parentElement !== target) {
             target.appendChild(brandWrap);
         }
-        sidebarHost.classList.toggle('is-visible', !collapsed);
-        controlHost.classList.toggle('is-visible', collapsed);
+
+        brandWrap.classList.toggle('is-in-sidebar', !collapsed);
+        brandWrap.classList.toggle('is-in-header', collapsed);
+
+        if (!animate || !fromRect) return;
+
+        const toRect = brandWrap.getBoundingClientRect();
+        const dx = fromRect.left - toRect.left;
+        const dy = fromRect.top - toRect.top;
+        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+
+        this.brandAnim?.cancel();
+        brandWrap.classList.add('is-brand-animating');
+        this.brandAnim = brandWrap.animate(
+            [
+                { transform: `translate(${dx}px, ${dy}px)`, opacity: 0.72 },
+                { transform: 'translate(0, 0)', opacity: 1 }
+            ],
+            {
+                duration: BRAND_TRANSITION_MS,
+                easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
+                fill: 'none'
+            }
+        );
+        this.brandAnim.onfinish = () => {
+            brandWrap.classList.remove('is-brand-animating');
+            this.brandAnim = null;
+        };
     },
 
-    setCollapsed(collapsed) {
-        this.moveBrand(collapsed);
+    setCollapsed(collapsed, animate = true) {
+        if (!collapsed && animate) {
+            this.panel?.classList.remove('is-collapsed');
+            this.toggleBtn?.setAttribute('aria-expanded', 'true');
+            localStorage.setItem('matrix_panel_collapsed', 'false');
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    this.moveBrand(false, true);
+                });
+            });
+            return;
+        }
+
+        this.moveBrand(collapsed, animate);
         this.panel?.classList.toggle('is-collapsed', collapsed);
         this.toggleBtn?.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         localStorage.setItem('matrix_panel_collapsed', collapsed ? 'true' : 'false');

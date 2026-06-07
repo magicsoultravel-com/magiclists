@@ -1,6 +1,6 @@
 ﻿import { applyCardTheme } from './cardTheme.js';
 import { ColorPicker, PALETTE_NOTE, randomNoteColor, resolveNoteColor } from './colorPicker.js';
-import { CARD_ICONS, UI, computeNoteSizeKb, noteHasSavableContent, normalizeItemForSave } from './ui.js';
+import { CARD_ICONS, UI, computeNoteSizeKb, createNoteId, noteHasSavableContent, normalizeItemForSave } from './ui.js';
 
 export const Editor = {
     overlay: null,
@@ -22,8 +22,13 @@ export const Editor = {
         document.getElementById('modal-close-btn')?.addEventListener('click', () => this.closeAndSave());
         const commitAndClose = () => {
             this.markInteracted();
-            this.autoSave();
-            this.closeAndSave();
+            if (this.autoSaveTimer) {
+                clearTimeout(this.autoSaveTimer);
+                this.autoSaveTimer = null;
+            }
+            this.syncActiveItemFromDom();
+            this.persistNote({ force: true });
+            this.animateEditorClose(() => this.resetEditorState());
         };
         this.saveBtn?.addEventListener('click', commitAndClose);
         this.approveBtn?.addEventListener('click', commitAndClose);
@@ -43,7 +48,7 @@ export const Editor = {
         this.isNewUnsavedNote = isNew;
         
         this.activeItem = item ? JSON.parse(JSON.stringify(item)) : {
-            id: `item_${Math.floor(Date.now() / 1000)}`,
+            id: createNoteId(),
             owner_id: "admin",
             visibility: "private",
             type: "note",
@@ -116,20 +121,26 @@ export const Editor = {
         }, 1000);
     },
     
+    persistNote({ force = false } = {}) {
+        if (!this.activeItem) return false;
+        if (!force && !this.hasUserInteracted) return false;
+
+        const currentData = this.collectFormData();
+        if (!noteHasSavableContent(currentData) && this.isNewUnsavedNote) return false;
+
+        const unchanged = JSON.stringify(currentData) === JSON.stringify(this.activeItem);
+        if (!force && unchanged) return true;
+
+        this.isNewUnsavedNote = false;
+        this.activeItem = currentData;
+        window.dispatchEvent(new CustomEvent('item:mutation_requested', { detail: currentData }));
+        return true;
+    },
+
     autoSave() {
         if (!this.hasUserInteracted) return;
         if (!this.activeItem) return;
-        const currentData = this.collectFormData();
-        
-        if (!noteHasSavableContent(currentData) && this.isNewUnsavedNote) {
-            return;
-        }
-
-        this.isNewUnsavedNote = false;
-
-        if (JSON.stringify(currentData) !== JSON.stringify(this.activeItem)) {
-            this.activeItem = currentData;
-            window.dispatchEvent(new CustomEvent('item:mutation_requested', { detail: currentData }));
+        if (this.persistNote()) {
             console.log('Auto-saved at', new Date().toLocaleTimeString());
         }
     },
@@ -216,12 +227,13 @@ export const Editor = {
             clearTimeout(this.autoSaveTimer);
             this.autoSaveTimer = null;
         }
-        if (this.activeItem) this.syncActiveItemFromDom();
-
-        if (this.hasUserInteracted) {
+        if (this.activeItem) {
+            this.syncActiveItemFromDom();
             const currentData = this.collectFormData();
-            if (noteHasSavableContent(currentData) || !this.isNewUnsavedNote) {
-                this.autoSave();
+            const shouldPersist = noteHasSavableContent(currentData)
+                || (this.hasUserInteracted && !this.isNewUnsavedNote);
+            if (shouldPersist) {
+                this.persistNote({ force: true });
             }
         }
 
@@ -328,6 +340,14 @@ export const Editor = {
         const body = document.getElementById('editor-note-body');
         if (header) UI.attachNoteBodyInteractions(header, this.activeItem, options);
         if (body) UI.attachNoteBodyInteractions(body, this.activeItem, options);
+
+        this.mountZone.querySelectorAll('.card-inline-edit').forEach((el) => {
+            el.addEventListener('input', () => {
+                this.markInteracted();
+                this.updateEditorSizeLabel();
+                this.triggerAutoSave();
+            });
+        });
     },
 
     renderForm() {
@@ -343,7 +363,7 @@ export const Editor = {
         const createdLabel = this.formatCreatedDate(item.created_at);
         const sizeLabel = computeNoteSizeKb(item);
         this.archiveBtn?.classList.toggle('is-hidden', !isExistingItem);
-        this.saveBtn.innerHTML = CARD_ICONS.save;
+        if (this.saveBtn) this.saveBtn.innerHTML = CARD_ICONS.save;
         document.getElementById('modal-close-btn').innerHTML = CARD_ICONS.close;
         this.updateArchiveToggleUI();
         this.updateCalendarToggleUI();
@@ -517,8 +537,13 @@ export const Editor = {
 
     collectAndSave() {
         this.markInteracted();
-        this.autoSave();
-        this.closeAndSave();
+        if (this.autoSaveTimer) {
+            clearTimeout(this.autoSaveTimer);
+            this.autoSaveTimer = null;
+        }
+        this.syncActiveItemFromDom();
+        this.persistNote({ force: true });
+        this.animateEditorClose(() => this.resetEditorState());
     },
     
     updateArchiveToggleUI() {
