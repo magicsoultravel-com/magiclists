@@ -249,10 +249,12 @@ export const UI = {
         }));
     },
 
-    mutateItem(item, mutator, { preserveView = false, skipRerender = false } = {}) {
+    mutateItem(item, mutator, { preserveView = false, skipRerender = false, localOnly = false } = {}) {
         const beforeItem = this.snapshotItem(item);
         mutator(item);
-        this.emitItemMutation(item, { preserveView, beforeItem, skipRerender });
+        if (!localOnly) {
+            this.emitItemMutation(item, { preserveView, beforeItem, skipRerender });
+        }
     },
 
     syncInlineFieldToItem(el, item) {
@@ -719,6 +721,37 @@ export const UI = {
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     },
 
+    formatNoteListDate(item) {
+        const ts = Number(item?.updated_at || item?.created_at || 0);
+        if (!ts) return '—';
+        const d = new Date(ts * 1000);
+        if (Number.isNaN(d.getTime())) return '—';
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    },
+
+    buildNoteBodyHtml(item, { canEdit = false, isQuickLinkType = false, alwaysShowChecklist = false } = {}) {
+        let html = '';
+        const hasContent = item.content && item.content.trim();
+        const showContent = hasContent
+            || (canEdit && item.type === 'note')
+            || (canEdit && alwaysShowChecklist);
+        if (showContent) {
+            html += canEdit
+                ? `<div class="card-content-preview card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-field="content" data-placeholder="Add note…">${this.escapeHTML(item.content || '')}</div>`
+                : `<div class="card-content-preview">${this.escapeHTML(item.content)}</div>`;
+        }
+
+        const showChecklist = !isQuickLinkType && (
+            (alwaysShowChecklist && canEdit)
+            || (!alwaysShowChecklist && (canEdit || (item.type === 'checklist' && item.steps && item.steps.length > 0)))
+        );
+        if (showChecklist) {
+            if (!item.steps) item.steps = [];
+            html += this.buildExpandedChecklistHtml(item, canEdit);
+        }
+        return html;
+    },
+
     renderCompactCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
         const fullTitle = item.title || '';
         const titleAttr = this.escapeHTML(fullTitle).replace(/"/g, '&quot;');
@@ -830,22 +863,7 @@ export const UI = {
             ? `<div class="mini-card-title card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-field="title" data-placeholder="Title…" title="Click to edit">${this.escapeHTML(fullTitle)}</div>`
             : `<div class="mini-card-title" title="${titleAttr}">${this.escapeHTML(fullTitle)}</div>`;
 
-        let bodyHtml = '';
-        const hasContent = item.content && item.content.trim();
-        if (hasContent || (canEdit && item.type === 'note')) {
-            bodyHtml += canEdit
-                ? `<div class="card-content-preview card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-field="content" data-placeholder="Add note…">${this.escapeHTML(item.content || '')}</div>`
-                : `<div class="card-content-preview">${this.escapeHTML(item.content)}</div>`;
-        }
-        
-        let checklistHtml = '';
-        const showInlineChecklist = !isQuickLinkType && (
-            canEdit || (item.type === 'checklist' && item.steps && item.steps.length > 0)
-        );
-        if (showInlineChecklist) {
-            if (!item.steps) item.steps = [];
-            checklistHtml = this.buildExpandedChecklistHtml(item, canEdit);
-        }
+        const bodyHtml = this.buildNoteBodyHtml(item, { canEdit, isQuickLinkType });
         
         let quickLinksHtml = '';
         if (isQuickLinkType && item.steps && item.steps.length > 0) {
@@ -878,7 +896,6 @@ export const UI = {
             </div>
             <div class="card-body">
                 ${bodyHtml}
-                ${checklistHtml}
                 ${quickLinksHtml}
             </div>
             <div class="mini-card-meta expanded${dragZone}">
@@ -935,19 +952,19 @@ export const UI = {
         sel?.addRange(range);
     },
 
-    getExpandedInlineEditSequence(card) {
+    getInlineEditSequence(root) {
         const fields = [];
-        const title = card.querySelector('[data-field="title"].card-inline-edit');
-        const content = card.querySelector('[data-field="content"].card-inline-edit');
+        const title = root.querySelector('[data-field="title"].card-inline-edit');
+        const content = root.querySelector('[data-field="content"].card-inline-edit');
         if (title) fields.push(title);
         if (content) fields.push(content);
-        card.querySelectorAll('[data-field="step-text"].card-inline-edit').forEach((el) => fields.push(el));
+        root.querySelectorAll('[data-field="step-text"].card-inline-edit').forEach((el) => fields.push(el));
         return fields;
     },
 
-    handleInlineEditArrowNav(e, card, fieldEl) {
+    handleInlineEditArrowNav(e, root, fieldEl) {
         if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return false;
-        const fields = this.getExpandedInlineEditSequence(card);
+        const fields = this.getInlineEditSequence(root);
         const idx = fields.indexOf(fieldEl);
         if (idx < 0) return false;
 
@@ -964,45 +981,56 @@ export const UI = {
         return false;
     },
 
-    handleChecklistEnter(card, item, el, refresh) {
+    handleChecklistEnter(root, item, el, refresh, { applyMutate } = {}) {
+        const mutate = applyMutate || ((mutator) => {
+            this.mutateItem(item, mutator, { preserveView: true });
+        });
         el.dataset.skipBlurSave = '1';
         const stepId = el.dataset.stepId;
         this.syncInlineFieldToItem(el, item);
         const newStep = this.createBlankChecklistStep();
-        this.mutateItem(item, (it) => {
+        mutate((it) => {
             if (it.type !== 'checklist') it.type = 'checklist';
             if (!it.steps) it.steps = [];
             const idx = it.steps.findIndex(s => s.id === stepId);
             const insertAt = idx >= 0 ? idx + 1 : it.steps.length;
             it.steps.splice(insertAt, 0, newStep);
             reorderStepsByCompletion(it.steps);
-        }, { preserveView: true });
+        });
         refresh();
         requestAnimationFrame(() => {
-            const newEl = card.querySelector(`[data-step-id="${newStep.id}"]`);
+            const newEl = root.querySelector(`[data-step-id="${newStep.id}"]`);
             if (newEl) this.focusInlineEdit(newEl, 'start');
         });
     },
 
-    attachExpandedCardInteractions(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
-        const refresh = () => {
-            this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+    attachNoteBodyInteractions(root, item, {
+        refresh = () => {},
+        localOnly = false,
+        onChange = () => {},
+        isQuickLinkType = false,
+        stopMousedownPropagation = false
+    } = {}) {
+        const applyMutate = (mutator) => {
+            this.mutateItem(item, mutator, { preserveView: true, skipRerender: true, localOnly });
+            if (localOnly) onChange();
         };
 
-        if (this.canEditInline()) {
-            card.addEventListener('mousedown', (e) => {
+        if (this.canEditInline() || localOnly) {
+            root.addEventListener('mousedown', (e) => {
                 if (e.button !== 0) return;
                 const active = document.activeElement;
-                if (!active?.classList?.contains('card-inline-edit') || !card.contains(active)) return;
+                if (!active?.classList?.contains('card-inline-edit') || !root.contains(active)) return;
                 if (active === e.target || active.contains(e.target)) return;
-                this.commitFocusedInlineField(card, item);
+                applyMutate(() => this.syncInlineFieldToItem(active, item));
+                active.dataset.skipBlurSave = '1';
             }, true);
 
-            card.querySelectorAll('.card-inline-edit').forEach((el) => {
+            root.querySelectorAll('.card-inline-edit').forEach((el) => {
                 el.addEventListener('click', (e) => e.stopPropagation());
-                el.addEventListener('mousedown', (e) => {
-                    if (card.dataset.freeform === '1') e.stopPropagation();
-                });
+                if (stopMousedownPropagation) {
+                    el.addEventListener('mousedown', (e) => e.stopPropagation());
+                }
                 el.addEventListener('keydown', (e) => {
                     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
                         e.preventDefault();
@@ -1019,90 +1047,87 @@ export const UI = {
                         }
                         e.preventDefault();
                         e.stopPropagation();
-                        this.handleChecklistEnter(card, item, el, refresh);
+                        this.handleChecklistEnter(root, item, el, refresh, { applyMutate });
                         return;
                     }
-                    if (!this.handleInlineEditArrowNav(e, card, el)) e.stopPropagation();
+                    if (!this.handleInlineEditArrowNav(e, root, el)) e.stopPropagation();
                 });
                 el.addEventListener('blur', () => {
                     if (el.dataset.skipBlurSave) {
                         delete el.dataset.skipBlurSave;
                         return;
                     }
-                    this.mutateItem(item, () => {
-                        this.syncInlineFieldToItem(el, item);
-                    }, { preserveView: true, skipRerender: true });
+                    applyMutate(() => this.syncInlineFieldToItem(el, item));
                 });
             });
         }
 
-        if (!isQuickLinkType && card.querySelector('.expanded-checklist')) {
+        if (!isQuickLinkType && root.querySelector('.expanded-checklist')) {
             if (!item.steps) item.steps = [];
 
-            card.querySelector('.expanded-checklist-add-btn')?.addEventListener('click', (e) => {
+            root.querySelector('.expanded-checklist-add-btn')?.addEventListener('click', (e) => {
                 e.stopPropagation();
-                this.mutateItem(item, (it) => {
+                applyMutate((it) => {
                     if (it.type !== 'checklist') it.type = 'checklist';
                     if (!it.steps) it.steps = [];
                     it.steps.push(this.createBlankChecklistStep());
                     reorderStepsByCompletion(it.steps);
-                }, { preserveView: true });
+                });
                 refresh();
                 requestAnimationFrame(() => {
-                    const fields = card.querySelectorAll('[data-field="step-text"].card-inline-edit');
+                    const fields = root.querySelectorAll('[data-field="step-text"].card-inline-edit');
                     const last = fields[fields.length - 1];
                     if (last) this.focusInlineEdit(last, 'end');
                 });
             });
 
-            card.querySelectorAll('.step-row--display').forEach((row) => {
+            root.querySelectorAll('.step-row--display').forEach((row) => {
                 const checkbox = row.querySelector('.step-check');
                 const stepId = row.dataset.stepId;
                 checkbox?.addEventListener('change', (e) => {
                     e.stopPropagation();
-                    const step = item.steps.find(s => s.id === stepId);
-                    if (!step) return;
+                    if (!item.steps.find(s => s.id === stepId)) return;
                     row.classList.add('step-row--animating');
-                    this.mutateItem(item, (it) => {
+                    applyMutate((it) => {
                         const s = it.steps.find(st => st.id === stepId);
                         if (!s) return;
                         moveStepOnCompletionChange(it.steps, s, checkbox.checked);
-                    }, { preserveView: true });
+                    });
                     refresh();
                 });
             });
 
-            card.querySelectorAll('.step-indent-btn').forEach((btn) => {
+            root.querySelectorAll('.step-indent-btn').forEach((btn) => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const row = btn.closest('.step-row--display');
                     const stepId = row?.dataset.stepId;
                     if (!stepId) return;
-                    this.mutateItem(item, (it) => {
+                    applyMutate((it) => {
                         const step = it.steps.find(s => s.id === stepId);
                         if (!step) return;
                         step.level = Math.min(4, getStepLevel(step) + 1);
-                    }, { preserveView: true });
+                    });
                     refresh();
                 });
             });
 
-            card.querySelectorAll('.step-outdent-btn').forEach((btn) => {
+            root.querySelectorAll('.step-outdent-btn').forEach((btn) => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const row = btn.closest('.step-row--display');
                     const stepId = row?.dataset.stepId;
                     if (!stepId) return;
-                    this.mutateItem(item, (it) => {
+                    applyMutate((it) => {
                         const step = it.steps.find(s => s.id === stepId);
                         if (!step) return;
                         step.level = Math.max(0, getStepLevel(step) - 1);
-                    }, { preserveView: true });
+                    });
                     refresh();
                 });
             });
 
-            card.querySelectorAll('.step-collapse-btn').forEach((btn) => {
+            root.querySelectorAll('.step-collapse-btn').forEach((btn) => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const key = btn.dataset.collapseKey;
@@ -1115,20 +1140,32 @@ export const UI = {
                 });
             });
 
-            card.querySelectorAll('.step-delete-btn').forEach((btn) => {
+            root.querySelectorAll('.step-delete-btn').forEach((btn) => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const row = btn.closest('.step-row--display');
                     const stepId = row?.dataset.stepId;
                     if (!stepId || !item.steps) return;
                     if (!item.steps.some((s) => s.id === stepId)) return;
-                    this.mutateItem(item, (it) => {
+                    applyMutate((it) => {
                         it.steps = it.steps.filter((s) => s.id !== stepId);
-                    }, { preserveView: true });
+                        if (!it.steps.length) it.type = 'note';
+                    });
                     refresh();
                 });
             });
         }
+    },
+
+    attachExpandedCardInteractions(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
+        const refresh = () => {
+            this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+        };
+        this.attachNoteBodyInteractions(card, item, {
+            refresh,
+            isQuickLinkType,
+            stopMousedownPropagation: card.dataset.freeform === '1'
+        });
     },
 
     getChecklistCollapsedKeys() {

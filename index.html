@@ -12,9 +12,7 @@
 
     <div id="workspace-shell" class="workspace-shell">
         <aside id="side-panel" class="side-panel" aria-label="Side panel">
-            <div class="side-panel-toolbar">
-                <button type="button" id="nav-panel-toggle" class="btn btn-icon" title="Show/hide panel" aria-label="Toggle side panel" aria-expanded="true">☰</button>
-            </div>
+            <div class="side-panel-scroll">
             <div class="nav-drawer-section nav-drawer-section--compact">
                 <div class="collapsable-header list-row--header" id="quick-actions-header">
                     <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Quick actions</span>
@@ -30,19 +28,6 @@
                 </div>
                 <div class="collapsable-section" id="view-section">
                     <div id="filter-controls"></div>
-                </div>
-            </div>
-
-            <div class="nav-drawer-section nav-drawer-section--compact">
-                <div class="collapsable-header list-row--header sidebar-notes-list-header" id="notes-list-section-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>List</span>
-                    <span class="sidebar-notes-list-sort" id="notes-list-sort-tools">
-                        <button type="button" class="sidebar-sort-btn" id="notes-sort-title" title="Sort by title" aria-label="Sort by title"></button>
-                        <button type="button" class="sidebar-sort-btn" id="notes-sort-date" title="Sort by date" aria-label="Sort by date"></button>
-                    </span>
-                </div>
-                <div class="collapsable-section" id="notes-list-section">
-                    <div id="notes-list-zone" class="sidebar-notes-list"></div>
                 </div>
             </div>
 
@@ -96,13 +81,30 @@
                     <div id="toolbox-dropdown" class="toolbox-list"></div>
                 </div>
             </div>
+            </div>
+
+            <div class="side-panel-list nav-drawer-section nav-drawer-section--compact">
+                <div class="collapsable-header list-row--header sidebar-notes-list-header" id="notes-list-section-header">
+                    <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>List</span>
+                    <span class="sidebar-notes-list-sort" id="notes-list-sort-tools">
+                        <button type="button" class="sidebar-sort-btn" id="notes-sort-title" title="Sort by title" aria-label="Sort by title"></button>
+                        <button type="button" class="sidebar-sort-btn" id="notes-sort-date" title="Sort by date" aria-label="Sort by date"></button>
+                    </span>
+                </div>
+                <div class="collapsable-section" id="notes-list-section">
+                    <div id="notes-list-zone" class="sidebar-notes-list"></div>
+                </div>
+            </div>
 
             <input type="file" id="system-import-file-picker" accept=".json" class="is-hidden">
         </aside>
 
         <div id="workspace-main" class="workspace-main">
             <header id="control-bar">
-                <div id="app-brand" class="app-brand">magicNotes</div>
+                <div class="control-bar-brand">
+                    <button type="button" id="nav-panel-toggle" class="btn btn-icon control-bar-menu-btn" title="Show/hide panel" aria-label="Toggle side panel" aria-expanded="true">☰</button>
+                    <div id="app-brand" class="app-brand">magicNotes</div>
+                </div>
                 <div id="digital-clock" class="logo-zone logo-zone--clock">
                     <div id="history-controls" class="history-controls is-hidden">
                         <button type="button" id="btn-undo" class="btn btn--compact btn--icon" disabled title="Undo (Ctrl+Z)" aria-label="Undo"></button>

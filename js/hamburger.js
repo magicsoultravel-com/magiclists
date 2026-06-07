@@ -1,4 +1,4 @@
-import { ACTION_ICONS, CARD_ICONS } from './ui.js';
+import { ACTION_ICONS, CARD_ICONS, UI } from './ui.js';
 
 const NOTES_LIST_SORT_KEY = 'matrix_notes_list_sort';
 
@@ -172,11 +172,17 @@ export const SidePanel = {
         }
 
         const sorted = this.sortNotesForList(items);
-        zone.innerHTML = sorted.map(item => `
-            <button type="button" class="sidebar-notes-list-item" data-id="${this.escapeAttr(item.id)}" title="${this.escapeHTML(item.title || 'Untitled')}">
-                <span class="sidebar-notes-list-item-title">${this.escapeHTML(item.title || 'Untitled')}</span>
-            </button>
-        `).join('');
+        zone.innerHTML = sorted.map(item => {
+            const accent = item.backgroundColor || '';
+            const accentStyle = accent ? ` style="--note-accent:${this.escapeAttr(accent)}"` : '';
+            const dateLabel = UI.formatNoteListDate(item);
+            const title = this.escapeHTML(item.title || 'Untitled');
+            return `
+            <button type="button" class="sidebar-notes-list-item${accent ? ' has-note-color' : ''}" data-id="${this.escapeAttr(item.id)}" title="${title}"${accentStyle}>
+                <span class="sidebar-notes-list-date">${this.escapeHTML(dateLabel)}</span>
+                <span class="sidebar-notes-list-item-title">${title}</span>
+            </button>`;
+        }).join('');
 
         zone.querySelectorAll('.sidebar-notes-list-item').forEach(btn => {
             btn.addEventListener('click', () => {

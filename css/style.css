@@ -393,41 +393,42 @@ body {
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
-    padding: 0.55rem 0.5rem;
+    gap: 0;
+    padding: 0.55rem 0.5rem 0.45rem;
     background: var(--bg-surface);
     border-right: 1px solid var(--border-color);
-    overflow-x: hidden;
-    overflow-y: auto;
+    overflow: hidden;
     font-size: 0.66rem;
     transition: width 0.2s ease, padding 0.2s ease, opacity 0.15s ease;
+}
+
+.side-panel-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.side-panel-list {
+    flex: 0 0 auto;
+    margin-top: auto;
+    padding-top: 0.35rem;
+    border-top: 1px solid var(--border-color);
 }
 
 .side-panel.is-collapsed {
     width: 0;
     padding: 0;
     border-right-width: 0;
-    overflow: visible;
+    overflow: hidden;
     pointer-events: none;
 }
 
-.side-panel.is-collapsed > :not(.side-panel-toolbar) {
+.side-panel.is-collapsed > * {
     display: none;
-}
-
-.side-panel-toolbar {
-    display: flex;
-    align-items: center;
-    margin-bottom: 0.15rem;
-}
-
-.side-panel.is-collapsed .side-panel-toolbar {
-    position: fixed;
-    left: 6px;
-    top: 10px;
-    z-index: 120;
-    margin: 0;
-    pointer-events: auto;
 }
 
 .quick-actions-grid {
@@ -740,8 +741,20 @@ body {
 
 #filter-controls {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 0.25rem;
+}
+
+.control-bar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-shrink: 0;
+    min-width: 0;
+}
+
+.control-bar-menu-btn {
+    flex-shrink: 0;
 }
 
 .app-brand {
@@ -750,6 +763,7 @@ body {
     letter-spacing: -0.03em;
     color: var(--text-main);
     flex-shrink: 0;
+    line-height: 1;
 }
 
 #filter-controls .btn.active {
@@ -1872,9 +1886,7 @@ textarea.form-input {
     display: flex;
     flex-direction: column;
     gap: 0.08rem;
-    max-height: min(42vh, 300px);
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: hidden;
     padding: 0.15rem 0.2rem 0.25rem;
 }
 
@@ -1885,11 +1897,14 @@ textarea.form-input {
 }
 
 .sidebar-notes-list-item {
-    display: block;
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
     width: 100%;
     min-width: 0;
-    padding: 0.18rem 0.3rem;
+    padding: 0.16rem 0.28rem 0.16rem 0.22rem;
     border: none;
+    border-left: 2px solid var(--note-accent, transparent);
     border-radius: 2px;
     background: transparent;
     color: var(--text-main);
@@ -1900,13 +1915,25 @@ textarea.form-input {
     transition: background 0.12s ease, color 0.12s ease;
 }
 
+.sidebar-notes-list-item.has-note-color {
+    background: color-mix(in srgb, var(--note-accent) 14%, transparent);
+}
+
 .sidebar-notes-list-item:hover {
-    background: rgba(255, 255, 255, 0.06);
+    background: color-mix(in srgb, var(--note-accent, #ffffff) 18%, rgba(255, 255, 255, 0.06));
     color: var(--text-main);
 }
 
+.sidebar-notes-list-date {
+    flex: 0 0 2.35rem;
+    font-size: 0.56rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
 .sidebar-notes-list-item-title {
-    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -2361,19 +2388,38 @@ textarea.form-input {
     gap: 0.3rem;
 }
 
-.editor-body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    flex: 1 1 auto;
-    min-height: 0;
-}
-
 .editor-panel--config {
     flex: 0 0 auto;
 }
 
-.editor-expanded-checklist .expanded-checklist-add-btn {
+.editor-note-shell {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.editor-note-header .mini-card-title {
+    font-size: 0.72rem;
+    font-weight: 500;
+    line-height: 1.35;
+    padding: 0.1rem 0.05rem;
+}
+
+#editor-overlay .editor-note-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0;
+    min-height: 0;
+}
+
+#editor-overlay .editor-note-body .card-content-preview {
+    font-size: 0.66rem;
+    line-height: 1.35;
+}
+
+#editor-overlay .editor-note-shell:hover .expanded-checklist-add-btn,
+#editor-overlay .editor-note-shell:focus-within .expanded-checklist-add-btn {
     opacity: 1;
     pointer-events: auto;
 }
