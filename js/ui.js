@@ -151,9 +151,10 @@ export const UI = {
 
     hideFromBoard(item) {
         if (localStorage.getItem('admin_token')) {
-            window.dispatchEvent(new CustomEvent('item:mutation_requested', {
-                detail: { ...item, hiddenFromBoard: true }
-            }));
+            this.emitItemMutation(
+                { ...item, hiddenFromBoard: true },
+                { beforeItem: this.snapshotItem(item) }
+            );
             return;
         }
         const ids = this.getLocalHiddenIds();
@@ -166,9 +167,10 @@ export const UI = {
         const ids = this.getLocalHiddenIds().filter(id => id !== item.id);
         localStorage.setItem('matrix_hidden_board_ids', JSON.stringify(ids));
         if (localStorage.getItem('admin_token')) {
-            window.dispatchEvent(new CustomEvent('item:mutation_requested', {
-                detail: { ...item, hiddenFromBoard: false }
-            }));
+            this.emitItemMutation(
+                { ...item, hiddenFromBoard: false },
+                { beforeItem: this.snapshotItem(item) }
+            );
             return;
         }
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
@@ -188,6 +190,7 @@ export const UI = {
     },
 
     toggleCardCalendar(item, btn) {
+        const beforeItem = this.snapshotItem(item);
         const willHide = !this.isHiddenFromCalendar(item);
         const updated = { ...item, hideFromCalendar: willHide };
         item.hideFromCalendar = willHide;
@@ -197,7 +200,7 @@ export const UI = {
         localStorage.setItem('matrix_calendar_hidden_ids', JSON.stringify(ids));
 
         if (localStorage.getItem('admin_token')) {
-            window.dispatchEvent(new CustomEvent('item:mutation_requested', { detail: updated }));
+            this.emitItemMutation(updated, { beforeItem });
         }
 
         window.dispatchEvent(new CustomEvent('calendar:items_changed', { detail: updated }));
@@ -234,10 +237,20 @@ export const UI = {
         });
     },
 
-    emitItemMutation(item, { preserveView = false } = {}) {
+    snapshotItem(item) {
+        return JSON.parse(JSON.stringify(item));
+    },
+
+    emitItemMutation(item, { preserveView = false, beforeItem = null } = {}) {
         window.dispatchEvent(new CustomEvent('item:mutation_requested', {
-            detail: preserveView ? { item, preserveView: true } : item
+            detail: { item, preserveView, beforeItem }
         }));
+    },
+
+    mutateItem(item, mutator, { preserveView = false } = {}) {
+        const beforeItem = this.snapshotItem(item);
+        mutator(item);
+        this.emitItemMutation(item, { preserveView, beforeItem });
     },
 
     buildNoteSizeHtml(item) {
@@ -932,19 +945,26 @@ export const UI = {
                 el.addEventListener('click', (e) => e.stopPropagation());
                 el.addEventListener('mousedown', (e) => e.stopPropagation());
                 el.addEventListener('keydown', (e) => {
+                    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        document.execCommand('undo');
+                        return;
+                    }
                     if (!this.handleInlineEditArrowNav(e, card, el)) e.stopPropagation();
                 });
                 el.addEventListener('blur', () => {
                     const field = el.dataset.field;
-                    if (field === 'title') {
-                        item.title = el.textContent.trim();
-                    } else if (field === 'content') {
-                        item.content = el.textContent;
-                    } else if (field === 'step-text') {
-                        const step = item.steps?.find(s => s.id === el.dataset.stepId);
-                        if (step) step.text = el.textContent.trim();
-                    }
-                    this.emitItemMutation(item, { preserveView: true });
+                    this.mutateItem(item, (it) => {
+                        if (field === 'title') {
+                            it.title = el.textContent.trim();
+                        } else if (field === 'content') {
+                            it.content = el.textContent;
+                        } else if (field === 'step-text') {
+                            const step = it.steps?.find(s => s.id === el.dataset.stepId);
+                            if (step) step.text = el.textContent.trim();
+                        }
+                    }, { preserveView: true });
                 });
             });
         }
@@ -954,10 +974,12 @@ export const UI = {
 
             card.querySelector('.expanded-checklist-add-btn')?.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (item.type !== 'checklist') item.type = 'checklist';
-                item.steps.push(this.createBlankChecklistStep());
-                reorderStepsByCompletion(item.steps);
-                this.emitItemMutation(item, { preserveView: true });
+                this.mutateItem(item, (it) => {
+                    if (it.type !== 'checklist') it.type = 'checklist';
+                    if (!it.steps) it.steps = [];
+                    it.steps.push(this.createBlankChecklistStep());
+                    reorderStepsByCompletion(it.steps);
+                }, { preserveView: true });
                 refresh();
                 requestAnimationFrame(() => {
                     const fields = card.querySelectorAll('[data-field="step-text"].card-inline-edit');
@@ -974,8 +996,11 @@ export const UI = {
                     const step = item.steps.find(s => s.id === stepId);
                     if (!step) return;
                     row.classList.add('step-row--animating');
-                    moveStepOnCompletionChange(item.steps, step, checkbox.checked);
-                    this.emitItemMutation(item, { preserveView: true });
+                    this.mutateItem(item, (it) => {
+                        const s = it.steps.find(st => st.id === stepId);
+                        if (!s) return;
+                        moveStepOnCompletionChange(it.steps, s, checkbox.checked);
+                    }, { preserveView: true });
                     refresh();
                 });
             });
@@ -984,10 +1009,13 @@ export const UI = {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const row = btn.closest('.step-row--display');
-                    const step = item.steps.find(s => s.id === row?.dataset.stepId);
-                    if (!step) return;
-                    step.level = Math.min(4, getStepLevel(step) + 1);
-                    this.emitItemMutation(item, { preserveView: true });
+                    const stepId = row?.dataset.stepId;
+                    if (!stepId) return;
+                    this.mutateItem(item, (it) => {
+                        const step = it.steps.find(s => s.id === stepId);
+                        if (!step) return;
+                        step.level = Math.min(4, getStepLevel(step) + 1);
+                    }, { preserveView: true });
                     refresh();
                 });
             });
@@ -996,10 +1024,13 @@ export const UI = {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const row = btn.closest('.step-row--display');
-                    const step = item.steps.find(s => s.id === row?.dataset.stepId);
-                    if (!step) return;
-                    step.level = Math.max(0, getStepLevel(step) - 1);
-                    this.emitItemMutation(item, { preserveView: true });
+                    const stepId = row?.dataset.stepId;
+                    if (!stepId) return;
+                    this.mutateItem(item, (it) => {
+                        const step = it.steps.find(s => s.id === stepId);
+                        if (!step) return;
+                        step.level = Math.max(0, getStepLevel(step) - 1);
+                    }, { preserveView: true });
                     refresh();
                 });
             });
@@ -1024,8 +1055,9 @@ export const UI = {
                     const stepId = row?.dataset.stepId;
                     if (!stepId || !item.steps) return;
                     if (!item.steps.some((s) => s.id === stepId)) return;
-                    item.steps = item.steps.filter((s) => s.id !== stepId);
-                    this.emitItemMutation(item, { preserveView: true });
+                    this.mutateItem(item, (it) => {
+                        it.steps = it.steps.filter((s) => s.id !== stepId);
+                    }, { preserveView: true });
                     refresh();
                 });
             });

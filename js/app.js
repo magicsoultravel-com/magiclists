@@ -336,14 +336,16 @@ class Application {
         window.addEventListener('item:mutation_requested', async (e) => {
             if (!AppState.user.isLoggedIn) return;
             const detail = e.detail;
-            const item = detail?.preserveView ? detail.item : detail;
+            const item = detail?.item ?? detail;
             const preserveView = detail?.preserveView === true;
             if (!item?.id) return;
 
             const idx = AppState.items.findIndex((i) => i.id === item.id);
-            const beforeSnapshot = idx >= 0
-                ? JSON.parse(JSON.stringify(AppState.items[idx]))
-                : null;
+            const beforeSnapshot = detail?.beforeItem
+                ? JSON.parse(JSON.stringify(detail.beforeItem))
+                : idx >= 0
+                    ? JSON.parse(JSON.stringify(AppState.items[idx]))
+                    : null;
 
             const success = await API.saveItem(item, AppState.user.token);
             if (!success) return;
@@ -403,7 +405,7 @@ class Application {
             if (!success) return;
 
             const label = item.title?.trim() || 'note';
-            UndoManager.recordItemDeletion(`Deleted "${label}"`, item);
+            UndoManager.recordItemDeletion(item, `Delete "${label}"`);
             await this.syncDataStore();
         });
 
