@@ -264,7 +264,7 @@ export const ColorPicker = {
         const body = popover.querySelector('.color-picker-body');
         const subpanel = popover.querySelector('.color-picker-subpanel');
 
-        popover.querySelectorAll('.color-picker-tile[data-color]').forEach((btn) => {
+        popover.querySelectorAll('.color-picker-presets .color-picker-tile[data-color]').forEach((btn) => {
             btn.addEventListener('mousedown', (e) => e.stopPropagation());
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
