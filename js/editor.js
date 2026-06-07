@@ -299,20 +299,11 @@ export const Editor = {
         const focusStepId = active?.dataset?.stepId;
 
         const pendingFocusStepId = body.dataset.pendingFocusStepId;
-        const categoryField = document.getElementById('edit-category');
-        const activeCategory = categoryField?.value?.trim() || this.activeItem.categories?.[0] || '';
-        const isQuickLink = UI.isQuickLinkCategory(activeCategory);
-        body.innerHTML = UI.buildNoteBodySectionHtml(this.activeItem, {
-            canEdit: true,
-            alwaysShowChecklist: true,
-            isQuickLinkType: false,
-            showQuickLinksPreview: isQuickLink
-        });
+        body.innerHTML = UI.buildNoteBodyHtml(this.activeItem, { canEdit: true, alwaysShowChecklist: true });
         if (pendingFocusStepId) body.dataset.pendingFocusStepId = pendingFocusStepId;
         UI.attachNoteBodyInteractions(body, this.activeItem, {
             refresh: () => this.refreshEditorNoteBody(),
             localOnly: true,
-            isQuickLinkType: false,
             onChange: () => {
                 this.markInteracted();
                 this.updateEditorSizeLabel();
@@ -358,8 +349,7 @@ export const Editor = {
             categoryOptionsHtml,
             startParts,
             endParts,
-            bodyId: 'editor-note-body',
-            isQuickLinkType: UI.isQuickLinkCategory(activeCategory)
+            bodyId: 'editor-note-body'
         });
 
         const onEditorChange = () => {
@@ -376,11 +366,8 @@ export const Editor = {
             onConfigChange: onEditorChange,
             onStatusChange: () => this.updateArchiveToggleUI(),
             bindDateDefaults: (dateId, timeId) => this.bindDateInputDefaults(dateId, timeId),
-            setupColorPalette: () => this.setupColorPalette(item),
-            isQuickLinkType: false
+            setupColorPalette: () => this.setupColorPalette(item)
         });
-
-        document.getElementById('edit-category')?.addEventListener('change', () => this.refreshEditorNoteBody());
 
         this.syncEditorTheme(resolveNoteColor(item.backgroundColor));
     },

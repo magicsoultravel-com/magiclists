@@ -687,8 +687,7 @@ body {
     word-break: break-word;
 }
 
-.note-surface .expanded-checklist,
-.note-surface .expanded-links {
+.note-surface .expanded-checklist {
     font-size: 0.6rem;
 }
 
@@ -1128,38 +1127,9 @@ body {
 }
 
 .mini-card.expanded .card-content-preview,
-.mini-card.expanded .expanded-checklist,
-.mini-card.expanded .expanded-links {
+.mini-card.expanded .expanded-checklist {
     flex: 0 0 auto;
     overflow: visible;
-}
-
-.expanded-links {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    font-size: 0.62rem;
-}
-
-.expanded-links.empty {
-    color: var(--text-muted);
-    font-style: italic;
-}
-
-.quicklink-anchor-row {
-    color: var(--accent);
-    text-decoration: none;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-}
-
-.quicklink-anchor-row:hover {
-    text-decoration: underline;
-}
-
-.has-custom-bg .expanded-links,
-.has-custom-bg .expanded-links.empty {
-    color: var(--card-muted);
 }
 
 /* Card Header */
