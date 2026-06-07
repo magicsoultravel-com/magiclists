@@ -8,6 +8,7 @@ import { SidePanel } from './hamburger.js';
 import { applyBackupToStorage } from './backup.js';
 import { DEFAULT_CATEGORIES, normalizeCategories } from './categories.js';
 import { UndoManager, historyLabelForItem } from './undo.js';
+import { DesktopBackground } from './desktopBackground.js';
 
 function countHiddenFromBoard(items) {
     return items.filter(item => UI.isHiddenFromBoard(item)).length;
@@ -34,6 +35,7 @@ const AppState = {
 
 class Application {
     async init() {
+        DesktopBackground.init();
         this.checkAuthSession();
         Editor.init();
         await ToolsManager.init(() => AppState.items);
