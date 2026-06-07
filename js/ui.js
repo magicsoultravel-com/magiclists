@@ -1,4 +1,4 @@
-import { isQuickLinksCategory, readStoredCategories } from './categories.js';
+import { readStoredCategories } from './categories.js';
 import { applyCardTheme } from './cardTheme.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor, THEME_DEFAULT_COLOR } from './colorPicker.js';
 
@@ -371,12 +371,12 @@ export const UI = {
         const scrollState = this.captureScrollState(canvas);
         const activeCategories = readStoredCategories()
             .filter((cat) => !hiddenCategories.includes(cat.name));
-        const { targetCatName, categoryColor, isQuickLinkType } = this.getCardRenderContext(item, activeCategories);
+        const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
 
         if (card.classList.contains('expanded')) {
-            this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+            this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
         } else {
-            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
         }
 
         this.restoreScrollState(canvas, scrollState);
@@ -682,10 +682,9 @@ export const UI = {
 
     getCardRenderContext(item, activeCategories) {
         const targetCatName = (item.categories && item.categories.length > 0) ? item.categories[0] : '';
-        const isQuickLinkType = isQuickLinksCategory(targetCatName);
         const matchedCat = activeCategories.find(c => c.name?.toLowerCase() === targetCatName.toLowerCase());
         const categoryColor = matchedCat ? matchedCat.color : '#64748b';
-        return { targetCatName, categoryColor, isQuickLinkType };
+        return { targetCatName, categoryColor };
     },
 
     updateFreeformCard(card, item, { expanded, dimensions = null } = {}) {
@@ -695,9 +694,9 @@ export const UI = {
         localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
 
         const activeCategories = readStoredCategories();
-        const { targetCatName, categoryColor, isQuickLinkType } = this.getCardRenderContext(item, activeCategories);
+        const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
 
-        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor);
 
         if (dimensions) {
             this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
@@ -706,16 +705,16 @@ export const UI = {
         }
     },
 
-    applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
+    applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor) {
         card.classList.add('card-state-changing');
         if (expanded) {
             card.classList.remove('compact');
             card.classList.add('expanded', 'card-animate-expand');
-            this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+            this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
         } else {
             card.classList.remove('expanded', 'card-animate-expand');
             card.classList.add('compact', 'card-animate-collapse');
-            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
         }
         const cleanup = () => {
             card.classList.remove('card-state-changing', 'card-animate-expand', 'card-animate-collapse');
@@ -742,8 +741,7 @@ export const UI = {
             willExpand,
             ctx.activeCategories,
             ctx.targetCatName,
-            ctx.categoryColor,
-            ctx.isQuickLinkType
+            ctx.categoryColor
         );
     },
 
@@ -756,25 +754,23 @@ export const UI = {
         if (freeform) card.dataset.freeform = '1';
 
         const targetCatName = (item.categories && item.categories.length > 0) ? item.categories[0] : '';
-        const isQuickLinkType = isQuickLinksCategory(targetCatName);
         const matchedCat = activeCategories.find(c => c.name?.toLowerCase() === targetCatName.toLowerCase());
         const categoryColor = matchedCat ? matchedCat.color : '#64748b';
 
         this.applyItemCardTheme(card, item);
         card.style.borderLeftColor = categoryColor;
 
-        const cardCtx = { activeCategories, targetCatName, categoryColor, isQuickLinkType };
         const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
         const isExpanded = expandedCards[item.id] === true;
 
         if (isExpanded) {
             card.classList.remove('compact');
             card.classList.add('expanded');
-            this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+            this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
         } else {
             card.classList.add('compact');
             card.classList.remove('expanded');
-            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
         }
 
         if (freeform) {
@@ -800,7 +796,7 @@ export const UI = {
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     },
 
-    buildNoteBodyHtml(item, { canEdit = false, isQuickLinkType = false, alwaysShowChecklist = false } = {}) {
+    buildNoteBodyHtml(item, { canEdit = false, alwaysShowChecklist = false } = {}) {
         let html = '';
         const hasContent = item.content && item.content.trim();
         const showContent = hasContent
@@ -812,10 +808,8 @@ export const UI = {
                 : `<div class="card-content-preview">${this.escapeHTML(item.content)}</div>`;
         }
 
-        const showChecklist = !isQuickLinkType && (
-            (alwaysShowChecklist && canEdit)
-            || (!alwaysShowChecklist && (canEdit || (item.type === 'checklist' && item.steps && item.steps.length > 0)))
-        );
+        const showChecklist = (alwaysShowChecklist && canEdit)
+            || (!alwaysShowChecklist && (canEdit || (item.type === 'checklist' && item.steps && item.steps.length > 0)));
         if (showChecklist) {
             if (!item.steps) item.steps = [];
             html += this.buildExpandedChecklistHtml(item, canEdit);
@@ -823,25 +817,10 @@ export const UI = {
         return html;
     },
 
-    renderCompactCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
+    renderCompactCard(card, item, activeCategories, targetCatName, categoryColor) {
         card.classList.remove('note-surface');
         const fullTitle = item.title || '';
         const titleAttr = this.escapeHTML(fullTitle).replace(/"/g, '&quot;');
-        let quickLinksHtml = '';
-        if (isQuickLinkType && item.steps && item.steps.length > 0) {
-            const activeLinks = item.steps.filter(step => step.completed);
-            if (activeLinks.length > 0) {
-                const firstLink = activeLinks[0];
-                let url = firstLink.text.trim();
-                if (!/^https?:\/\//i.test(url)) { url = 'https://' + url; }
-                const cleanLabel = firstLink.text.replace(/^(https?:\/\/)?(www\.)?/, '');
-                quickLinksHtml = `<a href="${url}" target="_blank" class="quicklink-anchor-row compact" title="Navigate to ${url}">${cleanLabel}</a>`;
-                if (activeLinks.length > 1) {
-                    quickLinksHtml += `<div class="more-links-badge">+${activeLinks.length - 1} more</div>`;
-                }
-            }
-        }
-        
         const visibilityBadgeColor = item.visibility === 'public' ? '#10b981' : '#f59e0b';
         
         const isExpanded = false;
@@ -855,14 +834,12 @@ export const UI = {
                 <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
                 ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
             </div>
-            ${quickLinksHtml ? `<div class="compact-links">${quickLinksHtml}</div>` : ''}
         `;
 
         this.attachCardActions(card, item, {
             activeCategories,
             targetCatName,
-            categoryColor,
-            isQuickLinkType
+            categoryColor
         });
         this.finalizeFreeformCard(card);
         this.syncCardDraggable(card);
@@ -927,7 +904,7 @@ export const UI = {
         return html;
     },
 
-    renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
+    renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor) {
         card.classList.add('note-surface');
         const canEdit = this.canEditInline();
         const fullTitle = item.title || '';
@@ -936,24 +913,7 @@ export const UI = {
             ? `<div class="mini-card-title card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-field="title" data-placeholder="Title…" title="Click to edit">${this.escapeHTML(fullTitle)}</div>`
             : `<div class="mini-card-title" title="${titleAttr}">${this.escapeHTML(fullTitle)}</div>`;
 
-        const bodyHtml = this.buildNoteBodyHtml(item, { canEdit, isQuickLinkType });
-        
-        let quickLinksHtml = '';
-        if (isQuickLinkType && item.steps && item.steps.length > 0) {
-            const activeLinks = item.steps.filter(step => step.completed);
-            if (activeLinks.length > 0) {
-                const linksMarkup = activeLinks.map(link => {
-                    let url = link.text.trim();
-                    if (!/^https?:\/\//i.test(url)) { url = 'https://' + url; }
-                    const cleanLabel = link.text.replace(/^(https?:\/\/)?(www\.)?/, '');
-                    return `<a href="${url}" target="_blank" class="quicklink-anchor-row" title="Navigate to ${url}">${cleanLabel}</a>`;
-                }).join('');
-                quickLinksHtml = `<div class="expanded-links">${linksMarkup}</div>`;
-            } else {
-                quickLinksHtml = `<div class="expanded-links empty">No active links. Check boxes in editor to display.</div>`;
-            }
-        }
-        
+        const bodyHtml = this.buildNoteBodyHtml(item, { canEdit });
         const visibilityBadgeColor = item.visibility === 'public' ? '#10b981' : '#f59e0b';
         
         const dragZone = this.freeformDragZoneClass(card);
@@ -968,7 +928,6 @@ export const UI = {
             </div>
             <div class="card-body">
                 ${bodyHtml}
-                ${quickLinksHtml}
             </div>
             <div class="mini-card-meta expanded${dragZone}">
                 <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
@@ -981,18 +940,17 @@ export const UI = {
         this.attachCardActions(card, item, {
             activeCategories,
             targetCatName,
-            categoryColor,
-            isQuickLinkType
+            categoryColor
         });
-        this.attachExpandedCardInteractions(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+        this.attachExpandedCardInteractions(card, item, activeCategories, targetCatName, categoryColor);
         this.finalizeFreeformCard(card);
         this.syncCardDraggable(card);
     },
 
-    refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
+    refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor) {
         const body = card.querySelector('.card-body');
         const scrollTop = body?.scrollTop ?? 0;
-        this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+        this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
         const newBody = card.querySelector('.card-body');
         if (newBody) newBody.scrollTop = scrollTop;
     },
@@ -1093,7 +1051,6 @@ export const UI = {
         refresh = () => {},
         localOnly = false,
         onChange = () => {},
-        isQuickLinkType = false,
         stopMousedownPropagation = false
     } = {}) {
         const applyMutate = (mutator) => {
@@ -1150,7 +1107,7 @@ export const UI = {
             });
         }
 
-        if (!isQuickLinkType && root.querySelector('.expanded-checklist')) {
+        if (root.querySelector('.expanded-checklist')) {
             if (!item.steps) item.steps = [];
 
             root.querySelector('.expanded-checklist-add-btn')?.addEventListener('click', (e) => {
@@ -1332,13 +1289,12 @@ export const UI = {
         });
     },
 
-    attachExpandedCardInteractions(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
+    attachExpandedCardInteractions(card, item, activeCategories, targetCatName, categoryColor) {
         const refresh = () => {
-            this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
+            this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
         };
         this.attachNoteBodyInteractions(card, item, {
             refresh,
-            isQuickLinkType,
             stopMousedownPropagation: card.dataset.freeform === '1'
         });
     },

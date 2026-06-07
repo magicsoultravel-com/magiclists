@@ -32,43 +32,27 @@
                 </div>
             </div>
 
-            <div id="sidebar-stats-section" class="nav-drawer-section nav-drawer-section--compact">
-                <div class="collapsable-header list-row--header" id="status-panel-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Status</span>
+            <div class="nav-drawer-section nav-drawer-section--compact">
+                <div class="collapsable-header list-row--header sidebar-panel-list-header" id="categories-section-header">
+                    <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Categories</span>
                 </div>
-                <div class="collapsable-section" id="status-panel">
-                    <div class="sidebar-status-item">
-                        <div class="collapsable-header list-row--header" id="objects-status-header">
-                            <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Objects</span>
-                            <span id="objects-count-badge" class="status-badge">0</span>
+                <div class="collapsable-section" id="categories-section">
+                    <div class="sidebar-notes-group">
+                        <div class="collapsable-header list-row--header sidebar-notes-subheader" id="categories-list-active-header">
+                            <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Active</span>
+                            <span id="categories-active-count" class="status-badge">0</span>
                         </div>
-                        <div id="objects-status-detail" class="collapsable-section collapsed sidebar-status-detail">
-                            <div class="list-row--muted">
-                                <span>Visible</span>
-                                <span id="objects-visible-count">0</span>
-                            </div>
-                            <div class="list-row--muted">
-                                <span>Hidden</span>
-                                <span id="objects-hidden-count">0</span>
-                            </div>
-                            <div id="objects-hidden-list" class="hidden-items-list"></div>
+                        <div class="collapsable-section" id="categories-list-active-section">
+                            <div id="categories-list-active-zone" class="sidebar-notes-list"></div>
                         </div>
                     </div>
-                    <div class="sidebar-status-item">
-                        <div class="collapsable-header list-row--header" id="categories-status-header">
-                            <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Categories</span>
-                            <span id="categories-count-badge" class="status-badge">0</span>
+                    <div class="sidebar-notes-group">
+                        <div class="collapsable-header list-row--header sidebar-notes-subheader" id="categories-list-hidden-header">
+                            <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Hidden</span>
+                            <span id="categories-hidden-count" class="status-badge">0</span>
                         </div>
-                        <div id="categories-status-detail" class="collapsable-section collapsed sidebar-status-detail">
-                            <div class="list-row--muted">
-                                <span>Active</span>
-                                <span id="categories-active-count">0</span>
-                            </div>
-                            <div class="list-row--muted">
-                                <span>Hidden</span>
-                                <span id="categories-hidden-count">0</span>
-                            </div>
-                            <div id="categories-hidden-list" class="hidden-items-list"></div>
+                        <div class="collapsable-section collapsed" id="categories-list-hidden-section">
+                            <div id="categories-list-hidden-zone" class="sidebar-notes-list"></div>
                         </div>
                     </div>
                 </div>
@@ -94,7 +78,7 @@
                 <div class="collapsable-section" id="notes-list-section">
                     <div class="sidebar-notes-group">
                         <div class="collapsable-header list-row--header sidebar-notes-subheader" id="notes-list-active-header">
-                            <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>active</span>
+                            <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Active</span>
                             <span id="notes-active-count" class="status-badge">0</span>
                         </div>
                         <div class="collapsable-section" id="notes-list-active-section">
@@ -102,8 +86,17 @@
                         </div>
                     </div>
                     <div class="sidebar-notes-group">
+                        <div class="collapsable-header list-row--header sidebar-notes-subheader" id="notes-list-hidden-header">
+                            <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Hidden</span>
+                            <span id="notes-hidden-count" class="status-badge">0</span>
+                        </div>
+                        <div class="collapsable-section collapsed" id="notes-list-hidden-section">
+                            <div id="notes-list-hidden-zone" class="sidebar-notes-list"></div>
+                        </div>
+                    </div>
+                    <div class="sidebar-notes-group">
                         <div class="collapsable-header list-row--header sidebar-notes-subheader" id="notes-list-archived-header">
-                            <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>archived</span>
+                            <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Archived</span>
                             <span id="notes-archived-count" class="status-badge">0</span>
                         </div>
                         <div class="collapsable-section collapsed" id="notes-list-archived-section">

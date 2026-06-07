@@ -51,13 +51,14 @@ export const SidePanel = {
     setupStatusClickHandlers() {
         this.bindCollapsable('quick-actions-header', 'quick-actions-section');
         this.bindCollapsable('view-section-header', 'view-section');
+        this.bindCollapsable('categories-section-header', 'categories-section');
+        this.bindCollapsable('categories-list-active-header', 'categories-list-active-section');
+        this.bindCollapsable('categories-list-hidden-header', 'categories-list-hidden-section', true);
+        this.bindCollapsable('tools-section-header', 'tools-section', true);
         this.bindCollapsable('notes-list-section-header', 'notes-list-section', false, '.sidebar-notes-list-sort');
         this.bindCollapsable('notes-list-active-header', 'notes-list-active-section');
+        this.bindCollapsable('notes-list-hidden-header', 'notes-list-hidden-section', true);
         this.bindCollapsable('notes-list-archived-header', 'notes-list-archived-section', true);
-        this.bindCollapsable('status-panel-header', 'status-panel');
-        this.bindCollapsable('objects-status-header', 'objects-status-detail', true);
-        this.bindCollapsable('categories-status-header', 'categories-status-detail', true);
-        this.bindCollapsable('tools-section-header', 'tools-section', true);
         this.setupNotesListSortControls();
     },
 
@@ -178,12 +179,18 @@ export const SidePanel = {
         });
     },
 
-    renderNotesListZone(zoneId, listItems, allItems, { archived = false } = {}) {
+    renderNotesListZone(zoneId, listItems, allItems, { variant = 'active' } = {}) {
         const zone = document.getElementById(zoneId);
         if (!zone) return;
 
+        const emptyLabels = {
+            active: 'No active notes',
+            hidden: 'No hidden notes',
+            archived: 'No archived notes'
+        };
+
         if (!listItems?.length) {
-            zone.innerHTML = `<div class="sidebar-notes-list-empty">${archived ? 'No archived notes' : 'No active notes'}</div>`;
+            zone.innerHTML = `<div class="sidebar-notes-list-empty">${emptyLabels[variant] || 'No notes'}</div>`;
             return;
         }
 
@@ -193,138 +200,133 @@ export const SidePanel = {
             const accentStyle = ` style="--note-accent:${this.escapeAttr(accent)}"`;
             const dateLabel = UI.formatNoteListDate(item);
             const title = this.escapeHTML(item.title || 'Untitled');
+
+            if (variant === 'hidden') {
+                return `
+                <div class="sidebar-notes-list-item--row has-note-color"${accentStyle}>
+                    <button type="button" class="sidebar-notes-list-item-body" data-id="${this.escapeAttr(item.id)}" title="${title}">
+                        <span class="sidebar-notes-list-date">${this.escapeHTML(dateLabel)}</span>
+                        <span class="sidebar-notes-list-item-title">${title}</span>
+                    </button>
+                    <button type="button" class="sidebar-list-action-btn unhide-btn" data-id="${this.escapeAttr(item.id)}" title="Unhide" aria-label="Unhide">${CARD_ICONS.show}</button>
+                </div>`;
+            }
+
             return `
-            <button type="button" class="sidebar-notes-list-item has-note-color${archived ? ' is-archived' : ''}" data-id="${this.escapeAttr(item.id)}" title="${title}"${accentStyle}>
+            <button type="button" class="sidebar-notes-list-item has-note-color${variant === 'archived' ? ' is-archived' : ''}" data-id="${this.escapeAttr(item.id)}" title="${title}"${accentStyle}>
                 <span class="sidebar-notes-list-date">${this.escapeHTML(dateLabel)}</span>
                 <span class="sidebar-notes-list-item-title">${title}</span>
             </button>`;
         }).join('');
 
-        zone.querySelectorAll('.sidebar-notes-list-item').forEach((btn) => {
+        zone.querySelectorAll('.sidebar-notes-list-item[data-id]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const item = allItems.find((entry) => entry.id === btn.dataset.id);
                 if (!item) return;
                 window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: item }));
             });
         });
-    },
 
-    updateNotesList(items) {
-        const allItems = items || [];
-        const activeItems = allItems.filter((item) => item.status !== 'archived');
-        const archivedItems = allItems.filter((item) => item.status === 'archived');
-
-        const activeCountEl = document.getElementById('notes-active-count');
-        const archivedCountEl = document.getElementById('notes-archived-count');
-        if (activeCountEl) activeCountEl.textContent = String(activeItems.length);
-        if (archivedCountEl) archivedCountEl.textContent = String(archivedItems.length);
-
-        this.renderNotesListZone('notes-list-active-zone', activeItems, allItems);
-        this.renderNotesListZone('notes-list-archived-zone', archivedItems, allItems, { archived: true });
-    },
-
-    escapeAttr(str) {
-        if (!str) return '';
-        return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-    },
-
-    updateStatus(items, categories, hiddenCategories) {
-        this.updateObjectsStatus(items);
-        this.updateCategoriesStatus(categories, hiddenCategories);
-    },
-
-    updateObjectsStatus(items) {
-        const visible = items.filter(item => {
-            if (item.status === 'archived') return false;
-            try {
-                const hiddenIds = JSON.parse(localStorage.getItem('matrix_hidden_board_ids') || '[]');
-                return !hiddenIds.includes(item.id) && !item.hiddenFromBoard;
-            } catch {
-                return !item.hiddenFromBoard;
-            }
-        });
-        const hiddenCount = items.length - visible.length;
-
-        document.getElementById('objects-count-badge').textContent = `${items.length} / ${hiddenCount}`;
-        document.getElementById('objects-visible-count').textContent = visible.length;
-        document.getElementById('objects-hidden-count').textContent = hiddenCount;
-
-        this.populateHiddenObjects(items);
-    },
-
-    populateHiddenObjects(items) {
-        const listContainer = document.getElementById('objects-hidden-list');
-        const hiddenItems = items.filter(item => {
-            try {
-                const hiddenIds = JSON.parse(localStorage.getItem('matrix_hidden_board_ids') || '[]');
-                return hiddenIds.includes(item.id) || item.hiddenFromBoard;
-            } catch {
-                return item.hiddenFromBoard;
-            }
+        zone.querySelectorAll('.sidebar-notes-list-item-body[data-id]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const item = allItems.find((entry) => entry.id === btn.dataset.id);
+                if (!item) return;
+                window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: item }));
+            });
         });
 
-        if (hiddenItems.length === 0) {
-            listContainer.innerHTML = '';
-            return;
-        }
-
-        listContainer.innerHTML = hiddenItems.map(item => `
-            <div class="list-row--danger" data-id="${item.id}">
-                <span class="hidden-item-title">${this.escapeHTML(item.title || 'Untitled')}</span>
-                <button type="button" class="hidden-item-btn unhide-btn" data-id="${item.id}" title="Unhide">${CARD_ICONS.show}</button>
-            </div>
-        `).join('');
-
-        listContainer.querySelectorAll('.unhide-btn').forEach(btn => {
+        zone.querySelectorAll('.unhide-btn').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const itemId = btn.dataset.id;
-                const item = items.find(i => i.id === itemId);
-                if (item) {
-                    import('./ui.js').then(module => {
-                        module.UI.unhideFromBoard(item);
-                    });
-                }
+                const item = allItems.find((entry) => entry.id === btn.dataset.id);
+                if (item) UI.unhideFromBoard(item);
             });
         });
     },
 
-    updateCategoriesStatus(categories, hiddenCategories) {
-        const activeCount = categories.filter(c => !hiddenCategories.includes(c.name)).length;
-        const hiddenCount = hiddenCategories.length;
+    updateNotesList(items) {
+        const allItems = items || [];
+        const activeItems = allItems.filter((item) => item.status !== 'archived' && !UI.isHiddenFromBoard(item));
+        const hiddenItems = allItems.filter((item) => item.status !== 'archived' && UI.isHiddenFromBoard(item));
+        const archivedItems = allItems.filter((item) => item.status === 'archived');
 
-        document.getElementById('categories-count-badge').textContent = `${categories.length} / ${hiddenCount}`;
-        document.getElementById('categories-active-count').textContent = activeCount;
-        document.getElementById('categories-hidden-count').textContent = hiddenCount;
+        const activeCountEl = document.getElementById('notes-active-count');
+        const hiddenCountEl = document.getElementById('notes-hidden-count');
+        const archivedCountEl = document.getElementById('notes-archived-count');
+        if (activeCountEl) activeCountEl.textContent = String(activeItems.length);
+        if (hiddenCountEl) hiddenCountEl.textContent = String(hiddenItems.length);
+        if (archivedCountEl) archivedCountEl.textContent = String(archivedItems.length);
 
-        this.populateHiddenCategories(categories, hiddenCategories);
+        this.renderNotesListZone('notes-list-active-zone', activeItems, allItems, { variant: 'active' });
+        this.renderNotesListZone('notes-list-hidden-zone', hiddenItems, allItems, { variant: 'hidden' });
+        this.renderNotesListZone('notes-list-archived-zone', archivedItems, allItems, { variant: 'archived' });
     },
 
-    populateHiddenCategories(categories, hiddenCategories) {
-        const listContainer = document.getElementById('categories-hidden-list');
+    renderCategoryListZone(zoneId, names, categories, hiddenCategories, { hidden = false } = {}) {
+        const zone = document.getElementById(zoneId);
+        if (!zone) return;
 
-        if (hiddenCategories.length === 0) {
-            listContainer.innerHTML = '';
+        if (!names?.length) {
+            zone.innerHTML = `<div class="sidebar-notes-list-empty">${hidden ? 'No hidden categories' : 'No active categories'}</div>`;
             return;
         }
 
-        listContainer.innerHTML = hiddenCategories.map(catName => {
-            const cat = categories.find(c => c.name === catName);
+        const sorted = [...names].sort((a, b) => a.localeCompare(b));
+        zone.innerHTML = sorted.map((catName) => {
+            const cat = categories.find((entry) => entry.name === catName);
             const color = cat?.color || '#64748b';
+            const accentStyle = ` style="--note-accent:${this.escapeAttr(color)}"`;
+            const title = this.escapeHTML(catName);
+
+            if (hidden) {
+                return `
+                <div class="sidebar-notes-list-item--row sidebar-notes-list-item--category has-note-color"${accentStyle}>
+                    <span class="sidebar-notes-list-item-body sidebar-notes-list-item--label">
+                        <span class="sidebar-notes-list-item-title">${title}</span>
+                    </span>
+                    <button type="button" class="sidebar-list-action-btn show-category-btn" data-category="${this.escapeAttr(catName)}" title="Show" aria-label="Show">${CARD_ICONS.show}</button>
+                </div>`;
+            }
+
             return `
-                <div class="list-row--danger" data-category="${this.escapeHTML(catName)}" style="border-left-color: ${color};">
-                    <span class="hidden-item-title">${this.escapeHTML(catName)}</span>
-                    <button type="button" class="hidden-item-btn show-category-btn" data-category="${this.escapeHTML(catName)}" title="Show">${CARD_ICONS.show}</button>
-                </div>
-            `;
+            <div class="sidebar-notes-list-item sidebar-notes-list-item--category sidebar-notes-list-item--label has-note-color"${accentStyle}>
+                <span class="sidebar-notes-list-item-title">${title}</span>
+            </div>`;
         }).join('');
 
-        listContainer.querySelectorAll('.show-category-btn').forEach(btn => {
+        zone.querySelectorAll('.show-category-btn').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 window.dispatchEvent(new CustomEvent('category:show_requested', { detail: { name: btn.dataset.category } }));
             });
         });
+    },
+
+    updateCategories(categories, hiddenCategories) {
+        const allCategories = categories || [];
+        const hiddenSet = hiddenCategories || [];
+        const activeNames = allCategories
+            .map((cat) => cat.name)
+            .filter((name) => name && !hiddenSet.includes(name));
+        const hiddenNames = hiddenSet.filter((name) => allCategories.some((cat) => cat.name === name));
+
+        const activeCountEl = document.getElementById('categories-active-count');
+        const hiddenCountEl = document.getElementById('categories-hidden-count');
+        if (activeCountEl) activeCountEl.textContent = String(activeNames.length);
+        if (hiddenCountEl) hiddenCountEl.textContent = String(hiddenNames.length);
+
+        this.renderCategoryListZone('categories-list-active-zone', activeNames, allCategories, hiddenSet);
+        this.renderCategoryListZone('categories-list-hidden-zone', hiddenNames, allCategories, hiddenSet, { hidden: true });
+    },
+
+    /** @deprecated use updateCategories */
+    updateStatus(_items, categories, hiddenCategories) {
+        this.updateCategories(categories, hiddenCategories);
+    },
+
+    escapeAttr(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     },
 
     escapeHTML(str) {

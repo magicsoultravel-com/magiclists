@@ -1,5 +1,4 @@
 export const DEFAULT_CATEGORIES = [
-    { name: "Quick Links", color: "#06b6d4", special: "quick-links" },
     { name: "Lifestyle", color: "#64748b" },
     { name: "Work", color: "#3b82f6" },
     { name: "Personal", color: "#10b981" },
@@ -26,8 +25,4 @@ export function readStoredCategories({ keepEmpty = false } = {}) {
 
 export function categoryKey(name) {
     return String(name || '').trim().toLowerCase();
-}
-
-export function isQuickLinksCategory(name) {
-    return categoryKey(name) === 'quick links';
 }

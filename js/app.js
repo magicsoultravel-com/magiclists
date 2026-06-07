@@ -154,7 +154,7 @@ class Application {
     }
 
     updateWorkspaceCounter() {
-        SidePanel.updateStatus(AppState.items, AppState.categories, AppState.hiddenCategories);
+        SidePanel.updateCategories(AppState.categories, AppState.hiddenCategories);
         SidePanel.updateNotesList(AppState.items);
     }
 
