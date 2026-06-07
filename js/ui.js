@@ -797,7 +797,10 @@ export const UI = {
         }
         
         let checklistHtml = '';
-        if (!isQuickLinkType && item.type === 'checklist' && (canEdit || (item.steps && item.steps.length > 0))) {
+        const showInlineChecklist = !isQuickLinkType && (
+            canEdit || (item.type === 'checklist' && item.steps && item.steps.length > 0)
+        );
+        if (showInlineChecklist) {
             if (!item.steps) item.steps = [];
             checklistHtml = this.buildExpandedChecklistHtml(item, canEdit);
         }
@@ -945,11 +948,12 @@ export const UI = {
             });
         }
 
-        if (!isQuickLinkType && item.type === 'checklist') {
+        if (!isQuickLinkType && card.querySelector('.expanded-checklist')) {
             if (!item.steps) item.steps = [];
 
             card.querySelector('.expanded-checklist-add-btn')?.addEventListener('click', (e) => {
                 e.stopPropagation();
+                if (item.type !== 'checklist') item.type = 'checklist';
                 item.steps.push(this.createBlankChecklistStep());
                 reorderStepsByCompletion(item.steps);
                 this.emitItemMutation(item, { preserveView: true });
