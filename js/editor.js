@@ -19,24 +19,15 @@ export const Editor = {
         this.archiveBtn = document.getElementById('modal-archive-btn');
         this.approveBtn = document.getElementById('modal-approve-btn');
 
-        document.getElementById('modal-close-btn')?.addEventListener('click', () => this.closeAndSave());
-        const commitAndClose = () => {
-            this.markInteracted();
-            if (this.autoSaveTimer) {
-                clearTimeout(this.autoSaveTimer);
-                this.autoSaveTimer = null;
-            }
-            this.syncActiveItemFromDom();
-            this.persistNote({ force: true });
-            this.animateEditorClose(() => this.resetEditorState());
-        };
+        const commitAndClose = () => this.closeAndSave({ revealOnBoard: true });
+        document.getElementById('modal-close-btn')?.addEventListener('click', commitAndClose);
         this.saveBtn?.addEventListener('click', commitAndClose);
         this.approveBtn?.addEventListener('click', commitAndClose);
         this.calendarToggleBtn?.addEventListener('click', () => this.toggleCalendarVisibility());
         this.archiveBtn?.addEventListener('click', () => this.emitArchiveAction());
         this.overlay?.addEventListener('mousedown', (e) => {
             if (e.target !== this.overlay) return;
-            this.closeAndSave();
+            this.closeAndSave({ revealOnBoard: true });
         });
     },
     
@@ -222,22 +213,32 @@ export const Editor = {
         if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
     },
 
-    closeAndSave() {
+    closeAndSave({ revealOnBoard = false } = {}) {
         if (this.autoSaveTimer) {
             clearTimeout(this.autoSaveTimer);
             this.autoSaveTimer = null;
         }
+
+        let savedItem = null;
         if (this.activeItem) {
             this.syncActiveItemFromDom();
             const currentData = this.collectFormData();
             const shouldPersist = noteHasSavableContent(currentData)
                 || (this.hasUserInteracted && !this.isNewUnsavedNote);
             if (shouldPersist) {
+                UI.markNoteExpanded(currentData.id);
                 this.persistNote({ force: true });
+                savedItem = this.activeItem;
             }
         }
 
-        this.animateEditorClose(() => this.resetEditorState());
+        const itemToReveal = revealOnBoard ? savedItem : null;
+        this.animateEditorClose(() => {
+            this.resetEditorState();
+            if (itemToReveal) {
+                window.dispatchEvent(new CustomEvent('editor:reveal_on_board', { detail: itemToReveal }));
+            }
+        });
     },
     
     close() {
@@ -353,88 +354,26 @@ export const Editor = {
             this.availableCategories.map(cat => {
                 const catName = typeof cat === 'string' ? cat : cat.name;
                 const selected = activeCategory && catName.toLowerCase() === activeCategory.toLowerCase();
-                return `<option value="${this.escapeQuotes(catName)}" ${selected ? 'selected' : ''}>${catName}</option>`;
+                return `<option value="${UI.escapeQuotes(catName)}" ${selected ? 'selected' : ''}>${catName}</option>`;
             }).join('');
         const isExistingItem = item.created_at !== undefined;
-        const createdLabel = this.formatCreatedDate(item.created_at);
-        const sizeLabel = computeNoteSizeKb(item);
         this.archiveBtn?.classList.toggle('is-hidden', !isExistingItem);
-        if (this.saveBtn) this.saveBtn.innerHTML = CARD_ICONS.save;
-        document.getElementById('modal-close-btn').innerHTML = CARD_ICONS.close;
+        this.updateDoneButtonUI();
         this.updateArchiveToggleUI();
         this.updateCalendarToggleUI();
-        const warningLightHtml = '';
         const startParts = this.parseStoredDateTime(item.startDateTime || '');
         const endParts = this.parseStoredDateTime(item.endDateTime || '');
-        const bodyHtml = UI.buildNoteBodyHtml(item, { canEdit: true, alwaysShowChecklist: true });
 
-        this.mountZone.innerHTML = `
-            ${warningLightHtml}
-            <div class="editor-note-shell note-surface">
-                <div class="editor-note-header">
-                    <div class="mini-card-title card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-field="title" data-placeholder="Title…">${UI.escapeHTML(item.title || '')}</div>
-                </div>
-
-            <div class="editor-panel editor-panel--config">
-                <div class="collapsable-header" id="config-section-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Configuration</span>
-                </div>
-                <div class="collapsable-section collapsed" id="config-section">
-                    <div class="form-row-grid form-row-grid--2">
-                        <div class="form-group form-group--compact">
-                            <label>Visibility</label>
-                            <select id="edit-visibility" class="form-input">
-                                <option value="private" ${item.visibility === 'private' ? 'selected' : ''}>Private</option>
-                                <option value="public" ${item.visibility === 'public' ? 'selected' : ''}>Public</option>
-                            </select>
-                        </div>
-                        <div class="form-group form-group--compact">
-                            <label>Start</label>
-                            <div class="datetime-input-row">
-                                <input type="date" id="edit-start-date" class="form-input" value="${startParts.date}">
-                                <input type="time" id="edit-start-time" class="form-input form-input--optional-time" value="${startParts.time}" step="60" title="Optional — leave blank for date only">
-                            </div>
-                        </div>
-                        <div class="form-group form-group--compact">
-                            <label>End</label>
-                            <div class="datetime-input-row">
-                                <input type="date" id="edit-end-date" class="form-input" value="${endParts.date}">
-                                <input type="time" id="edit-end-time" class="form-input form-input--optional-time" value="${endParts.time}" step="60" title="Optional — leave blank for date only">
-                            </div>
-                        </div>
-                        <div class="form-group form-group--compact">
-                            <label>Category</label>
-                            <select id="edit-category" class="form-input">${categoryOptionsHtml}</select>
-                        </div>
-                        <div class="form-group form-group--compact">
-                            <label>Status</label>
-                            <select id="edit-status" class="form-input">
-                                <option value="active" ${item.status === 'active' ? 'selected' : ''}>Active</option>
-                                <option value="archived" ${item.status === 'archived' ? 'selected' : ''}>Archived</option>
-                                <option value="completed" ${item.status === 'completed' ? 'selected' : ''}>Done</option>
-                            </select>
-                        </div>
-                        <div class="form-group form-group--compact form-group--color">
-                            <label>Card color</label>
-                            <input type="hidden" id="edit-bg-color-value" value="${this.escapeQuotes(resolveNoteColor(item.backgroundColor))}">
-                            <button type="button" id="edit-color-trigger" class="color-picker-trigger" title="Choose card color" aria-label="Choose card color" aria-haspopup="dialog">
-                                <span class="color-picker-trigger-dot"></span>
-                                <span class="color-picker-trigger-label">Choose color</span>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card-body editor-note-body" id="editor-note-body">
-                ${bodyHtml}
-            </div>
-                <div class="editor-meta-row editor-meta-row--footer">
-                    ${createdLabel ? `<span class="editor-created-date">Created ${createdLabel}</span>` : '<span></span>'}
-                    <span class="editor-note-size" title="Note content size">${sizeLabel} KB</span>
-                </div>
-            </div>
-        `;
+        this.mountZone.innerHTML = UI.buildNoteEditorShell(item, {
+            canEdit: true,
+            alwaysShowChecklist: true,
+            showConfig: true,
+            metaMode: 'modal',
+            categoryOptionsHtml,
+            startParts,
+            endParts,
+            bodyId: 'editor-note-body'
+        });
         
         const inputs = ['edit-visibility', 'edit-status', 'edit-category', 'edit-start-date', 'edit-start-time', 'edit-end-date', 'edit-end-time', 'edit-recurring'];
         inputs.forEach(id => {
@@ -484,11 +423,21 @@ export const Editor = {
         applyCardTheme(modal, backgroundColor || '', { paintBackground: true });
     },
 
-    formatCreatedDate(timestamp) {
-        if (!timestamp) return '';
-        const d = new Date(Number(timestamp) * 1000);
-        if (Number.isNaN(d.getTime())) return '';
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    updateDoneButtonUI() {
+        const doneTitle = 'Show on board';
+        const doneIcon = CARD_ICONS.collapse;
+        this.saveBtn?.classList.add('is-hidden');
+        const closeBtn = document.getElementById('modal-close-btn');
+        if (closeBtn) {
+            closeBtn.innerHTML = doneIcon;
+            closeBtn.title = doneTitle;
+            closeBtn.setAttribute('aria-label', doneTitle);
+        }
+        if (this.approveBtn) {
+            this.approveBtn.innerHTML = doneIcon;
+            this.approveBtn.title = doneTitle;
+            this.approveBtn.setAttribute('aria-label', doneTitle);
+        }
     },
 
     updateEditorSizeLabel() {
@@ -532,14 +481,7 @@ export const Editor = {
     },
 
     collectAndSave() {
-        this.markInteracted();
-        if (this.autoSaveTimer) {
-            clearTimeout(this.autoSaveTimer);
-            this.autoSaveTimer = null;
-        }
-        this.syncActiveItemFromDom();
-        this.persistNote({ force: true });
-        this.animateEditorClose(() => this.resetEditorState());
+        this.closeAndSave({ revealOnBoard: true });
     },
     
     updateArchiveToggleUI() {
@@ -569,5 +511,4 @@ export const Editor = {
         this.close();
     },
     
-    escapeQuotes(str) { return str ? str.replace(/"/g, '&quot;') : ''; }
 };

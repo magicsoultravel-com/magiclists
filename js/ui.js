@@ -863,6 +863,187 @@ export const UI = {
         return html;
     },
 
+    escapeQuotes(str) {
+        return str ? str.replace(/"/g, '&quot;') : '';
+    },
+
+    buildNoteTitleHtml(item, canEdit) {
+        const fullTitle = item.title || '';
+        const titleAttr = this.escapeHTML(fullTitle).replace(/"/g, '&quot;');
+        if (canEdit) {
+            return `<div class="mini-card-title card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-field="title" data-placeholder="Title…">${this.escapeHTML(fullTitle)}</div>`;
+        }
+        return `<div class="mini-card-title" title="${titleAttr}">${this.escapeHTML(fullTitle)}</div>`;
+    },
+
+    buildNoteMetaFooterHtml(item, { mode = 'inline', targetCatName = '', visibilityBadgeColor = '#f59e0b' } = {}) {
+        const createdLabel = this.formatCreatedDate(item.created_at);
+        const sizeLabel = computeNoteSizeKb(item);
+        const createdHtml = createdLabel
+            ? `<span class="editor-created-date" title="Created">Created ${createdLabel}</span>`
+            : '';
+        const sizeHtml = `<span class="editor-note-size" title="Note content size">${sizeLabel} KB</span>`;
+
+        if (mode === 'inline') {
+            return `
+                <div class="editor-meta-row editor-meta-row--footer editor-meta-row--inline">
+                    <span class="editor-meta-badges">
+                        <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
+                        ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
+                    </span>
+                    <span class="editor-meta-stats">
+                        ${createdHtml}
+                        ${sizeHtml}
+                    </span>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="editor-meta-row editor-meta-row--footer">
+                ${createdHtml || '<span></span>'}
+                ${sizeHtml}
+            </div>
+        `;
+    },
+
+    buildNoteConfigPanelHtml(item, { categoryOptionsHtml = '', startParts = {}, endParts = {} } = {}) {
+        return `
+            <div class="editor-panel editor-panel--config">
+                <div class="collapsable-header" id="config-section-header">
+                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Configuration</span>
+                </div>
+                <div class="collapsable-section collapsed" id="config-section">
+                    <div class="form-row-grid form-row-grid--2">
+                        <div class="form-group form-group--compact">
+                            <label>Visibility</label>
+                            <select id="edit-visibility" class="form-input">
+                                <option value="private" ${item.visibility === 'private' ? 'selected' : ''}>Private</option>
+                                <option value="public" ${item.visibility === 'public' ? 'selected' : ''}>Public</option>
+                            </select>
+                        </div>
+                        <div class="form-group form-group--compact">
+                            <label>Start</label>
+                            <div class="datetime-input-row">
+                                <input type="date" id="edit-start-date" class="form-input" value="${startParts.date || ''}">
+                                <input type="time" id="edit-start-time" class="form-input form-input--optional-time" value="${startParts.time || ''}" step="60" title="Optional — leave blank for date only">
+                            </div>
+                        </div>
+                        <div class="form-group form-group--compact">
+                            <label>End</label>
+                            <div class="datetime-input-row">
+                                <input type="date" id="edit-end-date" class="form-input" value="${endParts.date || ''}">
+                                <input type="time" id="edit-end-time" class="form-input form-input--optional-time" value="${endParts.time || ''}" step="60" title="Optional — leave blank for date only">
+                            </div>
+                        </div>
+                        <div class="form-group form-group--compact">
+                            <label>Category</label>
+                            <select id="edit-category" class="form-input">${categoryOptionsHtml}</select>
+                        </div>
+                        <div class="form-group form-group--compact">
+                            <label>Status</label>
+                            <select id="edit-status" class="form-input">
+                                <option value="active" ${item.status === 'active' ? 'selected' : ''}>Active</option>
+                                <option value="archived" ${item.status === 'archived' ? 'selected' : ''}>Archived</option>
+                                <option value="completed" ${item.status === 'completed' ? 'selected' : ''}>Done</option>
+                            </select>
+                        </div>
+                        <div class="form-group form-group--compact form-group--color">
+                            <label>Card color</label>
+                            <input type="hidden" id="edit-bg-color-value" value="${this.escapeQuotes(resolveNoteColor(item.backgroundColor))}">
+                            <button type="button" id="edit-color-trigger" class="color-picker-trigger" title="Choose card color" aria-label="Choose card color" aria-haspopup="dialog">
+                                <span class="color-picker-trigger-dot"></span>
+                                <span class="color-picker-trigger-label">Choose color</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    buildNoteEditorShell(item, {
+        canEdit = false,
+        alwaysShowChecklist = false,
+        showConfig = false,
+        toolbarHtml = '',
+        toolbarDragZone = '',
+        footerDragZone = '',
+        metaMode = 'inline',
+        targetCatName = '',
+        visibilityBadgeColor = '#f59e0b',
+        categoryOptionsHtml = '',
+        startParts = {},
+        endParts = {},
+        bodyId = ''
+    } = {}) {
+        const titleHtml = this.buildNoteTitleHtml(item, canEdit);
+        const bodyHtml = this.buildNoteBodyHtml(item, {
+            canEdit,
+            alwaysShowChecklist: alwaysShowChecklist || canEdit
+        });
+        const configHtml = showConfig
+            ? this.buildNoteConfigPanelHtml(item, { categoryOptionsHtml, startParts, endParts })
+            : '';
+        const metaHtml = this.buildNoteMetaFooterHtml(item, {
+            mode: metaMode,
+            targetCatName,
+            visibilityBadgeColor
+        });
+        const bodyIdAttr = bodyId ? ` id="${bodyId}"` : '';
+
+        return `
+            <div class="editor-note-shell note-surface">
+                ${toolbarHtml ? `<div class="note-editor-toolbar${toolbarDragZone}">${toolbarHtml}</div>` : ''}
+                <div class="editor-note-header">
+                    ${titleHtml}
+                </div>
+                ${configHtml}
+                <div class="card-body editor-note-body"${bodyIdAttr}>
+                    ${bodyHtml}
+                </div>
+                <div class="${footerDragZone ? `editor-meta-wrap${footerDragZone}` : 'editor-meta-wrap'}">
+                    ${metaHtml}
+                </div>
+            </div>
+        `;
+    },
+
+    markNoteExpanded(itemId) {
+        if (!itemId) return;
+        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
+        expandedCards[itemId] = true;
+        localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
+    },
+
+    revealNoteOnBoard(item, hiddenCategories = []) {
+        if (!item?.id) return false;
+        this.markNoteExpanded(item.id);
+
+        const canvas = document.getElementById('app-canvas');
+        if (!canvas) return false;
+
+        const activeCategories = readStoredCategories()
+            .filter((cat) => !hiddenCategories.includes(cat.name));
+        const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
+        let card = canvas.querySelector(`.mini-card[data-id="${item.id}"]`);
+
+        if (card) {
+            if (!card.classList.contains('expanded')) {
+                this.applyCardExpandCollapse(card, item, true, activeCategories, targetCatName, categoryColor);
+            } else {
+                this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
+            }
+            requestAnimationFrame(() => {
+                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            });
+            return true;
+        }
+
+        window.dispatchEvent(new CustomEvent('editor:reveal_on_board', { detail: item }));
+        return false;
+    },
+
     renderCompactCard(card, item, activeCategories, targetCatName, categoryColor) {
         card.classList.remove('note-surface');
         const fullTitle = item.title || '';
@@ -951,37 +1132,19 @@ export const UI = {
     },
 
     renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor) {
-        card.classList.add('note-surface');
         const canEdit = this.canEditInline();
-        const fullTitle = item.title || '';
-        const titleAttr = this.escapeHTML(fullTitle).replace(/"/g, '&quot;');
-        const titleHtml = canEdit
-            ? `<div class="mini-card-title card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-field="title" data-placeholder="Title…" title="Click to edit">${this.escapeHTML(fullTitle)}</div>`
-            : `<div class="mini-card-title" title="${titleAttr}">${this.escapeHTML(fullTitle)}</div>`;
-
-        const bodyHtml = this.buildNoteBodyHtml(item, { canEdit });
         const visibilityBadgeColor = item.visibility === 'public' ? '#10b981' : '#f59e0b';
-        
         const dragZone = this.freeformDragZoneClass(card);
-        const createdLabel = this.formatCreatedDate(item.created_at);
-        const createdHtml = createdLabel ? `<span class="created-date" title="Created">${createdLabel}</span>` : '';
-        const sizeHtml = this.buildNoteSizeHtml(item);
 
-        card.innerHTML = `
-            <div class="card-header${dragZone}">
-                ${titleHtml}
-                ${this.buildCardActionsHtml(item, true)}
-            </div>
-            <div class="card-body">
-                ${bodyHtml}
-            </div>
-            <div class="mini-card-meta expanded${dragZone}">
-                <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
-                ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
-                ${sizeHtml}
-                ${createdHtml}
-            </div>
-        `;
+        card.innerHTML = this.buildNoteEditorShell(item, {
+            canEdit,
+            toolbarHtml: this.buildCardActionsHtml(item, true),
+            toolbarDragZone: dragZone,
+            footerDragZone: dragZone,
+            metaMode: 'inline',
+            targetCatName,
+            visibilityBadgeColor
+        });
 
         this.attachCardActions(card, item, {
             activeCategories,
@@ -994,11 +1157,11 @@ export const UI = {
     },
 
     refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor) {
-        const body = card.querySelector('.card-body');
+        const body = card.querySelector('.editor-note-body') || card.querySelector('.card-body');
         const scrollTop = body?.scrollTop ?? 0;
         const pendingFocusStepId = card.dataset.pendingFocusStepId;
         this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
-        const newBody = card.querySelector('.card-body');
+        const newBody = card.querySelector('.editor-note-body') || card.querySelector('.card-body');
         if (newBody) newBody.scrollTop = scrollTop;
         if (pendingFocusStepId) {
             card.dataset.pendingFocusStepId = pendingFocusStepId;
@@ -1343,10 +1506,15 @@ export const UI = {
         const refresh = () => {
             this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
         };
-        this.attachNoteBodyInteractions(card, item, {
+        const shell = card.querySelector('.editor-note-shell') || card;
+        const header = shell.querySelector('.editor-note-header');
+        const body = shell.querySelector('.editor-note-body');
+        const interactionOptions = {
             refresh,
             stopMousedownPropagation: card.dataset.freeform === '1'
-        });
+        };
+        if (header) this.attachNoteBodyInteractions(header, item, interactionOptions);
+        if (body) this.attachNoteBodyInteractions(body, item, interactionOptions);
     },
 
     getChecklistCollapsedKeys() {

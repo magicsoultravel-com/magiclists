@@ -356,6 +356,28 @@ class Application {
             Editor.open(e.detail, AppState.categories);
         });
 
+        window.addEventListener('editor:reveal_on_board', async (e) => {
+            const item = e.detail;
+            if (!item?.id) return;
+            UI.markNoteExpanded(item.id);
+            const idx = AppState.items.findIndex((i) => i.id === item.id);
+            if (idx >= 0) AppState.items[idx] = item;
+            else AppState.items.push(item);
+
+            const canvas = document.getElementById('app-canvas');
+            const existingCard = canvas?.querySelector(`.mini-card[data-id="${item.id}"]`);
+            if (existingCard) {
+                UI.revealNoteOnBoard(item, AppState.hiddenCategories);
+                return;
+            }
+
+            await this.syncDataStore();
+            requestAnimationFrame(() => {
+                const card = document.getElementById('app-canvas')?.querySelector(`.mini-card[data-id="${item.id}"]`);
+                card?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            });
+        });
+
         window.addEventListener('item:mutation_requested', async (e) => {
             if (!AppState.user.isLoggedIn) {
                 alert('Login required to save notes. Use Quick actions → Login.');
