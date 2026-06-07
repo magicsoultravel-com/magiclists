@@ -1,6 +1,7 @@
 import { API } from './api.js';
 
 const MAX_STACK = 50;
+const MERGE_MS = 2500;
 
 let handlers = {
     getToken: () => null,
@@ -13,10 +14,20 @@ function cloneItem(item) {
     return JSON.parse(JSON.stringify(item));
 }
 
+function itemsEqual(a, b) {
+    return JSON.stringify(a) === JSON.stringify(b);
+}
+
+export function historyLabelForItem(item) {
+    const title = item?.title?.trim();
+    return title ? `Edit "${title}"` : 'Edit note';
+}
+
 export const UndoManager = {
     undoStack: [],
     redoStack: [],
     busy: false,
+    isApplying: false,
     undoBtn: null,
     redoBtn: null,
     controlsEl: null,
@@ -75,11 +86,29 @@ export const UndoManager = {
         return ok;
     },
 
-    recordItemChange(beforeItem, afterItem, { preserveView = false, label = 'Edit' } = {}) {
+    recordItemChange(beforeItem, afterItem, { preserveView = false, label } = {}) {
+        if (this.isApplying || !handlers.isEnabled() || !beforeItem || !afterItem) return;
+        if (itemsEqual(beforeItem, afterItem)) return;
+
         const before = cloneItem(beforeItem);
         const after = cloneItem(afterItem);
+        const entryLabel = label || historyLabelForItem(after);
+        const now = Date.now();
+        const top = this.undoStack[this.undoStack.length - 1];
+
+        if (top?.mergeKey === after.id && now - (top.mergedAt || 0) < MERGE_MS) {
+            top.redo = () => this.applyItem(after, { preserveView });
+            top.label = entryLabel;
+            top.mergedAt = now;
+            this.redoStack = [];
+            this.updateToolbar();
+            return;
+        }
+
         this.push({
-            label,
+            label: entryLabel,
+            mergeKey: after.id,
+            mergedAt: now,
             undo: () => this.applyItem(before, { preserveView }),
             redo: () => this.applyItem(after, { preserveView })
         });
@@ -107,6 +136,7 @@ export const UndoManager = {
         if (!entry) return;
 
         this.busy = true;
+        this.isApplying = true;
         this.updateToolbar();
         try {
             const ok = await entry.undo();
@@ -120,6 +150,7 @@ export const UndoManager = {
             this.undoStack.push(entry);
         } finally {
             this.busy = false;
+            this.isApplying = false;
             this.updateToolbar();
         }
     },
@@ -130,6 +161,7 @@ export const UndoManager = {
         if (!entry) return;
 
         this.busy = true;
+        this.isApplying = true;
         this.updateToolbar();
         try {
             const ok = await entry.redo();
@@ -143,6 +175,7 @@ export const UndoManager = {
             this.redoStack.push(entry);
         } finally {
             this.busy = false;
+            this.isApplying = false;
             this.updateToolbar();
         }
     },

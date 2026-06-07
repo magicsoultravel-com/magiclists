@@ -7,7 +7,7 @@ import { Calendar } from './calendar.js';
 import { SidePanel } from './hamburger.js';
 import { applyBackupToStorage } from './backup.js';
 import { DEFAULT_CATEGORIES, normalizeCategories } from './categories.js';
-import { UndoManager } from './undo.js';
+import { UndoManager, historyLabelForItem } from './undo.js';
 
 function countHiddenFromBoard(items) {
     return items.filter(item => UI.isHiddenFromBoard(item)).length;
@@ -332,11 +332,24 @@ class Application {
             const item = detail?.preserveView ? detail.item : detail;
             const preserveView = detail?.preserveView === true;
             if (!item?.id) return;
+
+            const idx = AppState.items.findIndex((i) => i.id === item.id);
+            const beforeSnapshot = idx >= 0
+                ? JSON.parse(JSON.stringify(AppState.items[idx]))
+                : null;
+
             const success = await API.saveItem(item, AppState.user.token);
             if (!success) return;
 
-            const idx = AppState.items.findIndex((i) => i.id === item.id);
+            if (beforeSnapshot) {
+                UndoManager.recordItemChange(beforeSnapshot, item, {
+                    preserveView,
+                    label: historyLabelForItem(item)
+                });
+            }
+
             if (idx !== -1) AppState.items[idx] = item;
+            else AppState.items.push(item);
 
             if (preserveView) {
                 const canvas = document.getElementById('app-canvas');

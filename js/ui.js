@@ -1,6 +1,5 @@
 import { isQuickLinksCategory, readStoredCategories } from './categories.js';
 import { applyCardTheme } from './cardTheme.js';
-import { UndoManager } from './undo.js';
 
 export const FREEFORM_DEFAULT_W = 96;
 export const FREEFORM_DEFAULT_H = 56;
@@ -1026,15 +1025,9 @@ export const UI = {
                     const stepId = row?.dataset.stepId;
                     if (!stepId || !item.steps) return;
                     if (!item.steps.some((s) => s.id === stepId)) return;
-                    const itemBefore = JSON.parse(JSON.stringify(item));
                     item.steps = item.steps.filter((s) => s.id !== stepId);
-                    const itemAfter = JSON.parse(JSON.stringify(item));
                     this.emitItemMutation(item, { preserveView: true });
                     refresh();
-                    UndoManager.recordItemChange(itemBefore, itemAfter, {
-                        preserveView: true,
-                        label: 'Remove checklist item'
-                    });
                 });
             });
         }
