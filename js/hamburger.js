@@ -24,13 +24,13 @@ export const SidePanel = {
     },
 
     moveBrand(collapsed) {
-        const brand = document.querySelector('.control-bar-brand');
+        const brandWrap = document.querySelector('.control-bar-brand');
         const sidebarHost = document.getElementById('side-panel-brand-host');
         const controlHost = document.getElementById('control-bar-brand-host');
-        if (!brand || !sidebarHost || !controlHost) return;
+        if (!brandWrap || !sidebarHost || !controlHost) return;
         const target = collapsed ? controlHost : sidebarHost;
-        if (brand.parentElement !== target) {
-            target.appendChild(brand);
+        if (brandWrap.parentElement !== target) {
+            target.appendChild(brandWrap);
         }
         sidebarHost.classList.toggle('is-visible', !collapsed);
         controlHost.classList.toggle('is-visible', collapsed);

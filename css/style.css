@@ -2137,7 +2137,7 @@ textarea.form-input {
     min-height: 58px;
     padding: 0.75rem 1rem;
     background: var(--chrome-bg, #151519);
-    justify-content: space-between;
+    justify-content: flex-end;
 }
 
 .logo-zone {
@@ -2146,9 +2146,11 @@ textarea.form-input {
     gap: 0.65rem;
     min-width: 0;
     font-weight: 400;
-    margin-left: auto;
-    margin-left: 0.15rem;
     letter-spacing: 0;
+}
+
+.logo-zone--clock {
+    margin-left: auto;
 }
 
 #btn-desktop-bg,
