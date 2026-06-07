@@ -61,7 +61,7 @@ export const Editor = {
             id: `item_${Math.floor(Date.now() / 1000)}`,
             owner_id: "admin",
             visibility: "private",
-            type: "note",
+            type: "checklist",
             title: "",
             content: "",
             status: "active",
@@ -169,7 +169,7 @@ export const Editor = {
 
     collectFormData() {
         const finalBgColor = document.getElementById('edit-bg-color-value')?.value || '';
-        const activeType = document.getElementById('edit-type')?.value || 'note';
+        const activeType = document.getElementById('edit-type')?.value || 'checklist';
         
         const data = {
             ...this.activeItem,
@@ -196,23 +196,21 @@ export const Editor = {
             hiddenFromBoard: this.activeItem.hiddenFromBoard === true
         };
         
-        if (activeType === 'checklist') {
-            data.steps = [];
-            document.querySelectorAll('#checklist-rows-active .step-row--edit, #checklist-rows-done .step-row--edit').forEach((row, idx) => {
-                const text = row.querySelector('.step-text')?.value.trim();
-                if (text) {
-                    const stepId = row.dataset.stepId || `step_${idx}_${Math.floor(Math.random() * 1000)}`;
-                    data.steps.push({
-                        id: stepId,
-                        text: text,
-                        completed: row.querySelector('.step-check')?.checked || false,
-                        level: Math.min(4, Math.max(0, parseInt(row.dataset.level || '0', 10) || 0)),
-                        startDateTime: row.dataset.startDateTime || '',
-                        endDateTime: row.dataset.endDateTime || ''
-                    });
-                }
-            });
-        }
+        data.steps = [];
+        document.querySelectorAll('#checklist-rows-active .step-row--edit, #checklist-rows-done .step-row--edit').forEach((row, idx) => {
+            const text = row.querySelector('.step-text')?.value.trim();
+            if (text) {
+                const stepId = row.dataset.stepId || `step_${idx}_${Math.floor(Math.random() * 1000)}`;
+                data.steps.push({
+                    id: stepId,
+                    text: text,
+                    completed: row.querySelector('.step-check')?.checked || false,
+                    level: Math.min(4, Math.max(0, parseInt(row.dataset.level || '0', 10) || 0)),
+                    startDateTime: row.dataset.startDateTime || '',
+                    endDateTime: row.dataset.endDateTime || ''
+                });
+            }
+        });
         return data;
     },
     
@@ -387,10 +385,7 @@ export const Editor = {
         document.getElementById('modal-close-btn').innerHTML = CARD_ICONS.close;
         if (this.deleteBtn) this.deleteBtn.innerHTML = CARD_ICONS.close;
         this.updateCalendarToggleUI();
-        const hasHiddenSteps = item.type === 'note' && item.steps && item.steps.length > 0;
-        const warningLightHtml = hasHiddenSteps
-            ? `<div class="warning-banner">⚠️ This note contains ${item.steps.length} hidden checklist items from a previous state. Switch type to re-activate.</div>`
-            : '';
+        const warningLightHtml = '';
         const startParts = this.parseStoredDateTime(item.startDateTime || '');
         const endParts = this.parseStoredDateTime(item.endDateTime || '');
         const colorSwatchesHtml = NOTE_COLOR_PRESETS.map(preset => {
@@ -407,17 +402,17 @@ export const Editor = {
                 <span class="editor-note-size" title="Note content size">${sizeLabel} KB</span>
             </div>
 
-            <div class="editor-panel">
+            <div class="editor-panel editor-panel--config">
                 <div class="collapsable-header" id="config-section-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Configuration</span>
+                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Configuration</span>
                 </div>
-                <div class="collapsable-section" id="config-section">
+                <div class="collapsable-section collapsed" id="config-section">
                     <div class="form-row-grid form-row-grid--2">
                         <div class="form-group form-group--compact">
                             <label>Type</label>
                             <select id="edit-type" class="form-input">
-                                <option value="note" ${item.type === 'note' ? 'selected' : ''}>Note</option>
                                 <option value="checklist" ${item.type === 'checklist' ? 'selected' : ''}>Checklist</option>
+                                <option value="note" ${item.type === 'note' ? 'selected' : ''}>Note</option>
                             </select>
                         </div>
                         <div class="form-group form-group--compact">
@@ -467,20 +462,9 @@ export const Editor = {
                 </div>
             </div>
 
-            <div class="editor-panel">
-                <div class="collapsable-header" id="content-section-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Content</span>
-                </div>
-                <div class="collapsable-section" id="content-section">
-                    <textarea id="edit-content" class="form-input form-input--content input-grow" rows="1" placeholder="Notes...">${item.content || ''}</textarea>
-                </div>
-            </div>
-
-            <div class="editor-panel${item.type === 'checklist' ? '' : ' is-hidden'}" id="checklist-panel">
-                <div class="collapsable-header" id="checklist-section-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Checklist <span id="line-counter-display" class="line-counter">0</span></span>
-                </div>
-                <div class="collapsable-section" id="checklist-section">
+            <div class="editor-body">
+                <textarea id="edit-content" class="form-input form-input--content input-grow" rows="1" placeholder="Add note…">${item.content || ''}</textarea>
+                <div class="editor-checklist-zone" id="editor-checklist-zone">
                     <div id="morphic-extension-zone"></div>
                 </div>
             </div>
@@ -505,7 +489,7 @@ export const Editor = {
         
         document.getElementById('edit-type').addEventListener('change', (e) => {
             this.markInteracted();
-            this.toggleTypeExtensions(e.target.value);
+            this.activeItem.type = e.target.value;
             this.triggerAutoSave();
         });
         
@@ -513,33 +497,10 @@ export const Editor = {
         this.bindDateInputDefaults('edit-start-date', 'edit-start-time');
         this.bindDateInputDefaults('edit-end-date', 'edit-end-time');
         this.syncEditorTheme(item.backgroundColor || '');
-        this.bindCollapsable('config-section-header', 'config-section');
-        this.bindCollapsable('content-section-header', 'content-section');
-        if (item.type === 'checklist') {
-            document.getElementById('checklist-section')?.classList.remove('collapsed');
-            document.querySelector('#checklist-section-header .collapsable-toggle')?.classList.remove('collapsed');
-            document.getElementById('checklist-section-header')?.classList.add('is-locked-open');
-        } else {
-            this.bindCollapsable('checklist-section-header', 'checklist-section');
-        }
+        this.bindCollapsable('config-section-header', 'config-section', true);
 
         attachAutoGrow(document.getElementById('edit-content'), { maxHeight: 420 });
-        this.toggleTypeExtensions(item.type);
-    },
-    
-    updateLineCounter() {
-        const contentText = document.getElementById('edit-content')?.value || '';
-        const contentLines = contentText.split(/\r\n|\r|\n/).filter(line => line.trim().length > 0).length;
-        
-        const checklistRows = document.querySelectorAll('#checklist-rows-active .step-row--edit, #checklist-rows-done .step-row--edit');
-        const checklistLines = checklistRows.length;
-        
-        const totalLines = contentLines + checklistLines;
-        
-        const counterDisplay = document.getElementById('line-counter-display');
-        if (counterDisplay) {
-            counterDisplay.textContent = `${totalLines}`;
-        }
+        this.renderEditorChecklist();
     },
     
     bindCollapsable(headerId, sectionId, startCollapsed = false) {
@@ -667,72 +628,53 @@ export const Editor = {
         this.updateDoneSectionVisibility();
     },
 
-    toggleTypeExtensions(type) {
+    renderEditorChecklist() {
         const extensionZone = document.getElementById('morphic-extension-zone');
-        const checklistPanel = document.getElementById('checklist-panel');
         if (!extensionZone) return;
 
-        checklistPanel?.classList.toggle('is-hidden', type !== 'checklist');
-        extensionZone.innerHTML = '';
-
-        if (type === 'checklist') {
-            const steps = this.activeItem.steps || [];
-            extensionZone.innerHTML = `
+        const steps = this.activeItem.steps || [];
+        extensionZone.innerHTML = `
+            <div class="expanded-checklist editor-expanded-checklist">
                 <div id="checklist-rows-active" class="checklist-rows-zone"></div>
                 <div id="checklist-done-section" class="checklist-done-section is-hidden">
                     <div class="checklist-done-divider"><span>Done</span></div>
                     <div id="checklist-rows-done" class="checklist-rows-zone"></div>
                 </div>
-                <button type="button" class="btn btn--sm btn--compact" id="btn-add-step-row">+ Item</button>
-            `;
-            const activeContainer = document.getElementById('checklist-rows-active');
-            const doneContainer = document.getElementById('checklist-rows-done');
-            activeContainer.addEventListener('dragover', (e) => this.handleContainerDragOver(e, activeContainer));
-            if (!activeContainer.dataset.collapseBound) {
-                activeContainer.dataset.collapseBound = '1';
-                activeContainer.addEventListener('click', (e) => {
-                    const btn = e.target.closest('.step-collapse-btn--edit');
-                    if (!btn || btn.style.visibility === 'hidden') return;
-                    e.stopPropagation();
-                    const row = btn.closest('.step-row--edit');
-                    const stepId = row?.dataset.stepId;
-                    if (!stepId) return;
-                    const collapseKey = `${this.activeItem.id}:${stepId}`;
-                    const keys = this.getChecklistCollapsedKeys();
-                    keys[collapseKey] = !keys[collapseKey];
-                    if (!keys[collapseKey]) delete keys[collapseKey];
-                    localStorage.setItem('matrix_checklist_collapsed', JSON.stringify(keys));
-                    this.syncEditorChecklistCollapse(activeContainer);
-                });
-            }
-            document.getElementById('checklist-section')?.classList.remove('collapsed');
-            document.querySelector('#checklist-section-header .collapsable-toggle')?.classList.remove('collapsed');
-            document.getElementById('checklist-section-header')?.classList.add('is-locked-open');
-            reorderStepsByCompletion(steps);
-            const { active, done } = partitionChecklistSteps(steps);
-            active.forEach(step => this.appendStepRow(activeContainer, step, { isDone: false }));
-            done.forEach(step => this.appendStepRow(doneContainer, step, { isDone: true }));
-            if (steps.length === 0) this.appendStepRow(activeContainer, null, { isDone: false });
-            this.updateDoneSectionVisibility();
-            document.getElementById('btn-add-step-row').addEventListener('click', () => {
-                this.markInteracted();
-                this.appendStepRow(activeContainer, null, { isDone: false });
-                this.updateLineCounter();
-                this.triggerAutoSave();
-            });
-            
-            const contentInput = document.getElementById('edit-content');
-            if (contentInput) {
-                contentInput.addEventListener('input', () => {
-                    this.updateLineCounter();
-                    this.markInteracted();
-                    this.triggerAutoSave();
-                });
-            }
-            
+                <button type="button" class="card-act expanded-checklist-add-btn" id="btn-add-step-row" title="Add checklist item" aria-label="Add checklist item">+</button>
+            </div>
+        `;
+        const activeContainer = document.getElementById('checklist-rows-active');
+        const doneContainer = document.getElementById('checklist-rows-done');
+        activeContainer.addEventListener('dragover', (e) => this.handleContainerDragOver(e, activeContainer));
+        activeContainer.addEventListener('click', (e) => {
+            const btn = e.target.closest('.step-collapse-btn--edit');
+            if (!btn || btn.style.visibility === 'hidden') return;
+            e.stopPropagation();
+            const row = btn.closest('.step-row--edit');
+            const stepId = row?.dataset.stepId;
+            if (!stepId) return;
+            const collapseKey = `${this.activeItem.id}:${stepId}`;
+            const keys = this.getChecklistCollapsedKeys();
+            keys[collapseKey] = !keys[collapseKey];
+            if (!keys[collapseKey]) delete keys[collapseKey];
+            localStorage.setItem('matrix_checklist_collapsed', JSON.stringify(keys));
             this.syncEditorChecklistCollapse(activeContainer);
-            this.updateLineCounter();
+        });
+        reorderStepsByCompletion(steps);
+        const { active, done } = partitionChecklistSteps(steps);
+        active.forEach(step => this.appendStepRow(activeContainer, step, { isDone: false }));
+        done.forEach(step => this.appendStepRow(doneContainer, step, { isDone: true }));
+        if (active.length === 0 && done.length === 0) {
+            this.appendStepRow(activeContainer, null, { isDone: false });
         }
+        this.updateDoneSectionVisibility();
+        document.getElementById('btn-add-step-row').addEventListener('click', () => {
+            this.markInteracted();
+            const row = this.appendStepRow(activeContainer, null, { isDone: false });
+            row?.querySelector('.step-text')?.focus();
+            this.triggerAutoSave();
+        });
+        this.syncEditorChecklistCollapse(activeContainer);
     },
 
     getChecklistCollapsedKeys() {
@@ -818,7 +760,15 @@ export const Editor = {
         const textarea = row.querySelector('.step-text');
         attachAutoGrow(textarea, { maxHeight: 240 });
         textarea.addEventListener('input', () => {
-            this.updateLineCounter();
+            this.markInteracted();
+            this.triggerAutoSave();
+        });
+        textarea.addEventListener('keydown', (e) => {
+            if (e.key !== 'Enter' || e.shiftKey) return;
+            e.preventDefault();
+            const nextRow = this.appendStepRow(container, null, { isDone: false });
+            container.insertBefore(nextRow, row.nextSibling);
+            nextRow.querySelector('.step-text')?.focus();
             this.markInteracted();
             this.triggerAutoSave();
         });
@@ -836,13 +786,11 @@ export const Editor = {
             this.markInteracted();
             row.remove();
             this.updateDoneSectionVisibility();
-            this.updateLineCounter();
             this.triggerAutoSave();
         });
         
         row.querySelector('.step-check').addEventListener('change', () => {
             this.handleEditorStepCheckChange(row);
-            this.updateLineCounter();
             this.markInteracted();
             this.triggerAutoSave();
         });
@@ -888,7 +836,7 @@ export const Editor = {
             const activeContainer = document.getElementById('checklist-rows-active');
             this.syncEditorChecklistCollapse(activeContainer || container);
         }
-        this.updateLineCounter();
+        return row;
     },
 
     handleContainerDragOver(e, container) {
@@ -902,7 +850,6 @@ export const Editor = {
         if (nextSibling) { container.insertBefore(this.draggedRow, nextSibling); } 
         else { container.appendChild(this.draggedRow); }
         this.syncEditorChecklistCollapse(container);
-        this.updateLineCounter();
         this.markInteracted();
         this.triggerAutoSave();
     },

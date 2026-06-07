@@ -120,6 +120,14 @@ export const DragDropEngine = {
 
         cards.forEach(card => {
             card.addEventListener('dragstart', (e) => {
+                if (card.classList.contains('expanded')) {
+                    e.preventDefault();
+                    return;
+                }
+                if (e.target.closest('.card-inline-edit, .card-actions, .card-body, .expanded-checklist, button, input, textarea, a')) {
+                    e.preventDefault();
+                    return;
+                }
                 e.dataTransfer.setData('text/plain', card.dataset.id);
                 card.style.opacity = '0.4';
             });

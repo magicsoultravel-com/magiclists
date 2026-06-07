@@ -459,6 +459,19 @@ body {
     border-radius: 3px;
     cursor: text;
     user-select: text;
+    -webkit-user-select: text;
+    pointer-events: auto;
+}
+
+.mini-card.expanded .card-inline-edit,
+.mini-card.expanded .step-text.card-inline-edit {
+    cursor: text;
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.mini-card.expanded .card-body {
+    cursor: default;
 }
 
 .card-inline-edit:focus {
@@ -1035,22 +1048,18 @@ body {
     white-space: normal;
 }
 
-/* Card quick actions — overlay on content, no layout shift */
+/* Card quick actions — top-right overlay, no chrome */
 .card-actions {
     position: absolute;
-    top: 0;
-    right: 0;
+    top: 2px;
+    right: 2px;
     z-index: 8;
     display: flex;
     align-items: center;
-    gap: 1px;
-    padding: 1px 2px;
+    gap: 2px;
+    padding: 0;
     opacity: 0;
-    background: rgba(18, 18, 22, 0.84);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    border-radius: 0 4px 0 4px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.22);
+    background: none;
     pointer-events: none;
 }
 
@@ -1145,10 +1154,6 @@ body {
 .mini-card.has-custom-bg .card-inline-edit:focus {
     background: var(--card-focus-bg);
     box-shadow: 0 0 0 1px var(--card-focus-ring);
-}
-
-.mini-card.has-custom-bg .card-actions {
-    background: var(--card-action-bg);
 }
 
 .mini-card.has-custom-bg .card-act {
@@ -2111,6 +2116,10 @@ textarea.form-input {
     box-sizing: border-box;
 }
 
+.canvas-column .mini-card.expanded {
+    grid-column: span 2 !important;
+}
+
 .canvas-column .mini-card.expanded .card-header,
 .canvas-column .mini-card.expanded .card-body,
 .canvas-column .mini-card.expanded .card-content-preview {
@@ -2256,6 +2265,23 @@ textarea.form-input {
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
+}
+
+.editor-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.editor-panel--config {
+    flex: 0 0 auto;
+}
+
+.editor-expanded-checklist .expanded-checklist-add-btn {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .editor-panel {
@@ -2414,6 +2440,7 @@ textarea.form-input {
     padding: 0.15rem 0.25rem;
     font-size: 0.66rem;
     max-height: none;
+    white-space: pre-wrap;
 }
 
 #editor-overlay .step-row-actions {

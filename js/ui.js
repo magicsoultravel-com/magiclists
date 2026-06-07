@@ -274,6 +274,20 @@ export const UI = {
         active.dataset.skipBlurSave = '1';
     },
 
+    syncCardDraggable(card) {
+        const hasSession = !!localStorage.getItem('admin_token');
+        const isFreeform = card.dataset.freeform === '1';
+        if (!hasSession || isFreeform || card.classList.contains('expanded')) {
+            card.removeAttribute('draggable');
+            return;
+        }
+        card.setAttribute('draggable', 'true');
+    },
+
+    freeformDragZoneClass(card) {
+        return card.dataset.freeform === '1' ? ' card-drag-zone' : '';
+    },
+
     buildNoteSizeHtml(item) {
         const kb = computeNoteSizeKb(item);
         return `<span class="note-size" title="Note content size">${kb} KB</span>`;
@@ -451,13 +465,10 @@ export const UI = {
     },
 
     buildCardActionsHtml(item, isExpanded = false) {
-        const calHidden = this.isHiddenFromCalendar(item);
-        const calTitle = calHidden ? 'Hidden from calendar — click to show' : 'Shown on calendar — click to hide';
         const expandTitle = isExpanded ? 'Collapse note' : 'Expand note';
         const expandIcon = isExpanded ? CARD_ICONS.collapse : CARD_ICONS.expand;
         return `<div class="card-actions">
             <button type="button" class="card-act card-act--toggle" title="${expandTitle}" aria-label="${expandTitle}">${expandIcon}</button>
-            <button type="button" class="card-act card-act--cal ${calHidden ? 'is-off' : 'is-on'}" title="${calTitle}" aria-label="Toggle calendar">${CARD_ICONS.calendar}</button>
             <button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>
             <button type="button" class="card-act card-act--edit" title="Edit note" aria-label="Edit note">${CARD_ICONS.edit}</button>
         </div>`;
@@ -487,7 +498,6 @@ export const UI = {
         if (!actions) return;
 
         const toggleBtn = actions.querySelector('.card-act--toggle');
-        const calBtn = actions.querySelector('.card-act--cal');
         const hideBtn = actions.querySelector('.card-act--hide');
         const editBtn = actions.querySelector('.card-act--edit');
 
@@ -502,10 +512,6 @@ export const UI = {
         this.attachCardActionButton(toggleBtn, () => {
             if (consumeSkipExpand()) return;
             if (ctx) this.toggleCardExpanded(card, item, ctx);
-        });
-
-        this.attachCardActionButton(calBtn, () => {
-            this.toggleCardCalendar(item, calBtn);
         });
 
         this.attachCardActionButton(hideBtn, () => {
@@ -677,11 +683,6 @@ export const UI = {
         card.classList.add('mini-card');
         card.classList.add('compact');
         
-        const hasSession = !!localStorage.getItem('admin_token');
-        if (hasSession && !freeform) {
-            card.setAttribute('draggable', 'true');
-        }
-        
         card.dataset.id = item.id;
         if (freeform) card.dataset.freeform = '1';
 
@@ -715,6 +716,7 @@ export const UI = {
             card.addEventListener('mousedown', () => this.raiseFreeformCard(card));
         }
 
+        this.syncCardDraggable(card);
         return card;
     },
 
@@ -748,12 +750,13 @@ export const UI = {
         const visibilityBadgeColor = item.visibility === 'public' ? '#10b981' : '#f59e0b';
         
         const isExpanded = false;
+        const dragZone = this.freeformDragZoneClass(card);
         card.innerHTML = `
-            <div class="card-header card-drag-zone">
+            <div class="card-header${dragZone}">
                 <div class="mini-card-title" title="${titleAttr}">${this.escapeHTML(fullTitle)}</div>
                 ${this.buildCardActionsHtml(item, isExpanded)}
             </div>
-            <div class="mini-card-meta compact card-drag-zone">
+            <div class="mini-card-meta compact${dragZone}">
                 <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
                 ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
                 ${typeBadgeHtml}
@@ -768,6 +771,7 @@ export const UI = {
             isQuickLinkType
         });
         this.finalizeFreeformCard(card);
+        this.syncCardDraggable(card);
     },
 
     canEditInline() {
@@ -870,22 +874,22 @@ export const UI = {
         const visibilityBadgeColor = item.visibility === 'public' ? '#10b981' : '#f59e0b';
         
         const typeBadgeHtml = this.buildChecklistBadgeHtml(item, isQuickLinkType);
-        const bodyDragClass = card.dataset.freeform === '1' ? '' : ' card-drag-zone';
+        const dragZone = this.freeformDragZoneClass(card);
         const createdLabel = this.formatCreatedDate(item.created_at);
         const createdHtml = createdLabel ? `<span class="created-date" title="Created">${createdLabel}</span>` : '';
         const sizeHtml = this.buildNoteSizeHtml(item);
 
         card.innerHTML = `
-            <div class="card-header card-drag-zone">
+            <div class="card-header${dragZone}">
                 ${titleHtml}
                 ${this.buildCardActionsHtml(item, true)}
             </div>
-            <div class="card-body${bodyDragClass}">
+            <div class="card-body">
                 ${bodyHtml}
                 ${checklistHtml}
                 ${quickLinksHtml}
             </div>
-            <div class="mini-card-meta expanded card-drag-zone">
+            <div class="mini-card-meta expanded${dragZone}">
                 <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
                 ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
                 ${typeBadgeHtml}
@@ -902,6 +906,7 @@ export const UI = {
         });
         this.attachExpandedCardInteractions(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType);
         this.finalizeFreeformCard(card);
+        this.syncCardDraggable(card);
     },
 
     refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor, isQuickLinkType) {
@@ -1003,7 +1008,9 @@ export const UI = {
 
             card.querySelectorAll('.card-inline-edit').forEach((el) => {
                 el.addEventListener('click', (e) => e.stopPropagation());
-                el.addEventListener('mousedown', (e) => e.stopPropagation());
+                el.addEventListener('mousedown', (e) => {
+                    if (card.dataset.freeform === '1') e.stopPropagation();
+                });
                 el.addEventListener('keydown', (e) => {
                     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
                         e.preventDefault();
