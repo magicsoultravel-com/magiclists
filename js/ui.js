@@ -50,6 +50,48 @@ export function itemHasCategory(item) {
     return typeof name === 'string' && name.trim() !== '';
 }
 
+export function deriveNoteTitle({ title = '', content = '', steps = [] } = {}) {
+    const trimmedTitle = String(title || '').trim();
+    if (trimmedTitle) return trimmedTitle;
+
+    const contentLine = String(content || '')
+        .trim()
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find(Boolean);
+    if (contentLine) return contentLine.slice(0, 72);
+
+    for (const step of steps || []) {
+        const text = String(step?.text || '').trim();
+        if (!text) continue;
+        const label = text.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+        return (label || text).slice(0, 72);
+    }
+
+    return 'Untitled';
+}
+
+export function noteHasSavableContent({ title = '', content = '', steps = [] } = {}) {
+    if (String(title || '').trim()) return true;
+    if (String(content || '').trim()) return true;
+    return (steps || []).some((step) => String(step?.text || '').trim());
+}
+
+export function normalizeItemForSave(item) {
+    if (!item) return item;
+
+    const content = String(item.content || '');
+    const steps = (item.steps || []).filter((step) => String(step?.text || '').trim());
+    const trimmedTitle = String(item.title || '').trim();
+
+    return {
+        ...item,
+        steps,
+        type: steps.length > 0 ? 'checklist' : 'note',
+        title: trimmedTitle || deriveNoteTitle({ content, steps })
+    };
+}
+
 export function getStepLevel(step) {
     const n = Number(step?.level);
     if (!Number.isFinite(n) || n <= 0) return 0;
@@ -255,8 +297,10 @@ export const UI = {
     },
 
     emitItemMutation(item, { preserveView = false, beforeItem = null, skipRerender = false } = {}) {
+        const normalized = normalizeItemForSave(item);
+        Object.assign(item, normalized);
         window.dispatchEvent(new CustomEvent('item:mutation_requested', {
-            detail: { item, preserveView, beforeItem, skipRerender }
+            detail: { item: normalized, preserveView, beforeItem, skipRerender }
         }));
     },
 

@@ -1,6 +1,6 @@
 ﻿import { applyCardTheme } from './cardTheme.js';
 import { ColorPicker, PALETTE_NOTE, randomNoteColor, resolveNoteColor } from './colorPicker.js';
-import { CARD_ICONS, UI, computeNoteSizeKb } from './ui.js';
+import { CARD_ICONS, UI, computeNoteSizeKb, noteHasSavableContent, normalizeItemForSave } from './ui.js';
 
 export const Editor = {
     overlay: null,
@@ -70,7 +70,14 @@ export const Editor = {
         const modal = this.overlay.querySelector('.modal');
         if (modal) modal.classList.add('modal--editor');
         requestAnimationFrame(() => {
-            requestAnimationFrame(() => this.overlay?.classList.add('is-open'));
+            requestAnimationFrame(() => {
+                this.overlay?.classList.add('is-open');
+                if (isNew) {
+                    const focusTarget = this.mountZone.querySelector('[data-field="content"].card-inline-edit')
+                        || this.mountZone.querySelector('[data-field="title"].card-inline-edit');
+                    if (focusTarget) UI.focusInlineEdit(focusTarget, 'start');
+                }
+            });
         });
     },
 
@@ -114,18 +121,15 @@ export const Editor = {
         if (!this.activeItem) return;
         const currentData = this.collectFormData();
         
-        const hasContent = currentData.title.trim() !== "" || currentData.content.trim() !== "" || 
-                          (currentData.steps && currentData.steps.length > 0);
-        
-        if (!hasContent && this.isNewUnsavedNote) {
+        if (!noteHasSavableContent(currentData) && this.isNewUnsavedNote) {
             return;
         }
-        
+
         this.isNewUnsavedNote = false;
-        
+
         if (JSON.stringify(currentData) !== JSON.stringify(this.activeItem)) {
             this.activeItem = currentData;
-            window.dispatchEvent(new CustomEvent('item:mutation_requested', { detail: this.activeItem }));
+            window.dispatchEvent(new CustomEvent('item:mutation_requested', { detail: currentData }));
             console.log('Auto-saved at', new Date().toLocaleTimeString());
         }
     },
@@ -195,7 +199,7 @@ export const Editor = {
             hideFromCalendar: this.activeItem.hideFromCalendar === true,
             hiddenFromBoard: this.activeItem.hiddenFromBoard === true
         };
-        return data;
+        return normalizeItemForSave(data);
     },
     
     resetEditorState() {
@@ -216,10 +220,7 @@ export const Editor = {
 
         if (this.hasUserInteracted) {
             const currentData = this.collectFormData();
-            const hasContent = currentData.title.trim() !== "" || currentData.content.trim() !== "" || 
-                              (currentData.steps && currentData.steps.length > 0);
-            
-            if (hasContent || !this.isNewUnsavedNote) {
+            if (noteHasSavableContent(currentData) || !this.isNewUnsavedNote) {
                 this.autoSave();
             }
         }
