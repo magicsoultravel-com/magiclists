@@ -33,11 +33,12 @@ export const COLUMN_MIN_COLS = 2;
 export const COLUMN_INNER_PAD = 8;
 export const COLUMN_MIN_INNER_W = COLUMN_MIN_COLS * COLUMN_GRID_CELL_W + (COLUMN_MIN_COLS - 1) * COLUMN_GRID_GAP;
 export const COLUMN_HEADER_APPROX_H = 40;
-export const CANVAS_COL_GAP = 12;
+export const CANVAS_COL_GAP = 8;
 export const CANVAS_GRID_W = COLUMN_MIN_INNER_W + COLUMN_INNER_PAD * 2;
 export const COLUMN_STRIDE_X = COLUMN_GRID_CELL_W + COLUMN_GRID_GAP;
 export const COLUMN_STRIDE_Y = COLUMN_GRID_CELL_H + COLUMN_GRID_GAP;
-const CANVAS_LAYOUT_ORIGIN = 8;
+export const CANVAS_LAYOUT_ORIGIN = 16;
+export const CANVAS_PACK_GAP = COLUMN_GRID_GAP;
 const CANVAS_LAYOUT_ORDER_KEY = 'matrix_canvas_layout_order';
 
 let freeformStackSeq = 1;
@@ -2460,27 +2461,43 @@ export const UI = {
         return { w: rect.w, h: rect.h };
     },
 
-    findFirstCanvasSlot(w, h, placed, canvasW) {
-        let y = CANVAS_LAYOUT_ORIGIN;
+    snapCanvasCoord(value, origin = CANVAS_LAYOUT_ORIGIN, stride = COLUMN_STRIDE_X) {
+        return origin + this.snapGridCoord(Math.max(0, value - origin), stride);
+    },
+
+    getCanvasPackBounds(canvas) {
+        const canvasW = Math.max(canvas?.clientWidth || 320, CANVAS_GRID_W + CANVAS_LAYOUT_ORIGIN * 2);
+        return {
+            origin: CANVAS_LAYOUT_ORIGIN,
+            packW: canvasW - CANVAS_LAYOUT_ORIGIN * 2,
+            canvasW
+        };
+    },
+
+    findFirstCanvasSlot(w, h, placed, canvasW, { origin = CANVAS_LAYOUT_ORIGIN } = {}) {
+        const packW = Math.max(CANVAS_GRID_W, canvasW - origin * 2);
+        const xOrigin = origin + (w <= COLUMN_GRID_CELL_W + 1 ? COLUMN_INNER_PAD : 0);
+        const rowStride = w <= COLUMN_GRID_CELL_W + 1 ? COLUMN_STRIDE_X : CANVAS_GRID_W;
+        let y = origin;
         let guard = 0;
         while (guard < 800) {
-            let x = CANVAS_LAYOUT_ORIGIN;
-            while (x + w <= canvasW + 1) {
+            let x = xOrigin;
+            while (x + w <= origin + packW + 1) {
                 const candidate = {
-                    x: this.snapGridCoord(x, COLUMN_STRIDE_X),
-                    y: this.snapGridCoord(y, COLUMN_STRIDE_Y),
+                    x: this.snapCanvasCoord(x, origin, COLUMN_STRIDE_X),
+                    y: this.snapCanvasCoord(y, origin, COLUMN_STRIDE_Y),
                     w,
                     h
                 };
-                if (!placed.some((p) => this.rectsOverlap(candidate, p, CANVAS_COL_GAP))) {
+                if (!placed.some((p) => this.rectsOverlap(candidate, p, CANVAS_PACK_GAP))) {
                     return candidate;
                 }
-                x += COLUMN_STRIDE_X;
+                x += rowStride;
             }
             y += COLUMN_STRIDE_Y;
             guard += 1;
         }
-        return { x: CANVAS_LAYOUT_ORIGIN, y: CANVAS_LAYOUT_ORIGIN, w, h };
+        return { x: xOrigin, y: origin, w, h };
     },
 
     applyCanvasOrderEntryPosition(el, entry, rect, { animate = false } = {}) {
@@ -2528,7 +2545,7 @@ export const UI = {
 
         this.layoutColumnInners(canvas, { animate: false });
 
-        const canvasW = Math.max(canvas.clientWidth, 320);
+        const { packW, canvasW, origin } = this.getCanvasPackBounds(canvas);
         const placed = [];
 
         order.forEach((entry, index) => {
@@ -2539,16 +2556,21 @@ export const UI = {
             let rect;
 
             if (pinned && pinned.index === index && pinned.rect) {
-                rect = { ...pinned.rect, w, h };
+                rect = {
+                    x: this.snapCanvasCoord(pinned.rect.x, origin, COLUMN_STRIDE_X),
+                    y: this.snapCanvasCoord(pinned.rect.y, origin, COLUMN_STRIDE_Y),
+                    w,
+                    h
+                };
             } else if (index < fromIndex) {
                 rect = {
-                    x: parseFloat(el.style.left) || 0,
-                    y: parseFloat(el.style.top) || 0,
+                    x: parseFloat(el.style.left) || origin,
+                    y: parseFloat(el.style.top) || origin,
                     w,
                     h
                 };
             } else {
-                rect = this.findFirstCanvasSlot(w, h, placed, canvasW);
+                rect = this.findFirstCanvasSlot(w, h, placed, packW + origin * 2, { origin });
             }
 
             this.applyCanvasOrderEntryPosition(el, entry, rect, { animate });
@@ -2556,7 +2578,7 @@ export const UI = {
         });
 
         const maxBottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
-        canvas.style.minHeight = `${maxBottom + CANVAS_COL_GAP}px`;
+        canvas.style.minHeight = `${maxBottom + origin + CANVAS_COL_GAP}px`;
 
         if (animate) {
             setTimeout(() => {
