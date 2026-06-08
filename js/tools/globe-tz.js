@@ -1,4 +1,4 @@
-/** @tool {"label":"Global TZ","order":4} */
+/** @tool {"label":"Global TZ","order":4,"defaultSize":{"w":400,"h":480},"minSize":{"w":320,"h":360}} */
 /** @tool-icon <circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M1.8 6h8.4M3.5 4h5M3.5 8h5" fill="none" stroke="currentColor" stroke-width="0.85"/> */
 export default {
     container: null,
@@ -13,11 +13,9 @@ export default {
         
         // Clear the container and set up a clean structure
         this.container.innerHTML = `
-            <div style="width:100%; height:100%; display:flex; flex-direction:column; background:#0f172a;">
-                <div id="globe-container" style="flex:1; position:relative; min-height:400px; background:#0f172a;"></div>
-                <div style="padding:8px; text-align:center; color:#94a3b8; font-size:0.7rem; border-top:1px solid #334155;">
-                    🖱️ Drag to rotate globe
-                </div>
+            <div class="globe-tool">
+                <div id="globe-container" class="globe-tool__canvas-wrap"></div>
+                <div class="globe-tool__hint tool-msg">Drag to rotate globe</div>
             </div>
         `;
         

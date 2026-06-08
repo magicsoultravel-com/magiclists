@@ -96,6 +96,33 @@ function hexToHsv(hex) {
     return { h, s, v };
 }
 
+function cssColorToHex(css) {
+    if (!css) return '';
+    const value = String(css).trim().toLowerCase();
+    if (!value || value === 'transparent' || value === 'rgba(0, 0, 0, 0)') return '';
+    if (/^#[0-9a-f]{6}$/i.test(value)) return value;
+    const rgb = value.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/);
+    if (rgb) {
+        const toByte = (n) => Math.max(0, Math.min(255, Math.round(Number(n)))).toString(16).padStart(2, '0');
+        return `#${toByte(rgb[1])}${toByte(rgb[2])}${toByte(rgb[3])}`;
+    }
+    return '';
+}
+
+function sampleColorAt(clientX, clientY) {
+    const skip = (el) => el?.closest?.('.color-picker-popover, .color-picker-eyedropper, .color-picker-eyedropper-hint');
+    const elements = document.elementsFromPoint(clientX, clientY).filter((el) => !skip(el));
+    const props = ['backgroundColor', 'color', 'borderTopColor', 'outlineColor'];
+    for (const el of elements) {
+        const style = getComputedStyle(el);
+        for (const prop of props) {
+            const hex = cssColorToHex(style[prop]);
+            if (hex) return hex;
+        }
+    }
+    return '';
+}
+
 function hsvToHex(h, s, v) {
     const hh = ((h % 360) + 360) % 360;
     const ss = Math.max(0, Math.min(100, s)) / 100;
@@ -124,6 +151,7 @@ export const ColorPicker = {
     keyHandler: null,
     subPicker: null,
     subDragCleanup: null,
+    eyedropperCleanup: null,
     align: 'end',
     selectedColor: '',
 
@@ -138,7 +166,94 @@ export const ColorPicker = {
         return this.popover;
     },
 
+    cancelEyedropper() {
+        if (!this.eyedropperCleanup) return;
+        this.eyedropperCleanup();
+        this.eyedropperCleanup = null;
+        this.popover?.classList.remove('is-hidden');
+        this.positionPopover(this.anchor, this.align);
+    },
+
+    async startEyedropper({ onPick } = {}) {
+        if (typeof onPick !== 'function') return;
+        this.cancelEyedropper();
+
+        if (typeof window.EyeDropper === 'function') {
+            try {
+                this.popover?.classList.add('is-hidden');
+                const result = await new window.EyeDropper().open();
+                const hex = normalizeHex(result?.sRGBHex);
+                this.popover?.classList.remove('is-hidden');
+                this.positionPopover(this.anchor, this.align);
+                if (hex) onPick(hex);
+                return;
+            } catch {
+                this.popover?.classList.remove('is-hidden');
+                this.positionPopover(this.anchor, this.align);
+                return;
+            }
+        }
+
+        this.popover?.classList.add('is-hidden');
+
+        const overlay = document.createElement('div');
+        overlay.className = 'color-picker-eyedropper';
+        const hint = document.createElement('div');
+        hint.className = 'color-picker-eyedropper-hint';
+        hint.textContent = 'Click to pick a color · Esc to cancel';
+        const swatch = document.createElement('span');
+        swatch.className = 'color-picker-eyedropper-swatch';
+        swatch.setAttribute('aria-hidden', 'true');
+        hint.prepend(swatch);
+        document.body.appendChild(overlay);
+        document.body.appendChild(hint);
+
+        const updateHint = (clientX, clientY) => {
+            const hex = sampleColorAt(clientX, clientY);
+            hint.style.left = `${clientX + 14}px`;
+            hint.style.top = `${clientY + 14}px`;
+            swatch.style.background = hex || 'transparent';
+            hint.dataset.hex = hex || '';
+        };
+
+        const finish = (hex) => {
+            if (this.eyedropperCleanup) {
+                this.eyedropperCleanup();
+                this.eyedropperCleanup = null;
+            }
+            if (hex) onPick(hex);
+            this.popover?.classList.remove('is-hidden');
+            this.positionPopover(this.anchor, this.align);
+        };
+
+        const onMove = (e) => updateHint(e.clientX, e.clientY);
+        const onClick = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            finish(sampleColorAt(e.clientX, e.clientY) || hint.dataset.hex);
+        };
+        const onKey = (e) => {
+            if (e.key !== 'Escape') return;
+            e.preventDefault();
+            e.stopPropagation();
+            finish('');
+        };
+
+        overlay.addEventListener('pointermove', onMove);
+        overlay.addEventListener('pointerdown', onClick);
+        document.addEventListener('keydown', onKey, true);
+
+        this.eyedropperCleanup = () => {
+            overlay.removeEventListener('pointermove', onMove);
+            overlay.removeEventListener('pointerdown', onClick);
+            document.removeEventListener('keydown', onKey, true);
+            overlay.remove();
+            hint.remove();
+        };
+    },
+
     closeSubPicker({ persist = false } = {}) {
+        this.cancelEyedropper();
         if (this.subDragCleanup) {
             this.subDragCleanup();
             this.subDragCleanup = null;
@@ -156,8 +271,8 @@ export const ColorPicker = {
         if (this.subPicker?.el) {
             this.subPicker.el.classList.add('is-hidden');
         }
-        this.popover?.querySelector('.color-picker-body')?.classList.remove('color-picker-body--editing');
         this.subPicker = null;
+        this.positionPopover(this.anchor, this.align);
     },
 
     persistUserSlot(slotIndex, hex) {
@@ -194,6 +309,7 @@ export const ColorPicker = {
     },
 
     close() {
+        this.cancelEyedropper();
         this.closeSubPicker({ persist: true });
         if (!this.popover) return;
         this.popover.classList.add('is-hidden');
@@ -250,26 +366,32 @@ export const ColorPicker = {
                 <div class="color-picker-grid color-picker-grid--presets">${presetHtml}</div>
                 <div class="color-picker-divider" aria-hidden="true"></div>
                 <div class="color-picker-grid color-picker-grid--user">${userHtml}</div>
+                <button type="button" class="color-picker-eyedropper-btn card-act" aria-label="Pick color from page" title="Pick color from page">
+                    <svg viewBox="0 0 16 16" width="12" height="12" focusable="false" aria-hidden="true"><path d="M10.2 1.8a1.6 1.6 0 0 1 2.3 2.3l-1 1-2.3-2.3 1-1ZM3.4 8.6l4-4 2.3 2.3-4 4-2.5.2.2-2.5Z" fill="currentColor"/><path d="M2.5 11.8 4.2 10l2 2-1.7 1.7a.8.8 0 0 1-1.1 0l-.9-.9a.8.8 0 0 1 0-1.1Z" fill="currentColor"/></svg>
+                </button>
             </div>
-            <div class="color-picker-subpanel is-hidden" role="dialog" aria-label="Pick a custom color">
-                <div class="color-picker-subpanel-content">
+            <div class="color-picker-editor is-hidden" role="group" aria-label="Fine-tune custom color">
+                <button type="button" class="color-picker-back card-act" aria-label="Close color editor">
+                    <svg viewBox="0 0 12 12" width="11" height="11" focusable="false" aria-hidden="true"><path d="M7 3L4 6l3 3" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <div class="color-picker-editor-content">
                     <div class="color-picker-sv" tabindex="0" aria-label="Saturation and brightness">
                         <span class="color-picker-sv-cursor" aria-hidden="true"></span>
                     </div>
                     <input type="range" class="color-picker-hue" min="0" max="360" value="240" aria-label="Hue">
                     <div class="color-picker-hex-row">
+                        <button type="button" class="color-picker-eyedropper-btn color-picker-eyedropper-btn--inline card-act" aria-label="Pick color from page" title="Pick color from page">
+                            <svg viewBox="0 0 16 16" width="12" height="12" focusable="false" aria-hidden="true"><path d="M10.2 1.8a1.6 1.6 0 0 1 2.3 2.3l-1 1-2.3-2.3 1-1ZM3.4 8.6l4-4 2.3 2.3-4 4-2.5.2.2-2.5Z" fill="currentColor"/><path d="M2.5 11.8 4.2 10l2 2-1.7 1.7a.8.8 0 0 1-1.1 0l-.9-.9a.8.8 0 0 1 0-1.1Z" fill="currentColor"/></svg>
+                        </button>
                         <div class="color-picker-preview" aria-hidden="true"></div>
                         <input type="text" class="color-picker-hex" maxlength="7" spellcheck="false" autocomplete="off" aria-label="Hex color" inputmode="text">
                     </div>
                 </div>
-                <button type="button" class="color-picker-back card-act" aria-label="Back to color grid">
-                    <svg viewBox="0 0 12 12" width="11" height="11" focusable="false" aria-hidden="true"><path d="M7 3L4 6l3 3" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </button>
             </div>
         </div>`;
 
         const body = popover.querySelector('.color-picker-body');
-        const subpanel = popover.querySelector('.color-picker-subpanel');
+        const editor = popover.querySelector('.color-picker-editor');
 
         const presetGrid = popover.querySelector('.color-picker-grid--presets');
         presetGrid?.addEventListener('mousedown', (e) => {
@@ -286,7 +408,26 @@ export const ColorPicker = {
 
         popover.querySelectorAll('.color-picker-tile--user').forEach((btn) => {
             btn.addEventListener('mousedown', (e) => e.stopPropagation());
-            this.attachUserSlotHandlers(btn, body, subpanel, onSelect);
+            this.attachUserSlotHandlers(btn, body, editor, onSelect);
+        });
+
+        const handleEyedropperPick = (hex) => {
+            if (!hex) return;
+            if (this.subPicker?.setColorFromHex) {
+                this.subPicker.setColorFromHex(hex);
+                this.persistUserSlot(this.subPicker.slotIndex, hex);
+                return;
+            }
+            this.selectColor(hex, onSelect);
+            this.close();
+        };
+
+        popover.querySelectorAll('.color-picker-eyedropper-btn').forEach((btn) => {
+            btn.addEventListener('mousedown', (e) => e.stopPropagation());
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.startEyedropper({ onPick: handleEyedropperPick });
+            });
         });
 
         popover.classList.remove('is-hidden');
@@ -299,6 +440,11 @@ export const ColorPicker = {
         };
         this.keyHandler = (e) => {
             if (e.key !== 'Escape') return;
+            if (this.eyedropperCleanup) {
+                this.cancelEyedropper();
+                e.stopPropagation();
+                return;
+            }
             if (this.subPicker) {
                 this.closeSubPicker({ persist: true });
                 e.stopPropagation();
@@ -312,7 +458,7 @@ export const ColorPicker = {
         });
     },
 
-    attachUserSlotHandlers(btn, body, subpanel, onSelect) {
+    attachUserSlotHandlers(btn, body, editor, onSelect) {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             const slotIndex = Number(btn.dataset.userSlot);
@@ -323,7 +469,7 @@ export const ColorPicker = {
                 this.previewColor(slotColor, onSelect);
             }
             const initial = slotColor || this.selectedColor || '#4f46e5';
-            this.openSubPicker(body, subpanel, btn, slotIndex, initial);
+            this.openSubPicker(body, editor, btn, slotIndex, initial);
         });
     },
 
@@ -363,7 +509,7 @@ export const ColorPicker = {
         });
     },
 
-    openSubPicker(body, subpanel, anchorTile, slotIndex, initialColor = '#4f46e5') {
+    openSubPicker(body, editor, anchorTile, slotIndex, initialColor = '#4f46e5') {
         if (this.subPicker?.slotIndex === slotIndex) return;
         this.closeSubPicker({ persist: true });
 
@@ -372,11 +518,11 @@ export const ColorPicker = {
         });
         anchorTile.classList.add('is-active-slot');
 
-        const sv = subpanel.querySelector('.color-picker-sv');
-        const hueInput = subpanel.querySelector('.color-picker-hue');
-        const hexInput = subpanel.querySelector('.color-picker-hex');
-        const preview = subpanel.querySelector('.color-picker-preview');
-        const cursor = subpanel.querySelector('.color-picker-sv-cursor');
+        const sv = editor.querySelector('.color-picker-sv');
+        const hueInput = editor.querySelector('.color-picker-hue');
+        const hexInput = editor.querySelector('.color-picker-hex');
+        const preview = editor.querySelector('.color-picker-preview');
+        const cursor = editor.querySelector('.color-picker-sv-cursor');
 
         const startHsv = hexToHsv(initialColor);
         let { h, s, v } = startHsv;
@@ -406,6 +552,13 @@ export const ColorPicker = {
             applyColor(hex);
         };
 
+        const setColorFromHex = (hex) => {
+            const normalized = normalizeHex(hex);
+            if (!normalized) return;
+            ({ h, s, v } = hexToHsv(normalized));
+            syncUi();
+        };
+
         const commitHex = () => {
             if (syncingHex) return;
             const hex = normalizeHex(hexInput.value);
@@ -413,8 +566,7 @@ export const ColorPicker = {
                 hexInput.value = this.subPicker?.lastHex || hsvToHex(h, s, v);
                 return;
             }
-            ({ h, s, v } = hexToHsv(hex));
-            syncUi();
+            setColorFromHex(hex);
         };
 
         const setFromSvEvent = (clientX, clientY) => {
@@ -449,9 +601,9 @@ export const ColorPicker = {
             };
         };
 
-        const onSubpanelClick = (e) => e.stopPropagation();
+        const onEditorClick = (e) => e.stopPropagation();
 
-        const backBtn = subpanel.querySelector('.color-picker-back');
+        const backBtn = editor.querySelector('.color-picker-back');
         const onBack = (e) => {
             e.stopPropagation();
             this.closeSubPicker({ persist: true });
@@ -469,26 +621,27 @@ export const ColorPicker = {
         hexInput.addEventListener('change', onHexChange);
         hexInput.addEventListener('keydown', onHexKeydown);
         sv.addEventListener('pointerdown', onSvPointerDown);
-        subpanel.addEventListener('mousedown', onSubpanelClick);
+        editor.addEventListener('mousedown', onEditorClick);
         backBtn?.addEventListener('click', onBack);
 
         this.subPicker = {
-            el: subpanel,
+            el: editor,
             slotIndex,
             lastHex: normalizeHex(initialColor) || '#4f46e5',
+            setColorFromHex,
             cleanup: () => {
                 hueInput.removeEventListener('input', onHueInput);
                 hexInput.removeEventListener('change', onHexChange);
                 hexInput.removeEventListener('keydown', onHexKeydown);
                 sv.removeEventListener('pointerdown', onSvPointerDown);
-                subpanel.removeEventListener('mousedown', onSubpanelClick);
+                editor.removeEventListener('mousedown', onEditorClick);
                 backBtn?.removeEventListener('click', onBack);
             }
         };
 
-        body.classList.add('color-picker-body--editing');
-        subpanel.classList.remove('is-hidden');
+        editor.classList.remove('is-hidden');
         syncUi();
+        this.positionPopover(this.anchor, this.align);
     },
 
     positionPopover(anchor, align = 'end') {

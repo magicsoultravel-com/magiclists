@@ -1,4 +1,4 @@
-/** @tool {"label":"Timezone","order":3} */
+/** @tool {"label":"Timezone","order":3,"defaultSize":{"w":340,"h":380}} */
 /** @tool-icon <circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M6 3.6V6l2 1.2" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/> */
 export const Timezone = {
     container: null,
@@ -20,7 +20,6 @@ export const Timezone = {
         const currentHours = now.getHours() + (now.getMinutes() / 60);
 
         this.container.innerHTML = `
-            <h4 class="tool-heading">Matrix Timezone Converter</h4>
             <div class="tool-stack">
                 <div id="tz-cards-stack" class="tz-cards-stack"></div>
 

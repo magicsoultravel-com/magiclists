@@ -1,28 +1,18 @@
 // js/toolsManager.js
-import { CARD_ICONS } from './ui.js';
 import { TOOLS_REGISTRY } from './tools/registry.js';
+import { createToolPanel, renderToolIcon } from './toolPanelChrome.js';
 
 function escapeHtml(str) {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-const GENERIC_TOOL_ICON =
-    '<rect x="2.2" y="2.2" width="7.6" height="7.6" rx="1" fill="none" stroke="currentColor" stroke-width="0.95"/>' +
-    '<path d="M4.5 6h3" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/>';
-
-function renderToolIcon(markup) {
-    const body = (markup || '').trim() || GENERIC_TOOL_ICON;
-    if (body.startsWith('<svg')) return body;
-    return `<svg viewBox="0 0 12 12" width="12" height="12" focusable="false" aria-hidden="true">${body}</svg>`;
-}
+export { renderToolIcon };
 
 export const ToolsManager = {
-    overlay: null,
-    mountZone: null,
+    desktop: null,
     dropdown: null,
-    activeToolInstance: null,
-    activeMountClass: null,
+    openPanels: new Map(),
     registry: [],
     getItems: null,
     getFocusCategories: null,
@@ -30,19 +20,16 @@ export const ToolsManager = {
     async init(getItems, getFocusCategories) {
         this.getItems = getItems || null;
         this.getFocusCategories = getFocusCategories || null;
-        this.overlay = document.getElementById('tools-overlay');
-        this.mountZone = document.getElementById('tools-form-mount');
+        this.desktop = document.getElementById('tools-desktop');
         this.dropdown = document.getElementById('toolbox-dropdown');
 
         if (!this.dropdown) return;
 
-        const closeBtn = document.getElementById('tools-close-btn');
-        if (closeBtn) {
-            closeBtn.innerHTML = CARD_ICONS.close;
-            closeBtn.addEventListener('click', () => this.close());
-        }
-
-        window.addEventListener('tools:request_close', () => this.close());
+        window.addEventListener('tools:request_close', (e) => {
+            const toolId = e.detail?.toolId;
+            if (toolId) this.dismiss(toolId);
+            else this.closeAll();
+        });
 
         await this.loadRegistry();
         this.renderDropdownMenu();
@@ -65,6 +52,10 @@ export const ToolsManager = {
         return this.registry.find((tool) => tool.id === toolId) || null;
     },
 
+    isOnDesktop(toolId) {
+        return this.openPanels.has(toolId);
+    },
+
     renderDropdownMenu() {
         if (!this.registry.length) {
             this.dropdown.innerHTML = '<p class="tool-msg">No tools available. Run node scripts/build-tools-list.mjs after adding tools.</p>';
@@ -73,7 +64,8 @@ export const ToolsManager = {
 
         this.dropdown.innerHTML = this.registry.map((tool) => {
             const icon = renderToolIcon(tool.icon);
-            return `<button type="button" class="btn btn--compact menu-tool-trigger" data-target="${tool.id}">
+            const onDesktop = this.isOnDesktop(tool.id);
+            return `<button type="button" class="btn btn--compact menu-tool-trigger${onDesktop ? ' is-on-desktop' : ''}" data-target="${tool.id}">
                 <span class="menu-tool-icon">${icon}</span>
                 <span class="menu-tool-label">${escapeHtml(tool.label)}</span>
             </button>`;
@@ -110,60 +102,91 @@ export const ToolsManager = {
         return null;
     },
 
-    applyToolShell(meta) {
-        const modal = this.overlay?.querySelector('.modal');
-        modal?.classList.toggle('modal--wide', !!meta?.wide);
-
-        if (meta?.mountClass) {
-            this.mountZone.classList.add(meta.mountClass);
-            this.activeMountClass = meta.mountClass;
-        }
+    focus(toolId) {
+        const entry = this.openPanels.get(toolId);
+        if (!entry) return;
+        entry.chrome.focus();
     },
 
-    clearToolShell() {
-        const modal = this.overlay?.querySelector('.modal');
-        modal?.classList.remove('modal--wide');
+    collapse(toolId) {
+        const entry = this.openPanels.get(toolId);
+        entry?.chrome.collapse();
+    },
 
-        if (this.activeMountClass) {
-            this.mountZone?.classList.remove(this.activeMountClass);
-            this.activeMountClass = null;
-        }
+    expand(toolId) {
+        const entry = this.openPanels.get(toolId);
+        entry?.chrome.expand();
     },
 
     async launch(toolName) {
+        if (this.openPanels.has(toolName)) {
+            this.focus(toolName);
+            this.renderDropdownMenu();
+            return;
+        }
+
         const meta = this.getToolMeta(toolName);
+        if (!meta || !this.desktop) return;
+
+        const chrome = createToolPanel(toolName, meta, this.desktop, {
+            onDismiss: () => this.dismiss(toolName),
+            onResize: (bodyEl) => {
+                const entry = this.openPanels.get(toolName);
+                entry?.instance?.onPanelResize?.(bodyEl);
+            }
+        });
+
+        chrome.bodyEl.innerHTML = '<p class="tool-msg">Loading tool...</p>';
+        chrome.show();
+
+        const entry = { chrome, instance: null, meta };
+        this.openPanels.set(toolName, entry);
+        this.renderDropdownMenu();
 
         try {
-            this.mountZone.innerHTML = '<p class="tool-msg">Loading tool...</p>';
-            this.overlay.classList.remove('is-hidden');
-            this.applyToolShell(meta);
-
             const toolsPath = this.getToolsBasePath();
             const modulePath = `${toolsPath}${toolName}.js?cb=${Date.now()}`;
             const module = await import(modulePath);
 
-            this.activeToolInstance = this.resolveToolModule(module, toolName);
+            if (!this.openPanels.has(toolName)) return;
 
-            if (this.activeToolInstance) {
-                await this.activeToolInstance.init(this.mountZone);
+            const instance = this.resolveToolModule(module, toolName);
+            entry.instance = instance;
+
+            if (instance) {
+                chrome.bodyEl.innerHTML = '';
+                await instance.init(chrome.bodyEl);
+                chrome.persist();
             } else {
-                this.mountZone.innerHTML = '<p class="tool-msg tool-msg--error">Tool module does not export an init function.</p>';
+                chrome.bodyEl.innerHTML = '<p class="tool-msg tool-msg--error">Tool module does not export an init function.</p>';
             }
         } catch (error) {
             console.error('Tool execution broken:', error);
-            const toolsPath = this.getToolsBasePath();
-            this.mountZone.innerHTML = `<p class="tool-msg tool-msg--error">Failed to load tool: ${toolName}. Check ${toolsPath}${toolName}.js</p>`;
+            if (this.openPanels.has(toolName)) {
+                const toolsPath = this.getToolsBasePath();
+                chrome.bodyEl.innerHTML = `<p class="tool-msg tool-msg--error">Failed to load tool: ${toolName}. Check ${toolsPath}${toolName}.js</p>`;
+            }
         }
     },
 
-    close() {
-        if (this.activeToolInstance && typeof this.activeToolInstance.destroy === 'function') {
-            this.activeToolInstance.destroy();
+    dismiss(toolId) {
+        const entry = this.openPanels.get(toolId);
+        if (!entry) return;
+
+        if (entry.instance && typeof entry.instance.destroy === 'function') {
+            entry.instance.destroy();
         }
 
-        this.clearToolShell();
-        this.overlay.classList.add('is-hidden');
-        this.mountZone.innerHTML = '';
-        this.activeToolInstance = null;
+        entry.chrome.destroy();
+        this.openPanels.delete(toolId);
+        this.renderDropdownMenu();
+    },
+
+     close() {
+        this.closeAll();
+    },
+
+    closeAll() {
+        [...this.openPanels.keys()].forEach((id) => this.dismiss(id));
     }
 };

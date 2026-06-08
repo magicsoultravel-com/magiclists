@@ -1,4 +1,4 @@
-/** @tool {"label":"Globe","order":5} */
+/** @tool {"label":"Globe","order":5,"defaultSize":{"w":480,"h":520},"minSize":{"w":320,"h":400}} */
 /** @tool-icon <circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M1.8 6h8.4M6 1.8c1.2 1.4 1.8 3 1.8 4.2S7.2 8.8 6 10.2M6 1.8C4.8 3.2 4.2 4.8 4.2 6s.6 2.8 1.8 4.2" fill="none" stroke="currentColor" stroke-width="0.85"/> */
 export const Globe = {
     container: null,
@@ -46,26 +46,24 @@ export const Globe = {
 
     render() {
         this.container.innerHTML = `
-            <div style="width:100%; height:100%; display:flex; flex-direction:column; position:relative; background:#0a0a0f; border-radius:8px; overflow:hidden; min-height:500px;">
-                <div style="position:absolute; top:12px; left:12px; z-index:10; display:flex; gap:8px; background:rgba(0,0,0,0.7); backdrop-filter:blur(8px); padding:6px 12px; border-radius:40px; border:1px solid rgba(255,255,255,0.1);">
-                    <button class="globe-layer-btn active" data-layer="political" style="background:#4f46e5; border:none; color:white; padding:6px 16px; border-radius:20px; cursor:pointer; font-size:12px; font-weight:500;">🌍 Political</button>
-                    <button class="globe-layer-btn" data-layer="geological" style="background:transparent; border:none; color:white; padding:6px 16px; border-radius:20px; cursor:pointer; font-size:12px; font-weight:500;">⛰️ Geological</button>
-                    <button class="globe-layer-btn" data-layer="timezones" style="background:transparent; border:none; color:white; padding:6px 16px; border-radius:20px; cursor:pointer; font-size:12px; font-weight:500;">🕒 Timezones</button>
+            <div class="globe-tool">
+                <div class="globe-tool__controls map-tool__control-row">
+                    <button type="button" class="btn btn--compact globe-layer-btn active" data-layer="political">Political</button>
+                    <button type="button" class="btn btn--compact globe-layer-btn" data-layer="geological">Geological</button>
+                    <button type="button" class="btn btn--compact globe-layer-btn" data-layer="timezones">Timezones</button>
                 </div>
-                <div id="globe-canvas-container" style="width:100%; height:100%; position:relative; flex:1; background:#050510;"></div>
-                <div style="position:absolute; bottom:12px; right:12px; z-index:10; background:rgba(0,0,0,0.5); padding:4px 10px; border-radius:20px; font-size:10px; color:#aaa; font-family:monospace;">
-                    🖱️ Drag to rotate • Scroll to zoom
-                </div>
+                <div id="globe-canvas-container" class="globe-tool__canvas-wrap"></div>
+                <div class="globe-tool__hint tool-msg">Drag to rotate · Scroll to zoom</div>
             </div>
         `;
 
         const btns = this.container.querySelectorAll('.globe-layer-btn');
-        btns.forEach(btn => {
-            btn.addEventListener('click', (e) => {
+        btns.forEach((btn) => {
+            btn.addEventListener('click', () => {
                 const layer = btn.getAttribute('data-layer');
                 this.switchLayer(layer);
-                btns.forEach(b => b.style.background = 'transparent');
-                btn.style.background = '#4f46e5';
+                btns.forEach((b) => b.classList.remove('active'));
+                btn.classList.add('active');
             });
         });
     },
@@ -141,6 +139,10 @@ export const Globe = {
         const earthMaterial = new THREE.MeshStandardMaterial({ map: earthTexture, roughness: 0.5, metalness: 0.1 });
         this.globeInstance = new THREE.Mesh(globeGeometry, earthMaterial);
         this.scene.add(this.globeInstance);
+    },
+
+    onPanelResize() {
+        this.handleResize();
     },
 
     handleResize() {

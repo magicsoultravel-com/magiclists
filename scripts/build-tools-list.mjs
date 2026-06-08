@@ -37,6 +37,9 @@ function parseToolFile(filePath) {
     let order = 100;
     let wide = false;
     let mountClass = '';
+    let resizable = false;
+    let defaultSize = null;
+    let minSize = null;
     let icon = '';
 
     const toolMatch = head.match(/@tool\s+(\{.*?\})/s);
@@ -47,6 +50,9 @@ function parseToolFile(filePath) {
             if (meta?.order != null) order = Number(meta.order);
             if (meta?.wide) wide = true;
             if (meta?.mountClass) mountClass = String(meta.mountClass);
+            if (meta?.resizable) resizable = true;
+            if (meta?.defaultSize) defaultSize = meta.defaultSize;
+            if (meta?.minSize) minSize = meta.minSize;
             if (meta?.icon) icon = String(meta.icon);
         } catch {
             console.warn(`[build-tools-list] Invalid @tool JSON in ${filePath}`);
@@ -58,7 +64,11 @@ function parseToolFile(filePath) {
         icon = iconMatch[1].trim();
     }
 
-    return { id, label, order, icon, wide, mountClass };
+    const entry = { id, label, order, icon, wide, mountClass };
+    if (resizable) entry.resizable = true;
+    if (defaultSize) entry.defaultSize = defaultSize;
+    if (minSize) entry.minSize = minSize;
+    return entry;
 }
 
 function buildRegistry(toolsDir) {

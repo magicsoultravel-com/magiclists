@@ -280,7 +280,6 @@ export const Calendar = {
             const defaultDate = this.currentView === 'day' ? this.currentDate : new Date();
             defaultDate.setHours(12, 0, 0, 0);
             window.dispatchEvent(new CustomEvent('calendar:add_note', { detail: defaultDate }));
-            this.close();
         });
         document.getElementById('holiday-country-select').addEventListener('change', (e) => {
             Holidays.setCountry(e.target.value);
@@ -368,7 +367,7 @@ export const Calendar = {
             grid += `
                 <div class="calendar-day ${todayClass}" data-year="${year}" data-month="${month}" data-day="${d}" style="${gradient}">
                     <div class="calendar-day-number ${numberClass}">${d}</div>
-                    ${hasEvents ? `<div class="calendar-day-notes-count">${events.length}</div>` : ''}
+                    ${hasEvents ? `<div class="calendar-day-notes-count" aria-label="${events.length} event${events.length === 1 ? '' : 's'}"></div>` : ''}
                 </div>
             `;
         }
@@ -387,7 +386,6 @@ export const Calendar = {
                         this.showEventsList(events, clickedDate);
                     } else {
                         window.dispatchEvent(new CustomEvent('calendar:add_note', { detail: clickedDate }));
-                        this.close();
                     }
                 });
             });
@@ -506,7 +504,6 @@ export const Calendar = {
                         this.showEventsList(events, clickedDate);
                     } else {
                         window.dispatchEvent(new CustomEvent('calendar:add_note', { detail: clickedDate }));
-                        this.close();
                     }
                 });
             });
@@ -544,7 +541,6 @@ export const Calendar = {
                 if (note) {
                     window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: note }));
                     modal.remove();
-                    this.close();
                 }
             });
         });
@@ -604,7 +600,6 @@ export const Calendar = {
                     const newDate = new Date(date);
                     newDate.setHours(hour, 0, 0, 0);
                     window.dispatchEvent(new CustomEvent('calendar:add_note', { detail: newDate }));
-                    this.close();
                 });
             });
             
@@ -615,7 +610,6 @@ export const Calendar = {
                     const note = this.items.find(i => i.id === parentId);
                     if (note) {
                         window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: note }));
-                        this.close();
                     }
                 });
             });

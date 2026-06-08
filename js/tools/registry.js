@@ -9,7 +9,10 @@ export const TOOLS_REGISTRY = [
         "order": 0,
         "icon": "<rect x=\"1.5\" y=\"2.5\" width=\"9\" height=\"8\" rx=\"0.8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.95\"/><path d=\"M1.5 5.2h9M4 1.5v1.6M8 1.5v1.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.95\" stroke-linecap=\"round\"/>",
         "wide": true,
-        "mountClass": "tool-mount--calendar"
+        "mountClass": "tool-mount--calendar",
+        "resizable": true,
+        "defaultSize": { "w": 720, "h": 560 },
+        "minSize": { "w": 480, "h": 400 }
     },
     {
         "id": "calculator",
@@ -17,7 +20,10 @@ export const TOOLS_REGISTRY = [
         "order": 1,
         "icon": "<rect x=\"2\" y=\"1.8\" width=\"8\" height=\"8.4\" rx=\"0.8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.95\"/><path d=\"M4 4.2h4M4 6h1.6M6.4 6H8M4 7.8h4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.85\" stroke-linecap=\"round\"/>",
         "wide": false,
-        "mountClass": ""
+        "mountClass": "tool-mount--calculator",
+        "resizable": true,
+        "defaultSize": { "w": 320, "h": 480 },
+        "minSize": { "w": 260, "h": 360 }
     },
     {
         "id": "converter",
@@ -25,7 +31,8 @@ export const TOOLS_REGISTRY = [
         "order": 2,
         "icon": "<path d=\"M3.2 4.2h5.2M7.6 3.4 8.8 4.2 7.6 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M8.8 7.8H3.6M4.4 7 3.2 7.8 4.4 8.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
         "wide": false,
-        "mountClass": ""
+        "mountClass": "",
+        "defaultSize": { "w": 340, "h": 320 }
     },
     {
         "id": "timezone",
@@ -33,7 +40,8 @@ export const TOOLS_REGISTRY = [
         "order": 3,
         "icon": "<circle cx=\"6\" cy=\"6\" r=\"4.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.95\"/><path d=\"M6 3.6V6l2 1.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.9\" stroke-linecap=\"round\"/>",
         "wide": false,
-        "mountClass": ""
+        "mountClass": "",
+        "defaultSize": { "w": 340, "h": 380 }
     },
     {
         "id": "globe-tz",
@@ -41,7 +49,9 @@ export const TOOLS_REGISTRY = [
         "order": 4,
         "icon": "<circle cx=\"6\" cy=\"6\" r=\"4.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.95\"/><path d=\"M1.8 6h8.4M3.5 4h5M3.5 8h5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.85\"/>",
         "wide": false,
-        "mountClass": ""
+        "mountClass": "",
+        "defaultSize": { "w": 400, "h": 480 },
+        "minSize": { "w": 320, "h": 360 }
     },
     {
         "id": "globe",
@@ -49,7 +59,9 @@ export const TOOLS_REGISTRY = [
         "order": 5,
         "icon": "<circle cx=\"6\" cy=\"6\" r=\"4.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.95\"/><path d=\"M1.8 6h8.4M6 1.8c1.2 1.4 1.8 3 1.8 4.2S7.2 8.8 6 10.2M6 1.8C4.8 3.2 4.2 4.8 4.2 6s.6 2.8 1.8 4.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.85\"/>",
         "wide": false,
-        "mountClass": ""
+        "mountClass": "",
+        "defaultSize": { "w": 480, "h": 520 },
+        "minSize": { "w": 320, "h": 400 }
     },
     {
         "id": "map",
@@ -57,6 +69,9 @@ export const TOOLS_REGISTRY = [
         "order": 6,
         "icon": "<path d=\"M2.2 3.2 6 1.8l3.8 1.4v5.6L6 10.2 2.2 8.8V3.2z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.9\" stroke-linejoin=\"round\"/><path d=\"M6 1.8v8.4M9.8 3.2v5.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.85\"/>",
         "wide": true,
-        "mountClass": "tool-mount--map"
+        "mountClass": "tool-mount--map",
+        "resizable": true,
+        "defaultSize": { "w": 800, "h": 600 },
+        "minSize": { "w": 400, "h": 320 }
     }
 ];
