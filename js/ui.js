@@ -1026,6 +1026,7 @@ export const UI = {
             ctx.targetCatName,
             ctx.categoryColor
         );
+        window.dispatchEvent(new CustomEvent('board:cards_reflowed'));
     },
 
     createCardComponent(item, activeCategories, { freeform = false, columnNote = false, columnsFloat = false, categoryName = '' } = {}) {
@@ -1344,6 +1345,7 @@ export const UI = {
             const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
             this.applyCardExpandCollapse(card, item, false, activeCategories, targetCatName, categoryColor);
         });
+        window.dispatchEvent(new CustomEvent('board:cards_reflowed'));
     },
 
     revealNoteOnBoard(item) {

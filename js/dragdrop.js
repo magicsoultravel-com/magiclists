@@ -323,19 +323,21 @@ export const DragDropEngine = {
             }, { signal });
         });
 
-        canvas.querySelectorAll('.grab-handle--note-cat').forEach(handle => {
-            handle.addEventListener('dragstart', (e) => {
-                const card = handle.closest('.mini-card');
-                if (!card) return;
-                e.dataTransfer.setData('text/plain', card.dataset.id);
-                e.dataTransfer.effectAllowed = 'move';
-                card.classList.add('is-column-cat-dragging');
-            }, { signal });
+        canvas.addEventListener('dragstart', (e) => {
+            const handle = e.target.closest('.grab-handle--note-cat');
+            if (!handle || !canvas.contains(handle)) return;
+            const card = handle.closest('.mini-card');
+            if (!card) return;
+            e.dataTransfer.setData('text/plain', card.dataset.id);
+            e.dataTransfer.effectAllowed = 'move';
+            card.classList.add('is-column-cat-dragging');
+        }, { signal });
 
-            handle.addEventListener('dragend', () => {
-                handle.closest('.mini-card')?.classList.remove('is-column-cat-dragging');
-            }, { signal });
-        });
+        canvas.addEventListener('dragend', (e) => {
+            const handle = e.target.closest('.grab-handle--note-cat');
+            if (!handle || !canvas.contains(handle)) return;
+            handle.closest('.mini-card')?.classList.remove('is-column-cat-dragging');
+        }, { signal });
 
         this.bindColumnPointerDrag(canvas, currentItems, signal);
         this.bindColumnPointerResize(canvas, currentItems, signal);

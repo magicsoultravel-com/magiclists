@@ -353,6 +353,7 @@ class Application {
         btn.innerHTML = ACTION_ICONS.collapseAll;
         btn.addEventListener('click', () => {
             UI.collapseAllCards(AppState.items);
+            DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         });
     }
 
@@ -460,6 +461,10 @@ class Application {
         window.addEventListener('board:visibility_changed', async () => {
             UI.render(document.getElementById('app-canvas'), AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories);
             this.updateWorkspaceCounter();
+            DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+        });
+
+        window.addEventListener('board:cards_reflowed', () => {
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         });
 
