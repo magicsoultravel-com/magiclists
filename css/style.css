@@ -832,10 +832,15 @@ body {
     color: var(--text-main);
 }
 
-#btn-layout-reset {
+#btn-layout-reset,
+#btn-save-view {
     min-width: 30px;
     min-height: 30px;
     padding: 0.25rem;
+}
+
+#btn-save-view.is-saved {
+    color: #6ee7b7;
 }
 
 

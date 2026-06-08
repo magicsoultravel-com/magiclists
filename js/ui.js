@@ -81,7 +81,8 @@ export const ACTION_ICONS = {
     sortDate: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><circle cx="4.8" cy="6" r="3.1" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M4.8 4.4V6l1.3 0.9" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.2 3v6M8.3 4.1l0.9-1.1 0.9 1.1M8.3 7.9l0.9 1.1 0.9-1.1" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     desktopBg: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="2.2" width="9.2" height="6.8" rx="0.7" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M2.2 8.4h7.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/><circle cx="4.1" cy="5.4" r="1.1" fill="currentColor" opacity="0.85"/><circle cx="6.6" cy="4.6" r="0.85" fill="currentColor" opacity="0.65"/><circle cx="8.1" cy="6.2" r="0.75" fill="currentColor" opacity="0.5"/></svg>',
     chromeBg: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.3" y="1.8" width="3.6" height="8.4" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="5.5" y="1.8" width="5.2" height="2.4" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="5.5" y="5" width="5.2" height="5.2" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
-    clockStyle: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.2V6l2 1.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    clockStyle: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.2V6l2 1.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    saveView: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.8 2.4h6.4v7.2L6 7.6 2.8 9.6V2.4z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M6 5.2v2.8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>'
 };
 
 export function itemHasCategory(item) {
@@ -2218,6 +2219,83 @@ export const UI = {
         if (card.dataset.freeform !== '1') return;
         const { w, h } = this.readFreeformCardSize(card);
         this.saveFreeformSize(card.dataset.id, w, h);
+    },
+
+    flushLayoutFromCanvas(canvas, viewMode) {
+        if (!canvas) return;
+        if (viewMode === 'freeform') {
+            canvas.querySelectorAll('.mini-card[data-freeform="1"]').forEach((card) => {
+                const id = card.dataset.id;
+                if (!id) return;
+                this.saveFreeformPosition(
+                    id,
+                    parseFloat(card.style.left) || 0,
+                    parseFloat(card.style.top) || 0
+                );
+                if (card.classList.contains('expanded')) {
+                    this.saveFreeformSizeFromCard(card);
+                }
+            });
+            return;
+        }
+
+        canvas.querySelectorAll('.canvas-column').forEach((col) => {
+            const cat = col.dataset.category;
+            if (!cat) return;
+            this.saveColumnPosition(cat, parseFloat(col.style.left) || 0, parseFloat(col.style.top) || 0);
+        });
+
+        canvas.querySelectorAll('.mini-card[data-column-note="1"], .mini-card[data-columns-float="1"]').forEach((card) => {
+            const id = card.dataset.id;
+            if (!id) return;
+            const rect = this.readNoteRect(card);
+            if (card.dataset.columnsFloat === '1') {
+                this.saveColumnsFloatPosition(id, rect.x, rect.y);
+                if (card.classList.contains('expanded')) {
+                    this.saveColumnsFloatSize(id, rect.w, rect.h);
+                }
+                return;
+            }
+            const cat = card.dataset.category;
+            if (cat) this.saveColumnNoteLayout(cat, id, rect);
+        });
+    },
+
+    captureViewSnapshot(viewMode) {
+        const canvas = document.getElementById('app-canvas');
+        this.flushLayoutFromCanvas(canvas, viewMode);
+        let expandedCards = {};
+        let collapsedCategories = [];
+        try {
+            expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
+        } catch {
+            expandedCards = {};
+        }
+        try {
+            collapsedCategories = JSON.parse(localStorage.getItem('matrix_collapsed_categories') || '[]');
+        } catch {
+            collapsedCategories = [];
+        }
+        return {
+            version: 1,
+            savedAt: Date.now(),
+            viewMode,
+            scroll: this.captureScrollState(canvas),
+            freeformPositions: this.getFreeformPositions(),
+            freeformSizes: this.getFreeformSizes(),
+            columnPositions: this.getColumnPositions(),
+            columnNoteLayout: this.getColumnNoteLayout(),
+            columnsFloatPositions: this.getColumnsFloatPositions(),
+            columnsFloatSizes: this.getColumnsFloatSizes(),
+            expandedCards,
+            collapsedCategories
+        };
+    },
+
+    saveViewSnapshot(viewMode) {
+        const snapshot = this.captureViewSnapshot(viewMode);
+        localStorage.setItem('matrix_saved_view', JSON.stringify(snapshot));
+        return snapshot;
     },
 
     resetFreeformLayout() {

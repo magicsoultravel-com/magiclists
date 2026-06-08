@@ -52,6 +52,7 @@ class Application {
         SidePanel.setupStatusClickHandlers();
         ClockStyle.init();
         this.setupLayoutResetButton();
+        this.setupSaveViewButton();
         this.updateLayoutResetVisibility();
         this.setupBackupInterface();
         this.setupFab();
@@ -341,6 +342,30 @@ class Application {
                 UI.resetColumnsLayout();
             }
             this.syncDataStore();
+        });
+    },
+
+    setupSaveViewButton() {
+        const btn = document.getElementById('btn-save-view');
+        if (!btn) return;
+        btn.innerHTML = ACTION_ICONS.saveView;
+        const defaultTitle = 'Save view';
+        btn.title = defaultTitle;
+        btn.setAttribute('aria-label', defaultTitle);
+
+        let savedTimer = null;
+        btn.addEventListener('click', () => {
+            const mode = AppState.viewSettings.sortBy;
+            UI.saveViewSnapshot(mode);
+            btn.classList.add('is-saved');
+            btn.title = 'View saved';
+            btn.setAttribute('aria-label', 'View saved');
+            clearTimeout(savedTimer);
+            savedTimer = setTimeout(() => {
+                btn.classList.remove('is-saved');
+                btn.title = defaultTitle;
+                btn.setAttribute('aria-label', defaultTitle);
+            }, 1600);
         });
     }
 
