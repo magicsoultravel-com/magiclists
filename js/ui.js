@@ -56,6 +56,8 @@ export const CANVAS_PACK_GAP = COLUMN_GRID_GAP;
 const CANVAS_LAYOUT_ORDER_KEY = 'matrix_canvas_layout_order';
 const GRID_LAYOUT_KEY = 'matrix_grid_layout';
 const GRID_PINS_KEY = 'matrix_grid_pins';
+const CARD_EXPAND_ANIM_MS = 220;
+const CARD_COLLAPSE_ANIM_MS = 200;
 
 let freeformStackSeq = 1;
 let gridStackSeq = 1;
@@ -745,7 +747,7 @@ export const UI = {
                     placed.push(rect);
                     this.finalizeGridBoardCard(card);
                     this.initGridBoardCardStack(card, index);
-                    if (this.isGridPinned(item.id)) card.classList.add('is-grid-pinned');
+                    this.syncBoardPinClass(card);
                     card.removeAttribute('draggable');
                     canvas.appendChild(card);
                 });
@@ -782,6 +784,7 @@ export const UI = {
                     card.removeAttribute('draggable');
                     this.applyFreeformSize(card);
                     this.initFreeformCardStack(card, index);
+                    this.syncBoardPinClass(card);
                     canvas.appendChild(card);
                 });
         }
@@ -948,16 +951,14 @@ export const UI = {
         localStorage.removeItem('matrix_columns_float_sizes');
     },
 
-    buildCardActionsHtml(item, isExpanded = false, { gridBoard = false, pinned = false } = {}) {
+    buildCardActionsHtml(item, isExpanded = false, { pinned = false } = {}) {
         const expandTitle = isExpanded ? 'Collapse note' : 'Expand note';
         const expandIcon = isExpanded ? CARD_ICONS.collapse : CARD_ICONS.expand;
         const copyBtn = isExpanded
             ? `<button type="button" class="card-act card-act--copy" title="Copy note as text" aria-label="Copy note as text">${CARD_ICONS.copy}</button>`
             : '';
-        const pinTitle = pinned ? 'Unpin position' : 'Pin position';
-        const pinBtn = gridBoard
-            ? `<button type="button" class="card-act card-act--pin${pinned ? ' is-active' : ''}" title="${pinTitle}" aria-label="${pinTitle}" aria-pressed="${pinned ? 'true' : 'false'}">${pinned ? CARD_ICONS.unpin : CARD_ICONS.pin}</button>`
-            : '';
+        const pinTitle = pinned ? 'Unpin (unlock drag)' : 'Pin position (locks drag)';
+        const pinBtn = `<button type="button" class="card-act card-act--pin${pinned ? ' is-active' : ''}" title="${pinTitle}" aria-label="${pinTitle}" aria-pressed="${pinned ? 'true' : 'false'}">${pinned ? CARD_ICONS.unpin : CARD_ICONS.pin}</button>`;
         return `<div class="card-actions">
             ${copyBtn}
             ${pinBtn}
@@ -1027,9 +1028,14 @@ export const UI = {
     },
 
     getCardActionsOptions(card) {
-        const gridBoard = card?.dataset?.gridBoard === '1';
-        const pinned = gridBoard && this.isGridPinned(card?.dataset?.id);
-        return { gridBoard, pinned };
+        return {
+            pinned: this.isBoardPinned(card?.dataset?.id)
+        };
+    },
+
+    syncBoardPinClass(card) {
+        if (!card?.dataset?.id) return;
+        card.classList.toggle('is-board-pinned', this.isBoardPinned(card.dataset.id));
     },
 
     attachCardActions(card, item, ctx) {
@@ -1059,24 +1065,36 @@ export const UI = {
             if (ok) this.flashCopyFeedback(copyBtn);
         });
 
+        const toolbar = card.querySelector('.note-editor-toolbar');
+        toolbar?.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            this.commitFocusedInlineField(card, item);
+        }, true);
+
         this.attachCardActionButton(pinBtn, () => {
-            const pinned = this.toggleGridPin(item.id);
-            card.classList.toggle('is-grid-pinned', pinned);
+            const pinned = this.toggleBoardPin(item.id);
+            this.syncBoardPinClass(card);
             pinBtn.classList.toggle('is-active', pinned);
             pinBtn.setAttribute('aria-pressed', pinned ? 'true' : 'false');
-            const pinTitle = pinned ? 'Unpin position' : 'Pin position';
+            const pinTitle = pinned ? 'Unpin (unlock drag)' : 'Pin position (locks drag)';
             pinBtn.setAttribute('title', pinTitle);
             pinBtn.setAttribute('aria-label', pinTitle);
             pinBtn.innerHTML = pinned ? CARD_ICONS.unpin : CARD_ICONS.pin;
         });
 
-        this.attachCardActionButton(toggleBtn, () => {
-            this.commitFocusedInlineField(card, item);
-            const isExpanded = this.isCardExpanded(card, item);
-            if (!isExpanded && consumeSkipExpand()) return;
-            if (card.dataset.skipExpand) delete card.dataset.skipExpand;
-            if (ctx) this.toggleCardExpanded(card, item, ctx);
-        });
+        if (toggleBtn) {
+            toggleBtn.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
+                e.stopPropagation();
+            });
+            toggleBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const isExpanded = card.classList.contains('expanded');
+                if (!isExpanded && consumeSkipExpand()) return;
+                if (card.dataset.skipExpand) delete card.dataset.skipExpand;
+                if (ctx) this.toggleCardExpanded(card, item, ctx);
+            });
+        }
 
         this.attachCardActionButton(colorBtn, () => {
             this.commitFocusedInlineField(card, item);
@@ -1308,7 +1326,7 @@ export const UI = {
             reflowColumnsFloat();
             reflowGridBoard();
             card.addEventListener('animationend', cleanup, { once: true });
-            setTimeout(cleanup, 400);
+            setTimeout(cleanup, CARD_EXPAND_ANIM_MS);
             return;
         }
 
@@ -1322,7 +1340,7 @@ export const UI = {
                 this.applyFreeformSize(card);
             };
             card.addEventListener('animationend', finishCollapse, { once: true });
-            setTimeout(finishCollapse, 400);
+            setTimeout(finishCollapse, CARD_COLLAPSE_ANIM_MS);
             return;
         }
 
@@ -1337,7 +1355,7 @@ export const UI = {
                 reflowGridBoard();
             };
             card.addEventListener('animationend', finishCollapse, { once: true });
-            setTimeout(finishCollapse, 400);
+            setTimeout(finishCollapse, CARD_COLLAPSE_ANIM_MS);
             return;
         }
 
@@ -1347,7 +1365,7 @@ export const UI = {
         reflowColumnNote();
         reflowColumnsFloat();
         card.addEventListener('animationend', cleanup, { once: true });
-        setTimeout(cleanup, 400);
+        setTimeout(cleanup, CARD_COLLAPSE_ANIM_MS);
     },
 
     updateColumnsFloatCard(card, item, { expanded, dimensions = null } = {}) {
@@ -1389,8 +1407,9 @@ export const UI = {
     },
 
     toggleCardExpanded(card, item, ctx) {
-        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
-        const willExpand = expandedCards[item.id] !== true;
+        if (card.classList.contains('card-animate-collapse')) return;
+
+        const willExpand = !card.classList.contains('expanded');
 
         if (card.dataset.freeform === '1') {
             this.updateFreeformCard(card, item, { expanded: willExpand });
@@ -1473,6 +1492,7 @@ export const UI = {
         }
 
         this.syncCardDraggable(card);
+        this.syncBoardPinClass(card);
         return card;
     },
 
@@ -2026,6 +2046,7 @@ export const UI = {
             this.finalizeColumnsFloat(card);
         }
         this.syncCardDraggable(card);
+        this.syncBoardPinClass(card);
     },
 
     canEditInline() {
@@ -2137,6 +2158,7 @@ export const UI = {
             this.finalizeColumnsFloat(card);
         }
         this.syncCardDraggable(card);
+        this.syncBoardPinClass(card);
     },
 
     refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor) {
@@ -3145,7 +3167,7 @@ export const UI = {
         localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layout));
     },
 
-    getGridPins() {
+    getBoardPins() {
         try {
             const raw = JSON.parse(localStorage.getItem(GRID_PINS_KEY) || '[]');
             return Array.isArray(raw) ? raw : [];
@@ -3154,13 +3176,21 @@ export const UI = {
         }
     },
 
-    isGridPinned(itemId) {
-        return !!itemId && this.getGridPins().includes(itemId);
+    getGridPins() {
+        return this.getBoardPins();
     },
 
-    toggleGridPin(itemId) {
+    isBoardPinned(itemId) {
+        return !!itemId && this.getBoardPins().includes(itemId);
+    },
+
+    isGridPinned(itemId) {
+        return this.isBoardPinned(itemId);
+    },
+
+    toggleBoardPin(itemId) {
         if (!itemId) return false;
-        const pins = this.getGridPins();
+        const pins = this.getBoardPins();
         const idx = pins.indexOf(itemId);
         if (idx >= 0) {
             pins.splice(idx, 1);
@@ -3169,6 +3199,10 @@ export const UI = {
         }
         localStorage.setItem(GRID_PINS_KEY, JSON.stringify(pins));
         return idx < 0;
+    },
+
+    toggleGridPin(itemId) {
+        return this.toggleBoardPin(itemId);
     },
 
     getGridBoardBounds(canvas) {
@@ -3223,7 +3257,7 @@ export const UI = {
         const cards = [...canvas.querySelectorAll('.mini-card[data-grid-board="1"]')];
         if (!cards.length) return;
 
-        const pinnedIds = new Set(this.getGridPins());
+        const pinnedIds = new Set(this.getBoardPins());
         const placed = [];
         let actorRect = null;
 
@@ -3980,6 +4014,7 @@ export const UI = {
         const saved = respectSaved && categoryName
             ? (this.getColumnNoteLayout()[categoryName] || {})
             : {};
+        const pinnedIds = new Set(this.getBoardPins());
 
         const sorted = cards
             .map((card) => ({ card, rect: this.readNoteRect(card) }))
@@ -3989,7 +4024,23 @@ export const UI = {
 
         sorted.forEach(({ card, rect }) => {
             const itemId = card.dataset.id;
-            const stored = itemId ? saved[itemId] : null;
+            if (!itemId || !pinnedIds.has(itemId)) return;
+            const stored = saved[itemId];
+            const manual = this.clampManualNoteRect(
+                stored && Number.isFinite(stored.x) && Number.isFinite(stored.w)
+                    ? { x: stored.x, y: stored.y, w: rect.w, h: rect.h }
+                    : rect,
+                { maxW: innerW, maxH }
+            );
+            this.applyNoteRect(card, manual, { settling: false });
+            placed.push(manual);
+            if (categoryName) this.saveColumnNoteLayout(categoryName, itemId, manual);
+        });
+
+        sorted.forEach(({ card, rect }) => {
+            const itemId = card.dataset.id;
+            if (!itemId || pinnedIds.has(itemId)) return;
+            const stored = saved[itemId];
             if (respectSaved && stored && Number.isFinite(stored.x) && Number.isFinite(stored.w)) {
                 const manual = this.clampManualNoteRect(
                     { x: stored.x, y: stored.y, w: rect.w, h: rect.h },
@@ -4002,7 +4053,8 @@ export const UI = {
 
         sorted.forEach(({ card, rect }) => {
             const itemId = card.dataset.id;
-            const stored = itemId ? saved[itemId] : null;
+            if (!itemId || pinnedIds.has(itemId)) return;
+            const stored = saved[itemId];
             if (respectSaved && stored && Number.isFinite(stored.x) && Number.isFinite(stored.w)) {
                 return;
             }

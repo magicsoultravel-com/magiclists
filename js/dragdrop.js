@@ -37,6 +37,19 @@ function getCanvasZoom(canvas) {
     return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
 }
 
+function pointerDelta(canvas, clientX, clientY, startX, startY) {
+    const zoom = getCanvasZoom(canvas);
+    return {
+        dx: (clientX - startX) / zoom,
+        dy: (clientY - startY) / zoom
+    };
+}
+
+function cardIsPinned(card) {
+    const id = card?.dataset?.id;
+    return !!id && UI.isBoardPinned(id);
+}
+
 function isScrollbarGrip(el, clientX) {
     if (!el || el.scrollHeight <= el.clientHeight) return false;
     const scrollbarWidth = el.offsetWidth - el.clientWidth;
@@ -115,8 +128,7 @@ export const DragDropEngine = {
 
         const onDragMove = (e) => {
             if (!dragActive) return;
-            const dx = e.clientX - dragActive.startX;
-            const dy = e.clientY - dragActive.startY;
+            const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, dragActive.startX, dragActive.startY);
             if (!dragActive.moved) {
                 if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
                 dragActive.moved = true;
@@ -149,8 +161,7 @@ export const DragDropEngine = {
         const onResizeMove = (e) => {
             if (!resizeActive) return;
             const { card, axis, startX, startY, origX, origY, origW, origH } = resizeActive;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
+            const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, startX, startY);
 
             let nextX = origX;
             let nextY = origY;
@@ -205,6 +216,7 @@ export const DragDropEngine = {
 
                 const resizeHandle = e.target.closest('.ff-resize');
                 if (resizeHandle) {
+                    if (cardIsPinned(card)) return;
                     e.preventDefault();
                     e.stopPropagation();
                     const { w: startW, h: startH } = UI.readFreeformCardSize(card);
@@ -239,6 +251,7 @@ export const DragDropEngine = {
                 }
 
                 if (!shouldStartCardDrag(e.target)) return;
+                if (cardIsPinned(card)) return;
 
                 const scrollHost = e.target.closest('.editor-note-body') || e.target.closest('.card-body');
                 if (scrollHost && isScrollbarGrip(scrollHost, e.clientX)) return;
@@ -274,9 +287,7 @@ export const DragDropEngine = {
 
         const onDragMove = (e) => {
             if (!dragActive) return;
-            const zoom = getCanvasZoom(canvas);
-            const dx = (e.clientX - dragActive.startX) / zoom;
-            const dy = (e.clientY - dragActive.startY) / zoom;
+            const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, dragActive.startX, dragActive.startY);
             if (!dragActive.moved) {
                 if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
                 dragActive.moved = true;
@@ -305,9 +316,7 @@ export const DragDropEngine = {
 
         const onResizeMove = (e) => {
             if (!resizeActive) return;
-            const zoom = getCanvasZoom(canvas);
-            const dx = (e.clientX - resizeActive.startX) / zoom;
-            const dy = (e.clientY - resizeActive.startY) / zoom;
+            const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, resizeActive.startX, resizeActive.startY);
             if (!resizeActive.moved) {
                 if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
                 resizeActive.moved = true;
@@ -372,6 +381,7 @@ export const DragDropEngine = {
 
                 const resizeHandle = e.target.closest('.ff-resize');
                 if (resizeHandle) {
+                    if (cardIsPinned(card)) return;
                     e.preventDefault();
                     e.stopPropagation();
                     const { w: startW, h: startH } = UI.readFreeformCardSize(card);
@@ -408,6 +418,7 @@ export const DragDropEngine = {
                 }
 
                 if (!shouldStartCardDrag(e.target)) return;
+                if (cardIsPinned(card)) return;
 
                 const scrollHost = e.target.closest('.editor-note-body') || e.target.closest('.card-body');
                 if (scrollHost && isScrollbarGrip(scrollHost, e.clientX)) return;
@@ -554,8 +565,7 @@ export const DragDropEngine = {
 
         const onMove = (e) => {
             if (!colDrag) return;
-            const dx = e.clientX - colDrag.startX;
-            const dy = e.clientY - colDrag.startY;
+            const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, colDrag.startX, colDrag.startY);
             if (!colDrag.moved) {
                 if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
                 colDrag.moved = true;
@@ -658,8 +668,7 @@ export const DragDropEngine = {
 
         const onMove = (e) => {
             if (!dragActive) return;
-            const dx = e.clientX - dragActive.startX;
-            const dy = e.clientY - dragActive.startY;
+            const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, dragActive.startX, dragActive.startY);
             if (!dragActive.moved) {
                 if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
                 dragActive.moved = true;
@@ -667,9 +676,8 @@ export const DragDropEngine = {
                 canvas.classList.add('is-layout-active');
             }
             e.preventDefault();
-            const bounds = dragActive.boundsEl.getBoundingClientRect();
-            const maxX = Math.max(0, bounds.width - dragActive.cardW);
-            const maxY = Math.max(0, bounds.height - dragActive.cardH);
+            const maxX = Math.max(0, dragActive.boundsEl.clientWidth - dragActive.cardW);
+            const maxY = Math.max(0, dragActive.boundsEl.clientHeight - dragActive.cardH);
             let x = Math.min(maxX, Math.max(0, dragActive.origX + dx));
             let y = Math.min(maxY, Math.max(0, dragActive.origY + dy));
             dragActive.card.style.left = `${x}px`;
@@ -717,6 +725,7 @@ export const DragDropEngine = {
                 if (e.button !== 0) return;
                 if (e.target.closest('.grab-handle--note-cat')) return;
                 if (!shouldStartCardDrag(e.target)) return;
+                if (cardIsPinned(card)) return;
 
                 const scrollHost = e.target.closest('.editor-note-body') || e.target.closest('.card-body');
                 if (scrollHost && isScrollbarGrip(scrollHost, e.clientX)) return;
@@ -770,8 +779,7 @@ export const DragDropEngine = {
 
         const onMove = (e) => {
             if (!resizeActive) return;
-            const dx = e.clientX - resizeActive.startX;
-            const dy = e.clientY - resizeActive.startY;
+            const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, resizeActive.startX, resizeActive.startY);
             if (!resizeActive.moved) {
                 if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
                 resizeActive.moved = true;
@@ -799,7 +807,6 @@ export const DragDropEngine = {
             if (axis.includes('n')) nextY = origY + (origH - clamped.h);
 
             const innerW = isFloat ? canvas.clientWidth : UI.getColumnNotesInnerWidth(boundsEl);
-            const maxH = isFloat ? window.innerHeight : UI.getColumnNotesMaxHeight(boundsEl);
             nextX = Math.max(0, nextX);
             nextY = Math.max(0, nextY);
             if (nextX + clamped.w > innerW) {
@@ -856,6 +863,7 @@ export const DragDropEngine = {
 
                 const resizeHandle = e.target.closest('.ff-resize');
                 if (!resizeHandle) return;
+                if (cardIsPinned(card)) return;
 
                 e.preventDefault();
                 e.stopPropagation();
@@ -932,8 +940,7 @@ export const DragDropEngine = {
 
         const onMove = (e) => {
             if (!resizeActive) return;
-            const dx = e.clientX - resizeActive.startX;
-            const dy = e.clientY - resizeActive.startY;
+            const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, resizeActive.startX, resizeActive.startY);
             if (!resizeActive.moved) {
                 if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
                 resizeActive.moved = true;

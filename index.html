@@ -132,39 +132,42 @@
                     <div id="app-brand" class="app-brand">magicNotes</div>
                 </div>
                 </div>
-                <div id="digital-clock" class="logo-zone logo-zone--clock">
-                    <div id="history-controls" class="history-controls is-hidden">
-                        <button type="button" id="btn-undo" class="btn btn--compact btn--icon" disabled title="Undo (Ctrl+Z)" aria-label="Undo"></button>
-                        <button type="button" id="btn-redo" class="btn btn--compact btn--icon" disabled title="Redo (Ctrl+Y)" aria-label="Redo"></button>
-                    </div>
-                    <button type="button" id="btn-chrome-bg" class="btn btn--compact btn--icon" title="Panel and header background" aria-label="Panel and header background" aria-expanded="false" aria-haspopup="dialog"></button>
-                    <button type="button" id="btn-desktop-bg" class="btn btn--compact btn--icon" title="Desktop background" aria-label="Desktop background" aria-expanded="false" aria-haspopup="dialog"></button>
-                    <div id="clock-display" class="clock-display">
-                        <span id="clock-date" class="clock-chip clock-chip--date">—</span>
-                        <span id="clock-time" class="clock-chip clock-chip--time">—</span>
-                        <div id="clock-analog" class="clock-analog">
-                            <div class="clock-departure">
-                                <div class="clock-departure-face"></div>
-                                <span id="clock-analog-date" class="clock-departure-date"></span>
-                            </div>
+                <div class="control-bar-end">
+                    <div id="control-bar-actions" class="control-bar-actions">
+                        <div id="history-controls" class="history-controls is-hidden">
+                            <button type="button" id="btn-undo" class="btn btn--compact btn--icon" disabled title="Undo (Ctrl+Z)" aria-label="Undo"></button>
+                            <button type="button" id="btn-redo" class="btn btn--compact btn--icon" disabled title="Redo (Ctrl+Y)" aria-label="Redo"></button>
                         </div>
-                        <div id="clock-segment" class="clock-segment">
-                            <div class="clock-segment-board">
-                                <div id="clock-segment-time" class="clock-segment-time" role="timer" aria-live="off"></div>
-                            </div>
-                        </div>
+                        <button type="button" id="btn-chrome-bg" class="btn btn--compact btn--icon" title="Panel and header background" aria-label="Panel and header background" aria-expanded="false" aria-haspopup="dialog"></button>
+                        <button type="button" id="btn-desktop-bg" class="btn btn--compact btn--icon" title="Desktop background" aria-label="Desktop background" aria-expanded="false" aria-haspopup="dialog"></button>
+                        <button type="button" id="btn-focus-mode" class="btn btn--compact btn--icon" title="Focus mode" aria-label="Focus mode" aria-expanded="false" aria-haspopup="menu"></button>
+                        <span id="desktop-zoom-controls" class="desktop-zoom-controls is-hidden" aria-label="Desktop zoom">
+                            <button type="button" id="btn-desktop-zoom-out" class="btn btn--compact btn--icon" title="Zoom out desktop" aria-label="Zoom out desktop">−</button>
+                            <span id="desktop-zoom-label" class="desktop-zoom-label" aria-hidden="true">100%</span>
+                            <button type="button" id="btn-desktop-zoom-in" class="btn btn--compact btn--icon" title="Zoom in desktop" aria-label="Zoom in desktop">+</button>
+                        </span>
+                        <button type="button" id="btn-save-view" class="btn btn--compact btn--icon" title="Save view" aria-label="Save view"></button>
+                        <button type="button" id="btn-recall-view" class="btn btn--compact btn--icon" title="Restore saved view" aria-label="Restore saved view" disabled></button>
+                        <button type="button" id="btn-collapse-all" class="btn btn--compact btn--icon is-hidden" title="Collapse all notes" aria-label="Collapse all notes"></button>
+                        <button type="button" id="btn-layout-reset" class="btn btn--compact btn--icon is-hidden" title="Reset" aria-label="Reset"></button>
                     </div>
-                    <button type="button" id="btn-focus-mode" class="btn btn--compact btn--icon" title="Focus mode" aria-label="Focus mode" aria-expanded="false" aria-haspopup="menu"></button>
-                    <span id="desktop-zoom-controls" class="desktop-zoom-controls is-hidden" aria-label="Desktop zoom">
-                        <button type="button" id="btn-desktop-zoom-out" class="btn btn--compact btn--icon" title="Zoom out desktop" aria-label="Zoom out desktop">−</button>
-                        <span id="desktop-zoom-label" class="desktop-zoom-label" aria-hidden="true">100%</span>
-                        <button type="button" id="btn-desktop-zoom-in" class="btn btn--compact btn--icon" title="Zoom in desktop" aria-label="Zoom in desktop">+</button>
-                    </span>
-                    <button type="button" id="btn-clock-style" class="btn btn--compact btn--icon" title="Clock style" aria-label="Clock style" aria-expanded="false" aria-haspopup="menu"></button>
-                    <button type="button" id="btn-save-view" class="btn btn--compact btn--icon" title="Save view" aria-label="Save view"></button>
-                    <button type="button" id="btn-recall-view" class="btn btn--compact btn--icon" title="Restore saved view" aria-label="Restore saved view" disabled></button>
-                    <button type="button" id="btn-collapse-all" class="btn btn--compact btn--icon is-hidden" title="Collapse all notes" aria-label="Collapse all notes"></button>
-                    <button type="button" id="btn-layout-reset" class="btn btn--compact btn--icon is-hidden" title="Reset" aria-label="Reset"></button>
+                    <div id="digital-clock" class="logo-zone logo-zone--clock">
+                        <button type="button" id="clock-display" class="clock-display clock-display-trigger" title="Change clock style" aria-label="Clock and date — change style" aria-expanded="false" aria-haspopup="menu">
+                            <span id="clock-date" class="clock-chip clock-chip--date">—</span>
+                            <span id="clock-time" class="clock-chip clock-chip--time">—</span>
+                            <div id="clock-analog" class="clock-analog">
+                                <div class="clock-departure">
+                                    <div class="clock-departure-face"></div>
+                                    <span id="clock-analog-date" class="clock-departure-date"></span>
+                                </div>
+                            </div>
+                            <div id="clock-segment" class="clock-segment">
+                                <div class="clock-segment-board">
+                                    <div id="clock-segment-time" class="clock-segment-time" role="timer" aria-live="off"></div>
+                                </div>
+                            </div>
+                        </button>
+                    </div>
                 </div>
             </header>
 

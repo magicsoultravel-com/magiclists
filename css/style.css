@@ -781,17 +781,18 @@ body {
 }
 
 .mini-card.card-animate-expand {
-    animation: cardExpandIn 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+    animation: cardExpandIn 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .mini-card.card-animate-collapse {
-    animation: cardExpandIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) reverse forwards;
+    animation: cardCollapseOut 0.2s cubic-bezier(0.4, 0, 0.85, 1) forwards;
+    transform-origin: top center;
 }
 
 @keyframes cardExpandIn {
     from {
-        opacity: 0.72;
-        transform: scale(0.96);
+        opacity: 0.65;
+        transform: scale(0.92);
     }
     to {
         opacity: 1;
@@ -799,12 +800,25 @@ body {
     }
 }
 
+@keyframes cardCollapseOut {
+    from {
+        opacity: 1;
+        transform: scale(1);
+        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+    }
+    to {
+        opacity: 0.45;
+        transform: scale(0.86);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    }
+}
+
 .mini-card.card-state-changing {
-    transition: max-height 0.32s ease, padding 0.32s ease, width 0.32s ease, box-shadow 0.25s ease;
+    transition: max-height 0.2s ease, padding 0.2s ease, width 0.2s ease, box-shadow 0.18s ease;
 }
 
 .mini-card.card-state-changing .card-body {
-    transition: opacity 0.22s ease;
+    transition: opacity 0.15s ease;
 }
 
 /* ==========================================================================
@@ -813,7 +827,7 @@ body {
 #control-bar {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 0.75rem;
     padding: 1rem 1.5rem;
     background-color: var(--chrome-bg, var(--bg-surface));
@@ -821,8 +835,26 @@ body {
     flex-shrink: 0;
 }
 
-.logo-zone--clock {
+.control-bar-end {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
     margin-left: auto;
+    min-width: 0;
+}
+
+.control-bar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+    min-width: 0;
+}
+
+.logo-zone--clock {
+    flex-shrink: 0;
+    padding-left: 0.5rem;
+    border-left: 1px solid var(--border-color);
 }
 
 .btn-icon {
@@ -1332,8 +1364,17 @@ body {
     box-sizing: border-box;
 }
 
-.mini-card.compact:hover {
-    z-index: 5;
+.mini-card.compact:hover,
+.mini-card.compact:focus-within {
+    overflow: visible !important;
+    z-index: 25;
+}
+
+#app-canvas.view-columns .column-notes .mini-card.compact:hover,
+#app-canvas.view-columns .column-notes .mini-card.compact:focus-within,
+#app-canvas.view-columns > .mini-card.compact:hover,
+#app-canvas.view-columns > .mini-card.compact:focus-within {
+    overflow: visible !important;
 }
 
 .mini-card.compact .mini-card-title {
@@ -1440,39 +1481,49 @@ body {
 .mini-card.compact .card-actions {
     top: -1px;
     right: 0;
-    gap: 0;
-    padding: 1px 0;
+    gap: 1px;
+    padding: 1px;
     border-radius: 0 4px 0 5px;
+    z-index: 12;
 }
 
-/* Scrim behind compact action icons — fades over title for contrast */
+/* Solid strip behind compact quick icons when rolled out past tile edge */
 .mini-card.compact .card-actions::before {
     content: '';
     position: absolute;
     top: -1px;
     right: -1px;
     bottom: -1px;
-    left: -1.4rem;
+    left: -4.75rem;
     z-index: -1;
     border-radius: 0 5px 0 6px;
-    background: linear-gradient(
-        90deg,
-        transparent 0%,
-        color-mix(in srgb, var(--bg-card) 55%, transparent) 20%,
-        color-mix(in srgb, var(--bg-card) 96%, #0a0a0c) 100%
-    );
-    box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-color) 55%, transparent);
+    background: color-mix(in srgb, var(--bg-card) 96%, #0a0a0c);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-color) 80%, transparent);
     pointer-events: none;
 }
 
 .mini-card.compact.has-custom-bg .card-actions::before {
-    background: linear-gradient(
-        90deg,
-        transparent 0%,
-        color-mix(in srgb, var(--card-action-bg) 40%, transparent) 16%,
-        var(--card-action-bg) 100%
-    );
+    background: var(--card-action-bg);
     box-shadow: 0 0 0 1px var(--card-border-subtle);
+}
+
+.mini-card.compact .card-act {
+    background: color-mix(in srgb, var(--bg-card) 96%, #0a0a0c);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-color) 75%, transparent);
+}
+
+.mini-card.compact.has-custom-bg .card-act {
+    background: var(--card-action-bg);
+    color: var(--card-action-fg);
+    box-shadow: 0 0 0 1px var(--card-border-subtle);
+}
+
+.mini-card.compact .card-act:hover {
+    background: color-mix(in srgb, var(--bg-surface) 88%, #fff 12%);
+}
+
+.mini-card.compact.has-custom-bg .card-act:hover {
+    background: color-mix(in srgb, var(--card-action-bg) 82%, #fff 18%);
 }
 
 .mini-card.compact:hover .card-act,
@@ -1530,6 +1581,11 @@ body {
 
 .card-act svg {
     display: block;
+}
+
+.card-act--pin.is-active {
+    color: #fbbf24;
+    opacity: 1;
 }
 
 .card-act:hover {
@@ -2702,7 +2758,7 @@ textarea.form-input {
     min-height: 58px;
     padding: 0.75rem 1rem;
     background: var(--chrome-bg, #151519);
-    justify-content: flex-end;
+    justify-content: flex-start;
 }
 
 .logo-zone {
@@ -2714,13 +2770,8 @@ textarea.form-input {
     letter-spacing: 0;
 }
 
-.logo-zone--clock {
-    margin-left: auto;
-}
-
 #btn-desktop-bg,
-#btn-chrome-bg,
-#btn-clock-style {
+#btn-chrome-bg {
     min-width: 30px;
     min-height: 30px;
     padding: 0.25rem;
@@ -2795,6 +2846,31 @@ textarea.form-input {
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
+}
+
+.clock-display-trigger {
+    border: none;
+    background: transparent;
+    padding: 0.2rem 0.35rem;
+    margin: 0;
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background 0.15s ease;
+}
+
+.clock-display-trigger:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.clock-display-trigger:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.clock-display-trigger[aria-expanded="true"] {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 .clock-analog {
@@ -4144,14 +4220,14 @@ textarea.form-input {
     z-index: 120 !important;
 }
 
-#app-canvas.view-grid .mini-card.is-grid-pinned {
+.mini-card.is-board-pinned {
     outline: 1px solid rgba(251, 191, 36, 0.45);
     outline-offset: 1px;
 }
 
-#app-canvas.view-grid .card-act--pin.is-active {
-    color: #fbbf24;
-    opacity: 1;
+.mini-card.is-board-pinned .card-drag-zone,
+.mini-card.is-board-pinned .ff-drag-gutter {
+    cursor: not-allowed;
 }
 
 #app-canvas.view-grid.is-layout-active {

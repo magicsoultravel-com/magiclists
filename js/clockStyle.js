@@ -1,5 +1,3 @@
-import { ACTION_ICONS } from './ui.js';
-
 const STORAGE_KEY = 'matrix_clock_style';
 
 export const CLOCK_STYLES = [
@@ -188,9 +186,8 @@ export const ClockStyle = {
         this.currentStyle = this.readStored();
         this.applyStyle(this.currentStyle, { silent: true });
 
-        this.triggerBtn = document.getElementById('btn-clock-style');
+        this.triggerBtn = document.getElementById('clock-display');
         if (this.triggerBtn) {
-            this.triggerBtn.innerHTML = ACTION_ICONS.clockStyle;
             this.triggerBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.togglePopover();

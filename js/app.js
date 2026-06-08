@@ -356,10 +356,9 @@ class Application {
     }
 
     updateDesktopZoomVisibility() {
-        const mode = AppState.viewSettings.sortBy;
-        const show = AppState.user.isLoggedIn && mode === 'grid' && DesktopZoom.isDesktopViewport();
+        const show = AppState.user.isLoggedIn && DesktopZoom.isDesktopViewport();
         document.getElementById('desktop-zoom-controls')?.classList.toggle('is-hidden', !show);
-        if (show) DesktopZoom.apply();
+        if (AppState.user.isLoggedIn) DesktopZoom.apply();
     }
 
     setupLayoutResetButton() {
@@ -618,6 +617,7 @@ class Application {
         const show = AppState.user.isLoggedIn;
         document.getElementById('btn-layout-reset')?.classList.toggle('is-hidden', !show);
         document.getElementById('btn-collapse-all')?.classList.toggle('is-hidden', !show);
+        this.updateDesktopZoomVisibility();
     }
 
     setupCoreListeners() {
