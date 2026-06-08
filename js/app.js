@@ -166,6 +166,7 @@ class Application {
                 canvas.innerHTML = `<div class="system-status-msg">Notes are in local storage but require admin login. Use Quick actions → Login (default dev token: dev-admin-secret-2026).</div>`;
             } else {
                 UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
+                UI.syncCollapseAllButton();
             }
 
             DesktopZoom.apply();
@@ -421,9 +422,8 @@ class Application {
     setupCollapseAllButton() {
         const btn = document.getElementById('btn-collapse-all');
         if (!btn) return;
-        btn.innerHTML = ACTION_ICONS.collapseAll;
         btn.addEventListener('click', () => {
-            UI.collapseAllCards();
+            UI.toggleCollapseAllCards();
         });
     }
 
@@ -672,6 +672,7 @@ class Application {
         const show = AppState.user.isLoggedIn;
         document.getElementById('btn-layout-reset')?.classList.toggle('is-hidden', !show);
         document.getElementById('btn-collapse-all')?.classList.toggle('is-hidden', !show);
+        if (show) UI.syncCollapseAllButton();
         this.updateDesktopZoomVisibility();
     }
 
@@ -764,6 +765,7 @@ class Application {
 
         window.addEventListener('board:visibility_changed', async () => {
             UI.render(document.getElementById('app-canvas'), AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
+            UI.syncCollapseAllButton();
             this.updateWorkspaceCounter();
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         });

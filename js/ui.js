@@ -33,6 +33,7 @@ import {
     persistViewSession,
     restoreViewSession,
     setExpandedCard,
+    setExpandedCardsMap,
     setGridExpandedIdForMode
 } from './viewSession.js';
 
@@ -93,7 +94,8 @@ export const CARD_ICONS = {
     pin: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M4.2 1.6h3.6l0.5 2.2 2.1 2.1-1.4 1.4-2.4-1.1-2.4 3.2V6.4L3.6 5.3 4.2 1.6z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
     unpin: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M4.2 1.6h3.6l0.5 2.2 2.1 2.1-1.4 1.4-2.4-1.1-2.4 3.2V6.4L3.6 5.3M2.2 2.2l7.6 7.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     resize: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M8.2 8.2 10.6 10.6M8.2 8.2V5.8M8.2 8.2H5.8M3.4 3.4 1 1M3.4 3.4V5.8M3.4 3.4H5.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    copy: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="3.5" y="3.8" width="5.8" height="6.4" rx="0.6" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M5.2 2.6h4.2a0.8 0.8 0 0 1 0.8 0.8v4.2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>'
+    copy: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="3.5" y="3.8" width="5.8" height="6.4" rx="0.6" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M5.2 2.6h4.2a0.8 0.8 0 0 1 0.8 0.8v4.2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
+    drag: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><circle cx="4.4" cy="3.1" r="0.85" fill="currentColor"/><circle cx="7.6" cy="3.1" r="0.85" fill="currentColor"/><circle cx="4.4" cy="6" r="0.85" fill="currentColor"/><circle cx="7.6" cy="6" r="0.85" fill="currentColor"/><circle cx="4.4" cy="8.9" r="0.85" fill="currentColor"/><circle cx="7.6" cy="8.9" r="0.85" fill="currentColor"/></svg>'
 };
 
 export const FORMAT_ICONS = {
@@ -109,6 +111,7 @@ export const FORMAT_ICONS = {
 export const ACTION_ICONS = {
     layoutReset: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 2.8h3.2M2.2 2.8V6M2.2 2.8l2.4 2.4M9.8 9.2H6.6M9.8 9.2V5.8M9.8 9.2 7.4 6.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><rect x="4.2" y="4.2" width="3.6" height="3.6" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
     collapseAll: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 8.2 6 4.4l3.8 3.8M2.2 4.6 6 0.8l3.8 3.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    expandAll: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 3.8 6 7.6l3.8-3.8M2.2 7.4 6 11.2l3.8-3.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     viewList: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 3.2h7.6M2.2 6h7.6M2.2 8.8h7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
     viewCols: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.6" y="2.2" width="3.6" height="7.6" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.8" y="2.2" width="3.6" height="7.6" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.95"/></svg>',
     viewFree: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.5" y="2" width="3.2" height="2.6" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="7.3" y="2" width="3.2" height="3.8" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="2.8" y="7.2" width="4.4" height="2.8" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
@@ -619,8 +622,13 @@ export const UI = {
 
     isGridBoardCardExpanded(itemId, card = null) {
         if (!itemId) return false;
+        if (getExpandedCards('grid')[itemId] === true) return true;
         if (this.getGridExpandedId() === itemId) return true;
         return !!card?.classList.contains('expanded');
+    },
+
+    isGridMultiCellSize(w, h) {
+        return w > COLUMN_GRID_CELL_W + 2 || h > COLUMN_GRID_CELL_H + 2;
     },
 
     gridBoardRectForCard(card, savedRect, isExpanded) {
@@ -634,6 +642,9 @@ export const UI = {
                 w: this.cellsToSpanW(2),
                 h: this.cellsToSpanH(2)
             };
+        }
+        if (this.isGridMultiCellSize(base.w, base.h)) {
+            return { ...base };
         }
         return {
             ...base,
@@ -798,6 +809,7 @@ export const UI = {
             const placed = [];
             const { origin, packW, maxH } = this.getGridBoardBounds(canvas);
             const gridExpandedId = this.getGridExpandedId();
+            const gridExpandedMap = getExpandedCards('grid');
 
             [...visibleItems]
                 .sort((a, b) => {
@@ -807,7 +819,7 @@ export const UI = {
                 })
                 .forEach((item, index) => {
                     const card = this.createCardComponent(item, activeCategories, { gridBoard: true });
-                    const isExpanded = gridExpandedId === item.id;
+                    const isExpanded = gridExpandedMap[item.id] === true || gridExpandedId === item.id;
                     const saved = layout[item.id];
                     let rect;
 
@@ -1031,7 +1043,7 @@ export const UI = {
         localStorage.removeItem('matrix_columns_float_sizes');
     },
 
-    buildCardActionsHtml(item, isExpanded = false, { pinned = false } = {}) {
+    buildCardActionsHtml(item, isExpanded = false, { pinned = false, showDrag = false } = {}) {
         const expandTitle = isExpanded ? 'Collapse note' : 'Expand note';
         const expandIcon = isExpanded ? CARD_ICONS.collapse : CARD_ICONS.expand;
         const copyBtn = isExpanded
@@ -1039,13 +1051,20 @@ export const UI = {
             : '';
         const pinTitle = pinned ? 'Unpin (unlock drag)' : 'Pin position (locks drag)';
         const pinBtn = `<button type="button" class="card-act card-act--pin${pinned ? ' is-active' : ''}" title="${pinTitle}" aria-label="${pinTitle}" aria-pressed="${pinned ? 'true' : 'false'}">${pinned ? CARD_ICONS.unpin : CARD_ICONS.pin}</button>`;
-        return `<div class="card-actions">
+        const dragBtn = showDrag && !pinned
+            ? `<button type="button" class="card-act card-act--drag" title="Drag to move" aria-label="Drag to move">${CARD_ICONS.drag}</button>`
+            : '';
+        let actionCount = 5;
+        if (isExpanded) actionCount += 1;
+        if (showDrag && !pinned) actionCount += 1;
+        return `<div class="card-actions" data-action-count="${actionCount}">
             ${copyBtn}
             ${pinBtn}
-            <button type="button" class="card-act card-act--toggle" title="${expandTitle}" aria-label="${expandTitle}">${expandIcon}</button>
             <button type="button" class="card-act card-act--color" title="Note color" aria-label="Note color" aria-haspopup="dialog">${CARD_ICONS.color}</button>
             <button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>
             <button type="button" class="card-act card-act--edit" title="Edit note" aria-label="Edit note">${CARD_ICONS.edit}</button>
+            ${dragBtn}
+            <button type="button" class="card-act card-act--toggle" title="${expandTitle}" aria-label="${expandTitle}">${expandIcon}</button>
         </div>`;
     },
 
@@ -1128,8 +1147,14 @@ export const UI = {
     },
 
     getCardActionsOptions(card) {
+        const hasSession = !!localStorage.getItem('admin_token');
+        const spatial = card?.dataset?.freeform === '1'
+            || card?.dataset?.gridBoard === '1'
+            || card?.dataset?.columnNote === '1'
+            || card?.dataset?.columnsFloat === '1';
         return {
-            pinned: this.isBoardPinned(card?.dataset?.id)
+            pinned: this.isBoardPinned(card?.dataset?.id),
+            showDrag: hasSession && spatial
         };
     },
 
@@ -1144,6 +1169,7 @@ export const UI = {
 
         const copyBtn = actions.querySelector('.card-act--copy');
         const pinBtn = actions.querySelector('.card-act--pin');
+        const dragBtn = actions.querySelector('.card-act--drag');
         const toggleBtn = actions.querySelector('.card-act--toggle');
         const colorBtn = actions.querySelector('.card-act--color');
         const hideBtn = actions.querySelector('.card-act--hide');
@@ -1181,6 +1207,7 @@ export const UI = {
             pinBtn.setAttribute('title', pinTitle);
             pinBtn.setAttribute('aria-label', pinTitle);
             pinBtn.innerHTML = pinned ? CARD_ICONS.unpin : CARD_ICONS.pin;
+            if (dragBtn) dragBtn.classList.toggle('is-hidden', pinned);
         });
 
         if (toggleBtn) {
@@ -1351,9 +1378,13 @@ export const UI = {
                     this.updateGridBoardCard(other, otherItem, { expanded: false, deferReflow: true });
                 }
             });
+            setExpandedCardsMap('grid', { [item.id]: true });
             this.setGridExpandedId(item.id);
-        } else if (!expanded && this.getGridExpandedId() === item.id) {
-            this.setGridExpandedId(null);
+        } else if (!expanded) {
+            setExpandedCard('grid', item.id, false);
+            if (this.getGridExpandedId() === item.id) {
+                this.setGridExpandedId(null);
+            }
         }
 
         const activeCategories = readStoredCategories();
@@ -1873,12 +1904,52 @@ export const UI = {
         setExpandedCard(activeBoardViewMode, itemId, true);
     },
 
+    hasAnyBoardCardsExpanded() {
+        const mode = activeBoardViewMode;
+        const expanded = getExpandedCards(mode);
+        if (Object.keys(expanded).some((id) => expanded[id])) return true;
+        if (mode === 'grid' && this.getGridExpandedId()) return true;
+        const canvas = document.getElementById('app-canvas');
+        return !!canvas?.querySelector('.mini-card.expanded');
+    },
+
+    expandAllCards() {
+        const mode = activeBoardViewMode;
+        const map = {};
+        boardItemsById.forEach((_item, id) => {
+            map[id] = true;
+        });
+        setExpandedCardsMap(mode, map);
+        if (mode === 'grid') {
+            this.setGridExpandedId(null);
+        }
+        window.dispatchEvent(new CustomEvent('board:visibility_changed'));
+    },
+
     collapseAllCards() {
         clearExpandedCards(activeBoardViewMode);
         if (activeBoardViewMode === 'grid') {
             this.setGridExpandedId(null);
         }
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
+    },
+
+    toggleCollapseAllCards() {
+        if (this.hasAnyBoardCardsExpanded()) {
+            this.collapseAllCards();
+        } else {
+            this.expandAllCards();
+        }
+    },
+
+    syncCollapseAllButton() {
+        const btn = document.getElementById('btn-collapse-all');
+        if (!btn || btn.classList.contains('is-hidden')) return;
+        const anyExpanded = this.hasAnyBoardCardsExpanded();
+        btn.innerHTML = anyExpanded ? ACTION_ICONS.collapseAll : ACTION_ICONS.expandAll;
+        const label = anyExpanded ? 'Collapse all notes' : 'Expand all notes';
+        btn.title = label;
+        btn.setAttribute('aria-label', label);
     },
 
     revealNoteOnBoard(item) {
@@ -3357,20 +3428,23 @@ export const UI = {
     applyGridBoardSize(card) {
         if (card.dataset.gridBoard !== '1') return;
         const isExpanded = card.classList.contains('expanded');
+        const saved = this.getGridLayout()[card.dataset.id];
         let w;
         let h;
         if (!isExpanded) {
-            w = COLUMN_GRID_CELL_W;
-            h = COLUMN_GRID_CELL_H;
-        } else {
-            const saved = this.getGridLayout()[card.dataset.id];
-            if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
+            if (saved && this.isGridMultiCellSize(saved.w, saved.h)) {
                 w = saved.w;
                 h = saved.h;
             } else {
-                w = this.cellsToSpanW(2);
-                h = this.cellsToSpanH(2);
+                w = COLUMN_GRID_CELL_W;
+                h = COLUMN_GRID_CELL_H;
             }
+        } else if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
+            w = saved.w;
+            h = saved.h;
+        } else {
+            w = this.cellsToSpanW(2);
+            h = this.cellsToSpanH(2);
         }
         this.applyFreeformDimensions(card, w, h);
     },

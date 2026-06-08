@@ -61,6 +61,7 @@ function isScrollbarGrip(el, clientX) {
 }
 
 function isInsideDragControl(target) {
+    if (target?.closest('.card-act--drag')) return false;
     return !!target.closest(
         '.card-actions, .card-act, .step-check, .step-delete-btn, .step-collapse-btn, ' +
         '.card-inline-edit, .rich-text--edit, .step-nest-controls, .step-row-actions, ' +
@@ -78,7 +79,9 @@ function pointerHitsStepGrab(clientX, clientY) {
 }
 
 function shouldStartCardDrag(target) {
-    if (!target || isInsideDragControl(target)) return false;
+    if (!target) return false;
+    if (target.closest('.card-act--drag')) return true;
+    if (isInsideDragControl(target)) return false;
     if (target.closest('.editor-note-body, .card-body.editor-note-body')) return false;
     const surface = target.closest('.card-drag-zone, .ff-drag-gutter');
     if (!surface) return false;
@@ -346,17 +349,8 @@ export const DragDropEngine = {
             const rect = UI.snapNoteRect(UI.readNoteRect(card), { maxW: packW, maxH });
             UI.applyNoteRect(card, rect, { settling: animate });
 
-            const multiCell = rect.w > COLUMN_GRID_CELL_W + 2 || rect.h > COLUMN_GRID_CELL_H + 2;
-            const itemMatch = currentItems.find((i) => i.id === card.dataset.id);
-            if (multiCell && itemMatch && card.classList.contains('compact')) {
-                UI.updateGridBoardCard(card, itemMatch, {
-                    expanded: true,
-                    dimensions: { w: rect.w, h: rect.h }
-                });
-            } else {
-                UI.saveGridLayout(card.dataset.id, rect);
-                UI.reflowGridBoard(canvas, card.dataset.id, { animate });
-            }
+            UI.saveGridLayout(card.dataset.id, rect);
+            UI.reflowGridBoard(canvas, card.dataset.id, { animate });
             canvas.classList.remove('is-layout-active', 'is-grid-forcing');
         };
 
@@ -476,6 +470,9 @@ export const DragDropEngine = {
                     if (cardIsPinned(card)) return;
                     e.preventDefault();
                     e.stopPropagation();
+                    UI.raiseGridBoardCard(card);
+                    canvas.classList.add('is-layout-active');
+                    UI.updateGridScrollPolicy(canvas, { forcing: true });
                     const { w: origW, h: origH } = UI.readFreeformCardSize(card);
                     resizeActive = {
                         card,
