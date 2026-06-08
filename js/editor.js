@@ -37,8 +37,6 @@ export const Editor = {
         this.hasUserInteracted = false;
         
         const isNew = !item;
-        this.isNewUnsavedNote = isNew;
-        
         this.activeItem = item ? JSON.parse(JSON.stringify(item)) : {
             id: createNoteId(),
             owner_id: "admin",
@@ -55,8 +53,13 @@ export const Editor = {
             hideFromCalendar: false,
             hiddenFromBoard: false,
             attachments: [],
-            steps: []
+            steps: [],
+            editorBodyLayout: 'content'
         };
+        if (!this.activeItem.editorBodyLayout && !noteHasSavableContent(this.activeItem)) {
+            this.activeItem.editorBodyLayout = 'content';
+        }
+        this.isNewUnsavedNote = isNew || !noteHasSavableContent(this.activeItem);
         if (this.activeItem.hideFromCalendar === undefined) {
             this.activeItem.hideFromCalendar = false;
         }
@@ -69,10 +72,9 @@ export const Editor = {
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 this.overlay?.classList.add('is-open');
-                if (isNew) {
-                    const focusTarget = this.mountZone.querySelector('[data-field="content"].card-inline-edit')
-                        || this.mountZone.querySelector('[data-field="title"].card-inline-edit');
-                    if (focusTarget) UI.focusInlineEdit(focusTarget, 'start');
+                if (this.isNewUnsavedNote) {
+                    const content = this.mountZone.querySelector('[data-field="content"].card-inline-edit');
+                    if (content) UI.focusInlineEdit(content, 'start');
                 }
             });
         });

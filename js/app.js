@@ -457,7 +457,9 @@ class Application {
                 endDateTime: "",
                 isRecurring: false,
                 hideFromCalendar: false,
-                hiddenFromBoard: false
+                hiddenFromBoard: false,
+                steps: [],
+                editorBodyLayout: 'content'
             };
             Editor.open(newItem, AppState.categories);
         });

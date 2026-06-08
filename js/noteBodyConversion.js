@@ -3,7 +3,6 @@ import { sanitizeRichHtml, stripRichText } from './richText.js';
 export const SOFT_BREAK = '\u2028';
 
 const STRIKE_TAGS = new Set(['S', 'STRIKE', 'DEL']);
-
 export function splitLineIndent(line) {
     const s = String(line ?? '');
     const match = s.match(/^(\s*)([\s\S]*)$/);
@@ -77,10 +76,54 @@ export function stepTextToContentLine(step) {
     return indent + body;
 }
 
+function isBlockTag(tag) {
+    return tag === 'DIV' || tag === 'P' || tag === 'LI' || /^H[1-6]$/.test(tag);
+}
+
+export function splitContentLines(content) {
+    const raw = String(content || '').replace(/\u2028/g, '\n');
+    if (!raw.trim()) return [];
+    if (!/<[^>]+>/.test(raw)) {
+        return raw.split('\n').filter((line) => stripRichText(line).trim());
+    }
+
+    const tpl = document.createElement('template');
+    tpl.innerHTML = raw;
+    const lines = [];
+    let buf = document.createElement('span');
+
+    const flush = () => {
+        const html = buf.innerHTML.trim();
+        buf = document.createElement('span');
+        if (stripRichText(html).trim()) lines.push(sanitizeRichHtml(html));
+    };
+
+    const walk = (node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+            buf.appendChild(node.cloneNode());
+            return;
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+        if (node.tagName === 'BR') {
+            flush();
+            return;
+        }
+        if (isBlockTag(node.tagName)) {
+            flush();
+            Array.from(node.childNodes).forEach(walk);
+            flush();
+            return;
+        }
+        buf.appendChild(node.cloneNode(true));
+    };
+
+    Array.from(tpl.content.childNodes).forEach(walk);
+    flush();
+    return lines;
+}
+
 export function contentHasConvertibleText(content) {
-    return String(content || '')
-        .split('\n')
-        .some((line) => stripRichText(line).trim());
+    return splitContentLines(content).some((line) => stripRichText(line).trim());
 }
 
 export function stepsHaveConvertibleText(steps) {
@@ -98,14 +141,14 @@ export function orderStepsActiveThenDone(steps) {
 }
 
 export function convertContentToChecklist(item, createStep) {
-    const lines = String(item.content || '').split('\n');
-    const steps = [];
+    const lines = splitContentLines(item.content);
+    const stepsFromContent = [];
 
     for (const line of lines) {
         if (!stripRichText(line).trim()) continue;
         const { text, completed, level } = parseContentLine(line);
         if (!stripRichText(text).trim()) continue;
-        steps.push({
+        stepsFromContent.push({
             ...createStep(),
             text,
             completed,
@@ -114,7 +157,7 @@ export function convertContentToChecklist(item, createStep) {
     }
 
     item.content = '';
-    item.steps = steps;
+    item.steps = [...stepsFromContent, ...(item.steps || [])];
     item.editorBodyLayout = 'checklist';
     return item;
 }
@@ -125,7 +168,11 @@ export function convertChecklistToContent(item) {
         .filter((step) => stripRichText(step.text || '').trim())
         .map((step) => stepTextToContentLine(step));
 
-    item.content = lines.join('\n');
+    const fromSteps = lines.join('\n');
+    const existing = String(item.content || '').trim();
+    item.content = existing && fromSteps
+        ? `${existing.replace(/\n+$/, '')}\n${fromSteps}`
+        : (existing || fromSteps);
     item.steps = [];
     item.editorBodyLayout = 'content';
     return item;

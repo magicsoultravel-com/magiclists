@@ -315,6 +315,23 @@
     color: var(--text-muted) !important;
     text-decoration: line-through;
     opacity: 0.82;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.step-row--display.step-row--done {
+    align-items: center;
+}
+
+.step-row--display.step-row--done .step-check {
+    margin-top: 0;
+}
+
+.step-row--display .step-text.completed.card-inline-edit:focus {
+    white-space: pre-wrap;
+    overflow: visible;
+    text-overflow: clip;
 }
 
 .step-row--edit .step-text {
@@ -1276,6 +1293,15 @@ body {
     color: var(--card-muted);
     opacity: 0.82;
     text-decoration: line-through;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.has-custom-bg .step-text.completed.card-inline-edit:focus {
+    white-space: pre-wrap;
+    overflow: visible;
+    text-overflow: clip;
 }
 
 .has-custom-bg .card-inline-edit:empty::before {
@@ -1417,6 +1443,10 @@ body {
 
 .expanded-checklist .step-row--done .step-text.completed {
     opacity: 0.82;
+}
+
+.expanded-checklist .step-row--done .step-row-actions {
+    align-self: center;
 }
 
 .checklist-done-section.is-hidden {
@@ -3470,28 +3500,7 @@ textarea.form-input {
     font-size: calc(0.6rem * var(--editor-zoom, 1));
 }
 
-.editor-config-convert-row {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    margin-top: 0.35rem;
-    padding-top: 0.35rem;
-    border-top: 1px solid var(--border-color);
-}
-
-.editor-convert-btn {
-    font-size: 0.62rem;
-    padding: 0.2rem 0.45rem;
-    min-height: 24px;
-}
-
-.editor-convert-btn--ghost {
-    margin-left: auto;
-    opacity: 0.85;
-}
-
-.editor-convert-btn:disabled {
+.format-toolbar .editor-convert-btn:disabled {
     opacity: 0.4;
     cursor: not-allowed;
 }

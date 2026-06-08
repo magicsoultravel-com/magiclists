@@ -49,7 +49,9 @@ export const FORMAT_ICONS = {
     italic: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M5.2 2.2h3.6M6.4 2.2 4.4 9.8M3.2 9.8h3.6" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>',
     strike: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 6h7.6M4.2 3.2h4.8a2 2 0 0 1 0 4M4.2 8.8h4.4a2 2 0 0 0 0-4" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
     smaller: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><text x="1.5" y="9" font-size="6" fill="currentColor" font-family="system-ui,sans-serif">A</text><path d="M8 8.5l2.5 1.5" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    larger: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><text x="1" y="9.5" font-size="8" fill="currentColor" font-family="system-ui,sans-serif">A</text><path d="M8.5 7.5l2.5 2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>'
+    larger: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><text x="1" y="9.5" font-size="8" fill="currentColor" font-family="system-ui,sans-serif">A</text><path d="M8.5 7.5l2.5 2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
+    toChecklist: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.8" y="2.4" width="2.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="1.8" y="5.4" width="2.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="1.8" y="8.4" width="2.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><path d="M5.2 3.5h5M5.2 6.5h5M5.2 9.5h4" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg>',
+    toNotes: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 3.2h7.6M2.2 6h7.6M2.2 8.8h5.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>'
 };
 
 export const ACTION_ICONS = {
@@ -409,13 +411,13 @@ export const UI = {
 
     renderRichHtml(str) {
         if (!str) return '';
-        const prepared = String(str).replace(/\u2028/g, '<br>');
+        const prepared = String(str).replace(/\u2028/g, '<br>').replace(/\n/g, '<br>');
         if (hasRichMarkup(prepared)) return sanitizeRichHtml(prepared);
         return sanitizeRichHtml(this.escapeHTML(prepared));
     },
 
     prepareContentForEdit(content) {
-        const prepared = String(content || '').replace(/\u2028/g, '<br>');
+        const prepared = String(content || '').replace(/\u2028/g, '<br>').replace(/\n/g, '<br>');
         if (hasRichMarkup(prepared)) return sanitizeRichHtml(prepared);
         return sanitizeRichHtml(this.escapeHTML(prepared));
     },
@@ -961,13 +963,12 @@ export const UI = {
     },
 
     buildNoteBodyConvertButtonsHtml(item) {
-        const canToChecklist = contentHasConvertibleText(item.content);
-        const canToContent = stepsHaveConvertibleText(item.steps);
+        const canToChecklist = contentHasConvertibleText(item?.content);
+        const canToContent = stepsHaveConvertibleText(item?.steps);
         return `
-            <div class="editor-config-convert-row" role="toolbar" aria-label="Convert note body">
-                <button type="button" class="card-act editor-convert-btn" data-convert="to-checklist" title="Move content into checklist items" aria-label="To checklist"${canToChecklist ? '' : ' disabled'}>To checklist</button>
-                <button type="button" class="card-act editor-convert-btn" data-convert="to-content" title="Move checklist into note content" aria-label="To notes"${canToContent ? '' : ' disabled'}>To notes</button>
-            </div>
+            <span class="format-toolbar-sep" aria-hidden="true"></span>
+            <button type="button" class="format-btn card-act editor-convert-btn" data-convert="to-checklist" title="Move content into checklist items" aria-label="To checklist"${canToChecklist ? '' : ' disabled'}>${FORMAT_ICONS.toChecklist}</button>
+            <button type="button" class="format-btn card-act editor-convert-btn" data-convert="to-content" title="Move checklist into note content" aria-label="To notes"${canToContent ? '' : ' disabled'}>${FORMAT_ICONS.toNotes}</button>
         `;
     },
 
@@ -1037,7 +1038,7 @@ export const UI = {
         return `<div class="mini-card-title${richClass}" title="${titleAttr}">${this.renderRichHtml(fullTitle)}</div>`;
     },
 
-    buildNoteFormatPanelHtml() {
+    buildNoteFormatPanelHtml(item = null) {
         return `
             <div class="editor-panel editor-panel--format">
                 <div class="collapsable-header" id="format-section-header">
@@ -1053,6 +1054,7 @@ export const UI = {
                         <input type="text" id="format-zoom-input" class="format-zoom-input" inputmode="numeric" title="Text size (100 = default)" aria-label="Text size" value="100">
                         <button type="button" class="format-btn card-act" data-zoom="up" title="Larger text" aria-label="Larger text">${FORMAT_ICONS.larger}</button>
                         <button type="button" class="format-btn card-act" data-zoom="reset" title="Reset text size" aria-label="Reset text size">${ACTION_ICONS.layoutReset}</button>
+                        ${item ? this.buildNoteBodyConvertButtonsHtml(item) : ''}
                     </div>
                 </div>
             </div>
@@ -1146,7 +1148,6 @@ export const UI = {
                             </label>
                         </div>
                     </div>
-                    ${this.buildNoteBodyConvertButtonsHtml(item)}
                 </div>
             </div>
         `;
@@ -1175,7 +1176,7 @@ export const UI = {
             alwaysShowChecklist: alwaysShowChecklist || canEdit,
             richEdit
         });
-        const formatHtml = showFormat ? this.buildNoteFormatPanelHtml() : '';
+        const formatHtml = showFormat ? this.buildNoteFormatPanelHtml(item) : '';
         const configHtml = showConfig
             ? this.buildNoteConfigPanelHtml(item, { categoryOptionsHtml, startParts, endParts })
             : '';
@@ -1293,13 +1294,14 @@ export const UI = {
             e.stopPropagation();
 
             const action = btn.dataset.convert;
+            this.syncItemBodyFromDom(shell, item);
+            Object.assign(item, normalizeItemForSave(item));
+
             const applyMutate = (mutator, { persist = !localOnly } = {}) => {
                 if (persist) {
                     this.mutateItem(item, mutator, { preserveView: true, skipRerender: true, localOnly });
-                    if (localOnly) onChange();
                 } else {
                     mutator(item);
-                    if (localOnly) onChange();
                 }
             };
 
@@ -1338,6 +1340,7 @@ export const UI = {
 
             refresh();
             this.updateConvertButtons(shell, item);
+            if (localOnly) onChange();
 
             const body = shell.querySelector('.editor-note-body');
             requestAnimationFrame(() => {
@@ -1430,12 +1433,13 @@ export const UI = {
             });
         }
 
-        if (showFormat) this.bindFormatPanel(shell, { onChange });
-        if (showConfig) this.bindBodyConvertBar(shell, item, { refresh, localOnly, onChange });
+        if (showFormat) {
+            this.bindFormatPanel(shell, { onChange });
+            this.bindBodyConvertBar(shell, item, { refresh, localOnly, onChange });
+            this.updateConvertButtons(shell, item);
+        }
 
         if (!showConfig) return;
-
-        this.updateConvertButtons(shell, item);
 
         const bothPanesEl = document.getElementById('edit-show-both-panes');
         bothPanesEl?.addEventListener('change', () => {
@@ -1672,9 +1676,10 @@ export const UI = {
             reorderStepsByCompletion(it.steps);
         }, { persist: false });
 
-        root.dataset.pendingFocusStepId = newStep.id;
+        const host = root.closest('.mini-card') || root;
+        host.dataset.pendingFocusStepId = newStep.id;
         refresh();
-        this.focusPendingChecklistStep(root);
+        this.focusPendingChecklistStep(host);
     },
 
     focusPendingChecklistStep(root) {
