@@ -345,7 +345,7 @@ class Application {
             }
             this.syncDataStore();
         });
-    },
+    }
 
     setupCollapseAllButton() {
         const btn = document.getElementById('btn-collapse-all');
@@ -354,7 +354,7 @@ class Application {
         btn.addEventListener('click', () => {
             UI.collapseAllCards(AppState.items);
         });
-    },
+    }
 
     setupSaveViewButton() {
         const btn = document.getElementById('btn-save-view');
