@@ -1087,6 +1087,28 @@ body {
     margin-left: auto;
 }
 
+.column-resize-btn {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.15rem;
+    height: 1.15rem;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: inherit;
+    opacity: 0.55;
+    transition: opacity 0.2s, background-color 0.2s;
+}
+
+.column-resize-btn:hover,
+.column-resize-btn.active {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.06);
+}
+
 .column-collapse-btn {
     cursor: pointer;
     font-size: 0.72rem;
@@ -3278,6 +3300,61 @@ textarea.form-input {
     transform: none !important;
     transition: none !important;
     z-index: 20;
+}
+
+#app-canvas.view-columns .column-chrome {
+    position: absolute;
+    inset: 0;
+    z-index: 8;
+    pointer-events: none;
+}
+
+#app-canvas.view-columns .col-resize {
+    position: absolute;
+    pointer-events: none;
+    opacity: 0;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 2px;
+    z-index: 9;
+    transition: opacity 0.15s ease;
+}
+
+#app-canvas.view-columns .canvas-column.is-column-resize-active .col-resize,
+#app-canvas.view-columns .canvas-column.is-column-resizing .col-resize {
+    pointer-events: auto;
+    opacity: 0.7;
+}
+
+#app-canvas.view-columns .col-resize-e {
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px;
+    height: 36px;
+    cursor: e-resize;
+}
+
+#app-canvas.view-columns .col-resize-s {
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 8px;
+    cursor: s-resize;
+}
+
+#app-canvas.view-columns .col-resize-se {
+    right: 0;
+    bottom: 0;
+    width: 14px;
+    height: 14px;
+    cursor: se-resize;
+}
+
+#app-canvas.view-columns .canvas-column.is-column-resizing {
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
+    z-index: 22;
 }
 
 #app-canvas.view-list .mini-card {

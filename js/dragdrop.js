@@ -6,7 +6,8 @@ import {
     FREEFORM_MIN_W,
     FREEFORM_MIN_H,
     CANVAS_GRID_W,
-    CANVAS_COL_GAP
+    CANVAS_COL_GAP,
+    COLUMN_MIN_CANVAS_H
 } from './ui.js';
 
 const DRAG_THRESHOLD = 4;
@@ -38,7 +39,7 @@ function isInsideDragControl(target) {
         '.card-actions, .card-act, .step-check, .step-delete-btn, .step-collapse-btn, ' +
         '.card-inline-edit, .rich-text--edit, .step-nest-controls, .step-row-actions, ' +
         '.grab-handle--step, .expanded-checklist-add-btn, .editor-body-convert-bar, ' +
-        '.grab-handle--note-cat, .ff-resize, a, button, input, textarea, select'
+        '.grab-handle--note-cat, .ff-resize, .col-resize, a, button, input, textarea, select'
     );
 }
 
@@ -344,6 +345,7 @@ export const DragDropEngine = {
 
         this.bindColumnPointerDrag(canvas, currentItems, signal);
         this.bindColumnPointerResize(canvas, currentItems, signal);
+        this.bindColumnContainerResize(canvas, signal);
         this.bindColumnDrag(canvas, signal, persistCategoryOrderFromDom);
     },
 
@@ -392,7 +394,10 @@ export const DragDropEngine = {
                 column.style.left = `${x}px`;
                 column.style.top = `${y}px`;
                 const cat = column.dataset.category;
-                if (cat) UI.saveColumnPosition(cat, x, y);
+                if (cat) {
+                    UI.saveColumnPosition(cat, x, y);
+                    UI.pushOverlappingCanvasItems(canvas, { type: 'category', name: cat }, { animate: true });
+                }
                 persistCategoryOrder();
             }
             colDrag = null;
@@ -730,5 +735,89 @@ export const DragDropEngine = {
         };
 
         canvas.querySelectorAll('.mini-card[data-column-note="1"], .mini-card[data-columns-float="1"]').forEach(attachCard);
+    },
+
+    bindColumnContainerResize(canvas, signal) {
+        let resizeActive = null;
+
+        const onMove = (e) => {
+            if (!resizeActive) return;
+            const dx = e.clientX - resizeActive.startX;
+            const dy = e.clientY - resizeActive.startY;
+            if (!resizeActive.moved) {
+                if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
+                resizeActive.moved = true;
+            }
+            const { column, axis, origW, origH } = resizeActive;
+            let nextW = origW;
+            let nextH = origH;
+            if (axis.includes('e')) nextW = origW + dx;
+            if (axis.includes('s')) nextH = origH + dy;
+            nextW = Math.max(CANVAS_GRID_W, Math.round(nextW));
+            nextH = Math.max(COLUMN_MIN_CANVAS_H, Math.round(nextH));
+            UI.applyColumnCanvasSize(column, nextW, nextH);
+        };
+
+        const onUp = () => {
+            if (!resizeActive) return;
+            const { column, moved, snapshot } = resizeActive;
+            column.classList.remove('is-column-resizing');
+            canvas.classList.remove('is-layout-active');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            resizeActive.sessionCleanup?.();
+
+            if (!moved && snapshot) {
+                UI.applyColumnCanvasSize(column, snapshot.w, snapshot.h);
+            } else {
+                const rect = UI.readColumnCanvasRect(column);
+                const cat = column.dataset.category;
+                if (cat) {
+                    UI.saveColumnSize(cat, rect.w, rect.h);
+                    UI.pushOverlappingCanvasItems(canvas, { type: 'category', name: cat }, { animate: true });
+                }
+            }
+            resizeActive = null;
+        };
+
+        canvas.querySelectorAll('.canvas-column').forEach((column) => {
+            column.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
+                if (!column.classList.contains('is-column-resize-active')) return;
+                const handle = e.target.closest('.col-resize');
+                if (!handle) return;
+                e.preventDefault();
+                e.stopPropagation();
+
+                const rect = UI.readColumnCanvasRect(column);
+                const snapshot = { w: rect.w, h: rect.h };
+                const sessionCleanup = bindPointerSession({
+                    onCancel: () => {
+                        UI.applyColumnCanvasSize(column, snapshot.w, snapshot.h);
+                        column.classList.remove('is-column-resizing');
+                        canvas.classList.remove('is-layout-active');
+                        resizeActive = null;
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                    }
+                });
+
+                resizeActive = {
+                    column,
+                    axis: handle.dataset.axis || 'se',
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    origW: rect.w,
+                    origH: rect.h,
+                    moved: false,
+                    snapshot,
+                    sessionCleanup
+                };
+                column.classList.add('is-column-resizing');
+                canvas.classList.add('is-layout-active');
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            }, { signal });
+        });
     }
 };

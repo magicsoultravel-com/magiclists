@@ -33,6 +33,7 @@ export const COLUMN_MIN_COLS = 2;
 export const COLUMN_INNER_PAD = 8;
 export const COLUMN_MIN_INNER_W = COLUMN_MIN_COLS * COLUMN_GRID_CELL_W + (COLUMN_MIN_COLS - 1) * COLUMN_GRID_GAP;
 export const COLUMN_HEADER_APPROX_H = 40;
+export const COLUMN_MIN_CANVAS_H = COLUMN_HEADER_APPROX_H + COLUMN_INNER_PAD + COLUMN_GRID_CELL_H;
 export const CANVAS_COL_GAP = 8;
 export const CANVAS_GRID_W = COLUMN_MIN_INNER_W + COLUMN_INNER_PAD * 2;
 export const COLUMN_STRIDE_X = COLUMN_GRID_CELL_W + COLUMN_GRID_GAP;
@@ -56,7 +57,8 @@ export const CARD_ICONS = {
     delete: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3 3.2h6M4.2 3.2V2.4h3.6v.8M4.4 5v4.2M7.6 5v4.2M3.8 3.2l.5 6.3h3.4l.5-6.3" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     archive: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 4.4h7.6v5.4H2.2z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M2 4.4h8V3.5H7.5L6.7 2.5H5.3L4.5 3.5H2v.9z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M5 6.2v2.2M7 6.2v2.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
     unarchive: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 5.8h7.6v4H2.2z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M2 5.8h8V4.9H7.5L6.7 3.9H5.3L4.5 4.9H2v.9z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M6 3.2V6.4M6 3.2 4.6 4.6M6 3.2 7.4 4.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    bringFront: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.4" y="4.6" width="7.2" height="5.2" rx="0.55" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M3.4 2.4h7.2v5.2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    bringFront: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.4" y="4.6" width="7.2" height="5.2" rx="0.55" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M3.4 2.4h7.2v5.2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    resize: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M8.2 8.2 10.6 10.6M8.2 8.2V5.8M8.2 8.2H5.8M3.4 3.4 1 1M3.4 3.4V5.8M3.4 3.4H5.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
 
 export const FORMAT_ICONS = {
@@ -660,11 +662,36 @@ export const UI = {
                 <span class="grab-handle grab-handle--col" title="Drag to reorder categories">⋮⋮</span>
                 <span class="column-title">${this.escapeHTML(categoryName)} (${columnItems.length})</span>
                 <span class="column-header-actions">
+                    <button type="button" class="column-resize-btn" title="Resize category" aria-label="Resize category" aria-pressed="false">${CARD_ICONS.resize}</button>
                     <button type="button" class="column-collapse-btn" title="${isCollapsed ? 'Expand category' : 'Collapse category'}" aria-label="${isCollapsed ? 'Expand category' : 'Collapse category'}">${isCollapsed ? '▶' : '▼'}</button>
                     <span class="column-hide-btn" title="Hide this category">×</span>
                 </span>
             </div>
         `;
+
+        this.setupColumnResizeChrome(colWrapper);
+        this.applySavedColumnSize(colWrapper);
+
+        const resizeBtn = colWrapper.querySelector('.column-resize-btn');
+        resizeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const active = colWrapper.classList.toggle('is-column-resize-active');
+            resizeBtn.classList.toggle('active', active);
+            resizeBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+            resizeBtn.title = active ? 'Done resizing' : 'Resize category';
+            resizeBtn.setAttribute('aria-label', resizeBtn.title);
+            document.getElementById('app-canvas')?.querySelectorAll('.canvas-column.is-column-resize-active').forEach((other) => {
+                if (other === colWrapper) return;
+                other.classList.remove('is-column-resize-active');
+                const btn = other.querySelector('.column-resize-btn');
+                if (btn) {
+                    btn.classList.remove('active');
+                    btn.setAttribute('aria-pressed', 'false');
+                    btn.title = 'Resize category';
+                    btn.setAttribute('aria-label', btn.title);
+                }
+            });
+        });
 
         const collapseBtn = colWrapper.querySelector('.column-collapse-btn');
         collapseBtn.addEventListener('click', (e) => {
@@ -811,6 +838,23 @@ export const UI = {
         card.style.backgroundColor = color;
         card.style.borderColor = 'rgba(255,255,255,0.15)';
         applyCardTheme(card, color);
+    },
+
+    setupColumnResizeChrome(columnEl) {
+        if (!columnEl?.classList.contains('canvas-column')) return;
+        let chrome = columnEl.querySelector('.column-chrome');
+        if (!chrome) {
+            chrome = document.createElement('div');
+            chrome.className = 'column-chrome';
+            columnEl.appendChild(chrome);
+        }
+        if (!chrome.querySelector('.col-resize-se')) {
+            chrome.insertAdjacentHTML('beforeend', `
+                <span class="col-resize col-resize-e" data-axis="e" title="Resize width"></span>
+                <span class="col-resize col-resize-s" data-axis="s" title="Resize height"></span>
+                <span class="col-resize col-resize-se" data-axis="se" title="Resize"></span>
+            `);
+        }
     },
 
     setupFreeformChrome(card) {
@@ -2279,6 +2323,8 @@ export const UI = {
             const cat = col.dataset.category;
             if (!cat) return;
             this.saveColumnPosition(cat, parseFloat(col.style.left) || 0, parseFloat(col.style.top) || 0);
+            const rect = this.readColumnCanvasRect(col);
+            if (rect.w && rect.h) this.saveColumnSize(cat, rect.w, rect.h);
         });
 
         canvas.querySelectorAll('.mini-card[data-column-note="1"], .mini-card[data-columns-float="1"]').forEach((card) => {
@@ -2320,6 +2366,7 @@ export const UI = {
             freeformPositions: this.getFreeformPositions(),
             freeformSizes: this.getFreeformSizes(),
             columnPositions: this.getColumnPositions(),
+            columnSizes: this.getColumnSizes(),
             columnNoteLayout: this.getColumnNoteLayout(),
             columnsFloatPositions: this.getColumnsFloatPositions(),
             columnsFloatSizes: this.getColumnsFloatSizes(),
@@ -2343,6 +2390,7 @@ export const UI = {
 
     resetColumnsLayout() {
         localStorage.removeItem('matrix_column_positions');
+        localStorage.removeItem('matrix_column_sizes');
         localStorage.removeItem('matrix_column_note_layout');
         localStorage.removeItem('matrix_columns_float_positions');
         localStorage.removeItem('matrix_columns_float_sizes');
@@ -2739,6 +2787,107 @@ export const UI = {
         localStorage.setItem('matrix_column_positions', JSON.stringify(positions));
     },
 
+    getColumnSizes() {
+        try {
+            return JSON.parse(localStorage.getItem('matrix_column_sizes') || '{}');
+        } catch {
+            return {};
+        }
+    },
+
+    saveColumnSize(categoryName, w, h) {
+        const sizes = this.getColumnSizes();
+        sizes[categoryName] = { w: Math.round(w), h: Math.round(h) };
+        localStorage.setItem('matrix_column_sizes', JSON.stringify(sizes));
+    },
+
+    applyColumnCanvasSize(columnEl, w, h, { animate = false } = {}) {
+        if (!columnEl) return;
+        const collapsed = columnEl.classList.contains('is-collapsed');
+        const colW = Math.max(CANVAS_GRID_W, Math.round(w));
+        const colH = Math.max(COLUMN_MIN_CANVAS_H, Math.round(h));
+        columnEl.style.width = `${colW}px`;
+        columnEl.style.minHeight = `${colH}px`;
+        if (collapsed) {
+            columnEl.style.height = `${colH}px`;
+        } else {
+            columnEl.style.height = '';
+        }
+        const notesEl = columnEl.querySelector('.column-notes');
+        if (notesEl && !collapsed) {
+            const chromePad = 6;
+            const notesH = Math.max(COLUMN_GRID_CELL_H, colH - COLUMN_HEADER_APPROX_H - COLUMN_INNER_PAD - chromePad);
+            notesEl.style.minHeight = `${notesH}px`;
+        }
+        columnEl.classList.toggle('layout-settling', animate);
+    },
+
+    applySavedColumnSize(columnEl) {
+        const cat = columnEl?.dataset.category;
+        if (!cat) return;
+        const saved = this.getColumnSizes()[cat];
+        if (saved?.w && saved?.h) {
+            this.applyColumnCanvasSize(columnEl, saved.w, saved.h);
+        }
+    },
+
+    readColumnCanvasRect(columnEl) {
+        if (!columnEl) return { x: 0, y: 0, w: CANVAS_GRID_W, h: COLUMN_MIN_CANVAS_H };
+        return {
+            x: parseFloat(columnEl.style.left) || 0,
+            y: parseFloat(columnEl.style.top) || 0,
+            w: columnEl.offsetWidth || CANVAS_GRID_W,
+            h: columnEl.offsetHeight || parseFloat(columnEl.style.minHeight) || COLUMN_MIN_CANVAS_H
+        };
+    },
+
+    getCanvasEntryRect(canvas, entry) {
+        const el = this.getCanvasElementForOrderEntry(canvas, entry);
+        if (!el) return null;
+        if (entry.type === 'category') return this.readColumnCanvasRect(el);
+        return this.readNoteRect(el);
+    },
+
+    pushOverlappingCanvasItems(canvas, pinnedEntry, { animate = true } = {}) {
+        if (!canvas || !pinnedEntry) return;
+        const order = this.getCanvasLayoutOrder();
+        const pinnedIndex = this.getCanvasOrderIndex(pinnedEntry);
+        if (pinnedIndex < 0) return;
+
+        const pinnedRect = this.getCanvasEntryRect(canvas, pinnedEntry);
+        if (!pinnedRect) return;
+
+        const { origin } = this.getCanvasPackBounds(canvas);
+        const canvasPackW = Math.max(canvas.clientWidth, CANVAS_GRID_W + origin * 2);
+        const placed = [{ ...pinnedRect }];
+
+        order.forEach((entry, index) => {
+            if (index === pinnedIndex) return;
+            const el = this.getCanvasElementForOrderEntry(canvas, entry);
+            if (!el) return;
+
+            let rect = this.getCanvasEntryRect(canvas, entry);
+            if (!rect) return;
+
+            const blocked = placed.some((p) => this.rectsOverlap(rect, p, CANVAS_PACK_GAP));
+            if (!blocked) {
+                placed.push({ ...rect });
+                return;
+            }
+
+            const slot = this.findFirstCanvasSlot(rect.w, rect.h, placed, canvasPackW, { origin });
+            rect = { x: slot.x, y: slot.y, w: rect.w, h: rect.h };
+            this.applyCanvasOrderEntryPosition(el, entry, rect, {
+                animate,
+                snap: entry.type === 'float'
+            });
+            placed.push({ ...rect });
+        });
+
+        const maxBottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
+        canvas.style.minHeight = `${maxBottom + origin + CANVAS_COL_GAP}px`;
+    },
+
     getColumnNoteLayout() {
         try {
             return JSON.parse(localStorage.getItem('matrix_column_note_layout') || '{}');
@@ -2824,6 +2973,13 @@ export const UI = {
     },
 
     getColumnNotesMaxHeight(columnNotesEl) {
+        const column = columnNotesEl?.closest('.canvas-column');
+        const cat = column?.dataset.category;
+        const manual = cat ? this.getColumnSizes()[cat] : null;
+        if (manual?.h) {
+            const inner = manual.h - COLUMN_HEADER_APPROX_H - COLUMN_INNER_PAD - 6;
+            return Math.max(this.cellsToSpanH(2), inner);
+        }
         const canvas = columnNotesEl?.closest('#app-canvas');
         const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
         const canvasH = canvas?.clientHeight || vh;
@@ -2958,6 +3114,8 @@ export const UI = {
     resizeColumnToFit(columnEl, { animate = false } = {}) {
         if (!columnEl) return;
         const collapsed = columnEl.classList.contains('is-collapsed');
+        const cat = columnEl.dataset.category;
+        const manual = cat ? this.getColumnSizes()[cat] : null;
         const notesEl = columnEl.querySelector('.column-notes');
         let innerW = COLUMN_MIN_INNER_W;
         let contentH = 0;
@@ -2967,16 +3125,32 @@ export const UI = {
                 const r = this.readNoteRect(card);
                 return Math.max(max, r.x + r.w);
             }, COLUMN_MIN_INNER_W);
-            contentH = parseFloat(notesEl.style.minHeight) || notesEl.offsetHeight;
+            contentH = [...notesEl.querySelectorAll('.mini-card')].reduce((max, card) => {
+                const r = this.readNoteRect(card);
+                return Math.max(max, r.y + r.h);
+            }, 0);
+            contentH = Math.max(contentH + COLUMN_GRID_GAP, parseFloat(notesEl.style.minHeight) || 0, notesEl.offsetHeight);
         } else if (notesEl) {
             notesEl.style.minHeight = '0';
         }
 
-        const colW = Math.max(CANVAS_GRID_W, innerW + COLUMN_INNER_PAD * 2);
-        const colH = COLUMN_HEADER_APPROX_H + contentH + COLUMN_INNER_PAD;
+        const contentColW = Math.max(CANVAS_GRID_W, innerW + COLUMN_INNER_PAD * 2);
+        const contentColH = COLUMN_HEADER_APPROX_H + contentH + COLUMN_INNER_PAD;
+        const colW = manual?.w ? Math.max(manual.w, contentColW) : contentColW;
+        const colH = manual?.h ? Math.max(manual.h, collapsed ? COLUMN_HEADER_APPROX_H + COLUMN_INNER_PAD : contentColH) : contentColH;
+
+        if (manual?.w || manual?.h) {
+            this.applyColumnCanvasSize(columnEl, colW, colH, { animate });
+            return;
+        }
+
         columnEl.style.width = `${colW}px`;
         columnEl.style.minHeight = `${colH}px`;
         columnEl.style.height = collapsed ? `${colH}px` : '';
+        if (notesEl && !collapsed) {
+            const notesH = Math.max(COLUMN_GRID_CELL_H, colH - COLUMN_HEADER_APPROX_H - COLUMN_INNER_PAD - 6);
+            notesEl.style.minHeight = `${notesH}px`;
+        }
         if (animate) columnEl.classList.add('layout-settling');
         else columnEl.classList.remove('layout-settling');
     },
