@@ -11,6 +11,7 @@ import {
     wrapLineAsStruck
 } from './noteBodyConversion.js';
 import { hasRichMarkup, linkifyPlainUrls, sanitizeHref, sanitizeRichHtml, stripRichText } from './richText.js';
+import { UndoManager } from './undo.js';
 
 const UNCATEGORIZED_COLOR = '#64748b';
 
@@ -398,8 +399,35 @@ export const UI = {
         const preserveEmptySteps = preserveView && skipRerender;
         const normalized = normalizeItemForSave(item, { preserveEmptySteps });
         Object.assign(item, normalized);
+        const normalizedBefore = beforeItem
+            ? normalizeItemForSave(beforeItem, { preserveEmptySteps })
+            : null;
         window.dispatchEvent(new CustomEvent('item:mutation_requested', {
-            detail: { item: normalized, preserveView, beforeItem, skipRerender }
+            detail: { item: normalized, preserveView, beforeItem: normalizedBefore, skipRerender }
+        }));
+    },
+
+    prepareInlineOpSnapshot(root, item, localOnly = false) {
+        if (localOnly) return null;
+        const shell = root.closest('.editor-note-shell') || root;
+        this.syncItemBodyFromDom(shell, item);
+        return this.snapshotItem(item);
+    },
+
+    commitInlineChecklistOp(item, beforeItem, { localOnly = false } = {}) {
+        if (localOnly || !beforeItem) return;
+        const preserveEmptySteps = true;
+        const afterNorm = normalizeItemForSave(item, { preserveEmptySteps });
+        const beforeNorm = normalizeItemForSave(beforeItem, { preserveEmptySteps });
+        if (JSON.stringify(beforeNorm) === JSON.stringify(afterNorm)) return;
+        Object.assign(item, afterNorm);
+        window.dispatchEvent(new CustomEvent('item:mutation_requested', {
+            detail: {
+                item: afterNorm,
+                preserveView: true,
+                beforeItem: beforeNorm,
+                skipRerender: true
+            }
         }));
     },
 
@@ -1828,15 +1856,44 @@ export const UI = {
 
     splitInlineEditAtCaret(el) {
         const rich = el.classList.contains('rich-text--edit');
+        const readFull = () => (rich
+            ? sanitizeRichHtml(linkifyPlainUrls(el.innerHTML))
+            : (el.textContent || ''));
+
         const sel = window.getSelection();
-        if (!sel?.rangeCount || !el.contains(sel.anchorNode)) {
-            const full = rich
-                ? sanitizeRichHtml(linkifyPlainUrls(el.innerHTML))
-                : (el.textContent || '');
+        if (!sel?.rangeCount) {
+            const full = readFull();
             return { before: full, after: '' };
         }
 
         const range = sel.getRangeAt(0);
+        if (!el.contains(range.startContainer)) {
+            const full = readFull();
+            return { before: full, after: '' };
+        }
+
+        const measureRange = range.cloneRange();
+        measureRange.selectNodeContents(el);
+        measureRange.setEnd(range.startContainer, range.startOffset);
+        const plainOffset = measureRange.toString().length;
+
+        if (!rich) {
+            const full = el.textContent || '';
+            return {
+                before: full.slice(0, plainOffset),
+                after: full.slice(plainOffset)
+            };
+        }
+
+        const fullHtml = readFull();
+        const fullPlain = stripRichText(fullHtml);
+        if (plainOffset <= 0) {
+            return { before: '', after: fullHtml };
+        }
+        if (plainOffset >= fullPlain.length) {
+            return { before: fullHtml, after: '' };
+        }
+
         const beforeRange = range.cloneRange();
         beforeRange.selectNodeContents(el);
         beforeRange.setEnd(range.startContainer, range.startOffset);
@@ -1845,21 +1902,14 @@ export const UI = {
         afterRange.selectNodeContents(el);
         afterRange.setStart(range.endContainer, range.endOffset);
 
-        if (rich) {
-            const htmlFromFragment = (frag) => {
-                const div = document.createElement('div');
-                div.appendChild(frag);
-                return div.innerHTML;
-            };
-            return {
-                before: sanitizeRichHtml(linkifyPlainUrls(htmlFromFragment(beforeRange.cloneContents()))),
-                after: sanitizeRichHtml(linkifyPlainUrls(htmlFromFragment(afterRange.cloneContents())))
-            };
-        }
-
+        const htmlFromFragment = (frag) => {
+            const div = document.createElement('div');
+            div.appendChild(frag);
+            return div.innerHTML;
+        };
         return {
-            before: beforeRange.toString(),
-            after: afterRange.toString()
+            before: sanitizeRichHtml(linkifyPlainUrls(htmlFromFragment(beforeRange.cloneContents()))),
+            after: sanitizeRichHtml(linkifyPlainUrls(htmlFromFragment(afterRange.cloneContents())))
         };
     },
 
@@ -1959,7 +2009,7 @@ export const UI = {
 
     insertChecklistStep(root, item, refresh, applyMutate, { afterStepId = null, initialText = '' } = {}) {
         const newStep = this.createBlankChecklistStep();
-        if (initialText) newStep.text = initialText;
+        newStep.text = initialText ?? '';
         applyMutate((it) => {
             if (it.type !== 'checklist') it.type = 'checklist';
             if (!it.steps) it.steps = [];
@@ -2024,13 +2074,14 @@ export const UI = {
         this.focusPendingChecklistStep(root.closest('.mini-card') || root);
     },
 
-    handleChecklistBackspace(root, item, el, refresh, { applyMutate } = {}) {
+    handleChecklistBackspace(root, item, el, refresh, { applyMutate, localOnly = false } = {}) {
         const sel = window.getSelection();
         if (!sel?.isCollapsed) return false;
         if (!this.caretAtEdge(el, 'start')) return false;
 
         el.dataset.skipBlurSave = '1';
         this.syncInlineFieldToItem(el, item);
+        const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
 
         const stepId = el.dataset.stepId;
         const steps = item.steps || [];
@@ -2048,6 +2099,7 @@ export const UI = {
                 focusStepId: focusStep.id,
                 focusEdge: idx > 0 ? 'end' : 'start'
             });
+            this.commitInlineChecklistOp(item, beforeItem, { localOnly });
             return true;
         }
 
@@ -2069,16 +2121,18 @@ export const UI = {
         this.scheduleChecklistStepFocus(root, prev.id, { plainOffset: joinAt });
         refresh();
         this.focusPendingChecklistStep(root.closest('.mini-card') || root);
+        this.commitInlineChecklistOp(item, beforeItem, { localOnly });
         return true;
     },
 
-    handleChecklistDelete(root, item, el, refresh, { applyMutate } = {}) {
+    handleChecklistDelete(root, item, el, refresh, { applyMutate, localOnly = false } = {}) {
         const sel = window.getSelection();
         if (!sel?.isCollapsed) return false;
         if (!this.caretAtEdge(el, 'end')) return false;
 
         el.dataset.skipBlurSave = '1';
         this.syncInlineFieldToItem(el, item);
+        const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
 
         const stepId = el.dataset.stepId;
         const steps = item.steps || [];
@@ -2097,6 +2151,7 @@ export const UI = {
             this.scheduleChecklistStepFocus(root, stepId, { edge: 'end' });
             refresh();
             this.focusPendingChecklistStep(root.closest('.mini-card') || root);
+            this.commitInlineChecklistOp(item, beforeItem, { localOnly });
             return true;
         }
 
@@ -2113,21 +2168,24 @@ export const UI = {
         this.scheduleChecklistStepFocus(root, stepId, { plainOffset: joinAt });
         refresh();
         this.focusPendingChecklistStep(root.closest('.mini-card') || root);
+        this.commitInlineChecklistOp(item, beforeItem, { localOnly });
         return true;
     },
 
-    handleChecklistEnter(root, item, el, refresh, { applyMutate } = {}) {
+    handleChecklistEnter(root, item, el, refresh, { applyMutate, localOnly = false } = {}) {
         el.dataset.skipBlurSave = '1';
+        const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
         const stepId = el.dataset.stepId;
         const { before, after } = this.splitInlineEditAtCaret(el);
         applyMutate((it) => {
             const step = it.steps?.find((s) => s.id === stepId);
-            if (step) step.text = before;
+            if (step) step.text = before ?? '';
         }, { persist: false });
         this.insertChecklistStep(root, item, refresh, applyMutate, {
             afterStepId: stepId,
             initialText: after
         });
+        this.commitInlineChecklistOp(item, beforeItem, { localOnly });
     },
 
     attachNoteBodyInteractions(root, item, {
@@ -2218,7 +2276,17 @@ export const UI = {
                     if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
                         e.preventDefault();
                         e.stopPropagation();
-                        document.execCommand('undo');
+                        if (localOnly) {
+                            document.execCommand('undo');
+                        } else {
+                            UndoManager.undo();
+                        }
+                        return;
+                    }
+                    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!localOnly) UndoManager.redo();
                         return;
                     }
                     if (el.dataset.field === 'content' && e.key === 'Enter') {
@@ -2241,18 +2309,18 @@ export const UI = {
                         }
                         e.preventDefault();
                         e.stopPropagation();
-                        this.handleChecklistEnter(root, item, el, refresh, { applyMutate });
+                        this.handleChecklistEnter(root, item, el, refresh, { applyMutate, localOnly });
                         return;
                     }
                     if (el.dataset.field === 'step-text' && e.key === 'Backspace') {
-                        if (this.handleChecklistBackspace(root, item, el, refresh, { applyMutate })) {
+                        if (this.handleChecklistBackspace(root, item, el, refresh, { applyMutate, localOnly })) {
                             e.preventDefault();
                             e.stopPropagation();
                         }
                         return;
                     }
                     if (el.dataset.field === 'step-text' && e.key === 'Delete') {
-                        if (this.handleChecklistDelete(root, item, el, refresh, { applyMutate })) {
+                        if (this.handleChecklistDelete(root, item, el, refresh, { applyMutate, localOnly })) {
                             e.preventDefault();
                             e.stopPropagation();
                         }
@@ -2297,7 +2365,7 @@ export const UI = {
             root.querySelectorAll('.step-indent-btn').forEach((btn) => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    this.syncItemBodyFromDom(root, item);
+                    const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
                     const row = btn.closest('.step-row--display');
                     const stepId = row?.dataset.stepId;
                     if (!stepId) return;
@@ -2307,16 +2375,14 @@ export const UI = {
                         step.level = Math.min(4, getStepLevel(step) + 1);
                     }, { persist: false });
                     refresh();
-                    if (!localOnly) {
-                        this.mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
-                    }
+                    this.commitInlineChecklistOp(item, beforeItem, { localOnly });
                 });
             });
 
             root.querySelectorAll('.step-outdent-btn').forEach((btn) => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    this.syncItemBodyFromDom(root, item);
+                    const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
                     const row = btn.closest('.step-row--display');
                     const stepId = row?.dataset.stepId;
                     if (!stepId) return;
@@ -2326,9 +2392,7 @@ export const UI = {
                         step.level = Math.max(0, getStepLevel(step) - 1);
                     }, { persist: false });
                     refresh();
-                    if (!localOnly) {
-                        this.mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
-                    }
+                    this.commitInlineChecklistOp(item, beforeItem, { localOnly });
                 });
             });
 
