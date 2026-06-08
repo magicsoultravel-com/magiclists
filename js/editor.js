@@ -29,7 +29,7 @@ export const Editor = {
             });
         }
 
-        const commitAndClose = () => this.closeAndSave({ revealOnBoard: true });
+        const commitAndClose = () => this.closeAndSave({ revealOnBoard: !this.preserveBoardCollapse });
         document.getElementById('modal-close-btn')?.addEventListener('click', commitAndClose);
         this.saveBtn?.addEventListener('click', commitAndClose);
         this.approveBtn?.addEventListener('click', commitAndClose);
@@ -37,7 +37,7 @@ export const Editor = {
         this.archiveBtn?.addEventListener('click', () => this.emitArchiveAction());
         this.overlay?.addEventListener('mousedown', (e) => {
             if (e.target !== this.overlay) return;
-            this.closeAndSave({ revealOnBoard: true });
+            this.closeAndSave({ revealOnBoard: !this.preserveBoardCollapse });
         });
     },
     
@@ -69,6 +69,7 @@ export const Editor = {
             this.activeItem.editorBodyLayout = 'content';
         }
         this.isNewUnsavedNote = isNew || !noteHasSavableContent(this.activeItem);
+        this.preserveBoardCollapse = !!(item && noteHasSavableContent(item));
         if (this.activeItem.hideFromCalendar === undefined) {
             this.activeItem.hideFromCalendar = false;
         }
@@ -240,6 +241,7 @@ export const Editor = {
         this.activeItem = null;
         this.hasUserInteracted = false;
         this.isNewUnsavedNote = false;
+        this.preserveBoardCollapse = false;
         if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
     },
 
@@ -256,7 +258,7 @@ export const Editor = {
             const shouldPersist = noteHasSavableContent(currentData)
                 || (this.hasUserInteracted && !this.isNewUnsavedNote);
             if (shouldPersist) {
-                UI.markNoteExpanded(currentData.id);
+                if (revealOnBoard) UI.markNoteExpanded(currentData.id);
                 this.persistNote({ force: true });
                 savedItem = this.activeItem;
             }
@@ -480,7 +482,7 @@ export const Editor = {
     },
 
     collectAndSave() {
-        this.closeAndSave({ revealOnBoard: true });
+        this.closeAndSave({ revealOnBoard: !this.preserveBoardCollapse });
     },
     
     updateArchiveToggleUI() {

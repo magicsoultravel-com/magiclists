@@ -302,6 +302,7 @@ class Application {
         if (secretInput) {
             localStorage.setItem('admin_token', secretInput.trim());
             this.checkAuthSession();
+            UndoManager.loadStacks();
             this.renderControlBar();
             this.syncDataStore();
         }

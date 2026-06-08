@@ -3,6 +3,7 @@ import { stripRichText } from './richText.js';
 
 const MAX_STACK = 50;
 const MERGE_MS = 2500;
+const STORAGE_KEY = 'matrix_undo_history';
 
 let handlers = {
     getToken: () => null,
@@ -25,6 +26,29 @@ export function historyLabelForItem(item) {
     return title ? `Edit "${title}"` : 'Edit note';
 }
 
+function serializeEntry(entry) {
+    if (!entry?.kind) return null;
+    if (entry.kind === 'change') {
+        return {
+            kind: 'change',
+            label: entry.label,
+            mergeKey: entry.mergeKey,
+            mergedAt: entry.mergedAt,
+            preserveView: !!entry.preserveView,
+            before: entry.before,
+            after: entry.after
+        };
+    }
+    if (entry.kind === 'deletion') {
+        return {
+            kind: 'deletion',
+            label: entry.label,
+            item: entry.item
+        };
+    }
+    return null;
+}
+
 export const UndoManager = {
     undoStack: [],
     redoStack: [],
@@ -43,12 +67,107 @@ export const UndoManager = {
         this.undoBtn?.addEventListener('click', () => this.undo());
         this.redoBtn?.addEventListener('click', () => this.redo());
         document.addEventListener('keydown', (e) => this.handleKeydown(e));
+        this.loadStacks();
         this.updateToolbar();
     },
 
-    clear() {
+    createChangeEntry({ before, after, preserveView = false, label, mergeKey, mergedAt }) {
+        const beforeItem = cloneItem(before);
+        const afterItem = cloneItem(after);
+        const keepView = !!preserveView;
+        return {
+            kind: 'change',
+            label: label || historyLabelForItem(afterItem),
+            mergeKey,
+            mergedAt,
+            preserveView: keepView,
+            before: beforeItem,
+            after: afterItem,
+            undo: () => this.applyItem(beforeItem, { preserveView: keepView }),
+            redo: () => this.applyItem(afterItem, { preserveView: keepView })
+        };
+    },
+
+    createDeletionEntry(item, label) {
+        const snapshot = cloneItem(item);
+        const itemLabel = label || `Delete "${stripRichText(snapshot.title || '').trim() || 'note'}"`;
+        return {
+            kind: 'deletion',
+            label: itemLabel,
+            item: snapshot,
+            undo: () => this.applyItem(snapshot, { preserveView: false }),
+            redo: async () => {
+                const token = handlers.getToken();
+                if (!token) return false;
+                const ok = await API.deleteItem(snapshot.id, token);
+                if (ok) await handlers.onRemove(snapshot.id);
+                return ok;
+            }
+        };
+    },
+
+    hydrateEntry(data) {
+        if (!data?.kind) return null;
+        if (data.kind === 'change' && data.before && data.after) {
+            return this.createChangeEntry({
+                before: data.before,
+                after: data.after,
+                preserveView: data.preserveView,
+                label: data.label,
+                mergeKey: data.mergeKey,
+                mergedAt: data.mergedAt
+            });
+        }
+        if (data.kind === 'deletion' && data.item) {
+            return this.createDeletionEntry(data.item, data.label);
+        }
+        return null;
+    },
+
+    loadStacks() {
+        if (!handlers.isEnabled()) {
+            this.undoStack = [];
+            this.redoStack = [];
+            return;
+        }
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return;
+            const parsed = JSON.parse(raw);
+            const undo = Array.isArray(parsed?.undo) ? parsed.undo : [];
+            const redo = Array.isArray(parsed?.redo) ? parsed.redo : [];
+            this.undoStack = undo.map((entry) => this.hydrateEntry(entry)).filter(Boolean);
+            this.redoStack = redo.map((entry) => this.hydrateEntry(entry)).filter(Boolean);
+        } catch (err) {
+            console.warn('[Undo] could not load history:', err);
+            this.undoStack = [];
+            this.redoStack = [];
+        }
+    },
+
+    persistStacks() {
+        if (!handlers.isEnabled()) return;
+        try {
+            const payload = {
+                undo: this.undoStack.map(serializeEntry).filter(Boolean),
+                redo: this.redoStack.map(serializeEntry).filter(Boolean)
+            };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        } catch (err) {
+            console.warn('[Undo] could not persist history:', err);
+        }
+    },
+
+    clear({ persist = true } = {}) {
         this.undoStack = [];
         this.redoStack = [];
+        if (persist) {
+            try {
+                localStorage.removeItem(STORAGE_KEY);
+            } catch {
+                /* ignore */
+            }
+        }
         this.updateToolbar();
     },
 
@@ -92,14 +211,14 @@ export const UndoManager = {
         if (this.isApplying || !handlers.isEnabled() || !beforeItem || !afterItem) return;
         if (itemsEqual(beforeItem, afterItem)) return;
 
-        const before = cloneItem(beforeItem);
         const after = cloneItem(afterItem);
         const entryLabel = label || historyLabelForItem(after);
         const now = Date.now();
         const top = this.undoStack[this.undoStack.length - 1];
 
-        if (top?.mergeKey === after.id && now - (top.mergedAt || 0) < MERGE_MS) {
-            top.redo = () => this.applyItem(after, { preserveView });
+        if (top?.kind === 'change' && top.mergeKey === after.id && now - (top.mergedAt || 0) < MERGE_MS) {
+            top.after = cloneItem(after);
+            top.redo = () => this.applyItem(top.after, { preserveView });
             top.label = entryLabel;
             top.mergedAt = now;
             this.redoStack = [];
@@ -107,30 +226,18 @@ export const UndoManager = {
             return;
         }
 
-        this.push({
+        this.push(this.createChangeEntry({
+            before: beforeItem,
+            after,
+            preserveView,
             label: entryLabel,
             mergeKey: after.id,
-            mergedAt: now,
-            undo: () => this.applyItem(before, { preserveView }),
-            redo: () => this.applyItem(after, { preserveView })
-        });
+            mergedAt: now
+        }));
     },
 
     recordItemDeletion(item, label) {
-        const snapshot = cloneItem(item);
-        const deletedTitle = stripRichText(snapshot.title || '').trim() || 'note';
-        const itemLabel = label || `Delete "${deletedTitle}"`;
-        this.push({
-            label: itemLabel,
-            undo: () => this.applyItem(snapshot, { preserveView: false }),
-            redo: async () => {
-                const token = handlers.getToken();
-                if (!token) return false;
-                const ok = await API.deleteItem(snapshot.id, token);
-                if (ok) await handlers.onRemove(snapshot.id);
-                return ok;
-            }
-        });
+        this.push(this.createDeletionEntry(item, label));
     },
 
     async undo() {
@@ -198,6 +305,7 @@ export const UndoManager = {
                 ? `Redo: ${this.redoStack[this.redoStack.length - 1].label} (Ctrl+Y)`
                 : 'Redo (Ctrl+Y)';
         }
+        if (enabled) this.persistStacks();
         handlers.onStackChange?.();
     }
 };
