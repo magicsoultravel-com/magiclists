@@ -834,14 +834,21 @@ body {
 
 #btn-layout-reset,
 #btn-collapse-all,
-#btn-save-view {
+#btn-save-view,
+#btn-recall-view {
     min-width: 30px;
     min-height: 30px;
     padding: 0.25rem;
 }
 
-#btn-save-view.is-saved {
+#btn-save-view.is-saved,
+#btn-recall-view.is-recalled {
     color: #6ee7b7;
+}
+
+#btn-recall-view:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
 }
 
 
@@ -1614,7 +1621,7 @@ body {
 /* Unified color picker */
 .color-picker-popover {
     position: fixed;
-    z-index: 320;
+    z-index: 2500;
     padding: 0.5rem;
     background: rgba(20, 20, 24, 0.97);
     border: 1px solid rgba(255, 255, 255, 0.1);

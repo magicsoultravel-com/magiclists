@@ -88,7 +88,8 @@ export const ACTION_ICONS = {
     desktopBg: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="2.2" width="9.2" height="6.8" rx="0.7" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M2.2 8.4h7.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/><circle cx="4.1" cy="5.4" r="1.1" fill="currentColor" opacity="0.85"/><circle cx="6.6" cy="4.6" r="0.85" fill="currentColor" opacity="0.65"/><circle cx="8.1" cy="6.2" r="0.75" fill="currentColor" opacity="0.5"/></svg>',
     chromeBg: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.3" y="1.8" width="3.6" height="8.4" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="5.5" y="1.8" width="5.2" height="2.4" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="5.5" y="5" width="5.2" height="5.2" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
     clockStyle: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.2V6l2 1.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    saveView: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.8 2.4h6.4v7.2L6 7.6 2.8 9.6V2.4z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M6 5.2v2.8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>'
+    saveView: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.8 2.4h6.4v7.2L6 7.6 2.8 9.6V2.4z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M6 5.2v2.8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
+    recallView: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.8 2.2h6.4v7.4L6 7.6 2.8 9.6V2.2z" fill="currentColor"/></svg>'
 };
 
 export function itemHasCategory(item) {
@@ -1750,14 +1751,15 @@ export const UI = {
 
         buildVisibleChecklistSteps(active, item.id, collapsedKeys)
             .forEach((row) => renderRow(row.step, row));
-        if (active.length > 0 && done.length > 0) {
-            html += '<div class="checklist-done-divider" role="separator" aria-hidden="true"></div>';
-        }
-        done.forEach((step) => renderRow(step, { isDoneSection: true }));
 
         if (canEdit) {
             html += `<button type="button" class="card-act expanded-checklist-add-btn" title="Add checklist item" aria-label="Add checklist item">+</button>`;
         }
+
+        if (active.length > 0 && done.length > 0) {
+            html += '<div class="checklist-done-divider" role="separator" aria-hidden="true"></div>';
+        }
+        done.forEach((step) => renderRow(step, { isDoneSection: true }));
 
         html += '</div>';
         return html;
@@ -2216,7 +2218,11 @@ export const UI = {
                     if (el.dataset.field === 'content' && e.key === 'Enter') {
                         e.preventDefault();
                         e.stopPropagation();
-                        this.insertTextAtCaret(el, e.shiftKey ? SOFT_BREAK : '\n');
+                        if (el.classList.contains('rich-text--edit')) {
+                            document.execCommand('insertLineBreak');
+                        } else {
+                            this.insertTextAtCaret(el, e.shiftKey ? SOFT_BREAK : '\n');
+                        }
                         if (localOnly) onChange();
                         return;
                     }
@@ -2551,6 +2557,43 @@ export const UI = {
     saveViewSnapshot(viewMode) {
         const snapshot = this.captureViewSnapshot(viewMode);
         localStorage.setItem('matrix_saved_view', JSON.stringify(snapshot));
+        return snapshot;
+    },
+
+    getSavedViewSnapshot() {
+        try {
+            const raw = localStorage.getItem('matrix_saved_view');
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (!parsed || parsed.version !== 1) return null;
+            return parsed;
+        } catch {
+            return null;
+        }
+    },
+
+    hasSavedViewSnapshot() {
+        return !!this.getSavedViewSnapshot();
+    },
+
+    applyViewSnapshot(snapshot) {
+        if (!snapshot || snapshot.version !== 1) return false;
+        localStorage.setItem('matrix_freeform_positions', JSON.stringify(snapshot.freeformPositions || {}));
+        localStorage.setItem('matrix_freeform_sizes', JSON.stringify(snapshot.freeformSizes || {}));
+        localStorage.setItem('matrix_column_positions', JSON.stringify(snapshot.columnPositions || {}));
+        localStorage.setItem('matrix_column_sizes', JSON.stringify(snapshot.columnSizes || {}));
+        localStorage.setItem('matrix_column_note_layout', JSON.stringify(snapshot.columnNoteLayout || {}));
+        localStorage.setItem('matrix_columns_float_positions', JSON.stringify(snapshot.columnsFloatPositions || {}));
+        localStorage.setItem('matrix_columns_float_sizes', JSON.stringify(snapshot.columnsFloatSizes || {}));
+        localStorage.setItem('matrix_expanded_cards', JSON.stringify(snapshot.expandedCards || {}));
+        localStorage.setItem('matrix_collapsed_categories', JSON.stringify(snapshot.collapsedCategories || []));
+        return true;
+    },
+
+    restoreSavedViewSnapshot() {
+        const snapshot = this.getSavedViewSnapshot();
+        if (!snapshot) return null;
+        this.applyViewSnapshot(snapshot);
         return snapshot;
     },
 

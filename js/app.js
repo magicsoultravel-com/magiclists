@@ -54,6 +54,7 @@ class Application {
         this.setupLayoutResetButton();
         this.setupCollapseAllButton();
         this.setupSaveViewButton();
+        this.setupRecallViewButton();
         this.updateLayoutResetVisibility();
         this.setupBackupInterface();
         this.setupFab();
@@ -368,6 +369,7 @@ class Application {
         btn.addEventListener('click', () => {
             const mode = AppState.viewSettings.sortBy;
             UI.saveViewSnapshot(mode);
+            this.updateRecallViewButtonState();
             btn.classList.add('is-saved');
             btn.title = 'View saved';
             btn.setAttribute('aria-label', 'View saved');
@@ -378,6 +380,78 @@ class Application {
                 btn.setAttribute('aria-label', defaultTitle);
             }, 1600);
         });
+    }
+
+    setupRecallViewButton() {
+        const btn = document.getElementById('btn-recall-view');
+        if (!btn) return;
+        btn.innerHTML = ACTION_ICONS.recallView;
+        this.updateRecallViewButtonState();
+
+        let recalledTimer = null;
+        btn.addEventListener('click', async () => {
+            if (btn.disabled) return;
+            const ok = await this.restoreSavedView();
+            if (!ok) {
+                this.updateRecallViewButtonState();
+                return;
+            }
+            const defaultTitle = btn.dataset.defaultTitle || 'Restore saved view';
+            btn.classList.add('is-recalled');
+            btn.title = 'View restored';
+            btn.setAttribute('aria-label', 'View restored');
+            clearTimeout(recalledTimer);
+            recalledTimer = setTimeout(() => {
+                btn.classList.remove('is-recalled');
+                this.updateRecallViewButtonState();
+            }, 1600);
+        });
+    }
+
+    updateRecallViewButtonState() {
+        const btn = document.getElementById('btn-recall-view');
+        if (!btn) return;
+        const snapshot = UI.getSavedViewSnapshot();
+        const defaultTitle = 'Restore saved view';
+        btn.dataset.defaultTitle = defaultTitle;
+        if (!snapshot) {
+            btn.disabled = true;
+            btn.title = 'No saved view';
+            btn.setAttribute('aria-label', 'No saved view');
+            return;
+        }
+        btn.disabled = false;
+        const when = snapshot.savedAt
+            ? new Date(snapshot.savedAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+            : '';
+        const title = when ? `${defaultTitle} (${when})` : defaultTitle;
+        btn.title = title;
+        btn.setAttribute('aria-label', title);
+    }
+
+    async restoreSavedView() {
+        const snapshot = UI.restoreSavedViewSnapshot();
+        if (!snapshot) return false;
+
+        const mode = snapshot.viewMode === 'freeform' ? 'freeform' : 'columns';
+        if (AppState.viewSettings.sortBy !== mode) {
+            AppState.viewSettings.sortBy = mode;
+            localStorage.setItem('matrix_preferred_view', mode);
+            window.dispatchEvent(new CustomEvent('view:mode_changed', { detail: mode }));
+            this.updateViewToggleState();
+            this.updateLayoutResetVisibility();
+        }
+
+        await this.syncDataStore();
+
+        requestAnimationFrame(() => {
+            const canvas = document.getElementById('app-canvas');
+            if (canvas && snapshot.scroll) {
+                UI.restoreScrollState(canvas, snapshot.scroll);
+            }
+        });
+
+        return true;
     }
 
     updateLayoutResetVisibility() {
