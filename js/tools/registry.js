@@ -23,7 +23,7 @@ export const TOOLS_REGISTRY = [
         "mountClass": "tool-mount--calculator",
         "resizable": true,
         "defaultSize": { "w": 320 },
-        "minSize": { "w": 260, "h": 360 }
+        "minSize": { "w": 260, "h": 220 }
     },
     {
         "id": "converter",

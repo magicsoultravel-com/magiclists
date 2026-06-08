@@ -133,7 +133,10 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     panel.dataset.toolId = toolId;
 
     const w = saved.w || defaults.w;
-    const h = saved.h ?? defaults.h;
+    let h = saved.h ?? defaults.h;
+    if (!defaults.h && !saved.manuallySized) {
+        h = null;
+    }
     const bounds = getDesktopBounds();
     const defaultX = bounds.left + Math.max(16, (bounds.right - bounds.left - w) / 2);
     const defaultY = Math.max(16, (bounds.bottom - (h || 300)) / 3);
@@ -178,13 +181,14 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     let chip = null;
     let collapsed = !!saved.collapsed;
 
-    const persist = () => {
+    const persist = (extra = {}) => {
         savePanelState(toolId, {
             x: panel.offsetLeft,
             y: panel.offsetTop,
             w: panel.offsetWidth,
             h: panel.offsetHeight,
-            collapsed
+            collapsed,
+            ...extra
         });
     };
 
@@ -278,7 +282,12 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
 
     bindPanelDrag(panel, persist);
     if (meta?.resizable) {
-        bindPanelResize(panel, mins, persist, () => callbacks.onResize?.(bodyEl));
+        bindPanelResize(
+            panel,
+            mins,
+            () => persist({ manuallySized: true }),
+            () => callbacks.onResize?.(bodyEl)
+        );
     }
 
     panel.addEventListener('pointerdown', () => bringToFront(panel));
@@ -423,10 +432,17 @@ function bindPanelResize(panel, mins, onEnd, onResize) {
     let startW = 0;
     let startH = 0;
 
+    const lockPanelDimensions = () => {
+        panel.classList.remove('tool-panel--auto-height');
+        panel.style.width = `${panel.offsetWidth}px`;
+        panel.style.height = `${panel.offsetHeight}px`;
+    };
+
     handle.addEventListener('pointerdown', (e) => {
         if (e.button !== 0) return;
         e.preventDefault();
         e.stopPropagation();
+        lockPanelDimensions();
         resizing = true;
         startX = e.clientX;
         startY = e.clientY;
