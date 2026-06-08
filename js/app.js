@@ -13,7 +13,9 @@ import { ChromeBackground } from './chromeBackground.js';
 import { ClockStyle } from './clockStyle.js';
 import { ColorPicker, PALETTE_NOTE, randomNoteColor } from './colorPicker.js';
 import { FocusMode } from './focusMode.js';
+import { DisplayOptions } from './displayOptions.js';
 import { DesktopZoom } from './desktopZoom.js';
+import { exportAppCode } from './codeExport.js';
 
 function countHiddenFromBoard(items) {
     return items.filter(item => UI.isHiddenFromBoard(item)).length;
@@ -47,6 +49,7 @@ class Application {
     async init() {
         DesktopBackground.init();
         ChromeBackground.init();
+        DisplayOptions.init();
         this.checkAuthSession();
         Editor.init();
         await ToolsManager.init(() => AppState.items, () => AppState.focusCategories);
@@ -61,6 +64,7 @@ class Application {
         DesktopZoom.init();
         this.setupLayoutResetButton();
         this.setupCollapseAllButton();
+        this.setupDisplayOptionsButton();
         this.setupFocusModeButton();
         this.setupSaveViewButton();
         this.setupRecallViewButton();
@@ -213,11 +217,13 @@ class Application {
         zone.innerHTML = `
             <button type="button" class="btn btn--compact btn--icon" id="btn-add-category" title="Add category" aria-label="Add category">${ACTION_ICONS.category}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-export-db" title="Export backup" aria-label="Export backup">${ACTION_ICONS.export}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="btn-export-code" title="Export app code" aria-label="Export app code">${ACTION_ICONS.exportCode}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-import-db" title="Import backup" aria-label="Import backup">${ACTION_ICONS.import}</button>
             <button type="button" class="btn btn--compact btn--icon btn--icon-danger" id="btn-auth-logout" title="Logout" aria-label="Logout">${ACTION_ICONS.logout}</button>
         `;
         document.getElementById('btn-add-category').addEventListener('click', () => this.executeAddCategoryPrompt());
         document.getElementById('btn-export-db').addEventListener('click', () => this.executeDataBackupExport());
+        document.getElementById('btn-export-code').addEventListener('click', () => this.executeCodeExport());
         document.getElementById('btn-import-db').addEventListener('click', () => document.getElementById('system-import-file-picker').click());
         document.getElementById('btn-auth-logout').addEventListener('click', () => this.executeLogout());
     }
@@ -241,6 +247,20 @@ class Application {
         const needsLogin = !AppState.user.isLoggedIn;
         fab.title = needsLogin ? 'New note (login required)' : 'New note';
         fab.setAttribute('aria-label', fab.title);
+    }
+
+    async executeCodeExport() {
+        if (!AppState.user.isLoggedIn) return;
+        const btn = document.getElementById('btn-export-code');
+        if (btn) btn.disabled = true;
+        try {
+            await exportAppCode(AppState.user.token);
+        } catch (err) {
+            console.error('[Code export]', err);
+            alert(err?.message || 'Could not export app code.');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
     }
 
     executeDataBackupExport() {
@@ -358,7 +378,7 @@ class Application {
     updateDesktopZoomVisibility() {
         const show = AppState.user.isLoggedIn && DesktopZoom.isDesktopViewport();
         document.getElementById('desktop-zoom-controls')?.classList.toggle('is-hidden', !show);
-        if (AppState.user.isLoggedIn) DesktopZoom.apply();
+        DesktopZoom.apply({ enabled: show });
     }
 
     setupLayoutResetButton() {
@@ -384,6 +404,11 @@ class Application {
             UI.collapseAllCards();
         });
     }
+
+    setupDisplayOptionsButton() {
+        const btn = document.getElementById('btn-display-options');
+        if (btn) btn.innerHTML = ACTION_ICONS.displayOptions;
+    },
 
     setupFocusModeButton() {
         const btn = document.getElementById('btn-focus-mode');
@@ -621,6 +646,8 @@ class Application {
     }
 
     setupCoreListeners() {
+        window.addEventListener('resize', () => this.updateDesktopZoomVisibility());
+
         window.addEventListener('item:selected_for_edit', (e) => {
             if (!AppState.user.isLoggedIn) {
                 alert("Authorization Blocked: Admin privileges required to edit workspace resources.");

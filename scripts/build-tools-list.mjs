@@ -11,6 +11,34 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
 
+const EXPORT_SKIP_DIRS = new Set(['.git', '.cursor', 'node_modules', 'vendor']);
+const EXPORT_ALLOW_EXT = new Set(['html', 'css', 'js', 'json', 'php', 'mjs', 'ps1', 'md', 'mdc']);
+
+function collectExportPaths(baseDir, relPrefix = '') {
+    const paths = [];
+    for (const name of fs.readdirSync(baseDir, { withFileTypes: true })) {
+        if (EXPORT_SKIP_DIRS.has(name.name)) continue;
+        const rel = relPrefix ? `${relPrefix}/${name.name}` : name.name;
+        const abs = path.join(baseDir, name.name);
+        if (name.isDirectory()) {
+            paths.push(...collectExportPaths(abs, rel));
+            continue;
+        }
+        const ext = path.extname(name.name).slice(1).toLowerCase();
+        if (!EXPORT_ALLOW_EXT.has(ext)) continue;
+        if (name.name === '.DS_Store' || name.name === 'Thumbs.db') continue;
+        paths.push(rel.replace(/\\/g, '/'));
+    }
+    return paths;
+}
+
+function writeCodeManifest(outJson) {
+    const paths = collectExportPaths(ROOT).sort((a, b) => a.localeCompare(b));
+    fs.mkdirSync(path.dirname(outJson), { recursive: true });
+    fs.writeFileSync(outJson, `${JSON.stringify({ paths }, null, 2)}\n`, 'utf8');
+    console.log(`[build-tools-list] ${paths.length} export paths → ${path.relative(ROOT, outJson)}`);
+}
+
 const TARGETS = [
     {
         toolsDir: path.join(ROOT, 'js', 'tools'),
@@ -113,3 +141,5 @@ for (const target of TARGETS) {
     writeOutputs(tools, target);
     console.log(`[build-tools-list] ${tools.length} tools → ${path.relative(ROOT, target.outJs)}`);
 }
+
+writeCodeManifest(path.join(ROOT, 'api', 'code-manifest.json'));

@@ -43,18 +43,24 @@ export const DesktopZoom = {
         return this.setScale(readZoom() + delta);
     },
 
-    apply() {
+    apply({ enabled = true } = {}) {
         const zoom = readZoom();
         const shell = document.getElementById('workspace-main');
+        const surface = document.getElementById('desktop-surface');
         const canvas = document.getElementById('app-canvas');
         if (shell) {
             shell.style.setProperty('--desktop-zoom', String(zoom));
-            shell.classList.toggle('has-desktop-zoom', zoom !== 1);
+            shell.classList.toggle('desktop-zoom-enabled', enabled);
+            shell.classList.toggle('desktop-zoom-expanded', enabled && zoom < 1);
+        }
+        if (surface) {
+            surface.dataset.desktopZoom = String(zoom);
         }
         if (canvas) {
             canvas.dataset.desktopZoom = String(zoom);
         }
         this.updateButtons();
+        window.dispatchEvent(new CustomEvent('tools:desktop_bounds_changed'));
     },
 
     updateButtons() {
@@ -68,7 +74,6 @@ export const DesktopZoom = {
     },
 
     init() {
-        this.apply();
         const outBtn = document.getElementById('btn-desktop-zoom-out');
         const inBtn = document.getElementById('btn-desktop-zoom-in');
         outBtn?.addEventListener('click', () => this.step(-ZOOM_STEP));

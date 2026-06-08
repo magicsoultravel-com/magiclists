@@ -56,11 +56,13 @@ export const CANVAS_PACK_GAP = COLUMN_GRID_GAP;
 const CANVAS_LAYOUT_ORDER_KEY = 'matrix_canvas_layout_order';
 const GRID_LAYOUT_KEY = 'matrix_grid_layout';
 const GRID_PINS_KEY = 'matrix_grid_pins';
+const GRID_EXPANDED_KEY = 'matrix_grid_expanded_id';
 const CARD_EXPAND_ANIM_MS = 220;
 const CARD_COLLAPSE_ANIM_MS = 200;
 
 let freeformStackSeq = 1;
 let gridStackSeq = 1;
+let boardItemsById = new Map();
 
 export const CARD_ICONS = {
     calendar: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.5" y="2.5" width="9" height="8" rx="0.8" fill="none" stroke="currentColor" stroke-width="1"/><path d="M1.5 5.2h9M4 1.5v1.6M8 1.5v1.6" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>',
@@ -101,6 +103,7 @@ export const ACTION_ICONS = {
     viewGrid: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="1.6" width="3.8" height="3.8" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="6.8" y="1.6" width="3.8" height="3.8" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="1.4" y="6.6" width="8.2" height="3.8" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
     category: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="1.4" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.7" y="1.4" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="1.4" y="6.7" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.7" y="6.7" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/></svg>',
     export: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.6v5.8M3.7 5.1 6 7.4 8.3 5.1" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.2 10.4h7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
+    exportCode: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.3 7.6 6.8 6 5.9 4.4 6.8Z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/><circle cx="6" cy="4.1" r="0.75" fill="none" stroke="currentColor" stroke-width="0.8"/><path d="M4.4 6.8 3.4 8.8M7.6 6.8 8.6 8.8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/><path d="M5.3 7.4 6 9.4 6.7 7.4" fill="none" stroke="currentColor" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     import: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 10.4V4.6M3.7 6.9 6 4.6 8.3 6.9" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.2 10.4h7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
     logout: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M4.6 2.1H3.1v7.8h1.5" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/><path d="M6.8 6 10 6M10 6 8.4 4.4M10 6 8.4 7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     undo: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.4 5.6H7.2a2.4 2.4 0 1 1 0 4.8H6.6M3.4 5.6 5.1 3.9M3.4 5.6 5.1 7.3" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -112,7 +115,8 @@ export const ACTION_ICONS = {
     clockStyle: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.2V6l2 1.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     saveView: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.8 2.4h6.4v7.2L6 7.6 2.8 9.6V2.4z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M6 5.2v2.8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
     recallView: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.8 2.2h6.4v7.4L6 7.6 2.8 9.6V2.2z" fill="currentColor"/></svg>',
-    focusMode: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.95"/><circle cx="6" cy="6" r="1.6" fill="currentColor"/></svg>'
+    focusMode: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.95"/><circle cx="6" cy="6" r="1.6" fill="currentColor"/></svg>',
+    displayOptions: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 3.4h7.6M2.2 6h7.6M2.2 8.6h7.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/><circle cx="4.4" cy="3.4" r="0.85" fill="currentColor"/><circle cx="7.8" cy="6" r="0.85" fill="currentColor"/><circle cx="5.6" cy="8.6" r="0.85" fill="currentColor"/></svg>'
 };
 
 const SAVED_VIEWS_KEY = 'matrix_saved_views';
@@ -555,6 +559,9 @@ export const UI = {
     },
 
     isCardExpanded(card, item) {
+        if (card?.dataset?.gridBoard === '1') {
+            return this.isGridBoardCardExpanded(item?.id, card);
+        }
         if (card?.classList.contains('expanded')) return true;
         try {
             const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
@@ -562,6 +569,53 @@ export const UI = {
         } catch {
             return false;
         }
+    },
+
+    resolveBoardItem(itemId) {
+        if (!itemId) return null;
+        return boardItemsById.get(itemId) || null;
+    },
+
+    getGridExpandedId() {
+        try {
+            const id = localStorage.getItem(GRID_EXPANDED_KEY);
+            return id && id !== 'null' ? id : null;
+        } catch {
+            return null;
+        }
+    },
+
+    setGridExpandedId(itemId) {
+        if (itemId) {
+            localStorage.setItem(GRID_EXPANDED_KEY, itemId);
+        } else {
+            localStorage.removeItem(GRID_EXPANDED_KEY);
+        }
+    },
+
+    isGridBoardCardExpanded(itemId, card = null) {
+        if (!itemId) return false;
+        if (this.getGridExpandedId() === itemId) return true;
+        return !!card?.classList.contains('expanded');
+    },
+
+    gridBoardRectForCard(card, savedRect, isExpanded) {
+        const base = savedRect && Number.isFinite(savedRect.x) && Number.isFinite(savedRect.w)
+            ? { x: savedRect.x, y: savedRect.y, w: savedRect.w, h: savedRect.h }
+            : this.readNoteRect(card);
+        if (isExpanded) {
+            if (base.w >= this.cellsToSpanW(2) && base.h >= this.cellsToSpanH(2)) return base;
+            return {
+                ...base,
+                w: this.cellsToSpanW(2),
+                h: this.cellsToSpanH(2)
+            };
+        }
+        return {
+            ...base,
+            w: COLUMN_GRID_CELL_W,
+            h: COLUMN_GRID_CELL_H
+        };
     },
 
     syncCardDraggable(card) {
@@ -645,6 +699,7 @@ export const UI = {
         let visibleItems = this.getVisibleItems(safeItems);
         const focusActive = Array.isArray(focusCategories) && focusCategories.length > 0;
         visibleItems = applyFocusToItems(visibleItems, focusCategories);
+        boardItemsById = new Map(visibleItems.map((item) => [item.id, item]));
 
         let activeCategories = readStoredCategories();
         activeCategories = activeCategories.filter(cat => !hiddenCategories.includes(cat.name));
@@ -717,7 +772,7 @@ export const UI = {
             const layout = this.getGridLayout();
             const placed = [];
             const { origin, packW, maxH } = this.getGridBoardBounds(canvas);
-            const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
+            const gridExpandedId = this.getGridExpandedId();
 
             [...visibleItems]
                 .sort((a, b) => {
@@ -727,13 +782,13 @@ export const UI = {
                 })
                 .forEach((item, index) => {
                     const card = this.createCardComponent(item, activeCategories, { gridBoard: true });
-                    const isExpanded = expandedCards[item.id] === true;
+                    const isExpanded = gridExpandedId === item.id;
                     const saved = layout[item.id];
                     let rect;
 
                     if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.w)) {
                         rect = this.snapNoteRect(
-                            { x: saved.x, y: saved.y, w: saved.w, h: saved.h },
+                            this.gridBoardRectForCard(card, saved, isExpanded),
                             { maxW: packW, maxH }
                         );
                     } else {
@@ -1013,18 +1068,38 @@ export const UI = {
         }
     },
 
-    flashCopyFeedback(btn, message = 'Copied!') {
+    flashCopyFeedback(btn, message = 'Copied!', { failed = false } = {}) {
         if (!btn) return;
+        if (btn.dataset.copyFlashTimer) {
+            clearTimeout(Number(btn.dataset.copyFlashTimer));
+            delete btn.dataset.copyFlashTimer;
+        }
+
+        const row = btn.closest('.step-row--display');
         const prevTitle = btn.getAttribute('title');
         const prevLabel = btn.getAttribute('aria-label');
+        const prevHtml = btn.innerHTML;
+        const isCopyBtn = btn.classList.contains('step-copy-btn') || btn.classList.contains('card-act--copy');
+
+        btn.classList.remove('is-copy-flashed', 'is-copy-flash-failed');
+        row?.classList.remove('is-copy-row-flashed');
+        btn.classList.add(failed ? 'is-copy-flash-failed' : 'is-copy-flashed');
+        if (!failed) row?.classList.add('is-copy-row-flashed');
+
+        if (isCopyBtn && !failed) btn.innerHTML = CARD_ICONS.save;
         btn.setAttribute('title', message);
         btn.setAttribute('aria-label', message);
-        window.setTimeout(() => {
+
+        btn.dataset.copyFlashTimer = String(window.setTimeout(() => {
+            btn.classList.remove('is-copy-flashed', 'is-copy-flash-failed');
+            row?.classList.remove('is-copy-row-flashed');
+            if (isCopyBtn && !failed) btn.innerHTML = prevHtml;
             if (prevTitle != null) btn.setAttribute('title', prevTitle);
             else btn.removeAttribute('title');
             if (prevLabel != null) btn.setAttribute('aria-label', prevLabel);
             else btn.removeAttribute('aria-label');
-        }, 1500);
+            delete btn.dataset.copyFlashTimer;
+        }, 1400));
     },
 
     getCardActionsOptions(card) {
@@ -1063,6 +1138,7 @@ export const UI = {
             if (shell) this.syncItemBodyFromDom(shell, item);
             const ok = await this.copyPlainTextToClipboard(itemToPlainCopyText(item));
             if (ok) this.flashCopyFeedback(copyBtn);
+            else this.flashCopyFeedback(copyBtn, 'Copy failed', { failed: true });
         });
 
         const toolbar = card.querySelector('.note-editor-toolbar');
@@ -1238,21 +1314,47 @@ export const UI = {
         return { targetCatName, categoryColor };
     },
 
-    updateGridBoardCard(card, item, { expanded, dimensions = null } = {}) {
+    updateGridBoardCard(card, item, { expanded, dimensions = null, deferReflow = false } = {}) {
         if (card.dataset.gridBoard !== '1') return;
-        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
-        expandedCards[item.id] = expanded;
-        localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
+
+        const canvas = card.closest('#app-canvas');
+        if (expanded && canvas) {
+            canvas.querySelectorAll('.mini-card[data-grid-board="1"].expanded').forEach((other) => {
+                if (other === card) return;
+                const otherItem = this.resolveBoardItem(other.dataset.id);
+                if (otherItem) {
+                    this.updateGridBoardCard(other, otherItem, { expanded: false, deferReflow: true });
+                }
+            });
+            this.setGridExpandedId(item.id);
+        } else if (!expanded && this.getGridExpandedId() === item.id) {
+            this.setGridExpandedId(null);
+        }
 
         const activeCategories = readStoredCategories();
         const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
 
-        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor);
+        this.applyCardExpandCollapse(
+            card,
+            item,
+            expanded,
+            activeCategories,
+            targetCatName,
+            categoryColor,
+            { skipGridReflow: true }
+        );
 
         if (dimensions) {
             this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
-        } else if (expanded) {
+        } else {
             this.applyGridBoardSize(card);
+        }
+
+        if (canvas?.classList.contains('view-grid') && !deferReflow) {
+            this.finalizeGridBoardCard(card);
+            requestAnimationFrame(() => {
+                this.reflowGridBoard(canvas, item.id, { animate: true });
+            });
         }
     },
 
@@ -1274,7 +1376,7 @@ export const UI = {
         }
     },
 
-    applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor) {
+    applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, options = {}) {
         const isFreeform = card.dataset.freeform === '1';
         const isGridBoard = card.dataset.gridBoard === '1';
         card.classList.add('card-state-changing');
@@ -1309,6 +1411,7 @@ export const UI = {
         };
 
         const reflowGridBoard = () => {
+            if (options.skipGridReflow) return;
             if (card.dataset.gridBoard !== '1') return;
             const canvas = document.getElementById('app-canvas');
             if (!canvas?.classList.contains('view-grid')) return;
@@ -1466,8 +1569,16 @@ export const UI = {
         this.applyItemCardTheme(card, item);
         card.style.borderLeftColor = categoryColor;
 
-        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
-        const isExpanded = expandedCards[item.id] === true;
+        const isExpanded = gridBoard
+            ? this.isGridBoardCardExpanded(item.id, card)
+            : (() => {
+                try {
+                    const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
+                    return expandedCards[item.id] === true;
+                } catch {
+                    return false;
+                }
+            })();
 
         if (isExpanded) {
             card.classList.remove('compact');
@@ -2771,6 +2882,7 @@ export const UI = {
                     if (!step) return;
                     const ok = await this.copyPlainTextToClipboard(stepToPlainCopyLine(step));
                     if (ok) this.flashCopyFeedback(btn);
+                    else this.flashCopyFeedback(btn, 'Copy failed', { failed: true });
                 });
             });
 
@@ -2988,6 +3100,7 @@ export const UI = {
             columnsFloatSizes: this.getColumnsFloatSizes(),
             gridLayout: this.getGridLayout(),
             gridPins: this.getGridPins(),
+            gridExpandedId: this.getGridExpandedId(),
             expandedCards,
             collapsedCategories
         };
@@ -3103,6 +3216,11 @@ export const UI = {
         localStorage.setItem('matrix_columns_float_sizes', JSON.stringify(snapshot.columnsFloatSizes || {}));
         localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(snapshot.gridLayout || {}));
         localStorage.setItem(GRID_PINS_KEY, JSON.stringify(snapshot.gridPins || []));
+        if (snapshot.gridExpandedId) {
+            localStorage.setItem(GRID_EXPANDED_KEY, snapshot.gridExpandedId);
+        } else {
+            localStorage.removeItem(GRID_EXPANDED_KEY);
+        }
         localStorage.setItem('matrix_expanded_cards', JSON.stringify(snapshot.expandedCards || {}));
         localStorage.setItem('matrix_collapsed_categories', JSON.stringify(snapshot.collapsedCategories || []));
         return true;
@@ -3136,7 +3254,7 @@ export const UI = {
     resetGridLayout() {
         localStorage.removeItem(GRID_LAYOUT_KEY);
         localStorage.removeItem(GRID_PINS_KEY);
-        localStorage.removeItem('matrix_expanded_cards');
+        localStorage.removeItem(GRID_EXPANDED_KEY);
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
     },
 
@@ -3267,7 +3385,8 @@ export const UI = {
             const id = card.dataset.id;
             if (!id || !pinnedIds.has(id)) return;
             const saved = this.getGridLayout()[id];
-            const rect = snapRect(saved || this.readNoteRect(card));
+            const isExpanded = this.isGridBoardCardExpanded(id, card);
+            const rect = snapRect(this.gridBoardRectForCard(card, saved, isExpanded));
             this.applyNoteRect(card, rect, { settling: false });
             this.saveGridLayout(id, rect);
             placed.push({ ...rect });
@@ -3276,7 +3395,10 @@ export const UI = {
         if (actorId) {
             const actorCard = cards.find((c) => c.dataset.id === actorId);
             if (actorCard) {
-                actorRect = snapRect(this.readNoteRect(actorCard));
+                const isActorExpanded = this.isGridBoardCardExpanded(actorId, actorCard);
+                actorRect = snapRect(
+                    this.gridBoardRectForCard(actorCard, this.readNoteRect(actorCard), isActorExpanded)
+                );
                 if (placed.some((p) => this.rectsOverlap(actorRect, p))) {
                     const slot = this.findFirstCanvasSlot(
                         actorRect.w,
@@ -3299,14 +3421,18 @@ export const UI = {
                 return id && id !== actorId && !pinnedIds.has(id);
             })
             .map((card) => {
-                const saved = this.getGridLayout()[card.dataset.id];
-                const rect = saved || this.readNoteRect(card);
+                const id = card.dataset.id;
+                const saved = this.getGridLayout()[id];
+                const isExpanded = this.isGridBoardCardExpanded(id, card);
+                const rect = this.gridBoardRectForCard(card, saved, isExpanded);
                 return { card, rect, sortY: rect.y, sortX: rect.x };
             })
             .sort((a, b) => a.sortY - b.sortY || a.sortX - b.sortX);
 
-        sortable.forEach(({ card, rect }) => {
+        sortable.forEach(({ card, rect: rawRect }) => {
             const id = card.dataset.id;
+            const isExpanded = this.isGridBoardCardExpanded(id, card);
+            const rect = this.gridBoardRectForCard(card, rawRect, isExpanded);
             let snapped = snapRect(rect);
             if (placed.some((p) => this.rectsOverlap(snapped, p))) {
                 const slot = this.findFirstCanvasSlot(

@@ -140,11 +140,12 @@
                         </div>
                         <button type="button" id="btn-chrome-bg" class="btn btn--compact btn--icon" title="Panel and header background" aria-label="Panel and header background" aria-expanded="false" aria-haspopup="dialog"></button>
                         <button type="button" id="btn-desktop-bg" class="btn btn--compact btn--icon" title="Desktop background" aria-label="Desktop background" aria-expanded="false" aria-haspopup="dialog"></button>
+                        <button type="button" id="btn-display-options" class="btn btn--compact btn--icon" title="Display options" aria-label="Display options" aria-expanded="false" aria-haspopup="menu"></button>
                         <button type="button" id="btn-focus-mode" class="btn btn--compact btn--icon" title="Focus mode" aria-label="Focus mode" aria-expanded="false" aria-haspopup="menu"></button>
                         <span id="desktop-zoom-controls" class="desktop-zoom-controls is-hidden" aria-label="Desktop zoom">
-                            <button type="button" id="btn-desktop-zoom-out" class="btn btn--compact btn--icon" title="Zoom out desktop" aria-label="Zoom out desktop">−</button>
+                            <button type="button" id="btn-desktop-zoom-out" class="btn btn--compact btn--icon" title="Zoom out — see more desktop" aria-label="Zoom out desktop">−</button>
                             <span id="desktop-zoom-label" class="desktop-zoom-label" aria-hidden="true">100%</span>
-                            <button type="button" id="btn-desktop-zoom-in" class="btn btn--compact btn--icon" title="Zoom in desktop" aria-label="Zoom in desktop">+</button>
+                            <button type="button" id="btn-desktop-zoom-in" class="btn btn--compact btn--icon" title="Zoom in — larger tiles" aria-label="Zoom in desktop">+</button>
                         </span>
                         <button type="button" id="btn-save-view" class="btn btn--compact btn--icon" title="Save view" aria-label="Save view"></button>
                         <button type="button" id="btn-recall-view" class="btn btn--compact btn--icon" title="Restore saved view" aria-label="Restore saved view" disabled></button>
@@ -152,6 +153,7 @@
                         <button type="button" id="btn-layout-reset" class="btn btn--compact btn--icon is-hidden" title="Reset" aria-label="Reset"></button>
                     </div>
                     <div id="digital-clock" class="logo-zone logo-zone--clock">
+                        <button type="button" id="clock-icon-fallback" class="btn btn--compact btn--icon clock-icon-fallback is-hidden" title="Clock — change style" aria-label="Clock — change style" aria-expanded="false" aria-haspopup="menu"></button>
                         <button type="button" id="clock-display" class="clock-display clock-display-trigger" title="Change clock style" aria-label="Clock and date — change style" aria-expanded="false" aria-haspopup="menu">
                             <span id="clock-date" class="clock-chip clock-chip--date">—</span>
                             <span id="clock-time" class="clock-chip clock-chip--time">—</span>
@@ -171,9 +173,12 @@
                 </div>
             </header>
 
-            <main id="app-canvas">
-                <div class="system-status-msg">Loading workspace…</div>
-            </main>
+            <div id="desktop-surface" class="desktop-surface">
+                <main id="app-canvas">
+                    <div class="system-status-msg">Loading workspace…</div>
+                </main>
+                <div id="tools-desktop" class="tools-desktop" aria-live="polite"></div>
+            </div>
         </div>
     </div>
 
@@ -196,8 +201,6 @@
             <button type="button" id="modal-approve-btn" class="fab-create editor-fab" title="Show on board" aria-label="Show on board"></button>
         </div>
     </div>
-
-    <div id="tools-desktop" class="tools-desktop" aria-live="polite"></div>
 
     <script type="module" src="./js/app.js?v=dev_1.7.9"></script>
 </body>

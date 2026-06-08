@@ -38,7 +38,35 @@ function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
 }
 
+function getDesktopSurface() {
+    return document.getElementById('desktop-surface');
+}
+
+function getDesktopZoom() {
+    const surface = getDesktopSurface();
+    const canvas = document.getElementById('app-canvas');
+    const raw = parseFloat(surface?.dataset?.desktopZoom ?? canvas?.dataset?.desktopZoom);
+    return Number.isFinite(raw) && raw > 0 ? raw : 1;
+}
+
+function pointerDelta(clientX, clientY, startX, startY) {
+    const zoom = getDesktopZoom();
+    return {
+        dx: (clientX - startX) / zoom,
+        dy: (clientY - startY) / zoom
+    };
+}
+
 function getDesktopBounds() {
+    const surface = getDesktopSurface();
+    if (surface) {
+        return {
+            left: 0,
+            top: 0,
+            right: surface.clientWidth,
+            bottom: surface.clientHeight
+        };
+    }
     const sidePanel = document.getElementById('side-panel');
     let left = 0;
     if (sidePanel && !sidePanel.classList.contains('is-collapsed')) {
@@ -60,6 +88,12 @@ function clampPosition(el, x, y) {
         x: clamp(x, bounds.left, Math.max(bounds.left, bounds.right - w)),
         y: clamp(y, bounds.top, Math.max(bounds.top, bounds.bottom - h))
     };
+}
+
+function loadSavedCoord(value, max, fallback) {
+    if (!Number.isFinite(value)) return fallback;
+    if (value < -8 || value > max + 48) return fallback;
+    return value;
 }
 
 let zStack = 0;
@@ -102,9 +136,10 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     const h = saved.h ?? defaults.h;
     const bounds = getDesktopBounds();
     const defaultX = bounds.left + Math.max(16, (bounds.right - bounds.left - w) / 2);
-    const x = saved.x ?? defaultX;
+    const defaultY = Math.max(16, (bounds.bottom - (h || 300)) / 3);
+    const x = loadSavedCoord(saved.x, bounds.right, defaultX);
     const estH = h || 300;
-    const y = saved.y ?? Math.max(16, (window.innerHeight - estH) / 3);
+    const y = loadSavedCoord(saved.y, bounds.bottom, defaultY);
     const initialPos = clampPosition({ offsetWidth: w, offsetHeight: estH }, x, y);
 
     panel.style.width = `${w}px`;
@@ -144,10 +179,9 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     let collapsed = !!saved.collapsed;
 
     const persist = () => {
-        const rect = panel.getBoundingClientRect();
         savePanelState(toolId, {
-            x: rect.left,
-            y: rect.top,
+            x: panel.offsetLeft,
+            y: panel.offsetTop,
             w: panel.offsetWidth,
             h: panel.offsetHeight,
             collapsed
@@ -171,8 +205,10 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
 
         desktop.appendChild(chip);
 
-        const chipX = saved.chipX ?? saved.x ?? bounds.left + 24;
-        const chipY = saved.chipY ?? saved.y ?? window.innerHeight - 80;
+        const defaultChipX = bounds.left + 24;
+        const defaultChipY = Math.max(bounds.top + 16, bounds.bottom - 80);
+        const chipX = loadSavedCoord(saved.chipX ?? saved.x, bounds.right, defaultChipX);
+        const chipY = loadSavedCoord(saved.chipY ?? saved.y, bounds.bottom, defaultChipY);
         const chipPos = clampPosition(chip, chipX, chipY);
         chip.style.left = `${chipPos.x}px`;
         chip.style.top = `${chipPos.y}px`;
@@ -190,8 +226,7 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
         });
 
         bindChipDrag(chip.querySelector('.tool-chip__drag'), chip, () => {
-            const r = chip.getBoundingClientRect();
-            savePanelState(toolId, { chipX: r.left, chipY: r.top });
+            savePanelState(toolId, { chipX: chip.offsetLeft, chipY: chip.offsetTop });
         });
     };
 
@@ -260,11 +295,13 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     };
     window.addEventListener('resize', onViewportChange);
     window.addEventListener('tools:desktop_bounds_changed', onViewportChange);
+    window.addEventListener('desktop:zoom_changed', onViewportChange);
 
     const originalDestroy = destroy;
     const destroyWithCleanup = () => {
         window.removeEventListener('resize', onViewportChange);
         window.removeEventListener('tools:desktop_bounds_changed', onViewportChange);
+        window.removeEventListener('desktop:zoom_changed', onViewportChange);
         originalDestroy();
     };
 
@@ -311,8 +348,7 @@ function bindPanelDrag(panel, onEnd) {
 
     header.addEventListener('pointermove', (e) => {
         if (!dragging) return;
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
+        const { dx, dy } = pointerDelta(e.clientX, e.clientY, startX, startY);
         const pos = clampPosition(panel, originLeft + dx, originTop + dy);
         panel.style.left = `${pos.x}px`;
         panel.style.top = `${pos.y}px`;
@@ -357,8 +393,7 @@ function bindChipDrag(dragHandle, chipEl, onEnd) {
 
     dragHandle.addEventListener('pointermove', (e) => {
         if (!dragging) return;
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
+        const { dx, dy } = pointerDelta(e.clientX, e.clientY, startX, startY);
         const pos = clampPosition(chipEl, originLeft + dx, originTop + dy);
         chipEl.style.left = `${pos.x}px`;
         chipEl.style.top = `${pos.y}px`;
@@ -404,11 +439,12 @@ function bindPanelResize(panel, mins, onEnd, onResize) {
 
     handle.addEventListener('pointermove', (e) => {
         if (!resizing) return;
+        const { dx, dy } = pointerDelta(e.clientX, e.clientY, startX, startY);
         const desktop = getDesktopBounds();
         const maxW = desktop.right - panel.offsetLeft - 8;
         const maxH = desktop.bottom - panel.offsetTop - 8;
-        panel.style.width = `${clamp(startW + (e.clientX - startX), mins.w, maxW)}px`;
-        panel.style.height = `${clamp(startH + (e.clientY - startY), mins.h, maxH)}px`;
+        panel.style.width = `${clamp(startW + dx, mins.w, maxW)}px`;
+        panel.style.height = `${clamp(startH + dy, mins.h, maxH)}px`;
         onResize?.();
     });
 

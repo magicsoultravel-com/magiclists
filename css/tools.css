@@ -2,14 +2,14 @@
    TOOLS DESKTOP — floating panels + chips
    ========================================================================== */
 .tools-desktop {
-    position: fixed;
+    position: absolute;
     inset: 0;
     pointer-events: none;
     z-index: 320;
 }
 
 .tool-panel {
-    position: fixed;
+    position: absolute;
     pointer-events: auto;
     display: flex;
     flex-direction: column;
@@ -103,7 +103,7 @@
 }
 
 .tool-chip {
-    position: fixed;
+    position: absolute;
     pointer-events: auto;
     display: flex;
     flex-direction: column;
