@@ -408,7 +408,7 @@ class Application {
     setupDisplayOptionsButton() {
         const btn = document.getElementById('btn-display-options');
         if (btn) btn.innerHTML = ACTION_ICONS.displayOptions;
-    },
+    }
 
     setupFocusModeButton() {
         const btn = document.getElementById('btn-focus-mode');
