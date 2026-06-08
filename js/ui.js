@@ -10,7 +10,7 @@ import {
     unwrapLineStrike,
     wrapLineAsStruck
 } from './noteBodyConversion.js';
-import { hasRichMarkup, linkifyPlainUrls, sanitizeRichHtml, stripRichText } from './richText.js';
+import { hasRichMarkup, linkifyPlainUrls, sanitizeHref, sanitizeRichHtml, stripRichText } from './richText.js';
 
 const UNCATEGORIZED_COLOR = '#64748b';
 
@@ -418,6 +418,18 @@ export const UI = {
         const prepared = String(content || '').replace(/\u2028/g, '<br>');
         if (hasRichMarkup(prepared)) return sanitizeRichHtml(prepared);
         return sanitizeRichHtml(this.escapeHTML(prepared));
+    },
+
+    tryOpenRichEditLink(e, host) {
+        if (!host?.classList?.contains('rich-text--edit')) return false;
+        const anchor = e.target.closest?.('a[href]');
+        if (!anchor || !host.contains(anchor)) return false;
+        const href = sanitizeHref(anchor.getAttribute('href'));
+        if (!href) return false;
+        e.preventDefault();
+        e.stopPropagation();
+        window.open(href, '_blank', 'noopener,noreferrer');
+        return true;
     },
 
     resolveEditorBodyLayoutUnchecked(item) {
@@ -1719,10 +1731,18 @@ export const UI = {
             }
 
             root.querySelectorAll('.card-inline-edit').forEach((el) => {
-                el.addEventListener('click', (e) => e.stopPropagation());
-                if (stopMousedownPropagation) {
-                    el.addEventListener('mousedown', (e) => e.stopPropagation());
-                }
+                el.addEventListener('click', (e) => {
+                    if (this.tryOpenRichEditLink(e, el)) return;
+                    e.stopPropagation();
+                });
+                el.addEventListener('mousedown', (e) => {
+                    if (el.classList.contains('rich-text--edit') && e.target.closest('a[href]')) {
+                        e.preventDefault();
+                    }
+                    if (stopMousedownPropagation) {
+                        e.stopPropagation();
+                    }
+                });
                 el.addEventListener('focus', () => {
                     const card = root.closest('.mini-card');
                     if (card?.dataset.freeform === '1') this.raiseFreeformCard(card);
