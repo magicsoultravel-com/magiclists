@@ -43,6 +43,16 @@ export function wrapLineAsStruck(html) {
     return `${indent}<s>${body}</s>`;
 }
 
+export function unwrapLineStrike(html) {
+    const { indent, body } = splitLineIndent(html);
+    if (!lineIsFullyStruck(body)) return html;
+    const tpl = document.createElement('template');
+    tpl.innerHTML = body.trim();
+    const el = tpl.content.firstElementChild;
+    const inner = el ? el.innerHTML : body;
+    return `${indent}${sanitizeRichHtml(String(inner))}`;
+}
+
 export function parseContentLine(line) {
     const { indent, body } = splitLineIndent(line);
     const level = indentLevelFromSpaces(indent);

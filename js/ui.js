@@ -6,9 +6,13 @@ import {
     convertChecklistToContent,
     convertContentToChecklist,
     SOFT_BREAK,
-    stepsHaveConvertibleText
+    stepsHaveConvertibleText,
+    unwrapLineStrike,
+    wrapLineAsStruck
 } from './noteBodyConversion.js';
-import { hasRichMarkup, sanitizeRichHtml, stripRichText } from './richText.js';
+import { hasRichMarkup, linkifyPlainUrls, sanitizeRichHtml, stripRichText } from './richText.js';
+
+const UNCATEGORIZED_COLOR = '#64748b';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -158,7 +162,12 @@ export function reorderStepsByCompletion(steps) {
 
 export function moveStepOnCompletionChange(steps, step, completed) {
     step.completed = completed;
-    if (!completed) step.level = 0;
+    if (completed) {
+        step.text = wrapLineAsStruck(step.text || '');
+    } else {
+        step.text = unwrapLineStrike(step.text || '');
+        step.level = 0;
+    }
     reorderStepsByCompletion(steps);
 }
 
@@ -379,7 +388,7 @@ export const UI = {
     syncInlineFieldToItem(el, item) {
         const field = el.dataset.field;
         if (el.classList.contains('rich-text--edit')) {
-            const val = sanitizeRichHtml(el.innerHTML);
+            const val = sanitizeRichHtml(linkifyPlainUrls(el.innerHTML));
             if (field === 'title') item.title = val;
             else if (field === 'content') item.content = val;
             else if (field === 'step-text') {
@@ -401,12 +410,14 @@ export const UI = {
     renderRichHtml(str) {
         if (!str) return '';
         const prepared = String(str).replace(/\u2028/g, '<br>');
-        return hasRichMarkup(prepared) ? sanitizeRichHtml(prepared) : this.escapeHTML(prepared);
+        if (hasRichMarkup(prepared)) return sanitizeRichHtml(prepared);
+        return sanitizeRichHtml(this.escapeHTML(prepared));
     },
 
     prepareContentForEdit(content) {
         const prepared = String(content || '').replace(/\u2028/g, '<br>');
-        return hasRichMarkup(prepared) ? sanitizeRichHtml(prepared) : this.escapeHTML(prepared);
+        if (hasRichMarkup(prepared)) return sanitizeRichHtml(prepared);
+        return sanitizeRichHtml(this.escapeHTML(prepared));
     },
 
     resolveEditorBodyLayoutUnchecked(item) {
@@ -1036,7 +1047,7 @@ export const UI = {
         `;
     },
 
-    buildNoteMetaFooterHtml(item, { mode = 'inline', targetCatName = '', visibilityBadgeColor = '#f59e0b' } = {}) {
+    buildNoteMetaFooterHtml(item, { mode = 'inline', targetCatName = '', categoryColor = UNCATEGORIZED_COLOR } = {}) {
         const createdLabel = this.formatCreatedDate(item.created_at);
         const sizeLabel = computeNoteSizeKb(item);
         const createdHtml = createdLabel
@@ -1048,7 +1059,7 @@ export const UI = {
             return `
                 <div class="editor-meta-row editor-meta-row--footer editor-meta-row--inline">
                     <span class="editor-meta-badges">
-                        <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
+                        <span class="badge-dot" style="background-color: ${categoryColor};" title="${this.escapeAttr(targetCatName || 'Uncategorized')}"></span>
                         ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
                     </span>
                     <span class="editor-meta-stats">
@@ -1140,7 +1151,7 @@ export const UI = {
         footerDragZone = '',
         metaMode = 'inline',
         targetCatName = '',
-        visibilityBadgeColor = '#f59e0b',
+        categoryColor = UNCATEGORIZED_COLOR,
         categoryOptionsHtml = '',
         startParts = {},
         endParts = {},
@@ -1159,7 +1170,7 @@ export const UI = {
         const metaHtml = this.buildNoteMetaFooterHtml(item, {
             mode: metaMode,
             targetCatName,
-            visibilityBadgeColor
+            categoryColor
         });
         const bodyIdAttr = bodyId ? ` id="${bodyId}"` : '';
 
@@ -1445,20 +1456,16 @@ export const UI = {
 
     renderCompactCard(card, item, activeCategories, targetCatName, categoryColor) {
         card.classList.remove('note-surface');
-        const fullTitle = item.title || '';
-        const titleAttr = this.escapeAttr(stripRichText(fullTitle));
-        const richClass = hasRichMarkup(fullTitle) ? ' rich-text' : '';
-        const visibilityBadgeColor = item.visibility === 'public' ? '#10b981' : '#f59e0b';
-        
+        const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
         const isExpanded = false;
         const dragZone = this.freeformDragZoneClass(card);
         card.innerHTML = `
             <div class="card-header${dragZone}">
-                <div class="mini-card-title${richClass}" title="${titleAttr}">${this.renderRichHtml(fullTitle)}</div>
+                ${this.buildNoteTitleHtml(item, false)}
                 ${this.buildCardActionsHtml(item, isExpanded)}
             </div>
             <div class="mini-card-meta compact${dragZone}">
-                <span class="badge-dot" style="background-color: ${visibilityBadgeColor};"></span>
+                <span class="badge-dot" style="background-color: ${dotColor};" title="${this.escapeAttr(targetCatName || 'Uncategorized')}"></span>
                 ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
             </div>
         `;
@@ -1542,7 +1549,7 @@ export const UI = {
 
     renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor) {
         const canEdit = this.canEditInline();
-        const visibilityBadgeColor = item.visibility === 'public' ? '#10b981' : '#f59e0b';
+        const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
         const dragZone = this.freeformDragZoneClass(card);
 
         card.innerHTML = this.buildNoteEditorShell(item, {
@@ -1553,7 +1560,7 @@ export const UI = {
             footerDragZone: dragZone,
             metaMode: 'inline',
             targetCatName,
-            visibilityBadgeColor
+            categoryColor: dotColor
         });
 
         this.attachCardActions(card, item, {
@@ -1720,6 +1727,20 @@ export const UI = {
                     const card = root.closest('.mini-card');
                     if (card?.dataset.freeform === '1') this.raiseFreeformCard(card);
                 });
+                if (el.classList.contains('rich-text--edit')) {
+                    el.addEventListener('paste', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const plain = e.clipboardData?.getData('text/plain') || '';
+                        if (plain) {
+                            document.execCommand('insertText', false, plain);
+                        } else {
+                            const html = e.clipboardData?.getData('text/html') || '';
+                            if (html) document.execCommand('insertHTML', false, sanitizeRichHtml(html));
+                        }
+                        if (localOnly) onChange();
+                    });
+                }
                 el.addEventListener('keydown', (e) => {
                     if (el.classList.contains('rich-text--edit')) {
                         const mod = e.ctrlKey || e.metaKey;
