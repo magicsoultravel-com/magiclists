@@ -90,10 +90,19 @@ function clampPosition(el, x, y) {
     };
 }
 
-function loadSavedCoord(value, max, fallback) {
+function loadSavedCoord(value, min, max, size, fallback) {
     if (!Number.isFinite(value)) return fallback;
-    if (value < -8 || value > max + 48) return fallback;
+    if (value < min || value + size > max) return fallback;
     return value;
+}
+
+function chipAnchorFromPanel(panel, chip) {
+    const chipW = chip?.offsetWidth || 40;
+    const chipH = chip?.offsetHeight || 44;
+    return {
+        x: panel.offsetLeft + panel.offsetWidth - chipW - 4,
+        y: panel.offsetTop + 4
+    };
 }
 
 let zStack = 0;
@@ -140,9 +149,9 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     const bounds = getDesktopBounds();
     const defaultX = bounds.left + Math.max(16, (bounds.right - bounds.left - w) / 2);
     const defaultY = Math.max(16, (bounds.bottom - (h || 300)) / 3);
-    const x = loadSavedCoord(saved.x, bounds.right, defaultX);
     const estH = h || 300;
-    const y = loadSavedCoord(saved.y, bounds.bottom, defaultY);
+    const x = loadSavedCoord(saved.x, bounds.left, bounds.right, w, defaultX);
+    const y = loadSavedCoord(saved.y, bounds.top, bounds.bottom, estH, defaultY);
     const initialPos = clampPosition({ offsetWidth: w, offsetHeight: estH }, x, y);
 
     panel.style.width = `${w}px`;
@@ -192,7 +201,33 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
         });
     };
 
+    const positionChip = (anchorToPanel = false) => {
+        if (!chip) return;
+        const desktopBounds = getDesktopBounds();
+        const chipW = chip.offsetWidth || 40;
+        const chipH = chip.offsetHeight || 44;
+        const panelAnchor = chipAnchorFromPanel(panel, chip);
+        const fallbackX = panelAnchor.x;
+        const fallbackY = panelAnchor.y;
+
+        let chipX;
+        let chipY;
+        if (anchorToPanel) {
+            chipX = fallbackX;
+            chipY = fallbackY;
+        } else {
+            chipX = loadSavedCoord(saved.chipX, desktopBounds.left, desktopBounds.right, chipW, fallbackX);
+            chipY = loadSavedCoord(saved.chipY, desktopBounds.top, desktopBounds.bottom, chipH, fallbackY);
+        }
+
+        const chipPos = clampPosition(chip, chipX, chipY);
+        chip.style.left = `${chipPos.x}px`;
+        chip.style.top = `${chipPos.y}px`;
+    };
+
     const createChip = () => {
+        if (chip) return;
+
         chip = document.createElement('div');
         chip.className = 'tool-chip';
         chip.dataset.toolId = toolId;
@@ -208,16 +243,6 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
         chip.querySelector('.tool-chip__close').innerHTML = CARD_ICONS.close;
 
         desktop.appendChild(chip);
-
-        const defaultChipX = bounds.left + 24;
-        const defaultChipY = Math.max(bounds.top + 16, bounds.bottom - 80);
-        const chipX = loadSavedCoord(saved.chipX ?? saved.x, bounds.right, defaultChipX);
-        const chipY = loadSavedCoord(saved.chipY ?? saved.y, bounds.bottom, defaultChipY);
-        const chipPos = clampPosition(chip, chipX, chipY);
-        chip.style.left = `${chipPos.x}px`;
-        chip.style.top = `${chipPos.y}px`;
-
-        bringToFront(chip);
 
         chip.querySelector('.tool-chip__expand').addEventListener('click', (e) => {
             e.stopPropagation();
@@ -236,10 +261,15 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
 
     const collapse = () => {
         collapsed = true;
-        panel.classList.add('is-hidden');
         if (!chip) createChip();
+        positionChip(true);
+        panel.classList.add('is-hidden');
         chip.classList.remove('is-hidden');
-        persist();
+        bringToFront(chip);
+        persist({
+            chipX: chip.offsetLeft,
+            chipY: chip.offsetTop
+        });
         callbacks.onCollapse?.();
     };
 
@@ -255,12 +285,15 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
 
     const show = () => {
         desktop.appendChild(panel);
-        bringToFront(panel);
         if (collapsed) {
             panel.classList.add('is-hidden');
             createChip();
+            positionChip(false);
+            chip.classList.remove('is-hidden');
+            bringToFront(chip);
         } else {
             panel.classList.remove('is-hidden');
+            bringToFront(panel);
         }
     };
 
