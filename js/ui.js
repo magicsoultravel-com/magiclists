@@ -24,6 +24,17 @@ import {
 } from './noteBodyConversion.js';
 import { hasRichMarkup, linkifyPlainUrls, sanitizeHref, sanitizeRichHtml, stripRichText } from './richText.js';
 import { UndoManager } from './undo.js';
+import {
+    applyViewSessionsFromSnapshot,
+    clearExpandedCards,
+    clearViewSessionExpanded,
+    getExpandedCards,
+    getViewSessionsForSnapshot,
+    persistViewSession,
+    restoreViewSession,
+    setExpandedCard,
+    setGridExpandedIdForMode
+} from './viewSession.js';
 
 const UNCATEGORIZED_COLOR = '#64748b';
 
@@ -63,6 +74,7 @@ const CARD_COLLAPSE_ANIM_MS = 200;
 let freeformStackSeq = 1;
 let gridStackSeq = 1;
 let boardItemsById = new Map();
+let activeBoardViewMode = 'columns';
 
 export const CARD_ICONS = {
     calendar: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.5" y="2.5" width="9" height="8" rx="0.8" fill="none" stroke="currentColor" stroke-width="1"/><path d="M1.5 5.2h9M4 1.5v1.6M8 1.5v1.6" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>',
@@ -116,7 +128,8 @@ export const ACTION_ICONS = {
     saveView: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.8 2.4h6.4v7.2L6 7.6 2.8 9.6V2.4z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M6 5.2v2.8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
     recallView: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.8 2.2h6.4v7.4L6 7.6 2.8 9.6V2.2z" fill="currentColor"/></svg>',
     focusMode: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.95"/><circle cx="6" cy="6" r="1.6" fill="currentColor"/></svg>',
-    displayOptions: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 3.4h7.6M2.2 6h7.6M2.2 8.6h7.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/><circle cx="4.4" cy="3.4" r="0.85" fill="currentColor"/><circle cx="7.8" cy="6" r="0.85" fill="currentColor"/><circle cx="5.6" cy="8.6" r="0.85" fill="currentColor"/></svg>'
+    displayOptions: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 3.4h7.6M2.2 6h7.6M2.2 8.6h7.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/><circle cx="4.4" cy="3.4" r="0.85" fill="currentColor"/><circle cx="7.8" cy="6" r="0.85" fill="currentColor"/><circle cx="5.6" cy="8.6" r="0.85" fill="currentColor"/></svg>',
+    appTheme: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="3.6" cy="4.2" r="1.5" fill="currentColor" opacity="0.9"/><circle cx="6.8" cy="3.4" r="1.5" fill="currentColor" opacity="0.65"/><circle cx="8.4" cy="6.8" r="1.5" fill="currentColor" opacity="0.45"/><path d="M1.4 10.2h9.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>'
 };
 
 const SAVED_VIEWS_KEY = 'matrix_saved_views';
@@ -420,6 +433,26 @@ export const UI = {
         });
     },
 
+    getActiveBoardViewMode() {
+        return activeBoardViewMode;
+    },
+
+    persistViewSessionForMode(mode, canvas = document.getElementById('app-canvas')) {
+        persistViewSession(mode, {
+            canvas,
+            flushLayout: (c, m) => this.flushLayoutFromCanvas(c, m),
+            captureScroll: (c) => this.captureScrollState(c)
+        });
+    },
+
+    restoreViewSessionForMode(mode) {
+        return restoreViewSession(mode);
+    },
+
+    readExpandedCardsForMode(mode = activeBoardViewMode) {
+        return getExpandedCards(mode);
+    },
+
     snapshotItem(item) {
         return JSON.parse(JSON.stringify(item));
     },
@@ -563,12 +596,7 @@ export const UI = {
             return this.isGridBoardCardExpanded(item?.id, card);
         }
         if (card?.classList.contains('expanded')) return true;
-        try {
-            const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
-            return expandedCards[item?.id] === true;
-        } catch {
-            return false;
-        }
+        return getExpandedCards(activeBoardViewMode)[item?.id] === true;
     },
 
     resolveBoardItem(itemId) {
@@ -586,11 +614,7 @@ export const UI = {
     },
 
     setGridExpandedId(itemId) {
-        if (itemId) {
-            localStorage.setItem(GRID_EXPANDED_KEY, itemId);
-        } else {
-            localStorage.removeItem(GRID_EXPANDED_KEY);
-        }
+        setGridExpandedIdForMode('grid', itemId);
     },
 
     isGridBoardCardExpanded(itemId, card = null) {
@@ -710,6 +734,7 @@ export const UI = {
             : viewMode === 'grid'
                 ? 'grid'
                 : 'columns';
+        activeBoardViewMode = resolvedMode;
         canvas.className = resolvedMode === 'freeform'
             ? 'view-freeform'
             : resolvedMode === 'grid'
@@ -1360,9 +1385,7 @@ export const UI = {
 
     updateFreeformCard(card, item, { expanded, dimensions = null } = {}) {
         if (card.dataset.freeform !== '1') return;
-        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
-        expandedCards[item.id] = expanded;
-        localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
+        setExpandedCard('freeform', item.id, expanded);
 
         const activeCategories = readStoredCategories();
         const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
@@ -1473,9 +1496,7 @@ export const UI = {
 
     updateColumnsFloatCard(card, item, { expanded, dimensions = null } = {}) {
         if (card.dataset.columnsFloat !== '1') return;
-        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
-        expandedCards[item.id] = expanded;
-        localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
+        setExpandedCard('columns', item.id, expanded);
 
         const activeCategories = readStoredCategories();
         const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
@@ -1491,9 +1512,7 @@ export const UI = {
 
     updateColumnNoteCard(card, item, { expanded, dimensions = null } = {}) {
         if (card.dataset.columnNote !== '1') return;
-        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
-        expandedCards[item.id] = expanded;
-        localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
+        setExpandedCard('columns', item.id, expanded);
 
         const activeCategories = readStoredCategories();
         const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
@@ -1534,8 +1553,7 @@ export const UI = {
             return;
         }
 
-        expandedCards[item.id] = willExpand;
-        localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
+        setExpandedCard(activeBoardViewMode, item.id, willExpand);
 
         this.applyCardExpandCollapse(
             card,
@@ -1571,14 +1589,7 @@ export const UI = {
 
         const isExpanded = gridBoard
             ? this.isGridBoardCardExpanded(item.id, card)
-            : (() => {
-                try {
-                    const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
-                    return expandedCards[item.id] === true;
-                } catch {
-                    return false;
-                }
-            })();
+            : getExpandedCards(activeBoardViewMode)[item.id] === true;
 
         if (isExpanded) {
             card.classList.remove('compact');
@@ -1859,13 +1870,14 @@ export const UI = {
 
     markNoteExpanded(itemId) {
         if (!itemId) return;
-        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
-        expandedCards[itemId] = true;
-        localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
+        setExpandedCard(activeBoardViewMode, itemId, true);
     },
 
     collapseAllCards() {
-        localStorage.setItem('matrix_expanded_cards', '{}');
+        clearExpandedCards(activeBoardViewMode);
+        if (activeBoardViewMode === 'grid') {
+            this.setGridExpandedId(null);
+        }
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
     },
 
@@ -2972,7 +2984,7 @@ export const UI = {
             };
             document.addEventListener('mousemove', onMove);
             document.addEventListener('mouseup', onUp);
-        });
+        }, true);
     },
 
     getChecklistCollapsedKeys() {
@@ -3072,21 +3084,15 @@ export const UI = {
 
     captureViewSnapshot(viewMode, focusCategories = []) {
         const canvas = document.getElementById('app-canvas');
-        this.flushLayoutFromCanvas(canvas, viewMode);
-        let expandedCards = {};
+        this.persistViewSessionForMode(viewMode, canvas);
         let collapsedCategories = [];
-        try {
-            expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
-        } catch {
-            expandedCards = {};
-        }
         try {
             collapsedCategories = JSON.parse(localStorage.getItem('matrix_collapsed_categories') || '[]');
         } catch {
             collapsedCategories = [];
         }
         return {
-            version: 2,
+            version: 3,
             savedAt: Date.now(),
             viewMode,
             focusCategories: Array.isArray(focusCategories) ? [...focusCategories] : [],
@@ -3101,8 +3107,9 @@ export const UI = {
             gridLayout: this.getGridLayout(),
             gridPins: this.getGridPins(),
             gridExpandedId: this.getGridExpandedId(),
-            expandedCards,
-            collapsedCategories
+            expandedCards: getExpandedCards(viewMode),
+            collapsedCategories,
+            viewSessions: getViewSessionsForSnapshot()
         };
     },
 
@@ -3206,7 +3213,7 @@ export const UI = {
     },
 
     applyViewSnapshot(snapshot) {
-        if (!snapshot || (snapshot.version !== 1 && snapshot.version !== 2)) return false;
+        if (!snapshot || (snapshot.version !== 1 && snapshot.version !== 2 && snapshot.version !== 3)) return false;
         localStorage.setItem('matrix_freeform_positions', JSON.stringify(snapshot.freeformPositions || {}));
         localStorage.setItem('matrix_freeform_sizes', JSON.stringify(snapshot.freeformSizes || {}));
         localStorage.setItem('matrix_column_positions', JSON.stringify(snapshot.columnPositions || {}));
@@ -3216,12 +3223,16 @@ export const UI = {
         localStorage.setItem('matrix_columns_float_sizes', JSON.stringify(snapshot.columnsFloatSizes || {}));
         localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(snapshot.gridLayout || {}));
         localStorage.setItem(GRID_PINS_KEY, JSON.stringify(snapshot.gridPins || []));
-        if (snapshot.gridExpandedId) {
-            localStorage.setItem(GRID_EXPANDED_KEY, snapshot.gridExpandedId);
+        if (snapshot.version >= 3 && snapshot.viewSessions) {
+            applyViewSessionsFromSnapshot(snapshot.viewSessions);
         } else {
-            localStorage.removeItem(GRID_EXPANDED_KEY);
+            if (snapshot.gridExpandedId) {
+                localStorage.setItem(GRID_EXPANDED_KEY, snapshot.gridExpandedId);
+            } else {
+                localStorage.removeItem(GRID_EXPANDED_KEY);
+            }
+            localStorage.setItem('matrix_expanded_cards', JSON.stringify(snapshot.expandedCards || {}));
         }
-        localStorage.setItem('matrix_expanded_cards', JSON.stringify(snapshot.expandedCards || {}));
         localStorage.setItem('matrix_collapsed_categories', JSON.stringify(snapshot.collapsedCategories || []));
         return true;
     },
@@ -3236,7 +3247,7 @@ export const UI = {
     resetFreeformLayout() {
         localStorage.removeItem('matrix_freeform_positions');
         localStorage.removeItem('matrix_freeform_sizes');
-        localStorage.removeItem('matrix_expanded_cards');
+        clearViewSessionExpanded('freeform');
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
     },
 
@@ -3247,14 +3258,15 @@ export const UI = {
         localStorage.removeItem('matrix_columns_float_positions');
         localStorage.removeItem('matrix_columns_float_sizes');
         localStorage.removeItem('matrix_canvas_layout_order');
-        localStorage.removeItem('matrix_expanded_cards');
+        clearViewSessionExpanded('columns');
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
     },
 
     resetGridLayout() {
         localStorage.removeItem(GRID_LAYOUT_KEY);
         localStorage.removeItem(GRID_PINS_KEY);
-        localStorage.removeItem(GRID_EXPANDED_KEY);
+        clearViewSessionExpanded('grid');
+        this.setGridExpandedId(null);
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
     },
 
@@ -3369,92 +3381,258 @@ export const UI = {
         this.applyGridBoardSize(card);
     },
 
-    reflowGridBoard(canvas, actorId, { animate = true } = {}) {
-        if (!canvas?.classList.contains('view-grid')) return;
-        const { origin, packW, maxH } = this.getGridBoardBounds(canvas);
-        const cards = [...canvas.querySelectorAll('.mini-card[data-grid-board="1"]')];
-        if (!cards.length) return;
+    clampGridResize(w, h, { packW } = {}) {
+        const minW = COLUMN_GRID_CELL_W;
+        const minH = COLUMN_GRID_CELL_H;
+        const maxCellsW = Math.max(1, this.spanToCellsW(packW || CANVAS_GRID_W));
+        let wCells = Math.max(1, this.spanToCellsW(Math.max(minW, w)));
+        let hCells = Math.max(1, this.spanToCellsH(Math.max(minH, h)));
+        wCells = Math.min(wCells, maxCellsW);
+        return {
+            w: this.cellsToSpanW(wCells),
+            h: this.cellsToSpanH(hCells)
+        };
+    },
 
+    findNearestGridSlot(preferred, w, h, placed, { packW, origin = CANVAS_LAYOUT_ORIGIN, maxH = Infinity } = {}) {
+        const bounds = { maxW: packW, maxH };
+        const snapped = this.snapNoteRect({ x: preferred.x, y: preferred.y, w, h }, bounds);
+        if (!placed.some((p) => this.rectsOverlap(snapped, p))) return snapped;
+
+        const prefX = snapped.x;
+        const prefY = snapped.y;
+        const candidates = [];
+
+        for (let ring = 0; ring <= 32; ring++) {
+            for (let dy = -ring; dy <= ring; dy++) {
+                for (let dx = -ring; dx <= ring; dx++) {
+                    if (ring > 0 && Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
+                    const x = prefX + dx * COLUMN_STRIDE_X;
+                    const y = prefY + dy * COLUMN_STRIDE_Y;
+                    const c = this.snapNoteRect({ x, y, w, h }, bounds);
+                    if (c.x < origin - 1) continue;
+                    if (c.x + c.w > origin + packW + 1) continue;
+                    if (c.y < origin - 1) continue;
+                    candidates.push({ rect: c, dist: Math.abs(c.x - prefX) + Math.abs(c.y - prefY) });
+                }
+            }
+        }
+        candidates.sort((a, b) => a.dist - b.dist);
+        for (const { rect } of candidates) {
+            if (!placed.some((p) => this.rectsOverlap(rect, p))) return rect;
+        }
+        return snapped;
+    },
+
+    pushGridCardRect(rect, placed, { packW, origin, maxH }) {
+        const snapRect = (r) => this.snapNoteRect(r, { maxW: packW, maxH });
+        let candidate = snapRect({ ...rect, x: rect.x + COLUMN_STRIDE_X });
+        if (candidate.x + candidate.w <= origin + packW + 1
+            && !placed.some((p) => this.rectsOverlap(candidate, p))) {
+            return candidate;
+        }
+        const blocker = placed.find((p) => this.rectsOverlap(rect, p));
+        if (blocker) {
+            candidate = snapRect({
+                x: rect.x,
+                y: blocker.y + blocker.h + COLUMN_GRID_GAP,
+                w: rect.w,
+                h: rect.h
+            });
+            if (!placed.some((p) => this.rectsOverlap(candidate, p))) return candidate;
+        }
+        return this.findNearestGridSlot(rect, rect.w, rect.h, placed, { packW, origin, maxH });
+    },
+
+    resolveGridPushLayout({ cardEntries, actorId, actorRect, pinnedIds, packW, origin, maxH }) {
+        const layout = new Map();
+        const placed = [];
+        const snapOpts = { packW, origin, maxH };
+
+        cardEntries.forEach(({ id, rect }) => {
+            if (!id || !pinnedIds.has(id)) return;
+            const snapped = this.snapNoteRect(rect, { maxW: packW, maxH });
+            layout.set(id, snapped);
+            placed.push({ ...snapped });
+        });
+
+        if (actorId && actorRect) {
+            const snapped = this.findNearestGridSlot(actorRect, actorRect.w, actorRect.h, placed, snapOpts);
+            layout.set(actorId, snapped);
+            placed.push({ ...snapped });
+        }
+
+        const others = cardEntries
+            .filter(({ id }) => id && id !== actorId && !pinnedIds.has(id))
+            .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x);
+
+        others.forEach(({ id, rect }) => {
+            let snapped = this.snapNoteRect(rect, { maxW: packW, maxH });
+            if (placed.some((p) => this.rectsOverlap(snapped, p))) {
+                snapped = this.pushGridCardRect(snapped, placed, snapOpts);
+            }
+            layout.set(id, snapped);
+            placed.push({ ...snapped });
+        });
+
+        return layout;
+    },
+
+    computeGridBoardLayout(canvas, actorId, actorRect = null, { maxH } = {}) {
+        if (!canvas?.classList.contains('view-grid')) return new Map();
+        const { origin, packW, maxH: boardMaxH } = this.getGridBoardBounds(canvas);
+        const limitH = maxH ?? boardMaxH;
+        const cards = [...canvas.querySelectorAll('.mini-card[data-grid-board="1"]')];
+        const pinnedIds = new Set(this.getBoardPins());
+
+        const cardEntries = cards.map((card) => {
+            const id = card.dataset.id;
+            const isExpanded = this.isGridBoardCardExpanded(id, card);
+            const saved = this.getGridLayout()[id];
+            const source = id === actorId && actorRect ? actorRect : (saved || this.readNoteRect(card));
+            const rect = this.gridBoardRectForCard(card, source, isExpanded);
+            return { id, card, rect };
+        });
+
+        let resolvedActor = null;
+        if (actorId && actorRect) {
+            const entry = cardEntries.find((e) => e.id === actorId);
+            const isExpanded = entry ? this.isGridBoardCardExpanded(actorId, entry.card) : false;
+            const sized = this.gridBoardRectForCard(entry?.card, actorRect, isExpanded);
+            resolvedActor = this.snapNoteRect(sized, { maxW: packW, maxH: limitH });
+        }
+
+        return this.resolveGridPushLayout({
+            cardEntries,
+            actorId,
+            actorRect: resolvedActor,
+            pinnedIds,
+            packW,
+            origin,
+            maxH: limitH
+        });
+    },
+
+    applyGridBoardLayout(canvas, layout, { animate = true, save = true, preview = false } = {}) {
+        if (!canvas || !layout?.size) return [];
+        const { origin } = this.getGridBoardBounds(canvas);
+        const placed = [];
+        layout.forEach((rect, id) => {
+            const card = canvas.querySelector(`.mini-card[data-grid-board="1"][data-id="${CSS.escape(id)}"]`);
+            if (!card) return;
+            this.applyNoteRect(card, rect, { settling: animate });
+            card.classList.toggle('layout-preview', preview);
+            if (save) this.saveGridLayout(id, rect);
+            placed.push(rect);
+        });
+        this.updateGridCanvasMinHeight(canvas, placed, origin);
+        if (animate && !preview) {
+            window.setTimeout(() => {
+                canvas.querySelectorAll('.mini-card.layout-settling').forEach((c) => {
+                    c.classList.remove('layout-settling');
+                });
+            }, 160);
+        }
+        return placed;
+    },
+
+    clearGridLayoutPreview(canvas) {
+        canvas?.querySelectorAll('.mini-card.layout-preview').forEach((c) => {
+            c.classList.remove('layout-preview');
+        });
+    },
+
+    getGridViewportBounds(canvas) {
+        const zoom = parseFloat(canvas?.dataset?.desktopZoom) || 1;
+        const pad = 24;
+        const { origin, packW } = this.getGridBoardBounds(canvas);
+        const viewportH = Math.max(200, (canvas.clientHeight || 400) / zoom - pad);
+        return { origin, packW, viewportH };
+    },
+
+    squeezeGridBoardToViewport(canvas, { animate = true } = {}) {
+        if (!canvas?.classList.contains('view-grid')) return;
+        const { origin, packW, viewportH } = this.getGridViewportBounds(canvas);
+        const bottomLimit = origin + viewportH;
+        const cards = [...canvas.querySelectorAll('.mini-card[data-grid-board="1"]')];
         const pinnedIds = new Set(this.getBoardPins());
         const placed = [];
-        let actorRect = null;
-
-        const snapRect = (rect) => this.snapNoteRect(rect, { maxW: packW, maxH });
+        const layout = new Map();
+        const snapOpts = { packW, origin, maxH: bottomLimit + COLUMN_GRID_CELL_H };
 
         cards.forEach((card) => {
             const id = card.dataset.id;
             if (!id || !pinnedIds.has(id)) return;
-            const saved = this.getGridLayout()[id];
             const isExpanded = this.isGridBoardCardExpanded(id, card);
-            const rect = snapRect(this.gridBoardRectForCard(card, saved, isExpanded));
-            this.applyNoteRect(card, rect, { settling: false });
-            this.saveGridLayout(id, rect);
+            const rect = this.snapNoteRect(
+                this.gridBoardRectForCard(card, this.readNoteRect(card), isExpanded),
+                { maxW: packW, maxH: snapOpts.maxH }
+            );
+            layout.set(id, rect);
             placed.push({ ...rect });
         });
 
-        if (actorId) {
-            const actorCard = cards.find((c) => c.dataset.id === actorId);
-            if (actorCard) {
-                const isActorExpanded = this.isGridBoardCardExpanded(actorId, actorCard);
-                actorRect = snapRect(
-                    this.gridBoardRectForCard(actorCard, this.readNoteRect(actorCard), isActorExpanded)
-                );
-                if (placed.some((p) => this.rectsOverlap(actorRect, p))) {
-                    const slot = this.findFirstCanvasSlot(
-                        actorRect.w,
-                        actorRect.h,
-                        placed,
-                        packW + origin * 2,
-                        { origin }
-                    );
-                    actorRect = { ...slot, w: actorRect.w, h: actorRect.h };
-                }
-                this.applyNoteRect(actorCard, actorRect, { settling: animate });
-                this.saveGridLayout(actorId, actorRect);
-                placed.push({ ...actorRect });
-            }
-        }
-
-        const sortable = cards
+        const unpinned = cards
             .filter((card) => {
                 const id = card.dataset.id;
-                return id && id !== actorId && !pinnedIds.has(id);
+                return id && !pinnedIds.has(id);
             })
             .map((card) => {
                 const id = card.dataset.id;
-                const saved = this.getGridLayout()[id];
                 const isExpanded = this.isGridBoardCardExpanded(id, card);
-                const rect = this.gridBoardRectForCard(card, saved, isExpanded);
-                return { card, rect, sortY: rect.y, sortX: rect.x };
+                const rect = this.gridBoardRectForCard(card, this.readNoteRect(card), isExpanded);
+                return { id, card, rect };
             })
-            .sort((a, b) => a.sortY - b.sortY || a.sortX - b.sortX);
+            .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x);
 
-        sortable.forEach(({ card, rect: rawRect }) => {
-            const id = card.dataset.id;
-            const isExpanded = this.isGridBoardCardExpanded(id, card);
-            const rect = this.gridBoardRectForCard(card, rawRect, isExpanded);
-            let snapped = snapRect(rect);
-            if (placed.some((p) => this.rectsOverlap(snapped, p))) {
-                const slot = this.findFirstCanvasSlot(
-                    snapped.w,
-                    snapped.h,
-                    placed,
-                    packW + origin * 2,
-                    { origin }
-                );
-                snapped = { ...slot, w: snapped.w, h: snapped.h };
+        unpinned.forEach(({ id, rect }) => {
+            let preferred = { ...rect };
+            if (preferred.y + preferred.h > bottomLimit + 2) {
+                preferred = { ...preferred, y: origin };
             }
-            this.applyNoteRect(card, snapped, { settling: animate });
-            this.saveGridLayout(id, snapped);
+            let snapped = this.snapNoteRect(preferred, { maxW: packW, maxH: snapOpts.maxH });
+            if (placed.some((p) => this.rectsOverlap(snapped, p))) {
+                snapped = this.findNearestGridSlot(preferred, snapped.w, snapped.h, placed, snapOpts);
+            }
+            if (placed.some((p) => this.rectsOverlap(snapped, p))) {
+                snapped = this.pushGridCardRect(snapped, placed, snapOpts);
+            }
+            layout.set(id, snapped);
             placed.push({ ...snapped });
         });
 
-        this.updateGridCanvasMinHeight(canvas, placed, origin);
-        if (animate) {
-            window.setTimeout(() => {
-                cards.forEach((card) => card.classList.remove('layout-settling'));
-            }, 160);
+        this.applyGridBoardLayout(canvas, layout, { animate, save: true });
+        this.updateGridScrollPolicy(canvas, { forcing: false });
+    },
+
+    updateGridScrollPolicy(canvas, { forcing = false } = {}) {
+        if (!canvas?.classList.contains('view-grid')) return;
+        canvas.classList.toggle('is-grid-forcing', forcing);
+        if (forcing) {
+            canvas.style.overflowY = 'auto';
+            return;
         }
+        const { origin, viewportH } = this.getGridViewportBounds(canvas);
+        const bottomLimit = origin + viewportH;
+        const cards = canvas.querySelectorAll('.mini-card[data-grid-board="1"]');
+        let contentBottom = origin;
+        cards.forEach((card) => {
+            const rect = this.readNoteRect(card);
+            contentBottom = Math.max(contentBottom, rect.y + rect.h);
+        });
+        const fits = contentBottom <= bottomLimit + 4;
+        canvas.style.overflowY = fits ? 'hidden' : 'auto';
+        if (fits) {
+            const placed = [...cards].map((c) => this.readNoteRect(c));
+            this.updateGridCanvasMinHeight(canvas, placed, origin);
+        }
+    },
+
+    reflowGridBoard(canvas, actorId, { animate = true } = {}) {
+        if (!canvas?.classList.contains('view-grid')) return;
+        const layout = this.computeGridBoardLayout(canvas, actorId);
+        this.applyGridBoardLayout(canvas, layout, { animate, save: true });
+        this.squeezeGridBoardToViewport(canvas, { animate });
     },
 
     initGridBoardCardStack(card, orderIndex = 0) {
@@ -4071,7 +4249,7 @@ export const UI = {
     autoPackColumnNotes(columnNotesEl, itemIds, categoryName) {
         const innerW = this.getColumnNotesInnerWidth(columnNotesEl);
         const saved = this.getColumnNoteLayout()[categoryName] || {};
-        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
+        const expandedCards = getExpandedCards('columns');
         let rowX = 0;
         let rowY = 0;
         let rowMaxH = COLUMN_GRID_CELL_H;

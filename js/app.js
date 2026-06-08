@@ -14,8 +14,10 @@ import { ClockStyle } from './clockStyle.js';
 import { ColorPicker, PALETTE_NOTE, randomNoteColor } from './colorPicker.js';
 import { FocusMode } from './focusMode.js';
 import { DisplayOptions } from './displayOptions.js';
+import { AppTheme } from './appTheme.js';
 import { DesktopZoom } from './desktopZoom.js';
 import { exportAppCode } from './codeExport.js';
+import { readViewSessions, restoreViewSession } from './viewSession.js';
 
 function countHiddenFromBoard(items) {
     return items.filter(item => UI.isHiddenFromBoard(item)).length;
@@ -27,7 +29,7 @@ const AppState = {
     categories: [...DEFAULT_CATEGORIES],
     hiddenCategories: JSON.parse(localStorage.getItem('matrix_hidden_categories') || '[]'),
     focusCategories: [],
-    expandedCards: JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}'),
+    expandedCards: {},
     viewSettings: {
         sortBy: (() => {
             const preferred = localStorage.getItem('matrix_preferred_view') || 'columns';
@@ -50,6 +52,10 @@ class Application {
         DesktopBackground.init();
         ChromeBackground.init();
         DisplayOptions.init();
+        AppTheme.init();
+        readViewSessions();
+        restoreViewSession(AppState.viewSettings.sortBy);
+        AppState.expandedCards = UI.readExpandedCardsForMode(AppState.viewSettings.sortBy);
         this.checkAuthSession();
         Editor.init();
         await ToolsManager.init(() => AppState.items, () => AppState.focusCategories);
@@ -65,6 +71,7 @@ class Application {
         this.setupLayoutResetButton();
         this.setupCollapseAllButton();
         this.setupDisplayOptionsButton();
+        this.setupAppThemeButton();
         this.setupFocusModeButton();
         this.setupSaveViewButton();
         this.setupRecallViewButton();
@@ -357,14 +364,29 @@ class Application {
         this.syncDataStore();
     }
 
-    switchViewMode(mode) {
+    async switchViewMode(mode) {
         if (mode === 'grid' && !DesktopZoom.isDesktopViewport()) return;
+        const prevMode = AppState.viewSettings.sortBy;
+        if (prevMode === mode) return;
+
+        const canvas = document.getElementById('app-canvas');
+        UI.persistViewSessionForMode(prevMode, canvas);
+
         AppState.viewSettings.sortBy = mode;
         localStorage.setItem('matrix_preferred_view', mode);
+        const scrollState = UI.restoreViewSessionForMode(mode);
+        AppState.expandedCards = UI.readExpandedCardsForMode(mode);
+
         window.dispatchEvent(new CustomEvent('view:mode_changed', { detail: mode }));
         this.updateViewToggleState();
         this.updateLayoutResetVisibility();
-        this.syncDataStore();
+        await this.syncDataStore();
+
+        if (scrollState) {
+            requestAnimationFrame(() => {
+                UI.restoreScrollState(document.getElementById('app-canvas'), scrollState);
+            });
+        }
     }
 
     updateViewToggleState() {
@@ -408,7 +430,12 @@ class Application {
     setupDisplayOptionsButton() {
         const btn = document.getElementById('btn-display-options');
         if (btn) btn.innerHTML = ACTION_ICONS.displayOptions;
-    }
+    },
+
+    setupAppThemeButton() {
+        const btn = document.getElementById('btn-app-theme');
+        if (btn) btn.innerHTML = ACTION_ICONS.appTheme;
+    },
 
     setupFocusModeButton() {
         const btn = document.getElementById('btn-focus-mode');
@@ -621,6 +648,9 @@ class Application {
             this.updateLayoutResetVisibility();
         }
 
+        UI.restoreViewSessionForMode(mode);
+        AppState.expandedCards = UI.readExpandedCardsForMode(mode);
+
         await this.syncDataStore();
 
         if (Calendar.isActive()) {
@@ -645,8 +675,22 @@ class Application {
         this.updateDesktopZoomVisibility();
     }
 
+    squeezeGridIfActive() {
+        const canvas = document.getElementById('app-canvas');
+        if (!canvas?.classList.contains('view-grid')) return;
+        UI.squeezeGridBoardToViewport(canvas, { animate: true });
+    },
+
     setupCoreListeners() {
-        window.addEventListener('resize', () => this.updateDesktopZoomVisibility());
+        let gridSqueezeTimer = null;
+        window.addEventListener('resize', () => {
+            this.updateDesktopZoomVisibility();
+            clearTimeout(gridSqueezeTimer);
+            gridSqueezeTimer = setTimeout(() => this.squeezeGridIfActive(), 120);
+        });
+        window.addEventListener('desktop:zoom_changed', () => {
+            this.squeezeGridIfActive();
+        });
 
         window.addEventListener('item:selected_for_edit', (e) => {
             if (!AppState.user.isLoggedIn) {

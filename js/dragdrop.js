@@ -13,7 +13,9 @@ import {
     CANVAS_GRID_W,
     CANVAS_COL_GAP,
     CANVAS_LAYOUT_ORIGIN,
-    COLUMN_MIN_CANVAS_H
+    COLUMN_MIN_CANVAS_H,
+    COLUMN_GRID_CELL_W,
+    COLUMN_GRID_CELL_H
 } from './ui.js';
 
 const DRAG_THRESHOLD = 4;
@@ -60,13 +62,19 @@ function isScrollbarGrip(el, clientX) {
 
 function isInsideDragControl(target) {
     return !!target.closest(
-        '.card-actions, .card-act, .note-editor-toolbar, .step-check, .step-delete-btn, .step-collapse-btn, ' +
+        '.card-actions, .card-act, .step-check, .step-delete-btn, .step-collapse-btn, ' +
         '.card-inline-edit, .rich-text--edit, .step-nest-controls, .step-row-actions, ' +
         '.grab-handle--step, .expanded-checklist-add-btn, .editor-body-convert-bar, ' +
         '.grab-handle--note-cat, .ff-resize, .col-resize, .card-act--pin, ' +
         '.tool-panel, .tool-chip, .tool-chip__drag, .tool-chip__expand, .tool-panel__resize-se, .tool-panel__header, ' +
         'a, button, input, textarea, select'
     );
+}
+
+function pointerHitsStepGrab(clientX, clientY) {
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+    return document.elementsFromPoint(clientX, clientY)
+        .some((el) => el instanceof Element && el.closest('.grab-handle--step'));
 }
 
 function shouldStartCardDrag(target) {
@@ -250,6 +258,7 @@ export const DragDropEngine = {
                     return;
                 }
 
+                if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
                 if (!shouldStartCardDrag(e.target)) return;
                 if (cardIsPinned(card)) return;
 
@@ -275,14 +284,80 @@ export const DragDropEngine = {
         const cards = canvas.querySelectorAll('.mini-card[data-grid-board="1"]');
         let dragActive = null;
         let resizeActive = null;
+        let previewFrame = null;
+        let previewBaseline = null;
+
+        const snapshotPreviewBaseline = () => {
+            previewBaseline = new Map();
+            canvas.querySelectorAll('.mini-card[data-grid-board="1"]').forEach((c) => {
+                const id = c.dataset.id;
+                if (id) previewBaseline.set(id, UI.readNoteRect(c));
+            });
+        };
+
+        const restorePreviewBaseline = () => {
+            if (!previewBaseline) return;
+            previewBaseline.forEach((rect, id) => {
+                const c = canvas.querySelector(`.mini-card[data-grid-board="1"][data-id="${CSS.escape(id)}"]`);
+                if (c) UI.applyNoteRect(c, rect, { settling: false });
+            });
+            previewBaseline = null;
+        };
+
+        const runLayoutPreview = (actorCard) => {
+            if (!actorCard?.dataset?.id) return;
+            if (previewFrame) return;
+            previewFrame = requestAnimationFrame(() => {
+                previewFrame = null;
+                const actorRect = UI.readNoteRect(actorCard);
+                const layout = UI.computeGridBoardLayout(canvas, actorCard.dataset.id, actorRect);
+                layout.forEach((rect, id) => {
+                    if (id === actorCard.dataset.id) return;
+                    const other = canvas.querySelector(`.mini-card[data-grid-board="1"][data-id="${CSS.escape(id)}"]`);
+                    if (!other) return;
+                    const base = previewBaseline?.get(id);
+                    const changed = !base
+                        || base.x !== rect.x
+                        || base.y !== rect.y
+                        || base.w !== rect.w
+                        || base.h !== rect.h;
+                    if (changed) {
+                        UI.applyNoteRect(other, rect, { settling: true });
+                        other.classList.add('layout-preview');
+                    }
+                });
+            });
+        };
+
+        const clearLayoutPreview = (restore = false) => {
+            if (previewFrame) {
+                cancelAnimationFrame(previewFrame);
+                previewFrame = null;
+            }
+            UI.clearGridLayoutPreview(canvas);
+            if (restore) restorePreviewBaseline();
+            else previewBaseline = null;
+        };
 
         const finishGridAction = (card, { animate = true } = {}) => {
+            clearLayoutPreview(false);
+            UI.updateGridScrollPolicy(canvas, { forcing: false });
             const { packW, maxH } = UI.getGridBoardBounds(canvas);
             const rect = UI.snapNoteRect(UI.readNoteRect(card), { maxW: packW, maxH });
             UI.applyNoteRect(card, rect, { settling: animate });
-            UI.saveGridLayout(card.dataset.id, rect);
-            UI.reflowGridBoard(canvas, card.dataset.id, { animate });
-            canvas.classList.remove('is-layout-active');
+
+            const multiCell = rect.w > COLUMN_GRID_CELL_W + 2 || rect.h > COLUMN_GRID_CELL_H + 2;
+            const itemMatch = currentItems.find((i) => i.id === card.dataset.id);
+            if (multiCell && itemMatch && card.classList.contains('compact')) {
+                UI.updateGridBoardCard(card, itemMatch, {
+                    expanded: true,
+                    dimensions: { w: rect.w, h: rect.h }
+                });
+            } else {
+                UI.saveGridLayout(card.dataset.id, rect);
+                UI.reflowGridBoard(canvas, card.dataset.id, { animate });
+            }
+            canvas.classList.remove('is-layout-active', 'is-grid-forcing');
         };
 
         const onDragMove = (e) => {
@@ -293,12 +368,15 @@ export const DragDropEngine = {
                 dragActive.moved = true;
                 dragActive.card.classList.add('is-grid-dragging');
                 canvas.classList.add('is-layout-active');
+                snapshotPreviewBaseline();
+                UI.updateGridScrollPolicy(canvas, { forcing: true });
             }
             e.preventDefault();
             const x = Math.max(0, dragActive.origX + dx);
             const y = Math.max(0, dragActive.origY + dy);
             dragActive.card.style.left = `${x}px`;
             dragActive.card.style.top = `${y}px`;
+            runLayoutPreview(dragActive.card);
         };
 
         const onDragUp = () => {
@@ -308,6 +386,10 @@ export const DragDropEngine = {
             if (moved) {
                 card.dataset.skipExpand = '1';
                 finishGridAction(card);
+            } else {
+                clearLayoutPreview(true);
+                UI.updateGridScrollPolicy(canvas, { forcing: false });
+                canvas.classList.remove('is-layout-active', 'is-grid-forcing');
             }
             dragActive = null;
             document.removeEventListener('mousemove', onDragMove);
@@ -321,6 +403,8 @@ export const DragDropEngine = {
                 if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
                 resizeActive.moved = true;
                 canvas.classList.add('is-layout-active');
+                snapshotPreviewBaseline();
+                UI.updateGridScrollPolicy(canvas, { forcing: true });
             }
             const { card, axis, origX, origY, origW, origH } = resizeActive;
 
@@ -340,24 +424,30 @@ export const DragDropEngine = {
                 nextY = origY + dy;
             }
 
-            const clamped = clampSize(nextW, nextH);
+            const { packW } = UI.getGridBoardBounds(canvas);
+            const clamped = UI.clampGridResize(nextW, nextH, { packW });
             if (axis.includes('w')) nextX = origX + (origW - clamped.w);
             if (axis.includes('n')) nextY = origY + (origH - clamped.h);
 
-            const { packW } = UI.getGridBoardBounds(canvas);
             nextX = Math.max(0, nextX);
             nextY = Math.max(0, nextY);
-            if (nextX + clamped.w > packW + CANVAS_LAYOUT_ORIGIN) {
-                if (axis.includes('w')) nextX = Math.max(0, packW + CANVAS_LAYOUT_ORIGIN - clamped.w);
-                else nextW = Math.max(FREEFORM_MIN_W, packW + CANVAS_LAYOUT_ORIGIN - nextX);
+            let finalW = clamped.w;
+            let finalH = clamped.h;
+            if (nextX + finalW > packW + CANVAS_LAYOUT_ORIGIN) {
+                if (axis.includes('w')) {
+                    nextX = Math.max(0, packW + CANVAS_LAYOUT_ORIGIN - finalW);
+                } else {
+                    finalW = Math.max(COLUMN_GRID_CELL_W, packW + CANVAS_LAYOUT_ORIGIN - nextX);
+                }
             }
 
             card.style.left = `${nextX}px`;
             card.style.top = `${nextY}px`;
-            card.style.setProperty('width', `${clamped.w}px`, 'important');
-            card.style.setProperty('height', `${clamped.h}px`, 'important');
-            card.style.setProperty('min-height', `${clamped.h}px`, 'important');
-            card.style.setProperty('max-height', `${clamped.h}px`, 'important');
+            card.style.setProperty('width', `${finalW}px`, 'important');
+            card.style.setProperty('height', `${finalH}px`, 'important');
+            card.style.setProperty('min-height', `${finalH}px`, 'important');
+            card.style.setProperty('max-height', `${finalH}px`, 'important');
+            runLayoutPreview(card);
         };
 
         const onResizeUp = () => {
@@ -368,7 +458,9 @@ export const DragDropEngine = {
                 card.dataset.skipExpand = '1';
                 finishGridAction(card);
             } else {
-                canvas.classList.remove('is-layout-active');
+                clearLayoutPreview(true);
+                UI.updateGridScrollPolicy(canvas, { forcing: false });
+                canvas.classList.remove('is-layout-active', 'is-grid-forcing');
             }
             resizeActive = null;
             document.removeEventListener('mousemove', onResizeMove);
@@ -384,16 +476,6 @@ export const DragDropEngine = {
                     if (cardIsPinned(card)) return;
                     e.preventDefault();
                     e.stopPropagation();
-                    const { w: startW, h: startH } = UI.readFreeformCardSize(card);
-                    if (card.classList.contains('compact')) {
-                        const itemMatch = currentItems.find((i) => i.id === card.dataset.id);
-                        if (itemMatch) {
-                            UI.updateGridBoardCard(card, itemMatch, {
-                                expanded: true,
-                                dimensions: { w: startW, h: startH }
-                            });
-                        }
-                    }
                     const { w: origW, h: origH } = UI.readFreeformCardSize(card);
                     resizeActive = {
                         card,
@@ -417,6 +499,7 @@ export const DragDropEngine = {
                     return;
                 }
 
+                if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
                 if (!shouldStartCardDrag(e.target)) return;
                 if (cardIsPinned(card)) return;
 
@@ -724,6 +807,7 @@ export const DragDropEngine = {
             card.addEventListener('mousedown', (e) => {
                 if (e.button !== 0) return;
                 if (e.target.closest('.grab-handle--note-cat')) return;
+                if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
                 if (!shouldStartCardDrag(e.target)) return;
                 if (cardIsPinned(card)) return;
 

@@ -933,6 +933,7 @@ body {
 
 #btn-layout-reset,
 #btn-collapse-all,
+#btn-app-theme,
 #btn-display-options,
 #btn-focus-mode,
 #btn-save-view,
@@ -944,6 +945,7 @@ body {
 
 #btn-save-view.is-saved,
 #btn-recall-view.is-recalled,
+#btn-app-theme.is-active,
 #btn-display-options.is-active,
 #btn-focus-mode.is-active {
     color: #6ee7b7;
@@ -2887,12 +2889,14 @@ textarea.form-input {
 }
 
 .grab-handle--step {
+    position: relative;
     font-size: 0.48rem;
     line-height: 1;
-    width: 0.42rem;
-    padding: 0;
-    margin-top: 0.12rem;
-    margin-right: -0.06rem;
+    width: auto;
+    min-width: 0.55rem;
+    padding: 0.14rem 0.22rem;
+    margin-top: 0.06rem;
+    margin-right: -0.1rem;
     color: var(--text-muted);
     opacity: 0;
     cursor: grab;
@@ -3458,6 +3462,13 @@ textarea.form-input {
     right: 12px;
     top: 0;
     height: 10px;
+}
+
+/* Expanded notes: left chrome gutter sits above the shell and steals checklist grab handles. */
+#app-canvas.view-freeform .mini-card.expanded .ff-drag-gutter--edge,
+#app-canvas.view-grid .mini-card.expanded .ff-drag-gutter--edge,
+#app-canvas.view-columns .mini-card.expanded .ff-drag-gutter--edge {
+    pointer-events: none;
 }
 
 #app-canvas.view-freeform .mini-card:hover .ff-drag-gutter--edge,
@@ -4358,6 +4369,23 @@ textarea.form-input {
     transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease;
 }
 
+#app-canvas.view-grid .mini-card.layout-preview {
+    opacity: 0.9;
+}
+
+#app-canvas.view-grid:not(.is-grid-forcing) {
+    overflow-y: hidden;
+}
+
+#app-canvas.view-grid.is-grid-forcing {
+    overflow-y: auto;
+}
+
+#app-canvas.view-grid .mini-card.compact:hover .ff-resize,
+#app-canvas.view-grid .mini-card.compact.is-grid-resizing .ff-resize {
+    opacity: 0.62;
+}
+
 .desktop-zoom-controls {
     display: inline-flex;
     align-items: center;
@@ -4389,6 +4417,150 @@ textarea.form-input {
         linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
     background-size: 100px 60px;
     background-position: 1rem 0.65rem;
+}
+
+/* ==========================================================================
+   APP THEME PICKER
+   ========================================================================== */
+.app-theme-swatch {
+    display: inline-flex;
+    align-items: stretch;
+    gap: 2px;
+    width: 2.6rem;
+    height: 1.35rem;
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    flex-shrink: 0;
+}
+
+.app-theme-swatch-chip {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.app-theme-option .clock-style-preview {
+    min-width: 2.6rem;
+}
+
+/* Monochrome — grayscale UI + notes (independent from Matrix) */
+html[data-app-theme="monochrome"] .mini-card,
+html[data-app-theme="monochrome"] #editor-overlay .editor-note-shell,
+html[data-app-theme="monochrome"] .calendar-note-item,
+html[data-app-theme="monochrome"] .calendar-hour-note {
+    background-color: #141414 !important;
+    border-left-color: #666 !important;
+    color: #f0f0f0 !important;
+    --card-fg: #f0f0f0;
+    --card-muted: #9ca3af;
+    --card-action-bg: rgba(255, 255, 255, 0.08);
+    --card-action-fg: #d4d4d8;
+    --card-border-subtle: rgba(255, 255, 255, 0.14);
+    --card-focus-bg: rgba(255, 255, 255, 0.08);
+    --card-focus-ring: rgba(255, 255, 255, 0.28);
+    --card-link: #e5e5e5;
+    --card-placeholder: #9ca3af;
+    --card-input-bg: rgba(0, 0, 0, 0.25);
+    --card-toolbar-bg: #1a1a1a;
+    --card-panel-bg: #222;
+}
+
+html[data-app-theme="monochrome"] .mini-card .mini-card-title,
+html[data-app-theme="monochrome"] .mini-card .card-content-preview,
+html[data-app-theme="monochrome"] .mini-card .step-text,
+html[data-app-theme="monochrome"] #editor-overlay .mini-card-title,
+html[data-app-theme="monochrome"] #editor-overlay .step-text {
+    color: #f0f0f0 !important;
+}
+
+html[data-app-theme="monochrome"] .mini-card .category-name,
+html[data-app-theme="monochrome"] .mini-card .editor-created-date,
+html[data-app-theme="monochrome"] .mini-card .badge-dot,
+html[data-app-theme="monochrome"] .mini-card .checklist-badge {
+    color: #9ca3af !important;
+    filter: grayscale(1);
+}
+
+html[data-app-theme="monochrome"] .btn--accent,
+html[data-app-theme="monochrome"] .card-act--cal.is-on {
+    filter: grayscale(1);
+}
+
+/* Matrix — full UI terminal green (independent from Monochrome) */
+html[data-app-theme="matrix"] {
+    font-family: ui-monospace, 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+}
+
+html[data-app-theme="matrix"] #control-bar,
+html[data-app-theme="matrix"] .side-panel,
+html[data-app-theme="matrix"] #workspace-footer,
+html[data-app-theme="matrix"] .clock-style-popover,
+html[data-app-theme="matrix"] .app-theme-popover {
+    text-shadow: 0 0 8px rgba(57, 255, 101, 0.12);
+}
+
+html[data-app-theme="matrix"] #app-canvas {
+    position: relative;
+}
+
+html[data-app-theme="matrix"] #app-canvas::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.04;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 0, 0, 0.45) 2px,
+        rgba(0, 0, 0, 0.45) 4px
+    );
+}
+
+html[data-app-theme="matrix"] .mini-card,
+html[data-app-theme="matrix"] #editor-overlay .editor-note-shell,
+html[data-app-theme="matrix"] .calendar-note-item,
+html[data-app-theme="matrix"] .calendar-hour-note {
+    background-color: #020402 !important;
+    border-left-color: rgba(57, 255, 101, 0.45) !important;
+    color: #39ff65 !important;
+    --card-fg: #39ff65;
+    --card-muted: rgba(57, 255, 101, 0.62);
+    --card-action-bg: rgba(57, 255, 101, 0.08);
+    --card-action-fg: rgba(57, 255, 101, 0.75);
+    --card-border-subtle: rgba(57, 255, 101, 0.18);
+    --card-focus-bg: rgba(57, 255, 101, 0.1);
+    --card-focus-ring: rgba(57, 255, 101, 0.35);
+    --card-link: #5dff82;
+    --card-placeholder: rgba(57, 255, 101, 0.45);
+    --card-input-bg: rgba(0, 0, 0, 0.35);
+    --card-toolbar-bg: #050a05;
+    --card-panel-bg: #071007;
+}
+
+html[data-app-theme="matrix"] .mini-card .mini-card-title,
+html[data-app-theme="matrix"] .mini-card .card-content-preview,
+html[data-app-theme="matrix"] .mini-card .step-text,
+html[data-app-theme="matrix"] #editor-overlay .mini-card-title,
+html[data-app-theme="matrix"] #editor-overlay .step-text,
+html[data-app-theme="matrix"] .app-brand,
+html[data-app-theme="matrix"] .clock-chip {
+    color: #39ff65 !important;
+    text-shadow: 0 0 6px rgba(57, 255, 101, 0.2);
+}
+
+html[data-app-theme="matrix"] .mini-card .category-name,
+html[data-app-theme="matrix"] .mini-card .editor-created-date,
+html[data-app-theme="matrix"] .mini-card .checklist-badge {
+    color: rgba(57, 255, 101, 0.55) !important;
+}
+
+html[data-app-theme="matrix"] .tool-panel,
+html[data-app-theme="matrix"] .tool-chip {
+    font-family: inherit;
+    border-color: rgba(57, 255, 101, 0.22);
 }
 
 @media (max-width: 768px) {
