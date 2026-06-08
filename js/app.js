@@ -52,6 +52,7 @@ class Application {
         SidePanel.setupStatusClickHandlers();
         ClockStyle.init();
         this.setupLayoutResetButton();
+        this.setupCollapseAllButton();
         this.setupSaveViewButton();
         this.updateLayoutResetVisibility();
         this.setupBackupInterface();
@@ -346,6 +347,15 @@ class Application {
         });
     },
 
+    setupCollapseAllButton() {
+        const btn = document.getElementById('btn-collapse-all');
+        if (!btn) return;
+        btn.innerHTML = ACTION_ICONS.collapseAll;
+        btn.addEventListener('click', () => {
+            UI.collapseAllCards(AppState.items);
+        });
+    },
+
     setupSaveViewButton() {
         const btn = document.getElementById('btn-save-view');
         if (!btn) return;
@@ -371,9 +381,9 @@ class Application {
     }
 
     updateLayoutResetVisibility() {
-        const btn = document.getElementById('btn-layout-reset');
-        if (!btn) return;
-        btn.classList.toggle('is-hidden', !AppState.user.isLoggedIn);
+        const show = AppState.user.isLoggedIn;
+        document.getElementById('btn-layout-reset')?.classList.toggle('is-hidden', !show);
+        document.getElementById('btn-collapse-all')?.classList.toggle('is-hidden', !show);
     }
 
     setupCoreListeners() {

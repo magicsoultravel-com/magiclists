@@ -68,6 +68,7 @@ export const FORMAT_ICONS = {
 
 export const ACTION_ICONS = {
     layoutReset: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 2.8h3.2M2.2 2.8V6M2.2 2.8l2.4 2.4M9.8 9.2H6.6M9.8 9.2V5.8M9.8 9.2 7.4 6.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><rect x="4.2" y="4.2" width="3.6" height="3.6" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
+    collapseAll: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 8.2 6 4.4l3.8 3.8M2.2 4.6 6 0.8l3.8 3.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     viewList: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 3.2h7.6M2.2 6h7.6M2.2 8.8h7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
     viewCols: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.6" y="2.2" width="3.6" height="7.6" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.8" y="2.2" width="3.6" height="7.6" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.95"/></svg>',
     viewFree: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.5" y="2" width="3.2" height="2.6" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="7.3" y="2" width="3.2" height="3.8" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="2.8" y="7.2" width="4.4" height="2.8" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
@@ -1327,6 +1328,22 @@ export const UI = {
         const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
         expandedCards[itemId] = true;
         localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
+    },
+
+    collapseAllCards(items) {
+        localStorage.setItem('matrix_expanded_cards', '{}');
+        const canvas = document.getElementById('app-canvas');
+        if (!canvas) return;
+
+        const activeCategories = readStoredCategories();
+        const itemById = new Map((items || []).map((item) => [item.id, item]));
+
+        canvas.querySelectorAll('.mini-card.expanded').forEach((card) => {
+            const item = itemById.get(card.dataset.id);
+            if (!item) return;
+            const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
+            this.applyCardExpandCollapse(card, item, false, activeCategories, targetCatName, categoryColor);
+        });
     },
 
     revealNoteOnBoard(item) {

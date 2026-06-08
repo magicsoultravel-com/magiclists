@@ -833,6 +833,7 @@ body {
 }
 
 #btn-layout-reset,
+#btn-collapse-all,
 #btn-save-view {
     min-width: 30px;
     min-height: 30px;
