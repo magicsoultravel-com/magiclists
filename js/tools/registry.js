@@ -22,7 +22,7 @@ export const TOOLS_REGISTRY = [
         "wide": false,
         "mountClass": "tool-mount--calculator",
         "resizable": true,
-        "defaultSize": { "w": 320, "h": 480 },
+        "defaultSize": { "w": 320, "h": 420 },
         "minSize": { "w": 260, "h": 360 }
     },
     {

@@ -33,6 +33,17 @@ export const ToolsManager = {
 
         await this.loadRegistry();
         this.renderDropdownMenu();
+        this.bindDesktopBoundsWatcher();
+    },
+
+    bindDesktopBoundsWatcher() {
+        if (this._desktopBoundsWatcher) return;
+        const sidePanel = document.getElementById('side-panel');
+        if (!sidePanel) return;
+        this._desktopBoundsWatcher = new MutationObserver(() => {
+            window.dispatchEvent(new CustomEvent('tools:desktop_bounds_changed'));
+        });
+        this._desktopBoundsWatcher.observe(sidePanel, { attributes: true, attributeFilter: ['class'] });
     },
 
     getToolsBasePath() {

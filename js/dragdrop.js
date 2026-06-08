@@ -45,7 +45,7 @@ function isInsideDragControl(target) {
         '.card-inline-edit, .rich-text--edit, .step-nest-controls, .step-row-actions, ' +
         '.grab-handle--step, .expanded-checklist-add-btn, .editor-body-convert-bar, ' +
         '.grab-handle--note-cat, .ff-resize, .col-resize, ' +
-        '.tool-panel, .tool-chip, .tool-panel__resize-se, .tool-panel__header, ' +
+        '.tool-panel, .tool-chip, .tool-chip__drag, .tool-chip__expand, .tool-panel__resize-se, .tool-panel__header, ' +
         'a, button, input, textarea, select'
     );
 }

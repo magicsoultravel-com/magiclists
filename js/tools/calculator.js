@@ -1,4 +1,4 @@
-/** @tool {"label":"Calculator","order":1,"resizable":true,"mountClass":"tool-mount--calculator","defaultSize":{"w":320,"h":480},"minSize":{"w":260,"h":360}} */
+/** @tool {"label":"Calculator","order":1,"resizable":true,"mountClass":"tool-mount--calculator","defaultSize":{"w":320,"h":420},"minSize":{"w":260,"h":320}} */
 /** @tool-icon <rect x="2" y="1.8" width="8" height="8.4" rx="0.8" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M4 4.2h4M4 6h1.6M6.4 6H8M4 7.8h4" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/> */
 
 const HISTORY_KEY = 'calc_history';
@@ -8,7 +8,7 @@ const SCALE_BASELINE = 320;
 export const Calculator = {
     container: null,
     history: [],
-    replaceOnNextKey: false,
+    historyOpen: false,
     resizeObserver: null,
 
     init(mountElement) {
@@ -47,9 +47,9 @@ export const Calculator = {
 
     render() {
         this.container.innerHTML = `
-            <div class="tool-stack">
+            <div class="tool-stack calc-tool-stack">
                 <input type="text" id="calc-display" class="calc-display tool-readout" autocomplete="off" spellcheck="false">
-                <div class="tool-grid-4">
+                <div class="tool-grid-4 calc-keypad">
                     <button type="button" class="btn btn--danger calc-btn" data-val="C">C</button>
                     <button type="button" class="btn calc-btn" data-val="(">(</button>
                     <button type="button" class="btn calc-btn" data-val=")">)</button>
@@ -70,21 +70,44 @@ export const Calculator = {
                     <button type="button" class="btn calc-btn" data-val=".">.</button>
                     <button type="button" class="btn btn--accent calc-btn" data-val="=">=</button>
                 </div>
-                <div id="calc-history" class="calc-history" aria-label="Calculation history"></div>
+                <div class="calc-history-block">
+                    <div class="calc-history-header" id="calc-history-header" role="button" tabindex="0" aria-expanded="false">
+                        <span class="collapsable-heading">
+                            <span class="collapsable-toggle collapsed" id="calc-history-toggle">▼</span>History
+                        </span>
+                    </div>
+                    <div class="calc-history-section" id="calc-history-section">
+                        <div id="calc-history" class="calc-history" aria-label="Calculation history"></div>
+                    </div>
+                </div>
             </div>
         `;
-
-        const display = this.container.querySelector('#calc-display');
-        display.addEventListener('input', () => {
-            this.replaceOnNextKey = false;
-        });
 
         this.container.querySelectorAll('.calc-btn').forEach((btn) => {
             btn.addEventListener('click', () => this.handleInput(btn.getAttribute('data-val')));
         });
 
+        const historyHeader = this.container.querySelector('#calc-history-header');
+        historyHeader?.addEventListener('click', () => this.toggleHistory());
+        historyHeader?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                this.toggleHistory();
+            }
+        });
+
         this.renderHistory();
         this.updateScale();
+    },
+
+    toggleHistory() {
+        this.historyOpen = !this.historyOpen;
+        const section = this.container.querySelector('#calc-history-section');
+        const toggle = this.container.querySelector('#calc-history-toggle');
+        const header = this.container.querySelector('#calc-history-header');
+        section?.classList.toggle('is-open', this.historyOpen);
+        toggle?.classList.toggle('collapsed', !this.historyOpen);
+        header?.setAttribute('aria-expanded', this.historyOpen ? 'true' : 'false');
     },
 
     renderHistory() {
@@ -92,7 +115,7 @@ export const Calculator = {
         if (!list) return;
 
         if (!this.history.length) {
-            list.innerHTML = '';
+            list.innerHTML = '<p class="tool-msg">No history yet</p>';
             return;
         }
 
@@ -107,11 +130,12 @@ export const Calculator = {
             row.addEventListener('click', () => {
                 const entry = this.history.find((h) => h.id === row.dataset.id);
                 if (!entry) return;
-                const display = this.container.querySelector('#calc-display');
+                const display = this.getDisplay();
                 if (!display) return;
                 display.value = entry.expression;
-                this.replaceOnNextKey = true;
                 display.focus();
+                const len = display.value.length;
+                display.setSelectionRange(len, len);
             });
         });
     },
@@ -133,7 +157,6 @@ export const Calculator = {
 
         if (val === 'C') {
             display.value = '';
-            this.replaceOnNextKey = false;
             return;
         }
 
@@ -144,22 +167,15 @@ export const Calculator = {
                 const result = Function(`"use strict"; return (${expr})`)();
                 this.pushHistory(expr, result);
                 display.value = String(result);
-                this.replaceOnNextKey = true;
             } catch {
                 display.value = 'Error';
-                this.replaceOnNextKey = false;
             }
             return;
         }
 
         if (display.value === 'Error') display.value = '';
-
-        if (this.replaceOnNextKey) {
-            display.value = val;
-            this.replaceOnNextKey = false;
-        } else {
-            display.value += val;
-        }
+        display.value += val;
+        display.focus();
     },
 
     bindResize() {

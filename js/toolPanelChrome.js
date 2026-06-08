@@ -38,6 +38,30 @@ function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
 }
 
+function getDesktopBounds() {
+    const sidePanel = document.getElementById('side-panel');
+    let left = 0;
+    if (sidePanel && !sidePanel.classList.contains('is-collapsed')) {
+        left = sidePanel.getBoundingClientRect().right;
+    }
+    return {
+        left,
+        top: 0,
+        right: window.innerWidth,
+        bottom: window.innerHeight
+    };
+}
+
+function clampPosition(el, x, y) {
+    const bounds = getDesktopBounds();
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    return {
+        x: clamp(x, bounds.left, Math.max(bounds.left, bounds.right - w)),
+        y: clamp(y, bounds.top, Math.max(bounds.top, bounds.bottom - h))
+    };
+}
+
 let zStack = 0;
 
 export function bringToFront(el) {
@@ -76,13 +100,16 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
 
     const w = saved.w || defaults.w;
     const h = saved.h || defaults.h;
-    const x = saved.x ?? Math.max(16, (window.innerWidth - w) / 2);
+    const bounds = getDesktopBounds();
+    const defaultX = bounds.left + Math.max(16, (bounds.right - bounds.left - w) / 2);
+    const x = saved.x ?? defaultX;
     const y = saved.y ?? Math.max(16, (window.innerHeight - h) / 3);
+    const initialPos = clampPosition({ offsetWidth: w, offsetHeight: h }, x, y);
 
     panel.style.width = `${w}px`;
     if (h && h !== 'auto') panel.style.height = `${h}px`;
-    panel.style.left = `${x}px`;
-    panel.style.top = `${y}px`;
+    panel.style.left = `${initialPos.x}px`;
+    panel.style.top = `${initialPos.y}px`;
 
     const iconMarkup = renderToolIcon(meta?.icon);
 
@@ -126,45 +153,41 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     };
 
     const createChip = () => {
-        chip = document.createElement('button');
-        chip.type = 'button';
+        chip = document.createElement('div');
         chip.className = 'tool-chip';
         chip.dataset.toolId = toolId;
         chip.title = meta?.label || toolId;
-        chip.setAttribute('aria-label', `${meta?.label || toolId} — expand`);
         chip.innerHTML = `
-            <span class="tool-chip__icon menu-tool-icon">${iconMarkup}</span>
-            <span class="tool-chip__close card-act card-act--close" role="button" tabindex="0" title="Remove from desktop" aria-label="Remove from desktop"></span>
+            <div class="tool-chip__drag" title="Drag ${meta?.label || toolId}">
+                <span class="tool-chip__icon menu-tool-icon">${iconMarkup}</span>
+            </div>
+            <button type="button" class="card-act card-act--collapse tool-chip__expand" title="Expand" aria-label="Expand"></button>
+            <button type="button" class="card-act card-act--close tool-chip__close" title="Remove from desktop" aria-label="Remove from desktop"></button>
         `;
+        chip.querySelector('.tool-chip__expand').innerHTML = CARD_ICONS.collapse;
         chip.querySelector('.tool-chip__close').innerHTML = CARD_ICONS.close;
 
-        const chipX = saved.chipX ?? saved.x ?? 24;
-        const chipY = saved.chipY ?? saved.y ?? window.innerHeight - 80;
-        chip.style.left = `${chipX}px`;
-        chip.style.top = `${chipY}px`;
-
         desktop.appendChild(chip);
+
+        const chipX = saved.chipX ?? saved.x ?? bounds.left + 24;
+        const chipY = saved.chipY ?? saved.y ?? window.innerHeight - 80;
+        const chipPos = clampPosition(chip, chipX, chipY);
+        chip.style.left = `${chipPos.x}px`;
+        chip.style.top = `${chipPos.y}px`;
+
         bringToFront(chip);
 
-        chip.addEventListener('click', (e) => {
-            if (e.target.closest('.tool-chip__close')) return;
+        chip.querySelector('.tool-chip__expand').addEventListener('click', (e) => {
+            e.stopPropagation();
             expand();
         });
 
-        const chipClose = chip.querySelector('.tool-chip__close');
-        chipClose.addEventListener('click', (e) => {
+        chip.querySelector('.tool-chip__close').addEventListener('click', (e) => {
             e.stopPropagation();
             callbacks.onDismiss?.();
         });
-        chipClose.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                e.stopPropagation();
-                callbacks.onDismiss?.();
-            }
-        });
 
-        bindChipDrag(chip, () => {
+        bindChipDrag(chip.querySelector('.tool-chip__drag'), chip, () => {
             const r = chip.getBoundingClientRect();
             savePanelState(toolId, { chipX: r.left, chipY: r.top });
         });
@@ -223,13 +246,33 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
 
     panel.addEventListener('pointerdown', () => bringToFront(panel));
 
+    const onViewportChange = () => {
+        const pos = clampPosition(panel, panel.offsetLeft, panel.offsetTop);
+        panel.style.left = `${pos.x}px`;
+        panel.style.top = `${pos.y}px`;
+        if (chip && !chip.classList.contains('is-hidden')) {
+            const cpos = clampPosition(chip, chip.offsetLeft, chip.offsetTop);
+            chip.style.left = `${cpos.x}px`;
+            chip.style.top = `${cpos.y}px`;
+        }
+    };
+    window.addEventListener('resize', onViewportChange);
+    window.addEventListener('tools:desktop_bounds_changed', onViewportChange);
+
+    const originalDestroy = destroy;
+    const destroyWithCleanup = () => {
+        window.removeEventListener('resize', onViewportChange);
+        window.removeEventListener('tools:desktop_bounds_changed', onViewportChange);
+        originalDestroy();
+    };
+
     return {
         panel,
         bodyEl,
         show,
         collapse,
         expand,
-        destroy,
+        destroy: destroyWithCleanup,
         persist,
         isCollapsed: () => collapsed,
         focus: () => {
@@ -268,10 +311,9 @@ function bindPanelDrag(panel, onEnd) {
         if (!dragging) return;
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
-        const maxX = window.innerWidth - panel.offsetWidth;
-        const maxY = window.innerHeight - 40;
-        panel.style.left = `${clamp(originLeft + dx, 0, Math.max(0, maxX))}px`;
-        panel.style.top = `${clamp(originTop + dy, 0, Math.max(0, maxY))}px`;
+        const pos = clampPosition(panel, originLeft + dx, originTop + dy);
+        panel.style.left = `${pos.x}px`;
+        panel.style.top = `${pos.y}px`;
     });
 
     const endDrag = (e) => {
@@ -288,48 +330,50 @@ function bindPanelDrag(panel, onEnd) {
     header.addEventListener('pointercancel', endDrag);
 }
 
-function bindChipDrag(chip, onEnd) {
+function bindChipDrag(dragHandle, chipEl, onEnd) {
+    if (!dragHandle || !chipEl) return;
+
     let dragging = false;
     let startX = 0;
     let startY = 0;
     let originLeft = 0;
     let originTop = 0;
 
-    chip.addEventListener('pointerdown', (e) => {
-        if (e.target.closest('.tool-chip__close')) return;
+    dragHandle.addEventListener('pointerdown', (e) => {
         if (e.button !== 0) return;
         e.preventDefault();
+        e.stopPropagation();
         dragging = true;
         startX = e.clientX;
         startY = e.clientY;
-        originLeft = chip.offsetLeft;
-        originTop = chip.offsetTop;
-        chip.setPointerCapture(e.pointerId);
-        chip.classList.add('is-dragging');
-        bringToFront(chip);
+        originLeft = chipEl.offsetLeft;
+        originTop = chipEl.offsetTop;
+        dragHandle.setPointerCapture(e.pointerId);
+        chipEl.classList.add('is-dragging');
+        bringToFront(chipEl);
     });
 
-    chip.addEventListener('pointermove', (e) => {
+    dragHandle.addEventListener('pointermove', (e) => {
         if (!dragging) return;
         const dx = e.clientX - startX;
         const dy = e.clientY - startY;
-        const size = chip.offsetWidth;
-        chip.style.left = `${clamp(originLeft + dx, 0, window.innerWidth - size)}px`;
-        chip.style.top = `${clamp(originTop + dy, 0, window.innerHeight - size)}px`;
+        const pos = clampPosition(chipEl, originLeft + dx, originTop + dy);
+        chipEl.style.left = `${pos.x}px`;
+        chipEl.style.top = `${pos.y}px`;
     });
 
     const endDrag = (e) => {
         if (!dragging) return;
         dragging = false;
-        chip.classList.remove('is-dragging');
+        chipEl.classList.remove('is-dragging');
         try {
-            chip.releasePointerCapture(e.pointerId);
+            dragHandle.releasePointerCapture(e.pointerId);
         } catch { /* ignore */ }
         onEnd?.();
     };
 
-    chip.addEventListener('pointerup', endDrag);
-    chip.addEventListener('pointercancel', endDrag);
+    dragHandle.addEventListener('pointerup', endDrag);
+    dragHandle.addEventListener('pointercancel', endDrag);
 }
 
 function bindPanelResize(panel, mins, onEnd, onResize) {
@@ -358,8 +402,9 @@ function bindPanelResize(panel, mins, onEnd, onResize) {
 
     handle.addEventListener('pointermove', (e) => {
         if (!resizing) return;
-        const maxW = window.innerWidth - panel.offsetLeft - 8;
-        const maxH = window.innerHeight - panel.offsetTop - 8;
+        const desktop = getDesktopBounds();
+        const maxW = desktop.right - panel.offsetLeft - 8;
+        const maxH = desktop.bottom - panel.offsetTop - 8;
         panel.style.width = `${clamp(startW + (e.clientX - startX), mins.w, maxW)}px`;
         panel.style.height = `${clamp(startH + (e.clientY - startY), mins.h, maxH)}px`;
         onResize?.();
