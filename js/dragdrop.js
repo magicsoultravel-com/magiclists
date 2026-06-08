@@ -52,6 +52,321 @@ function cardIsPinned(card) {
     return !!id && UI.isBoardPinned(id);
 }
 
+function finishSnapPanelGesture(card, {
+    canvas,
+    currentItems,
+    getBounds,
+    saveLayout,
+    reflow,
+    onExpandFromResize,
+    onCollapseFromResize,
+    clearPreview,
+    endScrollPolicy,
+    cleanupActive,
+    animate = true
+}) {
+    clearPreview(false);
+    endScrollPolicy?.();
+    const bounds = getBounds();
+    const rect = UI.snapNoteRect(UI.readNoteRect(card), { maxW: bounds.packW, maxH: bounds.maxH });
+    UI.applyNoteRect(card, rect, { settling: animate });
+
+    const item = currentItems.find((i) => i.id === card.dataset.id);
+    if (item && card.classList.contains('compact') && UI.shouldSnapPanelExpand(rect.w, rect.h)) {
+        saveLayout(card, rect, { customCompact: false });
+        onExpandFromResize(card, item, rect, { animate, bounds });
+        cleanupActive?.();
+        return;
+    }
+    if (item && card.classList.contains('expanded') && UI.shouldSnapPanelCollapse(rect.w, rect.h)) {
+        onCollapseFromResize(card, item, rect, { animate, bounds });
+        cleanupActive?.();
+        return;
+    }
+
+    saveLayout(card, rect, {
+        customCompact: card.classList.contains('compact') && UI.isGridMultiCellSize(rect.w, rect.h)
+    });
+    reflow(card, { animate });
+    cleanupActive?.();
+}
+
+function bindSnapPanelCardInteractions({
+    canvas,
+    panelEl,
+    cardSelector,
+    currentItems,
+    signal,
+    getBounds,
+    computeLayout,
+    raiseCard,
+    dragClass,
+    resizeClass,
+    saveLayout,
+    reflow,
+    onExpandFromResize,
+    onCollapseFromResize,
+    scrollPolicy = false
+}) {
+    const cards = panelEl.querySelectorAll(cardSelector);
+    let dragActive = null;
+    let resizeActive = null;
+    let previewFrame = null;
+    let previewBaseline = null;
+
+    const snapshotPreviewBaseline = () => {
+        previewBaseline = new Map();
+        panelEl.querySelectorAll(cardSelector).forEach((c) => {
+            const id = c.dataset.id;
+            if (id) previewBaseline.set(id, UI.readNoteRect(c));
+        });
+    };
+
+    const restorePreviewBaseline = () => {
+        if (!previewBaseline) return;
+        previewBaseline.forEach((rect, id) => {
+            const c = panelEl.querySelector(`${cardSelector}[data-id="${CSS.escape(id)}"]`);
+            if (c) UI.applyNoteRect(c, rect, { settling: false });
+        });
+        previewBaseline = null;
+    };
+
+    const runLayoutPreview = (actorCard) => {
+        if (!actorCard?.dataset?.id) return;
+        if (previewFrame) return;
+        previewFrame = requestAnimationFrame(() => {
+            previewFrame = null;
+            const actorRect = UI.readNoteRect(actorCard);
+            const layout = computeLayout(actorCard.dataset.id, actorRect);
+            layout.forEach((rect, id) => {
+                if (id === actorCard.dataset.id) return;
+                const other = panelEl.querySelector(`${cardSelector}[data-id="${CSS.escape(id)}"]`);
+                if (!other) return;
+                const base = previewBaseline?.get(id);
+                const changed = !base
+                    || base.x !== rect.x
+                    || base.y !== rect.y
+                    || base.w !== rect.w
+                    || base.h !== rect.h;
+                if (changed) {
+                    UI.applyNoteRect(other, rect, { settling: true });
+                    other.classList.add('layout-preview');
+                }
+            });
+        });
+    };
+
+    const clearLayoutPreview = (restore = false) => {
+        if (previewFrame) {
+            cancelAnimationFrame(previewFrame);
+            previewFrame = null;
+        }
+        UI.clearSnapPanelPreview(panelEl);
+        if (restore) restorePreviewBaseline();
+        else previewBaseline = null;
+    };
+
+    const endScrollPolicy = scrollPolicy
+        ? () => UI.updateGridScrollPolicy(canvas, { forcing: false })
+        : null;
+
+    const startScrollPolicy = scrollPolicy
+        ? () => UI.updateGridScrollPolicy(canvas, { forcing: true })
+        : null;
+
+    const markLayoutActive = () => {
+        canvas.classList.add('is-layout-active');
+        if (panelEl !== canvas) panelEl.classList.add('is-layout-active');
+    };
+
+    const cleanupActive = () => {
+        canvas.classList.remove('is-layout-active', 'is-grid-forcing');
+        if (panelEl !== canvas) panelEl.classList.remove('is-layout-active');
+    };
+
+    const finishAction = (card, { animate = true } = {}) => {
+        finishSnapPanelGesture(card, {
+            canvas,
+            currentItems,
+            getBounds,
+            saveLayout,
+            reflow,
+            onExpandFromResize,
+            onCollapseFromResize,
+            clearPreview: clearLayoutPreview,
+            endScrollPolicy,
+            cleanupActive,
+            animate
+        });
+    };
+
+    const onDragMove = (e) => {
+        if (!dragActive) return;
+        const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, dragActive.startX, dragActive.startY);
+        if (!dragActive.moved) {
+            if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
+            dragActive.moved = true;
+            dragActive.card.classList.add(dragClass);
+            markLayoutActive();
+            snapshotPreviewBaseline();
+            startScrollPolicy?.();
+        }
+        e.preventDefault();
+        const bounds = getBounds();
+        const origin = bounds.origin ?? 0;
+        const x = Math.max(origin, dragActive.origX + dx);
+        const y = Math.max(origin, dragActive.origY + dy);
+        dragActive.card.style.left = `${x}px`;
+        dragActive.card.style.top = `${y}px`;
+        runLayoutPreview(dragActive.card);
+    };
+
+    const onDragUp = () => {
+        if (!dragActive) return;
+        const { card, moved } = dragActive;
+        card.classList.remove(dragClass);
+        if (moved) {
+            card.dataset.skipExpand = '1';
+            finishAction(card);
+        } else {
+            clearLayoutPreview(true);
+            endScrollPolicy?.();
+            cleanupActive();
+        }
+        dragActive = null;
+        document.removeEventListener('mousemove', onDragMove);
+        document.removeEventListener('mouseup', onDragUp);
+    };
+
+    const onResizeMove = (e) => {
+        if (!resizeActive) return;
+        const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, resizeActive.startX, resizeActive.startY);
+        if (!resizeActive.moved) {
+            if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
+            resizeActive.moved = true;
+            markLayoutActive();
+            snapshotPreviewBaseline();
+            startScrollPolicy?.();
+        }
+        const { card, axis, origX, origY, origW, origH } = resizeActive;
+
+        let nextX = origX;
+        let nextY = origY;
+        let nextW = origW;
+        let nextH = origH;
+
+        if (axis.includes('e')) nextW = origW + dx;
+        if (axis.includes('w')) {
+            nextW = origW - dx;
+            nextX = origX + dx;
+        }
+        if (axis.includes('s')) nextH = origH + dy;
+        if (axis.includes('n')) {
+            nextH = origH - dy;
+            nextY = origY + dy;
+        }
+
+        const bounds = getBounds();
+        const origin = bounds.origin ?? 0;
+        const clamped = UI.clampGridResize(nextW, nextH, { packW: bounds.packW });
+        if (axis.includes('w')) nextX = origX + (origW - clamped.w);
+        if (axis.includes('n')) nextY = origY + (origH - clamped.h);
+
+        nextX = Math.max(origin, nextX);
+        nextY = Math.max(origin, nextY);
+        let finalW = clamped.w;
+        let finalH = clamped.h;
+        if (nextX + finalW > bounds.packW + origin) {
+            if (axis.includes('w')) {
+                nextX = Math.max(origin, bounds.packW + origin - finalW);
+            } else {
+                finalW = Math.max(COLUMN_GRID_CELL_W, bounds.packW + origin - nextX);
+            }
+        }
+
+        card.style.left = `${nextX}px`;
+        card.style.top = `${nextY}px`;
+        card.style.setProperty('width', `${finalW}px`, 'important');
+        card.style.setProperty('height', `${finalH}px`, 'important');
+        card.style.setProperty('min-height', `${finalH}px`, 'important');
+        card.style.setProperty('max-height', `${finalH}px`, 'important');
+        runLayoutPreview(card);
+    };
+
+    const onResizeUp = () => {
+        if (!resizeActive) return;
+        const { card, moved } = resizeActive;
+        card.classList.remove(resizeClass);
+        if (moved) {
+            card.dataset.skipExpand = '1';
+            finishAction(card);
+        } else {
+            clearLayoutPreview(true);
+            endScrollPolicy?.();
+            cleanupActive();
+        }
+        resizeActive = null;
+        document.removeEventListener('mousemove', onResizeMove);
+        document.removeEventListener('mouseup', onResizeUp);
+    };
+
+    cards.forEach((card) => {
+        card.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+
+            const resizeHandle = e.target.closest('.ff-resize');
+            if (resizeHandle) {
+                if (cardIsPinned(card)) return;
+                e.preventDefault();
+                e.stopPropagation();
+                raiseCard(card);
+                markLayoutActive();
+                startScrollPolicy?.();
+                const { w: origW, h: origH } = UI.readFreeformCardSize(card);
+                resizeActive = {
+                    card,
+                    axis: resizeHandle.dataset.axis || 'se',
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    origX: parseFloat(card.style.left) || 0,
+                    origY: parseFloat(card.style.top) || 0,
+                    origW,
+                    origH,
+                    moved: false
+                };
+                card.classList.add(resizeClass);
+                card.dataset.skipExpand = '1';
+                document.addEventListener('mousemove', onResizeMove);
+                document.addEventListener('mouseup', onResizeUp);
+                return;
+            }
+
+            if (e.target.closest('.editor-note-body .card-inline-edit, .editor-note-header .card-inline-edit')) {
+                return;
+            }
+
+            if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
+            if (!shouldStartCardDrag(e.target)) return;
+            if (cardIsPinned(card)) return;
+
+            const scrollHost = e.target.closest('.editor-note-body') || e.target.closest('.card-body');
+            if (scrollHost && isScrollbarGrip(scrollHost, e.clientX)) return;
+
+            e.stopPropagation();
+            dragActive = {
+                card,
+                startX: e.clientX,
+                startY: e.clientY,
+                origX: parseFloat(card.style.left) || 0,
+                origY: parseFloat(card.style.top) || 0,
+                moved: false
+            };
+            document.addEventListener('mousemove', onDragMove);
+            document.addEventListener('mouseup', onDragUp);
+        }, { signal });
+    });
+}
+
 function isScrollbarGrip(el, clientX) {
     if (!el || el.scrollHeight <= el.clientHeight) return false;
     const scrollbarWidth = el.offsetWidth - el.clientWidth;
@@ -284,239 +599,87 @@ export const DragDropEngine = {
     },
 
     initGridBoardInteractions(canvas, currentItems = [], signal) {
-        const cards = canvas.querySelectorAll('.mini-card[data-grid-board="1"]');
-        let dragActive = null;
-        let resizeActive = null;
-        let previewFrame = null;
-        let previewBaseline = null;
-
-        const snapshotPreviewBaseline = () => {
-            previewBaseline = new Map();
-            canvas.querySelectorAll('.mini-card[data-grid-board="1"]').forEach((c) => {
-                const id = c.dataset.id;
-                if (id) previewBaseline.set(id, UI.readNoteRect(c));
-            });
-        };
-
-        const restorePreviewBaseline = () => {
-            if (!previewBaseline) return;
-            previewBaseline.forEach((rect, id) => {
-                const c = canvas.querySelector(`.mini-card[data-grid-board="1"][data-id="${CSS.escape(id)}"]`);
-                if (c) UI.applyNoteRect(c, rect, { settling: false });
-            });
-            previewBaseline = null;
-        };
-
-        const runLayoutPreview = (actorCard) => {
-            if (!actorCard?.dataset?.id) return;
-            if (previewFrame) return;
-            previewFrame = requestAnimationFrame(() => {
-                previewFrame = null;
-                const actorRect = UI.readNoteRect(actorCard);
-                const layout = UI.computeGridBoardLayout(canvas, actorCard.dataset.id, actorRect);
-                layout.forEach((rect, id) => {
-                    if (id === actorCard.dataset.id) return;
-                    const other = canvas.querySelector(`.mini-card[data-grid-board="1"][data-id="${CSS.escape(id)}"]`);
-                    if (!other) return;
-                    const base = previewBaseline?.get(id);
-                    const changed = !base
-                        || base.x !== rect.x
-                        || base.y !== rect.y
-                        || base.w !== rect.w
-                        || base.h !== rect.h;
-                    if (changed) {
-                        UI.applyNoteRect(other, rect, { settling: true });
-                        other.classList.add('layout-preview');
-                    }
+        bindSnapPanelCardInteractions({
+            canvas,
+            panelEl: canvas,
+            cardSelector: '.mini-card[data-grid-board="1"]',
+            currentItems,
+            signal,
+            getBounds: () => UI.getGridBoardBounds(canvas),
+            computeLayout: (actorId, actorRect) => UI.computeGridBoardLayout(canvas, actorId, actorRect),
+            raiseCard: (card) => UI.raiseGridBoardCard(card),
+            dragClass: 'is-grid-dragging',
+            resizeClass: 'is-grid-resizing',
+            scrollPolicy: true,
+            saveLayout: (card, rect, { customCompact }) => {
+                UI.saveGridLayout(card.dataset.id, rect, { customCompact });
+            },
+            reflow: (card, { animate }) => {
+                UI.reflowGridBoard(canvas, card.dataset.id, { animate });
+            },
+            onExpandFromResize: (card, item, rect) => {
+                UI.updateGridBoardCard(card, item, {
+                    expanded: true,
+                    dimensions: { w: rect.w, h: rect.h }
                 });
-            });
-        };
-
-        const clearLayoutPreview = (restore = false) => {
-            if (previewFrame) {
-                cancelAnimationFrame(previewFrame);
-                previewFrame = null;
+            },
+            onCollapseFromResize: (card, item, rect, { animate, bounds }) => {
+                UI.collapseSnapPanelCard(card, item);
+                const compact = UI.gridCompactRect(rect, { ...rect, customCompact: true });
+                const finalRect = UI.snapNoteRect(
+                    { ...compact, x: rect.x, y: rect.y },
+                    { maxW: bounds.packW, maxH: bounds.maxH }
+                );
+                UI.applyNoteRect(card, finalRect, { settling: animate });
+                UI.saveGridLayout(card.dataset.id, finalRect, {
+                    customCompact: UI.isGridMultiCellSize(finalRect.w, finalRect.h)
+                });
+                UI.reflowGridBoard(canvas, card.dataset.id, { animate });
             }
-            UI.clearGridLayoutPreview(canvas);
-            if (restore) restorePreviewBaseline();
-            else previewBaseline = null;
-        };
+        });
+    },
 
-        const finishGridAction = (card, { animate = true } = {}) => {
-            clearLayoutPreview(false);
-            UI.updateGridScrollPolicy(canvas, { forcing: false });
-            const { packW, maxH } = UI.getGridBoardBounds(canvas);
-            const rect = UI.snapNoteRect(UI.readNoteRect(card), { maxW: packW, maxH });
-            UI.applyNoteRect(card, rect, { settling: animate });
-
-            UI.saveGridLayout(card.dataset.id, rect, {
-                customCompact: !card.classList.contains('expanded')
-            });
-            UI.reflowGridBoard(canvas, card.dataset.id, { animate });
-            canvas.classList.remove('is-layout-active', 'is-grid-forcing');
-        };
-
-        const onDragMove = (e) => {
-            if (!dragActive) return;
-            const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, dragActive.startX, dragActive.startY);
-            if (!dragActive.moved) {
-                if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
-                dragActive.moved = true;
-                dragActive.card.classList.add('is-grid-dragging');
-                canvas.classList.add('is-layout-active');
-                snapshotPreviewBaseline();
-                UI.updateGridScrollPolicy(canvas, { forcing: true });
-            }
-            e.preventDefault();
-            const x = Math.max(0, dragActive.origX + dx);
-            const y = Math.max(0, dragActive.origY + dy);
-            dragActive.card.style.left = `${x}px`;
-            dragActive.card.style.top = `${y}px`;
-            runLayoutPreview(dragActive.card);
-        };
-
-        const onDragUp = () => {
-            if (!dragActive) return;
-            const { card, moved } = dragActive;
-            card.classList.remove('is-grid-dragging');
-            if (moved) {
-                card.dataset.skipExpand = '1';
-                finishGridAction(card);
-            } else {
-                clearLayoutPreview(true);
-                UI.updateGridScrollPolicy(canvas, { forcing: false });
-                canvas.classList.remove('is-layout-active', 'is-grid-forcing');
-            }
-            dragActive = null;
-            document.removeEventListener('mousemove', onDragMove);
-            document.removeEventListener('mouseup', onDragUp);
-        };
-
-        const onResizeMove = (e) => {
-            if (!resizeActive) return;
-            const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, resizeActive.startX, resizeActive.startY);
-            if (!resizeActive.moved) {
-                if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
-                resizeActive.moved = true;
-                canvas.classList.add('is-layout-active');
-                snapshotPreviewBaseline();
-                UI.updateGridScrollPolicy(canvas, { forcing: true });
-            }
-            const { card, axis, origX, origY, origW, origH } = resizeActive;
-
-            let nextX = origX;
-            let nextY = origY;
-            let nextW = origW;
-            let nextH = origH;
-
-            if (axis.includes('e')) nextW = origW + dx;
-            if (axis.includes('w')) {
-                nextW = origW - dx;
-                nextX = origX + dx;
-            }
-            if (axis.includes('s')) nextH = origH + dy;
-            if (axis.includes('n')) {
-                nextH = origH - dy;
-                nextY = origY + dy;
-            }
-
-            const { packW } = UI.getGridBoardBounds(canvas);
-            const clamped = UI.clampGridResize(nextW, nextH, { packW });
-            if (axis.includes('w')) nextX = origX + (origW - clamped.w);
-            if (axis.includes('n')) nextY = origY + (origH - clamped.h);
-
-            nextX = Math.max(0, nextX);
-            nextY = Math.max(0, nextY);
-            let finalW = clamped.w;
-            let finalH = clamped.h;
-            if (nextX + finalW > packW + CANVAS_LAYOUT_ORIGIN) {
-                if (axis.includes('w')) {
-                    nextX = Math.max(0, packW + CANVAS_LAYOUT_ORIGIN - finalW);
-                } else {
-                    finalW = Math.max(COLUMN_GRID_CELL_W, packW + CANVAS_LAYOUT_ORIGIN - nextX);
+    initColumnNotesSnapInteractions(canvas, columnNotesEl, currentItems, signal) {
+        bindSnapPanelCardInteractions({
+            canvas,
+            panelEl: columnNotesEl,
+            cardSelector: '.mini-card[data-column-note="1"]',
+            currentItems,
+            signal,
+            getBounds: () => UI.getColumnNotesSnapBounds(columnNotesEl),
+            computeLayout: (actorId, actorRect) => UI.computeColumnNotesLayout(columnNotesEl, actorId, actorRect),
+            raiseCard: (card) => UI.raiseLayoutCard(card),
+            dragClass: 'is-column-dragging',
+            resizeClass: 'is-column-resizing',
+            saveLayout: (card, rect, { customCompact }) => {
+                const cat = card.dataset.category || columnNotesEl.dataset.category;
+                if (cat) UI.saveColumnNoteLayout(cat, card.dataset.id, rect, { customCompact });
+            },
+            reflow: (card, { animate }) => {
+                UI.reflowColumnNotesPanel(columnNotesEl, card.dataset.id, { animate });
+            },
+            onExpandFromResize: (card, item, rect) => {
+                UI.updateColumnNoteCard(card, item, {
+                    expanded: true,
+                    dimensions: { w: rect.w, h: rect.h }
+                });
+            },
+            onCollapseFromResize: (card, item, rect, { animate, bounds }) => {
+                const cat = card.dataset.category || columnNotesEl.dataset.category;
+                UI.collapseSnapPanelCard(card, item);
+                const compact = UI.gridCompactRect(rect, { ...rect, customCompact: true });
+                const finalRect = UI.snapNoteRect(
+                    { ...compact, x: rect.x, y: rect.y },
+                    { maxW: bounds.packW, maxH: bounds.maxH }
+                );
+                UI.applyNoteRect(card, finalRect, { settling: animate });
+                if (cat) {
+                    UI.saveColumnNoteLayout(cat, card.dataset.id, finalRect, {
+                        customCompact: UI.isGridMultiCellSize(finalRect.w, finalRect.h)
+                    });
                 }
+                UI.reflowColumnNotesPanel(columnNotesEl, card.dataset.id, { animate });
             }
-
-            card.style.left = `${nextX}px`;
-            card.style.top = `${nextY}px`;
-            card.style.setProperty('width', `${finalW}px`, 'important');
-            card.style.setProperty('height', `${finalH}px`, 'important');
-            card.style.setProperty('min-height', `${finalH}px`, 'important');
-            card.style.setProperty('max-height', `${finalH}px`, 'important');
-            runLayoutPreview(card);
-        };
-
-        const onResizeUp = () => {
-            if (!resizeActive) return;
-            const { card, moved } = resizeActive;
-            card.classList.remove('is-grid-resizing');
-            if (moved) {
-                card.dataset.skipExpand = '1';
-                finishGridAction(card);
-            } else {
-                clearLayoutPreview(true);
-                UI.updateGridScrollPolicy(canvas, { forcing: false });
-                canvas.classList.remove('is-layout-active', 'is-grid-forcing');
-            }
-            resizeActive = null;
-            document.removeEventListener('mousemove', onResizeMove);
-            document.removeEventListener('mouseup', onResizeUp);
-        };
-
-        cards.forEach((card) => {
-            card.addEventListener('mousedown', (e) => {
-                if (e.button !== 0) return;
-
-                const resizeHandle = e.target.closest('.ff-resize');
-                if (resizeHandle) {
-                    if (cardIsPinned(card)) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    UI.raiseGridBoardCard(card);
-                    canvas.classList.add('is-layout-active');
-                    UI.updateGridScrollPolicy(canvas, { forcing: true });
-                    const { w: origW, h: origH } = UI.readFreeformCardSize(card);
-                    resizeActive = {
-                        card,
-                        axis: resizeHandle.dataset.axis || 'se',
-                        startX: e.clientX,
-                        startY: e.clientY,
-                        origX: parseFloat(card.style.left) || 0,
-                        origY: parseFloat(card.style.top) || 0,
-                        origW,
-                        origH,
-                        moved: false
-                    };
-                    card.classList.add('is-grid-resizing');
-                    card.dataset.skipExpand = '1';
-                    document.addEventListener('mousemove', onResizeMove);
-                    document.addEventListener('mouseup', onResizeUp);
-                    return;
-                }
-
-                if (e.target.closest('.editor-note-body .card-inline-edit, .editor-note-header .card-inline-edit')) {
-                    return;
-                }
-
-                if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
-                if (!shouldStartCardDrag(e.target)) return;
-                if (cardIsPinned(card)) return;
-
-                const scrollHost = e.target.closest('.editor-note-body') || e.target.closest('.card-body');
-                if (scrollHost && isScrollbarGrip(scrollHost, e.clientX)) return;
-
-                e.stopPropagation();
-                dragActive = {
-                    card,
-                    startX: e.clientX,
-                    startY: e.clientY,
-                    origX: parseFloat(card.style.left) || 0,
-                    origY: parseFloat(card.style.top) || 0,
-                    moved: false
-                };
-                document.addEventListener('mousemove', onDragMove);
-                document.addEventListener('mouseup', onDragUp);
-            }, { signal });
         });
     },
 
@@ -626,6 +789,9 @@ export const DragDropEngine = {
             handle.closest('.mini-card')?.classList.remove('is-column-cat-dragging');
         }, { signal });
 
+        canvas.querySelectorAll('.column-notes').forEach((notesEl) => {
+            this.initColumnNotesSnapInteractions(canvas, notesEl, currentItems, signal);
+        });
         this.bindColumnPointerDrag(canvas, currentItems, signal);
         this.bindColumnPointerResize(canvas, currentItems, signal);
         this.bindColumnContainerResize(canvas, signal);
@@ -805,6 +971,7 @@ export const DragDropEngine = {
         const attachCard = (card) => {
             card.addEventListener('mousedown', (e) => {
                 if (e.button !== 0) return;
+                if (card.dataset.columnNote === '1') return;
                 if (e.target.closest('.grab-handle--note-cat')) return;
                 if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
                 if (!shouldStartCardDrag(e.target)) return;
@@ -943,6 +1110,7 @@ export const DragDropEngine = {
         const attachCard = (card) => {
             card.addEventListener('mousedown', (e) => {
                 if (e.button !== 0) return;
+                if (card.dataset.columnNote === '1') return;
 
                 const resizeHandle = e.target.closest('.ff-resize');
                 if (!resizeHandle) return;
@@ -950,20 +1118,13 @@ export const DragDropEngine = {
 
                 e.preventDefault();
                 e.stopPropagation();
-                const boundsEl = card.dataset.columnNote === '1'
-                    ? card.closest('.column-notes')
-                    : canvas;
+                const boundsEl = canvas;
                 const isFloat = card.dataset.columnsFloat === '1';
                 let { w: startW, h: startH } = UI.readFreeformCardSize(card);
 
                 if (card.classList.contains('compact')) {
                     const itemMatch = currentItems.find(i => i.id === card.dataset.id);
-                    if (itemMatch && card.dataset.columnNote === '1') {
-                        UI.updateColumnNoteCard(card, itemMatch, {
-                            expanded: true,
-                            dimensions: { w: startW, h: startH }
-                        });
-                    } else if (itemMatch && isFloat) {
+                    if (itemMatch && isFloat) {
                         UI.updateColumnsFloatCard(card, itemMatch, {
                             expanded: true,
                             dimensions: { w: startW, h: startH }

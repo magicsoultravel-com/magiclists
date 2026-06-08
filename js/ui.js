@@ -632,6 +632,34 @@ export const UI = {
         return w > COLUMN_GRID_CELL_W + 2 || h > COLUMN_GRID_CELL_H + 2;
     },
 
+    shouldSnapPanelExpand(w, h) {
+        return w >= this.cellsToSpanW(2) && h >= this.cellsToSpanH(2);
+    },
+
+    shouldSnapPanelCollapse(w, h) {
+        return w < this.cellsToSpanW(2) || h < this.cellsToSpanH(2);
+    },
+
+    collapseSnapPanelCard(card, item) {
+        const activeCategories = readStoredCategories();
+        const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
+        if (card.dataset.gridBoard === '1') {
+            setExpandedCard('grid', item.id, false);
+            if (this.getGridExpandedId() === item.id) this.setGridExpandedId(null);
+        } else if (card.dataset.columnNote === '1') {
+            setExpandedCard('columns', item.id, false);
+        }
+        card.classList.remove('expanded', 'card-animate-expand', 'card-animate-collapse', 'card-state-changing');
+        card.classList.add('compact');
+        this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
+        if (card.dataset.gridBoard === '1') {
+            this.finalizeGridBoardCard(card);
+        } else if (card.dataset.columnNote === '1') {
+            const cat = card.dataset.category || targetCatName;
+            this.finalizeColumnNote(card, cat);
+        }
+    },
+
     gridBoardRectForCard(card, savedRect, isExpanded) {
         const base = savedRect && Number.isFinite(savedRect.x) && Number.isFinite(savedRect.w)
             ? { x: savedRect.x, y: savedRect.y, w: savedRect.w, h: savedRect.h }
@@ -645,6 +673,10 @@ export const UI = {
             };
         }
         return this.gridCompactRect(base, savedRect);
+    },
+
+    columnNoteRectForCard(card, savedRect, isExpanded) {
+        return this.gridBoardRectForCard(card, savedRect, isExpanded);
     },
 
     gridCompactRect(base, saved) {
@@ -1414,14 +1446,18 @@ export const UI = {
 
         if (!expanded) {
             const pos = this.readNoteRect(card);
+            const saved = this.getGridLayout()[item.id];
+            const compact = this.gridCompactRect(pos, saved);
             const compactRect = {
                 x: pos.x,
                 y: pos.y,
-                w: COLUMN_GRID_CELL_W,
-                h: COLUMN_GRID_CELL_H
+                w: compact.w,
+                h: compact.h
             };
             this.applyNoteRect(card, compactRect, { settling: false });
-            this.saveGridLayout(item.id, compactRect);
+            this.saveGridLayout(item.id, compactRect, {
+                customCompact: this.isGridMultiCellSize(compactRect.w, compactRect.h)
+            });
         }
 
         if (canvas?.classList.contains('view-grid') && !deferReflow) {
@@ -1559,21 +1595,57 @@ export const UI = {
         }
     },
 
-    updateColumnNoteCard(card, item, { expanded, dimensions = null } = {}) {
+    updateColumnNoteCard(card, item, { expanded, dimensions = null, deferReflow = false } = {}) {
         if (card.dataset.columnNote !== '1') return;
-        setExpandedCard('columns', item.id, expanded);
 
+        const columnNotes = card.closest('.column-notes');
+        const canvas = card.closest('#app-canvas');
         const activeCategories = readStoredCategories();
         const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
+
+        if (expanded && columnNotes) {
+            columnNotes.querySelectorAll('.mini-card[data-column-note="1"].expanded').forEach((other) => {
+                if (other === card) return;
+                const otherItem = this.resolveBoardItem(other.dataset.id);
+                if (otherItem) {
+                    this.updateColumnNoteCard(other, otherItem, { expanded: false, deferReflow: true });
+                }
+            });
+        }
+
+        setExpandedCard('columns', item.id, expanded);
 
         this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor);
 
         if (dimensions) {
             this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
+        } else if (!expanded) {
+            const pos = this.readNoteRect(card);
+            const cat = card.dataset.category || targetCatName;
+            const saved = cat ? this.getColumnNoteLayout()[cat]?.[item.id] : null;
+            const compact = this.gridCompactRect(pos, saved);
+            const compactRect = { x: pos.x, y: pos.y, w: compact.w, h: compact.h };
+            this.applyNoteRect(card, compactRect, { settling: false });
+            if (cat) {
+                this.saveColumnNoteLayout(cat, item.id, compactRect, {
+                    customCompact: this.isGridMultiCellSize(compactRect.w, compactRect.h)
+                });
+            }
+        }
+
+        if (dimensions) {
             const cat = card.dataset.category || targetCatName;
             if (cat) {
                 this.saveColumnNoteLayout(cat, item.id, this.readNoteRect(card));
             }
+        }
+
+        if (columnNotes && canvas?.classList.contains('view-columns') && !deferReflow) {
+            const cat = card.dataset.category || targetCatName;
+            this.finalizeColumnNote(card, cat);
+            requestAnimationFrame(() => {
+                this.reflowColumnNotesPanel(columnNotes, item.id, { animate: true });
+            });
         }
     },
 
@@ -3571,27 +3643,44 @@ export const UI = {
         return layout;
     },
 
-    computeGridBoardLayout(canvas, actorId, actorRect = null, { maxH } = {}) {
-        if (!canvas?.classList.contains('view-grid')) return new Map();
-        const { origin, packW, maxH: boardMaxH } = this.getGridBoardBounds(canvas);
-        const limitH = maxH ?? boardMaxH;
-        const cards = [...canvas.querySelectorAll('.mini-card[data-grid-board="1"]')];
+    getColumnNotesSnapBounds(columnNotesEl) {
+        return {
+            origin: 0,
+            packW: this.getColumnNotesInnerWidth(columnNotesEl),
+            maxH: this.getColumnNotesMaxHeight(columnNotesEl)
+        };
+    },
+
+    computeSnapPanelLayout({
+        panelEl,
+        cardSelector,
+        getSavedRect,
+        rectForCard,
+        isCardExpanded,
+        actorId,
+        actorRect,
+        bounds
+    }) {
+        const origin = bounds.origin ?? 0;
+        const packW = bounds.packW;
+        const limitH = bounds.maxH;
+        const cards = [...panelEl.querySelectorAll(cardSelector)];
         const pinnedIds = new Set(this.getBoardPins());
 
         const cardEntries = cards.map((card) => {
             const id = card.dataset.id;
-            const isExpanded = this.isGridBoardCardExpanded(id, card);
-            const saved = this.getGridLayout()[id];
+            const isExpanded = isCardExpanded(id, card);
+            const saved = getSavedRect(id);
             const source = id === actorId && actorRect ? actorRect : (saved || this.readNoteRect(card));
-            const rect = this.gridBoardRectForCard(card, source, isExpanded);
+            const rect = rectForCard(card, source, isExpanded);
             return { id, card, rect };
         });
 
         let resolvedActor = null;
         if (actorId && actorRect) {
             const entry = cardEntries.find((e) => e.id === actorId);
-            const isExpanded = entry ? this.isGridBoardCardExpanded(actorId, entry.card) : false;
-            const sized = this.gridBoardRectForCard(entry?.card, actorRect, isExpanded);
+            const isExpanded = entry ? isCardExpanded(actorId, entry.card) : false;
+            const sized = rectForCard(entry?.card, actorRect, isExpanded);
             resolvedActor = this.snapNoteRect(sized, { maxW: packW, maxH: limitH });
         }
 
@@ -3606,6 +3695,80 @@ export const UI = {
         });
     },
 
+    computeGridBoardLayout(canvas, actorId, actorRect = null, { maxH } = {}) {
+        if (!canvas?.classList.contains('view-grid')) return new Map();
+        const { origin, packW, maxH: boardMaxH } = this.getGridBoardBounds(canvas);
+        return this.computeSnapPanelLayout({
+            panelEl: canvas,
+            cardSelector: '.mini-card[data-grid-board="1"]',
+            getSavedRect: (id) => this.getGridLayout()[id],
+            rectForCard: (card, saved, isExpanded) => this.gridBoardRectForCard(card, saved, isExpanded),
+            isCardExpanded: (id, card) => this.isGridBoardCardExpanded(id, card),
+            actorId,
+            actorRect,
+            bounds: { origin, packW, maxH: maxH ?? boardMaxH }
+        });
+    },
+
+    computeColumnNotesLayout(columnNotesEl, actorId, actorRect = null) {
+        if (!columnNotesEl) return new Map();
+        const categoryName = columnNotesEl.dataset.category;
+        const bounds = this.getColumnNotesSnapBounds(columnNotesEl);
+        return this.computeSnapPanelLayout({
+            panelEl: columnNotesEl,
+            cardSelector: '.mini-card[data-column-note="1"]',
+            getSavedRect: (id) => (categoryName ? this.getColumnNoteLayout()[categoryName]?.[id] : null),
+            rectForCard: (card, saved, isExpanded) => this.columnNoteRectForCard(card, saved, isExpanded),
+            isCardExpanded: (id, card) => getExpandedCards('columns')[id] === true || card.classList.contains('expanded'),
+            actorId,
+            actorRect,
+            bounds
+        });
+    },
+
+    clearSnapPanelPreview(panelEl) {
+        panelEl?.querySelectorAll('.mini-card.layout-preview').forEach((c) => {
+            c.classList.remove('layout-preview');
+        });
+    },
+
+    applyColumnNotesLayout(columnNotesEl, layout, { animate = true, save = true, preview = false } = {}) {
+        if (!columnNotesEl || !layout?.size) return [];
+        const categoryName = columnNotesEl.dataset.category;
+        const placed = [];
+        layout.forEach((rect, id) => {
+            const card = columnNotesEl.querySelector(`.mini-card[data-column-note="1"][data-id="${CSS.escape(id)}"]`);
+            if (!card) return;
+            this.applyNoteRect(card, rect, { settling: animate });
+            card.classList.toggle('layout-preview', preview);
+            if (save && categoryName) {
+                this.saveColumnNoteLayout(categoryName, id, rect, {
+                    customCompact: card.classList.contains('compact')
+                        && this.isGridMultiCellSize(rect.w, rect.h)
+                });
+            }
+            placed.push(rect);
+        });
+        const bottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
+        columnNotesEl.style.minHeight = `${bottom + COLUMN_GRID_GAP}px`;
+        const column = columnNotesEl.closest('.canvas-column');
+        if (column) this.resizeColumnToFit(column, { animate });
+        if (animate && !preview) {
+            window.setTimeout(() => {
+                columnNotesEl.querySelectorAll('.mini-card.layout-settling').forEach((c) => {
+                    c.classList.remove('layout-settling');
+                });
+            }, 160);
+        }
+        return placed;
+    },
+
+    reflowColumnNotesPanel(columnNotesEl, actorId, { animate = true } = {}) {
+        if (!columnNotesEl) return;
+        const layout = this.computeColumnNotesLayout(columnNotesEl, actorId);
+        this.applyColumnNotesLayout(columnNotesEl, layout, { animate, save: true });
+    },
+
     applyGridBoardLayout(canvas, layout, { animate = true, save = true, preview = false } = {}) {
         if (!canvas || !layout?.size) return [];
         const { origin } = this.getGridBoardBounds(canvas);
@@ -3615,7 +3778,12 @@ export const UI = {
             if (!card) return;
             this.applyNoteRect(card, rect, { settling: animate });
             card.classList.toggle('layout-preview', preview);
-            if (save) this.saveGridLayout(id, rect);
+            if (save) {
+                this.saveGridLayout(id, rect, {
+                    customCompact: !card.classList.contains('expanded')
+                        && this.isGridMultiCellSize(rect.w, rect.h)
+                });
+            }
             placed.push(rect);
         });
         this.updateGridCanvasMinHeight(canvas, placed, origin);
@@ -3630,9 +3798,7 @@ export const UI = {
     },
 
     clearGridLayoutPreview(canvas) {
-        canvas?.querySelectorAll('.mini-card.layout-preview').forEach((c) => {
-            c.classList.remove('layout-preview');
-        });
+        this.clearSnapPanelPreview(canvas);
     },
 
     getGridViewportBounds(canvas) {
@@ -3735,14 +3901,28 @@ export const UI = {
         if (z >= gridStackSeq) gridStackSeq = z + 1;
     },
 
-    raiseGridBoardCard(card) {
-        if (!card || card.dataset.gridBoard !== '1') return;
+    raiseLayoutCard(card) {
+        if (!card) return;
         gridStackSeq += 1;
         card.style.setProperty('z-index', String(gridStackSeq), 'important');
-        card.classList.add('is-grid-front');
-        card.closest('#app-canvas')?.querySelectorAll('.mini-card.is-grid-front').forEach((other) => {
-            if (other !== card) other.classList.remove('is-grid-front');
-        });
+        if (card.dataset.gridBoard === '1') {
+            card.classList.add('is-grid-front');
+            card.closest('#app-canvas')?.querySelectorAll('.mini-card.is-grid-front').forEach((other) => {
+                if (other !== card) other.classList.remove('is-grid-front');
+            });
+            return;
+        }
+        if (card.dataset.columnNote === '1') {
+            card.classList.add('is-column-front');
+            card.closest('.column-notes')?.querySelectorAll('.mini-card.is-column-front').forEach((other) => {
+                if (other !== card) other.classList.remove('is-column-front');
+            });
+        }
+    },
+
+    raiseGridBoardCard(card) {
+        if (!card || card.dataset.gridBoard !== '1') return;
+        this.raiseLayoutCard(card);
     },
 
     getCanvasLayoutOrder() {
@@ -4240,15 +4420,17 @@ export const UI = {
         }
     },
 
-    saveColumnNoteLayout(categoryName, itemId, rect) {
+    saveColumnNoteLayout(categoryName, itemId, rect, { customCompact = false } = {}) {
         const all = this.getColumnNoteLayout();
         if (!all[categoryName]) all[categoryName] = {};
-        all[categoryName][itemId] = {
+        const entry = {
             x: Math.round(rect.x),
             y: Math.round(rect.y),
             w: Math.round(rect.w),
             h: Math.round(rect.h)
         };
+        if (customCompact) entry.customCompact = true;
+        all[categoryName][itemId] = entry;
         localStorage.setItem('matrix_column_note_layout', JSON.stringify(all));
     },
 
@@ -4386,12 +4568,9 @@ export const UI = {
         });
     },
 
-    autoArrangeColumnNotes(columnNotesEl, { animate = false, respectSaved = true } = {}) {
+    autoArrangeColumnNotes(columnNotesEl, { animate = false } = {}) {
         if (!columnNotesEl) return;
-        const categoryName = columnNotesEl.dataset.category;
-        const innerW = this.getColumnNotesInnerWidth(columnNotesEl);
-        const maxH = this.getColumnNotesMaxHeight(columnNotesEl);
-        const cards = [...columnNotesEl.querySelectorAll('.mini-card')];
+        const cards = [...columnNotesEl.querySelectorAll('.mini-card[data-column-note="1"]')];
         if (cards.length === 0) {
             const collapsed = columnNotesEl.closest('.canvas-column')?.classList.contains('is-collapsed');
             columnNotesEl.querySelector('.column-empty-slot')?.remove();
@@ -4407,81 +4586,7 @@ export const UI = {
             return;
         }
         columnNotesEl.querySelector('.column-empty-slot')?.remove();
-
-        const saved = respectSaved && categoryName
-            ? (this.getColumnNoteLayout()[categoryName] || {})
-            : {};
-        const pinnedIds = new Set(this.getBoardPins());
-
-        const sorted = cards
-            .map((card) => ({ card, rect: this.readNoteRect(card) }))
-            .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x);
-
-        const placed = [];
-
-        sorted.forEach(({ card, rect }) => {
-            const itemId = card.dataset.id;
-            if (!itemId || !pinnedIds.has(itemId)) return;
-            const stored = saved[itemId];
-            const manual = this.clampManualNoteRect(
-                stored && Number.isFinite(stored.x) && Number.isFinite(stored.w)
-                    ? { x: stored.x, y: stored.y, w: rect.w, h: rect.h }
-                    : rect,
-                { maxW: innerW, maxH }
-            );
-            this.applyNoteRect(card, manual, { settling: false });
-            placed.push(manual);
-            if (categoryName) this.saveColumnNoteLayout(categoryName, itemId, manual);
-        });
-
-        sorted.forEach(({ card, rect }) => {
-            const itemId = card.dataset.id;
-            if (!itemId || pinnedIds.has(itemId)) return;
-            const stored = saved[itemId];
-            if (respectSaved && stored && Number.isFinite(stored.x) && Number.isFinite(stored.w)) {
-                const manual = this.clampManualNoteRect(
-                    { x: stored.x, y: stored.y, w: rect.w, h: rect.h },
-                    { maxW: innerW, maxH }
-                );
-                this.applyNoteRect(card, manual, { settling: false });
-                placed.push(manual);
-            }
-        });
-
-        sorted.forEach(({ card, rect }) => {
-            const itemId = card.dataset.id;
-            if (!itemId || pinnedIds.has(itemId)) return;
-            const stored = saved[itemId];
-            if (respectSaved && stored && Number.isFinite(stored.x) && Number.isFinite(stored.w)) {
-                return;
-            }
-
-            let snapped = this.snapNoteRect(rect, {
-                maxW: innerW,
-                maxH
-            });
-            if (snapped.x + snapped.w > innerW + 1) snapped.x = Math.max(0, innerW - snapped.w);
-
-            let guard = 0;
-            while (placed.some((p) => this.rectsOverlap(snapped, p)) && guard < 200) {
-                const blocker = placed.find((p) => this.rectsOverlap(snapped, p));
-                if (blocker) {
-                    snapped.y = blocker.y + blocker.h + COLUMN_GRID_GAP;
-                }
-                guard += 1;
-            }
-
-            this.applyNoteRect(card, snapped, { settling: animate });
-            placed.push(snapped);
-            if (categoryName && itemId) {
-                this.saveColumnNoteLayout(categoryName, itemId, snapped);
-            }
-        });
-
-        const bottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
-        columnNotesEl.style.minHeight = `${bottom + COLUMN_GRID_GAP}px`;
-        const column = columnNotesEl.closest('.canvas-column');
-        if (column) this.resizeColumnToFit(column, { animate });
+        this.reflowColumnNotesPanel(columnNotesEl, null, { animate });
     },
 
     resizeColumnToFit(columnEl, { animate = false } = {}) {
@@ -4581,13 +4686,17 @@ export const UI = {
         this.setupFreeformChrome(card);
         const saved = this.getColumnNoteLayout()[categoryName]?.[card.dataset.id];
         const isExpanded = card.classList.contains('expanded');
-        if (saved?.w && saved?.h) {
+        if (!isExpanded) {
+            const compact = this.gridCompactRect(
+                { x: 0, y: 0, w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H },
+                saved
+            );
+            this.applyFreeformDimensions(card, compact.w, compact.h);
+        } else if (saved?.w && saved?.h) {
             this.applyFreeformDimensions(card, saved.w, saved.h);
-        } else if (isExpanded) {
+        } else {
             const innerW = this.cellsToSpanW(COLUMN_MIN_COLS);
             this.applyFreeformDimensions(card, innerW, this.cellsToSpanH(2));
-        } else {
-            this.applyFreeformDimensions(card, COLUMN_GRID_CELL_W, COLUMN_GRID_CELL_H);
         }
     },
 

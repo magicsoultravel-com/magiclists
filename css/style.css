@@ -1597,6 +1597,7 @@ html[data-note-font="kalam"] .mini-card .step-text {
 
 #app-canvas.view-columns .column-notes .mini-card.compact:hover,
 #app-canvas.view-columns .column-notes .mini-card.compact:focus-within,
+#app-canvas.view-columns .column-notes .mini-card.compact.is-column-resizing,
 #app-canvas.view-columns > .mini-card.compact:hover,
 #app-canvas.view-columns > .mini-card.compact:focus-within {
     overflow: visible !important;
@@ -4561,8 +4562,25 @@ textarea.form-input {
     transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease;
 }
 
-#app-canvas.view-grid .mini-card.layout-preview {
+#app-canvas.view-grid .mini-card.layout-preview,
+#app-canvas.view-columns .column-notes .mini-card.layout-preview {
     opacity: 0.9;
+}
+
+#app-canvas.view-columns .column-notes.is-layout-active {
+    background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 100px 60px;
+    background-position: 0 0;
+}
+
+#app-canvas.view-columns .column-notes .mini-card.is-column-dragging,
+#app-canvas.view-columns .column-notes .mini-card.is-column-resizing,
+#app-canvas.view-columns .column-notes .mini-card.is-column-front {
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+    z-index: 120 !important;
+    transition: none !important;
 }
 
 #app-canvas.view-grid:not(.is-grid-forcing) {
