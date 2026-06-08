@@ -74,7 +74,7 @@ function defaultSizeFor(meta) {
     if (meta?.defaultSize?.w) {
         return {
             w: meta.defaultSize.w,
-            h: meta.defaultSize.h || 400
+            h: meta.defaultSize.h ?? null
         };
     }
     if (meta?.wide) return { w: 720, h: 560 };
@@ -99,15 +99,17 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     panel.dataset.toolId = toolId;
 
     const w = saved.w || defaults.w;
-    const h = saved.h || defaults.h;
+    const h = saved.h ?? defaults.h;
     const bounds = getDesktopBounds();
     const defaultX = bounds.left + Math.max(16, (bounds.right - bounds.left - w) / 2);
     const x = saved.x ?? defaultX;
-    const y = saved.y ?? Math.max(16, (window.innerHeight - h) / 3);
-    const initialPos = clampPosition({ offsetWidth: w, offsetHeight: h }, x, y);
+    const estH = h || 300;
+    const y = saved.y ?? Math.max(16, (window.innerHeight - estH) / 3);
+    const initialPos = clampPosition({ offsetWidth: w, offsetHeight: estH }, x, y);
 
     panel.style.width = `${w}px`;
-    if (h && h !== 'auto') panel.style.height = `${h}px`;
+    if (h) panel.style.height = `${h}px`;
+    else panel.classList.add('tool-panel--auto-height');
     panel.style.left = `${initialPos.x}px`;
     panel.style.top = `${initialPos.y}px`;
 

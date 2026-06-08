@@ -325,7 +325,9 @@ export const Editor = {
     refreshEditorNoteBody() {
         const body = document.getElementById('editor-note-body');
         if (!body || !this.activeItem) return;
-        this.syncActiveItemFromDom();
+        if (!body.dataset.pendingFocusStepId) {
+            this.syncActiveItemFromDom();
+        }
         const scrollTop = body.scrollTop;
         const active = document.activeElement;
         const focusField = active?.dataset?.field;

@@ -27,6 +27,10 @@
     display: none !important;
 }
 
+.tool-panel.is-dragging {
+    opacity: var(--desktop-drag-opacity);
+}
+
 .tool-panel.is-dragging .tool-panel__header {
     cursor: grabbing;
 }
@@ -117,6 +121,10 @@
 
 .tool-chip.is-hidden {
     display: none !important;
+}
+
+.tool-chip.is-dragging {
+    opacity: var(--desktop-drag-opacity);
 }
 
 .tool-chip.is-dragging .tool-chip__drag {
@@ -217,16 +225,30 @@
     box-sizing: border-box;
 }
 
+.tool-panel--auto-height {
+    height: auto;
+    min-height: 0;
+}
+
+.tool-panel--calculator.tool-panel--auto-height .tool-panel__body {
+    flex: 0 0 auto;
+    overflow: visible;
+}
+
 .tool-mount--calculator {
     --calc-scale: 1;
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
-    height: 100%;
+    height: auto;
 }
 
 .tool-panel__body.tool-mount--calculator {
     padding-bottom: 0.35rem;
+}
+
+.calc-tool-stack {
+    height: auto;
 }
 
 .tool-mount--calculator .calc-display {
@@ -248,13 +270,13 @@
 
 .calc-history-block {
     flex-shrink: 0;
-    margin-top: 0.1rem;
+    margin-top: 0.15rem;
 }
 
 .calc-history-header {
     display: flex;
     align-items: center;
-    padding: 0.2rem 0.25rem;
+    padding: 0.18rem 0.22rem;
     cursor: pointer;
     user-select: none;
     font-size: 0.66rem;
@@ -268,26 +290,34 @@
 }
 
 .calc-history-section {
-    max-height: 0;
-    overflow: hidden;
-    opacity: 0;
-    transition: max-height 0.22s ease, opacity 0.2s ease;
+    display: none;
 }
 
 .calc-history-section.is-open {
-    max-height: 120px;
-    opacity: 1;
-    overflow: hidden;
+    display: block;
+    margin-top: 0.15rem;
+    animation: calc-history-roll 0.2s ease;
+}
+
+@keyframes calc-history-roll {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .calc-history-section.is-open .calc-history {
-    max-height: 120px;
+    max-height: 110px;
     overflow-y: auto;
+    overflow-x: hidden;
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid var(--border-color);
     border-radius: 4px;
     padding: 0.25rem;
-    margin-top: 0.15rem;
 }
 
 .calc-history {

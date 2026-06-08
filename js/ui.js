@@ -1924,7 +1924,10 @@ export const UI = {
 
     refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor) {
         const shell = card.querySelector('.editor-note-shell');
-        if (shell) this.syncItemBodyFromDom(shell, item);
+        // Skip DOM→item sync while a checklist row op is in flight — stale DOM would undo splits/merges.
+        if (shell && !card.dataset.pendingFocusStepId) {
+            this.syncItemBodyFromDom(shell, item);
+        }
         const body = card.querySelector('.editor-note-body') || card.querySelector('.card-body');
         const scrollTop = body?.scrollTop ?? 0;
         const pendingFocusStepId = card.dataset.pendingFocusStepId;
