@@ -33,14 +33,21 @@ function isScrollbarGrip(el, clientX) {
     return clientX >= rect.right - scrollbarWidth - 2;
 }
 
-function isInteractiveTarget(target) {
+function isInsideDragControl(target) {
     return !!target.closest(
         '.card-actions, .card-act, .step-check, .step-delete-btn, .step-collapse-btn, ' +
         '.card-inline-edit, .rich-text--edit, .step-nest-controls, .step-row-actions, ' +
         '.grab-handle--step, .expanded-checklist-add-btn, .editor-body-convert-bar, ' +
-        '.editor-note-body, .editor-note-header, .note-editor-toolbar, .editor-meta-wrap, ' +
-        '.ff-resize, a, button, input, textarea, select'
+        '.grab-handle--note-cat, .ff-resize, a, button, input, textarea, select'
     );
+}
+
+function shouldStartCardDrag(target) {
+    if (!target || isInsideDragControl(target)) return false;
+    if (target.closest('.editor-note-body, .card-body.editor-note-body')) return false;
+    const surface = target.closest('.card-drag-zone, .ff-drag-gutter');
+    if (!surface) return false;
+    return true;
 }
 
 function bindPointerSession({ onKeyDown, onCancel }) {
@@ -212,11 +219,7 @@ export const DragDropEngine = {
                     return;
                 }
 
-                if (isInteractiveTarget(e.target)) return;
-
-                const onDragGutter = e.target.closest('.ff-drag-gutter');
-                const onDragZone = e.target.closest('.card-drag-zone');
-                if (!onDragGutter && !onDragZone) return;
+                if (!shouldStartCardDrag(e.target)) return;
 
                 const scrollHost = e.target.closest('.editor-note-body') || e.target.closest('.card-body');
                 if (scrollHost && isScrollbarGrip(scrollHost, e.clientX)) return;
@@ -518,11 +521,7 @@ export const DragDropEngine = {
             card.addEventListener('mousedown', (e) => {
                 if (e.button !== 0) return;
                 if (e.target.closest('.grab-handle--note-cat')) return;
-                if (isInteractiveTarget(e.target)) return;
-
-                const onDragGutter = e.target.closest('.ff-drag-gutter');
-                const onDragZone = e.target.closest('.card-drag-zone');
-                if (!onDragGutter && !onDragZone) return;
+                if (!shouldStartCardDrag(e.target)) return;
 
                 const scrollHost = e.target.closest('.editor-note-body') || e.target.closest('.card-body');
                 if (scrollHost && isScrollbarGrip(scrollHost, e.clientX)) return;

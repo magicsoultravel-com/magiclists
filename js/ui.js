@@ -1309,7 +1309,7 @@ export const UI = {
         return `
             <div class="editor-note-shell note-surface">
                 ${toolbarHtml ? `<div class="note-editor-toolbar${toolbarDragZone}">${toolbarHtml}</div>` : ''}
-                <div class="editor-note-header">
+                <div class="editor-note-header${toolbarDragZone || ''}">
                     ${titleHtml}
                 </div>
                 ${formatHtml}
@@ -1857,7 +1857,12 @@ export const UI = {
             if (!it.steps) it.steps = [];
             if (afterStepId) {
                 const idx = it.steps.findIndex((s) => s.id === afterStepId);
-                it.steps.splice(idx >= 0 ? idx + 1 : it.steps.length, 0, newStep);
+                if (idx >= 0) {
+                    newStep.level = getStepLevel(it.steps[idx]);
+                    it.steps.splice(idx + 1, 0, newStep);
+                } else {
+                    it.steps.push(newStep);
+                }
             } else {
                 it.steps.push(newStep);
             }

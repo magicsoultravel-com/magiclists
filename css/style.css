@@ -3020,7 +3020,7 @@ textarea.form-input {
 
 #app-canvas.view-freeform .ff-drag-gutter {
     position: absolute;
-    pointer-events: none;
+    pointer-events: auto;
     cursor: grab;
     z-index: 5;
 }
@@ -3152,6 +3152,14 @@ textarea.form-input {
     cursor: grabbing;
 }
 
+#app-canvas.view-columns .mini-card.expanded .editor-note-header.card-drag-zone {
+    cursor: grab;
+}
+
+#app-canvas.view-freeform .mini-card.expanded .editor-note-header.card-drag-zone {
+    cursor: grab;
+}
+
 #app-canvas.view-columns .mini-card.expanded {
     display: flex !important;
     flex-direction: column;
@@ -3197,7 +3205,7 @@ textarea.form-input {
 
 #app-canvas.view-columns .ff-drag-gutter {
     position: absolute;
-    pointer-events: none;
+    pointer-events: auto;
     cursor: grab;
     z-index: 5;
 }
