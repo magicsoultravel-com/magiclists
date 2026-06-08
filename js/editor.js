@@ -16,9 +16,18 @@ export const Editor = {
         this.overlay = document.getElementById('editor-overlay');
         this.mountZone = document.getElementById('modal-form-mount');
         this.calendarToggleBtn = document.getElementById('modal-calendar-toggle');
+        this.colorBtn = document.getElementById('modal-color-btn');
         this.saveBtn = document.getElementById('modal-save-btn');
         this.archiveBtn = document.getElementById('modal-archive-btn');
         this.approveBtn = document.getElementById('modal-approve-btn');
+
+        if (this.colorBtn) {
+            this.colorBtn.innerHTML = CARD_ICONS.color;
+            this.colorBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.openColorPicker();
+            });
+        }
 
         const commitAndClose = () => this.closeAndSave({ revealOnBoard: true });
         document.getElementById('modal-close-btn')?.addEventListener('click', commitAndClose);
@@ -397,11 +406,10 @@ export const Editor = {
             onChange: onEditorChange,
             onConfigChange: onEditorChange,
             onStatusChange: () => this.updateArchiveToggleUI(),
-            bindDateDefaults: (dateId, timeId) => this.bindDateInputDefaults(dateId, timeId),
-            setupColorPalette: () => this.setupColorPalette(item)
+            bindDateDefaults: (dateId, timeId) => this.bindDateInputDefaults(dateId, timeId)
         });
 
-        this.syncEditorTheme(resolveNoteColor(item.backgroundColor));
+        this.syncColorFromItem(item);
     },
 
     syncEditorTheme(backgroundColor) {
@@ -437,32 +445,37 @@ export const Editor = {
         }
     },
 
-    setupColorPalette(item) {
-        const trigger = document.getElementById('edit-color-trigger');
+    syncColorFromItem(item) {
         const hidden = document.getElementById('edit-bg-color-value');
-        if (!trigger || !hidden) return;
+        if (!hidden || !item) return;
+        const color = resolveNoteColor(item.backgroundColor);
+        hidden.value = color;
+        if (this.activeItem) this.activeItem.backgroundColor = color;
+        this.syncEditorTheme(color);
+    },
 
-        const selectColor = (value, { silent = false } = {}) => {
-            const color = resolveNoteColor(value);
-            hidden.value = color;
-            ColorPicker.updateTriggerPreview(trigger, color);
-            this.syncEditorTheme(color);
-            if (!silent) {
-                this.markInteracted();
-                this.triggerAutoSave();
-            }
-        };
+    applyNoteColor(value, { silent = false } = {}) {
+        const hidden = document.getElementById('edit-bg-color-value');
+        if (!hidden) return;
+        const color = resolveNoteColor(value);
+        hidden.value = color;
+        if (this.activeItem) this.activeItem.backgroundColor = color;
+        this.syncEditorTheme(color);
+        if (!silent) {
+            this.markInteracted();
+            this.triggerAutoSave();
+        }
+    },
 
-        selectColor(resolveNoteColor(item.backgroundColor), { silent: true });
-        trigger.addEventListener('click', (e) => {
-            e.stopPropagation();
-            ColorPicker.open({
-                anchor: trigger,
-                presets: PALETTE_NOTE,
-                value: hidden.value || '',
-                align: 'start',
-                onSelect: (color) => selectColor(color)
-            });
+    openColorPicker() {
+        if (!this.colorBtn) return;
+        const hidden = document.getElementById('edit-bg-color-value');
+        ColorPicker.open({
+            anchor: this.colorBtn,
+            presets: PALETTE_NOTE,
+            value: hidden?.value || resolveNoteColor(this.activeItem?.backgroundColor),
+            align: 'end',
+            onSelect: (color) => this.applyNoteColor(color)
         });
     },
 

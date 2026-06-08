@@ -1133,14 +1133,6 @@ export const UI = {
                                 <option value="completed" ${item.status === 'completed' ? 'selected' : ''}>Done</option>
                             </select>
                         </div>
-                        <div class="form-group form-group--compact form-group--color">
-                            <label>Card color</label>
-                            <input type="hidden" id="edit-bg-color-value" value="${this.escapeQuotes(resolveNoteColor(item.backgroundColor))}">
-                            <button type="button" id="edit-color-trigger" class="color-picker-trigger" title="Choose card color" aria-label="Choose card color" aria-haspopup="dialog">
-                                <span class="color-picker-trigger-dot"></span>
-                                <span class="color-picker-trigger-label">Choose color</span>
-                            </button>
-                        </div>
                         <div class="form-group form-group--compact form-group--checkbox">
                             <label class="checkbox-row">
                                 <input type="checkbox" id="edit-show-both-panes" ${(item.editorBodyLayout || 'both') === 'both' ? 'checked' : ''}>
@@ -1409,7 +1401,6 @@ export const UI = {
         onConfigChange = () => {},
         onStatusChange = () => {},
         bindDateDefaults = null,
-        setupColorPalette = null,
         stopMousedownPropagation = false
     } = {}) {
         const shell = root?.querySelector?.('.editor-note-shell') || root;
@@ -1467,7 +1458,6 @@ export const UI = {
             bindDateDefaults('edit-end-date', 'edit-end-time');
         }
         this.bindCollapsable('config-section-header', 'config-section', true);
-        if (setupColorPalette) setupColorPalette(item);
     },
 
     renderCompactCard(card, item, activeCategories, targetCatName, categoryColor) {
@@ -1606,6 +1596,43 @@ export const UI = {
         }
     },
 
+    splitInlineEditAtCaret(el) {
+        const rich = el.classList.contains('rich-text--edit');
+        const sel = window.getSelection();
+        if (!sel?.rangeCount || !el.contains(sel.anchorNode)) {
+            const full = rich
+                ? sanitizeRichHtml(linkifyPlainUrls(el.innerHTML))
+                : (el.textContent || '');
+            return { before: full, after: '' };
+        }
+
+        const range = sel.getRangeAt(0);
+        const beforeRange = range.cloneRange();
+        beforeRange.selectNodeContents(el);
+        beforeRange.setEnd(range.startContainer, range.startOffset);
+
+        const afterRange = range.cloneRange();
+        afterRange.selectNodeContents(el);
+        afterRange.setStart(range.endContainer, range.endOffset);
+
+        if (rich) {
+            const htmlFromFragment = (frag) => {
+                const div = document.createElement('div');
+                div.appendChild(frag);
+                return div.innerHTML;
+            };
+            return {
+                before: sanitizeRichHtml(linkifyPlainUrls(htmlFromFragment(beforeRange.cloneContents()))),
+                after: sanitizeRichHtml(linkifyPlainUrls(htmlFromFragment(afterRange.cloneContents())))
+            };
+        }
+
+        return {
+            before: beforeRange.toString(),
+            after: afterRange.toString()
+        };
+    },
+
     caretAtEdge(el, edge) {
         const sel = window.getSelection();
         if (!sel?.rangeCount) return true;
@@ -1662,8 +1689,9 @@ export const UI = {
         return false;
     },
 
-    insertChecklistStep(root, item, refresh, applyMutate, { afterStepId = null } = {}) {
+    insertChecklistStep(root, item, refresh, applyMutate, { afterStepId = null, initialText = '' } = {}) {
         const newStep = this.createBlankChecklistStep();
+        if (initialText) newStep.text = initialText;
         applyMutate((it) => {
             if (it.type !== 'checklist') it.type = 'checklist';
             if (!it.steps) it.steps = [];
@@ -1702,8 +1730,16 @@ export const UI = {
 
     handleChecklistEnter(root, item, el, refresh, { applyMutate } = {}) {
         el.dataset.skipBlurSave = '1';
-        this.syncInlineFieldToItem(el, item);
-        this.insertChecklistStep(root, item, refresh, applyMutate, { afterStepId: el.dataset.stepId });
+        const stepId = el.dataset.stepId;
+        const { before, after } = this.splitInlineEditAtCaret(el);
+        applyMutate((it) => {
+            const step = it.steps?.find((s) => s.id === stepId);
+            if (step) step.text = before;
+        }, { persist: false });
+        this.insertChecklistStep(root, item, refresh, applyMutate, {
+            afterStepId: stepId,
+            initialText: after
+        });
     },
 
     attachNoteBodyInteractions(root, item, {

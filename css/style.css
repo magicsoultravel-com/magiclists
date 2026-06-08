@@ -1239,6 +1239,48 @@ body {
     top: -1px;
     right: 0;
     gap: 0;
+    padding: 1px 0;
+    border-radius: 0 4px 0 5px;
+}
+
+/* Scrim behind compact action icons — fades over title for contrast */
+.mini-card.compact .card-actions::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    bottom: -1px;
+    left: -1.4rem;
+    z-index: -1;
+    border-radius: 0 5px 0 6px;
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        color-mix(in srgb, var(--bg-card) 55%, transparent) 20%,
+        color-mix(in srgb, var(--bg-card) 96%, #0a0a0c) 100%
+    );
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-color) 55%, transparent);
+    pointer-events: none;
+}
+
+.mini-card.compact.has-custom-bg .card-actions::before {
+    background: linear-gradient(
+        90deg,
+        transparent 0%,
+        color-mix(in srgb, var(--card-action-bg) 40%, transparent) 16%,
+        var(--card-action-bg) 100%
+    );
+    box-shadow: 0 0 0 1px var(--card-border-subtle);
+}
+
+.mini-card.compact:hover .card-act,
+.mini-card.compact:focus-within .card-act {
+    color: var(--text-main);
+}
+
+.mini-card.compact.has-custom-bg:hover .card-act,
+.mini-card.compact.has-custom-bg:focus-within .card-act {
+    color: var(--card-action-fg);
 }
 
 .mini-card.compact .card-header {
@@ -3221,6 +3263,10 @@ textarea.form-input {
 
 .editor-toolbar .card-act--archive.card-act--archive-on:hover {
     color: #86efac;
+}
+
+.editor-toolbar .card-act--color:hover {
+    color: #c4b5fd;
 }
 
 #editor-overlay .modal-body {
