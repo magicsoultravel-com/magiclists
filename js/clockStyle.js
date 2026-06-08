@@ -200,12 +200,14 @@ export const ClockStyle = {
             this.iconBtn.innerHTML = ACTION_ICONS.clockStyle;
             this.iconBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                this.togglePopover();
+                this.closePopover();
+                this.setHidden(!this.isHidden);
             });
         }
         if (this.triggerBtn) {
             this.triggerBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
+                if (this.isHidden) return;
                 this.togglePopover();
             });
         }
@@ -223,17 +225,24 @@ export const ClockStyle = {
     },
 
     getPopoverAnchor() {
-        return (this.isHidden && this.iconBtn) ? this.iconBtn : this.triggerBtn;
+        return this.triggerBtn;
+    },
+
+    syncToggleBtn() {
+        if (!this.iconBtn) return;
+        const label = this.isHidden ? 'Show clock' : 'Hide clock';
+        this.iconBtn.title = label;
+        this.iconBtn.setAttribute('aria-label', label);
     },
 
     applyHidden(hidden, { silent = false } = {}) {
         this.isHidden = hidden;
         this.zone?.classList.toggle('is-clock-hidden', hidden);
         this.triggerBtn?.classList.toggle('is-hidden', hidden);
-        this.iconBtn?.classList.toggle('is-hidden', !hidden);
+        this.syncToggleBtn();
         if (hidden) {
             this.triggerBtn?.setAttribute('aria-expanded', 'false');
-            this.iconBtn?.setAttribute('aria-expanded', 'false');
+            this.closePopover();
         }
         if (!silent) {
             try {
@@ -244,10 +253,10 @@ export const ClockStyle = {
         }
     },
 
-    setHidden(hidden) {
-        const wasOpen = this.popover && !this.popover.classList.contains('is-hidden');
+    setHidden(hidden, { keepPopoverOpen = false } = {}) {
+        const wasOpen = keepPopoverOpen && this.popover && !this.popover.classList.contains('is-hidden');
         this.applyHidden(hidden);
-        if (wasOpen) {
+        if (wasOpen && !hidden) {
             requestAnimationFrame(() => this.openPopover());
         }
     },
@@ -370,6 +379,7 @@ export const ClockStyle = {
     },
 
     openPopover() {
+        if (this.isHidden) return;
         const anchor = this.getPopoverAnchor();
         if (!anchor) return;
         this.closePopover();
@@ -401,7 +411,7 @@ export const ClockStyle = {
 
         popover.querySelector('#clock-opt-hidden')?.addEventListener('change', (e) => {
             e.stopPropagation();
-            this.setHidden(e.target.checked);
+            this.setHidden(e.target.checked, { keepPopoverOpen: true });
         });
         popover.querySelector('.clock-style-hide-row')?.addEventListener('mousedown', (e) => e.stopPropagation());
 
