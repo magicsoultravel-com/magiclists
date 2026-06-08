@@ -3168,7 +3168,14 @@ textarea.form-input {
     overflow: hidden !important;
     max-height: none !important;
     min-height: unset !important;
+    height: unset !important;
+    grid-column: unset !important;
     padding: 0.6rem !important;
+}
+
+#app-canvas.view-columns .column-notes .mini-card,
+#app-canvas.view-columns > .mini-card {
+    grid-column: unset !important;
 }
 
 #app-canvas.view-columns .mini-card.expanded .editor-note-shell {

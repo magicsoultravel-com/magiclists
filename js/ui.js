@@ -37,6 +37,8 @@ export const CANVAS_COL_GAP = 12;
 export const CANVAS_GRID_W = COLUMN_MIN_INNER_W + COLUMN_INNER_PAD * 2;
 export const COLUMN_STRIDE_X = COLUMN_GRID_CELL_W + COLUMN_GRID_GAP;
 export const COLUMN_STRIDE_Y = COLUMN_GRID_CELL_H + COLUMN_GRID_GAP;
+const CANVAS_LAYOUT_ORIGIN = 8;
+const CANVAS_LAYOUT_ORDER_KEY = 'matrix_canvas_layout_order';
 
 let freeformStackSeq = 1;
 
@@ -585,42 +587,26 @@ export const UI = {
                 const categoryName = typeof catObj === 'string' ? catObj : catObj.name;
                 const catColor = catObj.color || '#64748b';
 
-                const columnItems = visibleItems.filter(item => {
-                    if (!itemHasCategory(item)) return false;
-                    return item.categories.some(cat => String(cat).toLowerCase() === String(categoryName).toLowerCase());
-                });
+                const columnItems = visibleItems
+                    .filter(item => {
+                        if (!itemHasCategory(item)) return false;
+                        return item.categories.some(cat => String(cat).toLowerCase() === String(categoryName).toLowerCase());
+                    })
+                    .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0));
 
                 canvas.appendChild(this.createColumnStructure(categoryName, catColor, columnItems, activeCategories));
             });
-
-            const floatPositions = this.getColumnsFloatPositions();
-            let floatAutoX = 8;
-            let floatAutoY = 8;
-            const floatStep = 104;
-            const floatRow = 72;
 
             visibleItems
                 .filter(item => !itemHasCategory(item))
                 .forEach(item => {
                     const card = this.createCardComponent(item, activeCategories, { columnsFloat: true });
-                    const saved = floatPositions[item.id];
-                    if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
-                        card.style.left = `${saved.x}px`;
-                        card.style.top = `${saved.y}px`;
-                    } else {
-                        card.style.left = `${floatAutoX}px`;
-                        card.style.top = `${floatAutoY}px`;
-                        floatAutoX += floatStep;
-                        if (floatAutoX > Math.max(canvas.clientWidth, 320) - floatStep) {
-                            floatAutoX = 8;
-                            floatAutoY += floatRow;
-                        }
-                    }
                     this.finalizeColumnsFloat(card);
                     canvas.appendChild(card);
                 });
 
-            this.layoutColumnViewAfterRender(canvas, { animate: false });
+            this.syncCanvasLayoutOrder(activeCategories, visibleItems);
+            this.layoutColumnView(canvas, { animate: false });
         } else if (resolvedMode === 'freeform') {
             const positions = this.getFreeformPositions();
             let autoX = 8;
@@ -922,8 +908,25 @@ export const UI = {
             if (card.dataset.columnNote !== '1') return;
             const notesEl = card.closest('.column-notes');
             if (!notesEl) return;
-            this.finalizeColumnNote(card, card.dataset.category || targetCatName);
-            requestAnimationFrame(() => this.autoArrangeColumnNotes(notesEl, { animate: true }));
+            const cat = card.dataset.category || targetCatName;
+            this.finalizeColumnNote(card, cat);
+            requestAnimationFrame(() => {
+                this.autoArrangeColumnNotes(notesEl, { animate: true });
+                const canvas = document.getElementById('app-canvas');
+                if (canvas?.classList.contains('view-columns') && cat) {
+                    this.reflowCanvasFromOrderEntry(canvas, { type: 'category', name: cat }, { animate: true });
+                }
+            });
+        };
+
+        const reflowColumnsFloat = () => {
+            if (card.dataset.columnsFloat !== '1') return;
+            const canvas = document.getElementById('app-canvas');
+            if (!canvas?.classList.contains('view-columns')) return;
+            this.finalizeColumnsFloat(card);
+            requestAnimationFrame(() => {
+                this.reflowCanvasFromOrderEntry(canvas, { type: 'float', id: card.dataset.id }, { animate: true });
+            });
         };
 
         if (expanded) {
@@ -931,6 +934,7 @@ export const UI = {
             card.classList.add('expanded', 'card-animate-expand');
             this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
             reflowColumnNote();
+            reflowColumnsFloat();
             card.addEventListener('animationend', cleanup, { once: true });
             setTimeout(cleanup, 400);
             return;
@@ -954,6 +958,7 @@ export const UI = {
         card.classList.add('compact', 'card-animate-collapse');
         this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
         reflowColumnNote();
+        reflowColumnsFloat();
         card.addEventListener('animationend', cleanup, { once: true });
         setTimeout(cleanup, 400);
     },
@@ -1331,21 +1336,9 @@ export const UI = {
         localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
     },
 
-    collapseAllCards(items) {
+    collapseAllCards() {
         localStorage.setItem('matrix_expanded_cards', '{}');
-        const canvas = document.getElementById('app-canvas');
-        if (!canvas) return;
-
-        const activeCategories = readStoredCategories();
-        const itemById = new Map((items || []).map((item) => [item.id, item]));
-
-        canvas.querySelectorAll('.mini-card.expanded').forEach((card) => {
-            const item = itemById.get(card.dataset.id);
-            if (!item) return;
-            const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
-            this.applyCardExpandCollapse(card, item, false, activeCategories, targetCatName, categoryColor);
-        });
-        window.dispatchEvent(new CustomEvent('board:cards_reflowed'));
+        window.dispatchEvent(new CustomEvent('board:visibility_changed'));
     },
 
     revealNoteOnBoard(item) {
@@ -2334,8 +2327,279 @@ export const UI = {
         localStorage.removeItem('matrix_column_note_layout');
         localStorage.removeItem('matrix_columns_float_positions');
         localStorage.removeItem('matrix_columns_float_sizes');
+        localStorage.removeItem('matrix_canvas_layout_order');
         localStorage.removeItem('matrix_expanded_cards');
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
+    },
+
+    getCanvasLayoutOrder() {
+        try {
+            const raw = JSON.parse(localStorage.getItem(CANVAS_LAYOUT_ORDER_KEY) || '[]');
+            return Array.isArray(raw) ? raw : [];
+        } catch {
+            return [];
+        }
+    },
+
+    saveCanvasLayoutOrder(order) {
+        localStorage.setItem(CANVAS_LAYOUT_ORDER_KEY, JSON.stringify(order));
+    },
+
+    appendToCanvasOrder(entry) {
+        const order = this.getCanvasLayoutOrder();
+        const exists = order.some((e) => {
+            if (entry.type === 'category' && e.type === 'category') {
+                return String(e.name).toLowerCase() === String(entry.name).toLowerCase();
+            }
+            if (entry.type === 'float' && e.type === 'float') return e.id === entry.id;
+            return false;
+        });
+        if (!exists) {
+            order.push(entry);
+            this.saveCanvasLayoutOrder(order);
+        }
+    },
+
+    getCanvasOrderIndex(entry) {
+        return this.getCanvasLayoutOrder().findIndex((e) => {
+            if (entry.type === 'category' && e.type === 'category') {
+                return String(e.name).toLowerCase() === String(entry.name).toLowerCase();
+            }
+            if (entry.type === 'float' && e.type === 'float') return e.id === entry.id;
+            return false;
+        });
+    },
+
+    buildInitialCanvasOrder(activeCategories, visibleItems) {
+        const events = [];
+        activeCategories.forEach((catObj, idx) => {
+            const name = typeof catObj === 'string' ? catObj : catObj.name;
+            const inCat = visibleItems.filter((item) => {
+                if (!itemHasCategory(item)) return false;
+                return String(item.categories[0]).toLowerCase() === String(name).toLowerCase();
+            });
+            const ts = inCat.length
+                ? Math.min(...inCat.map((item) => Number(item.created_at || 0)))
+                : 1e15 + idx;
+            events.push({ type: 'category', name, ts, tie: idx });
+        });
+        visibleItems
+            .filter((item) => !itemHasCategory(item))
+            .forEach((item) => {
+                events.push({
+                    type: 'float',
+                    id: item.id,
+                    ts: Number(item.created_at || 0),
+                    tie: 0
+                });
+            });
+        events.sort((a, b) => a.ts - b.ts || a.tie - b.tie);
+        return events.map(({ type, name, id }) => (type === 'category' ? { type, name } : { type, id }));
+    },
+
+    syncCanvasLayoutOrder(activeCategories, visibleItems) {
+        let order = this.getCanvasLayoutOrder();
+        const visibleCatNames = new Set(
+            activeCategories.map((c) => (typeof c === 'string' ? c : c.name))
+        );
+        const floatIds = new Set(
+            visibleItems.filter((item) => !itemHasCategory(item)).map((item) => item.id)
+        );
+
+        order = order.filter((entry) => {
+            if (entry.type === 'category') return visibleCatNames.has(entry.name);
+            if (entry.type === 'float') return floatIds.has(entry.id);
+            return false;
+        });
+
+        activeCategories.forEach((catObj) => {
+            const name = typeof catObj === 'string' ? catObj : catObj.name;
+            if (!order.some((e) => e.type === 'category' && e.name === name)) {
+                order.push({ type: 'category', name });
+            }
+        });
+
+        visibleItems
+            .filter((item) => !itemHasCategory(item))
+            .forEach((item) => {
+                if (!order.some((e) => e.type === 'float' && e.id === item.id)) {
+                    order.push({ type: 'float', id: item.id });
+                }
+            });
+
+        if (order.length === 0) {
+            order = this.buildInitialCanvasOrder(activeCategories, visibleItems);
+        }
+
+        this.saveCanvasLayoutOrder(order);
+        return order;
+    },
+
+    getCanvasElementForOrderEntry(canvas, entry) {
+        if (!canvas || !entry) return null;
+        if (entry.type === 'category') {
+            return [...canvas.querySelectorAll('.canvas-column')].find(
+                (col) => col.dataset.category?.toLowerCase() === String(entry.name).toLowerCase()
+            ) || null;
+        }
+        if (entry.type === 'float') {
+            return canvas.querySelector(`.mini-card[data-columns-float="1"][data-id="${entry.id}"]`);
+        }
+        return null;
+    },
+
+    measureCanvasOrderEntry(el) {
+        if (!el) return { w: CANVAS_GRID_W, h: 200 };
+        if (el.classList.contains('canvas-column')) {
+            return {
+                w: el.offsetWidth || CANVAS_GRID_W,
+                h: el.offsetHeight || COLUMN_HEADER_APPROX_H + COLUMN_GRID_CELL_H
+            };
+        }
+        const rect = this.readNoteRect(el);
+        return { w: rect.w, h: rect.h };
+    },
+
+    findFirstCanvasSlot(w, h, placed, canvasW) {
+        let y = CANVAS_LAYOUT_ORIGIN;
+        let guard = 0;
+        while (guard < 800) {
+            let x = CANVAS_LAYOUT_ORIGIN;
+            while (x + w <= canvasW + 1) {
+                const candidate = {
+                    x: this.snapGridCoord(x, COLUMN_STRIDE_X),
+                    y: this.snapGridCoord(y, COLUMN_STRIDE_Y),
+                    w,
+                    h
+                };
+                if (!placed.some((p) => this.rectsOverlap(candidate, p, CANVAS_COL_GAP))) {
+                    return candidate;
+                }
+                x += COLUMN_STRIDE_X;
+            }
+            y += COLUMN_STRIDE_Y;
+            guard += 1;
+        }
+        return { x: CANVAS_LAYOUT_ORIGIN, y: CANVAS_LAYOUT_ORIGIN, w, h };
+    },
+
+    applyCanvasOrderEntryPosition(el, entry, rect, { animate = false } = {}) {
+        if (!el || !entry) return;
+        if (entry.type === 'category') {
+            el.style.position = 'absolute';
+            el.style.left = `${rect.x}px`;
+            el.style.top = `${rect.y}px`;
+            el.classList.toggle('layout-settling', animate);
+            if (entry.name) this.saveColumnPosition(entry.name, rect.x, rect.y);
+            return;
+        }
+        if (entry.type === 'float') {
+            const maxW = el.closest('#app-canvas')?.clientWidth || window.innerWidth;
+            const snapped = this.snapNoteRect(rect, { maxW, maxH: window.innerHeight });
+            this.applyNoteRect(el, snapped, { settling: animate });
+            if (el.dataset.id) {
+                this.saveColumnsFloatPosition(el.dataset.id, snapped.x, snapped.y);
+                if (el.classList.contains('expanded')) {
+                    this.saveColumnsFloatSize(el.dataset.id, snapped.w, snapped.h);
+                }
+            }
+        }
+    },
+
+    layoutColumnInners(canvas, { animate = false } = {}) {
+        if (!canvas) return;
+        [...canvas.querySelectorAll('.canvas-column')].forEach((col) => {
+            col.style.position = 'absolute';
+            const cat = col.dataset.category;
+            const notesEl = col.querySelector('.column-notes');
+            if (!notesEl || !cat) return;
+            const itemIds = [...notesEl.querySelectorAll('.mini-card')]
+                .map((c) => c.dataset.id)
+                .filter(Boolean);
+            this.autoPackColumnNotes(notesEl, itemIds, cat);
+            this.autoArrangeColumnNotes(notesEl, { animate });
+        });
+    },
+
+    packCanvasInOrder(canvas, { animate = false, fromIndex = 0, pinned = null } = {}) {
+        if (!canvas) return;
+        const order = this.getCanvasLayoutOrder();
+        if (!order.length) return;
+
+        this.layoutColumnInners(canvas, { animate: false });
+
+        const canvasW = Math.max(canvas.clientWidth, 320);
+        const placed = [];
+
+        order.forEach((entry, index) => {
+            const el = this.getCanvasElementForOrderEntry(canvas, entry);
+            if (!el) return;
+
+            const { w, h } = this.measureCanvasOrderEntry(el);
+            let rect;
+
+            if (pinned && pinned.index === index && pinned.rect) {
+                rect = { ...pinned.rect, w, h };
+            } else if (index < fromIndex) {
+                rect = {
+                    x: parseFloat(el.style.left) || 0,
+                    y: parseFloat(el.style.top) || 0,
+                    w,
+                    h
+                };
+            } else {
+                rect = this.findFirstCanvasSlot(w, h, placed, canvasW);
+            }
+
+            this.applyCanvasOrderEntryPosition(el, entry, rect, { animate });
+            placed.push(rect);
+        });
+
+        const maxBottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
+        canvas.style.minHeight = `${maxBottom + CANVAS_COL_GAP}px`;
+
+        if (animate) {
+            setTimeout(() => {
+                canvas.querySelectorAll('.layout-settling').forEach((node) => {
+                    node.classList.remove('layout-settling');
+                });
+            }, 140);
+        }
+    },
+
+    layoutColumnView(canvas, { animate = false, fromIndex = 0, pinned = null } = {}) {
+        if (!canvas) return;
+        this.layoutColumnInners(canvas, { animate: false });
+        requestAnimationFrame(() => {
+            this.packCanvasInOrder(canvas, { animate, fromIndex, pinned });
+        });
+    },
+
+    reflowCanvasFromOrderEntry(canvas, entry, { animate = true } = {}) {
+        if (!canvas) return;
+        const index = this.getCanvasOrderIndex(entry);
+        if (index < 0) {
+            this.layoutColumnView(canvas, { animate });
+            return;
+        }
+        const el = this.getCanvasElementForOrderEntry(canvas, entry);
+        if (!el) return;
+        const { w, h } = this.measureCanvasOrderEntry(el);
+        const rect = {
+            x: parseFloat(el.style.left) || 0,
+            y: parseFloat(el.style.top) || 0,
+            w,
+            h
+        };
+        this.layoutColumnView(canvas, {
+            animate,
+            fromIndex: index + 1,
+            pinned: { index, rect }
+        });
+    },
+
+    layoutColumnViewAfterRender(canvas, options = {}) {
+        this.layoutColumnView(canvas, options);
     },
 
     snapGridCoord(value, stride = COLUMN_STRIDE_X) {
@@ -2650,47 +2914,6 @@ export const UI = {
 
         const maxBottom = placed.reduce((m, b) => Math.max(m, b.y + b.h), 0);
         canvas.style.minHeight = `${maxBottom + CANVAS_COL_GAP}px`;
-    },
-
-    layoutColumnViewAfterRender(canvas, { animate = false } = {}) {
-        if (!canvas) return;
-        const colPositions = this.getColumnPositions();
-        let autoX = 8;
-        let autoY = 8;
-        let rowH = 0;
-        const canvasW = Math.max(canvas.clientWidth, 320);
-
-        [...canvas.querySelectorAll('.canvas-column')].forEach((col) => {
-            const cat = col.dataset.category;
-            const saved = cat ? colPositions[cat] : null;
-            col.style.position = 'absolute';
-            if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
-                col.style.left = `${saved.x}px`;
-                col.style.top = `${saved.y}px`;
-            } else {
-                const w = col.offsetWidth || CANVAS_GRID_W;
-                const h = col.offsetHeight || 200;
-                if (autoX + w > canvasW - 8) {
-                    autoX = 8;
-                    autoY += rowH + CANVAS_COL_GAP;
-                    rowH = 0;
-                }
-                col.style.left = `${autoX}px`;
-                col.style.top = `${autoY}px`;
-                autoX += w + CANVAS_COL_GAP;
-                rowH = Math.max(rowH, h);
-                if (cat) this.saveColumnPosition(cat, parseFloat(col.style.left), parseFloat(col.style.top));
-            }
-
-            const notesEl = col.querySelector('.column-notes');
-            if (notesEl) {
-                const itemIds = [...notesEl.querySelectorAll('.mini-card')].map((c) => c.dataset.id).filter(Boolean);
-                this.autoPackColumnNotes(notesEl, itemIds, cat);
-                this.autoArrangeColumnNotes(notesEl, { animate });
-            }
-        });
-
-        this.autoArrangeCanvasColumns(canvas, { animate });
     },
 
     finalizeColumnNote(card, categoryName) {

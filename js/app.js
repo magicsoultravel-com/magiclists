@@ -293,6 +293,7 @@ class Application {
                 const cleanColor = color && color.trim() ? color.trim() : '#64748b';
                 AppState.categories.push({ name: cleanName, color: cleanColor });
                 localStorage.setItem('matrix_custom_categories', JSON.stringify(AppState.categories));
+                UI.appendToCanvasOrder({ type: 'category', name: cleanName });
                 this.syncDataStore();
             }
         });
@@ -343,7 +344,6 @@ class Application {
             } else {
                 UI.resetColumnsLayout();
             }
-            this.syncDataStore();
         });
     }
 
@@ -352,8 +352,7 @@ class Application {
         if (!btn) return;
         btn.innerHTML = ACTION_ICONS.collapseAll;
         btn.addEventListener('click', () => {
-            UI.collapseAllCards(AppState.items);
-            DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+            UI.collapseAllCards();
         });
     }
 
@@ -465,6 +464,10 @@ class Application {
         });
 
         window.addEventListener('board:cards_reflowed', () => {
+            const canvas = document.getElementById('app-canvas');
+            if (canvas?.classList.contains('view-columns')) {
+                UI.layoutColumnView(canvas, { animate: true });
+            }
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         });
 

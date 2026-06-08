@@ -392,8 +392,18 @@ export const DragDropEngine = {
                 column.style.left = `${x}px`;
                 column.style.top = `${y}px`;
                 const cat = column.dataset.category;
+                const idx = cat ? UI.getCanvasOrderIndex({ type: 'category', name: cat }) : -1;
+                const { w, h } = UI.measureCanvasOrderEntry(column);
                 if (cat) UI.saveColumnPosition(cat, x, y);
-                UI.autoArrangeCanvasColumns(canvas, { animate: true });
+                if (idx >= 0) {
+                    UI.layoutColumnView(canvas, {
+                        animate: true,
+                        fromIndex: idx + 1,
+                        pinned: { index: idx, rect: { x, y, w, h } }
+                    });
+                } else {
+                    UI.layoutColumnView(canvas, { animate: true });
+                }
                 persistCategoryOrder();
             }
             colDrag = null;
@@ -508,10 +518,21 @@ export const DragDropEngine = {
                     if (card.classList.contains('expanded')) {
                         UI.saveColumnsFloatSize(card.dataset.id, rect.w, rect.h);
                     }
+                    const floatIdx = UI.getCanvasOrderIndex({ type: 'float', id: card.dataset.id });
+                    if (floatIdx >= 0) {
+                        UI.layoutColumnView(canvas, {
+                            animate: true,
+                            fromIndex: floatIdx + 1,
+                            pinned: { index: floatIdx, rect }
+                        });
+                    }
                 } else {
                     const cat = card.dataset.category;
                     if (cat) UI.saveColumnNoteLayout(cat, card.dataset.id, rect);
                     UI.autoArrangeColumnNotes(boundsEl, { animate: true });
+                    if (cat) {
+                        UI.reflowCanvasFromOrderEntry(canvas, { type: 'category', name: cat }, { animate: true });
+                    }
                 }
             }
             dragActive = null;
@@ -643,10 +664,21 @@ export const DragDropEngine = {
                 if (isFloat) {
                     UI.saveColumnsFloatPosition(card.dataset.id, rect.x, rect.y);
                     UI.saveColumnsFloatSize(card.dataset.id, rect.w, rect.h);
+                    const floatIdx = UI.getCanvasOrderIndex({ type: 'float', id: card.dataset.id });
+                    if (floatIdx >= 0) {
+                        UI.layoutColumnView(canvas, {
+                            animate: true,
+                            fromIndex: floatIdx + 1,
+                            pinned: { index: floatIdx, rect }
+                        });
+                    }
                 } else {
                     const cat = card.dataset.category;
                     if (cat) UI.saveColumnNoteLayout(cat, card.dataset.id, rect);
                     UI.autoArrangeColumnNotes(boundsEl, { animate: true });
+                    if (cat) {
+                        UI.reflowCanvasFromOrderEntry(canvas, { type: 'category', name: cat }, { animate: true });
+                    }
                 }
             }
             resizeActive = null;
