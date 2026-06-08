@@ -387,23 +387,12 @@ export const DragDropEngine = {
             if (!moved) {
                 restore();
             } else {
-                const x = UI.snapGridCoord(parseFloat(column.style.left) || 0, CANVAS_GRID_W);
-                const y = UI.snapGridCoord(parseFloat(column.style.top) || 0, CANVAS_GRID_W);
+                const x = Math.max(0, Math.round(parseFloat(column.style.left) || 0));
+                const y = Math.max(0, Math.round(parseFloat(column.style.top) || 0));
                 column.style.left = `${x}px`;
                 column.style.top = `${y}px`;
                 const cat = column.dataset.category;
-                const idx = cat ? UI.getCanvasOrderIndex({ type: 'category', name: cat }) : -1;
-                const { w, h } = UI.measureCanvasOrderEntry(column);
                 if (cat) UI.saveColumnPosition(cat, x, y);
-                if (idx >= 0) {
-                    UI.layoutColumnView(canvas, {
-                        animate: true,
-                        fromIndex: idx + 1,
-                        pinned: { index: idx, rect: { x, y, w, h } }
-                    });
-                } else {
-                    UI.layoutColumnView(canvas, { animate: true });
-                }
                 persistCategoryOrder();
             }
             colDrag = null;
@@ -508,9 +497,9 @@ export const DragDropEngine = {
                     ? canvas.clientWidth
                     : UI.getColumnNotesInnerWidth(boundsEl);
                 const maxH = isFloat
-                    ? window.innerHeight
+                    ? Math.max(canvas.scrollHeight, canvas.clientHeight, window.innerHeight)
                     : UI.getColumnNotesMaxHeight(boundsEl);
-                let rect = UI.snapNoteRect(UI.readNoteRect(card), { maxW: innerW, maxH });
+                const rect = UI.clampManualNoteRect(UI.readNoteRect(card), { maxW: innerW, maxH });
                 UI.applyNoteRect(card, rect, { settling: true });
 
                 if (isFloat) {
@@ -518,21 +507,11 @@ export const DragDropEngine = {
                     if (card.classList.contains('expanded')) {
                         UI.saveColumnsFloatSize(card.dataset.id, rect.w, rect.h);
                     }
-                    const floatIdx = UI.getCanvasOrderIndex({ type: 'float', id: card.dataset.id });
-                    if (floatIdx >= 0) {
-                        UI.layoutColumnView(canvas, {
-                            animate: true,
-                            fromIndex: floatIdx + 1,
-                            pinned: { index: floatIdx, rect }
-                        });
-                    }
                 } else {
                     const cat = card.dataset.category;
                     if (cat) UI.saveColumnNoteLayout(cat, card.dataset.id, rect);
-                    UI.autoArrangeColumnNotes(boundsEl, { animate: true });
-                    if (cat) {
-                        UI.reflowCanvasFromOrderEntry(canvas, { type: 'category', name: cat }, { animate: true });
-                    }
+                    const column = boundsEl.closest('.canvas-column');
+                    if (column) UI.resizeColumnToFit(column, { animate: true });
                 }
             }
             dragActive = null;
@@ -657,28 +636,20 @@ export const DragDropEngine = {
                 card.style.setProperty('height', snapshot.height, 'important');
             } else {
                 const innerW = isFloat ? canvas.clientWidth : UI.getColumnNotesInnerWidth(boundsEl);
-                const maxH = isFloat ? window.innerHeight : UI.getColumnNotesMaxHeight(boundsEl);
-                const rect = UI.snapNoteRect(UI.readNoteRect(card), { maxW: innerW, maxH });
+                const maxH = isFloat
+                    ? Math.max(canvas.scrollHeight, canvas.clientHeight, window.innerHeight)
+                    : UI.getColumnNotesMaxHeight(boundsEl);
+                const rect = UI.clampManualNoteRect(UI.readNoteRect(card), { maxW: innerW, maxH });
                 UI.applyNoteRect(card, rect, { settling: true });
 
                 if (isFloat) {
                     UI.saveColumnsFloatPosition(card.dataset.id, rect.x, rect.y);
                     UI.saveColumnsFloatSize(card.dataset.id, rect.w, rect.h);
-                    const floatIdx = UI.getCanvasOrderIndex({ type: 'float', id: card.dataset.id });
-                    if (floatIdx >= 0) {
-                        UI.layoutColumnView(canvas, {
-                            animate: true,
-                            fromIndex: floatIdx + 1,
-                            pinned: { index: floatIdx, rect }
-                        });
-                    }
                 } else {
                     const cat = card.dataset.category;
                     if (cat) UI.saveColumnNoteLayout(cat, card.dataset.id, rect);
-                    UI.autoArrangeColumnNotes(boundsEl, { animate: true });
-                    if (cat) {
-                        UI.reflowCanvasFromOrderEntry(canvas, { type: 'category', name: cat }, { animate: true });
-                    }
+                    const column = boundsEl.closest('.canvas-column');
+                    if (column) UI.resizeColumnToFit(column, { animate: true });
                 }
             }
             resizeActive = null;

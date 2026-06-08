@@ -674,6 +674,24 @@ export const UI = {
             collapseBtn.textContent = nowCollapsed ? '▶' : '▼';
             collapseBtn.title = nowCollapsed ? 'Expand category' : 'Collapse category';
             collapseBtn.setAttribute('aria-label', collapseBtn.title);
+            const notesEl = colWrapper.querySelector('.column-notes');
+            if (!nowCollapsed && notesEl) {
+                const itemIds = [...notesEl.querySelectorAll('.mini-card')]
+                    .map((c) => c.dataset.id)
+                    .filter(Boolean);
+                this.autoPackColumnNotes(notesEl, itemIds, categoryName);
+                this.autoArrangeColumnNotes(notesEl, { animate: true });
+            } else {
+                this.resizeColumnToFit(colWrapper, { animate: true });
+            }
+            const canvas = document.getElementById('app-canvas');
+            if (canvas?.classList.contains('view-columns')) {
+                this.reflowCanvasFromOrderEntry(
+                    canvas,
+                    { type: 'category', name: categoryName },
+                    { animate: true }
+                );
+            }
         });
 
         const hideBtn = colWrapper.querySelector('.column-hide-btn');
@@ -2500,7 +2518,7 @@ export const UI = {
         return { x: xOrigin, y: origin, w, h };
     },
 
-    applyCanvasOrderEntryPosition(el, entry, rect, { animate = false } = {}) {
+    applyCanvasOrderEntryPosition(el, entry, rect, { animate = false, snap = true } = {}) {
         if (!el || !entry) return;
         if (entry.type === 'category') {
             el.style.position = 'absolute';
@@ -2512,12 +2530,18 @@ export const UI = {
         }
         if (entry.type === 'float') {
             const maxW = el.closest('#app-canvas')?.clientWidth || window.innerWidth;
-            const snapped = this.snapNoteRect(rect, { maxW, maxH: window.innerHeight });
-            this.applyNoteRect(el, snapped, { settling: animate });
+            const maxH = Math.max(
+                el.closest('#app-canvas')?.scrollHeight || 0,
+                window.innerHeight
+            );
+            const finalRect = snap
+                ? this.snapNoteRect(rect, { maxW, maxH })
+                : this.clampManualNoteRect(rect, { maxW, maxH });
+            this.applyNoteRect(el, finalRect, { settling: animate });
             if (el.dataset.id) {
-                this.saveColumnsFloatPosition(el.dataset.id, snapped.x, snapped.y);
+                this.saveColumnsFloatPosition(el.dataset.id, finalRect.x, finalRect.y);
                 if (el.classList.contains('expanded')) {
-                    this.saveColumnsFloatSize(el.dataset.id, snapped.w, snapped.h);
+                    this.saveColumnsFloatSize(el.dataset.id, finalRect.w, finalRect.h);
                 }
             }
         }
@@ -2530,6 +2554,10 @@ export const UI = {
             const cat = col.dataset.category;
             const notesEl = col.querySelector('.column-notes');
             if (!notesEl || !cat) return;
+            if (col.classList.contains('is-collapsed')) {
+                this.resizeColumnToFit(col, { animate });
+                return;
+            }
             const itemIds = [...notesEl.querySelectorAll('.mini-card')]
                 .map((c) => c.dataset.id)
                 .filter(Boolean);
@@ -2555,13 +2583,13 @@ export const UI = {
             const { w, h } = this.measureCanvasOrderEntry(el);
             let rect;
 
+            const savedPos = this.getSavedCanvasPosition(entry);
+            let snap = false;
+
             if (pinned && pinned.index === index && pinned.rect) {
-                rect = {
-                    x: this.snapCanvasCoord(pinned.rect.x, origin, COLUMN_STRIDE_X),
-                    y: this.snapCanvasCoord(pinned.rect.y, origin, COLUMN_STRIDE_Y),
-                    w,
-                    h
-                };
+                rect = { x: pinned.rect.x, y: pinned.rect.y, w, h };
+            } else if (savedPos) {
+                rect = { x: savedPos.x, y: savedPos.y, w, h };
             } else if (index < fromIndex) {
                 rect = {
                     x: parseFloat(el.style.left) || origin,
@@ -2571,9 +2599,10 @@ export const UI = {
                 };
             } else {
                 rect = this.findFirstCanvasSlot(w, h, placed, packW + origin * 2, { origin });
+                snap = true;
             }
 
-            this.applyCanvasOrderEntryPosition(el, entry, rect, { animate });
+            this.applyCanvasOrderEntryPosition(el, entry, rect, { animate, snap });
             placed.push(rect);
         });
 
@@ -2644,6 +2673,35 @@ export const UI = {
 
     spanToCellsH(span) {
         return Math.max(1, Math.round((span + COLUMN_GRID_GAP) / COLUMN_STRIDE_Y));
+    },
+
+    getSavedCanvasPosition(entry) {
+        if (!entry) return null;
+        if (entry.type === 'category') {
+            const pos = this.getColumnPositions()[entry.name];
+            if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
+                return { x: pos.x, y: pos.y };
+            }
+        }
+        if (entry.type === 'float') {
+            const pos = this.getColumnsFloatPositions()[entry.id];
+            if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
+                return { x: pos.x, y: pos.y };
+            }
+        }
+        return null;
+    },
+
+    clampManualNoteRect(rect, { maxW = Infinity, maxH = Infinity } = {}) {
+        let w = Math.max(FREEFORM_MIN_W, Math.round(rect.w));
+        let h = Math.max(FREEFORM_MIN_H, Math.round(rect.h));
+        if (maxW < Infinity) w = Math.min(w, maxW);
+        if (maxH < Infinity) h = Math.min(h, maxH);
+        let x = Math.max(0, Math.round(rect.x));
+        let y = Math.max(0, Math.round(rect.y));
+        if (maxW < Infinity && x + w > maxW) x = Math.max(0, maxW - w);
+        if (maxH < Infinity && y + h > maxH) y = Math.max(0, maxH - h);
+        return { x, y, w, h };
     },
 
     snapNoteRect(rect, { maxW = Infinity, maxH = Infinity } = {}) {
@@ -2828,7 +2886,7 @@ export const UI = {
         });
     },
 
-    autoArrangeColumnNotes(columnNotesEl, { animate = false } = {}) {
+    autoArrangeColumnNotes(columnNotesEl, { animate = false, respectSaved = true } = {}) {
         if (!columnNotesEl) return;
         const categoryName = columnNotesEl.dataset.category;
         const innerW = this.getColumnNotesInnerWidth(columnNotesEl);
@@ -2839,12 +2897,36 @@ export const UI = {
             return;
         }
 
+        const saved = respectSaved && categoryName
+            ? (this.getColumnNoteLayout()[categoryName] || {})
+            : {};
+
         const sorted = cards
             .map((card) => ({ card, rect: this.readNoteRect(card) }))
             .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x);
 
         const placed = [];
+
         sorted.forEach(({ card, rect }) => {
+            const itemId = card.dataset.id;
+            const stored = itemId ? saved[itemId] : null;
+            if (respectSaved && stored && Number.isFinite(stored.x) && Number.isFinite(stored.w)) {
+                const manual = this.clampManualNoteRect(
+                    { x: stored.x, y: stored.y, w: rect.w, h: rect.h },
+                    { maxW: innerW, maxH }
+                );
+                this.applyNoteRect(card, manual, { settling: false });
+                placed.push(manual);
+            }
+        });
+
+        sorted.forEach(({ card, rect }) => {
+            const itemId = card.dataset.id;
+            const stored = itemId ? saved[itemId] : null;
+            if (respectSaved && stored && Number.isFinite(stored.x) && Number.isFinite(stored.w)) {
+                return;
+            }
+
             let snapped = this.snapNoteRect(rect, {
                 maxW: innerW,
                 maxH
@@ -2862,8 +2944,8 @@ export const UI = {
 
             this.applyNoteRect(card, snapped, { settling: animate });
             placed.push(snapped);
-            if (categoryName && card.dataset.id) {
-                this.saveColumnNoteLayout(categoryName, card.dataset.id, snapped);
+            if (categoryName && itemId) {
+                this.saveColumnNoteLayout(categoryName, itemId, snapped);
             }
         });
 
@@ -2875,20 +2957,26 @@ export const UI = {
 
     resizeColumnToFit(columnEl, { animate = false } = {}) {
         if (!columnEl) return;
+        const collapsed = columnEl.classList.contains('is-collapsed');
         const notesEl = columnEl.querySelector('.column-notes');
-        const innerW = notesEl
-            ? [...notesEl.querySelectorAll('.mini-card')].reduce((max, card) => {
+        let innerW = COLUMN_MIN_INNER_W;
+        let contentH = 0;
+
+        if (!collapsed && notesEl) {
+            innerW = [...notesEl.querySelectorAll('.mini-card')].reduce((max, card) => {
                 const r = this.readNoteRect(card);
                 return Math.max(max, r.x + r.w);
-            }, COLUMN_MIN_INNER_W)
-            : COLUMN_MIN_INNER_W;
-        const contentH = notesEl
-            ? parseFloat(notesEl.style.minHeight) || notesEl.offsetHeight
-            : 0;
+            }, COLUMN_MIN_INNER_W);
+            contentH = parseFloat(notesEl.style.minHeight) || notesEl.offsetHeight;
+        } else if (notesEl) {
+            notesEl.style.minHeight = '0';
+        }
+
         const colW = Math.max(CANVAS_GRID_W, innerW + COLUMN_INNER_PAD * 2);
         const colH = COLUMN_HEADER_APPROX_H + contentH + COLUMN_INNER_PAD;
         columnEl.style.width = `${colW}px`;
         columnEl.style.minHeight = `${colH}px`;
+        columnEl.style.height = collapsed ? `${colH}px` : '';
         if (animate) columnEl.classList.add('layout-settling');
         else columnEl.classList.remove('layout-settling');
     },

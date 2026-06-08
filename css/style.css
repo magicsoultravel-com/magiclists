@@ -1121,10 +1121,12 @@ body {
 
 .canvas-column.is-collapsed > .column-notes {
     display: none !important;
+    min-height: 0 !important;
 }
 
 .canvas-column.is-collapsed {
     align-self: start;
+    overflow: hidden;
 }
 
 /* ==========================================================================
