@@ -141,11 +141,14 @@ export function defaultStartDateTimeNow() {
     return `${date}T${time}`;
 }
 
-export function normalizeItemForSave(item) {
+export function normalizeItemForSave(item, { preserveEmptySteps = false } = {}) {
     if (!item) return item;
 
     const content = String(item.content || '');
-    const steps = (item.steps || []).filter((step) => stripRichText(step?.text || '').trim());
+    const allSteps = item.steps || [];
+    const steps = preserveEmptySteps
+        ? [...allSteps]
+        : allSteps.filter((step) => stripRichText(step?.text || '').trim());
     const hasTitle = stripRichText(item.title || '').trim();
     const startDateTime = String(item.startDateTime || '').trim()
         ? item.startDateTime
@@ -392,7 +395,8 @@ export const UI = {
     },
 
     emitItemMutation(item, { preserveView = false, beforeItem = null, skipRerender = false } = {}) {
-        const normalized = normalizeItemForSave(item);
+        const preserveEmptySteps = preserveView && skipRerender;
+        const normalized = normalizeItemForSave(item, { preserveEmptySteps });
         Object.assign(item, normalized);
         window.dispatchEvent(new CustomEvent('item:mutation_requested', {
             detail: { item: normalized, preserveView, beforeItem, skipRerender }
@@ -1802,6 +1806,8 @@ export const UI = {
     },
 
     refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor) {
+        const shell = card.querySelector('.editor-note-shell');
+        if (shell) this.syncItemBodyFromDom(shell, item);
         const body = card.querySelector('.editor-note-body') || card.querySelector('.card-body');
         const scrollTop = body?.scrollTop ?? 0;
         const pendingFocusStepId = card.dataset.pendingFocusStepId;
@@ -2291,6 +2297,7 @@ export const UI = {
             root.querySelectorAll('.step-indent-btn').forEach((btn) => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
+                    this.syncItemBodyFromDom(root, item);
                     const row = btn.closest('.step-row--display');
                     const stepId = row?.dataset.stepId;
                     if (!stepId) return;
@@ -2298,14 +2305,18 @@ export const UI = {
                         const step = it.steps.find(s => s.id === stepId);
                         if (!step) return;
                         step.level = Math.min(4, getStepLevel(step) + 1);
-                    });
+                    }, { persist: false });
                     refresh();
+                    if (!localOnly) {
+                        this.mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+                    }
                 });
             });
 
             root.querySelectorAll('.step-outdent-btn').forEach((btn) => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
+                    this.syncItemBodyFromDom(root, item);
                     const row = btn.closest('.step-row--display');
                     const stepId = row?.dataset.stepId;
                     if (!stepId) return;
@@ -2313,8 +2324,11 @@ export const UI = {
                         const step = it.steps.find(s => s.id === stepId);
                         if (!step) return;
                         step.level = Math.max(0, getStepLevel(step) - 1);
-                    });
+                    }, { persist: false });
                     refresh();
+                    if (!localOnly) {
+                        this.mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+                    }
                 });
             });
 

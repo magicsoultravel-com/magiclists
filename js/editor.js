@@ -125,20 +125,20 @@ export const Editor = {
         }, 1000);
     },
     
-    persistNote({ force = false } = {}) {
+    persistNote({ force = false, normalize = false } = {}) {
         if (!this.activeItem) return false;
         if (!force && !this.hasUserInteracted) return false;
 
-        const currentData = this.collectFormData();
+        const currentData = this.collectFormData({ normalize });
         if (!noteHasSavableContent(currentData) && this.isNewUnsavedNote) return false;
 
         const unchanged = JSON.stringify(currentData) === JSON.stringify(this.activeItem);
         if (!force && unchanged) return true;
 
         this.isNewUnsavedNote = false;
-        this.activeItem = currentData;
+        Object.assign(this.activeItem, currentData);
         window.dispatchEvent(new CustomEvent('item:mutation_requested', {
-            detail: { item: currentData, preserveView: true }
+            detail: { item: { ...this.activeItem }, preserveView: true }
         }));
         return true;
     },
@@ -197,10 +197,13 @@ export const Editor = {
         });
     },
 
-    collectFormData() {
+    collectFormData({ normalize = false } = {}) {
         this.syncActiveItemFromDom();
         const finalBgColor = resolveNoteColor(document.getElementById('edit-bg-color-value')?.value);
-        const steps = (this.activeItem.steps || []).filter((step) => stripRichText(step.text || '').trim());
+        const allSteps = this.activeItem.steps || [];
+        const steps = normalize
+            ? allSteps.filter((step) => stripRichText(step.text || '').trim())
+            : allSteps;
 
         const data = {
             ...this.activeItem,
@@ -232,7 +235,7 @@ export const Editor = {
                 return UI.resolveEditorBodyLayoutUnchecked(this.activeItem);
             })()
         };
-        return normalizeItemForSave(data);
+        return normalize ? normalizeItemForSave(data) : data;
     },
     
     resetEditorState() {
@@ -253,14 +256,13 @@ export const Editor = {
 
         let savedItem = null;
         if (this.activeItem) {
-            this.syncActiveItemFromDom();
-            const currentData = this.collectFormData();
+            const currentData = this.collectFormData({ normalize: true });
             const shouldPersist = noteHasSavableContent(currentData)
                 || (this.hasUserInteracted && !this.isNewUnsavedNote);
             if (shouldPersist) {
                 if (revealOnBoard) UI.markNoteExpanded(currentData.id);
-                this.persistNote({ force: true });
-                savedItem = this.activeItem;
+                this.persistNote({ force: true, normalize: true });
+                savedItem = { ...this.activeItem };
             }
         }
 
@@ -323,6 +325,7 @@ export const Editor = {
     refreshEditorNoteBody() {
         const body = document.getElementById('editor-note-body');
         if (!body || !this.activeItem) return;
+        this.syncActiveItemFromDom();
         const scrollTop = body.scrollTop;
         const active = document.activeElement;
         const focusField = active?.dataset?.field;
@@ -345,6 +348,7 @@ export const Editor = {
                 body.dataset.pendingFocusPlainOffset = pendingFocusPlainOffset;
             }
         }
+        delete body.dataset.noteInteractionsBound;
         UI.attachNoteBodyInteractions(body, this.activeItem, {
             refresh: () => this.refreshEditorNoteBody(),
             localOnly: true,
@@ -511,7 +515,7 @@ export const Editor = {
 
         this.markInteracted();
         const beforeItem = JSON.parse(JSON.stringify(this.activeItem));
-        const data = this.collectFormData();
+        const data = this.collectFormData({ normalize: true });
         data.status = isArchived ? 'active' : 'archived';
 
         window.dispatchEvent(new CustomEvent('item:mutation_requested', {
