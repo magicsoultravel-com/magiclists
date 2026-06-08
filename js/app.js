@@ -16,6 +16,7 @@ import { FocusMode } from './focusMode.js';
 import { DisplayOptions } from './displayOptions.js';
 import { AppTheme } from './appTheme.js';
 import { DesktopZoom } from './desktopZoom.js';
+import { resetCustomizationToDefaults } from './customizationReset.js';
 import { exportAppCode } from './codeExport.js';
 import { readViewSessions, restoreViewSession } from './viewSession.js';
 
@@ -71,6 +72,7 @@ class Application {
         this.setupLayoutResetButton();
         this.setupCollapseAllButton();
         this.setupDisplayOptionsButton();
+        this.setupResetCustomizationButton();
         this.setupAppThemeButton();
         this.setupFocusModeButton();
         this.setupSaveViewButton();
@@ -430,6 +432,19 @@ class Application {
     setupDisplayOptionsButton() {
         const btn = document.getElementById('btn-display-options');
         if (btn) btn.innerHTML = ACTION_ICONS.displayOptions;
+    }
+
+    setupResetCustomizationButton() {
+        const btn = document.getElementById('btn-reset-customization');
+        if (!btn) return;
+        btn.innerHTML = ACTION_ICONS.resetCustomization;
+        btn.addEventListener('click', () => {
+            if (!resetCustomizationToDefaults()) return;
+            AppState.focusCategories = [];
+            FocusMode.syncButtonState();
+            this.onFocusChange();
+            window.dispatchEvent(new CustomEvent('board:visibility_changed'));
+        });
     }
 
     setupAppThemeButton() {

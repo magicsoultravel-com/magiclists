@@ -949,6 +949,7 @@ body {
 #btn-collapse-all,
 #btn-app-theme,
 #btn-display-options,
+#btn-reset-customization,
 #btn-focus-mode,
 #btn-save-view,
 #btn-recall-view {
@@ -4851,6 +4852,79 @@ html[data-app-theme="casual"] .mini-card .checklist-badge {
 html[data-app-theme="casual"] .mini-card.compact .card-actions::before {
     background: rgba(255, 254, 249, 0.94);
     box-shadow: 0 0 0 1px rgba(59, 110, 168, 0.14);
+}
+
+/* Casual Dark — dark school notepad */
+html[data-app-theme="casual-dark"] #app-canvas {
+    background-color: #1a1c20;
+    background-image:
+        radial-gradient(circle at 18% 12%, rgba(107, 159, 212, 0.06), transparent 42%),
+        radial-gradient(circle at 82% 78%, rgba(0, 0, 0, 0.22), transparent 38%);
+}
+
+html[data-app-theme="casual-dark"] .mini-card,
+html[data-app-theme="casual-dark"] #editor-overlay .editor-note-shell,
+html[data-app-theme="casual-dark"] .calendar-note-item,
+html[data-app-theme="casual-dark"] .calendar-hour-note {
+    background-color: #2a2e36 !important;
+    background-image:
+        linear-gradient(to right, rgba(220, 100, 100, 0.42) 1px, transparent 1px),
+        repeating-linear-gradient(
+            to bottom,
+            transparent 0,
+            transparent calc(1.35rem - 1px),
+            rgba(107, 159, 212, 0.22) calc(1.35rem - 1px),
+            rgba(107, 159, 212, 0.22) 1.35rem
+        ) !important;
+    background-size: 100% 100%, 100% 1.35rem !important;
+    background-position: 1.35rem 0, 0 0.55rem !important;
+    background-repeat: no-repeat, repeat !important;
+    border-left-color: transparent !important;
+    border-radius: 2px 6px 6px 2px !important;
+    box-shadow:
+        0 1px 0 rgba(0, 0, 0, 0.18),
+        0 2px 10px rgba(0, 0, 0, 0.28) !important;
+    color: #dce6f2 !important;
+    --card-fg: #dce6f2;
+    --card-muted: #8fa8c4;
+    --card-action-bg: rgba(107, 159, 212, 0.12);
+    --card-action-fg: #9ec5ef;
+    --card-border-subtle: rgba(107, 159, 212, 0.22);
+    --card-focus-bg: rgba(107, 159, 212, 0.1);
+    --card-focus-ring: rgba(107, 159, 212, 0.32);
+    --card-link: #93c5fd;
+    --card-placeholder: #7b92ad;
+    --card-input-bg: rgba(0, 0, 0, 0.22);
+    --card-toolbar-bg: #242830;
+    --card-panel-bg: #1f232a;
+}
+
+html[data-app-theme="casual-dark"] .mini-card .mini-card-title,
+html[data-app-theme="casual-dark"] .mini-card .card-content-preview,
+html[data-app-theme="casual-dark"] .mini-card .step-text,
+html[data-app-theme="casual-dark"] #editor-overlay .mini-card-title,
+html[data-app-theme="casual-dark"] #editor-overlay .step-text {
+    color: #dce6f2 !important;
+}
+
+html[data-app-theme="casual-dark"][data-note-font="default"] .mini-card .mini-card-title,
+html[data-app-theme="casual-dark"][data-note-font="default"] .mini-card .card-content-preview,
+html[data-app-theme="casual-dark"][data-note-font="default"] .mini-card .step-text,
+html[data-app-theme="casual-dark"][data-note-font="default"] #editor-overlay .editor-note-shell .step-text {
+    font-family: 'Patrick Hand', 'Segoe Print', 'Comic Neue', cursive;
+    font-size: 0.78rem;
+    line-height: 1.35rem;
+}
+
+html[data-app-theme="casual-dark"] .mini-card .category-name,
+html[data-app-theme="casual-dark"] .mini-card .editor-created-date,
+html[data-app-theme="casual-dark"] .mini-card .checklist-badge {
+    color: #8fa8c4 !important;
+}
+
+html[data-app-theme="casual-dark"] .mini-card.compact .card-actions::before {
+    background: rgba(42, 46, 54, 0.94);
+    box-shadow: 0 0 0 1px rgba(107, 159, 212, 0.18);
 }
 
 @media (max-width: 768px) {

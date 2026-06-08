@@ -132,7 +132,8 @@ export const ACTION_ICONS = {
     recallView: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.8 2.2h6.4v7.4L6 7.6 2.8 9.6V2.2z" fill="currentColor"/></svg>',
     focusMode: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.95"/><circle cx="6" cy="6" r="1.6" fill="currentColor"/></svg>',
     displayOptions: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 3.4h7.6M2.2 6h7.6M2.2 8.6h7.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/><circle cx="4.4" cy="3.4" r="0.85" fill="currentColor"/><circle cx="7.8" cy="6" r="0.85" fill="currentColor"/><circle cx="5.6" cy="8.6" r="0.85" fill="currentColor"/></svg>',
-    appTheme: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="3.6" cy="4.2" r="1.5" fill="currentColor" opacity="0.9"/><circle cx="6.8" cy="3.4" r="1.5" fill="currentColor" opacity="0.65"/><circle cx="8.4" cy="6.8" r="1.5" fill="currentColor" opacity="0.45"/><path d="M1.4 10.2h9.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>'
+    appTheme: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="3.6" cy="4.2" r="1.5" fill="currentColor" opacity="0.9"/><circle cx="6.8" cy="3.4" r="1.5" fill="currentColor" opacity="0.65"/><circle cx="8.4" cy="6.8" r="1.5" fill="currentColor" opacity="0.45"/><path d="M1.4 10.2h9.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
+    resetCustomization: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 2.2a3.6 3.6 0 1 0 2.3 6.4L7.2 9.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.1 7.4 7.2 9.5 9.3 7.4" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
 
 const SAVED_VIEWS_KEY = 'matrix_saved_views';
@@ -643,8 +644,13 @@ export const UI = {
                 h: this.cellsToSpanH(2)
             };
         }
-        if (this.isGridMultiCellSize(base.w, base.h)) {
-            return { ...base };
+        return this.gridCompactRect(base, savedRect);
+    },
+
+    gridCompactRect(base, saved) {
+        const source = saved && Number.isFinite(saved.w) ? saved : base;
+        if (source?.customCompact && this.isGridMultiCellSize(source.w, source.h)) {
+            return { ...base, w: source.w, h: source.h };
         }
         return {
             ...base,
@@ -1404,6 +1410,18 @@ export const UI = {
             this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
         } else {
             this.applyGridBoardSize(card);
+        }
+
+        if (!expanded) {
+            const pos = this.readNoteRect(card);
+            const compactRect = {
+                x: pos.x,
+                y: pos.y,
+                w: COLUMN_GRID_CELL_W,
+                h: COLUMN_GRID_CELL_H
+            };
+            this.applyNoteRect(card, compactRect, { settling: false });
+            this.saveGridLayout(item.id, compactRect);
         }
 
         if (canvas?.classList.contains('view-grid') && !deferReflow) {
@@ -3349,15 +3367,17 @@ export const UI = {
         }
     },
 
-    saveGridLayout(itemId, rect) {
+    saveGridLayout(itemId, rect, { customCompact = false } = {}) {
         if (!itemId || !rect) return;
         const layout = this.getGridLayout();
-        layout[itemId] = {
+        const entry = {
             x: Math.round(rect.x),
             y: Math.round(rect.y),
             w: Math.round(rect.w),
             h: Math.round(rect.h)
         };
+        if (customCompact) entry.customCompact = true;
+        layout[itemId] = entry;
         localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layout));
     },
 
@@ -3432,13 +3452,12 @@ export const UI = {
         let w;
         let h;
         if (!isExpanded) {
-            if (saved && this.isGridMultiCellSize(saved.w, saved.h)) {
-                w = saved.w;
-                h = saved.h;
-            } else {
-                w = COLUMN_GRID_CELL_W;
-                h = COLUMN_GRID_CELL_H;
-            }
+            const compact = this.gridCompactRect(
+                { x: 0, y: 0, w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H },
+                saved
+            );
+            w = compact.w;
+            h = compact.h;
         } else if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
             w = saved.w;
             h = saved.h;

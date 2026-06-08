@@ -188,6 +188,24 @@ export const APP_THEMES = [
             '--desktop-bg': '#e8e4d9',
             '--chrome-bg': '#f5f1e8'
         }
+    },
+    {
+        id: 'casual-dark',
+        label: 'Casual Dark',
+        desc: 'Dark lined notepad',
+        special: 'casual-dark',
+        swatch: ['#1a1c20', '#2a2e36', '#6b9fd4'],
+        tokens: {
+            '--bg-primary': '#1a1c20',
+            '--bg-surface': '#22252b',
+            '--bg-card': '#2a2e36',
+            '--text-main': '#dce6f2',
+            '--text-muted': '#8fa8c4',
+            '--accent': '#6b9fd4',
+            '--border-color': '#3a4150',
+            '--desktop-bg': '#1a1c20',
+            '--chrome-bg': '#22252b'
+        }
     }
 ];
 

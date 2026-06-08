@@ -349,7 +349,9 @@ export const DragDropEngine = {
             const rect = UI.snapNoteRect(UI.readNoteRect(card), { maxW: packW, maxH });
             UI.applyNoteRect(card, rect, { settling: animate });
 
-            UI.saveGridLayout(card.dataset.id, rect);
+            UI.saveGridLayout(card.dataset.id, rect, {
+                customCompact: !card.classList.contains('expanded')
+            });
             UI.reflowGridBoard(canvas, card.dataset.id, { animate });
             canvas.classList.remove('is-layout-active', 'is-grid-forcing');
         };
