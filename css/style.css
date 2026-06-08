@@ -777,6 +777,20 @@ body {
 }
 
 /* Shared inline + modal note editing surface */
+/* Note typography — overridden by Display options → Note font */
+.mini-card .mini-card-title,
+.mini-card .card-content-preview,
+.mini-card .step-text,
+.mini-card .editor-note-body,
+#editor-overlay .editor-note-shell .mini-card-title,
+#editor-overlay .editor-note-shell .card-content-preview,
+#editor-overlay .editor-note-shell .step-text,
+#editor-overlay .editor-note-body,
+.calendar-note-item,
+.calendar-hour-note {
+    font-family: var(--note-font-family, inherit);
+}
+
 .note-surface .card-content-preview {
     font-size: 0.66rem;
     line-height: 1.35;
@@ -1008,6 +1022,105 @@ html[data-desktop-gradient="1"] #app-canvas.view-columns.is-layout-active {
     flex-shrink: 0;
     margin: 0;
     accent-color: var(--accent);
+}
+
+.note-font-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    max-height: 11rem;
+    overflow-y: auto;
+    padding: 0 0.2rem;
+    margin-bottom: 0.15rem;
+}
+
+.note-font-option {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: 100%;
+    padding: 0.35rem 0.45rem;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-main);
+    cursor: pointer;
+    text-align: left;
+}
+
+.note-font-option:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: var(--border-color);
+}
+
+.note-font-option.is-selected {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border-color));
+}
+
+.note-font-option-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.note-font-option-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.note-font-option-desc {
+    font-size: 0.58rem;
+    color: var(--text-muted);
+    line-height: 1.2;
+}
+
+.note-font-sample {
+    flex-shrink: 0;
+    font-size: 1.15rem;
+    line-height: 1;
+    color: var(--text-main);
+    opacity: 0.9;
+    min-width: 1.6rem;
+    text-align: center;
+}
+
+.note-font-sample--compact {
+    font-size: 0.62rem;
+}
+
+html[data-note-font="press-start"] .mini-card .mini-card-title,
+html[data-note-font="press-start"] .mini-card .card-content-preview,
+html[data-note-font="press-start"] .mini-card .step-text,
+html[data-note-font="press-start"] #editor-overlay .editor-note-shell .step-text {
+    font-size: 0.52rem;
+    line-height: 1.65;
+    letter-spacing: 0.02em;
+}
+
+html[data-note-font="fredericka"] .mini-card .mini-card-title,
+html[data-note-font="fredericka"] .mini-card .card-content-preview,
+html[data-note-font="fredericka"] .mini-card .step-text {
+    line-height: 1.45;
+}
+
+html[data-note-font="caveat"] .mini-card .mini-card-title,
+html[data-note-font="caveat"] .mini-card .card-content-preview,
+html[data-note-font="caveat"] .mini-card .step-text,
+html[data-note-font="patrick-hand"] .mini-card .mini-card-title,
+html[data-note-font="patrick-hand"] .mini-card .card-content-preview,
+html[data-note-font="patrick-hand"] .mini-card .step-text,
+html[data-note-font="indie-flower"] .mini-card .mini-card-title,
+html[data-note-font="indie-flower"] .mini-card .card-content-preview,
+html[data-note-font="indie-flower"] .mini-card .step-text,
+html[data-note-font="kalam"] .mini-card .mini-card-title,
+html[data-note-font="kalam"] .mini-card .card-content-preview,
+html[data-note-font="kalam"] .mini-card .step-text {
+    font-size: 0.78rem;
+    line-height: 1.4;
 }
 
 .focus-mode-list,
@@ -4561,15 +4674,41 @@ html[data-app-theme="monochrome"] .card-act--cal.is-on {
 
 /* Matrix — full UI terminal green (independent from Monochrome) */
 html[data-app-theme="matrix"] {
-    font-family: ui-monospace, 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+    font-family: 'Share Tech Mono', 'VT323', ui-monospace, 'Cascadia Code', monospace;
+    letter-spacing: 0.04em;
 }
 
 html[data-app-theme="matrix"] #control-bar,
 html[data-app-theme="matrix"] .side-panel,
 html[data-app-theme="matrix"] #workspace-footer,
 html[data-app-theme="matrix"] .clock-style-popover,
-html[data-app-theme="matrix"] .app-theme-popover {
+html[data-app-theme="matrix"] .app-theme-popover,
+html[data-app-theme="matrix"] .display-options-popover {
     text-shadow: 0 0 8px rgba(57, 255, 101, 0.12);
+}
+
+html[data-app-theme="matrix"] .btn,
+html[data-app-theme="matrix"] .collapsable-heading,
+html[data-app-theme="matrix"] .app-brand,
+html[data-app-theme="matrix"] .clock-chip {
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 0.92em;
+}
+
+html[data-app-theme="matrix"][data-note-font="default"] .mini-card .mini-card-title,
+html[data-app-theme="matrix"][data-note-font="default"] .mini-card .card-content-preview,
+html[data-app-theme="matrix"][data-note-font="default"] .mini-card .step-text,
+html[data-app-theme="matrix"][data-note-font="default"] #editor-overlay .editor-note-shell .mini-card-title,
+html[data-app-theme="matrix"][data-note-font="default"] #editor-overlay .editor-note-shell .step-text,
+html[data-app-theme="matrix"][data-note-font="default"] #editor-overlay .editor-note-body {
+    font-family: 'VT323', 'Share Tech Mono', monospace;
+    font-size: 0.82rem;
+    letter-spacing: 0.08em;
+    line-height: 1.45;
+    text-shadow:
+        0 0 6px rgba(57, 255, 101, 0.45),
+        0 0 18px rgba(57, 255, 101, 0.15);
 }
 
 html[data-app-theme="matrix"] #app-canvas {
@@ -4621,7 +4760,12 @@ html[data-app-theme="matrix"] #editor-overlay .step-text,
 html[data-app-theme="matrix"] .app-brand,
 html[data-app-theme="matrix"] .clock-chip {
     color: #39ff65 !important;
-    text-shadow: 0 0 6px rgba(57, 255, 101, 0.2);
+}
+
+html[data-app-theme="matrix"]:not([data-note-font="default"]) .mini-card .mini-card-title,
+html[data-app-theme="matrix"]:not([data-note-font="default"]) .mini-card .card-content-preview,
+html[data-app-theme="matrix"]:not([data-note-font="default"]) .mini-card .step-text {
+    text-shadow: 0 0 8px rgba(57, 255, 101, 0.25);
 }
 
 html[data-app-theme="matrix"] .mini-card .category-name,
@@ -4634,6 +4778,79 @@ html[data-app-theme="matrix"] .tool-panel,
 html[data-app-theme="matrix"] .tool-chip {
     font-family: inherit;
     border-color: rgba(57, 255, 101, 0.22);
+}
+
+/* Casual — school notepad with lined paper */
+html[data-app-theme="casual"] #app-canvas {
+    background-color: #e8e4d9;
+    background-image:
+        radial-gradient(circle at 20% 15%, rgba(255, 255, 255, 0.35), transparent 45%),
+        radial-gradient(circle at 80% 70%, rgba(0, 0, 0, 0.03), transparent 40%);
+}
+
+html[data-app-theme="casual"] .mini-card,
+html[data-app-theme="casual"] #editor-overlay .editor-note-shell,
+html[data-app-theme="casual"] .calendar-note-item,
+html[data-app-theme="casual"] .calendar-hour-note {
+    background-color: #fffef9 !important;
+    background-image:
+        linear-gradient(to right, rgba(232, 120, 120, 0.55) 1px, transparent 1px),
+        repeating-linear-gradient(
+            to bottom,
+            transparent 0,
+            transparent calc(1.35rem - 1px),
+            rgba(147, 181, 220, 0.55) calc(1.35rem - 1px),
+            rgba(147, 181, 220, 0.55) 1.35rem
+        ) !important;
+    background-size: 100% 100%, 100% 1.35rem !important;
+    background-position: 1.35rem 0, 0 0.55rem !important;
+    background-repeat: no-repeat, repeat !important;
+    border-left-color: transparent !important;
+    border-radius: 2px 6px 6px 2px !important;
+    box-shadow:
+        0 1px 0 rgba(0, 0, 0, 0.04),
+        0 2px 8px rgba(44, 74, 110, 0.08) !important;
+    color: #2c4a6e !important;
+    --card-fg: #2c4a6e;
+    --card-muted: #6b8ab0;
+    --card-action-bg: rgba(59, 110, 168, 0.08);
+    --card-action-fg: #3b6ea8;
+    --card-border-subtle: rgba(59, 110, 168, 0.18);
+    --card-focus-bg: rgba(59, 110, 168, 0.08);
+    --card-focus-ring: rgba(59, 110, 168, 0.28);
+    --card-link: #2563eb;
+    --card-placeholder: #94a3b8;
+    --card-input-bg: rgba(59, 110, 168, 0.06);
+    --card-toolbar-bg: #f8f6f0;
+    --card-panel-bg: #f3f0e8;
+}
+
+html[data-app-theme="casual"] .mini-card .mini-card-title,
+html[data-app-theme="casual"] .mini-card .card-content-preview,
+html[data-app-theme="casual"] .mini-card .step-text,
+html[data-app-theme="casual"] #editor-overlay .mini-card-title,
+html[data-app-theme="casual"] #editor-overlay .step-text {
+    color: #2c4a6e !important;
+}
+
+html[data-app-theme="casual"][data-note-font="default"] .mini-card .mini-card-title,
+html[data-app-theme="casual"][data-note-font="default"] .mini-card .card-content-preview,
+html[data-app-theme="casual"][data-note-font="default"] .mini-card .step-text,
+html[data-app-theme="casual"][data-note-font="default"] #editor-overlay .editor-note-shell .step-text {
+    font-family: 'Patrick Hand', 'Segoe Print', 'Comic Neue', cursive;
+    font-size: 0.78rem;
+    line-height: 1.35rem;
+}
+
+html[data-app-theme="casual"] .mini-card .category-name,
+html[data-app-theme="casual"] .mini-card .editor-created-date,
+html[data-app-theme="casual"] .mini-card .checklist-badge {
+    color: #6b8ab0 !important;
+}
+
+html[data-app-theme="casual"] .mini-card.compact .card-actions::before {
+    background: rgba(255, 254, 249, 0.94);
+    box-shadow: 0 0 0 1px rgba(59, 110, 168, 0.14);
 }
 
 @media (max-width: 768px) {

@@ -1,21 +1,34 @@
+import {
+    applyNoteFont,
+    isNoteFontCustomized,
+    NOTE_FONTS,
+    readNoteFont,
+    writeNoteFont
+} from './noteFont.js';
+
 const STORAGE_KEY = 'matrix_display_options';
 
 const DEFAULTS = {
     showCategoryName: true,
     showCreatedDate: true,
-    desktopGradient: false
+    desktopGradient: false,
+    noteFontId: 'default'
 };
 
 export function readDisplayOptions() {
     try {
         const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        const noteFontId = NOTE_FONTS.some((f) => f.id === raw.noteFontId)
+            ? raw.noteFontId
+            : readNoteFont();
         return {
             showCategoryName: raw.showCategoryName !== false,
             showCreatedDate: raw.showCreatedDate !== false,
-            desktopGradient: raw.desktopGradient === true
+            desktopGradient: raw.desktopGradient === true,
+            noteFontId
         };
     } catch {
-        return { ...DEFAULTS };
+        return { ...DEFAULTS, noteFontId: readNoteFont() };
     }
 }
 
@@ -30,10 +43,14 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     root.dataset.showNoteCategory = options.showCategoryName ? '1' : '0';
     root.dataset.showNoteCreated = options.showCreatedDate ? '1' : '0';
     root.dataset.desktopGradient = options.desktopGradient ? '1' : '0';
+    applyNoteFont(options.noteFontId);
 }
 
 function isCustomized(options) {
-    return !options.showCategoryName || !options.showCreatedDate || options.desktopGradient;
+    return !options.showCategoryName
+        || !options.showCreatedDate
+        || options.desktopGradient
+        || isNoteFontCustomized(options.noteFontId);
 }
 
 export const DisplayOptions = {
@@ -63,9 +80,16 @@ export const DisplayOptions = {
     setOptions(partial) {
         this.options = { ...this.options, ...partial };
         writeDisplayOptions(this.options);
+        if (partial.noteFontId != null) {
+            writeNoteFont(partial.noteFontId);
+        }
         applyDisplayOptions(this.options);
         this.syncButtonState();
         this.onChange?.(this.options);
+    },
+
+    setNoteFont(fontId) {
+        this.setOptions({ noteFontId: fontId });
     },
 
     syncButtonState() {
@@ -110,6 +134,22 @@ export const DisplayOptions = {
         </label>`;
     },
 
+    noteFontOptionsHtml(selectedId) {
+        return NOTE_FONTS.map((font) => {
+            const selected = font.id === selectedId;
+            const sampleFamily = font.family || "system-ui, sans-serif";
+            const sampleClass = font.compact ? ' note-font-sample--compact' : '';
+            return `<button type="button" class="note-font-option${selected ? ' is-selected' : ''}" data-font="${font.id}" role="menuitemradio" aria-checked="${selected}">
+                <span class="note-font-option-meta">
+                    <span class="note-font-option-label">${escapeHtml(font.label)}</span>
+                    <span class="note-font-option-desc">${escapeHtml(font.desc)}</span>
+                </span>
+                <span class="note-font-sample${sampleClass}" style="font-family:${sampleFamily}">Aa</span>
+                ${selected ? '<span class="clock-style-check" aria-hidden="true">✓</span>' : ''}
+            </button>`;
+        }).join('');
+    },
+
     openPopover() {
         if (!this.triggerBtn) return;
         this.closePopover();
@@ -122,6 +162,9 @@ export const DisplayOptions = {
                 <p class="display-options-heading">Notes on desktop</p>
                 ${this.optionRow('display-opt-category', 'Category name', 'Footer & compact', opts.showCategoryName)}
                 ${this.optionRow('display-opt-created', 'Created date', 'Expanded notes', opts.showCreatedDate)}
+                <div class="focus-mode-divider" role="separator"></div>
+                <p class="display-options-heading">Note font</p>
+                <div class="note-font-list">${this.noteFontOptionsHtml(opts.noteFontId)}</div>
                 <div class="focus-mode-divider" role="separator"></div>
                 <p class="display-options-heading">Desktop</p>
                 ${this.optionRow('display-opt-gradient', 'Gradient background', 'Subtle depth', opts.desktopGradient)}
@@ -139,6 +182,15 @@ export const DisplayOptions = {
         bindToggle('display-opt-category', 'showCategoryName');
         bindToggle('display-opt-created', 'showCreatedDate');
         bindToggle('display-opt-gradient', 'desktopGradient');
+
+        popover.querySelectorAll('.note-font-option').forEach((btn) => {
+            btn.addEventListener('mousedown', (e) => e.stopPropagation());
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.setNoteFont(btn.dataset.font);
+                this.openPopover();
+            });
+        });
 
         popover.querySelectorAll('.display-options-row').forEach((row) => {
             row.addEventListener('mousedown', (e) => e.stopPropagation());
