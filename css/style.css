@@ -464,7 +464,54 @@ body {
     margin-top: auto;
     padding: 0.28rem 0.22rem 0.08rem;
     border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
     text-align: right;
+}
+
+.sidebar-history-section {
+    text-align: left;
+    width: 100%;
+}
+
+.sidebar-history-header {
+    padding: 0.18rem 0.22rem;
+}
+
+.sidebar-history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.08rem;
+    padding: 0.15rem 0.2rem 0.25rem;
+}
+
+.sidebar-history-list--redo {
+    padding-top: 0;
+}
+
+.sidebar-history-subheader {
+    padding: 0.08rem 0.2rem 0.04rem;
+    font-size: 0.58rem;
+    letter-spacing: 0.01em;
+    color: var(--text-muted);
+}
+
+.sidebar-history-item {
+    min-width: 0;
+    padding: 0.08rem 0.18rem 0.08rem 0.16rem;
+    font-size: 0.52rem;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--text-main);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: default;
+}
+
+.sidebar-history-item--redo {
+    color: var(--text-muted);
 }
 
 .sidebar-storage-size {
@@ -2347,6 +2394,7 @@ textarea.form-input {
     flex: 0 0 auto;
     margin-left: auto;
     font-size: 0.46rem;
+    font-weight: 400;
     color: var(--text-muted);
     white-space: nowrap;
     padding-left: 0.25rem;
@@ -3475,6 +3523,11 @@ textarea.form-input {
 
 .mini-card-title.rich-text b,
 .mini-card-title.rich-text strong {
+    font-weight: 700;
+}
+
+.sidebar-notes-list-item-title.rich-text b,
+.sidebar-notes-list-item-title.rich-text strong {
     font-weight: 700;
 }
 

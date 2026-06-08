@@ -68,7 +68,8 @@ class Application {
             getToken: () => AppState.user.token,
             isEnabled: () => AppState.user.isLoggedIn,
             onRestore: (item, { preserveView = false } = {}) => this.restoreItem(item, preserveView),
-            onRemove: (itemId) => this.removeItemFromWorkspace(itemId)
+            onRemove: (itemId) => this.removeItemFromWorkspace(itemId),
+            onStackChange: () => SidePanel.renderHistoryPanel()
         });
     }
 

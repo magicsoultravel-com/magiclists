@@ -1,4 +1,5 @@
 import { API } from './api.js';
+import { stripRichText } from './richText.js';
 
 const MAX_STACK = 50;
 const MERGE_MS = 2500;
@@ -7,7 +8,8 @@ let handlers = {
     getToken: () => null,
     isEnabled: () => false,
     onRestore: async () => {},
-    onRemove: async () => {}
+    onRemove: async () => {},
+    onStackChange: () => {}
 };
 
 function cloneItem(item) {
@@ -19,7 +21,7 @@ function itemsEqual(a, b) {
 }
 
 export function historyLabelForItem(item) {
-    const title = item?.title?.trim();
+    const title = stripRichText(item?.title || '').trim();
     return title ? `Edit "${title}"` : 'Edit note';
 }
 
@@ -116,7 +118,8 @@ export const UndoManager = {
 
     recordItemDeletion(item, label) {
         const snapshot = cloneItem(item);
-        const itemLabel = label || `Delete "${snapshot.title?.trim() || 'note'}"`;
+        const deletedTitle = stripRichText(snapshot.title || '').trim() || 'note';
+        const itemLabel = label || `Delete "${deletedTitle}"`;
         this.push({
             label: itemLabel,
             undo: () => this.applyItem(snapshot, { preserveView: false }),
@@ -195,5 +198,6 @@ export const UndoManager = {
                 ? `Redo: ${this.redoStack[this.redoStack.length - 1].label} (Ctrl+Y)`
                 : 'Redo (Ctrl+Y)';
         }
+        handlers.onStackChange?.();
     }
 };

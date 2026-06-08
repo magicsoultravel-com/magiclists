@@ -107,7 +107,17 @@
             </div>
             </div>
 
-            <footer id="side-panel-footer" class="side-panel-footer" aria-label="Storage usage">
+            <footer id="side-panel-footer" class="side-panel-footer" aria-label="Side panel footer">
+                <div id="sidebar-history-section" class="sidebar-history-section is-hidden">
+                    <div class="collapsable-header list-row--header sidebar-history-header" id="history-section-header">
+                        <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>History</span>
+                        <span id="history-count-badge" class="status-badge">0</span>
+                    </div>
+                    <div class="collapsable-section collapsed" id="history-section">
+                        <div id="sidebar-history-undo-list" class="sidebar-history-list"></div>
+                        <div id="sidebar-history-redo-list" class="sidebar-history-list sidebar-history-list--redo is-hidden"></div>
+                    </div>
+                </div>
                 <span id="sidebar-storage-size" class="sidebar-storage-size">—</span>
             </footer>
 

@@ -1,6 +1,7 @@
 import { ACTION_ICONS, CARD_ICONS, UI, formatStorageSize, getLocalStorageUsedBytes } from './ui.js';
 import { resolveNoteColor } from './colorPicker.js';
-import { stripRichText } from './richText.js';
+import { hasRichMarkup, stripRichText } from './richText.js';
+import { UndoManager } from './undo.js';
 
 const NOTES_LIST_SORT_KEY = 'matrix_notes_list_sort';
 const BRAND_TRANSITION_MS = 240;
@@ -116,6 +117,7 @@ export const SidePanel = {
         this.bindCollapsable('notes-list-active-header', 'notes-list-active-section');
         this.bindCollapsable('notes-list-hidden-header', 'notes-list-hidden-section', true);
         this.bindCollapsable('notes-list-archived-header', 'notes-list-archived-section', true);
+        this.bindCollapsable('history-section-header', 'history-section', true);
         this.setupNotesListSortControls();
     },
 
@@ -236,6 +238,62 @@ export const SidePanel = {
         });
     },
 
+    buildSidebarNoteTitle(item) {
+        const plainTitle = stripRichText(item.title || '') || 'Untitled';
+        const titleRich = hasRichMarkup(item.title);
+        const titleHtml = titleRich
+            ? UI.renderRichHtml(item.title || '')
+            : this.escapeHTML(plainTitle);
+        return {
+            titleAttr: this.escapeAttr(plainTitle),
+            titleHtml,
+            richClass: titleRich ? ' rich-text' : ''
+        };
+    },
+
+    renderHistoryItem(label, { redo = false } = {}) {
+        const safe = this.escapeHTML(label || 'Edit');
+        const tip = this.escapeAttr(label || 'Edit');
+        const redoClass = redo ? ' sidebar-history-item--redo' : '';
+        return `<div class="sidebar-history-item${redoClass}" title="${tip}">${safe}</div>`;
+    },
+
+    renderHistoryPanel() {
+        const section = document.getElementById('sidebar-history-section');
+        const undoList = document.getElementById('sidebar-history-undo-list');
+        const redoList = document.getElementById('sidebar-history-redo-list');
+        const badge = document.getElementById('history-count-badge');
+        if (!section || !undoList || !redoList) return;
+
+        const enabled = !!this.appState?.user?.isLoggedIn;
+        section.classList.toggle('is-hidden', !enabled);
+        if (!enabled) return;
+
+        const undoEntries = [...UndoManager.undoStack].reverse();
+        const redoEntries = [...UndoManager.redoStack].reverse();
+
+        if (badge) badge.textContent = String(undoEntries.length);
+
+        if (!undoEntries.length && !redoEntries.length) {
+            undoList.innerHTML = '<div class="sidebar-notes-list-empty">No history yet</div>';
+            redoList.innerHTML = '';
+            redoList.classList.add('is-hidden');
+            return;
+        }
+
+        undoList.innerHTML = undoEntries.length
+            ? undoEntries.map((entry) => this.renderHistoryItem(entry.label)).join('')
+            : '<div class="sidebar-notes-list-empty">Nothing to undo</div>';
+
+        if (redoEntries.length) {
+            redoList.classList.remove('is-hidden');
+            redoList.innerHTML = `<div class="sidebar-history-subheader">Redo</div>${redoEntries.map((entry) => this.renderHistoryItem(entry.label, { redo: true })).join('')}`;
+        } else {
+            redoList.innerHTML = '';
+            redoList.classList.add('is-hidden');
+        }
+    },
+
     renderNotesListZone(zoneId, listItems, allItems, { variant = 'active' } = {}) {
         const zone = document.getElementById(zoneId);
         if (!zone) return;
@@ -256,13 +314,13 @@ export const SidePanel = {
             const accent = resolveNoteColor(item.backgroundColor);
             const accentStyle = ` style="--note-accent:${this.escapeAttr(accent)}"`;
             const dateLabel = UI.formatNoteListDate(item);
-            const title = this.escapeHTML(stripRichText(item.title || '') || 'Untitled');
+            const { titleAttr, titleHtml, richClass } = this.buildSidebarNoteTitle(item);
 
             if (variant === 'hidden') {
                 return `
                 <div class="sidebar-notes-list-item has-note-color sidebar-notes-list-item--with-act"${accentStyle}>
-                    <button type="button" class="sidebar-notes-list-item-main" data-id="${this.escapeAttr(item.id)}" title="${title}">
-                        <span class="sidebar-notes-list-item-title">${title}</span>
+                    <button type="button" class="sidebar-notes-list-item-main" data-id="${this.escapeAttr(item.id)}" title="${titleAttr}">
+                        <span class="sidebar-notes-list-item-title${richClass}">${titleHtml}</span>
                         <span class="sidebar-notes-list-date">${this.escapeHTML(dateLabel)}</span>
                     </button>
                     <button type="button" class="card-act card-act--show unhide-btn" data-id="${this.escapeAttr(item.id)}" title="Unhide" aria-label="Unhide">${CARD_ICONS.show}</button>
@@ -270,8 +328,8 @@ export const SidePanel = {
             }
 
             return `
-            <button type="button" class="sidebar-notes-list-item has-note-color${variant === 'archived' ? ' is-archived' : ''}" data-id="${this.escapeAttr(item.id)}" title="${title}"${accentStyle}>
-                <span class="sidebar-notes-list-item-title">${title}</span>
+            <button type="button" class="sidebar-notes-list-item has-note-color${variant === 'archived' ? ' is-archived' : ''}" data-id="${this.escapeAttr(item.id)}" title="${titleAttr}"${accentStyle}>
+                <span class="sidebar-notes-list-item-title${richClass}">${titleHtml}</span>
                 <span class="sidebar-notes-list-date">${this.escapeHTML(dateLabel)}</span>
             </button>`;
         }).join('');
