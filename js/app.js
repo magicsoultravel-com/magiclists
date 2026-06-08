@@ -430,12 +430,12 @@ class Application {
     setupDisplayOptionsButton() {
         const btn = document.getElementById('btn-display-options');
         if (btn) btn.innerHTML = ACTION_ICONS.displayOptions;
-    },
+    }
 
     setupAppThemeButton() {
         const btn = document.getElementById('btn-app-theme');
         if (btn) btn.innerHTML = ACTION_ICONS.appTheme;
-    },
+    }
 
     setupFocusModeButton() {
         const btn = document.getElementById('btn-focus-mode');
@@ -679,7 +679,7 @@ class Application {
         const canvas = document.getElementById('app-canvas');
         if (!canvas?.classList.contains('view-grid')) return;
         UI.squeezeGridBoardToViewport(canvas, { animate: true });
-    },
+    }
 
     setupCoreListeners() {
         let gridSqueezeTimer = null;
