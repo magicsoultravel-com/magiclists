@@ -329,6 +329,8 @@ export const Editor = {
         const focusStepId = active?.dataset?.stepId;
 
         const pendingFocusStepId = body.dataset.pendingFocusStepId;
+        const pendingFocusEdge = body.dataset.pendingFocusEdge;
+        const pendingFocusPlainOffset = body.dataset.pendingFocusPlainOffset;
         body.innerHTML = UI.buildNoteBodyHtml(this.activeItem, {
             canEdit: true,
             alwaysShowChecklist: true,
@@ -336,7 +338,13 @@ export const Editor = {
         });
         const shell = this.mountZone?.querySelector('.editor-note-shell');
         if (shell) UI.updateConvertButtons(shell, this.activeItem);
-        if (pendingFocusStepId) body.dataset.pendingFocusStepId = pendingFocusStepId;
+        if (pendingFocusStepId) {
+            body.dataset.pendingFocusStepId = pendingFocusStepId;
+            if (pendingFocusEdge) body.dataset.pendingFocusEdge = pendingFocusEdge;
+            if (pendingFocusPlainOffset != null) {
+                body.dataset.pendingFocusPlainOffset = pendingFocusPlainOffset;
+            }
+        }
         UI.attachNoteBodyInteractions(body, this.activeItem, {
             refresh: () => this.refreshEditorNoteBody(),
             localOnly: true,

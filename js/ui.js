@@ -1803,11 +1803,17 @@ export const UI = {
         const body = card.querySelector('.editor-note-body') || card.querySelector('.card-body');
         const scrollTop = body?.scrollTop ?? 0;
         const pendingFocusStepId = card.dataset.pendingFocusStepId;
+        const pendingFocusEdge = card.dataset.pendingFocusEdge;
+        const pendingFocusPlainOffset = card.dataset.pendingFocusPlainOffset;
         this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
         const newBody = card.querySelector('.editor-note-body') || card.querySelector('.card-body');
         if (newBody) newBody.scrollTop = scrollTop;
         if (pendingFocusStepId) {
             card.dataset.pendingFocusStepId = pendingFocusStepId;
+            if (pendingFocusEdge) card.dataset.pendingFocusEdge = pendingFocusEdge;
+            if (pendingFocusPlainOffset != null) {
+                card.dataset.pendingFocusPlainOffset = pendingFocusPlainOffset;
+            }
             this.focusPendingChecklistStep(card);
         }
     },
@@ -1875,6 +1881,44 @@ export const UI = {
         sel?.addRange(range);
     },
 
+    setCaretAtPlainOffset(el, offset) {
+        if (!el) return;
+        el.focus();
+        const target = Math.max(0, Number(offset) || 0);
+        const range = document.createRange();
+        const sel = window.getSelection();
+        let remaining = target;
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+        let node = walker.nextNode();
+        while (node) {
+            const len = node.textContent.length;
+            if (remaining <= len) {
+                range.setStart(node, remaining);
+                range.collapse(true);
+                sel?.removeAllRanges();
+                sel?.addRange(range);
+                return;
+            }
+            remaining -= len;
+            node = walker.nextNode();
+        }
+        range.selectNodeContents(el);
+        range.collapse(false);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+    },
+
+    scheduleChecklistStepFocus(root, stepId, { edge = 'start', plainOffset = null } = {}) {
+        const host = root.closest('.mini-card') || root;
+        host.dataset.pendingFocusStepId = stepId;
+        host.dataset.pendingFocusEdge = edge;
+        if (plainOffset != null) {
+            host.dataset.pendingFocusPlainOffset = String(plainOffset);
+        } else {
+            delete host.dataset.pendingFocusPlainOffset;
+        }
+    },
+
     getInlineEditSequence(root) {
         const fields = [];
         const title = root.querySelector('[data-field="title"].card-inline-edit');
@@ -1926,7 +1970,7 @@ export const UI = {
         }, { persist: false });
 
         const host = root.closest('.mini-card') || root;
-        host.dataset.pendingFocusStepId = newStep.id;
+        this.scheduleChecklistStepFocus(root, newStep.id, { edge: 'start' });
         refresh();
         this.focusPendingChecklistStep(host);
     },
@@ -1939,14 +1983,129 @@ export const UI = {
                 `[data-field="step-text"].card-inline-edit[data-step-id="${pendingId}"]`
             );
             if (!newEl) return false;
+            const edge = root.dataset.pendingFocusEdge || 'start';
+            const plainOffset = root.dataset.pendingFocusPlainOffset;
             delete root.dataset.pendingFocusStepId;
-            this.focusInlineEdit(newEl, 'start');
+            delete root.dataset.pendingFocusEdge;
+            delete root.dataset.pendingFocusPlainOffset;
+            if (plainOffset != null && plainOffset !== '') {
+                this.setCaretAtPlainOffset(newEl, Number(plainOffset));
+            } else {
+                this.focusInlineEdit(newEl, edge);
+            }
             return true;
         };
 
         requestAnimationFrame(() => {
             if (!focusNewStep()) requestAnimationFrame(() => focusNewStep());
         });
+    },
+
+    removeChecklistStepAndFocus(root, item, refresh, applyMutate, {
+        stepId,
+        focusStepId,
+        focusEdge = 'start',
+        plainOffset = null
+    } = {}) {
+        applyMutate((it) => {
+            it.steps = (it.steps || []).filter((s) => s.id !== stepId);
+            if (!it.steps.length) it.type = 'note';
+        }, { persist: false });
+        this.scheduleChecklistStepFocus(root, focusStepId, { edge: focusEdge, plainOffset });
+        refresh();
+        this.focusPendingChecklistStep(root.closest('.mini-card') || root);
+    },
+
+    handleChecklistBackspace(root, item, el, refresh, { applyMutate } = {}) {
+        const sel = window.getSelection();
+        if (!sel?.isCollapsed) return false;
+        if (!this.caretAtEdge(el, 'start')) return false;
+
+        el.dataset.skipBlurSave = '1';
+        this.syncInlineFieldToItem(el, item);
+
+        const stepId = el.dataset.stepId;
+        const steps = item.steps || [];
+        const idx = steps.findIndex((s) => s.id === stepId);
+        if (idx < 0) return false;
+
+        const current = steps[idx];
+        const empty = !stripRichText(current.text || '').trim();
+
+        if (empty) {
+            if (steps.length <= 1) return true;
+            const focusStep = idx > 0 ? steps[idx - 1] : steps[1];
+            this.removeChecklistStepAndFocus(root, item, refresh, applyMutate, {
+                stepId,
+                focusStepId: focusStep.id,
+                focusEdge: idx > 0 ? 'end' : 'start'
+            });
+            return true;
+        }
+
+        const prev = idx > 0 ? steps[idx - 1] : null;
+        if (!prev) return false;
+
+        const joinAt = stripRichText(prev.text || '').length;
+        const merged = `${prev.text || ''}${current.text || ''}`;
+        const rich = el.classList.contains('rich-text--edit');
+
+        applyMutate((it) => {
+            const p = it.steps?.find((s) => s.id === prev.id);
+            const c = it.steps?.find((s) => s.id === stepId);
+            if (!p || !c) return;
+            p.text = rich ? sanitizeRichHtml(linkifyPlainUrls(merged)) : merged;
+            it.steps = it.steps.filter((s) => s.id !== stepId);
+        }, { persist: false });
+
+        this.scheduleChecklistStepFocus(root, prev.id, { plainOffset: joinAt });
+        refresh();
+        this.focusPendingChecklistStep(root.closest('.mini-card') || root);
+        return true;
+    },
+
+    handleChecklistDelete(root, item, el, refresh, { applyMutate } = {}) {
+        const sel = window.getSelection();
+        if (!sel?.isCollapsed) return false;
+        if (!this.caretAtEdge(el, 'end')) return false;
+
+        el.dataset.skipBlurSave = '1';
+        this.syncInlineFieldToItem(el, item);
+
+        const stepId = el.dataset.stepId;
+        const steps = item.steps || [];
+        const idx = steps.findIndex((s) => s.id === stepId);
+        if (idx < 0 || idx >= steps.length - 1) return false;
+
+        const current = steps[idx];
+        const next = steps[idx + 1];
+        const nextEmpty = !stripRichText(next.text || '').trim();
+        const rich = el.classList.contains('rich-text--edit');
+
+        if (nextEmpty) {
+            applyMutate((it) => {
+                it.steps = (it.steps || []).filter((s) => s.id !== next.id);
+            }, { persist: false });
+            this.scheduleChecklistStepFocus(root, stepId, { edge: 'end' });
+            refresh();
+            this.focusPendingChecklistStep(root.closest('.mini-card') || root);
+            return true;
+        }
+
+        const joinAt = stripRichText(current.text || '').length;
+        const merged = `${current.text || ''}${next.text || ''}`;
+
+        applyMutate((it) => {
+            const cur = it.steps?.find((s) => s.id === stepId);
+            if (!cur) return;
+            cur.text = rich ? sanitizeRichHtml(linkifyPlainUrls(merged)) : merged;
+            it.steps = it.steps.filter((s) => s.id !== next.id);
+        }, { persist: false });
+
+        this.scheduleChecklistStepFocus(root, stepId, { plainOffset: joinAt });
+        refresh();
+        this.focusPendingChecklistStep(root.closest('.mini-card') || root);
+        return true;
     },
 
     handleChecklistEnter(root, item, el, refresh, { applyMutate } = {}) {
@@ -2071,6 +2230,20 @@ export const UI = {
                         e.preventDefault();
                         e.stopPropagation();
                         this.handleChecklistEnter(root, item, el, refresh, { applyMutate });
+                        return;
+                    }
+                    if (el.dataset.field === 'step-text' && e.key === 'Backspace') {
+                        if (this.handleChecklistBackspace(root, item, el, refresh, { applyMutate })) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }
+                        return;
+                    }
+                    if (el.dataset.field === 'step-text' && e.key === 'Delete') {
+                        if (this.handleChecklistDelete(root, item, el, refresh, { applyMutate })) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                        }
                         return;
                     }
                     if (!this.handleInlineEditArrowNav(e, root, el)) e.stopPropagation();
