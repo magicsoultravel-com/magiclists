@@ -51,8 +51,8 @@ class Application {
         SidePanel.init(AppState);
         SidePanel.setupStatusClickHandlers();
         ClockStyle.init();
-        this.setupFreeformResetButton();
-        this.updateFreeformResetVisibility();
+        this.setupLayoutResetButton();
+        this.updateLayoutResetVisibility();
         this.setupBackupInterface();
         this.setupFab();
         this.setupUndo();
@@ -93,7 +93,7 @@ class Application {
         if (preserveView) {
             const canvas = document.getElementById('app-canvas');
             UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
-            if (AppState.viewSettings.sortBy === 'freeform') {
+            if (AppState.viewSettings.sortBy === 'freeform' || AppState.viewSettings.sortBy === 'columns') {
                 DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
             }
             this.updateWorkspaceCounter();
@@ -177,7 +177,7 @@ class Application {
 
         this.renderQuickActions();
         this.updateFabVisibility();
-        this.updateFreeformResetVisibility();
+        this.updateLayoutResetVisibility();
         UndoManager.updateToolbar();
     }
 
@@ -312,7 +312,7 @@ class Application {
         AppState.user.token = null;
         UndoManager.clear();
         this.renderControlBar();
-        this.updateFreeformResetVisibility();
+        this.updateLayoutResetVisibility();
         this.syncDataStore();
     }
 
@@ -321,7 +321,7 @@ class Application {
         localStorage.setItem('matrix_preferred_view', mode);
         window.dispatchEvent(new CustomEvent('view:mode_changed', { detail: mode }));
         this.updateViewToggleState();
-        this.updateFreeformResetVisibility();
+        this.updateLayoutResetVisibility();
         this.syncDataStore();
     }
 
@@ -331,21 +331,23 @@ class Application {
         document.getElementById('btn-view-free')?.classList.toggle('active', mode === 'freeform');
     }
 
-    setupFreeformResetButton() {
-        const btn = document.getElementById('btn-freeform-reset');
+    setupLayoutResetButton() {
+        const btn = document.getElementById('btn-layout-reset');
         if (btn) btn.innerHTML = ACTION_ICONS.layoutReset;
         btn?.addEventListener('click', () => {
-            if (AppState.viewSettings.sortBy !== 'freeform') return;
-            UI.resetFreeformLayout();
+            if (AppState.viewSettings.sortBy === 'freeform') {
+                UI.resetFreeformLayout();
+            } else {
+                UI.resetColumnsLayout();
+            }
             this.syncDataStore();
         });
     }
 
-    updateFreeformResetVisibility() {
-        const btn = document.getElementById('btn-freeform-reset');
+    updateLayoutResetVisibility() {
+        const btn = document.getElementById('btn-layout-reset');
         if (!btn) return;
-        const show = AppState.viewSettings.sortBy === 'freeform' && AppState.user.isLoggedIn;
-        btn.classList.toggle('is-hidden', !show);
+        btn.classList.toggle('is-hidden', !AppState.user.isLoggedIn);
     }
 
     setupCoreListeners() {
@@ -409,7 +411,7 @@ class Application {
                 if (!detail?.skipRerender) {
                     const canvas = document.getElementById('app-canvas');
                     UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
-                    if (AppState.viewSettings.sortBy === 'freeform') {
+                    if (AppState.viewSettings.sortBy === 'freeform' || AppState.viewSettings.sortBy === 'columns') {
                         DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
                     }
                 }

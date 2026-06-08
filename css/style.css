@@ -832,7 +832,7 @@ body {
     color: var(--text-main);
 }
 
-#btn-freeform-reset {
+#btn-layout-reset {
     min-width: 30px;
     min-height: 30px;
     padding: 0.25rem;
@@ -988,32 +988,63 @@ body {
     gap: 0.75rem !important;
 }
 
-/* CATEGORY COLUMNS VIEW - equal width columns */
+/* CATEGORY COLUMNS VIEW - absolute layout with snap grid */
 #app-canvas.view-columns {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    gap: 0.75rem !important;
-    align-items: flex-start !important;
+    position: relative;
+    display: block !important;
+    min-height: 100%;
+    gap: 0 !important;
 }
 
-/* Individual Column - fixed width, 2 cards per row inside */
-.canvas-column {
-    width: 212px !important;
-    min-width: 212px !important;
-    max-width: 212px !important;
+#app-canvas.view-columns.is-layout-active {
+    background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 100px 60px;
+}
+
+#app-canvas.view-columns .canvas-column {
+    position: absolute;
+    box-sizing: border-box;
     background-color: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: 6px;
     padding: 0.4rem;
-    display: grid !important;
-    grid-template-columns: 1fr 1fr !important;
-    gap: 0.35rem !important;
+    display: flex !important;
+    flex-direction: column;
+    gap: 0.35rem;
+    overflow: visible;
+    min-width: 196px;
+}
+
+#app-canvas.view-columns .column-notes {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: visible;
+}
+
+#app-canvas.view-columns .column-notes .mini-card,
+#app-canvas.view-columns > .mini-card {
+    position: absolute;
     box-sizing: border-box;
-    overflow: hidden;
+    margin: 0 !important;
+    width: auto !important;
+    max-width: none !important;
+}
+
+#app-canvas.view-columns .column-notes .mini-card.compact,
+#app-canvas.view-columns > .mini-card.compact {
+    min-height: unset !important;
+    max-height: none !important;
+    overflow: hidden !important;
+}
+
+#app-canvas.view-columns .layout-settling {
+    transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease;
 }
 
 .column-header {
-    grid-column: span 2 !important;
     font-size: 0.8rem;
     font-weight: 600;
     text-transform: uppercase;
@@ -1080,7 +1111,7 @@ body {
     opacity: 1;
 }
 
-.canvas-column.is-collapsed > .mini-card {
+.canvas-column.is-collapsed > .column-notes {
     display: none !important;
 }
 
@@ -2857,34 +2888,13 @@ textarea.form-input {
     opacity: 0.9;
 }
 
-#app-canvas.view-list,
-#app-canvas.view-columns {
+#app-canvas.view-list {
     align-content: start !important;
     align-items: start !important;
     gap: 0.4rem !important;
-}
-
-#app-canvas.view-list {
     grid-template-columns: repeat(auto-fill, 96px) !important;
     grid-auto-rows: min-content !important;
     justify-content: start !important;
-}
-
-#app-canvas.view-columns {
-    row-gap: 0.4rem !important;
-    column-gap: 0.5rem !important;
-}
-
-#app-canvas.view-columns > .mini-card:not(.expanded) {
-    width: 96px !important;
-    flex-shrink: 0;
-    align-self: flex-start;
-}
-
-#app-canvas.view-columns > .mini-card.expanded {
-    width: 196px !important;
-    flex-shrink: 0;
-    align-self: flex-start;
 }
 
 #app-canvas.view-freeform {
@@ -3105,42 +3115,144 @@ textarea.form-input {
     transition: none !important;
 }
 
-.canvas-column {
-    width: 212px !important;
-    min-width: 212px !important;
-    max-width: 212px !important;
-    gap: 0.35rem !important;
-    padding: 0.4rem !important;
-    box-sizing: border-box;
-    overflow: hidden;
+#app-canvas.view-columns .canvas-column {
     transition: transform 0.16s ease, opacity 0.16s ease, outline-color 0.16s ease;
 }
 
-/* Cards inside category columns must fill grid cells, not use list-view fixed width */
-.canvas-column .mini-card.compact,
-.canvas-column .mini-card.expanded {
-    width: 100% !important;
-    max-width: 100%;
+#app-canvas.view-columns .column-header {
+    width: 100%;
     box-sizing: border-box;
+    flex-shrink: 0;
 }
 
-.canvas-column .mini-card.expanded {
-    grid-column: span 2 !important;
+#app-canvas.view-columns .grab-handle--note-cat {
+    cursor: grab;
+    flex-shrink: 0;
+    opacity: 0.55;
+    font-size: 0.65rem;
+    line-height: 1;
+    padding-right: 0.15rem;
 }
 
-.canvas-column .mini-card.expanded .card-header,
-.canvas-column .mini-card.expanded .note-editor-toolbar,
-.canvas-column .mini-card.expanded .editor-note-header,
-.canvas-column .mini-card.expanded .card-body,
-.canvas-column .mini-card.expanded .editor-note-body,
-.canvas-column .mini-card.expanded .card-content-preview {
+#app-canvas.view-columns .grab-handle--note-cat:active {
+    cursor: grabbing;
+}
+
+#app-canvas.view-columns .card-drag-zone {
+    cursor: grab;
+}
+
+#app-canvas.view-columns .card-drag-zone:active {
+    cursor: grabbing;
+}
+
+#app-canvas.view-columns .mini-card.expanded {
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+    overflow: hidden !important;
+    max-height: none !important;
+    min-height: unset !important;
+    padding: 0.6rem !important;
+}
+
+#app-canvas.view-columns .mini-card.expanded .editor-note-shell {
+    position: relative;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    flex: 1 1 auto;
+}
+
+#app-canvas.view-columns .mini-card.expanded .editor-note-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+#app-canvas.view-columns .mini-card.expanded .card-header,
+#app-canvas.view-columns .mini-card.expanded .note-editor-toolbar,
+#app-canvas.view-columns .mini-card.expanded .editor-note-header,
+#app-canvas.view-columns .mini-card.expanded .card-body,
+#app-canvas.view-columns .mini-card.expanded .editor-note-body,
+#app-canvas.view-columns .mini-card.expanded .card-content-preview {
     min-width: 0;
     max-width: 100%;
 }
 
-.canvas-column .column-header {
-    width: 100%;
-    box-sizing: border-box;
+#app-canvas.view-columns .ff-chrome {
+    position: absolute;
+    inset: 0;
+    z-index: 4;
+    pointer-events: none;
+}
+
+#app-canvas.view-columns .ff-drag-gutter {
+    position: absolute;
+    pointer-events: none;
+    cursor: grab;
+    z-index: 5;
+}
+
+#app-canvas.view-columns .ff-drag-gutter--edge {
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 12px;
+}
+
+#app-canvas.view-columns .ff-drag-gutter--top {
+    left: 12px;
+    right: 12px;
+    top: 0;
+    height: 10px;
+}
+
+#app-canvas.view-columns .mini-card:hover .ff-drag-gutter--edge,
+#app-canvas.view-columns .mini-card.is-column-dragging .ff-drag-gutter--edge {
+    background: linear-gradient(to right, rgba(255, 255, 255, 0.1), transparent);
+}
+
+#app-canvas.view-columns .mini-card:hover .ff-drag-gutter--top,
+#app-canvas.view-columns .mini-card.is-column-dragging .ff-drag-gutter--top {
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.1), transparent);
+}
+
+#app-canvas.view-columns .ff-resize {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    pointer-events: auto;
+    opacity: 0.18;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    z-index: 6;
+}
+
+#app-canvas.view-columns .mini-card:hover .ff-resize,
+#app-canvas.view-columns .mini-card.is-column-resizing .ff-resize {
+    opacity: 0.62;
+}
+
+#app-canvas.view-columns .ff-resize-n { top: 0; left: 50%; transform: translateX(-50%); width: 28px; height: 8px; cursor: n-resize; }
+#app-canvas.view-columns .ff-resize-s { bottom: 0; left: 50%; transform: translateX(-50%); width: 28px; height: 8px; cursor: s-resize; }
+#app-canvas.view-columns .ff-resize-e { right: 0; top: 50%; transform: translateY(-50%); width: 8px; height: 28px; cursor: e-resize; }
+#app-canvas.view-columns .ff-resize-w { left: 0; top: 50%; transform: translateY(-50%); width: 8px; height: 28px; cursor: w-resize; }
+#app-canvas.view-columns .ff-resize-nw { top: 0; left: 0; width: 12px; height: 12px; cursor: nw-resize; }
+#app-canvas.view-columns .ff-resize-ne { top: 0; right: 0; width: 12px; height: 12px; cursor: ne-resize; }
+#app-canvas.view-columns .ff-resize-sw { bottom: 0; left: 0; width: 12px; height: 12px; cursor: sw-resize; }
+#app-canvas.view-columns .ff-resize-se { bottom: 0; right: 0; width: 12px; height: 12px; cursor: se-resize; }
+
+#app-canvas.view-columns .mini-card.is-column-dragging,
+#app-canvas.view-columns .mini-card.is-column-resizing,
+#app-canvas.view-columns .canvas-column.is-canvas-col-dragging {
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+    transform: none !important;
+    transition: none !important;
+    z-index: 20;
 }
 
 #app-canvas.view-list .mini-card {

@@ -26,6 +26,18 @@ export const FREEFORM_MIN_W = 72;
 export const FREEFORM_MIN_H = 56;
 export const FREEFORM_EXPANDED_DEFAULT_H = 120;
 
+export const COLUMN_GRID_CELL_W = FREEFORM_DEFAULT_W;
+export const COLUMN_GRID_CELL_H = FREEFORM_DEFAULT_H;
+export const COLUMN_GRID_GAP = 4;
+export const COLUMN_MIN_COLS = 2;
+export const COLUMN_INNER_PAD = 8;
+export const COLUMN_MIN_INNER_W = COLUMN_MIN_COLS * COLUMN_GRID_CELL_W + (COLUMN_MIN_COLS - 1) * COLUMN_GRID_GAP;
+export const COLUMN_HEADER_APPROX_H = 40;
+export const CANVAS_COL_GAP = 12;
+export const CANVAS_GRID_W = COLUMN_MIN_INNER_W + COLUMN_INNER_PAD * 2;
+export const COLUMN_STRIDE_X = COLUMN_GRID_CELL_W + COLUMN_GRID_GAP;
+export const COLUMN_STRIDE_Y = COLUMN_GRID_CELL_H + COLUMN_GRID_GAP;
+
 let freeformStackSeq = 1;
 
 export const CARD_ICONS = {
@@ -480,7 +492,8 @@ export const UI = {
     syncCardDraggable(card) {
         const hasSession = !!localStorage.getItem('admin_token');
         const isFreeform = card.dataset.freeform === '1';
-        if (!hasSession || isFreeform || card.classList.contains('expanded')) {
+        const isColumnLayout = card.dataset.columnNote === '1' || card.dataset.columnsFloat === '1';
+        if (!hasSession || isFreeform || isColumnLayout || card.classList.contains('expanded')) {
             card.removeAttribute('draggable');
             return;
         }
@@ -488,6 +501,9 @@ export const UI = {
     },
 
     freeformDragZoneClass(card) {
+        if (card.dataset.columnNote === '1' || card.dataset.columnsFloat === '1') {
+            return ' card-drag-zone';
+        }
         return card.dataset.freeform === '1' ? ' card-drag-zone' : '';
     },
 
@@ -524,6 +540,14 @@ export const UI = {
         }
         this.applyItemCardTheme(card, item);
         card.style.borderLeftColor = categoryColor;
+
+        if (card.dataset.columnNote === '1') {
+            this.finalizeColumnNote(card, card.dataset.category || targetCatName);
+            const notesEl = card.closest('.column-notes');
+            if (notesEl) requestAnimationFrame(() => this.autoArrangeColumnNotes(notesEl, { animate: false }));
+        } else if (card.dataset.columnsFloat === '1') {
+            this.finalizeColumnsFloat(card);
+        }
 
         this.restoreScrollState(canvas, scrollState);
         return true;
@@ -567,11 +591,34 @@ export const UI = {
                 canvas.appendChild(this.createColumnStructure(categoryName, catColor, columnItems, activeCategories));
             });
 
+            const floatPositions = this.getColumnsFloatPositions();
+            let floatAutoX = 8;
+            let floatAutoY = 8;
+            const floatStep = 104;
+            const floatRow = 72;
+
             visibleItems
                 .filter(item => !itemHasCategory(item))
                 .forEach(item => {
-                    canvas.appendChild(this.createCardComponent(item, activeCategories));
+                    const card = this.createCardComponent(item, activeCategories, { columnsFloat: true });
+                    const saved = floatPositions[item.id];
+                    if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+                        card.style.left = `${saved.x}px`;
+                        card.style.top = `${saved.y}px`;
+                    } else {
+                        card.style.left = `${floatAutoX}px`;
+                        card.style.top = `${floatAutoY}px`;
+                        floatAutoX += floatStep;
+                        if (floatAutoX > Math.max(canvas.clientWidth, 320) - floatStep) {
+                            floatAutoX = 8;
+                            floatAutoY += floatRow;
+                        }
+                    }
+                    this.finalizeColumnsFloat(card);
+                    canvas.appendChild(card);
                 });
+
+            this.layoutColumnViewAfterRender(canvas, { animate: false });
         } else if (resolvedMode === 'freeform') {
             const positions = this.getFreeformPositions();
             let autoX = 8;
@@ -620,7 +667,7 @@ export const UI = {
         if (isCollapsed) colWrapper.classList.add('is-collapsed');
 
         colWrapper.innerHTML = `
-            <div class="column-header" draggable="true" data-category="${this.escapeAttr(categoryName)}" style="color: ${catColor};">
+            <div class="column-header" data-category="${this.escapeAttr(categoryName)}" style="color: ${catColor};">
                 <span class="grab-handle grab-handle--col" title="Drag to reorder categories">⋮⋮</span>
                 <span class="column-title">${this.escapeHTML(categoryName)} (${columnItems.length})</span>
                 <span class="column-header-actions">
@@ -653,10 +700,20 @@ export const UI = {
             }
         });
 
+        const notesHost = document.createElement('div');
+        notesHost.className = 'column-notes';
+        notesHost.dataset.category = categoryName;
+
         columnItems.forEach(item => {
-            colWrapper.appendChild(this.createCardComponent(item, activeCategories));
+            const card = this.createCardComponent(item, activeCategories, {
+                columnNote: true,
+                categoryName
+            });
+            this.finalizeColumnNote(card, categoryName);
+            notesHost.appendChild(card);
         });
 
+        colWrapper.appendChild(notesHost);
         return colWrapper;
     },
 
@@ -859,10 +916,19 @@ export const UI = {
             card.classList.remove('card-state-changing', 'card-animate-expand', 'card-animate-collapse');
         };
 
+        const reflowColumnNote = () => {
+            if (card.dataset.columnNote !== '1') return;
+            const notesEl = card.closest('.column-notes');
+            if (!notesEl) return;
+            this.finalizeColumnNote(card, card.dataset.category || targetCatName);
+            requestAnimationFrame(() => this.autoArrangeColumnNotes(notesEl, { animate: true }));
+        };
+
         if (expanded) {
             card.classList.remove('compact');
             card.classList.add('expanded', 'card-animate-expand');
             this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
+            reflowColumnNote();
             card.addEventListener('animationend', cleanup, { once: true });
             setTimeout(cleanup, 400);
             return;
@@ -885,8 +951,47 @@ export const UI = {
         card.classList.remove('expanded', 'card-animate-expand');
         card.classList.add('compact', 'card-animate-collapse');
         this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
+        reflowColumnNote();
         card.addEventListener('animationend', cleanup, { once: true });
         setTimeout(cleanup, 400);
+    },
+
+    updateColumnsFloatCard(card, item, { expanded, dimensions = null } = {}) {
+        if (card.dataset.columnsFloat !== '1') return;
+        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
+        expandedCards[item.id] = expanded;
+        localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
+
+        const activeCategories = readStoredCategories();
+        const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
+
+        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor);
+
+        if (dimensions) {
+            this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
+        } else if (expanded) {
+            this.finalizeColumnsFloat(card);
+        }
+    },
+
+    updateColumnNoteCard(card, item, { expanded, dimensions = null } = {}) {
+        if (card.dataset.columnNote !== '1') return;
+        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
+        expandedCards[item.id] = expanded;
+        localStorage.setItem('matrix_expanded_cards', JSON.stringify(expandedCards));
+
+        const activeCategories = readStoredCategories();
+        const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
+
+        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor);
+
+        if (dimensions) {
+            this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
+            const cat = card.dataset.category || targetCatName;
+            if (cat) {
+                this.saveColumnNoteLayout(cat, item.id, this.readNoteRect(card));
+            }
+        }
     },
 
     toggleCardExpanded(card, item, ctx) {
@@ -895,6 +1000,16 @@ export const UI = {
 
         if (card.dataset.freeform === '1') {
             this.updateFreeformCard(card, item, { expanded: willExpand });
+            return;
+        }
+
+        if (card.dataset.columnNote === '1') {
+            this.updateColumnNoteCard(card, item, { expanded: willExpand });
+            return;
+        }
+
+        if (card.dataset.columnsFloat === '1') {
+            this.updateColumnsFloatCard(card, item, { expanded: willExpand });
             return;
         }
 
@@ -911,13 +1026,18 @@ export const UI = {
         );
     },
 
-    createCardComponent(item, activeCategories, { freeform = false } = {}) {
+    createCardComponent(item, activeCategories, { freeform = false, columnNote = false, columnsFloat = false, categoryName = '' } = {}) {
         const card = document.createElement('div');
         card.classList.add('mini-card');
         card.classList.add('compact');
         
         card.dataset.id = item.id;
         if (freeform) card.dataset.freeform = '1';
+        if (columnNote) {
+            card.dataset.columnNote = '1';
+            if (categoryName) card.dataset.category = categoryName;
+        }
+        if (columnsFloat) card.dataset.columnsFloat = '1';
 
         const targetCatName = (item.categories && item.categories.length > 0) ? item.categories[0] : '';
         const matchedCat = activeCategories.find(c => c.name?.toLowerCase() === targetCatName.toLowerCase());
@@ -941,6 +1061,10 @@ export const UI = {
 
         if (freeform) {
             card.addEventListener('mousedown', () => this.raiseFreeformCard(card), true);
+        }
+
+        if (columnNote && !card.classList.contains('expanded')) {
+            card.dataset.hasCatDrag = '1';
         }
 
         this.syncCardDraggable(card);
@@ -1465,8 +1589,12 @@ export const UI = {
         const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
         const isExpanded = false;
         const dragZone = this.freeformDragZoneClass(card);
+        const catDragHandle = card.dataset.columnNote === '1'
+            ? '<span class="grab-handle grab-handle--note-cat" draggable="true" title="Drag to another category">⋮⋮</span>'
+            : '';
         card.innerHTML = `
             <div class="card-header${dragZone}">
+                ${catDragHandle}
                 ${this.buildNoteTitleHtml(item, false)}
                 ${this.buildCardActionsHtml(item, isExpanded)}
             </div>
@@ -1482,6 +1610,12 @@ export const UI = {
             categoryColor
         });
         this.finalizeFreeformCard(card);
+        if (card.dataset.columnNote === '1') {
+            this.finalizeColumnNote(card, card.dataset.category || targetCatName);
+        }
+        if (card.dataset.columnsFloat === '1') {
+            this.finalizeColumnsFloat(card);
+        }
         this.syncCardDraggable(card);
     },
 
@@ -1577,9 +1711,15 @@ export const UI = {
         this.bindNoteEditorShell(card, item, {
             richEdit: canEdit,
             refresh: () => this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor),
-            stopMousedownPropagation: card.dataset.freeform === '1'
+            stopMousedownPropagation: this.isColumnLayoutCard(card)
         });
         this.finalizeFreeformCard(card);
+        if (card.dataset.columnNote === '1') {
+            this.finalizeColumnNote(card, card.dataset.category || targetCatName);
+        }
+        if (card.dataset.columnsFloat === '1') {
+            this.finalizeColumnsFloat(card);
+        }
         this.syncCardDraggable(card);
     },
 
@@ -2085,6 +2225,412 @@ export const UI = {
         localStorage.removeItem('matrix_freeform_sizes');
         localStorage.removeItem('matrix_expanded_cards');
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
+    },
+
+    resetColumnsLayout() {
+        localStorage.removeItem('matrix_column_positions');
+        localStorage.removeItem('matrix_column_note_layout');
+        localStorage.removeItem('matrix_columns_float_positions');
+        localStorage.removeItem('matrix_columns_float_sizes');
+        localStorage.removeItem('matrix_expanded_cards');
+        window.dispatchEvent(new CustomEvent('board:visibility_changed'));
+    },
+
+    snapGridCoord(value, stride = COLUMN_STRIDE_X) {
+        return Math.max(0, Math.round(value / stride) * stride);
+    },
+
+    cellsToSpanW(cells) {
+        const n = Math.max(1, cells);
+        return n * COLUMN_GRID_CELL_W + (n - 1) * COLUMN_GRID_GAP;
+    },
+
+    cellsToSpanH(cells) {
+        const n = Math.max(1, cells);
+        return n * COLUMN_GRID_CELL_H + (n - 1) * COLUMN_GRID_GAP;
+    },
+
+    spanToCellsW(span) {
+        return Math.max(1, Math.round((span + COLUMN_GRID_GAP) / COLUMN_STRIDE_X));
+    },
+
+    spanToCellsH(span) {
+        return Math.max(1, Math.round((span + COLUMN_GRID_GAP) / COLUMN_STRIDE_Y));
+    },
+
+    snapNoteRect(rect, { maxW = Infinity, maxH = Infinity } = {}) {
+        const wCells = Math.max(1, this.spanToCellsW(rect.w));
+        const hCells = Math.max(1, this.spanToCellsH(rect.h));
+        let w = this.cellsToSpanW(wCells);
+        let h = this.cellsToSpanH(hCells);
+        if (maxW < Infinity) {
+            const maxCells = Math.max(1, this.spanToCellsW(maxW));
+            w = this.cellsToSpanW(Math.min(wCells, maxCells));
+        }
+        if (maxH < Infinity) {
+            const maxCells = Math.max(1, this.spanToCellsH(maxH));
+            h = this.cellsToSpanH(Math.min(hCells, maxCells));
+        }
+        return {
+            x: this.snapGridCoord(rect.x, COLUMN_STRIDE_X),
+            y: this.snapGridCoord(rect.y, COLUMN_STRIDE_Y),
+            w: Math.max(FREEFORM_MIN_W, w),
+            h: Math.max(FREEFORM_MIN_H, h)
+        };
+    },
+
+    getColumnPositions() {
+        try {
+            return JSON.parse(localStorage.getItem('matrix_column_positions') || '{}');
+        } catch {
+            return {};
+        }
+    },
+
+    saveColumnPosition(categoryName, x, y) {
+        const positions = this.getColumnPositions();
+        positions[categoryName] = { x: Math.round(x), y: Math.round(y) };
+        localStorage.setItem('matrix_column_positions', JSON.stringify(positions));
+    },
+
+    getColumnNoteLayout() {
+        try {
+            return JSON.parse(localStorage.getItem('matrix_column_note_layout') || '{}');
+        } catch {
+            return {};
+        }
+    },
+
+    saveColumnNoteLayout(categoryName, itemId, rect) {
+        const all = this.getColumnNoteLayout();
+        if (!all[categoryName]) all[categoryName] = {};
+        all[categoryName][itemId] = {
+            x: Math.round(rect.x),
+            y: Math.round(rect.y),
+            w: Math.round(rect.w),
+            h: Math.round(rect.h)
+        };
+        localStorage.setItem('matrix_column_note_layout', JSON.stringify(all));
+    },
+
+    removeColumnNoteLayout(itemId, categoryName = null) {
+        const all = this.getColumnNoteLayout();
+        if (categoryName) {
+            if (all[categoryName]) delete all[categoryName][itemId];
+        } else {
+            Object.keys(all).forEach((cat) => delete all[cat][itemId]);
+        }
+        localStorage.setItem('matrix_column_note_layout', JSON.stringify(all));
+    },
+
+    getColumnsFloatPositions() {
+        try {
+            return JSON.parse(localStorage.getItem('matrix_columns_float_positions') || '{}');
+        } catch {
+            return {};
+        }
+    },
+
+    saveColumnsFloatPosition(itemId, x, y) {
+        const positions = this.getColumnsFloatPositions();
+        positions[itemId] = { x: Math.round(x), y: Math.round(y) };
+        localStorage.setItem('matrix_columns_float_positions', JSON.stringify(positions));
+    },
+
+    getColumnsFloatSizes() {
+        try {
+            return JSON.parse(localStorage.getItem('matrix_columns_float_sizes') || '{}');
+        } catch {
+            return {};
+        }
+    },
+
+    saveColumnsFloatSize(itemId, w, h) {
+        const sizes = this.getColumnsFloatSizes();
+        sizes[itemId] = {
+            w: Math.round(Math.max(FREEFORM_MIN_W, w)),
+            h: Math.round(Math.max(FREEFORM_MIN_H, h))
+        };
+        localStorage.setItem('matrix_columns_float_sizes', JSON.stringify(sizes));
+    },
+
+    readNoteRect(card) {
+        return {
+            x: parseFloat(card.style.left) || 0,
+            y: parseFloat(card.style.top) || 0,
+            w: parseFloat(card.style.width) || card.offsetWidth || FREEFORM_DEFAULT_W,
+            h: parseFloat(card.style.height) || card.offsetHeight || FREEFORM_DEFAULT_H
+        };
+    },
+
+    applyNoteRect(card, rect, { settling = false } = {}) {
+        card.style.position = 'absolute';
+        card.style.left = `${rect.x}px`;
+        card.style.top = `${rect.y}px`;
+        this.applyFreeformDimensions(card, rect.w, rect.h);
+        card.classList.toggle('layout-settling', settling);
+    },
+
+    getColumnNotesInnerWidth(columnNotesEl) {
+        const column = columnNotesEl?.closest('.canvas-column');
+        const w = column?.offsetWidth || CANVAS_GRID_W;
+        return Math.max(COLUMN_MIN_INNER_W, w - COLUMN_INNER_PAD * 2);
+    },
+
+    getColumnNotesMaxHeight(columnNotesEl) {
+        const canvas = columnNotesEl?.closest('#app-canvas');
+        const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+        const canvasH = canvas?.clientHeight || vh;
+        return Math.max(this.cellsToSpanH(2), canvasH - COLUMN_HEADER_APPROX_H - 24);
+    },
+
+    rectsOverlap(a, b, gap = COLUMN_GRID_GAP) {
+        return !(
+            a.x + a.w + gap <= b.x
+            || b.x + b.w + gap <= a.x
+            || a.y + a.h + gap <= b.y
+            || b.y + b.h + gap <= a.y
+        );
+    },
+
+    autoPackColumnNotes(columnNotesEl, itemIds, categoryName) {
+        const innerW = this.getColumnNotesInnerWidth(columnNotesEl);
+        const saved = this.getColumnNoteLayout()[categoryName] || {};
+        const expandedCards = JSON.parse(localStorage.getItem('matrix_expanded_cards') || '{}');
+        let rowX = 0;
+        let rowY = 0;
+        let rowMaxH = COLUMN_GRID_CELL_H;
+
+        itemIds.forEach((itemId) => {
+            const card = columnNotesEl.querySelector(`.mini-card[data-id="${itemId}"]`);
+            if (!card) return;
+            const isExpanded = expandedCards[itemId] === true || card.classList.contains('expanded');
+            let rect = saved[itemId];
+
+            if (rect && Number.isFinite(rect.x) && Number.isFinite(rect.w)) {
+                this.applyNoteRect(card, rect);
+                return;
+            }
+
+            if (isExpanded) {
+                const w = Math.min(innerW, this.cellsToSpanW(COLUMN_MIN_COLS));
+                const h = this.cellsToSpanH(2);
+                if (rowX > 0) {
+                    rowY += rowMaxH + COLUMN_GRID_GAP;
+                    rowX = 0;
+                    rowMaxH = COLUMN_GRID_CELL_H;
+                }
+                rect = { x: 0, y: rowY, w, h };
+                rowY += h + COLUMN_GRID_GAP;
+                rowMaxH = COLUMN_GRID_CELL_H;
+                rowX = 0;
+            } else {
+                const w = COLUMN_GRID_CELL_W;
+                const h = COLUMN_GRID_CELL_H;
+                if (rowX + w > innerW + 1) {
+                    rowY += rowMaxH + COLUMN_GRID_GAP;
+                    rowX = 0;
+                    rowMaxH = COLUMN_GRID_CELL_H;
+                }
+                rect = { x: rowX, y: rowY, w, h };
+                rowX += w + COLUMN_GRID_GAP;
+                rowMaxH = Math.max(rowMaxH, h);
+            }
+            this.applyNoteRect(card, rect);
+        });
+    },
+
+    autoArrangeColumnNotes(columnNotesEl, { animate = false } = {}) {
+        if (!columnNotesEl) return;
+        const categoryName = columnNotesEl.dataset.category;
+        const innerW = this.getColumnNotesInnerWidth(columnNotesEl);
+        const maxH = this.getColumnNotesMaxHeight(columnNotesEl);
+        const cards = [...columnNotesEl.querySelectorAll('.mini-card')];
+        if (cards.length === 0) {
+            columnNotesEl.style.minHeight = '0';
+            return;
+        }
+
+        const sorted = cards
+            .map((card) => ({ card, rect: this.readNoteRect(card) }))
+            .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x);
+
+        const placed = [];
+        sorted.forEach(({ card, rect }) => {
+            let snapped = this.snapNoteRect(rect, {
+                maxW: innerW,
+                maxH
+            });
+            if (snapped.x + snapped.w > innerW + 1) snapped.x = Math.max(0, innerW - snapped.w);
+
+            let guard = 0;
+            while (placed.some((p) => this.rectsOverlap(snapped, p)) && guard < 200) {
+                const blocker = placed.find((p) => this.rectsOverlap(snapped, p));
+                if (blocker) {
+                    snapped.y = blocker.y + blocker.h + COLUMN_GRID_GAP;
+                }
+                guard += 1;
+            }
+
+            this.applyNoteRect(card, snapped, { settling: animate });
+            placed.push(snapped);
+            if (categoryName && card.dataset.id) {
+                this.saveColumnNoteLayout(categoryName, card.dataset.id, snapped);
+            }
+        });
+
+        const bottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
+        columnNotesEl.style.minHeight = `${bottom + COLUMN_GRID_GAP}px`;
+        const column = columnNotesEl.closest('.canvas-column');
+        if (column) this.resizeColumnToFit(column, { animate });
+    },
+
+    resizeColumnToFit(columnEl, { animate = false } = {}) {
+        if (!columnEl) return;
+        const notesEl = columnEl.querySelector('.column-notes');
+        const innerW = notesEl
+            ? [...notesEl.querySelectorAll('.mini-card')].reduce((max, card) => {
+                const r = this.readNoteRect(card);
+                return Math.max(max, r.x + r.w);
+            }, COLUMN_MIN_INNER_W)
+            : COLUMN_MIN_INNER_W;
+        const contentH = notesEl
+            ? parseFloat(notesEl.style.minHeight) || notesEl.offsetHeight
+            : 0;
+        const colW = Math.max(CANVAS_GRID_W, innerW + COLUMN_INNER_PAD * 2);
+        const colH = COLUMN_HEADER_APPROX_H + contentH + COLUMN_INNER_PAD;
+        columnEl.style.width = `${colW}px`;
+        columnEl.style.minHeight = `${colH}px`;
+        if (animate) columnEl.classList.add('layout-settling');
+        else columnEl.classList.remove('layout-settling');
+    },
+
+    autoArrangeCanvasColumns(canvas, { animate = false } = {}) {
+        if (!canvas) return;
+        const columns = [...canvas.querySelectorAll('.canvas-column')];
+        if (!columns.length) return;
+
+        const canvasW = Math.max(canvas.clientWidth, 320);
+        const sorted = columns
+            .map((col) => {
+                const x = parseFloat(col.style.left) || 0;
+                const y = parseFloat(col.style.top) || 0;
+                return { col, x, y, w: col.offsetWidth, h: col.offsetHeight };
+            })
+            .sort((a, b) => a.y - b.y || a.x - b.x);
+
+        const placed = [];
+        sorted.forEach(({ col, x, y, w, h }) => {
+            let nx = this.snapGridCoord(x, CANVAS_GRID_W);
+            let ny = this.snapGridCoord(y, CANVAS_GRID_W);
+            let guard = 0;
+            let box = { x: nx, y: ny, w, h };
+            while (placed.some((p) => this.rectsOverlap(box, p, CANVAS_COL_GAP)) && guard < 100) {
+                const blocker = placed.find((p) => this.rectsOverlap(box, p, CANVAS_COL_GAP));
+                if (!blocker) break;
+                if (nx + w + CANVAS_COL_GAP + w <= canvasW) {
+                    nx = blocker.x + blocker.w + CANVAS_COL_GAP;
+                } else {
+                    nx = 0;
+                    ny = blocker.y + blocker.h + CANVAS_COL_GAP;
+                }
+                box = { x: nx, y: ny, w, h };
+                guard += 1;
+            }
+            col.style.position = 'absolute';
+            col.style.left = `${nx}px`;
+            col.style.top = `${ny}px`;
+            col.classList.toggle('layout-settling', animate);
+            placed.push(box);
+            const cat = col.dataset.category;
+            if (cat) this.saveColumnPosition(cat, nx, ny);
+        });
+
+        const maxBottom = placed.reduce((m, b) => Math.max(m, b.y + b.h), 0);
+        canvas.style.minHeight = `${maxBottom + CANVAS_COL_GAP}px`;
+    },
+
+    layoutColumnViewAfterRender(canvas, { animate = false } = {}) {
+        if (!canvas) return;
+        const colPositions = this.getColumnPositions();
+        let autoX = 8;
+        let autoY = 8;
+        let rowH = 0;
+        const canvasW = Math.max(canvas.clientWidth, 320);
+
+        [...canvas.querySelectorAll('.canvas-column')].forEach((col) => {
+            const cat = col.dataset.category;
+            const saved = cat ? colPositions[cat] : null;
+            col.style.position = 'absolute';
+            if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
+                col.style.left = `${saved.x}px`;
+                col.style.top = `${saved.y}px`;
+            } else {
+                const w = col.offsetWidth || CANVAS_GRID_W;
+                const h = col.offsetHeight || 200;
+                if (autoX + w > canvasW - 8) {
+                    autoX = 8;
+                    autoY += rowH + CANVAS_COL_GAP;
+                    rowH = 0;
+                }
+                col.style.left = `${autoX}px`;
+                col.style.top = `${autoY}px`;
+                autoX += w + CANVAS_COL_GAP;
+                rowH = Math.max(rowH, h);
+                if (cat) this.saveColumnPosition(cat, parseFloat(col.style.left), parseFloat(col.style.top));
+            }
+
+            const notesEl = col.querySelector('.column-notes');
+            if (notesEl) {
+                const itemIds = [...notesEl.querySelectorAll('.mini-card')].map((c) => c.dataset.id).filter(Boolean);
+                this.autoPackColumnNotes(notesEl, itemIds, cat);
+                this.autoArrangeColumnNotes(notesEl, { animate });
+            }
+        });
+
+        this.autoArrangeCanvasColumns(canvas, { animate });
+    },
+
+    finalizeColumnNote(card, categoryName) {
+        if (card.dataset.columnNote !== '1') return;
+        card.style.position = 'absolute';
+        this.setupFreeformChrome(card);
+        const saved = this.getColumnNoteLayout()[categoryName]?.[card.dataset.id];
+        const isExpanded = card.classList.contains('expanded');
+        if (saved?.w && saved?.h) {
+            this.applyFreeformDimensions(card, saved.w, saved.h);
+        } else if (isExpanded) {
+            const innerW = this.cellsToSpanW(COLUMN_MIN_COLS);
+            this.applyFreeformDimensions(card, innerW, this.cellsToSpanH(2));
+        } else {
+            this.applyFreeformDimensions(card, COLUMN_GRID_CELL_W, COLUMN_GRID_CELL_H);
+        }
+    },
+
+    finalizeColumnsFloat(card) {
+        if (card.dataset.columnsFloat !== '1') return;
+        card.style.position = 'absolute';
+        this.setupFreeformChrome(card);
+        const saved = this.getColumnsFloatSizes()[card.dataset.id];
+        const isExpanded = card.classList.contains('expanded');
+        if (isExpanded) {
+            const w = saved?.w ?? FREEFORM_EXPANDED_W;
+            const h = saved?.h ?? FREEFORM_EXPANDED_DEFAULT_H;
+            this.applyFreeformDimensions(card, w, h);
+        } else {
+            this.applyFreeformDimensions(card, FREEFORM_DEFAULT_W, FREEFORM_DEFAULT_H);
+        }
+    },
+
+    isColumnLayoutCard(card) {
+        return card?.dataset?.columnNote === '1' || card?.dataset?.columnsFloat === '1';
+    },
+
+    columnDragZoneClass(card) {
+        if (card.dataset.columnNote === '1' || card.dataset.columnsFloat === '1') {
+            return ' card-drag-zone';
+        }
+        return this.freeformDragZoneClass(card);
     },
 
     initFreeformCardStack(card, orderIndex = 0) {

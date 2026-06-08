@@ -4,8 +4,61 @@ import {
     UI,
     itemHasCategory,
     FREEFORM_MIN_W,
-    FREEFORM_MIN_H
+    FREEFORM_MIN_H,
+    CANVAS_GRID_W,
+    CANVAS_COL_GAP
 } from './ui.js';
+
+const DRAG_THRESHOLD = 4;
+
+function teardownCanvasInit(canvas) {
+    if (canvas?._dragDropAbort) {
+        canvas._dragDropAbort.abort();
+        canvas._dragDropAbort = null;
+    }
+}
+
+function clampSize(w, h) {
+    return {
+        w: Math.max(FREEFORM_MIN_W, w),
+        h: Math.max(FREEFORM_MIN_H, h)
+    };
+}
+
+function isScrollbarGrip(el, clientX) {
+    if (!el || el.scrollHeight <= el.clientHeight) return false;
+    const scrollbarWidth = el.offsetWidth - el.clientWidth;
+    if (scrollbarWidth <= 0) return false;
+    const rect = el.getBoundingClientRect();
+    return clientX >= rect.right - scrollbarWidth - 2;
+}
+
+function isInteractiveTarget(target) {
+    return !!target.closest(
+        '.card-actions, .card-act, .step-check, .step-delete-btn, .step-collapse-btn, ' +
+        '.card-inline-edit, .rich-text--edit, .step-nest-controls, .step-row-actions, ' +
+        '.grab-handle--step, .expanded-checklist-add-btn, .editor-body-convert-bar, ' +
+        '.editor-note-body, .editor-note-header, .note-editor-toolbar, .editor-meta-wrap, ' +
+        '.ff-resize, a, button, input, textarea, select'
+    );
+}
+
+function bindPointerSession({ onKeyDown, onCancel }) {
+    const onEsc = (e) => {
+        if (e.key === 'Escape') {
+            onCancel();
+            cleanup();
+        }
+    };
+    const cleanup = () => {
+        document.removeEventListener('keydown', onEsc);
+        document.removeEventListener('pointercancel', onCancel);
+    };
+    document.addEventListener('keydown', onEsc);
+    document.addEventListener('pointercancel', onCancel);
+    if (onKeyDown) document.addEventListener('keydown', onKeyDown);
+    return cleanup;
+}
 
 export const DragDropEngine = {
     init(userState, currentItems, onMutationComplete) {
@@ -14,196 +67,32 @@ export const DragDropEngine = {
         const canvas = document.getElementById('app-canvas');
         if (!canvas) return;
 
+        teardownCanvasInit(canvas);
+        const ac = new AbortController();
+        canvas._dragDropAbort = ac;
+        const { signal } = ac;
+
         if (canvas.classList.contains('view-freeform')) {
-            this.initFreeformInteractions(canvas, currentItems);
+            this.initFreeformInteractions(canvas, currentItems, signal);
             return;
         }
 
-        const cards = document.querySelectorAll('.mini-card');
-        const columns = document.querySelectorAll('.canvas-column');
-        const columnHeaders = document.querySelectorAll('.column-header');
-        let draggedCategoryColumn = null;
-
-        const readCategories = () => readStoredCategories();
-
-        const persistCategoryOrderFromDom = () => {
-            const categories = readCategories();
-            const visibleOrder = [...document.querySelectorAll('.canvas-column')]
-                .map(column => column.dataset.category)
-                .filter(Boolean);
-            if (visibleOrder.length === 0) return false;
-
-            const byName = new Map(categories.map(cat => [categoryKey(cat.name || cat), cat]));
-            const orderedVisible = visibleOrder
-                .map(name => byName.get(categoryKey(name)))
-                .filter(Boolean);
-            const visibleNames = new Set(visibleOrder.map(categoryKey));
-            const hiddenOrMissing = categories.filter(cat => !visibleNames.has(categoryKey(cat.name || cat)));
-            const nextCategories = [...orderedVisible, ...hiddenOrMissing];
-
-            localStorage.setItem('matrix_custom_categories', JSON.stringify(nextCategories));
-            window.dispatchEvent(new CustomEvent('category:order_changed', { detail: nextCategories }));
-            return true;
-        };
-
-        const getCategoryInsertBefore = (clientX, clientY) => {
-            const availableColumns = [...canvas.querySelectorAll('.canvas-column:not(.is-category-dragging)')];
-            return availableColumns.reduce((closest, column) => {
-                const box = column.getBoundingClientRect();
-                const sameRow = clientY >= box.top - 8 && clientY <= box.bottom + 8;
-                const offset = sameRow
-                    ? clientX - box.left - box.width / 2
-                    : clientY - box.top - box.height / 2;
-
-                if (offset < 0 && offset > closest.offset) {
-                    return { offset, column };
-                }
-                return closest;
-            }, { offset: Number.NEGATIVE_INFINITY, column: null }).column;
-        };
-
-        columnHeaders.forEach(header => {
-            header.addEventListener('dragstart', (e) => {
-                e.dataTransfer.setData('application/x-category-name', header.dataset.category || '');
-                e.dataTransfer.effectAllowed = 'move';
-                draggedCategoryColumn = header.closest('.canvas-column');
-                draggedCategoryColumn?.classList.add('is-category-dragging');
-            });
-
-            header.addEventListener('dragend', () => {
-                document.querySelectorAll('.canvas-column').forEach(col => {
-                    col.classList.remove('is-category-dragging', 'is-category-drop-target');
-                });
-                draggedCategoryColumn = null;
-            });
-        });
-
         if (canvas.classList.contains('view-columns')) {
-            canvas.addEventListener('dragover', (e) => {
-                if ([...e.dataTransfer.types].includes('application/x-category-name') && draggedCategoryColumn) {
-                    e.preventDefault();
-                    const insertBefore = getCategoryInsertBefore(e.clientX, e.clientY);
-                    if (insertBefore) canvas.insertBefore(draggedCategoryColumn, insertBefore);
-                    else canvas.appendChild(draggedCategoryColumn);
-                    return;
-                }
-
-                if ([...e.dataTransfer.types].includes('text/plain') && !e.target.closest('.canvas-column')) {
-                    e.preventDefault();
-                }
-            });
-
-            canvas.addEventListener('drop', async (e) => {
-
-                if ([...e.dataTransfer.types].includes('application/x-category-name')) {
-                    e.preventDefault();
-                    persistCategoryOrderFromDom();
-                    return;
-                }
-
-                if (e.target.closest('.canvas-column')) return;
-
-                const cardId = e.dataTransfer.getData('text/plain');
-                if (!cardId) return;
-                e.preventDefault();
-
-                const itemMatch = currentItems.find(i => i.id === cardId);
-                if (itemMatch && itemHasCategory(itemMatch)) {
-                    itemMatch.categories = [];
-                    const success = await API.saveItem(itemMatch, userState.token);
-                    if (success && typeof onMutationComplete === 'function') {
-                        await onMutationComplete();
-                    }
-                }
-            });
+            this.initColumnsViewInteractions(canvas, currentItems, onMutationComplete, userState, signal);
         }
-
-        cards.forEach(card => {
-            card.addEventListener('dragstart', (e) => {
-                if (e.target.closest('.grab-handle--step')) return;
-                if (card.classList.contains('expanded')) {
-                    e.preventDefault();
-                    return;
-                }
-                if (e.target.closest('.card-inline-edit, .card-actions, .card-body, .editor-note-body, .expanded-checklist, button, input, textarea, a')) {
-                    e.preventDefault();
-                    return;
-                }
-                e.dataTransfer.setData('text/plain', card.dataset.id);
-                card.style.opacity = '0.4';
-            });
-
-            card.addEventListener('dragend', () => {
-                card.style.opacity = '1';
-                columns.forEach(col => col.style.background = '');
-            });
-        });
-
-        columns.forEach(column => {
-            column.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                if ([...e.dataTransfer.types].includes('application/x-category-name')) {
-                    column.classList.add('is-category-drop-target');
-                    return;
-                }
-                column.style.background = '#222227';
-            });
-
-            column.addEventListener('dragleave', () => {
-                column.style.background = '';
-                column.classList.remove('is-category-drop-target');
-            });
-
-            column.addEventListener('drop', async (e) => {
-                e.preventDefault();
-                column.style.background = '';
-                column.classList.remove('is-category-drop-target');
-
-                if (e.dataTransfer.getData('application/x-category-name')) return;
-
-                const cardId = e.dataTransfer.getData('text/plain');
-                const targetCategory = column.dataset.category;
-                if (!cardId || !targetCategory) return;
-
-                const itemMatch = currentItems.find(i => i.id === cardId);
-                const currentCat = itemMatch?.categories?.[0] || '';
-                if (itemMatch && currentCat !== targetCategory) {
-                    itemMatch.categories = [targetCategory];
-                    const success = await API.saveItem(itemMatch, userState.token);
-                    if (success && typeof onMutationComplete === 'function') {
-                        await onMutationComplete();
-                    }
-                }
-            });
-        });
-
     },
 
-    initFreeformInteractions(canvas, currentItems = []) {
+    initFreeformInteractions(canvas, currentItems = [], signal) {
         const cards = canvas.querySelectorAll('.mini-card');
         let dragActive = null;
         let resizeActive = null;
-        const dragThreshold = 4;
-
-        const clampSize = (w, h) => ({
-            w: Math.max(FREEFORM_MIN_W, w),
-            h: Math.max(FREEFORM_MIN_H, h)
-        });
-
-        const isScrollbarGrip = (el, clientX) => {
-            if (!el || el.scrollHeight <= el.clientHeight) return false;
-            const scrollbarWidth = el.offsetWidth - el.clientWidth;
-            if (scrollbarWidth <= 0) return false;
-            const rect = el.getBoundingClientRect();
-            return clientX >= rect.right - scrollbarWidth - 2;
-        };
 
         const onDragMove = (e) => {
             if (!dragActive) return;
             const dx = e.clientX - dragActive.startX;
             const dy = e.clientY - dragActive.startY;
             if (!dragActive.moved) {
-                if (Math.abs(dx) <= dragThreshold && Math.abs(dy) <= dragThreshold) return;
+                if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
                 dragActive.moved = true;
                 dragActive.card.classList.add('is-freeform-dragging');
             }
@@ -323,10 +212,7 @@ export const DragDropEngine = {
                     return;
                 }
 
-                const interactive = e.target.closest(
-                    '.card-actions, .step-check, .step-delete-btn, .step-collapse-btn, .card-inline-edit, .step-nest-controls, .step-row-actions, .grab-handle--step, .expanded-checklist-add-btn, .editor-body-convert-bar, .ff-resize, a, button, input, textarea'
-                );
-                if (interactive) return;
+                if (isInteractiveTarget(e.target)) return;
 
                 const onDragGutter = e.target.closest('.ff-drag-gutter');
                 const onDragZone = e.target.closest('.card-drag-zone');
@@ -346,7 +232,500 @@ export const DragDropEngine = {
                 };
                 document.addEventListener('mousemove', onDragMove);
                 document.addEventListener('mouseup', onDragUp);
-            });
+            }, { signal });
         });
+    },
+
+    initColumnsViewInteractions(canvas, currentItems, onMutationComplete, userState, signal) {
+        const readCategories = () => readStoredCategories();
+
+        const persistCategoryOrderFromDom = () => {
+            const categories = readCategories();
+            const visibleOrder = [...canvas.querySelectorAll('.canvas-column')]
+                .sort((a, b) => {
+                    const ay = parseFloat(a.style.top) || 0;
+                    const by = parseFloat(b.style.top) || 0;
+                    if (ay !== by) return ay - by;
+                    return (parseFloat(a.style.left) || 0) - (parseFloat(b.style.left) || 0);
+                })
+                .map(column => column.dataset.category)
+                .filter(Boolean);
+            if (visibleOrder.length === 0) return false;
+
+            const byName = new Map(categories.map(cat => [categoryKey(cat.name || cat), cat]));
+            const orderedVisible = visibleOrder
+                .map(name => byName.get(categoryKey(name)))
+                .filter(Boolean);
+            const visibleNames = new Set(visibleOrder.map(categoryKey));
+            const hiddenOrMissing = categories.filter(cat => !visibleNames.has(categoryKey(cat.name || cat)));
+            const nextCategories = [...orderedVisible, ...hiddenOrMissing];
+
+            localStorage.setItem('matrix_custom_categories', JSON.stringify(nextCategories));
+            window.dispatchEvent(new CustomEvent('category:order_changed', { detail: nextCategories }));
+            return true;
+        };
+
+        canvas.addEventListener('dragover', (e) => {
+            if ([...e.dataTransfer.types].includes('text/plain') && !e.target.closest('.canvas-column')) {
+                e.preventDefault();
+            }
+        }, { signal });
+
+        canvas.addEventListener('drop', async (e) => {
+            if (e.target.closest('.canvas-column')) return;
+
+            const cardId = e.dataTransfer.getData('text/plain');
+            if (!cardId) return;
+            e.preventDefault();
+
+            const itemMatch = currentItems.find(i => i.id === cardId);
+            if (itemMatch && itemHasCategory(itemMatch)) {
+                const oldCat = itemMatch.categories?.[0];
+                itemMatch.categories = [];
+                UI.removeColumnNoteLayout(itemMatch.id, oldCat);
+                const success = await API.saveItem(itemMatch, userState.token);
+                if (success && typeof onMutationComplete === 'function') {
+                    await onMutationComplete();
+                }
+            }
+        }, { signal });
+
+        canvas.querySelectorAll('.canvas-column').forEach(column => {
+            column.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                column.classList.add('is-category-drop-target');
+            }, { signal });
+
+            column.addEventListener('dragleave', (e) => {
+                if (!column.contains(e.relatedTarget)) {
+                    column.classList.remove('is-category-drop-target');
+                }
+            }, { signal });
+
+            column.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                column.classList.remove('is-category-drop-target');
+
+                const cardId = e.dataTransfer.getData('text/plain');
+                const targetCategory = column.dataset.category;
+                if (!cardId || !targetCategory) return;
+
+                const itemMatch = currentItems.find(i => i.id === cardId);
+                const currentCat = itemMatch?.categories?.[0] || '';
+                if (itemMatch && currentCat !== targetCategory) {
+                    if (currentCat) UI.removeColumnNoteLayout(itemMatch.id, currentCat);
+                    itemMatch.categories = [targetCategory];
+                    const success = await API.saveItem(itemMatch, userState.token);
+                    if (success && typeof onMutationComplete === 'function') {
+                        await onMutationComplete();
+                    }
+                }
+            }, { signal });
+        });
+
+        canvas.querySelectorAll('.grab-handle--note-cat').forEach(handle => {
+            handle.addEventListener('dragstart', (e) => {
+                const card = handle.closest('.mini-card');
+                if (!card) return;
+                e.dataTransfer.setData('text/plain', card.dataset.id);
+                e.dataTransfer.effectAllowed = 'move';
+                card.classList.add('is-column-cat-dragging');
+            }, { signal });
+
+            handle.addEventListener('dragend', () => {
+                handle.closest('.mini-card')?.classList.remove('is-column-cat-dragging');
+            }, { signal });
+        });
+
+        this.bindColumnPointerDrag(canvas, currentItems, signal);
+        this.bindColumnPointerResize(canvas, currentItems, signal);
+        this.bindColumnDrag(canvas, signal, persistCategoryOrderFromDom);
+    },
+
+    bindColumnDrag(canvas, signal, persistCategoryOrder) {
+        let colDrag = null;
+        let snapshot = null;
+
+        const restore = () => {
+            if (!snapshot) return;
+            snapshot.forEach(({ el, left, top }) => {
+                el.style.left = left;
+                el.style.top = top;
+            });
+            snapshot = null;
+        };
+
+        const onMove = (e) => {
+            if (!colDrag) return;
+            const dx = e.clientX - colDrag.startX;
+            const dy = e.clientY - colDrag.startY;
+            if (!colDrag.moved) {
+                if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
+                colDrag.moved = true;
+                colDrag.column.classList.add('is-canvas-col-dragging');
+                canvas.classList.add('is-layout-active');
+            }
+            e.preventDefault();
+            colDrag.column.style.left = `${Math.max(0, colDrag.origX + dx)}px`;
+            colDrag.column.style.top = `${Math.max(0, colDrag.origY + dy)}px`;
+        };
+
+        const onUp = () => {
+            if (!colDrag) return;
+            const { column, moved } = colDrag;
+            column.classList.remove('is-canvas-col-dragging');
+            canvas.classList.remove('is-layout-active');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            sessionCleanup?.();
+
+            if (!moved) {
+                restore();
+            } else {
+                const x = UI.snapGridCoord(parseFloat(column.style.left) || 0, CANVAS_GRID_W);
+                const y = UI.snapGridCoord(parseFloat(column.style.top) || 0, CANVAS_GRID_W);
+                column.style.left = `${x}px`;
+                column.style.top = `${y}px`;
+                const cat = column.dataset.category;
+                if (cat) UI.saveColumnPosition(cat, x, y);
+                UI.autoArrangeCanvasColumns(canvas, { animate: true });
+                persistCategoryOrder();
+            }
+            colDrag = null;
+            snapshot = null;
+        };
+
+        let sessionCleanup = null;
+
+        canvas.querySelectorAll('.grab-handle--col').forEach(handle => {
+            handle.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const column = handle.closest('.canvas-column');
+                if (!column) return;
+
+                snapshot = [...canvas.querySelectorAll('.canvas-column')].map((el) => ({
+                    el,
+                    left: el.style.left,
+                    top: el.style.top
+                }));
+
+                colDrag = {
+                    column,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    origX: parseFloat(column.style.left) || 0,
+                    origY: parseFloat(column.style.top) || 0,
+                    moved: false
+                };
+
+                sessionCleanup = bindPointerSession({
+                    onCancel: () => {
+                        restore();
+                        column.classList.remove('is-canvas-col-dragging');
+                        canvas.classList.remove('is-layout-active');
+                        colDrag = null;
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                    }
+                });
+
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            }, { signal });
+        });
+    },
+
+    bindColumnPointerDrag(canvas, currentItems, signal) {
+        let dragActive = null;
+        let snapshot = null;
+
+        const getBoundsEl = (card) => {
+            if (card.dataset.columnNote === '1') {
+                return card.closest('.column-notes');
+            }
+            return canvas;
+        };
+
+        const restoreCard = () => {
+            if (!dragActive?.snapshot) return;
+            const { card, snapshot: snap } = dragActive;
+            card.style.left = snap.left;
+            card.style.top = snap.top;
+            card.style.width = snap.width;
+            card.style.height = snap.height;
+        };
+
+        const onMove = (e) => {
+            if (!dragActive) return;
+            const dx = e.clientX - dragActive.startX;
+            const dy = e.clientY - dragActive.startY;
+            if (!dragActive.moved) {
+                if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
+                dragActive.moved = true;
+                dragActive.card.classList.add('is-column-dragging');
+                canvas.classList.add('is-layout-active');
+            }
+            e.preventDefault();
+            const bounds = dragActive.boundsEl.getBoundingClientRect();
+            const maxX = Math.max(0, bounds.width - dragActive.cardW);
+            const maxY = Math.max(0, bounds.height - dragActive.cardH);
+            let x = Math.min(maxX, Math.max(0, dragActive.origX + dx));
+            let y = Math.min(maxY, Math.max(0, dragActive.origY + dy));
+            dragActive.card.style.left = `${x}px`;
+            dragActive.card.style.top = `${y}px`;
+        };
+
+        const onUp = () => {
+            if (!dragActive) return;
+            const { card, moved, boundsEl, isFloat } = dragActive;
+            card.classList.remove('is-column-dragging');
+            canvas.classList.remove('is-layout-active');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            dragActive.sessionCleanup?.();
+
+            if (!moved) {
+                restoreCard();
+            } else {
+                const innerW = isFloat
+                    ? canvas.clientWidth
+                    : UI.getColumnNotesInnerWidth(boundsEl);
+                const maxH = isFloat
+                    ? window.innerHeight
+                    : UI.getColumnNotesMaxHeight(boundsEl);
+                let rect = UI.snapNoteRect(UI.readNoteRect(card), { maxW: innerW, maxH });
+                UI.applyNoteRect(card, rect, { settling: true });
+
+                if (isFloat) {
+                    UI.saveColumnsFloatPosition(card.dataset.id, rect.x, rect.y);
+                    if (card.classList.contains('expanded')) {
+                        UI.saveColumnsFloatSize(card.dataset.id, rect.w, rect.h);
+                    }
+                } else {
+                    const cat = card.dataset.category;
+                    if (cat) UI.saveColumnNoteLayout(cat, card.dataset.id, rect);
+                    UI.autoArrangeColumnNotes(boundsEl, { animate: true });
+                }
+            }
+            dragActive = null;
+        };
+
+        const attachCard = (card) => {
+            card.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
+                if (e.target.closest('.grab-handle--note-cat')) return;
+                if (isInteractiveTarget(e.target)) return;
+
+                const onDragGutter = e.target.closest('.ff-drag-gutter');
+                const onDragZone = e.target.closest('.card-drag-zone');
+                if (!onDragGutter && !onDragZone) return;
+
+                const scrollHost = e.target.closest('.editor-note-body') || e.target.closest('.card-body');
+                if (scrollHost && isScrollbarGrip(scrollHost, e.clientX)) return;
+
+                e.stopPropagation();
+                const boundsEl = getBoundsEl(card);
+                if (!boundsEl) return;
+                const rect = UI.readNoteRect(card);
+                const isFloat = card.dataset.columnsFloat === '1';
+
+                const sessionCleanup = bindPointerSession({
+                    onCancel: () => {
+                        restoreCard();
+                        card.classList.remove('is-column-dragging');
+                        canvas.classList.remove('is-layout-active');
+                        dragActive = null;
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                    }
+                });
+
+                dragActive = {
+                    card,
+                    boundsEl,
+                    isFloat,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    origX: rect.x,
+                    origY: rect.y,
+                    cardW: rect.w,
+                    cardH: rect.h,
+                    moved: false,
+                    snapshot: {
+                        left: card.style.left,
+                        top: card.style.top,
+                        width: card.style.width,
+                        height: card.style.height
+                    },
+                    sessionCleanup
+                };
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            }, { signal });
+        };
+
+        canvas.querySelectorAll('.mini-card[data-column-note="1"], .mini-card[data-columns-float="1"]').forEach(attachCard);
+    },
+
+    bindColumnPointerResize(canvas, currentItems, signal) {
+        let resizeActive = null;
+
+        const onMove = (e) => {
+            if (!resizeActive) return;
+            const dx = e.clientX - resizeActive.startX;
+            const dy = e.clientY - resizeActive.startY;
+            if (!resizeActive.moved) {
+                if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
+                resizeActive.moved = true;
+            }
+            const { card, axis, startX, startY, origX, origY, origW, origH, boundsEl, isFloat } = resizeActive;
+            const dy = e.clientY - startY;
+
+            let nextX = origX;
+            let nextY = origY;
+            let nextW = origW;
+            let nextH = origH;
+
+            if (axis.includes('e')) nextW = origW + dx;
+            if (axis.includes('w')) {
+                nextW = origW - dx;
+                nextX = origX + dx;
+            }
+            if (axis.includes('s')) nextH = origH + dy;
+            if (axis.includes('n')) {
+                nextH = origH - dy;
+                nextY = origY + dy;
+            }
+
+            const clamped = clampSize(nextW, nextH);
+            if (axis.includes('w')) nextX = origX + (origW - clamped.w);
+            if (axis.includes('n')) nextY = origY + (origH - clamped.h);
+
+            const innerW = isFloat ? canvas.clientWidth : UI.getColumnNotesInnerWidth(boundsEl);
+            const maxH = isFloat ? window.innerHeight : UI.getColumnNotesMaxHeight(boundsEl);
+            nextX = Math.max(0, nextX);
+            nextY = Math.max(0, nextY);
+            if (nextX + clamped.w > innerW) {
+                if (axis.includes('w')) nextX = Math.max(0, innerW - clamped.w);
+                else nextW = Math.max(FREEFORM_MIN_W, innerW - nextX);
+            }
+
+            card.style.left = `${nextX}px`;
+            card.style.top = `${nextY}px`;
+            card.style.setProperty('width', `${clamped.w}px`, 'important');
+            card.style.setProperty('height', `${clamped.h}px`, 'important');
+            card.style.setProperty('min-height', `${clamped.h}px`, 'important');
+            card.style.setProperty('max-height', `${clamped.h}px`, 'important');
+        };
+
+        const onUp = () => {
+            if (!resizeActive) return;
+            const { card, moved, boundsEl, isFloat, snapshot } = resizeActive;
+            card.classList.remove('is-column-resizing');
+            canvas.classList.remove('is-layout-active');
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            resizeActive.sessionCleanup?.();
+
+            if (!moved && snapshot) {
+                card.style.left = snapshot.left;
+                card.style.top = snapshot.top;
+                card.style.setProperty('width', snapshot.width, 'important');
+                card.style.setProperty('height', snapshot.height, 'important');
+            } else {
+                const innerW = isFloat ? canvas.clientWidth : UI.getColumnNotesInnerWidth(boundsEl);
+                const maxH = isFloat ? window.innerHeight : UI.getColumnNotesMaxHeight(boundsEl);
+                const rect = UI.snapNoteRect(UI.readNoteRect(card), { maxW: innerW, maxH });
+                UI.applyNoteRect(card, rect, { settling: true });
+
+                if (isFloat) {
+                    UI.saveColumnsFloatPosition(card.dataset.id, rect.x, rect.y);
+                    UI.saveColumnsFloatSize(card.dataset.id, rect.w, rect.h);
+                } else {
+                    const cat = card.dataset.category;
+                    if (cat) UI.saveColumnNoteLayout(cat, card.dataset.id, rect);
+                    UI.autoArrangeColumnNotes(boundsEl, { animate: true });
+                }
+            }
+            resizeActive = null;
+        };
+
+        const attachCard = (card) => {
+            card.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
+
+                const resizeHandle = e.target.closest('.ff-resize');
+                if (!resizeHandle) return;
+
+                e.preventDefault();
+                e.stopPropagation();
+                const boundsEl = card.dataset.columnNote === '1'
+                    ? card.closest('.column-notes')
+                    : canvas;
+                const isFloat = card.dataset.columnsFloat === '1';
+                let { w: startW, h: startH } = UI.readFreeformCardSize(card);
+
+                if (card.classList.contains('compact')) {
+                    const itemMatch = currentItems.find(i => i.id === card.dataset.id);
+                    if (itemMatch && card.dataset.columnNote === '1') {
+                        UI.updateColumnNoteCard(card, itemMatch, {
+                            expanded: true,
+                            dimensions: { w: startW, h: startH }
+                        });
+                    } else if (itemMatch && isFloat) {
+                        UI.updateColumnsFloatCard(card, itemMatch, {
+                            expanded: true,
+                            dimensions: { w: startW, h: startH }
+                        });
+                    }
+                    ({ w: startW, h: startH } = UI.readFreeformCardSize(card));
+                }
+
+                const snapshot = {
+                    left: card.style.left,
+                    top: card.style.top,
+                    width: card.style.width || `${startW}px`,
+                    height: card.style.height || `${startH}px`
+                };
+
+                const sessionCleanup = bindPointerSession({
+                    onCancel: () => {
+                        card.style.left = snapshot.left;
+                        card.style.top = snapshot.top;
+                        card.style.setProperty('width', snapshot.width, 'important');
+                        card.style.setProperty('height', snapshot.height, 'important');
+                        card.classList.remove('is-column-resizing');
+                        canvas.classList.remove('is-layout-active');
+                        resizeActive = null;
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                    }
+                });
+
+                resizeActive = {
+                    card,
+                    boundsEl,
+                    isFloat,
+                    axis: resizeHandle.dataset.axis || 'se',
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    origX: parseFloat(card.style.left) || 0,
+                    origY: parseFloat(card.style.top) || 0,
+                    origW: startW,
+                    origH: startH,
+                    moved: false,
+                    snapshot,
+                    sessionCleanup
+                };
+                card.classList.add('is-column-resizing');
+                canvas.classList.add('is-layout-active');
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            }, { signal });
+        };
+
+        canvas.querySelectorAll('.mini-card[data-column-note="1"], .mini-card[data-columns-float="1"]').forEach(attachCard);
     }
 };
