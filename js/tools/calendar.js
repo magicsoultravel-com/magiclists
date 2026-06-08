@@ -9,6 +9,7 @@ export const CalendarTool = {
         Calendar.open(items, {
             mount: mountElement,
             inline: true,
+            focusCategories: ToolsManager.getFocusCategories?.() || [],
             onClose: () => ToolsManager.close()
         });
     },

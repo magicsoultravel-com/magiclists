@@ -1,5 +1,6 @@
 import { Holidays } from './holidays.js';
 import { readStoredCategories } from './categories.js';
+import { applyFocusToItems } from './focusFilter.js';
 import { CARD_ICONS } from './ui.js';
 import { resolveNoteColor } from './colorPicker.js';
 import { stripRichText } from './richText.js';
@@ -15,6 +16,7 @@ export const Calendar = {
     selectedDate: null,
     items: [],
     hiddenCategories: [],
+    focusCategories: [],
     autoSaveTimer: null,
     
     isItemCalendarHidden(itemId) {
@@ -47,6 +49,7 @@ export const Calendar = {
     
     open(items, options = {}) {
         this.items = items;
+        this.focusCategories = options.focusCategories || [];
         this.hiddenCategories = JSON.parse(localStorage.getItem('matrix_hidden_categories') || '[]');
         this.inlineMode = !!options.inline;
         this.onInlineClose = options.onClose || null;
@@ -82,9 +85,14 @@ export const Calendar = {
         if (this.overlay) this.overlay.classList.add('is-hidden');
     },
     
-    refresh() {
+    refresh(focusCategories = null) {
+        if (focusCategories !== null) this.focusCategories = focusCategories;
         this.hiddenCategories = JSON.parse(localStorage.getItem('matrix_hidden_categories') || '[]');
         this.render();
+    },
+
+    getFilteredItems() {
+        return applyFocusToItems(this.items || [], this.focusCategories);
     },
     
     saveState() {
@@ -122,7 +130,7 @@ export const Calendar = {
         
         const events = [];
         
-        this.items.forEach(item => {
+        this.getFilteredItems().forEach(item => {
             if (item.status === 'archived') return;
             if (item.hideFromCalendar || this.isItemCalendarHidden(item.id)) return;
             const itemCategory = item.categories?.[0] || '';

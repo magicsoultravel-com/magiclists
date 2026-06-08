@@ -1,5 +1,10 @@
 import { API } from './api.js';
-import { categoryKey, readStoredCategories } from './categories.js';
+import {
+    categoryKey,
+    isUncategorizedCategory,
+    readStoredCategories,
+    UNCATEGORIZED_CATEGORY
+} from './categories.js';
 import {
     UI,
     itemHasCategory,
@@ -316,9 +321,12 @@ export const DragDropEngine = {
 
                 const itemMatch = currentItems.find(i => i.id === cardId);
                 const currentCat = itemMatch?.categories?.[0] || '';
-                if (itemMatch && currentCat !== targetCategory) {
+                const currentKey = categoryKey(currentCat || UNCATEGORIZED_CATEGORY);
+                const targetKey = categoryKey(targetCategory);
+                if (itemMatch && currentKey !== targetKey) {
                     if (currentCat) UI.removeColumnNoteLayout(itemMatch.id, currentCat);
-                    itemMatch.categories = [targetCategory];
+                    else UI.removeColumnNoteLayout(itemMatch.id, UNCATEGORIZED_CATEGORY);
+                    itemMatch.categories = isUncategorizedCategory(targetCategory) ? [] : [targetCategory];
                     const success = await API.saveItem(itemMatch, userState.token);
                     if (success && typeof onMutationComplete === 'function') {
                         await onMutationComplete();
@@ -783,9 +791,11 @@ export const DragDropEngine = {
         canvas.querySelectorAll('.canvas-column').forEach((column) => {
             column.addEventListener('mousedown', (e) => {
                 if (e.button !== 0) return;
-                if (!column.classList.contains('is-column-resize-active')) return;
                 const handle = e.target.closest('.col-resize');
                 if (!handle) return;
+                const axis = handle.dataset.axis || 'se';
+                const needsActiveMode = axis === 'e' || axis === 's';
+                if (needsActiveMode && !column.classList.contains('is-column-resize-active')) return;
                 e.preventDefault();
                 e.stopPropagation();
 

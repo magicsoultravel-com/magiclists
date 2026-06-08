@@ -834,6 +834,7 @@ body {
 
 #btn-layout-reset,
 #btn-collapse-all,
+#btn-focus-mode,
 #btn-save-view,
 #btn-recall-view {
     min-width: 30px;
@@ -842,13 +843,134 @@ body {
 }
 
 #btn-save-view.is-saved,
-#btn-recall-view.is-recalled {
+#btn-recall-view.is-recalled,
+#btn-focus-mode.is-active {
     color: #6ee7b7;
 }
 
 #btn-recall-view:disabled {
     opacity: 0.35;
     cursor: not-allowed;
+}
+
+#workspace-shell[data-focus-active] #app-canvas {
+    box-shadow: inset 0 0 0 1px rgba(110, 231, 183, 0.22);
+}
+
+.focus-mode-list,
+.view-slot-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    max-height: min(420px, calc(100vh - 24px));
+    overflow-y: auto;
+}
+
+.focus-mode-row {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    width: 100%;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-main);
+    text-align: left;
+    cursor: pointer;
+}
+
+.focus-mode-row:hover:not(.is-disabled) {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.focus-mode-row.is-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.focus-mode-reset {
+    border: none;
+    font: inherit;
+}
+
+.focus-mode-divider {
+    height: 1px;
+    margin: 0.15rem 0;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.focus-mode-footer {
+    margin: 0.2rem 0.35rem 0;
+    font-size: 0.72rem;
+    color: var(--text-muted, #94a3b8);
+}
+
+.focus-mode-row-hint {
+    margin-left: auto;
+    font-size: 0.72rem;
+    color: var(--text-muted, #94a3b8);
+}
+
+.view-slot-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.15rem;
+    width: 100%;
+    padding: 0.45rem 0.55rem;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-main);
+    text-align: left;
+    cursor: pointer;
+}
+
+.view-slot-option:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.view-slot-option.is-empty .view-slot-meta {
+    color: var(--text-muted, #94a3b8);
+}
+
+.view-slot-option:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.view-slot-meta {
+    font-size: 0.72rem;
+    color: var(--text-muted, #94a3b8);
+}
+
+#app-canvas.view-columns .column-empty-slot {
+    min-height: 56px;
+    border: 1px dashed rgba(255, 255, 255, 0.16);
+    border-radius: 6px;
+    box-sizing: border-box;
+}
+
+#app-canvas.view-columns .canvas-column.is-category-drop-target .column-empty-slot {
+    border-color: var(--accent);
+    background: rgba(99, 102, 241, 0.08);
+}
+
+#app-canvas.view-columns .mini-card.is-column-cat-dragging {
+    opacity: 0.55;
+    outline: 1px dashed var(--accent);
+}
+
+#app-canvas.view-columns .note-editor-toolbar .grab-handle--note-cat {
+    margin-right: 0.25rem;
+}
+
+#app-canvas.view-columns .canvas-column:hover .col-resize-se {
+    pointer-events: auto;
+    opacity: 0.55;
 }
 
 
@@ -3175,6 +3297,11 @@ textarea.form-input {
 
 #app-canvas.view-columns .grab-handle--note-cat:active {
     cursor: grabbing;
+}
+
+#app-canvas.view-columns .grab-handle--note-cat[draggable="false"] {
+    opacity: 0.35;
+    cursor: not-allowed;
 }
 
 #app-canvas.view-columns .card-drag-zone {

@@ -26,3 +26,9 @@ export function readStoredCategories({ keepEmpty = false } = {}) {
 export function categoryKey(name) {
     return String(name || '').trim().toLowerCase();
 }
+
+export const UNCATEGORIZED_CATEGORY = 'Uncategorized';
+
+export function isUncategorizedCategory(name) {
+    return categoryKey(name) === categoryKey(UNCATEGORIZED_CATEGORY);
+}

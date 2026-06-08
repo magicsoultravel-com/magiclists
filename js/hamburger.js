@@ -1,3 +1,5 @@
+import { UNCATEGORIZED_CATEGORY } from './categories.js';
+import { itemHasCategory } from './focusFilter.js';
 import { ACTION_ICONS, CARD_ICONS, UI, formatStorageSize, getLocalStorageUsedBytes } from './ui.js';
 import { resolveNoteColor } from './colorPicker.js';
 import { hasRichMarkup, stripRichText } from './richText.js';
@@ -377,7 +379,7 @@ export const SidePanel = {
         this.renderNotesListZone('notes-list-archived-zone', archivedItems, allItems, { variant: 'archived' });
     },
 
-    renderCategoryListZone(zoneId, names, categories, hiddenCategories, { hidden = false } = {}) {
+    renderCategoryListZone(zoneId, names, categories, hiddenCategories, { hidden = false, uncatCount = 0 } = {}) {
         const zone = document.getElementById(zoneId);
         if (!zone) return;
 
@@ -389,9 +391,13 @@ export const SidePanel = {
         const sorted = [...names].sort((a, b) => a.localeCompare(b));
         zone.innerHTML = sorted.map((catName) => {
             const cat = categories.find((entry) => entry.name === catName);
-            const color = cat?.color || '#64748b';
+            const color = catName === UNCATEGORIZED_CATEGORY
+                ? '#64748b'
+                : (cat?.color || '#64748b');
             const accentStyle = ` style="--note-accent:${this.escapeAttr(color)}"`;
-            const title = this.escapeHTML(catName);
+            const title = catName === UNCATEGORIZED_CATEGORY && uncatCount > 0
+                ? this.escapeHTML(`${UNCATEGORIZED_CATEGORY} (${uncatCount})`)
+                : this.escapeHTML(catName);
 
             if (hidden) {
                 return `
@@ -415,12 +421,18 @@ export const SidePanel = {
         });
     },
 
-    updateCategories(categories, hiddenCategories) {
+    updateCategories(categories, hiddenCategories, items = []) {
         const allCategories = categories || [];
         const hiddenSet = hiddenCategories || [];
         const activeNames = allCategories
             .map((cat) => cat.name)
             .filter((name) => name && !hiddenSet.includes(name));
+        const uncatCount = (items || []).filter(
+            (item) => item.status !== 'archived' && !UI.isHiddenFromBoard(item) && !itemHasCategory(item)
+        ).length;
+        if (uncatCount > 0 && !activeNames.includes(UNCATEGORIZED_CATEGORY)) {
+            activeNames.push(UNCATEGORIZED_CATEGORY);
+        }
         const hiddenNames = hiddenSet.filter((name) => allCategories.some((cat) => cat.name === name));
 
         const activeCountEl = document.getElementById('categories-active-count');
@@ -428,7 +440,7 @@ export const SidePanel = {
         if (activeCountEl) activeCountEl.textContent = String(activeNames.length);
         if (hiddenCountEl) hiddenCountEl.textContent = String(hiddenNames.length);
 
-        this.renderCategoryListZone('categories-list-active-zone', activeNames, allCategories, hiddenSet);
+        this.renderCategoryListZone('categories-list-active-zone', activeNames, allCategories, hiddenSet, { uncatCount });
         this.renderCategoryListZone('categories-list-hidden-zone', hiddenNames, allCategories, hiddenSet, { hidden: true });
     },
 

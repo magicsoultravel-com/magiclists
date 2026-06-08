@@ -25,9 +25,11 @@ export const ToolsManager = {
     activeMountClass: null,
     registry: [],
     getItems: null,
+    getFocusCategories: null,
 
-    async init(getItems) {
+    async init(getItems, getFocusCategories) {
         this.getItems = getItems || null;
+        this.getFocusCategories = getFocusCategories || null;
         this.overlay = document.getElementById('tools-overlay');
         this.mountZone = document.getElementById('tools-form-mount');
         this.dropdown = document.getElementById('toolbox-dropdown');

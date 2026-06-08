@@ -1,4 +1,14 @@
-import { readStoredCategories } from './categories.js';
+import {
+    categoryKey,
+    isUncategorizedCategory,
+    readStoredCategories,
+    UNCATEGORIZED_CATEGORY
+} from './categories.js';
+import {
+    applyFocusToCategories,
+    applyFocusToItems,
+    focusIncludesUncategorized
+} from './focusFilter.js';
 import { applyCardTheme } from './cardTheme.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor, THEME_DEFAULT_COLOR } from './colorPicker.js';
 import {
@@ -90,8 +100,12 @@ export const ACTION_ICONS = {
     chromeBg: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.3" y="1.8" width="3.6" height="8.4" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="5.5" y="1.8" width="5.2" height="2.4" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="5.5" y="5" width="5.2" height="5.2" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
     clockStyle: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.2V6l2 1.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     saveView: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.8 2.4h6.4v7.2L6 7.6 2.8 9.6V2.4z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M6 5.2v2.8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    recallView: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.8 2.2h6.4v7.4L6 7.6 2.8 9.6V2.2z" fill="currentColor"/></svg>'
+    recallView: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.8 2.2h6.4v7.4L6 7.6 2.8 9.6V2.2z" fill="currentColor"/></svg>',
+    focusMode: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.95"/><circle cx="6" cy="6" r="1.6" fill="currentColor"/></svg>'
 };
+
+const SAVED_VIEWS_KEY = 'matrix_saved_views';
+const SAVED_VIEWS_SLOTS = 3;
 
 export function itemHasCategory(item) {
     const name = item?.categories?.[0];
@@ -563,14 +577,15 @@ export const UI = {
         };
     },
 
-    updateSingleCard(canvas, item, hiddenCategories = []) {
+    updateSingleCard(canvas, item, hiddenCategories = [], focusCategories = []) {
         if (!canvas || !item?.id) return false;
         const card = canvas.querySelector(`.mini-card[data-id="${item.id}"]`);
         if (!card) return false;
 
         const scrollState = this.captureScrollState(canvas);
-        const activeCategories = readStoredCategories()
+        let activeCategories = readStoredCategories()
             .filter((cat) => !hiddenCategories.includes(cat.name));
+        activeCategories = applyFocusToCategories(activeCategories, focusCategories);
         const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
 
         if (card.classList.contains('expanded')) {
@@ -593,24 +608,30 @@ export const UI = {
         return true;
     },
 
-    render(canvas, items, viewMode, hiddenCategories = []) {
+    render(canvas, items, viewMode, hiddenCategories = [], focusCategories = []) {
         if (!canvas) return;
         const scrollState = this.captureScrollState(canvas);
         canvas.innerHTML = '';
 
         const safeItems = Array.isArray(items) ? items : [];
-        const visibleItems = this.getVisibleItems(safeItems);
+        let visibleItems = this.getVisibleItems(safeItems);
+        const focusActive = Array.isArray(focusCategories) && focusCategories.length > 0;
+        visibleItems = applyFocusToItems(visibleItems, focusCategories);
 
         let activeCategories = readStoredCategories();
-
         activeCategories = activeCategories.filter(cat => !hiddenCategories.includes(cat.name));
+        activeCategories = applyFocusToCategories(activeCategories, focusCategories);
 
         const resolvedMode = viewMode === 'freeform' ? 'freeform' : 'columns';
         canvas.className = resolvedMode === 'freeform' ? 'view-freeform' : 'view-columns';
+        if (focusActive) canvas.dataset.focusActive = '1';
+        else delete canvas.dataset.focusActive;
 
         if (visibleItems.length === 0) {
-            const hiddenCount = safeItems.length - visibleItems.length;
-            if (safeItems.length > 0 && hiddenCount === safeItems.length) {
+            const hiddenCount = safeItems.length - this.getVisibleItems(safeItems).length;
+            if (focusActive && this.getVisibleItems(safeItems).length > 0) {
+                canvas.innerHTML = `<div class="system-status-msg">Focus active — no notes in the selected categories on the desktop. Use the sidebar to open any note, or reset focus.</div>`;
+            } else if (safeItems.length > 0 && hiddenCount === safeItems.length) {
                 canvas.innerHTML = `<div class="system-status-msg">All objects are hidden. Use the footer to restore them.</div>`;
             } else {
                 canvas.innerHTML = `<div class="system-status-msg">Workspace clean. Click "+ New" to commit an entity.</div>`;
@@ -619,6 +640,8 @@ export const UI = {
         }
 
         if (resolvedMode === 'columns') {
+            this.migrateColumnsFloatLayouts();
+
             activeCategories.forEach(catObj => {
                 const categoryName = typeof catObj === 'string' ? catObj : catObj.name;
                 const catColor = catObj.color || '#64748b';
@@ -633,15 +656,26 @@ export const UI = {
                 canvas.appendChild(this.createColumnStructure(categoryName, catColor, columnItems, activeCategories));
             });
 
-            visibleItems
-                .filter(item => !itemHasCategory(item))
-                .forEach(item => {
-                    const card = this.createCardComponent(item, activeCategories, { columnsFloat: true });
-                    this.finalizeColumnsFloat(card);
-                    canvas.appendChild(card);
-                });
+            const uncatItems = visibleItems
+                .filter((item) => !itemHasCategory(item))
+                .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0));
+            const showUncategorizedColumn = focusActive
+                ? focusIncludesUncategorized(focusCategories)
+                : uncatItems.length > 0;
+            if (showUncategorizedColumn) {
+                canvas.appendChild(this.createColumnStructure(
+                    UNCATEGORIZED_CATEGORY,
+                    UNCATEGORIZED_COLOR,
+                    uncatItems,
+                    activeCategories
+                ));
+            }
 
-            this.syncCanvasLayoutOrder(activeCategories, visibleItems);
+            const columnsForOrder = [...activeCategories];
+            if (showUncategorizedColumn) {
+                columnsForOrder.push({ name: UNCATEGORIZED_CATEGORY, color: UNCATEGORIZED_COLOR });
+            }
+            this.syncCanvasLayoutOrder(columnsForOrder, visibleItems);
             this.layoutColumnView(canvas, { animate: false });
         } else if (resolvedMode === 'freeform') {
             const positions = this.getFreeformPositions();
@@ -690,14 +724,17 @@ export const UI = {
         const isCollapsed = this.isCategoryCollapsed(categoryName);
         if (isCollapsed) colWrapper.classList.add('is-collapsed');
 
+        const hideControl = isUncategorizedCategory(categoryName)
+            ? ''
+            : '<span class="column-hide-btn" title="Hide this category">×</span>';
         colWrapper.innerHTML = `
             <div class="column-header" data-category="${this.escapeAttr(categoryName)}" style="color: ${catColor};">
-                <span class="grab-handle grab-handle--col" title="Drag to reorder categories">⋮⋮</span>
+                <span class="grab-handle grab-handle--col" title="Drag to reposition category">⋮⋮</span>
                 <span class="column-title">${this.escapeHTML(categoryName)} (${columnItems.length})</span>
                 <span class="column-header-actions">
                     <button type="button" class="column-resize-btn" title="Resize category" aria-label="Resize category" aria-pressed="false">${CARD_ICONS.resize}</button>
                     <button type="button" class="column-collapse-btn" title="${isCollapsed ? 'Expand category' : 'Collapse category'}" aria-label="${isCollapsed ? 'Expand category' : 'Collapse category'}">${isCollapsed ? '▶' : '▼'}</button>
-                    <span class="column-hide-btn" title="Hide this category">×</span>
+                    ${hideControl}
                 </span>
             </div>
         `;
@@ -755,17 +792,19 @@ export const UI = {
         });
 
         const hideBtn = colWrapper.querySelector('.column-hide-btn');
-        hideBtn.addEventListener('mouseenter', () => hideBtn.style.opacity = '1');
-        hideBtn.addEventListener('mouseleave', () => hideBtn.style.opacity = '0.6');
-        hideBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            let currentHidden = JSON.parse(localStorage.getItem('matrix_hidden_categories') || '[]');
-            if (!currentHidden.includes(categoryName)) {
-                currentHidden.push(categoryName);
-                localStorage.setItem('matrix_hidden_categories', JSON.stringify(currentHidden));
-                window.location.reload();
-            }
-        });
+        if (hideBtn) {
+            hideBtn.addEventListener('mouseenter', () => { hideBtn.style.opacity = '1'; });
+            hideBtn.addEventListener('mouseleave', () => { hideBtn.style.opacity = '0.6'; });
+            hideBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                let currentHidden = JSON.parse(localStorage.getItem('matrix_hidden_categories') || '[]');
+                if (!currentHidden.includes(categoryName)) {
+                    currentHidden.push(categoryName);
+                    localStorage.setItem('matrix_hidden_categories', JSON.stringify(currentHidden));
+                    window.location.reload();
+                }
+            });
+        }
 
         const notesHost = document.createElement('div');
         notesHost.className = 'column-notes';
@@ -774,14 +813,65 @@ export const UI = {
         columnItems.forEach(item => {
             const card = this.createCardComponent(item, activeCategories, {
                 columnNote: true,
-                categoryName
+                categoryName: isUncategorizedCategory(categoryName) ? '' : categoryName
             });
             this.finalizeColumnNote(card, categoryName);
             notesHost.appendChild(card);
         });
 
+        if (!isCollapsed && columnItems.length === 0) {
+            const slot = document.createElement('div');
+            slot.className = 'column-empty-slot';
+            slot.setAttribute('aria-hidden', 'true');
+            notesHost.appendChild(slot);
+        }
+
         colWrapper.appendChild(notesHost);
+        if (!isCollapsed) {
+            requestAnimationFrame(() => this.resizeColumnToFit(colWrapper, { animate: false }));
+        }
         return colWrapper;
+    },
+
+    buildCategoryDragHandleHtml(card) {
+        if (card?.dataset?.columnNote !== '1') return '';
+        const loggedIn = !!localStorage.getItem('admin_token');
+        const title = loggedIn ? 'Drag to another category' : 'Login to move between categories';
+        return `<span class="grab-handle grab-handle--note-cat" draggable="${loggedIn ? 'true' : 'false'}" title="${this.escapeAttr(title)}" aria-label="${this.escapeAttr(title)}">⋮⋮</span>`;
+    },
+
+    migrateColumnsFloatLayouts() {
+        let floatPos;
+        let floatSizes;
+        try {
+            floatPos = JSON.parse(localStorage.getItem('matrix_columns_float_positions') || '{}');
+            floatSizes = JSON.parse(localStorage.getItem('matrix_columns_float_sizes') || '{}');
+        } catch {
+            return;
+        }
+        const posIds = Object.keys(floatPos || {});
+        const sizeIds = Object.keys(floatSizes || {});
+        if (posIds.length === 0 && sizeIds.length === 0) return;
+
+        const layout = this.getColumnNoteLayout();
+        const cat = UNCATEGORIZED_CATEGORY;
+        if (!layout[cat]) layout[cat] = {};
+        const allIds = new Set([...posIds, ...sizeIds]);
+        allIds.forEach((id) => {
+            const pos = floatPos[id];
+            const size = floatSizes[id];
+            if (!layout[cat][id]) {
+                layout[cat][id] = {
+                    x: pos?.x ?? 0,
+                    y: pos?.y ?? 0,
+                    w: size?.w ?? FREEFORM_DEFAULT_W,
+                    h: size?.h ?? FREEFORM_DEFAULT_H
+                };
+            }
+        });
+        localStorage.setItem('matrix_column_note_layout', JSON.stringify(layout));
+        localStorage.removeItem('matrix_columns_float_positions');
+        localStorage.removeItem('matrix_columns_float_sizes');
     },
 
     buildCardActionsHtml(item, isExpanded = false) {
@@ -1698,9 +1788,7 @@ export const UI = {
         const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
         const isExpanded = false;
         const dragZone = this.freeformDragZoneClass(card);
-        const catDragHandle = card.dataset.columnNote === '1'
-            ? '<span class="grab-handle grab-handle--note-cat" draggable="true" title="Drag to another category">⋮⋮</span>'
-            : '';
+        const catDragHandle = this.buildCategoryDragHandleHtml(card);
         card.innerHTML = `
             <div class="card-header${dragZone}">
                 ${catDragHandle}
@@ -1802,10 +1890,11 @@ export const UI = {
         const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
         const dragZone = this.freeformDragZoneClass(card);
 
+        const catDragHandle = this.buildCategoryDragHandleHtml(card);
         card.innerHTML = this.buildNoteEditorShell(item, {
             canEdit,
             richEdit: canEdit,
-            toolbarHtml: this.buildCardActionsHtml(item, true),
+            toolbarHtml: `${catDragHandle}${this.buildCardActionsHtml(item, true)}`,
             toolbarDragZone: dragZone,
             footerDragZone: dragZone,
             metaMode: 'inline',
@@ -2104,7 +2193,7 @@ export const UI = {
         }
 
         const prev = idx > 0 ? steps[idx - 1] : null;
-        if (!prev) return false;
+        if (!prev || prev.completed !== current.completed) return false;
 
         const joinAt = stripRichText(prev.text || '').length;
         const merged = `${prev.text || ''}${current.text || ''}`;
@@ -2137,10 +2226,12 @@ export const UI = {
         const stepId = el.dataset.stepId;
         const steps = item.steps || [];
         const idx = steps.findIndex((s) => s.id === stepId);
-        if (idx < 0 || idx >= steps.length - 1) return false;
+        if (idx < 0) return false;
 
         const current = steps[idx];
         const next = steps[idx + 1];
+        if (!next || next.completed !== current.completed) return false;
+
         const nextEmpty = !stripRichText(next.text || '').trim();
         const rich = el.classList.contains('rich-text--edit');
 
@@ -2600,7 +2691,7 @@ export const UI = {
         });
     },
 
-    captureViewSnapshot(viewMode) {
+    captureViewSnapshot(viewMode, focusCategories = []) {
         const canvas = document.getElementById('app-canvas');
         this.flushLayoutFromCanvas(canvas, viewMode);
         let expandedCards = {};
@@ -2616,9 +2707,10 @@ export const UI = {
             collapsedCategories = [];
         }
         return {
-            version: 1,
+            version: 2,
             savedAt: Date.now(),
             viewMode,
+            focusCategories: Array.isArray(focusCategories) ? [...focusCategories] : [],
             scroll: this.captureScrollState(canvas),
             freeformPositions: this.getFreeformPositions(),
             freeformSizes: this.getFreeformSizes(),
@@ -2632,30 +2724,107 @@ export const UI = {
         };
     },
 
-    saveViewSnapshot(viewMode) {
-        const snapshot = this.captureViewSnapshot(viewMode);
-        localStorage.setItem('matrix_saved_view', JSON.stringify(snapshot));
-        return snapshot;
-    },
-
-    getSavedViewSnapshot() {
+    migrateLegacySavedView() {
         try {
-            const raw = localStorage.getItem('matrix_saved_view');
-            if (!raw) return null;
-            const parsed = JSON.parse(raw);
-            if (!parsed || parsed.version !== 1) return null;
-            return parsed;
+            const legacy = localStorage.getItem('matrix_saved_view');
+            if (!legacy || localStorage.getItem(SAVED_VIEWS_KEY)) return;
+            const parsed = JSON.parse(legacy);
+            if (!parsed) return;
+            const store = {
+                version: 2,
+                slots: Array.from({ length: SAVED_VIEWS_SLOTS }, (_, id) => ({
+                    id,
+                    savedAt: null,
+                    label: `View ${id + 1}`,
+                    snapshot: null
+                }))
+            };
+            store.slots[0] = {
+                id: 0,
+                savedAt: parsed.savedAt || Date.now(),
+                label: 'View 1',
+                snapshot: { ...parsed, version: 2, focusCategories: parsed.focusCategories || [] }
+            };
+            localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(store));
+            localStorage.removeItem('matrix_saved_view');
         } catch {
-            return null;
+            /* ignore */
         }
     },
 
+    getSavedViewsStore() {
+        this.migrateLegacySavedView();
+        try {
+            const raw = localStorage.getItem(SAVED_VIEWS_KEY);
+            if (!raw) {
+                return {
+                    version: 2,
+                    slots: Array.from({ length: SAVED_VIEWS_SLOTS }, (_, id) => ({
+                        id,
+                        savedAt: null,
+                        label: `View ${id + 1}`,
+                        snapshot: null
+                    }))
+                };
+            }
+            const parsed = JSON.parse(raw);
+            if (!parsed?.slots?.length) throw new Error('invalid');
+            while (parsed.slots.length < SAVED_VIEWS_SLOTS) {
+                parsed.slots.push({
+                    id: parsed.slots.length,
+                    savedAt: null,
+                    label: `View ${parsed.slots.length + 1}`,
+                    snapshot: null
+                });
+            }
+            return parsed;
+        } catch {
+            return {
+                version: 2,
+                slots: Array.from({ length: SAVED_VIEWS_SLOTS }, (_, id) => ({
+                    id,
+                    savedAt: null,
+                    label: `View ${id + 1}`,
+                    snapshot: null
+                }))
+            };
+        }
+    },
+
+    saveViewSnapshotToSlot(slotIndex, viewMode, focusCategories = []) {
+        const snapshot = this.captureViewSnapshot(viewMode, focusCategories);
+        const store = this.getSavedViewsStore();
+        const idx = Math.max(0, Math.min(SAVED_VIEWS_SLOTS - 1, slotIndex));
+        store.slots[idx] = {
+            id: idx,
+            savedAt: snapshot.savedAt,
+            label: `View ${idx + 1}`,
+            snapshot
+        };
+        localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(store));
+        return snapshot;
+    },
+
+    getSavedViewSlot(slotIndex) {
+        const store = this.getSavedViewsStore();
+        const idx = Math.max(0, Math.min(SAVED_VIEWS_SLOTS - 1, slotIndex));
+        return store.slots[idx]?.snapshot || null;
+    },
+
+    hasAnySavedViewSlot() {
+        return this.getSavedViewsStore().slots.some((slot) => slot?.snapshot);
+    },
+
+    getSavedViewSnapshot(slotIndex = 0) {
+        return this.getSavedViewSlot(slotIndex);
+    },
+
     hasSavedViewSnapshot() {
-        return !!this.getSavedViewSnapshot();
+        return this.hasAnySavedViewSlot();
     },
 
     applyViewSnapshot(snapshot) {
-        if (!snapshot || snapshot.version !== 1) return false;
+        if (!snapshot || (snapshot.version !== 1 && snapshot.version !== 2)) return false;
         localStorage.setItem('matrix_freeform_positions', JSON.stringify(snapshot.freeformPositions || {}));
         localStorage.setItem('matrix_freeform_sizes', JSON.stringify(snapshot.freeformSizes || {}));
         localStorage.setItem('matrix_column_positions', JSON.stringify(snapshot.columnPositions || {}));
@@ -2668,8 +2837,8 @@ export const UI = {
         return true;
     },
 
-    restoreSavedViewSnapshot() {
-        const snapshot = this.getSavedViewSnapshot();
+    restoreSavedViewSnapshot(slotIndex = 0) {
+        const snapshot = this.getSavedViewSlot(slotIndex);
         if (!snapshot) return null;
         this.applyViewSnapshot(snapshot);
         return snapshot;
@@ -2744,49 +2913,46 @@ export const UI = {
                 : 1e15 + idx;
             events.push({ type: 'category', name, ts, tie: idx });
         });
-        visibleItems
-            .filter((item) => !itemHasCategory(item))
-            .forEach((item) => {
-                events.push({
-                    type: 'float',
-                    id: item.id,
-                    ts: Number(item.created_at || 0),
-                    tie: 0
-                });
-            });
+        const uncatItems = visibleItems.filter((item) => !itemHasCategory(item));
+        if (uncatItems.length > 0) {
+            const ts = Math.min(...uncatItems.map((item) => Number(item.created_at || 0)));
+            events.push({ type: 'category', name: UNCATEGORIZED_CATEGORY, ts, tie: 9999 });
+        }
         events.sort((a, b) => a.ts - b.ts || a.tie - b.tie);
-        return events.map(({ type, name, id }) => (type === 'category' ? { type, name } : { type, id }));
+        return events.map(({ type, name }) => ({ type, name }));
     },
 
     syncCanvasLayoutOrder(activeCategories, visibleItems) {
-        let order = this.getCanvasLayoutOrder();
+        let order = this.getCanvasLayoutOrder().map((entry) => {
+            if (entry.type === 'float') return { type: 'category', name: UNCATEGORIZED_CATEGORY };
+            return entry;
+        });
         const visibleCatNames = new Set(
             activeCategories.map((c) => (typeof c === 'string' ? c : c.name))
         );
-        const floatIds = new Set(
-            visibleItems.filter((item) => !itemHasCategory(item)).map((item) => item.id)
-        );
+        const hasUncat = visibleItems.some((item) => !itemHasCategory(item));
+        if (hasUncat) visibleCatNames.add(UNCATEGORIZED_CATEGORY);
 
+        const seen = new Set();
         order = order.filter((entry) => {
-            if (entry.type === 'category') return visibleCatNames.has(entry.name);
-            if (entry.type === 'float') return floatIds.has(entry.id);
-            return false;
+            if (entry.type !== 'category') return false;
+            const key = categoryKey(entry.name);
+            if (seen.has(key)) return false;
+            if (!visibleCatNames.has(entry.name)) return false;
+            seen.add(key);
+            return true;
         });
 
         activeCategories.forEach((catObj) => {
             const name = typeof catObj === 'string' ? catObj : catObj.name;
-            if (!order.some((e) => e.type === 'category' && e.name === name)) {
+            if (!order.some((e) => e.type === 'category' && categoryKey(e.name) === categoryKey(name))) {
                 order.push({ type: 'category', name });
             }
         });
 
-        visibleItems
-            .filter((item) => !itemHasCategory(item))
-            .forEach((item) => {
-                if (!order.some((e) => e.type === 'float' && e.id === item.id)) {
-                    order.push({ type: 'float', id: item.id });
-                }
-            });
+        if (hasUncat && !order.some((e) => isUncategorizedCategory(e.name))) {
+            order.push({ type: 'category', name: UNCATEGORIZED_CATEGORY });
+        }
 
         if (order.length === 0) {
             order = this.buildInitialCanvasOrder(activeCategories, visibleItems);
@@ -2804,7 +2970,8 @@ export const UI = {
             ) || null;
         }
         if (entry.type === 'float') {
-            return canvas.querySelector(`.mini-card[data-columns-float="1"][data-id="${entry.id}"]`);
+            return canvas.querySelector(`.canvas-column[data-category="${UNCATEGORIZED_CATEGORY}"]`)
+                || canvas.querySelector(`.mini-card[data-columns-float="1"][data-id="${entry.id}"]`);
         }
         return null;
     },
@@ -3343,9 +3510,20 @@ export const UI = {
         const maxH = this.getColumnNotesMaxHeight(columnNotesEl);
         const cards = [...columnNotesEl.querySelectorAll('.mini-card')];
         if (cards.length === 0) {
-            columnNotesEl.style.minHeight = '0';
+            const collapsed = columnNotesEl.closest('.canvas-column')?.classList.contains('is-collapsed');
+            columnNotesEl.querySelector('.column-empty-slot')?.remove();
+            if (!collapsed) {
+                const slot = document.createElement('div');
+                slot.className = 'column-empty-slot';
+                slot.setAttribute('aria-hidden', 'true');
+                columnNotesEl.appendChild(slot);
+            }
+            columnNotesEl.style.minHeight = collapsed ? '0' : `${COLUMN_GRID_CELL_H}px`;
+            const column = columnNotesEl.closest('.canvas-column');
+            if (column) this.resizeColumnToFit(column, { animate });
             return;
         }
+        columnNotesEl.querySelector('.column-empty-slot')?.remove();
 
         const saved = respectSaved && categoryName
             ? (this.getColumnNoteLayout()[categoryName] || {})
@@ -3415,14 +3593,16 @@ export const UI = {
         let contentH = 0;
 
         if (!collapsed && notesEl) {
-            innerW = [...notesEl.querySelectorAll('.mini-card')].reduce((max, card) => {
+            const cards = [...notesEl.querySelectorAll('.mini-card')];
+            innerW = cards.reduce((max, card) => {
                 const r = this.readNoteRect(card);
                 return Math.max(max, r.x + r.w);
             }, COLUMN_MIN_INNER_W);
-            contentH = [...notesEl.querySelectorAll('.mini-card')].reduce((max, card) => {
+            contentH = cards.reduce((max, card) => {
                 const r = this.readNoteRect(card);
                 return Math.max(max, r.y + r.h);
             }, 0);
+            if (cards.length === 0) contentH = COLUMN_GRID_CELL_H;
             contentH = Math.max(contentH + COLUMN_GRID_GAP, parseFloat(notesEl.style.minHeight) || 0, notesEl.offsetHeight);
         } else if (notesEl) {
             notesEl.style.minHeight = '0';
