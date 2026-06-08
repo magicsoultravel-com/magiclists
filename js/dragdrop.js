@@ -580,8 +580,7 @@ export const DragDropEngine = {
                 if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
                 resizeActive.moved = true;
             }
-            const { card, axis, startX, startY, origX, origY, origW, origH, boundsEl, isFloat } = resizeActive;
-            const dy = e.clientY - startY;
+            const { card, axis, origX, origY, origW, origH, boundsEl, isFloat } = resizeActive;
 
             let nextX = origX;
             let nextY = origY;
