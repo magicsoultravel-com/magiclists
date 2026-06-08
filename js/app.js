@@ -13,6 +13,7 @@ import { ChromeBackground } from './chromeBackground.js';
 import { ClockStyle } from './clockStyle.js';
 import { ColorPicker, PALETTE_NOTE, randomNoteColor } from './colorPicker.js';
 import { FocusMode } from './focusMode.js';
+import { DesktopZoom } from './desktopZoom.js';
 
 function countHiddenFromBoard(items) {
     return items.filter(item => UI.isHiddenFromBoard(item)).length;
@@ -28,11 +29,15 @@ const AppState = {
     viewSettings: {
         sortBy: (() => {
             const preferred = localStorage.getItem('matrix_preferred_view') || 'columns';
-            if (preferred === 'grid' || preferred === 'list') {
+            if (preferred === 'list') {
                 localStorage.setItem('matrix_preferred_view', 'columns');
                 return 'columns';
             }
-            return preferred;
+            if (preferred === 'grid' && !window.matchMedia('(min-width: 769px)').matches) {
+                return 'columns';
+            }
+            if (preferred === 'freeform' || preferred === 'grid') return preferred;
+            return 'columns';
         })(),
         currentView: 'active'
     }
@@ -53,6 +58,7 @@ class Application {
         SidePanel.init(AppState);
         SidePanel.setupStatusClickHandlers();
         ClockStyle.init();
+        DesktopZoom.init();
         this.setupLayoutResetButton();
         this.setupCollapseAllButton();
         this.setupFocusModeButton();
@@ -99,7 +105,7 @@ class Application {
         if (preserveView) {
             const canvas = document.getElementById('app-canvas');
             UI.updateSingleCard(canvas, item, AppState.hiddenCategories, AppState.focusCategories);
-            if (AppState.viewSettings.sortBy === 'freeform' || AppState.viewSettings.sortBy === 'columns') {
+            if (['freeform', 'grid', 'columns'].includes(AppState.viewSettings.sortBy)) {
                 DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
             }
             this.updateWorkspaceCounter();
@@ -151,6 +157,7 @@ class Application {
                 UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
             }
 
+            DesktopZoom.apply();
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         } catch (err) {
             console.error('[Fatal Sync Failure] Data sync broken:', err);
@@ -171,13 +178,19 @@ class Application {
     renderControlBar() {
         const filterControls = document.getElementById('filter-controls');
         const mode = AppState.viewSettings.sortBy;
+        const showGrid = DesktopZoom.isDesktopViewport();
         if (filterControls) {
+            const gridBtn = showGrid
+                ? `<button class="btn btn--compact btn--icon ${mode === 'grid' ? 'active' : ''}" id="btn-view-grid" title="Grid board" aria-label="Grid board">${ACTION_ICONS.viewGrid}</button>`
+                : '';
             filterControls.innerHTML = `
                 <button class="btn btn--compact btn--icon ${mode === 'columns' ? 'active' : ''}" id="btn-view-cols" title="Columns view" aria-label="Columns view">${ACTION_ICONS.viewCols}</button>
                 <button class="btn btn--compact btn--icon ${mode === 'freeform' ? 'active' : ''}" id="btn-view-free" title="Freeform view" aria-label="Freeform view">${ACTION_ICONS.viewFree}</button>
+                ${gridBtn}
             `;
             document.getElementById('btn-view-cols').addEventListener('click', () => this.switchViewMode('columns'));
             document.getElementById('btn-view-free').addEventListener('click', () => this.switchViewMode('freeform'));
+            document.getElementById('btn-view-grid')?.addEventListener('click', () => this.switchViewMode('grid'));
             this.updateViewToggleState();
         }
 
@@ -325,6 +338,7 @@ class Application {
     }
 
     switchViewMode(mode) {
+        if (mode === 'grid' && !DesktopZoom.isDesktopViewport()) return;
         AppState.viewSettings.sortBy = mode;
         localStorage.setItem('matrix_preferred_view', mode);
         window.dispatchEvent(new CustomEvent('view:mode_changed', { detail: mode }));
@@ -337,14 +351,26 @@ class Application {
         const mode = AppState.viewSettings.sortBy;
         document.getElementById('btn-view-cols')?.classList.toggle('active', mode === 'columns');
         document.getElementById('btn-view-free')?.classList.toggle('active', mode === 'freeform');
+        document.getElementById('btn-view-grid')?.classList.toggle('active', mode === 'grid');
+        this.updateDesktopZoomVisibility();
+    }
+
+    updateDesktopZoomVisibility() {
+        const mode = AppState.viewSettings.sortBy;
+        const show = AppState.user.isLoggedIn && mode === 'grid' && DesktopZoom.isDesktopViewport();
+        document.getElementById('desktop-zoom-controls')?.classList.toggle('is-hidden', !show);
+        if (show) DesktopZoom.apply();
     }
 
     setupLayoutResetButton() {
         const btn = document.getElementById('btn-layout-reset');
         if (btn) btn.innerHTML = ACTION_ICONS.layoutReset;
         btn?.addEventListener('click', () => {
-            if (AppState.viewSettings.sortBy === 'freeform') {
+            const mode = AppState.viewSettings.sortBy;
+            if (mode === 'freeform') {
                 UI.resetFreeformLayout();
+            } else if (mode === 'grid') {
+                UI.resetGridLayout();
             } else {
                 UI.resetColumnsLayout();
             }
@@ -442,7 +468,11 @@ class Application {
                 const when = snap?.savedAt
                     ? new Date(snap.savedAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
                     : emptyLabel;
-                const mode = snap?.viewMode === 'freeform' ? 'Freeform' : 'Columns';
+                const mode = snap?.viewMode === 'freeform'
+                    ? 'Freeform'
+                    : snap?.viewMode === 'grid'
+                        ? 'Grid'
+                        : 'Columns';
                 const focus = snap?.focusCategories?.length
                     ? ` · Focus: ${snap.focusCategories.join(', ')}`
                     : '';
@@ -553,7 +583,12 @@ class Application {
             : [];
         FocusMode.syncButtonState();
 
-        const mode = snapshot.viewMode === 'freeform' ? 'freeform' : 'columns';
+        let mode = snapshot.viewMode === 'freeform'
+            ? 'freeform'
+            : snapshot.viewMode === 'grid'
+                ? 'grid'
+                : 'columns';
+        if (mode === 'grid' && !DesktopZoom.isDesktopViewport()) mode = 'columns';
         if (AppState.viewSettings.sortBy !== mode) {
             AppState.viewSettings.sortBy = mode;
             localStorage.setItem('matrix_preferred_view', mode);
@@ -646,7 +681,7 @@ class Application {
                 if (!detail?.skipRerender) {
                     const canvas = document.getElementById('app-canvas');
                     UI.updateSingleCard(canvas, item, AppState.hiddenCategories, AppState.focusCategories);
-                    if (AppState.viewSettings.sortBy === 'freeform' || AppState.viewSettings.sortBy === 'columns') {
+                    if (['freeform', 'grid', 'columns'].includes(AppState.viewSettings.sortBy)) {
                         DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
                     }
                 }

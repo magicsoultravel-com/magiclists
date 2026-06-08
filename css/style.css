@@ -608,7 +608,9 @@ body {
     flex-shrink: 0;
     width: 14px !important;
     height: 14px !important;
-    opacity: 0.85;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
 }
 
 .step-nest-controls {
@@ -616,12 +618,18 @@ body {
     flex-shrink: 0;
     gap: 1px;
     opacity: 0;
+    pointer-events: none;
     transition: opacity 0.15s ease;
 }
 
 .step-row--display:hover .step-nest-controls,
-.step-row--display:focus-within .step-nest-controls {
-    opacity: 1;
+.step-row--display:focus-within .step-nest-controls,
+.step-row--display:hover .step-delete-btn,
+.step-row--display:hover .step-copy-btn,
+.step-row--display:focus-within .step-delete-btn,
+.step-row--display:focus-within .step-copy-btn {
+    opacity: 0.85;
+    pointer-events: auto;
 }
 
 .step-nest-controls .card-act {
@@ -3111,7 +3119,8 @@ textarea.form-input {
     justify-content: start !important;
 }
 
-#app-canvas.view-freeform {
+#app-canvas.view-freeform,
+#app-canvas.view-grid {
     position: relative;
     display: block !important;
     min-height: 100%;
@@ -4074,4 +4083,113 @@ textarea.form-input {
 .format-toolbar .card-act {
     width: 26px;
     height: 26px;
+}
+
+/* Grid board — shares freeform chrome; snap grid overlay */
+#app-canvas.view-grid .mini-card {
+    position: absolute;
+    cursor: default;
+    box-sizing: border-box;
+    margin: 0 !important;
+}
+
+#app-canvas.view-grid .card-drag-zone {
+    cursor: grab;
+}
+
+#app-canvas.view-grid .card-drag-zone:active {
+    cursor: grabbing;
+}
+
+#app-canvas.view-grid .mini-card.compact {
+    display: flex;
+    flex-direction: column;
+}
+
+#app-canvas.view-grid .mini-card.expanded {
+    display: flex !important;
+    flex-direction: column;
+    overflow: hidden !important;
+    max-height: none !important;
+}
+
+#app-canvas.view-grid .ff-chrome,
+#app-canvas.view-grid .ff-drag-gutter,
+#app-canvas.view-grid .ff-resize {
+    position: absolute;
+}
+
+#app-canvas.view-grid .ff-drag-gutter {
+    z-index: 5;
+    pointer-events: auto;
+}
+
+#app-canvas.view-grid .ff-resize {
+    width: 10px;
+    height: 10px;
+    pointer-events: auto;
+    opacity: 0.18;
+    z-index: 6;
+}
+
+#app-canvas.view-grid .mini-card:hover .ff-resize,
+#app-canvas.view-grid .mini-card.is-grid-resizing .ff-resize {
+    opacity: 0.62;
+}
+
+#app-canvas.view-grid .mini-card.is-grid-dragging,
+#app-canvas.view-grid .mini-card.is-grid-resizing,
+#app-canvas.view-grid .mini-card.is-grid-front {
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+    z-index: 120 !important;
+}
+
+#app-canvas.view-grid .mini-card.is-grid-pinned {
+    outline: 1px solid rgba(251, 191, 36, 0.45);
+    outline-offset: 1px;
+}
+
+#app-canvas.view-grid .card-act--pin.is-active {
+    color: #fbbf24;
+    opacity: 1;
+}
+
+#app-canvas.view-grid.is-layout-active {
+    background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 100px 60px;
+    background-position: 1rem 1rem;
+}
+
+#app-canvas.view-grid .layout-settling {
+    transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease;
+}
+
+.desktop-zoom-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+}
+
+.desktop-zoom-label {
+    font-size: 0.68rem;
+    opacity: 0.7;
+    min-width: 2.2rem;
+    text-align: center;
+    user-select: none;
+}
+
+#workspace-main.has-desktop-zoom #app-canvas {
+    transform: scale(var(--desktop-zoom, 1));
+    transform-origin: top left;
+    width: calc(100% / var(--desktop-zoom, 1));
+    min-height: calc(100% / var(--desktop-zoom, 1));
+}
+
+@media (max-width: 768px) {
+    #btn-view-grid,
+    .desktop-zoom-controls {
+        display: none !important;
+    }
 }

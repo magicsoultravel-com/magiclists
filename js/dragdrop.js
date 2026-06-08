@@ -12,6 +12,7 @@ import {
     FREEFORM_MIN_H,
     CANVAS_GRID_W,
     CANVAS_COL_GAP,
+    CANVAS_LAYOUT_ORIGIN,
     COLUMN_MIN_CANVAS_H
 } from './ui.js';
 
@@ -31,6 +32,11 @@ function clampSize(w, h) {
     };
 }
 
+function getCanvasZoom(canvas) {
+    const zoom = parseFloat(canvas?.dataset?.desktopZoom);
+    return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+}
+
 function isScrollbarGrip(el, clientX) {
     if (!el || el.scrollHeight <= el.clientHeight) return false;
     const scrollbarWidth = el.offsetWidth - el.clientWidth;
@@ -41,10 +47,10 @@ function isScrollbarGrip(el, clientX) {
 
 function isInsideDragControl(target) {
     return !!target.closest(
-        '.card-actions, .card-act, .step-check, .step-delete-btn, .step-collapse-btn, ' +
+        '.card-actions, .card-act, .note-editor-toolbar, .step-check, .step-delete-btn, .step-collapse-btn, ' +
         '.card-inline-edit, .rich-text--edit, .step-nest-controls, .step-row-actions, ' +
         '.grab-handle--step, .expanded-checklist-add-btn, .editor-body-convert-bar, ' +
-        '.grab-handle--note-cat, .ff-resize, .col-resize, ' +
+        '.grab-handle--note-cat, .ff-resize, .col-resize, .card-act--pin, ' +
         '.tool-panel, .tool-chip, .tool-chip__drag, .tool-chip__expand, .tool-panel__resize-se, .tool-panel__header, ' +
         'a, button, input, textarea, select'
     );
@@ -89,6 +95,11 @@ export const DragDropEngine = {
 
         if (canvas.classList.contains('view-freeform')) {
             this.initFreeformInteractions(canvas, currentItems, signal);
+            return;
+        }
+
+        if (canvas.classList.contains('view-grid')) {
+            this.initGridBoardInteractions(canvas, currentItems, signal);
             return;
         }
 
@@ -217,6 +228,175 @@ export const DragDropEngine = {
                         origH: startH
                     };
                     card.classList.add('is-freeform-resizing');
+                    card.dataset.skipExpand = '1';
+                    document.addEventListener('mousemove', onResizeMove);
+                    document.addEventListener('mouseup', onResizeUp);
+                    return;
+                }
+
+                if (e.target.closest('.editor-note-body .card-inline-edit, .editor-note-header .card-inline-edit')) {
+                    return;
+                }
+
+                if (!shouldStartCardDrag(e.target)) return;
+
+                const scrollHost = e.target.closest('.editor-note-body') || e.target.closest('.card-body');
+                if (scrollHost && isScrollbarGrip(scrollHost, e.clientX)) return;
+
+                e.stopPropagation();
+                dragActive = {
+                    card,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    origX: parseFloat(card.style.left) || 0,
+                    origY: parseFloat(card.style.top) || 0,
+                    moved: false
+                };
+                document.addEventListener('mousemove', onDragMove);
+                document.addEventListener('mouseup', onDragUp);
+            }, { signal });
+        });
+    },
+
+    initGridBoardInteractions(canvas, currentItems = [], signal) {
+        const cards = canvas.querySelectorAll('.mini-card[data-grid-board="1"]');
+        let dragActive = null;
+        let resizeActive = null;
+
+        const finishGridAction = (card, { animate = true } = {}) => {
+            const { packW, maxH } = UI.getGridBoardBounds(canvas);
+            const rect = UI.snapNoteRect(UI.readNoteRect(card), { maxW: packW, maxH });
+            UI.applyNoteRect(card, rect, { settling: animate });
+            UI.saveGridLayout(card.dataset.id, rect);
+            UI.reflowGridBoard(canvas, card.dataset.id, { animate });
+            canvas.classList.remove('is-layout-active');
+        };
+
+        const onDragMove = (e) => {
+            if (!dragActive) return;
+            const zoom = getCanvasZoom(canvas);
+            const dx = (e.clientX - dragActive.startX) / zoom;
+            const dy = (e.clientY - dragActive.startY) / zoom;
+            if (!dragActive.moved) {
+                if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
+                dragActive.moved = true;
+                dragActive.card.classList.add('is-grid-dragging');
+                canvas.classList.add('is-layout-active');
+            }
+            e.preventDefault();
+            const x = Math.max(0, dragActive.origX + dx);
+            const y = Math.max(0, dragActive.origY + dy);
+            dragActive.card.style.left = `${x}px`;
+            dragActive.card.style.top = `${y}px`;
+        };
+
+        const onDragUp = () => {
+            if (!dragActive) return;
+            const { card, moved } = dragActive;
+            card.classList.remove('is-grid-dragging');
+            if (moved) {
+                card.dataset.skipExpand = '1';
+                finishGridAction(card);
+            }
+            dragActive = null;
+            document.removeEventListener('mousemove', onDragMove);
+            document.removeEventListener('mouseup', onDragUp);
+        };
+
+        const onResizeMove = (e) => {
+            if (!resizeActive) return;
+            const zoom = getCanvasZoom(canvas);
+            const dx = (e.clientX - resizeActive.startX) / zoom;
+            const dy = (e.clientY - resizeActive.startY) / zoom;
+            if (!resizeActive.moved) {
+                if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
+                resizeActive.moved = true;
+                canvas.classList.add('is-layout-active');
+            }
+            const { card, axis, origX, origY, origW, origH } = resizeActive;
+
+            let nextX = origX;
+            let nextY = origY;
+            let nextW = origW;
+            let nextH = origH;
+
+            if (axis.includes('e')) nextW = origW + dx;
+            if (axis.includes('w')) {
+                nextW = origW - dx;
+                nextX = origX + dx;
+            }
+            if (axis.includes('s')) nextH = origH + dy;
+            if (axis.includes('n')) {
+                nextH = origH - dy;
+                nextY = origY + dy;
+            }
+
+            const clamped = clampSize(nextW, nextH);
+            if (axis.includes('w')) nextX = origX + (origW - clamped.w);
+            if (axis.includes('n')) nextY = origY + (origH - clamped.h);
+
+            const { packW } = UI.getGridBoardBounds(canvas);
+            nextX = Math.max(0, nextX);
+            nextY = Math.max(0, nextY);
+            if (nextX + clamped.w > packW + CANVAS_LAYOUT_ORIGIN) {
+                if (axis.includes('w')) nextX = Math.max(0, packW + CANVAS_LAYOUT_ORIGIN - clamped.w);
+                else nextW = Math.max(FREEFORM_MIN_W, packW + CANVAS_LAYOUT_ORIGIN - nextX);
+            }
+
+            card.style.left = `${nextX}px`;
+            card.style.top = `${nextY}px`;
+            card.style.setProperty('width', `${clamped.w}px`, 'important');
+            card.style.setProperty('height', `${clamped.h}px`, 'important');
+            card.style.setProperty('min-height', `${clamped.h}px`, 'important');
+            card.style.setProperty('max-height', `${clamped.h}px`, 'important');
+        };
+
+        const onResizeUp = () => {
+            if (!resizeActive) return;
+            const { card, moved } = resizeActive;
+            card.classList.remove('is-grid-resizing');
+            if (moved) {
+                card.dataset.skipExpand = '1';
+                finishGridAction(card);
+            } else {
+                canvas.classList.remove('is-layout-active');
+            }
+            resizeActive = null;
+            document.removeEventListener('mousemove', onResizeMove);
+            document.removeEventListener('mouseup', onResizeUp);
+        };
+
+        cards.forEach((card) => {
+            card.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
+
+                const resizeHandle = e.target.closest('.ff-resize');
+                if (resizeHandle) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const { w: startW, h: startH } = UI.readFreeformCardSize(card);
+                    if (card.classList.contains('compact')) {
+                        const itemMatch = currentItems.find((i) => i.id === card.dataset.id);
+                        if (itemMatch) {
+                            UI.updateGridBoardCard(card, itemMatch, {
+                                expanded: true,
+                                dimensions: { w: startW, h: startH }
+                            });
+                        }
+                    }
+                    const { w: origW, h: origH } = UI.readFreeformCardSize(card);
+                    resizeActive = {
+                        card,
+                        axis: resizeHandle.dataset.axis || 'se',
+                        startX: e.clientX,
+                        startY: e.clientY,
+                        origX: parseFloat(card.style.left) || 0,
+                        origY: parseFloat(card.style.top) || 0,
+                        origW,
+                        origH,
+                        moved: false
+                    };
+                    card.classList.add('is-grid-resizing');
                     card.dataset.skipExpand = '1';
                     document.addEventListener('mousemove', onResizeMove);
                     document.addEventListener('mouseup', onResizeUp);
