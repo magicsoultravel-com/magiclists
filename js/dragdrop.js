@@ -319,6 +319,10 @@ export const DragDropEngine = {
                     return;
                 }
 
+                if (e.target.closest('.editor-note-body .card-inline-edit, .editor-note-header .card-inline-edit')) {
+                    return;
+                }
+
                 const interactive = e.target.closest(
                     '.card-actions, .step-check, .step-delete-btn, .step-collapse-btn, .card-inline-edit, .step-nest-controls, .step-row-actions, .grab-handle--step, .expanded-checklist-add-btn, .editor-body-convert-bar, .ff-resize, a, button, input, textarea'
                 );

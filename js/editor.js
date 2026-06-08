@@ -1,7 +1,7 @@
 ﻿import { applyCardTheme } from './cardTheme.js';
 import { ColorPicker, PALETTE_NOTE, randomNoteColor, resolveNoteColor } from './colorPicker.js';
 import { sanitizeRichHtml, stripRichText } from './richText.js';
-import { CARD_ICONS, UI, computeNoteSizeKb, createNoteId, noteHasSavableContent, normalizeItemForSave } from './ui.js';
+import { CARD_ICONS, UI, computeNoteSizeKb, createNoteId, defaultStartDateTimeNow, noteHasSavableContent, normalizeItemForSave } from './ui.js';
 
 export const Editor = {
     overlay: null,
@@ -49,7 +49,7 @@ export const Editor = {
             status: "active",
             categories: [],
             backgroundColor: randomNoteColor(),
-            startDateTime: "",
+            startDateTime: defaultStartDateTimeNow(),
             endDateTime: "",
             isRecurring: false,
             hideFromCalendar: false,
@@ -321,6 +321,8 @@ export const Editor = {
             alwaysShowChecklist: true,
             richEdit: true
         });
+        const shell = this.mountZone?.querySelector('.editor-note-shell');
+        if (shell) UI.updateConvertButtons(shell, this.activeItem);
         if (pendingFocusStepId) body.dataset.pendingFocusStepId = pendingFocusStepId;
         UI.attachNoteBodyInteractions(body, this.activeItem, {
             refresh: () => this.refreshEditorNoteBody(),
@@ -379,6 +381,8 @@ export const Editor = {
         const onEditorChange = () => {
             this.markInteracted();
             this.updateEditorSizeLabel();
+            const shell = this.mountZone?.querySelector('.editor-note-shell');
+            if (shell && this.activeItem) UI.updateConvertButtons(shell, this.activeItem);
             this.triggerAutoSave();
         };
 

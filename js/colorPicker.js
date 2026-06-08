@@ -252,9 +252,6 @@ export const ColorPicker = {
                 <div class="color-picker-grid color-picker-grid--user">${userHtml}</div>
             </div>
             <div class="color-picker-subpanel is-hidden" role="dialog" aria-label="Pick a custom color">
-                <button type="button" class="color-picker-back" aria-label="Back to color grid">
-                    <span class="color-picker-back-icon" aria-hidden="true">←</span>
-                </button>
                 <div class="color-picker-subpanel-content">
                     <div class="color-picker-sv" tabindex="0" aria-label="Saturation and brightness">
                         <span class="color-picker-sv-cursor" aria-hidden="true"></span>
@@ -265,6 +262,9 @@ export const ColorPicker = {
                         <input type="text" class="color-picker-hex" maxlength="7" spellcheck="false" autocomplete="off" aria-label="Hex color" inputmode="text">
                     </div>
                 </div>
+                <button type="button" class="color-picker-back card-act" aria-label="Back to color grid">
+                    <svg viewBox="0 0 12 12" width="11" height="11" focusable="false" aria-hidden="true"><path d="M7 3L4 6l3 3" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
             </div>
         </div>`;
 

@@ -1526,8 +1526,6 @@ body {
     position: absolute;
     inset: 0;
     z-index: 2;
-    display: flex;
-    flex-direction: column;
     padding: 0.4rem;
     background: rgba(16, 16, 20, 0.99);
     border-radius: 8px;
@@ -1537,43 +1535,30 @@ body {
     pointer-events: none;
 }
 
-.color-picker-back {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    margin: 0 0 0.35rem;
-    padding: 0;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 6px;
-    background: rgba(255, 255, 255, 0.04);
-    color: var(--text-main);
-    font-size: 0.85rem;
-    line-height: 1;
-    cursor: pointer;
-    transition: border-color 0.12s ease, background 0.12s ease;
-}
-
-.color-picker-back:hover {
-    border-color: rgba(255, 255, 255, 0.24);
-    background: rgba(255, 255, 255, 0.08);
-}
-
-.color-picker-back-icon {
-    display: block;
-    margin-top: -1px;
-}
-
 .color-picker-subpanel-content {
-    flex: 1;
-    min-height: 0;
+    height: 100%;
+}
+
+.color-picker-back {
+    position: absolute;
+    top: 0.22rem;
+    left: 0.22rem;
+    z-index: 3;
+    opacity: 0;
+    pointer-events: auto;
+    transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+
+.color-picker-subpanel:hover .color-picker-back,
+.color-picker-subpanel:focus-within .color-picker-back,
+.color-picker-back:focus-visible {
+    opacity: 1;
 }
 
 .color-picker-sv {
     position: relative;
     width: 100%;
-    height: 88px;
+    height: 102px;
     border-radius: 6px;
     cursor: crosshair;
     touch-action: none;
@@ -2890,9 +2875,20 @@ textarea.form-input {
 
 #app-canvas.view-freeform .ff-drag-gutter {
     position: absolute;
-    pointer-events: auto;
+    pointer-events: none;
     cursor: grab;
     z-index: 5;
+}
+
+/* Editable shell above chrome layer; resize handles stay on top via .ff-resize */
+#app-canvas.view-freeform .mini-card.expanded .editor-note-shell {
+    position: relative;
+    z-index: 3;
+}
+
+#app-canvas.view-freeform .mini-card.expanded .card-inline-edit {
+    position: relative;
+    z-index: 1;
 }
 
 #app-canvas.view-freeform .ff-drag-gutter--edge {
@@ -3429,18 +3425,31 @@ textarea.form-input {
     font-style: italic;
 }
 
-.editor-note-shell {
-    font-size: calc(1em * var(--editor-zoom, 1));
+#editor-overlay .editor-note-shell {
+    --editor-zoom: 1;
 }
 
-.editor-body-convert-bar {
+#editor-overlay .editor-note-shell .editor-note-header .mini-card-title {
+    font-size: calc(0.72rem * var(--editor-zoom, 1));
+}
+
+#editor-overlay .editor-note-shell .card-content-preview {
+    font-size: calc(0.66rem * var(--editor-zoom, 1));
+}
+
+#editor-overlay .editor-note-shell .step-text,
+#editor-overlay .editor-note-shell .expanded-checklist {
+    font-size: calc(0.6rem * var(--editor-zoom, 1));
+}
+
+.editor-config-convert-row {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
     gap: 0.35rem;
-    margin-bottom: 0.45rem;
-    padding-bottom: 0.35rem;
-    border-bottom: 1px solid var(--border-color);
+    margin-top: 0.35rem;
+    padding-top: 0.35rem;
+    border-top: 1px solid var(--border-color);
 }
 
 .editor-convert-btn {
@@ -3495,9 +3504,22 @@ textarea.form-input {
     background: rgba(79, 70, 229, 0.12);
 }
 
-.format-btn--ghost {
-    font-size: 0.58rem;
-    padding: 0 0.4rem;
+.format-zoom-input {
+    width: 34px;
+    min-width: 34px;
+    height: 26px;
+    padding: 0 0.15rem;
+    text-align: center;
+    font-size: 0.66rem;
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.04);
+    color: inherit;
+}
+
+.format-zoom-input:focus {
+    outline: none;
+    box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.35);
 }
 
 .format-toolbar-sep {

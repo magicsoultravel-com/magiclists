@@ -102,18 +102,35 @@ export function noteHasSavableContent({ title = '', content = '', steps = [] } =
     return (steps || []).some((step) => stripRichText(step?.text || '').trim());
 }
 
+export function formatLocalDateTimeParts(date = new Date()) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return {
+        date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+        time: `${pad(date.getHours())}:${pad(date.getMinutes())}`
+    };
+}
+
+export function defaultStartDateTimeNow() {
+    const { date, time } = formatLocalDateTimeParts();
+    return `${date}T${time}`;
+}
+
 export function normalizeItemForSave(item) {
     if (!item) return item;
 
     const content = String(item.content || '');
     const steps = (item.steps || []).filter((step) => stripRichText(step?.text || '').trim());
     const hasTitle = stripRichText(item.title || '').trim();
+    const startDateTime = String(item.startDateTime || '').trim()
+        ? item.startDateTime
+        : defaultStartDateTimeNow();
 
     return {
         ...item,
         steps,
         type: steps.length > 0 ? 'checklist' : 'note',
-        title: hasTitle ? item.title : deriveNoteTitle({ content, steps })
+        title: hasTitle ? item.title : deriveNoteTitle({ content, steps }),
+        startDateTime
     };
 }
 
@@ -920,19 +937,23 @@ export const UI = {
         return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     },
 
-    buildNoteBodyConvertBarHtml(item, { canEdit = false } = {}) {
-        if (!canEdit) return '';
-        const layout = item.editorBodyLayout || 'both';
+    buildNoteBodyConvertButtonsHtml(item) {
         const canToChecklist = contentHasConvertibleText(item.content);
         const canToContent = stepsHaveConvertibleText(item.steps);
-        const showBothBtn = layout !== 'both';
         return `
-            <div class="editor-body-convert-bar" role="toolbar" aria-label="Convert note body">
+            <div class="editor-config-convert-row" role="toolbar" aria-label="Convert note body">
                 <button type="button" class="card-act editor-convert-btn" data-convert="to-checklist" title="Move content into checklist items" aria-label="To checklist"${canToChecklist ? '' : ' disabled'}>To checklist</button>
                 <button type="button" class="card-act editor-convert-btn" data-convert="to-content" title="Move checklist into note content" aria-label="To notes"${canToContent ? '' : ' disabled'}>To notes</button>
-                ${showBothBtn ? '<button type="button" class="card-act editor-convert-btn editor-convert-btn--ghost" data-convert="show-both" title="Show content and checklist together" aria-label="Show both">Show both</button>' : ''}
             </div>
         `;
+    },
+
+    updateConvertButtons(shell, item) {
+        if (!shell || !item) return;
+        const toChecklist = shell.querySelector('[data-convert="to-checklist"]');
+        const toContent = shell.querySelector('[data-convert="to-content"]');
+        if (toChecklist) toChecklist.disabled = !contentHasConvertibleText(item.content);
+        if (toContent) toContent.disabled = !stepsHaveConvertibleText(item.steps);
     },
 
     buildNoteBodyHtml(item, { canEdit = false, alwaysShowChecklist = false, richEdit = false } = {}) {
@@ -950,10 +971,6 @@ export const UI = {
         } else {
             showContent = !!hasContent;
             showChecklist = item.type === 'checklist' && item.steps && item.steps.length > 0;
-        }
-
-        if (canEdit) {
-            html += this.buildNoteBodyConvertBarHtml(item, { canEdit });
         }
 
         if (showContent) {
@@ -1010,8 +1027,9 @@ export const UI = {
                         <button type="button" class="format-btn card-act" data-format-cmd="strikeThrough" title="Strikethrough (Ctrl+Shift+S)" aria-label="Strikethrough">${FORMAT_ICONS.strike}</button>
                         <span class="format-toolbar-sep" aria-hidden="true"></span>
                         <button type="button" class="format-btn card-act" data-zoom="down" title="Smaller text" aria-label="Smaller text">${FORMAT_ICONS.smaller}</button>
+                        <input type="text" id="format-zoom-input" class="format-zoom-input" inputmode="numeric" title="Text size (100 = default)" aria-label="Text size" value="100">
                         <button type="button" class="format-btn card-act" data-zoom="up" title="Larger text" aria-label="Larger text">${FORMAT_ICONS.larger}</button>
-                        <button type="button" class="format-btn card-act format-btn--ghost" data-zoom="reset" title="Reset text size" aria-label="Reset text size">Reset</button>
+                        <button type="button" class="format-btn card-act" data-zoom="reset" title="Reset text size" aria-label="Reset text size">${ACTION_ICONS.layoutReset}</button>
                     </div>
                 </div>
             </div>
@@ -1105,6 +1123,7 @@ export const UI = {
                             </label>
                         </div>
                     </div>
+                    ${this.buildNoteBodyConvertButtonsHtml(item)}
                 </div>
             </div>
         `;
@@ -1197,11 +1216,36 @@ export const UI = {
         return Math.min(EDITOR_ZOOM_MAX, Math.max(EDITOR_ZOOM_MIN, stored));
     },
 
+    zoomToDisplay(zoom) {
+        return Math.round(zoom * 100);
+    },
+
+    displayToZoom(display) {
+        const n = parseInt(String(display).trim(), 10);
+        if (!Number.isFinite(n)) return 1;
+        const zoom = n / 100;
+        return Math.min(EDITOR_ZOOM_MAX, Math.max(EDITOR_ZOOM_MIN, zoom));
+    },
+
+    syncZoomInput(shell, zoom) {
+        const input = shell?.querySelector('#format-zoom-input')
+            || document.getElementById('format-zoom-input');
+        if (input) input.value = String(this.zoomToDisplay(zoom));
+    },
+
     setEditorZoom(shell, zoom) {
         const clamped = Math.min(EDITOR_ZOOM_MAX, Math.max(EDITOR_ZOOM_MIN, zoom));
         localStorage.setItem(EDITOR_ZOOM_KEY, String(clamped));
         shell?.style?.setProperty('--editor-zoom', String(clamped));
+        this.syncZoomInput(shell, clamped);
         return clamped;
+    },
+
+    applyZoomFromInput(shell) {
+        const input = shell?.querySelector('#format-zoom-input')
+            || document.getElementById('format-zoom-input');
+        if (!input) return this.getEditorZoom();
+        return this.setEditorZoom(shell, this.displayToZoom(input.value));
     },
 
     applyFormatCommand(cmd) {
@@ -1270,6 +1314,7 @@ export const UI = {
             }
 
             refresh();
+            this.updateConvertButtons(shell, item);
 
             const body = shell.querySelector('.editor-note-body');
             requestAnimationFrame(() => {
@@ -1309,6 +1354,23 @@ export const UI = {
                 else if (action === 'down') this.setEditorZoom(shell, current - EDITOR_ZOOM_STEP);
             });
         });
+
+        const zoomInput = shell.querySelector('#format-zoom-input')
+            || document.getElementById('format-zoom-input');
+        if (zoomInput) {
+            const commitZoomInput = () => {
+                this.applyZoomFromInput(shell);
+            };
+            zoomInput.addEventListener('change', commitZoomInput);
+            zoomInput.addEventListener('blur', commitZoomInput);
+            zoomInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    commitZoomInput();
+                    zoomInput.blur();
+                }
+            });
+        }
     },
 
     bindNoteEditorShell(root, item, {
@@ -1346,9 +1408,11 @@ export const UI = {
         }
 
         if (showFormat) this.bindFormatPanel(shell, { onChange });
-        this.bindBodyConvertBar(shell, item, { refresh, localOnly, onChange });
+        if (showConfig) this.bindBodyConvertBar(shell, item, { refresh, localOnly, onChange });
 
         if (!showConfig) return;
+
+        this.updateConvertButtons(shell, item);
 
         const bothPanesEl = document.getElementById('edit-show-both-panes');
         bothPanesEl?.addEventListener('change', () => {
@@ -1483,6 +1547,7 @@ export const UI = {
 
         card.innerHTML = this.buildNoteEditorShell(item, {
             canEdit,
+            richEdit: canEdit,
             toolbarHtml: this.buildCardActionsHtml(item, true),
             toolbarDragZone: dragZone,
             footerDragZone: dragZone,
@@ -1497,6 +1562,7 @@ export const UI = {
             categoryColor
         });
         this.bindNoteEditorShell(card, item, {
+            richEdit: canEdit,
             refresh: () => this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor),
             stopMousedownPropagation: card.dataset.freeform === '1'
         });
