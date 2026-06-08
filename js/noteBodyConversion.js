@@ -177,3 +177,22 @@ export function convertChecklistToContent(item) {
     item.editorBodyLayout = 'content';
     return item;
 }
+
+export function stepToPlainCopyLine(step) {
+    const line = stepTextToContentLine(step);
+    const { indent, body } = splitLineIndent(line);
+    return indent + stripRichText(body).replace(/\u2028/g, '\n');
+}
+
+export function itemToPlainCopyText(item) {
+    const blocks = [];
+    const title = stripRichText(item?.title || '').trim();
+    if (title) blocks.push(title);
+    const content = stripRichText(item?.content || '').replace(/\u2028/g, '\n').trim();
+    if (content) blocks.push(content);
+    const lines = orderStepsActiveThenDone(item?.steps || [])
+        .map(stepToPlainCopyLine)
+        .filter((l) => l.trim());
+    if (lines.length) blocks.push(lines.join('\n'));
+    return blocks.join('\n\n');
+}

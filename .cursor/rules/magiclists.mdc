@@ -1,0 +1,16 @@
+---
+description: magiclists — stack, design, and workflow
+alwaysApply: true
+---
+
+# magiclists
+
+Vanilla JS ES modules + plain CSS. Client-only; data via `js/api.js` → localStorage. Entry: `index.html` → `js/app.js`. No React/TS/bundler unless asked.
+
+**Architecture:** `app.js` orchestrates; modules use `window` CustomEvents (`namespace:action`); item CRUD through `API` only. Tools: `js/tools/*.js` with `@tool` header + `init(mount)`; run `node scripts/build-tools-list.mjs` after tool changes.
+
+**Before editing:** grep/read existing patterns in the area you touch and its callers. Minimal diff; no dead code or half-migrations. Reuse `CARD_ICONS` / `ACTION_ICONS` from `ui.js`.
+
+**Design:** Minimal, lightweight, smooth, modern, compact. Dark default; use CSS variables and existing theme pickers. Reuse classes (`.btn`, `.card-act`, `.collapsable-*`, `.overlay`) — ask before inventing new ones. Modular files; same tropes across tiles, editor, sidebar, tools. Match existing interaction patterns (hover, overlay, persistent). UX first.
+
+**Deliver:** concise, no preamble; audit shared styles/components for regressions across board, editor, sidebar, calendar, tools.

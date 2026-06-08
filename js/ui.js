@@ -15,7 +15,9 @@ import {
     contentHasConvertibleText,
     convertChecklistToContent,
     convertContentToChecklist,
+    itemToPlainCopyText,
     SOFT_BREAK,
+    stepToPlainCopyLine,
     stepsHaveConvertibleText,
     unwrapLineStrike,
     wrapLineAsStruck
@@ -69,7 +71,8 @@ export const CARD_ICONS = {
     archive: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 4.4h7.6v5.4H2.2z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M2 4.4h8V3.5H7.5L6.7 2.5H5.3L4.5 3.5H2v.9z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M5 6.2v2.2M7 6.2v2.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
     unarchive: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 5.8h7.6v4H2.2z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M2 5.8h8V4.9H7.5L6.7 3.9H5.3L4.5 4.9H2v.9z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M6 3.2V6.4M6 3.2 4.6 4.6M6 3.2 7.4 4.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     bringFront: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.4" y="4.6" width="7.2" height="5.2" rx="0.55" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M3.4 2.4h7.2v5.2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    resize: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M8.2 8.2 10.6 10.6M8.2 8.2V5.8M8.2 8.2H5.8M3.4 3.4 1 1M3.4 3.4V5.8M3.4 3.4H5.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    resize: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M8.2 8.2 10.6 10.6M8.2 8.2V5.8M8.2 8.2H5.8M3.4 3.4 1 1M3.4 3.4V5.8M3.4 3.4H5.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    copy: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="3.5" y="3.8" width="5.8" height="6.4" rx="0.6" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M5.2 2.6h4.2a0.8 0.8 0 0 1 0.8 0.8v4.2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>'
 };
 
 export const FORMAT_ICONS = {
@@ -877,7 +880,11 @@ export const UI = {
     buildCardActionsHtml(item, isExpanded = false) {
         const expandTitle = isExpanded ? 'Collapse note' : 'Expand note';
         const expandIcon = isExpanded ? CARD_ICONS.collapse : CARD_ICONS.expand;
+        const copyBtn = isExpanded
+            ? `<button type="button" class="card-act card-act--copy" title="Copy note as text" aria-label="Copy note as text">${CARD_ICONS.copy}</button>`
+            : '';
         return `<div class="card-actions">
+            ${copyBtn}
             <button type="button" class="card-act card-act--toggle" title="${expandTitle}" aria-label="${expandTitle}">${expandIcon}</button>
             <button type="button" class="card-act card-act--color" title="Note color" aria-label="Note color" aria-haspopup="dialog">${CARD_ICONS.color}</button>
             <button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>
@@ -904,10 +911,50 @@ export const UI = {
         });
     },
 
+    async copyPlainTextToClipboard(text) {
+        const value = String(text ?? '');
+        if (!value) return false;
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(value);
+                return true;
+            }
+        } catch { /* fallback below */ }
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = value;
+            ta.setAttribute('readonly', '');
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            return ok;
+        } catch {
+            return false;
+        }
+    },
+
+    flashCopyFeedback(btn, message = 'Copied!') {
+        if (!btn) return;
+        const prevTitle = btn.getAttribute('title');
+        const prevLabel = btn.getAttribute('aria-label');
+        btn.setAttribute('title', message);
+        btn.setAttribute('aria-label', message);
+        window.setTimeout(() => {
+            if (prevTitle != null) btn.setAttribute('title', prevTitle);
+            else btn.removeAttribute('title');
+            if (prevLabel != null) btn.setAttribute('aria-label', prevLabel);
+            else btn.removeAttribute('aria-label');
+        }, 1500);
+    },
+
     attachCardActions(card, item, ctx) {
         const actions = card.querySelector('.card-actions');
         if (!actions) return;
 
+        const copyBtn = actions.querySelector('.card-act--copy');
         const toggleBtn = actions.querySelector('.card-act--toggle');
         const colorBtn = actions.querySelector('.card-act--color');
         const hideBtn = actions.querySelector('.card-act--hide');
@@ -920,6 +967,14 @@ export const UI = {
             }
             return false;
         };
+
+        this.attachCardActionButton(copyBtn, async () => {
+            card.dataset.skipExpand = '1';
+            const shell = card.querySelector('.editor-note-shell');
+            if (shell) this.syncItemBodyFromDom(shell, item);
+            const ok = await this.copyPlainTextToClipboard(itemToPlainCopyText(item));
+            if (ok) this.flashCopyFeedback(copyBtn);
+        });
 
         this.attachCardActionButton(toggleBtn, () => {
             if (consumeSkipExpand()) return;
@@ -1862,6 +1917,7 @@ export const UI = {
                     </div>
                     ${textHtml}
                     <div class="step-row-actions">
+                        <button type="button" class="card-act step-copy-btn" title="Copy item" aria-label="Copy item">${CARD_ICONS.copy}</button>
                         ${canEdit ? `<span class="step-nest-controls">${nestControls}</span>` : ''}
                         ${deleteBtn}
                     </div>
@@ -2515,6 +2571,20 @@ export const UI = {
                         if (!it.steps.length) it.type = 'note';
                     });
                     refresh();
+                });
+            });
+
+            root.querySelectorAll('.step-copy-btn').forEach((btn) => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const shell = root.closest('.editor-note-shell') || root;
+                    this.syncItemBodyFromDom(shell, item);
+                    const row = btn.closest('.step-row--display');
+                    const stepId = row?.dataset.stepId;
+                    const step = item.steps?.find((s) => s.id === stepId);
+                    if (!step) return;
+                    const ok = await this.copyPlainTextToClipboard(stepToPlainCopyLine(step));
+                    if (ok) this.flashCopyFeedback(btn);
                 });
             });
 

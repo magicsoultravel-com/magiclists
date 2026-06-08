@@ -603,7 +603,8 @@ body {
     pointer-events: none;
 }
 
-.step-delete-btn {
+.step-delete-btn,
+.step-copy-btn {
     flex-shrink: 0;
     width: 14px !important;
     height: 14px !important;
