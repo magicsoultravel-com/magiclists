@@ -11,12 +11,14 @@ import { ChromeBackground } from './chromeBackground.js';
 import { DesktopBackground } from './desktopBackground.js';
 import { resetCustomizationToDefaults } from './customizationReset.js';
 import { ACTION_ICONS } from './ui.js';
+import { AppTheme, buildThemeOptionsHtml, isAppThemeCustomized, readAppTheme } from './appTheme.js';
 
 const STORAGE_KEY = 'matrix_display_options';
 
 const DEFAULTS = {
     showCategoryName: true,
     showCreatedDate: true,
+    showNoteSize: true,
     desktopGradient: false,
     cardAnimations: true,
     noteFontId: 'default'
@@ -31,6 +33,7 @@ export function readDisplayOptions() {
         return {
             showCategoryName: raw.showCategoryName !== false,
             showCreatedDate: raw.showCreatedDate !== false,
+            showNoteSize: raw.showNoteSize !== false,
             desktopGradient: raw.desktopGradient === true,
             cardAnimations: raw.cardAnimations !== false,
             noteFontId
@@ -50,6 +53,7 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     const root = document.documentElement;
     root.dataset.showNoteCategory = options.showCategoryName ? '1' : '0';
     root.dataset.showNoteCreated = options.showCreatedDate ? '1' : '0';
+    root.dataset.showNoteSize = options.showNoteSize ? '1' : '0';
     root.dataset.desktopGradient = options.desktopGradient ? '1' : '0';
     root.dataset.cardAnimations = options.cardAnimations ? '1' : '0';
     applyNoteFont(options.noteFontId);
@@ -58,9 +62,11 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
 function isCustomized(options) {
     return !options.showCategoryName
         || !options.showCreatedDate
+        || !options.showNoteSize
         || options.desktopGradient
         || !options.cardAnimations
         || isNoteFontCustomized(options.noteFontId)
+        || isAppThemeCustomized()
         || NoteFontScale.isCustomized()
         || DesktopZoom.isCustomized()
         || ChromeBackground.isCustomized()
@@ -93,6 +99,7 @@ export const DisplayOptions = {
         window.addEventListener('desktop:zoom_changed', () => this.syncButtonState());
         window.addEventListener('note:font_scale_changed', () => this.syncButtonState());
         window.addEventListener('appearance:color_changed', () => this.syncButtonState());
+        window.addEventListener('app:theme_changed', () => this.syncButtonState());
         window.addEventListener('customization:reset', () => {
             this.options = readDisplayOptions();
             applyDisplayOptions(this.options);
@@ -226,36 +233,44 @@ export const DisplayOptions = {
 
         popover.innerHTML = `
             <div class="display-options-list focus-mode-list">
+                <button type="button" class="focus-mode-row focus-mode-reset display-options-reset display-options-reset--top" id="display-opt-reset" role="menuitem">
+                    <span class="focus-mode-row-label display-options-reset-label">${ACTION_ICONS.resetCustomization}<span>Reset to defaults</span></span>
+                </button>
+                <div class="focus-mode-divider" role="separator"></div>
                 <p class="display-options-heading">Notes on desktop</p>
-                ${this.optionRow('display-opt-category', 'Category name', 'Footer & compact', opts.showCategoryName)}
-                ${this.optionRow('display-opt-created', 'Created date', 'Expanded notes', opts.showCreatedDate)}
+                ${this.optionRow('display-opt-category', 'Category name', '', opts.showCategoryName)}
+                ${this.optionRow('display-opt-created', 'Created date', '', opts.showCreatedDate)}
+                ${this.optionRow('display-opt-note-size', 'Note size', '', opts.showNoteSize)}
+                <div class="focus-mode-divider" role="separator"></div>
+                <p class="display-options-heading">Theme</p>
+                <div class="display-options-theme-list clock-style-list app-theme-list">${buildThemeOptionsHtml(readAppTheme())}</div>
                 <div class="focus-mode-divider" role="separator"></div>
                 <p class="display-options-heading">Text</p>
                 <div class="note-font-list">${this.noteFontOptionsHtml(opts.noteFontId)}</div>
-                ${this.stepperRow({
-                    idPrefix: 'display-opt-note-scale',
-                    label: 'Text size',
-                    valuePercent: noteScalePct
-                })}
+                <div class="focus-mode-divider" role="separator"></div>
+                <p class="display-options-heading">Scale</p>
+                <div class="display-options-scale-group">
+                    ${this.stepperRow({
+                        idPrefix: 'display-opt-note-scale',
+                        label: 'Text size',
+                        valuePercent: noteScalePct
+                    })}
+                    ${this.stepperRow({
+                        idPrefix: 'display-opt-desktop-zoom',
+                        label: 'Desktop zoom',
+                        valuePercent: desktopZoomPct,
+                        disabled: !desktopZoomEnabled,
+                        disabledHint: desktopZoomEnabled ? '' : 'Desktop only'
+                    })}
+                </div>
                 <div class="focus-mode-divider" role="separator"></div>
                 <p class="display-options-heading">Desktop</p>
-                ${this.optionRow('display-opt-gradient', 'Gradient background', 'Subtle depth', opts.desktopGradient)}
-                ${this.optionRow('display-opt-animations', 'Card animations', 'Expand & collapse roll', opts.cardAnimations)}
-                ${this.stepperRow({
-                    idPrefix: 'display-opt-desktop-zoom',
-                    label: 'Desktop zoom',
-                    valuePercent: desktopZoomPct,
-                    disabled: !desktopZoomEnabled,
-                    disabledHint: desktopZoomEnabled ? '' : 'Desktop only'
-                })}
+                ${this.optionRow('display-opt-gradient', 'Gradient background', '', opts.desktopGradient)}
+                ${this.optionRow('display-opt-animations', 'Card animations', '', opts.cardAnimations)}
                 <div class="focus-mode-divider" role="separator"></div>
                 <p class="display-options-heading">Backgrounds</p>
                 ${this.bgRow('display-opt-chrome-bg', 'Panel & header', '--chrome-bg')}
                 ${this.bgRow('display-opt-desktop-bg', 'Desktop', '--desktop-bg')}
-                <div class="focus-mode-divider" role="separator"></div>
-                <button type="button" class="focus-mode-row focus-mode-reset display-options-reset" id="display-opt-reset" role="menuitem">
-                    <span class="focus-mode-row-label display-options-reset-label">${ACTION_ICONS.resetCustomization}<span>Reset appearance to defaults</span></span>
-                </button>
             </div>
         `;
 
@@ -269,8 +284,18 @@ export const DisplayOptions = {
 
         bindToggle('display-opt-category', 'showCategoryName');
         bindToggle('display-opt-created', 'showCreatedDate');
+        bindToggle('display-opt-note-size', 'showNoteSize');
         bindToggle('display-opt-gradient', 'desktopGradient');
         bindToggle('display-opt-animations', 'cardAnimations');
+
+        popover.querySelectorAll('.app-theme-option').forEach((btn) => {
+            btn.addEventListener('mousedown', (e) => e.stopPropagation());
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                AppTheme.setTheme(btn.dataset.theme, { closePopover: false });
+                this.openPopover();
+            });
+        });
 
         popover.querySelectorAll('.note-font-option').forEach((btn) => {
             btn.addEventListener('mousedown', (e) => e.stopPropagation());

@@ -76,7 +76,6 @@ class Application {
         this.setupLayoutResetButton();
         this.setupCollapseAllButton();
         this.setupDisplayOptionsButton();
-        this.setupAppThemeButton();
         this.setupFocusModeButton();
         this.setupSearchBar();
         this.setupSaveViewButton();
@@ -435,11 +434,6 @@ class Application {
     setupDisplayOptionsButton() {
         const btn = document.getElementById('btn-display-options');
         if (btn) btn.innerHTML = ACTION_ICONS.displayOptions;
-    }
-
-    setupAppThemeButton() {
-        const btn = document.getElementById('btn-app-theme');
-        if (btn) btn.innerHTML = ACTION_ICONS.appTheme;
     }
 
     setupFocusModeButton() {

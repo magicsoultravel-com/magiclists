@@ -261,6 +261,24 @@ function swatchHtml(swatch) {
     return `<span class="app-theme-swatch" aria-hidden="true">${colors.map((c) => `<span class="app-theme-swatch-chip" style="background:${c}"></span>`).join('')}</span>`;
 }
 
+export function isAppThemeCustomized() {
+    return readAppTheme() !== 'dark';
+}
+
+export function buildThemeOptionsHtml(selectedId) {
+    return APP_THEMES.map((theme) => {
+        const selected = theme.id === selectedId;
+        return `<button type="button" class="clock-style-option app-theme-option${selected ? ' is-selected' : ''}" data-theme="${theme.id}" role="menuitemradio" aria-checked="${selected}">
+            ${swatchHtml(theme.swatch)}
+            <span class="clock-style-meta">
+                <span class="clock-style-label">${escapeHtml(theme.label)}</span>
+                <span class="clock-style-desc">${escapeHtml(theme.desc)}</span>
+            </span>
+            ${selected ? '<span class="clock-style-check" aria-hidden="true">✓</span>' : ''}
+        </button>`;
+    }).join('');
+}
+
 export const AppTheme = {
     triggerBtn: null,
     popover: null,
@@ -283,11 +301,12 @@ export const AppTheme = {
         this.syncButtonState();
     },
 
-    setTheme(themeId) {
+    setTheme(themeId, { closePopover = true } = {}) {
         this.currentId = themeId;
         applyAppTheme(themeId);
         this.syncButtonState();
-        this.closePopover();
+        if (closePopover) this.closePopover();
+        window.dispatchEvent(new CustomEvent('app:theme_changed', { detail: themeId }));
     },
 
     syncButtonState() {
@@ -330,19 +349,7 @@ export const AppTheme = {
         this.closePopover();
 
         const popover = this.ensurePopover();
-        const optionsHtml = APP_THEMES.map((theme) => {
-            const selected = theme.id === this.currentId;
-            return `<button type="button" class="clock-style-option app-theme-option${selected ? ' is-selected' : ''}" data-theme="${theme.id}" role="menuitemradio" aria-checked="${selected}">
-                ${swatchHtml(theme.swatch)}
-                <span class="clock-style-meta">
-                    <span class="clock-style-label">${escapeHtml(theme.label)}</span>
-                    <span class="clock-style-desc">${escapeHtml(theme.desc)}</span>
-                </span>
-                ${selected ? '<span class="clock-style-check" aria-hidden="true">✓</span>' : ''}
-            </button>`;
-        }).join('');
-
-        popover.innerHTML = `<div class="clock-style-list app-theme-list">${optionsHtml}</div>`;
+        popover.innerHTML = `<div class="clock-style-list app-theme-list">${buildThemeOptionsHtml(this.currentId)}</div>`;
 
         popover.querySelectorAll('.app-theme-option').forEach((btn) => {
             btn.addEventListener('mousedown', (e) => e.stopPropagation());

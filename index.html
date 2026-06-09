@@ -140,8 +140,10 @@
                 </div>
                 </div>
                 <div id="control-bar-search" class="control-bar-search">
-                    <input type="search" id="workspace-search-input" class="control-bar-search-input form-input" placeholder="Search…" aria-label="Search notes" autocomplete="off" spellcheck="false" aria-expanded="false" aria-controls="workspace-search-panel">
-                    <button type="button" id="workspace-search-clear" class="control-bar-search-clear" title="Clear search" aria-label="Clear search">×</button>
+                    <div class="control-bar-search-field">
+                        <input type="search" id="workspace-search-input" class="control-bar-search-input form-input" placeholder="Search…" aria-label="Search notes" autocomplete="off" spellcheck="false" aria-expanded="false" aria-controls="workspace-search-panel">
+                        <button type="button" id="workspace-search-clear" class="control-bar-search-clear" title="Clear search" aria-label="Clear search">×</button>
+                    </div>
                     <div id="workspace-search-panel" class="search-results-panel is-hidden" role="listbox" aria-label="Search results"></div>
                 </div>
                 <div class="control-bar-end">
@@ -150,7 +152,6 @@
                             <button type="button" id="btn-undo" class="btn btn--compact btn--icon" disabled title="Undo (Ctrl+Z)" aria-label="Undo"></button>
                             <button type="button" id="btn-redo" class="btn btn--compact btn--icon" disabled title="Redo (Ctrl+Y)" aria-label="Redo"></button>
                         </div>
-                        <button type="button" id="btn-app-theme" class="btn btn--compact btn--icon" title="App theme" aria-label="App theme" aria-expanded="false" aria-haspopup="menu"></button>
                         <button type="button" id="btn-display-options" class="btn btn--compact btn--icon" title="Display options" aria-label="Display options" aria-expanded="false" aria-haspopup="menu"></button>
                         <button type="button" id="btn-focus-mode" class="btn btn--compact btn--icon" title="Focus mode" aria-label="Focus mode" aria-expanded="false" aria-haspopup="menu"></button>
                         <button type="button" id="btn-save-view" class="btn btn--compact btn--icon" title="Save view" aria-label="Save view"></button>
@@ -159,7 +160,7 @@
                         <button type="button" id="btn-layout-reset" class="btn btn--compact btn--icon is-hidden" title="Reset" aria-label="Reset"></button>
                     </div>
                     <div id="digital-clock" class="logo-zone logo-zone--clock">
-                        <button type="button" id="clock-icon-fallback" class="btn btn--compact btn--icon clock-icon-fallback is-hidden" title="Show clock" aria-label="Show clock" aria-expanded="false"></button>
+                        <button type="button" id="clock-icon-fallback" class="btn btn--compact btn--icon clock-icon-fallback is-hidden" title="Show clock" aria-label="Show clock" aria-expanded="false"><svg viewBox="0 0 12 12" width="12" height="12" focusable="false" aria-hidden="true"><circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.2V6l2 1.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
                         <button type="button" id="clock-display" class="clock-display clock-display-trigger" title="Change clock style" aria-label="Clock and date — change style" aria-expanded="false" aria-haspopup="menu">
                             <span id="clock-date" class="clock-chip clock-chip--date">—</span>
                             <span id="clock-time" class="clock-chip clock-chip--time">—</span>

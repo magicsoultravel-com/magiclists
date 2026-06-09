@@ -21,6 +21,7 @@ const CUSTOMIZATION_KEYS = [
 const DISPLAY_DEFAULTS = {
     showCategoryName: true,
     showCreatedDate: true,
+    showNoteSize: true,
     desktopGradient: false,
     cardAnimations: true,
     noteFontId: 'default'

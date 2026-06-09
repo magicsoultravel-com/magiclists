@@ -197,7 +197,7 @@ export const ClockStyle = {
         this.triggerBtn = document.getElementById('clock-display');
         this.iconBtn = document.getElementById('clock-icon-fallback');
         if (this.iconBtn) {
-            this.iconBtn.innerHTML = ACTION_ICONS.clockStyle;
+            this.ensureIconBtn();
             this.iconBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.closePopover();
@@ -228,6 +228,13 @@ export const ClockStyle = {
         return this.triggerBtn;
     },
 
+    ensureIconBtn() {
+        if (!this.iconBtn) return;
+        if (!this.iconBtn.querySelector('svg')) {
+            this.iconBtn.innerHTML = ACTION_ICONS.clockStyle;
+        }
+    },
+
     syncToggleBtn() {
         if (!this.iconBtn) return;
         const label = this.isHidden ? 'Show clock' : 'Hide clock';
@@ -240,6 +247,7 @@ export const ClockStyle = {
         this.zone?.classList.toggle('is-clock-hidden', hidden);
         this.triggerBtn?.classList.toggle('is-hidden', hidden);
         this.iconBtn?.classList.toggle('is-hidden', !hidden);
+        if (!hidden) this.ensureIconBtn();
         this.syncToggleBtn();
         if (hidden) {
             this.triggerBtn?.setAttribute('aria-expanded', 'false');
