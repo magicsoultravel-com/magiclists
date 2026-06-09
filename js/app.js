@@ -19,6 +19,7 @@ import { DesktopZoom } from './desktopZoom.js';
 import { resetCustomizationToDefaults } from './customizationReset.js';
 import { exportAppCode } from './codeExport.js';
 import { readViewSessions, restoreViewSession } from './viewSession.js';
+import { SearchBar } from './searchBar.js';
 
 function countHiddenFromBoard(items) {
     return items.filter(item => UI.isHiddenFromBoard(item)).length;
@@ -75,6 +76,7 @@ class Application {
         this.setupResetCustomizationButton();
         this.setupAppThemeButton();
         this.setupFocusModeButton();
+        this.setupSearchBar();
         this.setupSaveViewButton();
         this.setupRecallViewButton();
         this.updateLayoutResetVisibility();
@@ -481,6 +483,20 @@ class Application {
         }));
     }
 
+    setupSearchBar() {
+        SearchBar.init({
+            getItems: () => AppState.items,
+            getCategories: () => AppState.categories,
+            onOpenItem: (item) => {
+                window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: item }));
+            },
+            onFocusCategory: (name) => {
+                AppState.focusCategories = [name];
+                this.onFocusChange();
+            }
+        });
+    }
+
     setupViewSlotPopover(btn, { ariaLabel, emptyLabel, onPick, requireSnapshot = false }) {
         if (!btn) return;
         let popover = null;
@@ -717,27 +733,6 @@ class Application {
             const item = detail?.item ?? detail;
             const sourceCard = detail?.sourceCard ?? null;
             Editor.open(item, AppState.categories, { sourceCard });
-        });
-
-        window.addEventListener('editor:reactivate_on_desktop', async (e) => {
-            const { item, restoreContext, modalGeometry } = e.detail || {};
-            if (!item?.id) return;
-
-            const placement = UI.resolveNoteDesktopPlacement(item.id, { restoreContext, modalGeometry });
-            UI.prepareDesktopPlacementBeforeRender(item.id, placement);
-
-            const idx = AppState.items.findIndex((i) => i.id === item.id);
-            if (idx >= 0) AppState.items[idx] = item;
-            else AppState.items.push(item);
-
-            const targetMode = placement.viewMode;
-            if (AppState.viewSettings.sortBy !== targetMode) {
-                await this.switchViewMode(targetMode);
-            } else {
-                await this.syncDataStore();
-            }
-
-            UI.finishNoteDesktopReactivation(item, placement);
         });
 
         window.addEventListener('editor:reveal_on_board', async (e) => {

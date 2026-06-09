@@ -12,6 +12,7 @@ const DEFAULTS = {
     showCategoryName: true,
     showCreatedDate: true,
     desktopGradient: false,
+    cardAnimations: true,
     noteFontId: 'default'
 };
 
@@ -25,6 +26,7 @@ export function readDisplayOptions() {
             showCategoryName: raw.showCategoryName !== false,
             showCreatedDate: raw.showCreatedDate !== false,
             desktopGradient: raw.desktopGradient === true,
+            cardAnimations: raw.cardAnimations !== false,
             noteFontId
         };
     } catch {
@@ -43,6 +45,7 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     root.dataset.showNoteCategory = options.showCategoryName ? '1' : '0';
     root.dataset.showNoteCreated = options.showCreatedDate ? '1' : '0';
     root.dataset.desktopGradient = options.desktopGradient ? '1' : '0';
+    root.dataset.cardAnimations = options.cardAnimations ? '1' : '0';
     applyNoteFont(options.noteFontId);
 }
 
@@ -50,6 +53,7 @@ function isCustomized(options) {
     return !options.showCategoryName
         || !options.showCreatedDate
         || options.desktopGradient
+        || !options.cardAnimations
         || isNoteFontCustomized(options.noteFontId);
 }
 
@@ -168,6 +172,7 @@ export const DisplayOptions = {
                 <div class="focus-mode-divider" role="separator"></div>
                 <p class="display-options-heading">Desktop</p>
                 ${this.optionRow('display-opt-gradient', 'Gradient background', 'Subtle depth', opts.desktopGradient)}
+                ${this.optionRow('display-opt-animations', 'Card animations', 'Expand & collapse roll', opts.cardAnimations)}
             </div>
         `;
 
@@ -182,6 +187,7 @@ export const DisplayOptions = {
         bindToggle('display-opt-category', 'showCategoryName');
         bindToggle('display-opt-created', 'showCreatedDate');
         bindToggle('display-opt-gradient', 'desktopGradient');
+        bindToggle('display-opt-animations', 'cardAnimations');
 
         popover.querySelectorAll('.note-font-option').forEach((btn) => {
             btn.addEventListener('mousedown', (e) => e.stopPropagation());

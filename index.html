@@ -145,6 +145,11 @@
                             <button type="button" id="btn-undo" class="btn btn--compact btn--icon" disabled title="Undo (Ctrl+Z)" aria-label="Undo"></button>
                             <button type="button" id="btn-redo" class="btn btn--compact btn--icon" disabled title="Redo (Ctrl+Y)" aria-label="Redo"></button>
                         </div>
+                        <div id="control-bar-search" class="control-bar-search">
+                            <input type="search" id="workspace-search-input" class="control-bar-search-input form-input" placeholder="Search…" aria-label="Search notes" autocomplete="off" spellcheck="false" aria-expanded="false" aria-controls="workspace-search-panel">
+                            <button type="button" id="workspace-search-clear" class="control-bar-search-clear" title="Clear search" aria-label="Clear search">×</button>
+                            <div id="workspace-search-panel" class="search-results-panel is-hidden" role="listbox" aria-label="Search results"></div>
+                        </div>
                         <button type="button" id="btn-chrome-bg" class="btn btn--compact btn--icon" title="Panel and header background" aria-label="Panel and header background" aria-expanded="false" aria-haspopup="dialog"></button>
                         <button type="button" id="btn-desktop-bg" class="btn btn--compact btn--icon" title="Desktop background" aria-label="Desktop background" aria-expanded="false" aria-haspopup="dialog"></button>
                         <button type="button" id="btn-app-theme" class="btn btn--compact btn--icon" title="App theme" aria-label="App theme" aria-expanded="false" aria-haspopup="menu"></button>
@@ -198,14 +203,8 @@
     <div id="editor-overlay" class="overlay is-hidden">
         <div class="modal">
             <div class="toolbar editor-toolbar">
-                <button type="button" id="modal-archive-btn" class="card-act card-act--archive is-hidden" title="Archive note" aria-label="Archive note"></button>
-                <button type="button" id="modal-reactivate-btn" class="card-act card-act--reactivate" title="Reactivate on desktop" aria-label="Reactivate on desktop"></button>
-                <span class="editor-toolbar-spacer" aria-hidden="true"></span>
+                <div id="modal-toolbar-mount" class="modal-toolbar-mount"></div>
                 <input type="hidden" id="edit-bg-color-value" value="">
-                <button type="button" id="modal-color-btn" class="card-act card-act--color" title="Note color" aria-label="Note color" aria-haspopup="dialog"></button>
-                <button type="button" id="modal-calendar-toggle" class="card-act card-act--cal" title="Show on calendar" aria-label="Toggle calendar"></button>
-                <button type="button" id="modal-save-btn" class="card-act card-act--save is-hidden" title="Show on board" aria-label="Show on board"></button>
-                <button type="button" id="modal-close-btn" class="card-act card-act--collapse" title="Show on board" aria-label="Show on board"></button>
             </div>
             <div id="modal-form-mount" class="modal-body"></div>
             <button type="button" id="modal-approve-btn" class="fab-create editor-fab" title="Show on board" aria-label="Show on board"></button>

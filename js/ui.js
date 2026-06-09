@@ -70,8 +70,12 @@ const CANVAS_LAYOUT_ORDER_KEY = 'matrix_canvas_layout_order';
 const GRID_LAYOUT_KEY = 'matrix_grid_layout';
 const GRID_PINS_KEY = 'matrix_grid_pins';
 const GRID_EXPANDED_KEY = 'matrix_grid_expanded_id';
-const CARD_EXPAND_ANIM_MS = 220;
-const CARD_COLLAPSE_ANIM_MS = 200;
+const CARD_EXPAND_ANIM_MS = 280;
+const CARD_COLLAPSE_ANIM_MS = 260;
+
+export function cardAnimationsEnabled() {
+    return document.documentElement.dataset.cardAnimations !== '0';
+}
 
 let freeformStackSeq = 1;
 let gridStackSeq = 1;
@@ -92,8 +96,8 @@ export const CARD_ICONS = {
     archive: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 4.4h7.6v5.4H2.2z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M2 4.4h8V3.5H7.5L6.7 2.5H5.3L4.5 3.5H2v.9z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M5 6.2v2.2M7 6.2v2.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
     unarchive: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 5.8h7.6v4H2.2z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M2 5.8h8V4.9H7.5L6.7 3.9H5.3L4.5 4.9H2v.9z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M6 3.2V6.4M6 3.2 4.6 4.6M6 3.2 7.4 4.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     bringFront: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.4" y="4.6" width="7.2" height="5.2" rx="0.55" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M3.4 2.4h7.2v5.2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    pin: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M4.2 1.6h3.6l0.5 2.2 2.1 2.1-1.4 1.4-2.4-1.1-2.4 3.2V6.4L3.6 5.3 4.2 1.6z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
-    unpin: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M4.2 1.6h3.6l0.5 2.2 2.1 2.1-1.4 1.4-2.4-1.1-2.4 3.2V6.4L3.6 5.3M2.2 2.2l7.6 7.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    pin: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><circle cx="6" cy="3.4" r="2.1" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M6 5.4v4.8M4.6 10.2h2.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
+    unpin: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><circle cx="6" cy="3.4" r="2.1" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M6 5.4v4.8M4.6 10.2h2.8M2.2 2.2l7.6 7.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg>',
     resize: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M8.2 8.2 10.6 10.6M8.2 8.2V5.8M8.2 8.2H5.8M3.4 3.4 1 1M3.4 3.4V5.8M3.4 3.4H5.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     copy: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="3.5" y="3.8" width="5.8" height="6.4" rx="0.6" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M5.2 2.6h4.2a0.8 0.8 0 0 1 0.8 0.8v4.2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
     drag: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><circle cx="4.4" cy="3.1" r="0.85" fill="currentColor"/><circle cx="7.6" cy="3.1" r="0.85" fill="currentColor"/><circle cx="4.4" cy="6" r="0.85" fill="currentColor"/><circle cx="7.6" cy="6" r="0.85" fill="currentColor"/><circle cx="4.4" cy="8.9" r="0.85" fill="currentColor"/><circle cx="7.6" cy="8.9" r="0.85" fill="currentColor"/></svg>'
@@ -1151,29 +1155,65 @@ export const UI = {
         localStorage.removeItem('matrix_columns_float_sizes');
     },
 
-    buildCardActionsHtml(item, isExpanded = false, { pinned = false, showDrag = false } = {}) {
-        const expandTitle = isExpanded ? 'Collapse note' : 'Expand note';
-        const expandIcon = isExpanded ? CARD_ICONS.collapse : CARD_ICONS.expand;
-        const copyBtn = isExpanded
-            ? `<button type="button" class="card-act card-act--copy" title="Copy note as text" aria-label="Copy note as text">${CARD_ICONS.copy}</button>`
-            : '';
+    buildNoteQuickActionsHtml(item, {
+        surface = 'board',
+        isExpanded = false,
+        pinned = false,
+        showDrag = false,
+        showArchive = false
+    } = {}) {
+        const isModal = surface === 'modal';
+        const expandTitle = isModal
+            ? 'Show on board'
+            : (isExpanded ? 'Collapse note' : 'Expand note');
+        const lastIcon = isModal || isExpanded ? CARD_ICONS.collapse : CARD_ICONS.expand;
+        const lastClass = isModal ? 'card-act--close' : 'card-act--toggle';
+        const lastId = isModal ? ' id="modal-close-btn"' : '';
         const pinTitle = pinned ? 'Unpin (unlock drag)' : 'Pin position (locks drag)';
         const pinBtn = `<button type="button" class="card-act card-act--pin${pinned ? ' is-active' : ''}" title="${pinTitle}" aria-label="${pinTitle}" aria-pressed="${pinned ? 'true' : 'false'}">${pinned ? CARD_ICONS.unpin : CARD_ICONS.pin}</button>`;
-        const dragBtn = showDrag && !pinned
-            ? `<button type="button" class="card-act card-act--drag" title="Drag to move" aria-label="Drag to move">${CARD_ICONS.drag}</button>`
+        const calHidden = this.isHiddenFromCalendar(item);
+        const calTitle = calHidden
+            ? 'Hidden from calendar — click to show'
+            : 'Shown on calendar — click to hide';
+        const calBtn = `<button type="button" class="card-act card-act--cal${calHidden ? ' is-off' : ' is-on'}" title="${this.escapeAttr(calTitle)}" aria-label="${this.escapeAttr(calTitle)}">${CARD_ICONS.calendar}</button>`;
+        const showDragIcon = isModal ? true : (showDrag && !pinned);
+        const dragBtn = showDragIcon
+            ? `<button type="button" class="card-act card-act--drag${isModal ? ' card-act--decorative' : ''}" title="Drag to move" aria-label="Drag to move"${isModal ? ' tabindex="-1" aria-hidden="true"' : ''}>${CARD_ICONS.drag}</button>`
             : '';
-        let actionCount = 5;
-        if (isExpanded) actionCount += 1;
-        if (showDrag && !pinned) actionCount += 1;
-        return `<div class="card-actions" data-action-count="${actionCount}">
-            ${copyBtn}
+        let actionCount = 7;
+        if (showDragIcon) actionCount += 1;
+        if (showArchive) actionCount += 1;
+        const archiveBtn = showArchive
+            ? `<button type="button" id="modal-archive-btn" class="card-act card-act--archive" title="Archive note" aria-label="Archive note">${CARD_ICONS.delete}</button>`
+            : '';
+        const actionsHtml = `<div class="card-actions${isModal ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
+            ${dragBtn}
+            <button type="button" class="card-act card-act--copy" title="Copy note as text" aria-label="Copy note as text">${CARD_ICONS.copy}</button>
             ${pinBtn}
             <button type="button" class="card-act card-act--color" title="Note color" aria-label="Note color" aria-haspopup="dialog">${CARD_ICONS.color}</button>
             <button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>
             <button type="button" class="card-act card-act--edit" title="Edit note" aria-label="Edit note">${CARD_ICONS.edit}</button>
-            ${dragBtn}
-            <button type="button" class="card-act card-act--toggle" title="${expandTitle}" aria-label="${expandTitle}">${expandIcon}</button>
+            ${calBtn}
+            <button type="button" class="card-act ${lastClass}"${lastId} title="${expandTitle}" aria-label="${expandTitle}">${lastIcon}</button>
         </div>`;
+        return isModal ? `${archiveBtn}${actionsHtml}` : actionsHtml;
+    },
+
+    buildCardActionsHtml(item, isExpanded = false, options = {}) {
+        return this.buildNoteQuickActionsHtml(item, { surface: 'board', isExpanded, ...options });
+    },
+
+    syncCalendarButtonUI(item, btn) {
+        if (!btn || !item) return;
+        const hidden = this.isHiddenFromCalendar(item);
+        btn.innerHTML = CARD_ICONS.calendar;
+        const title = hidden
+            ? 'Hidden from calendar — click to show'
+            : 'Shown on calendar — click to hide';
+        btn.title = title;
+        btn.setAttribute('aria-label', title);
+        btn.classList.toggle('is-off', hidden);
+        btn.classList.toggle('is-on', !hidden);
     },
 
     attachCardActionButton(btn, handler) {
@@ -1282,6 +1322,7 @@ export const UI = {
         const colorBtn = actions.querySelector('.card-act--color');
         const hideBtn = actions.querySelector('.card-act--hide');
         const editBtn = actions.querySelector('.card-act--edit');
+        const calBtn = actions.querySelector('.card-act--cal');
 
         const consumeSkipExpand = () => {
             if (card.dataset.skipExpand) {
@@ -1366,6 +1407,96 @@ export const UI = {
                 detail: { item, sourceCard: card }
             }));
         });
+
+        if (calBtn) {
+            this.syncCalendarButtonUI(item, calBtn);
+            this.attachCardActionButton(calBtn, () => {
+                this.commitFocusedInlineField(card, item);
+                this.toggleCardCalendar(item, calBtn);
+            });
+        }
+    },
+
+    attachModalQuickActions(toolbarMount, item, editor) {
+        if (!toolbarMount || !item || !editor) return;
+
+        const archiveBtn = toolbarMount.querySelector('.card-act--archive');
+        const actions = toolbarMount.querySelector('.card-actions');
+        if (!actions) return;
+
+        const copyBtn = actions.querySelector('.card-act--copy');
+        const pinBtn = actions.querySelector('.card-act--pin');
+        const colorBtn = actions.querySelector('.card-act--color');
+        const hideBtn = actions.querySelector('.card-act--hide');
+        const editBtn = actions.querySelector('.card-act--edit');
+        const calBtn = actions.querySelector('.card-act--cal');
+        const closeBtn = actions.querySelector('.card-act--close');
+
+        editor.archiveBtn = archiveBtn;
+        editor.colorBtn = colorBtn;
+        editor.calendarToggleBtn = calBtn;
+
+        if (archiveBtn) {
+            this.attachCardActionButton(archiveBtn, () => editor.emitArchiveAction());
+        }
+
+        const commitAndClose = () => editor.closeAndSave({ revealOnBoard: !editor.preserveBoardCollapse });
+
+        if (closeBtn) {
+            closeBtn.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
+                e.stopPropagation();
+            });
+            closeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                commitAndClose();
+            });
+        }
+
+        this.attachCardActionButton(copyBtn, async () => {
+            editor.syncActiveItemFromDom();
+            const data = editor.collectFormData();
+            const ok = await this.copyPlainTextToClipboard(itemToPlainCopyText(data));
+            if (ok) this.flashCopyFeedback(copyBtn);
+            else this.flashCopyFeedback(copyBtn, 'Copy failed', { failed: true });
+        });
+
+        this.attachCardActionButton(pinBtn, () => {
+            const pinned = this.toggleBoardPin(item.id);
+            pinBtn.classList.toggle('is-active', pinned);
+            pinBtn.setAttribute('aria-pressed', pinned ? 'true' : 'false');
+            const pinTitle = pinned ? 'Unpin (unlock drag)' : 'Pin position (locks drag)';
+            pinBtn.setAttribute('title', pinTitle);
+            pinBtn.setAttribute('aria-label', pinTitle);
+            pinBtn.innerHTML = pinned ? CARD_ICONS.unpin : CARD_ICONS.pin;
+            const dragBtn = actions.querySelector('.card-act--drag');
+            if (dragBtn) dragBtn.classList.toggle('is-hidden', pinned);
+        });
+
+        this.attachCardActionButton(colorBtn, () => editor.openColorPicker());
+
+        this.attachCardActionButton(hideBtn, () => {
+            editor.syncActiveItemFromDom();
+            const data = editor.collectFormData();
+            Object.assign(item, data);
+            this.hideFromBoard(item);
+        });
+
+        this.attachCardActionButton(editBtn, () => {
+            const titleEl = editor.mountZone?.querySelector('[data-field="title"]');
+            if (titleEl) this.focusInlineEdit(titleEl, 'end');
+        });
+
+        if (calBtn) {
+            this.syncCalendarButtonUI(item, calBtn);
+            this.attachCardActionButton(calBtn, () => {
+                editor.syncActiveItemFromDom();
+                this.toggleCardCalendar(item, calBtn);
+                editor.activeItem.hideFromCalendar = item.hideFromCalendar;
+                editor.markInteracted();
+                editor.triggerAutoSave();
+            });
+        }
     },
 
     applyItemCardTheme(card, item) {
@@ -1559,7 +1690,8 @@ export const UI = {
     applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, options = {}) {
         const isFreeform = card.dataset.freeform === '1';
         const isGridBoard = card.dataset.gridBoard === '1';
-        card.classList.add('card-state-changing');
+        const animate = cardAnimationsEnabled();
+        if (animate) card.classList.add('card-state-changing');
 
         const cleanup = () => {
             card.classList.remove('card-state-changing', 'card-animate-expand', 'card-animate-collapse');
@@ -1603,52 +1735,81 @@ export const UI = {
 
         if (expanded) {
             card.classList.remove('compact');
-            card.classList.add('expanded', 'card-animate-expand');
+            card.classList.add('expanded');
+            if (animate) card.classList.add('card-animate-expand');
             this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
             reflowColumnNote();
             reflowColumnsFloat();
             reflowGridBoard();
-            card.addEventListener('animationend', cleanup, { once: true });
-            setTimeout(cleanup, CARD_EXPAND_ANIM_MS);
+            if (animate) {
+                card.addEventListener('animationend', cleanup, { once: true });
+                setTimeout(cleanup, CARD_EXPAND_ANIM_MS);
+            } else {
+                cleanup();
+            }
             return;
         }
 
+        const finishFreeformCollapse = () => {
+            card.classList.remove('expanded', 'card-animate-expand', 'card-animate-collapse');
+            card.classList.add('compact');
+            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
+            cleanup();
+            this.applyFreeformSize(card);
+        };
+
+        const finishGridCollapse = () => {
+            card.classList.remove('expanded', 'card-animate-expand', 'card-animate-collapse');
+            card.classList.add('compact');
+            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
+            cleanup();
+            this.applyGridBoardSize(card);
+            reflowGridBoard();
+        };
+
+        const finishColumnCollapse = () => {
+            card.classList.remove('expanded', 'card-animate-expand');
+            card.classList.add('compact');
+            if (animate) card.classList.remove('card-animate-collapse');
+            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
+            reflowColumnNote();
+            reflowColumnsFloat();
+            cleanup();
+        };
+
         if (isFreeform) {
-            card.classList.add('card-animate-collapse');
-            const finishCollapse = () => {
-                card.classList.remove('expanded', 'card-animate-expand', 'card-animate-collapse');
-                card.classList.add('compact');
-                this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
-                cleanup();
-                this.applyFreeformSize(card);
-            };
-            card.addEventListener('animationend', finishCollapse, { once: true });
-            setTimeout(finishCollapse, CARD_COLLAPSE_ANIM_MS);
+            if (animate) {
+                card.classList.add('card-animate-collapse');
+                card.addEventListener('animationend', finishFreeformCollapse, { once: true });
+                setTimeout(finishFreeformCollapse, CARD_COLLAPSE_ANIM_MS);
+            } else {
+                finishFreeformCollapse();
+            }
             return;
         }
 
         if (isGridBoard) {
-            card.classList.add('card-animate-collapse');
-            const finishCollapse = () => {
-                card.classList.remove('expanded', 'card-animate-expand', 'card-animate-collapse');
-                card.classList.add('compact');
-                this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
-                cleanup();
-                this.applyGridBoardSize(card);
-                reflowGridBoard();
-            };
-            card.addEventListener('animationend', finishCollapse, { once: true });
-            setTimeout(finishCollapse, CARD_COLLAPSE_ANIM_MS);
+            if (animate) {
+                card.classList.add('card-animate-collapse');
+                card.addEventListener('animationend', finishGridCollapse, { once: true });
+                setTimeout(finishGridCollapse, CARD_COLLAPSE_ANIM_MS);
+            } else {
+                finishGridCollapse();
+            }
             return;
         }
 
-        card.classList.remove('expanded', 'card-animate-expand');
-        card.classList.add('compact', 'card-animate-collapse');
-        this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
-        reflowColumnNote();
-        reflowColumnsFloat();
-        card.addEventListener('animationend', cleanup, { once: true });
-        setTimeout(cleanup, CARD_COLLAPSE_ANIM_MS);
+        if (animate) {
+            card.classList.remove('expanded', 'card-animate-expand');
+            card.classList.add('compact', 'card-animate-collapse');
+            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
+            reflowColumnNote();
+            reflowColumnsFloat();
+            card.addEventListener('animationend', cleanup, { once: true });
+            setTimeout(cleanup, CARD_COLLAPSE_ANIM_MS);
+        } else {
+            finishColumnCollapse();
+        }
     },
 
     updateColumnsFloatCard(card, item, { expanded, dimensions = null } = {}) {

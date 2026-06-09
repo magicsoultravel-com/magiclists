@@ -2,7 +2,7 @@
 import { ColorPicker, PALETTE_NOTE, randomNoteColor, resolveNoteColor } from './colorPicker.js';
 import { EditorModalChrome } from './editorModalChrome.js';
 import { sanitizeRichHtml, stripRichText } from './richText.js';
-import { ACTION_ICONS, CARD_ICONS, UI, computeNoteSizeKb, createNoteId, defaultStartDateTimeNow, noteHasSavableContent, normalizeItemForSave } from './ui.js';
+import { CARD_ICONS, UI, computeNoteSizeKb, createNoteId, defaultStartDateTimeNow, noteHasSavableContent, normalizeItemForSave } from './ui.js';
 
 export const Editor = {
     overlay: null,
@@ -17,34 +17,14 @@ export const Editor = {
     init() {
         this.overlay = document.getElementById('editor-overlay');
         this.mountZone = document.getElementById('modal-form-mount');
-        this.calendarToggleBtn = document.getElementById('modal-calendar-toggle');
-        this.colorBtn = document.getElementById('modal-color-btn');
-        this.saveBtn = document.getElementById('modal-save-btn');
-        this.archiveBtn = document.getElementById('modal-archive-btn');
-        this.reactivateBtn = document.getElementById('modal-reactivate-btn');
+        this.toolbarMount = document.getElementById('modal-toolbar-mount');
+        this.archiveBtn = null;
+        this.colorBtn = null;
+        this.calendarToggleBtn = null;
         this.approveBtn = document.getElementById('modal-approve-btn');
 
-        if (this.colorBtn) {
-            this.colorBtn.innerHTML = CARD_ICONS.color;
-            this.colorBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.openColorPicker();
-            });
-        }
-
         const commitAndClose = () => this.closeAndSave({ revealOnBoard: !this.preserveBoardCollapse });
-        document.getElementById('modal-close-btn')?.addEventListener('click', commitAndClose);
-        this.saveBtn?.addEventListener('click', commitAndClose);
         this.approveBtn?.addEventListener('click', commitAndClose);
-        this.calendarToggleBtn?.addEventListener('click', () => this.toggleCalendarVisibility());
-        this.archiveBtn?.addEventListener('click', () => this.emitArchiveAction());
-        if (this.reactivateBtn) {
-            this.reactivateBtn.innerHTML = ACTION_ICONS.desktopBg;
-            this.reactivateBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.reactivateOnDesktop();
-            });
-        }
         this.overlay?.addEventListener('mousedown', (e) => {
             if (e.target !== this.overlay) return;
             this.closeAndSave({ revealOnBoard: !this.preserveBoardCollapse });
@@ -86,7 +66,6 @@ export const Editor = {
         }
         this.syncEditorTheme(resolveNoteColor(this.activeItem.backgroundColor));
         this.renderForm();
-        this.updateCalendarToggleUI();
         this.overlay.classList.remove('is-hidden');
         const modal = this.overlay.querySelector('.modal');
         if (modal) modal.classList.add('modal--editor');
@@ -141,7 +120,7 @@ export const Editor = {
         if (!force && !this.hasUserInteracted) return false;
 
         const currentData = this.collectFormData({ normalize });
-        if (!noteHasSavableContent(currentData) && this.isNewUnsavedNote) return false;
+        if (!force && !noteHasSavableContent(currentData) && this.isNewUnsavedNote) return false;
 
         const unchanged = JSON.stringify(currentData) === JSON.stringify(this.activeItem);
         if (!force && unchanged) return true;
@@ -164,25 +143,7 @@ export const Editor = {
     
     updateCalendarToggleUI() {
         if (!this.calendarToggleBtn || !this.activeItem) return;
-        const hidden = this.activeItem.hideFromCalendar === true ||
-            (() => {
-                try {
-                    return JSON.parse(localStorage.getItem('matrix_calendar_hidden_ids') || '[]').includes(this.activeItem.id);
-                } catch { return false; }
-            })();
-        this.calendarToggleBtn.innerHTML = CARD_ICONS.calendar;
-        this.calendarToggleBtn.title = hidden ? 'Hidden from calendar — click to show' : 'Shown on calendar — click to hide';
-        this.calendarToggleBtn.classList.toggle('is-off', hidden);
-        this.calendarToggleBtn.classList.toggle('is-on', !hidden);
-    },
-
-    toggleCalendarVisibility() {
-        if (!this.activeItem) return;
-        this.activeItem.hideFromCalendar = !this.activeItem.hideFromCalendar;
-        this.updateCalendarToggleUI();
-        this.markInteracted();
-        this.triggerAutoSave();
-        window.dispatchEvent(new CustomEvent('calendar:items_changed'));
+        UI.syncCalendarButtonUI(this.activeItem, this.calendarToggleBtn);
     },
 
     syncActiveItemFromDom() {
@@ -258,44 +219,6 @@ export const Editor = {
         if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
     },
 
-    readModalGeometry() {
-        const modal = this.overlay?.querySelector('.modal');
-        return EditorModalChrome.isEnabled() ? EditorModalChrome.readGeometry(modal) : null;
-    },
-
-    reactivateOnDesktop() {
-        if (this.autoSaveTimer) {
-            clearTimeout(this.autoSaveTimer);
-            this.autoSaveTimer = null;
-        }
-
-        let savedItem = null;
-        const restoreContext = this.desktopRestoreContext;
-        const modalGeometry = this.readModalGeometry();
-
-        if (this.activeItem) {
-            const currentData = this.collectFormData({ normalize: true });
-            const shouldPersist = noteHasSavableContent(currentData)
-                || (this.hasUserInteracted && !this.isNewUnsavedNote);
-            if (shouldPersist) {
-                this.persistNote({ force: true, normalize: true });
-                savedItem = { ...this.activeItem };
-            }
-        }
-
-        if (!savedItem?.id) {
-            this.close();
-            return;
-        }
-
-        this.animateEditorClose(() => {
-            this.resetEditorState();
-            window.dispatchEvent(new CustomEvent('editor:reactivate_on_desktop', {
-                detail: { item: savedItem, restoreContext, modalGeometry }
-            }));
-        });
-    },
-
     closeAndSave({ revealOnBoard = false } = {}) {
         if (this.autoSaveTimer) {
             clearTimeout(this.autoSaveTimer);
@@ -305,8 +228,20 @@ export const Editor = {
         let savedItem = null;
         if (this.activeItem) {
             const currentData = this.collectFormData({ normalize: true });
-            const shouldPersist = noteHasSavableContent(currentData)
+            let shouldPersist = noteHasSavableContent(currentData)
                 || (this.hasUserInteracted && !this.isNewUnsavedNote);
+
+            if (!shouldPersist && this.isNewUnsavedNote && !noteHasSavableContent(currentData)) {
+                const saveEmpty = window.confirm(
+                    'This note is empty. Save it anyway?\n\nOK — save empty note\nCancel — discard'
+                );
+                if (!saveEmpty) {
+                    this.animateEditorClose(() => this.resetEditorState());
+                    return;
+                }
+                shouldPersist = true;
+            }
+
             if (shouldPersist) {
                 if (revealOnBoard) UI.markNoteExpanded(currentData.id);
                 this.persistNote({ force: true, normalize: true });
@@ -433,7 +368,15 @@ export const Editor = {
                 return `<option value="${UI.escapeQuotes(catName)}" ${selected ? 'selected' : ''}>${catName}</option>`;
             }).join('');
         const isExistingItem = item.created_at !== undefined;
-        this.archiveBtn?.classList.toggle('is-hidden', !isExistingItem);
+        if (this.toolbarMount) {
+            this.toolbarMount.innerHTML = UI.buildNoteQuickActionsHtml(item, {
+                surface: 'modal',
+                pinned: UI.isBoardPinned(item.id),
+                showDrag: true,
+                showArchive: isExistingItem
+            });
+            UI.attachModalQuickActions(this.toolbarMount, item, this);
+        }
         this.updateDoneButtonUI();
         this.updateArchiveToggleUI();
         this.updateCalendarToggleUI();
@@ -488,8 +431,7 @@ export const Editor = {
     updateDoneButtonUI() {
         const doneTitle = 'Show on board';
         const doneIcon = CARD_ICONS.collapse;
-        this.saveBtn?.classList.add('is-hidden');
-        const closeBtn = document.getElementById('modal-close-btn');
+        const closeBtn = this.toolbarMount?.querySelector('.card-act--close');
         if (closeBtn) {
             closeBtn.innerHTML = doneIcon;
             closeBtn.title = doneTitle;
