@@ -831,51 +831,50 @@ body {
     to { opacity: 1; transform: translateY(0); }
 }
 
-.mini-card.card-animate-expand {
-    animation: cardExpandIn 0.28s cubic-bezier(0.22, 1, 0.36, 1);
-    transform-origin: top center;
+.mini-card.card-roll-busy {
+    overflow: hidden !important;
 }
 
-.mini-card.card-animate-collapse {
-    animation: cardCollapseOut 0.26s cubic-bezier(0.4, 0, 0.85, 1) forwards;
-    transform-origin: top center;
+.mini-card.card-roll-expand-h {
+    animation: cardRollExpandH 0.16s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
-@keyframes cardExpandIn {
-    0% {
-        opacity: 0.65;
-        transform: scaleX(0.72) scaleY(0.55);
-    }
-    45% {
-        opacity: 0.92;
-        transform: scaleX(1) scaleY(0.55);
-    }
-    100% {
-        opacity: 1;
-        transform: scaleX(1) scaleY(1);
-    }
+.mini-card.card-roll-expand-v {
+    animation: cardRollExpandV 0.16s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
-@keyframes cardCollapseOut {
-    0% {
-        opacity: 1;
-        transform: scaleX(1) scaleY(1);
-        box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
-    }
-    45% {
-        opacity: 0.75;
-        transform: scaleX(1) scaleY(0.55);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
-    }
-    100% {
-        opacity: 0.45;
-        transform: scaleX(0.72) scaleY(0.55);
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
-    }
+.mini-card.card-roll-collapse-v {
+    animation: cardRollCollapseV 0.16s cubic-bezier(0.4, 0, 0.85, 1) forwards;
 }
 
-html[data-card-animations="0"] .mini-card.card-animate-expand,
-html[data-card-animations="0"] .mini-card.card-animate-collapse {
+.mini-card.card-roll-collapse-h {
+    animation: cardRollCollapseH 0.16s cubic-bezier(0.4, 0, 0.85, 1) forwards;
+}
+
+@keyframes cardRollExpandH {
+    from { clip-path: inset(0 55% 0 0 round 4px); }
+    to { clip-path: inset(0 0 0 0 round 4px); }
+}
+
+@keyframes cardRollExpandV {
+    from { clip-path: inset(0 0 var(--roll-clip-bottom, 72%) 0 round 4px); }
+    to { clip-path: inset(0 0 0 0 round 4px); }
+}
+
+@keyframes cardRollCollapseV {
+    from { clip-path: inset(0 0 0 0 round 4px); }
+    to { clip-path: inset(0 0 var(--roll-clip-bottom, 72%) 0 round 4px); }
+}
+
+@keyframes cardRollCollapseH {
+    from { clip-path: inset(0 0 var(--roll-clip-bottom, 72%) 0 round 4px); }
+    to { clip-path: inset(0 55% 0 0 round 4px); }
+}
+
+html[data-card-animations="0"] .mini-card.card-roll-expand-h,
+html[data-card-animations="0"] .mini-card.card-roll-expand-v,
+html[data-card-animations="0"] .mini-card.card-roll-collapse-v,
+html[data-card-animations="0"] .mini-card.card-roll-collapse-h {
     animation: none;
 }
 
@@ -887,12 +886,17 @@ html[data-card-animations="0"] .mini-card.card-state-changing .card-body {
     transition: none;
 }
 
-.mini-card.card-state-changing {
+.mini-card.card-state-changing:not(.card-roll-busy) {
     transition: max-height 0.2s ease, padding 0.2s ease, width 0.2s ease, box-shadow 0.18s ease;
 }
 
-.mini-card.card-state-changing .card-body {
+.mini-card.card-state-changing:not(.card-roll-busy) .card-body {
     transition: opacity 0.15s ease;
+}
+
+.mini-card.card-roll-busy.card-state-changing,
+.mini-card.card-roll-busy.card-state-changing .card-body {
+    transition: none;
 }
 
 /* ==========================================================================

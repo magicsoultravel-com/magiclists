@@ -70,8 +70,16 @@ const CANVAS_LAYOUT_ORDER_KEY = 'matrix_canvas_layout_order';
 const GRID_LAYOUT_KEY = 'matrix_grid_layout';
 const GRID_PINS_KEY = 'matrix_grid_pins';
 const GRID_EXPANDED_KEY = 'matrix_grid_expanded_id';
-const CARD_EXPAND_ANIM_MS = 280;
-const CARD_COLLAPSE_ANIM_MS = 260;
+const CARD_ROLL_PHASE_MS = 160;
+const CARD_EXPAND_ANIM_MS = 320;
+const CARD_COLLAPSE_ANIM_MS = 320;
+const CARD_ROLL_COMPACT_H = 56;
+const CARD_ROLL_PHASE_CLASSES = [
+    'card-roll-expand-h',
+    'card-roll-expand-v',
+    'card-roll-collapse-v',
+    'card-roll-collapse-h'
+];
 
 export function cardAnimationsEnabled() {
     return document.documentElement.dataset.cardAnimations !== '0';
@@ -779,7 +787,7 @@ export const UI = {
         } else if (card.dataset.columnNote === '1') {
             setExpandedCard('columns', item.id, false);
         }
-        card.classList.remove('expanded', 'card-animate-expand', 'card-animate-collapse', 'card-state-changing');
+        card.classList.remove('expanded', 'card-state-changing', 'card-roll-busy', ...CARD_ROLL_PHASE_CLASSES);
         card.classList.add('compact');
         this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
         if (card.dataset.gridBoard === '1') {
@@ -1743,15 +1751,54 @@ export const UI = {
         }
     },
 
+    isCardRollAnimating(card) {
+        if (!card) return false;
+        return card.classList.contains('card-roll-busy')
+            || CARD_ROLL_PHASE_CLASSES.some((cls) => card.classList.contains(cls));
+    },
+
+    cleanupCardRoll(card) {
+        if (!card) return;
+        card.classList.remove('card-state-changing', 'card-roll-busy', ...CARD_ROLL_PHASE_CLASSES);
+        card.style.removeProperty('--roll-clip-bottom');
+        card.style.removeProperty('clip-path');
+    },
+
+    prepareRollClipBottom(card, compactHeight = CARD_ROLL_COMPACT_H) {
+        const h = card.getBoundingClientRect().height;
+        if (h <= compactHeight + 1) {
+            card.style.setProperty('--roll-clip-bottom', '0%');
+            return;
+        }
+        const pct = ((h - compactHeight) / h) * 100;
+        card.style.setProperty('--roll-clip-bottom', `${pct.toFixed(2)}%`);
+    },
+
+    runCardRollPhase(card, phaseClass) {
+        return new Promise((resolve) => {
+            let finished = false;
+            const finish = () => {
+                if (finished) return;
+                finished = true;
+                card.classList.remove(phaseClass);
+                card.removeEventListener('animationend', onEnd);
+                clearTimeout(timer);
+                resolve();
+            };
+            const onEnd = (e) => {
+                if (e.target !== card) return;
+                finish();
+            };
+            card.classList.add(phaseClass);
+            card.addEventListener('animationend', onEnd);
+            const timer = setTimeout(finish, CARD_ROLL_PHASE_MS + 50);
+        });
+    },
+
     applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, options = {}) {
         const isFreeform = card.dataset.freeform === '1';
         const isGridBoard = card.dataset.gridBoard === '1';
         const animate = cardAnimationsEnabled();
-        if (animate) card.classList.add('card-state-changing');
-
-        const cleanup = () => {
-            card.classList.remove('card-state-changing', 'card-animate-expand', 'card-animate-collapse');
-        };
 
         const reflowColumnNote = () => {
             if (card.dataset.columnNote !== '1') return;
@@ -1789,83 +1836,62 @@ export const UI = {
             });
         };
 
+        const finishExpand = () => {
+            reflowColumnNote();
+            reflowColumnsFloat();
+            reflowGridBoard();
+            this.cleanupCardRoll(card);
+        };
+
+        const finishCollapse = () => {
+            card.classList.remove('expanded');
+            card.classList.add('compact');
+            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
+            if (isFreeform) this.applyFreeformSize(card);
+            if (isGridBoard) {
+                this.applyGridBoardSize(card);
+                reflowGridBoard();
+            }
+            reflowColumnNote();
+            reflowColumnsFloat();
+            this.cleanupCardRoll(card);
+        };
+
         if (expanded) {
-            card.classList.remove('compact');
-            card.classList.add('expanded');
-            if (animate) card.classList.add('card-animate-expand');
-            this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
-            reflowColumnNote();
-            reflowColumnsFloat();
-            reflowGridBoard();
-            if (animate) {
-                card.addEventListener('animationend', cleanup, { once: true });
-                setTimeout(cleanup, CARD_EXPAND_ANIM_MS);
-            } else {
-                cleanup();
+            if (!animate) {
+                card.classList.remove('compact');
+                card.classList.add('expanded');
+                this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
+                finishExpand();
+                return;
             }
+
+            const compactHeight = card.getBoundingClientRect().height || CARD_ROLL_COMPACT_H;
+            card.classList.add('card-roll-busy', 'card-state-changing');
+            void this.runCardRollPhase(card, 'card-roll-expand-h').then(() => {
+                card.classList.remove('compact');
+                card.classList.add('expanded');
+                this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
+                this.prepareRollClipBottom(card, compactHeight);
+                return this.runCardRollPhase(card, 'card-roll-expand-v');
+            }).then(() => {
+                finishExpand();
+            });
             return;
         }
 
-        const finishFreeformCollapse = () => {
-            card.classList.remove('expanded', 'card-animate-expand', 'card-animate-collapse');
-            card.classList.add('compact');
-            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
-            cleanup();
-            this.applyFreeformSize(card);
-        };
-
-        const finishGridCollapse = () => {
-            card.classList.remove('expanded', 'card-animate-expand', 'card-animate-collapse');
-            card.classList.add('compact');
-            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
-            cleanup();
-            this.applyGridBoardSize(card);
-            reflowGridBoard();
-        };
-
-        const finishColumnCollapse = () => {
-            card.classList.remove('expanded', 'card-animate-expand');
-            card.classList.add('compact');
-            if (animate) card.classList.remove('card-animate-collapse');
-            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
-            reflowColumnNote();
-            reflowColumnsFloat();
-            cleanup();
-        };
-
-        if (isFreeform) {
-            if (animate) {
-                card.classList.add('card-animate-collapse');
-                card.addEventListener('animationend', finishFreeformCollapse, { once: true });
-                setTimeout(finishFreeformCollapse, CARD_COLLAPSE_ANIM_MS);
-            } else {
-                finishFreeformCollapse();
-            }
+        if (!animate) {
+            finishCollapse();
             return;
         }
 
-        if (isGridBoard) {
-            if (animate) {
-                card.classList.add('card-animate-collapse');
-                card.addEventListener('animationend', finishGridCollapse, { once: true });
-                setTimeout(finishGridCollapse, CARD_COLLAPSE_ANIM_MS);
-            } else {
-                finishGridCollapse();
-            }
-            return;
-        }
-
-        if (animate) {
-            card.classList.remove('expanded', 'card-animate-expand');
-            card.classList.add('compact', 'card-animate-collapse');
-            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
-            reflowColumnNote();
-            reflowColumnsFloat();
-            card.addEventListener('animationend', cleanup, { once: true });
-            setTimeout(cleanup, CARD_COLLAPSE_ANIM_MS);
-        } else {
-            finishColumnCollapse();
-        }
+        card.classList.add('card-roll-busy', 'card-state-changing');
+        this.prepareRollClipBottom(card);
+        void this.runCardRollPhase(card, 'card-roll-collapse-v').then(() => {
+            return this.runCardRollPhase(card, 'card-roll-collapse-h');
+        }).then(() => {
+            finishCollapse();
+        });
     },
 
     updateColumnsFloatCard(card, item, { expanded, dimensions = null } = {}) {
@@ -1939,7 +1965,7 @@ export const UI = {
     },
 
     toggleCardExpanded(card, item, ctx) {
-        if (card.classList.contains('card-animate-collapse')) return;
+        if (this.isCardRollAnimating(card)) return;
 
         const willExpand = !card.classList.contains('expanded');
 
