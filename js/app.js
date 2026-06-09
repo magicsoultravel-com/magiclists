@@ -21,6 +21,7 @@ import { exportAppCode } from './codeExport.js';
 import { readViewSessions, restoreViewSession } from './viewSession.js';
 import { DrawingBoard, getDrawingBackupKeys } from './drawingBoard.js';
 import { SearchBar } from './searchBar.js';
+import { Fullscreen } from './fullscreen.js';
 import { positionPopoverBelowAnchor } from './popoverPosition.js';
 
 function countHiddenFromBoard(items) {
@@ -92,6 +93,7 @@ class Application {
         this.setupFab();
         this.setupUndo();
         this.setupDrawingMode();
+        Fullscreen.init();
         DrawingBoard.init({ onExit: () => this.switchWorkspaceMode('notes') });
         if (AppState.workspaceMode === 'drawing') {
             requestAnimationFrame(() => this.applyWorkspaceMode('drawing', { skipPersist: true }));

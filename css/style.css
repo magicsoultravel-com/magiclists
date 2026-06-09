@@ -708,10 +708,19 @@ body {
     border-right: 1px solid var(--border-color);
 }
 
-.control-bar-actions .control-bar-search {
+.control-bar-actions-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: nowrap;
+    min-width: 0;
+}
+
+.control-bar-end .control-bar-search {
     margin-right: 0.1rem;
-    padding-right: 0.35rem;
+    padding-right: 0.5rem;
     border-right: 1px solid var(--border-color);
+    flex-shrink: 1;
 }
 
 .history-controls .btn--icon:disabled {
@@ -876,8 +885,9 @@ html[data-card-animations="0"] .mini-card.card-state-changing .card-body {
     align-items: center;
     justify-content: flex-start;
     gap: 0.75rem;
-    padding: 1rem 1.5rem;
-    background-color: var(--chrome-bg, var(--bg-surface));
+    min-height: 58px;
+    padding: 0.75rem 1rem;
+    background: var(--chrome-bg, var(--bg-surface));
     border-bottom: 1px solid var(--border-color);
     flex-shrink: 0;
 }
@@ -889,7 +899,9 @@ html[data-card-animations="0"] .mini-card.card-state-changing .card-body {
     gap: 0.65rem;
     margin-left: auto;
     min-width: 0;
-    flex-shrink: 0;
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    overflow: hidden;
 }
 
 .control-bar-actions {
@@ -3499,13 +3511,6 @@ textarea.form-input {
 /* ==========================================================================
    8. PRESENTATION REFRESH
    ========================================================================== */
-#control-bar {
-    min-height: 58px;
-    padding: 0.75rem 1rem;
-    background: var(--chrome-bg, #151519);
-    justify-content: flex-start;
-}
-
 .logo-zone {
     display: inline-flex;
     align-items: center;
@@ -4635,8 +4640,13 @@ textarea.form-input {
 .editor-meta-stats {
     display: inline-flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 0.25rem;
     min-width: 0;
+}
+
+#editor-overlay .editor-meta-row--footer {
+    justify-content: flex-end;
 }
 
 .editor-note-header .mini-card-title {
@@ -5258,6 +5268,7 @@ html[data-app-theme="monochrome"] #editor-overlay .step-text {
 
 html[data-app-theme="monochrome"] .mini-card .category-name,
 html[data-app-theme="monochrome"] .mini-card .editor-created-date,
+html[data-app-theme="monochrome"] .mini-card .editor-note-lines,
 html[data-app-theme="monochrome"] .mini-card .badge-dot,
 html[data-app-theme="monochrome"] .mini-card .checklist-badge {
     color: #9ca3af !important;
@@ -5403,6 +5414,7 @@ html[data-app-theme="matrix"]:not([data-note-font="default"]) .mini-card .step-t
 
 html[data-app-theme="matrix"] .mini-card .category-name,
 html[data-app-theme="matrix"] .mini-card .editor-created-date,
+html[data-app-theme="matrix"] .mini-card .editor-note-lines,
 html[data-app-theme="matrix"] .mini-card .checklist-badge {
     color: rgba(57, 255, 101, 0.55) !important;
 }
@@ -5483,6 +5495,7 @@ html[data-app-theme="casual"][data-note-font="default"] #editor-overlay .editor-
 
 html[data-app-theme="casual"] .mini-card .category-name,
 html[data-app-theme="casual"] .mini-card .editor-created-date,
+html[data-app-theme="casual"] .mini-card .editor-note-lines,
 html[data-app-theme="casual"] .mini-card .checklist-badge {
     color: #6b8ab0 !important;
 }
@@ -5562,6 +5575,7 @@ html[data-app-theme="casual-dark"][data-note-font="default"] #editor-overlay .ed
 
 html[data-app-theme="casual-dark"] .mini-card .category-name,
 html[data-app-theme="casual-dark"] .mini-card .editor-created-date,
+html[data-app-theme="casual-dark"] .mini-card .editor-note-lines,
 html[data-app-theme="casual-dark"] .mini-card .checklist-badge {
     color: #8fa8c4 !important;
 }
@@ -5606,7 +5620,7 @@ html[data-app-theme="casual-dark"] .mini-card.compact .card-actions::before {
     inset: 0;
     z-index: 2;
     overflow: hidden;
-    background: var(--desktop-bg, var(--bg-main));
+    background: var(--desktop-bg, var(--bg-primary));
 }
 
 .drawing-board.is-hidden {
@@ -5674,7 +5688,7 @@ html[data-app-theme="casual-dark"] .mini-card.compact .card-actions::before {
 }
 
 .drawing-color-swatch.is-active {
-    box-shadow: 0 0 0 2px var(--accent-color, #6b9fd4);
+    box-shadow: 0 0 0 2px var(--accent);
 }
 
 .drawing-color-input {
@@ -5718,10 +5732,19 @@ html[data-app-theme="casual-dark"] .mini-card.compact .card-actions::before {
 
 #control-bar.is-drawing-toolbar .draw-style-btn.active,
 #control-bar.is-drawing-toolbar .draw-tool-btn.active {
-    background: var(--accent-color, rgba(107, 159, 212, 0.35));
-    color: var(--text-primary);
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+    color: var(--text-main);
 }
 
 #btn-drawing-mode.active {
-    background: var(--accent-color, rgba(107, 159, 212, 0.35));
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+#btn-fullscreen.is-active {
+    color: var(--accent);
+}
+
+#workspace-shell[data-drawing-mode] #control-bar-search,
+#workspace-shell[data-drawing-mode] #btn-fullscreen {
+    display: none;
 }
