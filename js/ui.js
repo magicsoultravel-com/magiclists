@@ -537,10 +537,58 @@ export const UI = {
     },
 
     prepareInlineOpSnapshot(root, item, localOnly = false) {
-        if (localOnly) return null;
         const shell = root.closest('.editor-note-shell') || root;
         this.syncItemBodyFromDom(shell, item);
+        if (localOnly) return null;
         return this.snapshotItem(item);
+    },
+
+    ensureChecklistStepFromRow(row, item) {
+        const stepId = row?.dataset?.stepId;
+        if (!stepId || !item) return null;
+        if (!item.steps) item.steps = [];
+        let step = item.steps.find((s) => s.id === stepId);
+        if (!step) {
+            step = this.createBlankChecklistStep();
+            step.id = stepId;
+            step.level = Number(row.dataset.level) || 0;
+            step.completed = row.classList.contains('step-row--done');
+            const prevRow = this.findAdjacentChecklistStepRow(row, 'prev');
+            const prevId = prevRow?.dataset?.stepId;
+            if (prevId) {
+                const idx = item.steps.findIndex((s) => s.id === prevId);
+                item.steps.splice(idx >= 0 ? idx + 1 : item.steps.length, 0, step);
+            } else {
+                item.steps.unshift(step);
+            }
+            if (item.type !== 'checklist') item.type = 'checklist';
+        }
+        const textEl = row.querySelector('[data-field="step-text"]');
+        if (textEl) this.syncInlineFieldToItem(textEl, step);
+        return step;
+    },
+
+    expandChecklistAncestorsForStep(item, stepId) {
+        const steps = item?.steps || [];
+        const idx = steps.findIndex((s) => s.id === stepId);
+        if (idx < 0) return;
+        const collapsed = this.getChecklistCollapsedKeys();
+        let changed = false;
+        let childLevel = getStepLevel(steps[idx]);
+        for (let i = idx - 1; i >= 0 && childLevel > 0; i--) {
+            const level = getStepLevel(steps[i]);
+            if (level < childLevel) {
+                const key = `${item.id}:${steps[i].id}`;
+                if (collapsed[key]) {
+                    delete collapsed[key];
+                    changed = true;
+                }
+                childLevel = level;
+            }
+        }
+        if (changed) {
+            localStorage.setItem('matrix_checklist_collapsed', JSON.stringify(collapsed));
+        }
     },
 
     commitInlineChecklistOp(item, beforeItem, { localOnly = false } = {}) {
@@ -3451,16 +3499,21 @@ export const UI = {
             root.querySelectorAll('.step-indent-btn').forEach((btn) => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
                     const row = btn.closest('.step-row--display');
                     const stepId = row?.dataset.stepId;
                     if (!stepId) return;
+                    this.ensureChecklistStepFromRow(row, item);
+                    const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
                     applyMutate((it) => {
-                        const step = it.steps.find(s => s.id === stepId);
+                        const step = it.steps.find((s) => s.id === stepId);
                         if (!step) return;
                         step.level = Math.min(4, getStepLevel(step) + 1);
                     }, { persist: false });
+                    this.expandChecklistAncestorsForStep(item, stepId);
+                    const host = root.closest('.mini-card') || root;
+                    this.scheduleChecklistStepFocus(root, stepId, { edge: 'start' });
                     refresh();
+                    this.focusPendingChecklistStep(host);
                     this.commitInlineChecklistOp(item, beforeItem, { localOnly });
                 });
             });
@@ -3468,16 +3521,21 @@ export const UI = {
             root.querySelectorAll('.step-outdent-btn').forEach((btn) => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
-                    const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
                     const row = btn.closest('.step-row--display');
                     const stepId = row?.dataset.stepId;
                     if (!stepId) return;
+                    this.ensureChecklistStepFromRow(row, item);
+                    const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
                     applyMutate((it) => {
-                        const step = it.steps.find(s => s.id === stepId);
+                        const step = it.steps.find((s) => s.id === stepId);
                         if (!step) return;
                         step.level = Math.max(0, getStepLevel(step) - 1);
                     }, { persist: false });
+                    this.expandChecklistAncestorsForStep(item, stepId);
+                    const host = root.closest('.mini-card') || root;
+                    this.scheduleChecklistStepFocus(root, stepId, { edge: 'start' });
                     refresh();
+                    this.focusPendingChecklistStep(host);
                     this.commitInlineChecklistOp(item, beforeItem, { localOnly });
                 });
             });
@@ -3587,11 +3645,15 @@ export const UI = {
             if (moved) {
                 applyMutate((it) => {
                     const activeIds = getActiveRows().map((r) => r.dataset.stepId);
+                    const visibleIdSet = new Set(activeIds);
                     const doneSteps = it.steps.filter((step) => step.completed);
-                    const activeSteps = activeIds
+                    const activeFromDom = activeIds
                         .map((id) => it.steps.find((step) => step.id === id))
                         .filter(Boolean);
-                    it.steps = [...activeSteps, ...doneSteps];
+                    const hiddenActive = it.steps.filter(
+                        (step) => !step.completed && !visibleIdSet.has(step.id)
+                    );
+                    it.steps = [...activeFromDom, ...hiddenActive, ...doneSteps];
                 });
                 refresh();
             }
