@@ -44,7 +44,7 @@ export const SidePanel = {
         container.title = 'Notes: note content · Matrix: categories, layouts, view state · App: theme, tools, session';
     },
 
-    moveBrand(collapsed, animate = true) {
+    moveBrand(collapsed, { animate = true, fadeIn = false } = {}) {
         const brandWrap = document.querySelector('.control-bar-brand');
         const sidebarHost = document.getElementById('side-panel-brand-host');
         const controlHost = document.getElementById('control-bar-brand-host');
@@ -63,6 +63,20 @@ export const SidePanel = {
         brandWrap.classList.toggle('is-in-sidebar', !collapsed);
         brandWrap.classList.toggle('is-in-header', collapsed);
 
+        this.brandAnim?.cancel();
+        brandWrap.classList.remove('is-brand-animating', 'is-brand-fade-in');
+
+        if (fadeIn) {
+            brandWrap.classList.add('is-brand-fade-in');
+            const onFadeEnd = (e) => {
+                if (e.animationName !== 'control-bar-brand-fade-in') return;
+                brandWrap.classList.remove('is-brand-fade-in');
+                brandWrap.removeEventListener('animationend', onFadeEnd);
+            };
+            brandWrap.addEventListener('animationend', onFadeEnd);
+            return;
+        }
+
         if (!animate || !fromRect) return;
 
         const toRect = brandWrap.getBoundingClientRect();
@@ -70,12 +84,11 @@ export const SidePanel = {
         const dy = fromRect.top - toRect.top;
         if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
 
-        this.brandAnim?.cancel();
         brandWrap.classList.add('is-brand-animating');
         this.brandAnim = brandWrap.animate(
             [
-                { transform: `translate(${dx}px, ${dy}px)`, opacity: 0.72 },
-                { transform: 'translate(0, 0)', opacity: 1 }
+                { transform: `translate(${dx}px, ${dy}px)` },
+                { transform: 'translate(0, 0)' }
             ],
             {
                 duration: BRAND_TRANSITION_MS,
@@ -89,20 +102,40 @@ export const SidePanel = {
         };
     },
 
+    finishOpenPanel() {
+        this.moveBrand(false, { animate: false, fadeIn: true });
+    },
+
     setCollapsed(collapsed, animate = true) {
         if (!collapsed && animate) {
             this.panel?.classList.remove('is-collapsed');
             this.toggleBtn?.setAttribute('aria-expanded', 'true');
             localStorage.setItem('matrix_panel_collapsed', 'false');
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    this.moveBrand(false, true);
-                });
-            });
+
+            const panel = this.panel;
+            if (!panel) {
+                this.finishOpenPanel();
+                return;
+            }
+
+            let done = false;
+            const finish = () => {
+                if (done) return;
+                done = true;
+                panel.removeEventListener('transitionend', onTransitionEnd);
+                this.finishOpenPanel();
+            };
+
+            const onTransitionEnd = (e) => {
+                if (e.target === panel && e.propertyName === 'width') finish();
+            };
+
+            panel.addEventListener('transitionend', onTransitionEnd);
+            window.setTimeout(finish, BRAND_TRANSITION_MS + 40);
             return;
         }
 
-        this.moveBrand(collapsed, animate);
+        this.moveBrand(collapsed, { animate });
         this.panel?.classList.toggle('is-collapsed', collapsed);
         this.toggleBtn?.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         localStorage.setItem('matrix_panel_collapsed', collapsed ? 'true' : 'false');

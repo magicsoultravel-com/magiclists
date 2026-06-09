@@ -430,15 +430,10 @@ body {
     padding: 0 0 0.35rem;
     margin-bottom: 0.15rem;
     border-bottom: 1px solid var(--border-color);
-    opacity: 0;
-    transform: translateY(-4px);
-    transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .side-panel-brand-host.is-visible {
     display: block;
-    opacity: 1;
-    transform: translateY(0);
 }
 
 .side-panel-brand-host .control-bar-brand {
@@ -448,15 +443,10 @@ body {
 .control-bar-brand-host {
     display: none;
     flex-shrink: 0;
-    opacity: 0;
-    transform: translateX(-6px);
-    transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .control-bar-brand-host.is-visible {
     display: block;
-    opacity: 1;
-    transform: translateX(0);
 }
 
 .side-panel-scroll {
@@ -718,7 +708,13 @@ body {
     display: flex;
     align-items: center;
     gap: 0.15rem;
-    margin-right: 0.15rem;
+    margin-right: 0.1rem;
+    padding-right: 0.3rem;
+    border-right: 1px solid var(--border-color);
+}
+
+.control-bar-actions .control-bar-search {
+    margin-right: 0.1rem;
     padding-right: 0.35rem;
     border-right: 1px solid var(--border-color);
 }
@@ -836,39 +832,35 @@ body {
 }
 
 .mini-card.card-roll-expand-h {
-    animation: cardRollExpandH 0.16s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: cardRollExpandH var(--roll-phase-duration, 0.22s) cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .mini-card.card-roll-expand-v {
-    animation: cardRollExpandV 0.16s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: cardRollExpandV var(--roll-phase-duration, 0.28s) cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .mini-card.card-roll-collapse-v {
-    animation: cardRollCollapseV 0.16s cubic-bezier(0.4, 0, 0.85, 1) forwards;
+    animation: cardRollCollapseV var(--roll-phase-duration, 0.28s) cubic-bezier(0.4, 0, 0.85, 1) forwards;
 }
 
 .mini-card.card-roll-collapse-h {
-    animation: cardRollCollapseH 0.16s cubic-bezier(0.4, 0, 0.85, 1) forwards;
+    animation: cardRollCollapseH var(--roll-phase-duration, 0.22s) cubic-bezier(0.4, 0, 0.85, 1) forwards;
 }
 
 @keyframes cardRollExpandH {
-    from { clip-path: inset(0 55% 0 0 round 4px); }
     to { clip-path: inset(0 0 0 0 round 4px); }
 }
 
 @keyframes cardRollExpandV {
-    from { clip-path: inset(0 0 var(--roll-clip-bottom, 72%) 0 round 4px); }
     to { clip-path: inset(0 0 0 0 round 4px); }
 }
 
 @keyframes cardRollCollapseV {
-    from { clip-path: inset(0 0 0 0 round 4px); }
-    to { clip-path: inset(0 0 var(--roll-clip-bottom, 72%) 0 round 4px); }
+    to { clip-path: inset(0 0 var(--roll-clip-bottom, 0px) 0 round 4px); }
 }
 
 @keyframes cardRollCollapseH {
-    from { clip-path: inset(0 0 var(--roll-clip-bottom, 72%) 0 round 4px); }
-    to { clip-path: inset(0 55% 0 0 round 4px); }
+    to { clip-path: inset(0 var(--roll-clip-right, 0px) var(--roll-clip-bottom, 0px) 0 round 4px); }
 }
 
 html[data-card-animations="0"] .mini-card.card-roll-expand-h,
@@ -937,10 +929,6 @@ html[data-card-animations="0"] .mini-card.card-state-changing .card-body {
     align-items: center;
     flex: 0 1 auto;
     min-width: 0;
-    margin-left: 0.25rem;
-    margin-right: 0.35rem;
-    padding-right: 0.5rem;
-    border-right: 1px solid var(--border-color);
 }
 
 .control-bar-search-field {
@@ -1712,6 +1700,15 @@ html[data-note-font="kalam"] .mini-card .step-text {
 
 .control-bar-brand.is-brand-animating {
     pointer-events: none;
+}
+
+.control-bar-brand.is-brand-fade-in {
+    animation: control-bar-brand-fade-in 0.18s ease forwards;
+}
+
+@keyframes control-bar-brand-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 .control-bar-menu-btn {

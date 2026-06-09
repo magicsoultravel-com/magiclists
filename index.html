@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&family=Comic+Neue:wght@400;700&family=Fredericka+the+Great&family=IBM+Plex+Mono:wght@400;500&family=Indie+Flower&family=Inter:wght@400;600&family=JetBrains+Mono:wght@400;600&family=Kalam:wght@400;700&family=Merriweather:wght@400;700&family=Orbitron:wght@500;700&family=Overpass+Mono:wght@400;500&family=Patrick+Hand&family=Permanent+Marker&family=Press+Start+2P&family=Sacramento&family=Shadows+Into+Light&family=Share+Tech+Mono&family=VT323&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="./css/style.css?v=dev_1.8.13">
+    <link rel="stylesheet" href="./css/style.css?v=dev_1.8.14">
     <link rel="stylesheet" href="./css/tools.css?v=dev_1.0.0">
     <link rel="stylesheet" href="./css/calendar.css?v=dev_1.1.0">
 </head>
@@ -139,18 +139,18 @@
                     <div id="app-brand" class="app-brand">magicNotes</div>
                 </div>
                 </div>
-                <div id="control-bar-search" class="control-bar-search">
-                    <div class="control-bar-search-field">
-                        <input type="search" id="workspace-search-input" class="control-bar-search-input form-input" placeholder="Search…" aria-label="Search notes" autocomplete="off" spellcheck="false" aria-expanded="false" aria-controls="workspace-search-panel">
-                        <button type="button" id="workspace-search-clear" class="control-bar-search-clear" title="Clear search" aria-label="Clear search">×</button>
-                    </div>
-                    <div id="workspace-search-panel" class="search-results-panel is-hidden" role="listbox" aria-label="Search results"></div>
-                </div>
                 <div class="control-bar-end">
                     <div id="control-bar-actions" class="control-bar-actions">
                         <div id="history-controls" class="history-controls is-hidden">
                             <button type="button" id="btn-undo" class="btn btn--compact btn--icon" disabled title="Undo (Ctrl+Z)" aria-label="Undo"></button>
                             <button type="button" id="btn-redo" class="btn btn--compact btn--icon" disabled title="Redo (Ctrl+Y)" aria-label="Redo"></button>
+                        </div>
+                        <div id="control-bar-search" class="control-bar-search">
+                            <div class="control-bar-search-field">
+                                <input type="search" id="workspace-search-input" class="control-bar-search-input form-input" placeholder="Search…" aria-label="Search notes" autocomplete="off" spellcheck="false" aria-expanded="false" aria-controls="workspace-search-panel">
+                                <button type="button" id="workspace-search-clear" class="control-bar-search-clear" title="Clear search" aria-label="Clear search">×</button>
+                            </div>
+                            <div id="workspace-search-panel" class="search-results-panel is-hidden" role="listbox" aria-label="Search results"></div>
                         </div>
                         <button type="button" id="btn-display-options" class="btn btn--compact btn--icon" title="Display options" aria-label="Display options" aria-expanded="false" aria-haspopup="menu"></button>
                         <button type="button" id="btn-focus-mode" class="btn btn--compact btn--icon" title="Focus mode" aria-label="Focus mode" aria-expanded="false" aria-haspopup="menu"></button>

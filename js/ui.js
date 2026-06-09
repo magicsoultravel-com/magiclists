@@ -70,9 +70,12 @@ const CANVAS_LAYOUT_ORDER_KEY = 'matrix_canvas_layout_order';
 const GRID_LAYOUT_KEY = 'matrix_grid_layout';
 const GRID_PINS_KEY = 'matrix_grid_pins';
 const GRID_EXPANDED_KEY = 'matrix_grid_expanded_id';
-const CARD_ROLL_PHASE_MS = 160;
-const CARD_EXPAND_ANIM_MS = 320;
-const CARD_COLLAPSE_ANIM_MS = 320;
+const CARD_ROLL_PHASE_H_MS = 220;
+const CARD_ROLL_PHASE_V_MIN_MS = 220;
+const CARD_ROLL_PHASE_V_MAX_MS = 480;
+const CARD_ROLL_PHASE_GAP_MS = 40;
+const CARD_EXPAND_ANIM_MS = CARD_ROLL_PHASE_H_MS + CARD_ROLL_PHASE_V_MAX_MS + CARD_ROLL_PHASE_GAP_MS * 2;
+const CARD_COLLAPSE_ANIM_MS = CARD_EXPAND_ANIM_MS;
 const CARD_ROLL_COMPACT_H = 56;
 const CARD_ROLL_PHASE_CLASSES = [
     'card-roll-expand-h',
@@ -1707,7 +1710,7 @@ export const UI = {
 
         if (dimensions) {
             this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
-        } else {
+        } else if (!expanded || !cardAnimationsEnabled()) {
             this.applyGridBoardSize(card);
         }
 
@@ -1746,7 +1749,7 @@ export const UI = {
 
         if (dimensions) {
             this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
-        } else if (expanded) {
+        } else if (expanded && !cardAnimationsEnabled()) {
             this.applyFreeformSize(card);
         }
     },
@@ -1761,37 +1764,123 @@ export const UI = {
         if (!card) return;
         card.classList.remove('card-state-changing', 'card-roll-busy', ...CARD_ROLL_PHASE_CLASSES);
         card.style.removeProperty('--roll-clip-bottom');
+        card.style.removeProperty('--roll-clip-right');
+        card.style.removeProperty('--roll-phase-duration');
         card.style.removeProperty('clip-path');
+        card.style.removeProperty('-webkit-clip-path');
+        card.style.removeProperty('overflow');
+        card.style.removeProperty('transition');
     },
 
-    prepareRollClipBottom(card, compactHeight = CARD_ROLL_COMPACT_H) {
-        const h = card.getBoundingClientRect().height;
-        if (h <= compactHeight + 1) {
-            card.style.setProperty('--roll-clip-bottom', '0%');
+    waitRollPaintGap() {
+        return new Promise((resolve) => {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    setTimeout(resolve, CARD_ROLL_PHASE_GAP_MS);
+                });
+            });
+        });
+    },
+
+    setRollClip(card, clipPath) {
+        if (!clipPath || clipPath === 'none') {
+            card.style.removeProperty('clip-path');
+            card.style.removeProperty('-webkit-clip-path');
             return;
         }
-        const pct = ((h - compactHeight) / h) * 100;
-        card.style.setProperty('--roll-clip-bottom', `${pct.toFixed(2)}%`);
+        card.style.clipPath = clipPath;
+        card.style.setProperty('-webkit-clip-path', clipPath);
     },
 
-    runCardRollPhase(card, phaseClass) {
+    resolveRollCompactWidth(card) {
+        const id = card.dataset?.id;
+        if (card.dataset.freeform === '1') return FREEFORM_DEFAULT_W;
+        if (card.dataset.gridBoard === '1' && id) {
+            const saved = this.getGridLayout()[id];
+            if (saved?.customCompact && this.isGridMultiCellSize(saved.w, saved.h)) {
+                return saved.w;
+            }
+            return COLUMN_GRID_CELL_W;
+        }
+        return Math.round(card.getBoundingClientRect().width) || FREEFORM_DEFAULT_W;
+    },
+
+    resolveRollExpandedWidth(card, item) {
+        const id = card.dataset?.id || item?.id;
+        if (card.dataset.freeform === '1' && id) {
+            const saved = this.getFreeformSizes()[id];
+            return saved?.w ?? FREEFORM_EXPANDED_W;
+        }
+        if (card.dataset.gridBoard === '1' && id) {
+            const saved = this.getGridLayout()[id];
+            if (saved && Number.isFinite(saved.w)) return saved.w;
+            return this.cellsToSpanW(2);
+        }
+        return Math.round(card.getBoundingClientRect().width) || FREEFORM_EXPANDED_W;
+    },
+
+    resolveRollCompactHeight(card) {
+        if (card.dataset.gridBoard === '1') {
+            const saved = this.getGridLayout()[card.dataset.id];
+            const compact = this.gridCompactRect(
+                { x: 0, y: 0, w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H },
+                saved
+            );
+            return compact.h;
+        }
+        if (card.dataset.freeform === '1') return FREEFORM_DEFAULT_H;
+        return CARD_ROLL_COMPACT_H;
+    },
+
+    computeRollClipBottomPx(card, visibleHeight) {
+        const h = card.getBoundingClientRect().height;
+        return Math.max(0, Math.round(h - visibleHeight));
+    },
+
+    computeRollClipRightPx(card, visibleWidth) {
+        const w = card.getBoundingClientRect().width;
+        return Math.max(0, Math.round(w - visibleWidth));
+    },
+
+    rollPhaseDurationV(clipPx) {
+        return Math.min(
+            CARD_ROLL_PHASE_V_MAX_MS,
+            Math.max(CARD_ROLL_PHASE_V_MIN_MS, 180 + clipPx * 0.55)
+        );
+    },
+
+    lockRollHeight(card, heightPx) {
+        card.style.setProperty('height', `${heightPx}px`, 'important');
+        card.style.setProperty('min-height', `${heightPx}px`, 'important');
+        card.style.setProperty('max-height', `${heightPx}px`, 'important');
+        card.style.overflow = 'hidden';
+    },
+
+    beginRollPhase(card, phaseClass, durationMs) {
         return new Promise((resolve) => {
+            card.style.setProperty('--roll-phase-duration', `${durationMs}ms`);
             let finished = false;
             const finish = () => {
                 if (finished) return;
                 finished = true;
+                const clip = getComputedStyle(card).clipPath;
                 card.classList.remove(phaseClass);
                 card.removeEventListener('animationend', onEnd);
                 clearTimeout(timer);
+                card.style.removeProperty('--roll-phase-duration');
+                if (clip && clip !== 'none') {
+                    this.setRollClip(card, clip);
+                }
                 resolve();
             };
             const onEnd = (e) => {
                 if (e.target !== card) return;
                 finish();
             };
+            void card.offsetHeight;
             card.classList.add(phaseClass);
             card.addEventListener('animationend', onEnd);
-            const timer = setTimeout(finish, CARD_ROLL_PHASE_MS + 50);
+            const timer = setTimeout(finish, durationMs + 80);
         });
     },
 
@@ -1837,6 +1926,8 @@ export const UI = {
         };
 
         const finishExpand = () => {
+            if (isFreeform) this.applyFreeformSize(card);
+            if (isGridBoard) this.applyGridBoardSize(card);
             reflowColumnNote();
             reflowColumnsFloat();
             reflowGridBoard();
@@ -1867,16 +1958,63 @@ export const UI = {
             }
 
             const compactHeight = card.getBoundingClientRect().height || CARD_ROLL_COMPACT_H;
+            const compactWidth = this.resolveRollCompactWidth(card);
+            const expandedWidth = this.resolveRollExpandedWidth(card, item);
+            let clipBottomPx = 0;
+            let expandVDurationMs = CARD_ROLL_PHASE_V_MIN_MS;
+
             card.classList.add('card-roll-busy', 'card-state-changing');
-            void this.runCardRollPhase(card, 'card-roll-expand-h').then(() => {
-                card.classList.remove('compact');
-                card.classList.add('expanded');
-                this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
-                this.prepareRollClipBottom(card, compactHeight);
-                return this.runCardRollPhase(card, 'card-roll-expand-v');
-            }).then(() => {
-                finishExpand();
-            });
+
+            if (isFreeform || isGridBoard) {
+                this.applyFreeformDimensions(card, compactWidth, compactHeight);
+            }
+
+            const clipRightStart = Math.max(0, Math.round(expandedWidth - compactWidth));
+            this.setRollClip(card, `inset(0 ${clipRightStart}px 0 0 round 4px)`);
+            const expandHeightEase = 'cubic-bezier(0.22, 1, 0.36, 1)';
+
+            void this.waitRollPaintGap()
+                .then(() => {
+                    if (isFreeform || isGridBoard) {
+                        card.style.transition = `width ${CARD_ROLL_PHASE_H_MS}ms ${expandHeightEase}`;
+                        void card.offsetHeight;
+                        card.style.setProperty('width', `${expandedWidth}px`, 'important');
+                    }
+                    return this.beginRollPhase(card, 'card-roll-expand-h', CARD_ROLL_PHASE_H_MS);
+                })
+                .then(() => this.waitRollPaintGap())
+                .then(() => {
+                    card.classList.remove('compact');
+                    card.classList.add('expanded');
+                    this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
+
+                    if (isFreeform) {
+                        const saved = this.getFreeformSizes()[item.id];
+                        const expandedHeight = saved?.h ?? FREEFORM_EXPANDED_DEFAULT_H;
+                        this.applyFreeformDimensions(card, expandedWidth, expandedHeight);
+                    } else if (isGridBoard) {
+                        this.applyGridBoardSize(card);
+                    }
+
+                    clipBottomPx = this.computeRollClipBottomPx(card, compactHeight);
+                    const expandedHeight = card.getBoundingClientRect().height;
+                    expandVDurationMs = this.rollPhaseDurationV(clipBottomPx);
+                    card.style.setProperty('--roll-clip-bottom', `${clipBottomPx}px`);
+                    this.lockRollHeight(card, compactHeight);
+                    this.setRollClip(card, `inset(0 0 ${clipBottomPx}px 0 round 4px)`);
+                    const heightEase = 'cubic-bezier(0.22, 1, 0.36, 1)';
+                    card.style.transition = `height ${expandVDurationMs}ms ${heightEase}, min-height ${expandVDurationMs}ms ${heightEase}, max-height ${expandVDurationMs}ms ${heightEase}`;
+                    return this.waitRollPaintGap().then(() => {
+                        card.style.setProperty('height', `${expandedHeight}px`, 'important');
+                        card.style.setProperty('min-height', `${expandedHeight}px`, 'important');
+                        card.style.setProperty('max-height', `${expandedHeight}px`, 'important');
+                        return this.waitRollPaintGap();
+                    });
+                })
+                .then(() => this.beginRollPhase(card, 'card-roll-expand-v', expandVDurationMs))
+                .then(() => {
+                    finishExpand();
+                });
             return;
         }
 
@@ -1885,13 +2023,42 @@ export const UI = {
             return;
         }
 
+        const compactHeight = this.resolveRollCompactHeight(card);
+        const compactWidth = this.resolveRollCompactWidth(card);
+        const clipBottomPx = this.computeRollClipBottomPx(card, compactHeight);
+        const clipRightPx = this.computeRollClipRightPx(card, compactWidth);
+        const collapseVDurationMs = this.rollPhaseDurationV(clipBottomPx);
+        const collapseHeightEase = 'cubic-bezier(0.4, 0, 0.85, 1)';
+
         card.classList.add('card-roll-busy', 'card-state-changing');
-        this.prepareRollClipBottom(card);
-        void this.runCardRollPhase(card, 'card-roll-collapse-v').then(() => {
-            return this.runCardRollPhase(card, 'card-roll-collapse-h');
-        }).then(() => {
-            finishCollapse();
-        });
+        card.style.setProperty('--roll-clip-bottom', `${clipBottomPx}px`);
+        card.style.setProperty('--roll-clip-right', `${clipRightPx}px`);
+        this.setRollClip(card, 'inset(0 0 0 0 round 4px)');
+
+        void this.waitRollPaintGap()
+            .then(() => {
+                card.style.transition = `height ${collapseVDurationMs}ms ${collapseHeightEase}, min-height ${collapseVDurationMs}ms ${collapseHeightEase}, max-height ${collapseVDurationMs}ms ${collapseHeightEase}`;
+                card.style.overflow = 'hidden';
+                void card.offsetHeight;
+                card.style.setProperty('height', `${compactHeight}px`, 'important');
+                card.style.setProperty('min-height', `${compactHeight}px`, 'important');
+                card.style.setProperty('max-height', `${compactHeight}px`, 'important');
+                return this.beginRollPhase(card, 'card-roll-collapse-v', collapseVDurationMs);
+            })
+            .then(() => this.waitRollPaintGap())
+            .then(() => {
+                this.setRollClip(card, `inset(0 0 ${clipBottomPx}px 0 round 4px)`);
+                if (clipRightPx > 0) {
+                    card.style.transition = `width ${CARD_ROLL_PHASE_H_MS}ms ${collapseHeightEase}, min-width ${CARD_ROLL_PHASE_H_MS}ms ${collapseHeightEase}`;
+                    void card.offsetHeight;
+                    card.style.setProperty('width', `${compactWidth}px`, 'important');
+                }
+                return this.waitRollPaintGap();
+            })
+            .then(() => this.beginRollPhase(card, 'card-roll-collapse-h', CARD_ROLL_PHASE_H_MS))
+            .then(() => {
+                finishCollapse();
+            });
     },
 
     updateColumnsFloatCard(card, item, { expanded, dimensions = null } = {}) {
