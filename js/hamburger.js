@@ -1,6 +1,6 @@
 import { UNCATEGORIZED_CATEGORY } from './categories.js';
 import { itemHasCategory } from './focusFilter.js';
-import { ACTION_ICONS, CARD_ICONS, UI, formatStorageSize, getLocalStorageUsedBytes } from './ui.js';
+import { ACTION_ICONS, CARD_ICONS, UI, formatStorageSize, getStorageBreakdown } from './ui.js';
 import { resolveNoteColor } from './colorPicker.js';
 import { hasRichMarkup, stripRichText } from './richText.js';
 import { UndoManager } from './undo.js';
@@ -31,12 +31,17 @@ export const SidePanel = {
     },
 
     updateStorageFooter() {
-        const el = document.getElementById('sidebar-storage-size');
-        if (!el) return;
-        const bytes = getLocalStorageUsedBytes();
-        const label = formatStorageSize(bytes);
-        el.textContent = label;
-        el.title = `Local storage used by magicNotes (${label})`;
+        const container = document.getElementById('sidebar-storage-stats');
+        const notesEl = document.getElementById('sidebar-storage-notes');
+        const matrixEl = document.getElementById('sidebar-storage-matrix');
+        const appEl = document.getElementById('sidebar-storage-app');
+        if (!container || !notesEl || !matrixEl || !appEl) return;
+
+        const { notes, matrix, app } = getStorageBreakdown();
+        notesEl.textContent = `Notes: ${formatStorageSize(notes)}`;
+        matrixEl.textContent = `Matrix: ${formatStorageSize(matrix)}`;
+        appEl.textContent = `App: ${formatStorageSize(app)}`;
+        container.title = 'Notes: note content · Matrix: categories, layouts, view state · App: theme, tools, session';
     },
 
     moveBrand(collapsed, animate = true) {

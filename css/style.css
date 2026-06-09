@@ -523,11 +523,19 @@ body {
     color: var(--text-muted);
 }
 
-.sidebar-storage-size {
+.sidebar-storage-stats {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.04rem;
     font-size: 0.46rem;
     color: var(--text-muted);
     letter-spacing: 0.01em;
+}
+
+.sidebar-storage-stat {
     white-space: nowrap;
+    line-height: 1.15;
 }
 
 .side-panel-list {

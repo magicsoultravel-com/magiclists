@@ -302,6 +302,18 @@ export function computeNoteSizeKb(item) {
     return kb < 10 ? kb.toFixed(1) : String(Math.round(kb));
 }
 
+const MATRIX_DATABASE_KEY = 'matrix_database';
+
+function utf16Bytes(str) {
+    return (str?.length ?? 0) * 2;
+}
+
+export function getLocalStorageKeyBytes(key) {
+    const value = localStorage.getItem(key);
+    if (value === null) return 0;
+    return utf16Bytes(key) + utf16Bytes(value);
+}
+
 /** UTF-16 estimate of all keys on this origin — cheap O(n) scan, no network. */
 export function getLocalStorageUsedBytes() {
     let chars = 0;
@@ -312,6 +324,40 @@ export function getLocalStorageUsedBytes() {
         chars += key.length + (value?.length ?? 0);
     }
     return chars * 2;
+}
+
+export function getStorageBreakdown() {
+    let notes = 0;
+    let matrix = 0;
+    let app = 0;
+
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+
+        if (key === MATRIX_DATABASE_KEY) {
+            const raw = localStorage.getItem(key);
+            if (!raw) continue;
+            try {
+                const db = JSON.parse(raw);
+                notes += utf16Bytes(JSON.stringify(db.items ?? []));
+                matrix += utf16Bytes(key) + utf16Bytes(JSON.stringify({ auth: db.auth, settings: db.settings }));
+            } catch {
+                matrix += getLocalStorageKeyBytes(key);
+            }
+            continue;
+        }
+
+        if (key.startsWith('matrix_')) {
+            matrix += getLocalStorageKeyBytes(key);
+            continue;
+        }
+
+        app += getLocalStorageKeyBytes(key);
+    }
+
+    const total = notes + matrix + app;
+    return { notes, matrix, app, total };
 }
 
 export function formatStorageSize(bytes) {
