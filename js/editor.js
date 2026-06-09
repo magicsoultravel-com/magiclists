@@ -2,7 +2,7 @@
 import { ColorPicker, PALETTE_NOTE, randomNoteColor, resolveNoteColor } from './colorPicker.js';
 import { EditorModalChrome } from './editorModalChrome.js';
 import { sanitizeRichHtml, stripRichText } from './richText.js';
-import { CARD_ICONS, UI, computeNoteSizeKb, createNoteId, defaultStartDateTimeNow, noteHasSavableContent, normalizeItemForSave } from './ui.js';
+import { CARD_ICONS, UI, createNoteId, defaultStartDateTimeNow, noteHasSavableContent, normalizeItemForSave } from './ui.js';
 
 export const Editor = {
     overlay: null,
@@ -445,11 +445,10 @@ export const Editor = {
     },
 
     updateEditorSizeLabel() {
-        const el = document.querySelector('.editor-note-size');
-        if (!el) return;
         try {
+            const shell = this.mountZone?.querySelector('.editor-note-shell');
             const data = this.collectFormData();
-            el.textContent = `${computeNoteSizeKb(data)} KB`;
+            if (shell) UI.updateNoteMetaStats(shell, data);
         } catch {
             /* form not ready */
         }

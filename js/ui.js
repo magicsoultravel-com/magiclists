@@ -70,19 +70,13 @@ const CANVAS_LAYOUT_ORDER_KEY = 'matrix_canvas_layout_order';
 const GRID_LAYOUT_KEY = 'matrix_grid_layout';
 const GRID_PINS_KEY = 'matrix_grid_pins';
 const GRID_EXPANDED_KEY = 'matrix_grid_expanded_id';
-const CARD_ROLL_PHASE_H_MS = 220;
-const CARD_ROLL_PHASE_V_MIN_MS = 220;
-const CARD_ROLL_PHASE_V_MAX_MS = 480;
-const CARD_ROLL_PHASE_GAP_MS = 40;
-const CARD_EXPAND_ANIM_MS = CARD_ROLL_PHASE_H_MS + CARD_ROLL_PHASE_V_MAX_MS + CARD_ROLL_PHASE_GAP_MS * 2;
-const CARD_COLLAPSE_ANIM_MS = CARD_EXPAND_ANIM_MS;
-const CARD_ROLL_COMPACT_H = 56;
-const CARD_ROLL_PHASE_CLASSES = [
-    'card-roll-expand-h',
-    'card-roll-expand-v',
-    'card-roll-collapse-v',
-    'card-roll-collapse-h'
-];
+const CARD_ANIM_MS = 300;
+const CARD_CONTENT_FADE_MS = 180;
+const CARD_CONTENT_FADE_DELAY_MS = 120;
+const CARD_COLLAPSE_FADE_MS = 100;
+const CARD_COMPACT_H = 56;
+
+const cardAnimSessions = new WeakMap();
 
 export function cardAnimationsEnabled() {
     return document.documentElement.dataset.cardAnimations !== '0';
@@ -359,6 +353,23 @@ export function computeNoteSizeKb(item) {
     const kb = bytes / 1024;
     if (kb < 0.1) return '<0.1';
     return kb < 10 ? kb.toFixed(1) : String(Math.round(kb));
+}
+
+export function computeNoteLineCount(item) {
+    if (!item) return 0;
+    let count = 0;
+    const countText = (text) => {
+        const plain = stripRichText(text || '');
+        if (!plain) return;
+        count += plain.split(/\r?\n/).length;
+    };
+    countText(item.content);
+    for (const step of item.steps || []) countText(step.text);
+    return count;
+}
+
+export function formatNoteLineCount(n) {
+    return n === 1 ? '1 line' : `${n} lines`;
 }
 
 const MATRIX_DATABASE_KEY = 'matrix_database';
@@ -825,7 +836,8 @@ export const UI = {
         } else if (card.dataset.columnNote === '1') {
             setExpandedCard('columns', item.id, false);
         }
-        card.classList.remove('expanded', 'card-state-changing', 'card-roll-busy', ...CARD_ROLL_PHASE_CLASSES);
+        this.cancelCardAnimation(card);
+        card.classList.remove('expanded', 'card-state-changing', 'card-animating', 'card-anim-content-hidden');
         card.classList.add('compact');
         this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
         if (card.dataset.gridBoard === '1') {
@@ -1740,7 +1752,7 @@ export const UI = {
             activeCategories,
             targetCatName,
             categoryColor,
-            { skipGridReflow: true }
+            { skipGridReflow: true, skipAnimation: dimensions != null }
         );
 
         if (dimensions) {
@@ -1780,7 +1792,9 @@ export const UI = {
         const activeCategories = readStoredCategories();
         const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
 
-        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor);
+        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, {
+            skipAnimation: dimensions != null
+        });
 
         if (dimensions) {
             this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
@@ -1789,47 +1803,56 @@ export const UI = {
         }
     },
 
-    isCardRollAnimating(card) {
-        if (!card) return false;
-        return card.classList.contains('card-roll-busy')
-            || CARD_ROLL_PHASE_CLASSES.some((cls) => card.classList.contains(cls));
+    usesAnimPixelLock(card) {
+        return card.dataset.freeform === '1'
+            || card.dataset.gridBoard === '1'
+            || card.dataset.columnNote === '1'
+            || card.dataset.columnsFloat === '1';
     },
 
-    cleanupCardRoll(card) {
-        if (!card) return;
-        card.classList.remove('card-state-changing', 'card-roll-busy', ...CARD_ROLL_PHASE_CLASSES);
-        card.style.removeProperty('--roll-clip-bottom');
-        card.style.removeProperty('--roll-clip-right');
-        card.style.removeProperty('--roll-phase-duration');
-        card.style.removeProperty('clip-path');
-        card.style.removeProperty('-webkit-clip-path');
-        card.style.removeProperty('overflow');
-        card.style.removeProperty('transition');
+    isListLayoutCard(card) {
+        const canvas = card.closest('#app-canvas');
+        return !!canvas?.classList.contains('view-list') && !this.usesAnimPixelLock(card);
     },
 
-    waitRollPaintGap() {
-        return new Promise((resolve) => {
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    setTimeout(resolve, CARD_ROLL_PHASE_GAP_MS);
-                });
-            });
-        });
+    lockCardAnimationDimensions(card, w, h) {
+        card.style.setProperty('width', `${w}px`, 'important');
+        card.style.setProperty('height', `${h}px`, 'important');
+        card.style.setProperty('min-height', `${h}px`, 'important');
+        card.style.setProperty('max-height', `${h}px`, 'important');
     },
 
-    setRollClip(card, clipPath) {
-        if (!clipPath || clipPath === 'none') {
-            card.style.removeProperty('clip-path');
-            card.style.removeProperty('-webkit-clip-path');
-            return;
-        }
-        card.style.clipPath = clipPath;
-        card.style.setProperty('-webkit-clip-path', clipPath);
+    measureExpandedCardHeight(card, widthPx) {
+        const cap = Math.min(Math.round(window.innerHeight * 0.72), 680);
+        const prev = {
+            width: card.style.width,
+            height: card.style.height,
+            minHeight: card.style.minHeight,
+            maxHeight: card.style.maxHeight,
+            overflow: card.style.overflow
+        };
+        card.style.setProperty('width', `${widthPx}px`, 'important');
+        card.style.setProperty('height', 'auto', 'important');
+        card.style.setProperty('min-height', '0', 'important');
+        card.style.setProperty('max-height', `${cap}px`, 'important');
+        card.style.overflow = 'hidden';
+        const measured = Math.max(CARD_COMPACT_H, Math.ceil(card.scrollHeight));
+        if (prev.width) card.style.setProperty('width', prev.width, 'important');
+        else card.style.removeProperty('width');
+        if (prev.height) card.style.setProperty('height', prev.height, 'important');
+        else card.style.removeProperty('height');
+        if (prev.minHeight) card.style.setProperty('min-height', prev.minHeight, 'important');
+        else card.style.removeProperty('min-height');
+        if (prev.maxHeight) card.style.setProperty('max-height', prev.maxHeight, 'important');
+        else card.style.removeProperty('max-height');
+        card.style.overflow = prev.overflow || '';
+        return Math.min(measured, cap);
     },
 
-    resolveRollCompactWidth(card) {
+    resolveAnimCompactWidth(card) {
         const id = card.dataset?.id;
         if (card.dataset.freeform === '1') return FREEFORM_DEFAULT_W;
+        if (card.dataset.columnsFloat === '1') return FREEFORM_DEFAULT_W;
         if (card.dataset.gridBoard === '1' && id) {
             const saved = this.getGridLayout()[id];
             if (saved?.customCompact && this.isGridMultiCellSize(saved.w, saved.h)) {
@@ -1837,13 +1860,26 @@ export const UI = {
             }
             return COLUMN_GRID_CELL_W;
         }
+        if (card.dataset.columnNote === '1' && id) {
+            const cat = card.dataset.category;
+            const saved = cat ? this.getColumnNoteLayout()[cat]?.[id] : null;
+            if (saved?.customCompact && this.isGridMultiCellSize(saved.w, saved.h)) {
+                return saved.w;
+            }
+            return COLUMN_GRID_CELL_W;
+        }
+        if (this.isListLayoutCard(card)) return FREEFORM_DEFAULT_W;
         return Math.round(card.getBoundingClientRect().width) || FREEFORM_DEFAULT_W;
     },
 
-    resolveRollExpandedWidth(card, item) {
+    resolveAnimExpandedWidth(card, item) {
         const id = card.dataset?.id || item?.id;
         if (card.dataset.freeform === '1' && id) {
             const saved = this.getFreeformSizes()[id];
+            return saved?.w ?? FREEFORM_EXPANDED_W;
+        }
+        if (card.dataset.columnsFloat === '1' && id) {
+            const saved = this.getColumnsFloatSizes()[id];
             return saved?.w ?? FREEFORM_EXPANDED_W;
         }
         if (card.dataset.gridBoard === '1' && id) {
@@ -1851,10 +1887,17 @@ export const UI = {
             if (saved && Number.isFinite(saved.w)) return saved.w;
             return this.cellsToSpanW(2);
         }
+        if (card.dataset.columnNote === '1' && id) {
+            const cat = card.dataset.category;
+            const saved = cat ? this.getColumnNoteLayout()[cat]?.[id] : null;
+            if (saved?.w) return saved.w;
+            return this.cellsToSpanW(COLUMN_MIN_COLS);
+        }
+        if (this.isListLayoutCard(card)) return FREEFORM_EXPANDED_W;
         return Math.round(card.getBoundingClientRect().width) || FREEFORM_EXPANDED_W;
     },
 
-    resolveRollCompactHeight(card) {
+    resolveAnimCompactHeight(card) {
         if (card.dataset.gridBoard === '1') {
             const saved = this.getGridLayout()[card.dataset.id];
             const compact = this.gridCompactRect(
@@ -1863,66 +1906,114 @@ export const UI = {
             );
             return compact.h;
         }
-        if (card.dataset.freeform === '1') return FREEFORM_DEFAULT_H;
-        return CARD_ROLL_COMPACT_H;
+        if (card.dataset.columnNote === '1') {
+            const cat = card.dataset.category;
+            const saved = cat ? this.getColumnNoteLayout()[cat]?.[card.dataset.id] : null;
+            const compact = this.gridCompactRect(
+                { x: 0, y: 0, w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H },
+                saved
+            );
+            return compact.h;
+        }
+        if (card.dataset.freeform === '1' || card.dataset.columnsFloat === '1') return FREEFORM_DEFAULT_H;
+        if (this.isListLayoutCard(card)) return CARD_COMPACT_H;
+        return CARD_COMPACT_H;
     },
 
-    computeRollClipBottomPx(card, visibleHeight) {
-        const h = card.getBoundingClientRect().height;
-        return Math.max(0, Math.round(h - visibleHeight));
+    measureAnimTargetSize(card, item) {
+        const w = this.resolveAnimExpandedWidth(card, item);
+        const id = item?.id || card.dataset?.id;
+        let h;
+
+        if (card.dataset.freeform === '1') {
+            const saved = this.getFreeformSizes()[id];
+            h = saved?.h ?? FREEFORM_EXPANDED_DEFAULT_H;
+        } else if (card.dataset.columnsFloat === '1') {
+            const saved = this.getColumnsFloatSizes()[id];
+            h = saved?.h ?? FREEFORM_EXPANDED_DEFAULT_H;
+        } else if (card.dataset.gridBoard === '1') {
+            const saved = this.getGridLayout()[id];
+            h = saved && Number.isFinite(saved.h) ? saved.h : this.cellsToSpanH(2);
+        } else if (card.dataset.columnNote === '1') {
+            const cat = card.dataset.category;
+            const saved = cat ? this.getColumnNoteLayout()[cat]?.[id] : null;
+            h = saved?.h ?? this.cellsToSpanH(2);
+        } else {
+            h = this.measureExpandedCardHeight(card, w);
+        }
+
+        return { w, h };
     },
 
-    computeRollClipRightPx(card, visibleWidth) {
-        const w = card.getBoundingClientRect().width;
-        return Math.max(0, Math.round(w - visibleWidth));
+    isCardAnimating(card) {
+        return !!card?.classList.contains('card-animating');
     },
 
-    rollPhaseDurationV(clipPx) {
-        return Math.min(
-            CARD_ROLL_PHASE_V_MAX_MS,
-            Math.max(CARD_ROLL_PHASE_V_MIN_MS, 180 + clipPx * 0.55)
-        );
+    cancelCardAnimation(card) {
+        if (!card) return;
+        const session = cardAnimSessions.get(card);
+        if (session) {
+            if (session.fadeTimer) clearTimeout(session.fadeTimer);
+            if (session.collapseTimer) clearTimeout(session.collapseTimer);
+            if (session.transitionCleanup) session.transitionCleanup();
+            cardAnimSessions.delete(card);
+        }
+        this.cleanupCardAnimation(card);
     },
 
-    lockRollHeight(card, heightPx) {
-        card.style.setProperty('height', `${heightPx}px`, 'important');
-        card.style.setProperty('min-height', `${heightPx}px`, 'important');
-        card.style.setProperty('max-height', `${heightPx}px`, 'important');
-        card.style.overflow = 'hidden';
+    cleanupCardAnimation(card) {
+        if (!card) return;
+        card.classList.remove('card-state-changing', 'card-animating', 'card-anim-content-hidden');
+        card.style.removeProperty('--card-anim-duration');
+        card.style.removeProperty('--card-content-fade-duration');
+        card.style.removeProperty('overflow');
+        card.style.removeProperty('transition');
     },
 
-    beginRollPhase(card, phaseClass, durationMs) {
+    waitCardTransition(card, { properties = ['width', 'height'], timeoutMs = CARD_ANIM_MS + 80 } = {}) {
         return new Promise((resolve) => {
-            card.style.setProperty('--roll-phase-duration', `${durationMs}ms`);
             let finished = false;
+            const propSet = new Set(properties);
             const finish = () => {
                 if (finished) return;
                 finished = true;
-                const clip = getComputedStyle(card).clipPath;
-                card.classList.remove(phaseClass);
-                card.removeEventListener('animationend', onEnd);
+                card.removeEventListener('transitionend', onEnd);
                 clearTimeout(timer);
-                card.style.removeProperty('--roll-phase-duration');
-                if (clip && clip !== 'none') {
-                    this.setRollClip(card, clip);
+                const session = cardAnimSessions.get(card);
+                if (session?.transitionCleanup === finish) {
+                    session.transitionCleanup = null;
                 }
                 resolve();
             };
             const onEnd = (e) => {
                 if (e.target !== card) return;
+                if (!propSet.has(e.propertyName)) return;
                 finish();
             };
-            void card.offsetHeight;
-            card.classList.add(phaseClass);
-            card.addEventListener('animationend', onEnd);
-            const timer = setTimeout(finish, durationMs + 80);
+            card.addEventListener('transitionend', onEnd);
+            const timer = setTimeout(finish, timeoutMs);
+            const session = cardAnimSessions.get(card) || {};
+            session.transitionCleanup = finish;
+            cardAnimSessions.set(card, session);
         });
     },
 
     applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, options = {}) {
+        if (options.skipAnimation) {
+            this.cancelCardAnimation(card);
+        }
+
         const isFreeform = card.dataset.freeform === '1';
         const isGridBoard = card.dataset.gridBoard === '1';
-        const animate = cardAnimationsEnabled();
+        const animate = cardAnimationsEnabled() && !options.skipAnimation;
+
+        const clearListAnimDimensions = () => {
+            if (!this.isListLayoutCard(card)) return;
+            card.style.removeProperty('width');
+            card.style.removeProperty('height');
+            card.style.removeProperty('min-height');
+            card.style.removeProperty('max-height');
+        };
 
         const reflowColumnNote = () => {
             if (card.dataset.columnNote !== '1') return;
@@ -1963,10 +2054,11 @@ export const UI = {
         const finishExpand = () => {
             if (isFreeform) this.applyFreeformSize(card);
             if (isGridBoard) this.applyGridBoardSize(card);
+            clearListAnimDimensions();
             reflowColumnNote();
             reflowColumnsFloat();
             reflowGridBoard();
-            this.cleanupCardRoll(card);
+            this.cleanupCardAnimation(card);
         };
 
         const finishCollapse = () => {
@@ -1978,9 +2070,10 @@ export const UI = {
                 this.applyGridBoardSize(card);
                 reflowGridBoard();
             }
+            clearListAnimDimensions();
             reflowColumnNote();
             reflowColumnsFloat();
-            this.cleanupCardRoll(card);
+            this.cleanupCardAnimation(card);
         };
 
         if (expanded) {
@@ -1992,64 +2085,40 @@ export const UI = {
                 return;
             }
 
-            const compactHeight = card.getBoundingClientRect().height || CARD_ROLL_COMPACT_H;
-            const compactWidth = this.resolveRollCompactWidth(card);
-            const expandedWidth = this.resolveRollExpandedWidth(card, item);
-            let clipBottomPx = 0;
-            let expandVDurationMs = CARD_ROLL_PHASE_V_MIN_MS;
+            const compactW = this.resolveAnimCompactWidth(card);
+            const compactH = Math.round(card.getBoundingClientRect().height) || this.resolveAnimCompactHeight(card);
 
-            card.classList.add('card-roll-busy', 'card-state-changing');
+            card.classList.add('card-animating', 'card-state-changing', 'card-anim-content-hidden');
+            card.style.setProperty('--card-anim-duration', `${CARD_ANIM_MS}ms`);
+            card.style.setProperty('--card-content-fade-duration', `${CARD_CONTENT_FADE_MS}ms`);
+            card.style.overflow = 'hidden';
 
-            if (isFreeform || isGridBoard) {
-                this.applyFreeformDimensions(card, compactWidth, compactHeight);
-            }
+            this.lockCardAnimationDimensions(card, compactW, compactH);
 
-            const clipRightStart = Math.max(0, Math.round(expandedWidth - compactWidth));
-            this.setRollClip(card, `inset(0 ${clipRightStart}px 0 0 round 4px)`);
-            const expandHeightEase = 'cubic-bezier(0.22, 1, 0.36, 1)';
+            card.classList.remove('compact');
+            card.classList.add('expanded');
+            this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
 
-            void this.waitRollPaintGap()
-                .then(() => {
-                    if (isFreeform || isGridBoard) {
-                        card.style.transition = `width ${CARD_ROLL_PHASE_H_MS}ms ${expandHeightEase}`;
-                        void card.offsetHeight;
-                        card.style.setProperty('width', `${expandedWidth}px`, 'important');
-                    }
-                    return this.beginRollPhase(card, 'card-roll-expand-h', CARD_ROLL_PHASE_H_MS);
-                })
-                .then(() => this.waitRollPaintGap())
-                .then(() => {
-                    card.classList.remove('compact');
-                    card.classList.add('expanded');
-                    this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
+            this.lockCardAnimationDimensions(card, compactW, compactH);
 
-                    if (isFreeform) {
-                        const saved = this.getFreeformSizes()[item.id];
-                        const expandedHeight = saved?.h ?? FREEFORM_EXPANDED_DEFAULT_H;
-                        this.applyFreeformDimensions(card, expandedWidth, expandedHeight);
-                    } else if (isGridBoard) {
-                        this.applyGridBoardSize(card);
-                    }
+            const target = this.measureAnimTargetSize(card, item);
 
-                    clipBottomPx = this.computeRollClipBottomPx(card, compactHeight);
-                    const expandedHeight = card.getBoundingClientRect().height;
-                    expandVDurationMs = this.rollPhaseDurationV(clipBottomPx);
-                    card.style.setProperty('--roll-clip-bottom', `${clipBottomPx}px`);
-                    this.lockRollHeight(card, compactHeight);
-                    this.setRollClip(card, `inset(0 0 ${clipBottomPx}px 0 round 4px)`);
-                    const heightEase = 'cubic-bezier(0.22, 1, 0.36, 1)';
-                    card.style.transition = `height ${expandVDurationMs}ms ${heightEase}, min-height ${expandVDurationMs}ms ${heightEase}, max-height ${expandVDurationMs}ms ${heightEase}`;
-                    return this.waitRollPaintGap().then(() => {
-                        card.style.setProperty('height', `${expandedHeight}px`, 'important');
-                        card.style.setProperty('min-height', `${expandedHeight}px`, 'important');
-                        card.style.setProperty('max-height', `${expandedHeight}px`, 'important');
-                        return this.waitRollPaintGap();
+            void card.offsetHeight;
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    this.lockCardAnimationDimensions(card, target.w, target.h);
+
+                    const session = cardAnimSessions.get(card) || {};
+                    session.fadeTimer = setTimeout(() => {
+                        card.classList.remove('card-anim-content-hidden');
+                    }, CARD_CONTENT_FADE_DELAY_MS);
+                    cardAnimSessions.set(card, session);
+
+                    void this.waitCardTransition(card).then(() => {
+                        finishExpand();
                     });
-                })
-                .then(() => this.beginRollPhase(card, 'card-roll-expand-v', expandVDurationMs))
-                .then(() => {
-                    finishExpand();
                 });
+            });
             return;
         }
 
@@ -2058,42 +2127,26 @@ export const UI = {
             return;
         }
 
-        const compactHeight = this.resolveRollCompactHeight(card);
-        const compactWidth = this.resolveRollCompactWidth(card);
-        const clipBottomPx = this.computeRollClipBottomPx(card, compactHeight);
-        const clipRightPx = this.computeRollClipRightPx(card, compactWidth);
-        const collapseVDurationMs = this.rollPhaseDurationV(clipBottomPx);
-        const collapseHeightEase = 'cubic-bezier(0.4, 0, 0.85, 1)';
+        const expandedW = Math.round(card.getBoundingClientRect().width) || this.resolveAnimExpandedWidth(card, item);
+        const expandedH = Math.round(card.getBoundingClientRect().height) || this.measureAnimTargetSize(card, item).h;
+        const compactW = this.resolveAnimCompactWidth(card);
+        const compactH = this.resolveAnimCompactHeight(card);
 
-        card.classList.add('card-roll-busy', 'card-state-changing');
-        card.style.setProperty('--roll-clip-bottom', `${clipBottomPx}px`);
-        card.style.setProperty('--roll-clip-right', `${clipRightPx}px`);
-        this.setRollClip(card, 'inset(0 0 0 0 round 4px)');
+        card.classList.add('card-animating', 'card-state-changing', 'card-anim-content-hidden');
+        card.style.setProperty('--card-anim-duration', `${CARD_ANIM_MS}ms`);
+        card.style.setProperty('--card-content-fade-duration', `${CARD_CONTENT_FADE_MS}ms`);
+        card.style.overflow = 'hidden';
+        this.lockCardAnimationDimensions(card, expandedW, expandedH);
 
-        void this.waitRollPaintGap()
-            .then(() => {
-                card.style.transition = `height ${collapseVDurationMs}ms ${collapseHeightEase}, min-height ${collapseVDurationMs}ms ${collapseHeightEase}, max-height ${collapseVDurationMs}ms ${collapseHeightEase}`;
-                card.style.overflow = 'hidden';
-                void card.offsetHeight;
-                card.style.setProperty('height', `${compactHeight}px`, 'important');
-                card.style.setProperty('min-height', `${compactHeight}px`, 'important');
-                card.style.setProperty('max-height', `${compactHeight}px`, 'important');
-                return this.beginRollPhase(card, 'card-roll-collapse-v', collapseVDurationMs);
-            })
-            .then(() => this.waitRollPaintGap())
-            .then(() => {
-                this.setRollClip(card, `inset(0 0 ${clipBottomPx}px 0 round 4px)`);
-                if (clipRightPx > 0) {
-                    card.style.transition = `width ${CARD_ROLL_PHASE_H_MS}ms ${collapseHeightEase}, min-width ${CARD_ROLL_PHASE_H_MS}ms ${collapseHeightEase}`;
-                    void card.offsetHeight;
-                    card.style.setProperty('width', `${compactWidth}px`, 'important');
-                }
-                return this.waitRollPaintGap();
-            })
-            .then(() => this.beginRollPhase(card, 'card-roll-collapse-h', CARD_ROLL_PHASE_H_MS))
-            .then(() => {
+        const session = cardAnimSessions.get(card) || {};
+        session.collapseTimer = setTimeout(() => {
+            void card.offsetHeight;
+            this.lockCardAnimationDimensions(card, compactW, compactH);
+            void this.waitCardTransition(card).then(() => {
                 finishCollapse();
             });
+        }, CARD_COLLAPSE_FADE_MS);
+        cardAnimSessions.set(card, session);
     },
 
     updateColumnsFloatCard(card, item, { expanded, dimensions = null } = {}) {
@@ -2103,7 +2156,9 @@ export const UI = {
         const activeCategories = readStoredCategories();
         const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
 
-        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor);
+        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, {
+            skipAnimation: dimensions != null
+        });
 
         if (dimensions) {
             this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
@@ -2132,7 +2187,9 @@ export const UI = {
 
         setExpandedCard('columns', item.id, expanded);
 
-        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor);
+        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, {
+            skipAnimation: dimensions != null
+        });
 
         if (dimensions) {
             this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
@@ -2167,7 +2224,7 @@ export const UI = {
     },
 
     toggleCardExpanded(card, item, ctx) {
-        if (this.isCardRollAnimating(card)) return;
+        if (this.isCardAnimating(card)) return;
 
         const willExpand = !card.classList.contains('expanded');
 
@@ -2376,10 +2433,13 @@ export const UI = {
     buildNoteMetaFooterHtml(item, { mode = 'inline', targetCatName = '', categoryColor = UNCATEGORIZED_COLOR } = {}) {
         const createdLabel = this.formatCreatedDate(item.created_at);
         const sizeLabel = computeNoteSizeKb(item);
+        const lineLabel = formatNoteLineCount(computeNoteLineCount(item));
         const createdHtml = createdLabel
             ? `<span class="editor-created-date" title="Created">Created ${createdLabel}</span>`
             : '';
         const sizeHtml = `<span class="editor-note-size" title="Note content size">${sizeLabel} KB</span>`;
+        const lineHtml = `<span class="editor-note-lines" title="Number of lines">${lineLabel}</span>`;
+        const statsHtml = `${lineHtml}${createdHtml}${sizeHtml}`;
 
         if (mode === 'inline') {
             return `
@@ -2389,8 +2449,7 @@ export const UI = {
                         ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
                     </span>
                     <span class="editor-meta-stats">
-                        ${createdHtml}
-                        ${sizeHtml}
+                        ${statsHtml}
                     </span>
                 </div>
             `;
@@ -2398,10 +2457,19 @@ export const UI = {
 
         return `
             <div class="editor-meta-row editor-meta-row--footer">
-                ${createdHtml || '<span></span>'}
-                ${sizeHtml}
+                <span class="editor-meta-stats">${statsHtml}</span>
             </div>
         `;
+    },
+
+    updateNoteMetaStats(shell, item) {
+        if (!shell || !item) return;
+        const draft = { ...item };
+        this.syncItemBodyFromDom(shell, draft);
+        const sizeEl = shell.querySelector('.editor-note-size');
+        const linesEl = shell.querySelector('.editor-note-lines');
+        if (sizeEl) sizeEl.textContent = `${computeNoteSizeKb(draft)} KB`;
+        if (linesEl) linesEl.textContent = formatNoteLineCount(computeNoteLineCount(draft));
     },
 
     buildNoteConfigPanelHtml(item, { categoryOptionsHtml = '', startParts = {}, endParts = {} } = {}) {
@@ -2948,6 +3016,10 @@ export const UI = {
         const body = shell.querySelector('.editor-note-body');
         if (header) this.attachNoteBodyInteractions(header, item, interactionOptions);
         if (body) this.attachNoteBodyInteractions(body, item, interactionOptions);
+
+        shell.querySelectorAll('.card-inline-edit').forEach((el) => {
+            el.addEventListener('input', () => this.updateNoteMetaStats(shell, item));
+        });
 
         if (localOnly && onChange) {
             shell.querySelectorAll('.card-inline-edit').forEach((el) => {

@@ -319,6 +319,7 @@ function bindSnapPanelCardInteractions({
                 if (cardIsPinned(card)) return;
                 e.preventDefault();
                 e.stopPropagation();
+                UI.cancelCardAnimation(card);
                 raiseCard(card);
                 markLayoutActive();
                 startScrollPolicy?.();
@@ -545,6 +546,7 @@ export const DragDropEngine = {
                     if (cardIsPinned(card)) return;
                     e.preventDefault();
                     e.stopPropagation();
+                    UI.cancelCardAnimation(card);
                     const { w: startW, h: startH } = UI.readFreeformCardSize(card);
                     if (card.classList.contains('compact')) {
                         const itemMatch = currentItems.find(i => i.id === card.dataset.id);
@@ -1118,6 +1120,7 @@ export const DragDropEngine = {
 
                 e.preventDefault();
                 e.stopPropagation();
+                UI.cancelCardAnimation(card);
                 const boundsEl = canvas;
                 const isFloat = card.dataset.columnsFloat === '1';
                 let { w: startW, h: startH } = UI.readFreeformCardSize(card);

@@ -370,11 +370,6 @@
     margin-bottom: 0.5rem;
 }
 
-.line-counter {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-}
-
 *, *::before, *::after {
     box-sizing: inherit;
 }
@@ -742,7 +737,8 @@ body {
 }
 
 .editor-created-date,
-.editor-note-size {
+.editor-note-size,
+.editor-note-lines {
     font-size: inherit;
     color: inherit;
 }
@@ -827,47 +823,36 @@ body {
     to { opacity: 1; transform: translateY(0); }
 }
 
-.mini-card.card-roll-busy {
+.mini-card.card-animating {
     overflow: hidden !important;
+    transform: none !important;
+    transition: width var(--card-anim-duration, 0.3s) cubic-bezier(0.22, 1, 0.36, 1),
+                height var(--card-anim-duration, 0.3s) cubic-bezier(0.22, 1, 0.36, 1),
+                min-height var(--card-anim-duration, 0.3s) cubic-bezier(0.22, 1, 0.36, 1),
+                max-height var(--card-anim-duration, 0.3s) cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.mini-card.card-roll-expand-h {
-    animation: cardRollExpandH var(--roll-phase-duration, 0.22s) cubic-bezier(0.22, 1, 0.36, 1) forwards;
+.mini-card.card-animating .editor-note-shell {
+    transition: opacity var(--card-content-fade-duration, 0.18s) ease;
 }
 
-.mini-card.card-roll-expand-v {
-    animation: cardRollExpandV var(--roll-phase-duration, 0.28s) cubic-bezier(0.22, 1, 0.36, 1) forwards;
+.mini-card.card-animating.card-anim-content-hidden .editor-note-shell {
+    opacity: 0;
 }
 
-.mini-card.card-roll-collapse-v {
-    animation: cardRollCollapseV var(--roll-phase-duration, 0.28s) cubic-bezier(0.4, 0, 0.85, 1) forwards;
+#app-canvas.view-freeform .mini-card.card-animating.expanded,
+#app-canvas.view-grid .mini-card.card-animating.expanded {
+    min-height: unset;
+    max-height: unset;
 }
 
-.mini-card.card-roll-collapse-h {
-    animation: cardRollCollapseH var(--roll-phase-duration, 0.22s) cubic-bezier(0.4, 0, 0.85, 1) forwards;
+.mini-card.card-animating.compact:hover {
+    overflow: hidden !important;
+    z-index: auto;
 }
 
-@keyframes cardRollExpandH {
-    to { clip-path: inset(0 0 0 0 round 4px); }
-}
-
-@keyframes cardRollExpandV {
-    to { clip-path: inset(0 0 0 0 round 4px); }
-}
-
-@keyframes cardRollCollapseV {
-    to { clip-path: inset(0 0 var(--roll-clip-bottom, 0px) 0 round 4px); }
-}
-
-@keyframes cardRollCollapseH {
-    to { clip-path: inset(0 var(--roll-clip-right, 0px) var(--roll-clip-bottom, 0px) 0 round 4px); }
-}
-
-html[data-card-animations="0"] .mini-card.card-roll-expand-h,
-html[data-card-animations="0"] .mini-card.card-roll-expand-v,
-html[data-card-animations="0"] .mini-card.card-roll-collapse-v,
-html[data-card-animations="0"] .mini-card.card-roll-collapse-h {
-    animation: none;
+html[data-card-animations="0"] .mini-card.card-animating {
+    transition: none;
 }
 
 html[data-card-animations="0"] .mini-card.card-state-changing {
@@ -878,16 +863,16 @@ html[data-card-animations="0"] .mini-card.card-state-changing .card-body {
     transition: none;
 }
 
-.mini-card.card-state-changing:not(.card-roll-busy) {
+.mini-card.card-state-changing:not(.card-animating) {
     transition: max-height 0.2s ease, padding 0.2s ease, width 0.2s ease, box-shadow 0.18s ease;
 }
 
-.mini-card.card-state-changing:not(.card-roll-busy) .card-body {
+.mini-card.card-state-changing:not(.card-animating) .card-body {
     transition: opacity 0.15s ease;
 }
 
-.mini-card.card-roll-busy.card-state-changing,
-.mini-card.card-roll-busy.card-state-changing .card-body {
+.mini-card.card-animating.card-state-changing,
+.mini-card.card-animating.card-state-changing .card-body {
     transition: none;
 }
 
@@ -1227,6 +1212,10 @@ html[data-show-note-created="0"] .editor-created-date {
 
 html[data-show-note-size="0"] .editor-note-size,
 html[data-show-note-size="0"] .note-size {
+    display: none !important;
+}
+
+html[data-show-note-lines="0"] .editor-note-lines {
     display: none !important;
 }
 
@@ -2298,7 +2287,8 @@ html[data-note-font="kalam"] .mini-card .step-text {
 .has-custom-bg .category-name,
 .has-custom-bg .checklist-badge,
 .has-custom-bg .editor-created-date,
-.has-custom-bg .editor-note-size {
+.has-custom-bg .editor-note-size,
+.has-custom-bg .editor-note-lines {
     color: var(--card-muted) !important;
 }
 
@@ -4807,13 +4797,6 @@ textarea.form-input {
 
 #editor-overlay .step-row-actions {
     padding-top: 0.05rem;
-}
-
-.line-counter {
-    margin-left: 0.25rem;
-    font-size: 0.56rem;
-    font-weight: 500;
-    color: var(--text-muted);
 }
 
 @media (max-width: 760px) {

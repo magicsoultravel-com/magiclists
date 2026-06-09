@@ -20,6 +20,7 @@ const DEFAULTS = {
     showCategoryName: true,
     showCreatedDate: true,
     showNoteSize: true,
+    showLineCount: false,
     desktopGradient: false,
     cardAnimations: true,
     noteFontId: 'default'
@@ -35,6 +36,7 @@ export function readDisplayOptions() {
             showCategoryName: raw.showCategoryName !== false,
             showCreatedDate: raw.showCreatedDate !== false,
             showNoteSize: raw.showNoteSize !== false,
+            showLineCount: raw.showLineCount === true,
             desktopGradient: raw.desktopGradient === true,
             cardAnimations: raw.cardAnimations !== false,
             noteFontId
@@ -55,6 +57,7 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     root.dataset.showNoteCategory = options.showCategoryName ? '1' : '0';
     root.dataset.showNoteCreated = options.showCreatedDate ? '1' : '0';
     root.dataset.showNoteSize = options.showNoteSize ? '1' : '0';
+    root.dataset.showNoteLines = options.showLineCount ? '1' : '0';
     root.dataset.desktopGradient = options.desktopGradient ? '1' : '0';
     root.dataset.cardAnimations = options.cardAnimations ? '1' : '0';
     applyNoteFont(options.noteFontId);
@@ -64,6 +67,7 @@ function isCustomized(options) {
     return !options.showCategoryName
         || !options.showCreatedDate
         || !options.showNoteSize
+        || options.showLineCount
         || options.desktopGradient
         || !options.cardAnimations
         || isNoteFontCustomized(options.noteFontId)
@@ -242,6 +246,7 @@ export const DisplayOptions = {
                 ${this.optionRow('display-opt-category', 'Category name', '', opts.showCategoryName)}
                 ${this.optionRow('display-opt-created', 'Created date', '', opts.showCreatedDate)}
                 ${this.optionRow('display-opt-note-size', 'Note size', '', opts.showNoteSize)}
+                ${this.optionRow('display-opt-note-lines', 'Number of lines', '', opts.showLineCount)}
                 <div class="focus-mode-divider" role="separator"></div>
                 <p class="display-options-heading">Theme</p>
                 <div class="display-options-theme-list clock-style-list app-theme-list">${buildThemeOptionsHtml(readAppTheme())}</div>
@@ -286,6 +291,7 @@ export const DisplayOptions = {
         bindToggle('display-opt-category', 'showCategoryName');
         bindToggle('display-opt-created', 'showCreatedDate');
         bindToggle('display-opt-note-size', 'showNoteSize');
+        bindToggle('display-opt-note-lines', 'showLineCount');
         bindToggle('display-opt-gradient', 'desktopGradient');
         bindToggle('display-opt-animations', 'cardAnimations');
 

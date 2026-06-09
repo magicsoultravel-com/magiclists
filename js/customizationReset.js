@@ -22,6 +22,7 @@ const DISPLAY_DEFAULTS = {
     showCategoryName: true,
     showCreatedDate: true,
     showNoteSize: true,
+    showLineCount: false,
     desktopGradient: false,
     cardAnimations: true,
     noteFontId: 'default'

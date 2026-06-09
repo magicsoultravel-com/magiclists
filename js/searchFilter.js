@@ -8,6 +8,9 @@ const MIN_QUERY_MEANINGFUL_LENGTH = 3;
 const CAP_TITLES = 8;
 const CAP_CONTENT = 10;
 const CAP_CATEGORIES = 5;
+const FUZZY_MIN_TERM_LENGTH = 5;
+const FUZZY_MAX_DISTANCE = 1;
+const FUZZY_SCORE_PENALTY = 100;
 
 function escapeHtml(str) {
     return String(str ?? '')
@@ -23,6 +26,75 @@ function escapeRegExp(str) {
 
 function normalizeText(text) {
     return stripRichText(text || '').toLowerCase();
+}
+
+function levenshtein(a, b) {
+    if (a === b) return 0;
+    const m = a.length;
+    const n = b.length;
+    if (m === 0) return n;
+    if (n === 0) return m;
+
+    let prev = new Array(n + 1);
+    let curr = new Array(n + 1);
+    for (let j = 0; j <= n; j++) prev[j] = j;
+
+    for (let i = 1; i <= m; i++) {
+        curr[0] = i;
+        for (let j = 1; j <= n; j++) {
+            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+            curr[j] = Math.min(
+                curr[j - 1] + 1,
+                prev[j] + 1,
+                prev[j - 1] + cost
+            );
+        }
+        [prev, curr] = [curr, prev];
+    }
+    return prev[n];
+}
+
+function findTermMatch(norm, term) {
+    if (!norm || !term) return null;
+
+    const exactIdx = norm.indexOf(term);
+    if (exactIdx >= 0) {
+        return { start: exactIdx, end: exactIdx + term.length, fuzzy: false, distance: 0 };
+    }
+
+    if (term.length < FUZZY_MIN_TERM_LENGTH) return null;
+
+    let best = null;
+    const minSize = Math.max(1, term.length - FUZZY_MAX_DISTANCE);
+    const maxSize = term.length + FUZZY_MAX_DISTANCE;
+
+    for (let size = minSize; size <= maxSize; size++) {
+        if (size > norm.length) continue;
+        for (let i = 0; i <= norm.length - size; i++) {
+            const slice = norm.slice(i, i + size);
+            const distance = levenshtein(slice, term);
+            if (distance > FUZZY_MAX_DISTANCE) continue;
+
+            const candidate = { start: i, end: i + size, fuzzy: true, distance };
+            if (!best
+                || candidate.distance < best.distance
+                || (candidate.distance === best.distance && candidate.start < best.start)) {
+                best = candidate;
+            }
+        }
+    }
+
+    return best;
+}
+
+function findTermMatchFrom(norm, term, fromIndex = 0) {
+    const match = findTermMatch(norm.slice(fromIndex), term);
+    if (!match) return null;
+    return {
+        ...match,
+        start: match.start + fromIndex,
+        end: match.end + fromIndex
+    };
 }
 
 function meaningfulLength(parsed) {
@@ -78,7 +150,7 @@ export function itemMatchesQuery(text, parsed) {
         if (!norm.includes(phrase)) return false;
     }
     for (const term of parsed.terms) {
-        if (!norm.includes(term)) return false;
+        if (!findTermMatch(norm, term)) return false;
     }
     return true;
 }
@@ -99,9 +171,12 @@ export function scoreTextMatch(text, parsed) {
     }
 
     for (const term of parsed.terms) {
-        const idx = norm.indexOf(term);
-        if (idx >= 0) {
-            positions.push({ start: idx, end: idx + term.length });
+        const match = findTermMatch(norm, term);
+        if (!match) continue;
+        positions.push({ start: match.start, end: match.end });
+        if (match.fuzzy) {
+            score -= FUZZY_SCORE_PENALTY;
+        } else {
             const wordRe = new RegExp(`\\b${escapeRegExp(term)}\\b`, 'i');
             if (wordRe.test(norm)) score += 50;
         }
@@ -116,15 +191,15 @@ export function scoreTextMatch(text, parsed) {
     }
 
     if (parsed.terms.length > 1) {
-        let lastIdx = -1;
+        let searchFrom = 0;
         let inOrder = true;
         for (const term of parsed.terms) {
-            const idx = norm.indexOf(term, lastIdx + 1);
-            if (idx < 0) {
+            const match = findTermMatchFrom(norm, term, searchFrom);
+            if (!match) {
                 inOrder = false;
                 break;
             }
-            lastIdx = idx;
+            searchFrom = match.end;
         }
         if (inOrder) score += 30;
     }
@@ -160,9 +235,9 @@ function findMatchRange(norm, parsed) {
         }
     }
     for (const term of parsed.terms) {
-        const idx = norm.indexOf(term);
-        if (idx >= 0) {
-            return { start: idx, end: idx + term.length };
+        const match = findTermMatch(norm, term);
+        if (match) {
+            return { start: match.start, end: match.end };
         }
     }
     return null;
