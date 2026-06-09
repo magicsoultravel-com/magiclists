@@ -713,7 +713,31 @@ class Application {
                 alert("Authorization Blocked: Admin privileges required to edit workspace resources.");
                 return;
             }
-            Editor.open(e.detail, AppState.categories);
+            const detail = e.detail;
+            const item = detail?.item ?? detail;
+            const sourceCard = detail?.sourceCard ?? null;
+            Editor.open(item, AppState.categories, { sourceCard });
+        });
+
+        window.addEventListener('editor:reactivate_on_desktop', async (e) => {
+            const { item, restoreContext, modalGeometry } = e.detail || {};
+            if (!item?.id) return;
+
+            const placement = UI.resolveNoteDesktopPlacement(item.id, { restoreContext, modalGeometry });
+            UI.prepareDesktopPlacementBeforeRender(item.id, placement);
+
+            const idx = AppState.items.findIndex((i) => i.id === item.id);
+            if (idx >= 0) AppState.items[idx] = item;
+            else AppState.items.push(item);
+
+            const targetMode = placement.viewMode;
+            if (AppState.viewSettings.sortBy !== targetMode) {
+                await this.switchViewMode(targetMode);
+            } else {
+                await this.syncDataStore();
+            }
+
+            UI.finishNoteDesktopReactivation(item, placement);
         });
 
         window.addEventListener('editor:reveal_on_board', async (e) => {

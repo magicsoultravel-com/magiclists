@@ -2665,6 +2665,43 @@ textarea.form-input {
     margin-top: 0.5rem;
 }
 
+.app-toast-host {
+    position: fixed;
+    bottom: 1.25rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10050;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    pointer-events: none;
+}
+
+.app-toast {
+    padding: 0.45rem 0.8rem;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--bg-card) 94%, #000 6%);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    font-size: 0.72rem;
+    line-height: 1.35;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.32);
+    max-width: min(90vw, 24rem);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.app-toast.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
 .system-status-msg {
     grid-column: 1 / -1;
     text-align: center;
@@ -4006,11 +4043,84 @@ textarea.form-input {
     transform: translateY(10px) scale(0.97);
     opacity: 0;
     transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+#editor-overlay .modal.modal--floating {
+    transform: none;
+    transition: opacity 0.3s ease;
 }
 
 #editor-overlay.is-open .modal {
     transform: translateY(0) scale(1);
     opacity: 1;
+}
+
+#editor-overlay.is-open .modal.modal--floating {
+    transform: none;
+}
+
+#editor-overlay .modal.modal--floating .editor-toolbar {
+    cursor: grab;
+}
+
+#editor-overlay .modal.modal--floating.is-modal-dragging .editor-toolbar {
+    cursor: grabbing;
+}
+
+#editor-overlay .modal .modal-chrome {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 3;
+}
+
+#editor-overlay .modal .modal-resize {
+    position: absolute;
+    pointer-events: auto;
+    z-index: 4;
+}
+
+#editor-overlay .modal .modal-resize-n,
+#editor-overlay .modal .modal-resize-s {
+    left: 8px;
+    right: 8px;
+    height: 6px;
+}
+
+#editor-overlay .modal .modal-resize-e,
+#editor-overlay .modal .modal-resize-w {
+    top: 8px;
+    bottom: 8px;
+    width: 6px;
+}
+
+#editor-overlay .modal .modal-resize-nw,
+#editor-overlay .modal .modal-resize-ne,
+#editor-overlay .modal .modal-resize-sw,
+#editor-overlay .modal .modal-resize-se {
+    width: 12px;
+    height: 12px;
+}
+
+#editor-overlay .modal .modal-resize-n { top: 0; cursor: n-resize; }
+#editor-overlay .modal .modal-resize-s { bottom: 0; cursor: s-resize; }
+#editor-overlay .modal .modal-resize-e { right: 0; cursor: e-resize; }
+#editor-overlay .modal .modal-resize-w { left: 0; cursor: w-resize; }
+#editor-overlay .modal .modal-resize-nw { top: 0; left: 0; cursor: nw-resize; }
+#editor-overlay .modal .modal-resize-ne { top: 0; right: 0; cursor: ne-resize; }
+#editor-overlay .modal .modal-resize-sw { bottom: 0; left: 0; cursor: sw-resize; }
+#editor-overlay .modal .modal-resize-se { bottom: 0; right: 0; cursor: se-resize; }
+
+#editor-overlay .modal.modal--floating .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+.editor-toolbar .card-act--reactivate:hover {
+    color: #93c5fd;
 }
 
 #editor-overlay .modal.has-custom-bg {
@@ -4748,8 +4858,10 @@ html[data-app-theme="monochrome"] .card-act--cal.is-on {
 
 /* Matrix — full UI terminal green (independent from Monochrome) */
 html[data-app-theme="matrix"] {
-    font-family: 'Share Tech Mono', 'VT323', ui-monospace, 'Cascadia Code', monospace;
-    letter-spacing: 0.04em;
+    font-family: 'Overpass Mono', 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    -webkit-font-smoothing: antialiased;
 }
 
 html[data-app-theme="matrix"] #control-bar,
@@ -4758,31 +4870,39 @@ html[data-app-theme="matrix"] #workspace-footer,
 html[data-app-theme="matrix"] .clock-style-popover,
 html[data-app-theme="matrix"] .app-theme-popover,
 html[data-app-theme="matrix"] .display-options-popover {
-    text-shadow: 0 0 8px rgba(57, 255, 101, 0.12);
+    text-shadow: 0 0 6px rgba(57, 255, 101, 0.06);
 }
 
 html[data-app-theme="matrix"] .btn,
 html[data-app-theme="matrix"] .collapsable-heading,
 html[data-app-theme="matrix"] .app-brand,
 html[data-app-theme="matrix"] .clock-chip {
-    letter-spacing: 0.06em;
+    letter-spacing: 0.02em;
     text-transform: uppercase;
     font-size: 0.92em;
+    font-weight: 400;
 }
 
 html[data-app-theme="matrix"][data-note-font="default"] .mini-card .mini-card-title,
+html[data-app-theme="matrix"][data-note-font="default"] #editor-overlay .editor-note-shell .mini-card-title {
+    font-family: 'Overpass Mono', 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.84rem;
+    font-weight: 400;
+    letter-spacing: 0.03em;
+    line-height: 1.45;
+    text-shadow: 0 0 4px rgba(57, 255, 101, 0.22);
+}
+
 html[data-app-theme="matrix"][data-note-font="default"] .mini-card .card-content-preview,
 html[data-app-theme="matrix"][data-note-font="default"] .mini-card .step-text,
-html[data-app-theme="matrix"][data-note-font="default"] #editor-overlay .editor-note-shell .mini-card-title,
 html[data-app-theme="matrix"][data-note-font="default"] #editor-overlay .editor-note-shell .step-text,
 html[data-app-theme="matrix"][data-note-font="default"] #editor-overlay .editor-note-body {
-    font-family: 'VT323', 'Share Tech Mono', monospace;
-    font-size: 0.82rem;
-    letter-spacing: 0.08em;
+    font-family: 'Overpass Mono', 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.84rem;
+    font-weight: 400;
+    letter-spacing: 0.03em;
     line-height: 1.45;
-    text-shadow:
-        0 0 6px rgba(57, 255, 101, 0.45),
-        0 0 18px rgba(57, 255, 101, 0.15);
+    text-shadow: none;
 }
 
 html[data-app-theme="matrix"] #app-canvas {
@@ -4837,9 +4957,13 @@ html[data-app-theme="matrix"] .clock-chip {
 }
 
 html[data-app-theme="matrix"]:not([data-note-font="default"]) .mini-card .mini-card-title,
+html[data-app-theme="matrix"]:not([data-note-font="default"]) #editor-overlay .mini-card-title {
+    text-shadow: 0 0 4px rgba(57, 255, 101, 0.18);
+}
+
 html[data-app-theme="matrix"]:not([data-note-font="default"]) .mini-card .card-content-preview,
 html[data-app-theme="matrix"]:not([data-note-font="default"]) .mini-card .step-text {
-    text-shadow: 0 0 8px rgba(57, 255, 101, 0.25);
+    text-shadow: none;
 }
 
 html[data-app-theme="matrix"] .mini-card .category-name,

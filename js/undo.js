@@ -1,5 +1,6 @@
 import { API } from './api.js';
 import { stripRichText } from './richText.js';
+import { showAppToast } from './toast.js';
 
 const MAX_STACK = 50;
 const MERGE_MS = 2500;
@@ -260,6 +261,7 @@ export const UndoManager = {
                 this.undoStack.push(entry);
             } else {
                 this.redoStack.push(entry);
+                showAppToast(`Undid: ${entry.label}`);
             }
         } catch (err) {
             console.error('[Undo] failed:', err);
@@ -285,6 +287,7 @@ export const UndoManager = {
                 this.redoStack.push(entry);
             } else {
                 this.undoStack.push(entry);
+                showAppToast(`Redid: ${entry.label}`);
             }
         } catch (err) {
             console.error('[Redo] failed:', err);

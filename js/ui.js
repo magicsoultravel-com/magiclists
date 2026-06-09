@@ -1362,7 +1362,9 @@ export const UI = {
             if (card.dataset.gridBoard === '1') this.raiseGridBoardCard(card);
             if (consumeSkipExpand()) return;
             if (!localStorage.getItem('admin_token')) return;
-            window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: item }));
+            window.dispatchEvent(new CustomEvent('item:selected_for_edit', {
+                detail: { item, sourceCard: card }
+            }));
         });
     },
 
@@ -2112,6 +2114,195 @@ export const UI = {
     revealNoteOnBoard(item) {
         if (!item?.id) return;
         window.dispatchEvent(new CustomEvent('editor:reveal_on_board', { detail: item }));
+    },
+
+    captureDesktopRestoreContext(card) {
+        if (!card) return null;
+        if (card.dataset.gridBoard === '1') {
+            return {
+                viewMode: 'grid',
+                rect: this.readNoteRect(card),
+                size: this.readFreeformCardSize(card)
+            };
+        }
+        if (card.dataset.freeform === '1') {
+            return {
+                viewMode: 'freeform',
+                position: {
+                    x: parseFloat(card.style.left) || 0,
+                    y: parseFloat(card.style.top) || 0
+                },
+                size: this.readFreeformCardSize(card)
+            };
+        }
+        return null;
+    },
+
+    getPreferredDesktopViewMode() {
+        const preferred = localStorage.getItem('matrix_preferred_view');
+        if (preferred === 'freeform' || preferred === 'grid') return preferred;
+        return 'grid';
+    },
+
+    findDesktopCenterSlot(w, h, canvas, viewMode, { excludeId = null } = {}) {
+        const host = canvas || document.getElementById('app-canvas');
+        if (viewMode === 'grid') {
+            const { origin, packW, viewportH } = this.getGridViewportBounds(host);
+            let rect = {
+                x: origin + Math.max(0, (packW - w) / 2),
+                y: origin + Math.max(0, (viewportH - h) / 2),
+                w,
+                h
+            };
+            rect = this.snapNoteRect(rect, { maxW: packW, maxH: origin + viewportH });
+            const placed = [...(host?.querySelectorAll('.mini-card[data-grid-board="1"]') || [])]
+                .filter((c) => c.dataset.id !== excludeId)
+                .map((c) => this.readNoteRect(c));
+            if (placed.some((p) => this.rectsOverlap(rect, p))) {
+                rect = this.findNearestGridSlot(rect, rect.w, rect.h, placed, {
+                    packW,
+                    origin,
+                    maxH: origin + viewportH
+                });
+            }
+            return rect;
+        }
+
+        const zoom = parseFloat(host?.dataset?.desktopZoom) || 1;
+        const pad = 8;
+        const cw = (host?.clientWidth || window.innerWidth) / zoom;
+        const ch = (host?.clientHeight || window.innerHeight) / zoom;
+        return {
+            x: Math.max(pad, (cw - w) / 2),
+            y: Math.max(pad, (ch - h) / 2),
+            w,
+            h
+        };
+    },
+
+    resolveNoteDesktopPlacement(itemId, { restoreContext = null, modalGeometry = null } = {}) {
+        const gridW = modalGeometry?.w || this.cellsToSpanW(2);
+        const gridH = modalGeometry?.h || this.cellsToSpanH(2);
+        const ffW = modalGeometry?.w || FREEFORM_EXPANDED_W;
+        const ffH = modalGeometry?.h || FREEFORM_EXPANDED_DEFAULT_H;
+        const canvas = document.getElementById('app-canvas');
+
+        if (restoreContext?.viewMode === 'grid' && restoreContext.rect) {
+            return {
+                viewMode: 'grid',
+                rect: {
+                    ...restoreContext.rect,
+                    w: modalGeometry?.w ?? restoreContext.rect.w,
+                    h: modalGeometry?.h ?? restoreContext.rect.h
+                }
+            };
+        }
+        if (restoreContext?.viewMode === 'freeform' && restoreContext.position) {
+            return {
+                viewMode: 'freeform',
+                position: { ...restoreContext.position },
+                size: {
+                    w: modalGeometry?.w ?? restoreContext.size?.w ?? ffW,
+                    h: modalGeometry?.h ?? restoreContext.size?.h ?? ffH
+                }
+            };
+        }
+
+        const gridSaved = this.getGridLayout()[itemId];
+        if (gridSaved && Number.isFinite(gridSaved.x) && Number.isFinite(gridSaved.w)) {
+            return {
+                viewMode: 'grid',
+                rect: {
+                    ...gridSaved,
+                    w: modalGeometry?.w ?? gridSaved.w,
+                    h: modalGeometry?.h ?? gridSaved.h
+                }
+            };
+        }
+
+        const ffPos = this.getFreeformPositions()[itemId];
+        if (ffPos && Number.isFinite(ffPos.x)) {
+            const ffSize = this.getFreeformSizes()[itemId];
+            return {
+                viewMode: 'freeform',
+                position: { x: ffPos.x, y: ffPos.y },
+                size: {
+                    w: modalGeometry?.w ?? ffSize?.w ?? ffW,
+                    h: modalGeometry?.h ?? ffSize?.h ?? ffH
+                }
+            };
+        }
+
+        const viewMode = this.getPreferredDesktopViewMode();
+        if (viewMode === 'grid') {
+            return {
+                viewMode: 'grid',
+                rect: this.findDesktopCenterSlot(gridW, gridH, canvas, 'grid', { excludeId: itemId })
+            };
+        }
+        const center = this.findDesktopCenterSlot(ffW, ffH, canvas, 'freeform');
+        return {
+            viewMode: 'freeform',
+            position: { x: center.x, y: center.y },
+            size: { w: center.w, h: center.h }
+        };
+    },
+
+    prepareDesktopPlacementBeforeRender(itemId, placement) {
+        if (!itemId || !placement?.viewMode) return;
+        setExpandedCard(placement.viewMode, itemId, true);
+        if (placement.viewMode === 'grid') {
+            this.setGridExpandedId(itemId);
+            if (placement.rect) {
+                this.saveGridLayout(itemId, placement.rect);
+            }
+            return;
+        }
+        if (placement.viewMode === 'freeform') {
+            if (placement.position) {
+                this.saveFreeformPosition(itemId, placement.position.x, placement.position.y);
+            }
+            if (placement.size) {
+                this.saveFreeformSize(itemId, placement.size.w, placement.size.h);
+            }
+        }
+    },
+
+    finishNoteDesktopReactivation(item, placement) {
+        if (!item?.id || !placement?.viewMode) return;
+        const canvas = document.getElementById('app-canvas');
+        const card = canvas?.querySelector(`.mini-card[data-id="${CSS.escape(item.id)}"]`);
+        if (!card) return;
+
+        if (placement.viewMode === 'grid' && placement.rect) {
+            this.applyNoteRect(card, placement.rect);
+            this.finalizeGridBoardCard(card);
+            this.updateGridBoardCard(card, item, {
+                expanded: true,
+                dimensions: { w: placement.rect.w, h: placement.rect.h }
+            });
+            this.raiseGridBoardCard(card);
+            requestAnimationFrame(() => {
+                this.reflowGridBoard(canvas, item.id, { animate: true });
+                this.squeezeGridBoardToViewport(canvas, { animate: true });
+                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            });
+            return;
+        }
+
+        if (placement.viewMode === 'freeform') {
+            if (placement.position) {
+                card.style.left = `${placement.position.x}px`;
+                card.style.top = `${placement.position.y}px`;
+                this.saveFreeformPosition(item.id, placement.position.x, placement.position.y);
+            }
+            this.updateFreeformCard(card, item, {
+                expanded: true,
+                dimensions: placement.size || null
+            });
+            this.raiseFreeformCard(card);
+            card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
     },
 
     bindCollapsable(headerId, sectionId, startCollapsed = false) {

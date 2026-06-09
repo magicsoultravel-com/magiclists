@@ -1,7 +1,8 @@
 ﻿import { applyCardTheme } from './cardTheme.js';
 import { ColorPicker, PALETTE_NOTE, randomNoteColor, resolveNoteColor } from './colorPicker.js';
+import { EditorModalChrome } from './editorModalChrome.js';
 import { sanitizeRichHtml, stripRichText } from './richText.js';
-import { CARD_ICONS, UI, computeNoteSizeKb, createNoteId, defaultStartDateTimeNow, noteHasSavableContent, normalizeItemForSave } from './ui.js';
+import { ACTION_ICONS, CARD_ICONS, UI, computeNoteSizeKb, createNoteId, defaultStartDateTimeNow, noteHasSavableContent, normalizeItemForSave } from './ui.js';
 
 export const Editor = {
     overlay: null,
@@ -11,6 +12,7 @@ export const Editor = {
     autoSaveTimer: null,
     hasUserInteracted: false,
     isNewUnsavedNote: false,
+    desktopRestoreContext: null,
     
     init() {
         this.overlay = document.getElementById('editor-overlay');
@@ -19,6 +21,7 @@ export const Editor = {
         this.colorBtn = document.getElementById('modal-color-btn');
         this.saveBtn = document.getElementById('modal-save-btn');
         this.archiveBtn = document.getElementById('modal-archive-btn');
+        this.reactivateBtn = document.getElementById('modal-reactivate-btn');
         this.approveBtn = document.getElementById('modal-approve-btn');
 
         if (this.colorBtn) {
@@ -35,15 +38,23 @@ export const Editor = {
         this.approveBtn?.addEventListener('click', commitAndClose);
         this.calendarToggleBtn?.addEventListener('click', () => this.toggleCalendarVisibility());
         this.archiveBtn?.addEventListener('click', () => this.emitArchiveAction());
+        if (this.reactivateBtn) {
+            this.reactivateBtn.innerHTML = ACTION_ICONS.desktopBg;
+            this.reactivateBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.reactivateOnDesktop();
+            });
+        }
         this.overlay?.addEventListener('mousedown', (e) => {
             if (e.target !== this.overlay) return;
             this.closeAndSave({ revealOnBoard: !this.preserveBoardCollapse });
         });
     },
     
-    open(item = null, categoriesList = []) {
+    open(item = null, categoriesList = [], { sourceCard = null } = {}) {
         this.availableCategories = categoriesList;
         this.hasUserInteracted = false;
+        this.desktopRestoreContext = UI.captureDesktopRestoreContext(sourceCard);
         
         const isNew = !item;
         this.activeItem = item ? JSON.parse(JSON.stringify(item)) : {
@@ -241,7 +252,48 @@ export const Editor = {
         this.hasUserInteracted = false;
         this.isNewUnsavedNote = false;
         this.preserveBoardCollapse = false;
+        this.desktopRestoreContext = null;
+        const modal = this.overlay?.querySelector('.modal');
+        if (modal) EditorModalChrome.teardown(modal);
         if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
+    },
+
+    readModalGeometry() {
+        const modal = this.overlay?.querySelector('.modal');
+        return EditorModalChrome.isEnabled() ? EditorModalChrome.readGeometry(modal) : null;
+    },
+
+    reactivateOnDesktop() {
+        if (this.autoSaveTimer) {
+            clearTimeout(this.autoSaveTimer);
+            this.autoSaveTimer = null;
+        }
+
+        let savedItem = null;
+        const restoreContext = this.desktopRestoreContext;
+        const modalGeometry = this.readModalGeometry();
+
+        if (this.activeItem) {
+            const currentData = this.collectFormData({ normalize: true });
+            const shouldPersist = noteHasSavableContent(currentData)
+                || (this.hasUserInteracted && !this.isNewUnsavedNote);
+            if (shouldPersist) {
+                this.persistNote({ force: true, normalize: true });
+                savedItem = { ...this.activeItem };
+            }
+        }
+
+        if (!savedItem?.id) {
+            this.close();
+            return;
+        }
+
+        this.animateEditorClose(() => {
+            this.resetEditorState();
+            window.dispatchEvent(new CustomEvent('editor:reactivate_on_desktop', {
+                detail: { item: savedItem, restoreContext, modalGeometry }
+            }));
+        });
     },
 
     closeAndSave({ revealOnBoard = false } = {}) {
@@ -422,6 +474,10 @@ export const Editor = {
         });
 
         this.syncColorFromItem(item);
+        const modal = this.overlay?.querySelector('.modal');
+        if (modal) {
+            EditorModalChrome.init(modal);
+        }
     },
 
     syncEditorTheme(backgroundColor) {
