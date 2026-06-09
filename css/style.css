@@ -271,7 +271,7 @@
     align-items: flex-start;
     margin-bottom: 0;
     padding: 0.5rem;
-    background: #202026;
+    background: var(--bg-surface);
     border-radius: 6px;
     min-width: 0;
 }
@@ -830,14 +830,6 @@ body {
                 height var(--card-anim-duration, 0.3s) cubic-bezier(0.22, 1, 0.36, 1),
                 min-height var(--card-anim-duration, 0.3s) cubic-bezier(0.22, 1, 0.36, 1),
                 max-height var(--card-anim-duration, 0.3s) cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.mini-card.card-animating .editor-note-shell {
-    transition: opacity var(--card-content-fade-duration, 0.18s) ease;
-}
-
-.mini-card.card-animating.card-anim-content-hidden .editor-note-shell {
-    opacity: 0;
 }
 
 #app-canvas.view-freeform .mini-card.card-animating.expanded,
@@ -2595,7 +2587,7 @@ html[data-note-font="kalam"] .mini-card .step-text {
 }
 
 .color-picker-tile--user-empty {
-    background: #26262b;
+    background: var(--bg-card);
 }
 
 .color-picker-wheel {
@@ -5217,6 +5209,21 @@ textarea.form-input {
 
 .app-theme-option .clock-style-preview {
     min-width: 2.6rem;
+}
+
+/* OLED Black — true black surfaces, no gradient halos */
+html[data-app-theme="black"] {
+    color-scheme: dark;
+}
+
+html[data-app-theme="black"][data-desktop-gradient="1"] #app-canvas.view-freeform,
+html[data-app-theme="black"][data-desktop-gradient="1"] #app-canvas.view-grid,
+html[data-app-theme="black"][data-desktop-gradient="1"] #app-canvas.view-columns {
+    background-image: none;
+}
+
+html[data-app-theme="black"][data-desktop-gradient="1"] #app-canvas.view-columns.is-layout-active {
+    background-image: none;
 }
 
 /* Monochrome — grayscale UI + notes (independent from Matrix) */

@@ -71,9 +71,6 @@ const GRID_LAYOUT_KEY = 'matrix_grid_layout';
 const GRID_PINS_KEY = 'matrix_grid_pins';
 const GRID_EXPANDED_KEY = 'matrix_grid_expanded_id';
 const CARD_ANIM_MS = 300;
-const CARD_CONTENT_FADE_MS = 180;
-const CARD_CONTENT_FADE_DELAY_MS = 120;
-const CARD_COLLAPSE_FADE_MS = 100;
 const CARD_COMPACT_H = 56;
 
 const cardAnimSessions = new WeakMap();
@@ -837,7 +834,7 @@ export const UI = {
             setExpandedCard('columns', item.id, false);
         }
         this.cancelCardAnimation(card);
-        card.classList.remove('expanded', 'card-state-changing', 'card-animating', 'card-anim-content-hidden');
+        card.classList.remove('expanded', 'card-state-changing', 'card-animating');
         card.classList.add('compact');
         this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
         if (card.dataset.gridBoard === '1') {
@@ -1953,8 +1950,6 @@ export const UI = {
         if (!card) return;
         const session = cardAnimSessions.get(card);
         if (session) {
-            if (session.fadeTimer) clearTimeout(session.fadeTimer);
-            if (session.collapseTimer) clearTimeout(session.collapseTimer);
             if (session.transitionCleanup) session.transitionCleanup();
             cardAnimSessions.delete(card);
         }
@@ -1963,9 +1958,8 @@ export const UI = {
 
     cleanupCardAnimation(card) {
         if (!card) return;
-        card.classList.remove('card-state-changing', 'card-animating', 'card-anim-content-hidden');
+        card.classList.remove('card-state-changing', 'card-animating');
         card.style.removeProperty('--card-anim-duration');
-        card.style.removeProperty('--card-content-fade-duration');
         card.style.removeProperty('overflow');
         card.style.removeProperty('transition');
     },
@@ -2088,9 +2082,8 @@ export const UI = {
             const compactW = this.resolveAnimCompactWidth(card);
             const compactH = Math.round(card.getBoundingClientRect().height) || this.resolveAnimCompactHeight(card);
 
-            card.classList.add('card-animating', 'card-state-changing', 'card-anim-content-hidden');
+            card.classList.add('card-animating', 'card-state-changing');
             card.style.setProperty('--card-anim-duration', `${CARD_ANIM_MS}ms`);
-            card.style.setProperty('--card-content-fade-duration', `${CARD_CONTENT_FADE_MS}ms`);
             card.style.overflow = 'hidden';
 
             this.lockCardAnimationDimensions(card, compactW, compactH);
@@ -2107,12 +2100,6 @@ export const UI = {
             requestAnimationFrame(() => {
                 requestAnimationFrame(() => {
                     this.lockCardAnimationDimensions(card, target.w, target.h);
-
-                    const session = cardAnimSessions.get(card) || {};
-                    session.fadeTimer = setTimeout(() => {
-                        card.classList.remove('card-anim-content-hidden');
-                    }, CARD_CONTENT_FADE_DELAY_MS);
-                    cardAnimSessions.set(card, session);
 
                     void this.waitCardTransition(card).then(() => {
                         finishExpand();
@@ -2132,21 +2119,20 @@ export const UI = {
         const compactW = this.resolveAnimCompactWidth(card);
         const compactH = this.resolveAnimCompactHeight(card);
 
-        card.classList.add('card-animating', 'card-state-changing', 'card-anim-content-hidden');
+        card.classList.add('card-animating', 'card-state-changing');
         card.style.setProperty('--card-anim-duration', `${CARD_ANIM_MS}ms`);
-        card.style.setProperty('--card-content-fade-duration', `${CARD_CONTENT_FADE_MS}ms`);
         card.style.overflow = 'hidden';
         this.lockCardAnimationDimensions(card, expandedW, expandedH);
 
-        const session = cardAnimSessions.get(card) || {};
-        session.collapseTimer = setTimeout(() => {
-            void card.offsetHeight;
-            this.lockCardAnimationDimensions(card, compactW, compactH);
-            void this.waitCardTransition(card).then(() => {
-                finishCollapse();
+        void card.offsetHeight;
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                this.lockCardAnimationDimensions(card, compactW, compactH);
+                void this.waitCardTransition(card).then(() => {
+                    finishCollapse();
+                });
             });
-        }, CARD_COLLAPSE_FADE_MS);
-        cardAnimSessions.set(card, session);
+        });
     },
 
     updateColumnsFloatCard(card, item, { expanded, dimensions = null } = {}) {

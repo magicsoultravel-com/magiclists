@@ -52,19 +52,19 @@ export const APP_THEMES = [
     },
     {
         id: 'black',
-        label: 'Black',
-        desc: 'Pure dark',
-        swatch: ['#000000', '#0a0a0a', '#52525b'],
+        label: 'OLED Black',
+        desc: 'True black for OLED displays',
+        swatch: ['#000000', '#000000', '#6366f1'],
         tokens: {
             '--bg-primary': '#000000',
-            '--bg-surface': '#050505',
-            '--bg-card': '#111111',
+            '--bg-surface': '#000000',
+            '--bg-card': '#000000',
             '--text-main': '#f4f4f5',
-            '--text-muted': '#a1a1aa',
-            '--accent': '#a1a1aa',
-            '--border-color': '#27272a',
+            '--text-muted': '#71717a',
+            '--accent': '#6366f1',
+            '--border-color': '#1a1a1a',
             '--desktop-bg': '#000000',
-            '--chrome-bg': '#050505'
+            '--chrome-bg': '#000000'
         }
     },
     {
