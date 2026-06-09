@@ -16,7 +16,7 @@ import { FocusMode } from './focusMode.js';
 import { DisplayOptions } from './displayOptions.js';
 import { AppTheme } from './appTheme.js';
 import { DesktopZoom } from './desktopZoom.js';
-import { resetCustomizationToDefaults } from './customizationReset.js';
+import { NoteFontScale } from './noteFontScale.js';
 import { exportAppCode } from './codeExport.js';
 import { readViewSessions, restoreViewSession } from './viewSession.js';
 import { SearchBar } from './searchBar.js';
@@ -53,7 +53,10 @@ class Application {
     async init() {
         DesktopBackground.init();
         ChromeBackground.init();
-        DisplayOptions.init();
+        NoteFontScale.init();
+        DisplayOptions.init({
+            getLoggedIn: () => AppState.user.isLoggedIn
+        });
         AppTheme.init();
         readViewSessions();
         restoreViewSession(AppState.viewSettings.sortBy);
@@ -73,7 +76,6 @@ class Application {
         this.setupLayoutResetButton();
         this.setupCollapseAllButton();
         this.setupDisplayOptionsButton();
-        this.setupResetCustomizationButton();
         this.setupAppThemeButton();
         this.setupFocusModeButton();
         this.setupSearchBar();
@@ -404,7 +406,6 @@ class Application {
 
     updateDesktopZoomVisibility() {
         const show = AppState.user.isLoggedIn && DesktopZoom.isDesktopViewport();
-        document.getElementById('desktop-zoom-controls')?.classList.toggle('is-hidden', !show);
         DesktopZoom.apply({ enabled: show });
     }
 
@@ -434,19 +435,6 @@ class Application {
     setupDisplayOptionsButton() {
         const btn = document.getElementById('btn-display-options');
         if (btn) btn.innerHTML = ACTION_ICONS.displayOptions;
-    }
-
-    setupResetCustomizationButton() {
-        const btn = document.getElementById('btn-reset-customization');
-        if (!btn) return;
-        btn.innerHTML = ACTION_ICONS.resetCustomization;
-        btn.addEventListener('click', () => {
-            if (!resetCustomizationToDefaults()) return;
-            AppState.focusCategories = [];
-            FocusMode.syncButtonState();
-            this.onFocusChange();
-            window.dispatchEvent(new CustomEvent('board:visibility_changed'));
-        });
     }
 
     setupAppThemeButton() {

@@ -63,21 +63,22 @@ export const DesktopZoom = {
         window.dispatchEvent(new CustomEvent('tools:desktop_bounds_changed'));
     },
 
+    isCustomized() {
+        return Math.abs(readZoom() - ZOOM_DEFAULT) > 0.001;
+    },
+
     updateButtons() {
         const zoom = readZoom();
-        const outBtn = document.getElementById('btn-desktop-zoom-out');
-        const inBtn = document.getElementById('btn-desktop-zoom-in');
-        const label = document.getElementById('desktop-zoom-label');
+        const outBtn = document.getElementById('display-opt-desktop-zoom-out');
+        const inBtn = document.getElementById('display-opt-desktop-zoom-in');
+        const label = document.getElementById('display-opt-desktop-zoom-label');
         if (outBtn) outBtn.disabled = zoom <= ZOOM_MIN + 0.001;
         if (inBtn) inBtn.disabled = zoom >= ZOOM_MAX - 0.001;
         if (label) label.textContent = `${Math.round(zoom * 100)}%`;
     },
 
     init() {
-        const outBtn = document.getElementById('btn-desktop-zoom-out');
-        const inBtn = document.getElementById('btn-desktop-zoom-in');
-        outBtn?.addEventListener('click', () => this.step(-ZOOM_STEP));
-        inBtn?.addEventListener('click', () => this.step(ZOOM_STEP));
+        /* Stepper buttons are bound when the display options popover opens. */
     },
 
     isDesktopViewport() {

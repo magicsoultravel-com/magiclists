@@ -5,28 +5,29 @@ export function createThemePicker({
     defaultColor,
     presets,
     cssVar,
-    buttonId,
-    ariaLabel,
+    buttonId = null,
+    ariaLabel = '',
     iconHtml = '',
     onApply
 }) {
     return {
         triggerBtn: null,
+        storageKey,
+        defaultColor,
+        presets,
+        cssVar,
+        ariaLabel,
+        onApply,
 
         init() {
             this.applyStored();
+            if (!buttonId) return;
             this.triggerBtn = document.getElementById(buttonId);
             if (!this.triggerBtn) return;
             if (iconHtml) this.triggerBtn.innerHTML = iconHtml;
             this.triggerBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                ColorPicker.open({
-                    anchor: this.triggerBtn,
-                    presets,
-                    value: this.readStored(),
-                    align: 'end',
-                    onSelect: (color) => this.apply(color)
-                });
+                this.openPicker(this.triggerBtn);
             });
         },
 
@@ -40,6 +41,10 @@ export function createThemePicker({
             return defaultColor;
         },
 
+        isCustomized() {
+            return this.readStored().toLowerCase() !== defaultColor.toLowerCase();
+        },
+
         applyStored() {
             this.apply(this.readStored(), { silent: true });
         },
@@ -47,8 +52,22 @@ export function createThemePicker({
         apply(color, { silent = false } = {}) {
             const value = color || defaultColor;
             document.documentElement.style.setProperty(cssVar, value);
-            onApply?.(value);
-            if (!silent) localStorage.setItem(storageKey, value);
+            this.onApply?.(value);
+            if (!silent) {
+                localStorage.setItem(storageKey, value);
+                window.dispatchEvent(new CustomEvent('appearance:color_changed', { detail: { cssVar } }));
+            }
+        },
+
+        openPicker(anchor) {
+            if (!anchor) return;
+            ColorPicker.open({
+                anchor,
+                presets: this.presets,
+                value: this.readStored(),
+                align: 'end',
+                onSelect: (color) => this.apply(color)
+            });
         }
     };
 }

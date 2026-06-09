@@ -139,35 +139,27 @@
                     <div id="app-brand" class="app-brand">magicNotes</div>
                 </div>
                 </div>
+                <div id="control-bar-search" class="control-bar-search">
+                    <input type="search" id="workspace-search-input" class="control-bar-search-input form-input" placeholder="Search…" aria-label="Search notes" autocomplete="off" spellcheck="false" aria-expanded="false" aria-controls="workspace-search-panel">
+                    <button type="button" id="workspace-search-clear" class="control-bar-search-clear" title="Clear search" aria-label="Clear search">×</button>
+                    <div id="workspace-search-panel" class="search-results-panel is-hidden" role="listbox" aria-label="Search results"></div>
+                </div>
                 <div class="control-bar-end">
                     <div id="control-bar-actions" class="control-bar-actions">
                         <div id="history-controls" class="history-controls is-hidden">
                             <button type="button" id="btn-undo" class="btn btn--compact btn--icon" disabled title="Undo (Ctrl+Z)" aria-label="Undo"></button>
                             <button type="button" id="btn-redo" class="btn btn--compact btn--icon" disabled title="Redo (Ctrl+Y)" aria-label="Redo"></button>
                         </div>
-                        <div id="control-bar-search" class="control-bar-search">
-                            <input type="search" id="workspace-search-input" class="control-bar-search-input form-input" placeholder="Search…" aria-label="Search notes" autocomplete="off" spellcheck="false" aria-expanded="false" aria-controls="workspace-search-panel">
-                            <button type="button" id="workspace-search-clear" class="control-bar-search-clear" title="Clear search" aria-label="Clear search">×</button>
-                            <div id="workspace-search-panel" class="search-results-panel is-hidden" role="listbox" aria-label="Search results"></div>
-                        </div>
-                        <button type="button" id="btn-chrome-bg" class="btn btn--compact btn--icon" title="Panel and header background" aria-label="Panel and header background" aria-expanded="false" aria-haspopup="dialog"></button>
-                        <button type="button" id="btn-desktop-bg" class="btn btn--compact btn--icon" title="Desktop background" aria-label="Desktop background" aria-expanded="false" aria-haspopup="dialog"></button>
                         <button type="button" id="btn-app-theme" class="btn btn--compact btn--icon" title="App theme" aria-label="App theme" aria-expanded="false" aria-haspopup="menu"></button>
                         <button type="button" id="btn-display-options" class="btn btn--compact btn--icon" title="Display options" aria-label="Display options" aria-expanded="false" aria-haspopup="menu"></button>
-                        <button type="button" id="btn-reset-customization" class="btn btn--compact btn--icon" title="Reset appearance to defaults" aria-label="Reset appearance to defaults"></button>
                         <button type="button" id="btn-focus-mode" class="btn btn--compact btn--icon" title="Focus mode" aria-label="Focus mode" aria-expanded="false" aria-haspopup="menu"></button>
-                        <span id="desktop-zoom-controls" class="desktop-zoom-controls is-hidden" aria-label="Desktop zoom">
-                            <button type="button" id="btn-desktop-zoom-out" class="btn btn--compact btn--icon" title="Zoom out — see more desktop" aria-label="Zoom out desktop">−</button>
-                            <span id="desktop-zoom-label" class="desktop-zoom-label" aria-hidden="true">100%</span>
-                            <button type="button" id="btn-desktop-zoom-in" class="btn btn--compact btn--icon" title="Zoom in — larger tiles" aria-label="Zoom in desktop">+</button>
-                        </span>
                         <button type="button" id="btn-save-view" class="btn btn--compact btn--icon" title="Save view" aria-label="Save view"></button>
                         <button type="button" id="btn-recall-view" class="btn btn--compact btn--icon" title="Restore saved view" aria-label="Restore saved view" disabled></button>
                         <button type="button" id="btn-collapse-all" class="btn btn--compact btn--icon is-hidden" title="Collapse all notes" aria-label="Collapse all notes"></button>
                         <button type="button" id="btn-layout-reset" class="btn btn--compact btn--icon is-hidden" title="Reset" aria-label="Reset"></button>
                     </div>
                     <div id="digital-clock" class="logo-zone logo-zone--clock">
-                        <button type="button" id="clock-icon-fallback" class="btn btn--compact btn--icon clock-icon-fallback" title="Hide clock" aria-label="Hide clock" aria-expanded="false"></button>
+                        <button type="button" id="clock-icon-fallback" class="btn btn--compact btn--icon clock-icon-fallback is-hidden" title="Show clock" aria-label="Show clock" aria-expanded="false"></button>
                         <button type="button" id="clock-display" class="clock-display clock-display-trigger" title="Change clock style" aria-label="Clock and date — change style" aria-expanded="false" aria-haspopup="menu">
                             <span id="clock-date" class="clock-chip clock-chip--date">—</span>
                             <span id="clock-time" class="clock-chip clock-chip--time">—</span>

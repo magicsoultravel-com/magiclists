@@ -10,6 +10,7 @@
     --accent: #4f46e5;
     --border-color: #323238;
     --desktop-drag-opacity: 0.55;
+    --note-font-scale: 1;
 
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background-color: var(--desktop-bg, var(--bg-primary));
@@ -228,7 +229,7 @@
     margin-bottom: 0.2rem;
     margin-left: -0.12rem;
     gap: 0.28rem;
-    font-size: 0.65rem;
+    font-size: calc(0.65rem * var(--note-font-scale, 1));
     min-width: 0;
 }
 
@@ -753,7 +754,7 @@ body {
 .created-date,
 .note-size {
     color: var(--text-muted) !important;
-    font-size: 0.56rem;
+    font-size: calc(0.56rem * var(--note-font-scale, 1));
     white-space: nowrap;
 }
 
@@ -800,7 +801,7 @@ body {
 }
 
 .note-surface .card-content-preview {
-    font-size: 0.66rem;
+    font-size: calc(0.66rem * var(--note-font-scale, 1));
     line-height: 1.35;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -814,7 +815,7 @@ body {
 }
 
 .note-surface .expanded-checklist {
-    font-size: 0.6rem;
+    font-size: calc(0.6rem * var(--note-font-scale, 1));
 }
 
 .expanded-checklist-add-btn:hover {
@@ -922,7 +923,7 @@ html[data-card-animations="0"] .mini-card.card-state-changing .card-body {
     display: flex;
     align-items: center;
     gap: 0.45rem;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     min-width: 0;
 }
 
@@ -930,14 +931,19 @@ html[data-card-animations="0"] .mini-card.card-state-changing .card-body {
     position: relative;
     display: flex;
     align-items: center;
-    flex: 0 0 auto;
+    flex: 0 1 auto;
     min-width: 0;
+    margin-left: 0.25rem;
+    margin-right: 0.35rem;
+    padding-right: 0.5rem;
+    border-right: 1px solid var(--border-color);
 }
 
 .control-bar-search-input {
     width: 10rem;
     max-width: 12rem;
     height: 1.65rem;
+    min-height: 1.65rem;
     padding: 0.15rem 1.35rem 0.15rem 0.45rem;
     font-size: 0.66rem;
     line-height: 1.25;
@@ -1037,8 +1043,39 @@ html[data-card-animations="0"] .mini-card.card-state-changing .card-body {
 }
 
 .search-results-item--title,
+.search-results-item--content,
+.search-results-item--category {
+    position: relative;
+}
+
+.search-results-item--title,
 .search-results-item--category {
     border-left: 3px solid var(--note-accent, transparent);
+}
+
+.search-results-item--archived {
+    opacity: 0.78;
+}
+
+.search-results-item--archived .search-results-item-primary {
+    padding-right: 1.25rem;
+}
+
+.search-results-archived-badge {
+    position: absolute;
+    top: 0.4rem;
+    right: 0.65rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted, #64748b);
+    pointer-events: none;
+    opacity: 0.85;
+}
+
+.search-results-archived-badge svg {
+    width: 11px;
+    height: 11px;
 }
 
 .search-results-item-primary {
@@ -1110,7 +1147,6 @@ mark.search-hit {
 }
 
 .clock-icon-fallback {
-    order: 2;
     flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
@@ -1144,7 +1180,6 @@ mark.search-hit {
 #btn-collapse-all,
 #btn-app-theme,
 #btn-display-options,
-#btn-reset-customization,
 #btn-focus-mode,
 #btn-save-view,
 #btn-recall-view {
@@ -1201,6 +1236,25 @@ html[data-desktop-gradient="1"] #app-canvas.view-columns.is-layout-active {
     background-position: 0 0, 0 0, 1.25rem 0.65rem, 1.25rem 0.65rem;
 }
 
+.display-options-popover {
+    width: min(300px, calc(100vw - 16px));
+    font-size: 0.66rem;
+}
+
+.display-options-popover .focus-mode-row-label {
+    font-size: 0.66rem;
+    font-weight: 500;
+    line-height: 1.25;
+}
+
+.display-options-popover .focus-mode-row-hint {
+    font-size: 0.58rem;
+}
+
+.display-options-popover .focus-mode-row {
+    padding: 0.35rem 0.45rem;
+}
+
 .display-options-heading {
     margin: 0.1rem 0.45rem 0.2rem;
     font-size: 0.62rem;
@@ -1208,6 +1262,91 @@ html[data-desktop-gradient="1"] #app-canvas.view-columns.is-layout-active {
     letter-spacing: 0.04em;
     text-transform: uppercase;
     color: var(--text-muted);
+}
+
+.display-options-stepper-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.3rem 0.45rem;
+    min-height: 2rem;
+}
+
+.display-options-stepper-row.is-disabled {
+    opacity: 0.55;
+}
+
+.display-options-stepper-label {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.66rem;
+    font-weight: 500;
+    color: var(--text-main);
+}
+
+.display-options-stepper {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.12rem;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.display-options-stepper-btn {
+    min-width: 24px;
+    min-height: 24px;
+    padding: 0.15rem;
+    font-size: 0.75rem;
+    line-height: 1;
+}
+
+.display-options-stepper-value {
+    min-width: 2.4rem;
+    text-align: center;
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    user-select: none;
+}
+
+.display-options-bg-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: 100%;
+    border: none;
+    font: inherit;
+    cursor: pointer;
+}
+
+.display-options-swatch {
+    flex-shrink: 0;
+    width: 1.1rem;
+    height: 1.1rem;
+    margin-left: auto;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.display-options-reset {
+    width: calc(100% - 0.7rem);
+    margin: 0.15rem 0.35rem 0.1rem;
+    color: var(--text-muted);
+}
+
+.display-options-reset:hover {
+    color: var(--text-main);
+}
+
+.display-options-reset-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.display-options-reset-label svg {
+    flex-shrink: 0;
+    opacity: 0.85;
 }
 
 .display-options-row {
@@ -1290,7 +1429,12 @@ html[data-desktop-gradient="1"] #app-canvas.view-columns.is-layout-active {
 
 html[data-note-font="press-start"] .mini-card .mini-card-title,
 html[data-note-font="press-start"] .mini-card .card-content-preview,
-html[data-note-font="press-start"] .mini-card .step-text,
+html[data-note-font="press-start"] .mini-card .step-text {
+    font-size: calc(0.52rem * var(--note-font-scale, 1));
+    line-height: 1.65;
+    letter-spacing: 0.02em;
+}
+
 html[data-note-font="press-start"] #editor-overlay .editor-note-shell .step-text {
     font-size: 0.52rem;
     line-height: 1.65;
@@ -1315,7 +1459,7 @@ html[data-note-font="indie-flower"] .mini-card .step-text,
 html[data-note-font="kalam"] .mini-card .mini-card-title,
 html[data-note-font="kalam"] .mini-card .card-content-preview,
 html[data-note-font="kalam"] .mini-card .step-text {
-    font-size: 0.78rem;
+    font-size: calc(0.78rem * var(--note-font-scale, 1));
     line-height: 1.4;
 }
 
@@ -1870,7 +2014,7 @@ html[data-note-font="kalam"] .mini-card .step-text {
 }
 
 .mini-card-title {
-    font-size: 0.7rem;
+    font-size: calc(0.7rem * var(--note-font-scale, 1));
     font-weight: 600;
     color: var(--text-main);
     line-height: 1.3;
@@ -2142,7 +2286,7 @@ html[data-note-font="kalam"] .mini-card .step-text {
 .mini-card-meta.compact {
     margin-top: 0.25rem;
     gap: 0.25rem;
-    font-size: 0.6rem;
+    font-size: calc(0.6rem * var(--note-font-scale, 1));
     flex-wrap: wrap;
 }
 
@@ -2151,7 +2295,7 @@ html[data-note-font="kalam"] .mini-card .step-text {
     padding-top: 0.35rem;
     border-top: 1px solid var(--border-color);
     gap: 0.3rem;
-    font-size: 0.6rem;
+    font-size: calc(0.6rem * var(--note-font-scale, 1));
 }
 
 /* Default note text (overridden inside .has-custom-bg) */
@@ -2166,7 +2310,7 @@ html[data-note-font="kalam"] .mini-card .step-text {
 }
 
 .category-name {
-    font-size: 0.6rem !important;
+    font-size: calc(0.6rem * var(--note-font-scale, 1)) !important;
     max-width: 80px !important;
     display: inline-block !important;
 }
@@ -2184,7 +2328,7 @@ html[data-note-font="kalam"] .mini-card .step-text {
 }
 
 .checklist-badge {
-    font-size: 0.55rem;
+    font-size: calc(0.55rem * var(--note-font-scale, 1));
     background: rgba(255, 255, 255, 0.1);
     padding: 0.1rem 0.25rem;
     border-radius: 3px;
@@ -2192,7 +2336,7 @@ html[data-note-font="kalam"] .mini-card .step-text {
 
 /* Expanded Card Content - vertical layout */
 .card-content-preview {
-    font-size: 0.65rem;
+    font-size: calc(0.65rem * var(--note-font-scale, 1));
     margin: 0;
     line-height: 1.4;
     white-space: pre-wrap;
@@ -3283,13 +3427,6 @@ textarea.form-input {
     letter-spacing: 0;
 }
 
-#btn-desktop-bg,
-#btn-chrome-bg {
-    min-width: 30px;
-    min-height: 30px;
-    padding: 0.25rem;
-}
-
 .grab-handle--step {
     position: relative;
     font-size: 0.48rem;
@@ -4169,12 +4306,12 @@ textarea.form-input {
 }
 
 .mini-card-title {
-    font-size: 0.66rem;
+    font-size: calc(0.66rem * var(--note-font-scale, 1));
 }
 
 .mini-card-meta.compact {
     margin-top: 0.2rem;
-    font-size: 0.56rem;
+    font-size: calc(0.56rem * var(--note-font-scale, 1));
 }
 
 .category-name {
@@ -5068,7 +5205,15 @@ html[data-app-theme="matrix"] .clock-chip {
     font-weight: 400;
 }
 
-html[data-app-theme="matrix"][data-note-font="default"] .mini-card .mini-card-title,
+html[data-app-theme="matrix"][data-note-font="default"] .mini-card .mini-card-title {
+    font-family: 'Overpass Mono', 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
+    font-size: calc(0.84rem * var(--note-font-scale, 1));
+    font-weight: 400;
+    letter-spacing: 0.03em;
+    line-height: 1.45;
+    text-shadow: 0 0 4px rgba(57, 255, 101, 0.22);
+}
+
 html[data-app-theme="matrix"][data-note-font="default"] #editor-overlay .editor-note-shell .mini-card-title {
     font-family: 'Overpass Mono', 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
     font-size: 0.84rem;
@@ -5079,7 +5224,15 @@ html[data-app-theme="matrix"][data-note-font="default"] #editor-overlay .editor-
 }
 
 html[data-app-theme="matrix"][data-note-font="default"] .mini-card .card-content-preview,
-html[data-app-theme="matrix"][data-note-font="default"] .mini-card .step-text,
+html[data-app-theme="matrix"][data-note-font="default"] .mini-card .step-text {
+    font-family: 'Overpass Mono', 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
+    font-size: calc(0.84rem * var(--note-font-scale, 1));
+    font-weight: 400;
+    letter-spacing: 0.03em;
+    line-height: 1.45;
+    text-shadow: none;
+}
+
 html[data-app-theme="matrix"][data-note-font="default"] #editor-overlay .editor-note-shell .step-text,
 html[data-app-theme="matrix"][data-note-font="default"] #editor-overlay .editor-note-body {
     font-family: 'Overpass Mono', 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
@@ -5218,7 +5371,12 @@ html[data-app-theme="casual"] #editor-overlay .step-text {
 
 html[data-app-theme="casual"][data-note-font="default"] .mini-card .mini-card-title,
 html[data-app-theme="casual"][data-note-font="default"] .mini-card .card-content-preview,
-html[data-app-theme="casual"][data-note-font="default"] .mini-card .step-text,
+html[data-app-theme="casual"][data-note-font="default"] .mini-card .step-text {
+    font-family: 'Patrick Hand', 'Segoe Print', 'Comic Neue', cursive;
+    font-size: calc(0.78rem * var(--note-font-scale, 1));
+    line-height: 1.35rem;
+}
+
 html[data-app-theme="casual"][data-note-font="default"] #editor-overlay .editor-note-shell .step-text {
     font-family: 'Patrick Hand', 'Segoe Print', 'Comic Neue', cursive;
     font-size: 0.78rem;
@@ -5291,7 +5449,12 @@ html[data-app-theme="casual-dark"] #editor-overlay .step-text {
 
 html[data-app-theme="casual-dark"][data-note-font="default"] .mini-card .mini-card-title,
 html[data-app-theme="casual-dark"][data-note-font="default"] .mini-card .card-content-preview,
-html[data-app-theme="casual-dark"][data-note-font="default"] .mini-card .step-text,
+html[data-app-theme="casual-dark"][data-note-font="default"] .mini-card .step-text {
+    font-family: 'Patrick Hand', 'Segoe Print', 'Comic Neue', cursive;
+    font-size: calc(0.78rem * var(--note-font-scale, 1));
+    line-height: 1.35rem;
+}
+
 html[data-app-theme="casual-dark"][data-note-font="default"] #editor-overlay .editor-note-shell .step-text {
     font-family: 'Patrick Hand', 'Segoe Print', 'Comic Neue', cursive;
     font-size: 0.78rem;
@@ -5310,8 +5473,7 @@ html[data-app-theme="casual-dark"] .mini-card.compact .card-actions::before {
 }
 
 @media (max-width: 768px) {
-    #btn-view-grid,
-    .desktop-zoom-controls {
+    #btn-view-grid {
         display: none !important;
     }
 }

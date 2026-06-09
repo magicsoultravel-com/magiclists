@@ -5,6 +5,12 @@ import {
     readNoteFont,
     writeNoteFont
 } from './noteFont.js';
+import { NoteFontScale } from './noteFontScale.js';
+import { DesktopZoom } from './desktopZoom.js';
+import { ChromeBackground } from './chromeBackground.js';
+import { DesktopBackground } from './desktopBackground.js';
+import { resetCustomizationToDefaults } from './customizationReset.js';
+import { ACTION_ICONS } from './ui.js';
 
 const STORAGE_KEY = 'matrix_display_options';
 
@@ -54,7 +60,11 @@ function isCustomized(options) {
         || !options.showCreatedDate
         || options.desktopGradient
         || !options.cardAnimations
-        || isNoteFontCustomized(options.noteFontId);
+        || isNoteFontCustomized(options.noteFontId)
+        || NoteFontScale.isCustomized()
+        || DesktopZoom.isCustomized()
+        || ChromeBackground.isCustomized()
+        || DesktopBackground.isCustomized();
 }
 
 export const DisplayOptions = {
@@ -64,9 +74,11 @@ export const DisplayOptions = {
     keyHandler: null,
     options: { ...DEFAULTS },
     onChange: null,
+    getLoggedIn: null,
 
-    init({ onChange } = {}) {
+    init({ onChange, getLoggedIn } = {}) {
         this.onChange = onChange;
+        this.getLoggedIn = getLoggedIn;
         this.options = readDisplayOptions();
         applyDisplayOptions(this.options);
 
@@ -76,6 +88,15 @@ export const DisplayOptions = {
         this.triggerBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             this.togglePopover();
+        });
+
+        window.addEventListener('desktop:zoom_changed', () => this.syncButtonState());
+        window.addEventListener('note:font_scale_changed', () => this.syncButtonState());
+        window.addEventListener('appearance:color_changed', () => this.syncButtonState());
+        window.addEventListener('customization:reset', () => {
+            this.options = readDisplayOptions();
+            applyDisplayOptions(this.options);
+            this.syncButtonState();
         });
 
         this.syncButtonState();
@@ -103,6 +124,10 @@ export const DisplayOptions = {
         btn.classList.toggle('is-active', custom);
         btn.title = custom ? 'Display options (customized)' : 'Display options';
         btn.setAttribute('aria-label', btn.title);
+    },
+
+    isDesktopZoomEnabled() {
+        return Boolean(this.getLoggedIn?.()) && DesktopZoom.isDesktopViewport();
     },
 
     ensurePopover() {
@@ -138,6 +163,27 @@ export const DisplayOptions = {
         </label>`;
     },
 
+    stepperRow({ idPrefix, label, valuePercent, disabled = false, disabledHint = '' }) {
+        const disabledClass = disabled ? ' is-disabled' : '';
+        const disabledAttr = disabled ? ' disabled' : '';
+        return `<div class="display-options-stepper-row${disabledClass}">
+            <span class="display-options-stepper-label">${escapeHtml(label)}</span>
+            ${disabled && disabledHint ? `<span class="focus-mode-row-hint">${escapeHtml(disabledHint)}</span>` : ''}
+            <span class="display-options-stepper" aria-label="${escapeHtml(label)}">
+                <button type="button" id="${idPrefix}-out" class="btn btn--compact btn--icon display-options-stepper-btn" title="Decrease" aria-label="Decrease ${escapeHtml(label)}"${disabledAttr}>−</button>
+                <span id="${idPrefix}-label" class="display-options-stepper-value">${escapeHtml(valuePercent)}</span>
+                <button type="button" id="${idPrefix}-in" class="btn btn--compact btn--icon display-options-stepper-btn" title="Increase" aria-label="Increase ${escapeHtml(label)}"${disabledAttr}>+</button>
+            </span>
+        </div>`;
+    },
+
+    bgRow(id, label, cssVar) {
+        return `<button type="button" class="display-options-bg-row focus-mode-row" id="${id}" role="menuitem">
+            <span class="focus-mode-row-label">${escapeHtml(label)}</span>
+            <span class="display-options-swatch" style="background: var(${cssVar})" aria-hidden="true"></span>
+        </button>`;
+    },
+
     noteFontOptionsHtml(selectedId) {
         return NOTE_FONTS.map((font) => {
             const selected = font.id === selectedId;
@@ -154,12 +200,29 @@ export const DisplayOptions = {
         }).join('');
     },
 
+    bindStepper(popover, { idPrefix, onOut, onIn, disabled = false }) {
+        if (disabled) return;
+        popover.querySelector(`#${idPrefix}-out`)?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            onOut();
+            this.openPopover();
+        });
+        popover.querySelector(`#${idPrefix}-in`)?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            onIn();
+            this.openPopover();
+        });
+    },
+
     openPopover() {
         if (!this.triggerBtn) return;
         this.closePopover();
 
         const popover = this.ensurePopover();
         const opts = this.options;
+        const noteScalePct = `${Math.round(NoteFontScale.getScale() * 100)}%`;
+        const desktopZoomPct = `${Math.round(DesktopZoom.getScale() * 100)}%`;
+        const desktopZoomEnabled = this.isDesktopZoomEnabled();
 
         popover.innerHTML = `
             <div class="display-options-list focus-mode-list">
@@ -167,12 +230,32 @@ export const DisplayOptions = {
                 ${this.optionRow('display-opt-category', 'Category name', 'Footer & compact', opts.showCategoryName)}
                 ${this.optionRow('display-opt-created', 'Created date', 'Expanded notes', opts.showCreatedDate)}
                 <div class="focus-mode-divider" role="separator"></div>
-                <p class="display-options-heading">Note font</p>
+                <p class="display-options-heading">Text</p>
                 <div class="note-font-list">${this.noteFontOptionsHtml(opts.noteFontId)}</div>
+                ${this.stepperRow({
+                    idPrefix: 'display-opt-note-scale',
+                    label: 'Text size',
+                    valuePercent: noteScalePct
+                })}
                 <div class="focus-mode-divider" role="separator"></div>
                 <p class="display-options-heading">Desktop</p>
                 ${this.optionRow('display-opt-gradient', 'Gradient background', 'Subtle depth', opts.desktopGradient)}
                 ${this.optionRow('display-opt-animations', 'Card animations', 'Expand & collapse roll', opts.cardAnimations)}
+                ${this.stepperRow({
+                    idPrefix: 'display-opt-desktop-zoom',
+                    label: 'Desktop zoom',
+                    valuePercent: desktopZoomPct,
+                    disabled: !desktopZoomEnabled,
+                    disabledHint: desktopZoomEnabled ? '' : 'Desktop only'
+                })}
+                <div class="focus-mode-divider" role="separator"></div>
+                <p class="display-options-heading">Backgrounds</p>
+                ${this.bgRow('display-opt-chrome-bg', 'Panel & header', '--chrome-bg')}
+                ${this.bgRow('display-opt-desktop-bg', 'Desktop', '--desktop-bg')}
+                <div class="focus-mode-divider" role="separator"></div>
+                <button type="button" class="focus-mode-row focus-mode-reset display-options-reset" id="display-opt-reset" role="menuitem">
+                    <span class="focus-mode-row-label display-options-reset-label">${ACTION_ICONS.resetCustomization}<span>Reset appearance to defaults</span></span>
+                </button>
             </div>
         `;
 
@@ -198,9 +281,44 @@ export const DisplayOptions = {
             });
         });
 
-        popover.querySelectorAll('.display-options-row').forEach((row) => {
+        this.bindStepper(popover, {
+            idPrefix: 'display-opt-note-scale',
+            onOut: () => NoteFontScale.step(-NoteFontScale.SCALE_STEP),
+            onIn: () => NoteFontScale.step(NoteFontScale.SCALE_STEP)
+        });
+
+        this.bindStepper(popover, {
+            idPrefix: 'display-opt-desktop-zoom',
+            disabled: !desktopZoomEnabled,
+            onOut: () => DesktopZoom.step(-DesktopZoom.ZOOM_STEP),
+            onIn: () => DesktopZoom.step(DesktopZoom.ZOOM_STEP)
+        });
+
+        popover.querySelector('#display-opt-chrome-bg')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            ChromeBackground.openPicker(e.currentTarget);
+        });
+
+        popover.querySelector('#display-opt-desktop-bg')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            DesktopBackground.openPicker(e.currentTarget);
+        });
+
+        popover.querySelector('#display-opt-reset')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (!resetCustomizationToDefaults()) return;
+            this.options = readDisplayOptions();
+            applyDisplayOptions(this.options);
+            this.onChange?.(this.options);
+            this.openPopover();
+        });
+
+        popover.querySelectorAll('.display-options-row, .display-options-bg-row').forEach((row) => {
             row.addEventListener('mousedown', (e) => e.stopPropagation());
         });
+
+        NoteFontScale.updateLabels();
+        DesktopZoom.updateButtons();
 
         popover.classList.remove('is-hidden');
         this.positionPopover(this.triggerBtn);

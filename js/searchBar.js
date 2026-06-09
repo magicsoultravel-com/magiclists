@@ -1,4 +1,5 @@
 import { isSearchActive, querySearch } from './searchFilter.js';
+import { CARD_ICONS } from './ui.js';
 
 const DEBOUNCE_MS = 150;
 
@@ -142,16 +143,33 @@ export const SearchBar = {
         this.highlightedIndex = -1;
     },
 
+    isArchivedItem(item) {
+        return item?.status === 'archived';
+    },
+
+    renderArchivedBadge(item) {
+        if (!this.isArchivedItem(item)) return '';
+        return `<span class="search-results-archived-badge" title="Archived" aria-hidden="true">${CARD_ICONS.delete}</span>`;
+    },
+
+    itemRowTitle(hit) {
+        const base = escapeAttr(hit.title || 'Untitled');
+        return this.isArchivedItem(hit.item) ? `${base} (Archived)` : base;
+    },
+
     renderTitleRow(hit) {
         const typeLabel = hit.type === 'checklist' ? 'Checklist' : 'Note';
         const category = hit.category
             ? `<span class="search-results-meta">${escapeHtml(hit.category)}</span>`
             : '';
+        const archivedClass = this.isArchivedItem(hit.item) ? ' search-results-item--archived' : '';
         return `
-            <button type="button" class="search-results-item search-results-item--title"
+            <button type="button" class="search-results-item search-results-item--title${archivedClass}"
                 data-action="open-item" data-item-id="${escapeAttr(hit.item.id)}"
+                title="${this.itemRowTitle(hit)}"
                 style="--note-accent:${escapeAttr(hit.item.backgroundColor || '#64748b')}">
                 <span class="search-results-item-primary">${escapeHtml(hit.title)}</span>
+                ${this.renderArchivedBadge(hit.item)}
                 <span class="search-results-item-secondary">
                     <span class="search-results-badge">${typeLabel}</span>${category}
                 </span>
@@ -162,10 +180,13 @@ export const SearchBar = {
         const stepPrefix = hit.stepLabel
             ? `<span class="search-results-step-label">${hit.stepLabel}: </span>`
             : '';
+        const archivedClass = this.isArchivedItem(hit.item) ? ' search-results-item--archived' : '';
         return `
-            <button type="button" class="search-results-item search-results-item--content"
-                data-action="open-item" data-item-id="${escapeAttr(hit.item.id)}">
+            <button type="button" class="search-results-item search-results-item--content${archivedClass}"
+                data-action="open-item" data-item-id="${escapeAttr(hit.item.id)}"
+                title="${this.itemRowTitle(hit)}">
                 <span class="search-results-item-primary">${escapeHtml(hit.title)}</span>
+                ${this.renderArchivedBadge(hit.item)}
                 <span class="search-results-item-snippet">${stepPrefix}${hit.snippetHtml}</span>
             </button>`;
     },

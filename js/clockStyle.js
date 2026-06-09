@@ -239,6 +239,7 @@ export const ClockStyle = {
         this.isHidden = hidden;
         this.zone?.classList.toggle('is-clock-hidden', hidden);
         this.triggerBtn?.classList.toggle('is-hidden', hidden);
+        this.iconBtn?.classList.toggle('is-hidden', !hidden);
         this.syncToggleBtn();
         if (hidden) {
             this.triggerBtn?.setAttribute('aria-expanded', 'false');
