@@ -89,4 +89,21 @@ export function applyBackupToStorage(parsedBackup) {
     // UI-only hide lists from a prior session can hide imported items by id.
     localStorage.removeItem('matrix_hidden_board_ids');
     localStorage.removeItem('matrix_calendar_hidden_ids');
+
+    if (parsedBackup.matrix_global_drawing != null) {
+        localStorage.setItem('matrix_global_drawing', typeof parsedBackup.matrix_global_drawing === 'string'
+            ? parsedBackup.matrix_global_drawing
+            : JSON.stringify(parsedBackup.matrix_global_drawing));
+    }
+    if (parsedBackup.matrix_drawing_prefs != null) {
+        localStorage.setItem('matrix_drawing_prefs', typeof parsedBackup.matrix_drawing_prefs === 'string'
+            ? parsedBackup.matrix_drawing_prefs
+            : JSON.stringify(parsedBackup.matrix_drawing_prefs));
+    }
+    if (parsedBackup.matrix_workspace_mode != null) {
+        localStorage.setItem('matrix_workspace_mode', parsedBackup.matrix_workspace_mode);
+    }
+    if (parsedBackup.matrix_drawing_toolbar_collapsed != null) {
+        localStorage.setItem('matrix_drawing_toolbar_collapsed', parsedBackup.matrix_drawing_toolbar_collapsed);
+    }
 }

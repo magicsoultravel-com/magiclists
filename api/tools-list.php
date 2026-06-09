@@ -27,6 +27,10 @@ foreach ($files as $file) {
     }
 
     $head = file_get_contents($file, false, null, 0, 4096) ?: '';
+    if (!preg_match('/@tool\b/', $head)) {
+        continue;
+    }
+
     $label = humanize_tool_id($id);
     $order = 100;
     $wide = false;

@@ -69,5 +69,16 @@
     "resizable": true,
     "defaultSize": { "w": 800, "h": 600 },
     "minSize": { "w": 400, "h": 320 }
+  },
+  {
+    "id": "alphabets",
+    "label": "Alphabets",
+    "order": 7,
+    "icon": "<path d=\"M2.5 3.2h2.1c.9 0 1.5.5 1.5 1.2 0 .5-.3.9-.8 1.1.6.2 1 .7 1 1.3V9H4.8V6.9c0-.4-.2-.6-.6-.6H3.8V9H2.5V3.2zm5.2 0h1.3V9H7.7V3.2zm3.1 0c1.1 0 1.9.8 1.9 2.5V9h-1.3V5.9c0-.8-.4-1.2-1-1.2-.6 0-1 .4-1 1.2V9H8.1V3.2h1.3v.5z\" fill=\"currentColor\"/>",
+    "wide": false,
+    "mountClass": "tool-mount--alphabets",
+    "resizable": true,
+    "defaultSize": { "w": 380, "h": 480 },
+    "minSize": { "w": 300, "h": 360 }
   }
 ]

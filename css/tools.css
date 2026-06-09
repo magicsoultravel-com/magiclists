@@ -581,3 +581,130 @@
 .date-picker-modal .section-title {
     font-size: 0.72rem;
 }
+
+/* ==========================================================================
+   ALPHABETS TOOL
+   ========================================================================== */
+.tool-mount--alphabets {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+}
+
+.tool-mount--alphabets .alphabet-tool {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+    gap: 0.3rem;
+}
+
+.alphabet-tool__toolbar {
+    flex-shrink: 0;
+    margin-bottom: 0;
+}
+
+.alphabet-tool__counter {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
+.alphabet-tool__subtitle {
+    flex-shrink: 0;
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.65rem;
+    line-height: 1.3;
+}
+
+.alphabet-tool__content {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    outline: none;
+}
+
+.alphabet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+    gap: 0.3rem;
+}
+
+.alphabet-grid--chinese {
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+}
+
+.alphabet-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.1rem;
+    padding: 0.35rem 0.2rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.02);
+    text-align: center;
+    min-height: 3.2rem;
+}
+
+.alphabet-cell__char {
+    font-size: 1.45rem;
+    line-height: 1.1;
+    color: var(--text-main);
+}
+
+.alphabet-cell__roman {
+    font-family: inherit;
+    font-size: 0.68rem;
+    line-height: 1.2;
+    color: var(--text-muted);
+    word-break: break-word;
+}
+
+.alphabet-cell__gloss {
+    font-family: inherit;
+    font-size: 0.58rem;
+    line-height: 1.15;
+    color: var(--text-muted);
+    opacity: 0.75;
+    word-break: break-word;
+}
+
+.alphabet-kana {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.alphabet-kana-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+}
+
+.alphabet-kana-row__label {
+    flex-shrink: 0;
+    width: 1.6rem;
+    padding-top: 0.55rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-align: right;
+}
+
+.alphabet-kana-row__cells {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.alphabet-kana-row__cells .alphabet-cell {
+    min-width: 2.6rem;
+    flex: 0 0 auto;
+}

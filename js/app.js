@@ -19,6 +19,7 @@ import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
 import { exportAppCode } from './codeExport.js';
 import { readViewSessions, restoreViewSession } from './viewSession.js';
+import { DrawingBoard, getDrawingBackupKeys } from './drawingBoard.js';
 import { SearchBar } from './searchBar.js';
 import { positionPopoverBelowAnchor } from './popoverPosition.js';
 
@@ -33,6 +34,11 @@ const AppState = {
     hiddenCategories: JSON.parse(localStorage.getItem('matrix_hidden_categories') || '[]'),
     focusCategories: [],
     expandedCards: {},
+    workspaceMode: (() => {
+        const mode = localStorage.getItem('matrix_workspace_mode');
+        return mode === 'drawing' ? 'drawing' : 'notes';
+    })(),
+    sidebarBeforeDrawing: null,
     viewSettings: {
         sortBy: (() => {
             const preferred = localStorage.getItem('matrix_preferred_view') || 'columns';
@@ -85,6 +91,11 @@ class Application {
         this.setupBackupInterface();
         this.setupFab();
         this.setupUndo();
+        this.setupDrawingMode();
+        DrawingBoard.init({ onExit: () => this.switchWorkspaceMode('notes') });
+        if (AppState.workspaceMode === 'drawing') {
+            requestAnimationFrame(() => this.applyWorkspaceMode('drawing', { skipPersist: true }));
+        }
     }
 
     setupUndo() {
@@ -168,7 +179,9 @@ class Application {
             const data = await API.fetchItems(AppState.user.token);
             AppState.items = Array.isArray(data?.items) ? data.items : [];
 
-            if (AppState.items.length === 0 && !data?.write_access && (data?.total_items || 0) > 0) {
+            if (AppState.workspaceMode === 'drawing') {
+                /* board hidden — skip note canvas rebuild */
+            } else if (AppState.items.length === 0 && !data?.write_access && (data?.total_items || 0) > 0) {
                 canvas.innerHTML = `<div class="system-status-msg">Notes are in local storage but require admin login. Use Quick actions → Login (default dev token: dev-admin-secret-2026).</div>`;
             } else {
                 UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
@@ -176,7 +189,9 @@ class Application {
             }
 
             DesktopZoom.apply();
-            DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+            if (AppState.workspaceMode !== 'drawing') {
+                DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+            }
         } catch (err) {
             console.error('[Fatal Sync Failure] Data sync broken:', err);
             if (canvas) {
@@ -257,10 +272,87 @@ class Application {
     updateFabVisibility() {
         const fab = document.getElementById('fab-create');
         if (!fab) return;
+        if (AppState.workspaceMode === 'drawing') {
+            fab.classList.add('is-hidden');
+            return;
+        }
         fab.classList.remove('is-hidden');
         const needsLogin = !AppState.user.isLoggedIn;
         fab.title = needsLogin ? 'New note (login required)' : 'New note';
         fab.setAttribute('aria-label', fab.title);
+    }
+
+    setupDrawingMode() {
+        const btn = document.getElementById('btn-drawing-mode');
+        if (btn) btn.innerHTML = ACTION_ICONS.drawingPencil;
+        btn?.addEventListener('click', () => {
+            if (AppState.workspaceMode === 'drawing') {
+                this.switchWorkspaceMode('notes');
+            } else {
+                this.switchWorkspaceMode('drawing');
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (DrawingBoard.handleKeydown(e)) return;
+        });
+    }
+
+    switchWorkspaceMode(mode) {
+        if (mode !== 'notes' && mode !== 'drawing') return;
+        if (AppState.workspaceMode === mode) return;
+        this.applyWorkspaceMode(mode);
+    }
+
+    applyWorkspaceMode(mode, { skipPersist = false } = {}) {
+        AppState.workspaceMode = mode;
+        if (!skipPersist) {
+            localStorage.setItem('matrix_workspace_mode', mode);
+        }
+
+        const shell = document.getElementById('workspace-shell');
+        const canvas = document.getElementById('app-canvas');
+        const notesActions = document.getElementById('notes-control-actions');
+        const drawingActions = document.getElementById('drawing-control-actions');
+        const drawBtn = document.getElementById('btn-drawing-mode');
+        const brandHost = document.getElementById('control-bar-brand-host');
+
+        if (mode === 'drawing') {
+            AppState.sidebarBeforeDrawing = SidePanel.panel?.classList.contains('is-collapsed') ?? false;
+            SidePanel.setCollapsed(true, false);
+
+            shell?.setAttribute('data-drawing-mode', '');
+            canvas?.classList.add('is-hidden');
+            notesActions?.classList.add('is-hidden');
+            drawingActions?.classList.remove('is-hidden');
+            brandHost?.classList.add('is-hidden');
+            drawBtn?.classList.add('active');
+
+            DrawingBoard.activate(drawingActions);
+        } else {
+            shell?.removeAttribute('data-drawing-mode');
+            canvas?.classList.remove('is-hidden');
+            notesActions?.classList.remove('is-hidden');
+            drawingActions?.classList.add('is-hidden');
+            brandHost?.classList.remove('is-hidden');
+            drawBtn?.classList.remove('active');
+
+            DrawingBoard.deactivate();
+
+            if (AppState.sidebarBeforeDrawing != null) {
+                SidePanel.setCollapsed(AppState.sidebarBeforeDrawing, false);
+                AppState.sidebarBeforeDrawing = null;
+            }
+
+            if (AppState.items.length) {
+                UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
+                UI.syncCollapseAllButton();
+                DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+            }
+        }
+
+        this.updateFabVisibility();
+        this.updateLayoutResetVisibility();
     }
 
     async executeCodeExport() {
@@ -280,10 +372,15 @@ class Application {
     executeDataBackupExport() {
         const databasePayload = localStorage.getItem('matrix_database');
         const customCategoriesPayload = localStorage.getItem('matrix_custom_categories');
+        const drawingKeys = getDrawingBackupKeys();
         const backupPackage = {
             timestamp: Math.floor(Date.now() / 1000),
             matrix_database: databasePayload ? JSON.parse(databasePayload) : null,
-            matrix_custom_categories: customCategoriesPayload ? JSON.parse(customCategoriesPayload) : null
+            matrix_custom_categories: customCategoriesPayload ? JSON.parse(customCategoriesPayload) : null,
+            matrix_global_drawing: drawingKeys.matrix_global_drawing ? JSON.parse(drawingKeys.matrix_global_drawing) : null,
+            matrix_drawing_prefs: drawingKeys.matrix_drawing_prefs ? JSON.parse(drawingKeys.matrix_drawing_prefs) : null,
+            matrix_workspace_mode: drawingKeys.matrix_workspace_mode,
+            matrix_drawing_toolbar_collapsed: drawingKeys.matrix_drawing_toolbar_collapsed
         };
         const blob = new Blob([JSON.stringify(backupPackage, null, 2)], { type: 'application/json' });
         const virtualLink = document.createElement('a');

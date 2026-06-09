@@ -141,6 +141,7 @@
                 </div>
                 <div class="control-bar-end">
                     <div id="control-bar-actions" class="control-bar-actions">
+                        <div id="notes-control-actions" class="control-bar-actions-group">
                         <div id="history-controls" class="history-controls is-hidden">
                             <button type="button" id="btn-undo" class="btn btn--compact btn--icon" disabled title="Undo (Ctrl+Z)" aria-label="Undo"></button>
                             <button type="button" id="btn-redo" class="btn btn--compact btn--icon" disabled title="Redo (Ctrl+Y)" aria-label="Redo"></button>
@@ -158,6 +159,9 @@
                         <button type="button" id="btn-recall-view" class="btn btn--compact btn--icon" title="Restore saved view" aria-label="Restore saved view" disabled></button>
                         <button type="button" id="btn-collapse-all" class="btn btn--compact btn--icon is-hidden" title="Collapse all notes" aria-label="Collapse all notes"></button>
                         <button type="button" id="btn-layout-reset" class="btn btn--compact btn--icon is-hidden" title="Reset" aria-label="Reset"></button>
+                        <button type="button" id="btn-drawing-mode" class="btn btn--compact btn--icon" title="Drawing board" aria-label="Drawing board"></button>
+                        </div>
+                        <div id="drawing-control-actions" class="control-bar-actions-group is-hidden" aria-label="Drawing tools"></div>
                     </div>
                     <div id="digital-clock" class="logo-zone logo-zone--clock">
                         <button type="button" id="clock-icon-fallback" class="btn btn--compact btn--icon clock-icon-fallback is-hidden" title="Show clock" aria-label="Show clock" aria-expanded="false"><svg viewBox="0 0 12 12" width="12" height="12" focusable="false" aria-hidden="true"><circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.2V6l2 1.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -184,6 +188,9 @@
                 <main id="app-canvas">
                     <div class="system-status-msg">Loading workspace…</div>
                 </main>
+                <div id="drawing-board" class="drawing-board is-hidden" aria-hidden="true">
+                    <canvas id="drawing-canvas" class="drawing-canvas"></canvas>
+                </div>
                 <div id="tools-desktop" class="tools-desktop" aria-live="polite"></div>
             </div>
         </div>

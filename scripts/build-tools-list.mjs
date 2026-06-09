@@ -61,6 +61,8 @@ function parseToolFile(filePath) {
     if (!id || id[0] === '_') return null;
 
     const head = fs.readFileSync(filePath, 'utf8').slice(0, 4096);
+    if (!/@tool\b/.test(head)) return null;
+
     let label = humanizeToolId(id);
     let order = 100;
     let wide = false;
