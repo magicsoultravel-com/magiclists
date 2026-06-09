@@ -262,9 +262,44 @@ export function moveStepOnCompletionChange(steps, step, completed) {
         step.text = wrapLineAsStruck(step.text || '');
     } else {
         step.text = unwrapLineStrike(step.text || '');
-        step.level = 0;
     }
     reorderStepsByCompletion(steps);
+}
+
+export function collectStepSubtree(steps, startIndex) {
+    if (!steps?.length || startIndex < 0 || startIndex >= steps.length) return [];
+    const rootLevel = getStepLevel(steps[startIndex]);
+    const subtree = [steps[startIndex]];
+    for (let i = startIndex + 1; i < steps.length; i++) {
+        if (getStepLevel(steps[i]) <= rootLevel) break;
+        subtree.push(steps[i]);
+    }
+    return subtree;
+}
+
+export function reorderActiveStepsPreservingSubtrees(activeSteps, visibleRootIdsInOrder) {
+    const used = new Set();
+    const result = [];
+
+    const appendSubtree = (stepId) => {
+        const idx = activeSteps.findIndex((s) => s.id === stepId);
+        if (idx < 0) return;
+        for (const step of collectStepSubtree(activeSteps, idx)) {
+            if (used.has(step.id)) continue;
+            result.push(step);
+            used.add(step.id);
+        }
+    };
+
+    for (const id of visibleRootIdsInOrder) {
+        appendSubtree(id);
+    }
+
+    for (const step of activeSteps) {
+        if (!used.has(step.id)) result.push(step);
+    }
+
+    return result;
 }
 
 export function stepHasDescendants(steps, index) {
@@ -3238,10 +3273,15 @@ export const UI = {
     },
 
     getAdjacentChecklistStep(item, row, direction) {
-        const adjRow = this.findAdjacentChecklistStepRow(row, direction);
-        if (!adjRow) return null;
-        const stepId = adjRow.dataset.stepId;
-        return item.steps?.find((s) => s.id === stepId) || null;
+        const stepId = row?.dataset?.stepId;
+        if (!stepId) return null;
+        const steps = item.steps || [];
+        const idx = steps.findIndex((s) => s.id === stepId);
+        if (idx < 0) return null;
+        if (direction === 'prev') {
+            return idx > 0 ? steps[idx - 1] : null;
+        }
+        return idx < steps.length - 1 ? steps[idx + 1] : null;
     },
 
     focusInlineEdit(el, edge = 'end') {
@@ -3836,17 +3876,16 @@ export const UI = {
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup', onUp);
             if (moved) {
+                const shell = root.closest('.editor-note-shell') || root;
+                this.syncItemBodyFromDom(shell, item);
                 applyMutate((it) => {
-                    const activeIds = getActiveRows().map((r) => r.dataset.stepId);
-                    const visibleIdSet = new Set(activeIds);
+                    const activeSteps = it.steps.filter((step) => !step.completed);
                     const doneSteps = it.steps.filter((step) => step.completed);
-                    const activeFromDom = activeIds
-                        .map((id) => it.steps.find((step) => step.id === id))
-                        .filter(Boolean);
-                    const hiddenActive = it.steps.filter(
-                        (step) => !step.completed && !visibleIdSet.has(step.id)
-                    );
-                    it.steps = [...activeFromDom, ...hiddenActive, ...doneSteps];
+                    const visibleRootIds = getActiveRows().map((r) => r.dataset.stepId);
+                    it.steps = [
+                        ...reorderActiveStepsPreservingSubtrees(activeSteps, visibleRootIds),
+                        ...doneSteps
+                    ];
                 });
                 refresh();
             }
