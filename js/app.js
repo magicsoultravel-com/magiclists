@@ -20,6 +20,7 @@ import { NoteFontScale } from './noteFontScale.js';
 import { exportAppCode } from './codeExport.js';
 import { readViewSessions, restoreViewSession } from './viewSession.js';
 import { SearchBar } from './searchBar.js';
+import { positionPopoverBelowAnchor } from './popoverPosition.js';
 
 function countHiddenFromBoard(items) {
     return items.filter(item => UI.isHiddenFromBoard(item)).length;
@@ -500,20 +501,7 @@ class Application {
         };
 
         const position = () => {
-            if (!popover) return;
-            const rect = btn.getBoundingClientRect();
-            const gap = 8;
-            const margin = 8;
-            const popRect = popover.getBoundingClientRect();
-            let top = rect.bottom + gap;
-            let left = rect.right - popRect.width;
-            left = Math.max(margin, Math.min(left, window.innerWidth - popRect.width - margin));
-            if (top + popRect.height > window.innerHeight - margin) {
-                top = rect.top - popRect.height - gap;
-            }
-            top = Math.max(margin, top);
-            popover.style.top = `${top}px`;
-            popover.style.left = `${left}px`;
+            positionPopoverBelowAnchor(popover, btn);
         };
 
         const open = () => {

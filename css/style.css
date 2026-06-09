@@ -1514,8 +1514,9 @@ html[data-note-font="press-start"] .mini-card .step-text {
     letter-spacing: 0.02em;
 }
 
+html[data-note-font="press-start"] #editor-overlay .editor-note-shell .card-content-preview,
 html[data-note-font="press-start"] #editor-overlay .editor-note-shell .step-text {
-    font-size: 0.52rem;
+    font-size: calc(0.52rem * var(--note-font-scale, 1) * var(--editor-zoom, 1));
     line-height: 1.65;
     letter-spacing: 0.02em;
 }
@@ -4046,7 +4047,7 @@ textarea.form-input {
 }
 
 #app-canvas.view-freeform .mini-card.expanded .card-content-preview {
-    font-size: 0.62rem;
+    font-size: calc(0.62rem * var(--note-font-scale, 1));
     line-height: 1.35;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
@@ -4054,7 +4055,7 @@ textarea.form-input {
 }
 
 #app-canvas.view-freeform .mini-card.expanded .expanded-checklist {
-    font-size: 0.6rem;
+    font-size: calc(0.6rem * var(--note-font-scale, 1));
 }
 
 #app-canvas.view-freeform .mini-card.expanded .mini-card-meta,
@@ -4657,7 +4658,7 @@ textarea.form-input {
 }
 
 .editor-note-header .mini-card-title {
-    font-size: 0.72rem;
+    font-size: calc(0.72rem * var(--note-font-scale, 1));
     font-weight: 600;
     padding: 0.1rem 0.05rem;
 }
@@ -4920,16 +4921,16 @@ textarea.form-input {
 }
 
 #editor-overlay .editor-note-shell .editor-note-header .mini-card-title {
-    font-size: calc(0.72rem * var(--editor-zoom, 1));
+    font-size: calc(0.72rem * var(--note-font-scale, 1) * var(--editor-zoom, 1));
 }
 
 #editor-overlay .editor-note-shell .card-content-preview {
-    font-size: calc(0.66rem * var(--editor-zoom, 1));
+    font-size: calc(0.66rem * var(--note-font-scale, 1) * var(--editor-zoom, 1));
 }
 
 #editor-overlay .editor-note-shell .step-text,
 #editor-overlay .editor-note-shell .expanded-checklist {
-    font-size: calc(0.6rem * var(--editor-zoom, 1));
+    font-size: calc(0.6rem * var(--note-font-scale, 1) * var(--editor-zoom, 1));
 }
 
 .format-toolbar .editor-convert-btn:disabled {
@@ -5321,7 +5322,7 @@ html[data-app-theme="matrix"][data-note-font="default"] .mini-card .mini-card-ti
 
 html[data-app-theme="matrix"][data-note-font="default"] #editor-overlay .editor-note-shell .mini-card-title {
     font-family: 'Overpass Mono', 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 0.84rem;
+    font-size: calc(0.84rem * var(--note-font-scale, 1) * var(--editor-zoom, 1));
     font-weight: 400;
     letter-spacing: 0.03em;
     line-height: 1.45;
@@ -5338,10 +5339,11 @@ html[data-app-theme="matrix"][data-note-font="default"] .mini-card .step-text {
     text-shadow: none;
 }
 
+html[data-app-theme="matrix"][data-note-font="default"] #editor-overlay .editor-note-shell .card-content-preview,
 html[data-app-theme="matrix"][data-note-font="default"] #editor-overlay .editor-note-shell .step-text,
 html[data-app-theme="matrix"][data-note-font="default"] #editor-overlay .editor-note-body {
     font-family: 'Overpass Mono', 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
-    font-size: 0.84rem;
+    font-size: calc(0.84rem * var(--note-font-scale, 1) * var(--editor-zoom, 1));
     font-weight: 400;
     letter-spacing: 0.03em;
     line-height: 1.45;
@@ -5482,9 +5484,10 @@ html[data-app-theme="casual"][data-note-font="default"] .mini-card .step-text {
     line-height: 1.35rem;
 }
 
+html[data-app-theme="casual"][data-note-font="default"] #editor-overlay .editor-note-shell .card-content-preview,
 html[data-app-theme="casual"][data-note-font="default"] #editor-overlay .editor-note-shell .step-text {
     font-family: 'Patrick Hand', 'Segoe Print', 'Comic Neue', cursive;
-    font-size: 0.78rem;
+    font-size: calc(0.78rem * var(--note-font-scale, 1) * var(--editor-zoom, 1));
     line-height: 1.35rem;
 }
 
@@ -5560,9 +5563,10 @@ html[data-app-theme="casual-dark"][data-note-font="default"] .mini-card .step-te
     line-height: 1.35rem;
 }
 
+html[data-app-theme="casual-dark"][data-note-font="default"] #editor-overlay .editor-note-shell .card-content-preview,
 html[data-app-theme="casual-dark"][data-note-font="default"] #editor-overlay .editor-note-shell .step-text {
     font-family: 'Patrick Hand', 'Segoe Print', 'Comic Neue', cursive;
-    font-size: 0.78rem;
+    font-size: calc(0.78rem * var(--note-font-scale, 1) * var(--editor-zoom, 1));
     line-height: 1.35rem;
 }
 

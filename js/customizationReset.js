@@ -42,7 +42,6 @@ export function resetCustomizationToDefaults() {
 
     applyAppTheme('dark');
     AppTheme.currentId = 'dark';
-    AppTheme.syncButtonState();
 
     DesktopBackground.applyStored();
     ChromeBackground.applyStored();

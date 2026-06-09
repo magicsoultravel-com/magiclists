@@ -1,4 +1,5 @@
 import { ACTION_ICONS } from './ui.js';
+import { positionPopoverBelowAnchor } from './popoverPosition.js';
 
 const STORAGE_KEY = 'matrix_clock_style';
 const HIDDEN_STORAGE_KEY = 'matrix_clock_hidden';
@@ -435,7 +436,7 @@ export const ClockStyle = {
         });
 
         popover.classList.remove('is-hidden');
-        this.positionPopover(anchor);
+        positionPopoverBelowAnchor(popover, anchor);
         anchor.setAttribute('aria-expanded', 'true');
 
         this.refreshPreviewTimes();
@@ -462,25 +463,5 @@ export const ClockStyle = {
         } else {
             this.openPopover();
         }
-    },
-
-    positionPopover(anchor) {
-        if (!this.popover || !anchor) return;
-        const rect = anchor.getBoundingClientRect();
-        const gap = 8;
-        const margin = 8;
-        const popRect = this.popover.getBoundingClientRect();
-
-        let top = rect.bottom + gap;
-        let left = rect.right - popRect.width;
-
-        left = Math.max(margin, Math.min(left, window.innerWidth - popRect.width - margin));
-        if (top + popRect.height > window.innerHeight - margin) {
-            top = rect.top - popRect.height - gap;
-        }
-        top = Math.max(margin, top);
-
-        this.popover.style.top = `${top}px`;
-        this.popover.style.left = `${left}px`;
     }
 };

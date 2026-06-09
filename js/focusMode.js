@@ -1,5 +1,6 @@
 import { categoryKey, readStoredCategories, UNCATEGORIZED_CATEGORY } from './categories.js';
 import { isFocusActive } from './focusFilter.js';
+import { positionPopoverBelowAnchor } from './popoverPosition.js';
 
 const MAX_FOCUS = 3;
 
@@ -136,7 +137,7 @@ export const FocusMode = {
         });
 
         popover.classList.remove('is-hidden');
-        this.positionPopover(this.triggerBtn);
+        positionPopoverBelowAnchor(popover, this.triggerBtn);
         this.triggerBtn.setAttribute('aria-expanded', 'true');
 
         this.outsideHandler = (e) => {
@@ -158,26 +159,6 @@ export const FocusMode = {
         } else {
             this.openPopover(hiddenCategories);
         }
-    },
-
-    positionPopover(anchor) {
-        if (!this.popover || !anchor) return;
-        const rect = anchor.getBoundingClientRect();
-        const gap = 8;
-        const margin = 8;
-        const popRect = this.popover.getBoundingClientRect();
-
-        let top = rect.bottom + gap;
-        let left = rect.right - popRect.width;
-
-        left = Math.max(margin, Math.min(left, window.innerWidth - popRect.width - margin));
-        if (top + popRect.height > window.innerHeight - margin) {
-            top = rect.top - popRect.height - gap;
-        }
-        top = Math.max(margin, top);
-
-        this.popover.style.top = `${top}px`;
-        this.popover.style.left = `${left}px`;
     }
 };
 

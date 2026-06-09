@@ -280,127 +280,16 @@ export function buildThemeOptionsHtml(selectedId) {
 }
 
 export const AppTheme = {
-    triggerBtn: null,
-    popover: null,
-    outsideHandler: null,
-    keyHandler: null,
     currentId: 'dark',
 
     init() {
         this.currentId = readAppTheme();
         applyAppTheme(this.currentId, { silent: true });
-
-        this.triggerBtn = document.getElementById('btn-app-theme');
-        if (!this.triggerBtn) return;
-
-        this.triggerBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.togglePopover();
-        });
-
-        this.syncButtonState();
     },
 
-    setTheme(themeId, { closePopover = true } = {}) {
+    setTheme(themeId) {
         this.currentId = themeId;
         applyAppTheme(themeId);
-        this.syncButtonState();
-        if (closePopover) this.closePopover();
         window.dispatchEvent(new CustomEvent('app:theme_changed', { detail: themeId }));
-    },
-
-    syncButtonState() {
-        const btn = this.triggerBtn;
-        if (!btn) return;
-        const custom = this.currentId !== 'dark';
-        btn.classList.toggle('is-active', custom);
-        const theme = getThemeById(this.currentId);
-        btn.title = custom ? `Theme: ${theme.label}` : 'App theme';
-        btn.setAttribute('aria-label', btn.title);
-    },
-
-    ensurePopover() {
-        if (!this.popover) {
-            this.popover = document.createElement('div');
-            this.popover.className = 'app-theme-popover clock-style-popover is-hidden';
-            this.popover.setAttribute('role', 'menu');
-            this.popover.setAttribute('aria-label', 'App theme');
-            document.body.appendChild(this.popover);
-        }
-        return this.popover;
-    },
-
-    closePopover() {
-        if (!this.popover) return;
-        this.popover.classList.add('is-hidden');
-        this.triggerBtn?.setAttribute('aria-expanded', 'false');
-        if (this.outsideHandler) {
-            document.removeEventListener('mousedown', this.outsideHandler, true);
-            this.outsideHandler = null;
-        }
-        if (this.keyHandler) {
-            document.removeEventListener('keydown', this.keyHandler);
-            this.keyHandler = null;
-        }
-    },
-
-    openPopover() {
-        if (!this.triggerBtn) return;
-        this.closePopover();
-
-        const popover = this.ensurePopover();
-        popover.innerHTML = `<div class="clock-style-list app-theme-list">${buildThemeOptionsHtml(this.currentId)}</div>`;
-
-        popover.querySelectorAll('.app-theme-option').forEach((btn) => {
-            btn.addEventListener('mousedown', (e) => e.stopPropagation());
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.setTheme(btn.dataset.theme);
-            });
-        });
-
-        popover.classList.remove('is-hidden');
-        this.positionPopover(this.triggerBtn);
-        this.triggerBtn.setAttribute('aria-expanded', 'true');
-
-        this.outsideHandler = (e) => {
-            if (popover.contains(e.target) || this.triggerBtn.contains(e.target)) return;
-            this.closePopover();
-        };
-        this.keyHandler = (e) => {
-            if (e.key === 'Escape') this.closePopover();
-        };
-        requestAnimationFrame(() => {
-            document.addEventListener('mousedown', this.outsideHandler, true);
-            document.addEventListener('keydown', this.keyHandler);
-        });
-    },
-
-    togglePopover() {
-        if (this.popover && !this.popover.classList.contains('is-hidden')) {
-            this.closePopover();
-        } else {
-            this.openPopover();
-        }
-    },
-
-    positionPopover(anchor) {
-        if (!this.popover || !anchor) return;
-        const rect = anchor.getBoundingClientRect();
-        const gap = 8;
-        const margin = 8;
-        const popRect = this.popover.getBoundingClientRect();
-
-        let top = rect.bottom + gap;
-        let left = rect.right - popRect.width;
-
-        left = Math.max(margin, Math.min(left, window.innerWidth - popRect.width - margin));
-        if (top + popRect.height > window.innerHeight - margin) {
-            top = rect.top - popRect.height - gap;
-        }
-        top = Math.max(margin, top);
-
-        this.popover.style.top = `${top}px`;
-        this.popover.style.left = `${left}px`;
     }
 };

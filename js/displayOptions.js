@@ -12,6 +12,7 @@ import { DesktopBackground } from './desktopBackground.js';
 import { resetCustomizationToDefaults } from './customizationReset.js';
 import { ACTION_ICONS } from './ui.js';
 import { AppTheme, buildThemeOptionsHtml, isAppThemeCustomized, readAppTheme } from './appTheme.js';
+import { positionPopoverBelowAnchor } from './popoverPosition.js';
 
 const STORAGE_KEY = 'matrix_display_options';
 
@@ -292,7 +293,7 @@ export const DisplayOptions = {
             btn.addEventListener('mousedown', (e) => e.stopPropagation());
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                AppTheme.setTheme(btn.dataset.theme, { closePopover: false });
+                AppTheme.setTheme(btn.dataset.theme);
                 this.openPopover();
             });
         });
@@ -346,7 +347,7 @@ export const DisplayOptions = {
         DesktopZoom.updateButtons();
 
         popover.classList.remove('is-hidden');
-        this.positionPopover(this.triggerBtn);
+        positionPopoverBelowAnchor(popover, this.triggerBtn);
         this.triggerBtn.setAttribute('aria-expanded', 'true');
 
         this.outsideHandler = (e) => {
@@ -368,26 +369,6 @@ export const DisplayOptions = {
         } else {
             this.openPopover();
         }
-    },
-
-    positionPopover(anchor) {
-        if (!this.popover || !anchor) return;
-        const rect = anchor.getBoundingClientRect();
-        const gap = 8;
-        const margin = 8;
-        const popRect = this.popover.getBoundingClientRect();
-
-        let top = rect.bottom + gap;
-        let left = rect.right - popRect.width;
-
-        left = Math.max(margin, Math.min(left, window.innerWidth - popRect.width - margin));
-        if (top + popRect.height > window.innerHeight - margin) {
-            top = rect.top - popRect.height - gap;
-        }
-        top = Math.max(margin, top);
-
-        this.popover.style.top = `${top}px`;
-        this.popover.style.left = `${left}px`;
     }
 };
 
