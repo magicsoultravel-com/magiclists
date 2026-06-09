@@ -1688,14 +1688,15 @@ html[data-note-font="kalam"] .mini-card .step-text {
     white-space: normal;
 }
 
-/* Card quick actions — row-reverse: last child (toggle) sits on the far right */
+/* Card quick actions — toggle is last in DOM, aligned to the far right */
 .card-actions {
     position: absolute;
     top: 0;
     right: 1px;
     z-index: 8;
     display: flex;
-    flex-direction: row-reverse;
+    flex-direction: row;
+    justify-content: flex-end;
     align-items: center;
     gap: 1px;
     padding: 0;
@@ -2012,6 +2013,24 @@ html[data-note-font="kalam"] .mini-card .step-text {
     border: none;
 }
 
+.checklist-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+    margin: 0 0 0.15rem;
+    min-height: 0;
+}
+
+.checklist-toolbar .checklist-expand-collapse-all-btn {
+    opacity: 0.55;
+}
+
+.note-surface:hover .checklist-toolbar .checklist-expand-collapse-all-btn,
+.note-surface:focus-within .checklist-toolbar .checklist-expand-collapse-all-btn,
+.checklist-toolbar .checklist-expand-collapse-all-btn:focus-visible {
+    opacity: 1;
+}
+
 .expanded-checklist .step-collapse-btn,
 .expanded-checklist .step-collapse-spacer {
     width: 10px;
@@ -2037,6 +2056,34 @@ html[data-note-font="kalam"] .mini-card .step-text {
 
 .expanded-checklist .step-row--done .step-row-actions {
     align-self: center;
+}
+
+.checklist-done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: 100%;
+    padding: 0.25rem 0.35rem;
+    margin: 0.15rem 0 0.05rem;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.72rem;
+    cursor: pointer;
+    text-align: left;
+}
+
+.checklist-done-toggle:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.78);
+}
+
+.checklist-done-toggle-icon {
+    flex: 0 0 auto;
+    width: 10px;
+    font-size: 0.62rem;
+    line-height: 1;
 }
 
 .checklist-done-section.is-hidden {

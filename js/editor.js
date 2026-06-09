@@ -502,8 +502,8 @@ export const Editor = {
     updateArchiveToggleUI() {
         if (!this.archiveBtn || !this.activeItem) return;
         const isArchived = this.activeItem.status === 'archived';
-        this.archiveBtn.innerHTML = isArchived ? CARD_ICONS.unarchive : CARD_ICONS.archive;
-        this.archiveBtn.title = isArchived ? 'Restore to active' : 'Archive note';
+        this.archiveBtn.innerHTML = isArchived ? CARD_ICONS.unarchive : CARD_ICONS.delete;
+        this.archiveBtn.title = isArchived ? 'Restore from bin' : 'Move to bin';
         this.archiveBtn.setAttribute('aria-label', this.archiveBtn.title);
         this.archiveBtn.classList.toggle('card-act--archive-on', isArchived);
     },

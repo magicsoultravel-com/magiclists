@@ -380,7 +380,7 @@ function isInsideDragControl(target) {
     return !!target.closest(
         '.card-actions, .card-act, .step-check, .step-delete-btn, .step-collapse-btn, ' +
         '.card-inline-edit, .rich-text--edit, .step-nest-controls, .step-row-actions, ' +
-        '.grab-handle--step, .expanded-checklist-add-btn, .editor-body-convert-bar, ' +
+        '.grab-handle--step, .expanded-checklist-add-btn, .checklist-expand-collapse-all-btn, .editor-body-convert-bar, ' +
         '.grab-handle--note-cat, .ff-resize, .col-resize, .card-act--pin, ' +
         '.tool-panel, .tool-chip, .tool-chip__drag, .tool-chip__expand, .tool-panel__resize-se, .tool-panel__header, ' +
         'a, button, input, textarea, select'

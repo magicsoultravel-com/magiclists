@@ -757,7 +757,9 @@ class Application {
             if (beforeSnapshot) {
                 UndoManager.recordItemChange(beforeSnapshot, item, {
                     preserveView,
-                    label: historyLabelForItem(item)
+                    label: historyLabelForItem(item),
+                    mergeKey: detail?.mergeKey,
+                    mergeWindow: detail?.mergeWindow !== false
                 });
             }
 

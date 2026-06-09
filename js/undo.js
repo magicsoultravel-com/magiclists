@@ -207,7 +207,12 @@ export const UndoManager = {
         return ok;
     },
 
-    recordItemChange(beforeItem, afterItem, { preserveView = false, label } = {}) {
+    recordItemChange(beforeItem, afterItem, {
+        preserveView = false,
+        label,
+        mergeKey,
+        mergeWindow = true
+    } = {}) {
         if (this.isApplying || !handlers.isEnabled() || !beforeItem || !afterItem) return;
         if (itemsEqual(beforeItem, afterItem)) return;
 
@@ -215,8 +220,9 @@ export const UndoManager = {
         const entryLabel = label || historyLabelForItem(after);
         const now = Date.now();
         const top = this.undoStack[this.undoStack.length - 1];
+        const key = mergeKey || after.id;
 
-        if (top?.kind === 'change' && top.mergeKey === after.id && now - (top.mergedAt || 0) < MERGE_MS) {
+        if (mergeWindow && top?.kind === 'change' && top.mergeKey === key && now - (top.mergedAt || 0) < MERGE_MS) {
             top.after = cloneItem(after);
             top.redo = () => this.applyItem(top.after, { preserveView });
             top.label = entryLabel;
@@ -231,7 +237,7 @@ export const UndoManager = {
             after,
             preserveView,
             label: entryLabel,
-            mergeKey: after.id,
+            mergeKey: key,
             mergedAt: now
         }));
     },

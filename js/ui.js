@@ -262,6 +262,10 @@ export function levelListHasDescendants(levels, index) {
     return false;
 }
 
+export function checklistHasIndentations(steps) {
+    return (steps || []).some((step) => getStepLevel(step) > 0);
+}
+
 export function buildVisibleChecklistSteps(steps, itemId, collapsedKeys = {}) {
     const visible = [];
     let suppressBelow = -1;
@@ -492,7 +496,28 @@ export const UI = {
                 item: afterNorm,
                 preserveView: true,
                 beforeItem: beforeNorm,
-                skipRerender: true
+                skipRerender: true,
+                mergeKey: `${afterNorm.id}:struct`,
+                mergeWindow: false
+            }
+        }));
+    },
+
+    commitInlineTextOp(item, beforeItem, { localOnly = false } = {}) {
+        if (localOnly || !beforeItem) return;
+        const preserveEmptySteps = true;
+        const afterNorm = normalizeItemForSave(item, { preserveEmptySteps });
+        const beforeNorm = normalizeItemForSave(beforeItem, { preserveEmptySteps });
+        if (JSON.stringify(beforeNorm) === JSON.stringify(afterNorm)) return;
+        Object.assign(item, afterNorm);
+        window.dispatchEvent(new CustomEvent('item:mutation_requested', {
+            detail: {
+                item: afterNorm,
+                preserveView: true,
+                beforeItem: beforeNorm,
+                skipRerender: true,
+                mergeKey: `${afterNorm.id}:text`,
+                mergeWindow: true
             }
         }));
     },
@@ -2341,8 +2366,9 @@ export const UI = {
         const collapsedKeys = this.getChecklistCollapsedKeys();
         const { active, done } = partitionChecklistSteps(item.steps);
         let html = '<div class="expanded-checklist">';
+        html += this.buildChecklistExpandCollapseAllHtml(item);
 
-        const renderRow = (step, { hasKids = false, isCollapsed = false, collapseKey = '', isDoneSection = false } = {}) => {
+        const renderRowHtml = (step, { hasKids = false, isCollapsed = false, collapseKey = '', isDoneSection = false } = {}) => {
             const level = getStepLevel(step);
             const collapseControl = !isDoneSection && hasKids
                 ? `<button type="button" class="step-collapse-btn" data-collapse-key="${this.escapeAttr(collapseKey)}" title="${isCollapsed ? 'Expand group' : 'Collapse group'}" aria-label="${isCollapsed ? 'Expand group' : 'Collapse group'}">${isCollapsed ? '▶' : '▼'}</button>`
@@ -2373,7 +2399,7 @@ export const UI = {
                 const richClass = stepRich ? ' rich-text' : '';
                 textHtml = `<span class="step-text${richClass} ${step.completed ? 'completed' : ''}">${this.renderRichHtml(stepText)}</span>`;
             }
-            html += `
+            return `
                 <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}" data-step-id="${step.id}" data-level="${level}" style="padding-left:${level * 0.45}rem">
                     <div class="step-row-leading">
                         ${collapseControl}
@@ -2391,16 +2417,32 @@ export const UI = {
         };
 
         buildVisibleChecklistSteps(active, item.id, collapsedKeys)
-            .forEach((row) => renderRow(row.step, row));
+            .forEach((row) => { html += renderRowHtml(row.step, row); });
 
         if (canEdit) {
             html += `<button type="button" class="card-act expanded-checklist-add-btn" title="Add checklist item" aria-label="Add checklist item">+</button>`;
         }
 
-        if (active.length > 0 && done.length > 0) {
-            html += '<div class="checklist-done-divider" role="separator" aria-hidden="true"></div>';
+        if (done.length > 0) {
+            const doneCollapsed = this.isChecklistDoneSectionCollapsed(item.id);
+            const toggleTitle = doneCollapsed
+                ? `Show ${done.length} completed item${done.length === 1 ? '' : 's'}`
+                : 'Collapse completed items';
+            const toggleIcon = doneCollapsed ? '▶' : '▼';
+            const toggleLabel = doneCollapsed
+                ? `Hidden items (${done.length})`
+                : 'Completed';
+            html += `<button type="button" class="checklist-done-toggle" title="${this.escapeAttr(toggleTitle)}" aria-expanded="${doneCollapsed ? 'false' : 'true'}" aria-label="${this.escapeAttr(toggleTitle)}">
+                <span class="checklist-done-toggle-icon" aria-hidden="true">${toggleIcon}</span>
+                <span class="checklist-done-toggle-label">${this.escapeHTML(toggleLabel)}</span>
+            </button>`;
+            if (!doneCollapsed && active.length > 0) {
+                html += '<div class="checklist-done-divider" role="separator" aria-hidden="true"></div>';
+            }
+            html += `<div class="checklist-done-section${doneCollapsed ? ' is-hidden' : ''}">`;
+            done.forEach((step) => { html += renderRowHtml(step, { isDoneSection: true }); });
+            html += '</div>';
         }
-        done.forEach((step) => renderRow(step, { isDoneSection: true }));
 
         html += '</div>';
         return html;
@@ -2541,6 +2583,43 @@ export const UI = {
         }
         probe.setStart(range.endContainer, range.endOffset);
         return probe.toString().length === 0;
+    },
+
+    caretAtPlainEdge(el, edge) {
+        const sel = window.getSelection();
+        if (!sel?.rangeCount) return true;
+        const range = sel.getRangeAt(0);
+        if (!el.contains(range.startContainer)) return false;
+
+        const measureRange = range.cloneRange();
+        measureRange.selectNodeContents(el);
+        measureRange.setEnd(range.startContainer, range.startOffset);
+        const plainOffset = measureRange.toString().length;
+
+        const rich = el.classList.contains('rich-text--edit');
+        const fullPlain = rich
+            ? stripRichText(sanitizeRichHtml(linkifyPlainUrls(el.innerHTML)))
+            : (el.textContent || '');
+
+        if (edge === 'start') return plainOffset <= 0;
+        return plainOffset >= fullPlain.length;
+    },
+
+    findAdjacentChecklistStepRow(row, direction) {
+        if (!row) return null;
+        let sibling = direction === 'next' ? row.nextElementSibling : row.previousElementSibling;
+        while (sibling) {
+            if (sibling.classList?.contains('step-row--display')) return sibling;
+            sibling = direction === 'next' ? sibling.nextElementSibling : sibling.previousElementSibling;
+        }
+        return null;
+    },
+
+    getAdjacentChecklistStep(item, row, direction) {
+        const adjRow = this.findAdjacentChecklistStepRow(row, direction);
+        if (!adjRow) return null;
+        const stepId = adjRow.dataset.stepId;
+        return item.steps?.find((s) => s.id === stepId) || null;
     },
 
     focusInlineEdit(el, edge = 'end') {
@@ -2692,7 +2771,7 @@ export const UI = {
     handleChecklistBackspace(root, item, el, refresh, { applyMutate, localOnly = false } = {}) {
         const sel = window.getSelection();
         if (!sel?.isCollapsed) return false;
-        if (!this.caretAtEdge(el, 'start')) return false;
+        if (!this.caretAtPlainEdge(el, 'start')) return false;
 
         el.dataset.skipBlurSave = '1';
         this.syncInlineFieldToItem(el, item);
@@ -2705,20 +2784,24 @@ export const UI = {
 
         const current = steps[idx];
         const empty = !stripRichText(current.text || '').trim();
+        const row = el.closest('.step-row--display');
 
         if (empty) {
             if (steps.length <= 1) return true;
-            const focusStep = idx > 0 ? steps[idx - 1] : steps[1];
+            const prevRow = this.findAdjacentChecklistStepRow(row, 'prev');
+            const nextRow = this.findAdjacentChecklistStepRow(row, 'next');
+            const focusStepId = prevRow?.dataset.stepId || nextRow?.dataset.stepId;
+            if (!focusStepId) return true;
             this.removeChecklistStepAndFocus(root, item, refresh, applyMutate, {
                 stepId,
-                focusStepId: focusStep.id,
-                focusEdge: idx > 0 ? 'end' : 'start'
+                focusStepId,
+                focusEdge: prevRow ? 'end' : 'start'
             });
             this.commitInlineChecklistOp(item, beforeItem, { localOnly });
             return true;
         }
 
-        const prev = idx > 0 ? steps[idx - 1] : null;
+        const prev = this.getAdjacentChecklistStep(item, row, 'prev');
         if (!prev || prev.completed !== current.completed) return false;
 
         const joinAt = stripRichText(prev.text || '').length;
@@ -2743,7 +2826,7 @@ export const UI = {
     handleChecklistDelete(root, item, el, refresh, { applyMutate, localOnly = false } = {}) {
         const sel = window.getSelection();
         if (!sel?.isCollapsed) return false;
-        if (!this.caretAtEdge(el, 'end')) return false;
+        if (!this.caretAtPlainEdge(el, 'end')) return false;
 
         el.dataset.skipBlurSave = '1';
         this.syncInlineFieldToItem(el, item);
@@ -2755,7 +2838,8 @@ export const UI = {
         if (idx < 0) return false;
 
         const current = steps[idx];
-        const next = steps[idx + 1];
+        const row = el.closest('.step-row--display');
+        const next = this.getAdjacentChecklistStep(item, row, 'next');
         if (!next || next.completed !== current.completed) return false;
 
         const nextEmpty = !stripRichText(next.text || '').trim();
@@ -2856,6 +2940,7 @@ export const UI = {
                     el.addEventListener('paste', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        const beforePaste = this.prepareInlineOpSnapshot(root, item, localOnly);
                         const plain = e.clipboardData?.getData('text/plain') || '';
                         if (plain) {
                             document.execCommand('insertText', false, plain);
@@ -2863,6 +2948,8 @@ export const UI = {
                             const html = e.clipboardData?.getData('text/html') || '';
                             if (html) document.execCommand('insertHTML', false, sanitizeRichHtml(html));
                         }
+                        this.syncInlineFieldToItem(el, item);
+                        this.commitInlineTextOp(item, beforePaste, { localOnly });
                         if (localOnly) onChange();
                     });
                 }
@@ -3027,6 +3114,20 @@ export const UI = {
                 });
             });
 
+            root.querySelectorAll('.checklist-done-toggle').forEach((btn) => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.toggleChecklistDoneSection(item.id);
+                    refresh();
+                });
+            });
+
+            root.querySelector('.checklist-expand-collapse-all-btn')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleChecklistExpandCollapseAll(item);
+                refresh();
+            });
+
             root.querySelectorAll('.step-delete-btn').forEach((btn) => {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
@@ -3088,8 +3189,10 @@ export const UI = {
             });
             if (nextSibling) activeList.insertBefore(draggedRow, nextSibling);
             else {
-                const firstDone = activeList.querySelector('.step-row--done');
-                if (firstDone) activeList.insertBefore(draggedRow, firstDone);
+                const doneAnchor = activeList.querySelector('.checklist-done-toggle')
+                    || activeList.querySelector('.checklist-done-section')
+                    || activeList.querySelector('.step-row--done');
+                if (doneAnchor) activeList.insertBefore(draggedRow, doneAnchor);
                 else activeList.appendChild(draggedRow);
             }
         };
@@ -3154,6 +3257,76 @@ export const UI = {
         } catch {
             return {};
         }
+    },
+
+    getChecklistDoneCollapsed() {
+        try {
+            return JSON.parse(localStorage.getItem('matrix_checklist_done_collapsed') || '{}');
+        } catch {
+            return {};
+        }
+    },
+
+    isChecklistDoneSectionCollapsed(itemId) {
+        return !!this.getChecklistDoneCollapsed()[itemId];
+    },
+
+    toggleChecklistDoneSection(itemId) {
+        const collapsed = this.getChecklistDoneCollapsed();
+        collapsed[itemId] = !collapsed[itemId];
+        if (!collapsed[itemId]) delete collapsed[itemId];
+        localStorage.setItem('matrix_checklist_done_collapsed', JSON.stringify(collapsed));
+    },
+
+    getChecklistCollapsibleKeys(item) {
+        if (!item?.id) return [];
+        const { active } = partitionChecklistSteps(item.steps || []);
+        const keys = [];
+        active.forEach((step, index) => {
+            if (!stepHasDescendants(active, index)) return;
+            keys.push(`${item.id}:${step.id}`);
+        });
+        return keys;
+    },
+
+    checklistGroupsAnyExpanded(item) {
+        const collapsed = this.getChecklistCollapsedKeys();
+        return this.getChecklistCollapsibleKeys(item).some((key) => !collapsed[key]);
+    },
+
+    collapseAllChecklistGroups(item) {
+        const collapsed = this.getChecklistCollapsedKeys();
+        this.getChecklistCollapsibleKeys(item).forEach((key) => {
+            collapsed[key] = true;
+        });
+        localStorage.setItem('matrix_checklist_collapsed', JSON.stringify(collapsed));
+    },
+
+    expandAllChecklistGroups(item) {
+        const collapsed = this.getChecklistCollapsedKeys();
+        this.getChecklistCollapsibleKeys(item).forEach((key) => {
+            delete collapsed[key];
+        });
+        localStorage.setItem('matrix_checklist_collapsed', JSON.stringify(collapsed));
+    },
+
+    toggleChecklistExpandCollapseAll(item) {
+        if (this.checklistGroupsAnyExpanded(item)) {
+            this.collapseAllChecklistGroups(item);
+        } else {
+            this.expandAllChecklistGroups(item);
+        }
+    },
+
+    buildChecklistExpandCollapseAllHtml(item) {
+        if (!item?.id || !checklistHasIndentations(item.steps)) return '';
+        if (this.getChecklistCollapsibleKeys(item).length === 0) return '';
+        const anyExpanded = this.checklistGroupsAnyExpanded(item);
+        const label = anyExpanded ? 'Collapse all checklist groups' : 'Expand all checklist groups';
+        const icon = anyExpanded ? ACTION_ICONS.collapseAll : ACTION_ICONS.expandAll;
+        return `<div class="checklist-toolbar">
+            <button type="button" class="card-act checklist-expand-collapse-all-btn" title="${this.escapeAttr(label)}" aria-label="${this.escapeAttr(label)}">${icon}</button>
+        </div>`;
     },
 
     getFreeformPositions() {
