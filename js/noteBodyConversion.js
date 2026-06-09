@@ -140,6 +140,15 @@ export function orderStepsActiveThenDone(steps) {
     return [...active, ...done];
 }
 
+export function deriveEditorBodyLayout(item) {
+    const hasContent = !!stripRichText(item?.content || '').trim();
+    const hasSteps = stepsHaveConvertibleText(item?.steps);
+    if (hasContent && hasSteps) return 'both';
+    if (hasContent) return 'content';
+    if (hasSteps) return 'checklist';
+    return 'both';
+}
+
 export function convertContentToChecklist(item, createStep) {
     const lines = splitContentLines(item.content);
     const stepsFromContent = [];
@@ -158,7 +167,7 @@ export function convertContentToChecklist(item, createStep) {
 
     item.content = '';
     item.steps = [...stepsFromContent, ...(item.steps || [])];
-    item.editorBodyLayout = 'checklist';
+    item.editorBodyLayout = deriveEditorBodyLayout(item);
     return item;
 }
 
@@ -174,7 +183,7 @@ export function convertChecklistToContent(item) {
         ? `${existing.replace(/\n+$/, '')}\n${fromSteps}`
         : (existing || fromSteps);
     item.steps = [];
-    item.editorBodyLayout = 'content';
+    item.editorBodyLayout = deriveEditorBodyLayout(item);
     return item;
 }
 

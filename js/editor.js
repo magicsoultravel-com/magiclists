@@ -63,10 +63,10 @@ export const Editor = {
             hiddenFromBoard: false,
             attachments: [],
             steps: [],
-            editorBodyLayout: 'content'
+            editorBodyLayout: 'both'
         };
-        if (!this.activeItem.editorBodyLayout && !noteHasSavableContent(this.activeItem)) {
-            this.activeItem.editorBodyLayout = 'content';
+        if (!this.activeItem.editorBodyLayout) {
+            this.activeItem.editorBodyLayout = 'both';
         }
         this.isNewUnsavedNote = isNew || !noteHasSavableContent(this.activeItem);
         this.preserveBoardCollapse = !!(item && noteHasSavableContent(item));
@@ -229,11 +229,7 @@ export const Editor = {
             isRecurring: this.activeItem.isRecurring === true,
             hideFromCalendar: this.activeItem.hideFromCalendar === true,
             hiddenFromBoard: this.activeItem.hiddenFromBoard === true,
-            editorBodyLayout: (() => {
-                const bothEl = document.getElementById('edit-show-both-panes');
-                if (bothEl?.checked) return 'both';
-                return UI.resolveEditorBodyLayoutUnchecked(this.activeItem);
-            })()
+            editorBodyLayout: UI.resolveEditorBodyLayoutUnchecked(this.activeItem)
         };
         return normalize ? normalizeItemForSave(data) : data;
     },
@@ -338,7 +334,7 @@ export const Editor = {
         const pendingFocusPlainOffset = body.dataset.pendingFocusPlainOffset;
         body.innerHTML = UI.buildNoteBodyHtml(this.activeItem, {
             canEdit: true,
-            alwaysShowChecklist: true,
+            inModalEditor: true,
             richEdit: true
         });
         const shell = this.mountZone?.querySelector('.editor-note-shell');
@@ -394,7 +390,7 @@ export const Editor = {
 
         this.mountZone.innerHTML = UI.buildNoteEditorShell(item, {
             canEdit: true,
-            alwaysShowChecklist: true,
+            inModalEditor: true,
             showConfig: true,
             showFormat: true,
             richEdit: true,

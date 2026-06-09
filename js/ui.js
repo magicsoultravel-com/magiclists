@@ -15,6 +15,7 @@ import {
     contentHasConvertibleText,
     convertChecklistToContent,
     convertContentToChecklist,
+    deriveEditorBodyLayout,
     itemToPlainCopyText,
     SOFT_BREAK,
     stepToPlainCopyLine,
@@ -624,9 +625,7 @@ export const UI = {
     },
 
     resolveEditorBodyLayoutUnchecked(item) {
-        if (stripRichText(item?.content || '').trim()) return 'content';
-        if (stepsHaveConvertibleText(item?.steps)) return 'checklist';
-        return 'both';
+        return deriveEditorBodyLayout(item);
     },
 
     syncItemBodyFromDom(root, item) {
@@ -1843,14 +1842,17 @@ export const UI = {
         if (toContent) toContent.disabled = !stepsHaveConvertibleText(item.steps);
     },
 
-    buildNoteBodyHtml(item, { canEdit = false, alwaysShowChecklist = false, richEdit = false } = {}) {
+    buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false, richEdit = false } = {}) {
         let html = '';
         const layout = item.editorBodyLayout || 'both';
         const hasContent = stripRichText(item.content || '').trim();
 
         let showContent;
         let showChecklist;
-        if (canEdit) {
+        if (inModalEditor) {
+            showContent = true;
+            showChecklist = true;
+        } else if (canEdit) {
             showContent = layout !== 'checklist'
                 && (hasContent || layout === 'both' || layout === 'content');
             showChecklist = layout !== 'content'
@@ -1996,12 +1998,6 @@ export const UI = {
                                 <option value="completed" ${item.status === 'completed' ? 'selected' : ''}>Done</option>
                             </select>
                         </div>
-                        <div class="form-group form-group--compact form-group--checkbox">
-                            <label class="checkbox-row">
-                                <input type="checkbox" id="edit-show-both-panes" ${(item.editorBodyLayout || 'both') === 'both' ? 'checked' : ''}>
-                                <span>Show content and checklist together</span>
-                            </label>
-                        </div>
                     </div>
                 </div>
             </div>
@@ -2010,7 +2006,7 @@ export const UI = {
 
     buildNoteEditorShell(item, {
         canEdit = false,
-        alwaysShowChecklist = false,
+        inModalEditor = false,
         showConfig = false,
         showFormat = false,
         richEdit = false,
@@ -2028,7 +2024,7 @@ export const UI = {
         const titleHtml = this.buildNoteTitleHtml(item, canEdit, { richEdit });
         const bodyHtml = this.buildNoteBodyHtml(item, {
             canEdit,
-            alwaysShowChecklist: alwaysShowChecklist || canEdit,
+            inModalEditor,
             richEdit
         });
         const formatHtml = showFormat ? this.buildNoteFormatPanelHtml(item) : '';
@@ -2225,18 +2221,8 @@ export const UI = {
                     convertChecklistToContent(it);
                     Object.assign(it, normalizeItemForSave(it));
                 });
-            } else if (action === 'show-both') {
-                applyMutate((it) => {
-                    syncAndNormalize(it);
-                    it.editorBodyLayout = 'both';
-                });
             } else {
                 return;
-            }
-
-            const bothEl = document.getElementById('edit-show-both-panes');
-            if (bothEl) {
-                bothEl.checked = item.editorBodyLayout === 'both';
             }
 
             refresh();
@@ -2340,17 +2326,6 @@ export const UI = {
         }
 
         if (!showConfig) return;
-
-        const bothPanesEl = document.getElementById('edit-show-both-panes');
-        bothPanesEl?.addEventListener('change', () => {
-            if (bothPanesEl.checked) {
-                item.editorBodyLayout = 'both';
-            } else {
-                item.editorBodyLayout = this.resolveEditorBodyLayoutUnchecked(item);
-            }
-            onConfigChange();
-            refresh();
-        });
 
         ['edit-visibility', 'edit-status', 'edit-category', 'edit-start-date', 'edit-start-time', 'edit-end-date', 'edit-end-time'].forEach((id) => {
             const el = document.getElementById(id);
