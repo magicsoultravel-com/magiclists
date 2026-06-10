@@ -80,6 +80,7 @@ function isCustomized(options) {
 
 export const DisplayOptions = {
     triggerBtn: null,
+    activeAnchor: null,
     popover: null,
     outsideHandler: null,
     keyHandler: null,
@@ -157,6 +158,8 @@ export const DisplayOptions = {
         if (!this.popover) return;
         this.popover.classList.add('is-hidden');
         this.triggerBtn?.setAttribute('aria-expanded', 'false');
+        this.activeAnchor?.setAttribute('aria-expanded', 'false');
+        this.activeAnchor = null;
         if (this.outsideHandler) {
             document.removeEventListener('mousedown', this.outsideHandler, true);
             this.outsideHandler = null;
@@ -226,9 +229,12 @@ export const DisplayOptions = {
         });
     },
 
-    openPopover() {
-        if (!this.triggerBtn) return;
+    openPopover(anchor) {
+        const savedAnchor = anchor || this.activeAnchor;
+        const target = savedAnchor || this.triggerBtn;
+        if (!target) return;
         this.closePopover();
+        this.activeAnchor = savedAnchor || null;
 
         const popover = this.ensurePopover();
         const opts = this.options;
@@ -353,11 +359,11 @@ export const DisplayOptions = {
         DesktopZoom.updateButtons();
 
         popover.classList.remove('is-hidden');
-        positionPopoverBelowAnchor(popover, this.triggerBtn);
-        this.triggerBtn.setAttribute('aria-expanded', 'true');
+        positionPopoverBelowAnchor(popover, target);
+        target.setAttribute('aria-expanded', 'true');
 
         this.outsideHandler = (e) => {
-            if (popover.contains(e.target) || this.triggerBtn.contains(e.target)) return;
+            if (popover.contains(e.target) || target.contains(e.target)) return;
             this.closePopover();
         };
         this.keyHandler = (e) => {
@@ -370,10 +376,15 @@ export const DisplayOptions = {
     },
 
     togglePopover() {
-        if (this.popover && !this.popover.classList.contains('is-hidden')) {
+        this.toggleFrom(this.triggerBtn);
+    },
+
+    toggleFrom(anchor) {
+        if (!anchor) return;
+        if (this.popover && !this.popover.classList.contains('is-hidden') && this.activeAnchor === anchor) {
             this.closePopover();
         } else {
-            this.openPopover();
+            this.openPopover(anchor);
         }
     }
 };

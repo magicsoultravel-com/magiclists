@@ -5,22 +5,32 @@ function isSupported() {
 }
 
 export const Fullscreen = {
-    btn: null,
+    buttons: new Set(),
+    supported: isSupported(),
 
     init() {
-        this.btn = document.getElementById('btn-fullscreen');
-        if (!this.btn) return;
+        this.buttons = new Set();
+        const btn = document.getElementById('btn-fullscreen');
+        if (btn) this.registerButton(btn);
 
-        if (!isSupported()) {
-            this.btn.disabled = true;
-            this.btn.title = 'Full screen not supported';
-            this.btn.setAttribute('aria-label', 'Full screen not supported');
+        if (!this.supported) {
+            this.buttons.forEach((b) => {
+                b.disabled = true;
+                b.title = 'Full screen not supported';
+                b.setAttribute('aria-label', 'Full screen not supported');
+            });
             return;
         }
 
-        this.btn.addEventListener('click', () => this.toggle());
-        document.addEventListener('fullscreenchange', () => this.syncButton());
-        this.syncButton();
+        document.addEventListener('fullscreenchange', () => this.syncButtons());
+        this.syncButtons();
+    },
+
+    registerButton(btn) {
+        if (!btn || this.buttons.has(btn)) return;
+        this.buttons.add(btn);
+        btn.addEventListener('click', () => this.toggle());
+        this.syncButtons();
     },
 
     isActive() {
@@ -28,7 +38,7 @@ export const Fullscreen = {
     },
 
     async enter() {
-        if (!isSupported()) return;
+        if (!this.supported) return;
         try {
             await document.documentElement.requestFullscreen();
         } catch {
@@ -50,16 +60,16 @@ export const Fullscreen = {
         else this.enter();
     },
 
-    syncButton() {
-        const btn = this.btn;
-        if (!btn || btn.disabled) return;
-
+    syncButtons() {
         const active = this.isActive();
-        btn.classList.toggle('is-active', active);
-        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-        btn.innerHTML = active ? ACTION_ICONS.fullscreenExit : ACTION_ICONS.fullscreenEnter;
         const label = active ? 'Back to normal' : 'Full screen';
-        btn.title = label;
-        btn.setAttribute('aria-label', label);
+        this.buttons.forEach((btn) => {
+            if (btn.disabled && !this.supported) return;
+            btn.classList.toggle('is-active', active);
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+            btn.innerHTML = active ? ACTION_ICONS.fullscreenExit : ACTION_ICONS.fullscreenEnter;
+            btn.title = label;
+            btn.setAttribute('aria-label', label);
+        });
     }
 };

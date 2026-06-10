@@ -1,9 +1,10 @@
-export function renderBackground(ctx, type, width, height, { spacing = 24 } = {}) {
+export function renderBackground(ctx, type, width, height, { spacing = 24, fillColor = '' } = {}) {
     ctx.clearRect(0, 0, width, height);
-    const bg = getComputedStyle(document.documentElement).getPropertyValue('--desktop-bg').trim()
+    const fallback = getComputedStyle(document.documentElement).getPropertyValue('--desktop-bg').trim()
         || getComputedStyle(document.documentElement).getPropertyValue('--bg-primary').trim()
         || '#121214';
-    ctx.fillStyle = bg || '#121214';
+    const bg = fillColor || fallback || '#121214';
+    ctx.fillStyle = bg;
     ctx.fillRect(0, 0, width, height);
 
     if (type === 'blank' || !type) return;

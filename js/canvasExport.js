@@ -18,7 +18,8 @@ function renderPageToCanvas(page, doc) {
     canvas.height = fmt.height;
     const ctx = canvas.getContext('2d');
     const bg = doc.canvasMode === 'infinite' ? (doc.infinite.background || 'blank') : (page.background || 'blank');
-    renderBackground(ctx, bg, fmt.width, fmt.height);
+    const fillColor = doc.canvasMode === 'infinite' ? (doc.infinite.backgroundColor || '') : (page.backgroundColor || '');
+    renderBackground(ctx, bg, fmt.width, fmt.height, { fillColor });
     const strokes = doc.canvasMode === 'infinite' ? doc.infinite.strokes : (page.strokes || []);
     const texts = doc.canvasMode === 'infinite' ? doc.infinite.texts : (page.texts || []);
     renderStrokesToContext(ctx, strokes, texts);

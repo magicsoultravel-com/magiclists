@@ -93,7 +93,7 @@ class Application {
         this.setupUndo();
         this.setupDrawingMode();
         Fullscreen.init();
-        DrawingBoard.init({ onExit: () => this.switchWorkspaceMode('notes') });
+        DrawingBoard.init();
         if (AppState.workspaceMode === 'drawing') {
             requestAnimationFrame(() => this.applyWorkspaceMode('drawing', { skipPersist: true }));
         }
@@ -213,18 +213,24 @@ class Application {
         const filterControls = document.getElementById('filter-controls');
         const mode = AppState.viewSettings.sortBy;
         const showGrid = DesktopZoom.isDesktopViewport();
+        const drawingActive = AppState.workspaceMode === 'drawing';
         if (filterControls) {
             const gridBtn = showGrid
-                ? `<button class="btn btn--compact btn--icon ${mode === 'grid' ? 'active' : ''}" id="btn-view-grid" title="Grid board" aria-label="Grid board">${ACTION_ICONS.viewGrid}</button>`
+                ? `<button class="btn btn--compact btn--icon ${!drawingActive && mode === 'grid' ? 'active' : ''}" id="btn-view-grid" title="Grid board" aria-label="Grid board">${ACTION_ICONS.viewGrid}</button>`
                 : '';
             filterControls.innerHTML = `
-                <button class="btn btn--compact btn--icon ${mode === 'columns' ? 'active' : ''}" id="btn-view-cols" title="Columns view" aria-label="Columns view">${ACTION_ICONS.viewCols}</button>
-                <button class="btn btn--compact btn--icon ${mode === 'freeform' ? 'active' : ''}" id="btn-view-free" title="Freeform view" aria-label="Freeform view">${ACTION_ICONS.viewFree}</button>
+                <button class="btn btn--compact btn--icon ${!drawingActive && mode === 'columns' ? 'active' : ''}" id="btn-view-cols" title="Columns view" aria-label="Columns view">${ACTION_ICONS.viewCols}</button>
+                <button class="btn btn--compact btn--icon ${!drawingActive && mode === 'freeform' ? 'active' : ''}" id="btn-view-free" title="Freeform view" aria-label="Freeform view">${ACTION_ICONS.viewFree}</button>
                 ${gridBtn}
+                <button class="btn btn--compact btn--icon ${drawingActive ? 'active' : ''}" id="btn-drawing-mode" title="magicCanvas" aria-label="magicCanvas">${ACTION_ICONS.drawingPencil}</button>
             `;
             document.getElementById('btn-view-cols').addEventListener('click', () => this.switchViewMode('columns'));
             document.getElementById('btn-view-free').addEventListener('click', () => this.switchViewMode('freeform'));
             document.getElementById('btn-view-grid')?.addEventListener('click', () => this.switchViewMode('grid'));
+            document.getElementById('btn-drawing-mode')?.addEventListener('click', () => {
+                if (AppState.workspaceMode === 'drawing') this.switchWorkspaceMode('notes');
+                else this.switchWorkspaceMode('drawing');
+            });
             this.updateViewToggleState();
         }
 
@@ -280,16 +286,6 @@ class Application {
     }
 
     setupDrawingMode() {
-        const btn = document.getElementById('btn-drawing-mode');
-        if (btn) btn.innerHTML = ACTION_ICONS.drawingPencil;
-        btn?.addEventListener('click', () => {
-            if (AppState.workspaceMode === 'drawing') {
-                this.switchWorkspaceMode('notes');
-            } else {
-                this.switchWorkspaceMode('drawing');
-            }
-        });
-
         document.addEventListener('keydown', (e) => {
             if (DrawingBoard.handleKeydown(e)) return;
         });
@@ -341,6 +337,7 @@ class Application {
 
         this.updateFabVisibility();
         this.updateLayoutResetVisibility();
+        this.updateViewToggleState();
     }
 
     async executeCodeExport() {
@@ -459,6 +456,10 @@ class Application {
 
     async switchViewMode(mode) {
         if (mode === 'grid' && !DesktopZoom.isDesktopViewport()) return;
+        if (AppState.workspaceMode === 'drawing') {
+            this.switchWorkspaceMode('notes');
+            if (AppState.viewSettings.sortBy === mode) return;
+        }
         const prevMode = AppState.viewSettings.sortBy;
         if (prevMode === mode) return;
 
@@ -484,9 +485,11 @@ class Application {
 
     updateViewToggleState() {
         const mode = AppState.viewSettings.sortBy;
-        document.getElementById('btn-view-cols')?.classList.toggle('active', mode === 'columns');
-        document.getElementById('btn-view-free')?.classList.toggle('active', mode === 'freeform');
-        document.getElementById('btn-view-grid')?.classList.toggle('active', mode === 'grid');
+        const drawing = AppState.workspaceMode === 'drawing';
+        document.getElementById('btn-view-cols')?.classList.toggle('active', !drawing && mode === 'columns');
+        document.getElementById('btn-view-free')?.classList.toggle('active', !drawing && mode === 'freeform');
+        document.getElementById('btn-view-grid')?.classList.toggle('active', !drawing && mode === 'grid');
+        document.getElementById('btn-drawing-mode')?.classList.toggle('active', drawing);
         this.updateDesktopZoomVisibility();
     }
 

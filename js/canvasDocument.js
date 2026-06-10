@@ -14,11 +14,12 @@ function createId(prefix) {
     return p + '_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
 }
 
-function emptyPage(format, background) {
+function emptyPage(format, background, backgroundColor) {
     return {
         id: createId('page'),
         format: format || 'a4',
         background: background || 'blank',
+        backgroundColor: backgroundColor || '',
         strokes: [],
         texts: []
     };
@@ -36,6 +37,7 @@ export function createEmptyDocument(canvasMode) {
             strokes: [],
             texts: [],
             background: 'blank',
+            backgroundColor: '',
             bounds: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 }
         },
         viewport: { scale: 1, offsetX: 0, offsetY: 0 }
@@ -51,10 +53,12 @@ export function migrateDocument(raw) {
             doc.activePageId = doc.pages[0].id;
         }
         if (!doc.infinite) {
-            doc.infinite = { strokes: [], texts: [], background: 'blank', bounds: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 } };
+            doc.infinite = { strokes: [], texts: [], background: 'blank', backgroundColor: '', bounds: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 } };
         }
         if (!doc.viewport) doc.viewport = { scale: 1, offsetX: 0, offsetY: 0 };
         if (CANVAS_MODES.indexOf(doc.canvasMode) < 0) doc.canvasMode = 'a4';
+        doc.pages.forEach((p) => { if (p.backgroundColor == null) p.backgroundColor = ''; });
+        if (doc.infinite && doc.infinite.backgroundColor == null) doc.infinite.backgroundColor = '';
         return doc;
     }
     const strokes = Array.isArray(raw.strokes) ? raw.strokes : [];
@@ -133,6 +137,21 @@ export function setActiveBackground(doc, background) {
     }
 }
 
+export function getActiveBackgroundColor(doc) {
+    if (doc.canvasMode === 'infinite') return doc.infinite.backgroundColor || '';
+    var page = getActivePage(doc);
+    return page && page.backgroundColor ? page.backgroundColor : '';
+}
+
+export function setActiveBackgroundColor(doc, color) {
+    const hex = color || '';
+    if (doc.canvasMode === 'infinite') doc.infinite.backgroundColor = hex;
+    else {
+        var page = getActivePage(doc);
+        if (page) page.backgroundColor = hex;
+    }
+}
+
 export function getPageDimensions(doc) {
     if (doc.canvasMode === 'infinite') {
         var b = doc.infinite.bounds;
@@ -145,7 +164,7 @@ export function getPageDimensions(doc) {
 
 export function addPage(doc) {
     var fmt = doc.canvasMode === 'infinite' ? 'a4' : (PAGE_FORMATS[doc.canvasMode] ? doc.canvasMode : 'a4');
-    var page = emptyPage(fmt, getActiveBackground(doc));
+    var page = emptyPage(fmt, getActiveBackground(doc), getActiveBackgroundColor(doc));
     doc.pages.push(page);
     doc.activePageId = page.id;
     return page;

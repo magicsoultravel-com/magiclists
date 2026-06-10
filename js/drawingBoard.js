@@ -1,15 +1,18 @@
 import { ACTION_ICONS, DRAWING_ICONS } from './ui.js';
 import { ColorPicker, PALETTE_DRAWING } from './colorPicker.js';
 import { DrawingToolbarMenu, CHEVRON } from './drawingToolbarMenu.js';
+import { DisplayOptions } from './displayOptions.js';
+import { Fullscreen } from './fullscreen.js';
 import {
     readDocument, writeDocument, getActiveStrokes, getActiveTexts, setActiveStrokes,
-    getActiveBackground, setActiveBackground, getPageDimensions, addPage, nextPage, prevPage,
+    getActiveBackground, setActiveBackground, getActiveBackgroundColor, setActiveBackgroundColor,
+    getPageDimensions, addPage, nextPage, prevPage,
     expandInfiniteBounds, STORAGE_KEY, createId, CANVAS_MODES, BACKGROUNDS
 } from './canvasDocument.js';
 import { BRUSH_STYLES, drawBrushStroke, drawShapeStroke, drawTextObject } from './canvasBrushes.js';
 import { renderBackground } from './canvasBackgrounds.js';
 import { CanvasViewport } from './canvasViewport.js';
-import { exportCanvasJson, exportCanvasPng, exportCanvasPdf } from './canvasExport.js';
+import { exportCanvasPng, exportCanvasPdf } from './canvasExport.js';
 
 const PREFS_KEY = 'matrix_drawing_prefs';
 const TOOLBAR_HIDDEN_KEY = 'matrix_drawing_toolbar_hidden';
@@ -50,6 +53,11 @@ const TYPE_ITEMS = [
     { id: 'grid', label: 'Grid' },
     { id: 'notebook', label: 'Notebook' },
     { id: 'staff', label: 'Staff' }
+];
+
+const EXPORT_ITEMS = [
+    { id: 'export-png', label: 'Export PNG' },
+    { id: 'export-pdf', label: 'Export PDF' }
 ];
 
 function defaultWidthForStyle(style) {
@@ -132,7 +140,6 @@ export const DrawingBoard = {
     toolbarEl: null,
     toolbarFab: null,
     controlBar: null,
-    onExit: null,
     activeTool: 'brush',
     activeStyle: 'pen',
     penPointerActive: false,
@@ -144,8 +151,7 @@ export const DrawingBoard = {
     brandNotesText: 'magicNotes',
     colorRolloutOpen: false,
 
-    init({ onExit } = {}) {
-        this.onExit = onExit;
+    init() {
         this.boardEl = document.getElementById('drawing-board');
         this.canvas = document.getElementById('drawing-canvas');
         this.bgCanvas = document.getElementById('drawing-bg-canvas');
@@ -269,14 +275,45 @@ export const DrawingBoard = {
         if (this.innerEl) {
             this.innerEl.style.width = cssW + 'px';
             this.innerEl.style.height = cssH + 'px';
+            this.innerEl.classList.toggle('is-paged-canvas', this.doc.canvasMode !== 'infinite');
+            this.innerEl.classList.toggle('is-infinite-canvas', this.doc.canvasMode === 'infinite');
         }
         this.redrawBackground();
         this.redraw();
     },
 
+    pageBackgroundFill() {
+        return getActiveBackgroundColor(this.doc) || '';
+    },
+
+    pageBackgroundSwatch() {
+        const custom = this.pageBackgroundFill();
+        if (custom) return custom;
+        return getComputedStyle(document.documentElement).getPropertyValue('--desktop-bg').trim() || '#121214';
+    },
+
     redrawBackground() {
         if (!this.bgCtx || !this.bgCanvas) return;
-        renderBackground(this.bgCtx, getActiveBackground(this.doc), this.bgCanvas.width, this.bgCanvas.height);
+        renderBackground(this.bgCtx, getActiveBackground(this.doc), this.bgCanvas.width, this.bgCanvas.height, {
+            fillColor: this.pageBackgroundFill()
+        });
+    },
+
+    setPageBackgroundColor(color) {
+        setActiveBackgroundColor(this.doc, color);
+        this.redrawBackground();
+        this.scheduleSave();
+        this.renderToolbar();
+    },
+
+    openPageBackgroundPicker(anchor) {
+        ColorPicker.open({
+            anchor,
+            presets: PALETTE_DRAWING,
+            value: this.pageBackgroundFill() || this.pageBackgroundSwatch(),
+            align: 'end',
+            onSelect: (c) => this.setPageBackgroundColor(c)
+        });
     },
 
     currentBrush() {
@@ -618,12 +655,23 @@ export const DrawingBoard = {
     menuItemsWithIcons(items) {
         return items.map((item) => ({
             ...item,
-            icon: item.divider ? '' : (DRAWING_ICONS[item.id] || DRAWING_ICONS[item.iconKey || item.id] || '')
+            icon: item.divider ? '' : (item.icon || DRAWING_ICONS[item.id] || DRAWING_ICONS[item.iconKey || item.id] || '')
         }));
     },
 
-    formatMenuItems() {
-        const items = this.menuItemsWithIcons([...FORMAT_ITEMS]);
+    canvasMenuItems() {
+        const mode = this.doc.canvasMode;
+        const bg = getActiveBackground(this.doc);
+        const items = this.menuItemsWithIcons(FORMAT_ITEMS.map((item) => ({
+            ...item,
+            selected: item.id === mode
+        })));
+        items.push({ divider: true });
+        items.push(...this.menuItemsWithIcons(TYPE_ITEMS.map((item) => ({
+            ...item,
+            iconKey: item.id === 'blank' ? 'rect' : item.id,
+            selected: item.id === bg
+        }))));
         if (this.doc.canvasMode !== 'infinite') {
             items.push({ divider: true });
             items.push(
@@ -632,10 +680,21 @@ export const DrawingBoard = {
                 { id: 'page-add', label: 'Add page', icon: DRAWING_ICONS.pageAdd }
             );
         }
+        items.push({ divider: true });
+        const swatch = this.pageBackgroundSwatch();
+        items.push({
+            id: 'bg-color',
+            label: 'Background color…',
+            icon: `<span class="drawing-menu-swatch" style="background:${swatch}"></span>`
+        });
         return items;
     },
 
-    handleFormatMenu(id) {
+    handleCanvasMenu(id, anchor) {
+        if (id === 'bg-color') {
+            this.openPageBackgroundPicker(anchor);
+            return;
+        }
         if (id === 'page-prev') {
             if (prevPage(this.doc)) { this.resize(); this.scheduleSave(); this.renderToolbar(); }
             return;
@@ -651,7 +710,13 @@ export const DrawingBoard = {
             this.renderToolbar();
             return;
         }
-        this.setCanvasMode(id);
+        if (FORMAT_ITEMS.some((item) => item.id === id)) {
+            this.setCanvasMode(id);
+            return;
+        }
+        if (TYPE_ITEMS.some((item) => item.id === id)) {
+            this.setBackground(id);
+        }
     },
 
     renderToolbar() {
@@ -661,8 +726,6 @@ export const DrawingBoard = {
         const brush = this.currentBrush();
 
         this.toolbarEl.innerHTML = `
-            <button type="button" class="btn btn--compact btn--icon" id="draw-exit" title="Back to notes" aria-label="Back to notes">${ACTION_ICONS.drawingExit}</button>
-            <span class="format-toolbar-sep" aria-hidden="true"></span>
             <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-pointer" aria-haspopup="menu" aria-expanded="false" title="Pointer tools" aria-label="Pointer tools">
                 <span class="drawing-dropdown-icon">${this.pointerTriggerIcon()}</span>
                 <span class="drawing-dropdown-chevron">${CHEVRON}</span>
@@ -685,14 +748,16 @@ export const DrawingBoard = {
                 <span class="drawing-dropdown-icon">${this.shapeTriggerIcon()}</span>
                 <span class="drawing-dropdown-chevron">${CHEVRON}</span>
             </button>
-            <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-format" aria-haspopup="menu" aria-expanded="false" title="Format" aria-label="Format">
-                <span class="drawing-dropdown-label">${this.formatTriggerLabel()}</span>
+            <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-canvas" aria-haspopup="menu" aria-expanded="false" title="Canvas settings" aria-label="Canvas settings">
+                <span class="drawing-dropdown-label">Canvas</span>
                 <span class="drawing-dropdown-chevron">${CHEVRON}</span>
             </button>
-            <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-type" aria-haspopup="menu" aria-expanded="false" title="Background type" aria-label="Background type">
-                <span class="drawing-dropdown-icon">${this.typeTriggerIcon()}</span>
+            <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-export" aria-haspopup="menu" aria-expanded="false" title="Export" aria-label="Export">
+                <span class="drawing-dropdown-label">Export</span>
                 <span class="drawing-dropdown-chevron">${CHEVRON}</span>
             </button>
+            <button type="button" class="btn btn--compact btn--icon" id="draw-display-options" title="Display options" aria-label="Display options" aria-expanded="false" aria-haspopup="menu">${ACTION_ICONS.displayOptions}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="draw-fullscreen" title="Full screen" aria-label="Full screen" aria-pressed="false">${ACTION_ICONS.fullscreenEnter}</button>
             <span class="format-toolbar-sep" aria-hidden="true"></span>
             <button type="button" class="btn btn--compact btn--icon" id="draw-zoom-out" title="Zoom out" aria-label="Zoom out">${DRAWING_ICONS.zoomOut}</button>
             <button type="button" class="btn btn--compact btn--icon" id="draw-zoom-in" title="Zoom in" aria-label="Zoom in">${DRAWING_ICONS.zoomIn}</button>
@@ -700,9 +765,6 @@ export const DrawingBoard = {
             <button type="button" class="btn btn--compact btn--icon" id="draw-undo" title="Undo" aria-label="Undo" ${this.history.canUndo ? '' : 'disabled'}>${ACTION_ICONS.undo}</button>
             <button type="button" class="btn btn--compact btn--icon" id="draw-redo" title="Redo" aria-label="Redo" ${this.history.canRedo ? '' : 'disabled'}>${ACTION_ICONS.redo}</button>
             <button type="button" class="btn btn--compact btn--icon" id="draw-clear" title="Clear" aria-label="Clear">${ACTION_ICONS.layoutReset}</button>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-export-png" title="Export PNG" aria-label="Export PNG">${DRAWING_ICONS.exportPng}</button>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-export-pdf" title="Export PDF" aria-label="Export PDF">${ACTION_ICONS.export}</button>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-export-json" title="Export JSON" aria-label="Export JSON">${ACTION_ICONS.export}</button>
             <button type="button" class="btn btn--compact btn--icon" id="draw-toolbar-hide" title="Hide toolbar" aria-label="Hide toolbar">${ACTION_ICONS.collapseAll}</button>
         `;
         this.bindToolbar();
@@ -716,7 +778,6 @@ export const DrawingBoard = {
         if (!this.toolbarEl) return;
         const q = (sel) => this.toolbarEl.querySelector(sel);
 
-        q('#draw-exit')?.addEventListener('click', () => this.onExit?.());
         q('#draw-toolbar-hide')?.addEventListener('click', () => { ColorPicker.close(); this.colorRolloutOpen = false; this.hideToolbar(); });
         q('#draw-undo')?.addEventListener('click', () => this.undo());
         q('#draw-redo')?.addEventListener('click', () => this.redo());
@@ -729,9 +790,12 @@ export const DrawingBoard = {
         });
         q('#draw-zoom-in')?.addEventListener('click', () => { CanvasViewport.stepZoom(0.1); this.doc.viewport = CanvasViewport.toDoc(); });
         q('#draw-zoom-out')?.addEventListener('click', () => { CanvasViewport.stepZoom(-0.1); this.doc.viewport = CanvasViewport.toDoc(); });
-        q('#draw-export-png')?.addEventListener('click', () => exportCanvasPng());
-        q('#draw-export-pdf')?.addEventListener('click', () => exportCanvasPdf());
-        q('#draw-export-json')?.addEventListener('click', () => exportCanvasJson());
+        q('#draw-display-options')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            DisplayOptions.toggleFrom(e.currentTarget);
+        });
+        const fsBtn = q('#draw-fullscreen');
+        if (fsBtn) Fullscreen.registerButton(fsBtn);
 
         q('#draw-menu-pointer')?.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -763,28 +827,27 @@ export const DrawingBoard = {
             });
         });
 
-        q('#draw-menu-format')?.addEventListener('click', (e) => {
+        q('#draw-menu-canvas')?.addEventListener('click', (e) => {
             e.stopPropagation();
+            const anchor = e.currentTarget;
             DrawingToolbarMenu.toggle({
-                anchor: e.currentTarget,
-                ariaLabel: 'Format',
-                items: this.formatMenuItems(),
-                selected: this.doc.canvasMode,
-                onSelect: (id) => this.handleFormatMenu(id)
+                anchor,
+                ariaLabel: 'Canvas settings',
+                items: this.canvasMenuItems(),
+                onSelect: (id) => this.handleCanvasMenu(id, anchor)
             });
         });
 
-        q('#draw-menu-type')?.addEventListener('click', (e) => {
+        q('#draw-menu-export')?.addEventListener('click', (e) => {
             e.stopPropagation();
             DrawingToolbarMenu.toggle({
                 anchor: e.currentTarget,
-                ariaLabel: 'Background type',
-                items: this.menuItemsWithIcons(TYPE_ITEMS.map((item) => ({
-                    ...item,
-                    iconKey: item.id === 'blank' ? 'rect' : item.id
-                }))),
-                selected: getActiveBackground(this.doc),
-                onSelect: (id) => this.setBackground(id)
+                ariaLabel: 'Export',
+                items: EXPORT_ITEMS,
+                onSelect: (id) => {
+                    if (id === 'export-png') exportCanvasPng();
+                    else if (id === 'export-pdf') exportCanvasPdf();
+                }
             });
         });
     },

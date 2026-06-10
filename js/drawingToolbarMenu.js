@@ -58,7 +58,7 @@ export const DrawingToolbarMenu = {
 
         const html = items.map((item) => {
             if (item.divider) return '<div class="drawing-menu-divider" role="separator" aria-hidden="true"></div>';
-            const isSelected = item.id === selected;
+            const isSelected = item.selected === true || item.id === selected;
             return `<button type="button" class="drawing-menu-option${isSelected ? ' is-selected' : ''}" data-id="${item.id}" role="menuitem"${item.disabled ? ' disabled' : ''}>
                 <span class="drawing-menu-icon">${item.icon || ''}</span>
                 <span class="drawing-menu-label">${item.label}</span>
