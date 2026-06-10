@@ -1,18 +1,32 @@
 import { RadioBrowserApi } from './radioBrowserApi.js';
 
 const STATE_KEY = 'matrix_radio_state';
+const RECENTS_CAP = 20;
 
 function loadState() {
     try {
         const raw = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
         return {
             favorites: Array.isArray(raw.favorites) ? raw.favorites : [],
+            recents: Array.isArray(raw.recents) ? raw.recents : [],
             volume: Number.isFinite(raw.volume) ? Math.min(1, Math.max(0, raw.volume)) : 0.85,
             lastStationUuid: raw.lastStationUuid || null,
-            lastStationName: raw.lastStationName || ''
+            lastStationName: raw.lastStationName || '',
+            panelDocked: raw.panelDocked !== false,
+            panelX: Number.isFinite(raw.panelX) ? raw.panelX : null,
+            panelY: Number.isFinite(raw.panelY) ? raw.panelY : null
         };
     } catch {
-        return { favorites: [], volume: 0.85, lastStationUuid: null, lastStationName: '' };
+        return {
+            favorites: [],
+            recents: [],
+            volume: 0.85,
+            lastStationUuid: null,
+            lastStationName: '',
+            panelDocked: true,
+            panelX: null,
+            panelY: null
+        };
     }
 }
 
@@ -45,6 +59,9 @@ export const RadioPlayer = {
             this.playing = true;
             this.loading = false;
             this.error = null;
+            if (this.station?.stationuuid) {
+                this.pushRecent(this.station.stationuuid);
+            }
             this.emitState();
         });
         this.audio.addEventListener('pause', () => {
@@ -82,12 +99,38 @@ export const RadioPlayer = {
             playing: this.playing,
             loading: this.loading,
             error: this.error,
-            volume: this.volume
+            volume: this.volume,
+            favorites: this.getFavorites(),
+            recents: this.getRecents()
         });
     },
 
     getFavorites() {
         return [...loadState().favorites];
+    },
+
+    getRecents() {
+        return [...loadState().recents];
+    },
+
+    getPanelState() {
+        const s = loadState();
+        return {
+            panelDocked: s.panelDocked,
+            panelX: s.panelX,
+            panelY: s.panelY
+        };
+    },
+
+    savePanelState(patch) {
+        saveState(patch);
+    },
+
+    pushRecent(uuid) {
+        if (!uuid) return;
+        const recents = loadState().recents.filter((id) => id !== uuid);
+        recents.unshift(uuid);
+        saveState({ recents: recents.slice(0, RECENTS_CAP) });
     },
 
     isFavorite(uuid) {

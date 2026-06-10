@@ -148,7 +148,6 @@ export const SidePanel = {
 
     setupStatusClickHandlers() {
         this.bindCollapsable('quick-actions-header', 'quick-actions-section');
-        this.bindCollapsable('radio-section-header', 'radio-section', false, '.sidebar-radio__refresh');
         this.bindCollapsable('view-section-header', 'view-section');
         this.bindCollapsable('categories-section-header', 'categories-section');
         this.bindCollapsable('categories-list-active-header', 'categories-list-active-section');

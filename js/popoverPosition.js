@@ -17,3 +17,40 @@ export function positionPopoverBelowAnchor(popover, anchor, { gap = 8, margin = 
     popover.style.top = `${top}px`;
     popover.style.left = `${left}px`;
 }
+
+/** Position a fixed panel beside the side panel (docked expanded radio browser). */
+export function positionPanelBesideSidebar(panel, anchor, { gap = 8, margin = 8 } = {}) {
+    if (!panel) return;
+
+    const sidePanel = document.getElementById('side-panel');
+    const sideRect = sidePanel?.getBoundingClientRect();
+    const anchorRect = anchor?.getBoundingClientRect();
+    const popRect = panel.getBoundingClientRect();
+    const panelW = panel.offsetWidth || popRect.width;
+    const panelH = panel.offsetHeight || popRect.height;
+
+    let left;
+    if (sidePanel && !sidePanel.classList.contains('is-collapsed') && sideRect) {
+        left = sideRect.right + gap;
+    } else if (anchorRect) {
+        left = anchorRect.right + gap;
+    } else {
+        left = margin;
+    }
+
+    let top = anchorRect ? anchorRect.top - 12 : margin;
+    top = Math.max(margin, Math.min(top, window.innerHeight - panelH - margin));
+    left = Math.max(margin, Math.min(left, window.innerWidth - panelW - margin));
+
+    panel.style.top = `${top}px`;
+    panel.style.left = `${left}px`;
+}
+
+export function clampPanelToViewport(panel, x, y, { margin = 8 } = {}) {
+    const w = panel.offsetWidth;
+    const h = panel.offsetHeight;
+    return {
+        x: Math.max(margin, Math.min(x, window.innerWidth - w - margin)),
+        y: Math.max(margin, Math.min(y, window.innerHeight - h - margin))
+    };
+}
