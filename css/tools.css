@@ -75,13 +75,21 @@
     align-items: center;
     gap: 1px;
     flex-shrink: 0;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.tool-panel:hover .tool-panel__actions,
+.tool-panel:focus-within .tool-panel__actions,
+.tool-panel.is-dragging .tool-panel__actions,
+.tool-panel.is-resizing .tool-panel__actions {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .tool-panel__actions .card-act {
     width: 18px;
     height: 18px;
-    opacity: 1;
-    pointer-events: auto;
 }
 
 .tool-panel__body {
@@ -146,13 +154,13 @@
 .tool-chip {
     position: absolute;
     pointer-events: auto;
-    width: 44px;
-    height: 44px;
+    width: 48px;
+    height: 48px;
     padding: 0;
-    border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border-color));
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--bg-card) 92%, var(--accent) 8%);
-    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.05);
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border-color));
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--bg-card) 85%, var(--accent) 15%);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(255, 255, 255, 0.06);
     color: var(--text-muted);
 }
 
@@ -185,12 +193,12 @@
 
 .tool-chip__icon {
     pointer-events: none;
-    color: color-mix(in srgb, var(--text-main) 72%, var(--text-muted));
+    color: color-mix(in srgb, var(--text-main) 85%, var(--text-muted));
 }
 
 .tool-chip__icon .menu-tool-icon {
-    width: 16px;
-    height: 16px;
+    width: 20px;
+    height: 20px;
 }
 
 .tool-chip__actions {
@@ -201,30 +209,44 @@
     display: flex;
     align-items: center;
     gap: 1px;
+    padding: 1px 2px;
+    border-radius: 0 10px 0 6px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.tool-chip__actions::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    bottom: -1px;
+    left: -1px;
+    z-index: -1;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--bg-card) 94%, var(--accent) 6%);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-color) 80%, transparent);
+    pointer-events: none;
+}
+
+.tool-chip:hover .tool-chip__actions,
+.tool-chip:focus-within .tool-chip__actions,
+.tool-chip.is-dragging .tool-chip__actions {
+    opacity: 1;
     pointer-events: auto;
 }
 
 .tool-chip__actions .card-act {
     width: 18px;
     height: 18px;
-    opacity: 1;
-    background: color-mix(in srgb, var(--bg-card) 88%, var(--accent) 12%);
+    background: transparent;
     border-radius: 2px;
-    box-shadow: 0 0 0 1px var(--border-color);
+    box-shadow: none;
 }
 
 .tool-chip__actions .card-act:hover {
     color: var(--text-main);
     background: color-mix(in srgb, var(--bg-card) 82%, var(--accent) 18%);
-}
-
-.tool-chip__close {
-    opacity: 0;
-}
-
-.tool-chip:hover .tool-chip__close,
-.tool-chip:focus-within .tool-chip__close {
-    opacity: 1;
 }
 
 .menu-tool-trigger.is-on-desktop {
@@ -358,6 +380,18 @@
     font-size: 0.66rem;
     color: var(--text-muted);
     border-radius: 3px;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: var(--bg-card);
+}
+
+.calc-history-header.is-expanded .collapsable-toggle {
+    transform: rotate(180deg);
+}
+
+.calc-history-header.is-expanded .collapsable-toggle.collapsed {
+    transform: rotate(180deg);
 }
 
 .calc-history-header:hover {
@@ -394,6 +428,17 @@
     border: 1px solid var(--border-color);
     border-radius: 4px;
     padding: 0.25rem;
+}
+
+.calc-history-empty {
+    margin: 0 0 0.35rem;
+    text-align: center;
+}
+
+.calc-history-collapse {
+    display: block;
+    margin: 0 auto;
+    font-size: 0.62rem;
 }
 
 .calc-history {
@@ -539,6 +584,38 @@
     min-height: 0;
     position: relative;
     background: #050510;
+}
+
+.globe-tool__canvas-inner {
+    position: absolute;
+    inset: 0;
+}
+
+.globe-spin-btn {
+    position: absolute;
+    top: 6px;
+    z-index: 4;
+    opacity: 0;
+    pointer-events: none;
+    min-width: 1.6rem;
+    padding: 0.15rem 0.3rem;
+    font-size: 0.62rem;
+    line-height: 1;
+    background: color-mix(in srgb, var(--bg-card) 88%, transparent);
+}
+
+.globe-spin-btn--left {
+    left: 6px;
+}
+
+.globe-spin-btn--right {
+    right: 6px;
+}
+
+.globe-tool__canvas-wrap:hover .globe-spin-btn,
+.globe-tool__canvas-wrap:focus-within .globe-spin-btn {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .globe-tool__hint {

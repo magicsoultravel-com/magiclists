@@ -107,6 +107,7 @@ export const Calculator = {
         const header = this.container.querySelector('#calc-history-header');
         section?.classList.toggle('is-open', this.historyOpen);
         toggle?.classList.toggle('collapsed', !this.historyOpen);
+        header?.classList.toggle('is-expanded', this.historyOpen);
         header?.setAttribute('aria-expanded', this.historyOpen ? 'true' : 'false');
     },
 
@@ -115,7 +116,14 @@ export const Calculator = {
         if (!list) return;
 
         if (!this.history.length) {
-            list.innerHTML = '<p class="tool-msg">No history yet</p>';
+            list.innerHTML = `
+                <p class="tool-msg calc-history-empty">No history yet</p>
+                <button type="button" class="btn btn--compact calc-history-collapse">Hide</button>
+            `;
+            list.querySelector('.calc-history-collapse')?.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.historyOpen) this.toggleHistory();
+            });
             return;
         }
 

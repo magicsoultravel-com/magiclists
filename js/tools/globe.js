@@ -52,7 +52,11 @@ export const Globe = {
                     <button type="button" class="btn btn--compact globe-layer-btn" data-layer="geological">Geological</button>
                     <button type="button" class="btn btn--compact globe-layer-btn" data-layer="timezones">Timezones</button>
                 </div>
-                <div id="globe-canvas-container" class="globe-tool__canvas-wrap"></div>
+                <div class="globe-tool__canvas-wrap">
+                    <button type="button" class="btn btn--compact btn-icon globe-spin-btn globe-spin-btn--left" aria-label="Rotate left 90°">◀</button>
+                    <button type="button" class="btn btn--compact btn-icon globe-spin-btn globe-spin-btn--right" aria-label="Rotate right 90°">▶</button>
+                    <div id="globe-canvas-container" class="globe-tool__canvas-inner"></div>
+                </div>
                 <div class="globe-tool__hint tool-msg">Drag to rotate · Scroll to zoom</div>
             </div>
         `;
@@ -66,6 +70,19 @@ export const Globe = {
                 btn.classList.add('active');
             });
         });
+
+        this.container.querySelector('.globe-spin-btn--left')?.addEventListener('click', () => this.spinGlobe(-1));
+        this.container.querySelector('.globe-spin-btn--right')?.addEventListener('click', () => this.spinGlobe(1));
+    },
+
+    spinGlobe(direction) {
+        if (!this.camera || !this.controls || typeof THREE === 'undefined') return;
+        const offset = new THREE.Vector3().copy(this.camera.position).sub(this.controls.target);
+        const spherical = new THREE.Spherical().setFromVector3(offset);
+        spherical.theta += direction * Math.PI / 2;
+        offset.setFromSpherical(spherical);
+        this.camera.position.copy(this.controls.target).add(offset);
+        this.controls.update();
     },
 
     initThree() {

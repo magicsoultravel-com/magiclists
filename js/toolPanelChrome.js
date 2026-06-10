@@ -99,8 +99,8 @@ function loadSavedCoord(value, min, max, size, fallback) {
 }
 
 function chipAnchorFromPanel(panel, chip) {
-    const chipW = chip?.offsetWidth || 44;
-    const chipH = chip?.offsetHeight || 44;
+    const chipW = chip?.offsetWidth || 48;
+    const chipH = chip?.offsetHeight || 48;
     return {
         x: panel.offsetLeft + panel.offsetWidth - chipW - 4,
         y: panel.offsetTop + 4
@@ -212,8 +212,8 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     const positionChip = (anchorToPanel = false) => {
         if (!chip) return;
         const desktopBounds = getDesktopBounds();
-        const chipW = chip.offsetWidth || 44;
-        const chipH = chip.offsetHeight || 44;
+        const chipW = chip.offsetWidth || 48;
+        const chipH = chip.offsetHeight || 48;
         const panelAnchor = chipAnchorFromPanel(panel, chip);
         const fallbackX = panelAnchor.x;
         const fallbackY = panelAnchor.y;
@@ -240,7 +240,7 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
         chip.className = 'tool-chip';
         chip.dataset.toolId = toolId;
         chip.title = meta?.label || toolId;
-        const chipIconMarkup = renderToolIcon(meta?.icon, 16);
+        const chipIconMarkup = renderToolIcon(meta?.icon, 20);
         chip.innerHTML = `
             <div class="tool-chip__drag" title="Drag ${meta?.label || toolId}">
                 <span class="tool-chip__icon menu-tool-icon">${chipIconMarkup}</span>
