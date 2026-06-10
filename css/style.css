@@ -5804,6 +5804,209 @@ html[data-app-theme="casual-dark"] .mini-card.compact .card-actions::before {
     align-items: center;
 }
 
+.drawing-toolbar-dropdown {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.15rem 0.35rem !important;
+    min-height: 26px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.drawing-toolbar-dropdown:hover {
+    background: rgba(79, 70, 229, 0.12);
+}
+
+.drawing-dropdown-icon {
+    display: inline-flex;
+    align-items: center;
+    line-height: 0;
+}
+
+.drawing-dropdown-label {
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    min-width: 1.1rem;
+    text-align: center;
+}
+
+.drawing-dropdown-chevron {
+    display: inline-flex;
+    opacity: 0.55;
+    line-height: 0;
+}
+
+.drawing-toolbar-menu {
+    position: fixed;
+    z-index: 2600;
+    min-width: 10.5rem;
+    padding: 0.35rem;
+    background: rgba(20, 20, 24, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.48);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.drawing-toolbar-menu.is-hidden {
+    display: none;
+}
+
+.drawing-menu-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.drawing-menu-option {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: 100%;
+    padding: 0.35rem 0.45rem;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: inherit;
+    font-size: 0.72rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.drawing-menu-option:hover:not(:disabled) {
+    background: rgba(79, 70, 229, 0.15);
+}
+
+.drawing-menu-option.is-selected {
+    background: rgba(79, 70, 229, 0.2);
+}
+
+.drawing-menu-option:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.drawing-menu-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    width: 1rem;
+    justify-content: center;
+    line-height: 0;
+}
+
+.drawing-menu-label {
+    flex: 1;
+}
+
+.drawing-menu-check {
+    font-size: 0.65rem;
+    color: var(--accent);
+}
+
+.drawing-menu-divider {
+    height: 1px;
+    margin: 0.2rem 0.15rem;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.drawing-color-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    max-width: 100%;
+}
+
+.drawing-color-rollout {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    max-width: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        max-width 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 0.18s ease,
+        margin 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+    margin-left: 0;
+}
+
+.drawing-color-rollout.is-open {
+    max-width: 28rem;
+    opacity: 1;
+    pointer-events: auto;
+    margin-left: 0.25rem;
+}
+
+.drawing-color-rollout.is-opening .color-picker-tile {
+    animation: drawColorTileIn 0.2s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.drawing-color-rollout.is-opening .color-picker-tile:nth-child(1) { animation-delay: 0ms; }
+.drawing-color-rollout.is-opening .color-picker-tile:nth-child(2) { animation-delay: 20ms; }
+.drawing-color-rollout.is-opening .color-picker-tile:nth-child(3) { animation-delay: 40ms; }
+.drawing-color-rollout.is-opening .color-picker-tile:nth-child(4) { animation-delay: 60ms; }
+.drawing-color-rollout.is-opening .color-picker-tile:nth-child(5) { animation-delay: 80ms; }
+.drawing-color-rollout.is-opening .color-picker-tile:nth-child(6) { animation-delay: 100ms; }
+.drawing-color-rollout.is-opening .color-picker-tile:nth-child(7) { animation-delay: 120ms; }
+.drawing-color-rollout.is-opening .color-picker-tile:nth-child(8) { animation-delay: 140ms; }
+
+@keyframes drawColorTileIn {
+    from {
+        opacity: 0;
+        transform: scale(0.82) translateX(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateX(0);
+    }
+}
+
+.color-picker-body--inline {
+    padding: 0;
+}
+
+.color-picker-body--inline .color-picker-main {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-wrap: nowrap;
+}
+
+.color-picker-grid--inline {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.2rem;
+    grid-template-columns: unset;
+    grid-template-rows: unset;
+}
+
+.color-picker-grid--inline .color-picker-tile,
+.color-picker-grid--inline-user .color-picker-tile {
+    width: 1.05rem;
+    height: 1.05rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.color-picker-divider--inline {
+    width: 1px;
+    height: 1.05rem;
+    margin: 0 0.1rem;
+}
+
+.color-picker-grid--inline-user {
+    display: flex;
+    gap: 0.2rem;
+}
+
+.drawing-color-chip-btn[aria-expanded="true"] {
+    box-shadow: 0 0 0 2px var(--accent);
+}
+
 #control-bar.is-drawing-toolbar .draw-style-btn.active,
 #control-bar.is-drawing-toolbar .draw-tool-btn.active,
 #control-bar.is-drawing-toolbar .draw-mode-btn.active,

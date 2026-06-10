@@ -174,15 +174,19 @@ export const ColorPicker = {
     eyedropperCleanup: null,
     align: 'end',
     selectedColor: '',
+    mode: 'popover',
+    closeOnSelect: true,
+    onClose: null,
 
     ensurePopover() {
-        if (!this.popover) {
-            this.popover = document.createElement('div');
-            this.popover.className = 'color-picker-popover is-hidden';
-            this.popover.setAttribute('role', 'dialog');
-            this.popover.setAttribute('aria-label', 'Choose color');
-            document.body.appendChild(this.popover);
+        if (!this._bodyPopover) {
+            this._bodyPopover = document.createElement('div');
+            this._bodyPopover.className = 'color-picker-popover is-hidden';
+            this._bodyPopover.setAttribute('role', 'dialog');
+            this._bodyPopover.setAttribute('aria-label', 'Choose color');
+            document.body.appendChild(this._bodyPopover);
         }
+        this.popover = this._bodyPopover;
         return this.popover;
     },
 
@@ -331,6 +335,28 @@ export const ColorPicker = {
     close() {
         this.cancelEyedropper();
         this.closeSubPicker({ persist: true });
+        if (this.mode === 'inline') {
+            this.popover?.classList.remove('is-open', 'is-opening');
+            this.popover?.setAttribute('aria-hidden', 'true');
+            this.anchor?.setAttribute('aria-expanded', 'false');
+            this.anchor = null;
+            this.onSelect = null;
+            const done = this.onClose;
+            this.onClose = null;
+            this.popover = this._bodyPopover || null;
+            this.mode = 'popover';
+            this.closeOnSelect = true;
+            if (this.outsideHandler) {
+                document.removeEventListener('mousedown', this.outsideHandler, true);
+                this.outsideHandler = null;
+            }
+            if (this.keyHandler) {
+                document.removeEventListener('keydown', this.keyHandler);
+                this.keyHandler = null;
+            }
+            done?.();
+            return;
+        }
         if (!this.popover) return;
         this.popover.classList.add('is-hidden');
         this.anchor?.setAttribute('aria-expanded', 'false');
@@ -346,13 +372,39 @@ export const ColorPicker = {
         }
     },
 
-    open({ anchor, presets = PALETTE_NOTE, value = '', onSelect, align = 'end' }) {
-        if (!anchor || typeof onSelect !== 'function') return;
+    open({ anchor, presets = PALETTE_NOTE, value = '', onSelect, align = 'end', mode = 'popover', container = null, onClose = null }) {
+        if (typeof onSelect !== 'function') return;
+        if (mode === 'inline') {
+            if (!container) return;
+            this.close();
+            this.mode = 'inline';
+            this.closeOnSelect = false;
+            this.onClose = onClose;
+            this.anchor = anchor || null;
+            this.onSelect = onSelect;
+            this.presets = presets.slice(0, GRID_SLOTS);
+            while (this.presets.length < GRID_SLOTS) {
+                this.presets.push({ value: '#26262b', label: 'Color' });
+            }
+            this.userPalette = readUserPalette();
+            this.selectedColor = normalizeHex(value)?.toLowerCase() || '';
+            this.popover = container;
+            this._buildPickerContent(onSelect, { inline: true });
+            container.classList.add('is-open', 'is-opening');
+            container.setAttribute('aria-hidden', 'false');
+            anchor?.setAttribute('aria-expanded', 'true');
+            requestAnimationFrame(() => container.classList.remove('is-opening'));
+            this._attachDismissHandlers(anchor, container);
+            return;
+        }
+        if (!anchor) return;
         this.close();
 
         this.anchor = anchor;
         this.onSelect = onSelect;
         this.align = align;
+        this.mode = 'popover';
+        this.closeOnSelect = true;
         this.presets = presets.slice(0, GRID_SLOTS);
         while (this.presets.length < GRID_SLOTS) {
             this.presets.push({ value: '#26262b', label: 'Color' });
@@ -361,7 +413,18 @@ export const ColorPicker = {
         this.selectedColor = normalizeHex(value)?.toLowerCase() || '';
 
         const popover = this.ensurePopover();
+        this._buildPickerContent(onSelect, { inline: false });
+        popover.classList.remove('is-hidden');
+        this.positionPopover(anchor, align);
+        anchor.setAttribute('aria-expanded', 'true');
+        this._attachDismissHandlers(anchor, popover);
+    },
+
+    _buildPickerContent(onSelect, { inline = false } = {}) {
+        const popover = this.popover;
+        if (!popover) return;
         const current = this.selectedColor;
+        const gridClass = inline ? 'color-picker-grid color-picker-grid--inline' : 'color-picker-grid color-picker-grid--presets';
 
         const presetHtml = this.presets.map((preset) => {
             const selected = current === (preset.value || '').toLowerCase();
@@ -381,15 +444,19 @@ export const ColorPicker = {
             </button>`;
         }).join('');
 
-        popover.innerHTML = `<div class="color-picker-body">
-            <div class="color-picker-main">
-                <div class="color-picker-grid color-picker-grid--presets">${presetHtml}</div>
-                <div class="color-picker-divider" aria-hidden="true"></div>
-                <div class="color-picker-grid color-picker-grid--user">${userHtml}</div>
-                <button type="button" class="color-picker-eyedropper-btn card-act" aria-label="Pick color from page" title="Pick color from page">
-                    <svg viewBox="0 0 16 16" width="12" height="12" focusable="false" aria-hidden="true"><path d="M10.2 1.8a1.6 1.6 0 0 1 2.3 2.3l-1 1-2.3-2.3 1-1ZM3.4 8.6l4-4 2.3 2.3-4 4-2.5.2.2-2.5Z" fill="currentColor"/><path d="M2.5 11.8 4.2 10l2 2-1.7 1.7a.8.8 0 0 1-1.1 0l-.9-.9a.8.8 0 0 1 0-1.1Z" fill="currentColor"/></svg>
-                </button>
-            </div>
+        const mainInner = inline
+            ? `<div class="${gridClass}">${presetHtml}</div>
+               <div class="color-picker-divider color-picker-divider--inline" aria-hidden="true"></div>
+               <div class="color-picker-grid color-picker-grid--user color-picker-grid--inline-user">${userHtml}</div>`
+            : `<div class="color-picker-grid color-picker-grid--presets">${presetHtml}</div>
+               <div class="color-picker-divider" aria-hidden="true"></div>
+               <div class="color-picker-grid color-picker-grid--user">${userHtml}</div>
+               <button type="button" class="color-picker-eyedropper-btn card-act" aria-label="Pick color from page" title="Pick color from page">
+                   <svg viewBox="0 0 16 16" width="12" height="12" focusable="false" aria-hidden="true"><path d="M10.2 1.8a1.6 1.6 0 0 1 2.3 2.3l-1 1-2.3-2.3 1-1ZM3.4 8.6l4-4 2.3 2.3-4 4-2.5.2.2-2.5Z" fill="currentColor"/><path d="M2.5 11.8 4.2 10l2 2-1.7 1.7a.8.8 0 0 1-1.1 0l-.9-.9a.8.8 0 0 1 0-1.1Z" fill="currentColor"/></svg>
+               </button>`;
+
+        popover.innerHTML = `<div class="color-picker-body${inline ? ' color-picker-body--inline' : ''}">
+            <div class="color-picker-main">${mainInner}</div>
             <div class="color-picker-editor is-hidden" role="group" aria-label="Fine-tune custom color">
                 <button type="button" class="color-picker-back card-act" aria-label="Close color editor">
                     <svg viewBox="0 0 12 12" width="11" height="11" focusable="false" aria-hidden="true"><path d="M7 3L4 6l3 3" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -413,7 +480,7 @@ export const ColorPicker = {
         const body = popover.querySelector('.color-picker-body');
         const editor = popover.querySelector('.color-picker-editor');
 
-        const presetGrid = popover.querySelector('.color-picker-grid--presets');
+        const presetGrid = popover.querySelector(inline ? '.color-picker-grid--inline' : '.color-picker-grid--presets');
         presetGrid?.addEventListener('mousedown', (e) => {
             if (e.target.closest('.color-picker-tile[data-color]')) e.stopPropagation();
         });
@@ -423,7 +490,7 @@ export const ColorPicker = {
             e.stopPropagation();
             this.closeSubPicker({ persist: true });
             this.selectColor(btn.dataset.color || '', onSelect);
-            this.close();
+            if (this.closeOnSelect) this.close();
         });
 
         popover.querySelectorAll('.color-picker-tile--user').forEach((btn) => {
@@ -439,7 +506,7 @@ export const ColorPicker = {
                 return;
             }
             this.selectColor(hex, onSelect);
-            this.close();
+            if (this.closeOnSelect) this.close();
         };
 
         popover.querySelectorAll('.color-picker-eyedropper-btn').forEach((btn) => {
@@ -449,13 +516,14 @@ export const ColorPicker = {
                 this.startEyedropper({ onPick: handleEyedropperPick });
             });
         });
+    },
 
-        popover.classList.remove('is-hidden');
-        this.positionPopover(anchor, align);
-        anchor.setAttribute('aria-expanded', 'true');
-
+    _attachDismissHandlers(anchor, popover) {
         this.outsideHandler = (e) => {
-            if (popover.contains(e.target) || anchor.contains(e.target)) return;
+            const colorGroup = anchor?.closest?.('.drawing-color-group');
+            if (popover.contains(e.target)) return;
+            if (anchor?.contains(e.target)) return;
+            if (colorGroup?.contains(e.target)) return;
             this.close();
         };
         this.keyHandler = (e) => {

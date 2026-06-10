@@ -1,5 +1,6 @@
 import { ACTION_ICONS, DRAWING_ICONS } from './ui.js';
 import { ColorPicker, PALETTE_DRAWING } from './colorPicker.js';
+import { DrawingToolbarMenu, CHEVRON } from './drawingToolbarMenu.js';
 import {
     readDocument, writeDocument, getActiveStrokes, getActiveTexts, setActiveStrokes,
     getActiveBackground, setActiveBackground, getPageDimensions, addPage, nextPage, prevPage,
@@ -14,11 +15,53 @@ const PREFS_KEY = 'matrix_drawing_prefs';
 const TOOLBAR_HIDDEN_KEY = 'matrix_drawing_toolbar_hidden';
 const WIDTH_MIN = 1;
 const WIDTH_MAX = 48;
+const DEFAULT_WIDTH = 10;
+const HIGHLIGHTER_WIDTH = 14;
 const HISTORY_MAX = 50;
 const SAVE_DEBOUNCE_MS = 400;
 
+const POINTER_ITEMS = [
+    { id: 'pen', label: 'Pen' },
+    { id: 'marker', label: 'Marker' },
+    { id: 'highlighter', label: 'Highlighter' },
+    { id: 'pencil', label: 'Pencil' },
+    { id: 'spray', label: 'Spray' },
+    { id: 'calligraphy', label: 'Calligraphy' },
+    { id: 'brush', label: 'Brush' },
+    { id: 'eraser', label: 'Eraser' }
+];
+
+const SHAPE_ITEMS = [
+    { id: 'line', label: 'Line' },
+    { id: 'rect', label: 'Rectangle' },
+    { id: 'ellipse', label: 'Ellipse' },
+    { id: 'text', label: 'Text' }
+];
+
+const FORMAT_ITEMS = [
+    { id: 'a4', label: 'A4 page' },
+    { id: 'a5', label: 'A5 page' },
+    { id: 'a3', label: 'A3 page' },
+    { id: 'infinite', label: 'Infinite canvas' }
+];
+
+const TYPE_ITEMS = [
+    { id: 'blank', label: 'Blank' },
+    { id: 'grid', label: 'Grid' },
+    { id: 'notebook', label: 'Notebook' },
+    { id: 'staff', label: 'Staff' }
+];
+
+function defaultWidthForStyle(style) {
+    return style === 'highlighter' ? HIGHLIGHTER_WIDTH : DEFAULT_WIDTH;
+}
+
 function readPressure(event) {
     const p = event.pressure;
+    if (event.pointerType === 'pen') {
+        if (typeof p === 'number' && p > 0) return Math.min(1, p);
+        return 0.05;
+    }
     if (typeof p === 'number' && p > 0) return Math.min(1, p);
     return 0.5;
 }
@@ -29,7 +72,7 @@ function readPrefs() {
         const styles = {};
         BRUSH_STYLES.forEach((s) => {
             styles[s] = {
-                width: Number.isFinite(raw?.styles?.[s]?.width) ? raw.styles[s].width : (s === 'highlighter' ? 12 : 3),
+                width: Number.isFinite(raw?.styles?.[s]?.width) ? raw.styles[s].width : defaultWidthForStyle(s),
                 color: raw?.styles?.[s]?.color || '#f8fafc'
             };
         });
@@ -40,7 +83,7 @@ function readPrefs() {
         };
     } catch {
         const styles = {};
-        BRUSH_STYLES.forEach((s) => { styles[s] = { width: s === 'highlighter' ? 12 : 3, color: '#f8fafc' }; });
+        BRUSH_STYLES.forEach((s) => { styles[s] = { width: defaultWidthForStyle(s), color: '#f8fafc' }; });
         return { activeStyle: 'pen', activeTool: 'brush', styles };
     }
 }
@@ -99,6 +142,7 @@ export const DrawingBoard = {
     rafId: null,
     brandEl: null,
     brandNotesText: 'magicNotes',
+    colorRolloutOpen: false,
 
     init({ onExit } = {}) {
         this.onExit = onExit;
@@ -155,6 +199,9 @@ export const DrawingBoard = {
     deactivate() {
         this.active = false;
         this.flushSave();
+        ColorPicker.close();
+        DrawingToolbarMenu.close();
+        this.colorRolloutOpen = false;
         if (this.brandEl) this.brandEl.textContent = this.brandNotesText;
         this.boardEl?.classList.add('is-hidden');
         this.boardEl?.setAttribute('aria-hidden', 'true');
@@ -233,7 +280,7 @@ export const DrawingBoard = {
     },
 
     currentBrush() {
-        const s = this.prefs.styles[this.activeStyle] || { width: 3, color: '#f8fafc' };
+        const s = this.prefs.styles[this.activeStyle] || { width: DEFAULT_WIDTH, color: '#f8fafc' };
         return { width: s.width, color: s.color };
     },
 
@@ -251,32 +298,49 @@ export const DrawingBoard = {
         this.activeTool = tool;
         this.prefs.activeTool = tool;
         writePrefs(this.prefs);
-        this.updateToolbarState();
+        this.renderToolbar();
     },
 
     adjustWidth(delta) {
         const style = this.activeStyle;
-        const cur = this.prefs.styles[style]?.width ?? 3;
+        const cur = this.prefs.styles[style]?.width ?? DEFAULT_WIDTH;
         this.prefs.styles[style].width = Math.max(WIDTH_MIN, Math.min(WIDTH_MAX, cur + delta));
         writePrefs(this.prefs);
         this.renderToolbar();
     },
 
-    setColor(color) {
+    setColor(color, { rerender = true } = {}) {
         this.prefs.styles[this.activeStyle].color = color;
         writePrefs(this.prefs);
-        this.renderToolbar();
+        if (rerender) this.renderToolbar();
+        else this.updateColorChip(color);
     },
 
-    openColorPicker(anchor) {
+    updateColorChip(color) {
+        const chip = this.toolbarEl?.querySelector('.drawing-color-chip');
+        const btn = this.toolbarEl?.querySelector('#draw-color-btn');
+        if (chip) chip.style.background = color;
+        if (btn) btn.style.setProperty('--chip-color', color);
+    },
+
+    toggleColorRollout(anchor) {
+        if (this.colorRolloutOpen) {
+            ColorPicker.close();
+            return;
+        }
         const brush = this.currentBrush();
+        const rollout = this.toolbarEl?.querySelector('#draw-color-rollout');
+        if (!rollout) return;
         ColorPicker.open({
+            mode: 'inline',
+            container: rollout,
             anchor,
             presets: PALETTE_DRAWING,
             value: brush.color,
-            align: 'end',
-            onSelect: (c) => this.setColor(c)
+            onSelect: (c) => this.setColor(c, { rerender: false }),
+            onClose: () => { this.colorRolloutOpen = false; }
         });
+        this.colorRolloutOpen = true;
     },
 
     onPointerDown(e) {
@@ -525,26 +589,84 @@ export const DrawingBoard = {
         return (idx + 1) + ' / ' + this.doc.pages.length;
     },
 
+    pointerSelected() {
+        return this.activeTool === 'eraser' ? 'eraser' : this.activeStyle;
+    },
+
+    pointerTriggerIcon() {
+        const id = this.pointerSelected();
+        return DRAWING_ICONS[id] || DRAWING_ICONS.pen;
+    },
+
+    shapeTriggerIcon() {
+        if (SHAPE_ITEMS.some((item) => item.id === this.activeTool)) {
+            return DRAWING_ICONS[this.activeTool] || DRAWING_ICONS.line;
+        }
+        return DRAWING_ICONS.line;
+    },
+
+    formatTriggerLabel() {
+        if (this.doc.canvasMode === 'infinite') return '∞';
+        return this.doc.canvasMode.toUpperCase();
+    },
+
+    typeTriggerIcon() {
+        const bg = getActiveBackground(this.doc);
+        return DRAWING_ICONS[bg === 'blank' ? 'rect' : bg] || DRAWING_ICONS.grid;
+    },
+
+    menuItemsWithIcons(items) {
+        return items.map((item) => ({
+            ...item,
+            icon: item.divider ? '' : (DRAWING_ICONS[item.id] || DRAWING_ICONS[item.iconKey || item.id] || '')
+        }));
+    },
+
+    formatMenuItems() {
+        const items = this.menuItemsWithIcons([...FORMAT_ITEMS]);
+        if (this.doc.canvasMode !== 'infinite') {
+            items.push({ divider: true });
+            items.push(
+                { id: 'page-prev', label: 'Previous page', icon: DRAWING_ICONS.pagePrev },
+                { id: 'page-next', label: 'Next page', icon: DRAWING_ICONS.pageNext },
+                { id: 'page-add', label: 'Add page', icon: DRAWING_ICONS.pageAdd }
+            );
+        }
+        return items;
+    },
+
+    handleFormatMenu(id) {
+        if (id === 'page-prev') {
+            if (prevPage(this.doc)) { this.resize(); this.scheduleSave(); this.renderToolbar(); }
+            return;
+        }
+        if (id === 'page-next') {
+            if (nextPage(this.doc)) { this.resize(); this.scheduleSave(); this.renderToolbar(); }
+            return;
+        }
+        if (id === 'page-add') {
+            addPage(this.doc);
+            this.resize();
+            this.scheduleSave();
+            this.renderToolbar();
+            return;
+        }
+        this.setCanvasMode(id);
+    },
+
     renderToolbar() {
         if (!this.toolbarEl) return;
+        const wasColorOpen = this.colorRolloutOpen;
+        DrawingToolbarMenu.close();
         const brush = this.currentBrush();
-        const styleBtns = BRUSH_STYLES.map((s) =>
-            `<button type="button" class="btn btn--compact btn--icon draw-style-btn${this.activeStyle === s && this.activeTool === 'brush' ? ' active' : ''}" data-style="${s}" title="${s}" aria-label="${s}">${DRAWING_ICONS[s] || ''}</button>`
-        ).join('');
-        const toolBtns = ['eraser', 'line', 'rect', 'ellipse', 'text'].map((t) =>
-            `<button type="button" class="btn btn--compact btn--icon draw-tool-btn${this.activeTool === t ? ' active' : ''}" data-tool="${t}" title="${t}" aria-label="${t}">${DRAWING_ICONS[t] || ''}</button>`
-        ).join('');
-        const modeBtns = ['a4', 'a5', 'a3', 'infinite'].map((m) =>
-            `<button type="button" class="btn btn--compact btn--icon draw-mode-btn${this.doc.canvasMode === m ? ' active' : ''}" data-mode="${m}" title="${m}" aria-label="${m}">${m === 'infinite' ? '∞' : m.toUpperCase()}</button>`
-        ).join('');
-        const bgBtns = ['blank', 'grid', 'notebook', 'staff'].map((b) =>
-            `<button type="button" class="btn btn--compact btn--icon draw-bg-btn${getActiveBackground(this.doc) === b ? ' active' : ''}" data-bg="${b}" title="${b}" aria-label="${b}">${DRAWING_ICONS[b === 'blank' ? 'rect' : b] || ''}</button>`
-        ).join('');
 
         this.toolbarEl.innerHTML = `
             <button type="button" class="btn btn--compact btn--icon" id="draw-exit" title="Back to notes" aria-label="Back to notes">${ACTION_ICONS.drawingExit}</button>
             <span class="format-toolbar-sep" aria-hidden="true"></span>
-            <div class="drawing-toolbar-group" role="group" aria-label="Brush style">${styleBtns}</div>
+            <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-pointer" aria-haspopup="menu" aria-expanded="false" title="Pointer tools" aria-label="Pointer tools">
+                <span class="drawing-dropdown-icon">${this.pointerTriggerIcon()}</span>
+                <span class="drawing-dropdown-chevron">${CHEVRON}</span>
+            </button>
             <span class="format-toolbar-sep" aria-hidden="true"></span>
             <div class="drawing-toolbar-group drawing-width-control">
                 <button type="button" class="btn btn--compact btn--icon" id="draw-width-down" title="Thinner" aria-label="Thinner">−</button>
@@ -552,18 +674,25 @@ export const DrawingBoard = {
                 <button type="button" class="btn btn--compact btn--icon" id="draw-width-up" title="Thicker" aria-label="Thicker">+</button>
             </div>
             <span class="format-toolbar-sep" aria-hidden="true"></span>
-            <button type="button" class="btn btn--compact btn--icon drawing-color-chip-btn" id="draw-color-btn" title="Color" aria-label="Color" style="--chip-color:${brush.color}"><span class="drawing-color-chip" style="background:${brush.color}"></span></button>
+            <div class="drawing-color-group" id="draw-color-group">
+                <button type="button" class="btn btn--compact btn--icon drawing-color-chip-btn" id="draw-color-btn" title="Color" aria-label="Color" aria-expanded="false" style="--chip-color:${brush.color}">
+                    <span class="drawing-color-chip" style="background:${brush.color}"></span>
+                </button>
+                <div class="drawing-color-rollout" id="draw-color-rollout" aria-hidden="true"></div>
+            </div>
             <span class="format-toolbar-sep" aria-hidden="true"></span>
-            <div class="drawing-toolbar-group">${toolBtns}</div>
-            <span class="format-toolbar-sep" aria-hidden="true"></span>
-            <div class="drawing-toolbar-group">${modeBtns}</div>
-            <span class="format-toolbar-sep" aria-hidden="true"></span>
-            <div class="drawing-toolbar-group">${bgBtns}</div>
-            ${this.doc.canvasMode !== 'infinite' ? `<span class="format-toolbar-sep" aria-hidden="true"></span>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-page-prev" title="Previous page" aria-label="Previous page">${DRAWING_ICONS.pagePrev}</button>
-            <span class="drawing-width-label" id="draw-page-label">${this.pageLabel()}</span>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-page-next" title="Next page" aria-label="Next page">${DRAWING_ICONS.pageNext}</button>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-page-add" title="Add page" aria-label="Add page">${DRAWING_ICONS.pageAdd}</button>` : ''}
+            <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-shapes" aria-haspopup="menu" aria-expanded="false" title="Shapes" aria-label="Shapes">
+                <span class="drawing-dropdown-icon">${this.shapeTriggerIcon()}</span>
+                <span class="drawing-dropdown-chevron">${CHEVRON}</span>
+            </button>
+            <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-format" aria-haspopup="menu" aria-expanded="false" title="Format" aria-label="Format">
+                <span class="drawing-dropdown-label">${this.formatTriggerLabel()}</span>
+                <span class="drawing-dropdown-chevron">${CHEVRON}</span>
+            </button>
+            <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-type" aria-haspopup="menu" aria-expanded="false" title="Background type" aria-label="Background type">
+                <span class="drawing-dropdown-icon">${this.typeTriggerIcon()}</span>
+                <span class="drawing-dropdown-chevron">${CHEVRON}</span>
+            </button>
             <span class="format-toolbar-sep" aria-hidden="true"></span>
             <button type="button" class="btn btn--compact btn--icon" id="draw-zoom-out" title="Zoom out" aria-label="Zoom out">${DRAWING_ICONS.zoomOut}</button>
             <button type="button" class="btn btn--compact btn--icon" id="draw-zoom-in" title="Zoom in" aria-label="Zoom in">${DRAWING_ICONS.zoomIn}</button>
@@ -577,6 +706,10 @@ export const DrawingBoard = {
             <button type="button" class="btn btn--compact btn--icon" id="draw-toolbar-hide" title="Hide toolbar" aria-label="Hide toolbar">${ACTION_ICONS.collapseAll}</button>
         `;
         this.bindToolbar();
+        if (wasColorOpen) {
+            const btn = this.toolbarEl.querySelector('#draw-color-btn');
+            if (btn) this.toggleColorRollout(btn);
+        }
     },
 
     bindToolbar() {
@@ -584,33 +717,75 @@ export const DrawingBoard = {
         const q = (sel) => this.toolbarEl.querySelector(sel);
 
         q('#draw-exit')?.addEventListener('click', () => this.onExit?.());
-        q('#draw-toolbar-hide')?.addEventListener('click', () => this.hideToolbar());
+        q('#draw-toolbar-hide')?.addEventListener('click', () => { ColorPicker.close(); this.colorRolloutOpen = false; this.hideToolbar(); });
         q('#draw-undo')?.addEventListener('click', () => this.undo());
         q('#draw-redo')?.addEventListener('click', () => this.redo());
         q('#draw-clear')?.addEventListener('click', () => this.clearAll());
         q('#draw-width-down')?.addEventListener('click', () => this.adjustWidth(-1));
         q('#draw-width-up')?.addEventListener('click', () => this.adjustWidth(1));
-        q('#draw-color-btn')?.addEventListener('click', (e) => this.openColorPicker(e.currentTarget));
+        q('#draw-color-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleColorRollout(e.currentTarget);
+        });
         q('#draw-zoom-in')?.addEventListener('click', () => { CanvasViewport.stepZoom(0.1); this.doc.viewport = CanvasViewport.toDoc(); });
         q('#draw-zoom-out')?.addEventListener('click', () => { CanvasViewport.stepZoom(-0.1); this.doc.viewport = CanvasViewport.toDoc(); });
         q('#draw-export-png')?.addEventListener('click', () => exportCanvasPng());
         q('#draw-export-pdf')?.addEventListener('click', () => exportCanvasPdf());
         q('#draw-export-json')?.addEventListener('click', () => exportCanvasJson());
-        q('#draw-page-prev')?.addEventListener('click', () => { if (prevPage(this.doc)) { this.resize(); this.scheduleSave(); this.renderToolbar(); } });
-        q('#draw-page-next')?.addEventListener('click', () => { if (nextPage(this.doc)) { this.resize(); this.scheduleSave(); this.renderToolbar(); } });
-        q('#draw-page-add')?.addEventListener('click', () => { addPage(this.doc); this.resize(); this.scheduleSave(); this.renderToolbar(); });
 
-        this.toolbarEl.querySelectorAll('.draw-style-btn').forEach((btn) => {
-            btn.addEventListener('click', () => this.setStyle(btn.dataset.style));
+        q('#draw-menu-pointer')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            DrawingToolbarMenu.toggle({
+                anchor: e.currentTarget,
+                ariaLabel: 'Pointer tools',
+                items: this.menuItemsWithIcons(POINTER_ITEMS),
+                selected: this.pointerSelected(),
+                onSelect: (id) => {
+                    if (id === 'eraser') this.setTool('eraser');
+                    else this.setStyle(id);
+                    this.renderToolbar();
+                }
+            });
         });
-        this.toolbarEl.querySelectorAll('.draw-tool-btn').forEach((btn) => {
-            btn.addEventListener('click', () => this.setTool(btn.dataset.tool));
+
+        q('#draw-menu-shapes')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const selected = SHAPE_ITEMS.some((item) => item.id === this.activeTool) ? this.activeTool : 'line';
+            DrawingToolbarMenu.toggle({
+                anchor: e.currentTarget,
+                ariaLabel: 'Shapes',
+                items: this.menuItemsWithIcons(SHAPE_ITEMS),
+                selected,
+                onSelect: (id) => {
+                    this.setTool(id);
+                    this.renderToolbar();
+                }
+            });
         });
-        this.toolbarEl.querySelectorAll('.draw-mode-btn').forEach((btn) => {
-            btn.addEventListener('click', () => this.setCanvasMode(btn.dataset.mode));
+
+        q('#draw-menu-format')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            DrawingToolbarMenu.toggle({
+                anchor: e.currentTarget,
+                ariaLabel: 'Format',
+                items: this.formatMenuItems(),
+                selected: this.doc.canvasMode,
+                onSelect: (id) => this.handleFormatMenu(id)
+            });
         });
-        this.toolbarEl.querySelectorAll('.draw-bg-btn').forEach((btn) => {
-            btn.addEventListener('click', () => this.setBackground(btn.dataset.bg));
+
+        q('#draw-menu-type')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            DrawingToolbarMenu.toggle({
+                anchor: e.currentTarget,
+                ariaLabel: 'Background type',
+                items: this.menuItemsWithIcons(TYPE_ITEMS.map((item) => ({
+                    ...item,
+                    iconKey: item.id === 'blank' ? 'rect' : item.id
+                }))),
+                selected: getActiveBackground(this.doc),
+                onSelect: (id) => this.setBackground(id)
+            });
         });
     },
 
@@ -620,8 +795,6 @@ export const DrawingBoard = {
         this.toolbarEl.querySelector('#draw-redo')?.toggleAttribute('disabled', !this.history.canRedo);
         const label = this.toolbarEl.querySelector('#draw-width-label');
         if (label) label.textContent = this.currentBrush().width + 'px';
-        const pageLabel = this.toolbarEl.querySelector('#draw-page-label');
-        if (pageLabel) pageLabel.textContent = this.pageLabel();
     },
 
     handleKeydown(e) {
