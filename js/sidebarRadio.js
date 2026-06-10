@@ -1,6 +1,7 @@
 import { RadioBrowserApi } from './radioBrowserApi.js';
 import { RadioPlayer } from './radioPlayer.js';
 import { RadioPopover } from './radioPopover.js';
+import { clampPanelToViewport } from './popoverPosition.js';
 import { escapeHtml, countryFlagEmoji, debounce } from './radioUtils.js';
 import { ACTION_ICONS, CARD_ICONS } from './ui.js';
 
@@ -32,6 +33,168 @@ export const SidebarRadio = {
         this.updateTransport();
         this.restoreLastStationMeta();
         this.prefetchCountries();
+        this.bindDockButton();
+        this.bindMiniPlayerDrag();
+        this.applyInitialDockState();
+        this.bindViewportClamp();
+    },
+
+    isUndocked() {
+        return this.root?.classList.contains('sidebar-radio--undocked');
+    },
+
+    bindViewportClamp() {
+        window.addEventListener('resize', () => {
+            if (!this.isUndocked()) return;
+            const x = parseFloat(this.root.style.left) || 0;
+            const y = parseFloat(this.root.style.top) || 0;
+            const clamped = clampPanelToViewport(this.root, x, y);
+            this.root.style.left = `${clamped.x}px`;
+            this.root.style.top = `${clamped.y}px`;
+            RadioPopover.reposition();
+        });
+    },
+
+    applyInitialDockState() {
+        const { miniPlayerDocked, miniPlayerX, miniPlayerY } = RadioPlayer.getMiniPlayerState();
+        if (miniPlayerDocked !== false) {
+            this.updateDockButton();
+            return;
+        }
+
+        this.ensureUndockedInBody();
+        this.root.classList.add('sidebar-radio--undocked');
+        if (miniPlayerX != null && miniPlayerY != null) {
+            this.root.style.left = `${miniPlayerX}px`;
+            this.root.style.top = `${miniPlayerY}px`;
+            requestAnimationFrame(() => {
+                const clamped = clampPanelToViewport(this.root, miniPlayerX, miniPlayerY);
+                this.root.style.left = `${clamped.x}px`;
+                this.root.style.top = `${clamped.y}px`;
+            });
+        } else {
+            this.applyUndockedState(false);
+        }
+        this.updateDockButton();
+    },
+
+    ensureUndockedInBody() {
+        if (this.root.parentElement !== document.body) {
+            document.body.appendChild(this.root);
+        }
+    },
+
+    restoreToSidebar() {
+        const brandHost = document.getElementById('side-panel-brand-host');
+        if (brandHost && this.root.parentElement === document.body) {
+            brandHost.insertAdjacentElement('afterend', this.root);
+        }
+    },
+
+    updateDockButton() {
+        const btn = this.root?.querySelector('[data-radio-dock]');
+        if (!btn) return;
+        const undocked = this.isUndocked();
+        btn.innerHTML = undocked ? CARD_ICONS.pin : CARD_ICONS.unpin;
+        const label = undocked ? 'Dock in sidebar' : 'Undock to canvas';
+        btn.setAttribute('title', label);
+        btn.setAttribute('aria-label', label);
+    },
+
+    bindDockButton() {
+        this.root.querySelector('[data-radio-dock]')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleMiniPlayerDock();
+        });
+    },
+
+    toggleMiniPlayerDock() {
+        if (this.isUndocked()) {
+            this.applyDockedState();
+        } else {
+            this.applyUndockedState();
+        }
+        this.updateDockButton();
+        RadioPopover.reposition();
+    },
+
+    applyDockedState() {
+        this.root.classList.remove('sidebar-radio--undocked', 'sidebar-radio--dragging');
+        this.root.style.left = '';
+        this.root.style.top = '';
+        this.restoreToSidebar();
+        RadioPlayer.saveMiniPlayerState({ miniPlayerDocked: true, miniPlayerX: null, miniPlayerY: null });
+    },
+
+    applyUndockedState(persist = true) {
+        const rect = this.root.getBoundingClientRect();
+        const saved = RadioPlayer.getMiniPlayerState();
+        let x = saved.miniPlayerX ?? rect.left;
+        let y = saved.miniPlayerY ?? rect.top;
+
+        this.ensureUndockedInBody();
+        this.root.classList.add('sidebar-radio--undocked');
+        this.root.style.left = `${x}px`;
+        this.root.style.top = `${y}px`;
+        const clamped = clampPanelToViewport(this.root, x, y);
+        this.root.style.left = `${clamped.x}px`;
+        this.root.style.top = `${clamped.y}px`;
+
+        if (persist) {
+            RadioPlayer.saveMiniPlayerState({
+                miniPlayerDocked: false,
+                miniPlayerX: clamped.x,
+                miniPlayerY: clamped.y
+            });
+        }
+    },
+
+    bindMiniPlayerDrag() {
+        const header = document.getElementById('radio-section-header');
+        if (!header) return;
+
+        header.addEventListener('pointerdown', (e) => {
+            if (!this.isUndocked()) return;
+            if (e.target.closest('[data-radio-dock]') || e.target.closest('.collapsable-toggle')) return;
+            if (e.button !== 0) return;
+
+            e.preventDefault();
+            let dragging = true;
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const startLeft = parseFloat(this.root.style.left) || 0;
+            const startTop = parseFloat(this.root.style.top) || 0;
+
+            this.root.classList.add('sidebar-radio--dragging');
+            header.setPointerCapture(e.pointerId);
+
+            const onMove = (ev) => {
+                if (!dragging) return;
+                const x = startLeft + (ev.clientX - startX);
+                const y = startTop + (ev.clientY - startY);
+                const clamped = clampPanelToViewport(this.root, x, y);
+                this.root.style.left = `${clamped.x}px`;
+                this.root.style.top = `${clamped.y}px`;
+                RadioPopover.reposition();
+            };
+
+            const onUp = (ev) => {
+                if (!dragging) return;
+                dragging = false;
+                this.root.classList.remove('sidebar-radio--dragging');
+                header.releasePointerCapture(ev.pointerId);
+                const x = parseFloat(this.root.style.left) || 0;
+                const y = parseFloat(this.root.style.top) || 0;
+                RadioPlayer.saveMiniPlayerState({ miniPlayerX: x, miniPlayerY: y });
+                document.removeEventListener('pointermove', onMove);
+                document.removeEventListener('pointerup', onUp);
+                document.removeEventListener('pointercancel', onUp);
+            };
+
+            document.addEventListener('pointermove', onMove);
+            document.addEventListener('pointerup', onUp);
+            document.addEventListener('pointercancel', onUp);
+        });
     },
 
     async restoreLastStationMeta() {
@@ -59,19 +222,26 @@ export const SidebarRadio = {
 
     renderShell() {
         this.root.innerHTML = `
-            <div class="sidebar-radio__transport" data-radio-transport>
-                <button type="button" class="btn btn--compact btn-icon sidebar-radio__play" data-radio-play aria-label="Play or pause">
-                    <span data-radio-play-icon></span>
-                </button>
-                <span class="sidebar-radio__flag is-hidden" data-radio-flag aria-hidden="true"></span>
-                <img class="sidebar-radio__favicon is-hidden" data-radio-favicon alt="" width="14" height="14">
-                <span class="sidebar-radio__title u-truncate" data-radio-title>Radio</span>
-                <input type="range" class="sidebar-radio__volume" data-radio-volume min="0" max="100" value="85" aria-label="Volume">
+            <div class="collapsable-header list-row--header" id="radio-section-header">
+                <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Radio</span>
+                <button type="button" class="card-act sidebar-radio__dock" data-radio-dock title="Undock to canvas" aria-label="Undock to canvas">${CARD_ICONS.unpin}</button>
             </div>
-            <div class="sidebar-radio__actions">
-                <button type="button" class="btn btn--compact btn-icon sidebar-radio__action" data-radio-open="browse" title="Browse stations" aria-label="Browse stations" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioBrowse}</button>
-                <button type="button" class="btn btn--compact btn-icon sidebar-radio__action" data-radio-open="favorites" title="Favorites" aria-label="Favorites" aria-expanded="false" aria-haspopup="dialog">${CARD_ICONS.star}</button>
-                <button type="button" class="btn btn--compact btn-icon sidebar-radio__action" data-radio-open="recents" title="Recents" aria-label="Recents" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioRecents}</button>
+            <div class="collapsable-section" id="radio-section">
+                <div class="sidebar-radio__transport" data-radio-transport>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-radio__play" data-radio-play aria-label="Play or pause">
+                        <span data-radio-play-icon></span>
+                    </button>
+                    <span class="sidebar-radio__flag is-hidden" data-radio-flag aria-hidden="true"></span>
+                    <img class="sidebar-radio__favicon is-hidden" data-radio-favicon alt="" width="14" height="14">
+                    <span class="sidebar-radio__title u-truncate" data-radio-title>Radio</span>
+                    <button type="button" class="card-act sidebar-radio__favorite is-hidden" data-radio-favorite title="Add favorite" aria-label="Add favorite" aria-pressed="false">${CARD_ICONS.heart}</button>
+                    <input type="range" class="sidebar-radio__volume" data-radio-volume min="0" max="100" value="85" aria-label="Volume">
+                </div>
+                <div class="sidebar-radio__actions">
+                    <button type="button" class="btn btn--compact btn-icon sidebar-radio__action" data-radio-open="browse" title="Browse stations" aria-label="Browse stations" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioBrowse}</button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-radio__action" data-radio-open="favorites" title="Favorites" aria-label="Favorites" aria-expanded="false" aria-haspopup="dialog">${CARD_ICONS.star}</button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-radio__action" data-radio-open="recents" title="Recents" aria-label="Recents" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioRecents}</button>
+                </div>
             </div>
         `;
     },
@@ -79,6 +249,16 @@ export const SidebarRadio = {
     bindShellListeners() {
         this.root.querySelector('[data-radio-play]')?.addEventListener('click', () => {
             RadioPlayer.toggle();
+        });
+
+        this.root.querySelector('[data-radio-favorite]')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const station = RadioPlayer.station;
+            if (!station?.stationuuid) return;
+            RadioPlayer.toggleFavorite(station);
+            if (RadioPopover.mode && !RadioPopover.panel?.classList.contains('is-hidden')) {
+                this.refreshOpenPanel();
+            }
         });
 
         const volumeEl = this.root.querySelector('[data-radio-volume]');
@@ -116,7 +296,11 @@ export const SidebarRadio = {
             this.countryFilter = '';
         }
 
-        RadioPopover.open(mode, anchor, { title: titles[mode] || 'Radio' });
+        RadioPopover.open(mode, {
+            attachEl: this.root,
+            iconAnchor: anchor,
+            title: titles[mode] || 'Radio'
+        });
         this.renderPanelContent(mode);
     },
 
@@ -385,6 +569,7 @@ export const SidebarRadio = {
         const flagEl = this.root?.querySelector('[data-radio-flag]');
         const playIconEl = this.root?.querySelector('[data-radio-play-icon]');
         const volumeEl = this.root?.querySelector('[data-radio-volume]');
+        const favBtn = this.root?.querySelector('[data-radio-favorite]');
         const transport = this.root?.querySelector('[data-radio-transport]');
 
         if (titleEl) {
@@ -434,6 +619,23 @@ export const SidebarRadio = {
 
         if (volumeEl && Number.isFinite(state.volume)) {
             volumeEl.value = String(Math.round(state.volume * 100));
+        }
+
+        if (favBtn) {
+            const uuid = state.station?.stationuuid;
+            if (!uuid) {
+                favBtn.classList.add('is-hidden');
+                favBtn.setAttribute('aria-pressed', 'false');
+            } else {
+                const fav = RadioPlayer.isFavorite(uuid);
+                favBtn.classList.remove('is-hidden');
+                favBtn.classList.toggle('is-active', fav);
+                favBtn.innerHTML = fav ? CARD_ICONS.heartFilled : CARD_ICONS.heart;
+                favBtn.setAttribute('aria-pressed', fav ? 'true' : 'false');
+                const label = fav ? 'Remove favorite' : 'Add favorite';
+                favBtn.setAttribute('title', label);
+                favBtn.setAttribute('aria-label', label);
+            }
         }
 
         transport?.classList.toggle('sidebar-radio__transport--active', !!(state.station || state.playing || state.loading));

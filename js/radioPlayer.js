@@ -2,19 +2,29 @@ import { RadioBrowserApi } from './radioBrowserApi.js';
 
 const STATE_KEY = 'matrix_radio_state';
 const RECENTS_CAP = 20;
+const DEFAULT_BROWSER_W = 300;
+const DEFAULT_BROWSER_H = 360;
 
 function loadState() {
     try {
         const raw = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
+        const miniPlayerDocked = raw.miniPlayerDocked !== undefined
+            ? raw.miniPlayerDocked !== false
+            : raw.panelDocked !== false;
+
         return {
             favorites: Array.isArray(raw.favorites) ? raw.favorites : [],
             recents: Array.isArray(raw.recents) ? raw.recents : [],
             volume: Number.isFinite(raw.volume) ? Math.min(1, Math.max(0, raw.volume)) : 0.85,
             lastStationUuid: raw.lastStationUuid || null,
             lastStationName: raw.lastStationName || '',
-            panelDocked: raw.panelDocked !== false,
-            panelX: Number.isFinite(raw.panelX) ? raw.panelX : null,
-            panelY: Number.isFinite(raw.panelY) ? raw.panelY : null
+            miniPlayerDocked,
+            miniPlayerX: Number.isFinite(raw.miniPlayerX) ? raw.miniPlayerX
+                : (Number.isFinite(raw.panelX) ? raw.panelX : null),
+            miniPlayerY: Number.isFinite(raw.miniPlayerY) ? raw.miniPlayerY
+                : (Number.isFinite(raw.panelY) ? raw.panelY : null),
+            browserW: Number.isFinite(raw.browserW) ? raw.browserW : DEFAULT_BROWSER_W,
+            browserH: Number.isFinite(raw.browserH) ? raw.browserH : DEFAULT_BROWSER_H
         };
     } catch {
         return {
@@ -23,9 +33,11 @@ function loadState() {
             volume: 0.85,
             lastStationUuid: null,
             lastStationName: '',
-            panelDocked: true,
-            panelX: null,
-            panelY: null
+            miniPlayerDocked: true,
+            miniPlayerX: null,
+            miniPlayerY: null,
+            browserW: DEFAULT_BROWSER_W,
+            browserH: DEFAULT_BROWSER_H
         };
     }
 }
@@ -113,17 +125,26 @@ export const RadioPlayer = {
         return [...loadState().recents];
     },
 
-    getPanelState() {
+    getMiniPlayerState() {
         const s = loadState();
         return {
-            panelDocked: s.panelDocked,
-            panelX: s.panelX,
-            panelY: s.panelY
+            miniPlayerDocked: s.miniPlayerDocked,
+            miniPlayerX: s.miniPlayerX,
+            miniPlayerY: s.miniPlayerY
         };
     },
 
-    savePanelState(patch) {
+    getBrowserSize() {
+        const s = loadState();
+        return { w: s.browserW, h: s.browserH };
+    },
+
+    saveMiniPlayerState(patch) {
         saveState(patch);
+    },
+
+    saveBrowserSize(w, h) {
+        saveState({ browserW: w, browserH: h });
     },
 
     pushRecent(uuid) {

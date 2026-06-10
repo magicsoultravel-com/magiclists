@@ -18,7 +18,29 @@ export function positionPopoverBelowAnchor(popover, anchor, { gap = 8, margin = 
     popover.style.left = `${left}px`;
 }
 
-/** Position a fixed panel beside the side panel (docked expanded radio browser). */
+/** Position a fixed panel below an anchor element, left-aligned to it. */
+export function positionPanelBelowElement(panel, anchorEl, { gap = 8, margin = 8 } = {}) {
+    if (!panel || !anchorEl) return;
+
+    const rect = anchorEl.getBoundingClientRect();
+    const panelW = panel.offsetWidth;
+    const panelH = panel.offsetHeight;
+
+    let left = rect.left;
+    let top = rect.bottom + gap;
+
+    left = Math.max(margin, Math.min(left, window.innerWidth - panelW - margin));
+    if (top + panelH > window.innerHeight - margin) {
+        top = Math.max(margin, rect.top - panelH - gap);
+    } else {
+        top = Math.max(margin, top);
+    }
+
+    panel.style.top = `${top}px`;
+    panel.style.left = `${left}px`;
+}
+
+/** @deprecated use positionPanelBelowElement for radio browser */
 export function positionPanelBesideSidebar(panel, anchor, { gap = 8, margin = 8 } = {}) {
     if (!panel) return;
 

@@ -1,5 +1,5 @@
 /* ==========================================================================
-   SIDEBAR RADIO — transport, icon actions, popover browser
+   SIDEBAR RADIO — collapsible mini player, transport, popover browser
    ========================================================================== */
 
 .sidebar-radio {
@@ -7,6 +7,52 @@
     margin-bottom: 0.15rem;
     padding-bottom: 0.2rem;
     border-bottom: 1px solid var(--border-color);
+}
+
+.sidebar-radio .collapsable-header {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding-right: 0.15rem;
+}
+
+.sidebar-radio .collapsable-heading {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.sidebar-radio__dock {
+    flex-shrink: 0;
+    opacity: 0.8;
+}
+
+.sidebar-radio__dock:hover {
+    opacity: 1;
+}
+
+.sidebar-radio--undocked {
+    position: fixed;
+    z-index: 341;
+    width: 220px;
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+    background: var(--bg-panel, #1a1d24);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+    pointer-events: auto;
+}
+
+.sidebar-radio--undocked .collapsable-header {
+    cursor: grab;
+    user-select: none;
+}
+
+.sidebar-radio--dragging .collapsable-header {
+    cursor: grabbing;
+    opacity: var(--desktop-drag-opacity, 0.85);
 }
 
 .sidebar-radio__transport {
@@ -82,6 +128,23 @@
     color: #ff6b6b;
 }
 
+.sidebar-radio__favorite {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    opacity: 0.55;
+}
+
+.sidebar-radio__favorite:hover,
+.sidebar-radio__favorite:focus-visible {
+    opacity: 0.95;
+}
+
+.sidebar-radio__favorite.is-active {
+    opacity: 1;
+    color: #f87171;
+}
+
 .sidebar-radio__volume {
     flex-shrink: 0;
     width: 48px;
@@ -124,26 +187,10 @@
 .radio-popover {
     position: fixed;
     z-index: 340;
-    width: min(300px, calc(100vw - 16px));
-    max-height: min(420px, calc(100vh - 24px));
     display: flex;
     flex-direction: column;
     padding: 0;
     overflow: hidden;
-}
-
-.radio-popover.is-expanded {
-    width: min(580px, calc(100vw - 24px));
-    max-height: min(72vh, 560px);
-}
-
-.radio-popover.is-undocked .radio-popover__header {
-    cursor: grab;
-}
-
-.radio-popover.is-dragging .radio-popover__header {
-    cursor: grabbing;
-    opacity: var(--desktop-drag-opacity, 0.55);
 }
 
 .radio-popover__header {
@@ -201,6 +248,22 @@
     padding: 0.2rem 0.05rem;
 }
 
+.radio-popover__resize-se {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 12px;
+    height: 12px;
+    opacity: 0.35;
+    z-index: 6;
+    cursor: se-resize;
+}
+
+.radio-popover:hover .radio-popover__resize-se,
+.radio-popover.is-resizing .radio-popover__resize-se {
+    opacity: 0.65;
+}
+
 /* ==========================================================================
    TILE GRIDS
    ========================================================================== */
@@ -209,10 +272,6 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
     gap: 0.28rem;
-}
-
-.radio-popover.is-expanded .radio-tile-grid {
-    grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
 }
 
 .radio-tile {
@@ -339,8 +398,4 @@
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
     gap: 0.2rem;
-}
-
-.radio-popover.is-expanded .radio-recents-strip__grid {
-    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
 }
