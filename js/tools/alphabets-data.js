@@ -1,6 +1,6 @@
 /** Static alphabet reference data for the Alphabets tool. */
 
-import { ALPHABETS_EXT } from './_alphabets-data-ext.js';
+import { ALPHABETS_EXT } from './alphabets-data-ext.js';
 
 const GOJUON_HIRAGANA = [
     { label: 'a', chars: [{ char: 'あ', roman: 'a' }, { char: 'い', roman: 'i' }, { char: 'う', roman: 'u' }, { char: 'え', roman: 'e' }, { char: 'お', roman: 'o' }] },
