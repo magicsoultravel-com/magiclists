@@ -40,7 +40,8 @@ function hashQuery(params) {
     return JSON.stringify({
         name: params.name || '',
         countrycode: params.countrycode || '',
-        tag: params.tag || ''
+        tag: params.tag || '',
+        hideOffline: params.hideOffline !== false
     });
 }
 
@@ -178,9 +179,9 @@ export const RadioBrowserApi = {
         return writeCachedBucket('tags', null, data, TTL.tags);
     },
 
-    async searchStations({ name = '', countrycode = '', tag = '', limit = 50, refresh = false } = {}) {
+    async searchStations({ name = '', countrycode = '', tag = '', limit = 100, refresh = false, hideOffline = true } = {}) {
         const params = { name: name.trim(), countrycode, tag };
-        const key = hashQuery(params);
+        const key = hashQuery({ ...params, hideOffline });
 
         if (!refresh) {
             const cached = readCachedBucket('queries', key, TTL.queries);
@@ -192,6 +193,7 @@ export const RadioBrowserApi = {
         qs.set('hidebroken', 'true');
         qs.set('order', 'clickcount');
         qs.set('reverse', 'true');
+        if (hideOffline) qs.set('lastcheckok', 'true');
         if (params.name) qs.set('name', params.name);
         if (params.countrycode) qs.set('countrycode', params.countrycode);
         if (params.tag) qs.set('tag', params.tag);
@@ -247,6 +249,30 @@ export const RadioBrowserApi = {
     invalidateQueryCache() {
         const cache = loadCache();
         delete cache.queries;
+        saveCache(cache);
+    },
+
+    async discoverServers() {
+        return discoverServers();
+    },
+
+    clearCache() {
+        localStorage.removeItem(CACHE_KEY);
+        sessionStorage.removeItem(API_BASE_SESSION_KEY);
+    },
+
+    setMirrorHost(hostname) {
+        if (!hostname) {
+            sessionStorage.removeItem(API_BASE_SESSION_KEY);
+            const cache = loadCache();
+            delete cache.apiBase;
+            saveCache(cache);
+            return;
+        }
+        const base = `https://${hostname}/json`;
+        sessionStorage.setItem(API_BASE_SESSION_KEY, base);
+        const cache = loadCache();
+        cache.apiBase = { cachedAt: Date.now(), data: base };
         saveCache(cache);
     }
 };

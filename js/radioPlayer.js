@@ -1,4 +1,10 @@
-import { RadioBrowserApi } from './radioBrowserApi.js';
+import { RadioProviderRegistry } from './radioProviders/registry.js';
+import {
+    stationKey,
+    parseStationKey,
+    migrateFavoriteRef,
+    normalizeStation
+} from './radioProviders/stationShape.js';
 
 const STATE_KEY = 'matrix_radio_state';
 const RECENTS_CAP = 20;
@@ -12,12 +18,25 @@ function loadState() {
             ? raw.miniPlayerDocked !== false
             : raw.panelDocked !== false;
 
+        const favorites = Array.isArray(raw.favorites)
+            ? raw.favorites.map(migrateFavoriteRef)
+            : [];
+        const recents = Array.isArray(raw.recents)
+            ? raw.recents.map(migrateFavoriteRef)
+            : [];
+
+        const lastKey = raw.lastStationKey
+            || (raw.lastStationUuid ? migrateFavoriteRef(raw.lastStationUuid) : null);
+
         return {
-            favorites: Array.isArray(raw.favorites) ? raw.favorites : [],
-            recents: Array.isArray(raw.recents) ? raw.recents : [],
+            favorites,
+            recents,
             volume: Number.isFinite(raw.volume) ? Math.min(1, Math.max(0, raw.volume)) : 0.85,
-            lastStationUuid: raw.lastStationUuid || null,
+            lastStationKey: lastKey,
             lastStationName: raw.lastStationName || '',
+            catalogProvider: raw.catalogProvider || 'radio-browser',
+            radioBrowserMirror: raw.radioBrowserMirror || null,
+            hideOfflineStations: raw.hideOfflineStations !== false,
             miniPlayerDocked,
             miniPlayerX: Number.isFinite(raw.miniPlayerX) ? raw.miniPlayerX
                 : (Number.isFinite(raw.panelX) ? raw.panelX : null),
@@ -31,8 +50,11 @@ function loadState() {
             favorites: [],
             recents: [],
             volume: 0.85,
-            lastStationUuid: null,
+            lastStationKey: null,
             lastStationName: '',
+            catalogProvider: 'radio-browser',
+            radioBrowserMirror: null,
+            hideOfflineStations: true,
             miniPlayerDocked: true,
             miniPlayerX: null,
             miniPlayerY: null,
@@ -71,9 +93,8 @@ export const RadioPlayer = {
             this.playing = true;
             this.loading = false;
             this.error = null;
-            if (this.station?.stationuuid) {
-                this.pushRecent(this.station.stationuuid);
-            }
+            const key = stationKey(this.station);
+            if (key) this.pushRecent(key);
             this.emitState();
         });
         this.audio.addEventListener('pause', () => {
@@ -96,9 +117,12 @@ export const RadioPlayer = {
         });
 
         const saved = loadState();
-        if (saved.lastStationUuid) {
+        if (saved.lastStationKey) {
+            const parsed = parseStationKey(saved.lastStationKey);
             this.station = {
-                stationuuid: saved.lastStationUuid,
+                providerId: parsed.providerId,
+                stationId: parsed.stationId,
+                stationuuid: saved.lastStationKey,
                 name: saved.lastStationName || 'Last station'
             };
             this.emitState();
@@ -147,30 +171,35 @@ export const RadioPlayer = {
         saveState({ browserW: w, browserH: h });
     },
 
-    pushRecent(uuid) {
-        if (!uuid) return;
-        const recents = loadState().recents.filter((id) => id !== uuid);
-        recents.unshift(uuid);
+    pushRecent(key) {
+        if (!key) return;
+        const recents = loadState().recents.filter((id) => id !== key);
+        recents.unshift(key);
         saveState({ recents: recents.slice(0, RECENTS_CAP) });
     },
 
-    isFavorite(uuid) {
-        return loadState().favorites.includes(uuid);
+    isFavorite(stationOrKey) {
+        const key = typeof stationOrKey === 'string'
+            ? migrateFavoriteRef(stationOrKey)
+            : stationKey(stationOrKey);
+        return loadState().favorites.includes(key);
     },
 
     toggleFavorite(station) {
-        if (!station?.stationuuid) return false;
+        const key = stationKey(station);
+        if (!key) return false;
         const favorites = loadState().favorites;
-        const idx = favorites.indexOf(station.stationuuid);
+        const idx = favorites.indexOf(key);
         if (idx >= 0) {
             favorites.splice(idx, 1);
             saveState({ favorites });
             this.emitState();
             return false;
         }
-        favorites.unshift(station.stationuuid);
+        favorites.unshift(key);
         saveState({ favorites });
-        RadioBrowserApi.getStationByUuid(station.stationuuid).catch(() => {});
+        const parsed = parseStationKey(key);
+        RadioProviderRegistry.getStation(parsed).catch(() => {});
         this.emitState();
         return true;
     },
@@ -187,7 +216,7 @@ export const RadioPlayer = {
             this.pause();
             return;
         }
-        if (this.station?.stationuuid && this.audio?.src) {
+        if (this.station?.url_resolved && this.audio?.src) {
             try {
                 await this.audio.play();
             } catch {
@@ -196,7 +225,7 @@ export const RadioPlayer = {
             }
             return;
         }
-        if (this.station?.stationuuid) {
+        if (this.station) {
             await this.playStation(this.station);
         }
     },
@@ -219,33 +248,45 @@ export const RadioPlayer = {
         this.emitState();
     },
 
-    async playStation(stationOrUuid) {
+    async playStation(stationOrKey) {
         this.init();
-        const uuid = typeof stationOrUuid === 'string'
-            ? stationOrUuid
-            : stationOrUuid?.stationuuid;
-        if (!uuid) return;
+        let station = typeof stationOrKey === 'object' && stationOrKey !== null
+            ? stationOrKey
+            : null;
+
+        if (!station && typeof stationOrKey === 'string') {
+            const parsed = parseStationKey(stationOrKey);
+            station = await RadioProviderRegistry.getStation(parsed, { forPlay: true });
+        }
+
+        if (station && !station.url_resolved) {
+            const parsed = parseStationKey(stationKey(station));
+            station = await RadioProviderRegistry.getStation(parsed, { forPlay: true });
+        }
+
+        const key = stationKey(station);
+        if (!key || !station) return;
 
         this.loading = true;
         this.error = null;
         this.emitState();
 
         try {
-            const station = await RadioBrowserApi.getStationByUuid(uuid, { forPlay: true });
-            if (!station?.url_resolved) {
+            if (!station.url_resolved) {
                 throw new Error('No stream URL');
             }
             if (station.lastcheckok === 0) {
                 throw new Error('Station offline');
             }
 
-            this.station = station;
+            this.station = normalizeStation(station, station.providerId) || station;
             saveState({
-                lastStationUuid: station.stationuuid,
+                lastStationKey: key,
                 lastStationName: station.name || ''
             });
 
-            RadioBrowserApi.reportClick(station.stationuuid);
+            const provider = RadioProviderRegistry.getProvider(station.providerId);
+            provider.reportClick?.(station.stationId);
 
             if (this.audio.src !== station.url_resolved) {
                 this.audio.src = station.url_resolved;
@@ -256,8 +297,8 @@ export const RadioPlayer = {
             this.loading = false;
             this.playing = false;
             this.error = e?.message === 'Station offline' ? 'Station offline' : 'Stream unavailable';
-            if (typeof stationOrUuid === 'object' && stationOrUuid?.name) {
-                this.station = stationOrUuid;
+            if (typeof stationOrKey === 'object' && stationOrKey?.name) {
+                this.station = normalizeStation(stationOrKey, stationOrKey.providerId) || stationOrKey;
             }
             this.emitState();
         }

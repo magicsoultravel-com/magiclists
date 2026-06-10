@@ -87,13 +87,13 @@ export const RadioPopover = {
         panel.style.height = `${h}px`;
     },
 
-    open(mode, { attachEl, iconAnchor, title = 'Radio' } = {}) {
+    open(mode, { attachEl, iconAnchor, title = 'Radio', force = false } = {}) {
         const wasOpen = !this.panel?.classList.contains('is-hidden');
         const sameMode = this.mode === mode && this.iconAnchor === iconAnchor;
 
-        if (wasOpen && sameMode) {
+        if (wasOpen && sameMode && !force) {
             this.close();
-            return;
+            return false;
         }
 
         this.close(false);
@@ -115,6 +115,7 @@ export const RadioPopover = {
 
         this.attachListeners();
         this.attachBoundsWatcher();
+        return true;
     },
 
     attachBoundsWatcher() {
