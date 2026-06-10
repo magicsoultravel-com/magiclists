@@ -22,6 +22,7 @@ import { readViewSessions, restoreViewSession } from './viewSession.js';
 import { DrawingBoard, getDrawingBackupKeys } from './drawingBoard.js';
 import { SearchBar } from './searchBar.js';
 import { Fullscreen } from './fullscreen.js';
+import { SidebarRadio } from './sidebarRadio.js';
 import { positionPopoverBelowAnchor } from './popoverPosition.js';
 
 function countHiddenFromBoard(items) {
@@ -77,6 +78,7 @@ class Application {
         await this.syncDataStore();
         this.setupCoreListeners();
         SidePanel.init(AppState);
+        SidebarRadio.init();
         SidePanel.setupStatusClickHandlers();
         ClockStyle.init();
         DesktopZoom.init();

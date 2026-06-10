@@ -1,0 +1,239 @@
+/* ==========================================================================
+   SIDEBAR RADIO — fixed panel between brand and Quick actions
+   ========================================================================== */
+
+.sidebar-radio {
+    flex-shrink: 0;
+    margin-bottom: 0.15rem;
+    padding-bottom: 0.2rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.sidebar-radio__transport {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.2rem 0.15rem 0.28rem;
+    min-width: 0;
+}
+
+.sidebar-radio__transport--active .sidebar-radio__title {
+    color: var(--text-main);
+}
+
+.sidebar-radio__play {
+    flex-shrink: 0;
+    width: 26px;
+    height: 26px;
+    min-height: 26px;
+    padding: 0;
+}
+
+.sidebar-radio__play-triangle {
+    display: block;
+    width: 0;
+    height: 0;
+    margin-left: 2px;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 8px solid currentColor;
+}
+
+.sidebar-radio__pause-bars {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    height: 10px;
+}
+
+.sidebar-radio__pause-bars span {
+    display: block;
+    width: 2px;
+    height: 10px;
+    background: currentColor;
+    border-radius: 1px;
+}
+
+.sidebar-radio__now {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.22rem;
+    min-width: 0;
+}
+
+.sidebar-radio__favicon {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    object-fit: contain;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.sidebar-radio__title {
+    font-size: 0.62rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    line-height: 1.2;
+}
+
+.sidebar-radio__title--error {
+    color: #ff6b6b;
+}
+
+.sidebar-radio__volume {
+    flex-shrink: 0;
+    width: 52px;
+    height: 4px;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+#radio-section-header {
+    padding: 0.18rem 0.22rem;
+}
+
+.sidebar-radio__refresh {
+    flex-shrink: 0;
+    opacity: 0.75;
+}
+
+.sidebar-radio__refresh:hover {
+    opacity: 1;
+}
+
+.sidebar-radio__tabs {
+    display: flex;
+    gap: 0.2rem;
+    padding: 0.12rem 0.2rem 0.18rem;
+}
+
+.sidebar-radio__tab.is-active {
+    background: rgba(79, 70, 229, 0.14);
+    border: 1px solid rgba(79, 70, 229, 0.35);
+    color: #c7d2fe;
+}
+
+.sidebar-radio__browse {
+    display: flex;
+    flex-direction: column;
+    gap: 0.22rem;
+    padding: 0 0.2rem 0.18rem;
+}
+
+.sidebar-radio__search {
+    font-size: 0.62rem;
+    padding: 0.22rem 0.35rem;
+    min-height: 0;
+}
+
+.sidebar-radio__country {
+    font-size: 0.62rem;
+    padding: 0.2rem 0.32rem;
+    min-height: 0;
+}
+
+.sidebar-radio__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.15rem;
+}
+
+.sidebar-radio__tag {
+    font-size: 0.56rem;
+    padding: 0.1rem 0.28rem;
+    line-height: 1.2;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sidebar-radio__tag.is-active {
+    background: rgba(79, 70, 229, 0.14);
+    border-color: rgba(79, 70, 229, 0.35);
+    color: #c7d2fe;
+}
+
+.sidebar-radio__list-wrap {
+    padding: 0 0.12rem 0.2rem;
+}
+
+.sidebar-radio__list-wrap .tool-msg {
+    padding: 0.15rem 0.25rem 0.2rem;
+    margin: 0;
+}
+
+.sidebar-radio__list {
+    max-height: 180px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.sidebar-radio__row {
+    position: relative;
+    padding-right: 1.35rem;
+}
+
+.sidebar-radio__row--offline {
+    opacity: 0.55;
+}
+
+.sidebar-radio__row-favicon {
+    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    object-fit: contain;
+}
+
+.sidebar-radio__row-favicon--fallback {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    font-size: 0.58rem;
+    color: var(--text-muted);
+}
+
+.sidebar-radio__row-label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.02rem;
+    min-width: 0;
+}
+
+.sidebar-radio__row-name {
+    font-size: 0.62rem;
+    line-height: 1.15;
+}
+
+.sidebar-radio__row-meta {
+    font-size: 0.52rem;
+    color: var(--text-muted);
+    line-height: 1.1;
+}
+
+.sidebar-radio__star {
+    position: absolute;
+    right: 0.12rem;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0.45;
+}
+
+.sidebar-radio__row:hover .sidebar-radio__star,
+.sidebar-radio__row:focus-within .sidebar-radio__star {
+    opacity: 0.9;
+}
+
+.sidebar-radio__star.is-active {
+    opacity: 1;
+    color: #fbbf24;
+}
+
+.sidebar-radio__row.is-on-desktop .sidebar-radio__row-name {
+    color: #c7d2fe;
+}
