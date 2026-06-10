@@ -11,6 +11,7 @@ export const TOOLS_REGISTRY = [
         "wide": true,
         "mountClass": "tool-mount--calendar",
         "resizable": true,
+        "resizeMode": "fill",
         "defaultSize": { "w": 720, "h": 560 },
         "minSize": { "w": 480, "h": 400 }
     },
@@ -22,6 +23,7 @@ export const TOOLS_REGISTRY = [
         "wide": false,
         "mountClass": "tool-mount--calculator",
         "resizable": true,
+        "resizeMode": "scale",
         "defaultSize": { "w": 320 },
         "minSize": { "w": 260, "h": 220 }
     },
@@ -71,6 +73,7 @@ export const TOOLS_REGISTRY = [
         "wide": true,
         "mountClass": "tool-mount--map",
         "resizable": true,
+        "resizeMode": "fill",
         "defaultSize": { "w": 800, "h": 600 },
         "minSize": { "w": 400, "h": 320 }
     },
@@ -82,6 +85,7 @@ export const TOOLS_REGISTRY = [
         "wide": false,
         "mountClass": "tool-mount--alphabets",
         "resizable": true,
+        "resizeMode": "fill",
         "defaultSize": { "w": 380, "h": 480 },
         "minSize": { "w": 300, "h": 360 }
     },
@@ -93,6 +97,7 @@ export const TOOLS_REGISTRY = [
         "wide": true,
         "mountClass": "tool-mount--sudoku",
         "resizable": true,
+        "resizeMode": "scale",
         "defaultSize": { "w": 420, "h": 640 },
         "minSize": { "w": 340, "h": 480 }
     }

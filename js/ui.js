@@ -25,6 +25,7 @@ import {
 } from './noteBodyConversion.js';
 import { hasRichMarkup, linkifyPlainUrls, sanitizeHref, sanitizeRichHtml, stripRichText } from './richText.js';
 import { UndoManager } from './undo.js';
+import { raiseDesktopElement, syncDesktopStackSeq } from './desktopStack.js';
 import {
     applyViewSessionsFromSnapshot,
     clearExpandedCards,
@@ -79,8 +80,6 @@ export function cardAnimationsEnabled() {
     return document.documentElement.dataset.cardAnimations !== '0';
 }
 
-let freeformStackSeq = 1;
-let gridStackSeq = 1;
 let boardItemsById = new Map();
 let activeBoardViewMode = 'columns';
 
@@ -4932,13 +4931,12 @@ export const UI = {
         if (card.dataset.gridBoard !== '1') return;
         const z = orderIndex + 1;
         card.style.setProperty('z-index', String(z), 'important');
-        if (z >= gridStackSeq) gridStackSeq = z + 1;
+        syncDesktopStackSeq(z);
     },
 
     raiseLayoutCard(card) {
         if (!card) return;
-        gridStackSeq += 1;
-        card.style.setProperty('z-index', String(gridStackSeq), 'important');
+        raiseDesktopElement(card);
         if (card.dataset.gridBoard === '1') {
             card.classList.add('is-grid-front');
             card.closest('#app-canvas')?.querySelectorAll('.mini-card.is-grid-front').forEach((other) => {
@@ -5764,13 +5762,12 @@ export const UI = {
         if (card.dataset.freeform !== '1') return;
         const z = orderIndex + 1;
         card.style.setProperty('z-index', String(z), 'important');
-        if (z >= freeformStackSeq) freeformStackSeq = z + 1;
+        syncDesktopStackSeq(z);
     },
 
     raiseFreeformCard(card) {
         if (!card || card.dataset.freeform !== '1') return;
-        freeformStackSeq += 1;
-        card.style.setProperty('z-index', String(freeformStackSeq), 'important');
+        raiseDesktopElement(card);
         card.classList.add('is-freeform-front');
         card.closest('#app-canvas')?.querySelectorAll('.mini-card.is-freeform-front').forEach((other) => {
             if (other !== card) other.classList.remove('is-freeform-front');

@@ -1229,7 +1229,7 @@ function updateScale(targetMount) {
         const heightScale = bodyH / SCALE_HEIGHT_BASELINE;
         scale = Math.min(scale, heightScale);
     }
-    scale = Math.min(1.3, Math.max(0.7, scale));
+    scale = Math.max(0.6, scale);
     host.style.setProperty('--sudoku-scale', String(scale));
 }
 

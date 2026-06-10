@@ -5109,7 +5109,6 @@ textarea.form-input {
 #app-canvas.view-grid .mini-card.is-grid-resizing,
 #app-canvas.view-grid .mini-card.is-grid-front {
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
-    z-index: 120 !important;
     transition: none !important;
 }
 
@@ -5152,7 +5151,6 @@ textarea.form-input {
 #app-canvas.view-columns .column-notes .mini-card.is-column-resizing,
 #app-canvas.view-columns .column-notes .mini-card.is-column-front {
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
-    z-index: 120 !important;
     transition: none !important;
 }
 

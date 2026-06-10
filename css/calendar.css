@@ -7,6 +7,18 @@
     overflow-y: auto;
 }
 
+.tool-panel--calendar:not(.tool-panel--auto-height) .tool-panel__body {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.tool-panel--calendar:not(.tool-panel--auto-height) .tool-mount--calendar {
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+}
+
 .calendar-toolbar {
     margin-bottom: 0.4rem;
 }

@@ -1,3 +1,4 @@
+import { SUDOKU_ICONS } from './icons.js';
 import { renderThemeDots } from './theme.js';
 
 export function renderSudokuTemplate() {
@@ -23,30 +24,29 @@ export function renderSudokuTemplate() {
 
             <nav class="sudoku-menu" data-sudoku="menu" hidden aria-label="Sudoku menu">
                 <div class="sudoku-menu__actions">
-                    <button type="button" class="btn btn--compact btn-icon" data-sudoku="btn-new" title="New game">New</button>
-                    <button type="button" class="btn btn--compact btn-icon" data-sudoku="btn-restart" title="Restart">Restart</button>
-                    <button type="button" class="btn btn--compact btn-icon" data-sudoku="btn-undo" title="Undo" disabled>Undo</button>
-                    <button type="button" class="btn btn--compact btn-icon" data-sudoku="btn-redo" title="Redo" disabled>Redo</button>
-                    <button type="button" class="btn btn--compact btn-icon" data-sudoku="btn-pencil" title="Pencil">Pencil</button>
-                    <button type="button" class="btn btn--compact btn-icon" data-sudoku="btn-erase" title="Erase">Erase</button>
-                    <button type="button" class="btn btn--compact btn-icon" data-sudoku="btn-check" title="Check">Check</button>
-                    <button type="button" class="btn btn--compact btn-icon" data-sudoku="btn-pencil-fill" title="Fill notes">Fill notes</button>
-                    <button type="button" class="btn btn--compact btn-icon" data-sudoku="btn-pencil-clear" title="Clear notes">Clear notes</button>
-                    <button type="button" class="btn btn--compact btn-icon" data-sudoku="btn-lessons" title="Lessons">Lessons</button>
-                    <button type="button" class="btn btn--compact btn-icon" data-sudoku="btn-seeds" title="Seeds">Seeds</button>
-                    <button type="button" class="btn btn--compact btn-icon" data-sudoku="btn-cat" title="Companion cat">Cat</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-sudoku="btn-new" aria-label="New game" title="New game">${SUDOKU_ICONS.new}</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-sudoku="btn-restart" aria-label="Restart puzzle" title="Restart">${SUDOKU_ICONS.restart}</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-sudoku="btn-undo" aria-label="Undo" title="Undo" disabled>${SUDOKU_ICONS.undo}</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-sudoku="btn-redo" aria-label="Redo" title="Redo" disabled>${SUDOKU_ICONS.redo}</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-sudoku="btn-pencil" aria-label="Pencil marks" title="Pencil marks">${SUDOKU_ICONS.pencil}</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-sudoku="btn-erase" aria-label="Erase" title="Erase">${SUDOKU_ICONS.erase}</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-sudoku="btn-check" aria-label="Check" title="Check">${SUDOKU_ICONS.check}</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-sudoku="btn-pencil-fill" aria-label="Fill all pencil marks" title="Fill all pencil marks">${SUDOKU_ICONS.pencilFill}</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-sudoku="btn-pencil-clear" aria-label="Clear all pencil marks" title="Clear all pencil marks">${SUDOKU_ICONS.pencilClear}</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-sudoku="btn-lessons" aria-label="Lessons and tips" title="Lessons &amp; tips">${SUDOKU_ICONS.lessons}</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-sudoku="btn-seeds" aria-label="Puzzle seeds" title="Puzzle seeds">${SUDOKU_ICONS.seeds}</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-sudoku="btn-cat" aria-label="Companion cat" title="Companion cat — drag to toss">${SUDOKU_ICONS.cat}</button>
                 </div>
                 <div class="sudoku-menu__theme" data-sudoku="theme-dots">
                     ${renderThemeDots()}
                 </div>
-                <label class="sudoku-menu__difficulty">
-                    <span>Difficulty</span>
-                    <select class="btn btn--compact" data-sudoku="difficulty">
+                <div class="sudoku-menu__difficulty">
+                    <select class="btn btn--compact" data-sudoku="difficulty" aria-label="Difficulty">
                         <option value="easy">Easy</option>
                         <option value="medium" selected>Medium</option>
                         <option value="hard">Hard</option>
                     </select>
-                </label>
+                </div>
             </nav>
             <button type="button" class="sudoku-menu-scrim" data-sudoku="menu-scrim" hidden aria-label="Close menu"></button>
 

@@ -1,4 +1,4 @@
-/** @tool {"label":"Calculator","order":1,"resizable":true,"mountClass":"tool-mount--calculator","defaultSize":{"w":320},"minSize":{"w":260,"h":220}} */
+/** @tool {"label":"Calculator","order":1,"resizable":true,"resizeMode":"scale","mountClass":"tool-mount--calculator","defaultSize":{"w":320},"minSize":{"w":260,"h":220}} */
 /** @tool-icon <rect x="2" y="1.8" width="8" height="8.4" rx="0.8" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M4 4.2h4M4 6h1.6M6.4 6H8M4 7.8h4" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/> */
 
 const HISTORY_KEY = 'calc_history';
@@ -201,7 +201,7 @@ export const Calculator = {
             scale = Math.min(scale, heightScale);
         }
 
-        scale = Math.min(1.5, Math.max(0.85, scale));
+        scale = Math.max(0.6, scale);
         this.container.style.setProperty('--calc-scale', String(scale));
     },
 

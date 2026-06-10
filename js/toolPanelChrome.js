@@ -1,17 +1,19 @@
 // js/toolPanelChrome.js — floating desktop tool panels (drag, resize, collapse chip)
+import { raiseDesktopElement } from './desktopStack.js';
 import { CARD_ICONS } from './ui.js';
 
 const STORAGE_KEY = 'magiclists_tool_panels';
-const BASE_Z = 320;
 
 const GENERIC_TOOL_ICON =
     '<rect x="2.2" y="2.2" width="7.6" height="7.6" rx="1" fill="none" stroke="currentColor" stroke-width="0.95"/>' +
     '<path d="M4.5 6h3" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/>';
 
-export function renderToolIcon(markup) {
+export function renderToolIcon(markup, size = 12) {
     const body = (markup || '').trim() || GENERIC_TOOL_ICON;
-    if (body.startsWith('<svg')) return body;
-    return `<svg viewBox="0 0 12 12" width="12" height="12" focusable="false" aria-hidden="true">${body}</svg>`;
+    if (body.startsWith('<svg')) {
+        return body.replace(/\bwidth="[^"]*"/, `width="${size}"`).replace(/\bheight="[^"]*"/, `height="${size}"`);
+    }
+    return `<svg viewBox="0 0 12 12" width="${size}" height="${size}" focusable="false" aria-hidden="true">${body}</svg>`;
 }
 
 function loadAllPanelState() {
@@ -97,7 +99,7 @@ function loadSavedCoord(value, min, max, size, fallback) {
 }
 
 function chipAnchorFromPanel(panel, chip) {
-    const chipW = chip?.offsetWidth || 40;
+    const chipW = chip?.offsetWidth || 44;
     const chipH = chip?.offsetHeight || 44;
     return {
         x: panel.offsetLeft + panel.offsetWidth - chipW - 4,
@@ -105,12 +107,14 @@ function chipAnchorFromPanel(panel, chip) {
     };
 }
 
-let zStack = 0;
-
-export function bringToFront(el) {
+function bringToFront(el) {
     if (!el) return;
-    zStack += 1;
-    el.style.zIndex = String(BASE_Z + zStack);
+    raiseDesktopElement(el);
+    const desktop = el.closest('#tools-desktop');
+    desktop?.querySelectorAll('.is-desktop-front').forEach((other) => {
+        if (other !== el) other.classList.remove('is-desktop-front');
+    });
+    el.classList.add('is-desktop-front');
 }
 
 function defaultSizeFor(meta) {
@@ -173,7 +177,11 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
             </div>
         </div>
         <div class="tool-panel__body"></div>
-        ${meta?.resizable ? '<div class="tool-panel__resize-se ff-resize ff-resize-se" aria-hidden="true"></div>' : ''}
+        ${meta?.resizable ? `
+            <div class="tool-panel__resize-e" data-resize-axis="e" aria-hidden="true"></div>
+            <div class="tool-panel__resize-s" data-resize-axis="s" aria-hidden="true"></div>
+            <div class="tool-panel__resize-se" data-resize-axis="se" aria-hidden="true"></div>
+        ` : ''}
     `;
 
     const titleEl = panel.querySelector('.tool-panel__title');
@@ -204,7 +212,7 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     const positionChip = (anchorToPanel = false) => {
         if (!chip) return;
         const desktopBounds = getDesktopBounds();
-        const chipW = chip.offsetWidth || 40;
+        const chipW = chip.offsetWidth || 44;
         const chipH = chip.offsetHeight || 44;
         const panelAnchor = chipAnchorFromPanel(panel, chip);
         const fallbackX = panelAnchor.x;
@@ -232,17 +240,25 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
         chip.className = 'tool-chip';
         chip.dataset.toolId = toolId;
         chip.title = meta?.label || toolId;
+        const chipIconMarkup = renderToolIcon(meta?.icon, 16);
         chip.innerHTML = `
             <div class="tool-chip__drag" title="Drag ${meta?.label || toolId}">
-                <span class="tool-chip__icon menu-tool-icon">${iconMarkup}</span>
+                <span class="tool-chip__icon menu-tool-icon">${chipIconMarkup}</span>
             </div>
-            <button type="button" class="card-act card-act--collapse tool-chip__expand" title="Expand" aria-label="Expand"></button>
-            <button type="button" class="card-act card-act--close tool-chip__close" title="Remove from desktop" aria-label="Remove from desktop"></button>
+            <div class="tool-chip__actions">
+                <button type="button" class="card-act card-act--expand tool-chip__expand" title="Expand" aria-label="Expand"></button>
+                <button type="button" class="card-act card-act--close tool-chip__close" title="Remove from desktop" aria-label="Remove from desktop"></button>
+            </div>
         `;
-        chip.querySelector('.tool-chip__expand').innerHTML = CARD_ICONS.collapse;
+        chip.querySelector('.tool-chip__expand').innerHTML = CARD_ICONS.expand;
         chip.querySelector('.tool-chip__close').innerHTML = CARD_ICONS.close;
 
         desktop.appendChild(chip);
+
+        chip.addEventListener('pointerdown', (e) => {
+            if (e.target.closest('.card-act, .tool-chip__actions')) return;
+            bringToFront(chip);
+        });
 
         chip.querySelector('.tool-chip__expand').addEventListener('click', (e) => {
             e.stopPropagation();
@@ -456,10 +472,12 @@ function bindChipDrag(dragHandle, chipEl, onEnd) {
 }
 
 function bindPanelResize(panel, mins, onEnd, onResize) {
-    const handle = panel.querySelector('.tool-panel__resize-se');
-    if (!handle) return;
+    const handles = panel.querySelectorAll('[data-resize-axis]');
+    if (!handles.length) return;
 
     let resizing = false;
+    let activeHandle = null;
+    let axis = 'se';
     let startX = 0;
     let startY = 0;
     let startW = 0;
@@ -471,45 +489,58 @@ function bindPanelResize(panel, mins, onEnd, onResize) {
         panel.style.height = `${panel.offsetHeight}px`;
     };
 
-    handle.addEventListener('pointerdown', (e) => {
-        if (e.button !== 0) return;
-        e.preventDefault();
-        e.stopPropagation();
-        lockPanelDimensions();
-        resizing = true;
-        startX = e.clientX;
-        startY = e.clientY;
-        startW = panel.offsetWidth;
-        startH = panel.offsetHeight;
-        handle.setPointerCapture(e.pointerId);
-        panel.classList.add('is-resizing');
-        bringToFront(panel);
-    });
-
-    handle.addEventListener('pointermove', (e) => {
-        if (!resizing) return;
-        const { dx, dy } = pointerDelta(e.clientX, e.clientY, startX, startY);
+    const applyResize = (dx, dy) => {
         const desktop = getDesktopBounds();
         const maxW = desktop.right - panel.offsetLeft - 8;
         const maxH = desktop.bottom - panel.offsetTop - 8;
-        panel.style.width = `${clamp(startW + dx, mins.w, maxW)}px`;
-        panel.style.height = `${clamp(startH + dy, mins.h, maxH)}px`;
+        if (axis === 'e' || axis === 'se') {
+            panel.style.width = `${clamp(startW + dx, mins.w, maxW)}px`;
+        }
+        if (axis === 's' || axis === 'se') {
+            panel.style.height = `${clamp(startH + dy, mins.h, maxH)}px`;
+        }
         onResize?.();
-    });
+    };
 
     const endResize = (e) => {
         if (!resizing) return;
         resizing = false;
         panel.classList.remove('is-resizing');
         try {
-            handle.releasePointerCapture(e.pointerId);
+            activeHandle?.releasePointerCapture(e.pointerId);
         } catch { /* ignore */ }
+        activeHandle = null;
         onEnd?.();
         onResize?.();
     };
 
-    handle.addEventListener('pointerup', endResize);
-    handle.addEventListener('pointercancel', endResize);
+    handles.forEach((handle) => {
+        handle.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+            lockPanelDimensions();
+            resizing = true;
+            axis = handle.dataset.resizeAxis || 'se';
+            activeHandle = handle;
+            startX = e.clientX;
+            startY = e.clientY;
+            startW = panel.offsetWidth;
+            startH = panel.offsetHeight;
+            handle.setPointerCapture(e.pointerId);
+            panel.classList.add('is-resizing');
+            bringToFront(panel);
+        });
+
+        handle.addEventListener('pointermove', (e) => {
+            if (!resizing || activeHandle !== handle) return;
+            const { dx, dy } = pointerDelta(e.clientX, e.clientY, startX, startY);
+            applyResize(dx, dy);
+        });
+
+        handle.addEventListener('pointerup', endResize);
+        handle.addEventListener('pointercancel', endResize);
+    });
 }
 
 export function getPersistedOpenToolIds() {

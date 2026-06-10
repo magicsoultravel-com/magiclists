@@ -1,4 +1,4 @@
-/** @tool {"label":"Map","order":6,"wide":true,"resizable":true,"mountClass":"tool-mount--map","defaultSize":{"w":800,"h":600},"minSize":{"w":400,"h":320}} */
+/** @tool {"label":"Map","order":6,"wide":true,"resizable":true,"resizeMode":"fill","mountClass":"tool-mount--map","defaultSize":{"w":800,"h":600},"minSize":{"w":400,"h":320}} */
 /** @tool-icon <path d="M2.2 3.2 6 1.8l3.8 1.4v5.6L6 10.2 2.2 8.8V3.2z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/><path d="M6 1.8v8.4M9.8 3.2v5.6" fill="none" stroke="currentColor" stroke-width="0.85"/> */
 export const Map = {
     container: null,

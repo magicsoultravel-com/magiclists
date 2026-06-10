@@ -68,6 +68,7 @@ function parseToolFile(filePath) {
     let wide = false;
     let mountClass = '';
     let resizable = false;
+    let resizeMode = '';
     let defaultSize = null;
     let minSize = null;
     let icon = '';
@@ -81,6 +82,7 @@ function parseToolFile(filePath) {
             if (meta?.wide) wide = true;
             if (meta?.mountClass) mountClass = String(meta.mountClass);
             if (meta?.resizable) resizable = true;
+            if (meta?.resizeMode) resizeMode = String(meta.resizeMode);
             if (meta?.defaultSize) defaultSize = meta.defaultSize;
             if (meta?.minSize) minSize = meta.minSize;
             if (meta?.icon) icon = String(meta.icon);
@@ -96,6 +98,7 @@ function parseToolFile(filePath) {
 
     const entry = { id, label, order, icon, wide, mountClass };
     if (resizable) entry.resizable = true;
+    if (resizeMode) entry.resizeMode = resizeMode;
     if (defaultSize) entry.defaultSize = defaultSize;
     if (minSize) entry.minSize = minSize;
     return entry;

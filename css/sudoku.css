@@ -26,8 +26,8 @@
     --text: var(--text-main);
     --user: var(--text-main);
     --given: var(--text-muted);
-    --border: var(--border-color);
-    --border-strong: var(--border-color);
+    --border: color-mix(in srgb, var(--text-muted) 65%, var(--surface));
+    --border-strong: color-mix(in srgb, var(--text-main) 82%, var(--surface));
     --accent-soft: color-mix(in srgb, var(--accent) 18%, transparent);
     --hover: color-mix(in srgb, var(--accent) 10%, var(--bg-card));
     --highlight: color-mix(in srgb, var(--accent) 28%, var(--bg-card));
@@ -40,12 +40,16 @@
 
 .tool-mount--sudoku .sudoku-tool[data-sudoku-theme="light"] {
     --surface: color-mix(in srgb, var(--bg-card) 70%, #ffffff);
+    --border: color-mix(in srgb, var(--text-main) 22%, var(--surface));
+    --border-strong: color-mix(in srgb, var(--text-main) 58%, var(--surface));
     --highlight: color-mix(in srgb, var(--accent) 20%, #f4f4f5);
     --highlight-peer: color-mix(in srgb, var(--text-muted) 10%, #f4f4f5);
 }
 
 .tool-mount--sudoku .sudoku-tool[data-sudoku-theme="blue"] {
     --surface: color-mix(in srgb, var(--bg-card) 82%, #1e3a5f);
+    --border: color-mix(in srgb, #93c5fd 30%, var(--surface));
+    --border-strong: color-mix(in srgb, #e0f2fe 62%, var(--surface));
     --highlight: color-mix(in srgb, #3b82f6 32%, var(--bg-card));
     --highlight-peer: color-mix(in srgb, #60a5fa 14%, var(--bg-card));
     --accent-soft: color-mix(in srgb, #3b82f6 22%, transparent);
@@ -53,6 +57,8 @@
 
 .tool-mount--sudoku .sudoku-tool[data-sudoku-theme="green"] {
     --surface: color-mix(in srgb, var(--bg-card) 82%, #14532d);
+    --border: color-mix(in srgb, #86efac 28%, var(--surface));
+    --border-strong: color-mix(in srgb, #dcfce7 58%, var(--surface));
     --highlight: color-mix(in srgb, #22c55e 30%, var(--bg-card));
     --highlight-peer: color-mix(in srgb, #4ade80 14%, var(--bg-card));
     --accent-soft: color-mix(in srgb, #22c55e 22%, transparent);
@@ -117,6 +123,19 @@
     margin-bottom: 0.5rem;
 }
 
+.sudoku-menu__actions .btn--icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.75rem;
+    min-height: 1.75rem;
+    padding: 0.25rem;
+}
+
+.sudoku-menu__actions .btn--icon svg {
+    display: block;
+}
+
 .sudoku-menu__theme {
     margin-bottom: 0.5rem;
 }
@@ -143,16 +162,9 @@
     transform: scale(1.08);
 }
 
-.sudoku-menu__difficulty {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.75rem;
-    color: var(--text-muted);
-}
-
 .sudoku-menu__difficulty select {
     min-width: 6rem;
+    width: 100%;
 }
 
 .sudoku-menu-scrim {
