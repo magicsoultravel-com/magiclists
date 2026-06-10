@@ -190,7 +190,14 @@
                     <div class="system-status-msg">Loading workspace…</div>
                 </main>
                 <div id="drawing-board" class="drawing-board is-hidden" aria-hidden="true">
-                    <canvas id="drawing-canvas" class="drawing-canvas"></canvas>
+                    <div id="canvas-viewport" class="canvas-viewport">
+                        <div id="canvas-viewport-inner" class="canvas-viewport-inner">
+                            <canvas id="drawing-bg-canvas" class="drawing-bg-canvas"></canvas>
+                            <canvas id="drawing-canvas" class="drawing-canvas"></canvas>
+                            <div id="canvas-text-layer" class="canvas-text-layer"></div>
+                        </div>
+                    </div>
+                    <button type="button" id="canvas-toolbar-fab" class="canvas-toolbar-fab is-hidden" title="Show toolbar" aria-label="Show toolbar"></button>
                 </div>
                 <div id="tools-desktop" class="tools-desktop" aria-live="polite"></div>
             </div>

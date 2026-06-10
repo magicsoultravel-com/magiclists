@@ -39,7 +39,6 @@ const AppState = {
         const mode = localStorage.getItem('matrix_workspace_mode');
         return mode === 'drawing' ? 'drawing' : 'notes';
     })(),
-    sidebarBeforeDrawing: null,
     viewSettings: {
         sortBy: (() => {
             const preferred = localStorage.getItem('matrix_preferred_view') || 'columns';
@@ -274,10 +273,6 @@ class Application {
     updateFabVisibility() {
         const fab = document.getElementById('fab-create');
         if (!fab) return;
-        if (AppState.workspaceMode === 'drawing') {
-            fab.classList.add('is-hidden');
-            return;
-        }
         fab.classList.remove('is-hidden');
         const needsLogin = !AppState.user.isLoggedIn;
         fab.title = needsLogin ? 'New note (login required)' : 'New note';
@@ -317,34 +312,25 @@ class Application {
         const notesActions = document.getElementById('notes-control-actions');
         const drawingActions = document.getElementById('drawing-control-actions');
         const drawBtn = document.getElementById('btn-drawing-mode');
-        const brandHost = document.getElementById('control-bar-brand-host');
 
         if (mode === 'drawing') {
-            AppState.sidebarBeforeDrawing = SidePanel.panel?.classList.contains('is-collapsed') ?? false;
-            SidePanel.setCollapsed(true, false);
-
             shell?.setAttribute('data-drawing-mode', '');
             canvas?.classList.add('is-hidden');
             notesActions?.classList.add('is-hidden');
             drawingActions?.classList.remove('is-hidden');
-            brandHost?.classList.add('is-hidden');
             drawBtn?.classList.add('active');
 
+            DesktopZoom.apply({ enabled: false });
             DrawingBoard.activate(drawingActions);
         } else {
             shell?.removeAttribute('data-drawing-mode');
             canvas?.classList.remove('is-hidden');
             notesActions?.classList.remove('is-hidden');
             drawingActions?.classList.add('is-hidden');
-            brandHost?.classList.remove('is-hidden');
             drawBtn?.classList.remove('active');
 
             DrawingBoard.deactivate();
-
-            if (AppState.sidebarBeforeDrawing != null) {
-                SidePanel.setCollapsed(AppState.sidebarBeforeDrawing, false);
-                AppState.sidebarBeforeDrawing = null;
-            }
+            this.updateDesktopZoomVisibility();
 
             if (AppState.items.length) {
                 UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
@@ -382,7 +368,8 @@ class Application {
             matrix_global_drawing: drawingKeys.matrix_global_drawing ? JSON.parse(drawingKeys.matrix_global_drawing) : null,
             matrix_drawing_prefs: drawingKeys.matrix_drawing_prefs ? JSON.parse(drawingKeys.matrix_drawing_prefs) : null,
             matrix_workspace_mode: drawingKeys.matrix_workspace_mode,
-            matrix_drawing_toolbar_collapsed: drawingKeys.matrix_drawing_toolbar_collapsed
+            matrix_drawing_toolbar_hidden: drawingKeys.matrix_drawing_toolbar_hidden,
+            matrix_canvas_viewport: drawingKeys.matrix_canvas_viewport
         };
         const blob = new Blob([JSON.stringify(backupPackage, null, 2)], { type: 'application/json' });
         const virtualLink = document.createElement('a');
@@ -504,6 +491,10 @@ class Application {
     }
 
     updateDesktopZoomVisibility() {
+        if (AppState.workspaceMode === 'drawing') {
+            DesktopZoom.apply({ enabled: false });
+            return;
+        }
         const show = AppState.user.isLoggedIn && DesktopZoom.isDesktopViewport();
         DesktopZoom.apply({ enabled: show });
     }

@@ -103,7 +103,15 @@ export function applyBackupToStorage(parsedBackup) {
     if (parsedBackup.matrix_workspace_mode != null) {
         localStorage.setItem('matrix_workspace_mode', parsedBackup.matrix_workspace_mode);
     }
+    if (parsedBackup.matrix_drawing_toolbar_hidden != null) {
+        localStorage.setItem('matrix_drawing_toolbar_hidden', parsedBackup.matrix_drawing_toolbar_hidden);
+    }
     if (parsedBackup.matrix_drawing_toolbar_collapsed != null) {
-        localStorage.setItem('matrix_drawing_toolbar_collapsed', parsedBackup.matrix_drawing_toolbar_collapsed);
+        localStorage.setItem('matrix_drawing_toolbar_hidden', parsedBackup.matrix_drawing_toolbar_collapsed);
+    }
+    if (parsedBackup.matrix_canvas_viewport != null) {
+        localStorage.setItem('matrix_canvas_viewport', typeof parsedBackup.matrix_canvas_viewport === 'string'
+            ? parsedBackup.matrix_canvas_viewport
+            : JSON.stringify(parsedBackup.matrix_canvas_viewport));
     }
 }

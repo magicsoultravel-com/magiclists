@@ -14,8 +14,8 @@ export const Alphabets = {
     init(mountElement) {
         this.container = mountElement;
         const saved = parseInt(localStorage.getItem(STORAGE_KEY), 10);
-        if (!Number.isNaN(saved) && saved >= 0 && saved < ALPHABETS.length) {
-            this.index = saved;
+        if (!Number.isNaN(saved) && saved >= 0) {
+            this.index = Math.min(saved, ALPHABETS.length - 1);
         }
         this.renderShell();
         this.bindShellListeners();
@@ -55,6 +55,15 @@ export const Alphabets = {
         }
         if (page.layout === 'kana') {
             return page.rows[0].chars[0].char;
+        }
+        if (page.layout === 'sections') {
+            return page.sections[0].chars[0].char;
+        }
+        if (page.id === 'morse') {
+            return '·−';
+        }
+        if (page.id === 'braille') {
+            return '⠁';
         }
         if (page.chars?.length) {
             return page.chars[0].char;
@@ -189,6 +198,8 @@ export const Alphabets = {
 
         if (page.layout === 'kana') {
             contentEl.innerHTML = this.renderKana(page);
+        } else if (page.layout === 'sections') {
+            contentEl.innerHTML = this.renderSections(page);
         } else if (page.layout === 'case') {
             contentEl.innerHTML = this.renderCaseGrid(page);
         } else if (page.layout === 'arabic') {
@@ -288,11 +299,27 @@ export const Alphabets = {
         `;
     },
 
+    getGridClass(page) {
+        const variant = page.gridClass || (page.id === 'chinese' ? 'chinese' : '');
+        return variant ? `alphabet-grid alphabet-grid--${variant}` : 'alphabet-grid';
+    },
+
     renderGrid(page) {
         const scriptFont = page.fontFamily || 'inherit';
         const cells = (page.chars || []).map((entry) => this.renderCell(entry, scriptFont)).join('');
-        const gridClass = page.id === 'chinese' ? 'alphabet-grid alphabet-grid--chinese' : 'alphabet-grid';
-        return `<div class="${gridClass}">${cells}</div>`;
+        return `<div class="${this.getGridClass(page)}">${cells}</div>`;
+    },
+
+    renderSections(page) {
+        const scriptFont = page.fontFamily || 'inherit';
+        const blocks = (page.sections || []).map((section) => {
+            const cells = section.chars.map((entry) => this.renderCell(entry, scriptFont)).join('');
+            return `
+                <h4 class="alphabet-section__title">${section.title}</h4>
+                <div class="${this.getGridClass(page)}">${cells}</div>
+            `;
+        }).join('');
+        return `<div class="alphabet-sections">${blocks}</div>`;
     },
 
     renderKana(page) {

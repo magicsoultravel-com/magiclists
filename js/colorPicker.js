@@ -27,6 +27,26 @@ export const PALETTE_NOTE = PALETTE_UNIFIED;
 export const PALETTE_DESKTOP = PALETTE_UNIFIED;
 export const PALETTE_CHROME = PALETTE_UNIFIED;
 
+/** Light/bright accents for drawing on dark canvas backgrounds. */
+export const PALETTE_DRAWING = [
+    { value: '#f8fafc', label: 'White' },
+    { value: '#fbbf24', label: 'Yellow' },
+    { value: '#22d3ee', label: 'Cyan' },
+    { value: '#f472b6', label: 'Pink' },
+    { value: '#4ade80', label: 'Green' },
+    { value: '#fb923c', label: 'Orange' },
+    { value: '#f87171', label: 'Red' },
+    { value: '#60a5fa', label: 'Blue' },
+    { value: '#c084fc', label: 'Purple' },
+    { value: '#fde047', label: 'Lemon' },
+    { value: '#94a3b8', label: 'Gray' },
+    { value: '#1e293b', label: 'Ink' },
+    { value: '#ffffff', label: 'Pure' },
+    { value: '#000000', label: 'Black' },
+    { value: '#78350f', label: 'Brown' },
+    { value: '#ecfccb', label: 'Lime' }
+];
+
 export function resolveNoteColor(value) {
     if (value && /^#[0-9a-fA-F]{6}$/.test(value)) return value;
     return THEME_DEFAULT_COLOR;

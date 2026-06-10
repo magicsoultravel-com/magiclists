@@ -5595,20 +5595,17 @@ html[data-app-theme="casual-dark"] .mini-card.compact .card-actions::before {
    DRAWING BOARD
    ========================================================================== */
 
-#workspace-shell[data-drawing-mode] #side-panel {
-    display: none;
-}
-
-#workspace-shell[data-drawing-mode] #fab-create {
-    display: none !important;
-}
-
-#workspace-shell[data-drawing-mode] #digital-clock {
-    display: none;
-}
-
 #workspace-shell[data-drawing-mode] #app-canvas {
     display: none !important;
+}
+
+#control-bar.is-toolbar-hidden {
+    position: absolute;
+    width: 100%;
+    transform: translateY(-100%);
+    opacity: 0;
+    pointer-events: none;
+    visibility: hidden;
 }
 
 .control-bar-actions-group.is-hidden {
@@ -5623,14 +5620,91 @@ html[data-app-theme="casual-dark"] .mini-card.compact .card-actions::before {
     background: var(--desktop-bg, var(--bg-primary));
 }
 
+.canvas-viewport {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    touch-action: none;
+}
+
+.canvas-viewport-inner {
+    position: relative;
+    will-change: transform;
+}
+
+.drawing-bg-canvas,
+.drawing-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: block;
+}
+
+.drawing-canvas {
+    z-index: 1;
+}
+
+.canvas-text-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.canvas-text-box {
+    position: absolute;
+    min-width: 4rem;
+    min-height: 1.2em;
+    padding: 0.15rem 0.25rem;
+    pointer-events: auto;
+    outline: 1px dashed rgba(255, 255, 255, 0.35);
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 0.2rem;
+    white-space: pre-wrap;
+}
+
+.canvas-text-box:empty::before {
+    content: attr(data-placeholder);
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+.canvas-toolbar-fab {
+    position: absolute;
+    top: 0.65rem;
+    right: 0.65rem;
+    z-index: 10;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--chrome-bg, var(--bg-surface));
+    border: 1px solid var(--border-color);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    color: var(--text-primary);
+}
+
+.canvas-toolbar-fab.is-hidden {
+    display: none !important;
+}
+
+.drawing-color-chip-btn {
+    padding: 0.2rem !important;
+}
+
+.drawing-color-chip-btn .drawing-color-chip {
+    width: 1rem;
+    height: 1rem;
+}
+
 .drawing-board.is-hidden {
     display: none !important;
 }
 
 .drawing-canvas {
-    display: block;
-    width: 100%;
-    height: 100%;
     touch-action: none;
     cursor: crosshair;
 }
@@ -5731,7 +5805,9 @@ html[data-app-theme="casual-dark"] .mini-card.compact .card-actions::before {
 }
 
 #control-bar.is-drawing-toolbar .draw-style-btn.active,
-#control-bar.is-drawing-toolbar .draw-tool-btn.active {
+#control-bar.is-drawing-toolbar .draw-tool-btn.active,
+#control-bar.is-drawing-toolbar .draw-mode-btn.active,
+#control-bar.is-drawing-toolbar .draw-bg-btn.active {
     background: color-mix(in srgb, var(--accent) 35%, transparent);
     color: var(--text-main);
 }
@@ -5744,7 +5820,3 @@ html[data-app-theme="casual-dark"] .mini-card.compact .card-actions::before {
     color: var(--accent);
 }
 
-#workspace-shell[data-drawing-mode] #control-bar-search,
-#workspace-shell[data-drawing-mode] #btn-fullscreen {
-    display: none;
-}

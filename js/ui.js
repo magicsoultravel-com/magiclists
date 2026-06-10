@@ -155,6 +155,30 @@ export const ACTION_ICONS = {
     fullscreenExit: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M4.2 4.2H2.8M4.2 4.2V2.8M7.8 4.2h1.4M7.8 4.2V2.8M4.2 7.8H2.8M4.2 7.8v1.4M7.8 7.8h1.4M7.8 7.8v1.4" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg>'
 };
 
+export const DRAWING_ICONS = {
+    pen: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M8.8 1.2 10.8 3.2 4.6 9.4 2.2 9.8l.4-2.4 6.2-6.2z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
+    marker: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.4 8.8h7.2M3.2 8.8l4-5.6 2.4 2.4-4 5.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    highlighter: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2 9.2h8M3.6 9.2l3.2-6 2.4 2.4-3.2 6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
+    pencil: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M7.6 1.6 10.4 4.4 4.2 10.6 1.8 10.8l.2-2.4 5.6-6.8z" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linejoin="round"/></svg>',
+    spray: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="4" cy="5" r="1.2" fill="currentColor" opacity="0.7"/><circle cx="6.5" cy="4" r="0.9" fill="currentColor" opacity="0.5"/><circle cx="8" cy="6.5" r="1" fill="currentColor" opacity="0.6"/><path d="M2 10h8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
+    calligraphy: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3 9.2c2-5 5-7 7-7" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>',
+    brush: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M8.2 1.8c.8.8.8 2 0 2.8L4.8 8l-2.6.4.4-2.6 3.4-3.4c.8-.8 2-.8 2.8 0z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
+    eraser: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.4 7.6 6.4 3.6l3.2 3.2-4 4H2.4z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/><path d="M5.6 10.8h4.8" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg>',
+    line: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 9.8 9.8 2.2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
+    rect: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="2.2" y="3.2" width="7.6" height="5.6" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
+    ellipse: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><ellipse cx="6" cy="6" rx="4" ry="2.8" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
+    text: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.2 2.8h5.6M6 2.8V9.6M4.4 9.6h3.2" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg>',
+    grid: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 2.2v7.6h7.6M4.8 2.2v7.6M7.4 2.2v7.6M2.2 4.8h7.6M2.2 7.4h7.6" fill="none" stroke="currentColor" stroke-width="0.75"/></svg>',
+    notebook: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.6 1.8v8.4M2.2 4h7.6M2.2 6h7.6M2.2 8h7.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
+    staff: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M1.8 4h8.4M1.8 5.2h8.4M1.8 6.4h8.4M1.8 7.6h8.4M1.8 8.8h8.4" fill="none" stroke="currentColor" stroke-width="0.75"/></svg>',
+    pagePrev: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M7 2.4 3.4 6 7 9.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    pageNext: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M5 2.4 8.6 6 5 9.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    pageAdd: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="2.4" y="2" width="7.2" height="8" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 4.4v3.2M4.4 6h3.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
+    zoomIn: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="5.2" cy="5.2" r="3.2" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M7.6 7.6 10 10M5.2 3.6v3.2M3.6 5.2h3.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
+    zoomOut: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="5.2" cy="5.2" r="3.2" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M7.6 7.6 10 10M3.6 5.2h3.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
+    exportPng: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="2" y="2.4" width="8" height="6.4" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M4.4 7.2 5.8 5.6 7.2 7.2M2 10h8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+};
+
 const SAVED_VIEWS_KEY = 'matrix_saved_views';
 const SAVED_VIEWS_SLOTS = 3;
 
