@@ -147,21 +147,227 @@ export function drawBrushStroke(ctx, stroke) {
     ctx.restore();
 }
 
+function shapeBBox(stroke) {
+    const { x0, y0, x1, y1 } = stroke;
+    const left = Math.min(x0, x1);
+    const top = Math.min(y0, y1);
+    const w = Math.abs(x1 - x0);
+    const h = Math.abs(y1 - y0);
+    return { left, top, right: left + w, bottom: top + h, w, h, cx: left + w / 2, cy: top + h / 2 };
+}
+
+function drawArrow(ctx, stroke) {
+    const { x0, y0, x1, y1 } = stroke;
+    const head = Math.max(8, (stroke.width || 2) * 3);
+    const ang = Math.atan2(y1 - y0, x1 - x0);
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - head * Math.cos(ang - 0.45), y1 - head * Math.sin(ang - 0.45));
+    ctx.lineTo(x1 - head * Math.cos(ang + 0.45), y1 - head * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fillStyle = stroke.color;
+    ctx.fill();
+}
+
+function drawTriangle(ctx, b) {
+    ctx.beginPath();
+    ctx.moveTo(b.cx, b.top);
+    ctx.lineTo(b.left, b.bottom);
+    ctx.lineTo(b.right, b.bottom);
+    ctx.closePath();
+    ctx.stroke();
+}
+
+function drawDiamond(ctx, b) {
+    ctx.beginPath();
+    ctx.moveTo(b.cx, b.top);
+    ctx.lineTo(b.right, b.cy);
+    ctx.lineTo(b.cx, b.bottom);
+    ctx.lineTo(b.left, b.cy);
+    ctx.closePath();
+    ctx.stroke();
+}
+
+function drawRoundedRect(ctx, b) {
+    const r = Math.min(12, b.w / 4, b.h / 4);
+    if (typeof ctx.roundRect === 'function') {
+        ctx.beginPath();
+        ctx.roundRect(b.left, b.top, Math.max(b.w, 1), Math.max(b.h, 1), r);
+        ctx.stroke();
+        return;
+    }
+    ctx.strokeRect(b.left, b.top, Math.max(b.w, 1), Math.max(b.h, 1));
+}
+
+function drawStar(ctx, b) {
+    const outer = Math.min(b.w, b.h) / 2;
+    const inner = outer * 0.42;
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+        const r = i % 2 === 0 ? outer : inner;
+        const ang = -Math.PI / 2 + (i * Math.PI) / 5;
+        const x = b.cx + r * Math.cos(ang);
+        const y = b.cy + r * Math.sin(ang);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+}
+
+function drawChevron(ctx, b) {
+    const inset = b.w * 0.2;
+    ctx.beginPath();
+    ctx.moveTo(b.left, b.top);
+    ctx.lineTo(b.right - inset, b.cy);
+    ctx.lineTo(b.left, b.bottom);
+    ctx.stroke();
+}
+
+function drawTrapezoid(ctx, b) {
+    const inset = b.w * 0.2;
+    ctx.beginPath();
+    ctx.moveTo(b.left + inset, b.top);
+    ctx.lineTo(b.right - inset, b.top);
+    ctx.lineTo(b.right, b.bottom);
+    ctx.lineTo(b.left, b.bottom);
+    ctx.closePath();
+    ctx.stroke();
+}
+
+function drawParallelogram(ctx, b) {
+    const skew = b.w * 0.25;
+    ctx.beginPath();
+    ctx.moveTo(b.left + skew, b.top);
+    ctx.lineTo(b.right, b.top);
+    ctx.lineTo(b.right - skew, b.bottom);
+    ctx.lineTo(b.left, b.bottom);
+    ctx.closePath();
+    ctx.stroke();
+}
+
+function drawCube(ctx, b) {
+    const d = Math.min(b.w, b.h) * 0.28;
+    const fL = b.left, fT = b.top + d, fR = b.right - d, fB = b.bottom;
+    const bL = b.left + d, bT = b.top, bR = b.right, bB = b.bottom - d;
+    ctx.beginPath();
+    ctx.rect(fL, fT, fR - fL, fB - fT);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(fL, fT); ctx.lineTo(bL, bT);
+    ctx.moveTo(fR, fT); ctx.lineTo(bR, bT);
+    ctx.moveTo(fR, fB); ctx.lineTo(bR, bB);
+    ctx.moveTo(bL, bT); ctx.lineTo(bR, bT); ctx.lineTo(bR, bB); ctx.lineTo(bL, bB); ctx.lineTo(bL, bT);
+    ctx.stroke();
+}
+
+function drawPyramid(ctx, b) {
+    const inset = b.w * 0.08;
+    ctx.beginPath();
+    ctx.rect(b.left + inset, b.bottom - Math.min(b.w, b.h) * 0.35, b.w - inset * 2, Math.min(b.w, b.h) * 0.35);
+    ctx.stroke();
+    const apexX = b.cx;
+    const apexY = b.top;
+    const bl = b.left + inset;
+    const br = b.right - inset;
+    const bb = b.bottom;
+    ctx.beginPath();
+    ctx.moveTo(apexX, apexY);
+    ctx.lineTo(bl, bb);
+    ctx.moveTo(apexX, apexY);
+    ctx.lineTo(br, bb);
+    ctx.moveTo(apexX, apexY);
+    ctx.lineTo(b.cx, bb - Math.min(b.w, b.h) * 0.35);
+    ctx.stroke();
+}
+
+function drawCylinder(ctx, b) {
+    const ry = Math.max(b.h * 0.12, 4);
+    const topY = b.top + ry;
+    const botY = b.bottom - ry;
+    ctx.beginPath();
+    ctx.ellipse(b.cx, topY, Math.max(b.w / 2, 1), ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(b.cx, botY, Math.max(b.w / 2, 1), ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(b.left, topY);
+    ctx.lineTo(b.left, botY);
+    ctx.moveTo(b.right, topY);
+    ctx.lineTo(b.right, botY);
+    ctx.stroke();
+}
+
+function drawSphere(ctx, b) {
+    const rx = Math.max(b.w / 2, 1);
+    const ry = Math.max(b.h / 2, 1);
+    ctx.beginPath();
+    ctx.ellipse(b.cx, b.cy, rx, ry, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(b.cx, b.cy, rx * 0.92, ry * 0.35, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(b.cx, b.cy, rx * 0.35, ry * 0.92, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(b.cx, b.top);
+    ctx.lineTo(b.cx, b.bottom);
+    ctx.stroke();
+}
+
 export function drawShapeStroke(ctx, stroke) {
     const cfg = STYLE_CONFIG[stroke.style] || STYLE_CONFIG.pen;
     ctx.save();
     ctx.strokeStyle = stroke.color;
+    ctx.fillStyle = stroke.color;
     ctx.lineWidth = (stroke.width || 2) * cfg.widthMul;
     ctx.globalAlpha = cfg.alpha;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
     const { x0, y0, x1, y1, tool } = stroke;
-    ctx.beginPath();
-    if (tool === 'line') { ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); }
-    else if (tool === 'rect') { ctx.strokeRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0)); }
-    else if (tool === 'ellipse') {
-        ctx.ellipse((x0 + x1) / 2, (y0 + y1) / 2, Math.max(Math.abs(x1 - x0) / 2, 0.5), Math.max(Math.abs(y1 - y0) / 2, 0.5), 0, 0, Math.PI * 2);
+    const b = shapeBBox(stroke);
+
+    if (tool === 'line') {
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
         ctx.stroke();
+    } else if (tool === 'arrow') {
+        drawArrow(ctx, stroke);
+    } else if (tool === 'rect') {
+        ctx.strokeRect(b.left, b.top, Math.max(b.w, 1), Math.max(b.h, 1));
+    } else if (tool === 'rounded_rect') {
+        drawRoundedRect(ctx, b);
+    } else if (tool === 'ellipse') {
+        ctx.beginPath();
+        ctx.ellipse(b.cx, b.cy, Math.max(b.w / 2, 0.5), Math.max(b.h / 2, 0.5), 0, 0, Math.PI * 2);
+        ctx.stroke();
+    } else if (tool === 'triangle') {
+        drawTriangle(ctx, b);
+    } else if (tool === 'diamond') {
+        drawDiamond(ctx, b);
+    } else if (tool === 'star') {
+        drawStar(ctx, b);
+    } else if (tool === 'chevron') {
+        drawChevron(ctx, b);
+    } else if (tool === 'trapezoid') {
+        drawTrapezoid(ctx, b);
+    } else if (tool === 'parallelogram') {
+        drawParallelogram(ctx, b);
+    } else if (tool === 'cube') {
+        drawCube(ctx, b);
+    } else if (tool === 'pyramid') {
+        drawPyramid(ctx, b);
+    } else if (tool === 'cylinder') {
+        drawCylinder(ctx, b);
+    } else if (tool === 'sphere') {
+        drawSphere(ctx, b);
     }
     ctx.restore();
 }

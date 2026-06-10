@@ -6,11 +6,12 @@ let menuEl = null;
 let anchorEl = null;
 let outsideHandler = null;
 let keyHandler = null;
+let menuState = null;
 
 function ensureMenu() {
     if (!menuEl) {
         menuEl = document.createElement('div');
-        menuEl.className = 'drawing-toolbar-menu is-hidden';
+        menuEl.className = 'drawing-toolbar-menu clock-style-popover is-hidden';
         menuEl.setAttribute('role', 'menu');
         document.body.appendChild(menuEl);
     }
@@ -28,71 +29,132 @@ function detachListeners() {
     }
 }
 
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function renderItemsHtml(items, selected) {
+    return items.map((item) => {
+        if (item.heading) {
+            return `<p class="drawing-menu-heading display-options-heading">${escapeHtml(item.heading)}</p>`;
+        }
+        if (item.divider) return '<div class="drawing-menu-divider" role="separator" aria-hidden="true"></div>';
+        if (item.stepper) {
+            return `<div class="display-options-stepper-row drawing-menu-stepper-row">
+                <span class="display-options-stepper-label">${escapeHtml(item.label)}</span>
+                <span class="display-options-stepper" aria-label="${escapeHtml(item.label)}">
+                    <button type="button" class="btn btn--compact btn--icon display-options-stepper-btn drawing-menu-stepper-out" data-stepper-id="${item.id}" title="Decrease" aria-label="Decrease ${escapeHtml(item.label)}">−</button>
+                    <span class="display-options-stepper-value drawing-menu-stepper-value">${escapeHtml(item.value)}</span>
+                    <button type="button" class="btn btn--compact btn--icon display-options-stepper-btn drawing-menu-stepper-in" data-stepper-id="${item.id}" title="Increase" aria-label="Increase ${escapeHtml(item.label)}">+</button>
+                </span>
+            </div>`;
+        }
+        const isSelected = item.selected === true || item.id === selected;
+        return `<button type="button" class="drawing-menu-option${isSelected ? ' is-selected' : ''}" data-id="${item.id}" role="menuitem"${item.disabled ? ' disabled' : ''}>
+            <span class="drawing-menu-icon">${item.icon || ''}</span>
+            <span class="drawing-menu-label">${escapeHtml(item.label)}</span>
+            ${isSelected ? '<span class="drawing-menu-check" aria-hidden="true">✓</span>' : ''}
+        </button>`;
+    }).join('');
+}
+
+function bindMenuInteractions(menu, { onSelect, onStepper }) {
+    menu.querySelectorAll('.drawing-menu-option:not([disabled])').forEach((btn) => {
+        btn.addEventListener('mousedown', (e) => e.stopPropagation());
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.id;
+            DrawingToolbarMenu.close();
+            onSelect?.(id);
+        });
+    });
+
+    menu.querySelectorAll('.drawing-menu-stepper-out').forEach((btn) => {
+        btn.addEventListener('mousedown', (e) => e.stopPropagation());
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            onStepper?.(btn.dataset.stepperId, -1);
+        });
+    });
+
+    menu.querySelectorAll('.drawing-menu-stepper-in').forEach((btn) => {
+        btn.addEventListener('mousedown', (e) => e.stopPropagation());
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            onStepper?.(btn.dataset.stepperId, 1);
+        });
+    });
+}
+
 export const DrawingToolbarMenu = {
     close() {
         detachListeners();
         if (menuEl) menuEl.classList.add('is-hidden');
         anchorEl?.setAttribute('aria-expanded', 'false');
         anchorEl = null;
+        menuState = null;
     },
 
     isOpen() {
         return menuEl && !menuEl.classList.contains('is-hidden');
     },
 
-    toggle({ anchor, ariaLabel, items, selected, onSelect }) {
-        if (this.isOpen() && anchorEl === anchor) {
+    setItems(items, selected) {
+        if (!menuState) return;
+        menuState.items = items;
+        if (selected !== undefined) menuState.selected = selected;
+        this.refresh();
+    },
+
+    refresh() {
+        if (!menuState || !anchorEl || !menuEl) return;
+        const { items, selected, onSelect, onStepper, ariaLabel } = menuState;
+        menuEl.setAttribute('aria-label', ariaLabel || 'Menu');
+        menuEl.innerHTML = `<div class="drawing-menu-list">${renderItemsHtml(items, selected)}</div>`;
+        bindMenuInteractions(menuEl, { onSelect, onStepper });
+        positionPopoverBelowAnchor(menuEl, anchorEl);
+    },
+
+    toggle(state) {
+        if (this.isOpen() && anchorEl === state.anchor) {
             this.close();
             return;
         }
-        this.open({ anchor, ariaLabel, items, selected, onSelect });
+        this.open(state);
     },
 
-    open({ anchor, ariaLabel, items, selected, onSelect }) {
+    open({ anchor, ariaLabel, items, selected, onSelect, onStepper }) {
         if (!anchor || !items?.length) return;
-        this.close();
+
+        const wasSameAnchor = anchorEl === anchor && this.isOpen();
+        if (!wasSameAnchor) this.close();
 
         anchorEl = anchor;
+        menuState = { anchor, ariaLabel, items, selected, onSelect, onStepper };
         const menu = ensureMenu();
         menu.setAttribute('aria-label', ariaLabel || 'Menu');
-
-        const html = items.map((item) => {
-            if (item.divider) return '<div class="drawing-menu-divider" role="separator" aria-hidden="true"></div>';
-            const isSelected = item.selected === true || item.id === selected;
-            return `<button type="button" class="drawing-menu-option${isSelected ? ' is-selected' : ''}" data-id="${item.id}" role="menuitem"${item.disabled ? ' disabled' : ''}>
-                <span class="drawing-menu-icon">${item.icon || ''}</span>
-                <span class="drawing-menu-label">${item.label}</span>
-                ${isSelected ? '<span class="drawing-menu-check" aria-hidden="true">✓</span>' : ''}
-            </button>`;
-        }).join('');
-
-        menu.innerHTML = `<div class="drawing-menu-list">${html}</div>`;
-
-        menu.querySelectorAll('.drawing-menu-option:not([disabled])').forEach((btn) => {
-            btn.addEventListener('mousedown', (e) => e.stopPropagation());
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const id = btn.dataset.id;
-                this.close();
-                onSelect?.(id);
-            });
-        });
+        menu.innerHTML = `<div class="drawing-menu-list">${renderItemsHtml(items, selected)}</div>`;
+        bindMenuInteractions(menu, { onSelect, onStepper });
 
         menu.classList.remove('is-hidden');
         anchor.setAttribute('aria-expanded', 'true');
         positionPopoverBelowAnchor(menu, anchor);
 
-        outsideHandler = (e) => {
-            if (menu.contains(e.target) || anchor.contains(e.target)) return;
-            this.close();
-        };
-        keyHandler = (e) => {
-            if (e.key === 'Escape') this.close();
-        };
-        requestAnimationFrame(() => {
-            document.addEventListener('mousedown', outsideHandler, true);
-            document.addEventListener('keydown', keyHandler);
-        });
+        if (!wasSameAnchor) {
+            detachListeners();
+            outsideHandler = (e) => {
+                if (menu.contains(e.target) || anchor.contains(e.target)) return;
+                this.close();
+            };
+            keyHandler = (e) => {
+                if (e.key === 'Escape') this.close();
+            };
+            requestAnimationFrame(() => {
+                document.addEventListener('mousedown', outsideHandler, true);
+                document.addEventListener('keydown', keyHandler);
+            });
+        }
     }
 };
 

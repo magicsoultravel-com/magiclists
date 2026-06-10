@@ -34,25 +34,54 @@ const POINTER_ITEMS = [
     { id: 'eraser', label: 'Eraser' }
 ];
 
+const DRAG_SHAPE_TOOLS = [
+    'line', 'arrow', 'rect', 'rounded_rect', 'ellipse', 'triangle', 'diamond',
+    'star', 'chevron', 'trapezoid', 'parallelogram', 'cube', 'pyramid', 'cylinder', 'sphere'
+];
+
 const SHAPE_ITEMS = [
     { id: 'line', label: 'Line' },
+    { id: 'arrow', label: 'Arrow' },
     { id: 'rect', label: 'Rectangle' },
+    { id: 'rounded_rect', label: 'Rounded rectangle' },
     { id: 'ellipse', label: 'Ellipse' },
+    { id: 'triangle', label: 'Triangle' },
+    { id: 'diamond', label: 'Diamond' },
+    { id: 'star', label: 'Star' },
+    { id: 'chevron', label: 'Chevron' },
+    { id: 'trapezoid', label: 'Trapezoid' },
+    { id: 'parallelogram', label: 'Parallelogram' },
+    { id: 'cube', label: 'Cube' },
+    { id: 'pyramid', label: 'Pyramid' },
+    { id: 'cylinder', label: 'Cylinder' },
+    { id: 'sphere', label: 'Sphere' },
     { id: 'text', label: 'Text' }
 ];
+
+const GRID_BACKGROUNDS = [
+    { id: 'grid', label: 'Grid' },
+    { id: 'dots', label: 'Dot grid' },
+    { id: 'graph', label: 'Graph paper' },
+    { id: 'coarse', label: 'Coarse grid' },
+    { id: 'isometric', label: 'Isometric' },
+    { id: 'hex', label: 'Hex grid' }
+];
+
+const WRITING_BACKGROUNDS = [
+    { id: 'ruled', label: 'Ruled' },
+    { id: 'notebook', label: 'Notebook' },
+    { id: 'staff', label: 'Staff' }
+];
+
+function isDragShape(tool) {
+    return DRAG_SHAPE_TOOLS.includes(tool);
+}
 
 const FORMAT_ITEMS = [
     { id: 'a4', label: 'A4 page' },
     { id: 'a5', label: 'A5 page' },
     { id: 'a3', label: 'A3 page' },
     { id: 'infinite', label: 'Infinite canvas' }
-];
-
-const TYPE_ITEMS = [
-    { id: 'blank', label: 'Blank' },
-    { id: 'grid', label: 'Grid' },
-    { id: 'notebook', label: 'Notebook' },
-    { id: 'staff', label: 'Staff' }
 ];
 
 const EXPORT_ITEMS = [
@@ -86,7 +115,7 @@ function readPrefs() {
         });
         return {
             activeStyle: BRUSH_STYLES.includes(raw?.activeStyle) ? raw.activeStyle : 'pen',
-            activeTool: ['brush', 'eraser', 'line', 'rect', 'ellipse', 'text'].includes(raw?.activeTool) ? raw.activeTool : 'brush',
+            activeTool: ['brush', 'eraser', 'text', ...DRAG_SHAPE_TOOLS].includes(raw?.activeTool) ? raw.activeTool : 'brush',
             styles
         };
     } catch {
@@ -338,12 +367,22 @@ export const DrawingBoard = {
         this.renderToolbar();
     },
 
-    adjustWidth(delta) {
+    adjustWidth(delta, { refreshMenu = false } = {}) {
         const style = this.activeStyle;
         const cur = this.prefs.styles[style]?.width ?? DEFAULT_WIDTH;
         this.prefs.styles[style].width = Math.max(WIDTH_MIN, Math.min(WIDTH_MAX, cur + delta));
         writePrefs(this.prefs);
-        this.renderToolbar();
+        if (refreshMenu && DrawingToolbarMenu.isOpen()) {
+            DrawingToolbarMenu.setItems(this.pointerMenuItems(), this.pointerSelected());
+            this.updatePointerWidthLabel();
+        } else {
+            this.renderToolbar();
+        }
+    },
+
+    updatePointerWidthLabel() {
+        const label = this.toolbarEl?.querySelector('#draw-pointer-width');
+        if (label) label.textContent = this.currentBrush().width + 'px';
     },
 
     setColor(color, { rerender = true } = {}) {
@@ -418,7 +457,7 @@ export const DrawingBoard = {
             return;
         }
 
-        if (['line', 'rect', 'ellipse'].includes(this.activeTool)) {
+        if (isDragShape(this.activeTool)) {
             const brush = this.currentBrush();
             this.shapePreview = {
                 id: createId('stroke'),
@@ -636,10 +675,32 @@ export const DrawingBoard = {
     },
 
     shapeTriggerIcon() {
-        if (SHAPE_ITEMS.some((item) => item.id === this.activeTool)) {
-            return DRAWING_ICONS[this.activeTool] || DRAWING_ICONS.line;
-        }
-        return DRAWING_ICONS.line;
+        return DRAWING_ICONS.shapes || DRAWING_ICONS.line;
+    },
+
+    pointerMenuItems() {
+        const brush = this.currentBrush();
+        const items = this.menuItemsWithIcons(POINTER_ITEMS);
+        items.push({ divider: true });
+        items.push({ stepper: true, id: 'brush-width', label: 'Size', value: `${brush.width}px` });
+        return items;
+    },
+
+    openPointerMenu(anchor) {
+        DrawingToolbarMenu.toggle({
+            anchor,
+            ariaLabel: 'Pointer tools',
+            items: this.pointerMenuItems(),
+            selected: this.pointerSelected(),
+            onSelect: (id) => {
+                if (id === 'eraser') this.setTool('eraser');
+                else this.setStyle(id);
+                this.renderToolbar();
+            },
+            onStepper: (id, delta) => {
+                if (id === 'brush-width') this.adjustWidth(delta, { refreshMenu: true });
+            }
+        });
     },
 
     formatTriggerLabel() {
@@ -653,34 +714,43 @@ export const DrawingBoard = {
     },
 
     menuItemsWithIcons(items) {
-        return items.map((item) => ({
-            ...item,
-            icon: item.divider ? '' : (item.icon || DRAWING_ICONS[item.id] || DRAWING_ICONS[item.iconKey || item.id] || '')
-        }));
+        return items.map((item) => {
+            if (item.heading || item.divider || item.stepper) return { ...item };
+            return {
+                ...item,
+                icon: item.icon || DRAWING_ICONS[item.id] || DRAWING_ICONS[item.iconKey || item.id] || ''
+            };
+        });
     },
 
-    canvasMenuItems() {
-        const mode = this.doc.canvasMode;
-        const bg = getActiveBackground(this.doc);
-        const items = this.menuItemsWithIcons(FORMAT_ITEMS.map((item) => ({
+    backgroundMenuItems(bg) {
+        const withSel = (list) => this.menuItemsWithIcons(list.map((item) => ({
             ...item,
-            selected: item.id === mode
-        })));
-        items.push({ divider: true });
-        items.push(...this.menuItemsWithIcons(TYPE_ITEMS.map((item) => ({
-            ...item,
-            iconKey: item.id === 'blank' ? 'rect' : item.id,
+            iconKey: item.iconKey || item.id,
             selected: item.id === bg
+        })));
+        const items = [];
+        items.push({ heading: 'Page format' });
+        items.push(...this.menuItemsWithIcons(FORMAT_ITEMS.map((item) => ({
+            ...item,
+            selected: item.id === this.doc.canvasMode
         }))));
+        items.push({ divider: true });
+        items.push({ heading: 'Background' });
+        items.push(...withSel([{ id: 'blank', label: 'Blank', iconKey: 'blank' }]));
+        items.push({ heading: 'Grids' });
+        items.push(...withSel(GRID_BACKGROUNDS));
+        items.push({ heading: 'Writing' });
+        items.push(...withSel(WRITING_BACKGROUNDS));
         if (this.doc.canvasMode !== 'infinite') {
-            items.push({ divider: true });
+            items.push({ heading: 'Pages' });
             items.push(
                 { id: 'page-prev', label: 'Previous page', icon: DRAWING_ICONS.pagePrev },
                 { id: 'page-next', label: 'Next page', icon: DRAWING_ICONS.pageNext },
                 { id: 'page-add', label: 'Add page', icon: DRAWING_ICONS.pageAdd }
             );
         }
-        items.push({ divider: true });
+        items.push({ heading: 'Fill' });
         const swatch = this.pageBackgroundSwatch();
         items.push({
             id: 'bg-color',
@@ -688,6 +758,10 @@ export const DrawingBoard = {
             icon: `<span class="drawing-menu-swatch" style="background:${swatch}"></span>`
         });
         return items;
+    },
+
+    canvasMenuItems() {
+        return this.backgroundMenuItems(getActiveBackground(this.doc));
     },
 
     handleCanvasMenu(id, anchor) {
@@ -714,7 +788,7 @@ export const DrawingBoard = {
             this.setCanvasMode(id);
             return;
         }
-        if (TYPE_ITEMS.some((item) => item.id === id)) {
+        if (BACKGROUNDS.includes(id)) {
             this.setBackground(id);
         }
     },
@@ -728,14 +802,9 @@ export const DrawingBoard = {
         this.toolbarEl.innerHTML = `
             <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-pointer" aria-haspopup="menu" aria-expanded="false" title="Pointer tools" aria-label="Pointer tools">
                 <span class="drawing-dropdown-icon">${this.pointerTriggerIcon()}</span>
+                <span class="drawing-dropdown-width" id="draw-pointer-width">${brush.width}px</span>
                 <span class="drawing-dropdown-chevron">${CHEVRON}</span>
             </button>
-            <span class="format-toolbar-sep" aria-hidden="true"></span>
-            <div class="drawing-toolbar-group drawing-width-control">
-                <button type="button" class="btn btn--compact btn--icon" id="draw-width-down" title="Thinner" aria-label="Thinner">−</button>
-                <span class="drawing-width-label" id="draw-width-label">${brush.width}px</span>
-                <button type="button" class="btn btn--compact btn--icon" id="draw-width-up" title="Thicker" aria-label="Thicker">+</button>
-            </div>
             <span class="format-toolbar-sep" aria-hidden="true"></span>
             <div class="drawing-color-group" id="draw-color-group">
                 <button type="button" class="btn btn--compact btn--icon drawing-color-chip-btn" id="draw-color-btn" title="Color" aria-label="Color" aria-expanded="false" style="--chip-color:${brush.color}">
@@ -782,8 +851,6 @@ export const DrawingBoard = {
         q('#draw-undo')?.addEventListener('click', () => this.undo());
         q('#draw-redo')?.addEventListener('click', () => this.redo());
         q('#draw-clear')?.addEventListener('click', () => this.clearAll());
-        q('#draw-width-down')?.addEventListener('click', () => this.adjustWidth(-1));
-        q('#draw-width-up')?.addEventListener('click', () => this.adjustWidth(1));
         q('#draw-color-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             this.toggleColorRollout(e.currentTarget);
@@ -799,17 +866,7 @@ export const DrawingBoard = {
 
         q('#draw-menu-pointer')?.addEventListener('click', (e) => {
             e.stopPropagation();
-            DrawingToolbarMenu.toggle({
-                anchor: e.currentTarget,
-                ariaLabel: 'Pointer tools',
-                items: this.menuItemsWithIcons(POINTER_ITEMS),
-                selected: this.pointerSelected(),
-                onSelect: (id) => {
-                    if (id === 'eraser') this.setTool('eraser');
-                    else this.setStyle(id);
-                    this.renderToolbar();
-                }
-            });
+            this.openPointerMenu(e.currentTarget);
         });
 
         q('#draw-menu-shapes')?.addEventListener('click', (e) => {
@@ -856,8 +913,7 @@ export const DrawingBoard = {
         if (!this.toolbarEl) return;
         this.toolbarEl.querySelector('#draw-undo')?.toggleAttribute('disabled', !this.history.canUndo);
         this.toolbarEl.querySelector('#draw-redo')?.toggleAttribute('disabled', !this.history.canRedo);
-        const label = this.toolbarEl.querySelector('#draw-width-label');
-        if (label) label.textContent = this.currentBrush().width + 'px';
+        this.updatePointerWidthLabel();
     },
 
     handleKeydown(e) {

@@ -164,13 +164,33 @@ export const DRAWING_ICONS = {
     calligraphy: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3 9.2c2-5 5-7 7-7" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>',
     brush: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M8.2 1.8c.8.8.8 2 0 2.8L4.8 8l-2.6.4.4-2.6 3.4-3.4c.8-.8 2-.8 2.8 0z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
     eraser: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.4 7.6 6.4 3.6l3.2 3.2-4 4H2.4z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/><path d="M5.6 10.8h4.8" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg>',
+    shapes: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.8" y="4.2" width="4.2" height="4.2" rx="0.3" fill="none" stroke="currentColor" stroke-width="0.85"/><circle cx="8.2" cy="4.8" r="2.1" fill="none" stroke="currentColor" stroke-width="0.85"/><path d="M7.2 9.2 9.6 7.2 10.8 9.8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     line: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 9.8 9.8 2.2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
+    arrow: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2 6h6.2M6.8 3.4 10 6l-3.2 2.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     rect: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="2.2" y="3.2" width="7.6" height="5.6" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
+    rounded_rect: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="2.2" y="3.4" width="7.6" height="5.4" rx="1.6" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
     ellipse: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><ellipse cx="6" cy="6" rx="4" ry="2.8" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
+    triangle: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 2.4 10.2 9.6H1.8Z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
+    diamond: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.8 10.2 6 6 10.2 1.8 6Z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
+    star: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.6 7.4 4.8 10.8 5.1 8.2 7.2 9 10.6 6 8.9 3 10.6 3.8 7.2 1.2 5.1 4.6 4.8Z" fill="none" stroke="currentColor" stroke-width="0.8" stroke-linejoin="round"/></svg>',
+    chevron: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.4 2.4 7.8 6 2.4 9.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    trapezoid: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.2 3.2h5.6L10.2 8.8H1.8Z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
+    parallelogram: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.6 3.2h6.6L9 8.8H2.4Z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
+    cube: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.4 5.2V9.2h5.2V5.2M2.4 5.2l2.6-2 5.2 2M7.6 3.2V7.2l2.6 2V5.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linejoin="round"/></svg>',
+    pyramid: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.8 10.2 9H1.8ZM6 1.8 1.8 9M6 1.8 10.2 9" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linejoin="round"/></svg>',
+    cylinder: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><ellipse cx="6" cy="3.6" rx="3.6" ry="1.2" fill="none" stroke="currentColor" stroke-width="0.85"/><path d="M2.4 3.6V8.4M9.6 3.6V8.4" fill="none" stroke="currentColor" stroke-width="0.85"/><ellipse cx="6" cy="8.4" rx="3.6" ry="1.2" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
+    sphere: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" stroke-width="0.85"/><ellipse cx="6" cy="6" rx="4" ry="1.5" fill="none" stroke="currentColor" stroke-width="0.75"/><path d="M6 2v8" fill="none" stroke="currentColor" stroke-width="0.75"/></svg>',
     text: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.2 2.8h5.6M6 2.8V9.6M4.4 9.6h3.2" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg>',
     grid: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 2.2v7.6h7.6M4.8 2.2v7.6M7.4 2.2v7.6M2.2 4.8h7.6M2.2 7.4h7.6" fill="none" stroke="currentColor" stroke-width="0.75"/></svg>',
+    dots: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="3" cy="3" r="0.7" fill="currentColor"/><circle cx="6" cy="3" r="0.7" fill="currentColor"/><circle cx="9" cy="3" r="0.7" fill="currentColor"/><circle cx="3" cy="6" r="0.7" fill="currentColor"/><circle cx="6" cy="6" r="0.7" fill="currentColor"/><circle cx="9" cy="6" r="0.7" fill="currentColor"/><circle cx="3" cy="9" r="0.7" fill="currentColor"/><circle cx="6" cy="9" r="0.7" fill="currentColor"/><circle cx="9" cy="9" r="0.7" fill="currentColor"/></svg>',
+    graph: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2 2v8h8M4 2v8M6 2v8M8 2v8M2 4h8M2 6h8M2 8h8" fill="none" stroke="currentColor" stroke-width="0.55"/><path d="M2 2v8h8" fill="none" stroke="currentColor" stroke-width="0.95"/></svg>',
+    coarse: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M1.8 1.8v8.4h8.4M6 1.8v8.4M1.8 6h8.4" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
+    isometric: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M1.5 10 6 2.5 10.5 10M3 7.5h6" fill="none" stroke="currentColor" stroke-width="0.8" stroke-linejoin="round"/></svg>',
+    ruled: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M1.8 3.6h8.4M1.8 6h8.4M1.8 8.4h8.4" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
+    hex: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.8 9.6 3.8v4L6 9.8 2.4 7.8v-4Z" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linejoin="round"/></svg>',
     notebook: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.6 1.8v8.4M2.2 4h7.6M2.2 6h7.6M2.2 8h7.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    staff: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M1.8 4h8.4M1.8 5.2h8.4M1.8 6.4h8.4M1.8 7.6h8.4M1.8 8.8h8.4" fill="none" stroke="currentColor" stroke-width="0.75"/></svg>',
+    staff: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 3.2c.6-1 1.4-1.4 2.2-1.2-.4 2.2.2 4.2 1.6 5.6M1.8 4.8h8M1.8 6h8M1.8 7.2h8M1.8 8.4h8" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linecap="round"/></svg>',
+    blank: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="2.4" y="2.4" width="7.2" height="7.2" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.85" stroke-dasharray="1.6 1.2"/></svg>',
     pagePrev: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M7 2.4 3.4 6 7 9.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     pageNext: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M5 2.4 8.6 6 5 9.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     pageAdd: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="2.4" y="2" width="7.2" height="8" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 4.4v3.2M4.4 6h3.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
@@ -296,26 +316,88 @@ export function collectStepSubtree(steps, startIndex) {
     return subtree;
 }
 
-export function reorderActiveStepsPreservingSubtrees(activeSteps, visibleRootIdsInOrder) {
-    const used = new Set();
+export function getStepRowLevel(row) {
+    const n = Number(row?.dataset?.level);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    return Math.min(4, Math.floor(n));
+}
+
+export function collectDomRowBlock(rows, row) {
+    const idx = rows.indexOf(row);
+    if (idx < 0) return [row];
+    const level = getStepRowLevel(row);
+    const block = [row];
+    for (let i = idx + 1; i < rows.length; i++) {
+        if (getStepRowLevel(rows[i]) <= level) break;
+        block.push(rows[i]);
+    }
+    return block;
+}
+
+function findParentRowIndex(rows, rowIndex) {
+    const level = getStepRowLevel(rows[rowIndex]);
+    if (level <= 0) return -1;
+    for (let i = rowIndex - 1; i >= 0; i--) {
+        if (getStepRowLevel(rows[i]) < level) return i;
+    }
+    return -1;
+}
+
+export function clampChecklistInsertIndex(allRows, block, insertIndexInOthers) {
+    const others = allRows.filter((row) => !block.includes(row));
+    const firstIdx = allRows.indexOf(block[0]);
+    if (firstIdx < 0) return insertIndexInOthers;
+
+    const blockLevel = getStepRowLevel(block[0]);
+    const parentIdx = findParentRowIndex(allRows, firstIdx);
+    let minIndex = 0;
+    if (parentIdx >= 0) {
+        const parentRow = allRows[parentIdx];
+        const parentInOthers = others.indexOf(parentRow);
+        minIndex = parentInOthers >= 0 ? parentInOthers + 1 : 0;
+    }
+
+    let maxIndex = others.length;
+    for (let i = firstIdx + block.length; i < allRows.length; i++) {
+        if (getStepRowLevel(allRows[i]) < blockLevel) {
+            const boundaryInOthers = others.indexOf(allRows[i]);
+            maxIndex = boundaryInOthers >= 0 ? boundaryInOthers : others.length;
+            break;
+        }
+    }
+
+    return Math.max(minIndex, Math.min(maxIndex, insertIndexInOthers));
+}
+
+export function reorderActiveStepsFromDomOrder(activeSteps, visibleOrderIds, itemId, collapsedKeys = {}) {
+    const stepById = new Map(activeSteps.map((step) => [step.id, step]));
+    const visibleSet = new Set(visibleOrderIds);
+    const placed = new Set();
     const result = [];
 
-    const appendSubtree = (stepId) => {
-        const idx = activeSteps.findIndex((s) => s.id === stepId);
-        if (idx < 0) return;
-        for (const step of collectStepSubtree(activeSteps, idx)) {
-            if (used.has(step.id)) continue;
-            result.push(step);
-            used.add(step.id);
-        }
-    };
+    for (const id of visibleOrderIds) {
+        const step = stepById.get(id);
+        if (!step || placed.has(id)) continue;
+        result.push(step);
+        placed.add(id);
 
-    for (const id of visibleRootIdsInOrder) {
-        appendSubtree(id);
+        const idx = activeSteps.findIndex((s) => s.id === id);
+        const collapseKey = `${itemId}:${id}`;
+        if (idx < 0 || !collapsedKeys[collapseKey] || !stepHasDescendants(activeSteps, idx)) continue;
+
+        const rootLevel = getStepLevel(step);
+        for (let i = idx + 1; i < activeSteps.length; i++) {
+            const child = activeSteps[i];
+            const level = getStepLevel(child);
+            if (level <= rootLevel) break;
+            if (visibleSet.has(child.id) || placed.has(child.id)) continue;
+            result.push(child);
+            placed.add(child.id);
+        }
     }
 
     for (const step of activeSteps) {
-        if (!used.has(step.id)) result.push(step);
+        if (!placed.has(step.id)) result.push(step);
     }
 
     return result;
@@ -3935,41 +4017,50 @@ export const UI = {
         const getList = () => root.querySelector('.expanded-checklist');
         const getActiveRows = () => [...(getList()?.querySelectorAll('.step-row--display:not(.step-row--done)') || [])];
 
-        const reorderAt = (clientY) => {
-            const draggedRow = activeDrag?.row;
-            const activeList = getList();
-            if (!draggedRow || !activeList?.contains(draggedRow)) return;
+        const getDoneAnchor = (activeList) => activeList.querySelector('.checklist-done-toggle')
+            || activeList.querySelector('.checklist-done-section')
+            || activeList.querySelector('.step-row--done');
 
-            const siblings = getActiveRows().filter((row) => row !== draggedRow);
-            const nextSibling = siblings.find((sibling) => {
-                const box = sibling.getBoundingClientRect();
-                return clientY <= box.top + box.height / 2;
-            });
-            if (nextSibling) activeList.insertBefore(draggedRow, nextSibling);
-            else {
-                const doneAnchor = activeList.querySelector('.checklist-done-toggle')
-                    || activeList.querySelector('.checklist-done-section')
-                    || activeList.querySelector('.step-row--done');
-                if (doneAnchor) activeList.insertBefore(draggedRow, doneAnchor);
-                else activeList.appendChild(draggedRow);
+        const reorderAt = (clientY) => {
+            const block = activeDrag?.block;
+            const activeList = getList();
+            if (!block?.length || !activeList?.contains(block[0])) return;
+
+            const allRows = getActiveRows();
+            const others = allRows.filter((row) => !block.includes(row));
+
+            let insertIndex = others.length;
+            for (let i = 0; i < others.length; i++) {
+                const box = others[i].getBoundingClientRect();
+                if (clientY <= box.top + box.height / 2) {
+                    insertIndex = i;
+                    break;
+                }
             }
+
+            insertIndex = clampChecklistInsertIndex(allRows, block, insertIndex);
+            const ref = others[insertIndex] || getDoneAnchor(activeList);
+            block.forEach((node) => {
+                activeList.insertBefore(node, ref);
+            });
         };
 
         const finishDrag = () => {
             if (!activeDrag) return;
-            const { row, moved } = activeDrag;
-            row.classList.remove('is-dragging');
+            const { block, moved } = activeDrag;
+            block.forEach((row) => row.classList.remove('is-dragging'));
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup', onUp);
             if (moved) {
                 const shell = root.closest('.editor-note-shell') || root;
                 this.syncItemBodyFromDom(shell, item);
+                const collapsedKeys = this.getChecklistCollapsedKeys();
                 applyMutate((it) => {
                     const activeSteps = it.steps.filter((step) => !step.completed);
                     const doneSteps = it.steps.filter((step) => step.completed);
-                    const visibleRootIds = getActiveRows().map((r) => r.dataset.stepId);
+                    const visibleOrderIds = getActiveRows().map((r) => r.dataset.stepId);
                     it.steps = [
-                        ...reorderActiveStepsPreservingSubtrees(activeSteps, visibleRootIds),
+                        ...reorderActiveStepsFromDomOrder(activeSteps, visibleOrderIds, item.id, collapsedKeys),
                         ...doneSteps
                     ];
                 });
@@ -3985,7 +4076,7 @@ export const UI = {
                 const dy = Math.abs(e.clientY - activeDrag.startY);
                 if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
                 activeDrag.moved = true;
-                activeDrag.row.classList.add('is-dragging');
+                activeDrag.block.forEach((row) => row.classList.add('is-dragging'));
             }
             e.preventDefault();
             reorderAt(e.clientY);
@@ -4001,8 +4092,10 @@ export const UI = {
             if (!row) return;
             e.preventDefault();
             e.stopPropagation();
+            const rows = getActiveRows();
             activeDrag = {
                 row,
+                block: collectDomRowBlock(rows, row),
                 startX: e.clientX,
                 startY: e.clientY,
                 moved: false

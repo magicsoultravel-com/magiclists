@@ -7,7 +7,7 @@ export const PAGE_FORMATS = {
 };
 
 export const CANVAS_MODES = ['a4', 'a5', 'a3', 'infinite'];
-export const BACKGROUNDS = ['blank', 'grid', 'notebook', 'staff'];
+export const BACKGROUNDS = ['blank', 'grid', 'dots', 'graph', 'coarse', 'isometric', 'ruled', 'hex', 'notebook', 'staff'];
 
 function createId(prefix) {
     const p = prefix || 'page';

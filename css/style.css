@@ -5847,10 +5847,10 @@ html[data-app-theme="casual-dark"] .mini-card.compact .card-actions::before {
     position: fixed;
     z-index: 2600;
     min-width: 10.5rem;
-    padding: 0.35rem;
+    padding: 0.45rem;
     background: rgba(20, 20, 24, 0.97);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
+    border-radius: 10px;
     box-shadow: 0 14px 36px rgba(0, 0, 0, 0.48);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -5864,6 +5864,31 @@ html[data-app-theme="casual-dark"] .mini-card.compact .card-actions::before {
     display: flex;
     flex-direction: column;
     gap: 0.1rem;
+    max-height: min(420px, calc(100vh - 24px));
+    overflow-y: auto;
+}
+
+.drawing-menu-heading {
+    margin: 0.35rem 0.45rem 0.15rem;
+    padding: 0;
+}
+
+.drawing-menu-heading:first-child {
+    margin-top: 0.1rem;
+}
+
+.drawing-menu-stepper-row {
+    margin: 0.15rem 0.25rem 0.25rem;
+    padding: 0.35rem 0.45rem;
+    border-radius: 6px;
+}
+
+.drawing-dropdown-width {
+    font-size: 0.58rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    min-width: 1.6rem;
+    text-align: center;
 }
 
 .drawing-menu-option {

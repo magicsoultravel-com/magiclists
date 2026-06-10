@@ -279,7 +279,9 @@ class Application {
     updateFabVisibility() {
         const fab = document.getElementById('fab-create');
         if (!fab) return;
-        fab.classList.remove('is-hidden');
+        const inDrawing = AppState.workspaceMode === 'drawing';
+        fab.classList.toggle('is-hidden', inDrawing);
+        if (inDrawing) return;
         const needsLogin = !AppState.user.isLoggedIn;
         fab.title = needsLogin ? 'New note (login required)' : 'New note';
         fab.setAttribute('aria-label', fab.title);
