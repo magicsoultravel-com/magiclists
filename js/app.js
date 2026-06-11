@@ -6,7 +6,12 @@ import { ToolsManager } from './toolsManager.js';
 import { Calendar } from './calendar.js';
 import { SidePanel } from './hamburger.js';
 import { applyBackupToStorage } from './backup.js';
-import { getLayoutBackupKeys, reconcileLayoutStorage } from './layoutStorage.js';
+import {
+    getLayoutBackupKeys,
+    getLocalStorageByteEstimate,
+    getLocalStorageUsageBreakdown,
+    reconcileLayoutStorage
+} from './layoutStorage.js';
 import { DEFAULT_CATEGORIES, normalizeCategories } from './categories.js';
 import { UndoManager, historyLabelForItem } from './undo.js';
 import { DesktopBackground } from './desktopBackground.js';
@@ -76,10 +81,11 @@ class Application {
         Calendar.init();
         this.renderControlBar();
         this.loadCategoriesStore();
-        reconcileLayoutStorage({
+        await reconcileLayoutStorage({
             items: API._getLocalDB().items,
             categories: AppState.categories
         });
+        this.renderStorageUsageFooter();
         await this.syncDataStore();
         this.setupCoreListeners();
         SidePanel.init(AppState);
@@ -419,6 +425,33 @@ class Application {
         virtualLink.download = `matrix_workspace_backup_${Math.floor(Date.now()/1000)}.json`;
         virtualLink.click();
         URL.revokeObjectURL(virtualLink.href);
+    }
+
+    renderStorageUsageFooter() {
+        const footer = document.getElementById('system-footer');
+        if (!footer) return;
+
+        const total = getLocalStorageByteEstimate();
+        const mb = (total / (1024 * 1024)).toFixed(2);
+        const pct = Math.min(100, Math.round((total / 5_000_000) * 100));
+        const breakdown = getLocalStorageUsageBreakdown(6);
+        const detail = breakdown
+            .map((row) => `${row.key}: ${(row.bytes / 1024).toFixed(1)} KB`)
+            .join('\n');
+
+        footer.innerHTML = `
+            <div class="storage-usage-footer" title="${this.escapeStorageTitle(detail)}">
+                <span>Storage ${mb} MB (~${pct}% of browser limit)</span>
+                ${breakdown.length ? `<span class="storage-usage-footer__hint">Hover for largest items</span>` : ''}
+            </div>
+        `;
+    }
+
+    escapeStorageTitle(text) {
+        return String(text || '')
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/</g, '&lt;');
     }
 
     setupBackupInterface() {

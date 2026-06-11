@@ -59,6 +59,10 @@ const LAYOUT_BACKUP_KEYS = [
     'matrix_collapsed_categories'
 ];
 
+const PRESENTATION_CLEAR_KEYS = [...new Set(LAYOUT_BACKUP_KEYS)];
+
+let quotaDialogOpen = false;
+
 function readJson(key, fallback) {
     try {
         const raw = localStorage.getItem(key);
@@ -69,11 +73,336 @@ function readJson(key, fallback) {
     }
 }
 
-function writeJsonIfChanged(key, value) {
+function isQuotaError(err) {
+    if (!err) return false;
+    if (err.name === 'QuotaExceededError') return true;
+    return err instanceof DOMException && (err.code === 22 || err.code === 1014);
+}
+
+function safeSetItem(key, value, writeState = null) {
+    try {
+        localStorage.setItem(key, value);
+        return true;
+    } catch (err) {
+        if (isQuotaError(err)) {
+            if (writeState) {
+                writeState.quotaExceeded = true;
+                writeState.failedKey = key;
+            }
+            console.warn('[layoutStorage] quota exceeded writing', key);
+            return false;
+        }
+        throw err;
+    }
+}
+
+function writeJsonIfChanged(key, value, writeState = null) {
     const next = JSON.stringify(value);
     if (localStorage.getItem(key) === next) return false;
-    localStorage.setItem(key, next);
+    return safeSetItem(key, next, writeState);
+}
+
+export function getLocalStorageByteEstimate() {
+    let total = 0;
+    for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+        const value = localStorage.getItem(key) || '';
+        total += key.length + value.length;
+    }
+    return total;
+}
+
+export function getLocalStorageUsageBreakdown(limit = 8) {
+    const rows = [];
+    for (let i = 0; i < localStorage.length; i += 1) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+        const value = localStorage.getItem(key) || '';
+        rows.push({ key, bytes: key.length + value.length });
+    }
+    rows.sort((a, b) => b.bytes - a.bytes);
+    return rows.slice(0, limit);
+}
+
+function confirmStorageRecovery() {
+    if (quotaDialogOpen) return Promise.resolve('hold');
+    if (typeof document === 'undefined' || !document.body) return Promise.resolve('hold');
+
+    quotaDialogOpen = true;
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'overlay storage-quota-overlay';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.setAttribute('aria-labelledby', 'storage-quota-title');
+        overlay.innerHTML = `
+            <div class="modal storage-quota-modal">
+                <h2 id="storage-quota-title" class="storage-quota-title">Storage almost full</h2>
+                <p class="storage-quota-body">
+                    Your <strong>notes are safe</strong> and will not be deleted.
+                    The app needs a little space to save board layout.
+                    You can clear saved views and card positions (you can rearrange cards afterwards).
+                </p>
+                <div class="storage-quota-actions">
+                    <button type="button" class="btn" data-action="hold">Keep my layout</button>
+                    <button type="button" class="btn btn--accent" data-action="clear">Clear layout &amp; continue</button>
+                </div>
+            </div>
+        `;
+
+        const finish = (choice) => {
+            overlay.remove();
+            quotaDialogOpen = false;
+            resolve(choice);
+        };
+
+        overlay.addEventListener('click', (e) => {
+            const action = e.target.closest('[data-action]')?.dataset?.action;
+            if (action === 'clear') finish('clear');
+            else if (action === 'hold') finish('hold');
+        });
+
+        document.body.appendChild(overlay);
+        overlay.querySelector('[data-action="clear"]')?.focus();
+    });
+}
+
+function confirmClearDrawing() {
+    if (quotaDialogOpen) return Promise.resolve(false);
+    if (typeof document === 'undefined' || !document.body) return Promise.resolve(false);
+
+    quotaDialogOpen = true;
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'overlay storage-quota-overlay';
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.setAttribute('aria-labelledby', 'storage-drawing-title');
+        overlay.innerHTML = `
+            <div class="modal storage-quota-modal">
+                <h2 id="storage-drawing-title" class="storage-quota-title">Still low on space</h2>
+                <p class="storage-quota-body">
+                    Layout was cleared but storage is still full.
+                    magicCanvas drawing data can use a lot of space. Clear it only if you no longer need those drawings.
+                    Your notes are still safe.
+                </p>
+                <div class="storage-quota-actions">
+                    <button type="button" class="btn" data-action="hold">Keep drawings</button>
+                    <button type="button" class="btn btn--accent" data-action="clear">Clear magicCanvas</button>
+                </div>
+            </div>
+        `;
+
+        const finish = (clearDrawing) => {
+            overlay.remove();
+            quotaDialogOpen = false;
+            resolve(clearDrawing);
+        };
+
+        overlay.addEventListener('click', (e) => {
+            const action = e.target.closest('[data-action]')?.dataset?.action;
+            if (action === 'clear') finish(true);
+            else if (action === 'hold') finish(false);
+        });
+
+        document.body.appendChild(overlay);
+        overlay.querySelector('[data-action="hold"]')?.focus();
+    });
+}
+
+export function clearPresentationLayoutKeys() {
+    PRESENTATION_CLEAR_KEYS.forEach((key) => {
+        try {
+            localStorage.removeItem(key);
+        } catch {
+            /* ignore */
+        }
+    });
+}
+
+export function migrateLegacyColumnsFloatStorage(writeState = null) {
+    const floatPos = readJson('matrix_columns_float_positions', {});
+    const floatSizes = readJson('matrix_columns_float_sizes', {});
+    const posIds = Object.keys(floatPos || {});
+    const sizeIds = Object.keys(floatSizes || {});
+    if (!posIds.length && !sizeIds.length) return false;
+
+    const layout = readJson('matrix_column_note_layout', {});
+    const cat = UNCATEGORIZED_CATEGORY;
+    if (!layout[cat]) layout[cat] = {};
+    const allIds = new Set([...posIds, ...sizeIds]);
+    allIds.forEach((id) => {
+        if (layout[cat][id]) return;
+        const pos = floatPos[id];
+        const size = floatSizes[id];
+        layout[cat][id] = {
+            x: pos?.x ?? 0,
+            y: pos?.y ?? 0,
+            w: size?.w ?? FREEFORM_DEFAULT_W,
+            h: size?.h ?? FREEFORM_DEFAULT_H
+        };
+    });
+
+    writeJsonIfChanged('matrix_column_note_layout', layout, writeState);
+    try {
+        localStorage.removeItem('matrix_columns_float_positions');
+        localStorage.removeItem('matrix_columns_float_sizes');
+    } catch {
+        /* ignore */
+    }
     return true;
+}
+
+function createReconcileStats() {
+    return { removed: 0, normalized: 0, clamped: 0, touched: new Set() };
+}
+
+function applyReconcileWrites(context, stats, writeState) {
+    writeJsonIfChanged(
+        GRID_LAYOUT_KEY,
+        normalizeIdRectMap(
+            pruneIdMap(readJson(GRID_LAYOUT_KEY, {}), context.liveIds, stats, GRID_LAYOUT_KEY),
+            context.liveIds,
+            context.tileSizeById,
+            stats,
+            GRID_LAYOUT_KEY
+        ),
+        writeState
+    );
+    if (writeState.quotaExceeded) return;
+
+    writeJsonIfChanged(
+        'matrix_freeform_positions',
+        pruneIdMap(readJson('matrix_freeform_positions', {}), context.liveIds, stats, 'matrix_freeform_positions'),
+        writeState
+    );
+    if (writeState.quotaExceeded) return;
+
+    writeJsonIfChanged(
+        'matrix_freeform_sizes',
+        normalizeSizeOnlyMap(
+            pruneIdMap(readJson('matrix_freeform_sizes', {}), context.liveIds, stats, 'matrix_freeform_sizes'),
+            context.liveIds,
+            context.tileSizeById,
+            stats,
+            'matrix_freeform_sizes'
+        ),
+        writeState
+    );
+    if (writeState.quotaExceeded) return;
+
+    writeJsonIfChanged(
+        'matrix_columns_float_positions',
+        pruneIdMap(readJson('matrix_columns_float_positions', {}), context.liveIds, stats, 'matrix_columns_float_positions'),
+        writeState
+    );
+    if (writeState.quotaExceeded) return;
+
+    writeJsonIfChanged(
+        'matrix_columns_float_sizes',
+        normalizeSizeOnlyMap(
+            pruneIdMap(readJson('matrix_columns_float_sizes', {}), context.liveIds, stats, 'matrix_columns_float_sizes'),
+            context.liveIds,
+            context.tileSizeById,
+            stats,
+            'matrix_columns_float_sizes'
+        ),
+        writeState
+    );
+    if (writeState.quotaExceeded) return;
+
+    writeJsonIfChanged(
+        'matrix_column_positions',
+        pruneCategoryMap(readJson('matrix_column_positions', {}), context.catNames, stats, 'matrix_column_positions'),
+        writeState
+    );
+    if (writeState.quotaExceeded) return;
+
+    writeJsonIfChanged(
+        'matrix_column_sizes',
+        pruneCategoryMap(readJson('matrix_column_sizes', {}), context.catNames, stats, 'matrix_column_sizes'),
+        writeState
+    );
+    if (writeState.quotaExceeded) return;
+
+    writeJsonIfChanged(
+        'matrix_column_note_layout',
+        normalizeColumnNoteLayout(
+            readJson('matrix_column_note_layout', {}),
+            context.liveIds,
+            context.tileSizeById,
+            context.catNames,
+            stats
+        ),
+        writeState
+    );
+    if (writeState.quotaExceeded) return;
+
+    writeJsonIfChanged(GRID_PINS_KEY, pruneIdArray(readJson(GRID_PINS_KEY, []), context.liveIds, stats, GRID_PINS_KEY), writeState);
+    if (writeState.quotaExceeded) return;
+
+    writeJsonIfChanged(
+        'matrix_hidden_board_ids',
+        pruneIdArray(readJson('matrix_hidden_board_ids', []), context.liveIds, stats, 'matrix_hidden_board_ids'),
+        writeState
+    );
+    if (writeState.quotaExceeded) return;
+
+    writeJsonIfChanged(
+        'matrix_calendar_hidden_ids',
+        pruneIdArray(readJson('matrix_calendar_hidden_ids', []), context.liveIds, stats, 'matrix_calendar_hidden_ids'),
+        writeState
+    );
+    if (writeState.quotaExceeded) return;
+
+    const gridExpanded = localStorage.getItem(GRID_EXPANDED_KEY);
+    if (gridExpanded && !context.liveIds.has(gridExpanded)) {
+        try {
+            localStorage.removeItem(GRID_EXPANDED_KEY);
+            stats.removed += 1;
+            stats.touched.add(GRID_EXPANDED_KEY);
+        } catch (err) {
+            if (isQuotaError(err)) {
+                writeState.quotaExceeded = true;
+                writeState.failedKey = GRID_EXPANDED_KEY;
+                return;
+            }
+            throw err;
+        }
+    }
+
+    writeJsonIfChanged(
+        LEGACY_EXPANDED_KEY,
+        sanitizeExpandedMap(readJson(LEGACY_EXPANDED_KEY, {}), context.liveIds, stats, LEGACY_EXPANDED_KEY),
+        writeState
+    );
+    if (writeState.quotaExceeded) return;
+
+    const sessionsPayload = JSON.stringify(sanitizeViewSessions(readViewSessions(), context.liveIds, stats));
+    if (localStorage.getItem('matrix_view_sessions') !== sessionsPayload) {
+        if (!safeSetItem('matrix_view_sessions', sessionsPayload, writeState)) return;
+    }
+
+    const savedViews = readJson(SAVED_VIEWS_KEY, null);
+    if (savedViews) {
+        writeJsonIfChanged(SAVED_VIEWS_KEY, sanitizeSavedViewsStore(savedViews, context), writeState);
+    }
+}
+
+function reportReconcileStats(stats, showToast) {
+    const total = stats.removed + stats.normalized + stats.clamped;
+    if (total > 0) {
+        console.info('[layoutStorage] reconciled', {
+            removed: stats.removed,
+            normalized: stats.normalized,
+            clamped: stats.clamped,
+            keys: [...stats.touched]
+        });
+        if (showToast) {
+            showAppToast(`Adjusted ${total} layout ${total === 1 ? 'entry' : 'entries'}`);
+        }
+    }
 }
 
 function cellsToSpanW(cells) {
@@ -685,116 +1014,59 @@ export function purgeLayoutForItem(itemId) {
     return changed;
 }
 
-export function reconcileLayoutStorage({ items = [], categories = [], showToast = true } = {}) {
+export async function reconcileLayoutStorage({ items = [], categories = [], showToast = true } = {}) {
     const context = buildContext(items, categories);
-    const stats = { removed: 0, normalized: 0, clamped: 0, touched: new Set() };
+    const migrateState = { quotaExceeded: false, failedKey: null };
+    migrateLegacyColumnsFloatStorage(migrateState);
 
-    writeJsonIfChanged(
-        GRID_LAYOUT_KEY,
-        normalizeIdRectMap(
-            pruneIdMap(readJson(GRID_LAYOUT_KEY, {}), context.liveIds, stats, GRID_LAYOUT_KEY),
-            context.liveIds,
-            context.tileSizeById,
-            stats,
-            GRID_LAYOUT_KEY
-        )
-    );
+    let stats = createReconcileStats();
+    let writeState = { quotaExceeded: migrateState.quotaExceeded, failedKey: migrateState.failedKey };
+    applyReconcileWrites(context, stats, writeState);
 
-    writeJsonIfChanged(
-        'matrix_freeform_positions',
-        pruneIdMap(readJson('matrix_freeform_positions', {}), context.liveIds, stats, 'matrix_freeform_positions')
-    );
+    if (writeState.quotaExceeded) {
+        const choice = await confirmStorageRecovery();
+        if (choice === 'clear') {
+            clearPresentationLayoutKeys();
+            stats = createReconcileStats();
+            writeState = { quotaExceeded: false, failedKey: null };
+            applyReconcileWrites(context, stats, writeState);
 
-    writeJsonIfChanged(
-        'matrix_freeform_sizes',
-        normalizeSizeOnlyMap(
-            pruneIdMap(readJson('matrix_freeform_sizes', {}), context.liveIds, stats, 'matrix_freeform_sizes'),
-            context.liveIds,
-            context.tileSizeById,
-            stats,
-            'matrix_freeform_sizes'
-        )
-    );
+            if (writeState.quotaExceeded) {
+                const clearDrawing = await confirmClearDrawing();
+                if (clearDrawing) {
+                    try {
+                        localStorage.removeItem('matrix_global_drawing');
+                        localStorage.removeItem('matrix_drawing_prefs');
+                    } catch {
+                        /* ignore */
+                    }
+                    stats = createReconcileStats();
+                    writeState = { quotaExceeded: false, failedKey: null };
+                    applyReconcileWrites(context, stats, writeState);
+                }
+            }
 
-    writeJsonIfChanged(
-        'matrix_columns_float_positions',
-        pruneIdMap(readJson('matrix_columns_float_positions', {}), context.liveIds, stats, 'matrix_columns_float_positions')
-    );
+            if (writeState.quotaExceeded) {
+                if (showToast) {
+                    showAppToast('Storage still full. Export a backup and free space in browser settings.');
+                }
+                return { ...stats, skipped: true, quotaExceeded: true };
+            }
 
-    writeJsonIfChanged(
-        'matrix_columns_float_sizes',
-        normalizeSizeOnlyMap(
-            pruneIdMap(readJson('matrix_columns_float_sizes', {}), context.liveIds, stats, 'matrix_columns_float_sizes'),
-            context.liveIds,
-            context.tileSizeById,
-            stats,
-            'matrix_columns_float_sizes'
-        )
-    );
-
-    writeJsonIfChanged(
-        'matrix_column_positions',
-        pruneCategoryMap(readJson('matrix_column_positions', {}), context.catNames, stats, 'matrix_column_positions')
-    );
-
-    writeJsonIfChanged(
-        'matrix_column_sizes',
-        pruneCategoryMap(readJson('matrix_column_sizes', {}), context.catNames, stats, 'matrix_column_sizes')
-    );
-
-    writeJsonIfChanged(
-        'matrix_column_note_layout',
-        normalizeColumnNoteLayout(
-            readJson('matrix_column_note_layout', {}),
-            context.liveIds,
-            context.tileSizeById,
-            context.catNames,
-            stats
-        )
-    );
-
-    writeJsonIfChanged(GRID_PINS_KEY, pruneIdArray(readJson(GRID_PINS_KEY, []), context.liveIds, stats, GRID_PINS_KEY));
-    writeJsonIfChanged(
-        'matrix_hidden_board_ids',
-        pruneIdArray(readJson('matrix_hidden_board_ids', []), context.liveIds, stats, 'matrix_hidden_board_ids')
-    );
-    writeJsonIfChanged(
-        'matrix_calendar_hidden_ids',
-        pruneIdArray(readJson('matrix_calendar_hidden_ids', []), context.liveIds, stats, 'matrix_calendar_hidden_ids')
-    );
-
-    const gridExpanded = localStorage.getItem(GRID_EXPANDED_KEY);
-    if (gridExpanded && !context.liveIds.has(gridExpanded)) {
-        localStorage.removeItem(GRID_EXPANDED_KEY);
-        stats.removed += 1;
-        stats.touched.add(GRID_EXPANDED_KEY);
-    }
-
-    writeJsonIfChanged(
-        LEGACY_EXPANDED_KEY,
-        sanitizeExpandedMap(readJson(LEGACY_EXPANDED_KEY, {}), context.liveIds, stats, LEGACY_EXPANDED_KEY)
-    );
-
-    writeViewSessions(sanitizeViewSessions(readViewSessions(), context.liveIds, stats));
-
-    const savedViews = readJson(SAVED_VIEWS_KEY, null);
-    if (savedViews) {
-        writeJsonIfChanged(SAVED_VIEWS_KEY, sanitizeSavedViewsStore(savedViews, context));
-    }
-
-    const total = stats.removed + stats.normalized + stats.clamped;
-    if (total > 0) {
-        console.info('[layoutStorage] reconciled', {
-            removed: stats.removed,
-            normalized: stats.normalized,
-            clamped: stats.clamped,
-            keys: [...stats.touched]
-        });
-        if (showToast) {
-            showAppToast(`Adjusted ${total} layout ${total === 1 ? 'entry' : 'entries'}`);
+            if (showToast) {
+                showAppToast('Layout cleared. Your notes are unchanged.');
+            }
+            reportReconcileStats(stats, false);
+            return { ...stats, clearedLayout: true };
         }
+
+        if (showToast) {
+            showAppToast('Storage full — layout cleanup skipped. Export a backup when you can.');
+        }
+        return { ...stats, skipped: true, quotaExceeded: true };
     }
 
+    reportReconcileStats(stats, showToast);
     return stats;
 }
 
@@ -812,6 +1084,8 @@ export function applyLayoutBackupKeys(payload = {}) {
     LAYOUT_BACKUP_KEYS.forEach((key) => {
         if (payload[key] == null) return;
         const value = typeof payload[key] === 'string' ? payload[key] : JSON.stringify(payload[key]);
-        localStorage.setItem(key, value);
+        if (!safeSetItem(key, value)) {
+            console.warn('[layoutStorage] quota exceeded restoring', key);
+        }
     });
 }

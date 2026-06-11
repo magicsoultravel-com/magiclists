@@ -24,7 +24,7 @@ import {
     wrapLineAsStruck
 } from './noteBodyConversion.js';
 import { hasRichMarkup, linkifyPlainUrls, sanitizeHref, sanitizeRichHtml, stripRichText } from './richText.js';
-import { sanitizeLayoutSnapshot } from './layoutStorage.js';
+import { migrateLegacyColumnsFloatStorage, sanitizeLayoutSnapshot } from './layoutStorage.js';
 import { UndoManager } from './undo.js';
 import { raiseDesktopElement, syncDesktopStackSeq } from './desktopStack.js';
 import {
@@ -1842,37 +1842,7 @@ export const UI = {
     },
 
     migrateColumnsFloatLayouts() {
-        let floatPos;
-        let floatSizes;
-        try {
-            floatPos = JSON.parse(localStorage.getItem('matrix_columns_float_positions') || '{}');
-            floatSizes = JSON.parse(localStorage.getItem('matrix_columns_float_sizes') || '{}');
-        } catch {
-            return;
-        }
-        const posIds = Object.keys(floatPos || {});
-        const sizeIds = Object.keys(floatSizes || {});
-        if (posIds.length === 0 && sizeIds.length === 0) return;
-
-        const layout = this.getColumnNoteLayout();
-        const cat = UNCATEGORIZED_CATEGORY;
-        if (!layout[cat]) layout[cat] = {};
-        const allIds = new Set([...posIds, ...sizeIds]);
-        allIds.forEach((id) => {
-            const pos = floatPos[id];
-            const size = floatSizes[id];
-            if (!layout[cat][id]) {
-                layout[cat][id] = {
-                    x: pos?.x ?? 0,
-                    y: pos?.y ?? 0,
-                    w: size?.w ?? FREEFORM_DEFAULT_W,
-                    h: size?.h ?? FREEFORM_DEFAULT_H
-                };
-            }
-        });
-        localStorage.setItem('matrix_column_note_layout', JSON.stringify(layout));
-        localStorage.removeItem('matrix_columns_float_positions');
-        localStorage.removeItem('matrix_columns_float_sizes');
+        migrateLegacyColumnsFloatStorage();
     },
 
     buildNoteQuickActionsHtml(item, {
