@@ -166,7 +166,8 @@ export const ClockStyle = {
     analogDateEl: null,
     segmentTimeEl: null,
     triggerBtn: null,
-    iconBtn: null,
+    showBtn: null,
+    clockChromeEl: null,
     popover: null,
     intervalId: null,
     currentStyle: 'digital',
@@ -189,23 +190,18 @@ export const ClockStyle = {
             analogFaceMount.innerHTML = analogSvgHtml();
         }
 
+        this.triggerBtn = document.getElementById('clock-display');
+        this.clockChromeEl = this.zone.closest('.side-panel-clock');
+
         this.currentStyle = this.readStored();
         this.applyStyle(this.currentStyle, { silent: true });
 
+        this.showBtn = document.getElementById('btn-show-clock');
         this.isHidden = this.readHidden();
         this.applyHidden(this.isHidden, { silent: true });
 
-        this.triggerBtn = document.getElementById('clock-display');
-        this.iconBtn = document.getElementById('clock-icon-fallback');
-        if (this.iconBtn) {
-            this.ensureIconBtn();
-            this.iconBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.closePopover();
-                this.setHidden(!this.isHidden);
-            });
-        }
-        if (this.triggerBtn) {
+        if (this.triggerBtn && this.triggerBtn.dataset.clockBound !== 'true') {
+            this.triggerBtn.dataset.clockBound = 'true';
             this.triggerBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (this.isHidden) return;
@@ -215,6 +211,21 @@ export const ClockStyle = {
 
         this.tick();
         this.intervalId = setInterval(() => this.tick(), 1000);
+    },
+
+    rebindTrigger() {
+        this.showBtn = document.getElementById('btn-show-clock');
+        if (!this.showBtn) {
+            this.syncShowBtn();
+            return;
+        }
+        this.showBtn.innerHTML = ACTION_ICONS.clockStyle;
+        this.showBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.closePopover();
+            this.setHidden(false);
+        });
+        this.syncShowBtn();
     },
 
     readHidden() {
@@ -229,27 +240,17 @@ export const ClockStyle = {
         return this.triggerBtn;
     },
 
-    ensureIconBtn() {
-        if (!this.iconBtn) return;
-        if (!this.iconBtn.querySelector('svg')) {
-            this.iconBtn.innerHTML = ACTION_ICONS.clockStyle;
-        }
-    },
-
-    syncToggleBtn() {
-        if (!this.iconBtn) return;
-        const label = this.isHidden ? 'Show clock' : 'Hide clock';
-        this.iconBtn.title = label;
-        this.iconBtn.setAttribute('aria-label', label);
+    syncShowBtn() {
+        if (!this.showBtn) return;
+        this.showBtn.title = 'Show clock';
+        this.showBtn.setAttribute('aria-label', 'Show clock');
+        this.showBtn.classList.toggle('is-hidden', !this.isHidden);
     },
 
     applyHidden(hidden, { silent = false } = {}) {
         this.isHidden = hidden;
-        this.zone?.classList.toggle('is-clock-hidden', hidden);
-        this.triggerBtn?.classList.toggle('is-hidden', hidden);
-        this.iconBtn?.classList.toggle('is-hidden', !hidden);
-        if (!hidden) this.ensureIconBtn();
-        this.syncToggleBtn();
+        this.clockChromeEl?.classList.toggle('is-hidden', hidden);
+        this.syncShowBtn();
         if (hidden) {
             this.triggerBtn?.setAttribute('aria-expanded', 'false');
             this.closePopover();
@@ -342,7 +343,6 @@ export const ClockStyle = {
         if (!this.popover) return;
         this.popover.classList.add('is-hidden');
         this.triggerBtn?.setAttribute('aria-expanded', 'false');
-        this.iconBtn?.setAttribute('aria-expanded', 'false');
         if (this.outsideHandler) {
             document.removeEventListener('mousedown', this.outsideHandler, true);
             this.outsideHandler = null;
@@ -413,7 +413,7 @@ export const ClockStyle = {
             <label class="clock-style-hide-row focus-mode-row" for="clock-opt-hidden">
                 <input type="checkbox" class="display-options-checkbox" id="clock-opt-hidden"${this.isHidden ? ' checked' : ''}>
                 <span class="focus-mode-row-label">Hide clock</span>
-                <span class="focus-mode-row-hint">Icon only</span>
+                <span class="focus-mode-row-hint">Quick actions</span>
             </label>
             <div class="focus-mode-divider" role="separator"></div>
             <div class="clock-style-list">${optionsHtml}</div>
@@ -445,7 +445,7 @@ export const ClockStyle = {
         this.outsideHandler = (e) => {
             if (popover.contains(e.target)) return;
             if (this.triggerBtn?.contains(e.target)) return;
-            if (this.iconBtn?.contains(e.target)) return;
+            if (this.showBtn?.contains(e.target)) return;
             this.closePopover();
         };
         this.keyHandler = (e) => {

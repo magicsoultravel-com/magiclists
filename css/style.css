@@ -1115,38 +1115,10 @@ mark.search-hit {
     border-left: none;
 }
 
-#digital-clock.is-clock-hidden {
-    padding-left: 0.35rem;
-    gap: 0;
-}
-
 #clock-display {
     order: 1;
     flex: 0 1 auto;
     min-width: 0;
-}
-
-#clock-icon-fallback {
-    min-width: 30px;
-    min-height: 30px;
-    padding: 0.25rem;
-}
-
-.clock-icon-fallback {
-    flex: 0 0 auto;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0;
-    line-height: 0;
-    color: var(--text-main);
-}
-
-.clock-icon-fallback svg {
-    display: block;
-    width: 12px;
-    height: 12px;
-    flex-shrink: 0;
 }
 
 .btn-icon {

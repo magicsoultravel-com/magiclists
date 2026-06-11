@@ -15,6 +15,11 @@ const BROWSE_SORT_OPTIONS = [
     { value: 'bitrate', label: 'Bitrate' }
 ];
 
+const COUNTRY_SORT_OPTIONS = [
+    { value: 'count', label: 'Most stations' },
+    { value: 'name', label: 'Name' }
+];
+
 export const SidebarRadio = {
     root: null,
     countries: [],
@@ -326,10 +331,7 @@ export const SidebarRadio = {
             e.stopPropagation();
             const station = RadioPlayer.station;
             if (!stationKey(station)) return;
-            RadioPlayer.toggleFavorite(station);
-            if (RadioPopover.mode && !RadioPopover.panel?.classList.contains('is-hidden')) {
-                this.refreshOpenPanel();
-            }
+            this.tryToggleFavorite(station);
         });
 
         this.root.querySelectorAll('[data-radio-station-context]').forEach((el) => {
@@ -603,9 +605,7 @@ export const SidebarRadio = {
     async renderBrowseCountries() {
         RadioPopover.setTitle('Browse');
         RadioPopover.setBackVisible(false);
-        RadioPopover.setToolbarHtml(`
-            <input type="search" class="form-input sidebar-radio__search" data-radio-country-search placeholder="Filter countries…" aria-label="Filter countries" autocomplete="off" spellcheck="false" value="${escapeHtml(this.countryFilter)}">
-        `);
+        RadioPopover.setToolbarHtml(this.renderBrowseCountriesToolbar());
 
         const body = RadioPopover.getBodyEl();
         if (!body) return;
@@ -615,15 +615,17 @@ export const SidebarRadio = {
             await this.prefetchCountries();
         }
 
-        const searchEl = RadioPopover.getToolbarEl()?.querySelector('[data-radio-country-search]');
-        searchEl?.addEventListener('input', debounce((e) => {
+        const toolbar = RadioPopover.getToolbarEl();
+        toolbar?.querySelector('[data-radio-country-search]')?.addEventListener('input', debounce((e) => {
             this.countryFilter = e.target.value.trim().toLowerCase();
             this.renderBrowseCountries();
         }, 200));
+        toolbar?.querySelector('[data-radio-country-sort]')?.addEventListener('change', (e) => {
+            RadioPlayer.saveCountrySort(e.target.value);
+            this.renderBrowseCountries();
+        });
 
-        const filtered = this.countries
-            .slice()
-            .sort((a, b) => (b.stationcount || 0) - (a.stationcount || 0))
+        const filtered = this.sortCountries(this.countries)
             .filter((c) => {
                 if (!this.countryFilter) return true;
                 const name = (c.name || '').toLowerCase();
@@ -666,13 +668,69 @@ export const SidebarRadio = {
         `;
     },
 
-    renderBrowseSortToolbar() {
-        const current = RadioPlayer.getBrowseSort();
+    renderSortSelect(options, current, attrName, label) {
         return `
-            <select class="form-input sidebar-radio__sort" data-radio-sort aria-label="Sort stations">
-                ${BROWSE_SORT_OPTIONS.map((o) => `<option value="${escapeHtml(o.value)}"${o.value === current ? ' selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
+            <select class="form-input sidebar-radio__sort" ${attrName} aria-label="${escapeHtml(label)}">
+                ${options.map((o) => `<option value="${escapeHtml(o.value)}"${o.value === current ? ' selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
             </select>
         `;
+    },
+
+    renderBrowseCountriesToolbar() {
+        return `
+            <div class="radio-popover__toolbar-row">
+                <input type="search" class="form-input sidebar-radio__search" data-radio-country-search placeholder="Filter countries…" aria-label="Filter countries" autocomplete="off" spellcheck="false" value="${escapeHtml(this.countryFilter)}">
+                ${this.renderSortSelect(COUNTRY_SORT_OPTIONS, RadioPlayer.getCountrySort(), 'data-radio-country-sort', 'Sort countries')}
+            </div>
+        `;
+    },
+
+    sortCountries(countries) {
+        const sort = RadioPlayer.getCountrySort();
+        const list = countries.slice();
+        if (sort === 'name') {
+            list.sort((a, b) => (a.name || a.iso_3166_1 || '').localeCompare(b.name || b.iso_3166_1 || ''));
+        } else {
+            list.sort((a, b) => (b.stationcount || 0) - (a.stationcount || 0));
+        }
+        return list;
+    },
+
+    renderBrowseSortToolbar() {
+        return `
+            <div class="radio-popover__toolbar-row radio-popover__toolbar-row--end">
+                ${this.renderSortSelect(BROWSE_SORT_OPTIONS, RadioPlayer.getBrowseSort(), 'data-radio-sort', 'Sort stations')}
+            </div>
+        `;
+    },
+
+    renderRecentsToolbar() {
+        return `
+            <div class="radio-popover__toolbar-row radio-popover__toolbar-row--end">
+                <button type="button" class="btn btn--compact btn-icon card-act sidebar-radio__clear-recents" data-radio-clear-recents title="Clear recents" aria-label="Clear recents">${CARD_ICONS.delete}</button>
+            </div>
+        `;
+    },
+
+    tryToggleFavorite(stationOrKey) {
+        const station = typeof stationOrKey === 'object' && stationOrKey !== null
+            ? stationOrKey
+            : null;
+        const key = station ? stationKey(station) : (typeof stationOrKey === 'string' ? stationOrKey : '');
+        if (!key) return false;
+
+        if (RadioPlayer.isFavorite(key)) {
+            const name = station?.name || this.findStation(key)?.name || '';
+            const msg = name ? `Remove "${name}" from favorites?` : 'Remove from favorites?';
+            if (!window.confirm(msg)) return false;
+        }
+
+        RadioPlayer.toggleFavorite(station || parseStationKey(key));
+        if (RadioPopover.mode && !RadioPopover.panel?.classList.contains('is-hidden')) {
+            this.refreshOpenPanel();
+        }
+        this.updateTransport();
+        return true;
     },
 
     async openBrowseCountry(code, name) {
@@ -802,14 +860,24 @@ export const SidebarRadio = {
 
     async renderStationGrid(kind) {
         RadioPopover.setBackVisible(false);
-        RadioPopover.setToolbarHtml('');
         RadioPopover.setTitle(kind === 'favorites' ? 'Favorites' : 'Recents');
+
+        const keys = kind === 'favorites' ? RadioPlayer.getFavorites() : RadioPlayer.getRecents();
+        if (kind === 'recents' && keys.length) {
+            RadioPopover.setToolbarHtml(this.renderRecentsToolbar());
+            RadioPopover.getToolbarEl()?.querySelector('[data-radio-clear-recents]')?.addEventListener('click', () => {
+                if (!window.confirm('Clear all recent stations?')) return;
+                RadioPlayer.clearRecents();
+                this.renderStationGrid('recents');
+            });
+        } else {
+            RadioPopover.setToolbarHtml('');
+        }
 
         const body = RadioPopover.getBodyEl();
         if (!body) return;
         body.innerHTML = '<p class="tool-msg">Loading…</p>';
 
-        const keys = kind === 'favorites' ? RadioPlayer.getFavorites() : RadioPlayer.getRecents();
         if (!keys.length) {
             body.innerHTML = `<p class="tool-msg">${kind === 'favorites' ? 'Heart stations while listening.' : 'Played stations appear here after a successful connection.'}</p>`;
             return;
@@ -897,8 +965,7 @@ export const SidebarRadio = {
                 e.preventDefault();
                 const uuid = btn.getAttribute('data-radio-star');
                 const station = this.findStation(uuid);
-                RadioPlayer.toggleFavorite(station || parseStationKey(uuid));
-                this.refreshOpenPanel();
+                this.tryToggleFavorite(station || parseStationKey(uuid));
             });
         });
 

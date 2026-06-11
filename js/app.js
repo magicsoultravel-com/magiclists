@@ -245,6 +245,7 @@ class Application {
             <button type="button" id="btn-collapse-all" class="btn btn--compact btn--icon is-hidden" title="Collapse all notes" aria-label="Collapse all notes"></button>
             <button type="button" id="btn-layout-reset" class="btn btn--compact btn--icon is-hidden" title="Reset" aria-label="Reset"></button>
             <button type="button" id="btn-fullscreen" class="btn btn--compact btn--icon" title="Full screen" aria-label="Full screen" aria-pressed="false"></button>
+            <button type="button" id="btn-show-clock" class="btn btn--compact btn--icon is-hidden" title="Show clock" aria-label="Show clock"></button>
         `;
 
         if (!AppState.user.isLoggedIn) {
@@ -277,6 +278,7 @@ class Application {
         const focusBtn = document.getElementById('btn-focus-mode');
         if (focusBtn) focusBtn.innerHTML = ACTION_ICONS.focusMode;
         FocusMode.rebindTrigger();
+        ClockStyle.rebindTrigger();
 
         this.setupLayoutResetButton();
         this.setupCollapseAllButton();

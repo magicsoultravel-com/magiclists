@@ -11,6 +11,7 @@ const RECENTS_CAP = 20;
 const DEFAULT_BROWSER_W = 320;
 const DEFAULT_BROWSER_H = 360;
 const DEFAULT_BROWSE_SORT = 'clickcount';
+const DEFAULT_COUNTRY_SORT = 'count';
 
 function migrateRecentsMeta(raw) {
     if (Array.isArray(raw.recentsMeta) && raw.recentsMeta.length) {
@@ -76,7 +77,8 @@ function loadState() {
             browserX: Number.isFinite(raw.browserX) ? raw.browserX : null,
             browserY: Number.isFinite(raw.browserY) ? raw.browserY : null,
             browserFloating: raw.browserFloating === true,
-            browseSort: raw.browseSort || DEFAULT_BROWSE_SORT
+            browseSort: raw.browseSort || DEFAULT_BROWSE_SORT,
+            countrySort: raw.countrySort || DEFAULT_COUNTRY_SORT
         };
     } catch {
         return {
@@ -98,7 +100,8 @@ function loadState() {
             browserX: null,
             browserY: null,
             browserFloating: false,
-            browseSort: DEFAULT_BROWSE_SORT
+            browseSort: DEFAULT_BROWSE_SORT,
+            countrySort: DEFAULT_COUNTRY_SORT
         };
     }
 }
@@ -236,6 +239,19 @@ export const RadioPlayer = {
 
     saveBrowseSort(sort) {
         saveState({ browseSort: sort || DEFAULT_BROWSE_SORT });
+    },
+
+    getCountrySort() {
+        return loadState().countrySort || DEFAULT_COUNTRY_SORT;
+    },
+
+    saveCountrySort(sort) {
+        saveState({ countrySort: sort || DEFAULT_COUNTRY_SORT });
+    },
+
+    clearRecents() {
+        saveState({ recentsMeta: [] });
+        this.emitState();
     },
 
     getMiniPlayerState() {
