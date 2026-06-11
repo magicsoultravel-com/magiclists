@@ -3518,6 +3518,23 @@ textarea.form-input {
     cursor: grabbing;
 }
 
+.checklist-drop-indicator {
+    display: none;
+    height: 2px;
+    margin: 0.05rem 0;
+    border-radius: 1px;
+    background: var(--accent-color, #6ea8fe);
+    pointer-events: none;
+}
+
+.checklist-drop-indicator.is-visible {
+    display: block;
+}
+
+.checklist-drop-indicator.is-child {
+    margin-left: 0.9rem;
+}
+
 .editor-meta-row--footer {
     margin: 0.35rem 0 0;
     padding-top: 0.25rem;

@@ -322,6 +322,146 @@ export function collectStepSubtree(steps, startIndex) {
     return subtree;
 }
 
+export function collectStepSubtreeIds(steps, startIndex) {
+    return collectStepSubtree(steps, startIndex).map((step) => step.id);
+}
+
+export function findStepParentIndex(steps, index) {
+    const level = getStepLevel(steps[index]);
+    if (level <= 0) return -1;
+    for (let i = index - 1; i >= 0; i--) {
+        if (getStepLevel(steps[i]) < level) return i;
+    }
+    return -1;
+}
+
+export function applySubtreeLevelDelta(steps, startIndex, delta) {
+    const subtree = collectStepSubtree(steps, startIndex);
+    if (!subtree.length || !delta) return;
+    const rootLevel = getStepLevel(subtree[0]);
+    let effectiveDelta = delta;
+    if (delta < 0 && rootLevel + delta < 0) {
+        effectiveDelta = -rootLevel;
+    }
+    for (const step of subtree) {
+        step.level = Math.max(0, Math.min(4, getStepLevel(step) + effectiveDelta));
+    }
+}
+
+export function normalizeChecklistLevels(steps) {
+    if (!steps?.length) return;
+    for (let i = 0; i < steps.length; i++) {
+        const maxLevel = i === 0 ? 0 : getStepLevel(steps[i - 1]) + 1;
+        const current = getStepLevel(steps[i]);
+        steps[i].level = Math.max(0, Math.min(4, Math.min(current, maxLevel)));
+    }
+}
+
+export function resolveDropTarget(steps, blockRootId, { mode = 'sibling' } = {}) {
+    const blockStartIndex = steps.findIndex((step) => step.id === blockRootId);
+    if (blockStartIndex < 0) return;
+    const subtree = collectStepSubtree(steps, blockStartIndex);
+    const oldRootLevel = getStepLevel(subtree[0]);
+    let newRootLevel = oldRootLevel;
+
+    if (blockStartIndex === 0) {
+        newRootLevel = oldRootLevel;
+    } else if (mode === 'child') {
+        const parent = steps[blockStartIndex - 1];
+        newRootLevel = Math.min(4, getStepLevel(parent) + 1);
+    } else {
+        const prev = steps[blockStartIndex - 1];
+        newRootLevel = getStepLevel(prev);
+        const nextIndex = blockStartIndex + subtree.length;
+        if (nextIndex < steps.length) {
+            const nextLevel = getStepLevel(steps[nextIndex]);
+            newRootLevel = Math.min(newRootLevel, nextLevel);
+        }
+    }
+
+    const delta = newRootLevel - oldRootLevel;
+    if (delta) applySubtreeLevelDelta(steps, blockStartIndex, delta);
+}
+
+export function computeChecklistInsertBounds(steps, startIndex) {
+    const blockLevel = getStepLevel(steps[startIndex]);
+    const subtree = collectStepSubtree(steps, startIndex);
+    const parentIdx = findStepParentIndex(steps, startIndex);
+
+    let minIndex = 0;
+    if (parentIdx >= 0) minIndex = parentIdx + 1;
+
+    let maxIndex = steps.length;
+    for (let i = startIndex + subtree.length; i < steps.length; i++) {
+        if (getStepLevel(steps[i]) < blockLevel) {
+            maxIndex = i;
+            break;
+        }
+    }
+
+    return { minIndex, maxIndex, blockLevel, subtreeIds: subtree.map((step) => step.id) };
+}
+
+export function computeVisibleInsertBounds(activeSteps, startIndex, visibleIds, blockIds) {
+    const { minIndex, maxIndex, subtreeIds } = computeChecklistInsertBounds(activeSteps, startIndex);
+    const blockIdSet = new Set(blockIds || subtreeIds);
+    const others = visibleIds.filter((id) => !blockIdSet.has(id));
+
+    let minAmongOthers = 0;
+    if (minIndex > 0) {
+        const parentId = activeSteps[minIndex - 1]?.id;
+        const parentPos = others.indexOf(parentId);
+        minAmongOthers = parentPos >= 0 ? parentPos + 1 : 0;
+    }
+
+    let maxAmongOthers = others.length;
+    if (maxIndex < activeSteps.length) {
+        const boundaryId = activeSteps[maxIndex]?.id;
+        const boundaryPos = others.indexOf(boundaryId);
+        maxAmongOthers = boundaryPos >= 0 ? boundaryPos : others.length;
+    }
+
+    return { minAmongOthers, maxAmongOthers, subtreeIds: subtreeIds || [...blockIdSet], others };
+}
+
+export function resolvePointerDropTarget(clientY, visibleRows, blockRows, bounds) {
+    const blockSet = new Set(blockRows);
+    const others = visibleRows.filter((row) => !blockSet.has(row));
+    let insertIndex = others.length;
+    let dropMode = 'sibling';
+
+    for (let i = 0; i < others.length; i++) {
+        const box = others[i].getBoundingClientRect();
+        const midY = box.top + box.height / 2;
+
+        if (clientY < box.top) {
+            insertIndex = i;
+            dropMode = 'sibling';
+            break;
+        }
+        if (clientY <= midY) {
+            insertIndex = i;
+            dropMode = 'sibling';
+            break;
+        }
+        if (clientY <= box.bottom) {
+            insertIndex = i + 1;
+            dropMode = 'child';
+            break;
+        }
+    }
+
+    if (bounds) {
+        insertIndex = Math.max(bounds.minAmongOthers, Math.min(bounds.maxAmongOthers, insertIndex));
+        if (dropMode === 'child' && insertIndex > 0 && insertIndex <= others.length) {
+            const parentRow = others[insertIndex - 1];
+            if (!parentRow) dropMode = 'sibling';
+        }
+    }
+
+    return { insertIndex, dropMode, others };
+}
+
 export function getStepRowLevel(row) {
     const n = Number(row?.dataset?.level);
     if (!Number.isFinite(n) || n <= 0) return 0;
@@ -349,7 +489,11 @@ function findParentRowIndex(rows, rowIndex) {
     return -1;
 }
 
-export function clampChecklistInsertIndex(allRows, block, insertIndexInOthers) {
+export function clampChecklistInsertIndex(allRows, block, insertIndexInOthers, bounds = null) {
+    if (bounds) {
+        return Math.max(bounds.minAmongOthers, Math.min(bounds.maxAmongOthers, insertIndexInOthers));
+    }
+
     const others = allRows.filter((row) => !block.includes(row));
     const firstIdx = allRows.indexOf(block[0]);
     if (firstIdx < 0) return insertIndexInOthers;
@@ -3912,9 +4056,14 @@ export const UI = {
                     this.ensureChecklistStepFromRow(row, item);
                     const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
                     applyMutate((it) => {
-                        const step = it.steps.find((s) => s.id === stepId);
-                        if (!step) return;
-                        step.level = Math.min(4, getStepLevel(step) + 1);
+                        const activeSteps = it.steps.filter((step) => !step.completed);
+                        const idx = activeSteps.findIndex((s) => s.id === stepId);
+                        if (idx < 0) return;
+                        if (getStepLevel(activeSteps[idx]) >= 4) return;
+                        applySubtreeLevelDelta(activeSteps, idx, +1);
+                        normalizeChecklistLevels(activeSteps);
+                        const doneSteps = it.steps.filter((step) => step.completed);
+                        it.steps = [...activeSteps, ...doneSteps];
                     }, { persist: false });
                     this.expandChecklistAncestorsForStep(item, stepId);
                     const host = root.closest('.mini-card') || root;
@@ -3934,9 +4083,14 @@ export const UI = {
                     this.ensureChecklistStepFromRow(row, item);
                     const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
                     applyMutate((it) => {
-                        const step = it.steps.find((s) => s.id === stepId);
-                        if (!step) return;
-                        step.level = Math.max(0, getStepLevel(step) - 1);
+                        const activeSteps = it.steps.filter((step) => !step.completed);
+                        const idx = activeSteps.findIndex((s) => s.id === stepId);
+                        if (idx < 0) return;
+                        if (getStepLevel(activeSteps[idx]) <= 0) return;
+                        applySubtreeLevelDelta(activeSteps, idx, -1);
+                        normalizeChecklistLevels(activeSteps);
+                        const doneSteps = it.steps.filter((step) => step.completed);
+                        it.steps = [...activeSteps, ...doneSteps];
                     }, { persist: false });
                     this.expandChecklistAncestorsForStep(item, stepId);
                     const host = root.closest('.mini-card') || root;
@@ -4007,12 +4161,12 @@ export const UI = {
             });
 
             if (this.canEditInline() || localOnly) {
-                this.attachChecklistDrag(root, item, applyMutate, refresh);
+                this.attachChecklistDrag(root, item, applyMutate, refresh, localOnly);
             }
         }
     },
 
-    attachChecklistDrag(root, item, applyMutate, refresh) {
+    attachChecklistDrag(root, item, applyMutate, refresh, localOnly = false) {
         if (!root.querySelector('.expanded-checklist')) return;
         if (root.dataset.checklistDragBound) return;
         root.dataset.checklistDragBound = '1';
@@ -4027,50 +4181,90 @@ export const UI = {
             || activeList.querySelector('.checklist-done-section')
             || activeList.querySelector('.step-row--done');
 
+        const buildDomBlockFromIds = (rows, ids) => {
+            const idSet = new Set(ids);
+            return rows.filter((row) => idSet.has(row.dataset.stepId));
+        };
+
+        const syncDomBlock = () => {
+            if (!activeDrag) return;
+            const rows = getActiveRows();
+            activeDrag.block = buildDomBlockFromIds(rows, activeDrag.blockStepIds);
+        };
+
+        const updateDropIndicator = (activeList, ref, mode) => {
+            let indicator = activeList.querySelector('.checklist-drop-indicator');
+            if (!indicator) {
+                indicator = document.createElement('div');
+                indicator.className = 'checklist-drop-indicator';
+                indicator.setAttribute('aria-hidden', 'true');
+                activeList.appendChild(indicator);
+            }
+            if (!ref) {
+                indicator.classList.remove('is-visible', 'is-child');
+                return;
+            }
+            indicator.classList.add('is-visible');
+            indicator.classList.toggle('is-child', mode === 'child');
+            activeList.insertBefore(indicator, ref);
+        };
+
+        const hideDropIndicator = () => {
+            getList()?.querySelector('.checklist-drop-indicator')?.classList.remove('is-visible', 'is-child');
+        };
+
         const reorderAt = (clientY) => {
             const block = activeDrag?.block;
             const activeList = getList();
             if (!block?.length || !activeList?.contains(block[0])) return;
 
             const allRows = getActiveRows();
-            const others = allRows.filter((row) => !block.includes(row));
+            const { insertIndex, dropMode, others } = resolvePointerDropTarget(
+                clientY,
+                allRows,
+                block,
+                activeDrag.bounds
+            );
+            activeDrag.dropMode = dropMode;
+            activeDrag.insertIndex = insertIndex;
 
-            let insertIndex = others.length;
-            for (let i = 0; i < others.length; i++) {
-                const box = others[i].getBoundingClientRect();
-                if (clientY <= box.top + box.height / 2) {
-                    insertIndex = i;
-                    break;
-                }
-            }
-
-            insertIndex = clampChecklistInsertIndex(allRows, block, insertIndex);
             const ref = others[insertIndex] || getDoneAnchor(activeList);
             block.forEach((node) => {
                 activeList.insertBefore(node, ref);
             });
+            updateDropIndicator(activeList, ref, dropMode);
         };
 
         const finishDrag = () => {
             if (!activeDrag) return;
-            const { block, moved } = activeDrag;
-            block.forEach((row) => row.classList.remove('is-dragging'));
+            const { block, moved, blockStepIds, dropMode } = activeDrag;
+            const blockRootId = blockStepIds[0];
+            block.forEach((r) => r.classList.remove('is-dragging'));
+            hideDropIndicator();
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup', onUp);
             if (moved) {
                 const shell = root.closest('.editor-note-shell') || root;
                 this.syncItemBodyFromDom(shell, item);
                 const collapsedKeys = this.getChecklistCollapsedKeys();
+                const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
                 applyMutate((it) => {
                     const activeSteps = it.steps.filter((step) => !step.completed);
                     const doneSteps = it.steps.filter((step) => step.completed);
                     const visibleOrderIds = getActiveRows().map((r) => r.dataset.stepId);
-                    it.steps = [
-                        ...reorderActiveStepsFromDomOrder(activeSteps, visibleOrderIds, item.id, collapsedKeys),
-                        ...doneSteps
-                    ];
-                });
+                    const reordered = reorderActiveStepsFromDomOrder(
+                        activeSteps,
+                        visibleOrderIds,
+                        item.id,
+                        collapsedKeys
+                    );
+                    resolveDropTarget(reordered, blockRootId, { mode: dropMode || 'sibling' });
+                    normalizeChecklistLevels(reordered);
+                    it.steps = [...reordered, ...doneSteps];
+                }, { persist: false });
+                this.expandChecklistAncestorsForStep(item, blockRootId);
                 refresh();
+                this.commitInlineChecklistOp(item, beforeItem, { localOnly });
             }
             activeDrag = null;
         };
@@ -4082,9 +4276,11 @@ export const UI = {
                 const dy = Math.abs(e.clientY - activeDrag.startY);
                 if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
                 activeDrag.moved = true;
-                activeDrag.block.forEach((row) => row.classList.add('is-dragging'));
+                syncDomBlock();
+                activeDrag.block.forEach((r) => r.classList.add('is-dragging'));
             }
             e.preventDefault();
+            syncDomBlock();
             reorderAt(e.clientY);
         };
 
@@ -4098,10 +4294,28 @@ export const UI = {
             if (!row) return;
             e.preventDefault();
             e.stopPropagation();
+
+            const stepId = row.dataset.stepId;
+            const activeSteps = (item.steps || []).filter((step) => !step.completed);
+            const stepIndex = activeSteps.findIndex((step) => step.id === stepId);
+            if (stepIndex < 0) return;
+
+            const visibleIds = getActiveRows().map((r) => r.dataset.stepId);
+            const { subtreeIds, minAmongOthers, maxAmongOthers } = computeVisibleInsertBounds(
+                activeSteps,
+                stepIndex,
+                visibleIds
+            );
             const rows = getActiveRows();
+            const block = buildDomBlockFromIds(rows, subtreeIds);
+
             activeDrag = {
                 row,
-                block: collectDomRowBlock(rows, row),
+                block,
+                blockStepIds: subtreeIds,
+                bounds: { minAmongOthers, maxAmongOthers },
+                dropMode: 'sibling',
+                insertIndex: 0,
                 startX: e.clientX,
                 startY: e.clientY,
                 moved: false
