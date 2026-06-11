@@ -79,12 +79,18 @@ function isQuotaError(err) {
     return err instanceof DOMException && (err.code === 22 || err.code === 1014);
 }
 
-function safeSetItem(key, value, writeState = null) {
+export function safeSetItem(key, value, writeState = null) {
     try {
         localStorage.setItem(key, value);
         return true;
     } catch (err) {
-        if (isQuotaError(err)) {
+        if (!isQuotaError(err)) throw err;
+        try {
+            localStorage.removeItem(key);
+            localStorage.setItem(key, value);
+            return true;
+        } catch (retryErr) {
+            if (!isQuotaError(retryErr)) throw retryErr;
             if (writeState) {
                 writeState.quotaExceeded = true;
                 writeState.failedKey = key;
@@ -92,7 +98,6 @@ function safeSetItem(key, value, writeState = null) {
             console.warn('[layoutStorage] quota exceeded writing', key);
             return false;
         }
-        throw err;
     }
 }
 
@@ -293,26 +298,6 @@ function applyReconcileWrites(context, stats, writeState) {
     if (writeState.quotaExceeded) return;
 
     writeJsonIfChanged(
-        'matrix_columns_float_positions',
-        pruneIdMap(readJson('matrix_columns_float_positions', {}), context.liveIds, stats, 'matrix_columns_float_positions'),
-        writeState
-    );
-    if (writeState.quotaExceeded) return;
-
-    writeJsonIfChanged(
-        'matrix_columns_float_sizes',
-        normalizeSizeOnlyMap(
-            pruneIdMap(readJson('matrix_columns_float_sizes', {}), context.liveIds, stats, 'matrix_columns_float_sizes'),
-            context.liveIds,
-            context.tileSizeById,
-            stats,
-            'matrix_columns_float_sizes'
-        ),
-        writeState
-    );
-    if (writeState.quotaExceeded) return;
-
-    writeJsonIfChanged(
         'matrix_column_positions',
         pruneCategoryMap(readJson('matrix_column_positions', {}), context.catNames, stats, 'matrix_column_positions'),
         writeState
@@ -438,13 +423,6 @@ function isCustomTileRect(w, h, tileSize = LEGACY_TILE_SIZE) {
     return Math.abs(w - def.w) > 2 || Math.abs(h - def.h) > 2;
 }
 
-function getCollapsedTierExpandCap() {
-    return {
-        w: cellsToSpanW(2) - 1,
-        h: cellsToSpanH(2) - 1
-    };
-}
-
 function inferCollapsedTileTier(w, h, prevTier = LEGACY_TILE_SIZE) {
     const prev = normalizeTileSize(prevTier);
     let inNoteZone;
@@ -466,25 +444,10 @@ function inferCollapsedTileTier(w, h, prevTier = LEGACY_TILE_SIZE) {
 
 function resolveCollapsedTierRect(w, h, prevTier = LEGACY_TILE_SIZE) {
     const tier = inferCollapsedTileTier(w, h, prevTier);
-    if (tier === 'note') {
-        const cap = getCollapsedTierExpandCap();
-        return {
-            tier,
-            w: softSnapPx(Math.max(TILE_RESIZE_MIN_W, Math.min(w, cap.w))),
-            h: softSnapPx(Math.max(TILE_RESIZE_MIN_H, Math.min(h, cap.h)))
-        };
-    }
-    if (tier === 'label') {
-        return {
-            tier,
-            w: softSnapPx(Math.max(TILE_RESIZE_MIN_W, Math.min(w, COLUMN_GRID_CELL_W))),
-            h: softSnapPx(Math.max(TILE_RESIZE_MIN_H, Math.min(h, TILE_LABEL_COMPACT_H_UP)))
-        };
-    }
     return {
         tier,
-        w: COLUMN_GRID_CELL_W,
-        h: COLUMN_GRID_CELL_H
+        w: softSnapPx(Math.max(TILE_RESIZE_MIN_W, w)),
+        h: softSnapPx(Math.max(TILE_RESIZE_MIN_H, h))
     };
 }
 
@@ -848,18 +811,18 @@ export function sanitizeLayoutSnapshot(snapshot, context) {
     next.columnPositions = pruneCategoryMap(next.columnPositions || {}, ctx.catNames, stats, 'snapshot.columnPositions');
     next.columnSizes = pruneCategoryMap(next.columnSizes || {}, ctx.catNames, stats, 'snapshot.columnSizes');
     next.columnNoteLayout = normalizeColumnNoteLayout(next.columnNoteLayout || {}, ctx.liveIds, ctx.tileSizeById, ctx.catNames, stats);
-    next.columnsFloatPositions = pruneIdMap(next.columnsFloatPositions || {}, ctx.liveIds, stats, 'snapshot.columnsFloatPositions');
-    next.columnsFloatSizes = normalizeSizeOnlyMap(next.columnsFloatSizes || {}, ctx.liveIds, ctx.tileSizeById, stats, 'snapshot.columnsFloatSizes');
+    delete next.columnsFloatPositions;
+    delete next.columnsFloatSizes;
     next.gridLayout = normalizeIdRectMap(next.gridLayout || {}, ctx.liveIds, ctx.tileSizeById, stats, 'snapshot.gridLayout');
     next.gridPins = pruneIdArray(next.gridPins || [], ctx.liveIds, stats, 'snapshot.gridPins');
     if (next.gridExpandedId && !ctx.liveIds.has(next.gridExpandedId)) {
         next.gridExpandedId = null;
     }
-    if (next.expandedCards) {
-        next.expandedCards = sanitizeExpandedMap(next.expandedCards, ctx.liveIds, stats, 'snapshot.expandedCards');
-    }
     if (next.viewSessions) {
         next.viewSessions = sanitizeViewSessions(next.viewSessions, ctx.liveIds, stats);
+        delete next.expandedCards;
+    } else if (next.expandedCards) {
+        next.expandedCards = sanitizeExpandedMap(next.expandedCards, ctx.liveIds, stats, 'snapshot.expandedCards');
     }
     return next;
 }

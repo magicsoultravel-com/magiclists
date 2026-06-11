@@ -24,7 +24,11 @@ import {
     wrapLineAsStruck
 } from './noteBodyConversion.js';
 import { hasRichMarkup, linkifyPlainUrls, sanitizeHref, sanitizeRichHtml, stripRichText } from './richText.js';
-import { migrateLegacyColumnsFloatStorage, sanitizeLayoutSnapshot } from './layoutStorage.js';
+import {
+    migrateLegacyColumnsFloatStorage,
+    safeSetItem,
+    sanitizeLayoutSnapshot
+} from './layoutStorage.js';
 import { UndoManager } from './undo.js';
 import { raiseDesktopElement, syncDesktopStackSeq } from './desktopStack.js';
 import {
@@ -1208,11 +1212,10 @@ export const UI = {
 
     resolveCollapsedTierRect(w, h, prevTier = LEGACY_TILE_SIZE) {
         const tier = this.inferCollapsedTileTier(w, h, prevTier);
-        const noteMax = this.getTileDefaultRect('note');
         return {
             tier,
-            w: this.softSnapPx(Math.max(TILE_RESIZE_MIN_W, Math.min(w, noteMax.w))),
-            h: this.softSnapPx(Math.max(TILE_RESIZE_MIN_H, Math.min(h, noteMax.h)))
+            w: this.softSnapPx(Math.max(TILE_RESIZE_MIN_W, w)),
+            h: this.softSnapPx(Math.max(TILE_RESIZE_MIN_H, h))
         };
     },
 
@@ -5104,27 +5107,51 @@ export const UI = {
     applyViewSnapshot(snapshot) {
         if (!snapshot || (snapshot.version !== 1 && snapshot.version !== 2 && snapshot.version !== 3)) return false;
         snapshot = sanitizeLayoutSnapshot(snapshot);
-        localStorage.setItem('matrix_freeform_positions', JSON.stringify(snapshot.freeformPositions || {}));
-        localStorage.setItem('matrix_freeform_sizes', JSON.stringify(snapshot.freeformSizes || {}));
-        localStorage.setItem('matrix_column_positions', JSON.stringify(snapshot.columnPositions || {}));
-        localStorage.setItem('matrix_column_sizes', JSON.stringify(snapshot.columnSizes || {}));
-        localStorage.setItem('matrix_column_note_layout', JSON.stringify(snapshot.columnNoteLayout || {}));
-        localStorage.setItem('matrix_columns_float_positions', JSON.stringify(snapshot.columnsFloatPositions || {}));
-        localStorage.setItem('matrix_columns_float_sizes', JSON.stringify(snapshot.columnsFloatSizes || {}));
-        localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(snapshot.gridLayout || {}));
-        localStorage.setItem(GRID_PINS_KEY, JSON.stringify(snapshot.gridPins || []));
+        const writeState = { quotaExceeded: false, failedKey: null };
+        const writeJson = (key, value) => safeSetItem(key, JSON.stringify(value), writeState);
+
+        writeJson('matrix_freeform_positions', snapshot.freeformPositions || {});
+        if (writeState.quotaExceeded) return false;
+        writeJson('matrix_freeform_sizes', snapshot.freeformSizes || {});
+        if (writeState.quotaExceeded) return false;
+        writeJson('matrix_column_positions', snapshot.columnPositions || {});
+        if (writeState.quotaExceeded) return false;
+        writeJson('matrix_column_sizes', snapshot.columnSizes || {});
+        if (writeState.quotaExceeded) return false;
+        writeJson('matrix_column_note_layout', snapshot.columnNoteLayout || {});
+        if (writeState.quotaExceeded) return false;
+        writeJson(GRID_LAYOUT_KEY, snapshot.gridLayout || {});
+        if (writeState.quotaExceeded) return false;
+        writeJson(GRID_PINS_KEY, snapshot.gridPins || []);
+        if (writeState.quotaExceeded) return false;
+
         if (snapshot.version >= 3 && snapshot.viewSessions) {
             applyViewSessionsFromSnapshot(snapshot.viewSessions);
         } else {
             if (snapshot.gridExpandedId) {
-                localStorage.setItem(GRID_EXPANDED_KEY, snapshot.gridExpandedId);
+                if (!safeSetItem(GRID_EXPANDED_KEY, snapshot.gridExpandedId, writeState)) return false;
             } else {
-                localStorage.removeItem(GRID_EXPANDED_KEY);
+                try {
+                    localStorage.removeItem(GRID_EXPANDED_KEY);
+                } catch {
+                    /* ignore */
+                }
             }
-            localStorage.setItem('matrix_expanded_cards', JSON.stringify(snapshot.expandedCards || {}));
+            writeJson('matrix_expanded_cards', snapshot.expandedCards || {});
+            if (writeState.quotaExceeded) return false;
         }
-        localStorage.setItem('matrix_collapsed_categories', JSON.stringify(snapshot.collapsedCategories || []));
-        return true;
+
+        writeJson('matrix_collapsed_categories', snapshot.collapsedCategories || []);
+        if (writeState.quotaExceeded) return false;
+
+        migrateLegacyColumnsFloatStorage(writeState);
+        try {
+            localStorage.removeItem('matrix_columns_float_positions');
+            localStorage.removeItem('matrix_columns_float_sizes');
+        } catch {
+            /* ignore */
+        }
+        return !writeState.quotaExceeded;
     },
 
     restoreSavedViewSnapshot(slotIndex = 0) {
