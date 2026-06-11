@@ -2305,6 +2305,7 @@ export const UI = {
                 <span class="ff-resize ff-resize-se" data-axis="se" aria-hidden="true"></span>
             `);
         }
+        card.appendChild(resizeLayer);
     },
 
     readFreeformCardSize(card) {
@@ -3695,6 +3696,20 @@ export const UI = {
         if (header) this.attachNoteBodyInteractions(header, item, interactionOptions);
         if (body) this.attachNoteBodyInteractions(body, item, interactionOptions);
 
+        if (stopMousedownPropagation && !shell.dataset.shellBubbleBound) {
+            shell.dataset.shellBubbleBound = '1';
+            shell.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
+                if (!e.target.closest(
+                    '.card-inline-edit, .step-check, .step-text, input, textarea, button, a, '
+                    + '.card-act, .grab-handle--step, .expanded-checklist-add-btn, '
+                    + '.checklist-done-toggle, .step-collapse-btn, .step-delete-btn, '
+                    + '.step-indent-btn, .step-outdent-btn, .checklist-expand-collapse-all-btn'
+                )) return;
+                e.stopPropagation();
+            });
+        }
+
         shell.querySelectorAll('.card-inline-edit').forEach((el) => {
             el.addEventListener('input', () => this.updateNoteMetaStats(shell, item));
         });
@@ -4395,6 +4410,9 @@ export const UI = {
                 el.addEventListener('click', (e) => {
                     if (this.tryOpenRichEditLink(e, el)) return;
                     e.stopPropagation();
+                    if (document.activeElement !== el) {
+                        this.focusInlineEdit(el, 'end');
+                    }
                 });
                 el.addEventListener('mousedown', (e) => {
                     if (e.button !== 0) return;
@@ -4407,7 +4425,7 @@ export const UI = {
                     if (document.activeElement !== el) {
                         this.focusInlineEdit(el, 'end');
                     }
-                }, !!stopMousedownPropagation);
+                });
                 el.addEventListener('focus', () => {
                     const card = root.closest('.mini-card');
                     if (card?.dataset.freeform === '1') this.raiseFreeformCard(card);
@@ -4531,6 +4549,9 @@ export const UI = {
             root.querySelectorAll('.step-row--display').forEach((row) => {
                 const checkbox = row.querySelector('.step-check');
                 const stepId = row.dataset.stepId;
+                checkbox?.addEventListener('mousedown', (e) => {
+                    e.stopPropagation();
+                });
                 checkbox?.addEventListener('change', (e) => {
                     e.stopPropagation();
                     this.ensureChecklistStepFromRow(row, item);

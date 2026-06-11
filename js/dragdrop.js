@@ -369,10 +369,10 @@ function bindSnapPanelCardInteractions({
                 return;
             }
 
+            if (pointerHitsNoteEditor(e.clientX, e.clientY, card)) return;
             if (e.target.closest('.editor-note-body .card-inline-edit, .editor-note-header .card-inline-edit')) {
                 return;
             }
-            if (pointerHitsInlineEdit(e.clientX, e.clientY, card)) return;
 
             if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
             if (!shouldStartCardDrag(e.target)) return;
@@ -423,11 +423,23 @@ function pointerHitsStepGrab(clientX, clientY) {
 }
 
 function pointerHitsInlineEdit(clientX, clientY, card) {
+    return pointerHitsNoteEditor(clientX, clientY, card);
+}
+
+function pointerHitsNoteEditor(clientX, clientY, card) {
     if (!card || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
     return document.elementsFromPoint(clientX, clientY)
         .some((el) => el instanceof Element
             && card.contains(el)
-            && el.closest('.editor-note-body .card-inline-edit, .editor-note-header .card-inline-edit'));
+            && el.closest(
+                '.editor-note-shell .card-inline-edit, '
+                + '.editor-note-shell .step-check, '
+                + '.editor-note-shell input, '
+                + '.editor-note-shell textarea, '
+                + '.editor-note-shell button, '
+                + '.editor-note-shell a, '
+                + '.editor-note-shell .grab-handle--step'
+            ));
 }
 
 function shouldStartCardDrag(target) {
@@ -640,10 +652,10 @@ export const DragDropEngine = {
                     return;
                 }
 
+                if (pointerHitsNoteEditor(e.clientX, e.clientY, card)) return;
                 if (e.target.closest('.editor-note-body .card-inline-edit, .editor-note-header .card-inline-edit')) {
                     return;
                 }
-                if (pointerHitsInlineEdit(e.clientX, e.clientY, card)) return;
 
                 if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
                 if (!shouldStartCardDrag(e.target)) return;
@@ -1044,10 +1056,10 @@ export const DragDropEngine = {
                 if (e.button !== 0) return;
                 if (card.dataset.columnNote === '1') return;
                 if (e.target.closest('.grab-handle--note-cat')) return;
+                if (pointerHitsNoteEditor(e.clientX, e.clientY, card)) return;
                 if (e.target.closest('.editor-note-body .card-inline-edit, .editor-note-header .card-inline-edit')) {
                     return;
                 }
-                if (pointerHitsInlineEdit(e.clientX, e.clientY, card)) return;
                 if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
                 if (!shouldStartCardDrag(e.target)) return;
                 if (cardIsPinned(card)) return;

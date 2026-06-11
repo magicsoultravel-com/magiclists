@@ -2111,6 +2111,16 @@ html[data-note-font="kalam"] .mini-card .step-text {
     flex: 1 1 auto;
     min-height: 0;
     gap: 0.3rem;
+    position: relative;
+    z-index: 5;
+    pointer-events: auto;
+}
+
+.mini-card.expanded .editor-note-header,
+.mini-card.expanded .editor-note-body {
+    pointer-events: auto;
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 .mini-card.expanded .card-body,
@@ -4238,6 +4248,7 @@ textarea.form-input {
     inset: 0;
     z-index: 10;
     pointer-events: none;
+    overflow: visible;
 }
 
 #app-canvas.view-freeform .ff-resize-layer .ff-resize,
