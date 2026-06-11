@@ -77,6 +77,12 @@ const CARD_COMPACT_H = 56;
 export const TILE_LABEL_H = 28;
 export const TILE_NOTE_W_CELLS = 2.5;
 export const TILE_NOTE_H_CELLS = 5;
+export const TILE_LABEL_COMPACT_H_UP = 40;
+export const TILE_LABEL_COMPACT_H_DOWN = 36;
+export const TILE_COMPACT_NOTE_W_UP = 104;
+export const TILE_COMPACT_NOTE_H_UP = 64;
+export const TILE_COMPACT_NOTE_W_DOWN = 100;
+export const TILE_COMPACT_NOTE_H_DOWN = 60;
 export const TILE_SIZES = ['label', 'compact', 'note'];
 export const DEFAULT_TILE_SIZE = 'note';
 export const LEGACY_TILE_SIZE = 'compact';
@@ -1168,6 +1174,152 @@ export const UI = {
         return w < this.cellsToSpanW(2) || h < this.cellsToSpanH(2);
     },
 
+    getCollapsedTierExpandCap() {
+        return {
+            w: this.cellsToSpanW(2) - 1,
+            h: this.cellsToSpanH(2) - 1
+        };
+    },
+
+    softSnapPx(value) {
+        return Math.round(Math.max(0, value) / 2) * 2;
+    },
+
+    inferCollapsedTileTier(w, h, prevTier = LEGACY_TILE_SIZE) {
+        const prev = normalizeTileSize(prevTier);
+        let inNoteZone;
+        if (prev === 'note') {
+            inNoteZone = !(w <= TILE_COMPACT_NOTE_W_DOWN && h <= TILE_COMPACT_NOTE_H_DOWN);
+        } else {
+            inNoteZone = w > TILE_COMPACT_NOTE_W_UP || h > TILE_COMPACT_NOTE_H_UP;
+        }
+        if (inNoteZone) return 'note';
+
+        if (prev === 'label') {
+            return h > TILE_LABEL_COMPACT_H_UP ? 'compact' : 'label';
+        }
+        if (prev === 'compact') {
+            return h < TILE_LABEL_COMPACT_H_DOWN ? 'label' : 'compact';
+        }
+        return h < TILE_LABEL_COMPACT_H_DOWN ? 'label' : 'compact';
+    },
+
+    resolveCollapsedTierRect(w, h, prevTier = LEGACY_TILE_SIZE) {
+        const tier = this.inferCollapsedTileTier(w, h, prevTier);
+        if (tier === 'note') {
+            const cap = this.getCollapsedTierExpandCap();
+            return {
+                tier,
+                w: this.softSnapPx(Math.max(COLUMN_GRID_CELL_W, Math.min(w, cap.w))),
+                h: this.softSnapPx(Math.max(COLUMN_GRID_CELL_H, Math.min(h, cap.h)))
+            };
+        }
+        if (tier === 'label') {
+            return { tier, w: COLUMN_GRID_CELL_W, h: TILE_LABEL_H };
+        }
+        return { tier, w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H };
+    },
+
+    createTierResizeSession(card, item) {
+        const rect = this.readNoteRect(card);
+        const startTier = this.getCardTileSize(card, item);
+        return {
+            startTier,
+            previewTier: startTier,
+            startRect: { x: rect.x, y: rect.y, w: rect.w, h: rect.h }
+        };
+    },
+
+    applyTierResizeBox(card, rect) {
+        card.style.left = `${rect.x}px`;
+        card.style.top = `${rect.y}px`;
+        this.applyFreeformDimensions(card, rect.w, rect.h);
+    },
+
+    applyTierResizePreview(card, item, rect, tier, resizeState) {
+        if (!card || !item || !resizeState) return;
+        const normalized = normalizeTileSize(tier);
+        card.classList.add('is-tier-resizing');
+        card.dataset.tierResizePreview = '1';
+
+        if (resizeState.previewTier !== normalized) {
+            const activeCategories = readStoredCategories();
+            const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
+            const previewItem = { ...item, tileSize: normalized };
+            this.renderCollapsedCard(card, previewItem, activeCategories, targetCatName, categoryColor);
+            resizeState.previewTier = normalized;
+            card.dataset.tierResizePreview = '1';
+            card.classList.add('is-tier-resizing');
+        }
+
+        this.applyTierResizeBox(card, rect);
+    },
+
+    revertTierResizePreview(card, item, resizeState) {
+        if (!card || !item || !resizeState) return;
+        delete card.dataset.tierResizePreview;
+        card.classList.remove('is-tier-resizing');
+
+        const activeCategories = readStoredCategories();
+        const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
+        const restoreItem = { ...item, tileSize: resizeState.startTier };
+        this.renderCollapsedCard(card, restoreItem, activeCategories, targetCatName, categoryColor);
+        this.applyTierResizeBox(card, resizeState.startRect);
+
+        if (card.dataset.gridBoard === '1') {
+            this.finalizeGridBoardCard(card);
+        } else if (card.dataset.columnNote === '1') {
+            this.finalizeColumnNote(card, card.dataset.category || targetCatName);
+        } else if (card.dataset.freeform === '1') {
+            this.finalizeFreeformCard(card);
+        } else if (card.dataset.columnsFloat === '1') {
+            this.finalizeColumnsFloat(card);
+        }
+    },
+
+    commitTierResize(card, item, resizeState) {
+        if (!card || !item || !resizeState) return resizeState?.previewTier || resolveTileSize(item);
+        delete card.dataset.tierResizePreview;
+        card.classList.remove('is-tier-resizing');
+
+        const finalTier = normalizeTileSize(resizeState.previewTier);
+        if (finalTier !== resolveTileSize(item) && this.canEditInline()) {
+            this.mutateItem(item, (it) => {
+                it.tileSize = finalTier;
+            }, { preserveView: true, skipRerender: true });
+            item.tileSize = finalTier;
+            boardItemsById.set(item.id, item);
+        }
+        return finalTier;
+    },
+
+    processCollapsedTierResizeMove(card, item, resizeState, rect, { maxW = Infinity, axis = 'se' } = {}) {
+        const resolved = this.resolveCollapsedTierRect(rect.w, rect.h, resizeState.previewTier);
+        let finalW = resolved.w;
+        let finalH = resolved.h;
+        let finalX = rect.x;
+        let finalY = rect.y;
+
+        if (axis.includes('w') && rect.w !== finalW) {
+            finalX = rect.x + (rect.w - finalW);
+        }
+        if (axis.includes('n') && rect.h !== finalH) {
+            finalY = rect.y + (rect.h - finalH);
+        }
+
+        if (Number.isFinite(maxW) && finalX + finalW > maxW) {
+            if (rect.w > resolved.w) {
+                finalX = Math.max(0, maxW - finalW);
+            } else {
+                finalW = Math.max(COLUMN_GRID_CELL_W, maxW - finalX);
+            }
+        }
+
+        const finalRect = { x: finalX, y: finalY, w: finalW, h: finalH };
+        this.applyTierResizePreview(card, item, finalRect, resolved.tier, resizeState);
+        return { ...finalRect, tier: resolved.tier };
+    },
+
     collapseSnapPanelCard(card, item) {
         const activeCategories = readStoredCategories();
         const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
@@ -2020,6 +2172,7 @@ export const UI = {
 
     applyFreeformSize(card) {
         if (card.dataset.freeform !== '1') return;
+        if (card.dataset.tierResizePreview === '1') return;
         const saved = this.getFreeformSizes()[card.dataset.id];
         const isExpanded = card.classList.contains('expanded');
         const item = this.resolveBoardItem(card.dataset.id);
@@ -4968,6 +5121,7 @@ export const UI = {
 
     applyGridBoardSize(card) {
         if (card.dataset.gridBoard !== '1') return;
+        if (card.dataset.tierResizePreview === '1') return;
         const isExpanded = card.classList.contains('expanded');
         const saved = this.getGridLayout()[card.dataset.id];
         let w;
@@ -6140,6 +6294,7 @@ export const UI = {
         if (card.dataset.columnNote !== '1') return;
         card.style.position = 'absolute';
         this.setupFreeformChrome(card);
+        if (card.dataset.tierResizePreview === '1') return;
         const saved = this.getColumnNoteLayout()[categoryName]?.[card.dataset.id];
         const isExpanded = card.classList.contains('expanded');
         if (!isExpanded) {
@@ -6165,6 +6320,7 @@ export const UI = {
         if (card.dataset.columnsFloat !== '1') return;
         card.style.position = 'absolute';
         this.setupFreeformChrome(card);
+        if (card.dataset.tierResizePreview === '1') return;
         const saved = this.getColumnsFloatSizes()[card.dataset.id];
         const isExpanded = card.classList.contains('expanded');
         if (isExpanded) {
@@ -6172,7 +6328,14 @@ export const UI = {
             const h = saved?.h ?? FREEFORM_EXPANDED_DEFAULT_H;
             this.applyFreeformDimensions(card, w, h);
         } else {
-            this.applyFreeformDimensions(card, FREEFORM_DEFAULT_W, FREEFORM_DEFAULT_H);
+            const item = this.resolveBoardItem(card.dataset.id);
+            const tileSize = this.getCardTileSize(card, item);
+            if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) {
+                this.applyFreeformDimensions(card, saved.w, saved.h);
+            } else {
+                const defaults = this.getTileDefaultRect(tileSize);
+                this.applyFreeformDimensions(card, defaults.w, defaults.h);
+            }
         }
     },
 

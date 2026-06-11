@@ -63,7 +63,8 @@ function finishSnapPanelGesture(card, {
     clearPreview,
     endScrollPolicy,
     cleanupActive,
-    animate = true
+    animate = true,
+    tierResizeState = null
 }) {
     clearPreview(false);
     endScrollPolicy?.();
@@ -72,7 +73,10 @@ function finishSnapPanelGesture(card, {
     UI.applyNoteRect(card, rect, { settling: animate });
 
     const item = currentItems.find((i) => i.id === card.dataset.id);
-    const tileSize = item ? UI.getCardTileSize(card, item) : 'compact';
+    let tileSize = item ? UI.getCardTileSize(card, item) : 'compact';
+    if (item && tierResizeState && UI.isCollapsedTile(card)) {
+        tileSize = UI.commitTierResize(card, item, tierResizeState);
+    }
     if (item && UI.isCollapsedTile(card) && UI.shouldSnapPanelExpand(rect.w, rect.h, tileSize)) {
         saveLayout(card, rect, { customCompact: false });
         onExpandFromResize(card, item, rect, { animate, bounds });
@@ -185,7 +189,7 @@ function bindSnapPanelCardInteractions({
         if (panelEl !== canvas) panelEl.classList.remove('is-layout-active');
     };
 
-    const finishAction = (card, { animate = true } = {}) => {
+    const finishAction = (card, { animate = true, tierResizeState = null } = {}) => {
         finishSnapPanelGesture(card, {
             canvas,
             currentItems,
@@ -197,7 +201,8 @@ function bindSnapPanelCardInteractions({
             clearPreview: clearLayoutPreview,
             endScrollPolicy,
             cleanupActive,
-            animate
+            animate,
+            tierResizeState
         });
     };
 
@@ -269,6 +274,22 @@ function bindSnapPanelCardInteractions({
 
         const bounds = getBounds();
         const origin = bounds.origin ?? 0;
+        const item = currentItems.find((i) => i.id === card.dataset.id);
+        const maxW = bounds.packW + origin;
+
+        if (item && UI.isCollapsedTile(card) && resizeActive.tierResizeState) {
+            nextX = Math.max(origin, nextX);
+            nextY = Math.max(origin, nextY);
+            UI.processCollapsedTierResizeMove(card, item, resizeActive.tierResizeState, {
+                x: nextX,
+                y: nextY,
+                w: nextW,
+                h: nextH
+            }, { maxW, axis });
+            runLayoutPreview(card);
+            return;
+        }
+
         const clamped = UI.clampGridResize(nextW, nextH, { packW: bounds.packW });
         if (axis.includes('w')) nextX = origX + (origW - clamped.w);
         if (axis.includes('n')) nextY = origY + (origH - clamped.h);
@@ -277,11 +298,11 @@ function bindSnapPanelCardInteractions({
         nextY = Math.max(origin, nextY);
         let finalW = clamped.w;
         let finalH = clamped.h;
-        if (nextX + finalW > bounds.packW + origin) {
+        if (nextX + finalW > maxW) {
             if (axis.includes('w')) {
-                nextX = Math.max(origin, bounds.packW + origin - finalW);
+                nextX = Math.max(origin, maxW - finalW);
             } else {
-                finalW = Math.max(COLUMN_GRID_CELL_W, bounds.packW + origin - nextX);
+                finalW = Math.max(COLUMN_GRID_CELL_W, maxW - nextX);
             }
         }
 
@@ -296,11 +317,17 @@ function bindSnapPanelCardInteractions({
 
     const onResizeUp = () => {
         if (!resizeActive) return;
-        const { card, moved } = resizeActive;
+        const { card, moved, tierResizeState } = resizeActive;
+        const item = currentItems.find((i) => i.id === card.dataset.id);
         card.classList.remove(resizeClass);
         if (moved) {
             card.dataset.skipExpand = '1';
-            finishAction(card);
+            finishAction(card, { tierResizeState });
+        } else if (tierResizeState && item) {
+            UI.revertTierResizePreview(card, item, tierResizeState);
+            clearLayoutPreview(true);
+            endScrollPolicy?.();
+            cleanupActive();
         } else {
             clearLayoutPreview(true);
             endScrollPolicy?.();
@@ -325,6 +352,10 @@ function bindSnapPanelCardInteractions({
                 markLayoutActive();
                 startScrollPolicy?.();
                 const { w: origW, h: origH } = UI.readFreeformCardSize(card);
+                const item = currentItems.find((i) => i.id === card.dataset.id);
+                const tierResizeState = item && UI.isCollapsedTile(card)
+                    ? UI.createTierResizeSession(card, item)
+                    : null;
                 resizeActive = {
                     card,
                     axis: resizeHandle.dataset.axis || 'se',
@@ -334,7 +365,8 @@ function bindSnapPanelCardInteractions({
                     origY: parseFloat(card.style.top) || 0,
                     origW,
                     origH,
-                    moved: false
+                    moved: false,
+                    tierResizeState
                 };
                 card.classList.add(resizeClass);
                 card.dataset.skipExpand = '1';
@@ -489,8 +521,13 @@ export const DragDropEngine = {
         const onResizeMove = (e) => {
             if (!resizeActive) return;
             e.preventDefault();
-            const { card, axis, startX, startY, origX, origY, origW, origH } = resizeActive;
+            const { card, axis, startX, startY, origX, origY, origW, origH, tierResizeState } = resizeActive;
             const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, startX, startY);
+            if (!resizeActive.moved) {
+                if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
+                resizeActive.moved = true;
+            }
+            const item = currentItems.find((i) => i.id === card.dataset.id);
 
             let nextX = origX;
             let nextY = origY;
@@ -506,6 +543,18 @@ export const DragDropEngine = {
             if (axis.includes('n')) {
                 nextH = origH - dy;
                 nextY = origY + dy;
+            }
+
+            if (item && UI.isCollapsedTile(card) && tierResizeState) {
+                nextX = Math.max(0, nextX);
+                nextY = Math.max(0, nextY);
+                UI.processCollapsedTierResizeMove(card, item, tierResizeState, {
+                    x: nextX,
+                    y: nextY,
+                    w: nextW,
+                    h: nextH
+                }, { axis });
+                return;
             }
 
             const clamped = clampSize(nextW, nextH);
@@ -525,15 +574,38 @@ export const DragDropEngine = {
 
         const onResizeUp = () => {
             if (!resizeActive) return;
-            const { card } = resizeActive;
+            const { card, moved, tierResizeState } = resizeActive;
+            const item = currentItems.find((i) => i.id === card.dataset.id);
             card.classList.remove('is-freeform-resizing');
-            UI.saveFreeformPosition(
-                card.dataset.id,
-                parseFloat(card.style.left) || 0,
-                parseFloat(card.style.top) || 0
-            );
-            UI.saveFreeformSizeFromCard(card);
-            card.dataset.skipExpand = '1';
+
+            if (!moved && tierResizeState && item) {
+                UI.revertTierResizePreview(card, item, tierResizeState);
+            } else if (moved) {
+                card.dataset.skipExpand = '1';
+                UI.saveFreeformPosition(
+                    card.dataset.id,
+                    parseFloat(card.style.left) || 0,
+                    parseFloat(card.style.top) || 0
+                );
+                if (item && tierResizeState && UI.isCollapsedTile(card)) {
+                    const tileSize = UI.commitTierResize(card, item, tierResizeState);
+                    const { w, h } = UI.readFreeformCardSize(card);
+                    if (UI.shouldSnapPanelExpand(w, h, tileSize)) {
+                        UI.updateFreeformCard(card, item, { expanded: true, dimensions: { w, h } });
+                    } else {
+                        const sizes = UI.getFreeformSizes();
+                        sizes[card.dataset.id] = {
+                            w: Math.round(w),
+                            h: Math.round(h),
+                            customCompact: UI.isCustomTileRect(w, h, tileSize)
+                        };
+                        localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
+                        UI.finalizeFreeformCard(card);
+                    }
+                } else {
+                    UI.saveFreeformSizeFromCard(card);
+                }
+            }
             resizeActive = null;
             document.removeEventListener('mousemove', onResizeMove);
             document.removeEventListener('mouseup', onResizeUp);
@@ -549,17 +621,11 @@ export const DragDropEngine = {
                     e.preventDefault();
                     e.stopPropagation();
                     UI.cancelCardAnimation(card);
-                    let { w: startW, h: startH } = UI.readFreeformCardSize(card);
-                    if (UI.isCollapsedTile(card)) {
-                        const itemMatch = currentItems.find(i => i.id === card.dataset.id);
-                        if (itemMatch) {
-                            UI.updateFreeformCard(card, itemMatch, {
-                                expanded: true,
-                                dimensions: { w: startW, h: startH }
-                            });
-                        }
-                        ({ w: startW, h: startH } = UI.readFreeformCardSize(card));
-                    }
+                    const { w: startW, h: startH } = UI.readFreeformCardSize(card);
+                    const itemMatch = currentItems.find((i) => i.id === card.dataset.id);
+                    const tierResizeState = itemMatch && UI.isCollapsedTile(card)
+                        ? UI.createTierResizeSession(card, itemMatch)
+                        : null;
                     resizeActive = {
                         card,
                         axis: resizeHandle.dataset.axis || 'se',
@@ -568,7 +634,9 @@ export const DragDropEngine = {
                         origX: parseFloat(card.style.left) || 0,
                         origY: parseFloat(card.style.top) || 0,
                         origW: startW,
-                        origH: startH
+                        origH: startH,
+                        moved: false,
+                        tierResizeState
                     };
                     card.classList.add('is-freeform-resizing');
                     card.dataset.skipExpand = '1';
@@ -1059,11 +1127,25 @@ export const DragDropEngine = {
                 nextY = origY + dy;
             }
 
+            const item = currentItems.find((i) => i.id === card.dataset.id);
+            const innerW = isFloat ? canvas.clientWidth : UI.getColumnNotesInnerWidth(boundsEl);
+
+            if (item && UI.isCollapsedTile(card) && resizeActive.tierResizeState) {
+                nextX = Math.max(0, nextX);
+                nextY = Math.max(0, nextY);
+                UI.processCollapsedTierResizeMove(card, item, resizeActive.tierResizeState, {
+                    x: nextX,
+                    y: nextY,
+                    w: nextW,
+                    h: nextH
+                }, { maxW: innerW, axis });
+                return;
+            }
+
             const clamped = clampSize(nextW, nextH);
             if (axis.includes('w')) nextX = origX + (origW - clamped.w);
             if (axis.includes('n')) nextY = origY + (origH - clamped.h);
 
-            const innerW = isFloat ? canvas.clientWidth : UI.getColumnNotesInnerWidth(boundsEl);
             nextX = Math.max(0, nextX);
             nextY = Math.max(0, nextY);
             if (nextX + clamped.w > innerW) {
@@ -1081,18 +1163,23 @@ export const DragDropEngine = {
 
         const onUp = () => {
             if (!resizeActive) return;
-            const { card, moved, boundsEl, isFloat, snapshot } = resizeActive;
+            const { card, moved, boundsEl, isFloat, snapshot, tierResizeState } = resizeActive;
+            const item = currentItems.find((i) => i.id === card.dataset.id);
             card.classList.remove('is-column-resizing');
             canvas.classList.remove('is-layout-active');
             document.removeEventListener('mousemove', onMove);
             document.removeEventListener('mouseup', onUp);
             resizeActive.sessionCleanup?.();
 
-            if (!moved && snapshot) {
-                card.style.left = snapshot.left;
-                card.style.top = snapshot.top;
-                card.style.setProperty('width', snapshot.width, 'important');
-                card.style.setProperty('height', snapshot.height, 'important');
+            if (!moved) {
+                if (tierResizeState && item) {
+                    UI.revertTierResizePreview(card, item, tierResizeState);
+                } else if (snapshot) {
+                    card.style.left = snapshot.left;
+                    card.style.top = snapshot.top;
+                    card.style.setProperty('width', snapshot.width, 'important');
+                    card.style.setProperty('height', snapshot.height, 'important');
+                }
             } else {
                 const innerW = isFloat ? canvas.clientWidth : UI.getColumnNotesInnerWidth(boundsEl);
                 const maxH = isFloat
@@ -1101,12 +1188,37 @@ export const DragDropEngine = {
                 const rect = UI.clampManualNoteRect(UI.readNoteRect(card), { maxW: innerW, maxH });
                 UI.applyNoteRect(card, rect, { settling: true });
 
-                if (isFloat) {
+                let tileSize = item ? UI.getCardTileSize(card, item) : 'compact';
+                if (item && tierResizeState && UI.isCollapsedTile(card)) {
+                    tileSize = UI.commitTierResize(card, item, tierResizeState);
+                }
+
+                if (item && UI.isCollapsedTile(card) && UI.shouldSnapPanelExpand(rect.w, rect.h, tileSize)) {
+                    if (isFloat) {
+                        UI.updateColumnsFloatCard(card, item, { expanded: true, dimensions: { w: rect.w, h: rect.h } });
+                    } else {
+                        UI.updateColumnNoteCard(card, item, { expanded: true, dimensions: { w: rect.w, h: rect.h } });
+                    }
+                } else if (isFloat) {
                     UI.saveColumnsFloatPosition(card.dataset.id, rect.x, rect.y);
                     UI.saveColumnsFloatSize(card.dataset.id, rect.w, rect.h);
+                    if (item && tierResizeState) {
+                        const sizes = UI.getColumnsFloatSizes();
+                        sizes[card.dataset.id] = {
+                            w: Math.round(rect.w),
+                            h: Math.round(rect.h),
+                            customCompact: UI.isCustomTileRect(rect.w, rect.h, tileSize)
+                        };
+                        localStorage.setItem('matrix_columns_float_sizes', JSON.stringify(sizes));
+                    }
+                    UI.finalizeColumnsFloat(card);
                 } else {
                     const cat = card.dataset.category;
-                    if (cat) UI.saveColumnNoteLayout(cat, card.dataset.id, rect);
+                    if (cat) {
+                        UI.saveColumnNoteLayout(cat, card.dataset.id, rect, {
+                            customCompact: UI.isCustomTileRect(rect.w, rect.h, tileSize)
+                        });
+                    }
                     const column = boundsEl.closest('.canvas-column');
                     if (column) UI.resizeColumnToFit(column, { animate: true });
                 }
@@ -1128,32 +1240,36 @@ export const DragDropEngine = {
                 UI.cancelCardAnimation(card);
                 const boundsEl = canvas;
                 const isFloat = card.dataset.columnsFloat === '1';
-                let { w: startW, h: startH } = UI.readFreeformCardSize(card);
-
-                if (UI.isCollapsedTile(card)) {
-                    const itemMatch = currentItems.find(i => i.id === card.dataset.id);
-                    if (itemMatch && isFloat) {
-                        UI.updateColumnsFloatCard(card, itemMatch, {
-                            expanded: true,
-                            dimensions: { w: startW, h: startH }
-                        });
-                    }
-                    ({ w: startW, h: startH } = UI.readFreeformCardSize(card));
-                }
+                const { w: startW, h: startH } = UI.readFreeformCardSize(card);
+                const itemMatch = currentItems.find((i) => i.id === card.dataset.id);
+                const tierResizeState = itemMatch && UI.isCollapsedTile(card)
+                    ? UI.createTierResizeSession(card, itemMatch)
+                    : null;
 
                 const snapshot = {
                     left: card.style.left,
                     top: card.style.top,
                     width: card.style.width || `${startW}px`,
-                    height: card.style.height || `${startH}px`
+                    height: card.style.height || `${startH}px`,
+                    tierResizeState: tierResizeState
+                        ? {
+                            startTier: tierResizeState.startTier,
+                            previewTier: tierResizeState.previewTier,
+                            startRect: { ...tierResizeState.startRect }
+                        }
+                        : null
                 };
 
                 const sessionCleanup = bindPointerSession({
                     onCancel: () => {
-                        card.style.left = snapshot.left;
-                        card.style.top = snapshot.top;
-                        card.style.setProperty('width', snapshot.width, 'important');
-                        card.style.setProperty('height', snapshot.height, 'important');
+                        if (snapshot.tierResizeState && itemMatch) {
+                            UI.revertTierResizePreview(card, itemMatch, snapshot.tierResizeState);
+                        } else {
+                            card.style.left = snapshot.left;
+                            card.style.top = snapshot.top;
+                            card.style.setProperty('width', snapshot.width, 'important');
+                            card.style.setProperty('height', snapshot.height, 'important');
+                        }
                         card.classList.remove('is-column-resizing');
                         canvas.classList.remove('is-layout-active');
                         resizeActive = null;
@@ -1175,6 +1291,7 @@ export const DragDropEngine = {
                     origH: startH,
                     moved: false,
                     snapshot,
+                    tierResizeState,
                     sessionCleanup
                 };
                 card.classList.add('is-column-resizing');

@@ -2064,6 +2064,19 @@ html[data-note-font="kalam"] .mini-card .step-text {
     z-index: 25;
 }
 
+.mini-card.is-tier-resizing {
+    overflow: hidden !important;
+}
+
+.mini-card.is-tier-resizing.tile-label,
+.mini-card.is-tier-resizing.tile-compact,
+.mini-card.is-tier-resizing.tile-note {
+    width: auto !important;
+    height: auto !important;
+    min-height: unset !important;
+    max-height: none !important;
+}
+
 .mini-card.expanded {
     padding: 0.6rem !important;
     height: auto !important;
