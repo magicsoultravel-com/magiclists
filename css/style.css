@@ -408,6 +408,8 @@ body {
 .side-panel {
     width: 220px;
     flex-shrink: 0;
+    align-self: flex-start;
+    max-height: 100vh;
     display: flex;
     flex-direction: column;
     gap: 0;
@@ -527,8 +529,9 @@ body {
 }
 
 .side-panel-scroll {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-height: 0;
+    max-height: calc(100vh - 9.5rem);
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
@@ -536,15 +539,15 @@ body {
     overflow-y: auto;
 }
 
-.side-panel-footer {
+.side-panel-bottom {
     flex-shrink: 0;
-    margin-top: auto;
-    padding: 0.28rem 0.22rem 0.08rem;
+    margin-top: 0.15rem;
+    padding: 0.2rem 0.22rem 0.05rem;
     border-top: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
-    text-align: right;
+    text-align: left;
 }
 
 .sidebar-history-section {
@@ -594,7 +597,7 @@ body {
 .sidebar-storage-stats {
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: flex-start;
     gap: 0.04rem;
     font-size: 0.46rem;
     color: var(--text-muted);

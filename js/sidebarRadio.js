@@ -5,6 +5,7 @@ import { RadioPopover } from './radioPopover.js';
 import { clampPanelToViewport } from './popoverPosition.js';
 import { escapeHtml, countryFlagEmoji, debounce, syncMarquee } from './radioUtils.js';
 import { ACTION_ICONS, CARD_ICONS } from './ui.js';
+import { applySectionCollapse } from './hamburger.js';
 
 export const SidebarRadio = {
     root: null,
@@ -269,6 +270,7 @@ export const SidebarRadio = {
                 </div>
             </div>
         `;
+        applySectionCollapse('radio-section', 'radio-section-header', true);
     },
 
     bindShellListeners() {

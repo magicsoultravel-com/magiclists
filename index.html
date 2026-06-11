@@ -86,10 +86,10 @@
                 <div class="collapsable-section collapsed" id="categories-section">
                     <div class="sidebar-notes-group">
                         <div class="collapsable-header list-row--header sidebar-notes-subheader" id="categories-list-active-header">
-                            <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Active</span>
+                            <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Active</span>
                             <span id="categories-active-count" class="status-badge">0</span>
                         </div>
-                        <div class="collapsable-section" id="categories-list-active-section">
+                        <div class="collapsable-section collapsed" id="categories-list-active-section">
                             <div id="categories-list-active-zone" class="sidebar-notes-list"></div>
                         </div>
                     </div>
@@ -152,9 +152,8 @@
                     </div>
                 </div>
             </div>
-            </div>
 
-            <footer id="side-panel-footer" class="side-panel-footer" aria-label="Side panel footer">
+            <div class="side-panel-bottom" aria-label="Side panel footer">
                 <div id="sidebar-history-section" class="sidebar-history-section is-hidden">
                     <div class="collapsable-header list-row--header sidebar-history-header" id="history-section-header">
                         <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>History</span>
@@ -170,7 +169,8 @@
                     <span id="sidebar-storage-matrix" class="sidebar-storage-stat">Matrix: —</span>
                     <span id="sidebar-storage-app" class="sidebar-storage-stat">App: —</span>
                 </div>
-            </footer>
+            </div>
+            </div>
 
             <input type="file" id="system-import-file-picker" accept=".json" class="is-hidden">
         </aside>

@@ -23,6 +23,21 @@ function writeSidebarSection(sectionId, collapsed) {
     localStorage.setItem(SIDEBAR_SECTIONS_KEY, JSON.stringify(map));
 }
 
+export function applySectionCollapse(sectionId, headerId, startCollapsed = false) {
+    const header = document.getElementById(headerId);
+    const section = document.getElementById(sectionId);
+    if (!header || !section) return;
+
+    const toggle = header.querySelector('.collapsable-toggle');
+    const stored = readSidebarSections();
+    const collapsed = Object.prototype.hasOwnProperty.call(stored, sectionId)
+        ? !!stored[sectionId]
+        : startCollapsed;
+
+    section.classList.toggle('collapsed', collapsed);
+    toggle?.classList.toggle('collapsed', collapsed);
+}
+
 export const SidePanel = {
     panel: null,
     toggleBtn: null,
@@ -78,7 +93,7 @@ export const SidePanel = {
         this.bindCollapsable('quick-actions-header', 'quick-actions-section', true);
         this.bindCollapsable('view-section-header', 'view-section', true);
         this.bindCollapsable('categories-section-header', 'categories-section', true);
-        this.bindCollapsable('categories-list-active-header', 'categories-list-active-section');
+        this.bindCollapsable('categories-list-active-header', 'categories-list-active-section', true);
         this.bindCollapsable('categories-list-hidden-header', 'categories-list-hidden-section', true);
         this.bindCollapsable('tools-section-header', 'tools-section', true);
         this.bindCollapsable('notes-list-section-header', 'notes-list-section', false, '.sidebar-notes-list-sort');
@@ -94,17 +109,14 @@ export const SidePanel = {
         const section = document.getElementById(sectionId);
         if (!header || !section) return;
 
-        const toggle = header.querySelector('.collapsable-toggle');
-        const stored = readSidebarSections();
-        const collapsed = Object.prototype.hasOwnProperty.call(stored, sectionId)
-            ? !!stored[sectionId]
-            : startCollapsed;
+        applySectionCollapse(sectionId, headerId, startCollapsed);
 
-        section.classList.toggle('collapsed', collapsed);
-        toggle?.classList.toggle('collapsed', collapsed);
+        if (header.dataset.collapsableBound === 'true') return;
+        header.dataset.collapsableBound = 'true';
 
         header.addEventListener('click', (e) => {
             if (ignoreSelector && e.target.closest(ignoreSelector)) return;
+            const toggle = header.querySelector('.collapsable-toggle');
             const nowCollapsed = !section.classList.contains('collapsed');
             section.classList.toggle('collapsed', nowCollapsed);
             toggle?.classList.toggle('collapsed', nowCollapsed);
