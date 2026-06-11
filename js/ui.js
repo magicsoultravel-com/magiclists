@@ -2308,6 +2308,22 @@ export const UI = {
         card.appendChild(resizeLayer);
     },
 
+    syncSpatialChromeForEditing(card) {
+        if (!card?.querySelector?.('.ff-chrome')) return;
+        const expanded = card.classList.contains('expanded');
+        const layer = card.querySelector('.ff-resize-layer');
+        const gutters = card.querySelectorAll('.ff-drag-gutter');
+        if (layer) {
+            layer.style.pointerEvents = expanded ? 'none' : '';
+            layer.querySelectorAll('.ff-resize').forEach((handle) => {
+                handle.style.pointerEvents = expanded ? 'auto' : '';
+            });
+        }
+        gutters.forEach((g) => {
+            g.style.pointerEvents = expanded ? 'none' : '';
+        });
+    },
+
     readFreeformCardSize(card) {
         const { w, h } = this.readNoteRect(card);
         return {
@@ -3696,6 +3712,16 @@ export const UI = {
         if (header) this.attachNoteBodyInteractions(header, item, interactionOptions);
         if (body) this.attachNoteBodyInteractions(body, item, interactionOptions);
 
+        if (stopMousedownPropagation && !shell.dataset.shellCaptureBound) {
+            shell.dataset.shellCaptureBound = '1';
+            shell.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
+                if (e.target.closest('.editor-note-body, .editor-note-header, .expanded-checklist')) {
+                    e.stopPropagation();
+                }
+            }, true);
+        }
+
         if (stopMousedownPropagation && !shell.dataset.shellBubbleBound) {
             shell.dataset.shellBubbleBound = '1';
             shell.addEventListener('mousedown', (e) => {
@@ -3767,6 +3793,7 @@ export const UI = {
         }
         this.syncCardDraggable(card);
         this.syncBoardPinClass(card);
+        this.syncSpatialChromeForEditing(card);
     },
 
     renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor) {
@@ -3968,6 +3995,7 @@ export const UI = {
         }
         this.syncCardDraggable(card);
         this.syncBoardPinClass(card);
+        this.syncSpatialChromeForEditing(card);
     },
 
     refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor) {

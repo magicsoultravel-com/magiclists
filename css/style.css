@@ -2105,6 +2105,31 @@ html[data-note-font="kalam"] .mini-card .step-text {
     flex: 0 0 auto;
 }
 
+.mini-card.expanded .editor-meta-wrap {
+    flex-shrink: 0;
+    z-index: 1;
+}
+
+.mini-card.expanded .editor-meta-row--inline {
+    font-size: calc(0.6rem * var(--note-font-scale, 1));
+    flex-wrap: wrap;
+    row-gap: 0.2rem;
+}
+
+.mini-card.expanded .editor-meta-stats {
+    margin-left: auto;
+    justify-content: flex-end;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.mini-card.expanded .editor-created-date,
+.mini-card.expanded .editor-note-size,
+.mini-card.expanded .editor-note-lines {
+    font-size: calc(0.56rem * var(--note-font-scale, 1));
+    white-space: nowrap;
+}
+
 .mini-card.expanded .editor-note-shell {
     display: flex;
     flex-direction: column;
@@ -2112,7 +2137,7 @@ html[data-note-font="kalam"] .mini-card .step-text {
     min-height: 0;
     gap: 0.3rem;
     position: relative;
-    z-index: 5;
+    z-index: 11;
     pointer-events: auto;
 }
 
@@ -4184,9 +4209,14 @@ textarea.form-input {
 }
 
 #app-canvas.view-freeform .mini-card.expanded .mini-card-meta,
-#app-canvas.view-freeform .mini-card.expanded .editor-meta-wrap {
+#app-canvas.view-freeform .mini-card.expanded .editor-meta-wrap,
+#app-canvas.view-grid .mini-card.expanded .editor-meta-wrap,
+#app-canvas.view-columns .mini-card.expanded .editor-meta-wrap {
     flex: 0 0 auto;
+    flex-shrink: 0;
     margin-top: auto;
+    min-height: 1.2em;
+    overflow: visible;
 }
 
 #app-canvas.view-freeform .mini-card.is-freeform-dragging {
@@ -4240,14 +4270,14 @@ textarea.form-input {
 #app-canvas.view-freeform .mini-card.expanded .ff-drag-gutter,
 #app-canvas.view-grid .mini-card.expanded .ff-drag-gutter,
 #app-canvas.view-columns .mini-card.expanded .ff-drag-gutter {
-    pointer-events: none;
+    pointer-events: none !important;
 }
 
 /* Expanded notes: shell above resize layer; edge handles stay on top */
 #app-canvas.view-freeform .mini-card.expanded .ff-resize-layer,
 #app-canvas.view-grid .mini-card.expanded .ff-resize-layer,
 #app-canvas.view-columns .mini-card.expanded .ff-resize-layer {
-    pointer-events: none;
+    pointer-events: none !important;
 }
 
 #app-canvas.view-freeform .mini-card.expanded .ff-resize-layer .ff-resize,
