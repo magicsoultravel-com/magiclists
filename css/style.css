@@ -4210,9 +4210,11 @@ textarea.form-input {
 }
 
 /* Editable shell above chrome layer; resize handles stay on top via .ff-resize */
-#app-canvas.view-freeform .mini-card.expanded .editor-note-shell {
+#app-canvas.view-freeform .mini-card.expanded .editor-note-shell,
+#app-canvas.view-grid .mini-card.expanded .editor-note-shell,
+#app-canvas.view-columns .mini-card.expanded .editor-note-shell {
     position: relative;
-    z-index: 5;
+    z-index: 11;
 }
 
 #app-canvas.view-freeform .mini-card.expanded .card-inline-edit {
@@ -4239,6 +4241,20 @@ textarea.form-input {
 #app-canvas.view-grid .mini-card.expanded .ff-drag-gutter,
 #app-canvas.view-columns .mini-card.expanded .ff-drag-gutter {
     pointer-events: none;
+}
+
+/* Expanded notes: shell above resize layer; edge handles stay on top */
+#app-canvas.view-freeform .mini-card.expanded .ff-resize-layer,
+#app-canvas.view-grid .mini-card.expanded .ff-resize-layer,
+#app-canvas.view-columns .mini-card.expanded .ff-resize-layer {
+    pointer-events: none;
+}
+
+#app-canvas.view-freeform .mini-card.expanded .ff-resize-layer .ff-resize,
+#app-canvas.view-grid .mini-card.expanded .ff-resize-layer .ff-resize,
+#app-canvas.view-columns .mini-card.expanded .ff-resize-layer .ff-resize {
+    z-index: 12;
+    pointer-events: auto;
 }
 
 #app-canvas.view-freeform .ff-resize-layer,
@@ -4375,8 +4391,6 @@ textarea.form-input {
 }
 
 #app-canvas.view-columns .mini-card.expanded .editor-note-shell {
-    position: relative;
-    z-index: 5;
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -4627,7 +4641,7 @@ textarea.form-input {
 #editor-overlay .modal .modal-resize {
     position: absolute;
     pointer-events: auto;
-    z-index: 4;
+    z-index: 5;
 }
 
 #editor-overlay .modal .modal-resize-n,
@@ -5039,6 +5053,8 @@ textarea.form-input {
 
 #editor-overlay .editor-note-shell {
     --editor-zoom: 1;
+    position: relative;
+    z-index: 4;
 }
 
 #editor-overlay .editor-note-shell .editor-note-header .mini-card-title {
@@ -5187,11 +5203,6 @@ textarea.form-input {
     flex-direction: column;
     overflow: hidden !important;
     max-height: none !important;
-}
-
-#app-canvas.view-grid .mini-card.expanded .editor-note-shell {
-    position: relative;
-    z-index: 5;
 }
 
 #app-canvas.view-grid .ff-chrome {

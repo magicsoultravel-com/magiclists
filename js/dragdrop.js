@@ -434,6 +434,10 @@ function pointerHitsNoteEditor(clientX, clientY, card) {
             && el.closest(
                 '.editor-note-shell .card-inline-edit, '
                 + '.editor-note-shell .step-check, '
+                + '.editor-note-shell .step-text, '
+                + '.editor-note-shell .step-collapse-btn, '
+                + '.editor-note-shell .expanded-checklist, '
+                + '.editor-note-shell .checklist-done-toggle, '
                 + '.editor-note-shell input, '
                 + '.editor-note-shell textarea, '
                 + '.editor-note-shell button, '

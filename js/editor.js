@@ -364,6 +364,7 @@ export const Editor = {
             }
         }
         delete body.dataset.noteInteractionsBound;
+        delete body.dataset.checklistInteractionsBound;
         UI.attachNoteBodyInteractions(body, this.activeItem, {
             refresh: () => this.refreshEditorNoteBody(),
             localOnly: true,

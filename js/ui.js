@@ -4538,7 +4538,8 @@ export const UI = {
             });
         }
 
-        if (root.querySelector('.expanded-checklist')) {
+        if (root.querySelector('.expanded-checklist') && !root.dataset.checklistInteractionsBound) {
+            root.dataset.checklistInteractionsBound = '1';
             if (!item.steps) item.steps = [];
 
             root.querySelector('.expanded-checklist-add-btn')?.addEventListener('click', (e) => {
