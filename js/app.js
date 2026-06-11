@@ -48,16 +48,12 @@ const AppState = {
     })(),
     viewSettings: {
         sortBy: (() => {
-            const preferred = localStorage.getItem('matrix_preferred_view') || 'columns';
-            if (preferred === 'list') {
-                localStorage.setItem('matrix_preferred_view', 'columns');
-                return 'columns';
-            }
-            if (preferred === 'grid' && !window.matchMedia('(min-width: 769px)').matches) {
-                return 'columns';
-            }
+            const legacy = localStorage.getItem('matrix_desktop_layout')
+                || localStorage.getItem('matrix_preferred_view');
+            const preferred = legacy || 'grid';
+            if (preferred === 'list' || preferred === 'columns') return 'grid';
             if (preferred === 'freeform' || preferred === 'grid') return preferred;
-            return 'columns';
+            return 'grid';
         })(),
         currentView: 'active'
     }
@@ -73,6 +69,7 @@ class Application {
         });
         AppTheme.init();
         readViewSessions();
+        localStorage.setItem('matrix_desktop_layout', AppState.viewSettings.sortBy);
         restoreViewSession(AppState.viewSettings.sortBy);
         AppState.expandedCards = UI.readExpandedCardsForMode(AppState.viewSettings.sortBy);
         this.checkAuthSession();
@@ -136,7 +133,7 @@ class Application {
         if (preserveView) {
             const canvas = document.getElementById('app-canvas');
             UI.updateSingleCard(canvas, item, AppState.hiddenCategories, AppState.focusCategories);
-            if (['freeform', 'grid', 'columns'].includes(AppState.viewSettings.sortBy)) {
+            if (['freeform', 'grid'].includes(AppState.viewSettings.sortBy)) {
                 DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
             }
             this.updateWorkspaceCounter();
@@ -214,21 +211,14 @@ class Application {
     renderControlBar() {
         const filterControls = document.getElementById('filter-controls');
         const mode = AppState.viewSettings.sortBy;
-        const showGrid = DesktopZoom.isDesktopViewport();
         const drawingActive = AppState.workspaceMode === 'drawing';
+        const freeformActive = !drawingActive && mode === 'freeform';
         if (filterControls) {
-            const gridBtn = showGrid
-                ? `<button class="btn btn--compact btn--icon ${!drawingActive && mode === 'grid' ? 'active' : ''}" id="btn-view-grid" title="Grid board" aria-label="Grid board">${ACTION_ICONS.viewGrid}</button>`
-                : '';
             filterControls.innerHTML = `
-                <button class="btn btn--compact btn--icon ${!drawingActive && mode === 'columns' ? 'active' : ''}" id="btn-view-cols" title="Columns view" aria-label="Columns view">${ACTION_ICONS.viewCols}</button>
-                <button class="btn btn--compact btn--icon ${!drawingActive && mode === 'freeform' ? 'active' : ''}" id="btn-view-free" title="Freeform view" aria-label="Freeform view">${ACTION_ICONS.viewFree}</button>
-                ${gridBtn}
+                <button class="btn btn--compact btn--icon ${freeformActive ? 'active' : ''}" id="btn-freeform-toggle" title="${freeformActive ? 'Snap to bento grid' : 'Freeform layout'}" aria-label="${freeformActive ? 'Snap to bento grid' : 'Freeform layout'}" aria-pressed="${freeformActive ? 'true' : 'false'}">${ACTION_ICONS.viewFree}</button>
                 <button class="btn btn--compact btn--icon ${drawingActive ? 'active' : ''}" id="btn-drawing-mode" title="magicCanvas" aria-label="magicCanvas">${ACTION_ICONS.drawingPencil}</button>
             `;
-            document.getElementById('btn-view-cols').addEventListener('click', () => this.switchViewMode('columns'));
-            document.getElementById('btn-view-free').addEventListener('click', () => this.switchViewMode('freeform'));
-            document.getElementById('btn-view-grid')?.addEventListener('click', () => this.switchViewMode('grid'));
+            document.getElementById('btn-freeform-toggle').addEventListener('click', () => this.toggleFreeformLayout());
             document.getElementById('btn-drawing-mode')?.addEventListener('click', () => {
                 if (AppState.workspaceMode === 'drawing') this.switchWorkspaceMode('notes');
                 else this.switchWorkspaceMode('drawing');
@@ -532,8 +522,13 @@ class Application {
         this.syncDataStore();
     }
 
-    async switchViewMode(mode) {
-        if (mode === 'grid' && !DesktopZoom.isDesktopViewport()) return;
+    async toggleFreeformLayout() {
+        const nextMode = AppState.viewSettings.sortBy === 'freeform' ? 'grid' : 'freeform';
+        await this.setDesktopLayoutMode(nextMode);
+    }
+
+    async setDesktopLayoutMode(mode) {
+        if (mode !== 'grid' && mode !== 'freeform') return;
         if (AppState.workspaceMode === 'drawing') {
             this.switchWorkspaceMode('notes');
             if (AppState.viewSettings.sortBy === mode) return;
@@ -543,8 +538,10 @@ class Application {
 
         const canvas = document.getElementById('app-canvas');
         UI.persistViewSessionForMode(prevMode, canvas);
+        UI.convertDesktopLayoutForModeChange(canvas, prevMode, mode, AppState.items);
 
         AppState.viewSettings.sortBy = mode;
+        localStorage.setItem('matrix_desktop_layout', mode);
         localStorage.setItem('matrix_preferred_view', mode);
         const scrollState = UI.restoreViewSessionForMode(mode);
         AppState.expandedCards = UI.readExpandedCardsForMode(mode);
@@ -564,9 +561,15 @@ class Application {
     updateViewToggleState() {
         const mode = AppState.viewSettings.sortBy;
         const drawing = AppState.workspaceMode === 'drawing';
-        document.getElementById('btn-view-cols')?.classList.toggle('active', !drawing && mode === 'columns');
-        document.getElementById('btn-view-free')?.classList.toggle('active', !drawing && mode === 'freeform');
-        document.getElementById('btn-view-grid')?.classList.toggle('active', !drawing && mode === 'grid');
+        const freeformActive = !drawing && mode === 'freeform';
+        const ffBtn = document.getElementById('btn-freeform-toggle');
+        ffBtn?.classList.toggle('active', freeformActive);
+        if (ffBtn) {
+            const title = freeformActive ? 'Snap to bento grid' : 'Freeform layout';
+            ffBtn.title = title;
+            ffBtn.setAttribute('aria-label', title);
+            ffBtn.setAttribute('aria-pressed', freeformActive ? 'true' : 'false');
+        }
         document.getElementById('btn-drawing-mode')?.classList.toggle('active', drawing);
         this.updateDesktopZoomVisibility();
     }
@@ -587,10 +590,8 @@ class Application {
             const mode = AppState.viewSettings.sortBy;
             if (mode === 'freeform') {
                 UI.resetFreeformLayout();
-            } else if (mode === 'grid') {
-                UI.resetGridLayout();
             } else {
-                UI.resetColumnsLayout();
+                UI.resetGridLayout();
             }
         });
     }
@@ -685,11 +686,7 @@ class Application {
                 const when = snap?.savedAt
                     ? new Date(snap.savedAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
                     : emptyLabel;
-                const mode = snap?.viewMode === 'freeform'
-                    ? 'Freeform'
-                    : snap?.viewMode === 'grid'
-                        ? 'Grid'
-                        : 'Columns';
+                const mode = snap?.viewMode === 'freeform' ? 'Freeform' : 'Bento grid';
                 const focus = snap?.focusCategories?.length
                     ? ` · Focus: ${snap.focusCategories.join(', ')}`
                     : '';
@@ -800,14 +797,10 @@ class Application {
             : [];
         FocusMode.syncButtonState();
 
-        let mode = snapshot.viewMode === 'freeform'
-            ? 'freeform'
-            : snapshot.viewMode === 'grid'
-                ? 'grid'
-                : 'columns';
-        if (mode === 'grid' && !DesktopZoom.isDesktopViewport()) mode = 'columns';
+        let mode = snapshot.viewMode === 'freeform' ? 'freeform' : 'grid';
         if (AppState.viewSettings.sortBy !== mode) {
             AppState.viewSettings.sortBy = mode;
+            localStorage.setItem('matrix_desktop_layout', mode);
             localStorage.setItem('matrix_preferred_view', mode);
             window.dispatchEvent(new CustomEvent('view:mode_changed', { detail: mode }));
             this.updateViewToggleState();
@@ -933,7 +926,7 @@ class Application {
                 if (!detail?.skipRerender) {
                     const canvas = document.getElementById('app-canvas');
                     UI.updateSingleCard(canvas, item, AppState.hiddenCategories, AppState.focusCategories);
-                    if (['freeform', 'grid', 'columns'].includes(AppState.viewSettings.sortBy)) {
+                    if (['freeform', 'grid'].includes(AppState.viewSettings.sortBy)) {
                         DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
                     }
                 }
@@ -952,8 +945,8 @@ class Application {
 
         window.addEventListener('board:cards_reflowed', () => {
             const canvas = document.getElementById('app-canvas');
-            if (canvas?.classList.contains('view-columns')) {
-                UI.layoutColumnView(canvas, { animate: true });
+            if (canvas?.classList.contains('view-grid')) {
+                UI.reflowGridBoard(canvas, null, { animate: true });
             }
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         });

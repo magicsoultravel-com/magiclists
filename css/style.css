@@ -5765,12 +5765,6 @@ html[data-app-theme="casual-dark"] .mini-card.compact .card-actions::before {
     box-shadow: 0 0 0 1px rgba(107, 159, 212, 0.18);
 }
 
-@media (max-width: 768px) {
-    #btn-view-grid {
-        display: none !important;
-    }
-}
-
 /* ==========================================================================
    DRAWING BOARD
    ========================================================================== */

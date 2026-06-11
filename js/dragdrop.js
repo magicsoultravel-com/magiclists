@@ -485,19 +485,341 @@ export const DragDropEngine = {
         canvas._dragDropAbort = ac;
         const { signal } = ac;
 
-        if (canvas.classList.contains('view-freeform')) {
-            this.initFreeformInteractions(canvas, currentItems, signal);
-            return;
+        if (canvas.classList.contains('view-freeform') || canvas.classList.contains('view-grid')) {
+            const snapEnabled = canvas.classList.contains('view-grid');
+            this.initDesktopInteractions(canvas, currentItems, signal, { snapEnabled });
         }
+    },
 
-        if (canvas.classList.contains('view-grid')) {
-            this.initGridBoardInteractions(canvas, currentItems, signal);
-            return;
-        }
+    initDesktopInteractions(canvas, currentItems = [], signal, { snapEnabled = false } = {}) {
+        const cards = canvas.querySelectorAll('.mini-card[data-desktop="1"]');
+        let dragActive = null;
+        let resizeActive = null;
+        let previewFrame = null;
+        let previewBaseline = null;
 
-        if (canvas.classList.contains('view-columns')) {
-            this.initColumnsViewInteractions(canvas, currentItems, onMutationComplete, userState, signal);
-        }
+        const snapshotPreviewBaseline = () => {
+            previewBaseline = new Map();
+            canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((c) => {
+                const id = c.dataset.id;
+                if (id) previewBaseline.set(id, UI.readNoteRect(c));
+            });
+        };
+
+        const restorePreviewBaseline = () => {
+            if (!previewBaseline) return;
+            previewBaseline.forEach((rect, id) => {
+                const c = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(id)}"]`);
+                if (c) UI.applyNoteRect(c, rect, { settling: false });
+            });
+            previewBaseline = null;
+        };
+
+        const runLayoutPreview = (actorCard) => {
+            if (!snapEnabled || !actorCard?.dataset?.id) return;
+            if (previewFrame) return;
+            previewFrame = requestAnimationFrame(() => {
+                previewFrame = null;
+                const actorRect = UI.readNoteRect(actorCard);
+                const layout = UI.computeGridBoardLayout(canvas, actorCard.dataset.id, actorRect);
+                layout.forEach((rect, id) => {
+                    if (id === actorCard.dataset.id) return;
+                    const other = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(id)}"]`);
+                    if (!other) return;
+                    const base = previewBaseline?.get(id);
+                    const changed = !base
+                        || base.x !== rect.x
+                        || base.y !== rect.y
+                        || base.w !== rect.w
+                        || base.h !== rect.h;
+                    if (changed) {
+                        UI.applyNoteRect(other, rect, { settling: true });
+                        other.classList.add('layout-preview');
+                    }
+                });
+            });
+        };
+
+        const clearLayoutPreview = (restore = false) => {
+            if (previewFrame) {
+                cancelAnimationFrame(previewFrame);
+                previewFrame = null;
+            }
+            UI.clearSnapPanelPreview(canvas);
+            if (restore) restorePreviewBaseline();
+            else previewBaseline = null;
+        };
+
+        const finishSnapDrop = (card, { tierResizeState = null } = {}) => {
+            finishSnapPanelGesture(card, {
+                canvas,
+                currentItems,
+                getBounds: () => UI.getGridBoardBounds(canvas),
+                saveLayout: (c, rect, { customCompact }) => {
+                    UI.saveGridLayout(c.dataset.id, rect, { customCompact });
+                },
+                reflow: (c, { animate }) => {
+                    UI.reflowGridBoard(canvas, c.dataset.id, { animate });
+                },
+                onExpandFromResize: (c, item, rect) => {
+                    UI.updateDesktopCard(c, item, {
+                        expanded: true,
+                        dimensions: { w: rect.w, h: rect.h }
+                    });
+                },
+                onCollapseFromResize: (c, item, rect, { animate, bounds }) => {
+                    UI.collapseSnapPanelCard(c, item);
+                    const tileSize = UI.getCardTileSize(c, item);
+                    const compact = UI.gridTileRect(tileSize, rect, { ...rect, customCompact: true });
+                    const finalRect = UI.snapNoteRect(
+                        { ...compact, x: rect.x, y: rect.y },
+                        { maxW: bounds.packW, maxH: bounds.maxH }
+                    );
+                    UI.applyNoteRect(c, finalRect, { settling: animate });
+                    UI.saveGridLayout(c.dataset.id, finalRect, {
+                        customCompact: UI.isCustomTileRect(finalRect.w, finalRect.h, tileSize)
+                    });
+                    UI.reflowGridBoard(canvas, c.dataset.id, { animate });
+                },
+                clearPreview: clearLayoutPreview,
+                endScrollPolicy: () => UI.updateGridScrollPolicy(canvas, { forcing: false }),
+                cleanupActive: () => {
+                    canvas.classList.remove('is-layout-active', 'is-grid-forcing');
+                },
+                animate: true,
+                tierResizeState
+            });
+        };
+
+        const onDragMove = (e) => {
+            if (!dragActive) return;
+            const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, dragActive.startX, dragActive.startY);
+            if (!dragActive.moved) {
+                if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
+                dragActive.moved = true;
+                dragActive.card.classList.add(snapEnabled ? 'is-grid-dragging' : 'is-freeform-dragging');
+                if (snapEnabled) {
+                    canvas.classList.add('is-layout-active');
+                    snapshotPreviewBaseline();
+                    UI.updateGridScrollPolicy(canvas, { forcing: true });
+                }
+            }
+            e.preventDefault();
+            const origin = snapEnabled ? (UI.getGridBoardBounds(canvas).origin ?? 0) : 0;
+            const x = Math.max(origin, dragActive.origX + dx);
+            const y = Math.max(origin, dragActive.origY + dy);
+            dragActive.card.style.left = `${x}px`;
+            dragActive.card.style.top = `${y}px`;
+            if (snapEnabled) runLayoutPreview(dragActive.card);
+        };
+
+        const onDragUp = () => {
+            if (!dragActive) return;
+            const { card, moved } = dragActive;
+            card.classList.remove('is-grid-dragging', 'is-freeform-dragging');
+            if (moved) {
+                card.dataset.skipExpand = '1';
+                if (snapEnabled) {
+                    finishSnapDrop(card);
+                } else {
+                    UI.saveFreeformPosition(
+                        card.dataset.id,
+                        parseFloat(card.style.left) || 0,
+                        parseFloat(card.style.top) || 0
+                    );
+                }
+            } else if (snapEnabled) {
+                clearLayoutPreview(true);
+                UI.updateGridScrollPolicy(canvas, { forcing: false });
+                canvas.classList.remove('is-layout-active', 'is-grid-forcing');
+            }
+            dragActive = null;
+            document.removeEventListener('mousemove', onDragMove);
+            document.removeEventListener('mouseup', onDragUp);
+        };
+
+        const onResizeMove = (e) => {
+            if (!resizeActive) return;
+            e.preventDefault();
+            const { card, axis, startX, startY, origX, origY, origW, origH, tierResizeState } = resizeActive;
+            const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, startX, startY);
+            if (!resizeActive.moved) {
+                if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
+                resizeActive.moved = true;
+                if (snapEnabled) {
+                    canvas.classList.add('is-layout-active');
+                    snapshotPreviewBaseline();
+                    UI.updateGridScrollPolicy(canvas, { forcing: true });
+                }
+            }
+            const item = currentItems.find((i) => i.id === card.dataset.id);
+            const origin = snapEnabled ? (UI.getGridBoardBounds(canvas).origin ?? 0) : 0;
+
+            let nextX = origX;
+            let nextY = origY;
+            let nextW = origW;
+            let nextH = origH;
+
+            if (axis.includes('e')) nextW = origW + dx;
+            if (axis.includes('w')) {
+                nextW = origW - dx;
+                nextX = origX + dx;
+            }
+            if (axis.includes('s')) nextH = origH + dy;
+            if (axis.includes('n')) {
+                nextH = origH - dy;
+                nextY = origY + dy;
+            }
+
+            if (item && UI.isCollapsedTile(card) && tierResizeState) {
+                nextX = Math.max(origin, nextX);
+                nextY = Math.max(origin, nextY);
+                const maxW = snapEnabled ? UI.getGridBoardBounds(canvas).packW + origin : undefined;
+                UI.processCollapsedTierResizeMove(card, item, tierResizeState, {
+                    x: nextX,
+                    y: nextY,
+                    w: nextW,
+                    h: nextH
+                }, { maxW, axis });
+                if (snapEnabled) runLayoutPreview(card);
+                return;
+            }
+
+            const clamped = snapEnabled
+                ? UI.clampGridResize(nextW, nextH, { packW: UI.getGridBoardBounds(canvas).packW })
+                : clampSize(nextW, nextH);
+            if (axis.includes('w')) nextX = origX + (origW - clamped.w);
+            if (axis.includes('n')) nextY = origY + (origH - clamped.h);
+
+            nextX = Math.max(origin, nextX);
+            nextY = Math.max(origin, nextY);
+            let finalW = clamped.w;
+            let finalH = clamped.h;
+
+            if (snapEnabled) {
+                const maxW = UI.getGridBoardBounds(canvas).packW + origin;
+                if (nextX + finalW > maxW) {
+                    if (axis.includes('w')) {
+                        nextX = Math.max(origin, maxW - finalW);
+                    } else {
+                        finalW = Math.max(COLUMN_GRID_CELL_W, maxW - nextX);
+                    }
+                }
+            }
+
+            card.style.left = `${nextX}px`;
+            card.style.top = `${nextY}px`;
+            card.style.setProperty('width', `${finalW}px`, 'important');
+            card.style.setProperty('height', `${finalH}px`, 'important');
+            card.style.setProperty('min-height', `${finalH}px`, 'important');
+            card.style.setProperty('max-height', `${finalH}px`, 'important');
+            if (snapEnabled) runLayoutPreview(card);
+        };
+
+        const onResizeUp = () => {
+            if (!resizeActive) return;
+            const { card, moved, tierResizeState } = resizeActive;
+            const item = currentItems.find((i) => i.id === card.dataset.id);
+            card.classList.remove('is-grid-resizing', 'is-freeform-resizing');
+
+            if (!moved && tierResizeState && item) {
+                UI.revertTierResizePreview(card, item, tierResizeState);
+                if (snapEnabled) {
+                    clearLayoutPreview(true);
+                    UI.updateGridScrollPolicy(canvas, { forcing: false });
+                    canvas.classList.remove('is-layout-active', 'is-grid-forcing');
+                }
+            } else if (moved) {
+                card.dataset.skipExpand = '1';
+                if (snapEnabled) {
+                    finishSnapDrop(card, { tierResizeState });
+                } else {
+                    UI.saveFreeformPosition(
+                        card.dataset.id,
+                        parseFloat(card.style.left) || 0,
+                        parseFloat(card.style.top) || 0
+                    );
+                    if (item && tierResizeState && UI.isCollapsedTile(card)) {
+                        const tileSize = UI.commitTierResize(card, item, tierResizeState);
+                        const { w, h } = UI.readFreeformCardSize(card);
+                        UI.saveFreeformSize(card.dataset.id, w, h, {
+                            customCompact: UI.isCustomTileRect(w, h, tileSize)
+                        });
+                        UI.finalizeDesktopCard(card);
+                    } else {
+                        UI.saveFreeformSizeFromCard(card);
+                    }
+                }
+            } else if (snapEnabled) {
+                clearLayoutPreview(true);
+                UI.updateGridScrollPolicy(canvas, { forcing: false });
+                canvas.classList.remove('is-layout-active', 'is-grid-forcing');
+            }
+            resizeActive = null;
+            document.removeEventListener('mousemove', onResizeMove);
+            document.removeEventListener('mouseup', onResizeUp);
+        };
+
+        cards.forEach((card) => {
+            card.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
+
+                const resizeHandle = e.target.closest('.ff-resize');
+                if (resizeHandle) {
+                    if (cardIsPinned(card)) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    UI.cancelCardAnimation(card);
+                    if (snapEnabled) UI.raiseDesktopCard(card);
+                    const { w: startW, h: startH } = UI.readFreeformCardSize(card);
+                    const itemMatch = currentItems.find((i) => i.id === card.dataset.id);
+                    const tierResizeState = itemMatch && UI.isCollapsedTile(card)
+                        ? UI.createTierResizeSession(card, itemMatch)
+                        : null;
+                    resizeActive = {
+                        card,
+                        axis: resizeHandle.dataset.axis || 'se',
+                        startX: e.clientX,
+                        startY: e.clientY,
+                        origX: parseFloat(card.style.left) || 0,
+                        origY: parseFloat(card.style.top) || 0,
+                        origW: startW,
+                        origH: startH,
+                        moved: false,
+                        tierResizeState
+                    };
+                    card.classList.add(snapEnabled ? 'is-grid-resizing' : 'is-freeform-resizing');
+                    card.dataset.skipExpand = '1';
+                    document.addEventListener('mousemove', onResizeMove);
+                    document.addEventListener('mouseup', onResizeUp);
+                    return;
+                }
+
+                if (pointerHitsNoteEditor(e.clientX, e.clientY, card)) return;
+                if (e.target.closest('.editor-note-body .card-inline-edit, .editor-note-header .card-inline-edit')) {
+                    return;
+                }
+
+                if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
+                if (!shouldStartCardDrag(e.target)) return;
+                if (cardIsPinned(card)) return;
+
+                const scrollHost = e.target.closest('.editor-note-body') || e.target.closest('.card-body');
+                if (scrollHost && isScrollbarGrip(scrollHost, e.clientX)) return;
+
+                e.stopPropagation();
+                dragActive = {
+                    card,
+                    startX: e.clientX,
+                    startY: e.clientY,
+                    origX: parseFloat(card.style.left) || 0,
+                    origY: parseFloat(card.style.top) || 0,
+                    moved: false
+                };
+                document.addEventListener('mousemove', onDragMove);
+                document.addEventListener('mouseup', onDragUp);
+            }, { signal });
+        });
     },
 
     initFreeformInteractions(canvas, currentItems = [], signal) {

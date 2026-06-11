@@ -41,7 +41,7 @@ import {
     restoreViewSession,
     setExpandedCard,
     setExpandedCardsMap,
-    setGridExpandedIdForMode
+    normalizeViewMode
 } from './viewSession.js';
 
 const UNCATEGORIZED_COLOR = '#64748b';
@@ -110,7 +110,15 @@ export function cardAnimationsEnabled() {
 }
 
 let boardItemsById = new Map();
-let activeBoardViewMode = 'columns';
+let activeBoardViewMode = 'grid';
+
+export function isSnapLayoutMode(mode) {
+    return normalizeViewMode(mode) === 'grid';
+}
+
+export function isDesktopCard(card) {
+    return card?.dataset?.desktop === '1';
+}
 
 // Chrome icon trope: stroke-first, currentColor, fill="none" on paths/shapes (see ACTION_ICONS).
 // CARD_ICONS 11×12; ACTION_ICONS 12×12. Minimal fills only when semantically needed (e.g. focusMode dot).
@@ -1092,9 +1100,6 @@ export const UI = {
     },
 
     isCardExpanded(card, item) {
-        if (card?.dataset?.gridBoard === '1') {
-            return this.isGridBoardCardExpanded(item?.id, card);
-        }
         if (card?.classList.contains('expanded')) return true;
         return getExpandedCards(activeBoardViewMode)[item?.id] === true;
     },
@@ -1102,26 +1107,6 @@ export const UI = {
     resolveBoardItem(itemId) {
         if (!itemId) return null;
         return boardItemsById.get(itemId) || null;
-    },
-
-    getGridExpandedId() {
-        try {
-            const id = localStorage.getItem(GRID_EXPANDED_KEY);
-            return id && id !== 'null' ? id : null;
-        } catch {
-            return null;
-        }
-    },
-
-    setGridExpandedId(itemId) {
-        setGridExpandedIdForMode('grid', itemId);
-    },
-
-    isGridBoardCardExpanded(itemId, card = null) {
-        if (!itemId) return false;
-        if (getExpandedCards('grid')[itemId] === true) return true;
-        if (this.getGridExpandedId() === itemId) return true;
-        return !!card?.classList.contains('expanded');
     },
 
     isGridMultiCellSize(w, h) {
@@ -1192,8 +1177,7 @@ export const UI = {
     },
 
     usesTileTierBoard(card) {
-        return card?.dataset?.freeform === '1'
-            || card?.dataset?.gridBoard === '1'
+        return isDesktopCard(card)
             || card?.dataset?.columnNote === '1'
             || card?.dataset?.columnsFloat === '1';
     },
@@ -1278,12 +1262,10 @@ export const UI = {
         this.renderCollapsedCard(card, restoreItem, activeCategories, targetCatName, categoryColor);
         this.applyTierResizeBox(card, resizeState.startRect);
 
-        if (card.dataset.gridBoard === '1') {
-            this.finalizeGridBoardCard(card);
+        if (isDesktopCard(card)) {
+            this.finalizeDesktopCard(card);
         } else if (card.dataset.columnNote === '1') {
             this.finalizeColumnNote(card, card.dataset.category || targetCatName);
-        } else if (card.dataset.freeform === '1') {
-            this.finalizeFreeformCard(card);
         } else if (card.dataset.columnsFloat === '1') {
             this.finalizeColumnsFloat(card);
         }
@@ -1335,17 +1317,16 @@ export const UI = {
     collapseSnapPanelCard(card, item) {
         const activeCategories = readStoredCategories();
         const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
-        if (card.dataset.gridBoard === '1') {
-            setExpandedCard('grid', item.id, false);
-            if (this.getGridExpandedId() === item.id) this.setGridExpandedId(null);
+        if (isDesktopCard(card)) {
+            setExpandedCard(activeBoardViewMode, item.id, false);
         } else if (card.dataset.columnNote === '1') {
             setExpandedCard('columns', item.id, false);
         }
         this.cancelCardAnimation(card);
         card.classList.remove('expanded', 'card-state-changing', 'card-animating');
         this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
-        if (card.dataset.gridBoard === '1') {
-            this.finalizeGridBoardCard(card);
+        if (isDesktopCard(card)) {
+            this.finalizeDesktopCard(card);
         } else if (card.dataset.columnNote === '1') {
             const cat = card.dataset.category || targetCatName;
             this.finalizeColumnNote(card, cat);
@@ -1359,11 +1340,8 @@ export const UI = {
         const targetCatName = ctx.targetCatName ?? this.getCardRenderContext(item, activeCategories).targetCatName;
         const categoryColor = ctx.categoryColor ?? this.getCardRenderContext(item, activeCategories).categoryColor;
 
-        if (card.dataset.freeform === '1') {
-            setExpandedCard('freeform', item.id, false);
-        } else if (card.dataset.gridBoard === '1') {
-            setExpandedCard('grid', item.id, false);
-            if (this.getGridExpandedId() === item.id) this.setGridExpandedId(null);
+        if (isDesktopCard(card)) {
+            setExpandedCard(activeBoardViewMode, item.id, false);
         } else if (card.dataset.columnNote === '1') {
             setExpandedCard('columns', item.id, false);
         } else if (card.dataset.columnsFloat === '1') {
@@ -1372,15 +1350,17 @@ export const UI = {
 
         this.collapseSnapPanelCard(card, item);
 
-        if (card.dataset.freeform === '1') {
-            this.applyFreeformSize(card);
-            this.finalizeFreeformCard(card);
-        } else if (card.dataset.gridBoard === '1') {
-            this.applyGridBoardSize(card);
-            const canvas = card.closest('#app-canvas');
-            if (canvas?.classList.contains('view-grid')) {
-                this.finalizeGridBoardCard(card);
-                requestAnimationFrame(() => this.reflowGridBoard(canvas, item.id, { animate: true }));
+        if (isDesktopCard(card)) {
+            if (isSnapLayoutMode(activeBoardViewMode)) {
+                this.applyDesktopSize(card);
+                const canvas = card.closest('#app-canvas');
+                if (canvas?.classList.contains('view-grid')) {
+                    this.finalizeDesktopCard(card);
+                    requestAnimationFrame(() => this.reflowGridBoard(canvas, item.id, { animate: true }));
+                }
+            } else {
+                this.applyFreeformSize(card);
+                this.finalizeDesktopCard(card);
             }
         } else if (card.dataset.columnNote === '1') {
             const cat = card.dataset.category || targetCatName;
@@ -1407,13 +1387,13 @@ export const UI = {
         const id = item?.id || card.dataset.id;
         if (!id) return;
 
-        if (card.dataset.freeform === '1') {
-            this.saveFreeformSize(id, rect.w, rect.h, { customCompact });
-            this.saveFreeformPosition(id, rect.x, rect.y);
-            return;
-        }
-        if (card.dataset.gridBoard === '1') {
-            this.saveGridLayout(id, rect, { customCompact });
+        if (isDesktopCard(card)) {
+            if (isSnapLayoutMode(activeBoardViewMode)) {
+                this.saveGridLayout(id, rect, { customCompact });
+            } else {
+                this.saveFreeformSize(id, rect.w, rect.h, { customCompact });
+                this.saveFreeformPosition(id, rect.x, rect.y);
+            }
             return;
         }
         if (card.dataset.columnNote === '1') {
@@ -1445,13 +1425,13 @@ export const UI = {
         this.applyNoteRect(card, rect, { settling: false });
         this.saveTileLayoutFromCard(card, item, rect, normalizedTier);
 
-        if (card.dataset.freeform === '1') {
-            this.finalizeFreeformCard(card);
-        } else if (card.dataset.gridBoard === '1') {
-            this.finalizeGridBoardCard(card);
-            const canvas = card.closest('#app-canvas');
-            if (canvas?.classList.contains('view-grid')) {
-                requestAnimationFrame(() => this.reflowGridBoard(canvas, item.id, { animate: true }));
+        if (isDesktopCard(card)) {
+            this.finalizeDesktopCard(card);
+            if (isSnapLayoutMode(activeBoardViewMode)) {
+                const canvas = card.closest('#app-canvas');
+                if (canvas?.classList.contains('view-grid')) {
+                    requestAnimationFrame(() => this.reflowGridBoard(canvas, item.id, { animate: true }));
+                }
             }
         } else if (card.dataset.columnNote === '1') {
             const cat = card.dataset.category || targetCatName;
@@ -1527,10 +1507,8 @@ export const UI = {
 
     syncCardDraggable(card) {
         const hasSession = !!localStorage.getItem('admin_token');
-        const isFreeform = card.dataset.freeform === '1';
-        const isGridBoard = card.dataset.gridBoard === '1';
         const isColumnLayout = card.dataset.columnNote === '1' || card.dataset.columnsFloat === '1';
-        if (!hasSession || isFreeform || isGridBoard || isColumnLayout || card.classList.contains('expanded')) {
+        if (!hasSession || isDesktopCard(card) || isColumnLayout || card.classList.contains('expanded')) {
             card.removeAttribute('draggable');
             return;
         }
@@ -1538,14 +1516,14 @@ export const UI = {
     },
 
     isGridBoardCard(card) {
-        return card?.dataset?.gridBoard === '1';
+        return isDesktopCard(card) && isSnapLayoutMode(activeBoardViewMode);
     },
 
     freeformDragZoneClass(card) {
         if (card.dataset.columnNote === '1' || card.dataset.columnsFloat === '1') {
             return ' card-drag-zone';
         }
-        return (card.dataset.freeform === '1' || card.dataset.gridBoard === '1') ? ' card-drag-zone' : '';
+        return isDesktopCard(card) ? ' card-drag-zone' : '';
     },
 
     buildNoteSizeHtml(item) {
@@ -1589,8 +1567,8 @@ export const UI = {
             if (notesEl) requestAnimationFrame(() => this.autoArrangeColumnNotes(notesEl, { animate: false }));
         } else if (card.dataset.columnsFloat === '1') {
             this.finalizeColumnsFloat(card);
-        } else if (card.dataset.gridBoard === '1') {
-            this.finalizeGridBoardCard(card);
+        } else if (isDesktopCard(card)) {
+            this.finalizeDesktopCard(card);
         }
 
         this.restoreScrollState(canvas, scrollState);
@@ -1612,17 +1590,10 @@ export const UI = {
         activeCategories = activeCategories.filter(cat => !hiddenCategories.includes(cat.name));
         activeCategories = applyFocusToCategories(activeCategories, focusCategories);
 
-        const resolvedMode = viewMode === 'freeform'
-            ? 'freeform'
-            : viewMode === 'grid'
-                ? 'grid'
-                : 'columns';
+        const resolvedMode = normalizeViewMode(viewMode);
+        const snapLayout = isSnapLayoutMode(resolvedMode);
         activeBoardViewMode = resolvedMode;
-        canvas.className = resolvedMode === 'freeform'
-            ? 'view-freeform'
-            : resolvedMode === 'grid'
-                ? 'view-grid'
-                : 'view-columns';
+        canvas.className = snapLayout ? 'view-grid' : 'view-freeform';
         if (focusActive) canvas.dataset.focusActive = '1';
         else delete canvas.dataset.focusActive;
 
@@ -1638,60 +1609,27 @@ export const UI = {
             return;
         }
 
-        if (resolvedMode === 'columns') {
-            this.migrateColumnsFloatLayouts();
+        const layout = snapLayout ? this.getGridLayout() : null;
+        const positions = snapLayout ? null : this.getFreeformPositions();
+        const placed = [];
+        const bounds = snapLayout ? this.getGridBoardBounds(canvas) : null;
+        let autoX = 8;
+        let autoY = 8;
+        const cardStep = 104;
+        const rowStep = 72;
 
-            activeCategories.forEach(catObj => {
-                const categoryName = typeof catObj === 'string' ? catObj : catObj.name;
-                const catColor = catObj.color || '#64748b';
+        [...visibleItems]
+            .sort((a, b) => {
+                const aTime = Number(a.created_at || a.updated_at || 0);
+                const bTime = Number(b.created_at || b.updated_at || 0);
+                return aTime - bTime;
+            })
+            .forEach((item, index) => {
+                const card = this.createCardComponent(item, activeCategories, { desktop: true });
+                const isExpanded = getExpandedCards(resolvedMode)[item.id] === true;
 
-                const columnItems = visibleItems
-                    .filter(item => {
-                        if (!itemHasCategory(item)) return false;
-                        return item.categories.some(cat => String(cat).toLowerCase() === String(categoryName).toLowerCase());
-                    })
-                    .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0));
-
-                canvas.appendChild(this.createColumnStructure(categoryName, catColor, columnItems, activeCategories));
-            });
-
-            const uncatItems = visibleItems
-                .filter((item) => !itemHasCategory(item))
-                .sort((a, b) => Number(a.created_at || 0) - Number(b.created_at || 0));
-            const showUncategorizedColumn = focusActive
-                ? focusIncludesUncategorized(focusCategories)
-                : uncatItems.length > 0;
-            if (showUncategorizedColumn) {
-                canvas.appendChild(this.createColumnStructure(
-                    UNCATEGORIZED_CATEGORY,
-                    UNCATEGORIZED_COLOR,
-                    uncatItems,
-                    activeCategories
-                ));
-            }
-
-            const columnsForOrder = [...activeCategories];
-            if (showUncategorizedColumn) {
-                columnsForOrder.push({ name: UNCATEGORIZED_CATEGORY, color: UNCATEGORIZED_COLOR });
-            }
-            this.syncCanvasLayoutOrder(columnsForOrder, visibleItems);
-            this.layoutColumnView(canvas, { animate: false });
-        } else if (resolvedMode === 'grid') {
-            const layout = this.getGridLayout();
-            const placed = [];
-            const { origin, packW, maxH } = this.getGridBoardBounds(canvas);
-            const gridExpandedId = this.getGridExpandedId();
-            const gridExpandedMap = getExpandedCards('grid');
-
-            [...visibleItems]
-                .sort((a, b) => {
-                    const aTime = Number(a.created_at || a.updated_at || 0);
-                    const bTime = Number(b.created_at || b.updated_at || 0);
-                    return aTime - bTime;
-                })
-                .forEach((item, index) => {
-                    const card = this.createCardComponent(item, activeCategories, { gridBoard: true });
-                    const isExpanded = gridExpandedMap[item.id] === true || gridExpandedId === item.id;
+                if (snapLayout) {
+                    const { origin, packW, maxH } = bounds;
                     const saved = layout[item.id];
                     let rect;
 
@@ -1710,29 +1648,7 @@ export const UI = {
                     this.applyNoteRect(card, rect, { settling: false });
                     this.saveGridLayout(item.id, rect);
                     placed.push(rect);
-                    this.finalizeGridBoardCard(card);
-                    this.initGridBoardCardStack(card, index);
-                    this.syncBoardPinClass(card);
-                    card.removeAttribute('draggable');
-                    canvas.appendChild(card);
-                });
-
-            this.updateGridCanvasMinHeight(canvas, placed, origin);
-        } else if (resolvedMode === 'freeform') {
-            const positions = this.getFreeformPositions();
-            let autoX = 8;
-            let autoY = 8;
-            const cardStep = 104;
-            const rowStep = 72;
-
-            [...visibleItems]
-                .sort((a, b) => {
-                    const aTime = Number(a.created_at || a.updated_at || 0);
-                    const bTime = Number(b.created_at || b.updated_at || 0);
-                    return aTime - bTime;
-                })
-                .forEach((item, index) => {
-                    const card = this.createCardComponent(item, activeCategories, { freeform: true });
+                } else {
                     const saved = positions[item.id];
                     if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)) {
                         card.style.left = `${saved.x}px`;
@@ -1746,12 +1662,18 @@ export const UI = {
                             autoY += rowStep;
                         }
                     }
-                    card.removeAttribute('draggable');
                     this.applyFreeformSize(card);
-                    this.initFreeformCardStack(card, index);
-                    this.syncBoardPinClass(card);
-                    canvas.appendChild(card);
-                });
+                }
+
+                card.removeAttribute('draggable');
+                this.finalizeDesktopCard(card);
+                this.initDesktopCardStack(card, index);
+                this.syncBoardPinClass(card);
+                canvas.appendChild(card);
+            });
+
+        if (snapLayout && bounds) {
+            this.updateGridCanvasMinHeight(canvas, placed, bounds.origin);
         }
 
         this.restoreScrollState(canvas, scrollState);
@@ -2019,8 +1941,7 @@ export const UI = {
 
     getCardActionsOptions(card) {
         const hasSession = !!localStorage.getItem('admin_token');
-        const spatial = card?.dataset?.freeform === '1'
-            || card?.dataset?.gridBoard === '1'
+        const spatial = isDesktopCard(card)
             || card?.dataset?.columnNote === '1'
             || card?.dataset?.columnsFloat === '1';
         const opts = {
@@ -2111,8 +2032,7 @@ export const UI = {
 
         this.attachCardActionButton(colorBtn, () => {
             this.commitFocusedInlineField(card, item);
-            if (card.dataset.freeform === '1') this.raiseFreeformCard(card);
-            if (card.dataset.gridBoard === '1') this.raiseGridBoardCard(card);
+            if (isDesktopCard(card)) this.raiseDesktopCard(card);
             if (!localStorage.getItem('admin_token')) return;
             ColorPicker.open({
                 anchor: colorBtn,
@@ -2135,8 +2055,7 @@ export const UI = {
 
         this.attachCardActionButton(editBtn, () => {
             this.commitFocusedInlineField(card, item);
-            if (card.dataset.freeform === '1') this.raiseFreeformCard(card);
-            if (card.dataset.gridBoard === '1') this.raiseGridBoardCard(card);
+            if (isDesktopCard(card)) this.raiseDesktopCard(card);
             if (consumeSkipExpand()) return;
             if (!localStorage.getItem('admin_token')) return;
             window.dispatchEvent(new CustomEvent('item:selected_for_edit', {
@@ -2347,7 +2266,7 @@ export const UI = {
     },
 
     applyFreeformSize(card) {
-        if (card.dataset.freeform !== '1') return;
+        if (!isDesktopCard(card) || isSnapLayoutMode(activeBoardViewMode)) return;
         if (card.dataset.tierResizePreview === '1') return;
         const saved = this.getFreeformSizes()[card.dataset.id];
         const isExpanded = card.classList.contains('expanded');
@@ -2371,9 +2290,17 @@ export const UI = {
     },
 
     finalizeFreeformCard(card) {
-        if (card.dataset.freeform !== '1') return;
+        this.finalizeDesktopCard(card);
+    },
+
+    finalizeDesktopCard(card) {
+        if (!isDesktopCard(card)) return;
         this.setupFreeformChrome(card);
-        this.applyFreeformSize(card);
+        if (isSnapLayoutMode(activeBoardViewMode)) {
+            this.applyDesktopSize(card);
+        } else {
+            this.applyFreeformSize(card);
+        }
     },
 
     getCardRenderContext(item, activeCategories) {
@@ -2383,91 +2310,61 @@ export const UI = {
         return { targetCatName, categoryColor };
     },
 
-    updateGridBoardCard(card, item, { expanded, dimensions = null, deferReflow = false } = {}) {
-        if (card.dataset.gridBoard !== '1') return;
+    updateDesktopCard(card, item, { expanded, dimensions = null, deferReflow = false } = {}) {
+        if (!isDesktopCard(card)) return;
 
+        const mode = activeBoardViewMode;
+        const snapLayout = isSnapLayoutMode(mode);
         const canvas = card.closest('#app-canvas');
-        if (expanded && canvas) {
-            canvas.querySelectorAll('.mini-card[data-grid-board="1"].expanded').forEach((other) => {
-                if (other === card) return;
-                const otherItem = this.resolveBoardItem(other.dataset.id);
-                if (otherItem) {
-                    this.updateGridBoardCard(other, otherItem, { expanded: false, deferReflow: true });
-                }
-            });
-            setExpandedCardsMap('grid', { [item.id]: true });
-            this.setGridExpandedId(item.id);
-        } else if (!expanded) {
-            setExpandedCard('grid', item.id, false);
-            if (this.getGridExpandedId() === item.id) {
-                this.setGridExpandedId(null);
-            }
-        }
+        setExpandedCard(mode, item.id, expanded);
 
         const activeCategories = readStoredCategories();
         const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
 
-        this.applyCardExpandCollapse(
-            card,
-            item,
-            expanded,
-            activeCategories,
-            targetCatName,
-            categoryColor,
-            { skipGridReflow: true, skipAnimation: dimensions != null }
-        );
+        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, {
+            skipGridReflow: true,
+            skipAnimation: dimensions != null
+        });
 
         if (dimensions) {
             this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
-        } else if (!expanded || !cardAnimationsEnabled()) {
-            this.applyGridBoardSize(card);
+        } else if (snapLayout) {
+            if (!expanded || !cardAnimationsEnabled()) {
+                this.applyDesktopSize(card);
+            }
+        } else if (expanded && !cardAnimationsEnabled()) {
+            this.applyFreeformSize(card);
         }
 
-        if (!expanded) {
+        if (snapLayout && !expanded) {
             const pos = this.readNoteRect(card);
             const saved = this.getGridLayout()[item.id];
             const compact = this.gridTileRect(resolveTileSize(item), pos, saved);
-            const compactRect = {
-                x: pos.x,
-                y: pos.y,
-                w: compact.w,
-                h: compact.h
-            };
+            const compactRect = { x: pos.x, y: pos.y, w: compact.w, h: compact.h };
             this.applyNoteRect(card, compactRect, { settling: false });
             this.saveGridLayout(item.id, compactRect, {
                 customCompact: this.isCustomTileRect(compactRect.w, compactRect.h, resolveTileSize(item))
             });
         }
 
-        if (canvas?.classList.contains('view-grid') && !deferReflow) {
-            this.finalizeGridBoardCard(card);
+        if (snapLayout && canvas && !deferReflow) {
+            this.finalizeDesktopCard(card);
             requestAnimationFrame(() => {
                 this.reflowGridBoard(canvas, item.id, { animate: true });
             });
         }
     },
 
-    updateFreeformCard(card, item, { expanded, dimensions = null } = {}) {
-        if (card.dataset.freeform !== '1') return;
-        setExpandedCard('freeform', item.id, expanded);
+    updateGridBoardCard(card, item, opts = {}) {
+        return this.updateDesktopCard(card, item, opts);
+    },
 
-        const activeCategories = readStoredCategories();
-        const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
-
-        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, {
-            skipAnimation: dimensions != null
-        });
-
-        if (dimensions) {
-            this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
-        } else if (expanded && !cardAnimationsEnabled()) {
-            this.applyFreeformSize(card);
-        }
+    updateFreeformCard(card, item, opts = {}) {
+        return this.updateDesktopCard(card, item, opts);
     },
 
     usesAnimPixelLock(card) {
-        return card.dataset.freeform === '1'
-            || card.dataset.gridBoard === '1'
+        return isDesktopCard(card)
             || card.dataset.columnNote === '1'
             || card.dataset.columnsFloat === '1';
     },
@@ -2516,19 +2413,19 @@ export const UI = {
         const item = this.resolveBoardItem(id);
         const tileSize = this.getCardTileSize(card, item);
         const tileDefaultW = this.getTileDefaultRect(tileSize).w;
-        if (card.dataset.freeform === '1') {
-            const saved = id ? this.getFreeformSizes()[id] : null;
-            if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) return saved.w;
-            return tileDefaultW;
-        }
-        if (card.dataset.columnsFloat === '1') return tileDefaultW;
-        if (card.dataset.gridBoard === '1' && id) {
-            const saved = this.getGridLayout()[id];
-            if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) {
-                return saved.w;
+        if (isDesktopCard(card) && id) {
+            if (isSnapLayoutMode(activeBoardViewMode)) {
+                const saved = this.getGridLayout()[id];
+                if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) {
+                    return saved.w;
+                }
+            } else {
+                const saved = this.getFreeformSizes()[id];
+                if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) return saved.w;
             }
             return tileDefaultW;
         }
+        if (card.dataset.columnsFloat === '1') return tileDefaultW;
         if (card.dataset.columnNote === '1' && id) {
             const cat = card.dataset.category;
             const saved = cat ? this.getColumnNoteLayout()[cat]?.[id] : null;
@@ -2544,7 +2441,12 @@ export const UI = {
     resolveAnimExpandedWidth(card, item) {
         const id = card.dataset?.id || item?.id;
         const tileSize = this.getCardTileSize(card, item);
-        if (card.dataset.freeform === '1' && id) {
+        if (isDesktopCard(card) && id) {
+            if (isSnapLayoutMode(activeBoardViewMode)) {
+                const saved = this.getGridLayout()[id];
+                if (saved && Number.isFinite(saved.w)) return saved.w;
+                return this.resolveExpandedDefaultRect(tileSize).w;
+            }
             const saved = this.getFreeformSizes()[id];
             if (saved?.customCompact) return FREEFORM_EXPANDED_W;
             return this.resolveExpandedDefaultRect(tileSize, saved).w;
@@ -2553,11 +2455,6 @@ export const UI = {
             const saved = this.getColumnsFloatSizes()[id];
             if (saved?.customCompact) return FREEFORM_EXPANDED_W;
             return this.resolveExpandedDefaultRect(tileSize, saved).w;
-        }
-        if (card.dataset.gridBoard === '1' && id) {
-            const saved = this.getGridLayout()[id];
-            if (saved && Number.isFinite(saved.w)) return saved.w;
-            return this.resolveExpandedDefaultRect(tileSize).w;
         }
         if (card.dataset.columnNote === '1' && id) {
             const cat = card.dataset.category;
@@ -2573,7 +2470,7 @@ export const UI = {
         const item = this.resolveBoardItem(card.dataset?.id);
         const tileSize = this.getCardTileSize(card, item);
         const tileDefaultH = this.getTileDefaultRect(tileSize).h;
-        if (card.dataset.gridBoard === '1') {
+        if (isDesktopCard(card) && isSnapLayoutMode(activeBoardViewMode)) {
             const saved = this.getGridLayout()[card.dataset.id];
             const compact = this.gridTileRect(
                 tileSize,
@@ -2592,8 +2489,8 @@ export const UI = {
             );
             return compact.h;
         }
-        if (card.dataset.freeform === '1' || card.dataset.columnsFloat === '1') {
-            const saved = card.dataset.freeform === '1'
+        if (isDesktopCard(card) || card.dataset.columnsFloat === '1') {
+            const saved = isDesktopCard(card)
                 ? this.getFreeformSizes()[card.dataset.id]
                 : this.getColumnsFloatSizes()[card.dataset.id];
             if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) return saved.h;
@@ -2609,19 +2506,21 @@ export const UI = {
         const tileSize = this.getCardTileSize(card, item);
         let h;
 
-        if (card.dataset.freeform === '1') {
-            const saved = this.getFreeformSizes()[id];
-            if (saved?.customCompact) h = FREEFORM_EXPANDED_DEFAULT_H;
-            else h = this.resolveExpandedDefaultRect(tileSize, saved).h;
+        if (isDesktopCard(card)) {
+            if (isSnapLayoutMode(activeBoardViewMode)) {
+                const saved = this.getGridLayout()[id];
+                h = saved && Number.isFinite(saved.h)
+                    ? saved.h
+                    : this.resolveExpandedDefaultRect(tileSize).h;
+            } else {
+                const saved = this.getFreeformSizes()[id];
+                if (saved?.customCompact) h = FREEFORM_EXPANDED_DEFAULT_H;
+                else h = this.resolveExpandedDefaultRect(tileSize, saved).h;
+            }
         } else if (card.dataset.columnsFloat === '1') {
             const saved = this.getColumnsFloatSizes()[id];
             if (saved?.customCompact) h = FREEFORM_EXPANDED_DEFAULT_H;
             else h = this.resolveExpandedDefaultRect(tileSize, saved).h;
-        } else if (card.dataset.gridBoard === '1') {
-            const saved = this.getGridLayout()[id];
-            h = saved && Number.isFinite(saved.h)
-                ? saved.h
-                : this.resolveExpandedDefaultRect(tileSize).h;
         } else if (card.dataset.columnNote === '1') {
             const cat = card.dataset.category;
             const saved = cat ? this.getColumnNoteLayout()[cat]?.[id] : null;
@@ -2688,8 +2587,8 @@ export const UI = {
             this.cancelCardAnimation(card);
         }
 
-        const isFreeform = card.dataset.freeform === '1';
-        const isGridBoard = card.dataset.gridBoard === '1';
+        const isDesktop = isDesktopCard(card);
+        const snapLayout = isDesktop && isSnapLayoutMode(activeBoardViewMode);
         const animate = cardAnimationsEnabled() && !options.skipAnimation;
 
         const clearListAnimDimensions = () => {
@@ -2727,18 +2626,20 @@ export const UI = {
 
         const reflowGridBoard = () => {
             if (options.skipGridReflow) return;
-            if (card.dataset.gridBoard !== '1') return;
+            if (!snapLayout) return;
             const canvas = document.getElementById('app-canvas');
             if (!canvas?.classList.contains('view-grid')) return;
-            this.finalizeGridBoardCard(card);
+            this.finalizeDesktopCard(card);
             requestAnimationFrame(() => {
                 this.reflowGridBoard(canvas, card.dataset.id, { animate: true });
             });
         };
 
         const finishExpand = () => {
-            if (isFreeform) this.applyFreeformSize(card);
-            if (isGridBoard) this.applyGridBoardSize(card);
+            if (isDesktop) {
+                if (snapLayout) this.applyDesktopSize(card);
+                else this.applyFreeformSize(card);
+            }
             clearListAnimDimensions();
             reflowColumnNote();
             reflowColumnsFloat();
@@ -2749,10 +2650,13 @@ export const UI = {
         const finishCollapse = () => {
             card.classList.remove('expanded');
             this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
-            if (isFreeform) this.applyFreeformSize(card);
-            if (isGridBoard) {
-                this.applyGridBoardSize(card);
-                reflowGridBoard();
+            if (isDesktop) {
+                if (snapLayout) {
+                    this.applyDesktopSize(card);
+                    reflowGridBoard();
+                } else {
+                    this.applyFreeformSize(card);
+                }
             }
             clearListAnimDimensions();
             reflowColumnNote();
@@ -2923,18 +2827,12 @@ export const UI = {
         window.dispatchEvent(new CustomEvent('board:cards_reflowed'));
     },
 
-    createCardComponent(item, activeCategories, { freeform = false, gridBoard = false, columnNote = false, columnsFloat = false, categoryName = '' } = {}) {
+    createCardComponent(item, activeCategories, { desktop = false, freeform = false, gridBoard = false } = {}) {
         const card = document.createElement('div');
         card.classList.add('mini-card');
 
         card.dataset.id = item.id;
-        if (freeform) card.dataset.freeform = '1';
-        if (gridBoard) card.dataset.gridBoard = '1';
-        if (columnNote) {
-            card.dataset.columnNote = '1';
-            if (categoryName) card.dataset.category = categoryName;
-        }
-        if (columnsFloat) card.dataset.columnsFloat = '1';
+        if (desktop || freeform || gridBoard) card.dataset.desktop = '1';
 
         const targetCatName = (item.categories && item.categories.length > 0) ? item.categories[0] : '';
         const matchedCat = activeCategories.find(c => c.name?.toLowerCase() === targetCatName.toLowerCase());
@@ -2943,9 +2841,7 @@ export const UI = {
         this.applyItemCardTheme(card, item);
         card.style.borderLeftColor = categoryColor;
 
-        const isExpanded = gridBoard
-            ? this.isGridBoardCardExpanded(item.id, card)
-            : getExpandedCards(activeBoardViewMode)[item.id] === true;
+        const isExpanded = getExpandedCards(activeBoardViewMode)[item.id] === true;
 
         if (isExpanded) {
             card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note');
@@ -2956,16 +2852,8 @@ export const UI = {
             this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
         }
 
-        if (freeform) {
-            card.addEventListener('mousedown', () => this.raiseFreeformCard(card), true);
-        }
-
-        if (gridBoard) {
-            card.addEventListener('mousedown', () => this.raiseGridBoardCard(card), true);
-        }
-
-        if (columnNote && !card.classList.contains('expanded')) {
-            card.dataset.hasCatDrag = '1';
+        if (isDesktopCard(card)) {
+            card.addEventListener('mousedown', () => this.raiseDesktopCard(card), true);
         }
 
         this.syncCardDraggable(card);
@@ -3239,20 +3127,13 @@ export const UI = {
     markNoteCollapsed(itemId) {
         if (!itemId) return;
         setExpandedCard(activeBoardViewMode, itemId, false);
-        if (activeBoardViewMode === 'grid') {
-            if (this.getGridExpandedId() === itemId) this.setGridExpandedId(null);
-        }
     },
 
     collapseBoardCardIfExpanded(card, item, hiddenCategories = [], focusCategories = []) {
         if (!card || !item?.id || !card.classList.contains('expanded')) return;
 
-        if (card.dataset.freeform === '1') {
-            this.updateFreeformCard(card, item, { expanded: false });
-            return;
-        }
-        if (card.dataset.gridBoard === '1') {
-            this.updateGridBoardCard(card, item, { expanded: false });
+        if (isDesktopCard(card)) {
+            this.updateDesktopCard(card, item, { expanded: false });
             return;
         }
         if (card.dataset.columnNote === '1') {
@@ -3275,7 +3156,6 @@ export const UI = {
         const mode = activeBoardViewMode;
         const expanded = getExpandedCards(mode);
         if (Object.keys(expanded).some((id) => expanded[id])) return true;
-        if (mode === 'grid' && this.getGridExpandedId()) return true;
         const canvas = document.getElementById('app-canvas');
         return !!canvas?.querySelector('.mini-card.expanded');
     },
@@ -3287,17 +3167,11 @@ export const UI = {
             map[id] = true;
         });
         setExpandedCardsMap(mode, map);
-        if (mode === 'grid') {
-            this.setGridExpandedId(null);
-        }
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
     },
 
     collapseAllCards() {
         clearExpandedCards(activeBoardViewMode);
-        if (activeBoardViewMode === 'grid') {
-            this.setGridExpandedId(null);
-        }
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
     },
 
@@ -3325,29 +3199,28 @@ export const UI = {
     },
 
     captureDesktopRestoreContext(card) {
-        if (!card) return null;
-        if (card.dataset.gridBoard === '1') {
+        if (!isDesktopCard(card)) return null;
+        const mode = activeBoardViewMode;
+        if (isSnapLayoutMode(mode)) {
             return {
                 viewMode: 'grid',
                 rect: this.readNoteRect(card),
                 size: this.readFreeformCardSize(card)
             };
         }
-        if (card.dataset.freeform === '1') {
-            return {
-                viewMode: 'freeform',
-                position: {
-                    x: parseFloat(card.style.left) || 0,
-                    y: parseFloat(card.style.top) || 0
-                },
-                size: this.readFreeformCardSize(card)
-            };
-        }
-        return null;
+        return {
+            viewMode: 'freeform',
+            position: {
+                x: parseFloat(card.style.left) || 0,
+                y: parseFloat(card.style.top) || 0
+            },
+            size: this.readFreeformCardSize(card)
+        };
     },
 
     getPreferredDesktopViewMode() {
-        const preferred = localStorage.getItem('matrix_preferred_view');
+        const preferred = localStorage.getItem('matrix_desktop_layout')
+            || localStorage.getItem('matrix_preferred_view');
         if (preferred === 'freeform' || preferred === 'grid') return preferred;
         return 'grid';
     },
@@ -3363,7 +3236,7 @@ export const UI = {
                 h
             };
             rect = this.snapNoteRect(rect, { maxW: packW, maxH: origin + viewportH });
-            const placed = [...(host?.querySelectorAll('.mini-card[data-grid-board="1"]') || [])]
+            const placed = [...(host?.querySelectorAll('.mini-card[data-desktop="1"]') || [])]
                 .filter((c) => c.dataset.id !== excludeId)
                 .map((c) => this.readNoteRect(c));
             if (placed.some((p) => this.rectsOverlap(rect, p))) {
@@ -3460,7 +3333,6 @@ export const UI = {
         if (!itemId || !placement?.viewMode) return;
         setExpandedCard(placement.viewMode, itemId, true);
         if (placement.viewMode === 'grid') {
-            this.setGridExpandedId(itemId);
             if (placement.rect) {
                 this.saveGridLayout(itemId, placement.rect);
             }
@@ -3981,8 +3853,7 @@ export const UI = {
         this.bindNoteEditorShell(card, item, {
             richEdit: canEdit,
             refresh: () => this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor),
-            stopMousedownPropagation: card.dataset.freeform === '1'
-                || card.dataset.gridBoard === '1'
+            stopMousedownPropagation: isDesktopCard(card)
                 || this.isColumnLayoutCard(card)
         });
         this.finalizeFreeformCard(card);
@@ -4456,8 +4327,7 @@ export const UI = {
                 });
                 el.addEventListener('focus', () => {
                     const card = root.closest('.mini-card');
-                    if (card?.dataset.freeform === '1') this.raiseFreeformCard(card);
-                    if (card?.dataset.gridBoard === '1') this.raiseGridBoardCard(card);
+                    if (isDesktopCard(card)) this.raiseDesktopCard(card);
                 });
                 if (el.classList.contains('rich-text--edit')) {
                     el.addEventListener('paste', (e) => {
@@ -5003,7 +4873,7 @@ export const UI = {
     },
 
     saveFreeformSizeFromCard(card) {
-        if (card.dataset.freeform !== '1') return;
+        if (!isDesktopCard(card)) return;
         const { w, h } = this.readFreeformCardSize(card);
         const item = this.resolveBoardItem(card.dataset.id);
         const tileSize = this.getCardTileSize(card, item);
@@ -5016,7 +4886,7 @@ export const UI = {
     flushLayoutFromCanvas(canvas, viewMode) {
         if (!canvas) return;
         if (viewMode === 'grid') {
-            canvas.querySelectorAll('.mini-card[data-grid-board="1"]').forEach((card) => {
+            canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
                 const id = card.dataset.id;
                 if (!id) return;
                 this.saveGridLayout(id, this.readNoteRect(card));
@@ -5024,7 +4894,7 @@ export const UI = {
             return;
         }
         if (viewMode === 'freeform') {
-            canvas.querySelectorAll('.mini-card[data-freeform="1"]').forEach((card) => {
+            canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
                 const id = card.dataset.id;
                 if (!id) return;
                 this.saveFreeformPosition(
@@ -5032,35 +4902,9 @@ export const UI = {
                     parseFloat(card.style.left) || 0,
                     parseFloat(card.style.top) || 0
                 );
-                if (card.classList.contains('expanded')) {
-                    this.saveFreeformSizeFromCard(card);
-                }
+                this.saveFreeformSizeFromCard(card);
             });
-            return;
         }
-
-        canvas.querySelectorAll('.canvas-column').forEach((col) => {
-            const cat = col.dataset.category;
-            if (!cat) return;
-            this.saveColumnPosition(cat, parseFloat(col.style.left) || 0, parseFloat(col.style.top) || 0);
-            const rect = this.readColumnCanvasRect(col);
-            if (rect.w && rect.h) this.saveColumnSize(cat, rect.w, rect.h);
-        });
-
-        canvas.querySelectorAll('.mini-card[data-column-note="1"], .mini-card[data-columns-float="1"]').forEach((card) => {
-            const id = card.dataset.id;
-            if (!id) return;
-            const rect = this.readNoteRect(card);
-            if (card.dataset.columnsFloat === '1') {
-                this.saveColumnsFloatPosition(id, rect.x, rect.y);
-                if (card.classList.contains('expanded')) {
-                    this.saveColumnsFloatSize(id, rect.w, rect.h);
-                }
-                return;
-            }
-            const cat = card.dataset.category;
-            if (cat) this.saveColumnNoteLayout(cat, id, rect);
-        });
     },
 
     captureViewSnapshot(viewMode, focusCategories = []) {
@@ -5087,7 +4931,6 @@ export const UI = {
             columnsFloatSizes: this.getColumnsFloatSizes(),
             gridLayout: this.getGridLayout(),
             gridPins: this.getGridPins(),
-            gridExpandedId: this.getGridExpandedId(),
             expandedCards: getExpandedCards(viewMode),
             collapsedCategories,
             viewSessions: getViewSessionsForSnapshot()
@@ -5250,6 +5093,72 @@ export const UI = {
         return snapshot;
     },
 
+    convertDesktopLayoutForModeChange(canvas, fromMode, toMode, items) {
+        if (!canvas || fromMode === toMode) return;
+        const visible = this.getVisibleItems(Array.isArray(items) ? items : []);
+        const ids = new Set(visible.map((item) => item.id));
+
+        if (toMode === 'freeform') {
+            visible.forEach((item) => {
+                const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
+                if (!card) {
+                    const saved = this.getGridLayout()[item.id];
+                    if (saved) {
+                        this.saveFreeformPosition(item.id, saved.x, saved.y);
+                        this.saveFreeformSize(item.id, saved.w, saved.h, {
+                            customCompact: !!saved.customCompact
+                        });
+                    }
+                    return;
+                }
+                const rect = this.readNoteRect(card);
+                this.saveFreeformPosition(item.id, rect.x, rect.y);
+                const { w, h } = this.readFreeformCardSize(card);
+                this.saveFreeformSize(item.id, w, h, {
+                    customCompact: this.isCustomTileRect(w, h, resolveTileSize(item))
+                });
+            });
+            return;
+        }
+
+        if (toMode === 'grid') {
+            const placed = [];
+            const { origin, packW, maxH } = this.getGridBoardBounds(canvas);
+            visible.forEach((item) => {
+                const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
+                const pos = this.getFreeformPositions()[item.id];
+                const size = this.getFreeformSizes()[item.id];
+                const isExpanded = getExpandedCards('grid')[item.id] === true;
+                let rect;
+                if (card) {
+                    rect = this.readNoteRect(card);
+                    const { w, h } = this.readFreeformCardSize(card);
+                    rect = { ...rect, w, h };
+                } else if (pos && size) {
+                    rect = { x: pos.x, y: pos.y, w: size.w, h: size.h, customCompact: size.customCompact };
+                } else {
+                    const tileDefaults = this.getTileDefaultRect(resolveTileSize(item));
+                    const w = isExpanded ? this.cellsToSpanW(2) : tileDefaults.w;
+                    const h = isExpanded ? this.cellsToSpanH(2) : tileDefaults.h;
+                    rect = this.findFirstCanvasSlot(w, h, placed, packW + origin * 2, { origin });
+                }
+                rect = this.snapNoteRect(rect, { maxW: packW, maxH });
+                if (placed.some((p) => this.rectsOverlap(rect, p))) {
+                    rect = this.findNearestGridSlot(rect, rect.w, rect.h, placed, { packW, origin, maxH });
+                }
+                this.saveGridLayout(item.id, rect, {
+                    customCompact: !!rect.customCompact || this.isCustomTileRect(rect.w, rect.h, resolveTileSize(item))
+                });
+                placed.push(rect);
+            });
+            const layout = this.computeGridBoardLayout(canvas, null);
+            layout.forEach((rect, id) => {
+                if (!ids.has(id)) return;
+                this.saveGridLayout(id, rect);
+            });
+        }
+    },
+
     resetFreeformLayout() {
         localStorage.removeItem('matrix_freeform_positions');
         localStorage.removeItem('matrix_freeform_sizes');
@@ -5272,7 +5181,6 @@ export const UI = {
         localStorage.removeItem(GRID_LAYOUT_KEY);
         localStorage.removeItem(GRID_PINS_KEY);
         clearViewSessionExpanded('grid');
-        this.setGridExpandedId(null);
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
     },
 
@@ -5362,8 +5270,8 @@ export const UI = {
         canvas.style.minHeight = `${bottom + origin + CANVAS_COL_GAP}px`;
     },
 
-    applyGridBoardSize(card) {
-        if (card.dataset.gridBoard !== '1') return;
+    applyDesktopSize(card) {
+        if (!isDesktopCard(card)) return;
         if (card.dataset.tierResizePreview === '1') return;
         const isExpanded = card.classList.contains('expanded');
         const saved = this.getGridLayout()[card.dataset.id];
@@ -5389,9 +5297,11 @@ export const UI = {
     },
 
     finalizeGridBoardCard(card) {
-        if (card.dataset.gridBoard !== '1') return;
-        this.setupFreeformChrome(card);
-        this.applyGridBoardSize(card);
+        this.finalizeDesktopCard(card);
+    },
+
+    applyGridBoardSize(card) {
+        this.applyDesktopSize(card);
     },
 
     clampGridResize(w, h, { packW } = {}) {
@@ -5548,10 +5458,10 @@ export const UI = {
         const { origin, packW, maxH: boardMaxH } = this.getGridBoardBounds(canvas);
         return this.computeSnapPanelLayout({
             panelEl: canvas,
-            cardSelector: '.mini-card[data-grid-board="1"]',
+            cardSelector: '.mini-card[data-desktop="1"]',
             getSavedRect: (id) => this.getGridLayout()[id],
             rectForCard: (card, saved, isExpanded) => this.gridBoardRectForCard(card, saved, isExpanded),
-            isCardExpanded: (id, card) => this.isGridBoardCardExpanded(id, card),
+            isCardExpanded: (id, card) => getExpandedCards('grid')[id] === true || card.classList.contains('expanded'),
             actorId,
             actorRect,
             bounds: { origin, packW, maxH: maxH ?? boardMaxH }
@@ -5624,7 +5534,7 @@ export const UI = {
         const { origin } = this.getGridBoardBounds(canvas);
         const placed = [];
         layout.forEach((rect, id) => {
-            const card = canvas.querySelector(`.mini-card[data-grid-board="1"][data-id="${CSS.escape(id)}"]`);
+            const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(id)}"]`);
             if (!card) return;
             this.applyNoteRect(card, rect, { settling: animate });
             card.classList.toggle('layout-preview', preview);
@@ -5665,7 +5575,7 @@ export const UI = {
         if (!canvas?.classList.contains('view-grid')) return;
         const { origin, packW, viewportH } = this.getGridViewportBounds(canvas);
         const bottomLimit = origin + viewportH;
-        const cards = [...canvas.querySelectorAll('.mini-card[data-grid-board="1"]')];
+        const cards = [...canvas.querySelectorAll('.mini-card[data-desktop="1"]')];
         const pinnedIds = new Set(this.getBoardPins());
         const placed = [];
         const layout = new Map();
@@ -5674,7 +5584,7 @@ export const UI = {
         cards.forEach((card) => {
             const id = card.dataset.id;
             if (!id || !pinnedIds.has(id)) return;
-            const isExpanded = this.isGridBoardCardExpanded(id, card);
+            const isExpanded = getExpandedCards('grid')[id] === true || card.classList.contains('expanded');
             const rect = this.snapNoteRect(
                 this.gridBoardRectForCard(card, this.readNoteRect(card), isExpanded),
                 { maxW: packW, maxH: snapOpts.maxH }
@@ -5690,7 +5600,7 @@ export const UI = {
             })
             .map((card) => {
                 const id = card.dataset.id;
-                const isExpanded = this.isGridBoardCardExpanded(id, card);
+                const isExpanded = getExpandedCards('grid')[id] === true || card.classList.contains('expanded');
                 const rect = this.gridBoardRectForCard(card, this.readNoteRect(card), isExpanded);
                 return { id, card, rect };
             })
@@ -5725,7 +5635,7 @@ export const UI = {
         }
         const { origin, viewportH } = this.getGridViewportBounds(canvas);
         const bottomLimit = origin + viewportH;
-        const cards = canvas.querySelectorAll('.mini-card[data-grid-board="1"]');
+        const cards = canvas.querySelectorAll('.mini-card[data-desktop="1"]');
         let contentBottom = origin;
         cards.forEach((card) => {
             const rect = this.readNoteRect(card);
@@ -5746,21 +5656,22 @@ export const UI = {
         this.squeezeGridBoardToViewport(canvas, { animate });
     },
 
-    initGridBoardCardStack(card, orderIndex = 0) {
-        if (card.dataset.gridBoard !== '1') return;
+    initDesktopCardStack(card, orderIndex = 0) {
+        if (!isDesktopCard(card)) return;
         const z = orderIndex + 1;
         card.style.setProperty('z-index', String(z), 'important');
         syncDesktopStackSeq(z);
     },
 
+    initGridBoardCardStack(card, orderIndex = 0) {
+        this.initDesktopCardStack(card, orderIndex);
+    },
+
     raiseLayoutCard(card) {
         if (!card) return;
         raiseDesktopElement(card);
-        if (card.dataset.gridBoard === '1') {
-            card.classList.add('is-grid-front');
-            card.closest('#app-canvas')?.querySelectorAll('.mini-card.is-grid-front').forEach((other) => {
-                if (other !== card) other.classList.remove('is-grid-front');
-            });
+        if (isDesktopCard(card)) {
+            this.raiseDesktopCard(card);
             return;
         }
         if (card.dataset.columnNote === '1') {
@@ -5771,9 +5682,18 @@ export const UI = {
         }
     },
 
+    raiseDesktopCard(card) {
+        if (!isDesktopCard(card)) return;
+        raiseDesktopElement(card);
+        const frontClass = isSnapLayoutMode(activeBoardViewMode) ? 'is-grid-front' : 'is-freeform-front';
+        card.classList.add(frontClass);
+        card.closest('#app-canvas')?.querySelectorAll(`.mini-card.${frontClass}`).forEach((other) => {
+            if (other !== card) other.classList.remove(frontClass);
+        });
+    },
+
     raiseGridBoardCard(card) {
-        if (!card || card.dataset.gridBoard !== '1') return;
-        this.raiseLayoutCard(card);
+        this.raiseDesktopCard(card);
     },
 
     getCanvasLayoutOrder() {
@@ -6596,19 +6516,11 @@ export const UI = {
     },
 
     initFreeformCardStack(card, orderIndex = 0) {
-        if (card.dataset.freeform !== '1') return;
-        const z = orderIndex + 1;
-        card.style.setProperty('z-index', String(z), 'important');
-        syncDesktopStackSeq(z);
+        this.initDesktopCardStack(card, orderIndex);
     },
 
     raiseFreeformCard(card) {
-        if (!card || card.dataset.freeform !== '1') return;
-        raiseDesktopElement(card);
-        card.classList.add('is-freeform-front');
-        card.closest('#app-canvas')?.querySelectorAll('.mini-card.is-freeform-front').forEach((other) => {
-            if (other !== card) other.classList.remove('is-freeform-front');
-        });
+        this.raiseDesktopCard(card);
     },
 
     getCollapsedCategories() {

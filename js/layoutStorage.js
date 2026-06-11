@@ -729,22 +729,19 @@ function sanitizeExpandedMap(map, liveIds, stats, label) {
 }
 
 function sanitizeViewSessions(store, liveIds, stats) {
-    if (!store || store.version !== 1) return store;
+    if (!store || (store.version !== 1 && store.version !== 2)) return store;
     let changed = false;
-    const next = { version: 1 };
+    const next = { version: 2 };
     VIEW_MODES.forEach((mode) => {
         const bucket = { ...(store[mode] || {}) };
+        delete bucket.gridExpandedId;
+        delete bucket.collapsedCategories;
         if (bucket.expandedCards) {
             const cleaned = sanitizeExpandedMap(bucket.expandedCards, liveIds, stats, `view_sessions.${mode}.expanded`);
             if (cleaned !== bucket.expandedCards) {
                 bucket.expandedCards = cleaned;
                 changed = true;
             }
-        }
-        if (mode === 'grid' && bucket.gridExpandedId && !liveIds.has(bucket.gridExpandedId)) {
-            bucket.gridExpandedId = null;
-            stats.removed += 1;
-            changed = true;
         }
         next[mode] = bucket;
     });
