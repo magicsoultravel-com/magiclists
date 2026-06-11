@@ -14,3 +14,17 @@ Vanilla JS ES modules + plain CSS. Client-only; data via `js/api.js` → localSt
 **Design:** Minimal, lightweight, smooth, modern, compact. Dark default; use CSS variables and existing theme pickers. Reuse classes (`.btn`, `.card-act`, `.collapsable-*`, `.overlay`) — ask before inventing new ones. Modular files; same tropes across tiles, editor, sidebar, tools. Match existing interaction patterns (hover, overlay, persistent). UX first.
 
 **Deliver:** concise, no preamble; audit shared styles/components for regressions across board, editor, sidebar, calendar, tools.
+
+**Git / GitHub:** Never commit or push unless the user agrees. At the end of a session — or when a cohesive chunk of work is finished — always ask whether to commit the changes.
+
+When asking:
+- Briefly summarize what changed (1–2 sentences)
+- Offer: commit only, commit + push, or skip
+
+If the user says yes to commit:
+1. `git status` + `git diff` to verify scope
+2. Stage only relevant files (never `.env`, credentials, or accidental junk)
+3. Commit with a concise message (why, not a file list) matching recent repo style
+4. Push only if the user also wants push (or ask separately after commit)
+
+If push fails (auth, hook, conflict), report the error and fix or ask before continuing. Do not force-push to `main`.

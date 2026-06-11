@@ -589,6 +589,12 @@
     color: var(--text-muted);
 }
 
+.radio-tile__favicon--empty {
+    display: block;
+    width: 16px;
+    height: 16px;
+}
+
 .radio-tile__badge {
     position: absolute;
     top: 3px;

@@ -3,7 +3,7 @@ import { stationKey, parseStationKey } from './radioProviders/stationShape.js';
 import { RadioPlayer } from './radioPlayer.js';
 import { RadioPopover } from './radioPopover.js';
 import { clampPanelToViewport } from './popoverPosition.js';
-import { escapeHtml, countryFlagEmoji, debounce, syncMarquee } from './radioUtils.js';
+import { escapeHtml, countryFlagEmoji, debounce, syncMarquee, bindFaviconImage } from './radioUtils.js';
 import { ACTION_ICONS, CARD_ICONS } from './ui.js';
 import { applySectionCollapse } from './hamburger.js';
 
@@ -363,6 +363,15 @@ export const SidebarRadio = {
                 e.stopPropagation();
                 this.openPanel(btn.getAttribute('data-radio-open'), btn);
             });
+        });
+
+        const artImg = this.root.querySelector('[data-radio-art]');
+        const compactArtImg = this.root.querySelector('[data-radio-compact-art]');
+        bindFaviconImage(artImg, () => {
+            this.root.querySelector('[data-radio-art-fallback]')?.classList.add('is-hidden');
+        });
+        bindFaviconImage(compactArtImg, () => {
+            this.root.querySelector('[data-radio-compact-art-fallback]')?.classList.add('is-hidden');
         });
     },
 
@@ -853,6 +862,15 @@ export const SidebarRadio = {
     bindStationTileActions(container) {
         if (!container) return;
 
+        container.querySelectorAll('.radio-tile__favicon[src]').forEach((img) => {
+            bindFaviconImage(img, () => {
+                const empty = document.createElement('span');
+                empty.className = 'radio-tile__favicon radio-tile__favicon--empty';
+                empty.setAttribute('aria-hidden', 'true');
+                img.replaceWith(empty);
+            });
+        });
+
         container.querySelectorAll('[data-radio-star]').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -974,9 +992,13 @@ export const SidebarRadio = {
         const updateArt = (img, fallback) => {
             if (!img || !fallback) return;
             if (favicon) {
-                img.src = favicon;
-                img.classList.remove('is-hidden');
                 fallback.classList.add('is-hidden');
+                if (img.getAttribute('src') !== favicon) {
+                    img.classList.add('is-hidden');
+                    img.src = favicon;
+                } else if (img.complete && img.naturalWidth > 0) {
+                    img.classList.remove('is-hidden');
+                }
             } else {
                 img.removeAttribute('src');
                 img.classList.add('is-hidden');

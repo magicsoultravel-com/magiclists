@@ -20,6 +20,20 @@ export function debounce(fn, ms) {
     };
 }
 
+/** Hide broken favicon images — leaves empty placeholder space. */
+export function bindFaviconImage(img, onError) {
+    if (!img || img.dataset.faviconBound === 'true') return;
+    img.dataset.faviconBound = 'true';
+    img.addEventListener('load', () => {
+        if (img.naturalWidth > 0) img.classList.remove('is-hidden');
+    });
+    img.addEventListener('error', () => {
+        img.removeAttribute('src');
+        img.classList.add('is-hidden');
+        onError?.();
+    });
+}
+
 /** Enable horizontal marquee when text overflows; respects reduced motion. */
 export function syncMarquee(wrapEl, text, { error = false } = {}) {
     if (!wrapEl) return;
