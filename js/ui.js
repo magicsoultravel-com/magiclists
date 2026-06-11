@@ -1403,7 +1403,6 @@ export const UI = {
                 <span class="grab-handle grab-handle--col" title="Drag to reposition category">⋮⋮</span>
                 <span class="column-title">${this.escapeHTML(categoryName)} (${columnItems.length})</span>
                 <span class="column-header-actions">
-                    <button type="button" class="column-resize-btn" title="Resize category" aria-label="Resize category" aria-pressed="false">${CARD_ICONS.resize}</button>
                     <button type="button" class="column-collapse-btn" title="${isCollapsed ? 'Expand category' : 'Collapse category'}" aria-label="${isCollapsed ? 'Expand category' : 'Collapse category'}">${isCollapsed ? '▶' : '▼'}</button>
                     ${hideControl}
                 </span>
@@ -1412,27 +1411,6 @@ export const UI = {
 
         this.setupColumnResizeChrome(colWrapper);
         this.applySavedColumnSize(colWrapper);
-
-        const resizeBtn = colWrapper.querySelector('.column-resize-btn');
-        resizeBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const active = colWrapper.classList.toggle('is-column-resize-active');
-            resizeBtn.classList.toggle('active', active);
-            resizeBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
-            resizeBtn.title = active ? 'Done resizing' : 'Resize category';
-            resizeBtn.setAttribute('aria-label', resizeBtn.title);
-            document.getElementById('app-canvas')?.querySelectorAll('.canvas-column.is-column-resize-active').forEach((other) => {
-                if (other === colWrapper) return;
-                other.classList.remove('is-column-resize-active');
-                const btn = other.querySelector('.column-resize-btn');
-                if (btn) {
-                    btn.classList.remove('active');
-                    btn.setAttribute('aria-pressed', 'false');
-                    btn.title = 'Resize category';
-                    btn.setAttribute('aria-label', btn.title);
-                }
-            });
-        });
 
         const collapseBtn = colWrapper.querySelector('.column-collapse-btn');
         collapseBtn.addEventListener('click', (e) => {
@@ -1830,7 +1808,7 @@ export const UI = {
             this.attachCardActionButton(archiveBtn, () => editor.emitArchiveAction());
         }
 
-        const commitAndClose = () => editor.closeAndSave({ revealOnBoard: !editor.preserveBoardCollapse });
+        const commitAndClose = () => editor.commitAndClose();
 
         if (closeBtn) {
             closeBtn.addEventListener('mousedown', (e) => {
@@ -1906,9 +1884,14 @@ export const UI = {
         }
         if (!chrome.querySelector('.col-resize-se')) {
             chrome.insertAdjacentHTML('beforeend', `
-                <span class="col-resize col-resize-e" data-axis="e" title="Resize width"></span>
-                <span class="col-resize col-resize-s" data-axis="s" title="Resize height"></span>
-                <span class="col-resize col-resize-se" data-axis="se" title="Resize"></span>
+                <span class="col-resize col-resize-n" data-axis="n" aria-hidden="true"></span>
+                <span class="col-resize col-resize-s" data-axis="s" aria-hidden="true"></span>
+                <span class="col-resize col-resize-e" data-axis="e" aria-hidden="true"></span>
+                <span class="col-resize col-resize-w" data-axis="w" aria-hidden="true"></span>
+                <span class="col-resize col-resize-nw" data-axis="nw" aria-hidden="true"></span>
+                <span class="col-resize col-resize-ne" data-axis="ne" aria-hidden="true"></span>
+                <span class="col-resize col-resize-sw" data-axis="sw" aria-hidden="true"></span>
+                <span class="col-resize col-resize-se" data-axis="se" aria-hidden="true"></span>
             `);
         }
     },
@@ -1934,14 +1917,14 @@ export const UI = {
         }
         if (!chrome.querySelector('.ff-resize-se')) {
             chrome.insertAdjacentHTML('beforeend', `
-                <span class="ff-resize ff-resize-n" data-axis="n" title="Resize"></span>
-                <span class="ff-resize ff-resize-s" data-axis="s" title="Resize"></span>
-                <span class="ff-resize ff-resize-e" data-axis="e" title="Resize"></span>
-                <span class="ff-resize ff-resize-w" data-axis="w" title="Resize"></span>
-                <span class="ff-resize ff-resize-nw" data-axis="nw" title="Resize"></span>
-                <span class="ff-resize ff-resize-ne" data-axis="ne" title="Resize"></span>
-                <span class="ff-resize ff-resize-sw" data-axis="sw" title="Resize"></span>
-                <span class="ff-resize ff-resize-se" data-axis="se" title="Resize"></span>
+                <span class="ff-resize ff-resize-n" data-axis="n" aria-hidden="true"></span>
+                <span class="ff-resize ff-resize-s" data-axis="s" aria-hidden="true"></span>
+                <span class="ff-resize ff-resize-e" data-axis="e" aria-hidden="true"></span>
+                <span class="ff-resize ff-resize-w" data-axis="w" aria-hidden="true"></span>
+                <span class="ff-resize ff-resize-nw" data-axis="nw" aria-hidden="true"></span>
+                <span class="ff-resize ff-resize-ne" data-axis="ne" aria-hidden="true"></span>
+                <span class="ff-resize ff-resize-sw" data-axis="sw" aria-hidden="true"></span>
+                <span class="ff-resize ff-resize-se" data-axis="se" aria-hidden="true"></span>
             `);
         }
     },
@@ -2839,6 +2822,41 @@ export const UI = {
     markNoteExpanded(itemId) {
         if (!itemId) return;
         setExpandedCard(activeBoardViewMode, itemId, true);
+    },
+
+    markNoteCollapsed(itemId) {
+        if (!itemId) return;
+        setExpandedCard(activeBoardViewMode, itemId, false);
+        if (activeBoardViewMode === 'grid') {
+            if (this.getGridExpandedId() === itemId) this.setGridExpandedId(null);
+        }
+    },
+
+    collapseBoardCardIfExpanded(card, item, hiddenCategories = [], focusCategories = []) {
+        if (!card || !item?.id || !card.classList.contains('expanded')) return;
+
+        if (card.dataset.freeform === '1') {
+            this.updateFreeformCard(card, item, { expanded: false });
+            return;
+        }
+        if (card.dataset.gridBoard === '1') {
+            this.updateGridBoardCard(card, item, { expanded: false });
+            return;
+        }
+        if (card.dataset.columnNote === '1') {
+            this.updateColumnNoteCard(card, item, { expanded: false });
+            return;
+        }
+        if (card.dataset.columnsFloat === '1') {
+            this.updateColumnsFloatCard(card, item, { expanded: false });
+            return;
+        }
+
+        let activeCategories = readStoredCategories()
+            .filter((cat) => !hiddenCategories.includes(cat.name));
+        activeCategories = applyFocusToCategories(activeCategories, focusCategories);
+        const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
+        this.applyCardExpandCollapse(card, item, false, activeCategories, targetCatName, categoryColor);
     },
 
     hasAnyBoardCardsExpanded() {

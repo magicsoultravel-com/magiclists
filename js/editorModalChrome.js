@@ -5,7 +5,7 @@ const PAD = 16;
 const DEFAULT_W = 520;
 
 function defaultHeight() {
-    return Math.min(Math.round(window.innerHeight * 0.85), 640);
+    return window.innerHeight - PAD * 2;
 }
 
 function clampGeometry(geom) {
@@ -27,6 +27,11 @@ export const EditorModalChrome = {
 
     isEnabled() {
         return isDesktopViewport();
+    },
+
+    isInitialized(modalEl) {
+        const binding = this._bindings.get(modalEl);
+        return !!(binding && binding.desktopEnabled === this.isEnabled());
     },
 
     loadGeometry() {
@@ -87,14 +92,14 @@ export const EditorModalChrome = {
             const chrome = document.createElement('div');
             chrome.className = 'modal-chrome';
             chrome.innerHTML = `
-                <span class="modal-resize modal-resize-n" data-axis="n" title="Resize"></span>
-                <span class="modal-resize modal-resize-s" data-axis="s" title="Resize"></span>
-                <span class="modal-resize modal-resize-e" data-axis="e" title="Resize"></span>
-                <span class="modal-resize modal-resize-w" data-axis="w" title="Resize"></span>
-                <span class="modal-resize modal-resize-nw" data-axis="nw" title="Resize"></span>
-                <span class="modal-resize modal-resize-ne" data-axis="ne" title="Resize"></span>
-                <span class="modal-resize modal-resize-sw" data-axis="sw" title="Resize"></span>
-                <span class="modal-resize modal-resize-se" data-axis="se" title="Resize"></span>
+                <span class="modal-resize modal-resize-n" data-axis="n" aria-hidden="true"></span>
+                <span class="modal-resize modal-resize-s" data-axis="s" aria-hidden="true"></span>
+                <span class="modal-resize modal-resize-e" data-axis="e" aria-hidden="true"></span>
+                <span class="modal-resize modal-resize-w" data-axis="w" aria-hidden="true"></span>
+                <span class="modal-resize modal-resize-nw" data-axis="nw" aria-hidden="true"></span>
+                <span class="modal-resize modal-resize-ne" data-axis="ne" aria-hidden="true"></span>
+                <span class="modal-resize modal-resize-sw" data-axis="sw" aria-hidden="true"></span>
+                <span class="modal-resize modal-resize-se" data-axis="se" aria-hidden="true"></span>
             `;
             modalEl.appendChild(chrome);
         }
@@ -109,9 +114,13 @@ export const EditorModalChrome = {
 
     init(modalEl, { onGeometryChange } = {}) {
         if (!modalEl) return;
+
+        const desktopEnabled = this.isEnabled();
+        if (this.isInitialized(modalEl)) return;
+
         this.teardown(modalEl);
 
-        if (!this.isEnabled()) {
+        if (!desktopEnabled) {
             modalEl.classList.remove('modal--floating');
             modalEl.style.position = '';
             modalEl.style.left = '';
@@ -136,6 +145,8 @@ export const EditorModalChrome = {
         const toolbar = modalEl.querySelector('.editor-toolbar');
         let dragActive = null;
         let resizeActive = null;
+        let dragRaf = null;
+        let resizeRaf = null;
 
         const commitGeometry = () => {
             const geom = this.readGeometry(modalEl);
@@ -149,12 +160,18 @@ export const EditorModalChrome = {
             const dy = e.clientY - dragActive.startY;
             if (!dragActive.moved && Math.abs(dx) < 4 && Math.abs(dy) < 4) return;
             dragActive.moved = true;
-            modalEl.classList.add('is-modal-dragging');
-            this.applyGeometry(modalEl, {
+            dragActive.pending = {
                 x: dragActive.origX + dx,
                 y: dragActive.origY + dy,
                 w: dragActive.w,
                 h: dragActive.h
+            };
+            if (dragRaf) return;
+            dragRaf = requestAnimationFrame(() => {
+                dragRaf = null;
+                if (!dragActive?.pending) return;
+                modalEl.classList.add('is-modal-dragging');
+                this.applyGeometry(modalEl, dragActive.pending);
             });
         };
 
@@ -162,6 +179,10 @@ export const EditorModalChrome = {
             if (!dragActive) return;
             document.removeEventListener('mousemove', onDragMove);
             document.removeEventListener('mouseup', onDragUp);
+            if (dragRaf) {
+                cancelAnimationFrame(dragRaf);
+                dragRaf = null;
+            }
             modalEl.classList.remove('is-modal-dragging');
             if (dragActive.moved) commitGeometry();
             dragActive = null;
@@ -201,13 +222,23 @@ export const EditorModalChrome = {
                 h = resizeActive.orig.h - dy;
                 y = resizeActive.orig.y + dy;
             }
-            this.applyGeometry(modalEl, { x, y, w, h });
+            resizeActive.pending = { x, y, w, h };
+            if (resizeRaf) return;
+            resizeRaf = requestAnimationFrame(() => {
+                resizeRaf = null;
+                if (!resizeActive?.pending) return;
+                this.applyGeometry(modalEl, resizeActive.pending);
+            });
         };
 
         const onResizeUp = () => {
             if (!resizeActive) return;
             document.removeEventListener('mousemove', onResizeMove);
             document.removeEventListener('mouseup', onResizeUp);
+            if (resizeRaf) {
+                cancelAnimationFrame(resizeRaf);
+                resizeRaf = null;
+            }
             modalEl.classList.remove('is-modal-resizing');
             commitGeometry();
             resizeActive = null;
@@ -230,6 +261,6 @@ export const EditorModalChrome = {
             }, { signal });
         });
 
-        this._bindings.set(modalEl, { abort });
+        this._bindings.set(modalEl, { abort, desktopEnabled });
     }
 };

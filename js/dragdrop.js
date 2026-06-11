@@ -1192,13 +1192,27 @@ export const DragDropEngine = {
                 if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
                 resizeActive.moved = true;
             }
-            const { column, axis, origW, origH } = resizeActive;
+            const { column, axis, origW, origH, origX, origY } = resizeActive;
             let nextW = origW;
             let nextH = origH;
+            let nextX = origX;
+            let nextY = origY;
             if (axis.includes('e')) nextW = origW + dx;
+            if (axis.includes('w')) {
+                nextW = origW - dx;
+                nextX = origX + dx;
+            }
             if (axis.includes('s')) nextH = origH + dy;
+            if (axis.includes('n')) {
+                nextH = origH - dy;
+                nextY = origY + dy;
+            }
             nextW = Math.max(CANVAS_GRID_W, Math.round(nextW));
             nextH = Math.max(COLUMN_MIN_CANVAS_H, Math.round(nextH));
+            if (axis.includes('w')) nextX = origX + (origW - nextW);
+            if (axis.includes('n')) nextY = origY + (origH - nextH);
+            column.style.left = `${nextX}px`;
+            column.style.top = `${nextY}px`;
             UI.applyColumnCanvasSize(column, nextW, nextH);
         };
 
@@ -1212,11 +1226,14 @@ export const DragDropEngine = {
             resizeActive.sessionCleanup?.();
 
             if (!moved && snapshot) {
+                column.style.left = `${snapshot.x}px`;
+                column.style.top = `${snapshot.y}px`;
                 UI.applyColumnCanvasSize(column, snapshot.w, snapshot.h);
             } else {
                 const rect = UI.readColumnCanvasRect(column);
                 const cat = column.dataset.category;
                 if (cat) {
+                    UI.saveColumnPosition(cat, rect.x, rect.y);
                     UI.saveColumnSize(cat, rect.w, rect.h);
                     UI.pushOverlappingCanvasItems(canvas, { type: 'category', name: cat }, { animate: true });
                 }
@@ -1229,16 +1246,15 @@ export const DragDropEngine = {
                 if (e.button !== 0) return;
                 const handle = e.target.closest('.col-resize');
                 if (!handle) return;
-                const axis = handle.dataset.axis || 'se';
-                const needsActiveMode = axis === 'e' || axis === 's';
-                if (needsActiveMode && !column.classList.contains('is-column-resize-active')) return;
                 e.preventDefault();
                 e.stopPropagation();
 
                 const rect = UI.readColumnCanvasRect(column);
-                const snapshot = { w: rect.w, h: rect.h };
+                const snapshot = { w: rect.w, h: rect.h, x: rect.x, y: rect.y };
                 const sessionCleanup = bindPointerSession({
                     onCancel: () => {
+                        column.style.left = `${snapshot.x}px`;
+                        column.style.top = `${snapshot.y}px`;
                         UI.applyColumnCanvasSize(column, snapshot.w, snapshot.h);
                         column.classList.remove('is-column-resizing');
                         canvas.classList.remove('is-layout-active');
@@ -1255,6 +1271,8 @@ export const DragDropEngine = {
                     startY: e.clientY,
                     origW: rect.w,
                     origH: rect.h,
+                    origX: rect.x,
+                    origY: rect.y,
                     moved: false,
                     snapshot,
                     sessionCleanup

@@ -10,9 +10,27 @@ export const Editor = {
     activeItem: null,
     availableCategories: [],
     autoSaveTimer: null,
+    metaLabelTimer: null,
     hasUserInteracted: false,
     isNewUnsavedNote: false,
     desktopRestoreContext: null,
+
+    isColorPickerOpen() {
+        if (ColorPicker.eyedropperCleanup) return true;
+        return !!(ColorPicker.popover && !ColorPicker.popover.classList.contains('is-hidden'));
+    },
+
+    commitAndClose() {
+        this.closeAndSave({ scrollToBoard: true });
+    },
+
+    scheduleEditorSizeLabelUpdate() {
+        if (this.metaLabelTimer) clearTimeout(this.metaLabelTimer);
+        this.metaLabelTimer = setTimeout(() => {
+            this.metaLabelTimer = null;
+            this.updateEditorSizeLabel();
+        }, 150);
+    },
     
     init() {
         this.overlay = document.getElementById('editor-overlay');
@@ -23,12 +41,20 @@ export const Editor = {
         this.calendarToggleBtn = null;
         this.approveBtn = document.getElementById('modal-approve-btn');
 
-        const commitAndClose = () => this.closeAndSave({ revealOnBoard: !this.preserveBoardCollapse });
-        this.approveBtn?.addEventListener('click', commitAndClose);
+        this.approveBtn?.addEventListener('click', () => this.commitAndClose());
         this.overlay?.addEventListener('mousedown', (e) => {
             if (e.target !== this.overlay) return;
-            this.closeAndSave({ revealOnBoard: !this.preserveBoardCollapse });
+            this.commitAndClose();
         });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape') return;
+            if (!this.overlay?.classList.contains('is-open')) return;
+            if (this.isColorPickerOpen()) return;
+            e.preventDefault();
+            e.stopPropagation();
+            this.commitAndClose();
+        }, true);
     },
     
     open(item = null, categoriesList = [], { sourceCard = null } = {}) {
@@ -60,7 +86,6 @@ export const Editor = {
             this.activeItem.editorBodyLayout = 'both';
         }
         this.isNewUnsavedNote = isNew || !noteHasSavableContent(this.activeItem);
-        this.preserveBoardCollapse = !!(item && noteHasSavableContent(item));
         if (this.activeItem.hideFromCalendar === undefined) {
             this.activeItem.hideFromCalendar = false;
         }
@@ -212,17 +237,21 @@ export const Editor = {
         this.activeItem = null;
         this.hasUserInteracted = false;
         this.isNewUnsavedNote = false;
-        this.preserveBoardCollapse = false;
         this.desktopRestoreContext = null;
         const modal = this.overlay?.querySelector('.modal');
         if (modal) EditorModalChrome.teardown(modal);
         if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
+        if (this.metaLabelTimer) clearTimeout(this.metaLabelTimer);
     },
 
-    closeAndSave({ revealOnBoard = false } = {}) {
+    closeAndSave({ scrollToBoard = false } = {}) {
         if (this.autoSaveTimer) {
             clearTimeout(this.autoSaveTimer);
             this.autoSaveTimer = null;
+        }
+        if (this.metaLabelTimer) {
+            clearTimeout(this.metaLabelTimer);
+            this.metaLabelTimer = null;
         }
 
         let savedItem = null;
@@ -243,13 +272,13 @@ export const Editor = {
             }
 
             if (shouldPersist) {
-                if (revealOnBoard) UI.markNoteExpanded(currentData.id);
+                if (scrollToBoard) UI.markNoteCollapsed(currentData.id);
                 this.persistNote({ force: true, normalize: true });
                 savedItem = { ...this.activeItem };
             }
         }
 
-        const itemToReveal = revealOnBoard ? savedItem : null;
+        const itemToReveal = scrollToBoard ? savedItem : null;
         this.animateEditorClose(() => {
             this.resetEditorState();
             if (itemToReveal) {
@@ -340,7 +369,7 @@ export const Editor = {
             richEdit: true,
             onChange: () => {
                 this.markInteracted();
-                this.updateEditorSizeLabel();
+                this.scheduleEditorSizeLabelUpdate();
                 this.triggerAutoSave();
             }
         });
@@ -398,7 +427,7 @@ export const Editor = {
 
         const onEditorChange = () => {
             this.markInteracted();
-            this.updateEditorSizeLabel();
+            this.scheduleEditorSizeLabelUpdate();
             const shell = this.mountZone?.querySelector('.editor-note-shell');
             if (shell && this.activeItem) UI.updateConvertButtons(shell, this.activeItem);
             this.triggerAutoSave();
@@ -489,7 +518,7 @@ export const Editor = {
     },
 
     collectAndSave() {
-        this.closeAndSave({ revealOnBoard: !this.preserveBoardCollapse });
+        this.closeAndSave({ scrollToBoard: true });
     },
     
     updateArchiveToggleUI() {

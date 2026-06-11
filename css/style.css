@@ -1638,12 +1638,6 @@ html[data-note-font="kalam"] .mini-card .step-text {
     margin-right: 0.25rem;
 }
 
-#app-canvas.view-columns .canvas-column:hover .col-resize-se {
-    pointer-events: auto;
-    opacity: 0.55;
-}
-
-
 .nav-drawer-section {
     display: flex;
     flex-direction: column;
@@ -4086,38 +4080,22 @@ textarea.form-input {
 
 #app-canvas.view-freeform .ff-resize {
     position: absolute;
-    width: 10px;
-    height: 10px;
     pointer-events: auto;
-    opacity: 0.18;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 2px;
     z-index: 6;
-}
-
-#app-canvas.view-freeform .mini-card:hover .ff-resize,
-#app-canvas.view-freeform .mini-card.is-freeform-resizing .ff-resize {
-    opacity: 0.62;
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.22);
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
 }
 
 #app-canvas.view-freeform .ff-resize-n,
 #app-canvas.view-freeform .ff-resize-s {
-    left: 50%;
-    transform: translateX(-50%);
-    width: 28px;
+    left: 8px;
+    right: 8px;
     height: 8px;
 }
 
 #app-canvas.view-freeform .ff-resize-e,
 #app-canvas.view-freeform .ff-resize-w {
-    top: 50%;
-    transform: translateY(-50%);
+    top: 8px;
+    bottom: 8px;
     width: 8px;
-    height: 28px;
 }
 
 #app-canvas.view-freeform .ff-resize-nw,
@@ -4272,25 +4250,28 @@ textarea.form-input {
 
 #app-canvas.view-columns .ff-resize {
     position: absolute;
-    width: 10px;
-    height: 10px;
     pointer-events: auto;
-    opacity: 0.18;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 2px;
     z-index: 6;
 }
 
-#app-canvas.view-columns .mini-card:hover .ff-resize,
-#app-canvas.view-columns .mini-card.is-column-resizing .ff-resize {
-    opacity: 0.62;
+#app-canvas.view-columns .ff-resize-n,
+#app-canvas.view-columns .ff-resize-s {
+    left: 8px;
+    right: 8px;
+    height: 8px;
 }
 
-#app-canvas.view-columns .ff-resize-n { top: 0; left: 50%; transform: translateX(-50%); width: 28px; height: 8px; cursor: n-resize; }
-#app-canvas.view-columns .ff-resize-s { bottom: 0; left: 50%; transform: translateX(-50%); width: 28px; height: 8px; cursor: s-resize; }
-#app-canvas.view-columns .ff-resize-e { right: 0; top: 50%; transform: translateY(-50%); width: 8px; height: 28px; cursor: e-resize; }
-#app-canvas.view-columns .ff-resize-w { left: 0; top: 50%; transform: translateY(-50%); width: 8px; height: 28px; cursor: w-resize; }
+#app-canvas.view-columns .ff-resize-e,
+#app-canvas.view-columns .ff-resize-w {
+    top: 8px;
+    bottom: 8px;
+    width: 8px;
+}
+
+#app-canvas.view-columns .ff-resize-n { top: 0; cursor: n-resize; }
+#app-canvas.view-columns .ff-resize-s { bottom: 0; cursor: s-resize; }
+#app-canvas.view-columns .ff-resize-e { right: 0; cursor: e-resize; }
+#app-canvas.view-columns .ff-resize-w { left: 0; cursor: w-resize; }
 #app-canvas.view-columns .ff-resize-nw { top: 0; left: 0; width: 12px; height: 12px; cursor: nw-resize; }
 #app-canvas.view-columns .ff-resize-ne { top: 0; right: 0; width: 12px; height: 12px; cursor: ne-resize; }
 #app-canvas.view-columns .ff-resize-sw { bottom: 0; left: 0; width: 12px; height: 12px; cursor: sw-resize; }
@@ -4314,46 +4295,40 @@ textarea.form-input {
 
 #app-canvas.view-columns .col-resize {
     position: absolute;
-    pointer-events: none;
-    opacity: 0;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 2px;
-    z-index: 9;
-    transition: opacity 0.15s ease;
-}
-
-#app-canvas.view-columns .canvas-column.is-column-resize-active .col-resize,
-#app-canvas.view-columns .canvas-column.is-column-resizing .col-resize {
     pointer-events: auto;
-    opacity: 0.7;
+    z-index: 9;
 }
 
-#app-canvas.view-columns .col-resize-e {
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 8px;
-    height: 36px;
-    cursor: e-resize;
-}
-
+#app-canvas.view-columns .col-resize-n,
 #app-canvas.view-columns .col-resize-s {
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 36px;
+    left: 8px;
+    right: 8px;
     height: 8px;
-    cursor: s-resize;
 }
 
-#app-canvas.view-columns .col-resize-se {
-    right: 0;
-    bottom: 0;
-    width: 14px;
-    height: 14px;
-    cursor: se-resize;
+#app-canvas.view-columns .col-resize-e,
+#app-canvas.view-columns .col-resize-w {
+    top: 8px;
+    bottom: 8px;
+    width: 8px;
 }
+
+#app-canvas.view-columns .col-resize-nw,
+#app-canvas.view-columns .col-resize-ne,
+#app-canvas.view-columns .col-resize-sw,
+#app-canvas.view-columns .col-resize-se {
+    width: 12px;
+    height: 12px;
+}
+
+#app-canvas.view-columns .col-resize-n { top: 0; cursor: n-resize; }
+#app-canvas.view-columns .col-resize-s { bottom: 0; cursor: s-resize; }
+#app-canvas.view-columns .col-resize-e { right: 0; cursor: e-resize; }
+#app-canvas.view-columns .col-resize-w { left: 0; cursor: w-resize; }
+#app-canvas.view-columns .col-resize-nw { top: 0; left: 0; cursor: nw-resize; }
+#app-canvas.view-columns .col-resize-ne { top: 0; right: 0; cursor: ne-resize; }
+#app-canvas.view-columns .col-resize-sw { bottom: 0; left: 0; cursor: sw-resize; }
+#app-canvas.view-columns .col-resize-se { bottom: 0; right: 0; cursor: se-resize; }
 
 #app-canvas.view-columns .canvas-column.is-column-resizing {
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
@@ -4396,11 +4371,16 @@ textarea.form-input {
 #editor-overlay {
     align-items: stretch;
     justify-content: center;
-    padding: 2.5vh 1rem;
+    padding: 16px;
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
     transition: opacity 0.28s ease, visibility 0.28s ease;
+}
+
+#editor-overlay.overlay {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 }
 
 #editor-overlay.is-open {
@@ -4465,14 +4445,14 @@ textarea.form-input {
 #editor-overlay .modal .modal-resize-s {
     left: 8px;
     right: 8px;
-    height: 6px;
+    height: 8px;
 }
 
 #editor-overlay .modal .modal-resize-e,
 #editor-overlay .modal .modal-resize-w {
     top: 8px;
     bottom: 8px;
-    width: 6px;
+    width: 8px;
 }
 
 #editor-overlay .modal .modal-resize-nw,
@@ -5021,38 +5001,22 @@ textarea.form-input {
 }
 
 #app-canvas.view-grid .ff-resize {
-    width: 14px;
-    height: 14px;
     pointer-events: auto;
-    opacity: 0.35;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 2px;
     z-index: 14;
-}
-
-#app-canvas.view-grid .mini-card:hover .ff-resize,
-#app-canvas.view-grid .mini-card.is-grid-resizing .ff-resize {
-    opacity: 0.62;
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.22);
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
 }
 
 #app-canvas.view-grid .ff-resize-n,
 #app-canvas.view-grid .ff-resize-s {
-    left: 50%;
-    transform: translateX(-50%);
-    width: 28px;
+    left: 8px;
+    right: 8px;
     height: 8px;
 }
 
 #app-canvas.view-grid .ff-resize-e,
 #app-canvas.view-grid .ff-resize-w {
-    top: 50%;
-    transform: translateY(-50%);
+    top: 8px;
+    bottom: 8px;
     width: 8px;
-    height: 28px;
 }
 
 #app-canvas.view-grid .ff-resize-nw,

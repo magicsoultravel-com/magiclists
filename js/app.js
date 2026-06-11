@@ -823,14 +823,23 @@ class Application {
         window.addEventListener('editor:reveal_on_board', async (e) => {
             const item = e.detail;
             if (!item?.id) return;
-            UI.markNoteExpanded(item.id);
+            UI.markNoteCollapsed(item.id);
+
             const idx = AppState.items.findIndex((i) => i.id === item.id);
             if (idx >= 0) AppState.items[idx] = item;
             else AppState.items.push(item);
 
-            await this.syncDataStore();
+            const canvas = document.getElementById('app-canvas');
+            let card = canvas?.querySelector(`.mini-card[data-id="${item.id}"]`);
+            if (!card) {
+                await this.syncDataStore();
+                card = canvas?.querySelector(`.mini-card[data-id="${item.id}"]`);
+            } else {
+                UI.collapseBoardCardIfExpanded(card, item, AppState.hiddenCategories, AppState.focusCategories);
+            }
+
             requestAnimationFrame(() => {
-                const card = document.getElementById('app-canvas')?.querySelector(`.mini-card[data-id="${item.id}"]`);
+                card = canvas?.querySelector(`.mini-card[data-id="${item.id}"]`) || card;
                 card?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             });
         });
