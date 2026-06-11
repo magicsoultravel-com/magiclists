@@ -4,7 +4,7 @@ import { DrawingToolbarMenu, CHEVRON } from './drawingToolbarMenu.js';
 import { DisplayOptions } from './displayOptions.js';
 import { Fullscreen } from './fullscreen.js';
 import {
-    readDocument, writeDocument, getActiveStrokes, getActiveTexts, setActiveStrokes,
+    readDocument, writeDocument, getActiveStrokes, getActiveTexts, setActiveStrokes, setActiveTexts,
     getActiveBackground, setActiveBackground, getActiveBackgroundColor, setActiveBackgroundColor,
     getPageDimensions, addPage, nextPage, prevPage,
     expandInfiniteBounds, STORAGE_KEY, createId, CANVAS_MODES, BACKGROUNDS
@@ -129,6 +129,10 @@ function writePrefs(prefs) {
     localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
 }
 
+function trimDrawingStack(stack) {
+    while (stack.length > HISTORY_MAX) stack.shift();
+}
+
 class DrawingHistory {
     constructor() {
         this.undoStack = [];
@@ -136,17 +140,19 @@ class DrawingHistory {
     }
     push(snapshot) {
         this.undoStack.push(JSON.stringify(snapshot));
-        if (this.undoStack.length > HISTORY_MAX) this.undoStack.shift();
+        trimDrawingStack(this.undoStack);
         this.redoStack = [];
     }
     undo(current) {
         if (!this.undoStack.length) return null;
         this.redoStack.push(JSON.stringify(current));
+        trimDrawingStack(this.redoStack);
         return JSON.parse(this.undoStack.pop());
     }
     redo(current) {
         if (!this.redoStack.length) return null;
         this.undoStack.push(JSON.stringify(current));
+        trimDrawingStack(this.undoStack);
         return JSON.parse(this.redoStack.pop());
     }
     get canUndo() { return this.undoStack.length > 0; }
@@ -258,8 +264,27 @@ export const DrawingBoard = {
         return JSON.parse(JSON.stringify(this.doc));
     },
 
+    getLayerUndoSlice() {
+        return {
+            kind: 'layer',
+            canvasMode: this.doc.canvasMode,
+            activePageId: this.doc.activePageId,
+            strokes: JSON.parse(JSON.stringify(getActiveStrokes(this.doc))),
+            texts: JSON.parse(JSON.stringify(getActiveTexts(this.doc)))
+        };
+    },
+
+    pushLayerHistory() {
+        this.history.push(this.getLayerUndoSlice());
+    },
+
     applySnapshot(snapshot) {
-        this.doc = JSON.parse(JSON.stringify(snapshot));
+        if (snapshot?.kind === 'layer') {
+            setActiveStrokes(this.doc, JSON.parse(JSON.stringify(snapshot.strokes || [])));
+            setActiveTexts(this.doc, JSON.parse(JSON.stringify(snapshot.texts || [])));
+        } else {
+            this.doc = JSON.parse(JSON.stringify(snapshot));
+        }
         this.redraw();
         this.scheduleSave();
         this.updateToolbarState();
@@ -426,7 +451,7 @@ export const DrawingBoard = {
         }
 
         if (this.activeTool === 'eraser') {
-            this.history.push(this.getSnapshot());
+            this.pushLayerHistory();
             this.eraseAt(x, y);
             this.scheduleSave();
             this.redraw();
@@ -435,7 +460,7 @@ export const DrawingBoard = {
 
         if (this.activeTool === 'brush') {
             const brush = this.currentBrush();
-            this.history.push(this.getSnapshot());
+            this.pushLayerHistory();
             this.draftStroke = {
                 id: createId('stroke'),
                 tool: 'brush',
@@ -507,7 +532,7 @@ export const DrawingBoard = {
         if (this.shapePreview) {
             const s = this.shapePreview;
             if (Math.hypot(s.x1 - s.x0, s.y1 - s.y0) > 2) {
-                this.history.push(this.getSnapshot());
+                this.pushLayerHistory();
                 const strokes = this.strokes();
                 strokes.push({ ...s });
                 this.setStrokes(strokes);
@@ -536,7 +561,7 @@ export const DrawingBoard = {
             const text = el.innerText.trim();
             el.remove();
             if (!text) return;
-            this.history.push(this.getSnapshot());
+            this.pushLayerHistory();
             const texts = getActiveTexts(this.doc);
             texts.push({
                 id: createId('text'),
@@ -610,7 +635,7 @@ export const DrawingBoard = {
     clearAll() {
         if (!this.strokes().length && !getActiveTexts(this.doc).length) return;
         if (!confirm('Clear the current canvas page?')) return;
-        this.history.push(this.getSnapshot());
+        this.pushLayerHistory();
         this.setStrokes([]);
         if (this.doc.canvasMode === 'infinite') this.doc.infinite.texts = [];
         else { const page = this.doc.pages.find((p) => p.id === this.doc.activePageId); if (page) page.texts = []; }

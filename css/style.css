@@ -4195,7 +4195,7 @@ textarea.form-input {
 /* Editable shell above chrome layer; resize handles stay on top via .ff-resize */
 #app-canvas.view-freeform .mini-card.expanded .editor-note-shell {
     position: relative;
-    z-index: 3;
+    z-index: 5;
 }
 
 #app-canvas.view-freeform .mini-card.expanded .card-inline-edit {
@@ -4217,11 +4217,23 @@ textarea.form-input {
     height: 10px;
 }
 
-/* Expanded notes: left chrome gutter sits above the shell and steals checklist grab handles. */
-#app-canvas.view-freeform .mini-card.expanded .ff-drag-gutter--edge,
-#app-canvas.view-grid .mini-card.expanded .ff-drag-gutter--edge,
-#app-canvas.view-columns .mini-card.expanded .ff-drag-gutter--edge {
+/* Expanded notes: chrome gutters sit above the shell and steal inline-edit clicks */
+#app-canvas.view-freeform .mini-card.expanded .ff-drag-gutter,
+#app-canvas.view-grid .mini-card.expanded .ff-drag-gutter,
+#app-canvas.view-columns .mini-card.expanded .ff-drag-gutter {
     pointer-events: none;
+}
+
+#app-canvas.view-freeform .mini-card.expanded .ff-chrome,
+#app-canvas.view-grid .mini-card.expanded .ff-chrome,
+#app-canvas.view-columns .mini-card.expanded .ff-chrome {
+    z-index: 6;
+}
+
+#app-canvas.view-freeform .mini-card.expanded .ff-resize,
+#app-canvas.view-grid .mini-card.expanded .ff-resize,
+#app-canvas.view-columns .mini-card.expanded .ff-resize {
+    z-index: 7;
 }
 
 #app-canvas.view-freeform .mini-card:hover .ff-drag-gutter--edge,
@@ -4343,7 +4355,7 @@ textarea.form-input {
 
 #app-canvas.view-columns .mini-card.expanded .editor-note-shell {
     position: relative;
-    z-index: 3;
+    z-index: 5;
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -5154,6 +5166,11 @@ textarea.form-input {
     flex-direction: column;
     overflow: hidden !important;
     max-height: none !important;
+}
+
+#app-canvas.view-grid .mini-card.expanded .editor-note-shell {
+    position: relative;
+    z-index: 5;
 }
 
 #app-canvas.view-grid .ff-chrome {

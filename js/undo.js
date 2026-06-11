@@ -1,4 +1,5 @@
 import { API } from './api.js';
+import { safeSetItem } from './layoutStorage.js';
 import { stripRichText } from './richText.js';
 import { showAppToast } from './toast.js';
 
@@ -22,6 +23,40 @@ function itemsEqual(a, b) {
     return JSON.stringify(a) === JSON.stringify(b);
 }
 
+function trimStack(stack, max = MAX_STACK) {
+    while (stack.length > max) stack.shift();
+}
+
+function trimStacks(manager) {
+    trimStack(manager.undoStack);
+    trimStack(manager.redoStack);
+}
+
+function itemForwardDelta(before, after) {
+    const delta = {};
+    const keys = new Set([
+        ...Object.keys(before || {}),
+        ...Object.keys(after || {})
+    ]);
+    keys.forEach((key) => {
+        if (JSON.stringify(before?.[key]) !== JSON.stringify(after?.[key])) {
+            delta[key] = after[key];
+        }
+    });
+    return delta;
+}
+
+function applyForwardDelta(before, delta) {
+    return { ...before, ...delta };
+}
+
+function afterItemFromData(data) {
+    if (!data?.before) return null;
+    if (data.after) return cloneItem(data.after);
+    if (data.forwardDelta) return applyForwardDelta(cloneItem(data.before), data.forwardDelta);
+    return null;
+}
+
 export function historyLabelForItem(item) {
     const title = stripRichText(item?.title || '').trim();
     return title ? `Edit "${title}"` : 'Edit note';
@@ -30,6 +65,9 @@ export function historyLabelForItem(item) {
 function serializeEntry(entry) {
     if (!entry?.kind) return null;
     if (entry.kind === 'change') {
+        const forwardDelta = entry.forwardDelta
+            ?? (entry.before && entry.after ? itemForwardDelta(entry.before, entry.after) : null);
+        if (!entry.before || !forwardDelta) return null;
         return {
             kind: 'change',
             label: entry.label,
@@ -37,7 +75,7 @@ function serializeEntry(entry) {
             mergedAt: entry.mergedAt,
             preserveView: !!entry.preserveView,
             before: entry.before,
-            after: entry.after
+            forwardDelta
         };
     }
     if (entry.kind === 'deletion') {
@@ -78,7 +116,8 @@ export const UndoManager = {
 
     createChangeEntry({ before, after, preserveView = false, label, mergeKey, mergedAt }) {
         const beforeItem = cloneItem(before);
-        const afterItem = cloneItem(after);
+        const forwardDelta = itemForwardDelta(beforeItem, after);
+        const afterItem = applyForwardDelta(beforeItem, forwardDelta);
         const keepView = !!preserveView;
         return {
             kind: 'change',
@@ -87,7 +126,7 @@ export const UndoManager = {
             mergedAt,
             preserveView: keepView,
             before: beforeItem,
-            after: afterItem,
+            forwardDelta,
             undo: () => this.applyItem(beforeItem, { preserveView: keepView }),
             redo: () => this.applyItem(afterItem, { preserveView: keepView })
         };
@@ -113,10 +152,12 @@ export const UndoManager = {
 
     hydrateEntry(data) {
         if (!data?.kind) return null;
-        if (data.kind === 'change' && data.before && data.after) {
+        if (data.kind === 'change' && data.before) {
+            const after = afterItemFromData(data);
+            if (!after) return null;
             return this.createChangeEntry({
                 before: data.before,
-                after: data.after,
+                after,
                 preserveView: data.preserveView,
                 label: data.label,
                 mergeKey: data.mergeKey,
@@ -143,6 +184,7 @@ export const UndoManager = {
             const redo = Array.isArray(parsed?.redo) ? parsed.redo : [];
             this.undoStack = undo.map((entry) => this.hydrateEntry(entry)).filter(Boolean);
             this.redoStack = redo.map((entry) => this.hydrateEntry(entry)).filter(Boolean);
+            trimStacks(this);
         } catch (err) {
             console.warn('[Undo] could not load history:', err);
             this.undoStack = [];
@@ -152,14 +194,23 @@ export const UndoManager = {
 
     persistStacks() {
         if (!handlers.isEnabled()) return;
-        try {
+        trimStacks(this);
+        while (true) {
             const payload = {
                 undo: this.undoStack.map(serializeEntry).filter(Boolean),
                 redo: this.redoStack.map(serializeEntry).filter(Boolean)
             };
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-        } catch (err) {
-            console.warn('[Undo] could not persist history:', err);
+            if (safeSetItem(STORAGE_KEY, JSON.stringify(payload))) return;
+            if (this.undoStack.length) {
+                this.undoStack.shift();
+                continue;
+            }
+            if (this.redoStack.length) {
+                this.redoStack.shift();
+                continue;
+            }
+            console.warn('[Undo] could not persist history: quota exceeded');
+            return;
         }
     },
 
@@ -199,7 +250,7 @@ export const UndoManager = {
     push(entry) {
         if (!handlers.isEnabled()) return;
         this.undoStack.push(entry);
-        if (this.undoStack.length > MAX_STACK) this.undoStack.shift();
+        trimStack(this.undoStack);
         this.redoStack = [];
         this.updateToolbar();
     },
@@ -228,8 +279,9 @@ export const UndoManager = {
         const key = mergeKey || after.id;
 
         if (mergeWindow && top?.kind === 'change' && top.mergeKey === key && now - (top.mergedAt || 0) < MERGE_MS) {
-            top.after = cloneItem(after);
-            top.redo = () => this.applyItem(top.after, { preserveView });
+            top.forwardDelta = itemForwardDelta(top.before, after);
+            const afterMerged = applyForwardDelta(top.before, top.forwardDelta);
+            top.redo = () => this.applyItem(afterMerged, { preserveView });
             top.label = entryLabel;
             top.mergedAt = now;
             this.redoStack = [];
@@ -263,13 +315,16 @@ export const UndoManager = {
             const ok = await entry.undo();
             if (ok === false) {
                 this.undoStack.push(entry);
+                trimStack(this.undoStack);
             } else {
                 this.redoStack.push(entry);
+                trimStack(this.redoStack);
                 showAppToast(`Undid: ${entry.label}`);
             }
         } catch (err) {
             console.error('[Undo] failed:', err);
             this.undoStack.push(entry);
+            trimStack(this.undoStack);
         } finally {
             this.busy = false;
             this.isApplying = false;
@@ -289,13 +344,16 @@ export const UndoManager = {
             const ok = await entry.redo();
             if (ok === false) {
                 this.redoStack.push(entry);
+                trimStack(this.redoStack);
             } else {
                 this.undoStack.push(entry);
+                trimStack(this.undoStack);
                 showAppToast(`Redid: ${entry.label}`);
             }
         } catch (err) {
             console.error('[Redo] failed:', err);
             this.redoStack.push(entry);
+            trimStack(this.redoStack);
         } finally {
             this.busy = false;
             this.isApplying = false;

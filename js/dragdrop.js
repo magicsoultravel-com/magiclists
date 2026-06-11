@@ -372,6 +372,7 @@ function bindSnapPanelCardInteractions({
             if (e.target.closest('.editor-note-body .card-inline-edit, .editor-note-header .card-inline-edit')) {
                 return;
             }
+            if (pointerHitsInlineEdit(e.clientX, e.clientY, card)) return;
 
             if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
             if (!shouldStartCardDrag(e.target)) return;
@@ -419,6 +420,14 @@ function pointerHitsStepGrab(clientX, clientY) {
     if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
     return document.elementsFromPoint(clientX, clientY)
         .some((el) => el instanceof Element && el.closest('.grab-handle--step'));
+}
+
+function pointerHitsInlineEdit(clientX, clientY, card) {
+    if (!card || !Number.isFinite(clientX) || !Number.isFinite(clientY)) return false;
+    return document.elementsFromPoint(clientX, clientY)
+        .some((el) => el instanceof Element
+            && card.contains(el)
+            && el.closest('.editor-note-body .card-inline-edit, .editor-note-header .card-inline-edit'));
 }
 
 function shouldStartCardDrag(target) {
@@ -634,6 +643,7 @@ export const DragDropEngine = {
                 if (e.target.closest('.editor-note-body .card-inline-edit, .editor-note-header .card-inline-edit')) {
                     return;
                 }
+                if (pointerHitsInlineEdit(e.clientX, e.clientY, card)) return;
 
                 if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
                 if (!shouldStartCardDrag(e.target)) return;
@@ -1034,6 +1044,10 @@ export const DragDropEngine = {
                 if (e.button !== 0) return;
                 if (card.dataset.columnNote === '1') return;
                 if (e.target.closest('.grab-handle--note-cat')) return;
+                if (e.target.closest('.editor-note-body .card-inline-edit, .editor-note-header .card-inline-edit')) {
+                    return;
+                }
+                if (pointerHitsInlineEdit(e.clientX, e.clientY, card)) return;
                 if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
                 if (!shouldStartCardDrag(e.target)) return;
                 if (cardIsPinned(card)) return;
