@@ -73,18 +73,12 @@
     to { transform: translateX(100%); }
 }
 
-.cosmos-figure__stage img,
-.cosmos-figure__stage .cosmos-solar-svg {
+.cosmos-figure__stage img {
     max-width: 100%;
     max-height: 100%;
     width: auto;
     height: auto;
     object-fit: contain;
-}
-
-.cosmos-solar-svg {
-    width: 100%;
-    height: 100%;
 }
 
 .cosmos-figure__caption {

@@ -4,48 +4,6 @@ import { COSMOS_VIEWS } from './cosmos-data.js';
 
 const STORAGE_KEY = 'cosmos_view';
 
-const SOLAR_BODIES = [
-    { name: 'Mercury', color: '#b5b5b5', orbit: 0.39, size: 4 },
-    { name: 'Venus', color: '#e8cda2', orbit: 0.72, size: 6 },
-    { name: 'Earth', color: '#6b9bd1', orbit: 1.0, size: 6.5 },
-    { name: 'Mars', color: '#c1440e', orbit: 1.52, size: 5 },
-    { name: 'Jupiter', color: '#c9a066', orbit: 2.1, size: 14 },
-    { name: 'Saturn', color: '#e4d3a5', orbit: 2.7, size: 12, ring: true },
-    { name: 'Uranus', color: '#9ad5e5', orbit: 3.2, size: 9 },
-    { name: 'Neptune', color: '#5b7fde', orbit: 3.6, size: 9 }
-];
-
-function solarSystemSvg() {
-    const cx = 400;
-    const cy = 280;
-    const scale = 72;
-    const orbits = SOLAR_BODIES.map((body) => {
-        const r = body.orbit * scale;
-        return `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
-    }).join('');
-
-    const planets = SOLAR_BODIES.map((body, i) => {
-        const angle = (i / SOLAR_BODIES.length) * Math.PI * 1.6 - Math.PI * 0.3;
-        const r = body.orbit * scale;
-        const px = cx + Math.cos(angle) * r;
-        const py = cy + Math.sin(angle) * r;
-        const ring = body.ring
-            ? `<ellipse cx="${px}" cy="${py}" rx="${body.size + 5}" ry="${body.size * 0.35}" fill="none" stroke="rgba(228,211,165,0.55)" stroke-width="1"/>`
-            : '';
-        return `${ring}<circle cx="${px}" cy="${py}" r="${body.size}" fill="${body.color}" stroke="rgba(0,0,0,0.35)" stroke-width="0.5"/>
-            <text x="${px}" y="${py + body.size + 11}" fill="rgba(255,255,255,0.72)" font-size="10" text-anchor="middle" font-family="inherit">${body.name}</text>`;
-    }).join('');
-
-    return `<svg class="cosmos-solar-svg" viewBox="0 0 800 560" xmlns="http://www.w3.org/2000/svg" aria-label="Solar system diagram">
-        <rect width="800" height="560" fill="#050510"/>
-        ${orbits}
-        <circle cx="${cx}" cy="${cy}" r="22" fill="#fbbf24" stroke="#f59e0b" stroke-width="1.5"/>
-        <text x="${cx}" y="${cy + 38}" fill="rgba(255,255,255,0.85)" font-size="11" text-anchor="middle" font-family="inherit">Sun</text>
-        ${planets}
-        <text x="400" y="24" fill="rgba(255,255,255,0.45)" font-size="10" text-anchor="middle" font-family="inherit">Not to scale</text>
-    </svg>`;
-}
-
 export const Cosmos = {
     container: null,
     activeViewId: null,
@@ -115,12 +73,6 @@ export const Cosmos = {
         if (!view || !stage || !caption) return;
 
         caption.textContent = `${view.caption} · ${view.credit}`;
-
-        if (view.type === 'diagram') {
-            figure?.classList.remove('is-loading', 'is-error');
-            stage.innerHTML = solarSystemSvg();
-            return;
-        }
 
         figure?.classList.add('is-loading');
         figure?.classList.remove('is-error');
