@@ -41,7 +41,10 @@ function hashQuery(params) {
         name: params.name || '',
         countrycode: params.countrycode || '',
         tag: params.tag || '',
-        hideOffline: params.hideOffline !== false
+        hideOffline: params.hideOffline !== false,
+        offset: params.offset || 0,
+        order: params.order || 'clickcount',
+        reverse: params.reverse !== false
     });
 }
 
@@ -179,9 +182,19 @@ export const RadioBrowserApi = {
         return writeCachedBucket('tags', null, data, TTL.tags);
     },
 
-    async searchStations({ name = '', countrycode = '', tag = '', limit = 100, refresh = false, hideOffline = true } = {}) {
+    async searchStations({
+        name = '',
+        countrycode = '',
+        tag = '',
+        limit = 100,
+        offset = 0,
+        order = 'clickcount',
+        reverse = true,
+        refresh = false,
+        hideOffline = true
+    } = {}) {
         const params = { name: name.trim(), countrycode, tag };
-        const key = hashQuery({ ...params, hideOffline });
+        const key = hashQuery({ ...params, hideOffline, offset, order, reverse });
 
         if (!refresh) {
             const cached = readCachedBucket('queries', key, TTL.queries);
@@ -190,9 +203,10 @@ export const RadioBrowserApi = {
 
         const qs = new URLSearchParams();
         qs.set('limit', String(limit));
+        qs.set('offset', String(offset));
         qs.set('hidebroken', 'true');
-        qs.set('order', 'clickcount');
-        qs.set('reverse', 'true');
+        qs.set('order', order);
+        qs.set('reverse', reverse ? 'true' : 'false');
         if (hideOffline) qs.set('lastcheckok', 'true');
         if (params.name) qs.set('name', params.name);
         if (params.countrycode) qs.set('countrycode', params.countrycode);

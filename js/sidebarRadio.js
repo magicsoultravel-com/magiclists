@@ -7,6 +7,14 @@ import { escapeHtml, countryFlagEmoji, debounce, syncMarquee } from './radioUtil
 import { ACTION_ICONS, CARD_ICONS } from './ui.js';
 import { applySectionCollapse } from './hamburger.js';
 
+const BROWSE_PAGE_SIZE = 60;
+const BROWSE_SORT_OPTIONS = [
+    { value: 'clickcount', label: 'Popular' },
+    { value: 'name', label: 'Name' },
+    { value: 'votes', label: 'Votes' },
+    { value: 'bitrate', label: 'Bitrate' }
+];
+
 export const SidebarRadio = {
     root: null,
     countries: [],
@@ -14,7 +22,10 @@ export const SidebarRadio = {
     browseView: 'countries',
     browseCountry: null,
     browseStations: [],
+    browseOffset: 0,
+    browseHasMore: false,
     listStations: [],
+    activeTab: 'browse',
     loadSeq: 0,
     onStateChanged: null,
 
@@ -25,15 +36,28 @@ export const SidebarRadio = {
         RadioPlayer.init();
         this.renderShell();
         this.bindShellListeners();
+
+        RadioPopover.onTabChange = (tab) => {
+            this.activeTab = tab;
+            this.renderPanelContent(tab);
+        };
+
         this.onStateChanged = (e) => {
             this.updateTransport(e.detail);
-            if (RadioPopover.mode && !RadioPopover.panel?.classList.contains('is-hidden')) {
+            if (!RadioPopover.mode || RadioPopover.panel?.classList.contains('is-hidden')) return;
+            const tab = RadioPopover.activeTab;
+            if (tab === 'browse' && this.browseView === 'country') {
+                this.updatePlayingTiles();
+            } else if (tab === 'recents' || tab === 'favorites') {
                 this.refreshOpenPanel();
             }
         };
         window.addEventListener('radio:state_changed', this.onStateChanged);
         this.updateTransport();
-        this.restoreLastStationMeta();
+        this.restoreLastStationMeta().then(() => {
+            this.updateTransport();
+            return RadioPlayer.resumeIfWasPlaying();
+        }).catch(() => {});
         this.prefetchCountries().then(() => this.updateTransport());
         this.bindDockButton();
         this.bindMiniPlayerDrag();
@@ -158,10 +182,12 @@ export const SidebarRadio = {
         header.addEventListener('pointerdown', (e) => {
             if (!this.isUndocked()) return;
             if (e.target.closest('[data-radio-dock]') || e.target.closest('.collapsable-toggle')) return;
+            if (e.target.closest('.sidebar-radio__compact')) return;
             if (e.button !== 0) return;
 
             e.preventDefault();
             let dragging = true;
+            let didDrag = false;
             const startX = e.clientX;
             const startY = e.clientY;
             const startLeft = parseFloat(this.root.style.left) || 0;
@@ -172,6 +198,9 @@ export const SidebarRadio = {
 
             const onMove = (ev) => {
                 if (!dragging) return;
+                if (Math.abs(ev.clientX - startX) > 4 || Math.abs(ev.clientY - startY) > 4) {
+                    didDrag = true;
+                }
                 const nx = startLeft + (ev.clientX - startX);
                 const ny = startTop + (ev.clientY - startY);
                 const clamped = clampPanelToViewport(this.root, nx, ny);
@@ -185,6 +214,12 @@ export const SidebarRadio = {
                 dragging = false;
                 this.root.classList.remove('sidebar-radio--dragging');
                 header.releasePointerCapture(ev.pointerId);
+                if (didDrag) {
+                    header.dataset.suppressClick = 'true';
+                    requestAnimationFrame(() => {
+                        delete header.dataset.suppressClick;
+                    });
+                }
                 RadioPlayer.saveMiniPlayerState({
                     miniPlayerX: parseFloat(this.root.style.left) || 0,
                     miniPlayerY: parseFloat(this.root.style.top) || 0
@@ -235,6 +270,16 @@ export const SidebarRadio = {
         this.root.innerHTML = `
             <div class="collapsable-header list-row--header" id="radio-section-header">
                 <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Radio</span>
+                <div class="sidebar-radio__compact">
+                    <button type="button" class="sidebar-radio__compact-art" data-radio-station-context title="Show station in browser" aria-label="Show station in browser">
+                        <img class="sidebar-radio__compact-art-img is-hidden" data-radio-compact-art alt="">
+                        <span class="sidebar-radio__compact-art-fallback" data-radio-compact-art-fallback aria-hidden="true">♪</span>
+                    </button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-radio__action" data-radio-play aria-label="Play or pause">
+                        <span data-radio-play-icon></span>
+                    </button>
+                    <input type="range" class="sidebar-radio__volume-compact" data-radio-volume-compact min="0" max="100" value="85" aria-label="Volume">
+                </div>
                 <button type="button" class="card-act sidebar-radio__dock" data-radio-dock title="Undock to canvas" aria-label="Undock to canvas">${CARD_ICONS.unpin}</button>
             </div>
             <div class="collapsable-section" id="radio-section">
@@ -252,6 +297,7 @@ export const SidebarRadio = {
                                 <span data-radio-flag aria-hidden="true"></span>
                                 <span class="sidebar-radio__country-name" data-radio-country-name></span>
                             </button>
+                            <span class="sidebar-radio__load-status is-hidden" data-radio-load-status></span>
                         </div>
                         <div class="sidebar-radio__volume-row">
                             <input type="range" class="sidebar-radio__volume" data-radio-volume min="0" max="100" value="85" aria-label="Volume">
@@ -264,8 +310,6 @@ export const SidebarRadio = {
                     </button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-radio__action" data-radio-open="browse" title="Browse stations" aria-label="Browse stations" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioBrowse}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-radio__action sidebar-radio__action--heart is-hidden" data-radio-favorite title="Add favorite" aria-label="Add favorite" aria-pressed="false">${CARD_ICONS.heart}</button>
-                    <button type="button" class="btn btn--compact btn-icon sidebar-radio__action" data-radio-open="favorites" title="Favorites" aria-label="Favorites" aria-expanded="false" aria-haspopup="dialog">${CARD_ICONS.star}</button>
-                    <button type="button" class="btn btn--compact btn-icon sidebar-radio__action" data-radio-open="recents" title="Recents" aria-label="Recents" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioRecents}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-radio__action" data-radio-open="special" title="Radio settings" aria-label="Radio settings" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioSpecial}</button>
                 </div>
             </div>
@@ -274,8 +318,8 @@ export const SidebarRadio = {
     },
 
     bindShellListeners() {
-        this.root.querySelector('[data-radio-play]')?.addEventListener('click', () => {
-            RadioPlayer.toggle();
+        this.root.querySelectorAll('[data-radio-play]').forEach((btn) => {
+            btn.addEventListener('click', () => RadioPlayer.toggle());
         });
 
         this.root.querySelector('[data-radio-favorite]')?.addEventListener('click', (e) => {
@@ -295,13 +339,24 @@ export const SidebarRadio = {
             });
         });
 
-        const volumeEl = this.root.querySelector('[data-radio-volume]');
-        volumeEl?.addEventListener('input', (e) => {
-            RadioPlayer.setVolume(Number(e.target.value) / 100);
+        const syncVolume = (value) => {
+            RadioPlayer.setVolume(value);
+            this.root.querySelectorAll('[data-radio-volume], [data-radio-volume-compact]').forEach((el) => {
+                el.value = String(Math.round(value * 100));
+            });
+        };
+
+        this.root.querySelector('[data-radio-volume]')?.addEventListener('input', (e) => {
+            syncVolume(Number(e.target.value) / 100);
         });
-        if (volumeEl) {
-            volumeEl.value = String(Math.round(RadioPlayer.volume * 100));
-        }
+        this.root.querySelector('[data-radio-volume-compact]')?.addEventListener('input', (e) => {
+            syncVolume(Number(e.target.value) / 100);
+        });
+
+        const vol = Math.round(RadioPlayer.volume * 100);
+        this.root.querySelectorAll('[data-radio-volume], [data-radio-volume-compact]').forEach((el) => {
+            el.value = String(vol);
+        });
 
         this.root.querySelectorAll('[data-radio-open]').forEach((btn) => {
             btn.addEventListener('click', (e) => {
@@ -311,7 +366,11 @@ export const SidebarRadio = {
         });
     },
 
-    openPanel(mode, anchor, { browseContext = null } = {}) {
+    getBrowseAnchor() {
+        return this.root.querySelector('[data-radio-open="browse"]');
+    },
+
+    openPanel(mode, anchor, { browseContext = null, tab = null } = {}) {
         this.root.querySelectorAll('[data-radio-open]').forEach((btn) => {
             if (btn !== anchor) btn.setAttribute('aria-expanded', 'false');
         });
@@ -329,7 +388,22 @@ export const SidebarRadio = {
             });
         };
 
-        if (mode === 'browse' && !browseContext) {
+        if (mode === 'special') {
+            const opened = RadioPopover.open('special', {
+                attachEl: this.root,
+                iconAnchor: anchor,
+                title: titles.special,
+                force: !!browseContext
+            });
+            if (!opened) return;
+            this.renderSpecialPanel();
+            return;
+        }
+
+        const resolvedTab = tab || (mode === 'browse' ? 'browse' : mode);
+        this.activeTab = resolvedTab;
+
+        if (resolvedTab === 'browse' && !browseContext) {
             this.browseView = 'countries';
             this.browseCountry = null;
             this.countryFilter = '';
@@ -343,29 +417,32 @@ export const SidebarRadio = {
             this.highlightUuid = null;
         }
 
-        const opened = RadioPopover.open(mode, {
+        const browseAnchor = this.getBrowseAnchor() || anchor;
+        const opened = RadioPopover.open('browse', {
             attachEl: this.root,
-            iconAnchor: anchor,
-            title: titles[mode] || 'Radio',
-            force: !!browseContext
+            iconAnchor: browseAnchor,
+            title: titles[resolvedTab] || 'Radio',
+            force: !!browseContext,
+            tab: resolvedTab
         });
         if (!opened) return;
-        this.renderPanelContent(mode);
+        this.renderPanelContent(resolvedTab);
     },
 
     async openBrowseForNowPlaying() {
         const station = RadioPlayer.station;
         const key = stationKey(station);
+        const browseBtn = this.getBrowseAnchor();
+        if (!browseBtn) return;
+
         if (!key) {
-            const btn = this.root.querySelector('[data-radio-open="browse"]');
-            if (btn) this.openPanel('browse', btn);
+            this.openPanel('browse', browseBtn);
             return;
         }
 
-        const browseBtn = this.root.querySelector('[data-radio-open="browse"]');
         const code = station.countrycode;
 
-        if (code && browseBtn) {
+        if (code) {
             await this.prefetchCountries();
             this.openPanel('browse', browseBtn, {
                 browseContext: {
@@ -377,23 +454,25 @@ export const SidebarRadio = {
             return;
         }
 
-        if (RadioPlayer.isFavorite(station) && browseBtn) {
-            const favBtn = this.root.querySelector('[data-radio-open="favorites"]');
-            this.openPanel('favorites', favBtn || browseBtn);
+        if (RadioPlayer.isFavorite(station)) {
+            this.openPanel('browse', browseBtn, { tab: 'favorites' });
             return;
         }
 
-        const recentsBtn = this.root.querySelector('[data-radio-open="recents"]');
-        if (recentsBtn) {
-            this.openPanel('recents', recentsBtn);
+        if (RadioPlayer.getRecents().includes(key)) {
+            this.openPanel('browse', browseBtn, { tab: 'recents' });
             return;
         }
 
-        if (browseBtn) this.openPanel('browse', browseBtn);
+        this.openPanel('browse', browseBtn);
     },
 
     async refreshOpenPanel() {
-        await this.renderPanelContent(RadioPopover.mode);
+        if (RadioPopover.mode === 'special') {
+            this.renderSpecialPanel();
+            return;
+        }
+        await this.renderPanelContent(RadioPopover.activeTab || this.activeTab);
     },
 
     async renderPanelContent(mode) {
@@ -533,7 +612,6 @@ export const SidebarRadio = {
             this.renderBrowseCountries();
         }, 200));
 
-        const recentsHtml = await this.buildRecentsStripHtml();
         const filtered = this.countries
             .slice()
             .sort((a, b) => (b.stationcount || 0) - (a.stationcount || 0))
@@ -545,22 +623,15 @@ export const SidebarRadio = {
             });
 
         if (!filtered.length) {
-            body.innerHTML = `${recentsHtml}<p class="tool-msg">No countries match.</p>`;
+            body.innerHTML = '<p class="tool-msg">No countries match.</p>';
             return;
         }
 
         body.innerHTML = `
-            ${recentsHtml}
             <div class="radio-tile-grid" data-radio-country-grid>
                 ${filtered.map((c) => this.renderCountryTile(c)).join('')}
             </div>
         `;
-
-        body.querySelector('[data-radio-see-recents]')?.addEventListener('click', (e) => {
-            e.preventDefault();
-            const btn = this.root.querySelector('[data-radio-open="recents"]');
-            if (btn) this.openPanel('recents', btn);
-        });
 
         body.querySelectorAll('[data-radio-country]').forEach((tile) => {
             tile.addEventListener('click', () => {
@@ -570,7 +641,6 @@ export const SidebarRadio = {
             });
         });
 
-        this.bindStationTileActions(body);
         RadioPopover.reposition();
     },
 
@@ -587,69 +657,95 @@ export const SidebarRadio = {
         `;
     },
 
-    async buildRecentsStripHtml() {
-        const keys = RadioPlayer.getRecents().slice(0, 6);
-        if (!keys.length) return '';
-
-        const stations = await RadioProviderRegistry.getStationsByRefs(keys);
-        const byKey = new Map(stations.map((s) => [stationKey(s), s]));
-        const ordered = keys.map((id) => byKey.get(id)).filter(Boolean);
-        if (!ordered.length) return '';
-
+    renderBrowseSortToolbar() {
+        const current = RadioPlayer.getBrowseSort();
         return `
-            <div class="radio-recents-strip">
-                <div class="radio-recents-strip__head">
-                    <span class="radio-recents-strip__label">Recents</span>
-                    <button type="button" class="btn btn--compact sidebar-radio__see-all" data-radio-see-recents>See all</button>
-                </div>
-                <div class="radio-recents-strip__grid">
-                    ${ordered.map((s) => this.renderStationTile(s, { compact: true })).join('')}
-                </div>
-            </div>
+            <select class="form-input sidebar-radio__sort" data-radio-sort aria-label="Sort stations">
+                ${BROWSE_SORT_OPTIONS.map((o) => `<option value="${escapeHtml(o.value)}"${o.value === current ? ' selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
+            </select>
         `;
     },
 
     async openBrowseCountry(code, name) {
         this.browseView = 'country';
         this.browseCountry = { code, name };
+        this.browseOffset = 0;
         await this.renderBrowseCountry();
     },
 
-    async renderBrowseCountry() {
+    async renderBrowseCountry(append = false) {
         const { code, name } = this.browseCountry || {};
         RadioPopover.setTitle(name || 'Stations');
         RadioPopover.setBackVisible(true, () => {
             this.browseView = 'countries';
             this.browseCountry = null;
+            this.browseOffset = 0;
+            this.browseStations = [];
             this.renderBrowseCountries();
         });
-        RadioPopover.setToolbarHtml('');
+        RadioPopover.setToolbarHtml(this.renderBrowseSortToolbar());
 
         const body = RadioPopover.getBodyEl();
         if (!body) return;
-        body.innerHTML = '<p class="tool-msg">Loading…</p>';
 
+        if (!append) {
+            body.innerHTML = '<p class="tool-msg">Loading…</p>';
+        }
+
+        const sort = RadioPlayer.getBrowseSort();
         const seq = ++this.loadSeq;
         try {
             const data = await RadioProviderRegistry.searchStations({
                 countrycode: code,
-                limit: 120,
+                limit: BROWSE_PAGE_SIZE,
+                offset: this.browseOffset,
+                order: sort,
+                reverse: sort !== 'name',
                 hideOffline: RadioProviderRegistry.getHideOffline()
             });
             if (seq !== this.loadSeq) return;
-            this.browseStations = Array.isArray(data) ? data : [];
+
+            const page = Array.isArray(data) ? data : [];
+            this.browseHasMore = page.length >= BROWSE_PAGE_SIZE;
+
+            if (append) {
+                this.browseStations = [...this.browseStations, ...page];
+            } else {
+                this.browseStations = page;
+            }
+
             if (!this.browseStations.length) {
                 body.innerHTML = '<p class="tool-msg">No stations in this country.</p>';
             } else {
-                body.innerHTML = `<div class="radio-tile-grid">${this.browseStations.map((s) => this.renderStationTile(s)).join('')}</div>`;
+                body.innerHTML = `
+                    <div class="radio-tile-grid" data-radio-station-grid>
+                        ${this.browseStations.map((s) => this.renderStationTile(s)).join('')}
+                    </div>
+                    ${this.browseHasMore ? '<button type="button" class="btn btn--compact sidebar-radio__load-more" data-radio-load-more>Load more</button>' : ''}
+                `;
                 this.bindStationTileActions(body);
-                this.scrollToHighlightedStation(body);
+                this.bindBrowseCountryControls(body);
+                if (!append) this.scrollToHighlightedStation(body);
             }
         } catch {
             if (seq !== this.loadSeq) return;
             body.innerHTML = '<p class="tool-msg tool-msg--error">Could not load stations.</p>';
         }
         RadioPopover.reposition();
+    },
+
+    bindBrowseCountryControls(body) {
+        RadioPopover.getToolbarEl()?.querySelector('[data-radio-sort]')?.addEventListener('change', (e) => {
+            RadioPlayer.saveBrowseSort(e.target.value);
+            this.browseOffset = 0;
+            this.browseStations = [];
+            this.renderBrowseCountry();
+        });
+
+        body.querySelector('[data-radio-load-more]')?.addEventListener('click', () => {
+            this.browseOffset += BROWSE_PAGE_SIZE;
+            this.renderBrowseCountry(true);
+        });
     },
 
     scrollToHighlightedStation(body) {
@@ -660,6 +756,19 @@ export const SidebarRadio = {
             tile?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
             this.highlightUuid = null;
         });
+    },
+
+    stationFromMeta(meta) {
+        if (!meta?.key) return null;
+        const parsed = parseStationKey(meta.key);
+        return {
+            providerId: parsed.providerId,
+            stationId: parsed.stationId,
+            stationuuid: meta.key,
+            name: meta.name || 'Unknown',
+            favicon: meta.favicon || '',
+            countrycode: meta.countrycode || ''
+        };
     },
 
     async renderStationGrid(kind) {
@@ -673,16 +782,29 @@ export const SidebarRadio = {
 
         const keys = kind === 'favorites' ? RadioPlayer.getFavorites() : RadioPlayer.getRecents();
         if (!keys.length) {
-            body.innerHTML = `<p class="tool-msg">${kind === 'favorites' ? 'Heart stations while listening.' : 'Played stations appear here.'}</p>`;
+            body.innerHTML = `<p class="tool-msg">${kind === 'favorites' ? 'Heart stations while listening.' : 'Played stations appear here after a successful connection.'}</p>`;
             return;
         }
+
+        const metaList = kind === 'recents'
+            ? RadioPlayer.getRecentsMeta()
+            : keys.map((key) => ({ key, name: '', favicon: '', countrycode: '' }));
+
+        const fallbackStations = metaList
+            .map((meta) => this.stationFromMeta(meta))
+            .filter(Boolean);
 
         const seq = ++this.loadSeq;
         try {
             const data = await RadioProviderRegistry.getStationsByRefs(keys);
             if (seq !== this.loadSeq) return;
             const byKey = new Map(data.map((s) => [stationKey(s), s]));
-            this.listStations = keys.map((id) => byKey.get(id)).filter(Boolean);
+            this.listStations = metaList.map((meta) => {
+                const hydrated = byKey.get(meta.key);
+                if (hydrated) return hydrated;
+                return this.stationFromMeta(meta);
+            }).filter(Boolean);
+
             if (!this.listStations.length) {
                 body.innerHTML = '<p class="tool-msg tool-msg--error">Stations unavailable.</p>';
             } else {
@@ -691,7 +813,13 @@ export const SidebarRadio = {
             }
         } catch {
             if (seq !== this.loadSeq) return;
-            body.innerHTML = '<p class="tool-msg tool-msg--error">Could not load list.</p>';
+            this.listStations = fallbackStations;
+            if (!this.listStations.length) {
+                body.innerHTML = '<p class="tool-msg tool-msg--error">Could not load list.</p>';
+            } else {
+                body.innerHTML = `<div class="radio-tile-grid">${this.listStations.map((s) => this.renderStationTile(s)).join('')}</div>`;
+                this.bindStationTileActions(body);
+            }
         }
         RadioPopover.reposition();
     },
@@ -762,29 +890,57 @@ export const SidebarRadio = {
             || (stationKey(RadioPlayer.station) === uuid ? RadioPlayer.station : null);
     },
 
+    updatePlayingTiles() {
+        const body = RadioPopover.getBodyEl();
+        if (!body) return;
+        const currentKey = stationKey(RadioPlayer.station);
+        const active = RadioPlayer.playing || RadioPlayer.loading;
+        body.querySelectorAll('[data-radio-station]').forEach((tile) => {
+            tile.classList.toggle(
+                'is-on-desktop',
+                tile.getAttribute('data-radio-station') === currentKey && active
+            );
+        });
+    },
+
+    getPlayIconHtml(state) {
+        if (state.loading || state.loadPhase === 'connecting' || state.loadPhase === 'buffering') {
+            return ACTION_ICONS.radioLoading;
+        }
+        if (state.playing) return ACTION_ICONS.radioPause;
+        return ACTION_ICONS.radioPlay;
+    },
+
     updateTransport(detail = null) {
         const state = detail || {
             station: RadioPlayer.station,
             playing: RadioPlayer.playing,
             loading: RadioPlayer.loading,
+            loadPhase: RadioPlayer.loadPhase,
             error: RadioPlayer.error,
+            resumeBlocked: RadioPlayer.resumeBlocked,
             volume: RadioPlayer.volume
         };
 
         const marqueeEl = this.root?.querySelector('[data-radio-marquee]');
         const artImg = this.root?.querySelector('[data-radio-art]');
         const artFallback = this.root?.querySelector('[data-radio-art-fallback]');
+        const compactArtImg = this.root?.querySelector('[data-radio-compact-art]');
+        const compactArtFallback = this.root?.querySelector('[data-radio-compact-art-fallback]');
         const flagEl = this.root?.querySelector('[data-radio-flag]');
         const countryNameEl = this.root?.querySelector('[data-radio-country-name]');
         const localeBtn = this.root?.querySelector('.sidebar-radio__locale');
-        const playIconEl = this.root?.querySelector('[data-radio-play-icon]');
-        const volumeEl = this.root?.querySelector('[data-radio-volume]');
+        const loadStatusEl = this.root?.querySelector('[data-radio-load-status]');
+        const volumeEls = this.root?.querySelectorAll('[data-radio-volume], [data-radio-volume-compact]');
         const favBtn = this.root?.querySelector('[data-radio-favorite]');
         const transport = this.root?.querySelector('[data-radio-transport]');
+        const artBtn = this.root?.querySelector('.sidebar-radio__art');
 
         let titleText = 'Radio';
         let isError = false;
-        if (state.error) {
+        if (state.resumeBlocked) {
+            titleText = 'Tap play to resume';
+        } else if (state.error) {
             titleText = state.error;
             isError = true;
         } else if (state.station?.name) {
@@ -792,12 +948,12 @@ export const SidebarRadio = {
         }
 
         if (marqueeEl) {
-            syncMarquee(marqueeEl, titleText, { error: isError });
+            syncMarquee(marqueeEl, titleText, { error: isError || !!state.resumeBlocked });
         }
 
         const code = state.station?.countrycode;
         if (localeBtn && flagEl && countryNameEl) {
-            if (code && state.station) {
+            if (code && state.station && !state.resumeBlocked) {
                 flagEl.textContent = countryFlagEmoji(code);
                 countryNameEl.textContent = this.resolveCountryName(code) || code;
                 localeBtn.classList.remove('is-hidden');
@@ -806,31 +962,42 @@ export const SidebarRadio = {
             }
         }
 
-        if (artImg && artFallback) {
-            const favicon = state.station?.favicon;
+        if (loadStatusEl) {
+            let statusText = '';
+            if (state.loadPhase === 'connecting') statusText = 'Connecting…';
+            else if (state.loadPhase === 'buffering') statusText = 'Buffering…';
+            loadStatusEl.textContent = statusText;
+            loadStatusEl.classList.toggle('is-hidden', !statusText);
+        }
+
+        const favicon = state.station?.favicon;
+        const updateArt = (img, fallback) => {
+            if (!img || !fallback) return;
             if (favicon) {
-                artImg.src = favicon;
-                artImg.classList.remove('is-hidden');
-                artFallback.classList.add('is-hidden');
+                img.src = favicon;
+                img.classList.remove('is-hidden');
+                fallback.classList.add('is-hidden');
             } else {
-                artImg.removeAttribute('src');
-                artImg.classList.add('is-hidden');
-                artFallback.classList.remove('is-hidden');
+                img.removeAttribute('src');
+                img.classList.add('is-hidden');
+                fallback.classList.remove('is-hidden');
             }
-        }
+        };
+        updateArt(artImg, artFallback);
+        updateArt(compactArtImg, compactArtFallback);
 
-        if (playIconEl) {
-            if (state.loading) {
-                playIconEl.textContent = '…';
-            } else if (state.playing) {
-                playIconEl.innerHTML = '<span class="sidebar-radio__pause-bars" aria-hidden="true"><span></span><span></span></span>';
-            } else {
-                playIconEl.innerHTML = '<span class="sidebar-radio__play-triangle" aria-hidden="true"></span>';
-            }
-        }
+        const isLoading = state.loading || state.loadPhase === 'connecting' || state.loadPhase === 'buffering';
+        artBtn?.classList.toggle('sidebar-radio__art--loading', isLoading);
+        this.root?.querySelector('.sidebar-radio__compact-art')?.classList.toggle('sidebar-radio__art--loading', isLoading);
 
-        if (volumeEl && Number.isFinite(state.volume)) {
-            volumeEl.value = String(Math.round(state.volume * 100));
+        const playIconHtml = this.getPlayIconHtml(state);
+        this.root?.querySelectorAll('[data-radio-play-icon]').forEach((el) => {
+            el.innerHTML = playIconHtml;
+        });
+
+        if (volumeEls.length && Number.isFinite(state.volume)) {
+            const vol = String(Math.round(state.volume * 100));
+            volumeEls.forEach((el) => { el.value = vol; });
         }
 
         if (favBtn) {

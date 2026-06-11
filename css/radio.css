@@ -73,6 +73,7 @@
 .sidebar-radio__art {
     grid-row: 1 / -1;
     grid-column: 1;
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -195,29 +196,107 @@
     cursor: pointer;
 }
 
-.sidebar-radio__play-triangle {
+.sidebar-radio__action svg {
     display: block;
-    width: 0;
-    height: 0;
-    margin-left: 2px;
-    border-top: 5px solid transparent;
-    border-bottom: 5px solid transparent;
-    border-left: 8px solid currentColor;
 }
 
-.sidebar-radio__pause-bars {
-    display: inline-flex;
+.sidebar-radio__spin-icon {
+    animation: sidebar-radio-spin 0.85s linear infinite;
+    transform-origin: center;
+}
+
+@keyframes sidebar-radio-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar-radio__spin-icon {
+        animation: none;
+    }
+}
+
+.sidebar-radio__load-status {
+    font-size: 0.5rem;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.sidebar-radio__art--loading::after,
+.sidebar-radio__compact-art.sidebar-radio__art--loading::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+}
+
+.sidebar-radio__art--loading::before,
+.sidebar-radio__compact-art.sidebar-radio__art--loading::before {
+    content: '';
+    position: absolute;
+    z-index: 1;
+    top: 50%;
+    left: 50%;
+    width: 14px;
+    height: 14px;
+    margin: -7px 0 0 -7px;
+    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-top-color: var(--accent, #818cf8);
+    border-radius: 50%;
+    animation: sidebar-radio-spin 0.75s linear infinite;
+    pointer-events: none;
+}
+
+.sidebar-radio__compact {
+    display: none;
     align-items: center;
-    gap: 2px;
-    height: 10px;
+    gap: 0.15rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 0 0.1rem;
 }
 
-.sidebar-radio__pause-bars span {
-    display: block;
-    width: 2px;
-    height: 10px;
-    background: currentColor;
-    border-radius: 1px;
+.sidebar-radio:has(#radio-section.collapsed) .sidebar-radio__compact {
+    display: flex;
+}
+
+.sidebar-radio__compact-art {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.03);
+    cursor: pointer;
+    overflow: hidden;
+    flex-shrink: 0;
+}
+
+.sidebar-radio__compact-art-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 2px;
+}
+
+.sidebar-radio__compact-art-fallback {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+    line-height: 1;
+}
+
+.sidebar-radio__volume-compact {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 4px;
+    margin: 0;
+    accent-color: var(--accent);
+    cursor: pointer;
 }
 
 .sidebar-radio__actions {
@@ -249,6 +328,20 @@
     font-size: 0.54rem;
     padding: 0.06rem 0.28rem;
     line-height: 1.2;
+}
+
+.sidebar-radio__sort {
+    width: 100%;
+    font-size: 0.62rem;
+    padding: 0.22rem 0.35rem;
+    min-height: 0;
+}
+
+.sidebar-radio__load-more {
+    display: block;
+    width: 100%;
+    margin-top: 0.35rem;
+    font-size: 0.58rem;
 }
 
 /* Special actions form */
@@ -315,6 +408,12 @@
     padding: 0.35rem 0.4rem 0.32rem;
     border-bottom: 1px solid var(--border-color);
     user-select: none;
+    cursor: grab;
+}
+
+.radio-popover--dragging .radio-popover__header {
+    cursor: grabbing;
+    opacity: var(--desktop-drag-opacity, 0.85);
 }
 
 .radio-popover__title {
@@ -360,6 +459,38 @@
 .radio-popover__body .tool-msg {
     margin: 0;
     padding: 0.2rem 0.05rem;
+}
+
+.radio-popover__tabs {
+    display: flex;
+    flex-shrink: 0;
+    border-top: 1px solid var(--border-color);
+}
+
+.radio-popover__tabs.is-hidden {
+    display: none;
+}
+
+.radio-popover__tab {
+    flex: 1 1 0;
+    padding: 0.32rem 0.25rem;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: none;
+    color: var(--text-muted);
+    font-size: 0.58rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.radio-popover__tab:hover {
+    color: var(--text-main);
+}
+
+.radio-popover__tab.is-active {
+    color: #c7d2fe;
+    border-bottom-color: rgba(79, 70, 229, 0.65);
 }
 
 .radio-popover__resize-se {

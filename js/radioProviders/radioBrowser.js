@@ -9,10 +9,21 @@ export const RadioBrowserProvider = {
         return RadioBrowserApi.getCountries({ refresh });
     },
 
-    async searchStations({ countrycode = '', limit = 100, refresh = false, hideOffline = true } = {}) {
+    async searchStations({
+        countrycode = '',
+        limit = 100,
+        offset = 0,
+        order = 'clickcount',
+        reverse = true,
+        refresh = false,
+        hideOffline = true
+    } = {}) {
         const data = await RadioBrowserApi.searchStations({
             countrycode,
             limit,
+            offset,
+            order,
+            reverse,
             refresh,
             hideOffline
         });

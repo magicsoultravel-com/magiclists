@@ -10,6 +10,34 @@ const STATE_KEY = 'matrix_radio_state';
 const RECENTS_CAP = 20;
 const DEFAULT_BROWSER_W = 300;
 const DEFAULT_BROWSER_H = 360;
+const DEFAULT_BROWSE_SORT = 'clickcount';
+
+function migrateRecentsMeta(raw) {
+    if (Array.isArray(raw.recentsMeta) && raw.recentsMeta.length) {
+        return raw.recentsMeta.map((entry) => {
+            if (typeof entry === 'string') {
+                return { key: migrateFavoriteRef(entry), name: '', favicon: '', countrycode: '', at: 0 };
+            }
+            return {
+                key: migrateFavoriteRef(entry.key),
+                name: entry.name || '',
+                favicon: entry.favicon || '',
+                countrycode: entry.countrycode || '',
+                at: Number.isFinite(entry.at) ? entry.at : 0
+            };
+        }).filter((e) => e.key);
+    }
+    if (Array.isArray(raw.recents)) {
+        return raw.recents.map((key) => ({
+            key: migrateFavoriteRef(key),
+            name: '',
+            favicon: '',
+            countrycode: '',
+            at: 0
+        })).filter((e) => e.key);
+    }
+    return [];
+}
 
 function loadState() {
     try {
@@ -21,9 +49,8 @@ function loadState() {
         const favorites = Array.isArray(raw.favorites)
             ? raw.favorites.map(migrateFavoriteRef)
             : [];
-        const recents = Array.isArray(raw.recents)
-            ? raw.recents.map(migrateFavoriteRef)
-            : [];
+        const recentsMeta = migrateRecentsMeta(raw);
+        const recents = recentsMeta.map((e) => e.key);
 
         const lastKey = raw.lastStationKey
             || (raw.lastStationUuid ? migrateFavoriteRef(raw.lastStationUuid) : null);
@@ -31,9 +58,11 @@ function loadState() {
         return {
             favorites,
             recents,
+            recentsMeta,
             volume: Number.isFinite(raw.volume) ? Math.min(1, Math.max(0, raw.volume)) : 0.85,
             lastStationKey: lastKey,
             lastStationName: raw.lastStationName || '',
+            wasPlaying: raw.wasPlaying === true,
             catalogProvider: raw.catalogProvider || 'radio-browser',
             radioBrowserMirror: raw.radioBrowserMirror || null,
             hideOfflineStations: raw.hideOfflineStations !== false,
@@ -43,15 +72,21 @@ function loadState() {
             miniPlayerY: Number.isFinite(raw.miniPlayerY) ? raw.miniPlayerY
                 : (Number.isFinite(raw.panelY) ? raw.panelY : null),
             browserW: Number.isFinite(raw.browserW) ? raw.browserW : DEFAULT_BROWSER_W,
-            browserH: Number.isFinite(raw.browserH) ? raw.browserH : DEFAULT_BROWSER_H
+            browserH: Number.isFinite(raw.browserH) ? raw.browserH : DEFAULT_BROWSER_H,
+            browserX: Number.isFinite(raw.browserX) ? raw.browserX : null,
+            browserY: Number.isFinite(raw.browserY) ? raw.browserY : null,
+            browserFloating: raw.browserFloating === true,
+            browseSort: raw.browseSort || DEFAULT_BROWSE_SORT
         };
     } catch {
         return {
             favorites: [],
             recents: [],
+            recentsMeta: [],
             volume: 0.85,
             lastStationKey: null,
             lastStationName: '',
+            wasPlaying: false,
             catalogProvider: 'radio-browser',
             radioBrowserMirror: null,
             hideOfflineStations: true,
@@ -59,7 +94,11 @@ function loadState() {
             miniPlayerX: null,
             miniPlayerY: null,
             browserW: DEFAULT_BROWSER_W,
-            browserH: DEFAULT_BROWSER_H
+            browserH: DEFAULT_BROWSER_H,
+            browserX: null,
+            browserY: null,
+            browserFloating: false,
+            browseSort: DEFAULT_BROWSE_SORT
         };
     }
 }
@@ -67,6 +106,9 @@ function loadState() {
 function saveState(patch) {
     const current = loadState();
     const next = { ...current, ...patch };
+    if (next.recentsMeta) {
+        next.recents = next.recentsMeta.map((e) => e.key);
+    }
     localStorage.setItem(STATE_KEY, JSON.stringify(next));
     return next;
 }
@@ -80,7 +122,10 @@ export const RadioPlayer = {
     station: null,
     playing: false,
     loading: false,
+    loadPhase: 'idle',
     error: null,
+    resumeBlocked: false,
+    recentRecordedForKey: null,
     volume: loadState().volume,
 
     init() {
@@ -89,12 +134,28 @@ export const RadioPlayer = {
         this.audio.preload = 'none';
         this.audio.volume = this.volume;
 
+        this.audio.addEventListener('loadstart', () => {
+            this.loadPhase = 'connecting';
+            this.emitState();
+        });
+        this.audio.addEventListener('canplay', () => {
+            if (this.loadPhase !== 'idle') {
+                this.loadPhase = 'idle';
+                this.emitState();
+            }
+        });
         this.audio.addEventListener('playing', () => {
             this.playing = true;
             this.loading = false;
+            this.loadPhase = 'idle';
             this.error = null;
+            this.resumeBlocked = false;
+            saveState({ wasPlaying: true });
             const key = stationKey(this.station);
-            if (key) this.pushRecent(key);
+            if (key && this.recentRecordedForKey !== key) {
+                this.recentRecordedForKey = key;
+                this.pushRecent(key, this.station);
+            }
             this.emitState();
         });
         this.audio.addEventListener('pause', () => {
@@ -103,16 +164,25 @@ export const RadioPlayer = {
         });
         this.audio.addEventListener('waiting', () => {
             this.loading = true;
+            this.loadPhase = 'buffering';
             this.emitState();
+        });
+        this.audio.addEventListener('stalled', () => {
+            if (this.playing || this.loading) {
+                this.loadPhase = 'buffering';
+                this.emitState();
+            }
         });
         this.audio.addEventListener('error', () => {
             this.loading = false;
+            this.loadPhase = 'idle';
             this.playing = false;
             this.error = 'Stream unavailable';
             this.emitState();
         });
         this.audio.addEventListener('ended', () => {
             this.playing = false;
+            this.loadPhase = 'idle';
             this.emitState();
         });
 
@@ -134,10 +204,13 @@ export const RadioPlayer = {
             station: this.station,
             playing: this.playing,
             loading: this.loading,
+            loadPhase: this.loadPhase,
             error: this.error,
+            resumeBlocked: this.resumeBlocked,
             volume: this.volume,
             favorites: this.getFavorites(),
-            recents: this.getRecents()
+            recents: this.getRecents(),
+            recentsMeta: this.getRecentsMeta()
         });
     },
 
@@ -147,6 +220,22 @@ export const RadioPlayer = {
 
     getRecents() {
         return [...loadState().recents];
+    },
+
+    getRecentsMeta() {
+        return loadState().recentsMeta.map((e) => ({ ...e }));
+    },
+
+    getWasPlaying() {
+        return loadState().wasPlaying;
+    },
+
+    getBrowseSort() {
+        return loadState().browseSort || DEFAULT_BROWSE_SORT;
+    },
+
+    saveBrowseSort(sort) {
+        saveState({ browseSort: sort || DEFAULT_BROWSE_SORT });
     },
 
     getMiniPlayerState() {
@@ -163,6 +252,15 @@ export const RadioPlayer = {
         return { w: s.browserW, h: s.browserH };
     },
 
+    getBrowserPosition() {
+        const s = loadState();
+        return {
+            browserX: s.browserX,
+            browserY: s.browserY,
+            browserFloating: s.browserFloating
+        };
+    },
+
     saveMiniPlayerState(patch) {
         saveState(patch);
     },
@@ -171,11 +269,21 @@ export const RadioPlayer = {
         saveState({ browserW: w, browserH: h });
     },
 
-    pushRecent(key) {
+    saveBrowserPosition(patch) {
+        saveState(patch);
+    },
+
+    pushRecent(key, station = null) {
         if (!key) return;
-        const recents = loadState().recents.filter((id) => id !== key);
-        recents.unshift(key);
-        saveState({ recents: recents.slice(0, RECENTS_CAP) });
+        const meta = loadState().recentsMeta.filter((e) => e.key !== key);
+        meta.unshift({
+            key,
+            name: station?.name || '',
+            favicon: station?.favicon || '',
+            countrycode: station?.countrycode || '',
+            at: Date.now()
+        });
+        saveState({ recentsMeta: meta.slice(0, RECENTS_CAP) });
     },
 
     isFavorite(stationOrKey) {
@@ -216,11 +324,14 @@ export const RadioPlayer = {
             this.pause();
             return;
         }
+        this.resumeBlocked = false;
         if (this.station?.url_resolved && this.audio?.src) {
             try {
                 await this.audio.play();
             } catch {
                 this.error = 'Playback blocked';
+                this.resumeBlocked = true;
+                saveState({ wasPlaying: false });
                 this.emitState();
             }
             return;
@@ -233,6 +344,7 @@ export const RadioPlayer = {
     pause() {
         this.audio?.pause();
         this.playing = false;
+        saveState({ wasPlaying: false });
         this.emitState();
     },
 
@@ -244,8 +356,25 @@ export const RadioPlayer = {
         }
         this.playing = false;
         this.loading = false;
+        this.loadPhase = 'idle';
         this.error = null;
+        saveState({ wasPlaying: false });
         this.emitState();
+    },
+
+    async resumeIfWasPlaying() {
+        if (!this.getWasPlaying() || !this.station) return;
+        try {
+            await this.playStation(this.station);
+        } catch (e) {
+            const blocked = e?.name === 'NotAllowedError'
+                || String(e?.message || '').toLowerCase().includes('not allowed');
+            if (blocked) {
+                this.resumeBlocked = true;
+                saveState({ wasPlaying: false });
+                this.emitState();
+            }
+        }
     },
 
     async playStation(stationOrKey) {
@@ -267,8 +396,11 @@ export const RadioPlayer = {
         const key = stationKey(station);
         if (!key || !station) return;
 
+        this.recentRecordedForKey = null;
         this.loading = true;
+        this.loadPhase = 'connecting';
         this.error = null;
+        this.resumeBlocked = false;
         this.emitState();
 
         try {
@@ -295,12 +427,22 @@ export const RadioPlayer = {
             await this.audio.play();
         } catch (e) {
             this.loading = false;
+            this.loadPhase = 'idle';
             this.playing = false;
-            this.error = e?.message === 'Station offline' ? 'Station offline' : 'Stream unavailable';
+            const blocked = e?.name === 'NotAllowedError'
+                || String(e?.message || '').toLowerCase().includes('not allowed');
+            if (blocked) {
+                this.error = null;
+                this.resumeBlocked = true;
+                saveState({ wasPlaying: false });
+            } else {
+                this.error = e?.message === 'Station offline' ? 'Station offline' : 'Stream unavailable';
+            }
             if (typeof stationOrKey === 'object' && stationOrKey?.name) {
                 this.station = normalizeStation(stationOrKey, stationOrKey.providerId) || stationOrKey;
             }
             this.emitState();
+            if (blocked) throw e;
         }
     }
 };

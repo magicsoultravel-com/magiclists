@@ -10,11 +10,14 @@ export const RadioPopover = {
     attachEl: null,
     iconAnchor: null,
     mode: null,
+    activeTab: 'browse',
     outsideHandler: null,
     keyHandler: null,
     resizeHandler: null,
     boundsHandler: null,
     onClose: null,
+    onTabChange: null,
+    tabsBound: false,
 
     ensurePanel() {
         if (this.panel) return this.panel;
@@ -23,7 +26,7 @@ export const RadioPopover = {
         panel.className = 'radio-popover clock-style-popover is-hidden';
         panel.setAttribute('role', 'dialog');
         panel.innerHTML = `
-            <div class="radio-popover__header">
+            <div class="radio-popover__header" data-radio-pop-drag>
                 <button type="button" class="btn btn--compact btn-icon radio-popover__back is-hidden" data-radio-pop-back aria-label="Back">◀</button>
                 <span class="radio-popover__title" data-radio-pop-title>Radio</span>
                 <span class="radio-popover__spacer"></span>
@@ -31,6 +34,11 @@ export const RadioPopover = {
             </div>
             <div class="radio-popover__toolbar is-hidden" data-radio-pop-toolbar></div>
             <div class="radio-popover__body" data-radio-pop-body></div>
+            <div class="radio-popover__tabs" data-radio-pop-tabs>
+                <button type="button" class="radio-popover__tab is-active" data-radio-tab="browse">Browse</button>
+                <button type="button" class="radio-popover__tab" data-radio-tab="recents">Recents</button>
+                <button type="button" class="radio-popover__tab" data-radio-tab="favorites">Favorites</button>
+            </div>
             <div class="radio-popover__resize-se ff-resize ff-resize-se" data-radio-pop-resize aria-hidden="true"></div>
         `;
         document.body.appendChild(panel);
@@ -41,8 +49,86 @@ export const RadioPopover = {
         });
 
         this.bindResize(panel);
+        this.bindHeaderDrag(panel);
+        this.bindTabs(panel);
         this.panel = panel;
         return panel;
+    },
+
+    bindTabs(panel) {
+        if (this.tabsBound) return;
+        this.tabsBound = true;
+        panel.querySelector('[data-radio-pop-tabs]')?.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-radio-tab]');
+            if (!btn || this.mode === 'special') return;
+            e.stopPropagation();
+            const tab = btn.getAttribute('data-radio-tab');
+            if (tab && tab !== this.activeTab) {
+                this.setActiveTab(tab);
+                this.onTabChange?.(tab);
+            }
+        });
+    },
+
+    setActiveTab(tab) {
+        this.activeTab = tab;
+        this.panel?.querySelectorAll('[data-radio-tab]').forEach((btn) => {
+            btn.classList.toggle('is-active', btn.getAttribute('data-radio-tab') === tab);
+        });
+    },
+
+    setTabsVisible(visible) {
+        this.panel?.querySelector('[data-radio-pop-tabs]')?.classList.toggle('is-hidden', !visible);
+    },
+
+    bindHeaderDrag(panel) {
+        const header = panel.querySelector('[data-radio-pop-drag]');
+        if (!header || header.dataset.dragBound === 'true') return;
+        header.dataset.dragBound = 'true';
+
+        header.addEventListener('pointerdown', (e) => {
+            if (e.target.closest('[data-radio-pop-close]')
+                || e.target.closest('[data-radio-pop-back]')
+                || e.button !== 0) return;
+
+            e.preventDefault();
+            let dragging = true;
+            const startX = e.clientX;
+            const startY = e.clientY;
+            const startLeft = parseFloat(panel.style.left) || panel.getBoundingClientRect().left;
+            const startTop = parseFloat(panel.style.top) || panel.getBoundingClientRect().top;
+
+            panel.classList.add('radio-popover--dragging');
+            header.setPointerCapture(e.pointerId);
+
+            const onMove = (ev) => {
+                if (!dragging) return;
+                const nx = startLeft + (ev.clientX - startX);
+                const ny = startTop + (ev.clientY - startY);
+                const clamped = clampPanelToViewport(panel, nx, ny);
+                panel.style.left = `${clamped.x}px`;
+                panel.style.top = `${clamped.y}px`;
+            };
+
+            const onUp = (ev) => {
+                if (!dragging) return;
+                dragging = false;
+                panel.classList.remove('radio-popover--dragging');
+                header.releasePointerCapture(ev.pointerId);
+                RadioPlayer.saveBrowserPosition({
+                    browserFloating: true,
+                    browserX: parseFloat(panel.style.left) || 0,
+                    browserY: parseFloat(panel.style.top) || 0
+                });
+                document.removeEventListener('pointermove', onMove);
+                document.removeEventListener('pointerup', onUp);
+                document.removeEventListener('pointercancel', onUp);
+            };
+
+            document.addEventListener('pointermove', onMove);
+            document.addEventListener('pointerup', onUp);
+            document.addEventListener('pointercancel', onUp);
+        });
     },
 
     bindResize(panel) {
@@ -87,11 +173,15 @@ export const RadioPopover = {
         panel.style.height = `${h}px`;
     },
 
-    open(mode, { attachEl, iconAnchor, title = 'Radio', force = false } = {}) {
+    open(mode, { attachEl, iconAnchor, title = 'Radio', force = false, tab = 'browse' } = {}) {
         const wasOpen = !this.panel?.classList.contains('is-hidden');
-        const sameMode = this.mode === mode && this.iconAnchor === iconAnchor;
+        const sameBrowse = mode === 'browse'
+            && this.mode === 'browse'
+            && this.iconAnchor === iconAnchor
+            && this.activeTab === tab;
+        const sameSpecial = mode === 'special' && this.mode === 'special' && this.iconAnchor === iconAnchor;
 
-        if (wasOpen && sameMode && !force) {
+        if (wasOpen && !force && (sameBrowse || sameSpecial)) {
             this.close();
             return false;
         }
@@ -100,12 +190,18 @@ export const RadioPopover = {
         this.attachEl = attachEl;
         this.iconAnchor = iconAnchor;
         this.mode = mode;
+        this.activeTab = mode === 'browse' ? tab : null;
 
         const panel = this.ensurePanel();
         this.applyBrowserSize(panel);
         panel.classList.remove('is-hidden');
         panel.setAttribute('aria-label', title);
         panel.querySelector('[data-radio-pop-title]').textContent = title;
+
+        this.setTabsVisible(mode === 'browse');
+        if (mode === 'browse') {
+            this.setActiveTab(tab);
+        }
 
         iconAnchor?.setAttribute('aria-expanded', 'true');
 
@@ -173,6 +269,7 @@ export const RadioPopover = {
         this.attachEl = null;
         this.iconAnchor = null;
         this.mode = null;
+        this.activeTab = 'browse';
         this.onClose?.();
     },
 
@@ -204,7 +301,23 @@ export const RadioPopover = {
     },
 
     reposition() {
-        if (!this.panel || this.panel.classList.contains('is-hidden') || !this.attachEl) return;
+        if (!this.panel || this.panel.classList.contains('is-hidden')) return;
+
+        const { browserX, browserY, browserFloating } = RadioPlayer.getBrowserPosition();
+        if (browserFloating && browserX != null && browserY != null) {
+            this.panel.style.left = `${browserX}px`;
+            this.panel.style.top = `${browserY}px`;
+            const clamped = clampPanelToViewport(
+                this.panel,
+                browserX,
+                browserY
+            );
+            this.panel.style.left = `${clamped.x}px`;
+            this.panel.style.top = `${clamped.y}px`;
+            return;
+        }
+
+        if (!this.attachEl) return;
         positionPanelBelowElement(this.panel, this.attachEl);
         const clamped = clampPanelToViewport(
             this.panel,

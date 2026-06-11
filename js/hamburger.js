@@ -89,7 +89,7 @@ export const SidePanel = {
     },
 
     setupStatusClickHandlers() {
-        this.bindCollapsable('radio-section-header', 'radio-section', true, '.sidebar-radio__dock');
+        this.bindCollapsable('radio-section-header', 'radio-section', true, '.sidebar-radio__dock', '.collapsable-toggle');
         this.bindCollapsable('quick-actions-header', 'quick-actions-section', true);
         this.bindCollapsable('view-section-header', 'view-section', true);
         this.bindCollapsable('categories-section-header', 'categories-section', true);
@@ -104,7 +104,7 @@ export const SidePanel = {
         this.setupNotesListSortControls();
     },
 
-    bindCollapsable(headerId, sectionId, startCollapsed = false, ignoreSelector = null) {
+    bindCollapsable(headerId, sectionId, startCollapsed = false, ignoreSelector = null, toggleSelector = null) {
         const header = document.getElementById(headerId);
         const section = document.getElementById(sectionId);
         if (!header || !section) return;
@@ -114,8 +114,14 @@ export const SidePanel = {
         if (header.dataset.collapsableBound === 'true') return;
         header.dataset.collapsableBound = 'true';
 
-        header.addEventListener('click', (e) => {
+        const clickTarget = toggleSelector
+            ? header.querySelector(toggleSelector)
+            : header;
+        if (!clickTarget) return;
+
+        clickTarget.addEventListener('click', (e) => {
             if (ignoreSelector && e.target.closest(ignoreSelector)) return;
+            if (toggleSelector && !e.target.closest(toggleSelector)) return;
             const toggle = header.querySelector('.collapsable-toggle');
             const nowCollapsed = !section.classList.contains('collapsed');
             section.classList.toggle('collapsed', nowCollapsed);

@@ -110,18 +110,31 @@ export const IptvOrgProvider = {
         return catalog.countryList;
     },
 
-    async searchStations({ countrycode = '', limit = 100, refresh = false, hideOffline = true } = {}) {
+    async searchStations({
+        countrycode = '',
+        limit = 100,
+        offset = 0,
+        order = 'clickcount',
+        reverse = true,
+        refresh = false,
+        hideOffline = true
+    } = {}) {
         const catalog = await loadCatalog(refresh);
         let list = countrycode
-            ? (catalog.byCountry.get(countrycode) || [])
-            : catalog.stations;
+            ? [...(catalog.byCountry.get(countrycode) || [])]
+            : [...catalog.stations];
 
         if (hideOffline) {
             list = list.filter((s) => s.url_resolved);
         }
 
+        if (order === 'name') {
+            list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            if (!reverse) list.reverse();
+        }
+
         return list
-            .slice(0, limit)
+            .slice(offset, offset + limit)
             .map((s) => normalizeStation(s, PROVIDER_IPTV_ORG))
             .filter(Boolean);
     },
