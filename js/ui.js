@@ -2257,6 +2257,16 @@ export const UI = {
             chrome.className = 'ff-chrome';
             card.appendChild(chrome);
         }
+        let resizeLayer = card.querySelector('.ff-resize-layer');
+        if (!resizeLayer) {
+            resizeLayer = document.createElement('div');
+            resizeLayer.className = 'ff-resize-layer';
+            resizeLayer.setAttribute('aria-hidden', 'true');
+            card.appendChild(resizeLayer);
+        }
+        chrome.querySelectorAll('.ff-resize').forEach((handle) => {
+            resizeLayer.appendChild(handle);
+        });
         if (!chrome.querySelector('.ff-drag-gutter--edge')) {
             const gutter = document.createElement('span');
             gutter.className = 'ff-drag-gutter ff-drag-gutter--edge';
@@ -2269,8 +2279,8 @@ export const UI = {
             topGutter.title = 'Drag to move';
             chrome.appendChild(topGutter);
         }
-        if (!chrome.querySelector('.ff-resize-se')) {
-            chrome.insertAdjacentHTML('beforeend', `
+        if (!resizeLayer.querySelector('.ff-resize-se')) {
+            resizeLayer.insertAdjacentHTML('beforeend', `
                 <span class="ff-resize ff-resize-n" data-axis="n" aria-hidden="true"></span>
                 <span class="ff-resize ff-resize-s" data-axis="s" aria-hidden="true"></span>
                 <span class="ff-resize ff-resize-e" data-axis="e" aria-hidden="true"></span>
@@ -3170,7 +3180,7 @@ export const UI = {
         return `
             <div class="editor-note-shell note-surface">
                 ${toolbarHtml ? `<div class="note-editor-toolbar${toolbarDragZone}">${toolbarHtml}</div>` : ''}
-                <div class="editor-note-header${toolbarDragZone || ''}">
+                <div class="editor-note-header">
                     ${titleHtml}
                 </div>
                 ${formatHtml}
@@ -3666,6 +3676,14 @@ export const UI = {
         if (header) this.attachNoteBodyInteractions(header, item, interactionOptions);
         if (body) this.attachNoteBodyInteractions(body, item, interactionOptions);
 
+        if (stopMousedownPropagation && !shell.dataset.shellDragBound) {
+            shell.dataset.shellDragBound = '1';
+            shell.addEventListener('mousedown', (e) => {
+                if (e.button !== 0) return;
+                e.stopPropagation();
+            }, true);
+        }
+
         shell.querySelectorAll('.card-inline-edit').forEach((el) => {
             el.addEventListener('input', () => this.updateNoteMetaStats(shell, item));
         });
@@ -3910,7 +3928,9 @@ export const UI = {
         this.bindNoteEditorShell(card, item, {
             richEdit: canEdit,
             refresh: () => this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor),
-            stopMousedownPropagation: this.isColumnLayoutCard(card)
+            stopMousedownPropagation: card.dataset.freeform === '1'
+                || card.dataset.gridBoard === '1'
+                || this.isColumnLayoutCard(card)
         });
         this.finalizeFreeformCard(card);
         this.finalizeGridBoardCard(card);
@@ -4366,11 +4386,15 @@ export const UI = {
                     e.stopPropagation();
                 });
                 el.addEventListener('mousedown', (e) => {
+                    if (e.button !== 0) return;
                     if (el.classList.contains('rich-text--edit') && e.target.closest('a[href]')) {
                         e.preventDefault();
                     }
                     if (stopMousedownPropagation) {
                         e.stopPropagation();
+                    }
+                    if (document.activeElement !== el) {
+                        this.focusInlineEdit(el, 'end');
                     }
                 });
                 el.addEventListener('focus', () => {
@@ -4498,10 +4522,12 @@ export const UI = {
                 const stepId = row.dataset.stepId;
                 checkbox?.addEventListener('change', (e) => {
                     e.stopPropagation();
-                    if (!item.steps.find(s => s.id === stepId)) return;
+                    this.ensureChecklistStepFromRow(row, item);
+                    const step = item.steps?.find((s) => s.id === stepId);
+                    if (!step) return;
                     row.classList.add('step-row--animating');
                     applyMutate((it) => {
-                        const s = it.steps.find(st => st.id === stepId);
+                        const s = it.steps.find((st) => st.id === stepId);
                         if (!s) return;
                         moveStepOnCompletionChange(it.steps, s, checkbox.checked);
                     });

@@ -2260,6 +2260,13 @@ html[data-note-font="kalam"] .mini-card .step-text {
     pointer-events: auto;
 }
 
+#app-canvas.view-freeform .mini-card.expanded .note-editor-toolbar .card-actions,
+#app-canvas.view-grid .mini-card.expanded .note-editor-toolbar .card-actions,
+#app-canvas.view-columns .mini-card.expanded .note-editor-toolbar .card-actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
 .note-editor-toolbar {
     position: relative;
     min-width: 0;
@@ -4224,16 +4231,19 @@ textarea.form-input {
     pointer-events: none;
 }
 
-#app-canvas.view-freeform .mini-card.expanded .ff-chrome,
-#app-canvas.view-grid .mini-card.expanded .ff-chrome,
-#app-canvas.view-columns .mini-card.expanded .ff-chrome {
-    z-index: 6;
+#app-canvas.view-freeform .ff-resize-layer,
+#app-canvas.view-grid .ff-resize-layer,
+#app-canvas.view-columns .ff-resize-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 7;
+    pointer-events: none;
 }
 
-#app-canvas.view-freeform .mini-card.expanded .ff-resize,
-#app-canvas.view-grid .mini-card.expanded .ff-resize,
-#app-canvas.view-columns .mini-card.expanded .ff-resize {
-    z-index: 7;
+#app-canvas.view-freeform .ff-resize-layer .ff-resize,
+#app-canvas.view-grid .ff-resize-layer .ff-resize,
+#app-canvas.view-columns .ff-resize-layer .ff-resize {
+    pointer-events: auto;
 }
 
 #app-canvas.view-freeform .mini-card:hover .ff-drag-gutter--edge,

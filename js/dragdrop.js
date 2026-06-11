@@ -434,7 +434,7 @@ function shouldStartCardDrag(target) {
     if (!target) return false;
     if (target.closest('.card-act--drag')) return true;
     if (isInsideDragControl(target)) return false;
-    if (target.closest('.editor-note-body, .card-body.editor-note-body')) return false;
+    if (target.closest('.editor-note-header, .editor-note-body, .card-body.editor-note-body')) return false;
     const surface = target.closest('.card-drag-zone, .ff-drag-gutter');
     if (!surface) return false;
     return true;
