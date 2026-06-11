@@ -1,4 +1,5 @@
 import { normalizeCategories } from './categories.js';
+import { applyLayoutBackupKeys } from './layoutStorage.js';
 
 function migrateImportedStep(step) {
     if (!step || typeof step !== 'object') return step;
@@ -114,4 +115,6 @@ export function applyBackupToStorage(parsedBackup) {
             ? parsedBackup.matrix_canvas_viewport
             : JSON.stringify(parsedBackup.matrix_canvas_viewport));
     }
+
+    applyLayoutBackupKeys(parsedBackup);
 }

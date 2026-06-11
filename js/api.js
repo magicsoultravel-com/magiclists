@@ -1,4 +1,5 @@
 import { DEFAULT_CATEGORIES } from './categories.js';
+import { purgeLayoutForItem } from './layoutStorage.js';
 
 function normalizeItemTileSize(tileSize) {
     if (tileSize === 'label' || tileSize === 'compact' || tileSize === 'note') return tileSize;
@@ -123,6 +124,7 @@ export const API = {
         
         if (db.items.length !== initialLength) {
             this._writeLocalDB(db);
+            purgeLayoutForItem(itemId);
             return true;
         }
         return false;

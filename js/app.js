@@ -6,6 +6,7 @@ import { ToolsManager } from './toolsManager.js';
 import { Calendar } from './calendar.js';
 import { SidePanel } from './hamburger.js';
 import { applyBackupToStorage } from './backup.js';
+import { getLayoutBackupKeys, reconcileLayoutStorage } from './layoutStorage.js';
 import { DEFAULT_CATEGORIES, normalizeCategories } from './categories.js';
 import { UndoManager, historyLabelForItem } from './undo.js';
 import { DesktopBackground } from './desktopBackground.js';
@@ -75,6 +76,10 @@ class Application {
         Calendar.init();
         this.renderControlBar();
         this.loadCategoriesStore();
+        reconcileLayoutStorage({
+            items: API._getLocalDB().items,
+            categories: AppState.categories
+        });
         await this.syncDataStore();
         this.setupCoreListeners();
         SidePanel.init(AppState);
@@ -388,6 +393,7 @@ class Application {
         const databasePayload = localStorage.getItem('matrix_database');
         const customCategoriesPayload = localStorage.getItem('matrix_custom_categories');
         const drawingKeys = getDrawingBackupKeys();
+        const layoutKeys = getLayoutBackupKeys();
         const backupPackage = {
             timestamp: Math.floor(Date.now() / 1000),
             matrix_database: databasePayload ? JSON.parse(databasePayload) : null,
@@ -396,7 +402,16 @@ class Application {
             matrix_drawing_prefs: drawingKeys.matrix_drawing_prefs ? JSON.parse(drawingKeys.matrix_drawing_prefs) : null,
             matrix_workspace_mode: drawingKeys.matrix_workspace_mode,
             matrix_drawing_toolbar_hidden: drawingKeys.matrix_drawing_toolbar_hidden,
-            matrix_canvas_viewport: drawingKeys.matrix_canvas_viewport
+            matrix_canvas_viewport: drawingKeys.matrix_canvas_viewport,
+            ...Object.fromEntries(
+                Object.entries(layoutKeys).map(([key, raw]) => {
+                    try {
+                        return [key, JSON.parse(raw)];
+                    } catch {
+                        return [key, raw];
+                    }
+                })
+            )
         };
         const blob = new Blob([JSON.stringify(backupPackage, null, 2)], { type: 'application/json' });
         const virtualLink = document.createElement('a');

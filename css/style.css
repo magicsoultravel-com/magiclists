@@ -2019,9 +2019,17 @@ html[data-note-font="kalam"] .mini-card .step-text {
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
-    font-size: 0.68rem;
     line-height: 1.25;
     opacity: 0.88;
+}
+
+.mini-card.tile-compact .tile-preview,
+.mini-card.compact .tile-preview {
+    font-size: 0.62rem;
+}
+
+.mini-card.tile-note .tile-preview {
+    font-size: 0.68rem;
 }
 
 .mini-card.tile-compact .tile-preview,

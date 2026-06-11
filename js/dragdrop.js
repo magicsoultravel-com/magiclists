@@ -77,12 +77,6 @@ function finishSnapPanelGesture(card, {
     if (item && tierResizeState && UI.isCollapsedTile(card)) {
         tileSize = UI.commitTierResize(card, item, tierResizeState);
     }
-    if (item && UI.isCollapsedTile(card) && UI.shouldSnapPanelExpand(rect.w, rect.h, tileSize)) {
-        saveLayout(card, rect, { customCompact: false });
-        onExpandFromResize(card, item, rect, { animate, bounds });
-        cleanupActive?.();
-        return;
-    }
     if (item && card.classList.contains('expanded') && UI.shouldSnapPanelCollapse(rect.w, rect.h, tileSize)) {
         onCollapseFromResize(card, item, rect, { animate, bounds });
         cleanupActive?.();
@@ -590,18 +584,10 @@ export const DragDropEngine = {
                 if (item && tierResizeState && UI.isCollapsedTile(card)) {
                     const tileSize = UI.commitTierResize(card, item, tierResizeState);
                     const { w, h } = UI.readFreeformCardSize(card);
-                    if (UI.shouldSnapPanelExpand(w, h, tileSize)) {
-                        UI.updateFreeformCard(card, item, { expanded: true, dimensions: { w, h } });
-                    } else {
-                        const sizes = UI.getFreeformSizes();
-                        sizes[card.dataset.id] = {
-                            w: Math.round(w),
-                            h: Math.round(h),
-                            customCompact: UI.isCustomTileRect(w, h, tileSize)
-                        };
-                        localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
-                        UI.finalizeFreeformCard(card);
-                    }
+                    UI.saveFreeformSize(card.dataset.id, w, h, {
+                        customCompact: UI.isCustomTileRect(w, h, tileSize)
+                    });
+                    UI.finalizeFreeformCard(card);
                 } else {
                     UI.saveFreeformSizeFromCard(card);
                 }
@@ -1193,24 +1179,12 @@ export const DragDropEngine = {
                     tileSize = UI.commitTierResize(card, item, tierResizeState);
                 }
 
-                if (item && UI.isCollapsedTile(card) && UI.shouldSnapPanelExpand(rect.w, rect.h, tileSize)) {
-                    if (isFloat) {
-                        UI.updateColumnsFloatCard(card, item, { expanded: true, dimensions: { w: rect.w, h: rect.h } });
-                    } else {
-                        UI.updateColumnNoteCard(card, item, { expanded: true, dimensions: { w: rect.w, h: rect.h } });
-                    }
-                } else if (isFloat) {
+                if (isFloat) {
                     UI.saveColumnsFloatPosition(card.dataset.id, rect.x, rect.y);
-                    UI.saveColumnsFloatSize(card.dataset.id, rect.w, rect.h);
-                    if (item && tierResizeState) {
-                        const sizes = UI.getColumnsFloatSizes();
-                        sizes[card.dataset.id] = {
-                            w: Math.round(rect.w),
-                            h: Math.round(rect.h),
-                            customCompact: UI.isCustomTileRect(rect.w, rect.h, tileSize)
-                        };
-                        localStorage.setItem('matrix_columns_float_sizes', JSON.stringify(sizes));
-                    }
+                    UI.saveColumnsFloatSize(card.dataset.id, rect.w, rect.h, {
+                        customCompact: UI.isCollapsedTile(card)
+                            && UI.isCustomTileRect(rect.w, rect.h, tileSize)
+                    });
                     UI.finalizeColumnsFloat(card);
                 } else {
                     const cat = card.dataset.category;
