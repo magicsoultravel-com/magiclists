@@ -1163,7 +1163,18 @@ export const UI = {
         if (size === 'compact') card.classList.add('compact');
     },
 
-    shouldSnapPanelCollapse(w, h, tileSize = LEGACY_TILE_SIZE) {
+    resolveExpandedDefaultRect(tileSize, saved = null) {
+        const tileDefault = this.getTileDefaultRect(tileSize);
+        return {
+            w: saved?.w ?? Math.max(FREEFORM_EXPANDED_W, tileDefault.w),
+            h: saved?.h ?? Math.max(FREEFORM_EXPANDED_DEFAULT_H, tileDefault.h)
+        };
+    },
+
+    shouldSnapPanelCollapse(w, h, tileSize = LEGACY_TILE_SIZE, { isExpanded = false } = {}) {
+        if (isExpanded) {
+            return w < this.cellsToSpanW(2) || h < this.cellsToSpanH(2);
+        }
         const size = normalizeTileSize(tileSize);
         if (size === 'note') {
             const def = this.getTileDefaultRect('note');
@@ -1483,11 +1494,14 @@ export const UI = {
             ? { x: savedRect.x, y: savedRect.y, w: savedRect.w, h: savedRect.h }
             : this.readNoteRect(card);
         if (isExpanded) {
-            if (base.w >= this.cellsToSpanW(2) && base.h >= this.cellsToSpanH(2)) return base;
+            const item = this.resolveBoardItem(card.dataset.id);
+            const tileSize = this.getCardTileSize(card, item);
+            const expandedMin = this.resolveExpandedDefaultRect(tileSize, savedRect);
+            if (base.w >= expandedMin.w && base.h >= expandedMin.h) return base;
             return {
                 ...base,
-                w: this.cellsToSpanW(2),
-                h: this.cellsToSpanH(2)
+                w: expandedMin.w,
+                h: expandedMin.h
             };
         }
         const item = this.resolveBoardItem(card.dataset.id);
@@ -2325,8 +2339,9 @@ export const UI = {
         let w;
         let h;
         if (isExpanded) {
-            w = saved?.w ?? FREEFORM_EXPANDED_W;
-            h = saved?.h ?? FREEFORM_EXPANDED_DEFAULT_H;
+            const expanded = this.resolveExpandedDefaultRect(tileSize, saved);
+            w = expanded.w;
+            h = expanded.h;
         } else if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) {
             w = saved.w;
             h = saved.h;
@@ -2511,26 +2526,27 @@ export const UI = {
 
     resolveAnimExpandedWidth(card, item) {
         const id = card.dataset?.id || item?.id;
+        const tileSize = this.getCardTileSize(card, item);
         if (card.dataset.freeform === '1' && id) {
             const saved = this.getFreeformSizes()[id];
             if (saved?.customCompact) return FREEFORM_EXPANDED_W;
-            return saved?.w ?? FREEFORM_EXPANDED_W;
+            return this.resolveExpandedDefaultRect(tileSize, saved).w;
         }
         if (card.dataset.columnsFloat === '1' && id) {
             const saved = this.getColumnsFloatSizes()[id];
             if (saved?.customCompact) return FREEFORM_EXPANDED_W;
-            return saved?.w ?? FREEFORM_EXPANDED_W;
+            return this.resolveExpandedDefaultRect(tileSize, saved).w;
         }
         if (card.dataset.gridBoard === '1' && id) {
             const saved = this.getGridLayout()[id];
             if (saved && Number.isFinite(saved.w)) return saved.w;
-            return this.cellsToSpanW(2);
+            return this.resolveExpandedDefaultRect(tileSize).w;
         }
         if (card.dataset.columnNote === '1' && id) {
             const cat = card.dataset.category;
             const saved = cat ? this.getColumnNoteLayout()[cat]?.[id] : null;
             if (saved?.w) return saved.w;
-            return this.cellsToSpanW(COLUMN_MIN_COLS);
+            return this.resolveExpandedDefaultRect(tileSize, saved).w;
         }
         if (this.isListLayoutCard(card)) return FREEFORM_EXPANDED_W;
         return Math.round(this.readNoteRect(card).w) || FREEFORM_EXPANDED_W;
@@ -2573,23 +2589,26 @@ export const UI = {
     measureAnimTargetSize(card, item) {
         const w = this.resolveAnimExpandedWidth(card, item);
         const id = item?.id || card.dataset?.id;
+        const tileSize = this.getCardTileSize(card, item);
         let h;
 
         if (card.dataset.freeform === '1') {
             const saved = this.getFreeformSizes()[id];
             if (saved?.customCompact) h = FREEFORM_EXPANDED_DEFAULT_H;
-            else h = saved?.h ?? FREEFORM_EXPANDED_DEFAULT_H;
+            else h = this.resolveExpandedDefaultRect(tileSize, saved).h;
         } else if (card.dataset.columnsFloat === '1') {
             const saved = this.getColumnsFloatSizes()[id];
             if (saved?.customCompact) h = FREEFORM_EXPANDED_DEFAULT_H;
-            else h = saved?.h ?? FREEFORM_EXPANDED_DEFAULT_H;
+            else h = this.resolveExpandedDefaultRect(tileSize, saved).h;
         } else if (card.dataset.gridBoard === '1') {
             const saved = this.getGridLayout()[id];
-            h = saved && Number.isFinite(saved.h) ? saved.h : this.cellsToSpanH(2);
+            h = saved && Number.isFinite(saved.h)
+                ? saved.h
+                : this.resolveExpandedDefaultRect(tileSize).h;
         } else if (card.dataset.columnNote === '1') {
             const cat = card.dataset.category;
             const saved = cat ? this.getColumnNoteLayout()[cat]?.[id] : null;
-            h = saved?.h ?? this.cellsToSpanH(2);
+            h = saved?.h ?? this.resolveExpandedDefaultRect(tileSize, saved).h;
         } else {
             h = this.measureExpandedCardHeight(card, w);
         }
@@ -3676,14 +3695,6 @@ export const UI = {
         if (header) this.attachNoteBodyInteractions(header, item, interactionOptions);
         if (body) this.attachNoteBodyInteractions(body, item, interactionOptions);
 
-        if (stopMousedownPropagation && !shell.dataset.shellDragBound) {
-            shell.dataset.shellDragBound = '1';
-            shell.addEventListener('mousedown', (e) => {
-                if (e.button !== 0) return;
-                e.stopPropagation();
-            }, true);
-        }
-
         shell.querySelectorAll('.card-inline-edit').forEach((el) => {
             el.addEventListener('input', () => this.updateNoteMetaStats(shell, item));
         });
@@ -4396,7 +4407,7 @@ export const UI = {
                     if (document.activeElement !== el) {
                         this.focusInlineEdit(el, 'end');
                     }
-                });
+                }, !!stopMousedownPropagation);
                 el.addEventListener('focus', () => {
                     const card = root.closest('.mini-card');
                     if (card?.dataset.freeform === '1') this.raiseFreeformCard(card);

@@ -77,7 +77,7 @@ function finishSnapPanelGesture(card, {
     if (item && tierResizeState && UI.isCollapsedTile(card)) {
         tileSize = UI.commitTierResize(card, item, tierResizeState);
     }
-    if (item && card.classList.contains('expanded') && UI.shouldSnapPanelCollapse(rect.w, rect.h, tileSize)) {
+    if (item && card.classList.contains('expanded') && UI.shouldSnapPanelCollapse(rect.w, rect.h, tileSize, { isExpanded: true })) {
         onCollapseFromResize(card, item, rect, { animate, bounds });
         cleanupActive?.();
         return;
