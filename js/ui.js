@@ -74,6 +74,22 @@ const GRID_EXPANDED_KEY = 'matrix_grid_expanded_id';
 const CARD_ANIM_MS = 300;
 const CARD_COMPACT_H = 56;
 
+export const TILE_LABEL_H = 28;
+export const TILE_NOTE_W_CELLS = 2.5;
+export const TILE_NOTE_H_CELLS = 5;
+export const TILE_SIZES = ['label', 'compact', 'note'];
+export const DEFAULT_TILE_SIZE = 'note';
+export const LEGACY_TILE_SIZE = 'compact';
+
+export function normalizeTileSize(tileSize) {
+    if (tileSize === 'label' || tileSize === 'compact' || tileSize === 'note') return tileSize;
+    return LEGACY_TILE_SIZE;
+}
+
+export function resolveTileSize(item) {
+    return normalizeTileSize(item?.tileSize);
+}
+
 const cardAnimSessions = new WeakMap();
 
 export function cardAnimationsEnabled() {
@@ -278,7 +294,8 @@ export function normalizeItemForSave(item, { preserveEmptySteps = false } = {}) 
         steps,
         type: steps.length > 0 ? 'checklist' : 'note',
         title: hasTitle ? item.title : deriveNoteTitle({ content, steps }),
-        startDateTime
+        startDateTime,
+        tileSize: normalizeTileSize(item.tileSize)
     };
 }
 
@@ -1098,11 +1115,56 @@ export const UI = {
         return w > COLUMN_GRID_CELL_W + 2 || h > COLUMN_GRID_CELL_H + 2;
     },
 
-    shouldSnapPanelExpand(w, h) {
+    isCustomTileRect(w, h, tileSize = LEGACY_TILE_SIZE) {
+        const def = this.getTileDefaultRect(tileSize);
+        return w > def.w + 2 || h > def.h + 2;
+    },
+
+    getTileDefaultRect(tileSize) {
+        const size = normalizeTileSize(tileSize);
+        if (size === 'label') {
+            return { w: COLUMN_GRID_CELL_W, h: TILE_LABEL_H };
+        }
+        if (size === 'note') {
+            return {
+                w: this.cellsToSpanW(TILE_NOTE_W_CELLS),
+                h: this.cellsToSpanH(TILE_NOTE_H_CELLS)
+            };
+        }
+        return { w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H };
+    },
+
+    getCardTileSize(card, item = null) {
+        const resolved = item || this.resolveBoardItem(card?.dataset?.id);
+        return resolveTileSize(resolved);
+    },
+
+    isCollapsedTile(card) {
+        return !!card && !card.classList.contains('expanded');
+    },
+
+    applyCollapsedTileClasses(card, tileSize) {
+        card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note');
+        const size = normalizeTileSize(tileSize);
+        card.classList.add(`tile-${size}`);
+        if (size === 'compact') card.classList.add('compact');
+    },
+
+    shouldSnapPanelExpand(w, h, tileSize = LEGACY_TILE_SIZE) {
+        const size = normalizeTileSize(tileSize);
+        if (size === 'note') {
+            const def = this.getTileDefaultRect('note');
+            return w >= def.w && h >= def.h;
+        }
         return w >= this.cellsToSpanW(2) && h >= this.cellsToSpanH(2);
     },
 
-    shouldSnapPanelCollapse(w, h) {
+    shouldSnapPanelCollapse(w, h, tileSize = LEGACY_TILE_SIZE) {
+        const size = normalizeTileSize(tileSize);
+        if (size === 'note') {
+            const def = this.getTileDefaultRect('note');
+            return w < def.w || h < def.h;
+        }
         return w < this.cellsToSpanW(2) || h < this.cellsToSpanH(2);
     },
 
@@ -1117,8 +1179,7 @@ export const UI = {
         }
         this.cancelCardAnimation(card);
         card.classList.remove('expanded', 'card-state-changing', 'card-animating');
-        card.classList.add('compact');
-        this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
+        this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
         if (card.dataset.gridBoard === '1') {
             this.finalizeGridBoardCard(card);
         } else if (card.dataset.columnNote === '1') {
@@ -1139,23 +1200,25 @@ export const UI = {
                 h: this.cellsToSpanH(2)
             };
         }
-        return this.gridCompactRect(base, savedRect);
+        const item = this.resolveBoardItem(card.dataset.id);
+        return this.gridTileRect(this.getCardTileSize(card, item), base, savedRect);
     },
 
     columnNoteRectForCard(card, savedRect, isExpanded) {
         return this.gridBoardRectForCard(card, savedRect, isExpanded);
     },
 
-    gridCompactRect(base, saved) {
+    gridTileRect(tileSize, base, saved) {
         const source = saved && Number.isFinite(saved.w) ? saved : base;
-        if (source?.customCompact && this.isGridMultiCellSize(source.w, source.h)) {
+        if (source?.customCompact && this.isCustomTileRect(source.w, source.h, tileSize)) {
             return { ...base, w: source.w, h: source.h };
         }
-        return {
-            ...base,
-            w: COLUMN_GRID_CELL_W,
-            h: COLUMN_GRID_CELL_H
-        };
+        const defaults = this.getTileDefaultRect(tileSize);
+        return { ...base, w: defaults.w, h: defaults.h };
+    },
+
+    gridCompactRect(base, saved, tileSize = LEGACY_TILE_SIZE) {
+        return this.gridTileRect(tileSize, base, saved);
     },
 
     syncCardDraggable(card) {
@@ -1211,7 +1274,7 @@ export const UI = {
         if (card.classList.contains('expanded')) {
             this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
         } else {
-            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
+            this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
         }
         this.applyItemCardTheme(card, item);
         card.style.borderLeftColor = categoryColor;
@@ -1334,8 +1397,9 @@ export const UI = {
                             { maxW: packW, maxH }
                         );
                     } else {
-                        const w = isExpanded ? this.cellsToSpanW(2) : COLUMN_GRID_CELL_W;
-                        const h = isExpanded ? this.cellsToSpanH(2) : COLUMN_GRID_CELL_H;
+                        const tileDefaults = this.getTileDefaultRect(resolveTileSize(item));
+                        const w = isExpanded ? this.cellsToSpanW(2) : tileDefaults.w;
+                        const h = isExpanded ? this.cellsToSpanH(2) : tileDefaults.h;
                         rect = this.findFirstCanvasSlot(w, h, placed, packW + origin * 2, { origin });
                     }
 
@@ -1958,14 +2022,20 @@ export const UI = {
         if (card.dataset.freeform !== '1') return;
         const saved = this.getFreeformSizes()[card.dataset.id];
         const isExpanded = card.classList.contains('expanded');
+        const item = this.resolveBoardItem(card.dataset.id);
+        const tileSize = this.getCardTileSize(card, item);
         let w;
         let h;
         if (isExpanded) {
             w = saved?.w ?? FREEFORM_EXPANDED_W;
             h = saved?.h ?? FREEFORM_EXPANDED_DEFAULT_H;
+        } else if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) {
+            w = saved.w;
+            h = saved.h;
         } else {
-            w = FREEFORM_DEFAULT_W;
-            h = FREEFORM_DEFAULT_H;
+            const defaults = this.getTileDefaultRect(tileSize);
+            w = defaults.w;
+            h = defaults.h;
         }
         this.applyFreeformDimensions(card, w, h);
     },
@@ -2026,7 +2096,7 @@ export const UI = {
         if (!expanded) {
             const pos = this.readNoteRect(card);
             const saved = this.getGridLayout()[item.id];
-            const compact = this.gridCompactRect(pos, saved);
+            const compact = this.gridTileRect(resolveTileSize(item), pos, saved);
             const compactRect = {
                 x: pos.x,
                 y: pos.y,
@@ -2035,7 +2105,7 @@ export const UI = {
             };
             this.applyNoteRect(card, compactRect, { settling: false });
             this.saveGridLayout(item.id, compactRect, {
-                customCompact: this.isGridMultiCellSize(compactRect.w, compactRect.h)
+                customCompact: this.isCustomTileRect(compactRect.w, compactRect.h, resolveTileSize(item))
             });
         }
 
@@ -2113,25 +2183,32 @@ export const UI = {
 
     resolveAnimCompactWidth(card) {
         const id = card.dataset?.id;
-        if (card.dataset.freeform === '1') return FREEFORM_DEFAULT_W;
-        if (card.dataset.columnsFloat === '1') return FREEFORM_DEFAULT_W;
+        const item = this.resolveBoardItem(id);
+        const tileSize = this.getCardTileSize(card, item);
+        const tileDefaultW = this.getTileDefaultRect(tileSize).w;
+        if (card.dataset.freeform === '1') {
+            const saved = id ? this.getFreeformSizes()[id] : null;
+            if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) return saved.w;
+            return tileDefaultW;
+        }
+        if (card.dataset.columnsFloat === '1') return tileDefaultW;
         if (card.dataset.gridBoard === '1' && id) {
             const saved = this.getGridLayout()[id];
-            if (saved?.customCompact && this.isGridMultiCellSize(saved.w, saved.h)) {
+            if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) {
                 return saved.w;
             }
-            return COLUMN_GRID_CELL_W;
+            return tileDefaultW;
         }
         if (card.dataset.columnNote === '1' && id) {
             const cat = card.dataset.category;
             const saved = cat ? this.getColumnNoteLayout()[cat]?.[id] : null;
-            if (saved?.customCompact && this.isGridMultiCellSize(saved.w, saved.h)) {
+            if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) {
                 return saved.w;
             }
-            return COLUMN_GRID_CELL_W;
+            return tileDefaultW;
         }
-        if (this.isListLayoutCard(card)) return FREEFORM_DEFAULT_W;
-        return Math.round(this.readNoteRect(card).w) || FREEFORM_DEFAULT_W;
+        if (this.isListLayoutCard(card)) return tileDefaultW;
+        return Math.round(this.readNoteRect(card).w) || tileDefaultW;
     },
 
     resolveAnimExpandedWidth(card, item) {
@@ -2160,9 +2237,13 @@ export const UI = {
     },
 
     resolveAnimCompactHeight(card) {
+        const item = this.resolveBoardItem(card.dataset?.id);
+        const tileSize = this.getCardTileSize(card, item);
+        const tileDefaultH = this.getTileDefaultRect(tileSize).h;
         if (card.dataset.gridBoard === '1') {
             const saved = this.getGridLayout()[card.dataset.id];
-            const compact = this.gridCompactRect(
+            const compact = this.gridTileRect(
+                tileSize,
                 { x: 0, y: 0, w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H },
                 saved
             );
@@ -2171,15 +2252,22 @@ export const UI = {
         if (card.dataset.columnNote === '1') {
             const cat = card.dataset.category;
             const saved = cat ? this.getColumnNoteLayout()[cat]?.[card.dataset.id] : null;
-            const compact = this.gridCompactRect(
+            const compact = this.gridTileRect(
+                tileSize,
                 { x: 0, y: 0, w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H },
                 saved
             );
             return compact.h;
         }
-        if (card.dataset.freeform === '1' || card.dataset.columnsFloat === '1') return FREEFORM_DEFAULT_H;
-        if (this.isListLayoutCard(card)) return CARD_COMPACT_H;
-        return CARD_COMPACT_H;
+        if (card.dataset.freeform === '1' || card.dataset.columnsFloat === '1') {
+            const saved = card.dataset.freeform === '1'
+                ? this.getFreeformSizes()[card.dataset.id]
+                : this.getColumnsFloatSizes()[card.dataset.id];
+            if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) return saved.h;
+            return tileDefaultH;
+        }
+        if (this.isListLayoutCard(card)) return tileDefaultH;
+        return tileDefaultH;
     },
 
     measureAnimTargetSize(card, item) {
@@ -2322,8 +2410,7 @@ export const UI = {
 
         const finishCollapse = () => {
             card.classList.remove('expanded');
-            card.classList.add('compact');
-            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
+            this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
             if (isFreeform) this.applyFreeformSize(card);
             if (isGridBoard) {
                 this.applyGridBoardSize(card);
@@ -2337,7 +2424,7 @@ export const UI = {
 
         if (expanded) {
             if (!animate) {
-                card.classList.remove('compact');
+                card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note');
                 card.classList.add('expanded');
                 this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
                 finishExpand();
@@ -2353,7 +2440,7 @@ export const UI = {
 
             this.lockCardAnimationDimensions(card, compactW, compactH);
 
-            card.classList.remove('compact');
+            card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note');
             card.classList.add('expanded');
             this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
 
@@ -2449,12 +2536,12 @@ export const UI = {
             const pos = this.readNoteRect(card);
             const cat = card.dataset.category || targetCatName;
             const saved = cat ? this.getColumnNoteLayout()[cat]?.[item.id] : null;
-            const compact = this.gridCompactRect(pos, saved);
+            const compact = this.gridTileRect(resolveTileSize(item), pos, saved);
             const compactRect = { x: pos.x, y: pos.y, w: compact.w, h: compact.h };
             this.applyNoteRect(card, compactRect, { settling: false });
             if (cat) {
                 this.saveColumnNoteLayout(cat, item.id, compactRect, {
-                    customCompact: this.isGridMultiCellSize(compactRect.w, compactRect.h)
+                    customCompact: this.isCustomTileRect(compactRect.w, compactRect.h, resolveTileSize(item))
                 });
             }
         }
@@ -2516,8 +2603,7 @@ export const UI = {
     createCardComponent(item, activeCategories, { freeform = false, gridBoard = false, columnNote = false, columnsFloat = false, categoryName = '' } = {}) {
         const card = document.createElement('div');
         card.classList.add('mini-card');
-        card.classList.add('compact');
-        
+
         card.dataset.id = item.id;
         if (freeform) card.dataset.freeform = '1';
         if (gridBoard) card.dataset.gridBoard = '1';
@@ -2539,13 +2625,12 @@ export const UI = {
             : getExpandedCards(activeBoardViewMode)[item.id] === true;
 
         if (isExpanded) {
-            card.classList.remove('compact');
+            card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note');
             card.classList.add('expanded');
             this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
         } else {
-            card.classList.add('compact');
             card.classList.remove('expanded');
-            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
+            this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
         }
 
         if (freeform) {
@@ -3339,24 +3424,13 @@ export const UI = {
         this.bindCollapsable('config-section-header', 'config-section', true);
     },
 
-    renderCompactCard(card, item, activeCategories, targetCatName, categoryColor) {
-        card.classList.remove('note-surface');
-        const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
-        const isExpanded = false;
-        const dragZone = this.freeformDragZoneClass(card);
-        const catDragHandle = this.buildCategoryDragHandleHtml(card);
-        card.innerHTML = `
-            <div class="card-header${dragZone}">
-                ${catDragHandle}
-                ${this.buildNoteTitleHtml(item, false)}
-                ${this.buildCardActionsHtml(item, isExpanded, this.getCardActionsOptions(card))}
-            </div>
-            <div class="mini-card-meta compact${dragZone}">
-                <span class="badge-dot" style="background-color: ${dotColor};" title="${this.escapeAttr(targetCatName || 'Uncategorized')}"></span>
-                ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
-            </div>
-        `;
+    buildCollapsedPreviewHtml(item) {
+        const body = this.buildNoteBodyHtml(item, { canEdit: false });
+        if (!body.trim()) return '';
+        return `<div class="card-body tile-preview">${body}</div>`;
+    },
 
+    finalizeCollapsedCard(card, item, activeCategories, targetCatName, categoryColor) {
         this.attachCardActions(card, item, {
             activeCategories,
             targetCatName,
@@ -3372,6 +3446,76 @@ export const UI = {
         }
         this.syncCardDraggable(card);
         this.syncBoardPinClass(card);
+    },
+
+    renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor) {
+        const tileSize = resolveTileSize(item);
+        this.applyCollapsedTileClasses(card, tileSize);
+        if (tileSize === 'label') {
+            this.renderLabelCard(card, item, activeCategories, targetCatName, categoryColor);
+        } else if (tileSize === 'note') {
+            this.renderNoteCard(card, item, activeCategories, targetCatName, categoryColor);
+        } else {
+            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
+        }
+    },
+
+    renderLabelCard(card, item, activeCategories, targetCatName, categoryColor) {
+        card.classList.remove('note-surface');
+        const dragZone = this.freeformDragZoneClass(card);
+        const catDragHandle = this.buildCategoryDragHandleHtml(card);
+        card.innerHTML = `
+            <div class="card-header tile-label-header${dragZone}">
+                ${catDragHandle}
+                ${this.buildNoteTitleHtml(item, false)}
+                ${this.buildCardActionsHtml(item, false, this.getCardActionsOptions(card))}
+            </div>
+        `;
+        this.finalizeCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
+    },
+
+    renderNoteCard(card, item, activeCategories, targetCatName, categoryColor) {
+        card.classList.remove('note-surface');
+        const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
+        const dragZone = this.freeformDragZoneClass(card);
+        const catDragHandle = this.buildCategoryDragHandleHtml(card);
+        const previewHtml = this.buildCollapsedPreviewHtml(item);
+        card.innerHTML = `
+            <div class="card-header${dragZone}">
+                ${catDragHandle}
+                ${this.buildNoteTitleHtml(item, false)}
+                ${this.buildCardActionsHtml(item, false, this.getCardActionsOptions(card))}
+            </div>
+            <div class="mini-card-meta compact${dragZone}">
+                <span class="badge-dot" style="background-color: ${dotColor};" title="${this.escapeAttr(targetCatName || 'Uncategorized')}"></span>
+                ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
+            </div>
+            ${previewHtml}
+        `;
+        this.finalizeCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
+    },
+
+    renderCompactCard(card, item, activeCategories, targetCatName, categoryColor) {
+        card.classList.remove('note-surface');
+        const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
+        const isExpanded = false;
+        const dragZone = this.freeformDragZoneClass(card);
+        const catDragHandle = this.buildCategoryDragHandleHtml(card);
+        const previewHtml = this.buildCollapsedPreviewHtml(item);
+        card.innerHTML = `
+            <div class="card-header${dragZone}">
+                ${catDragHandle}
+                ${this.buildNoteTitleHtml(item, false)}
+                ${this.buildCardActionsHtml(item, isExpanded, this.getCardActionsOptions(card))}
+            </div>
+            <div class="mini-card-meta compact${dragZone}">
+                <span class="badge-dot" style="background-color: ${dotColor};" title="${this.escapeAttr(targetCatName || 'Uncategorized')}"></span>
+                ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
+            </div>
+            ${previewHtml}
+        `;
+
+        this.finalizeCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
     },
 
     canEditInline() {
@@ -4829,7 +4973,9 @@ export const UI = {
         let w;
         let h;
         if (!isExpanded) {
-            const compact = this.gridCompactRect(
+            const item = this.resolveBoardItem(card.dataset.id);
+            const compact = this.gridTileRect(
+                this.getCardTileSize(card, item),
                 { x: 0, y: 0, w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H },
                 saved
             );
@@ -5047,9 +5193,11 @@ export const UI = {
             this.applyNoteRect(card, rect, { settling: animate });
             card.classList.toggle('layout-preview', preview);
             if (save && categoryName) {
+                const layoutItem = this.resolveBoardItem(id);
+                const tileSize = this.getCardTileSize(card, layoutItem);
                 this.saveColumnNoteLayout(categoryName, id, rect, {
-                    customCompact: card.classList.contains('compact')
-                        && this.isGridMultiCellSize(rect.w, rect.h)
+                    customCompact: this.isCollapsedTile(card)
+                        && this.isCustomTileRect(rect.w, rect.h, tileSize)
                 });
             }
             placed.push(rect);
@@ -5084,9 +5232,11 @@ export const UI = {
             this.applyNoteRect(card, rect, { settling: animate });
             card.classList.toggle('layout-preview', preview);
             if (save) {
+                const layoutItem = this.resolveBoardItem(id);
+                const tileSize = this.getCardTileSize(card, layoutItem);
                 this.saveGridLayout(id, rect, {
-                    customCompact: !card.classList.contains('expanded')
-                        && this.isGridMultiCellSize(rect.w, rect.h)
+                    customCompact: this.isCollapsedTile(card)
+                        && this.isCustomTileRect(rect.w, rect.h, tileSize)
                 });
             }
             placed.push(rect);
@@ -5535,12 +5685,12 @@ export const UI = {
 
     cellsToSpanW(cells) {
         const n = Math.max(1, cells);
-        return n * COLUMN_GRID_CELL_W + (n - 1) * COLUMN_GRID_GAP;
+        return Math.round(n * COLUMN_GRID_CELL_W + (n - 1) * COLUMN_GRID_GAP);
     },
 
     cellsToSpanH(cells) {
         const n = Math.max(1, cells);
-        return n * COLUMN_GRID_CELL_H + (n - 1) * COLUMN_GRID_GAP;
+        return Math.round(n * COLUMN_GRID_CELL_H + (n - 1) * COLUMN_GRID_GAP);
     },
 
     spanToCellsW(span) {
@@ -5857,8 +6007,10 @@ export const UI = {
                 rowMaxH = COLUMN_GRID_CELL_H;
                 rowX = 0;
             } else {
-                const w = COLUMN_GRID_CELL_W;
-                const h = COLUMN_GRID_CELL_H;
+                const item = this.resolveBoardItem(itemId);
+                const defaults = this.getTileDefaultRect(resolveTileSize(item));
+                const w = Math.min(defaults.w, innerW);
+                const h = defaults.h;
                 if (rowX + w > innerW + 1) {
                     rowY += rowMaxH + COLUMN_GRID_GAP;
                     rowX = 0;
@@ -5991,11 +6143,16 @@ export const UI = {
         const saved = this.getColumnNoteLayout()[categoryName]?.[card.dataset.id];
         const isExpanded = card.classList.contains('expanded');
         if (!isExpanded) {
-            const compact = this.gridCompactRect(
+            const item = this.resolveBoardItem(card.dataset.id);
+            const columnNotesEl = card.closest('.column-notes');
+            const innerW = columnNotesEl ? this.getColumnNotesInnerWidth(columnNotesEl) : null;
+            const compact = this.gridTileRect(
+                this.getCardTileSize(card, item),
                 { x: 0, y: 0, w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H },
                 saved
             );
-            this.applyFreeformDimensions(card, compact.w, compact.h);
+            const w = innerW ? Math.min(compact.w, innerW) : compact.w;
+            this.applyFreeformDimensions(card, w, compact.h);
         } else if (saved?.w && saved?.h) {
             this.applyFreeformDimensions(card, saved.w, saved.h);
         } else {

@@ -72,20 +72,21 @@ function finishSnapPanelGesture(card, {
     UI.applyNoteRect(card, rect, { settling: animate });
 
     const item = currentItems.find((i) => i.id === card.dataset.id);
-    if (item && card.classList.contains('compact') && UI.shouldSnapPanelExpand(rect.w, rect.h)) {
+    const tileSize = item ? UI.getCardTileSize(card, item) : 'compact';
+    if (item && UI.isCollapsedTile(card) && UI.shouldSnapPanelExpand(rect.w, rect.h, tileSize)) {
         saveLayout(card, rect, { customCompact: false });
         onExpandFromResize(card, item, rect, { animate, bounds });
         cleanupActive?.();
         return;
     }
-    if (item && card.classList.contains('expanded') && UI.shouldSnapPanelCollapse(rect.w, rect.h)) {
+    if (item && card.classList.contains('expanded') && UI.shouldSnapPanelCollapse(rect.w, rect.h, tileSize)) {
         onCollapseFromResize(card, item, rect, { animate, bounds });
         cleanupActive?.();
         return;
     }
 
     saveLayout(card, rect, {
-        customCompact: card.classList.contains('compact') && UI.isGridMultiCellSize(rect.w, rect.h)
+        customCompact: UI.isCollapsedTile(card) && UI.isCustomTileRect(rect.w, rect.h, tileSize)
     });
     reflow(card, { animate });
     cleanupActive?.();
@@ -549,7 +550,7 @@ export const DragDropEngine = {
                     e.stopPropagation();
                     UI.cancelCardAnimation(card);
                     let { w: startW, h: startH } = UI.readFreeformCardSize(card);
-                    if (card.classList.contains('compact')) {
+                    if (UI.isCollapsedTile(card)) {
                         const itemMatch = currentItems.find(i => i.id === card.dataset.id);
                         if (itemMatch) {
                             UI.updateFreeformCard(card, itemMatch, {
@@ -629,14 +630,15 @@ export const DragDropEngine = {
             },
             onCollapseFromResize: (card, item, rect, { animate, bounds }) => {
                 UI.collapseSnapPanelCard(card, item);
-                const compact = UI.gridCompactRect(rect, { ...rect, customCompact: true });
+                const tileSize = UI.getCardTileSize(card, item);
+                const compact = UI.gridTileRect(tileSize, rect, { ...rect, customCompact: true });
                 const finalRect = UI.snapNoteRect(
                     { ...compact, x: rect.x, y: rect.y },
                     { maxW: bounds.packW, maxH: bounds.maxH }
                 );
                 UI.applyNoteRect(card, finalRect, { settling: animate });
                 UI.saveGridLayout(card.dataset.id, finalRect, {
-                    customCompact: UI.isGridMultiCellSize(finalRect.w, finalRect.h)
+                    customCompact: UI.isCustomTileRect(finalRect.w, finalRect.h, tileSize)
                 });
                 UI.reflowGridBoard(canvas, card.dataset.id, { animate });
             }
@@ -671,7 +673,8 @@ export const DragDropEngine = {
             onCollapseFromResize: (card, item, rect, { animate, bounds }) => {
                 const cat = card.dataset.category || columnNotesEl.dataset.category;
                 UI.collapseSnapPanelCard(card, item);
-                const compact = UI.gridCompactRect(rect, { ...rect, customCompact: true });
+                const tileSize = UI.getCardTileSize(card, item);
+                const compact = UI.gridTileRect(tileSize, rect, { ...rect, customCompact: true });
                 const finalRect = UI.snapNoteRect(
                     { ...compact, x: rect.x, y: rect.y },
                     { maxW: bounds.packW, maxH: bounds.maxH }
@@ -679,7 +682,7 @@ export const DragDropEngine = {
                 UI.applyNoteRect(card, finalRect, { settling: animate });
                 if (cat) {
                     UI.saveColumnNoteLayout(cat, card.dataset.id, finalRect, {
-                        customCompact: UI.isGridMultiCellSize(finalRect.w, finalRect.h)
+                        customCompact: UI.isCustomTileRect(finalRect.w, finalRect.h, tileSize)
                     });
                 }
                 UI.reflowColumnNotesPanel(columnNotesEl, card.dataset.id, { animate });
@@ -1127,7 +1130,7 @@ export const DragDropEngine = {
                 const isFloat = card.dataset.columnsFloat === '1';
                 let { w: startW, h: startH } = UI.readFreeformCardSize(card);
 
-                if (card.classList.contains('compact')) {
+                if (UI.isCollapsedTile(card)) {
                     const itemMatch = currentItems.find(i => i.id === card.dataset.id);
                     if (itemMatch && isFloat) {
                         UI.updateColumnsFloatCard(card, itemMatch, {

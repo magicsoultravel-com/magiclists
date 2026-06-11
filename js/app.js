@@ -945,7 +945,8 @@ class Application {
                 hideFromCalendar: false,
                 hiddenFromBoard: false,
                 steps: [],
-                editorBodyLayout: 'content'
+                editorBodyLayout: 'content',
+                tileSize: 'note'
             };
             Editor.open(newItem, AppState.categories);
         });

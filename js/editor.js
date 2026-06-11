@@ -80,7 +80,8 @@ export const Editor = {
             hiddenFromBoard: false,
             attachments: [],
             steps: [],
-            editorBodyLayout: 'both'
+            editorBodyLayout: 'both',
+            tileSize: 'note'
         };
         if (!this.activeItem.editorBodyLayout) {
             this.activeItem.editorBodyLayout = 'both';

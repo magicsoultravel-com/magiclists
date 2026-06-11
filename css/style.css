@@ -1786,7 +1786,13 @@ html[data-note-font="kalam"] .mini-card .step-text {
 }
 
 #app-canvas.view-columns .column-notes .mini-card.compact,
-#app-canvas.view-columns > .mini-card.compact {
+#app-canvas.view-columns > .mini-card.compact,
+#app-canvas.view-columns .column-notes .mini-card.tile-label,
+#app-canvas.view-columns .column-notes .mini-card.tile-compact,
+#app-canvas.view-columns .column-notes .mini-card.tile-note,
+#app-canvas.view-columns > .mini-card.tile-label,
+#app-canvas.view-columns > .mini-card.tile-compact,
+#app-canvas.view-columns > .mini-card.tile-note {
     min-height: unset !important;
     max-height: none !important;
     overflow: hidden !important;
@@ -1955,6 +1961,107 @@ html[data-note-font="kalam"] .mini-card .step-text {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+/* Collapsed tile tiers */
+.mini-card.tile-label {
+    padding: 0.15rem 0.38rem !important;
+    height: 28px !important;
+    min-height: 28px !important;
+    max-height: 28px !important;
+    overflow: hidden !important;
+    width: 96px !important;
+    box-sizing: border-box;
+}
+
+.mini-card.tile-label .tile-label-header {
+    min-height: 0;
+}
+
+.mini-card.tile-label .mini-card-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.72rem;
+    line-height: 1.2;
+}
+
+.mini-card.tile-compact,
+.mini-card.compact.tile-compact {
+    padding: 0.3rem 0.38rem !important;
+    height: 56px !important;
+    min-height: 56px !important;
+    max-height: 56px !important;
+    overflow: hidden !important;
+    width: 96px !important;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+}
+
+.mini-card.tile-note {
+    padding: 0.38rem 0.45rem !important;
+    width: 246px !important;
+    height: 296px !important;
+    min-height: 296px !important;
+    max-height: 296px !important;
+    overflow: hidden !important;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.mini-card.tile-compact .tile-preview,
+.mini-card.compact .tile-preview,
+.mini-card.tile-note .tile-preview {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    font-size: 0.68rem;
+    line-height: 1.25;
+    opacity: 0.88;
+}
+
+.mini-card.tile-compact .tile-preview,
+.mini-card.compact .tile-preview {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+}
+
+.mini-card.tile-compact .tile-preview .card-content-preview,
+.mini-card.compact .tile-preview .card-content-preview,
+.mini-card.tile-compact .tile-preview .expanded-checklist,
+.mini-card.compact .tile-preview .expanded-checklist {
+    overflow: hidden;
+}
+
+.mini-card.tile-note .tile-preview {
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.mini-card.tile-note .tile-preview::-webkit-scrollbar {
+    width: 4px;
+}
+
+.mini-card.tile-note .tile-preview::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.22);
+    border-radius: 4px;
+}
+
+.mini-card.tile-label:hover,
+.mini-card.tile-label:focus-within,
+.mini-card.tile-compact:hover,
+.mini-card.tile-compact:focus-within,
+.mini-card.tile-note:hover,
+.mini-card.tile-note:focus-within {
+    overflow: visible !important;
+    z-index: 25;
 }
 
 .mini-card.expanded {
@@ -3937,6 +4044,25 @@ textarea.form-input {
     margin-top: auto;
 }
 
+#app-canvas.view-freeform .mini-card.tile-label {
+    width: 96px !important;
+    display: flex;
+    flex-direction: column;
+}
+
+#app-canvas.view-freeform .mini-card.tile-note {
+    width: 246px !important;
+    height: 296px !important;
+    display: flex;
+    flex-direction: column;
+}
+
+#app-canvas.view-freeform .mini-card.tile-compact {
+    width: 96px !important;
+    display: flex;
+    flex-direction: column;
+}
+
 /* Expanded freeform: fixed box from resize; inner content scrolls */
 #app-canvas.view-freeform .mini-card.expanded {
     display: flex !important;
@@ -4928,22 +5054,39 @@ textarea.form-input {
     cursor: grabbing;
 }
 
-#app-canvas.view-grid .mini-card.compact {
+#app-canvas.view-grid .mini-card.compact,
+#app-canvas.view-grid .mini-card.tile-label,
+#app-canvas.view-grid .mini-card.tile-compact,
+#app-canvas.view-grid .mini-card.tile-note {
     display: flex;
     flex-direction: column;
     width: auto !important;
     height: auto !important;
     min-width: 96px;
-    min-height: 56px;
+    min-height: 28px;
     max-width: none !important;
     max-height: none !important;
     overflow: hidden !important;
     box-sizing: border-box;
 }
 
+#app-canvas.view-grid .mini-card.tile-note {
+    min-width: 246px;
+    min-height: 296px;
+}
+
 #app-canvas.view-grid .mini-card.compact:hover,
 #app-canvas.view-grid .mini-card.compact:focus-within,
-#app-canvas.view-grid .mini-card.compact.is-grid-resizing {
+#app-canvas.view-grid .mini-card.compact.is-grid-resizing,
+#app-canvas.view-grid .mini-card.tile-label:hover,
+#app-canvas.view-grid .mini-card.tile-label:focus-within,
+#app-canvas.view-grid .mini-card.tile-label.is-grid-resizing,
+#app-canvas.view-grid .mini-card.tile-compact:hover,
+#app-canvas.view-grid .mini-card.tile-compact:focus-within,
+#app-canvas.view-grid .mini-card.tile-compact.is-grid-resizing,
+#app-canvas.view-grid .mini-card.tile-note:hover,
+#app-canvas.view-grid .mini-card.tile-note:focus-within,
+#app-canvas.view-grid .mini-card.tile-note.is-grid-resizing {
     overflow: visible !important;
     z-index: 25;
 }

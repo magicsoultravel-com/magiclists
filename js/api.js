@@ -1,5 +1,10 @@
 import { DEFAULT_CATEGORIES } from './categories.js';
 
+function normalizeItemTileSize(tileSize) {
+    if (tileSize === 'label' || tileSize === 'compact' || tileSize === 'note') return tileSize;
+    return 'compact';
+}
+
 const DEFAULT_DATABASE_SEED = {
     "auth": { "admin_token": "dev-admin-secret-2026" },
     "settings": { "categories": DEFAULT_CATEGORIES },
@@ -16,7 +21,8 @@ const DEFAULT_DATABASE_SEED = {
         "startDateTime": "",
         "endDateTime": "",
         "created_at": 1775080000,
-        "updated_at": 1775080000
+        "updated_at": 1775080000,
+        "tileSize": "compact"
     }]
 };
 
@@ -38,6 +44,13 @@ function repairDatabase(db) {
     if (!Array.isArray(repaired.items)) {
         repaired.items = [];
     }
+
+    repaired.items = repaired.items.map((item) => {
+        if (!item || typeof item !== 'object') return item;
+        const tileSize = item.tileSize ? normalizeItemTileSize(item.tileSize) : 'compact';
+        if (item.tileSize === tileSize) return item;
+        return { ...item, tileSize };
+    });
 
     return repaired;
 }
