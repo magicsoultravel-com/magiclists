@@ -57,18 +57,22 @@ export const UndoManager = {
     isApplying: false,
     undoBtn: null,
     redoBtn: null,
-    controlsEl: null,
 
     init(h = {}) {
         handlers = { ...handlers, ...h };
+        if (!this._keydownBound) {
+            document.addEventListener('keydown', (e) => this.handleKeydown(e));
+            this._keydownBound = true;
+        }
+        this.loadStacks();
+        this.rebindToolbar();
+    },
+
+    rebindToolbar() {
         this.undoBtn = document.getElementById('btn-undo');
         this.redoBtn = document.getElementById('btn-redo');
-        this.controlsEl = document.getElementById('history-controls');
-
         this.undoBtn?.addEventListener('click', () => this.undo());
         this.redoBtn?.addEventListener('click', () => this.redo());
-        document.addEventListener('keydown', (e) => this.handleKeydown(e));
-        this.loadStacks();
         this.updateToolbar();
     },
 
@@ -301,7 +305,8 @@ export const UndoManager = {
 
     updateToolbar() {
         const enabled = handlers.isEnabled();
-        this.controlsEl?.classList.toggle('is-hidden', !enabled);
+        this.undoBtn?.classList.toggle('is-hidden', !enabled);
+        this.redoBtn?.classList.toggle('is-hidden', !enabled);
         if (this.undoBtn) {
             this.undoBtn.disabled = !enabled || this.busy || this.undoStack.length === 0;
             this.undoBtn.title = this.undoStack.length

@@ -6,28 +6,45 @@ import { hasRichMarkup, stripRichText } from './richText.js';
 import { UndoManager } from './undo.js';
 
 const NOTES_LIST_SORT_KEY = 'matrix_notes_list_sort';
-const BRAND_TRANSITION_MS = 240;
+const SIDEBAR_SECTIONS_KEY = 'matrix_sidebar_sections';
+
+function readSidebarSections() {
+    try {
+        return JSON.parse(localStorage.getItem(SIDEBAR_SECTIONS_KEY) || '{}');
+    } catch {
+        return {};
+    }
+}
+
+function writeSidebarSection(sectionId, collapsed) {
+    const map = readSidebarSections();
+    if (collapsed) map[sectionId] = true;
+    else delete map[sectionId];
+    localStorage.setItem(SIDEBAR_SECTIONS_KEY, JSON.stringify(map));
+}
 
 export const SidePanel = {
     panel: null,
     toggleBtn: null,
+    toggleFab: null,
     appState: null,
     notesListSort: null,
     notesListSortBound: false,
-    brandAnim: null,
 
     init(appState) {
         this.appState = appState;
         this.panel = document.getElementById('side-panel');
         this.toggleBtn = document.getElementById('nav-panel-toggle');
+        this.toggleFab = document.getElementById('nav-panel-toggle-fab');
         this.notesListSort = this.readNotesListSort();
 
         const stored = localStorage.getItem('matrix_panel_collapsed');
-        const collapsed = stored === 'true';
+        const collapsed = stored === null ? true : stored === 'true';
         this.setCollapsed(collapsed, false);
         this.updateStorageFooter();
 
         this.toggleBtn?.addEventListener('click', () => this.toggle());
+        this.toggleFab?.addEventListener('click', () => this.toggle());
     },
 
     updateStorageFooter() {
@@ -44,100 +61,10 @@ export const SidePanel = {
         container.title = 'Notes: note content · Matrix: categories, layouts, view state · App: theme, tools, session';
     },
 
-    moveBrand(collapsed, { animate = true, fadeIn = false } = {}) {
-        const brandWrap = document.querySelector('.control-bar-brand');
-        const sidebarHost = document.getElementById('side-panel-brand-host');
-        const controlHost = document.getElementById('control-bar-brand-host');
-        if (!brandWrap || !sidebarHost || !controlHost) return;
-
-        const target = collapsed ? controlHost : sidebarHost;
-        const fromRect = animate ? brandWrap.getBoundingClientRect() : null;
-
-        sidebarHost.classList.toggle('is-visible', !collapsed);
-        controlHost.classList.toggle('is-visible', collapsed);
-
-        if (brandWrap.parentElement !== target) {
-            target.appendChild(brandWrap);
-        }
-
-        brandWrap.classList.toggle('is-in-sidebar', !collapsed);
-        brandWrap.classList.toggle('is-in-header', collapsed);
-
-        this.brandAnim?.cancel();
-        brandWrap.classList.remove('is-brand-animating', 'is-brand-fade-in');
-
-        if (fadeIn) {
-            brandWrap.classList.add('is-brand-fade-in');
-            const onFadeEnd = (e) => {
-                if (e.animationName !== 'control-bar-brand-fade-in') return;
-                brandWrap.classList.remove('is-brand-fade-in');
-                brandWrap.removeEventListener('animationend', onFadeEnd);
-            };
-            brandWrap.addEventListener('animationend', onFadeEnd);
-            return;
-        }
-
-        if (!animate || !fromRect) return;
-
-        const toRect = brandWrap.getBoundingClientRect();
-        const dx = fromRect.left - toRect.left;
-        const dy = fromRect.top - toRect.top;
-        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
-
-        brandWrap.classList.add('is-brand-animating');
-        this.brandAnim = brandWrap.animate(
-            [
-                { transform: `translate(${dx}px, ${dy}px)` },
-                { transform: 'translate(0, 0)' }
-            ],
-            {
-                duration: BRAND_TRANSITION_MS,
-                easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-                fill: 'none'
-            }
-        );
-        this.brandAnim.onfinish = () => {
-            brandWrap.classList.remove('is-brand-animating');
-            this.brandAnim = null;
-        };
-    },
-
-    finishOpenPanel() {
-        this.moveBrand(false, { animate: false, fadeIn: true });
-    },
-
-    setCollapsed(collapsed, animate = true) {
-        if (!collapsed && animate) {
-            this.panel?.classList.remove('is-collapsed');
-            this.toggleBtn?.setAttribute('aria-expanded', 'true');
-            localStorage.setItem('matrix_panel_collapsed', 'false');
-
-            const panel = this.panel;
-            if (!panel) {
-                this.finishOpenPanel();
-                return;
-            }
-
-            let done = false;
-            const finish = () => {
-                if (done) return;
-                done = true;
-                panel.removeEventListener('transitionend', onTransitionEnd);
-                this.finishOpenPanel();
-            };
-
-            const onTransitionEnd = (e) => {
-                if (e.target === panel && e.propertyName === 'width') finish();
-            };
-
-            panel.addEventListener('transitionend', onTransitionEnd);
-            window.setTimeout(finish, BRAND_TRANSITION_MS + 40);
-            return;
-        }
-
-        this.moveBrand(collapsed, { animate });
+    setCollapsed(collapsed) {
         this.panel?.classList.toggle('is-collapsed', collapsed);
         this.toggleBtn?.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        this.toggleFab?.classList.toggle('is-hidden', !collapsed);
         localStorage.setItem('matrix_panel_collapsed', collapsed ? 'true' : 'false');
     },
 
@@ -147,10 +74,10 @@ export const SidePanel = {
     },
 
     setupStatusClickHandlers() {
-        this.bindCollapsable('radio-section-header', 'radio-section', false, '.sidebar-radio__dock');
-        this.bindCollapsable('quick-actions-header', 'quick-actions-section');
-        this.bindCollapsable('view-section-header', 'view-section');
-        this.bindCollapsable('categories-section-header', 'categories-section');
+        this.bindCollapsable('radio-section-header', 'radio-section', true, '.sidebar-radio__dock');
+        this.bindCollapsable('quick-actions-header', 'quick-actions-section', true);
+        this.bindCollapsable('view-section-header', 'view-section', true);
+        this.bindCollapsable('categories-section-header', 'categories-section', true);
         this.bindCollapsable('categories-list-active-header', 'categories-list-active-section');
         this.bindCollapsable('categories-list-hidden-header', 'categories-list-hidden-section', true);
         this.bindCollapsable('tools-section-header', 'tools-section', true);
@@ -168,15 +95,20 @@ export const SidePanel = {
         if (!header || !section) return;
 
         const toggle = header.querySelector('.collapsable-toggle');
-        if (startCollapsed) {
-            section.classList.add('collapsed');
-            toggle?.classList.add('collapsed');
-        }
+        const stored = readSidebarSections();
+        const collapsed = Object.prototype.hasOwnProperty.call(stored, sectionId)
+            ? !!stored[sectionId]
+            : startCollapsed;
+
+        section.classList.toggle('collapsed', collapsed);
+        toggle?.classList.toggle('collapsed', collapsed);
 
         header.addEventListener('click', (e) => {
             if (ignoreSelector && e.target.closest(ignoreSelector)) return;
-            section.classList.toggle('collapsed');
-            toggle?.classList.toggle('collapsed');
+            const nowCollapsed = !section.classList.contains('collapsed');
+            section.classList.toggle('collapsed', nowCollapsed);
+            toggle?.classList.toggle('collapsed', nowCollapsed);
+            writeSidebarSection(sectionId, nowCollapsed);
         });
     },
 

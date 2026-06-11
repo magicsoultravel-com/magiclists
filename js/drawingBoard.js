@@ -13,9 +13,9 @@ import { BRUSH_STYLES, drawBrushStroke, drawShapeStroke, drawTextObject } from '
 import { renderBackground } from './canvasBackgrounds.js';
 import { CanvasViewport } from './canvasViewport.js';
 import { exportCanvasPng, exportCanvasPdf } from './canvasExport.js';
+import { DrawingToolbarChrome } from './drawingToolbarChrome.js';
 
 const PREFS_KEY = 'matrix_drawing_prefs';
-const TOOLBAR_HIDDEN_KEY = 'matrix_drawing_toolbar_hidden';
 const WIDTH_MIN = 1;
 const WIDTH_MAX = 48;
 const DEFAULT_WIDTH = 10;
@@ -167,8 +167,6 @@ export const DrawingBoard = {
     innerEl: null,
     textLayer: null,
     toolbarEl: null,
-    toolbarFab: null,
-    controlBar: null,
     activeTool: 'brush',
     activeStyle: 'pen',
     penPointerActive: false,
@@ -187,9 +185,13 @@ export const DrawingBoard = {
         this.viewportEl = document.getElementById('canvas-viewport');
         this.innerEl = document.getElementById('canvas-viewport-inner');
         this.textLayer = document.getElementById('canvas-text-layer');
-        this.toolbarFab = document.getElementById('canvas-toolbar-fab');
-        this.controlBar = document.getElementById('control-bar');
         this.brandEl = document.getElementById('app-brand');
+        DrawingToolbarChrome.init();
+        DrawingToolbarChrome.onCollapse = () => requestAnimationFrame(() => this.resize());
+        DrawingToolbarChrome.onExpand = () => {
+            this.renderToolbar();
+            requestAnimationFrame(() => this.resize());
+        };
         if (this.brandEl) this.brandNotesText = this.brandEl.textContent || 'magicNotes';
 
         if (!this.canvas || !this.boardEl) return;
@@ -204,13 +206,13 @@ export const DrawingBoard = {
         this.canvas.addEventListener('pointercancel', (e) => this.onPointerUp(e));
         this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-        this.toolbarFab?.addEventListener('click', () => this.showToolbar());
         window.addEventListener('resize', () => { if (this.active) this.resize(); });
     },
 
-    activate(toolbarMount) {
+    activate() {
         this.active = true;
-        this.toolbarEl = toolbarMount;
+        DrawingToolbarChrome.show();
+        this.toolbarEl = DrawingToolbarChrome.getToolbarMount();
         this.doc = readDocument();
         this.prefs = readPrefs();
         this.activeTool = this.prefs.activeTool;
@@ -220,10 +222,6 @@ export const DrawingBoard = {
 
         this.boardEl.classList.remove('is-hidden');
         this.boardEl.setAttribute('aria-hidden', 'false');
-
-        this.controlBar?.classList.add('is-drawing-toolbar');
-        const hidden = localStorage.getItem(TOOLBAR_HIDDEN_KEY) === 'true';
-        if (hidden) this.hideToolbar(); else this.showToolbar(false);
 
         CanvasViewport.loadFromDoc(this.doc.viewport);
         this.renderToolbar();
@@ -240,8 +238,7 @@ export const DrawingBoard = {
         if (this.brandEl) this.brandEl.textContent = this.brandNotesText;
         this.boardEl?.classList.add('is-hidden');
         this.boardEl?.setAttribute('aria-hidden', 'true');
-        this.controlBar?.classList.remove('is-drawing-toolbar', 'is-toolbar-hidden');
-        this.toolbarFab?.classList.add('is-hidden');
+        DrawingToolbarChrome.hide();
         this.textLayer.innerHTML = '';
         this.toolbarEl = null;
         this.draftStroke = null;
@@ -249,19 +246,12 @@ export const DrawingBoard = {
     },
 
     hideToolbar() {
-        this.controlBar?.classList.add('is-toolbar-hidden');
-        this.toolbarFab?.classList.remove('is-hidden');
-        if (this.toolbarFab) this.toolbarFab.innerHTML = ACTION_ICONS.expandAll;
-        localStorage.setItem(TOOLBAR_HIDDEN_KEY, 'true');
-        requestAnimationFrame(() => this.resize());
+        DrawingToolbarChrome.collapse();
     },
 
     showToolbar(render = true) {
-        this.controlBar?.classList.remove('is-toolbar-hidden');
-        this.toolbarFab?.classList.add('is-hidden');
-        localStorage.setItem(TOOLBAR_HIDDEN_KEY, 'false');
+        DrawingToolbarChrome.expand();
         if (render) this.renderToolbar();
-        requestAnimationFrame(() => this.resize());
     },
 
     getSnapshot() {
@@ -926,12 +916,15 @@ export const DrawingBoard = {
     }
 };
 
+const TOOLBAR_STATE_KEY = 'matrix_drawing_toolbar';
+
 export function getDrawingBackupKeys() {
     return {
         matrix_global_drawing: localStorage.getItem(STORAGE_KEY),
         matrix_drawing_prefs: localStorage.getItem(PREFS_KEY),
         matrix_workspace_mode: localStorage.getItem('matrix_workspace_mode'),
-        matrix_drawing_toolbar_hidden: localStorage.getItem(TOOLBAR_HIDDEN_KEY),
+        matrix_drawing_toolbar: localStorage.getItem(TOOLBAR_STATE_KEY),
+        matrix_drawing_toolbar_hidden: localStorage.getItem(TOOLBAR_STATE_KEY),
         matrix_canvas_viewport: localStorage.getItem('matrix_canvas_viewport')
     };
 }
@@ -946,5 +939,15 @@ export function applyDrawingBackupKeys(backup) {
             ? backup.matrix_drawing_prefs : JSON.stringify(backup.matrix_drawing_prefs));
     }
     if (backup.matrix_workspace_mode != null) localStorage.setItem('matrix_workspace_mode', backup.matrix_workspace_mode);
-    if (backup.matrix_drawing_toolbar_hidden != null) localStorage.setItem(TOOLBAR_HIDDEN_KEY, backup.matrix_drawing_toolbar_hidden);
+    const toolbarState = backup.matrix_drawing_toolbar ?? backup.matrix_drawing_toolbar_hidden;
+    if (toolbarState != null) {
+        if (typeof toolbarState === 'string' && toolbarState === 'true') {
+            localStorage.setItem(TOOLBAR_STATE_KEY, JSON.stringify({ collapsed: true }));
+        } else if (typeof toolbarState === 'string' && toolbarState === 'false') {
+            localStorage.setItem(TOOLBAR_STATE_KEY, JSON.stringify({ collapsed: false }));
+        } else {
+            localStorage.setItem(TOOLBAR_STATE_KEY, typeof toolbarState === 'string'
+                ? toolbarState : JSON.stringify(toolbarState));
+        }
+    }
 }

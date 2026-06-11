@@ -86,9 +86,9 @@ export const SidebarRadio = {
     },
 
     restoreToSidebar() {
-        const brandHost = document.getElementById('side-panel-brand-host');
-        if (brandHost && this.root.parentElement === document.body) {
-            brandHost.insertAdjacentElement('afterend', this.root);
+        const quickSection = document.getElementById('quick-actions-section')?.closest('.nav-drawer-section');
+        if (quickSection && this.root.parentElement === document.body) {
+            quickSection.insertAdjacentElement('afterend', this.root);
         }
     },
 

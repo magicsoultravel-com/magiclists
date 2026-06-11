@@ -33,6 +33,16 @@ export const Fullscreen = {
         this.syncButtons();
     },
 
+    rebindMainButton() {
+        const btn = document.getElementById('btn-fullscreen');
+        if (!btn) return;
+        for (const b of [...this.buttons]) {
+            if (!b.isConnected) this.buttons.delete(b);
+        }
+        if (!this.buttons.has(btn)) this.registerButton(btn);
+        else this.syncButtons();
+    },
+
     isActive() {
         return Boolean(document.fullscreenElement);
     },

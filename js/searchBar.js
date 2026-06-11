@@ -1,5 +1,6 @@
 import { isSearchActive, querySearch } from './searchFilter.js';
 import { CARD_ICONS } from './ui.js';
+import { SidePanel } from './hamburger.js';
 
 const DEBOUNCE_MS = 150;
 
@@ -38,7 +39,7 @@ export const SearchBar = {
         this.onOpenItem = onOpenItem;
         this.onFocusCategory = onFocusCategory;
 
-        this.root = document.getElementById('control-bar-search');
+        this.root = document.getElementById('side-panel-search');
         this.input = document.getElementById('workspace-search-input');
         this.clearBtn = document.getElementById('workspace-search-clear');
         this.panel = document.getElementById('workspace-search-panel');
@@ -60,6 +61,9 @@ export const SearchBar = {
             if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'k') return;
             if (this.isEditableTarget(e.target)) return;
             e.preventDefault();
+            if (SidePanel.panel?.classList.contains('is-collapsed')) {
+                SidePanel.setCollapsed(false);
+            }
             this.input.focus();
             this.input.select();
         };

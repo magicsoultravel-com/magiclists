@@ -79,17 +79,11 @@ class Application {
         this.setupCoreListeners();
         SidePanel.init(AppState);
         SidebarRadio.init();
-        SidePanel.setupStatusClickHandlers();
+        SidePanel.setupStatusClickHandlers(); /* after radio shell exists */
         ClockStyle.init();
         DesktopZoom.init();
-        this.setupLayoutResetButton();
-        this.setupCollapseAllButton();
-        this.setupDisplayOptionsButton();
         this.setupFocusModeButton();
         this.setupSearchBar();
-        this.setupSaveViewButton();
-        this.setupRecallViewButton();
-        this.updateLayoutResetVisibility();
         this.setupBackupInterface();
         this.setupFab();
         this.setupUndo();
@@ -102,11 +96,6 @@ class Application {
     }
 
     setupUndo() {
-        const undoBtn = document.getElementById('btn-undo');
-        const redoBtn = document.getElementById('btn-redo');
-        if (undoBtn) undoBtn.innerHTML = ACTION_ICONS.undo;
-        if (redoBtn) redoBtn.innerHTML = ACTION_ICONS.redo;
-
         UndoManager.init({
             getToken: () => AppState.user.token,
             isEnabled: () => AppState.user.isLoggedIn,
@@ -246,24 +235,65 @@ class Application {
         const zone = document.getElementById('quick-actions-zone');
         if (!zone) return;
 
+        const globalActions = `
+            <button type="button" id="btn-undo" class="btn btn--compact btn--icon is-hidden" disabled title="Undo (Ctrl+Z)" aria-label="Undo"></button>
+            <button type="button" id="btn-redo" class="btn btn--compact btn--icon is-hidden" disabled title="Redo (Ctrl+Y)" aria-label="Redo"></button>
+            <button type="button" id="btn-display-options" class="btn btn--compact btn--icon" title="Display options" aria-label="Display options" aria-expanded="false" aria-haspopup="menu"></button>
+            <button type="button" id="btn-focus-mode" class="btn btn--compact btn--icon" title="Focus mode" aria-label="Focus mode" aria-expanded="false" aria-haspopup="menu"></button>
+            <button type="button" id="btn-save-view" class="btn btn--compact btn--icon" title="Save view" aria-label="Save view"></button>
+            <button type="button" id="btn-recall-view" class="btn btn--compact btn--icon" title="Restore saved view" aria-label="Restore saved view" disabled></button>
+            <button type="button" id="btn-collapse-all" class="btn btn--compact btn--icon is-hidden" title="Collapse all notes" aria-label="Collapse all notes"></button>
+            <button type="button" id="btn-layout-reset" class="btn btn--compact btn--icon is-hidden" title="Reset" aria-label="Reset"></button>
+            <button type="button" id="btn-fullscreen" class="btn btn--compact btn--icon" title="Full screen" aria-label="Full screen" aria-pressed="false"></button>
+        `;
+
         if (!AppState.user.isLoggedIn) {
-            zone.innerHTML = `<button type="button" class="btn btn--compact btn--block" id="btn-auth-login">Login</button>`;
-            document.getElementById('btn-auth-login')?.addEventListener('click', () => this.executeLoginPrompt());
-            return;
+            zone.innerHTML = `${globalActions}
+                <button type="button" class="btn btn--compact btn--block" id="btn-auth-login">Login</button>`;
+        } else {
+            zone.innerHTML = `${globalActions}
+                <button type="button" class="btn btn--compact btn--icon" id="btn-add-category" title="Add category" aria-label="Add category">${ACTION_ICONS.category}</button>
+                <button type="button" class="btn btn--compact btn--icon" id="btn-export-db" title="Export backup" aria-label="Export backup">${ACTION_ICONS.export}</button>
+                <button type="button" class="btn btn--compact btn--icon" id="btn-export-code" title="Export app code" aria-label="Export app code">${ACTION_ICONS.exportCode}</button>
+                <button type="button" class="btn btn--compact btn--icon" id="btn-import-db" title="Import backup" aria-label="Import backup">${ACTION_ICONS.import}</button>
+                <button type="button" class="btn btn--compact btn--icon btn--icon-danger" id="btn-auth-logout" title="Logout" aria-label="Logout">${ACTION_ICONS.logout}</button>`;
         }
 
-        zone.innerHTML = `
-            <button type="button" class="btn btn--compact btn--icon" id="btn-add-category" title="Add category" aria-label="Add category">${ACTION_ICONS.category}</button>
-            <button type="button" class="btn btn--compact btn--icon" id="btn-export-db" title="Export backup" aria-label="Export backup">${ACTION_ICONS.export}</button>
-            <button type="button" class="btn btn--compact btn--icon" id="btn-export-code" title="Export app code" aria-label="Export app code">${ACTION_ICONS.exportCode}</button>
-            <button type="button" class="btn btn--compact btn--icon" id="btn-import-db" title="Import backup" aria-label="Import backup">${ACTION_ICONS.import}</button>
-            <button type="button" class="btn btn--compact btn--icon btn--icon-danger" id="btn-auth-logout" title="Logout" aria-label="Logout">${ACTION_ICONS.logout}</button>
-        `;
-        document.getElementById('btn-add-category').addEventListener('click', () => this.executeAddCategoryPrompt());
-        document.getElementById('btn-export-db').addEventListener('click', () => this.executeDataBackupExport());
-        document.getElementById('btn-export-code').addEventListener('click', () => this.executeCodeExport());
-        document.getElementById('btn-import-db').addEventListener('click', () => document.getElementById('system-import-file-picker').click());
-        document.getElementById('btn-auth-logout').addEventListener('click', () => this.executeLogout());
+        this.bindQuickActionHandlers();
+    }
+
+    bindQuickActionHandlers() {
+        const undoBtn = document.getElementById('btn-undo');
+        const redoBtn = document.getElementById('btn-redo');
+        if (undoBtn) undoBtn.innerHTML = ACTION_ICONS.undo;
+        if (redoBtn) redoBtn.innerHTML = ACTION_ICONS.redo;
+
+        UndoManager.rebindToolbar();
+
+        const displayBtn = document.getElementById('btn-display-options');
+        if (displayBtn) displayBtn.innerHTML = ACTION_ICONS.displayOptions;
+        DisplayOptions.rebindTrigger();
+
+        const focusBtn = document.getElementById('btn-focus-mode');
+        if (focusBtn) focusBtn.innerHTML = ACTION_ICONS.focusMode;
+        FocusMode.rebindTrigger();
+
+        this.setupLayoutResetButton();
+        this.setupCollapseAllButton();
+        this.setupSaveViewButton();
+        this.setupRecallViewButton();
+        Fullscreen.rebindMainButton();
+
+        document.getElementById('btn-add-category')?.addEventListener('click', () => this.executeAddCategoryPrompt());
+        document.getElementById('btn-export-db')?.addEventListener('click', () => this.executeDataBackupExport());
+        document.getElementById('btn-export-code')?.addEventListener('click', () => this.executeCodeExport());
+        document.getElementById('btn-import-db')?.addEventListener('click', () => document.getElementById('system-import-file-picker').click());
+        document.getElementById('btn-auth-logout')?.addEventListener('click', () => this.executeLogout());
+        document.getElementById('btn-auth-login')?.addEventListener('click', () => this.executeLoginPrompt());
+
+        this.updateLayoutResetVisibility();
+        UndoManager.updateToolbar();
+        FocusMode.syncButtonState();
     }
 
     setupFab() {
@@ -309,24 +339,18 @@ class Application {
 
         const shell = document.getElementById('workspace-shell');
         const canvas = document.getElementById('app-canvas');
-        const notesActions = document.getElementById('notes-control-actions');
-        const drawingActions = document.getElementById('drawing-control-actions');
         const drawBtn = document.getElementById('btn-drawing-mode');
 
         if (mode === 'drawing') {
             shell?.setAttribute('data-drawing-mode', '');
             canvas?.classList.add('is-hidden');
-            notesActions?.classList.add('is-hidden');
-            drawingActions?.classList.remove('is-hidden');
             drawBtn?.classList.add('active');
 
             DesktopZoom.apply({ enabled: false });
-            DrawingBoard.activate(drawingActions);
+            DrawingBoard.activate();
         } else {
             shell?.removeAttribute('data-drawing-mode');
             canvas?.classList.remove('is-hidden');
-            notesActions?.classList.remove('is-hidden');
-            drawingActions?.classList.add('is-hidden');
             drawBtn?.classList.remove('active');
 
             DrawingBoard.deactivate();
@@ -527,16 +551,10 @@ class Application {
         btn.addEventListener('click', () => {
             UI.toggleCollapseAllCards();
         });
-    }
-
-    setupDisplayOptionsButton() {
-        const btn = document.getElementById('btn-display-options');
-        if (btn) btn.innerHTML = ACTION_ICONS.displayOptions;
+        UI.syncCollapseAllButton();
     }
 
     setupFocusModeButton() {
-        const btn = document.getElementById('btn-focus-mode');
-        if (btn) btn.innerHTML = ACTION_ICONS.focusMode;
         FocusMode.init({
             getState: () => AppState.focusCategories,
             setState: (next) => {

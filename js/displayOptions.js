@@ -115,6 +115,16 @@ export const DisplayOptions = {
         this.syncButtonState();
     },
 
+    rebindTrigger() {
+        this.triggerBtn = document.getElementById('btn-display-options');
+        if (!this.triggerBtn) return;
+        this.triggerBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.togglePopover();
+        });
+        this.syncButtonState();
+    },
+
     setOptions(partial) {
         this.options = { ...this.options, ...partial };
         writeDisplayOptions(this.options);

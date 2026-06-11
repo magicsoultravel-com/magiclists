@@ -17,33 +17,73 @@
 <body>
 
     <div id="workspace-shell" class="workspace-shell">
+        <button type="button" id="nav-panel-toggle-fab" class="side-panel-toggle-fab is-hidden" title="Show panel" aria-label="Show side panel">☰</button>
+
         <aside id="side-panel" class="side-panel" aria-label="Side panel">
-            <div id="side-panel-brand-host" class="side-panel-brand-host"></div>
-            <div id="sidebar-radio" class="sidebar-radio nav-drawer-section nav-drawer-section--compact" aria-label="Internet radio"></div>
+            <div id="side-panel-brand-host" class="side-panel-brand-host is-visible">
+                <div class="control-bar-brand is-in-sidebar">
+                    <button type="button" id="nav-panel-toggle" class="btn btn-icon control-bar-menu-btn" title="Hide panel" aria-label="Toggle side panel" aria-expanded="true">☰</button>
+                    <div id="app-brand" class="app-brand">magicNotes</div>
+                </div>
+            </div>
+
+            <div class="side-panel-chrome side-panel-clock">
+                <div id="digital-clock" class="logo-zone logo-zone--clock logo-zone--sidebar">
+                    <button type="button" id="clock-icon-fallback" class="btn btn--compact btn--icon clock-icon-fallback is-hidden" title="Show clock" aria-label="Show clock" aria-expanded="false"><svg viewBox="0 0 12 12" width="12" height="12" focusable="false" aria-hidden="true"><circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.2V6l2 1.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                    <button type="button" id="clock-display" class="clock-display clock-display-trigger" title="Change clock style" aria-label="Clock and date — change style" aria-expanded="false" aria-haspopup="menu">
+                        <span id="clock-date" class="clock-chip clock-chip--date">—</span>
+                        <span id="clock-time" class="clock-chip clock-chip--time">—</span>
+                        <div id="clock-analog" class="clock-analog">
+                            <div class="clock-departure">
+                                <div class="clock-departure-face"></div>
+                                <span id="clock-analog-date" class="clock-departure-date"></span>
+                            </div>
+                        </div>
+                        <div id="clock-segment" class="clock-segment">
+                            <div class="clock-segment-board">
+                                <div id="clock-segment-time" class="clock-segment-time" role="timer" aria-live="off"></div>
+                            </div>
+                        </div>
+                    </button>
+                </div>
+            </div>
+
+            <div class="side-panel-chrome side-panel-search">
+                <div id="side-panel-search" class="side-panel-search-wrap">
+                    <div class="side-panel-search-field">
+                        <input type="search" id="workspace-search-input" class="side-panel-search-input form-input" placeholder="Search…" aria-label="Search notes" autocomplete="off" spellcheck="false" aria-expanded="false" aria-controls="workspace-search-panel">
+                        <button type="button" id="workspace-search-clear" class="side-panel-search-clear" title="Clear search" aria-label="Clear search">×</button>
+                    </div>
+                    <div id="workspace-search-panel" class="search-results-panel is-hidden" role="listbox" aria-label="Search results"></div>
+                </div>
+            </div>
+
             <div class="side-panel-scroll">
             <div class="nav-drawer-section nav-drawer-section--compact">
                 <div class="collapsable-header list-row--header" id="quick-actions-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Quick actions</span>
+                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Quick actions</span>
                 </div>
-                <div class="collapsable-section" id="quick-actions-section">
+                <div class="collapsable-section collapsed" id="quick-actions-section">
                     <div id="quick-actions-zone" class="quick-actions-grid"></div>
                 </div>
             </div>
 
+            <div id="sidebar-radio" class="sidebar-radio nav-drawer-section nav-drawer-section--compact" aria-label="Internet radio"></div>
+
             <div class="nav-drawer-section nav-drawer-section--compact">
                 <div class="collapsable-header list-row--header" id="view-section-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>View</span>
+                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>View</span>
                 </div>
-                <div class="collapsable-section" id="view-section">
+                <div class="collapsable-section collapsed" id="view-section">
                     <div id="filter-controls"></div>
                 </div>
             </div>
 
             <div class="nav-drawer-section nav-drawer-section--compact">
                 <div class="collapsable-header list-row--header sidebar-panel-list-header" id="categories-section-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Categories</span>
+                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Categories</span>
                 </div>
-                <div class="collapsable-section" id="categories-section">
+                <div class="collapsable-section collapsed" id="categories-section">
                     <div class="sidebar-notes-group">
                         <div class="collapsable-header list-row--header sidebar-notes-subheader" id="categories-list-active-header">
                             <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Active</span>
@@ -136,58 +176,6 @@
         </aside>
 
         <div id="workspace-main" class="workspace-main">
-            <header id="control-bar">
-                <div id="control-bar-brand-host" class="control-bar-brand-host is-visible">
-                <div class="control-bar-brand">
-                    <button type="button" id="nav-panel-toggle" class="btn btn-icon control-bar-menu-btn" title="Show/hide panel" aria-label="Toggle side panel" aria-expanded="true">☰</button>
-                    <div id="app-brand" class="app-brand">magicNotes</div>
-                </div>
-                </div>
-                <div class="control-bar-end">
-                    <div id="control-bar-search" class="control-bar-search">
-                        <div class="control-bar-search-field">
-                            <input type="search" id="workspace-search-input" class="control-bar-search-input form-input" placeholder="Search…" aria-label="Search notes" autocomplete="off" spellcheck="false" aria-expanded="false" aria-controls="workspace-search-panel">
-                            <button type="button" id="workspace-search-clear" class="control-bar-search-clear" title="Clear search" aria-label="Clear search">×</button>
-                        </div>
-                        <div id="workspace-search-panel" class="search-results-panel is-hidden" role="listbox" aria-label="Search results"></div>
-                    </div>
-                    <div id="control-bar-actions" class="control-bar-actions">
-                        <div id="notes-control-actions" class="control-bar-actions-group">
-                            <div id="history-controls" class="history-controls is-hidden">
-                                <button type="button" id="btn-undo" class="btn btn--compact btn--icon" disabled title="Undo (Ctrl+Z)" aria-label="Undo"></button>
-                                <button type="button" id="btn-redo" class="btn btn--compact btn--icon" disabled title="Redo (Ctrl+Y)" aria-label="Redo"></button>
-                            </div>
-                            <button type="button" id="btn-display-options" class="btn btn--compact btn--icon" title="Display options" aria-label="Display options" aria-expanded="false" aria-haspopup="menu"></button>
-                            <button type="button" id="btn-focus-mode" class="btn btn--compact btn--icon" title="Focus mode" aria-label="Focus mode" aria-expanded="false" aria-haspopup="menu"></button>
-                            <button type="button" id="btn-save-view" class="btn btn--compact btn--icon" title="Save view" aria-label="Save view"></button>
-                            <button type="button" id="btn-recall-view" class="btn btn--compact btn--icon" title="Restore saved view" aria-label="Restore saved view" disabled></button>
-                            <button type="button" id="btn-collapse-all" class="btn btn--compact btn--icon is-hidden" title="Collapse all notes" aria-label="Collapse all notes"></button>
-                            <button type="button" id="btn-layout-reset" class="btn btn--compact btn--icon is-hidden" title="Reset" aria-label="Reset"></button>
-                            <button type="button" id="btn-fullscreen" class="btn btn--compact btn--icon" title="Full screen" aria-label="Full screen" aria-pressed="false"></button>
-                        </div>
-                        <div id="drawing-control-actions" class="control-bar-actions-group is-hidden" aria-label="Drawing tools"></div>
-                    </div>
-                    <div id="digital-clock" class="logo-zone logo-zone--clock">
-                        <button type="button" id="clock-icon-fallback" class="btn btn--compact btn--icon clock-icon-fallback is-hidden" title="Show clock" aria-label="Show clock" aria-expanded="false"><svg viewBox="0 0 12 12" width="12" height="12" focusable="false" aria-hidden="true"><circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.2V6l2 1.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-                        <button type="button" id="clock-display" class="clock-display clock-display-trigger" title="Change clock style" aria-label="Clock and date — change style" aria-expanded="false" aria-haspopup="menu">
-                            <span id="clock-date" class="clock-chip clock-chip--date">—</span>
-                            <span id="clock-time" class="clock-chip clock-chip--time">—</span>
-                            <div id="clock-analog" class="clock-analog">
-                                <div class="clock-departure">
-                                    <div class="clock-departure-face"></div>
-                                    <span id="clock-analog-date" class="clock-departure-date"></span>
-                                </div>
-                            </div>
-                            <div id="clock-segment" class="clock-segment">
-                                <div class="clock-segment-board">
-                                    <div id="clock-segment-time" class="clock-segment-time" role="timer" aria-live="off"></div>
-                                </div>
-                            </div>
-                        </button>
-                    </div>
-                </div>
-            </header>
-
             <div id="desktop-surface" class="desktop-surface">
                 <main id="app-canvas">
                     <div class="system-status-msg">Loading workspace…</div>
@@ -200,7 +188,21 @@
                             <div id="canvas-text-layer" class="canvas-text-layer"></div>
                         </div>
                     </div>
-                    <button type="button" id="canvas-toolbar-fab" class="canvas-toolbar-fab is-hidden" title="Show toolbar" aria-label="Show toolbar"></button>
+                    <div id="drawing-toolbar-panel" class="drawing-toolbar-panel is-hidden" aria-label="Drawing tools">
+                        <div class="drawing-toolbar-panel__header" data-draw-toolbar-drag>
+                            <span class="drawing-toolbar-panel__grip" aria-hidden="true">⋮⋮</span>
+                            <span class="drawing-toolbar-panel__title">magicCanvas</span>
+                            <span class="drawing-toolbar-panel__spacer"></span>
+                            <button type="button" class="card-act drawing-toolbar-panel__collapse" id="draw-panel-collapse" title="Minimize toolbar" aria-label="Minimize toolbar"></button>
+                        </div>
+                        <div id="drawing-control-actions" class="drawing-toolbar-panel__body control-bar-actions-group" aria-label="Drawing tools"></div>
+                    </div>
+                    <div id="drawing-toolbar-chip" class="drawing-toolbar-chip is-hidden" aria-label="Drawing tools minimized">
+                        <button type="button" class="drawing-toolbar-chip__drag" data-draw-chip-drag title="Drag toolbar" aria-label="Drag toolbar">
+                            <span class="drawing-toolbar-chip__icon" aria-hidden="true">✎</span>
+                        </button>
+                        <button type="button" class="card-act drawing-toolbar-chip__expand" id="draw-panel-expand" title="Expand toolbar" aria-label="Expand toolbar"></button>
+                    </div>
                 </div>
                 <div id="tools-desktop" class="tools-desktop" aria-live="polite"></div>
             </div>

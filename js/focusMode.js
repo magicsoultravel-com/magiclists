@@ -31,6 +31,16 @@ export const FocusMode = {
         this.syncButtonState();
     },
 
+    rebindTrigger() {
+        this.triggerBtn = document.getElementById('btn-focus-mode');
+        if (!this.triggerBtn) return;
+        this.triggerBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.togglePopover(this.getHiddenCategories?.() || []);
+        });
+        this.syncButtonState();
+    },
+
     syncButtonState() {
         const btn = this.triggerBtn;
         if (!btn) return;
