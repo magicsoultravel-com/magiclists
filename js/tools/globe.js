@@ -22,10 +22,24 @@ export const Globe = {
             await this.loadThreeJS();
         }
         
-        setTimeout(() => {
+        this.whenCanvasReady(() => {
             this.initThree();
             this.loadPoliticalLayer();
-        }, 100);
+        });
+    },
+
+    whenCanvasReady(callback) {
+        const containerEl = () => this.container?.querySelector('#globe-canvas-container');
+        const tryReady = () => {
+            const el = containerEl();
+            if (!el) return;
+            if (el.clientWidth >= 2 && el.clientHeight >= 2) {
+                callback();
+                return;
+            }
+            requestAnimationFrame(tryReady);
+        };
+        requestAnimationFrame(tryReady);
     },
 
     loadThreeJS() {
@@ -50,13 +64,11 @@ export const Globe = {
                 <div class="globe-tool__controls map-tool__control-row">
                     <button type="button" class="btn btn--compact globe-layer-btn active" data-layer="political">Political</button>
                     <button type="button" class="btn btn--compact globe-layer-btn" data-layer="geological">Geological</button>
-                    <button type="button" class="btn btn--compact globe-layer-btn" data-layer="timezones">Timezones</button>
+                    <button type="button" class="btn btn--compact globe-layer-btn" data-layer="timezones">Time zones</button>
+                    <button type="button" class="btn btn--compact btn-icon globe-spin-btn" data-spin="-1" aria-label="Rotate left 90°">−</button>
+                    <button type="button" class="btn btn--compact btn-icon globe-spin-btn" data-spin="1" aria-label="Rotate right 90°">+</button>
                 </div>
-                <div class="globe-tool__canvas-wrap">
-                    <button type="button" class="btn btn--compact btn-icon globe-spin-btn globe-spin-btn--left" aria-label="Rotate left 90°">◀</button>
-                    <button type="button" class="btn btn--compact btn-icon globe-spin-btn globe-spin-btn--right" aria-label="Rotate right 90°">▶</button>
-                    <div id="globe-canvas-container" class="globe-tool__canvas-inner"></div>
-                </div>
+                <div id="globe-canvas-container" class="globe-tool__canvas-wrap"></div>
                 <div class="globe-tool__hint tool-msg">Drag to rotate · Scroll to zoom</div>
             </div>
         `;
@@ -71,8 +83,12 @@ export const Globe = {
             });
         });
 
-        this.container.querySelector('.globe-spin-btn--left')?.addEventListener('click', () => this.spinGlobe(-1));
-        this.container.querySelector('.globe-spin-btn--right')?.addEventListener('click', () => this.spinGlobe(1));
+        this.container.querySelectorAll('.globe-spin-btn[data-spin]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const direction = parseInt(btn.getAttribute('data-spin'), 10);
+                if (direction === -1 || direction === 1) this.spinGlobe(direction);
+            });
+        });
     },
 
     spinGlobe(direction) {
@@ -87,10 +103,11 @@ export const Globe = {
 
     initThree() {
         const containerEl = this.container.querySelector('#globe-canvas-container');
-        if (!containerEl) return;
-        
+        if (!containerEl || this.renderer) return;
+
         const width = containerEl.clientWidth;
         const height = containerEl.clientHeight;
+        if (width < 2 || height < 2) return;
 
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x050510);
@@ -164,10 +181,10 @@ export const Globe = {
 
     handleResize() {
         const container = this.container?.querySelector('#globe-canvas-container');
-        if (!container) return;
+        if (!container || !this.camera || !this.renderer) return;
         const width = container.clientWidth;
         const height = container.clientHeight;
-        if (width === 0 || height === 0) return;
+        if (width < 2 || height < 2) return;
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(width, height);

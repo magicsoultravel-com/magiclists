@@ -577,6 +577,16 @@
     flex-shrink: 0;
     padding: 0.35rem;
     border-bottom: 1px solid var(--border-color);
+    gap: 0.25rem;
+    flex-wrap: wrap;
+}
+
+.globe-tool__controls .globe-spin-btn {
+    min-width: 1.5rem;
+    padding: 0.15rem 0.35rem;
+    font-size: 0.85rem;
+    line-height: 1;
+    font-weight: 600;
 }
 
 .globe-tool__canvas-wrap {
@@ -584,38 +594,6 @@
     min-height: 0;
     position: relative;
     background: #050510;
-}
-
-.globe-tool__canvas-inner {
-    position: absolute;
-    inset: 0;
-}
-
-.globe-spin-btn {
-    position: absolute;
-    top: 6px;
-    z-index: 4;
-    opacity: 0;
-    pointer-events: none;
-    min-width: 1.6rem;
-    padding: 0.15rem 0.3rem;
-    font-size: 0.62rem;
-    line-height: 1;
-    background: color-mix(in srgb, var(--bg-card) 88%, transparent);
-}
-
-.globe-spin-btn--left {
-    left: 6px;
-}
-
-.globe-spin-btn--right {
-    right: 6px;
-}
-
-.globe-tool__canvas-wrap:hover .globe-spin-btn,
-.globe-tool__canvas-wrap:focus-within .globe-spin-btn {
-    opacity: 1;
-    pointer-events: auto;
 }
 
 .globe-tool__hint {
