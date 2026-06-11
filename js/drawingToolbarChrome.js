@@ -19,6 +19,21 @@ function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
 }
 
+function getDesktopZoom() {
+    const surface = document.getElementById('desktop-surface');
+    const canvas = document.getElementById('app-canvas');
+    const raw = parseFloat(surface?.dataset?.desktopZoom ?? canvas?.dataset?.desktopZoom);
+    return Number.isFinite(raw) && raw > 0 ? raw : 1;
+}
+
+function pointerDelta(clientX, clientY, startX, startY) {
+    const zoom = getDesktopZoom();
+    return {
+        dx: (clientX - startX) / zoom,
+        dy: (clientY - startY) / zoom
+    };
+}
+
 function getDesktopBounds() {
     const surface = document.getElementById('desktop-surface');
     if (surface) {
@@ -60,8 +75,7 @@ function bindDrag(handle, el, onEnd) {
         handle.setPointerCapture?.(e.pointerId);
 
         const onMove = (ev) => {
-            const dx = ev.clientX - startX;
-            const dy = ev.clientY - startY;
+            const { dx, dy } = pointerDelta(ev.clientX, ev.clientY, startX, startY);
             const pos = clampPosition(el, originLeft + dx, originTop + dy);
             el.style.left = `${pos.x}px`;
             el.style.top = `${pos.y}px`;

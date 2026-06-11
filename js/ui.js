@@ -1933,10 +1933,10 @@ export const UI = {
     },
 
     readFreeformCardSize(card) {
-        const rect = card.getBoundingClientRect();
+        const { w, h } = this.readNoteRect(card);
         return {
-            w: Math.round(rect.width) || FREEFORM_DEFAULT_W,
-            h: Math.round(rect.height) || FREEFORM_DEFAULT_H
+            w: Math.round(w) || FREEFORM_DEFAULT_W,
+            h: Math.round(h) || FREEFORM_DEFAULT_H
         };
     },
 
@@ -2131,7 +2131,7 @@ export const UI = {
             return COLUMN_GRID_CELL_W;
         }
         if (this.isListLayoutCard(card)) return FREEFORM_DEFAULT_W;
-        return Math.round(card.getBoundingClientRect().width) || FREEFORM_DEFAULT_W;
+        return Math.round(this.readNoteRect(card).w) || FREEFORM_DEFAULT_W;
     },
 
     resolveAnimExpandedWidth(card, item) {
@@ -2156,7 +2156,7 @@ export const UI = {
             return this.cellsToSpanW(COLUMN_MIN_COLS);
         }
         if (this.isListLayoutCard(card)) return FREEFORM_EXPANDED_W;
-        return Math.round(card.getBoundingClientRect().width) || FREEFORM_EXPANDED_W;
+        return Math.round(this.readNoteRect(card).w) || FREEFORM_EXPANDED_W;
     },
 
     resolveAnimCompactHeight(card) {
@@ -2345,7 +2345,7 @@ export const UI = {
             }
 
             const compactW = this.resolveAnimCompactWidth(card);
-            const compactH = Math.round(card.getBoundingClientRect().height) || this.resolveAnimCompactHeight(card);
+            const compactH = Math.round(this.readNoteRect(card).h) || this.resolveAnimCompactHeight(card);
 
             card.classList.add('card-animating', 'card-state-changing');
             card.style.setProperty('--card-anim-duration', `${CARD_ANIM_MS}ms`);
@@ -2379,8 +2379,9 @@ export const UI = {
             return;
         }
 
-        const expandedW = Math.round(card.getBoundingClientRect().width) || this.resolveAnimExpandedWidth(card, item);
-        const expandedH = Math.round(card.getBoundingClientRect().height) || this.measureAnimTargetSize(card, item).h;
+        const expandedRect = this.readNoteRect(card);
+        const expandedW = Math.round(expandedRect.w) || this.resolveAnimExpandedWidth(card, item);
+        const expandedH = Math.round(expandedRect.h) || this.measureAnimTargetSize(card, item).h;
         const compactW = this.resolveAnimCompactWidth(card);
         const compactH = this.resolveAnimCompactHeight(card);
 

@@ -487,6 +487,7 @@ export const DragDropEngine = {
 
         const onResizeMove = (e) => {
             if (!resizeActive) return;
+            e.preventDefault();
             const { card, axis, startX, startY, origX, origY, origW, origH } = resizeActive;
             const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, startX, startY);
 
@@ -547,7 +548,7 @@ export const DragDropEngine = {
                     e.preventDefault();
                     e.stopPropagation();
                     UI.cancelCardAnimation(card);
-                    const { w: startW, h: startH } = UI.readFreeformCardSize(card);
+                    let { w: startW, h: startH } = UI.readFreeformCardSize(card);
                     if (card.classList.contains('compact')) {
                         const itemMatch = currentItems.find(i => i.id === card.dataset.id);
                         if (itemMatch) {
@@ -556,6 +557,7 @@ export const DragDropEngine = {
                                 dimensions: { w: startW, h: startH }
                             });
                         }
+                        ({ w: startW, h: startH } = UI.readFreeformCardSize(card));
                     }
                     resizeActive = {
                         card,
