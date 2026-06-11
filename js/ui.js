@@ -357,30 +357,44 @@ export function normalizeChecklistLevels(steps) {
     }
 }
 
+export function previewDropTargetLevel(rows, insertIndex, dropMode, getLevel = getStepRowLevel) {
+    if (insertIndex <= 0) return 0;
+    if (dropMode === 'child') {
+        const parent = rows[insertIndex - 1];
+        return parent ? Math.min(4, getLevel(parent) + 1) : 0;
+    }
+    const next = rows[insertIndex];
+    if (next) return getLevel(next);
+    const prev = rows[insertIndex - 1];
+    return prev ? getLevel(prev) : 0;
+}
+
 export function resolveDropTarget(steps, blockRootId, { mode = 'sibling' } = {}) {
     const blockStartIndex = steps.findIndex((step) => step.id === blockRootId);
-    if (blockStartIndex < 0) return;
+    if (blockStartIndex < 0) return null;
     const subtree = collectStepSubtree(steps, blockStartIndex);
     const oldRootLevel = getStepLevel(subtree[0]);
     let newRootLevel = oldRootLevel;
 
-    if (blockStartIndex === 0) {
-        newRootLevel = oldRootLevel;
-    } else if (mode === 'child') {
+    if (mode === 'child' && blockStartIndex > 0) {
         const parent = steps[blockStartIndex - 1];
         newRootLevel = Math.min(4, getStepLevel(parent) + 1);
+    } else if (blockStartIndex === 0) {
+        newRootLevel = 0;
     } else {
-        const prev = steps[blockStartIndex - 1];
-        newRootLevel = getStepLevel(prev);
         const nextIndex = blockStartIndex + subtree.length;
-        if (nextIndex < steps.length) {
-            const nextLevel = getStepLevel(steps[nextIndex]);
-            newRootLevel = Math.min(newRootLevel, nextLevel);
-        }
+        newRootLevel = nextIndex < steps.length
+            ? getStepLevel(steps[nextIndex])
+            : getStepLevel(steps[blockStartIndex - 1]);
     }
 
     const delta = newRootLevel - oldRootLevel;
     if (delta) applySubtreeLevelDelta(steps, blockStartIndex, delta);
+
+    const parentId = mode === 'child' && blockStartIndex > 0
+        ? steps[blockStartIndex - 1].id
+        : null;
+    return { parentId };
 }
 
 export function computeChecklistInsertBounds(steps, startIndex) {
@@ -424,7 +438,7 @@ export function computeVisibleInsertBounds(activeSteps, startIndex, visibleIds, 
     return { minAmongOthers, maxAmongOthers, subtreeIds: subtreeIds || [...blockIdSet], others };
 }
 
-export function resolvePointerDropTarget(clientY, visibleRows, blockRows, bounds) {
+export function resolvePointerDropTarget(clientY, visibleRows, blockRows, { bounds = null, isSingleLeaf = false } = {}) {
     const blockSet = new Set(blockRows);
     const others = visibleRows.filter((row) => !blockSet.has(row));
     let insertIndex = others.length;
@@ -436,7 +450,11 @@ export function resolvePointerDropTarget(clientY, visibleRows, blockRows, bounds
 
         if (clientY < box.top) {
             insertIndex = i;
-            dropMode = 'sibling';
+            if (i > 0 && getStepRowLevel(others[i - 1]) < getStepRowLevel(others[i])) {
+                dropMode = 'child';
+            } else {
+                dropMode = 'sibling';
+            }
             break;
         }
         if (clientY <= midY) {
@@ -451,7 +469,7 @@ export function resolvePointerDropTarget(clientY, visibleRows, blockRows, bounds
         }
     }
 
-    if (bounds) {
+    if (bounds && !isSingleLeaf) {
         insertIndex = Math.max(bounds.minAmongOthers, Math.min(bounds.maxAmongOthers, insertIndex));
         if (dropMode === 'child' && insertIndex > 0 && insertIndex <= others.length) {
             const parentRow = others[insertIndex - 1];
@@ -459,7 +477,8 @@ export function resolvePointerDropTarget(clientY, visibleRows, blockRows, bounds
         }
     }
 
-    return { insertIndex, dropMode, others };
+    const targetLevel = previewDropTargetLevel(others, insertIndex, dropMode);
+    return { insertIndex, dropMode, others, targetLevel };
 }
 
 export function getStepRowLevel(row) {
@@ -4192,7 +4211,7 @@ export const UI = {
             activeDrag.block = buildDomBlockFromIds(rows, activeDrag.blockStepIds);
         };
 
-        const updateDropIndicator = (activeList, ref, mode) => {
+        const updateDropIndicator = (activeList, ref, { mode, targetLevel = 0 } = {}) => {
             let indicator = activeList.querySelector('.checklist-drop-indicator');
             if (!indicator) {
                 indicator = document.createElement('div');
@@ -4201,16 +4220,20 @@ export const UI = {
                 activeList.appendChild(indicator);
             }
             if (!ref) {
-                indicator.classList.remove('is-visible', 'is-child');
+                indicator.classList.remove('is-visible');
+                indicator.style.marginLeft = '';
                 return;
             }
             indicator.classList.add('is-visible');
-            indicator.classList.toggle('is-child', mode === 'child');
+            indicator.style.marginLeft = `${targetLevel * 0.45}rem`;
             activeList.insertBefore(indicator, ref);
         };
 
         const hideDropIndicator = () => {
-            getList()?.querySelector('.checklist-drop-indicator')?.classList.remove('is-visible', 'is-child');
+            const indicator = getList()?.querySelector('.checklist-drop-indicator');
+            if (!indicator) return;
+            indicator.classList.remove('is-visible');
+            indicator.style.marginLeft = '';
         };
 
         const reorderAt = (clientY) => {
@@ -4219,20 +4242,21 @@ export const UI = {
             if (!block?.length || !activeList?.contains(block[0])) return;
 
             const allRows = getActiveRows();
-            const { insertIndex, dropMode, others } = resolvePointerDropTarget(
+            const { insertIndex, dropMode, others, targetLevel } = resolvePointerDropTarget(
                 clientY,
                 allRows,
                 block,
-                activeDrag.bounds
+                { bounds: activeDrag.bounds, isSingleLeaf: activeDrag.isSingleLeaf }
             );
             activeDrag.dropMode = dropMode;
             activeDrag.insertIndex = insertIndex;
+            activeDrag.targetLevel = targetLevel;
 
             const ref = others[insertIndex] || getDoneAnchor(activeList);
             block.forEach((node) => {
                 activeList.insertBefore(node, ref);
             });
-            updateDropIndicator(activeList, ref, dropMode);
+            updateDropIndicator(activeList, ref, { mode: dropMode, targetLevel });
         };
 
         const finishDrag = () => {
@@ -4248,6 +4272,7 @@ export const UI = {
                 this.syncItemBodyFromDom(shell, item);
                 const collapsedKeys = this.getChecklistCollapsedKeys();
                 const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
+                let parentIdToExpand = null;
                 applyMutate((it) => {
                     const activeSteps = it.steps.filter((step) => !step.completed);
                     const doneSteps = it.steps.filter((step) => step.completed);
@@ -4258,11 +4283,15 @@ export const UI = {
                         item.id,
                         collapsedKeys
                     );
-                    resolveDropTarget(reordered, blockRootId, { mode: dropMode || 'sibling' });
+                    const dropResult = resolveDropTarget(reordered, blockRootId, { mode: dropMode || 'sibling' });
+                    parentIdToExpand = dropResult?.parentId || null;
                     normalizeChecklistLevels(reordered);
                     it.steps = [...reordered, ...doneSteps];
                 }, { persist: false });
                 this.expandChecklistAncestorsForStep(item, blockRootId);
+                if (parentIdToExpand) {
+                    this.expandChecklistAncestorsForStep(item, parentIdToExpand);
+                }
                 refresh();
                 this.commitInlineChecklistOp(item, beforeItem, { localOnly });
             }
@@ -4306,16 +4335,23 @@ export const UI = {
                 stepIndex,
                 visibleIds
             );
+            const isSingleLeaf = subtreeIds.length === 1
+                || !stepHasDescendants(activeSteps, stepIndex);
             const rows = getActiveRows();
             const block = buildDomBlockFromIds(rows, subtreeIds);
+            const othersCount = visibleIds.filter((id) => !subtreeIds.includes(id)).length;
 
             activeDrag = {
                 row,
                 block,
                 blockStepIds: subtreeIds,
-                bounds: { minAmongOthers, maxAmongOthers },
+                isSingleLeaf,
+                bounds: isSingleLeaf
+                    ? { minAmongOthers: 0, maxAmongOthers: othersCount }
+                    : { minAmongOthers, maxAmongOthers },
                 dropMode: 'sibling',
                 insertIndex: 0,
+                targetLevel: 0,
                 startX: e.clientX,
                 startY: e.clientY,
                 moved: false

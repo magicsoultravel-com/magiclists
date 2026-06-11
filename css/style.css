@@ -3531,10 +3531,6 @@ textarea.form-input {
     display: block;
 }
 
-.checklist-drop-indicator.is-child {
-    margin-left: 0.9rem;
-}
-
 .editor-meta-row--footer {
     margin: 0.35rem 0 0;
     padding-top: 0.25rem;
