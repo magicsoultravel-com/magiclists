@@ -7,6 +7,25 @@
     margin-bottom: 0.15rem;
     padding-bottom: 0.2rem;
     border-bottom: 1px solid var(--border-color);
+    font-size: 0.66rem;
+}
+
+/* Match .side-panel control sizing when radio is undocked on body */
+.sidebar-radio .btn,
+.sidebar-radio .btn--compact,
+.radio-popover .btn,
+.radio-popover .btn--compact {
+    padding: 0.22rem 0.4rem;
+    font-size: 0.66rem;
+    border-radius: 3px;
+    line-height: 1.25;
+}
+
+.sidebar-radio .btn-icon,
+.radio-popover .btn-icon {
+    padding: 0.2rem 0.35rem;
+    font-size: 0.85rem;
+    line-height: 1;
 }
 
 .sidebar-radio .collapsable-header {
@@ -33,11 +52,12 @@
 .sidebar-radio--undocked {
     position: fixed;
     z-index: 341;
-    width: 236px;
+    box-sizing: border-box;
+    width: 220px;
+    padding: 0 0.5rem 0.45rem;
     margin-bottom: 0;
-    padding-bottom: 0;
     border-bottom: none;
-    background: var(--bg-panel, #1a1d24);
+    background: var(--chrome-bg, var(--bg-surface));
     border: 1px solid var(--border-color);
     border-radius: 8px;
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
@@ -46,6 +66,8 @@
 }
 
 .sidebar-radio--undocked .collapsable-header {
+    padding: 0.28rem 0.35rem;
+    padding-right: 0.15rem;
     cursor: grab;
     user-select: none;
 }
@@ -276,10 +298,15 @@
     padding: 0;
     border: 1px solid var(--border-color);
     border-radius: 4px;
-    background: rgba(255, 255, 255, 0.03);
+    background: linear-gradient(145deg, rgba(79, 70, 229, 0.12), rgba(255, 255, 255, 0.03));
     cursor: pointer;
     overflow: hidden;
     flex-shrink: 0;
+}
+
+.sidebar-radio__compact-art:hover {
+    border-color: rgba(255, 255, 255, 0.14);
+    background: linear-gradient(145deg, rgba(79, 70, 229, 0.18), rgba(255, 255, 255, 0.05));
 }
 
 .sidebar-radio__compact-art-img {
@@ -417,6 +444,17 @@
     flex-direction: column;
     padding: 0;
     overflow: hidden;
+    font-size: 0.66rem;
+}
+
+/* Override clock-style glass so browser matches sidebar chrome when detached */
+.radio-popover.clock-style-popover {
+    background: var(--chrome-bg, var(--bg-surface));
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
 }
 
 .radio-popover__header {
@@ -451,8 +489,8 @@
 }
 
 .radio-popover__header .card-act {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     opacity: 0.85;
 }
 
