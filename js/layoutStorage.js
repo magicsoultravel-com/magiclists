@@ -13,8 +13,8 @@ const COLUMN_GRID_CELL_H = FREEFORM_DEFAULT_H;
 const COLUMN_GRID_GAP = 4;
 const LEGACY_TILE_SIZE = 'compact';
 const TILE_LABEL_H = 28;
-const TILE_RESIZE_MIN_W = 48;
-const TILE_RESIZE_MIN_H = 16;
+const TILE_RESIZE_MIN_W = COLUMN_GRID_CELL_W;
+const TILE_RESIZE_MIN_H = TILE_LABEL_H;
 const TILE_NOTE_W_CELLS = 2.5;
 const TILE_NOTE_H_CELLS = 5;
 const TILE_LABEL_COMPACT_H_UP = 40;
@@ -425,6 +425,8 @@ function isCustomTileRect(w, h, tileSize = LEGACY_TILE_SIZE) {
 
 function inferCollapsedTileTier(w, h, prevTier = LEGACY_TILE_SIZE) {
     const prev = normalizeTileSize(prevTier);
+    if (h <= TILE_LABEL_COMPACT_H_DOWN) return 'label';
+
     let inNoteZone;
     if (prev === 'note') {
         inNoteZone = !(w <= TILE_COMPACT_NOTE_W_DOWN && h <= TILE_COMPACT_NOTE_H_DOWN);

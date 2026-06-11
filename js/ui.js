@@ -80,8 +80,8 @@ const CARD_ANIM_MS = 300;
 const CARD_COMPACT_H = 56;
 
 export const TILE_LABEL_H = 28;
-export const TILE_RESIZE_MIN_W = 48;
-export const TILE_RESIZE_MIN_H = 16;
+export const TILE_RESIZE_MIN_W = COLUMN_GRID_CELL_W;
+export const TILE_RESIZE_MIN_H = TILE_LABEL_H;
 export const TILE_NOTE_W_CELLS = 2.5;
 export const TILE_NOTE_H_CELLS = 5;
 export const TILE_LABEL_COMPACT_H_UP = 40;
@@ -1193,6 +1193,8 @@ export const UI = {
 
     inferCollapsedTileTier(w, h, prevTier = LEGACY_TILE_SIZE) {
         const prev = normalizeTileSize(prevTier);
+        if (h <= TILE_LABEL_COMPACT_H_DOWN) return 'label';
+
         let inNoteZone;
         if (prev === 'note') {
             inNoteZone = !(w <= TILE_COMPACT_NOTE_W_DOWN && h <= TILE_COMPACT_NOTE_H_DOWN);
@@ -1310,7 +1312,7 @@ export const UI = {
             if (rect.w > resolved.w) {
                 finalX = Math.max(0, maxW - finalW);
             } else {
-                finalW = Math.max(TILE_RESIZE_MIN_W, maxW - finalX);
+                finalW = Math.max(COLUMN_GRID_CELL_W, maxW - finalX);
             }
         }
 
