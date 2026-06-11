@@ -1,5 +1,5 @@
 ---
-description: magiclists — stack, design, and workflow
+description: magiclists — stack, design, workflow, and end-of-turn commit prompt
 alwaysApply: true
 ---
 
@@ -15,16 +15,24 @@ Vanilla JS ES modules + plain CSS. Client-only; data via `js/api.js` → localSt
 
 **Deliver:** concise, no preamble; audit shared styles/components for regressions across board, editor, sidebar, calendar, tools.
 
-**Git / GitHub:** Never commit or push unless the user agrees. At the end of a session — or when a cohesive chunk of work is finished — always ask whether to commit the changes.
+## Git / GitHub (required — magiclists workspace only)
 
-When asking:
-- Briefly summarize what changed (1–2 sentences)
-- Offer: commit only, commit + push, or skip
+This section applies only in chats opened for this repo. Do not use this commit prompt in other projects.
 
-If the user says yes to commit:
+Never commit or push unless the user explicitly agrees.
+
+**End-of-turn commit prompt — mandatory:** If this conversation turn created or modified any project files, the assistant's final lines MUST ask whether to commit. Do not skip this when wrapping up, summarizing, or saying work is done. Do not commit silently.
+
+Prompt format (last thing in the message):
+1. One-line summary of what changed
+2. Ask: **commit only**, **commit + push to origin**, or **skip**?
+
+Skip the prompt only when the turn was read-only (no file edits) or the user already answered for the current changes.
+
+When the user agrees to commit:
 1. `git status` + `git diff` to verify scope
 2. Stage only relevant files (never `.env`, credentials, or accidental junk)
 3. Commit with a concise message (why, not a file list) matching recent repo style
-4. Push only if the user also wants push (or ask separately after commit)
+4. Push only if they also want push (or ask again after commit)
 
 If push fails (auth, hook, conflict), report the error and fix or ask before continuing. Do not force-push to `main`.

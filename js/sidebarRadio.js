@@ -725,16 +725,36 @@ export const SidebarRadio = {
 
             if (!this.browseStations.length) {
                 body.innerHTML = '<p class="tool-msg">No stations in this country.</p>';
+            } else if (append) {
+                const grid = body.querySelector('[data-radio-station-grid]');
+                if (grid && page.length) {
+                    const wrapper = document.createElement('div');
+                    wrapper.innerHTML = page.map((s) => this.renderStationTile(s)).join('');
+                    while (wrapper.firstChild) {
+                        grid.appendChild(wrapper.firstChild);
+                    }
+                    this.bindStationTileActions(grid);
+                }
+                body.querySelector('[data-radio-load-more]')?.remove();
+                if (this.browseHasMore) {
+                    const btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'btn btn--compact sidebar-radio__load-more';
+                    btn.setAttribute('data-radio-load-more', '');
+                    btn.textContent = 'Load more';
+                    body.appendChild(btn);
+                    this.bindBrowseCountryControls(body);
+                }
             } else {
                 body.innerHTML = `
-                    <div class="radio-tile-grid" data-radio-station-grid>
+                    <div class="radio-tile-grid radio-tile-grid--stations" data-radio-station-grid>
                         ${this.browseStations.map((s) => this.renderStationTile(s)).join('')}
                     </div>
                     ${this.browseHasMore ? '<button type="button" class="btn btn--compact sidebar-radio__load-more" data-radio-load-more>Load more</button>' : ''}
                 `;
                 this.bindStationTileActions(body);
                 this.bindBrowseCountryControls(body);
-                if (!append) this.scrollToHighlightedStation(body);
+                this.scrollToHighlightedStation(body);
             }
         } catch {
             if (seq !== this.loadSeq) return;
@@ -817,7 +837,7 @@ export const SidebarRadio = {
             if (!this.listStations.length) {
                 body.innerHTML = '<p class="tool-msg tool-msg--error">Stations unavailable.</p>';
             } else {
-                body.innerHTML = `<div class="radio-tile-grid">${this.listStations.map((s) => this.renderStationTile(s)).join('')}</div>`;
+                body.innerHTML = `<div class="radio-tile-grid radio-tile-grid--stations">${this.listStations.map((s) => this.renderStationTile(s)).join('')}</div>`;
                 this.bindStationTileActions(body);
             }
         } catch {
@@ -826,7 +846,7 @@ export const SidebarRadio = {
             if (!this.listStations.length) {
                 body.innerHTML = '<p class="tool-msg tool-msg--error">Could not load list.</p>';
             } else {
-                body.innerHTML = `<div class="radio-tile-grid">${this.listStations.map((s) => this.renderStationTile(s)).join('')}</div>`;
+                body.innerHTML = `<div class="radio-tile-grid radio-tile-grid--stations">${this.listStations.map((s) => this.renderStationTile(s)).join('')}</div>`;
                 this.bindStationTileActions(body);
             }
         }
@@ -841,7 +861,7 @@ export const SidebarRadio = {
         const offline = station.lastcheckok === 0;
         const starIcon = fav ? CARD_ICONS.starFilled : CARD_ICONS.star;
         const favicon = station.favicon
-            ? `<img class="radio-tile__favicon" src="${escapeHtml(station.favicon)}" alt="" width="16" height="16" loading="lazy">`
+            ? `<img class="radio-tile__favicon is-hidden" src="${escapeHtml(station.favicon)}" alt="" width="32" height="32" loading="lazy" decoding="async">`
             : '<span class="radio-tile__favicon radio-tile__favicon--fallback" aria-hidden="true">♪</span>';
         const flag = station.countrycode
             ? `<span class="radio-tile__badge" aria-hidden="true">${countryFlagEmoji(station.countrycode)}</span>`
@@ -850,10 +870,10 @@ export const SidebarRadio = {
 
         return `
             <div class="radio-tile radio-tile--station${playing ? ' is-on-desktop' : ''}${offline ? ' radio-tile--offline' : ''}${compact ? ' radio-tile--compact' : ''}" data-radio-station="${escapeHtml(uuid)}" role="button" tabindex="0" title="${escapeHtml(station.name || '')}">
-                ${favicon}
+                <span class="radio-tile__art">${favicon}</span>
+                <span class="radio-tile__label u-truncate">${escapeHtml(station.name || 'Unknown')}</span>
                 ${flag}
                 ${offlineBadge}
-                <span class="radio-tile__label u-truncate">${escapeHtml(station.name || 'Unknown')}</span>
                 <button type="button" class="card-act radio-tile__star${fav ? ' is-active' : ''}" data-radio-star="${escapeHtml(uuid)}" title="${fav ? 'Remove favorite' : 'Add favorite'}" aria-label="${fav ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${fav ? 'true' : 'false'}">${starIcon}</button>
             </div>
         `;

@@ -8,7 +8,7 @@ import {
 
 const STATE_KEY = 'matrix_radio_state';
 const RECENTS_CAP = 20;
-const DEFAULT_BROWSER_W = 300;
+const DEFAULT_BROWSER_W = 320;
 const DEFAULT_BROWSER_H = 360;
 const DEFAULT_BROWSE_SORT = 'clickcount';
 
