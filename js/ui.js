@@ -1282,6 +1282,32 @@ export const UI = {
         if (size === 'compact') card.classList.add('compact');
     },
 
+    applyDesktopTilePresentation(card, item) {
+        if (!isDesktopCard(card)) return;
+        card.classList.remove('expanded');
+        card.classList.add('note-surface');
+        this.applyCollapsedTileClasses(card, resolveTileSize(item));
+    },
+
+    bindBoardEditorFocusChrome(card) {
+        if (!isDesktopCard(card) || card.dataset.boardEditorFocusBound) return;
+        card.dataset.boardEditorFocusBound = '1';
+        card.addEventListener('focusin', (e) => {
+            if (e.target.closest('.editor-note-shell .card-inline-edit')) {
+                card.classList.add('is-editing-inline');
+                this.syncSpatialChromeForEditing(card);
+            }
+        });
+        card.addEventListener('focusout', () => {
+            requestAnimationFrame(() => {
+                if (!card.querySelector('.editor-note-shell .card-inline-edit:focus')) {
+                    card.classList.remove('is-editing-inline');
+                    this.syncSpatialChromeForEditing(card);
+                }
+            });
+        });
+    },
+
     resolveExpandedDefaultRect(tileSize, saved = null) {
         return geoResolveExpandedDefaultRect(tileSize, saved);
     },
@@ -1333,10 +1359,14 @@ export const UI = {
         card.dataset.tierResizePreview = '1';
 
         if (resizeState.previewTier !== normalized) {
-            const activeCategories = readStoredCategories();
-            const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
-            const previewItem = { ...item, tileSize: normalized };
-            this.renderCollapsedCard(card, previewItem, activeCategories, targetCatName, categoryColor);
+            if (isDesktopCard(card)) {
+                this.applyCollapsedTileClasses(card, normalized);
+            } else {
+                const activeCategories = readStoredCategories();
+                const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
+                const previewItem = { ...item, tileSize: normalized };
+                this.renderCollapsedCard(card, previewItem, activeCategories, targetCatName, categoryColor);
+            }
             resizeState.previewTier = normalized;
             card.dataset.tierResizePreview = '1';
             card.classList.add('is-tier-resizing');
@@ -1350,10 +1380,14 @@ export const UI = {
         delete card.dataset.tierResizePreview;
         card.classList.remove('is-tier-resizing');
 
-        const activeCategories = readStoredCategories();
-        const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
-        const restoreItem = { ...item, tileSize: resizeState.startTier };
-        this.renderCollapsedCard(card, restoreItem, activeCategories, targetCatName, categoryColor);
+        if (isDesktopCard(card)) {
+            this.applyCollapsedTileClasses(card, resizeState.startTier);
+        } else {
+            const activeCategories = readStoredCategories();
+            const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
+            const restoreItem = { ...item, tileSize: resizeState.startTier };
+            this.renderCollapsedCard(card, restoreItem, activeCategories, targetCatName, categoryColor);
+        }
         this.applyTierResizeBox(card, resizeState.startRect);
 
         if (isDesktopCard(card)) {
@@ -1412,9 +1446,11 @@ export const UI = {
         }
         this.cancelCardAnimation(card);
         card.classList.remove('expanded', 'card-state-changing', 'card-animating');
-        this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
         if (isDesktopCard(card)) {
+            this.applyDesktopTilePresentation(card, item);
             this.finalizeDesktopCard(card);
+        } else {
+            this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
         }
     },
 
@@ -1461,7 +1497,11 @@ export const UI = {
             boardItemsById.set(item.id, item);
         }
 
-        this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
+        if (isDesktopCard(card)) {
+            this.applyDesktopTilePresentation(card, item);
+        } else {
+            this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
+        }
         this.applyNoteRect(card, rect, { settling: false });
         this.saveTileLayoutFromCard(card, item, rect, normalizedTier);
 
@@ -1476,12 +1516,7 @@ export const UI = {
     },
 
     applyTileZoneToggle(card, item, ctx = {}) {
-        if (card.classList.contains('expanded')
-            && card.querySelector('.editor-note-shell')
-            && !ctx.fromToolbar) {
-            return;
-        }
-        if (this.collapseLegacyExpandedTile(card, item, ctx)) return;
+        if (!isDesktopCard(card) && this.collapseLegacyExpandedTile(card, item, ctx)) return;
 
         const pos = this.readNoteRect(card);
         const tileSize = resolveTileSize(item);
@@ -1572,7 +1607,9 @@ export const UI = {
         activeCategories = applyFocusToCategories(activeCategories, focusCategories);
         const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
 
-        if (card.classList.contains('expanded')) {
+        if (isDesktopCard(card)) {
+            this.renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
+        } else if (card.classList.contains('expanded')) {
             this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
         } else {
             this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
@@ -1864,15 +1901,11 @@ export const UI = {
         };
         if (spatial && card) {
             opts.spatialTile = true;
-            if (card.classList.contains('expanded')) {
-                opts.legacyExpanded = true;
-            } else {
-                const item = this.resolveBoardItem(card.dataset.id);
-                const { w, h } = this.readNoteRect(card);
-                opts.tileSize = this.getCardTileSize(card, item);
-                opts.tileW = w;
-                opts.tileH = h;
-            }
+            const item = this.resolveBoardItem(card.dataset.id);
+            const { w, h } = this.readNoteRect(card);
+            opts.tileSize = this.getCardTileSize(card, item);
+            opts.tileW = w;
+            opts.tileH = h;
         }
         return opts;
     },
@@ -2130,25 +2163,31 @@ export const UI = {
 
     syncSpatialChromeForEditing(card) {
         if (!card?.querySelector?.('.ff-chrome')) return;
-        const expanded = card.classList.contains('expanded');
-        card.classList.toggle('is-editing-inline', expanded);
         const layer = card.querySelector('.ff-resize-layer');
         const gutters = card.querySelectorAll('.ff-drag-gutter');
+        let disableChrome = false;
+        if (isDesktopCard(card)) {
+            disableChrome = card.classList.contains('is-editing-inline');
+        } else {
+            const expanded = card.classList.contains('expanded');
+            card.classList.toggle('is-editing-inline', expanded);
+            disableChrome = expanded;
+            if (expanded) {
+                const shell = card.querySelector('.editor-note-shell');
+                if (shell) card.appendChild(shell);
+            }
+        }
         if (layer) {
-            layer.style.pointerEvents = expanded ? 'none' : '';
-            layer.style.zIndex = expanded ? '0' : '';
+            layer.style.pointerEvents = disableChrome ? 'none' : '';
+            layer.style.zIndex = disableChrome ? '0' : '';
             layer.querySelectorAll('.ff-resize').forEach((handle) => {
-                handle.style.pointerEvents = expanded ? 'none' : '';
-                handle.style.zIndex = expanded ? '0' : '';
+                handle.style.pointerEvents = disableChrome ? 'none' : '';
+                handle.style.zIndex = disableChrome ? '0' : '';
             });
         }
         gutters.forEach((g) => {
-            g.style.pointerEvents = expanded ? 'none' : '';
+            g.style.pointerEvents = disableChrome ? 'none' : '';
         });
-        if (expanded) {
-            const shell = card.querySelector('.editor-note-shell');
-            if (shell) card.appendChild(shell);
-        }
     },
 
     readFreeformCardSize(card) {
@@ -2177,16 +2216,11 @@ export const UI = {
         if (!isDesktopCard(card) || isSnapLayoutMode(activeBoardViewMode)) return;
         if (card.dataset.tierResizePreview === '1') return;
         const saved = this.getFreeformSizes()[card.dataset.id];
-        const isExpanded = card.classList.contains('expanded');
         const item = this.resolveBoardItem(card.dataset.id);
         const tileSize = this.getCardTileSize(card, item);
         let w;
         let h;
-        if (isExpanded) {
-            const editorRect = this.resolveCardRect(card, item, { mode: 'editor' });
-            w = editorRect.w;
-            h = editorRect.h;
-        } else if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
+        if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
             const clamped = geoClampSpatialSize(saved.w, saved.h, tileSize);
             w = clamped.w;
             h = clamped.h;
@@ -2204,6 +2238,8 @@ export const UI = {
 
     finalizeDesktopCard(card) {
         if (!isDesktopCard(card)) return;
+        const { w, h } = this.readNoteRect(card);
+        card.classList.toggle('spatial-at-label', isAtLabelSize(w, h));
         this.setupFreeformChrome(card);
         if (isSnapLayoutMode(activeBoardViewMode)) {
             this.applyDesktopSize(card);
@@ -2223,35 +2259,22 @@ export const UI = {
     updateDesktopCard(card, item, { expanded, dimensions = null, deferReflow = false } = {}) {
         if (!isDesktopCard(card)) return;
 
-        const mode = activeBoardViewMode;
-        const snapLayout = isSnapLayoutMode(mode);
+        const snapLayout = isSnapLayoutMode(activeBoardViewMode);
         const canvas = card.closest('#app-canvas');
-        setExpandedCard(mode, item.id, expanded);
 
-        const activeCategories = readStoredCategories();
-        const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
-
-        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, {
-            skipGridReflow: true,
-            skipAnimation: dimensions != null
-        });
+        this.applyDesktopTilePresentation(card, item);
 
         if (dimensions) {
             this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
         } else if (snapLayout) {
-            if (!expanded || !cardAnimationsEnabled()) {
-                this.applyDesktopSize(card);
-            }
-        } else if (expanded && !cardAnimationsEnabled()) {
+            this.applyDesktopSize(card);
+        } else {
             this.applyFreeformSize(card);
         }
 
-        if (snapLayout && !expanded) {
-            this.applyDesktopSize(card);
-        }
+        this.finalizeDesktopCard(card);
 
         if (snapLayout && canvas && !deferReflow) {
-            this.finalizeDesktopCard(card);
             requestAnimationFrame(() => {
                 this.reflowGridBoard(canvas, item.id, { animate: true });
             });
@@ -2440,12 +2463,31 @@ export const UI = {
     },
 
     applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, options = {}) {
+        if (isDesktopCard(card)) {
+            this.applyDesktopTilePresentation(card, item);
+            const snapLayout = isSnapLayoutMode(activeBoardViewMode);
+            if (snapLayout) this.applyDesktopSize(card);
+            else this.applyFreeformSize(card);
+            if (!options.skipGridReflow && snapLayout) {
+                const canvas = document.getElementById('app-canvas');
+                if (canvas?.classList.contains('view-grid')) {
+                    this.finalizeDesktopCard(card);
+                    requestAnimationFrame(() => {
+                        this.reflowGridBoard(canvas, card.dataset.id, { animate: true });
+                    });
+                }
+            }
+            this.cleanupCardAnimation(card);
+            this.syncSpatialChromeForEditing(card);
+            return;
+        }
+
         if (options.skipAnimation) {
             this.cancelCardAnimation(card);
         }
 
-        const isDesktop = isDesktopCard(card);
-        const snapLayout = isDesktop && isSnapLayoutMode(activeBoardViewMode);
+        const isDesktop = false;
+        const snapLayout = false;
         const animate = cardAnimationsEnabled() && !options.skipAnimation;
 
         const clearListAnimDimensions = () => {
@@ -2596,17 +2638,19 @@ export const UI = {
         this.applyItemCardTheme(card, item);
         card.style.borderLeftColor = categoryColor;
 
-        const isExpanded = desktop
-            ? false
-            : getExpandedCards(activeBoardViewMode)[item.id] === true;
-
-        if (isExpanded) {
-            card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note');
-            card.classList.add('expanded');
-            this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
-        } else {
+        if (desktop || freeform || gridBoard) {
             card.classList.remove('expanded');
-            this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
+            this.renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
+        } else {
+            const isExpanded = getExpandedCards(activeBoardViewMode)[item.id] === true;
+            if (isExpanded) {
+                card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note');
+                card.classList.add('expanded');
+                this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
+            } else {
+                card.classList.remove('expanded');
+                this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
+            }
         }
 
         if (isDesktopCard(card)) {
@@ -2735,7 +2779,7 @@ export const UI = {
         `;
     },
 
-    buildNoteMetaFooterHtml(item, { mode = 'inline', targetCatName = '', categoryColor = UNCATEGORIZED_COLOR } = {}) {
+    buildNoteMetaFooterHtml(item, { targetCatName = '', categoryColor = UNCATEGORIZED_COLOR } = {}) {
         const createdLabel = this.formatCreatedDate(item.created_at);
         const sizeLabel = computeNoteSizeKb(item);
         const lineLabel = formatNoteLineCount(computeNoteLineCount(item));
@@ -2746,23 +2790,15 @@ export const UI = {
         const lineHtml = `<span class="editor-note-lines" title="Number of lines">${lineLabel}</span>`;
         const statsHtml = `${lineHtml}${createdHtml}${sizeHtml}`;
 
-        if (mode === 'inline') {
-            return `
-                <div class="editor-meta-row editor-meta-row--footer editor-meta-row--inline">
-                    <span class="editor-meta-badges">
-                        <span class="badge-dot" style="background-color: ${categoryColor};" title="${this.escapeAttr(targetCatName || 'Uncategorized')}"></span>
-                        ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
-                    </span>
-                    <span class="editor-meta-stats">
-                        ${statsHtml}
-                    </span>
-                </div>
-            `;
-        }
-
         return `
-            <div class="editor-meta-row editor-meta-row--footer">
-                <span class="editor-meta-stats">${statsHtml}</span>
+            <div class="editor-meta-row editor-meta-row--footer editor-meta-row--inline">
+                <span class="editor-meta-badges">
+                    <span class="badge-dot" style="background-color: ${categoryColor};" title="${this.escapeAttr(targetCatName || 'Uncategorized')}"></span>
+                    ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
+                </span>
+                <span class="editor-meta-stats">
+                    ${statsHtml}
+                </span>
             </div>
         `;
     },
@@ -2833,7 +2869,6 @@ export const UI = {
         toolbarHtml = '',
         toolbarDragZone = '',
         footerDragZone = '',
-        metaMode = 'inline',
         targetCatName = '',
         categoryColor = UNCATEGORIZED_COLOR,
         categoryOptionsHtml = '',
@@ -2852,7 +2887,6 @@ export const UI = {
             ? this.buildNoteConfigPanelHtml(item, { categoryOptionsHtml, startParts, endParts })
             : '';
         const metaHtml = this.buildNoteMetaFooterHtml(item, {
-            mode: metaMode,
             targetCatName,
             categoryColor
         });
@@ -3382,83 +3416,8 @@ export const UI = {
         this.bindCollapsable('config-section-header', 'config-section', true);
     },
 
-    buildCollapsedPreviewHtml(item) {
-        const body = this.buildNoteBodyHtml(item, { canEdit: false });
-        if (!body.trim()) return '';
-        return `<div class="card-body tile-preview">${body}</div>`;
-    },
-
-    finalizeCollapsedCard(card, item, activeCategories, targetCatName, categoryColor) {
-        const ctx = { activeCategories, targetCatName, categoryColor };
-        this.attachCardActions(card, item, ctx);
-        this.bindCollapsedPreviewExpand(card, item, ctx);
-        this.finalizeDesktopCard(card);
-        this.syncCardDraggable(card);
-        this.syncBoardPinClass(card);
-    },
-
     renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor) {
-        const tileSize = resolveTileSize(item);
-        this.applyCollapsedTileClasses(card, tileSize);
-        if (tileSize === 'label') {
-            this.renderLabelCard(card, item, activeCategories, targetCatName, categoryColor);
-        } else if (tileSize === 'note') {
-            this.renderNoteCard(card, item, activeCategories, targetCatName, categoryColor);
-        } else {
-            this.renderCompactCard(card, item, activeCategories, targetCatName, categoryColor);
-        }
-    },
-
-    renderLabelCard(card, item, activeCategories, targetCatName, categoryColor) {
-        card.classList.remove('note-surface');
-        const dragZone = this.freeformDragZoneClass(card);
-        card.innerHTML = `
-            <div class="card-header tile-label-header${dragZone}">
-                ${this.buildNoteTitleHtml(item, false)}
-                ${this.buildCardActionsHtml(item, false, this.getCardActionsOptions(card))}
-            </div>
-        `;
-        this.finalizeCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
-    },
-
-    renderNoteCard(card, item, activeCategories, targetCatName, categoryColor) {
-        card.classList.remove('note-surface');
-        const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
-        const dragZone = this.freeformDragZoneClass(card);
-        const previewHtml = this.buildCollapsedPreviewHtml(item);
-        card.innerHTML = `
-            <div class="card-header${dragZone}">
-                ${this.buildNoteTitleHtml(item, false)}
-                ${this.buildCardActionsHtml(item, false, this.getCardActionsOptions(card))}
-            </div>
-            <div class="mini-card-meta compact${dragZone}">
-                <span class="badge-dot" style="background-color: ${dotColor};" title="${this.escapeAttr(targetCatName || 'Uncategorized')}"></span>
-                ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
-            </div>
-            ${previewHtml}
-        `;
-        this.finalizeCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
-    },
-
-    renderCompactCard(card, item, activeCategories, targetCatName, categoryColor) {
-        card.classList.remove('note-surface');
-        const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
-        const isExpanded = false;
-        const dragZone = this.freeformDragZoneClass(card);
-        const previewHtml = this.buildCollapsedPreviewHtml(item);
-        card.innerHTML = `
-            <div class="card-header${dragZone}">
-                ${this.buildNoteTitleHtml(item, false)}
-                ${this.buildCardActionsHtml(item, isExpanded, this.getCardActionsOptions(card))}
-            </div>
-            <div class="mini-card-meta compact${dragZone}">
-                <span class="badge-dot" style="background-color: ${dotColor};" title="${this.escapeAttr(targetCatName || 'Uncategorized')}"></span>
-                ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
-            </div>
-            ${previewHtml}
-        `;
-
-        this.finalizeCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
+        this.renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
     },
 
     canEditInline() {
@@ -3551,7 +3510,42 @@ export const UI = {
         return html;
     },
 
+    renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor) {
+        const canEdit = this.canEditInline();
+        const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
+        const dragZone = this.freeformDragZoneClass(card);
+
+        card.classList.remove('expanded');
+        card.innerHTML = this.buildNoteEditorShell(item, {
+            canEdit,
+            richEdit: canEdit,
+            toolbarHtml: this.buildCardActionsHtml(item, false, this.getCardActionsOptions(card)),
+            toolbarDragZone: dragZone,
+            footerDragZone: dragZone,
+            targetCatName,
+            categoryColor: dotColor
+        });
+
+        this.attachCardActions(card, item, {
+            activeCategories,
+            targetCatName,
+            categoryColor
+        });
+        this.bindNoteEditorShell(card, item, {
+            richEdit: canEdit,
+            refresh: () => this.refreshBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor),
+            stopMousedownPropagation: true
+        });
+        this.bindBoardEditorFocusChrome(card);
+        this.applyDesktopTilePresentation(card, item);
+        this.finalizeDesktopCard(card);
+        this.syncCardDraggable(card);
+        this.syncBoardPinClass(card);
+        this.focusPendingBoardField(card);
+    },
+
     renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor) {
+        card.classList.add('expanded');
         const canEdit = this.canEditInline();
         const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
         const dragZone = this.freeformDragZoneClass(card);
@@ -3562,7 +3556,6 @@ export const UI = {
             toolbarHtml: this.buildCardActionsHtml(item, true, this.getCardActionsOptions(card)),
             toolbarDragZone: dragZone,
             footerDragZone: dragZone,
-            metaMode: 'inline',
             targetCatName,
             categoryColor: dotColor
         });
@@ -3575,12 +3568,34 @@ export const UI = {
         this.bindNoteEditorShell(card, item, {
             richEdit: canEdit,
             refresh: () => this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor),
-            stopMousedownPropagation: isDesktopCard(card)
+            stopMousedownPropagation: false
         });
-        this.finalizeDesktopCard(card);
         this.syncCardDraggable(card);
         this.syncBoardPinClass(card);
         this.focusPendingBoardField(card);
+    },
+
+    refreshBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor) {
+        const shell = card.querySelector('.editor-note-shell');
+        if (shell && !card.dataset.pendingFocusStepId) {
+            this.syncItemBodyFromDom(shell, item);
+        }
+        const body = card.querySelector('.editor-note-body');
+        const scrollTop = body?.scrollTop ?? 0;
+        const pendingFocusStepId = card.dataset.pendingFocusStepId;
+        const pendingFocusEdge = card.dataset.pendingFocusEdge;
+        const pendingFocusPlainOffset = card.dataset.pendingFocusPlainOffset;
+        this.renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
+        const newBody = card.querySelector('.editor-note-body');
+        if (newBody) newBody.scrollTop = scrollTop;
+        if (pendingFocusStepId) {
+            card.dataset.pendingFocusStepId = pendingFocusStepId;
+            if (pendingFocusEdge) card.dataset.pendingFocusEdge = pendingFocusEdge;
+            if (pendingFocusPlainOffset != null) {
+                card.dataset.pendingFocusPlainOffset = pendingFocusPlainOffset;
+            }
+            this.focusPendingChecklistStep(card);
+        }
     },
 
     focusPendingBoardField(card) {
@@ -3600,40 +3615,6 @@ export const UI = {
         });
     },
 
-    bindCollapsedPreviewExpand(card, item, ctx) {
-        if (!isDesktopCard(card) || !this.canEditInline()) return;
-        if (card.dataset.collapsedExpandBound) return;
-        card.dataset.collapsedExpandBound = '1';
-
-        card.addEventListener('mousedown', (e) => {
-            if (e.button !== 0) return;
-            if (card.classList.contains('expanded') || card.classList.contains('is-editing-inline')) return;
-            if (e.target.closest('.editor-note-shell')) return;
-            if (e.target.closest(
-                '.card-actions, .card-act, .grab-handle--note-cat, .grab-handle--step, '
-                + 'button, a, input, .ff-resize, .ff-drag-gutter'
-            )) return;
-
-            const inPreview = e.target.closest('.tile-preview');
-            const inTitle = e.target.closest('.card-header .mini-card-title');
-            if (!inPreview && !inTitle) return;
-
-            e.stopPropagation();
-            card.dataset.pendingFocusField = inPreview ? 'content' : 'title';
-            if (card.dataset.skipExpand) delete card.dataset.skipExpand;
-            setExpandedCard(activeBoardViewMode, item.id, true);
-            this.applyCardExpandCollapse(
-                card,
-                item,
-                true,
-                ctx.activeCategories,
-                ctx.targetCatName,
-                ctx.categoryColor
-            );
-            window.dispatchEvent(new CustomEvent('board:cards_reflowed'));
-        });
-    },
-
     refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor) {
         const shell = card.querySelector('.editor-note-shell');
         // Skip DOM→item sync while a checklist row op is in flight — stale DOM would undo splits/merges.
@@ -3645,6 +3626,10 @@ export const UI = {
         const pendingFocusStepId = card.dataset.pendingFocusStepId;
         const pendingFocusEdge = card.dataset.pendingFocusEdge;
         const pendingFocusPlainOffset = card.dataset.pendingFocusPlainOffset;
+        if (isDesktopCard(card)) {
+            this.refreshBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
+            return;
+        }
         this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
         const newBody = card.querySelector('.editor-note-body') || card.querySelector('.card-body');
         if (newBody) newBody.scrollTop = scrollTop;
@@ -4637,9 +4622,8 @@ export const UI = {
     saveFreeformSizeFromCard(card) {
         if (!isDesktopCard(card)) return;
         const { w, h } = this.readFreeformCardSize(card);
-        const isExpanded = card.classList.contains('expanded');
         this.saveFreeformSize(card.dataset.id, w, h, {
-            updateRemembered: !isExpanded && !isAtLabelSize(w, h)
+            updateRemembered: !isAtLabelSize(w, h)
         });
     },
 
@@ -5039,34 +5023,26 @@ export const UI = {
     applyDesktopSize(card) {
         if (!isDesktopCard(card)) return;
         if (card.dataset.tierResizePreview === '1') return;
-        const isExpanded = card.classList.contains('expanded');
         const saved = this.getGridLayout()[card.dataset.id];
+        const item = this.resolveBoardItem(card.dataset.id);
         let w;
         let h;
-        if (!isExpanded) {
-            const item = this.resolveBoardItem(card.dataset.id);
-            if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
-                const clamped = geoClampSpatialSize(
-                    saved.w,
-                    saved.h,
-                    this.getCardTileSize(card, item)
-                );
-                w = clamped.w;
-                h = clamped.h;
-            } else {
-                const compact = this.gridTileRect(
-                    this.getCardTileSize(card, item),
-                    { x: 0, y: 0, w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H },
-                    saved
-                );
-                w = compact.w;
-                h = compact.h;
-            }
+        if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
+            const clamped = geoClampSpatialSize(
+                saved.w,
+                saved.h,
+                this.getCardTileSize(card, item)
+            );
+            w = clamped.w;
+            h = clamped.h;
         } else {
-            const item = this.resolveBoardItem(card.dataset.id);
-            const editorRect = this.resolveCardRect(card, item, { mode: 'editor' });
-            w = editorRect.w;
-            h = editorRect.h;
+            const compact = this.gridTileRect(
+                this.getCardTileSize(card, item),
+                { x: 0, y: 0, w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H },
+                saved
+            );
+            w = compact.w;
+            h = compact.h;
         }
         this.applyFreeformDimensions(card, w, h);
     },

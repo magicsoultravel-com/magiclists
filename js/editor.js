@@ -392,6 +392,13 @@ export const Editor = {
     renderForm() {
         const item = this.activeItem;
         const activeCategory = item.categories?.[0] || '';
+        const matchedCat = this.availableCategories.find((cat) => {
+            const name = typeof cat === 'string' ? cat : cat?.name;
+            return name && name.toLowerCase() === activeCategory.toLowerCase();
+        });
+        const categoryColor = matchedCat && typeof matchedCat !== 'string' && matchedCat.color
+            ? matchedCat.color
+            : '#64748b';
         const categoryOptionsHtml = `<option value="" ${!activeCategory ? 'selected' : ''}>—</option>` +
             this.availableCategories.map(cat => {
                 const catName = typeof cat === 'string' ? cat : cat.name;
@@ -420,7 +427,8 @@ export const Editor = {
             showConfig: true,
             showFormat: true,
             richEdit: true,
-            metaMode: 'modal',
+            targetCatName: activeCategory,
+            categoryColor,
             categoryOptionsHtml,
             startParts,
             endParts,

@@ -3897,10 +3897,52 @@ textarea.form-input {
     min-height: 100%;
 }
 
-#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.expanded),
-#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.expanded) {
+#app-canvas.view-grid .mini-card[data-desktop="1"],
+#app-canvas.view-freeform .mini-card[data-desktop="1"] {
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     box-sizing: border-box;
+}
+
+#app-canvas.view-grid .mini-card[data-desktop="1"] .editor-note-shell,
+#app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-note-shell {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+    position: relative;
+    z-index: 6;
+    isolation: isolate;
+}
+
+#app-canvas.view-grid .mini-card[data-desktop="1"] .editor-note-header,
+#app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-note-header {
+    flex: 0 0 auto;
+    min-width: 0;
+}
+
+#app-canvas.view-grid .mini-card[data-desktop="1"] .editor-meta-wrap,
+#app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-meta-wrap {
+    flex: 0 0 auto;
+    min-width: 0;
+}
+
+#app-canvas.view-grid .mini-card[data-desktop="1"] .editor-note-body,
+#app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-note-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+}
+
+#app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-label .editor-note-body,
+#app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-label .editor-note-body,
+#app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-label .editor-meta-wrap,
+#app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-label .editor-meta-wrap {
+    display: none;
 }
 
 #app-canvas.view-freeform .mini-card {
@@ -4027,17 +4069,8 @@ textarea.form-input {
     opacity: var(--desktop-drag-opacity);
 }
 
-#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.expanded) .tile-preview,
-#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.expanded) .tile-preview,
-#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.expanded) .card-header .mini-card-title,
-#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.expanded) .card-header .mini-card-title {
-    cursor: pointer;
-}
-
-#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.expanded) .tile-preview:hover,
-#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.expanded) .tile-preview:hover,
-#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.expanded) .card-header .mini-card-title:hover,
-#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.expanded) .card-header .mini-card-title:hover {
+#app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-note-header .mini-card-title,
+#app-canvas.view-grid .mini-card[data-desktop="1"] .editor-note-header .mini-card-title {
     cursor: text;
 }
 
@@ -4055,11 +4088,11 @@ textarea.form-input {
     z-index: 5;
 }
 
-/* Editable shell above chrome layer; resize handles stay on top via .ff-resize */
+/* Editable shell above chrome layer when typing; resize handles stay on top via .ff-resize */
+#app-canvas.view-freeform .mini-card[data-desktop="1"].is-editing-inline .editor-note-shell,
+#app-canvas.view-grid .mini-card[data-desktop="1"].is-editing-inline .editor-note-shell,
 #app-canvas.view-freeform .mini-card.expanded .editor-note-shell,
-#app-canvas.view-grid .mini-card.expanded .editor-note-shell,
-#app-canvas.view-freeform .mini-card.is-editing-inline .editor-note-shell,
-#app-canvas.view-grid .mini-card.is-editing-inline .editor-note-shell {
+#app-canvas.view-grid .mini-card.expanded .editor-note-shell {
     position: relative;
     z-index: 20;
     isolation: isolate;
@@ -4460,16 +4493,35 @@ textarea.form-input {
     align-items: center;
     justify-content: space-between;
     gap: 0.35rem;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    min-height: 1.15em;
+    max-height: 1.15em;
 }
 
 .editor-meta-badges,
 .editor-meta-stats {
     display: inline-flex;
     align-items: center;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 0.25rem;
     min-width: 0;
+    white-space: nowrap;
+}
+
+.editor-meta-badges {
+    flex: 0 1 auto;
+    overflow: hidden;
+}
+
+.editor-meta-stats {
+    flex: 0 0 auto;
+}
+
+.editor-meta-row--footer .editor-created-date,
+.editor-meta-row--footer .editor-note-size,
+.editor-meta-row--footer .editor-note-lines {
+    white-space: nowrap;
 }
 
 #editor-overlay .editor-meta-row--footer {
