@@ -1286,7 +1286,22 @@ export const UI = {
         if (!isDesktopCard(card)) return;
         card.classList.remove('expanded');
         card.classList.add('note-surface');
-        this.applyCollapsedTileClasses(card, resolveTileSize(item));
+        const { w, h } = this.readNoteRect(card);
+        const tier = geoInferCollapsedTileTier(w, h, resolveTileSize(item));
+        this.applyCollapsedTileClasses(card, tier);
+    },
+
+    syncSpatialToggleButton(card) {
+        if (!isDesktopCard(card)) return;
+        const toggleBtn = card.querySelector('.card-act--toggle');
+        if (!toggleBtn) return;
+        const { w, h } = this.readNoteRect(card);
+        const atLabel = isAtLabelSize(w, h);
+        const expandTitle = atLabel ? 'Expand' : 'Collapse to label';
+        const lastIcon = atLabel ? CARD_ICONS.expand : CARD_ICONS.collapse;
+        toggleBtn.innerHTML = lastIcon;
+        toggleBtn.setAttribute('title', expandTitle);
+        toggleBtn.setAttribute('aria-label', expandTitle);
     },
 
     bindBoardEditorFocusChrome(card) {
@@ -1515,6 +1530,21 @@ export const UI = {
         }
     },
 
+    applySpatialToggleRect(card, item, rect, ctx = {}) {
+        this.applyNoteRect(card, rect, { settling: false });
+        this.applyDesktopTilePresentation(card, item);
+        this.saveTileLayoutFromCard(card, item, rect, resolveTileSize(item));
+
+        if (!isDesktopCard(card)) return;
+        this.finalizeDesktopCard(card);
+        if (isSnapLayoutMode(activeBoardViewMode)) {
+            const canvas = card.closest('#app-canvas');
+            if (canvas?.classList.contains('view-grid')) {
+                requestAnimationFrame(() => this.reflowGridBoard(canvas, item.id, { animate: true }));
+            }
+        }
+    },
+
     applyTileZoneToggle(card, item, ctx = {}) {
         if (!isDesktopCard(card) && this.collapseLegacyExpandedTile(card, item, ctx)) return;
 
@@ -1522,12 +1552,11 @@ export const UI = {
         const tileSize = resolveTileSize(item);
         if (isAtLabelSize(pos.w, pos.h)) {
             const rect = this.resolveCardRect(card, item, { mode: 'remembered' });
-            const tier = geoInferCollapsedTileTier(rect.w, rect.h, tileSize);
-            this.applyTileTierRect(card, item, tier, rect, ctx);
+            this.applySpatialToggleRect(card, item, rect, ctx);
         } else {
             this.persistRememberedSpatialSize(item.id, pos.w, pos.h, tileSize);
             const labelRect = this.resolveCardRect(card, item, { mode: 'label' });
-            this.applyTileTierRect(card, item, 'label', labelRect, ctx);
+            this.applySpatialToggleRect(card, item, labelRect, ctx);
         }
     },
 
@@ -1746,7 +1775,6 @@ export const UI = {
         showDrag = false,
         showArchive = false,
         spatialTile = false,
-        legacyExpanded = false,
         tileSize = LEGACY_TILE_SIZE,
         tileW = 0,
         tileH = 0
@@ -1758,7 +1786,7 @@ export const UI = {
             expandTitle = 'Show on board';
             lastIcon = CARD_ICONS.collapse;
         } else if (spatialTile) {
-            const atLabel = legacyExpanded || isAtLabelSize(tileW, tileH);
+            const atLabel = isAtLabelSize(tileW, tileH);
             expandTitle = atLabel ? 'Expand' : 'Collapse to label';
             lastIcon = atLabel ? CARD_ICONS.expand : CARD_ICONS.collapse;
         } else {
@@ -1970,9 +1998,13 @@ export const UI = {
             });
             toggleBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                const isExpanded = card.classList.contains('expanded');
-                if (!isExpanded && consumeSkipExpand()) return;
-                if (card.dataset.skipExpand) delete card.dataset.skipExpand;
+                if (isDesktopCard(card)) {
+                    delete card.dataset.skipExpand;
+                } else {
+                    const isExpanded = card.classList.contains('expanded');
+                    if (!isExpanded && consumeSkipExpand()) return;
+                    if (card.dataset.skipExpand) delete card.dataset.skipExpand;
+                }
                 if (ctx) this.toggleCardExpanded(card, item, { ...ctx, fromToolbar: true });
             });
         }
@@ -2247,6 +2279,7 @@ export const UI = {
             this.applyFreeformSize(card);
         }
         this.syncSpatialChromeForEditing(card);
+        this.syncSpatialToggleButton(card);
     },
 
     getCardRenderContext(item, activeCategories) {
