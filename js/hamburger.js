@@ -5,24 +5,14 @@ import { getLocalStorageByteEstimate, getLocalStorageUsageBreakdown } from './la
 import { resolveNoteColor } from './colorPicker.js';
 import { hasRichMarkup, stripRichText } from './richText.js';
 import { UndoManager } from './undo.js';
-
-const NOTES_LIST_SORT_KEY = 'matrix_notes_list_sort';
-const SIDEBAR_SECTIONS_KEY = 'matrix_sidebar_sections';
-
-function readSidebarSections() {
-    try {
-        return JSON.parse(localStorage.getItem(SIDEBAR_SECTIONS_KEY) || '{}');
-    } catch {
-        return {};
-    }
-}
-
-function writeSidebarSection(sectionId, collapsed) {
-    const map = readSidebarSections();
-    if (collapsed) map[sectionId] = true;
-    else delete map[sectionId];
-    localStorage.setItem(SIDEBAR_SECTIONS_KEY, JSON.stringify(map));
-}
+import {
+    readNotesListSort as loadNotesListSort,
+    readPanelCollapsed,
+    readSidebarSections,
+    writeNotesListSort as persistNotesListSort,
+    writePanelCollapsed,
+    writeSidebarSection
+} from './sidebarPrefs.js';
 
 export function applySectionCollapse(sectionId, headerId, startCollapsed = false) {
     const header = document.getElementById(headerId);
@@ -52,11 +42,9 @@ export const SidePanel = {
         this.panel = document.getElementById('side-panel');
         this.toggleBtn = document.getElementById('nav-panel-toggle');
         this.toggleFab = document.getElementById('nav-panel-toggle-fab');
-        this.notesListSort = this.readNotesListSort();
+        this.notesListSort = loadNotesListSort();
 
-        const stored = localStorage.getItem('matrix_panel_collapsed');
-        const collapsed = stored === null ? true : stored === 'true';
-        this.setCollapsed(collapsed, false);
+        this.setCollapsed(readPanelCollapsed(), { persist: false });
         this.updateStorageFooter();
 
         this.toggleBtn?.addEventListener('click', () => this.toggle());
@@ -72,29 +60,33 @@ export const SidePanel = {
         const pct = Math.min(100, Math.round((total / 5_000_000) * 100));
         const { notes, matrix, app } = getStorageBreakdown();
         const keyBreakdown = getLocalStorageUsageBreakdown(6);
+        const totalLine = `Total: ${mb} MB (~${pct}%)`;
         const detail = keyBreakdown
             .map((row) => `${row.key}: ${(row.bytes / 1024).toFixed(1)} KB`)
             .join('\n');
+        const fallbackDetail = 'Notes: note content · Matrix: categories, layouts, view state · App: theme, tools, session';
 
         const hintLine = keyBreakdown.length
             ? '<span class="sidebar-storage-stat sidebar-storage-stat--hint">Hover for largest items</span>'
             : '';
 
         container.innerHTML = `
-            <span class="sidebar-storage-stat">Total: ${mb} MB (~${pct}%)</span>
             <span class="sidebar-storage-stat">Notes: ${formatStorageSize(notes)}</span>
             <span class="sidebar-storage-stat">Matrix: ${formatStorageSize(matrix)}</span>
             <span class="sidebar-storage-stat">App: ${formatStorageSize(app)}</span>
+            <span class="sidebar-storage-stat">${totalLine}</span>
             ${hintLine}
         `;
-        container.title = detail || 'Notes: note content · Matrix: categories, layouts, view state · App: theme, tools, session';
+        container.title = detail
+            ? `${totalLine}\n${detail}`
+            : `${totalLine}\n${fallbackDetail}`;
     },
 
-    setCollapsed(collapsed) {
+    setCollapsed(collapsed, { persist = true } = {}) {
         this.panel?.classList.toggle('is-collapsed', collapsed);
         this.toggleBtn?.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         this.toggleFab?.classList.toggle('is-hidden', !collapsed);
-        localStorage.setItem('matrix_panel_collapsed', collapsed ? 'true' : 'false');
+        if (persist) writePanelCollapsed(collapsed);
     },
 
     toggle() {
@@ -144,24 +136,9 @@ export const SidePanel = {
         });
     },
 
-    readNotesListSort() {
-        try {
-            const stored = JSON.parse(localStorage.getItem(NOTES_LIST_SORT_KEY) || 'null');
-            if (stored?.field === 'title' || stored?.field === 'date') {
-                return {
-                    field: stored.field,
-                    dir: stored.dir === 'asc' ? 'asc' : 'desc'
-                };
-            }
-        } catch {
-            /* ignore */
-        }
-        return { field: 'date', dir: 'desc' };
-    },
-
     writeNotesListSort(sort) {
         this.notesListSort = sort;
-        localStorage.setItem(NOTES_LIST_SORT_KEY, JSON.stringify(sort));
+        persistNotesListSort(sort);
         this.updateNotesListSortButtons();
     },
 
@@ -178,7 +155,7 @@ export const SidePanel = {
 
         titleBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const current = this.readNotesListSort();
+            const current = loadNotesListSort();
             if (current.field === 'title') {
                 this.writeNotesListSort({ field: 'title', dir: current.dir === 'asc' ? 'desc' : 'asc' });
             } else {
@@ -189,7 +166,7 @@ export const SidePanel = {
 
         dateBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            const current = this.readNotesListSort();
+            const current = loadNotesListSort();
             if (current.field === 'date') {
                 this.writeNotesListSort({ field: 'date', dir: current.dir === 'asc' ? 'desc' : 'asc' });
             } else {
@@ -200,7 +177,7 @@ export const SidePanel = {
     },
 
     updateNotesListSortButtons() {
-        const sort = this.readNotesListSort();
+        const sort = loadNotesListSort();
         const titleBtn = document.getElementById('notes-sort-title');
         const dateBtn = document.getElementById('notes-sort-date');
         if (!titleBtn || !dateBtn) return;
@@ -226,7 +203,7 @@ export const SidePanel = {
     },
 
     sortNotesForList(items) {
-        const sort = this.readNotesListSort();
+        const sort = loadNotesListSort();
         const dir = sort.dir === 'asc' ? 1 : -1;
         return [...items].sort((a, b) => {
             if (sort.field === 'title') {

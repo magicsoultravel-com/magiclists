@@ -14,6 +14,7 @@ import {
     readRememberedSize,
     resolveTileSize
 } from './tileGeometry.js';
+import { SIDEBAR_BACKUP_KEYS } from './sidebarPrefs.js';
 import { readViewSessions, writeViewSessions, VIEW_MODES } from './viewSession.js';
 
 const GRID_LAYOUT_KEY = 'matrix_grid_layout';
@@ -54,6 +55,7 @@ const LAYOUT_BACKUP_KEYS = [
 ];
 
 const PRESENTATION_CLEAR_KEYS = [...new Set(LAYOUT_BACKUP_KEYS)];
+const BACKUP_KEYS = [...LAYOUT_BACKUP_KEYS, ...SIDEBAR_BACKUP_KEYS];
 
 let quotaDialogOpen = false;
 
@@ -1002,7 +1004,7 @@ export async function reconcileLayoutStorage({ items = [], categories = [], show
 
 export function getLayoutBackupKeys() {
     const payload = {};
-    LAYOUT_BACKUP_KEYS.forEach((key) => {
+    BACKUP_KEYS.forEach((key) => {
         const raw = localStorage.getItem(key);
         if (raw != null) payload[key] = raw;
     });
@@ -1011,7 +1013,7 @@ export function getLayoutBackupKeys() {
 
 export function applyLayoutBackupKeys(payload = {}) {
     if (!payload || typeof payload !== 'object') return;
-    LAYOUT_BACKUP_KEYS.forEach((key) => {
+    BACKUP_KEYS.forEach((key) => {
         if (payload[key] == null) return;
         const value = typeof payload[key] === 'string' ? payload[key] : JSON.stringify(payload[key]);
         if (!safeSetItem(key, value)) {

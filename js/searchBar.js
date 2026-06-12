@@ -62,7 +62,7 @@ export const SearchBar = {
             if (this.isEditableTarget(e.target)) return;
             e.preventDefault();
             if (SidePanel.panel?.classList.contains('is-collapsed')) {
-                SidePanel.setCollapsed(false);
+                SidePanel.setCollapsed(false, { persist: false });
             }
             this.input.focus();
             this.input.select();

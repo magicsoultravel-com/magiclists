@@ -156,7 +156,7 @@
                 </div>
                 <div id="sidebar-stats-section" class="sidebar-stats-section">
                     <div class="collapsable-header list-row--header" id="stats-section-header">
-                        <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Stats</span>
+                        <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>localStorage</span>
                     </div>
                     <div class="collapsable-section collapsed" id="stats-section">
                         <div id="sidebar-storage-stats" class="sidebar-storage-stats" aria-label="Local storage usage"></div>
@@ -167,6 +167,35 @@
 
             <input type="file" id="system-import-file-picker" accept=".json" class="is-hidden">
         </aside>
+        <script>
+            (function () {
+                try {
+                    var stored = localStorage.getItem('matrix_panel_collapsed');
+                    var collapsed = stored === null ? true : stored === 'true';
+                    var panel = document.getElementById('side-panel');
+                    var fab = document.getElementById('nav-panel-toggle-fab');
+                    var toggle = document.getElementById('nav-panel-toggle');
+                    if (panel) panel.classList.toggle('is-collapsed', collapsed);
+                    if (fab) fab.classList.toggle('is-hidden', !collapsed);
+                    if (toggle) toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+
+                    var sectionsRaw = localStorage.getItem('matrix_sidebar_sections');
+                    if (!sectionsRaw) return;
+                    var sections = JSON.parse(sectionsRaw);
+                    Object.keys(sections).forEach(function (sectionId) {
+                        if (!sections[sectionId]) return;
+                        var section = document.getElementById(sectionId);
+                        if (!section) return;
+                        section.classList.add('collapsed');
+                        var header = section.previousElementSibling;
+                        if (header && header.classList.contains('collapsable-header')) {
+                            var toggleEl = header.querySelector('.collapsable-toggle');
+                            if (toggleEl) toggleEl.classList.add('collapsed');
+                        }
+                    });
+                } catch (e) { /* ignore */ }
+            })();
+        </script>
 
         <div id="workspace-main" class="workspace-main">
             <div id="desktop-surface" class="desktop-surface">
