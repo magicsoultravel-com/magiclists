@@ -64,12 +64,17 @@ function finishSnapPanelGesture(card, {
     endScrollPolicy,
     cleanupActive,
     animate = true,
-    tierResizeState = null
-}) {
+    tierResizeState = null,
+    snapMode = 'full'
+} = {}) {
     clearPreview(false);
     endScrollPolicy?.();
     const bounds = getBounds();
-    const rect = UI.snapNoteRect(UI.readNoteRect(card), { maxW: bounds.packW, maxH: bounds.maxH });
+    const live = UI.readNoteRect(card);
+    const origin = bounds.origin ?? CANVAS_LAYOUT_ORIGIN;
+    const rect = snapMode === 'position'
+        ? UI.snapNotePosition(live, { maxW: bounds.packW, maxH: bounds.maxH, origin })
+        : UI.snapNoteRect(live, { maxW: bounds.packW, maxH: bounds.maxH });
     UI.applyNoteRect(card, rect, { settling: animate });
 
     const item = currentItems.find((i) => i.id === card.dataset.id);
@@ -587,7 +592,8 @@ export const DragDropEngine = {
                     canvas.classList.remove('is-layout-active', 'is-grid-forcing');
                 },
                 animate: true,
-                tierResizeState
+                tierResizeState,
+                snapMode: 'position'
             });
         };
 
@@ -671,17 +677,30 @@ export const DragDropEngine = {
                 nextY = origY + dy;
             }
 
-            if (item && UI.isCollapsedTile(card) && tierResizeState) {
+            if (item && UI.isCollapsedTile(card) && tierResizeState && !snapEnabled) {
                 nextX = Math.max(origin, nextX);
                 nextY = Math.max(origin, nextY);
-                const maxW = snapEnabled ? UI.getGridBoardBounds(canvas).packW + origin : undefined;
                 UI.processCollapsedTierResizeMove(card, item, tierResizeState, {
                     x: nextX,
                     y: nextY,
                     w: nextW,
                     h: nextH
-                }, { maxW, axis });
-                if (snapEnabled) runLayoutPreview(card);
+                }, { axis });
+                return;
+            }
+
+            if (item && UI.isCollapsedTile(card) && tierResizeState && snapEnabled) {
+                nextX = Math.max(origin, nextX);
+                nextY = Math.max(origin, nextY);
+                card.dataset.tierResizePreview = '1';
+                card.classList.add('is-tier-resizing');
+                card.style.left = `${nextX}px`;
+                card.style.top = `${nextY}px`;
+                card.style.setProperty('width', `${Math.max(FREEFORM_MIN_W, nextW)}px`, 'important');
+                card.style.setProperty('height', `${Math.max(FREEFORM_MIN_H, nextH)}px`, 'important');
+                card.style.setProperty('min-height', `${Math.max(FREEFORM_MIN_H, nextH)}px`, 'important');
+                card.style.setProperty('max-height', `${Math.max(FREEFORM_MIN_H, nextH)}px`, 'important');
+                runLayoutPreview(card);
                 return;
             }
 
@@ -691,19 +710,8 @@ export const DragDropEngine = {
 
             nextX = Math.max(origin, nextX);
             nextY = Math.max(origin, nextY);
-            let finalW = clamped.w;
-            let finalH = clamped.h;
-
-            if (snapEnabled) {
-                const maxW = UI.getGridBoardBounds(canvas).packW + origin;
-                if (nextX + finalW > maxW) {
-                    if (axis.includes('w')) {
-                        nextX = Math.max(origin, maxW - finalW);
-                    } else {
-                        finalW = Math.max(COLUMN_GRID_CELL_W, maxW - nextX);
-                    }
-                }
-            }
+            const finalW = clamped.w;
+            const finalH = clamped.h;
 
             card.style.left = `${nextX}px`;
             card.style.top = `${nextY}px`;
@@ -730,6 +738,16 @@ export const DragDropEngine = {
             } else if (moved) {
                 card.dataset.skipExpand = '1';
                 if (snapEnabled) {
+                    if (item && tierResizeState && UI.isCollapsedTile(card)) {
+                        const { w, h } = UI.readFreeformCardSize(card);
+                        tierResizeState.previewTier = UI.inferCollapsedTileTier(
+                            w,
+                            h,
+                            tierResizeState.previewTier
+                        );
+                        delete card.dataset.tierResizePreview;
+                        card.classList.remove('is-tier-resizing');
+                    }
                     finishSnapDrop(card, { tierResizeState });
                 } else {
                     UI.saveFreeformPosition(

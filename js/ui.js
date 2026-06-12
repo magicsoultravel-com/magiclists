@@ -1497,6 +1497,10 @@ export const UI = {
         if (source?.customCompact && this.isCustomTileRect(source.w, source.h, tileSize)) {
             return { ...base, w: source.w, h: source.h };
         }
+        if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)
+            && this.isCustomTileRect(saved.w, saved.h, tileSize)) {
+            return { ...base, w: saved.w, h: saved.h };
+        }
         const defaults = this.getTileDefaultRect(tileSize);
         return { ...base, w: defaults.w, h: defaults.h };
     },
@@ -5473,10 +5477,11 @@ export const UI = {
 
         let resolvedActor = null;
         if (actorId && actorRect) {
-            const entry = cardEntries.find((e) => e.id === actorId);
-            const isExpanded = entry ? isCardExpanded(actorId, entry.card) : false;
-            const sized = rectForCard(entry?.card, actorRect, isExpanded);
-            resolvedActor = this.snapNoteRect(sized, { maxW: packW, maxH: limitH });
+            resolvedActor = this.snapNotePosition(actorRect, {
+                maxW: packW,
+                maxH: limitH,
+                origin
+            });
         }
 
         return this.resolveGridPushLayout({
