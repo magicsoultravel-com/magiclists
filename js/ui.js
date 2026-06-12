@@ -55,6 +55,7 @@ import {
     renderFileCabinet,
     seedFileCabinetOrderFromItems,
     setFileCabinetActive,
+    shouldFileItem,
     FILE_CABINET_ORDER_KEY
 } from './fileCabinet.js';
 import {
@@ -3009,12 +3010,17 @@ export const UI = {
         });
         const bodyIdAttr = bodyId ? ` id="${bodyId}"` : '';
 
+        const toplineHtml = `
+                <div class="editor-note-topline">
+                    <div class="editor-note-header">
+                        ${titleHtml}
+                    </div>
+                    ${toolbarHtml ? `<div class="note-editor-toolbar${toolbarDragZone}">${toolbarHtml}</div>` : ''}
+                </div>`;
+
         return `
             <div class="editor-note-shell note-surface">
-                ${toolbarHtml ? `<div class="note-editor-toolbar${toolbarDragZone}">${toolbarHtml}</div>` : ''}
-                <div class="editor-note-header">
-                    ${titleHtml}
-                </div>
+                ${toplineHtml}
                 ${formatHtml}
                 ${configHtml}
                 <div class="card-body editor-note-body"${bodyIdAttr}>
@@ -3082,10 +3088,12 @@ export const UI = {
     collapseAllFileCabinetCards() {
         const sortBy = activeBoardViewMode;
         boardItemsById.forEach((item) => {
+            if (shouldFileItem(item, sortBy, this)) return;
             const size = this.getStoredItemSizeForFileCabinet(item.id, sortBy);
-            if (!size || isAtLabelSize(size.w, size.h)) return;
             const tileSize = resolveTileSize(item);
-            this.persistRememberedSpatialSize(item.id, size.w, size.h, tileSize);
+            if (size) {
+                this.persistRememberedSpatialSize(item.id, size.w, size.h, tileSize);
+            }
             addToFileCabinetOrder(getItemCategoryName(item), item.id);
             const labelRect = getLabelRect();
             const savedGrid = this.getGridLayout()[item.id];

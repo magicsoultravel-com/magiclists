@@ -28,7 +28,7 @@ import { SearchBar } from './searchBar.js';
 import { Fullscreen } from './fullscreen.js';
 import { SidebarRadio } from './sidebarRadio.js';
 import {
-    seedFromCurrentLayout,
+    migrateItemsToFileCabinet,
     setFileCabinetActive
 } from './fileCabinet.js';
 
@@ -528,7 +528,7 @@ class Application {
         AppState.viewSettings.fileCabinet = next;
         setFileCabinetActive(next);
         if (next) {
-            seedFromCurrentLayout(AppState.items, AppState.viewSettings.sortBy, UI);
+            migrateItemsToFileCabinet(AppState.items, AppState.viewSettings.sortBy, UI);
         }
         this.updateViewToggleState();
         this.updateLayoutResetVisibility();
