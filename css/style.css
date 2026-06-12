@@ -4614,9 +4614,33 @@ html[data-tile-small-footprint="label"] #app-canvas.view-freeform .mini-card[dat
 #editor-overlay .modal .modal-resize-se { bottom: 0; right: 0; cursor: se-resize; }
 
 #editor-overlay .modal.modal--floating .modal-body {
+    display: flex;
+    flex-direction: column;
     flex: 1 1 auto;
     min-height: 0;
+    overflow: hidden;
+}
+
+#editor-overlay .modal.modal--floating .editor-note-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+#editor-overlay .modal.modal--floating .editor-note-topline,
+#editor-overlay .modal.modal--floating .editor-panel {
+    flex: 0 0 auto;
+}
+
+#editor-overlay .modal.modal--floating .editor-note-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
     overflow-y: auto;
+}
+
+#editor-overlay .modal.modal--floating .editor-meta-wrap {
+    flex: 0 0 auto;
+    margin-top: auto;
 }
 
 #editor-overlay .modal.has-custom-bg {
@@ -4759,6 +4783,22 @@ html[data-tile-small-footprint="label"] #app-canvas.view-freeform .mini-card[dat
 
 #editor-overlay .editor-meta-row--footer {
     justify-content: flex-start;
+}
+
+#editor-overlay .editor-meta-row--footer,
+#editor-overlay .editor-meta-row--inline {
+    font-size: calc(0.6rem * var(--note-font-scale, 1));
+    min-height: unset;
+    max-height: none;
+    flex-wrap: wrap;
+    row-gap: 0.2rem;
+}
+
+#editor-overlay .editor-meta-row--footer .editor-created-date,
+#editor-overlay .editor-meta-row--footer .editor-note-size,
+#editor-overlay .editor-meta-row--footer .editor-note-lines {
+    font-size: calc(0.56rem * var(--note-font-scale, 1));
+    white-space: nowrap;
 }
 
 .editor-note-header .mini-card-title {

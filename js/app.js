@@ -10,7 +10,13 @@ import {
     getLayoutBackupKeys,
     reconcileLayoutStorage
 } from './layoutStorage.js';
-import { DEFAULT_CATEGORIES, normalizeCategories } from './categories.js';
+import {
+    DEFAULT_CATEGORIES,
+    isUncategorizedCategory,
+    normalizeCategories,
+    readStoredCategories,
+    writeStoredCategories
+} from './categories.js';
 import { UndoManager, historyLabelForItem } from './undo.js';
 import { DesktopBackground } from './desktopBackground.js';
 import { ChromeBackground } from './chromeBackground.js';
@@ -24,7 +30,7 @@ import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
 import { exportAppCode } from './codeExport.js';
 import { readViewSessions, restoreViewSession } from './viewSession.js';
-import { DrawingBoard, getDrawingBackupKeys } from './drawingBoard.js';
+import { DrawingBoard } from './drawingBoard.js';
 import { SearchBar } from './searchBar.js';
 import { Fullscreen } from './fullscreen.js';
 import { SidebarRadio } from './sidebarRadio.js';
@@ -163,7 +169,10 @@ class Application {
         if (storedCats) {
             try {
                 const parsed = normalizeCategories(JSON.parse(storedCats), { keepEmpty: true });
-                if (parsed.length) AppState.categories = parsed;
+                if (parsed.length) {
+                    AppState.categories = writeStoredCategories(parsed, { keepEmpty: true });
+                    return;
+                }
             } catch {
                 /* ignore */
             }
@@ -171,8 +180,7 @@ class Application {
 
         if (!AppState.categories?.length) {
             const db = API._getLocalDB();
-            AppState.categories = normalizeCategories(db.settings?.categories || []);
-            localStorage.setItem('matrix_custom_categories', JSON.stringify(AppState.categories));
+            AppState.categories = writeStoredCategories(normalizeCategories(db.settings?.categories || []));
         }
     }
 
@@ -403,19 +411,26 @@ class Application {
     }
 
     executeDataBackupExport() {
+        const categories = readStoredCategories({ keepEmpty: true });
+        writeStoredCategories(categories, { keepEmpty: true });
+
         const databasePayload = localStorage.getItem('matrix_database');
-        const customCategoriesPayload = localStorage.getItem('matrix_custom_categories');
-        const drawingKeys = getDrawingBackupKeys();
+        let matrix_database = databasePayload ? JSON.parse(databasePayload) : null;
+        if (matrix_database) {
+            matrix_database = {
+                ...matrix_database,
+                settings: {
+                    ...(matrix_database.settings || {}),
+                    categories: categories.map((cat) => cat.name)
+                }
+            };
+        }
+
         const layoutKeys = getLayoutBackupKeys();
         const backupPackage = {
             timestamp: Math.floor(Date.now() / 1000),
-            matrix_database: databasePayload ? JSON.parse(databasePayload) : null,
-            matrix_custom_categories: customCategoriesPayload ? JSON.parse(customCategoriesPayload) : null,
-            matrix_global_drawing: drawingKeys.matrix_global_drawing ? JSON.parse(drawingKeys.matrix_global_drawing) : null,
-            matrix_drawing_prefs: drawingKeys.matrix_drawing_prefs ? JSON.parse(drawingKeys.matrix_drawing_prefs) : null,
-            matrix_workspace_mode: drawingKeys.matrix_workspace_mode,
-            matrix_drawing_toolbar_hidden: drawingKeys.matrix_drawing_toolbar_hidden,
-            matrix_canvas_viewport: drawingKeys.matrix_canvas_viewport,
+            matrix_database,
+            matrix_custom_categories: categories,
             ...Object.fromEntries(
                 Object.entries(layoutKeys).map(([key, raw]) => {
                     try {
@@ -470,6 +485,10 @@ class Application {
         const nameInput = prompt("Enter Unique New Category Label Name:");
         if (!nameInput || !nameInput.trim()) return;
         const cleanName = nameInput.trim();
+        if (isUncategorizedCategory(cleanName)) {
+            alert('Conflict: Uncategorized is reserved.');
+            return;
+        }
         if (AppState.categories.map(c => c.name.toLowerCase()).includes(cleanName.toLowerCase())) {
             alert("Conflict: That category tag layout already exists.");
             return;
@@ -483,8 +502,10 @@ class Application {
             align: 'end',
             onSelect: (color) => {
                 const cleanColor = color && color.trim() ? color.trim() : '#64748b';
-                AppState.categories.push({ name: cleanName, color: cleanColor });
-                localStorage.setItem('matrix_custom_categories', JSON.stringify(AppState.categories));
+                AppState.categories = writeStoredCategories([
+                    ...AppState.categories,
+                    { name: cleanName, color: cleanColor }
+                ], { keepEmpty: true });
                 this.syncDataStore();
             }
         });
@@ -1002,7 +1023,7 @@ class Application {
         });
 
         window.addEventListener('category:order_changed', (e) => {
-            AppState.categories = e.detail || AppState.categories;
+            AppState.categories = writeStoredCategories(e.detail || AppState.categories, { keepEmpty: true });
             this.syncDataStore();
         });
     }

@@ -1,5 +1,16 @@
-import { normalizeCategories } from './categories.js';
+import {
+    ensureUncategorizedCategory,
+    normalizeCategories,
+    writeStoredCategories
+} from './categories.js';
 import { applyLayoutBackupKeys } from './layoutStorage.js';
+
+let stepIdSeq = 0;
+
+function createStepId() {
+    stepIdSeq += 1;
+    return `step_${Date.now()}_${stepIdSeq}_${Math.random().toString(36).slice(2, 8)}`;
+}
 
 function migrateImportedStep(step) {
     if (!step || typeof step !== 'object') return step;
@@ -10,6 +21,7 @@ function migrateImportedStep(step) {
         completed: false,
         text: '',
         ...step,
+        id: createStepId(),
         level: Number.isFinite(Number(step.level)) ? Number(step.level) : 0,
         completed: step.completed === true
     };
@@ -37,7 +49,8 @@ export function migrateImportedItem(item) {
 
 export function migrateImportedDatabase(db, categories = []) {
     if (!db || typeof db !== 'object') return db;
-    const names = normalizeCategories(categories, { keepEmpty: true }).map((c) => c.name);
+    const names = ensureUncategorizedCategory(normalizeCategories(categories, { keepEmpty: true }))
+        .map((c) => c.name);
     return {
         ...db,
         auth: {
@@ -53,12 +66,13 @@ export function migrateImportedDatabase(db, categories = []) {
 }
 
 export function applyBackupToStorage(parsedBackup) {
+    stepIdSeq = 0;
     const categories = parsedBackup.matrix_custom_categories
-        ? normalizeCategories(parsedBackup.matrix_custom_categories, { keepEmpty: true })
+        ? ensureUncategorizedCategory(normalizeCategories(parsedBackup.matrix_custom_categories, { keepEmpty: true }))
         : [];
 
     if (categories.length) {
-        localStorage.setItem('matrix_custom_categories', JSON.stringify(categories));
+        writeStoredCategories(categories, { keepEmpty: true });
     }
 
     if (parsedBackup.matrix_database) {
@@ -80,41 +94,13 @@ export function applyBackupToStorage(parsedBackup) {
             localStorage.setItem('admin_token', db.auth.admin_token);
         }
         if (!categories.length && Array.isArray(db.settings?.categories) && db.settings.categories.length) {
-            localStorage.setItem(
-                'matrix_custom_categories',
-                JSON.stringify(normalizeCategories(db.settings.categories, { keepEmpty: true }))
-            );
+            writeStoredCategories(normalizeCategories(db.settings.categories, { keepEmpty: true }), { keepEmpty: true });
         }
     }
 
     // UI-only hide lists from a prior session can hide imported items by id.
     localStorage.removeItem('matrix_hidden_board_ids');
     localStorage.removeItem('matrix_calendar_hidden_ids');
-
-    if (parsedBackup.matrix_global_drawing != null) {
-        localStorage.setItem('matrix_global_drawing', typeof parsedBackup.matrix_global_drawing === 'string'
-            ? parsedBackup.matrix_global_drawing
-            : JSON.stringify(parsedBackup.matrix_global_drawing));
-    }
-    if (parsedBackup.matrix_drawing_prefs != null) {
-        localStorage.setItem('matrix_drawing_prefs', typeof parsedBackup.matrix_drawing_prefs === 'string'
-            ? parsedBackup.matrix_drawing_prefs
-            : JSON.stringify(parsedBackup.matrix_drawing_prefs));
-    }
-    if (parsedBackup.matrix_workspace_mode != null) {
-        localStorage.setItem('matrix_workspace_mode', parsedBackup.matrix_workspace_mode);
-    }
-    if (parsedBackup.matrix_drawing_toolbar_hidden != null) {
-        localStorage.setItem('matrix_drawing_toolbar_hidden', parsedBackup.matrix_drawing_toolbar_hidden);
-    }
-    if (parsedBackup.matrix_drawing_toolbar_collapsed != null) {
-        localStorage.setItem('matrix_drawing_toolbar_hidden', parsedBackup.matrix_drawing_toolbar_collapsed);
-    }
-    if (parsedBackup.matrix_canvas_viewport != null) {
-        localStorage.setItem('matrix_canvas_viewport', typeof parsedBackup.matrix_canvas_viewport === 'string'
-            ? parsedBackup.matrix_canvas_viewport
-            : JSON.stringify(parsedBackup.matrix_canvas_viewport));
-    }
 
     applyLayoutBackupKeys(parsedBackup);
 }

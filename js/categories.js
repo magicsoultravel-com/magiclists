@@ -6,6 +6,9 @@ export const DEFAULT_CATEGORIES = [
     { name: "Travel", color: "#ec4899" }
 ];
 
+export const UNCATEGORIZED_CATEGORY = 'Uncategorized';
+export const UNCATEGORIZED_COLOR = '#64748b';
+
 export function normalizeCategories(categories, { keepEmpty = false } = {}) {
     const mapped = (Array.isArray(categories) ? categories : [])
         .map(cat => typeof cat === 'string' ? { name: cat, color: '#64748b' } : cat)
@@ -15,20 +18,46 @@ export function normalizeCategories(categories, { keepEmpty = false } = {}) {
     return mapped;
 }
 
+export function isUncategorizedCategory(name) {
+    return categoryKey(name) === categoryKey(UNCATEGORIZED_CATEGORY);
+}
+
+export function ensureUncategorizedCategory(categories) {
+    const normalized = normalizeCategories(categories, { keepEmpty: true });
+    if (normalized.some((cat) => isUncategorizedCategory(cat.name))) return normalized;
+    return [...normalized, { name: UNCATEGORIZED_CATEGORY, color: UNCATEGORIZED_COLOR }];
+}
+
+export function syncDbCategoryNames(categories) {
+    const names = ensureUncategorizedCategory(categories).map((cat) => cat.name);
+    try {
+        const raw = localStorage.getItem('matrix_database');
+        if (!raw) return;
+        const db = JSON.parse(raw);
+        db.settings = { ...(db.settings || {}), categories: names };
+        localStorage.setItem('matrix_database', JSON.stringify(db));
+    } catch {
+        /* ignore */
+    }
+}
+
+export function writeStoredCategories(categories, { keepEmpty = false } = {}) {
+    const normalized = ensureUncategorizedCategory(normalizeCategories(categories, { keepEmpty: true }));
+    localStorage.setItem('matrix_custom_categories', JSON.stringify(normalized));
+    syncDbCategoryNames(normalized);
+    return normalized;
+}
+
 export function readStoredCategories({ keepEmpty = false } = {}) {
     try {
-        return normalizeCategories(JSON.parse(localStorage.getItem('matrix_custom_categories') || '[]'), { keepEmpty });
+        return ensureUncategorizedCategory(
+            normalizeCategories(JSON.parse(localStorage.getItem('matrix_custom_categories') || '[]'), { keepEmpty })
+        );
     } catch {
-        return keepEmpty ? [] : [...DEFAULT_CATEGORIES];
+        return ensureUncategorizedCategory(keepEmpty ? [] : [...DEFAULT_CATEGORIES]);
     }
 }
 
 export function categoryKey(name) {
     return String(name || '').trim().toLowerCase();
-}
-
-export const UNCATEGORIZED_CATEGORY = 'Uncategorized';
-
-export function isUncategorizedCategory(name) {
-    return categoryKey(name) === categoryKey(UNCATEGORIZED_CATEGORY);
 }
