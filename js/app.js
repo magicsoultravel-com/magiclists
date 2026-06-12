@@ -188,7 +188,6 @@ class Application {
                 canvas.innerHTML = `<div class="system-status-msg">Notes are in local storage but require admin login. Use Quick actions → Login (default dev token: dev-admin-secret-2026).</div>`;
             } else {
                 UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
-                UI.syncCollapseAllButton();
             }
 
             DesktopZoom.apply();
@@ -251,7 +250,6 @@ class Application {
         `;
 
         const layoutGroup = `
-            <button type="button" id="btn-collapse-all" class="btn btn--compact btn--icon is-hidden" title="Collapse all notes" aria-label="Collapse all notes"></button>
             <button type="button" id="btn-layout-reset" class="btn btn--compact btn--icon is-hidden" title="Reset" aria-label="Reset"></button>
         `;
 
@@ -295,7 +293,6 @@ class Application {
         ClockStyle.rebindTrigger();
 
         this.setupLayoutResetButton();
-        this.setupCollapseAllButton();
         this.setupSaveViewButton();
         this.setupRecallViewButton();
         Fullscreen.rebindMainButton();
@@ -382,7 +379,6 @@ class Application {
 
             if (AppState.items.length) {
                 UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
-                UI.syncCollapseAllButton();
                 DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
             }
         }
@@ -605,22 +601,9 @@ class Application {
         const btn = document.getElementById('btn-layout-reset');
         if (btn) btn.innerHTML = ACTION_ICONS.layoutReset;
         btn?.addEventListener('click', () => {
-            const mode = AppState.viewSettings.sortBy;
-            if (mode === 'freeform') {
-                UI.resetFreeformLayout();
-            } else {
-                UI.resetGridLayout();
-            }
+            if (AppState.workspaceMode === 'drawing') return;
+            UI.resetBoardLayout(AppState.viewSettings.sortBy, AppState.items);
         });
-    }
-
-    setupCollapseAllButton() {
-        const btn = document.getElementById('btn-collapse-all');
-        if (!btn) return;
-        btn.addEventListener('click', () => {
-            UI.toggleCollapseAllCards();
-        });
-        UI.syncCollapseAllButton();
     }
 
     setupFocusModeButton() {
@@ -843,8 +826,6 @@ class Application {
     updateLayoutResetVisibility() {
         const show = AppState.user.isLoggedIn;
         document.getElementById('btn-layout-reset')?.classList.toggle('is-hidden', !show);
-        document.getElementById('btn-collapse-all')?.classList.toggle('is-hidden', !show);
-        if (show) UI.syncCollapseAllButton();
         this.updateDesktopZoomVisibility();
     }
 
@@ -957,7 +938,6 @@ class Application {
 
         window.addEventListener('board:visibility_changed', async () => {
             UI.render(document.getElementById('app-canvas'), AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
-            UI.syncCollapseAllButton();
             this.updateWorkspaceCounter();
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         });

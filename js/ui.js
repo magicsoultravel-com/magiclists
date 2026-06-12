@@ -53,6 +53,7 @@ import {
     partitionItemsForFileCabinet,
     removeFromFileCabinetOrder,
     renderFileCabinet,
+    fileAllItemsToCabinet,
     seedFileCabinetOrderFromItems,
     setFileCabinetActive,
     shouldFileItem,
@@ -1557,12 +1558,23 @@ export const UI = {
 
         if (!isDesktopCard(card)) return;
         this.finalizeDesktopCard(card);
+        if (ctx.deferReflow) return;
         if (isSnapLayoutMode(activeBoardViewMode)) {
             const canvas = card.closest('#app-canvas');
             if (canvas?.classList.contains('view-grid')) {
                 requestAnimationFrame(() => this.reflowGridBoard(canvas, item.id, { animate: true }));
             }
         }
+    },
+
+    collapseBoardCardToSmallFootprint(card, item, { deferReflow = false } = {}) {
+        if (!card || !item?.id || isFileCabinetActive()) return;
+        const pos = this.readNoteRect(card);
+        if (this.isAtCurrentSmallSize(pos.w, pos.h)) return;
+        const tileSize = resolveTileSize(item);
+        this.persistRememberedSpatialSize(item.id, pos.w, pos.h, tileSize);
+        const smallRect = this.resolveCardRect(card, item, { mode: 'small' });
+        this.applySpatialToggleRect(card, item, smallRect, { deferReflow });
     },
 
     applyTileZoneToggle(card, item, ctx = {}) {
@@ -2934,7 +2946,7 @@ export const UI = {
             : '';
         const sizeHtml = `<span class="editor-note-size" title="Note content size">${sizeLabel} KB</span>`;
         const lineHtml = `<span class="editor-note-lines" title="Number of lines">${lineLabel}</span>`;
-        const statsHtml = `${lineHtml}${createdHtml}${sizeHtml}`;
+        const statsHtml = `${sizeHtml}${lineHtml}${createdHtml}`;
 
         return `
             <div class="editor-meta-row editor-meta-row--footer editor-meta-row--inline">
@@ -3085,128 +3097,6 @@ export const UI = {
         activeCategories = applyFocusToCategories(activeCategories, focusCategories);
         const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
         this.applyCardExpandCollapse(card, item, false, activeCategories, targetCatName, categoryColor);
-    },
-
-    hasAnyBoardCardsExpanded() {
-        if (isFileCabinetActive()) {
-            const { expanded } = partitionItemsForFileCabinet(
-                [...boardItemsById.values()],
-                activeBoardViewMode,
-                this
-            );
-            return expanded.length > 0;
-        }
-        const mode = activeBoardViewMode;
-        const expanded = getExpandedCards(mode);
-        if (Object.keys(expanded).some((id) => expanded[id])) return true;
-        const canvas = document.getElementById('app-canvas');
-        return !!canvas?.querySelector('.mini-card.expanded');
-    },
-
-    getStoredItemSizeForFileCabinet(itemId, sortBy) {
-        if (sortBy === 'freeform') {
-            const sizes = this.getFreeformSizes()[itemId];
-            if (sizes?.w != null && sizes?.h != null) return { w: sizes.w, h: sizes.h };
-        } else {
-            const layout = this.getGridLayout()[itemId];
-            if (layout?.w != null && layout?.h != null) return { w: layout.w, h: layout.h };
-        }
-        return null;
-    },
-
-    collapseAllFileCabinetCards() {
-        const sortBy = activeBoardViewMode;
-        boardItemsById.forEach((item) => {
-            if (shouldFileItem(item, sortBy, this)) return;
-            const size = this.getStoredItemSizeForFileCabinet(item.id, sortBy);
-            const tileSize = resolveTileSize(item);
-            if (size) {
-                this.persistRememberedSpatialSize(item.id, size.w, size.h, tileSize);
-            }
-            addToFileCabinetOrder(getItemCategoryName(item), item.id);
-            const labelRect = getLabelRect();
-            const savedGrid = this.getGridLayout()[item.id];
-            const savedPos = this.getFreeformPositions()[item.id];
-            const x = savedGrid?.x ?? savedPos?.x ?? 8;
-            const y = savedGrid?.y ?? savedPos?.y ?? 8;
-            const filedRect = { x, y, w: labelRect.w, h: labelRect.h };
-            if (isSnapLayoutMode(sortBy)) {
-                this.saveGridLayout(item.id, filedRect, { updateRemembered: true });
-            } else {
-                this.saveFreeformSize(item.id, filedRect.w, filedRect.h, { updateRemembered: true });
-                this.saveFreeformPosition(item.id, x, y);
-            }
-        });
-    },
-
-    expandAllCards() {
-        if (isFileCabinetActive()) {
-            this.expandAllFileCabinetCards();
-            window.dispatchEvent(new CustomEvent('board:visibility_changed'));
-            return;
-        }
-        const mode = activeBoardViewMode;
-        const map = {};
-        boardItemsById.forEach((_item, id) => {
-            map[id] = true;
-        });
-        setExpandedCardsMap(mode, map);
-        window.dispatchEvent(new CustomEvent('board:visibility_changed'));
-    },
-
-    expandAllFileCabinetCards() {
-        const sortBy = activeBoardViewMode;
-        boardItemsById.forEach((item) => {
-            if (!isItemFiled(item, sortBy, this)) return;
-            removeFromFileCabinetOrder(item.id);
-            const tileSize = resolveTileSize(item);
-            let rect = this.resolveCardRect(null, item, { mode: 'remembered' });
-            const expandedMin = this.resolveExpandedDefaultRect(tileSize, null);
-            if (this.isAtCurrentSmallSize(rect.w, rect.h)) {
-                rect = { ...rect, w: expandedMin.w, h: expandedMin.h };
-            }
-            const savedGrid = this.getGridLayout()[item.id];
-            const savedPos = this.getFreeformPositions()[item.id];
-            const x = savedGrid?.x ?? savedPos?.x ?? 8;
-            const y = savedGrid?.y ?? savedPos?.y ?? 8;
-            rect = { x, y, w: rect.w, h: rect.h };
-            if (isSnapLayoutMode(sortBy)) {
-                this.saveGridLayout(item.id, rect, { updateRemembered: true });
-            } else {
-                this.saveFreeformSize(item.id, rect.w, rect.h, { updateRemembered: true });
-                this.saveFreeformPosition(item.id, x, y);
-            }
-        });
-    },
-
-    collapseAllCards() {
-        if (isFileCabinetActive()) {
-            this.collapseAllFileCabinetCards();
-            window.dispatchEvent(new CustomEvent('board:visibility_changed'));
-            return;
-        }
-        clearExpandedCards(activeBoardViewMode);
-        window.dispatchEvent(new CustomEvent('board:visibility_changed'));
-    },
-
-    toggleCollapseAllCards() {
-        if (this.hasAnyBoardCardsExpanded()) {
-            this.collapseAllCards();
-        } else {
-            this.expandAllCards();
-        }
-    },
-
-    syncCollapseAllButton() {
-        const btn = document.getElementById('btn-collapse-all');
-        if (!btn || btn.classList.contains('is-hidden')) return;
-        const anyExpanded = this.hasAnyBoardCardsExpanded();
-        btn.innerHTML = anyExpanded ? ACTION_ICONS.collapseAll : ACTION_ICONS.expandAll;
-        const label = isFileCabinetActive()
-            ? (anyExpanded ? 'File away all notes' : 'Open all notes below')
-            : (anyExpanded ? 'Collapse all notes' : 'Expand all notes');
-        btn.title = label;
-        btn.setAttribute('aria-label', label);
     },
 
     revealNoteOnBoard(item) {
@@ -5193,18 +5083,44 @@ export const UI = {
         }
     },
 
-    resetFreeformLayout() {
-        localStorage.removeItem('matrix_freeform_positions');
-        localStorage.removeItem('matrix_freeform_sizes');
-        clearViewSessionExpanded('freeform');
-        window.dispatchEvent(new CustomEvent('board:visibility_changed'));
-    },
+    resetBoardLayout(sortBy, items) {
+        const visibleItems = this.getVisibleItems(items || []);
+        const visibleIds = new Set(visibleItems.map((item) => item.id));
+        const mode = normalizeViewMode(sortBy);
+        clearViewSessionExpanded(mode);
 
-    resetGridLayout() {
-        localStorage.removeItem(GRID_LAYOUT_KEY);
-        localStorage.removeItem(GRID_PINS_KEY);
-        clearViewSessionExpanded('grid');
-        window.dispatchEvent(new CustomEvent('board:visibility_changed'));
+        if (isFileCabinetActive()) {
+            const canvas = document.getElementById('app-canvas');
+            if (canvas) this.flushLayoutFromCanvas(canvas, mode);
+            fileAllItemsToCabinet(visibleItems, mode, this);
+            window.dispatchEvent(new CustomEvent('board:visibility_changed'));
+            return;
+        }
+
+        if (mode === 'grid') {
+            try {
+                localStorage.removeItem(GRID_PINS_KEY);
+            } catch {
+                /* ignore */
+            }
+        }
+
+        const canvas = document.getElementById('app-canvas');
+        if (canvas) {
+            canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
+                if (!visibleIds.has(card.dataset.id)) return;
+                const item = this.resolveBoardItem(card.dataset.id);
+                if (item) this.collapseBoardCardToSmallFootprint(card, item, { deferReflow: true });
+            });
+            this.updateBoardCanvasMinHeight(canvas);
+        }
+
+        if (mode === 'grid' && canvas?.classList.contains('view-grid')) {
+            requestAnimationFrame(() => {
+                this.reflowGridBoard(canvas, null, { animate: true });
+                this.squeezeGridBoardToViewport(canvas, { animate: true });
+            });
+        }
     },
 
     getGridLayout() {

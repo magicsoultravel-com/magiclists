@@ -115,6 +115,38 @@ export function partitionItemsForFileCabinet(items, sortBy, UI) {
     return { filed, expanded };
 }
 
+export function fileAllItemsToCabinet(items, sortBy, UI) {
+    const label = getLabelRect();
+    const snapLayout = sortBy !== 'freeform';
+
+    (items || []).forEach((item) => {
+        if (!item?.id) return;
+
+        const tileSize = resolveTileSize(item);
+        const stored = getStoredItemSize(item.id, sortBy, UI) ?? getTileDefaultRect(tileSize);
+        const savedGrid = UI.getGridLayout()[item.id];
+        const savedPos = UI.getFreeformPositions()[item.id];
+        const x = savedGrid?.x ?? savedPos?.x ?? 8;
+        const y = savedGrid?.y ?? savedPos?.y ?? 8;
+
+        if (stored && !isAtLabelSize(stored.w, stored.h)) {
+            UI.persistRememberedSpatialSize(item.id, stored.w, stored.h, tileSize);
+        }
+
+        const filedRect = { x, y, w: label.w, h: label.h };
+        if (snapLayout) {
+            UI.saveGridLayout(item.id, filedRect, { updateRemembered: true });
+        } else {
+            UI.saveFreeformSize(item.id, filedRect.w, filedRect.h, { updateRemembered: true });
+            UI.saveFreeformPosition(item.id, x, y);
+        }
+
+        addToFileCabinetOrder(getItemCategoryName(item), item.id);
+    });
+
+    seedFileCabinetOrderFromItems(items);
+}
+
 export function migrateItemsToFileCabinet(items, sortBy, UI) {
     const label = getLabelRect();
     const snapLayout = sortBy !== 'freeform';
