@@ -3592,6 +3592,14 @@ export const UI = {
             shell.dataset.shellCaptureBound = '1';
             shell.addEventListener('mousedown', (e) => {
                 if (e.button !== 0) return;
+                // Let interactive targets receive the event (capture runs before the target).
+                if (e.target.closest(
+                    '.card-inline-edit, .step-check, .step-text, input, textarea, button, a, '
+                    + '.card-act, .grab-handle--step, .expanded-checklist-add-btn, '
+                    + '.checklist-done-toggle, .step-collapse-btn, .step-delete-btn, '
+                    + '.step-indent-btn, .step-outdent-btn, .checklist-expand-collapse-all-btn, '
+                    + '.format-btn, .editor-convert-btn'
+                )) return;
                 if (e.target.closest('.editor-note-body, .editor-note-header, .expanded-checklist')) {
                     e.stopPropagation();
                 }
