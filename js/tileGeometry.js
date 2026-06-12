@@ -140,3 +140,29 @@ export function resolveCollapsedTierRect(w, h, prevTier = LEGACY_TILE_SIZE) {
         h: softSnapPx(Math.max(TILE_RESIZE_MIN_H, h))
     };
 }
+
+export function clampSpatialSize(w, h, prevTier = LEGACY_TILE_SIZE) {
+    const resolved = resolveCollapsedTierRect(w, h, prevTier);
+    return { w: resolved.w, h: resolved.h };
+}
+
+export function resolveSpatialFallbackRect(tileSize = LEGACY_TILE_SIZE) {
+    const size = normalizeTileSize(tileSize);
+    return getTileDefaultRect(size === 'label' ? DEFAULT_TILE_SIZE : size);
+}
+
+export function readRememberedSize(saved) {
+    if (!saved || typeof saved !== 'object') return null;
+    const rw = Number(saved.rememberedW);
+    const rh = Number(saved.rememberedH);
+    if (Number.isFinite(rw) && Number.isFinite(rh) && !(rw <= LABEL_RECT.w + 2 && rh <= LABEL_RECT.h + 2)) {
+        return clampSpatialSize(rw, rh);
+    }
+    if (saved.customCompact === true
+        && Number.isFinite(saved.w)
+        && Number.isFinite(saved.h)
+        && !isAtLabelSize(saved.w, saved.h)) {
+        return clampSpatialSize(saved.w, saved.h);
+    }
+    return null;
+}

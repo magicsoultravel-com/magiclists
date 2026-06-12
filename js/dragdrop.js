@@ -1,4 +1,4 @@
-import { API } from './api.js';
+﻿import { API } from './api.js';
 import {
     categoryKey,
     isUncategorizedCategory,
@@ -17,6 +17,7 @@ import {
     COLUMN_GRID_CELL_W,
     COLUMN_GRID_CELL_H
 } from './ui.js';
+import { isAtLabelSize } from './tileGeometry.js';
 
 const DRAG_THRESHOLD = 4;
 
@@ -89,313 +90,10 @@ function finishSnapPanelGesture(card, {
     }
 
     saveLayout(card, rect, {
-        customCompact: UI.isCollapsedTile(card) && UI.isCustomTileRect(rect.w, rect.h, tileSize)
+        updateRemembered: UI.isCollapsedTile(card) && !isAtLabelSize(rect.w, rect.h)
     });
     reflow(card, { animate });
     cleanupActive?.();
-}
-
-function bindSnapPanelCardInteractions({
-    canvas,
-    panelEl,
-    cardSelector,
-    currentItems,
-    signal,
-    getBounds,
-    computeLayout,
-    raiseCard,
-    dragClass,
-    resizeClass,
-    saveLayout,
-    reflow,
-    onExpandFromResize,
-    onCollapseFromResize,
-    scrollPolicy = false
-}) {
-    const cards = panelEl.querySelectorAll(cardSelector);
-    let dragActive = null;
-    let resizeActive = null;
-    let previewFrame = null;
-    let previewBaseline = null;
-
-    const snapshotPreviewBaseline = () => {
-        previewBaseline = new Map();
-        panelEl.querySelectorAll(cardSelector).forEach((c) => {
-            const id = c.dataset.id;
-            if (id) previewBaseline.set(id, UI.readNoteRect(c));
-        });
-    };
-
-    const restorePreviewBaseline = () => {
-        if (!previewBaseline) return;
-        previewBaseline.forEach((rect, id) => {
-            const c = panelEl.querySelector(`${cardSelector}[data-id="${CSS.escape(id)}"]`);
-            if (c) UI.applyNoteRect(c, rect, { settling: false });
-        });
-        previewBaseline = null;
-    };
-
-    const runLayoutPreview = (actorCard) => {
-        if (!actorCard?.dataset?.id) return;
-        if (previewFrame) return;
-        previewFrame = requestAnimationFrame(() => {
-            previewFrame = null;
-            const actorRect = UI.readNoteRect(actorCard);
-            const layout = computeLayout(actorCard.dataset.id, actorRect);
-            layout.forEach((rect, id) => {
-                if (id === actorCard.dataset.id) return;
-                const other = panelEl.querySelector(`${cardSelector}[data-id="${CSS.escape(id)}"]`);
-                if (!other) return;
-                const base = previewBaseline?.get(id);
-                const changed = !base
-                    || base.x !== rect.x
-                    || base.y !== rect.y
-                    || base.w !== rect.w
-                    || base.h !== rect.h;
-                if (changed) {
-                    UI.applyNoteRect(other, rect, { settling: true });
-                    other.classList.add('layout-preview');
-                }
-            });
-        });
-    };
-
-    const clearLayoutPreview = (restore = false) => {
-        if (previewFrame) {
-            cancelAnimationFrame(previewFrame);
-            previewFrame = null;
-        }
-        UI.clearSnapPanelPreview(panelEl);
-        if (restore) restorePreviewBaseline();
-        else previewBaseline = null;
-    };
-
-    const endScrollPolicy = scrollPolicy
-        ? () => UI.updateGridScrollPolicy(canvas, { forcing: false })
-        : null;
-
-    const startScrollPolicy = scrollPolicy
-        ? () => UI.updateGridScrollPolicy(canvas, { forcing: true })
-        : null;
-
-    const markLayoutActive = () => {
-        canvas.classList.add('is-layout-active');
-        if (panelEl !== canvas) panelEl.classList.add('is-layout-active');
-    };
-
-    const cleanupActive = () => {
-        canvas.classList.remove('is-layout-active', 'is-grid-forcing');
-        if (panelEl !== canvas) panelEl.classList.remove('is-layout-active');
-    };
-
-    const finishAction = (card, { animate = true, tierResizeState = null } = {}) => {
-        finishSnapPanelGesture(card, {
-            canvas,
-            currentItems,
-            getBounds,
-            saveLayout,
-            reflow,
-            onExpandFromResize,
-            onCollapseFromResize,
-            clearPreview: clearLayoutPreview,
-            endScrollPolicy,
-            cleanupActive,
-            animate,
-            tierResizeState
-        });
-    };
-
-    const onDragMove = (e) => {
-        if (!dragActive) return;
-        const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, dragActive.startX, dragActive.startY);
-        if (!dragActive.moved) {
-            if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
-            dragActive.moved = true;
-            dragActive.card.classList.add(dragClass);
-            markLayoutActive();
-            snapshotPreviewBaseline();
-            startScrollPolicy?.();
-        }
-        e.preventDefault();
-        const bounds = getBounds();
-        const origin = bounds.origin ?? 0;
-        const x = Math.max(origin, dragActive.origX + dx);
-        const y = Math.max(origin, dragActive.origY + dy);
-        dragActive.card.style.left = `${x}px`;
-        dragActive.card.style.top = `${y}px`;
-        runLayoutPreview(dragActive.card);
-    };
-
-    const onDragUp = () => {
-        if (!dragActive) return;
-        const { card, moved } = dragActive;
-        card.classList.remove(dragClass);
-        if (moved) {
-            card.dataset.skipExpand = '1';
-            finishAction(card);
-        } else {
-            clearLayoutPreview(true);
-            endScrollPolicy?.();
-            cleanupActive();
-        }
-        dragActive = null;
-        document.removeEventListener('mousemove', onDragMove);
-        document.removeEventListener('mouseup', onDragUp);
-    };
-
-    const onResizeMove = (e) => {
-        if (!resizeActive) return;
-        const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, resizeActive.startX, resizeActive.startY);
-        if (!resizeActive.moved) {
-            if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
-            resizeActive.moved = true;
-            markLayoutActive();
-            snapshotPreviewBaseline();
-            startScrollPolicy?.();
-        }
-        const { card, axis, origX, origY, origW, origH } = resizeActive;
-
-        let nextX = origX;
-        let nextY = origY;
-        let nextW = origW;
-        let nextH = origH;
-
-        if (axis.includes('e')) nextW = origW + dx;
-        if (axis.includes('w')) {
-            nextW = origW - dx;
-            nextX = origX + dx;
-        }
-        if (axis.includes('s')) nextH = origH + dy;
-        if (axis.includes('n')) {
-            nextH = origH - dy;
-            nextY = origY + dy;
-        }
-
-        const bounds = getBounds();
-        const origin = bounds.origin ?? 0;
-        const item = currentItems.find((i) => i.id === card.dataset.id);
-        const maxW = bounds.packW + origin;
-
-        if (item && UI.isCollapsedTile(card) && resizeActive.tierResizeState) {
-            nextX = Math.max(origin, nextX);
-            nextY = Math.max(origin, nextY);
-            UI.processCollapsedTierResizeMove(card, item, resizeActive.tierResizeState, {
-                x: nextX,
-                y: nextY,
-                w: nextW,
-                h: nextH
-            }, { maxW, axis });
-            runLayoutPreview(card);
-            return;
-        }
-
-        const clamped = UI.clampGridResize(nextW, nextH, { packW: bounds.packW });
-        if (axis.includes('w')) nextX = origX + (origW - clamped.w);
-        if (axis.includes('n')) nextY = origY + (origH - clamped.h);
-
-        nextX = Math.max(origin, nextX);
-        nextY = Math.max(origin, nextY);
-        let finalW = clamped.w;
-        let finalH = clamped.h;
-        if (nextX + finalW > maxW) {
-            if (axis.includes('w')) {
-                nextX = Math.max(origin, maxW - finalW);
-            } else {
-                finalW = Math.max(COLUMN_GRID_CELL_W, maxW - nextX);
-            }
-        }
-
-        card.style.left = `${nextX}px`;
-        card.style.top = `${nextY}px`;
-        card.style.setProperty('width', `${finalW}px`, 'important');
-        card.style.setProperty('height', `${finalH}px`, 'important');
-        card.style.setProperty('min-height', `${finalH}px`, 'important');
-        card.style.setProperty('max-height', `${finalH}px`, 'important');
-        runLayoutPreview(card);
-    };
-
-    const onResizeUp = () => {
-        if (!resizeActive) return;
-        const { card, moved, tierResizeState } = resizeActive;
-        const item = currentItems.find((i) => i.id === card.dataset.id);
-        card.classList.remove(resizeClass);
-        if (moved) {
-            card.dataset.skipExpand = '1';
-            finishAction(card, { tierResizeState });
-        } else if (tierResizeState && item) {
-            UI.revertTierResizePreview(card, item, tierResizeState);
-            clearLayoutPreview(true);
-            endScrollPolicy?.();
-            cleanupActive();
-        } else {
-            clearLayoutPreview(true);
-            endScrollPolicy?.();
-            cleanupActive();
-        }
-        resizeActive = null;
-        document.removeEventListener('mousemove', onResizeMove);
-        document.removeEventListener('mouseup', onResizeUp);
-    };
-
-    cards.forEach((card) => {
-        card.addEventListener('mousedown', (e) => {
-            if (e.button !== 0) return;
-
-            if (shouldYieldToNoteEditor(e, card)) return;
-
-            const resizeHandle = e.target.closest('.ff-resize');
-            if (resizeHandle) {
-                if (cardIsPinned(card)) return;
-                e.preventDefault();
-                e.stopPropagation();
-                UI.cancelCardAnimation(card);
-                raiseCard(card);
-                markLayoutActive();
-                startScrollPolicy?.();
-                const { w: origW, h: origH } = UI.readFreeformCardSize(card);
-                const item = currentItems.find((i) => i.id === card.dataset.id);
-                const tierResizeState = item && UI.isCollapsedTile(card)
-                    ? UI.createTierResizeSession(card, item)
-                    : null;
-                resizeActive = {
-                    card,
-                    axis: resizeHandle.dataset.axis || 'se',
-                    startX: e.clientX,
-                    startY: e.clientY,
-                    origX: parseFloat(card.style.left) || 0,
-                    origY: parseFloat(card.style.top) || 0,
-                    origW,
-                    origH,
-                    moved: false,
-                    tierResizeState
-                };
-                card.classList.add(resizeClass);
-                card.dataset.skipExpand = '1';
-                document.addEventListener('mousemove', onResizeMove);
-                document.addEventListener('mouseup', onResizeUp);
-                return;
-            }
-
-            if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
-            if (!shouldStartCardDrag(e.target)) return;
-            if (cardIsPinned(card)) return;
-
-            const scrollHost = e.target.closest('.editor-note-body') || e.target.closest('.card-body');
-            if (scrollHost && isScrollbarGrip(scrollHost, e.clientX)) return;
-
-            e.stopPropagation();
-            dragActive = {
-                card,
-                startX: e.clientX,
-                startY: e.clientY,
-                origX: parseFloat(card.style.left) || 0,
-                origY: parseFloat(card.style.top) || 0,
-                moved: false
-            };
-            document.addEventListener('mousemove', onDragMove);
-            document.addEventListener('mouseup', onDragUp);
-        }, { signal });
-    });
 }
 
 function isScrollbarGrip(el, clientX) {
@@ -567,29 +265,24 @@ export const DragDropEngine = {
                 canvas,
                 currentItems,
                 getBounds: () => UI.getGridBoardBounds(canvas),
-                saveLayout: (c, rect, { customCompact }) => {
-                    UI.saveGridLayout(c.dataset.id, rect, { customCompact });
+                saveLayout: (c, rect, { updateRemembered }) => {
+                    UI.saveGridLayout(c.dataset.id, rect, { updateRemembered });
                 },
                 reflow: (c, { animate }) => {
                     UI.reflowGridBoard(canvas, c.dataset.id, { animate });
                 },
-                onExpandFromResize: (c, item, rect) => {
-                    UI.updateDesktopCard(c, item, {
-                        expanded: true,
-                        dimensions: { w: rect.w, h: rect.h }
-                    });
-                },
+                onExpandFromResize: () => {},
                 onCollapseFromResize: (c, item, rect, { animate, bounds }) => {
                     UI.collapseSnapPanelCard(c, item);
                     const tileSize = UI.getCardTileSize(c, item);
-                    const compact = UI.gridTileRect(tileSize, rect, { ...rect, customCompact: true });
+                    const sized = UI.gridTileRect(tileSize, rect, rect);
                     const finalRect = UI.snapNoteRect(
-                        { ...compact, x: rect.x, y: rect.y },
+                        { ...sized, x: rect.x, y: rect.y },
                         { maxW: bounds.packW, maxH: bounds.maxH }
                     );
                     UI.applyNoteRect(c, finalRect, { settling: animate });
                     UI.saveGridLayout(c.dataset.id, finalRect, {
-                        customCompact: UI.isCustomTileRect(finalRect.w, finalRect.h, tileSize)
+                        updateRemembered: !isAtLabelSize(finalRect.w, finalRect.h)
                     });
                     UI.reflowGridBoard(canvas, c.dataset.id, { animate });
                 },
@@ -684,30 +377,18 @@ export const DragDropEngine = {
                 nextY = origY + dy;
             }
 
-            if (item && UI.isCollapsedTile(card) && tierResizeState && !snapEnabled) {
+            if (item && UI.isCollapsedTile(card) && tierResizeState) {
                 nextX = Math.max(origin, nextX);
                 nextY = Math.max(origin, nextY);
+                const bounds = snapEnabled ? UI.getGridBoardBounds(canvas) : null;
+                const maxW = bounds ? bounds.packW + origin : undefined;
                 UI.processCollapsedTierResizeMove(card, item, tierResizeState, {
                     x: nextX,
                     y: nextY,
                     w: nextW,
                     h: nextH
-                }, { axis });
-                return;
-            }
-
-            if (item && UI.isCollapsedTile(card) && tierResizeState && snapEnabled) {
-                nextX = Math.max(origin, nextX);
-                nextY = Math.max(origin, nextY);
-                card.dataset.tierResizePreview = '1';
-                card.classList.add('is-tier-resizing');
-                card.style.left = `${nextX}px`;
-                card.style.top = `${nextY}px`;
-                card.style.setProperty('width', `${Math.max(FREEFORM_MIN_W, nextW)}px`, 'important');
-                card.style.setProperty('height', `${Math.max(FREEFORM_MIN_H, nextH)}px`, 'important');
-                card.style.setProperty('min-height', `${Math.max(FREEFORM_MIN_H, nextH)}px`, 'important');
-                card.style.setProperty('max-height', `${Math.max(FREEFORM_MIN_H, nextH)}px`, 'important');
-                runLayoutPreview(card);
+                }, { axis, maxW });
+                if (snapEnabled) runLayoutPreview(card);
                 return;
             }
 
@@ -766,7 +447,7 @@ export const DragDropEngine = {
                         const tileSize = UI.commitTierResize(card, item, tierResizeState);
                         const { w, h } = UI.readFreeformCardSize(card);
                         UI.saveFreeformSize(card.dataset.id, w, h, {
-                            customCompact: UI.isCustomTileRect(w, h, tileSize)
+                            updateRemembered: !isAtLabelSize(w, h)
                         });
                         UI.finalizeDesktopCard(card);
                     } else {
@@ -842,226 +523,5 @@ export const DragDropEngine = {
         });
     },
 
-    initFreeformInteractions(canvas, currentItems = [], signal) {
-        const cards = canvas.querySelectorAll('.mini-card');
-        let dragActive = null;
-        let resizeActive = null;
-
-        const onDragMove = (e) => {
-            if (!dragActive) return;
-            const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, dragActive.startX, dragActive.startY);
-            if (!dragActive.moved) {
-                if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
-                dragActive.moved = true;
-                dragActive.card.classList.add('is-freeform-dragging');
-            }
-            e.preventDefault();
-            const x = Math.max(0, dragActive.origX + dx);
-            const y = Math.max(0, dragActive.origY + dy);
-            dragActive.card.style.left = `${x}px`;
-            dragActive.card.style.top = `${y}px`;
-        };
-
-        const onDragUp = () => {
-            if (!dragActive) return;
-            const { card, moved } = dragActive;
-            card.classList.remove('is-freeform-dragging');
-            if (moved) {
-                card.dataset.skipExpand = '1';
-                UI.saveFreeformPosition(
-                    card.dataset.id,
-                    parseFloat(card.style.left) || 0,
-                    parseFloat(card.style.top) || 0
-                );
-            }
-            dragActive = null;
-            document.removeEventListener('mousemove', onDragMove);
-            document.removeEventListener('mouseup', onDragUp);
-        };
-
-        const onResizeMove = (e) => {
-            if (!resizeActive) return;
-            e.preventDefault();
-            const { card, axis, startX, startY, origX, origY, origW, origH, tierResizeState } = resizeActive;
-            const { dx, dy } = pointerDelta(canvas, e.clientX, e.clientY, startX, startY);
-            if (!resizeActive.moved) {
-                if (Math.abs(dx) <= DRAG_THRESHOLD && Math.abs(dy) <= DRAG_THRESHOLD) return;
-                resizeActive.moved = true;
-            }
-            const item = currentItems.find((i) => i.id === card.dataset.id);
-
-            let nextX = origX;
-            let nextY = origY;
-            let nextW = origW;
-            let nextH = origH;
-
-            if (axis.includes('e')) nextW = origW + dx;
-            if (axis.includes('w')) {
-                nextW = origW - dx;
-                nextX = origX + dx;
-            }
-            if (axis.includes('s')) nextH = origH + dy;
-            if (axis.includes('n')) {
-                nextH = origH - dy;
-                nextY = origY + dy;
-            }
-
-            if (item && UI.isCollapsedTile(card) && tierResizeState) {
-                nextX = Math.max(0, nextX);
-                nextY = Math.max(0, nextY);
-                UI.processCollapsedTierResizeMove(card, item, tierResizeState, {
-                    x: nextX,
-                    y: nextY,
-                    w: nextW,
-                    h: nextH
-                }, { axis });
-                return;
-            }
-
-            const clamped = clampSize(nextW, nextH);
-            if (axis.includes('w')) nextX = origX + (origW - clamped.w);
-            if (axis.includes('n')) nextY = origY + (origH - clamped.h);
-
-            nextX = Math.max(0, nextX);
-            nextY = Math.max(0, nextY);
-
-            card.style.left = `${nextX}px`;
-            card.style.top = `${nextY}px`;
-            card.style.setProperty('width', `${clamped.w}px`, 'important');
-            card.style.setProperty('height', `${clamped.h}px`, 'important');
-            card.style.setProperty('min-height', `${clamped.h}px`, 'important');
-            card.style.setProperty('max-height', `${clamped.h}px`, 'important');
-        };
-
-        const onResizeUp = () => {
-            if (!resizeActive) return;
-            const { card, moved, tierResizeState } = resizeActive;
-            const item = currentItems.find((i) => i.id === card.dataset.id);
-            card.classList.remove('is-freeform-resizing');
-
-            if (!moved && tierResizeState && item) {
-                UI.revertTierResizePreview(card, item, tierResizeState);
-            } else if (moved) {
-                card.dataset.skipExpand = '1';
-                UI.saveFreeformPosition(
-                    card.dataset.id,
-                    parseFloat(card.style.left) || 0,
-                    parseFloat(card.style.top) || 0
-                );
-                if (item && tierResizeState && UI.isCollapsedTile(card)) {
-                    const tileSize = UI.commitTierResize(card, item, tierResizeState);
-                    const { w, h } = UI.readFreeformCardSize(card);
-                    UI.saveFreeformSize(card.dataset.id, w, h, {
-                        customCompact: UI.isCustomTileRect(w, h, tileSize)
-                    });
-                    UI.finalizeFreeformCard(card);
-                } else {
-                    UI.saveFreeformSizeFromCard(card);
-                }
-            }
-            resizeActive = null;
-            document.removeEventListener('mousemove', onResizeMove);
-            document.removeEventListener('mouseup', onResizeUp);
-        };
-
-        cards.forEach(card => {
-            card.addEventListener('mousedown', (e) => {
-                if (e.button !== 0) return;
-
-                if (shouldYieldToNoteEditor(e, card)) return;
-
-                const resizeHandle = e.target.closest('.ff-resize');
-                if (resizeHandle) {
-                    if (cardIsPinned(card)) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    UI.cancelCardAnimation(card);
-                    const { w: startW, h: startH } = UI.readFreeformCardSize(card);
-                    const itemMatch = currentItems.find((i) => i.id === card.dataset.id);
-                    const tierResizeState = itemMatch && UI.isCollapsedTile(card)
-                        ? UI.createTierResizeSession(card, itemMatch)
-                        : null;
-                    resizeActive = {
-                        card,
-                        axis: resizeHandle.dataset.axis || 'se',
-                        startX: e.clientX,
-                        startY: e.clientY,
-                        origX: parseFloat(card.style.left) || 0,
-                        origY: parseFloat(card.style.top) || 0,
-                        origW: startW,
-                        origH: startH,
-                        moved: false,
-                        tierResizeState
-                    };
-                    card.classList.add('is-freeform-resizing');
-                    card.dataset.skipExpand = '1';
-                    document.addEventListener('mousemove', onResizeMove);
-                    document.addEventListener('mouseup', onResizeUp);
-                    return;
-                }
-
-                if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
-                if (!shouldStartCardDrag(e.target)) return;
-                if (cardIsPinned(card)) return;
-
-                const scrollHost = e.target.closest('.editor-note-body') || e.target.closest('.card-body');
-                if (scrollHost && isScrollbarGrip(scrollHost, e.clientX)) return;
-
-                e.stopPropagation();
-                dragActive = {
-                    card,
-                    startX: e.clientX,
-                    startY: e.clientY,
-                    origX: parseFloat(card.style.left) || 0,
-                    origY: parseFloat(card.style.top) || 0,
-                    moved: false
-                };
-                document.addEventListener('mousemove', onDragMove);
-                document.addEventListener('mouseup', onDragUp);
-            }, { signal });
-        });
-    },
-
-    initGridBoardInteractions(canvas, currentItems = [], signal) {
-        bindSnapPanelCardInteractions({
-            canvas,
-            panelEl: canvas,
-            cardSelector: '.mini-card[data-grid-board="1"]',
-            currentItems,
-            signal,
-            getBounds: () => UI.getGridBoardBounds(canvas),
-            computeLayout: (actorId, actorRect) => UI.computeGridBoardLayout(canvas, actorId, actorRect),
-            raiseCard: (card) => UI.raiseGridBoardCard(card),
-            dragClass: 'is-grid-dragging',
-            resizeClass: 'is-grid-resizing',
-            scrollPolicy: true,
-            saveLayout: (card, rect, { customCompact }) => {
-                UI.saveGridLayout(card.dataset.id, rect, { customCompact });
-            },
-            reflow: (card, { animate }) => {
-                UI.reflowGridBoard(canvas, card.dataset.id, { animate });
-            },
-            onExpandFromResize: (card, item, rect) => {
-                UI.updateGridBoardCard(card, item, {
-                    expanded: true,
-                    dimensions: { w: rect.w, h: rect.h }
-                });
-            },
-            onCollapseFromResize: (card, item, rect, { animate, bounds }) => {
-                UI.collapseSnapPanelCard(card, item);
-                const tileSize = UI.getCardTileSize(card, item);
-                const compact = UI.gridTileRect(tileSize, rect, { ...rect, customCompact: true });
-                const finalRect = UI.snapNoteRect(
-                    { ...compact, x: rect.x, y: rect.y },
-                    { maxW: bounds.packW, maxH: bounds.maxH }
-                );
-                UI.applyNoteRect(card, finalRect, { settling: animate });
-                UI.saveGridLayout(card.dataset.id, finalRect, {
-                    customCompact: UI.isCustomTileRect(finalRect.w, finalRect.h, tileSize)
-                });
-                UI.reflowGridBoard(canvas, card.dataset.id, { animate });
-            }
-        });
-    },
 
 };

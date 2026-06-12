@@ -91,7 +91,10 @@ import {
     resolveExpandedDefaultRect as geoResolveExpandedDefaultRect,
     isAtOrBelowCompactZone as geoIsAtOrBelowCompactZone,
     inferCollapsedTileTier as geoInferCollapsedTileTier,
-    resolveCollapsedTierRect as geoResolveCollapsedTierRect
+    resolveCollapsedTierRect as geoResolveCollapsedTierRect,
+    clampSpatialSize as geoClampSpatialSize,
+    readRememberedSize as geoReadRememberedSize,
+    resolveSpatialFallbackRect as geoResolveSpatialFallbackRect
 } from './tileGeometry.js';
 
 export {
@@ -1161,27 +1164,94 @@ export const UI = {
         return this.getFreeformSizes()[id] || null;
     },
 
+    resolveRememberedSpatialSize(saved, item) {
+        const remembered = geoReadRememberedSize(saved);
+        if (remembered) return remembered;
+        return geoResolveSpatialFallbackRect(resolveTileSize(item));
+    },
+
     resolveSpatialExpandTarget(item, saved) {
-        const tileSize = resolveTileSize(item);
-        if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)
-            && geoIsCustomTileRect(saved.w, saved.h, tileSize)) {
-            return { w: saved.w, h: saved.h };
+        return this.resolveRememberedSpatialSize(saved, item);
+    },
+
+    mergeSpatialLayoutEntry(prev, rect, tileSize = LEGACY_TILE_SIZE, {
+        updateRemembered = false,
+        rememberedW = null,
+        rememberedH = null
+    } = {}) {
+        const clamped = geoClampSpatialSize(rect.w, rect.h, tileSize);
+        const entry = {
+            w: Math.round(clamped.w),
+            h: Math.round(clamped.h)
+        };
+        if (Number.isFinite(rect.x)) entry.x = Math.round(rect.x);
+        if (Number.isFinite(rect.y)) entry.y = Math.round(rect.y);
+
+        let rw = rememberedW;
+        let rh = rememberedH;
+        if (updateRemembered && !isAtLabelSize(entry.w, entry.h)) {
+            rw = entry.w;
+            rh = entry.h;
         }
-        return geoResolveExpandedDefaultRect(tileSize, saved);
+        if (!Number.isFinite(rw) || !Number.isFinite(rh)) {
+            rw = prev?.rememberedW;
+            rh = prev?.rememberedH;
+        }
+        if (Number.isFinite(rw) && Number.isFinite(rh) && !isAtLabelSize(rw, rh)) {
+            const mem = geoClampSpatialSize(rw, rh, tileSize);
+            entry.rememberedW = Math.round(mem.w);
+            entry.rememberedH = Math.round(mem.h);
+        }
+        return entry;
+    },
+
+    persistRememberedSpatialSize(itemId, w, h, tileSize = LEGACY_TILE_SIZE) {
+        if (!itemId || !Number.isFinite(w) || !Number.isFinite(h)) return;
+        if (isAtLabelSize(w, h)) return;
+        const clamped = geoClampSpatialSize(w, h, tileSize);
+        if (isSnapLayoutMode(activeBoardViewMode)) {
+            const layout = this.getGridLayout();
+            const prev = layout[itemId] || {};
+            layout[itemId] = {
+                ...prev,
+                rememberedW: Math.round(clamped.w),
+                rememberedH: Math.round(clamped.h)
+            };
+            localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layout));
+        } else {
+            const sizes = this.getFreeformSizes();
+            const prev = sizes[itemId] || {};
+            sizes[itemId] = {
+                ...prev,
+                rememberedW: Math.round(clamped.w),
+                rememberedH: Math.round(clamped.h)
+            };
+            localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
+        }
     },
 
     resolveCardRect(card, item, { mode } = {}) {
         const pos = card ? this.readNoteRect(card) : { x: 0, y: 0, w: 0, h: 0 };
+        const saved = this.getSavedLayoutRect(card, item);
         if (mode === 'label') {
             const label = getLabelRect();
             return { x: pos.x, y: pos.y, w: label.w, h: label.h };
         }
-        const saved = this.getSavedLayoutRect(card, item);
         if (mode === 'editor' && saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
             return { x: pos.x, y: pos.y, w: saved.w, h: saved.h };
         }
-        const target = this.resolveSpatialExpandTarget(item, saved);
-        return { x: pos.x, y: pos.y, w: target.w, h: target.h };
+        if (mode === 'remembered' || mode === 'toggleTarget' || mode === 'saved') {
+            const size = mode === 'saved' && saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)
+                ? geoClampSpatialSize(saved.w, saved.h, resolveTileSize(item))
+                : this.resolveRememberedSpatialSize(saved, item);
+            return { x: pos.x, y: pos.y, w: size.w, h: size.h };
+        }
+        if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
+            const size = geoClampSpatialSize(saved.w, saved.h, resolveTileSize(item));
+            return { x: pos.x, y: pos.y, w: size.w, h: size.h };
+        }
+        const fallback = geoResolveSpatialFallbackRect(resolveTileSize(item));
+        return { x: pos.x, y: pos.y, w: fallback.w, h: fallback.h };
     },
 
     isGridMultiCellSize(w, h) {
@@ -1360,17 +1430,21 @@ export const UI = {
     },
 
     saveTileLayoutFromCard(card, item, rect, tileSize) {
-        const customCompact = this.isCustomTileRect(rect.w, rect.h, tileSize);
         const id = item?.id || card.dataset.id;
-        if (!id) return;
-
-        if (!isDesktopCard(card)) return;
+        if (!id || !isDesktopCard(card)) return;
+        const updateRemembered = !isAtLabelSize(rect.w, rect.h);
         if (isSnapLayoutMode(activeBoardViewMode)) {
-            this.saveGridLayout(id, rect, { customCompact });
+            this.saveGridLayout(id, rect, { updateRemembered });
         } else {
-            this.saveFreeformSize(id, rect.w, rect.h, { customCompact });
+            this.saveFreeformSize(id, rect.w, rect.h, { updateRemembered });
             this.saveFreeformPosition(id, rect.x, rect.y);
         }
+    },
+
+    saveSpatialLayoutFromResize(card, item, tileSize) {
+        if (!card || !item) return;
+        const rect = this.readNoteRect(card);
+        this.saveTileLayoutFromCard(card, item, rect, tileSize || resolveTileSize(item));
     },
 
     applyTileTierRect(card, item, nextTier, rect, ctx = {}) {
@@ -1410,11 +1484,13 @@ export const UI = {
         if (this.collapseLegacyExpandedTile(card, item, ctx)) return;
 
         const pos = this.readNoteRect(card);
+        const tileSize = resolveTileSize(item);
         if (isAtLabelSize(pos.w, pos.h)) {
-            const rect = this.resolveCardRect(card, item, { mode: 'toggleTarget' });
-            const tier = resolveTileSize(item) === 'label' ? DEFAULT_TILE_SIZE : resolveTileSize(item);
+            const rect = this.resolveCardRect(card, item, { mode: 'remembered' });
+            const tier = geoInferCollapsedTileTier(rect.w, rect.h, tileSize);
             this.applyTileTierRect(card, item, tier, rect, ctx);
         } else {
+            this.persistRememberedSpatialSize(item.id, pos.w, pos.h, tileSize);
             const labelRect = this.resolveCardRect(card, item, { mode: 'label' });
             this.applyTileTierRect(card, item, 'label', labelRect, ctx);
         }
@@ -1440,13 +1516,9 @@ export const UI = {
     },
 
     gridTileRect(tileSize, base, saved) {
-        const source = saved && Number.isFinite(saved.w) ? saved : base;
-        if (source?.customCompact && this.isCustomTileRect(source.w, source.h, tileSize)) {
-            return { ...base, w: source.w, h: source.h };
-        }
-        if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)
-            && this.isCustomTileRect(saved.w, saved.h, tileSize)) {
-            return { ...base, w: saved.w, h: saved.h };
+        if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
+            const clamped = geoClampSpatialSize(saved.w, saved.h, tileSize);
+            return { ...base, w: clamped.w, h: clamped.h };
         }
         const defaults = this.getTileDefaultRect(tileSize);
         return { ...base, w: defaults.w, h: defaults.h };
@@ -1567,7 +1639,7 @@ export const UI = {
             })
             .forEach((item, index) => {
                 const card = this.createCardComponent(item, activeCategories, { desktop: true });
-                const isExpanded = getExpandedCards(resolvedMode)[item.id] === true;
+                const isExpanded = false;
 
                 if (snapLayout) {
                     const { origin, packW, maxH } = bounds;
@@ -1595,7 +1667,9 @@ export const UI = {
                     }
 
                     this.applyNoteRect(card, rect, { settling: false });
-                    this.saveGridLayout(item.id, rect);
+                    if (!saved) {
+                        this.saveGridLayout(item.id, rect);
+                    }
                     placed.push(rect);
                 } else {
                     const saved = positions[item.id];
@@ -2112,9 +2186,10 @@ export const UI = {
             const editorRect = this.resolveCardRect(card, item, { mode: 'editor' });
             w = editorRect.w;
             h = editorRect.h;
-        } else if (saved?.customCompact && geoIsCustomTileRect(saved.w, saved.h, tileSize)) {
-            w = saved.w;
-            h = saved.h;
+        } else if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
+            const clamped = geoClampSpatialSize(saved.w, saved.h, tileSize);
+            w = clamped.w;
+            h = clamped.h;
         } else {
             const defaults = geoGetTileDefaultRect(tileSize);
             w = defaults.w;
@@ -2172,14 +2247,7 @@ export const UI = {
         }
 
         if (snapLayout && !expanded) {
-            const pos = this.readNoteRect(card);
-            const saved = this.getGridLayout()[item.id];
-            const compact = this.gridTileRect(resolveTileSize(item), pos, saved);
-            const compactRect = { x: pos.x, y: pos.y, w: compact.w, h: compact.h };
-            this.applyNoteRect(card, compactRect, { settling: false });
-            this.saveGridLayout(item.id, compactRect, {
-                customCompact: this.isCustomTileRect(compactRect.w, compactRect.h, resolveTileSize(item))
-            });
+            this.applyDesktopSize(card);
         }
 
         if (snapLayout && canvas && !deferReflow) {
@@ -2249,12 +2317,10 @@ export const UI = {
         if (isDesktopCard(card) && id) {
             if (isSnapLayoutMode(activeBoardViewMode)) {
                 const saved = this.getGridLayout()[id];
-                if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) {
-                    return saved.w;
-                }
+                if (saved && Number.isFinite(saved.w)) return saved.w;
             } else {
                 const saved = this.getFreeformSizes()[id];
-                if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) return saved.w;
+                if (saved && Number.isFinite(saved.w)) return saved.w;
             }
             return tileDefaultW;
         }
@@ -2293,7 +2359,7 @@ export const UI = {
         }
         if (isDesktopCard(card)) {
             const saved = this.getFreeformSizes()[card.dataset.id];
-            if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) return saved.h;
+            if (saved && Number.isFinite(saved.h)) return saved.h;
             return tileDefaultH;
         }
         if (this.isListLayoutCard(card)) return tileDefaultH;
@@ -2530,7 +2596,9 @@ export const UI = {
         this.applyItemCardTheme(card, item);
         card.style.borderLeftColor = categoryColor;
 
-        const isExpanded = getExpandedCards(activeBoardViewMode)[item.id] === true;
+        const isExpanded = desktop
+            ? false
+            : getExpandedCards(activeBoardViewMode)[item.id] === true;
 
         if (isExpanded) {
             card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note');
@@ -4558,25 +4626,20 @@ export const UI = {
         }
     },
 
-    saveFreeformSize(itemId, w, h, { customCompact = false } = {}) {
+    saveFreeformSize(itemId, w, h, { updateRemembered = false } = {}) {
         const sizes = this.getFreeformSizes();
-        const entry = {
-            w: Math.round(Math.max(FREEFORM_MIN_W, w)),
-            h: Math.round(Math.max(FREEFORM_MIN_H, h))
-        };
-        if (customCompact) entry.customCompact = true;
-        sizes[itemId] = entry;
+        const prev = sizes[itemId] || {};
+        const item = this.resolveBoardItem(itemId);
+        sizes[itemId] = this.mergeSpatialLayoutEntry(prev, { w, h }, resolveTileSize(item), { updateRemembered });
         localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
     },
 
     saveFreeformSizeFromCard(card) {
         if (!isDesktopCard(card)) return;
         const { w, h } = this.readFreeformCardSize(card);
-        const item = this.resolveBoardItem(card.dataset.id);
-        const tileSize = this.getCardTileSize(card, item);
         const isExpanded = card.classList.contains('expanded');
         this.saveFreeformSize(card.dataset.id, w, h, {
-            customCompact: !isExpanded && this.isCustomTileRect(w, h, tileSize)
+            updateRemembered: !isExpanded && !isAtLabelSize(w, h)
         });
     },
 
@@ -4784,9 +4847,19 @@ export const UI = {
                     const saved = this.getGridLayout()[item.id];
                     if (saved) {
                         this.saveFreeformPosition(item.id, saved.x, saved.y);
-                        this.saveFreeformSize(item.id, saved.w, saved.h, {
-                            customCompact: !!saved.customCompact
-                        });
+                        const sizes = this.getFreeformSizes();
+                        const prev = sizes[item.id] || {};
+                        sizes[item.id] = this.mergeSpatialLayoutEntry(
+                            prev,
+                            { w: saved.w, h: saved.h },
+                            resolveTileSize(item),
+                            {
+                                updateRemembered: !isAtLabelSize(saved.w, saved.h),
+                                rememberedW: saved.rememberedW,
+                                rememberedH: saved.rememberedH
+                            }
+                        );
+                        localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
                     }
                     return;
                 }
@@ -4794,7 +4867,7 @@ export const UI = {
                 this.saveFreeformPosition(item.id, rect.x, rect.y);
                 const { w, h } = this.readFreeformCardSize(card);
                 this.saveFreeformSize(item.id, w, h, {
-                    customCompact: this.isCustomTileRect(w, h, resolveTileSize(item))
+                    updateRemembered: !isAtLabelSize(w, h)
                 });
             });
             return;
@@ -4808,41 +4881,19 @@ export const UI = {
 
             visible.forEach((item) => {
                 const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
-                const isExpanded = getExpandedCards('grid')[item.id] === true;
                 const saved = gridLayout[item.id];
                 let w;
                 let h;
-                let customCompact = false;
 
                 if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
-                    if (card) {
-                        const sized = this.gridBoardRectForCard(card, saved, isExpanded);
-                        w = sized.w;
-                        h = sized.h;
-                    } else if (isExpanded) {
-                        w = saved.w;
-                        h = saved.h;
-                    } else {
-                        const tileSize = resolveTileSize(item);
-                        const compact = this.gridTileRect(
-                            tileSize,
-                            { x: 0, y: 0, w: saved.w, h: saved.h },
-                            saved
-                        );
-                        w = compact.w;
-                        h = compact.h;
-                    }
-                    customCompact = !!saved.customCompact && !isExpanded;
+                    const tileSize = resolveTileSize(item);
+                    const clamped = geoClampSpatialSize(saved.w, saved.h, tileSize);
+                    w = clamped.w;
+                    h = clamped.h;
                 } else {
                     const tileDefaults = geoGetTileDefaultRect(resolveTileSize(item));
-                    if (isExpanded) {
-                        const target = this.resolveSpatialExpandTarget(item, null);
-                        w = target.w;
-                        h = target.h;
-                    } else {
-                        w = tileDefaults.w;
-                        h = tileDefaults.h;
-                    }
+                    w = tileDefaults.w;
+                    h = tileDefaults.h;
                 }
 
                 let x;
@@ -4856,9 +4907,7 @@ export const UI = {
                     y = freeformPositions[item.id].y;
                 } else {
                     const slot = this.findFirstCanvasSlot(w, h, placed, packW + origin * 2, { origin });
-                    this.saveGridLayout(item.id, slot, {
-                        customCompact: customCompact || this.isCustomTileRect(slot.w, slot.h, resolveTileSize(item))
-                    });
+                    this.saveGridLayout(item.id, slot);
                     placed.push(slot);
                     return;
                 }
@@ -4867,9 +4916,20 @@ export const UI = {
                 if (placed.some((p) => this.rectsOverlap(rect, p))) {
                     rect = this.findNearestGridSlot(rect, w, h, placed, { packW, origin, maxH });
                 }
-                this.saveGridLayout(item.id, rect, {
-                    customCompact: customCompact || this.isCustomTileRect(rect.w, rect.h, resolveTileSize(item))
-                });
+                const freeSaved = this.getFreeformSizes()[item.id];
+                const gridPrev = gridLayout[item.id] || (freeSaved ? { ...freeSaved } : {});
+                const layoutStore = this.getGridLayout();
+                layoutStore[item.id] = this.mergeSpatialLayoutEntry(
+                    gridPrev,
+                    rect,
+                    resolveTileSize(item),
+                    {
+                        updateRemembered: !isAtLabelSize(rect.w, rect.h),
+                        rememberedW: freeSaved?.rememberedW ?? gridPrev.rememberedW,
+                        rememberedH: freeSaved?.rememberedH ?? gridPrev.rememberedH
+                    }
+                );
+                localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layoutStore));
                 placed.push(rect);
             });
 
@@ -4903,17 +4963,12 @@ export const UI = {
         }
     },
 
-    saveGridLayout(itemId, rect, { customCompact = false } = {}) {
+    saveGridLayout(itemId, rect, { updateRemembered = false } = {}) {
         if (!itemId || !rect) return;
         const layout = this.getGridLayout();
-        const entry = {
-            x: Math.round(rect.x),
-            y: Math.round(rect.y),
-            w: Math.round(rect.w),
-            h: Math.round(rect.h)
-        };
-        if (customCompact) entry.customCompact = true;
-        layout[itemId] = entry;
+        const prev = layout[itemId] || {};
+        const item = this.resolveBoardItem(itemId);
+        layout[itemId] = this.mergeSpatialLayoutEntry(prev, rect, resolveTileSize(item), { updateRemembered });
         localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layout));
     },
 
@@ -4990,13 +5045,23 @@ export const UI = {
         let h;
         if (!isExpanded) {
             const item = this.resolveBoardItem(card.dataset.id);
-            const compact = this.gridTileRect(
-                this.getCardTileSize(card, item),
-                { x: 0, y: 0, w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H },
-                saved
-            );
-            w = compact.w;
-            h = compact.h;
+            if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
+                const clamped = geoClampSpatialSize(
+                    saved.w,
+                    saved.h,
+                    this.getCardTileSize(card, item)
+                );
+                w = clamped.w;
+                h = clamped.h;
+            } else {
+                const compact = this.gridTileRect(
+                    this.getCardTileSize(card, item),
+                    { x: 0, y: 0, w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H },
+                    saved
+                );
+                w = compact.w;
+                h = compact.h;
+            }
         } else {
             const item = this.resolveBoardItem(card.dataset.id);
             const editorRect = this.resolveCardRect(card, item, { mode: 'editor' });
@@ -5189,10 +5254,7 @@ export const UI = {
             if (save) {
                 const layoutItem = this.resolveBoardItem(id);
                 const tileSize = this.getCardTileSize(card, layoutItem);
-                this.saveGridLayout(id, rect, {
-                    customCompact: this.isCollapsedTile(card)
-                        && this.isCustomTileRect(rect.w, rect.h, tileSize)
-                });
+                this.saveGridLayout(id, rect);
             }
             placed.push(rect);
         });
@@ -5232,7 +5294,7 @@ export const UI = {
         cards.forEach((card) => {
             const id = card.dataset.id;
             if (!id || !pinnedIds.has(id)) return;
-            const isExpanded = getExpandedCards('grid')[id] === true || card.classList.contains('expanded');
+            const isExpanded = card.classList.contains('expanded');
             const rect = this.snapNoteRect(
                 this.gridBoardRectForCard(card, this.readNoteRect(card), isExpanded),
                 { maxW: packW, maxH: snapOpts.maxH }

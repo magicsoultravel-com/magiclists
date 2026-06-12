@@ -5,16 +5,14 @@ import {
 } from './categories.js';
 import { showAppToast } from './toast.js';
 import {
+    clampSpatialSize,
     getLabelRect,
     getTileDefaultRect,
     isAtLabelSize,
-    isCustomTileRect,
     LEGACY_TILE_SIZE,
     normalizeTileSize,
-    resolveCollapsedTierRect,
-    resolveExpandedDefaultRect,
-    resolveTileSize,
-    softSnapPx
+    readRememberedSize,
+    resolveTileSize
 } from './tileGeometry.js';
 import { readViewSessions, writeViewSessions, VIEW_MODES } from './viewSession.js';
 
@@ -23,6 +21,17 @@ const GRID_PINS_KEY = 'matrix_grid_pins';
 const GRID_EXPANDED_KEY = 'matrix_grid_expanded_id';
 const SAVED_VIEWS_KEY = 'matrix_saved_views';
 const LEGACY_EXPANDED_KEY = 'matrix_expanded_cards';
+const SPATIAL_LAYOUT_SCHEMA_KEY = 'matrix_spatial_layout_schema';
+const SPATIAL_LAYOUT_SCHEMA_VERSION = 2;
+
+const DEAD_LAYOUT_KEYS = [
+    'matrix_column_positions',
+    'matrix_column_sizes',
+    'matrix_column_note_layout',
+    'matrix_columns_float_positions',
+    'matrix_columns_float_sizes',
+    'matrix_canvas_layout_order'
+];
 
 const LAYOUT_BACKUP_KEYS = [
     GRID_LAYOUT_KEY,
@@ -211,8 +220,140 @@ export function clearPresentationLayoutKeys() {
     });
 }
 
-export function migrateLegacyColumnsFloatStorage() {
-    return false;
+export function migrateLegacyColumnsFloatStorage(writeState = null) {
+    let changed = false;
+    DEAD_LAYOUT_KEYS.forEach((key) => {
+        if (localStorage.getItem(key) == null) return;
+        try {
+            localStorage.removeItem(key);
+            changed = true;
+        } catch (err) {
+            if (isQuotaError(err) && writeState) {
+                writeState.quotaExceeded = true;
+                writeState.failedKey = key;
+            }
+        }
+    });
+    return changed;
+}
+
+function migrateSpatialLayoutEntry(saved, tileSize) {
+    if (!saved || typeof saved !== 'object') return saved;
+    const tier = normalizeTileSize(tileSize);
+    const entry = { ...saved };
+    delete entry.customCompact;
+
+    if (Number.isFinite(Number(saved.w)) && Number.isFinite(Number(saved.h))) {
+        const clamped = clampSpatialSize(Number(saved.w), Number(saved.h), tier);
+        entry.w = clamped.w;
+        entry.h = clamped.h;
+    }
+
+    const remembered = readRememberedSize(saved);
+    if (remembered) {
+        entry.rememberedW = remembered.w;
+        entry.rememberedH = remembered.h;
+    } else {
+        delete entry.rememberedW;
+        delete entry.rememberedH;
+    }
+
+    if (isAtLabelSize(entry.w, entry.h)) {
+        const label = getLabelRect();
+        entry.w = label.w;
+        entry.h = label.h;
+        delete entry.rememberedW;
+        delete entry.rememberedH;
+    }
+
+    return entry;
+}
+
+export function migrateSpatialLayoutSchema(writeState = null) {
+    try {
+        const current = Number(localStorage.getItem(SPATIAL_LAYOUT_SCHEMA_KEY) || 0);
+        if (current >= SPATIAL_LAYOUT_SCHEMA_VERSION) return false;
+    } catch {
+        return false;
+    }
+
+    let changed = migrateLegacyColumnsFloatStorage(writeState);
+    if (writeState?.quotaExceeded) return changed;
+
+    const db = readJson('matrix_database', {});
+    const categories = readJson('matrix_custom_categories', []);
+    const context = buildContext(db.items || [], categories);
+
+    const grid = readJson(GRID_LAYOUT_KEY, {});
+    const gridNext = { ...grid };
+    Object.keys(gridNext).forEach((id) => {
+        if (!context.liveIds.has(id)) return;
+        const tier = context.tileSizeById.get(id) || LEGACY_TILE_SIZE;
+        const migrated = migrateSpatialLayoutEntry(gridNext[id], tier);
+        if (JSON.stringify(migrated) !== JSON.stringify(gridNext[id])) {
+            gridNext[id] = migrated;
+            changed = true;
+        }
+    });
+    if (changed) {
+        writeJsonIfChanged(GRID_LAYOUT_KEY, gridNext, writeState);
+        if (writeState?.quotaExceeded) return true;
+    }
+
+    const sizes = readJson('matrix_freeform_sizes', {});
+    const sizesNext = { ...sizes };
+    Object.keys(sizesNext).forEach((id) => {
+        if (!context.liveIds.has(id)) return;
+        const tier = context.tileSizeById.get(id) || LEGACY_TILE_SIZE;
+        const migrated = migrateSpatialLayoutEntry(sizesNext[id], tier);
+        if (JSON.stringify(migrated) !== JSON.stringify(sizesNext[id])) {
+            sizesNext[id] = migrated;
+            changed = true;
+        }
+    });
+    if (changed) {
+        writeJsonIfChanged('matrix_freeform_sizes', sizesNext, writeState);
+        if (writeState?.quotaExceeded) return true;
+    }
+
+    const sessions = readViewSessions();
+    let sessionChanged = false;
+    const nextSessions = { version: 2 };
+    VIEW_MODES.forEach((mode) => {
+        const bucket = { ...(sessions[mode] || {}) };
+        delete bucket.gridExpandedId;
+        if (bucket.expandedCards && (mode === 'grid' || mode === 'freeform')) {
+            delete bucket.expandedCards;
+            sessionChanged = true;
+        }
+        nextSessions[mode] = bucket;
+    });
+    if (sessionChanged) {
+        writeViewSessions(nextSessions);
+        changed = true;
+    }
+
+    if (localStorage.getItem(LEGACY_EXPANDED_KEY) != null) {
+        try {
+            localStorage.removeItem(LEGACY_EXPANDED_KEY);
+            changed = true;
+        } catch {
+            /* ignore */
+        }
+    }
+    if (localStorage.getItem(GRID_EXPANDED_KEY) != null) {
+        try {
+            localStorage.removeItem(GRID_EXPANDED_KEY);
+            changed = true;
+        } catch {
+            /* ignore */
+        }
+    }
+
+    if (!safeSetItem(SPATIAL_LAYOUT_SCHEMA_KEY, String(SPATIAL_LAYOUT_SCHEMA_VERSION), writeState)) {
+        return changed;
+    }
+    return changed;
 }
 
 function createReconcileStats() {
@@ -319,11 +460,7 @@ function reportReconcileStats(stats, showToast) {
     }
 }
 
-function isSpatialExpandedRect(w, h) {
-    return !isAtLabelSize(w, h);
-}
-
-export function normalizeSavedCardRect(saved, tileSize, { expanded = false } = {}) {
+export function normalizeSavedCardRect(saved, tileSize) {
     if (!saved || typeof saved !== 'object') {
         return { changed: true, value: null };
     }
@@ -347,8 +484,13 @@ export function normalizeSavedCardRect(saved, tileSize, { expanded = false } = {
         h = defaults.h;
     }
 
-    let customCompact = saved.customCompact === true;
     let changed = false;
+    const clamped = clampSpatialSize(w, h, tier);
+    if (clamped.w !== w || clamped.h !== h) {
+        w = clamped.w;
+        h = clamped.h;
+        changed = true;
+    }
 
     if (isAtLabelSize(w, h)) {
         if (w !== label.w || h !== label.h) {
@@ -356,47 +498,25 @@ export function normalizeSavedCardRect(saved, tileSize, { expanded = false } = {
             h = label.h;
             changed = true;
         }
-        if (customCompact) {
-            customCompact = false;
+    }
+
+    let rw = Number(saved.rememberedW);
+    let rh = Number(saved.rememberedH);
+    if (!Number.isFinite(rw) || !Number.isFinite(rh)) {
+        const remembered = readRememberedSize(saved);
+        if (remembered) {
+            rw = remembered.w;
+            rh = remembered.h;
             changed = true;
         }
-    } else if (expanded || isSpatialExpandedRect(w, h)) {
-        const spatialMin = resolveExpandedDefaultRect(tier);
-        const nw = Math.max(spatialMin.w, softSnapPx(w));
-        const nh = Math.max(spatialMin.h, softSnapPx(h));
-        if (nw !== w || nh !== h) {
-            w = nw;
-            h = nh;
-            changed = true;
-        }
-        if (customCompact && !isCustomTileRect(w, h, tier)) {
-            customCompact = false;
-            changed = true;
-        }
-    } else if (customCompact && isCustomTileRect(w, h, tier)) {
-        const resolved = resolveCollapsedTierRect(w, h, tier);
-        if (resolved.w !== w || resolved.h !== h) {
-            w = resolved.w;
-            h = resolved.h;
-            changed = true;
-        }
-        if (resolved.tier !== tier) {
-            w = defaults.w;
-            h = defaults.h;
-            customCompact = false;
-            changed = true;
-        } else if (!isCustomTileRect(w, h, tier)) {
-            customCompact = false;
-            changed = true;
-        }
-    } else {
-        if (w !== defaults.w || h !== defaults.h) {
-            w = defaults.w;
-            h = defaults.h;
-            changed = true;
-        }
-        if (customCompact) {
-            customCompact = false;
+    }
+    if (Number.isFinite(rw) && Number.isFinite(rh)) {
+        const mem = clampSpatialSize(rw, rh, tier);
+        rw = mem.w;
+        rh = mem.h;
+        if (isAtLabelSize(rw, rh)) {
+            rw = undefined;
+            rh = undefined;
             changed = true;
         }
     }
@@ -419,12 +539,17 @@ export function normalizeSavedCardRect(saved, tileSize, { expanded = false } = {
         entry.x = Math.round(x);
         entry.y = Math.round(y);
     }
-    if (customCompact && isCustomTileRect(entry.w, entry.h, tier)) {
-        entry.customCompact = true;
+    if (Number.isFinite(rw) && Number.isFinite(rh) && !isAtLabelSize(rw, rh)) {
+        entry.rememberedW = Math.round(rw);
+        entry.rememberedH = Math.round(rh);
     }
 
+    if (saved.customCompact != null) changed = true;
+
     if (!changed) {
-        changed = JSON.stringify(entry) !== JSON.stringify(saved);
+        const comparable = { ...saved };
+        delete comparable.customCompact;
+        changed = JSON.stringify(entry) !== JSON.stringify(comparable);
     }
 
     return { changed, value: entry };
@@ -472,8 +597,7 @@ function normalizeIdRectMap(map, liveIds, tileSizeById, stats, label) {
         if (!liveIds.has(id)) return;
         const tileSize = tileSizeById.get(id) || LEGACY_TILE_SIZE;
         const saved = next[id];
-        const expanded = saved && isSpatialExpandedRect(Number(saved.w), Number(saved.h));
-        const result = normalizeSavedCardRect(saved, tileSize, { expanded });
+        const result = normalizeSavedCardRect(saved, tileSize);
         if (result.value === null) {
             delete next[id];
             stats.removed += 1;
@@ -498,8 +622,7 @@ function normalizeSizeOnlyMap(map, liveIds, tileSizeById, stats, label) {
         if (!liveIds.has(id)) return;
         const tileSize = tileSizeById.get(id) || LEGACY_TILE_SIZE;
         const saved = next[id];
-        const expanded = saved && isSpatialExpandedRect(Number(saved.w), Number(saved.h));
-        const result = normalizeSavedCardRect(saved, tileSize, { expanded });
+        const result = normalizeSavedCardRect(saved, tileSize);
         if (result.value === null) {
             delete next[id];
             stats.removed += 1;
@@ -510,8 +633,13 @@ function normalizeSizeOnlyMap(map, liveIds, tileSizeById, stats, label) {
             w: result.value.w,
             h: result.value.h
         };
-        if (result.value.customCompact) normalized.customCompact = true;
-        if (JSON.stringify(normalized) !== JSON.stringify(saved)) {
+        if (Number.isFinite(result.value.rememberedW) && Number.isFinite(result.value.rememberedH)) {
+            normalized.rememberedW = result.value.rememberedW;
+            normalized.rememberedH = result.value.rememberedH;
+        }
+        const comparable = { ...saved };
+        delete comparable.customCompact;
+        if (JSON.stringify(normalized) !== JSON.stringify(comparable)) {
             next[id] = normalized;
             stats.normalized += 1;
             changed = true;
@@ -812,6 +940,7 @@ export function purgeLayoutForItem(itemId) {
 export async function reconcileLayoutStorage({ items = [], categories = [], showToast = true } = {}) {
     const context = buildContext(items, categories);
     const migrateState = { quotaExceeded: false, failedKey: null };
+    migrateSpatialLayoutSchema(migrateState);
     migrateLegacyColumnsFloatStorage(migrateState);
 
     let stats = createReconcileStats();

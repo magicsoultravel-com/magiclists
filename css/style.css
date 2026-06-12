@@ -3897,6 +3897,12 @@ textarea.form-input {
     min-height: 100%;
 }
 
+#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.expanded),
+#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.expanded) {
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
 #app-canvas.view-freeform .mini-card {
     position: absolute;
     cursor: default;
