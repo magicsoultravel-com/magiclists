@@ -4130,7 +4130,7 @@ textarea.form-input {
     min-height: 0;
     min-width: 0;
     position: relative;
-    z-index: 6;
+    z-index: 3;
     isolation: isolate;
 }
 
@@ -4166,6 +4166,20 @@ textarea.form-input {
 #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-label .editor-meta-wrap,
 #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-label .editor-meta-wrap {
     display: none;
+}
+
+#app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-label .editor-note-topline.card-drag-zone,
+#app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-label .editor-note-topline.card-drag-zone {
+    flex: 1 1 auto;
+    min-height: 0;
+    cursor: grab;
+}
+
+#app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-label .editor-note-topline.card-drag-zone:active,
+#app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-label .editor-note-topline.card-drag-zone:active,
+#app-canvas.view-grid .mini-card[data-desktop="1"].is-grid-dragging .editor-note-topline.card-drag-zone,
+#app-canvas.view-freeform .mini-card[data-desktop="1"].is-freeform-dragging .editor-note-topline.card-drag-zone {
+    cursor: grabbing;
 }
 
 #app-canvas.view-freeform .mini-card {

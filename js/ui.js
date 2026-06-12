@@ -3010,8 +3010,9 @@ export const UI = {
         });
         const bodyIdAttr = bodyId ? ` id="${bodyId}"` : '';
 
+        const toplineDragZone = toolbarDragZone || footerDragZone || '';
         const toplineHtml = `
-                <div class="editor-note-topline">
+                <div class="editor-note-topline${toplineDragZone}">
                     <div class="editor-note-header">
                         ${titleHtml}
                     </div>
@@ -3575,6 +3576,7 @@ export const UI = {
             shell.dataset.shellBubbleBound = '1';
             shell.addEventListener('mousedown', (e) => {
                 if (e.button !== 0) return;
+                if (e.target.closest('.card-act--drag')) return;
                 if (!e.target.closest(
                     '.card-inline-edit, .step-check, .step-text, input, textarea, button, a, '
                     + '.card-act, .grab-handle--step, .expanded-checklist-add-btn, '
