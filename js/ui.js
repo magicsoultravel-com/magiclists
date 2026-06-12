@@ -1452,6 +1452,11 @@ export const UI = {
     },
 
     applyTileZoneToggle(card, item, ctx = {}) {
+        if (card.classList.contains('expanded')
+            && card.querySelector('.editor-note-shell')
+            && !ctx.fromToolbar) {
+            return;
+        }
         if (this.collapseLegacyExpandedTile(card, item, ctx)) return;
 
         const pos = this.readNoteRect(card);
@@ -2030,7 +2035,7 @@ export const UI = {
                 const isExpanded = card.classList.contains('expanded');
                 if (!isExpanded && consumeSkipExpand()) return;
                 if (card.dataset.skipExpand) delete card.dataset.skipExpand;
-                if (ctx) this.toggleCardExpanded(card, item, ctx);
+                if (ctx) this.toggleCardExpanded(card, item, { ...ctx, fromToolbar: true });
             });
         }
 
@@ -3899,20 +3904,30 @@ export const UI = {
 
         card.addEventListener('mousedown', (e) => {
             if (e.button !== 0) return;
-            if (card.classList.contains('expanded')) return;
+            if (card.classList.contains('expanded') || card.classList.contains('is-editing-inline')) return;
+            if (e.target.closest('.editor-note-shell')) return;
             if (e.target.closest(
                 '.card-actions, .card-act, .grab-handle--note-cat, .grab-handle--step, '
                 + 'button, a, input, .ff-resize, .ff-drag-gutter'
             )) return;
 
-            const inPreview = e.target.closest('.tile-preview, .card-content-preview, .expanded-checklist');
+            const inPreview = e.target.closest('.tile-preview');
             const inTitle = e.target.closest('.card-header .mini-card-title');
             if (!inPreview && !inTitle) return;
 
             e.stopPropagation();
             card.dataset.pendingFocusField = inPreview ? 'content' : 'title';
             if (card.dataset.skipExpand) delete card.dataset.skipExpand;
-            this.toggleCardExpanded(card, item, ctx);
+            setExpandedCard(activeBoardViewMode, item.id, true);
+            this.applyCardExpandCollapse(
+                card,
+                item,
+                true,
+                ctx.activeCategories,
+                ctx.targetCatName,
+                ctx.categoryColor
+            );
+            window.dispatchEvent(new CustomEvent('board:cards_reflowed'));
         });
     },
 
