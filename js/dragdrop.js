@@ -18,6 +18,7 @@ import {
     COLUMN_GRID_CELL_H
 } from './ui.js';
 import { isAtLabelSize } from './tileGeometry.js';
+import { initFileCabinetDrag, isFileCabinetActive } from './fileCabinet.js';
 
 const DRAG_THRESHOLD = 4;
 
@@ -198,6 +199,13 @@ export const DragDropEngine = {
         if (canvas.classList.contains('view-freeform') || canvas.classList.contains('view-grid')) {
             const snapEnabled = canvas.classList.contains('view-grid');
             this.initDesktopInteractions(canvas, currentItems, signal, { snapEnabled });
+        }
+
+        if (isFileCabinetActive()) {
+            const fileCabinet = document.getElementById('file-cabinet');
+            if (fileCabinet) {
+                initFileCabinetDrag(fileCabinet, signal);
+            }
         }
     },
 

@@ -4,6 +4,7 @@ import {
     UNCATEGORIZED_CATEGORY
 } from './categories.js';
 import { showAppToast } from './toast.js';
+import { pruneFileCabinetOrder } from './fileCabinet.js';
 import {
     clampSpatialSize,
     getLabelRect,
@@ -51,7 +52,9 @@ const LAYOUT_BACKUP_KEYS = [
     LEGACY_EXPANDED_KEY,
     'matrix_hidden_board_ids',
     'matrix_calendar_hidden_ids',
-    'matrix_collapsed_categories'
+    'matrix_collapsed_categories',
+    'matrix_file_cabinet',
+    'matrix_file_cabinet_order'
 ];
 
 const PRESENTATION_CLEAR_KEYS = [...new Set(LAYOUT_BACKUP_KEYS)];
@@ -412,6 +415,8 @@ function applyReconcileWrites(context, stats, writeState) {
         writeState
     );
     if (writeState.quotaExceeded) return;
+
+    pruneFileCabinetOrder(context.liveIds);
 
     const gridExpanded = localStorage.getItem(GRID_EXPANDED_KEY);
     if (gridExpanded && !context.liveIds.has(gridExpanded)) {

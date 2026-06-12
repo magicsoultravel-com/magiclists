@@ -7,7 +7,8 @@ import {
 import {
     applyFocusToCategories,
     applyFocusToItems,
-    focusIncludesUncategorized
+    focusIncludesUncategorized,
+    getItemCategoryName
 } from './focusFilter.js';
 import { applyCardTheme } from './cardTheme.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor, THEME_DEFAULT_COLOR } from './colorPicker.js';
@@ -42,6 +43,20 @@ import {
     setExpandedCardsMap,
     normalizeViewMode
 } from './viewSession.js';
+import {
+    addToFileCabinetOrder,
+    ensureFileCabinetMount,
+    getFileCabinetOrder,
+    getFileCabinetToggleLabels,
+    isFileCabinetActive,
+    isItemFiled,
+    partitionItemsForFileCabinet,
+    removeFromFileCabinetOrder,
+    renderFileCabinet,
+    seedFileCabinetOrderFromItems,
+    setFileCabinetActive,
+    FILE_CABINET_ORDER_KEY
+} from './fileCabinet.js';
 import {
     FREEFORM_DEFAULT_W,
     FREEFORM_DEFAULT_H,
@@ -217,6 +232,7 @@ export const ACTION_ICONS = {
     viewCols: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.6" y="2.2" width="3.6" height="7.6" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.8" y="2.2" width="3.6" height="7.6" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.95"/></svg>',
     viewFree: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.5" y="2" width="3.2" height="2.6" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="7.3" y="2" width="3.2" height="3.8" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="2.8" y="7.2" width="4.4" height="2.8" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
     viewGrid: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="1.6" width="3.8" height="3.8" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="6.8" y="1.6" width="3.8" height="3.8" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="1.4" y="6.6" width="8.2" height="3.8" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
+    viewFileCabinet: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="2.2" width="9.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="1.4" y="4.8" width="9.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="1.4" y="7.4" width="9.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
     category: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="1.4" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.7" y="1.4" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="1.4" y="6.7" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.7" y="6.7" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/></svg>',
     export: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.6v5.8M3.7 5.1 6 7.4 8.3 5.1" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.2 10.4h7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
     exportCode: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.3 7.6 6.8 6 5.9 4.4 6.8Z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/><circle cx="6" cy="4.1" r="0.75" fill="none" stroke="currentColor" stroke-width="0.8"/><path d="M4.4 6.8 3.4 8.8M7.6 6.8 8.6 8.8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/><path d="M5.3 7.4 6 9.4 6.7 7.4" fill="none" stroke="currentColor" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -1293,8 +1309,17 @@ export const UI = {
         if (!toggleBtn) return;
         const { w, h } = this.readNoteRect(card);
         const atLabel = isAtLabelSize(w, h);
-        const expandTitle = atLabel ? 'Expand' : 'Collapse to label';
-        const lastIcon = atLabel ? CARD_ICONS.expand : CARD_ICONS.collapse;
+        const inFileCabinet = !!card.closest('#file-cabinet');
+        let expandTitle;
+        let lastIcon;
+        if (isFileCabinetActive()) {
+            const labels = getFileCabinetToggleLabels(inFileCabinet, atLabel);
+            expandTitle = labels.title;
+            lastIcon = labels.iconKey === 'expand' ? CARD_ICONS.expand : CARD_ICONS.collapse;
+        } else {
+            expandTitle = atLabel ? 'Expand' : 'Collapse to label';
+            lastIcon = atLabel ? CARD_ICONS.expand : CARD_ICONS.collapse;
+        }
         toggleBtn.innerHTML = lastIcon;
         toggleBtn.setAttribute('title', expandTitle);
         toggleBtn.setAttribute('aria-label', expandTitle);
@@ -1544,6 +1569,11 @@ export const UI = {
     applyTileZoneToggle(card, item, ctx = {}) {
         if (!isDesktopCard(card) && this.collapseLegacyExpandedTile(card, item, ctx)) return;
 
+        if (isFileCabinetActive()) {
+            this.applyFileCabinetZoneToggle(card, item, ctx);
+            return;
+        }
+
         const pos = this.readNoteRect(card);
         const tileSize = resolveTileSize(item);
         if (isAtLabelSize(pos.w, pos.h)) {
@@ -1554,6 +1584,47 @@ export const UI = {
             const labelRect = this.resolveCardRect(card, item, { mode: 'label' });
             this.applySpatialToggleRect(card, item, labelRect, ctx);
         }
+    },
+
+    applyFileCabinetZoneToggle(card, item, ctx = {}) {
+        const inFileCabinet = !!card.closest('#file-cabinet');
+        const tileSize = resolveTileSize(item);
+
+        if (inFileCabinet) {
+            removeFromFileCabinetOrder(item.id);
+            let rect = this.resolveCardRect(card, item, { mode: 'remembered' });
+            const expandedMin = this.resolveExpandedDefaultRect(tileSize, null);
+            if (isAtLabelSize(rect.w, rect.h)) {
+                rect = { ...rect, w: expandedMin.w, h: expandedMin.h };
+            }
+            const savedGrid = this.getGridLayout()[item.id];
+            const savedPos = this.getFreeformPositions()[item.id];
+            const x = savedGrid?.x ?? savedPos?.x ?? 8;
+            const y = savedGrid?.y ?? savedPos?.y ?? 8;
+            rect = { x, y, w: rect.w, h: rect.h };
+            if (isSnapLayoutMode(activeBoardViewMode)) {
+                this.saveGridLayout(item.id, rect, { updateRemembered: true });
+            } else {
+                this.saveFreeformSize(item.id, rect.w, rect.h, { updateRemembered: true });
+                this.saveFreeformPosition(item.id, x, y);
+            }
+        } else {
+            const pos = this.readNoteRect(card);
+            this.persistRememberedSpatialSize(item.id, pos.w, pos.h, tileSize);
+            addToFileCabinetOrder(getItemCategoryName(item), item.id);
+            const labelRect = this.resolveCardRect(card, item, { mode: 'label' });
+            const x = pos.x ?? 8;
+            const y = pos.y ?? 8;
+            const filedRect = { x, y, w: labelRect.w, h: labelRect.h };
+            if (isSnapLayoutMode(activeBoardViewMode)) {
+                this.saveGridLayout(item.id, filedRect, { updateRemembered: true });
+            } else {
+                this.saveFreeformSize(item.id, filedRect.w, filedRect.h, { updateRemembered: true });
+                this.saveFreeformPosition(item.id, x, y);
+            }
+        }
+
+        window.dispatchEvent(new CustomEvent('board:visibility_changed'));
     },
 
     gridBoardRectForCard(card, savedRect, isExpanded) {
@@ -1664,12 +1735,28 @@ export const UI = {
 
         const resolvedMode = normalizeViewMode(viewMode);
         const snapLayout = isSnapLayoutMode(resolvedMode);
+        const fileCabinetActive = isFileCabinetActive();
         activeBoardViewMode = resolvedMode;
         canvas.className = snapLayout ? 'view-grid' : 'view-freeform';
+        if (fileCabinetActive) canvas.classList.add('file-cabinet-bottom');
         if (focusActive) canvas.dataset.focusActive = '1';
         else delete canvas.dataset.focusActive;
 
-        if (visibleItems.length === 0) {
+        let boardItems = visibleItems;
+        if (fileCabinetActive) {
+            const { filed, expanded } = partitionItemsForFileCabinet(visibleItems, resolvedMode, this);
+            seedFileCabinetOrderFromItems(filed);
+            const mount = ensureFileCabinetMount(true);
+            renderFileCabinet(mount, filed, activeCategories, this);
+            boardItems = expanded;
+        } else {
+            ensureFileCabinetMount(false);
+        }
+
+        if (boardItems.length === 0) {
+            if (fileCabinetActive && visibleItems.length > 0) {
+                return;
+            }
             const hiddenCount = safeItems.length - this.getVisibleItems(safeItems).length;
             if (focusActive && this.getVisibleItems(safeItems).length > 0) {
                 canvas.innerHTML = `<div class="system-status-msg">Focus active — no notes in the selected categories on the desktop. Use the sidebar to open any note, or reset focus.</div>`;
@@ -1690,7 +1777,7 @@ export const UI = {
         const cardStep = 104;
         const rowStep = 72;
 
-        [...visibleItems]
+        [...boardItems]
             .sort((a, b) => {
                 const aTime = Number(a.created_at || a.updated_at || 0);
                 const bTime = Number(b.created_at || b.updated_at || 0);
@@ -1778,8 +1865,14 @@ export const UI = {
             lastIcon = CARD_ICONS.collapse;
         } else if (spatialTile) {
             const atLabel = isAtLabelSize(tileW, tileH);
-            expandTitle = atLabel ? 'Expand' : 'Collapse to label';
-            lastIcon = atLabel ? CARD_ICONS.expand : CARD_ICONS.collapse;
+            if (isFileCabinetActive()) {
+                const labels = getFileCabinetToggleLabels(atLabel, atLabel);
+                expandTitle = labels.title;
+                lastIcon = labels.iconKey === 'expand' ? CARD_ICONS.expand : CARD_ICONS.collapse;
+            } else {
+                expandTitle = atLabel ? 'Expand' : 'Collapse to label';
+                lastIcon = atLabel ? CARD_ICONS.expand : CARD_ICONS.collapse;
+            }
         } else {
             expandTitle = isExpanded ? 'Collapse note' : 'Expand note';
             lastIcon = isExpanded ? CARD_ICONS.collapse : CARD_ICONS.expand;
@@ -2960,6 +3053,14 @@ export const UI = {
     },
 
     hasAnyBoardCardsExpanded() {
+        if (isFileCabinetActive()) {
+            const { expanded } = partitionItemsForFileCabinet(
+                [...boardItemsById.values()],
+                activeBoardViewMode,
+                this
+            );
+            return expanded.length > 0;
+        }
         const mode = activeBoardViewMode;
         const expanded = getExpandedCards(mode);
         if (Object.keys(expanded).some((id) => expanded[id])) return true;
@@ -2967,7 +3068,46 @@ export const UI = {
         return !!canvas?.querySelector('.mini-card.expanded');
     },
 
+    getStoredItemSizeForFileCabinet(itemId, sortBy) {
+        if (sortBy === 'freeform') {
+            const sizes = this.getFreeformSizes()[itemId];
+            if (sizes?.w != null && sizes?.h != null) return { w: sizes.w, h: sizes.h };
+        } else {
+            const layout = this.getGridLayout()[itemId];
+            if (layout?.w != null && layout?.h != null) return { w: layout.w, h: layout.h };
+        }
+        return null;
+    },
+
+    collapseAllFileCabinetCards() {
+        const sortBy = activeBoardViewMode;
+        boardItemsById.forEach((item) => {
+            const size = this.getStoredItemSizeForFileCabinet(item.id, sortBy);
+            if (!size || isAtLabelSize(size.w, size.h)) return;
+            const tileSize = resolveTileSize(item);
+            this.persistRememberedSpatialSize(item.id, size.w, size.h, tileSize);
+            addToFileCabinetOrder(getItemCategoryName(item), item.id);
+            const labelRect = getLabelRect();
+            const savedGrid = this.getGridLayout()[item.id];
+            const savedPos = this.getFreeformPositions()[item.id];
+            const x = savedGrid?.x ?? savedPos?.x ?? 8;
+            const y = savedGrid?.y ?? savedPos?.y ?? 8;
+            const filedRect = { x, y, w: labelRect.w, h: labelRect.h };
+            if (isSnapLayoutMode(sortBy)) {
+                this.saveGridLayout(item.id, filedRect, { updateRemembered: true });
+            } else {
+                this.saveFreeformSize(item.id, filedRect.w, filedRect.h, { updateRemembered: true });
+                this.saveFreeformPosition(item.id, x, y);
+            }
+        });
+    },
+
     expandAllCards() {
+        if (isFileCabinetActive()) {
+            this.expandAllFileCabinetCards();
+            window.dispatchEvent(new CustomEvent('board:visibility_changed'));
+            return;
+        }
         const mode = activeBoardViewMode;
         const map = {};
         boardItemsById.forEach((_item, id) => {
@@ -2977,7 +3117,37 @@ export const UI = {
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
     },
 
+    expandAllFileCabinetCards() {
+        const sortBy = activeBoardViewMode;
+        boardItemsById.forEach((item) => {
+            if (!isItemFiled(item, sortBy, this)) return;
+            removeFromFileCabinetOrder(item.id);
+            const tileSize = resolveTileSize(item);
+            let rect = this.resolveCardRect(null, item, { mode: 'remembered' });
+            const expandedMin = this.resolveExpandedDefaultRect(tileSize, null);
+            if (isAtLabelSize(rect.w, rect.h)) {
+                rect = { ...rect, w: expandedMin.w, h: expandedMin.h };
+            }
+            const savedGrid = this.getGridLayout()[item.id];
+            const savedPos = this.getFreeformPositions()[item.id];
+            const x = savedGrid?.x ?? savedPos?.x ?? 8;
+            const y = savedGrid?.y ?? savedPos?.y ?? 8;
+            rect = { x, y, w: rect.w, h: rect.h };
+            if (isSnapLayoutMode(sortBy)) {
+                this.saveGridLayout(item.id, rect, { updateRemembered: true });
+            } else {
+                this.saveFreeformSize(item.id, rect.w, rect.h, { updateRemembered: true });
+                this.saveFreeformPosition(item.id, x, y);
+            }
+        });
+    },
+
     collapseAllCards() {
+        if (isFileCabinetActive()) {
+            this.collapseAllFileCabinetCards();
+            window.dispatchEvent(new CustomEvent('board:visibility_changed'));
+            return;
+        }
         clearExpandedCards(activeBoardViewMode);
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
     },
@@ -2995,7 +3165,9 @@ export const UI = {
         if (!btn || btn.classList.contains('is-hidden')) return;
         const anyExpanded = this.hasAnyBoardCardsExpanded();
         btn.innerHTML = anyExpanded ? ACTION_ICONS.collapseAll : ACTION_ICONS.expandAll;
-        const label = anyExpanded ? 'Collapse all notes' : 'Expand all notes';
+        const label = isFileCabinetActive()
+            ? (anyExpanded ? 'File away all notes' : 'Open all notes below')
+            : (anyExpanded ? 'Collapse all notes' : 'Expand all notes');
         btn.title = label;
         btn.setAttribute('aria-label', label);
     },
@@ -4689,6 +4861,8 @@ export const UI = {
             savedAt: Date.now(),
             viewMode,
             focusCategories: Array.isArray(focusCategories) ? [...focusCategories] : [],
+            fileCabinet: isFileCabinetActive(),
+            fileCabinetOrder: getFileCabinetOrder(),
             freeformPositions: this.getFreeformPositions(),
             freeformSizes: this.getFreeformSizes(),
             gridLayout: this.getGridLayout(),
@@ -4831,6 +5005,14 @@ export const UI = {
 
         writeJson('matrix_collapsed_categories', snapshot.collapsedCategories || []);
         if (writeState.quotaExceeded) return false;
+
+        if (snapshot.fileCabinet != null) {
+            setFileCabinetActive(!!snapshot.fileCabinet);
+        }
+        if (snapshot.fileCabinetOrder) {
+            writeJson(FILE_CABINET_ORDER_KEY, snapshot.fileCabinetOrder);
+            if (writeState.quotaExceeded) return false;
+        }
 
         return !writeState.quotaExceeded;
     },

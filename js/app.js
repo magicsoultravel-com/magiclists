@@ -27,7 +27,10 @@ import { DrawingBoard, getDrawingBackupKeys } from './drawingBoard.js';
 import { SearchBar } from './searchBar.js';
 import { Fullscreen } from './fullscreen.js';
 import { SidebarRadio } from './sidebarRadio.js';
-import { positionPopoverBelowAnchor } from './popoverPosition.js';
+import {
+    seedFromCurrentLayout,
+    setFileCabinetActive
+} from './fileCabinet.js';
 
 function countHiddenFromBoard(items) {
     return items.filter(item => UI.isHiddenFromBoard(item)).length;
@@ -53,6 +56,7 @@ const AppState = {
             if (preferred === 'freeform' || preferred === 'grid') return preferred;
             return 'grid';
         })(),
+        fileCabinet: localStorage.getItem('matrix_file_cabinet') === 'true',
         currentView: 'active'
     }
 };
@@ -218,12 +222,17 @@ class Application {
 
         const mode = AppState.viewSettings.sortBy;
         const drawingActive = AppState.workspaceMode === 'drawing';
+        const fileCabinetActive = !drawingActive && AppState.viewSettings.fileCabinet;
         const freeformActive = !drawingActive && mode === 'freeform';
-        const viewTitle = freeformActive ? 'Snap to bento grid' : 'Freeform layout';
+        const fileCabinetTitle = fileCabinetActive ? 'Hide File Cabinet' : 'File Cabinet';
+        const viewTitle = fileCabinetActive
+            ? (freeformActive ? 'Snap bottom to grid' : 'Freeform bottom workspace')
+            : (freeformActive ? 'Snap to bento grid' : 'Freeform layout');
         const viewIcon = freeformActive ? ACTION_ICONS.viewFree : ACTION_ICONS.viewGrid;
 
         const workspaceGroup = `
             <button class="btn btn--compact btn--icon ${freeformActive ? 'active' : ''}" id="btn-freeform-toggle" title="${viewTitle}" aria-label="${viewTitle}" aria-pressed="${freeformActive ? 'true' : 'false'}">${viewIcon}</button>
+            <button class="btn btn--compact btn--icon ${fileCabinetActive ? 'active' : ''}" id="btn-file-cabinet-toggle" title="${fileCabinetTitle}" aria-label="${fileCabinetTitle}" aria-pressed="${fileCabinetActive ? 'true' : 'false'}">${ACTION_ICONS.viewFileCabinet}</button>
             <button class="btn btn--compact btn--icon ${drawingActive ? 'active' : ''}" id="btn-drawing-mode" title="magicCanvas" aria-label="magicCanvas">${ACTION_ICONS.drawingPencil}</button>
         `;
 
@@ -290,6 +299,7 @@ class Application {
         Fullscreen.rebindMainButton();
 
         document.getElementById('btn-freeform-toggle')?.addEventListener('click', () => this.toggleFreeformLayout());
+        document.getElementById('btn-file-cabinet-toggle')?.addEventListener('click', () => this.toggleFileCabinet());
         document.getElementById('btn-drawing-mode')?.addEventListener('click', () => {
             if (AppState.workspaceMode === 'drawing') this.switchWorkspaceMode('notes');
             else this.switchWorkspaceMode('drawing');
@@ -508,6 +518,23 @@ class Application {
         await this.setDesktopLayoutMode(nextMode);
     }
 
+    async toggleFileCabinet() {
+        if (AppState.workspaceMode === 'drawing') {
+            this.switchWorkspaceMode('notes');
+        }
+        const next = !AppState.viewSettings.fileCabinet;
+        const canvas = document.getElementById('app-canvas');
+        UI.flushAllInlineEditsFromCanvas(canvas, AppState.items);
+        AppState.viewSettings.fileCabinet = next;
+        setFileCabinetActive(next);
+        if (next) {
+            seedFromCurrentLayout(AppState.items, AppState.viewSettings.sortBy, UI);
+        }
+        this.updateViewToggleState();
+        this.updateLayoutResetVisibility();
+        await this.syncDataStore();
+    }
+
     async setDesktopLayoutMode(mode) {
         if (mode !== 'grid' && mode !== 'freeform') return;
         if (AppState.workspaceMode === 'drawing') {
@@ -537,15 +564,27 @@ class Application {
     updateViewToggleState() {
         const mode = AppState.viewSettings.sortBy;
         const drawing = AppState.workspaceMode === 'drawing';
+        const fileCabinetActive = !drawing && AppState.viewSettings.fileCabinet;
         const freeformActive = !drawing && mode === 'freeform';
         const ffBtn = document.getElementById('btn-freeform-toggle');
         ffBtn?.classList.toggle('active', freeformActive);
         if (ffBtn) {
-            const title = freeformActive ? 'Snap to bento grid' : 'Freeform layout';
+            const title = fileCabinetActive
+                ? (freeformActive ? 'Snap bottom to grid' : 'Freeform bottom workspace')
+                : (freeformActive ? 'Snap to bento grid' : 'Freeform layout');
             ffBtn.innerHTML = freeformActive ? ACTION_ICONS.viewFree : ACTION_ICONS.viewGrid;
             ffBtn.title = title;
             ffBtn.setAttribute('aria-label', title);
             ffBtn.setAttribute('aria-pressed', freeformActive ? 'true' : 'false');
+        }
+        const fcBtn = document.getElementById('btn-file-cabinet-toggle');
+        fcBtn?.classList.toggle('active', fileCabinetActive);
+        if (fcBtn) {
+            const fcTitle = fileCabinetActive ? 'Hide File Cabinet' : 'File Cabinet';
+            fcBtn.innerHTML = ACTION_ICONS.viewFileCabinet;
+            fcBtn.title = fcTitle;
+            fcBtn.setAttribute('aria-label', fcTitle);
+            fcBtn.setAttribute('aria-pressed', fileCabinetActive ? 'true' : 'false');
         }
         document.getElementById('btn-drawing-mode')?.classList.toggle('active', drawing);
         this.updateDesktopZoomVisibility();
@@ -786,6 +825,8 @@ class Application {
 
         UI.restoreViewSessionForMode(mode);
         AppState.expandedCards = UI.readExpandedCardsForMode(mode);
+        AppState.viewSettings.fileCabinet = localStorage.getItem('matrix_file_cabinet') === 'true';
+        this.updateViewToggleState();
 
         await this.syncDataStore();
 
