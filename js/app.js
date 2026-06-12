@@ -221,7 +221,6 @@ class Application {
         const freeformActive = !drawingActive && mode === 'freeform';
         const viewTitle = freeformActive ? 'Snap to bento grid' : 'Freeform layout';
         const viewIcon = freeformActive ? ACTION_ICONS.viewFree : ACTION_ICONS.viewGrid;
-        const sep = '<span class="quick-actions-sep" aria-hidden="true"></span>';
 
         const workspaceGroup = `
             <button class="btn btn--compact btn--icon ${freeformActive ? 'active' : ''}" id="btn-freeform-toggle" title="${viewTitle}" aria-label="${viewTitle}" aria-pressed="${freeformActive ? 'true' : 'false'}">${viewIcon}</button>
@@ -251,7 +250,7 @@ class Application {
         `;
 
         if (!AppState.user.isLoggedIn) {
-            zone.innerHTML = `${workspaceGroup}${sep}${historyGroup}${sep}${displayGroup}${sep}${layoutGroup}${sep}${shellGroup}${sep}
+            zone.innerHTML = `${workspaceGroup}${historyGroup}${displayGroup}${layoutGroup}${shellGroup}
                 <button type="button" class="btn btn--compact btn--block" id="btn-auth-login">Login</button>`;
         } else {
             const accountGroup = `
@@ -261,7 +260,7 @@ class Application {
                 <button type="button" class="btn btn--compact btn--icon" id="btn-import-db" title="Import backup" aria-label="Import backup">${ACTION_ICONS.import}</button>
                 <button type="button" class="btn btn--compact btn--icon btn--icon-danger" id="btn-auth-logout" title="Logout" aria-label="Logout">${ACTION_ICONS.logout}</button>
             `;
-            zone.innerHTML = `${workspaceGroup}${sep}${historyGroup}${sep}${displayGroup}${sep}${layoutGroup}${sep}${shellGroup}${sep}${accountGroup}`;
+            zone.innerHTML = `${workspaceGroup}${historyGroup}${displayGroup}${layoutGroup}${shellGroup}${accountGroup}`;
         }
 
         this.bindQuickActionHandlers();
