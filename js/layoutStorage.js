@@ -10,6 +10,7 @@ import {
     isAtLabelSize,
     isCustomTileRect,
     LEGACY_TILE_SIZE,
+    normalizeTileSize,
     resolveCollapsedTierRect,
     resolveExpandedDefaultRect,
     resolveTileSize,
