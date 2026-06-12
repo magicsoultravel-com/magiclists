@@ -132,6 +132,7 @@ function pointerHitsNoteEditor(clientX, clientY, card) {
     return document.elementsFromPoint(clientX, clientY)
         .some((el) => el instanceof Element
             && card.contains(el)
+            && !el.closest('.card-act--drag')
             && el.closest(
                 '.editor-note-shell .card-inline-edit, '
                 + '.editor-note-shell .step-check, '
@@ -342,6 +343,7 @@ export const DragDropEngine = {
                         parseFloat(card.style.left) || 0,
                         parseFloat(card.style.top) || 0
                     );
+                    UI.updateBoardCanvasMinHeight(canvas);
                 }
             } else if (snapEnabled) {
                 clearLayoutPreview(true);
@@ -462,6 +464,7 @@ export const DragDropEngine = {
                     } else {
                         UI.saveFreeformSizeFromCard(card);
                     }
+                    UI.updateBoardCanvasMinHeight(canvas);
                 }
             } else if (snapEnabled) {
                 clearLayoutPreview(true);

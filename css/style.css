@@ -16,6 +16,7 @@
     --tile-label-h: 28px;
     --tile-note-w: 246px;
     --tile-note-h: 296px;
+    --board-area-inset: 0.875rem;
 
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background-color: var(--desktop-bg, var(--bg-primary));
@@ -422,7 +423,7 @@ body {
     max-height: min(45vh, 520px);
     overflow-x: auto;
     overflow-y: auto;
-    padding: 0.45rem 0.65rem 0.5rem;
+    padding: var(--board-area-inset);
     border-bottom: 1px solid color-mix(in srgb, var(--text-muted) 28%, var(--border-color));
     background: color-mix(in srgb, var(--bg-surface) 88%, var(--bg-primary));
 }
@@ -1861,9 +1862,9 @@ html[data-note-font="kalam"] .mini-card .step-text {
    ========================================================================== */
 #app-canvas {
     flex: 1;
-    padding: 0.75rem;
+    padding: var(--board-area-inset);
     display: grid;
-    gap: 0.75rem;
+    gap: var(--board-area-inset);
     align-items: start;
     overflow-y: auto;
     width: 100%;
@@ -1875,7 +1876,7 @@ html[data-note-font="kalam"] .mini-card .step-text {
 #app-canvas.view-list {
     display: grid !important;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
-    gap: 0.75rem !important;
+    gap: var(--board-area-inset) !important;
 }
 
 /* ==========================================================================
@@ -4101,7 +4102,7 @@ textarea.form-input {
 #app-canvas.view-list {
     align-content: start !important;
     align-items: start !important;
-    gap: 0.4rem !important;
+    gap: var(--board-area-inset) !important;
     grid-template-columns: repeat(auto-fill, 96px) !important;
     grid-auto-rows: min-content !important;
     justify-content: start !important;
@@ -4309,6 +4310,31 @@ textarea.form-input {
 #app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-note-header .mini-card-title,
 #app-canvas.view-grid .mini-card[data-desktop="1"] .editor-note-header .mini-card-title {
     cursor: text;
+    width: max-content;
+    max-width: 100%;
+}
+
+#app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-note-header .mini-card-title.card-inline-edit,
+#app-canvas.view-grid .mini-card[data-desktop="1"] .editor-note-header .mini-card-title.card-inline-edit {
+    field-sizing: content;
+}
+
+#app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-note-topline .editor-note-header,
+#app-canvas.view-grid .mini-card[data-desktop="1"] .editor-note-topline .editor-note-header {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: calc(100% - 7rem);
+}
+
+#app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-note-topline .note-editor-toolbar,
+#app-canvas.view-grid .mini-card[data-desktop="1"] .editor-note-topline .note-editor-toolbar {
+    margin-left: auto;
+}
+
+#app-canvas.view-grid .mini-card[data-desktop="1"] .editor-meta-row--footer,
+#app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-meta-row--footer {
+    font-size: calc(0.54rem * var(--note-font-scale, 1));
+    max-height: 1.1em;
 }
 
 #app-canvas.view-freeform .ff-chrome {
@@ -5294,7 +5320,7 @@ textarea.form-input {
         linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
         linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
     background-size: 100px 60px;
-    background-position: 1rem 0.65rem;
+    background-position: var(--board-area-inset) var(--board-area-inset);
 }
 
 /* ==========================================================================
