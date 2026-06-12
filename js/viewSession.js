@@ -6,9 +6,18 @@ const LEGACY_EXPANDED_KEY = 'matrix_expanded_cards';
 
 function emptyBucket() {
     return {
-        expandedCards: {},
-        scroll: null
+        expandedCards: {}
     };
+}
+
+function stripScrollFromBucket(bucket) {
+    if (!bucket || typeof bucket !== 'object') return emptyBucket();
+    const next = { ...bucket };
+    delete next.scroll;
+    delete next.gridExpandedId;
+    delete next.collapsedCategories;
+    if (!next.expandedCards) next.expandedCards = {};
+    return next;
 }
 
 export function normalizeViewMode(mode) {
@@ -25,11 +34,9 @@ export function readViewSessions() {
                 const store = { version: 2 };
                 VIEW_MODES.forEach((mode) => {
                     const legacy = parsed[mode] || parsed[mode === 'grid' ? 'columns' : mode] || {};
-                    store[mode] = {
-                        ...emptyBucket(),
-                        expandedCards: { ...(legacy.expandedCards || {}) },
-                        scroll: legacy.scroll ?? null
-                    };
+                    store[mode] = stripScrollFromBucket({
+                        expandedCards: { ...(legacy.expandedCards || {}) }
+                    });
                 });
                 return store;
             }
@@ -107,7 +114,7 @@ function syncWorkingExpandedCards(mode, map) {
     }
 }
 
-export function persistViewSession(mode, { canvas, flushLayout, captureScroll } = {}) {
+export function persistViewSession(mode, { canvas, flushLayout } = {}) {
     const m = normalizeViewMode(mode);
     const store = readViewSessions();
     const bucket = store[m] || emptyBucket();
@@ -122,9 +129,7 @@ export function persistViewSession(mode, { canvas, flushLayout, captureScroll } 
         bucket.expandedCards = {};
     }
 
-    if (typeof captureScroll === 'function' && canvas) {
-        bucket.scroll = captureScroll(canvas);
-    }
+    delete bucket.scroll;
 
     store[m] = bucket;
     writeViewSessions(store);
@@ -135,15 +140,14 @@ export function restoreViewSession(mode) {
     const store = readViewSessions();
     const bucket = store[m] || emptyBucket();
     syncWorkingExpandedCards(m, bucket.expandedCards || {});
-    return bucket.scroll || null;
 }
 
 export function getViewSessionsForSnapshot() {
     const store = readViewSessions();
     return {
         version: 2,
-        grid: store.grid,
-        freeform: store.freeform
+        grid: stripScrollFromBucket(store.grid),
+        freeform: stripScrollFromBucket(store.freeform)
     };
 }
 
@@ -152,16 +156,14 @@ export function applyViewSessionsFromSnapshot(viewSessions) {
     const store = { version: 2 };
     if (viewSessions.version === 2) {
         VIEW_MODES.forEach((mode) => {
-            store[mode] = { ...emptyBucket(), ...(viewSessions[mode] || {}) };
+            store[mode] = stripScrollFromBucket(viewSessions[mode]);
         });
     } else if (viewSessions.version === 1) {
         VIEW_MODES.forEach((mode) => {
             const legacy = viewSessions[mode] || viewSessions[mode === 'grid' ? 'columns' : mode] || {};
-            store[mode] = {
-                ...emptyBucket(),
-                expandedCards: { ...(legacy.expandedCards || {}) },
-                scroll: legacy.scroll ?? null
-            };
+            store[mode] = stripScrollFromBucket({
+                expandedCards: { ...(legacy.expandedCards || {}) }
+            });
         });
     } else {
         return false;

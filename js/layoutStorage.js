@@ -697,6 +697,10 @@ function sanitizeViewSessions(store, liveIds, stats) {
         const bucket = { ...(store[mode] || {}) };
         delete bucket.gridExpandedId;
         delete bucket.collapsedCategories;
+        if ('scroll' in bucket) {
+            delete bucket.scroll;
+            changed = true;
+        }
         if (bucket.expandedCards) {
             const cleaned = sanitizeExpandedMap(bucket.expandedCards, liveIds, stats, `view_sessions.${mode}.expanded`);
             if (cleaned !== bucket.expandedCards) {
@@ -765,6 +769,8 @@ export function sanitizeLayoutSnapshot(snapshot, context) {
 
     const next = { ...snapshot };
     const stats = { removed: 0, normalized: 0, clamped: 0, touched: new Set() };
+
+    delete next.scroll;
 
     next.freeformPositions = pruneIdMap(next.freeformPositions || {}, ctx.liveIds, stats, 'snapshot.freeformPositions');
     next.freeformSizes = normalizeSizeOnlyMap(next.freeformSizes || {}, ctx.liveIds, ctx.tileSizeById, stats, 'snapshot.freeformSizes');

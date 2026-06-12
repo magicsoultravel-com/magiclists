@@ -899,24 +899,21 @@ export const UI = {
         return items.filter((item) => !this.isHiddenFromBoard(item) && !this.isArchived(item));
     },
 
-    captureScrollState(canvas) {
-        if (!canvas) return null;
-        return {
-            canvasScrollTop: canvas.scrollTop,
-            cardBodies: [...canvas.querySelectorAll('.mini-card[data-id]')].map((card) => ({
-                id: card.dataset.id,
-                scrollTop: (card.querySelector('.editor-note-body') || card.querySelector('.card-body'))?.scrollTop ?? 0
-            }))
-        };
-    },
-
-    restoreScrollState(canvas, state) {
-        if (!canvas || !state) return;
-        canvas.scrollTop = state.canvasScrollTop ?? 0;
-        state.cardBodies?.forEach(({ id, scrollTop }) => {
-            const card = canvas.querySelector(`.mini-card[data-id="${id}"]`);
-            const body = card?.querySelector('.editor-note-body') || card?.querySelector('.card-body');
-            if (body) body.scrollTop = scrollTop;
+    flushAllInlineEditsFromCanvas(canvas, items) {
+        if (!canvas || !Array.isArray(items)) return;
+        const byId = new Map(items.map((item) => [item.id, item]));
+        canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
+            const item = byId.get(card.dataset.id);
+            if (!item) return;
+            this.commitFocusedInlineField(card, item);
+            if (card.dataset.pendingFocusStepId) return;
+            const shell = card.querySelector('.editor-note-shell');
+            if (!shell) return;
+            const beforeItem = this.snapshotItem(item);
+            this.syncItemBodyFromDom(shell, item);
+            if (JSON.stringify(beforeItem) !== JSON.stringify(this.snapshotItem(item))) {
+                this.emitItemMutation(item, { preserveView: true, beforeItem, skipRerender: true });
+            }
         });
     },
 
@@ -927,13 +924,12 @@ export const UI = {
     persistViewSessionForMode(mode, canvas = document.getElementById('app-canvas')) {
         persistViewSession(mode, {
             canvas,
-            flushLayout: (c, m) => this.flushLayoutFromCanvas(c, m),
-            captureScroll: (c) => this.captureScrollState(c)
+            flushLayout: (c, m) => this.flushLayoutFromCanvas(c, m)
         });
     },
 
     restoreViewSessionForMode(mode) {
-        return restoreViewSession(mode);
+        restoreViewSession(mode);
     },
 
     readExpandedCardsForMode(mode = activeBoardViewMode) {
@@ -1630,7 +1626,6 @@ export const UI = {
         const card = canvas.querySelector(`.mini-card[data-id="${item.id}"]`);
         if (!card) return false;
 
-        const scrollState = this.captureScrollState(canvas);
         let activeCategories = readStoredCategories()
             .filter((cat) => !hiddenCategories.includes(cat.name));
         activeCategories = applyFocusToCategories(activeCategories, focusCategories);
@@ -1650,13 +1645,11 @@ export const UI = {
             this.finalizeDesktopCard(card);
         }
 
-        this.restoreScrollState(canvas, scrollState);
         return true;
     },
 
     render(canvas, items, viewMode, hiddenCategories = [], focusCategories = []) {
         if (!canvas) return;
-        const scrollState = this.captureScrollState(canvas);
         canvas.innerHTML = '';
 
         const safeItems = Array.isArray(items) ? items : [];
@@ -1764,8 +1757,6 @@ export const UI = {
         if (snapLayout && bounds) {
             this.updateGridCanvasMinHeight(canvas, placed, bounds.origin);
         }
-
-        this.restoreScrollState(canvas, scrollState);
     },
 
     buildNoteQuickActionsHtml(item, {
@@ -4698,7 +4689,6 @@ export const UI = {
             savedAt: Date.now(),
             viewMode,
             focusCategories: Array.isArray(focusCategories) ? [...focusCategories] : [],
-            scroll: this.captureScrollState(canvas),
             freeformPositions: this.getFreeformPositions(),
             freeformSizes: this.getFreeformSizes(),
             gridLayout: this.getGridLayout(),

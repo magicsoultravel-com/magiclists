@@ -518,25 +518,20 @@ class Application {
         if (prevMode === mode) return;
 
         const canvas = document.getElementById('app-canvas');
+        UI.flushAllInlineEditsFromCanvas(canvas, AppState.items);
         UI.persistViewSessionForMode(prevMode, canvas);
         UI.convertDesktopLayoutForModeChange(canvas, prevMode, mode, AppState.items);
 
         AppState.viewSettings.sortBy = mode;
         localStorage.setItem('matrix_desktop_layout', mode);
         localStorage.setItem('matrix_preferred_view', mode);
-        const scrollState = UI.restoreViewSessionForMode(mode);
+        UI.restoreViewSessionForMode(mode);
         AppState.expandedCards = UI.readExpandedCardsForMode(mode);
 
         window.dispatchEvent(new CustomEvent('view:mode_changed', { detail: mode }));
         this.updateViewToggleState();
         this.updateLayoutResetVisibility();
         await this.syncDataStore();
-
-        if (scrollState) {
-            requestAnimationFrame(() => {
-                UI.restoreScrollState(document.getElementById('app-canvas'), scrollState);
-            });
-        }
     }
 
     updateViewToggleState() {
@@ -798,13 +793,6 @@ class Application {
             Calendar.items = AppState.items;
             Calendar.refresh(AppState.focusCategories);
         }
-
-        requestAnimationFrame(() => {
-            const canvas = document.getElementById('app-canvas');
-            if (canvas && snapshot.scroll) {
-                UI.restoreScrollState(canvas, snapshot.scroll);
-            }
-        });
 
         return true;
     }
