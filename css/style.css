@@ -418,10 +418,10 @@ body {
 
 .file-cabinet {
     flex: 0 0 auto;
-    max-height: 140px;
     min-height: 72px;
+    max-height: min(45vh, 520px);
     overflow-x: auto;
-    overflow-y: hidden;
+    overflow-y: auto;
     padding: 0.45rem 0.65rem 0.5rem;
     border-bottom: 1px solid color-mix(in srgb, var(--text-muted) 28%, var(--border-color));
     background: color-mix(in srgb, var(--bg-surface) 88%, var(--bg-primary));
@@ -443,8 +443,8 @@ body {
 }
 
 .file-cabinet-category {
-    flex: 0 0 160px;
-    width: 160px;
+    flex: 0 0 auto;
+    width: auto;
     min-width: 160px;
 }
 
@@ -482,7 +482,7 @@ body {
 
 .file-cabinet-tab-stack {
     position: relative;
-    width: 100%;
+    min-width: 160px;
 }
 
 .file-cabinet .file-cabinet-tab {
@@ -492,6 +492,7 @@ body {
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
     border-radius: 0.25rem;
     overflow: hidden;
+    border-left: 2px solid var(--file-cabinet-category-color, var(--border-color));
 }
 
 .file-cabinet .file-cabinet-tab:hover {
@@ -520,11 +521,37 @@ body {
     min-height: 0;
     min-width: 0;
     height: 100%;
+    position: relative;
 }
 
 .file-cabinet .file-cabinet-tab .editor-note-header {
+    flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
+    padding-right: 0.15rem;
+}
+
+.file-cabinet .file-cabinet-tab .note-editor-toolbar {
+    position: absolute;
+    right: 0;
+    top: 0;
+    flex: 0 0 auto;
+    min-height: unset;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+.file-cabinet .file-cabinet-tab:hover .note-editor-toolbar,
+.file-cabinet .file-cabinet-tab:focus-within .note-editor-toolbar {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-actions {
+    position: static;
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .file-cabinet .file-cabinet-tab .mini-card-title {
@@ -1941,6 +1968,34 @@ html[data-note-font="kalam"] .mini-card .step-text {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.mini-card.tile-label .editor-note-topline .note-editor-toolbar,
+.mini-card[data-desktop="1"].spatial-at-label .editor-note-topline .note-editor-toolbar {
+    position: absolute;
+    right: 0;
+    top: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+.mini-card.tile-label:hover .editor-note-topline .note-editor-toolbar,
+.mini-card.tile-label:focus-within .editor-note-topline .note-editor-toolbar,
+.mini-card[data-desktop="1"].spatial-at-label:hover .editor-note-topline .note-editor-toolbar,
+.mini-card[data-desktop="1"].spatial-at-label:focus-within .editor-note-topline .note-editor-toolbar {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.mini-card.tile-label .editor-note-topline,
+.mini-card[data-desktop="1"].spatial-at-label .editor-note-topline {
+    position: relative;
+}
+
+.mini-card.tile-label .editor-note-topline .editor-note-header,
+.mini-card[data-desktop="1"].spatial-at-label .editor-note-topline .editor-note-header {
+    padding-right: 0.1rem;
 }
 
 .mini-card.tile-compact,

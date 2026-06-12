@@ -12,7 +12,9 @@ export const FILE_CABINET_ORDER_KEY = 'matrix_file_cabinet_order';
 
 export const FILE_CABINET_TAB_WIDTH = 160;
 export const FILE_CABINET_TAB_HEIGHT = 28;
-export const FILE_CABINET_STACK_OFFSET = 6;
+export const FILE_CABINET_STACK_OFFSET_Y = 18;
+export const FILE_CABINET_STACK_OFFSET_X = 10;
+export const FILE_CABINET_DRAWER_HEADER_PAD = 48;
 
 const DRAG_THRESHOLD = 4;
 
@@ -245,17 +247,44 @@ export function applyFileCabinetStackPositions(stackEl) {
     if (!stackEl) return;
     const tabs = [...stackEl.querySelectorAll('.file-cabinet-tab')];
     const label = getLabelRect();
+    const count = tabs.length;
+    const stackWidth = count > 0
+        ? FILE_CABINET_TAB_WIDTH + (count - 1) * FILE_CABINET_STACK_OFFSET_X
+        : FILE_CABINET_TAB_WIDTH;
+    const stackHeight = count > 0
+        ? label.h + (count - 1) * FILE_CABINET_STACK_OFFSET_Y
+        : label.h;
+
+    stackEl.style.width = `${stackWidth}px`;
+    stackEl.style.height = `${Math.max(stackHeight, label.h)}px`;
+
+    const col = stackEl.closest('.file-cabinet-category');
+    if (col) {
+        col.style.width = `${stackWidth}px`;
+        col.style.minWidth = `${stackWidth}px`;
+        col.style.flexBasis = `${stackWidth}px`;
+    }
+
     tabs.forEach((card, index) => {
         card.style.position = 'absolute';
-        card.style.left = '0';
-        card.style.top = `${index * FILE_CABINET_STACK_OFFSET}px`;
+        card.style.left = `${index * FILE_CABINET_STACK_OFFSET_X}px`;
+        card.style.top = `${index * FILE_CABINET_STACK_OFFSET_Y}px`;
         card.style.width = `${FILE_CABINET_TAB_WIDTH}px`;
         card.style.height = `${label.h}px`;
         card.style.zIndex = String(index + 1);
         card.dataset.fileCabinetStackIndex = String(index);
     });
-    const depth = tabs.length > 0 ? label.h + (tabs.length - 1) * FILE_CABINET_STACK_OFFSET : 0;
-    stackEl.style.height = `${Math.max(depth, label.h)}px`;
+}
+
+export function syncFileCabinetDrawerHeight(mount) {
+    if (!mount) return;
+    const label = getLabelRect();
+    let maxStackH = label.h;
+    mount.querySelectorAll('.file-cabinet-tab-stack').forEach((stack) => {
+        maxStackH = Math.max(maxStackH, stack.offsetHeight || 0);
+    });
+    mount.style.minHeight = `${maxStackH + FILE_CABINET_DRAWER_HEADER_PAD}px`;
+    mount.style.maxHeight = 'none';
 }
 
 export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
@@ -264,6 +293,8 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
 
     if (!filedItems.length) {
         mount.innerHTML = '<div class="file-cabinet-empty">No filed notes — use File away on a note to add tabs here.</div>';
+        mount.style.minHeight = '';
+        mount.style.maxHeight = '';
         return;
     }
 
@@ -288,6 +319,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
         const col = document.createElement('div');
         col.className = 'file-cabinet-category';
         col.dataset.category = catName;
+        col.style.setProperty('--file-cabinet-category-color', color);
 
         const header = document.createElement('div');
         header.className = 'file-cabinet-category-header';
@@ -317,6 +349,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
     });
 
     mount.appendChild(row);
+    syncFileCabinetDrawerHeight(mount);
 }
 
 export function initFileCabinetDrag(mount, signal) {
@@ -333,7 +366,7 @@ export function initFileCabinetDrag(mount, signal) {
         const tabs = [...stack.querySelectorAll('.file-cabinet-tab')];
         const rect = stack.getBoundingClientRect();
         const y = e.clientY - rect.top;
-        let toIndex = Math.floor(y / FILE_CABINET_STACK_OFFSET);
+        let toIndex = Math.floor(y / FILE_CABINET_STACK_OFFSET_Y);
         toIndex = Math.max(0, Math.min(tabs.length - 1, toIndex));
 
         if (toIndex !== startIndex) {
@@ -345,6 +378,9 @@ export function initFileCabinetDrag(mount, signal) {
         } else {
             applyFileCabinetStackPositions(stack);
         }
+
+        const mount = stack.closest('#file-cabinet');
+        if (mount) syncFileCabinetDrawerHeight(mount);
 
         dragState = null;
     };
@@ -372,13 +408,17 @@ export function initFileCabinetDrag(mount, signal) {
                     stack,
                     category: stack.dataset.category || 'Uncategorized',
                     card,
-                    startIndex
+                    startIndex,
+                    baseLeft: startIndex * FILE_CABINET_STACK_OFFSET_X,
+                    baseTop: startIndex * FILE_CABINET_STACK_OFFSET_Y
                 };
                 card.classList.add('is-file-cabinet-dragging');
                 document.body.classList.add('is-file-cabinet-drag-active');
             }
+            const offsetX = ev.clientX - startX;
             const offsetY = ev.clientY - startY;
-            card.style.top = `${startIndex * FILE_CABINET_STACK_OFFSET + offsetY}px`;
+            card.style.left = `${dragState.baseLeft + offsetX}px`;
+            card.style.top = `${dragState.baseTop + offsetY}px`;
             card.style.zIndex = '999';
         };
 
