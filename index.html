@@ -70,15 +70,6 @@
             <div id="sidebar-radio" class="sidebar-radio nav-drawer-section nav-drawer-section--compact" aria-label="Internet radio"></div>
 
             <div class="nav-drawer-section nav-drawer-section--compact">
-                <div class="collapsable-header list-row--header" id="view-section-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>View</span>
-                </div>
-                <div class="collapsable-section collapsed" id="view-section">
-                    <div id="filter-controls"></div>
-                </div>
-            </div>
-
-            <div class="nav-drawer-section nav-drawer-section--compact">
                 <div class="collapsable-header list-row--header sidebar-panel-list-header" id="categories-section-header">
                     <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Categories</span>
                 </div>
@@ -163,10 +154,13 @@
                         <div id="sidebar-history-redo-list" class="sidebar-history-list sidebar-history-list--redo is-hidden"></div>
                     </div>
                 </div>
-                <div id="sidebar-storage-stats" class="sidebar-storage-stats" aria-label="Local storage usage">
-                    <span id="sidebar-storage-notes" class="sidebar-storage-stat">Notes: —</span>
-                    <span id="sidebar-storage-matrix" class="sidebar-storage-stat">Matrix: —</span>
-                    <span id="sidebar-storage-app" class="sidebar-storage-stat">App: —</span>
+                <div id="sidebar-stats-section" class="sidebar-stats-section">
+                    <div class="collapsable-header list-row--header" id="stats-section-header">
+                        <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Stats</span>
+                    </div>
+                    <div class="collapsable-section collapsed" id="stats-section">
+                        <div id="sidebar-storage-stats" class="sidebar-storage-stats" aria-label="Local storage usage"></div>
+                    </div>
                 </div>
             </div>
             </div>
@@ -209,8 +203,6 @@
     </div>
 
     <button type="button" id="fab-create" class="fab-create is-hidden" title="New note" aria-label="New note">+</button>
-
-    <footer id="system-footer"></footer>
 
     <div id="editor-overlay" class="overlay is-hidden">
         <div class="modal">

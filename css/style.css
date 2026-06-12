@@ -400,6 +400,7 @@ body {
     flex-direction: column;
     min-width: 0;
     min-height: 0;
+    border: 1px solid var(--border-color);
 }
 
 .desktop-surface {
@@ -547,7 +548,7 @@ body {
 .side-panel-bottom {
     flex-shrink: 0;
     margin-top: 0.15rem;
-    padding: 0.2rem 0.22rem 0.05rem;
+    padding: 0.2rem 0 0.05rem;
     border-top: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
@@ -560,8 +561,10 @@ body {
     width: 100%;
 }
 
-.sidebar-history-header {
-    padding: 0.18rem 0.22rem;
+.sidebar-history-header .status-badge {
+    font-size: 0.52rem;
+    min-width: 1rem;
+    padding: 0 0.2rem;
 }
 
 .sidebar-history-list {
@@ -599,12 +602,17 @@ body {
     color: var(--text-muted);
 }
 
+.sidebar-stats-section {
+    width: 100%;
+}
+
 .sidebar-storage-stats {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: 0.04rem;
-    font-size: 0.46rem;
+    padding: 0.15rem 0.2rem 0.25rem;
+    font-size: 0.52rem;
     color: var(--text-muted);
     letter-spacing: 0.01em;
 }
@@ -612,6 +620,11 @@ body {
 .sidebar-storage-stat {
     white-space: nowrap;
     line-height: 1.15;
+}
+
+.sidebar-storage-stat--hint {
+    opacity: 0.75;
+    font-size: 0.48rem;
 }
 
 .side-panel-list {
@@ -644,6 +657,17 @@ body {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
     gap: 0.25rem;
+}
+
+.quick-actions-sep {
+    grid-column: 1 / -1;
+    height: 1px;
+    background: var(--border-color);
+    margin: 0.04rem 0;
+}
+
+.quick-actions-grid .btn--icon.active {
+    color: #fff;
 }
 
 .btn--icon {
@@ -789,26 +813,12 @@ body {
     background: #5b52e8;
 }
 
-.history-controls {
-    display: flex;
-    align-items: center;
-    gap: 0.15rem;
-    margin-right: 0.1rem;
-    padding-right: 0.3rem;
-    border-right: 1px solid var(--border-color);
-}
-
 .control-bar-actions-group {
     display: inline-flex;
     align-items: center;
     gap: 0.45rem;
     flex-wrap: nowrap;
     min-width: 0;
-}
-
-.history-controls .btn--icon:disabled {
-    opacity: 0.28;
-    cursor: default;
 }
 
 .editor-fab {
@@ -1606,12 +1616,6 @@ html[data-note-font="kalam"] .mini-card .step-text {
     font-size: 0.85rem;
 }
 
-#filter-controls {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.25rem;
-}
-
 .control-bar-brand {
     display: flex;
     align-items: center;
@@ -1631,12 +1635,6 @@ html[data-note-font="kalam"] .mini-card .step-text {
     color: var(--text-main);
     flex-shrink: 0;
     line-height: 1;
-}
-
-#filter-controls .btn.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
 }
 
 #auth-zone {
@@ -1661,13 +1659,6 @@ html[data-note-font="kalam"] .mini-card .step-text {
     color: var(--text-muted);
     letter-spacing: 0.04em;
 }
-
-.nav-drawer-actions {
-    margin-top: auto;
-    padding-top: 1rem;
-    border-top: 1px solid var(--border-color);
-}
-
 
 .btn {
     background: var(--bg-card);
@@ -3025,31 +3016,6 @@ textarea.form-input {
     padding: 3rem 0;
 }
 
-/* ==========================================================================
-   6. PERSISTENT SYSTEM FOOTER FIXED LAYOUT
-   ========================================================================== */
-#system-footer {
-    flex-shrink: 0;
-    padding: 0.6rem 1.5rem;
-    background-color: var(--bg-surface);
-    border-top: 1px solid var(--border-color);
-    font-size: 0.78rem;
-    color: var(--text-muted);
-    font-weight: 500;
-}
-
-.storage-usage-footer {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.5rem 1rem;
-}
-
-.storage-usage-footer__hint {
-    opacity: 0.75;
-    font-size: 0.72rem;
-}
-
 .storage-quota-modal {
     max-width: 420px;
 }
@@ -3135,13 +3101,6 @@ textarea.form-input {
     max-height: calc(85vh - 120px);
     padding-right: 0.5rem;
 }
-
-#sidebar-stats-section {
-    padding: 0;
-    background: transparent;
-    border: 0;
-}
-
 
 /* Modern modal improvements */
 .modal {

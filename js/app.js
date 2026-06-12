@@ -8,8 +8,6 @@ import { SidePanel } from './hamburger.js';
 import { applyBackupToStorage } from './backup.js';
 import {
     getLayoutBackupKeys,
-    getLocalStorageByteEstimate,
-    getLocalStorageUsageBreakdown,
     reconcileLayoutStorage
 } from './layoutStorage.js';
 import { DEFAULT_CATEGORIES, normalizeCategories } from './categories.js';
@@ -82,7 +80,6 @@ class Application {
             items: API._getLocalDB().items,
             categories: AppState.categories
         });
-        this.renderStorageUsageFooter();
         await this.syncDataStore();
         this.setupCoreListeners();
         SidePanel.init(AppState);
@@ -209,23 +206,6 @@ class Application {
     }
 
     renderControlBar() {
-        const filterControls = document.getElementById('filter-controls');
-        const mode = AppState.viewSettings.sortBy;
-        const drawingActive = AppState.workspaceMode === 'drawing';
-        const freeformActive = !drawingActive && mode === 'freeform';
-        if (filterControls) {
-            filterControls.innerHTML = `
-                <button class="btn btn--compact btn--icon ${freeformActive ? 'active' : ''}" id="btn-freeform-toggle" title="${freeformActive ? 'Snap to bento grid' : 'Freeform layout'}" aria-label="${freeformActive ? 'Snap to bento grid' : 'Freeform layout'}" aria-pressed="${freeformActive ? 'true' : 'false'}">${ACTION_ICONS.viewFree}</button>
-                <button class="btn btn--compact btn--icon ${drawingActive ? 'active' : ''}" id="btn-drawing-mode" title="magicCanvas" aria-label="magicCanvas">${ACTION_ICONS.drawingPencil}</button>
-            `;
-            document.getElementById('btn-freeform-toggle').addEventListener('click', () => this.toggleFreeformLayout());
-            document.getElementById('btn-drawing-mode')?.addEventListener('click', () => {
-                if (AppState.workspaceMode === 'drawing') this.switchWorkspaceMode('notes');
-                else this.switchWorkspaceMode('drawing');
-            });
-            this.updateViewToggleState();
-        }
-
         this.renderQuickActions();
         this.updateFabVisibility();
         this.updateLayoutResetVisibility();
@@ -236,29 +216,52 @@ class Application {
         const zone = document.getElementById('quick-actions-zone');
         if (!zone) return;
 
-        const globalActions = `
+        const mode = AppState.viewSettings.sortBy;
+        const drawingActive = AppState.workspaceMode === 'drawing';
+        const freeformActive = !drawingActive && mode === 'freeform';
+        const viewTitle = freeformActive ? 'Snap to bento grid' : 'Freeform layout';
+        const viewIcon = freeformActive ? ACTION_ICONS.viewFree : ACTION_ICONS.viewGrid;
+        const sep = '<span class="quick-actions-sep" aria-hidden="true"></span>';
+
+        const workspaceGroup = `
+            <button class="btn btn--compact btn--icon ${freeformActive ? 'active' : ''}" id="btn-freeform-toggle" title="${viewTitle}" aria-label="${viewTitle}" aria-pressed="${freeformActive ? 'true' : 'false'}">${viewIcon}</button>
+            <button class="btn btn--compact btn--icon ${drawingActive ? 'active' : ''}" id="btn-drawing-mode" title="magicCanvas" aria-label="magicCanvas">${ACTION_ICONS.drawingPencil}</button>
+        `;
+
+        const historyGroup = `
             <button type="button" id="btn-undo" class="btn btn--compact btn--icon is-hidden" disabled title="Undo (Ctrl+Z)" aria-label="Undo"></button>
             <button type="button" id="btn-redo" class="btn btn--compact btn--icon is-hidden" disabled title="Redo (Ctrl+Y)" aria-label="Redo"></button>
+        `;
+
+        const displayGroup = `
             <button type="button" id="btn-display-options" class="btn btn--compact btn--icon" title="Display options" aria-label="Display options" aria-expanded="false" aria-haspopup="menu"></button>
             <button type="button" id="btn-focus-mode" class="btn btn--compact btn--icon" title="Focus mode" aria-label="Focus mode" aria-expanded="false" aria-haspopup="menu"></button>
             <button type="button" id="btn-save-view" class="btn btn--compact btn--icon" title="Save view" aria-label="Save view"></button>
             <button type="button" id="btn-recall-view" class="btn btn--compact btn--icon" title="Restore saved view" aria-label="Restore saved view" disabled></button>
+        `;
+
+        const layoutGroup = `
             <button type="button" id="btn-collapse-all" class="btn btn--compact btn--icon is-hidden" title="Collapse all notes" aria-label="Collapse all notes"></button>
             <button type="button" id="btn-layout-reset" class="btn btn--compact btn--icon is-hidden" title="Reset" aria-label="Reset"></button>
+        `;
+
+        const shellGroup = `
             <button type="button" id="btn-fullscreen" class="btn btn--compact btn--icon" title="Full screen" aria-label="Full screen" aria-pressed="false"></button>
             <button type="button" id="btn-show-clock" class="btn btn--compact btn--icon is-hidden" title="Show clock" aria-label="Show clock"></button>
         `;
 
         if (!AppState.user.isLoggedIn) {
-            zone.innerHTML = `${globalActions}
+            zone.innerHTML = `${workspaceGroup}${sep}${historyGroup}${sep}${displayGroup}${sep}${layoutGroup}${sep}${shellGroup}${sep}
                 <button type="button" class="btn btn--compact btn--block" id="btn-auth-login">Login</button>`;
         } else {
-            zone.innerHTML = `${globalActions}
+            const accountGroup = `
                 <button type="button" class="btn btn--compact btn--icon" id="btn-add-category" title="Add category" aria-label="Add category">${ACTION_ICONS.category}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="btn-export-db" title="Export backup" aria-label="Export backup">${ACTION_ICONS.export}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="btn-export-code" title="Export app code" aria-label="Export app code">${ACTION_ICONS.exportCode}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="btn-import-db" title="Import backup" aria-label="Import backup">${ACTION_ICONS.import}</button>
-                <button type="button" class="btn btn--compact btn--icon btn--icon-danger" id="btn-auth-logout" title="Logout" aria-label="Logout">${ACTION_ICONS.logout}</button>`;
+                <button type="button" class="btn btn--compact btn--icon btn--icon-danger" id="btn-auth-logout" title="Logout" aria-label="Logout">${ACTION_ICONS.logout}</button>
+            `;
+            zone.innerHTML = `${workspaceGroup}${sep}${historyGroup}${sep}${displayGroup}${sep}${layoutGroup}${sep}${shellGroup}${sep}${accountGroup}`;
         }
 
         this.bindQuickActionHandlers();
@@ -287,6 +290,12 @@ class Application {
         this.setupRecallViewButton();
         Fullscreen.rebindMainButton();
 
+        document.getElementById('btn-freeform-toggle')?.addEventListener('click', () => this.toggleFreeformLayout());
+        document.getElementById('btn-drawing-mode')?.addEventListener('click', () => {
+            if (AppState.workspaceMode === 'drawing') this.switchWorkspaceMode('notes');
+            else this.switchWorkspaceMode('drawing');
+        });
+
         document.getElementById('btn-add-category')?.addEventListener('click', () => this.executeAddCategoryPrompt());
         document.getElementById('btn-export-db')?.addEventListener('click', () => this.executeDataBackupExport());
         document.getElementById('btn-export-code')?.addEventListener('click', () => this.executeCodeExport());
@@ -295,6 +304,7 @@ class Application {
         document.getElementById('btn-auth-login')?.addEventListener('click', () => this.executeLoginPrompt());
 
         this.updateLayoutResetVisibility();
+        this.updateViewToggleState();
         UndoManager.updateToolbar();
         FocusMode.syncButtonState();
     }
@@ -415,33 +425,6 @@ class Application {
         virtualLink.download = `matrix_workspace_backup_${Math.floor(Date.now()/1000)}.json`;
         virtualLink.click();
         URL.revokeObjectURL(virtualLink.href);
-    }
-
-    renderStorageUsageFooter() {
-        const footer = document.getElementById('system-footer');
-        if (!footer) return;
-
-        const total = getLocalStorageByteEstimate();
-        const mb = (total / (1024 * 1024)).toFixed(2);
-        const pct = Math.min(100, Math.round((total / 5_000_000) * 100));
-        const breakdown = getLocalStorageUsageBreakdown(6);
-        const detail = breakdown
-            .map((row) => `${row.key}: ${(row.bytes / 1024).toFixed(1)} KB`)
-            .join('\n');
-
-        footer.innerHTML = `
-            <div class="storage-usage-footer" title="${this.escapeStorageTitle(detail)}">
-                <span>Storage ${mb} MB (~${pct}% of browser limit)</span>
-                ${breakdown.length ? `<span class="storage-usage-footer__hint">Hover for largest items</span>` : ''}
-            </div>
-        `;
-    }
-
-    escapeStorageTitle(text) {
-        return String(text || '')
-            .replace(/&/g, '&amp;')
-            .replace(/"/g, '&quot;')
-            .replace(/</g, '&lt;');
     }
 
     setupBackupInterface() {
@@ -565,6 +548,7 @@ class Application {
         ffBtn?.classList.toggle('active', freeformActive);
         if (ffBtn) {
             const title = freeformActive ? 'Snap to bento grid' : 'Freeform layout';
+            ffBtn.innerHTML = freeformActive ? ACTION_ICONS.viewFree : ACTION_ICONS.viewGrid;
             ffBtn.title = title;
             ffBtn.setAttribute('aria-label', title);
             ffBtn.setAttribute('aria-pressed', freeformActive ? 'true' : 'false');

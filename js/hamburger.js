@@ -1,6 +1,7 @@
 import { UNCATEGORIZED_CATEGORY } from './categories.js';
 import { itemHasCategory } from './focusFilter.js';
 import { ACTION_ICONS, CARD_ICONS, UI, formatStorageSize, getStorageBreakdown } from './ui.js';
+import { getLocalStorageByteEstimate, getLocalStorageUsageBreakdown } from './layoutStorage.js';
 import { resolveNoteColor } from './colorPicker.js';
 import { hasRichMarkup, stripRichText } from './richText.js';
 import { UndoManager } from './undo.js';
@@ -64,16 +65,29 @@ export const SidePanel = {
 
     updateStorageFooter() {
         const container = document.getElementById('sidebar-storage-stats');
-        const notesEl = document.getElementById('sidebar-storage-notes');
-        const matrixEl = document.getElementById('sidebar-storage-matrix');
-        const appEl = document.getElementById('sidebar-storage-app');
-        if (!container || !notesEl || !matrixEl || !appEl) return;
+        if (!container) return;
 
+        const total = getLocalStorageByteEstimate();
+        const mb = (total / (1024 * 1024)).toFixed(2);
+        const pct = Math.min(100, Math.round((total / 5_000_000) * 100));
         const { notes, matrix, app } = getStorageBreakdown();
-        notesEl.textContent = `Notes: ${formatStorageSize(notes)}`;
-        matrixEl.textContent = `Matrix: ${formatStorageSize(matrix)}`;
-        appEl.textContent = `App: ${formatStorageSize(app)}`;
-        container.title = 'Notes: note content · Matrix: categories, layouts, view state · App: theme, tools, session';
+        const keyBreakdown = getLocalStorageUsageBreakdown(6);
+        const detail = keyBreakdown
+            .map((row) => `${row.key}: ${(row.bytes / 1024).toFixed(1)} KB`)
+            .join('\n');
+
+        const hintLine = keyBreakdown.length
+            ? '<span class="sidebar-storage-stat sidebar-storage-stat--hint">Hover for largest items</span>'
+            : '';
+
+        container.innerHTML = `
+            <span class="sidebar-storage-stat">Total: ${mb} MB (~${pct}%)</span>
+            <span class="sidebar-storage-stat">Notes: ${formatStorageSize(notes)}</span>
+            <span class="sidebar-storage-stat">Matrix: ${formatStorageSize(matrix)}</span>
+            <span class="sidebar-storage-stat">App: ${formatStorageSize(app)}</span>
+            ${hintLine}
+        `;
+        container.title = detail || 'Notes: note content · Matrix: categories, layouts, view state · App: theme, tools, session';
     },
 
     setCollapsed(collapsed) {
@@ -91,7 +105,6 @@ export const SidePanel = {
     setupStatusClickHandlers() {
         this.bindCollapsable('radio-section-header', 'radio-section', true, '.sidebar-radio__dock', '.collapsable-toggle');
         this.bindCollapsable('quick-actions-header', 'quick-actions-section', true);
-        this.bindCollapsable('view-section-header', 'view-section', true);
         this.bindCollapsable('categories-section-header', 'categories-section', true);
         this.bindCollapsable('categories-list-active-header', 'categories-list-active-section', true);
         this.bindCollapsable('categories-list-hidden-header', 'categories-list-hidden-section', true);
@@ -101,6 +114,7 @@ export const SidePanel = {
         this.bindCollapsable('notes-list-hidden-header', 'notes-list-hidden-section', true);
         this.bindCollapsable('notes-list-archived-header', 'notes-list-archived-section', true);
         this.bindCollapsable('history-section-header', 'history-section', true);
+        this.bindCollapsable('stats-section-header', 'stats-section', true);
         this.setupNotesListSortControls();
     },
 
