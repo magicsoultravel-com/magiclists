@@ -2188,19 +2188,29 @@ export const UI = {
     },
 
     setupFreeformChrome(card) {
+        const shell = card.querySelector('.editor-note-shell');
+
         let chrome = card.querySelector('.ff-chrome');
         if (!chrome) {
             chrome = document.createElement('div');
             chrome.className = 'ff-chrome';
-            card.appendChild(chrome);
         }
+
         let resizeLayer = card.querySelector('.ff-resize-layer');
         if (!resizeLayer) {
             resizeLayer = document.createElement('div');
             resizeLayer.className = 'ff-resize-layer';
             resizeLayer.setAttribute('aria-hidden', 'true');
-            card.appendChild(resizeLayer);
         }
+
+        if (shell) {
+            card.insertBefore(chrome, shell);
+            card.insertBefore(resizeLayer, shell);
+        } else {
+            if (!chrome.parentNode) card.appendChild(chrome);
+            if (!resizeLayer.parentNode) card.appendChild(resizeLayer);
+        }
+
         chrome.querySelectorAll('.ff-resize').forEach((handle) => {
             resizeLayer.appendChild(handle);
         });
@@ -2228,7 +2238,6 @@ export const UI = {
                 <span class="ff-resize ff-resize-se" data-axis="se" aria-hidden="true"></span>
             `);
         }
-        card.appendChild(resizeLayer);
     },
 
     syncSpatialChromeForEditing(card) {
@@ -3653,13 +3662,10 @@ export const UI = {
     },
 
     finalizeCollapsedCard(card, item, activeCategories, targetCatName, categoryColor) {
-        this.attachCardActions(card, item, {
-            activeCategories,
-            targetCatName,
-            categoryColor
-        });
-        this.finalizeFreeformCard(card);
-        this.finalizeGridBoardCard(card);
+        const ctx = { activeCategories, targetCatName, categoryColor };
+        this.attachCardActions(card, item, ctx);
+        this.bindCollapsedPreviewExpand(card, item, ctx);
+        this.finalizeDesktopCard(card);
         if (card.dataset.columnNote === '1') {
             this.finalizeColumnNote(card, card.dataset.category || targetCatName);
         }
@@ -3668,7 +3674,6 @@ export const UI = {
         }
         this.syncCardDraggable(card);
         this.syncBoardPinClass(card);
-        this.syncSpatialChromeForEditing(card);
     },
 
     renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor) {
@@ -3856,10 +3861,9 @@ export const UI = {
         this.bindNoteEditorShell(card, item, {
             richEdit: canEdit,
             refresh: () => this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor),
-            stopMousedownPropagation: this.isColumnLayoutCard(card)
+            stopMousedownPropagation: isDesktopCard(card) || this.isColumnLayoutCard(card)
         });
-        this.finalizeFreeformCard(card);
-        this.finalizeGridBoardCard(card);
+        this.finalizeDesktopCard(card);
         if (card.dataset.columnNote === '1') {
             this.finalizeColumnNote(card, card.dataset.category || targetCatName);
         }
@@ -3868,7 +3872,48 @@ export const UI = {
         }
         this.syncCardDraggable(card);
         this.syncBoardPinClass(card);
-        this.syncSpatialChromeForEditing(card);
+        this.focusPendingBoardField(card);
+    },
+
+    focusPendingBoardField(card) {
+        const field = card?.dataset?.pendingFocusField;
+        if (!field) return;
+        delete card.dataset.pendingFocusField;
+        requestAnimationFrame(() => {
+            let el = null;
+            if (field === 'content') {
+                el = card.querySelector('.editor-note-body .card-inline-edit[data-field="content"]')
+                    || card.querySelector('.editor-note-body .card-inline-edit[data-field="step-text"]')
+                    || card.querySelector('.editor-note-header .card-inline-edit[data-field="title"]');
+            } else {
+                el = card.querySelector('.editor-note-header .card-inline-edit[data-field="title"]');
+            }
+            if (el) this.focusInlineEdit(el, 'start');
+        });
+    },
+
+    bindCollapsedPreviewExpand(card, item, ctx) {
+        if (!isDesktopCard(card) || !this.canEditInline()) return;
+        if (card.dataset.collapsedExpandBound) return;
+        card.dataset.collapsedExpandBound = '1';
+
+        card.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            if (card.classList.contains('expanded')) return;
+            if (e.target.closest(
+                '.card-actions, .card-act, .grab-handle--note-cat, .grab-handle--step, '
+                + 'button, a, input, .ff-resize, .ff-drag-gutter'
+            )) return;
+
+            const inPreview = e.target.closest('.tile-preview, .card-content-preview, .expanded-checklist');
+            const inTitle = e.target.closest('.card-header .mini-card-title');
+            if (!inPreview && !inTitle) return;
+
+            e.stopPropagation();
+            card.dataset.pendingFocusField = inPreview ? 'content' : 'title';
+            if (card.dataset.skipExpand) delete card.dataset.skipExpand;
+            this.toggleCardExpanded(card, item, ctx);
+        });
     },
 
     refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor) {

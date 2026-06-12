@@ -341,6 +341,8 @@ function bindSnapPanelCardInteractions({
         card.addEventListener('mousedown', (e) => {
             if (e.button !== 0) return;
 
+            if (shouldYieldToNoteEditor(e, card)) return;
+
             const resizeHandle = e.target.closest('.ff-resize');
             if (resizeHandle) {
                 if (cardIsPinned(card)) return;
@@ -371,11 +373,6 @@ function bindSnapPanelCardInteractions({
                 card.dataset.skipExpand = '1';
                 document.addEventListener('mousemove', onResizeMove);
                 document.addEventListener('mouseup', onResizeUp);
-                return;
-            }
-
-            if (pointerHitsNoteEditor(e.clientX, e.clientY, card)) return;
-            if (e.target.closest('.editor-note-body .card-inline-edit, .editor-note-header .card-inline-edit')) {
                 return;
             }
 
@@ -449,6 +446,16 @@ function pointerHitsNoteEditor(clientX, clientY, card) {
                 + '.editor-note-shell a, '
                 + '.editor-note-shell .grab-handle--step'
             ));
+}
+
+function shouldYieldToNoteEditor(e, card) {
+    if (!e || !card) return false;
+    if (pointerHitsNoteEditor(e.clientX, e.clientY, card)) return true;
+    return !!e.target?.closest?.(
+        '.editor-note-shell .card-inline-edit, '
+        + '.editor-note-shell .step-text, '
+        + '.editor-note-shell .step-check'
+    );
 }
 
 function shouldStartCardDrag(target) {
@@ -780,6 +787,8 @@ export const DragDropEngine = {
             card.addEventListener('mousedown', (e) => {
                 if (e.button !== 0) return;
 
+                if (shouldYieldToNoteEditor(e, card)) return;
+
                 const resizeHandle = e.target.closest('.ff-resize');
                 if (resizeHandle) {
                     if (cardIsPinned(card)) return;
@@ -808,11 +817,6 @@ export const DragDropEngine = {
                     card.dataset.skipExpand = '1';
                     document.addEventListener('mousemove', onResizeMove);
                     document.addEventListener('mouseup', onResizeUp);
-                    return;
-                }
-
-                if (pointerHitsNoteEditor(e.clientX, e.clientY, card)) return;
-                if (e.target.closest('.editor-note-body .card-inline-edit, .editor-note-header .card-inline-edit')) {
                     return;
                 }
 
@@ -964,6 +968,8 @@ export const DragDropEngine = {
             card.addEventListener('mousedown', (e) => {
                 if (e.button !== 0) return;
 
+                if (shouldYieldToNoteEditor(e, card)) return;
+
                 const resizeHandle = e.target.closest('.ff-resize');
                 if (resizeHandle) {
                     if (cardIsPinned(card)) return;
@@ -991,11 +997,6 @@ export const DragDropEngine = {
                     card.dataset.skipExpand = '1';
                     document.addEventListener('mousemove', onResizeMove);
                     document.addEventListener('mouseup', onResizeUp);
-                    return;
-                }
-
-                if (pointerHitsNoteEditor(e.clientX, e.clientY, card)) return;
-                if (e.target.closest('.editor-note-body .card-inline-edit, .editor-note-header .card-inline-edit')) {
                     return;
                 }
 

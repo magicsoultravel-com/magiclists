@@ -4225,6 +4225,20 @@ textarea.form-input {
     opacity: var(--desktop-drag-opacity);
 }
 
+#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.expanded) .tile-preview,
+#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.expanded) .tile-preview,
+#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.expanded) .card-header .mini-card-title,
+#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.expanded) .card-header .mini-card-title {
+    cursor: pointer;
+}
+
+#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.expanded) .tile-preview:hover,
+#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.expanded) .tile-preview:hover,
+#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.expanded) .card-header .mini-card-title:hover,
+#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.expanded) .card-header .mini-card-title:hover {
+    cursor: text;
+}
+
 #app-canvas.view-freeform .ff-chrome {
     position: absolute;
     inset: 0;
@@ -4242,7 +4256,10 @@ textarea.form-input {
 /* Editable shell above chrome layer; resize handles stay on top via .ff-resize */
 #app-canvas.view-freeform .mini-card.expanded .editor-note-shell,
 #app-canvas.view-grid .mini-card.expanded .editor-note-shell,
-#app-canvas.view-columns .mini-card.expanded .editor-note-shell {
+#app-canvas.view-columns .mini-card.expanded .editor-note-shell,
+#app-canvas.view-freeform .mini-card.is-editing-inline .editor-note-shell,
+#app-canvas.view-grid .mini-card.is-editing-inline .editor-note-shell,
+#app-canvas.view-columns .mini-card.is-editing-inline .editor-note-shell {
     position: relative;
     z-index: 20;
     isolation: isolate;
@@ -4253,11 +4270,31 @@ textarea.form-input {
 #app-canvas.view-freeform .mini-card.expanded .editor-note-header .card-inline-edit,
 #app-canvas.view-freeform .mini-card.expanded .editor-note-body .card-inline-edit,
 #app-canvas.view-grid .mini-card.expanded .step-text.card-inline-edit,
-#app-canvas.view-freeform .mini-card.expanded .step-text.card-inline-edit {
+#app-canvas.view-freeform .mini-card.expanded .step-text.card-inline-edit,
+#app-canvas.view-grid .mini-card.is-editing-inline .editor-note-header .card-inline-edit,
+#app-canvas.view-grid .mini-card.is-editing-inline .editor-note-body .card-inline-edit,
+#app-canvas.view-freeform .mini-card.is-editing-inline .editor-note-header .card-inline-edit,
+#app-canvas.view-freeform .mini-card.is-editing-inline .editor-note-body .card-inline-edit,
+#app-canvas.view-grid .mini-card.is-editing-inline .step-text.card-inline-edit,
+#app-canvas.view-freeform .mini-card.is-editing-inline .step-text.card-inline-edit {
     cursor: text;
     pointer-events: auto;
     position: relative;
     z-index: 1;
+}
+
+#app-canvas.view-grid .mini-card.expanded .editor-note-body,
+#app-canvas.view-freeform .mini-card.expanded .editor-note-body,
+#app-canvas.view-grid .mini-card.is-editing-inline .editor-note-body,
+#app-canvas.view-freeform .mini-card.is-editing-inline .editor-note-body {
+    cursor: default;
+}
+
+#app-canvas.view-grid .mini-card.expanded .editor-note-body .card-inline-edit,
+#app-canvas.view-freeform .mini-card.expanded .editor-note-body .card-inline-edit,
+#app-canvas.view-grid .mini-card.is-editing-inline .editor-note-body .card-inline-edit,
+#app-canvas.view-freeform .mini-card.is-editing-inline .editor-note-body .card-inline-edit {
+    cursor: text;
 }
 
 #app-canvas.view-grid .mini-card.expanded .expanded-checklist,
@@ -4287,26 +4324,39 @@ textarea.form-input {
 }
 
 #app-canvas.view-freeform .mini-card.expanded .ff-chrome,
-#app-canvas.view-grid .mini-card.expanded .ff-chrome {
+#app-canvas.view-grid .mini-card.expanded .ff-chrome,
+#app-canvas.view-columns .mini-card.expanded .ff-chrome,
+#app-canvas.view-freeform .mini-card.is-editing-inline .ff-chrome,
+#app-canvas.view-grid .mini-card.is-editing-inline .ff-chrome,
+#app-canvas.view-columns .mini-card.is-editing-inline .ff-chrome {
     pointer-events: none !important;
 }
 
 #app-canvas.view-freeform .mini-card.expanded .ff-drag-gutter,
 #app-canvas.view-grid .mini-card.expanded .ff-drag-gutter,
-#app-canvas.view-columns .mini-card.expanded .ff-drag-gutter {
+#app-canvas.view-columns .mini-card.expanded .ff-drag-gutter,
+#app-canvas.view-freeform .mini-card.is-editing-inline .ff-drag-gutter,
+#app-canvas.view-grid .mini-card.is-editing-inline .ff-drag-gutter,
+#app-canvas.view-columns .mini-card.is-editing-inline .ff-drag-gutter {
     pointer-events: none !important;
 }
 
 /* Expanded notes: disable all spatial chrome hit targets while editing inline */
 #app-canvas.view-freeform .mini-card.expanded .ff-resize-layer,
 #app-canvas.view-grid .mini-card.expanded .ff-resize-layer,
-#app-canvas.view-columns .mini-card.expanded .ff-resize-layer {
+#app-canvas.view-columns .mini-card.expanded .ff-resize-layer,
+#app-canvas.view-freeform .mini-card.is-editing-inline .ff-resize-layer,
+#app-canvas.view-grid .mini-card.is-editing-inline .ff-resize-layer,
+#app-canvas.view-columns .mini-card.is-editing-inline .ff-resize-layer {
     pointer-events: none !important;
 }
 
 #app-canvas.view-freeform .mini-card.expanded .ff-resize-layer .ff-resize,
 #app-canvas.view-grid .mini-card.expanded .ff-resize-layer .ff-resize,
-#app-canvas.view-columns .mini-card.expanded .ff-resize-layer .ff-resize {
+#app-canvas.view-columns .mini-card.expanded .ff-resize-layer .ff-resize,
+#app-canvas.view-freeform .mini-card.is-editing-inline .ff-resize-layer .ff-resize,
+#app-canvas.view-grid .mini-card.is-editing-inline .ff-resize-layer .ff-resize,
+#app-canvas.view-columns .mini-card.is-editing-inline .ff-resize-layer .ff-resize {
     z-index: 0;
     pointer-events: none !important;
 }
@@ -4507,6 +4557,9 @@ textarea.form-input {
 
 #app-canvas.view-columns .ff-resize {
     position: absolute;
+}
+
+#app-canvas.view-columns .mini-card:not(.expanded):not(.is-editing-inline) .ff-resize {
     pointer-events: auto;
     z-index: 6;
 }
