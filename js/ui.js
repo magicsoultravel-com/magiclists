@@ -2239,7 +2239,7 @@ export const UI = {
         if (layer) {
             layer.style.pointerEvents = expanded ? 'none' : '';
             layer.querySelectorAll('.ff-resize').forEach((handle) => {
-                handle.style.pointerEvents = expanded ? 'auto' : '';
+                handle.style.pointerEvents = expanded ? 'none' : '';
             });
         }
         gutters.forEach((g) => {
@@ -2305,6 +2305,7 @@ export const UI = {
         } else {
             this.applyFreeformSize(card);
         }
+        this.syncSpatialChromeForEditing(card);
     },
 
     getCardRenderContext(item, activeCategories) {
@@ -2649,6 +2650,7 @@ export const UI = {
             reflowColumnsFloat();
             reflowGridBoard();
             this.cleanupCardAnimation(card);
+            if (isDesktop) this.syncSpatialChromeForEditing(card);
         };
 
         const finishCollapse = () => {
@@ -3588,24 +3590,6 @@ export const UI = {
         if (header) this.attachNoteBodyInteractions(header, item, interactionOptions);
         if (body) this.attachNoteBodyInteractions(body, item, interactionOptions);
 
-        if (stopMousedownPropagation && !shell.dataset.shellCaptureBound) {
-            shell.dataset.shellCaptureBound = '1';
-            shell.addEventListener('mousedown', (e) => {
-                if (e.button !== 0) return;
-                // Let interactive targets receive the event (capture runs before the target).
-                if (e.target.closest(
-                    '.card-inline-edit, .step-check, .step-text, input, textarea, button, a, '
-                    + '.card-act, .grab-handle--step, .expanded-checklist-add-btn, '
-                    + '.checklist-done-toggle, .step-collapse-btn, .step-delete-btn, '
-                    + '.step-indent-btn, .step-outdent-btn, .checklist-expand-collapse-all-btn, '
-                    + '.format-btn, .editor-convert-btn'
-                )) return;
-                if (e.target.closest('.editor-note-body, .editor-note-header, .expanded-checklist')) {
-                    e.stopPropagation();
-                }
-            }, true);
-        }
-
         if (stopMousedownPropagation && !shell.dataset.shellBubbleBound) {
             shell.dataset.shellBubbleBound = '1';
             shell.addEventListener('mousedown', (e) => {
@@ -3865,8 +3849,7 @@ export const UI = {
         this.bindNoteEditorShell(card, item, {
             richEdit: canEdit,
             refresh: () => this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor),
-            stopMousedownPropagation: isDesktopCard(card)
-                || this.isColumnLayoutCard(card)
+            stopMousedownPropagation: this.isColumnLayoutCard(card)
         });
         this.finalizeFreeformCard(card);
         this.finalizeGridBoardCard(card);

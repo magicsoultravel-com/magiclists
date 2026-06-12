@@ -4273,7 +4273,7 @@ textarea.form-input {
     pointer-events: none !important;
 }
 
-/* Expanded notes: shell above resize layer; edge handles stay on top */
+/* Expanded notes: disable all spatial chrome hit targets while editing inline */
 #app-canvas.view-freeform .mini-card.expanded .ff-resize-layer,
 #app-canvas.view-grid .mini-card.expanded .ff-resize-layer,
 #app-canvas.view-columns .mini-card.expanded .ff-resize-layer {
@@ -4283,8 +4283,8 @@ textarea.form-input {
 #app-canvas.view-freeform .mini-card.expanded .ff-resize-layer .ff-resize,
 #app-canvas.view-grid .mini-card.expanded .ff-resize-layer .ff-resize,
 #app-canvas.view-columns .mini-card.expanded .ff-resize-layer .ff-resize {
-    z-index: 12;
-    pointer-events: auto;
+    z-index: 0;
+    pointer-events: none !important;
 }
 
 #app-canvas.view-freeform .ff-resize-layer,
