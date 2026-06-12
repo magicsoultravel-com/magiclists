@@ -81,7 +81,7 @@ export const Editor = {
             attachments: [],
             steps: [],
             editorBodyLayout: 'both',
-            tileSize: 'note'
+            tileSize: 'large'
         };
         if (!this.activeItem.editorBodyLayout) {
             this.activeItem.editorBodyLayout = 'both';

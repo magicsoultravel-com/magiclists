@@ -1,9 +1,9 @@
 import { DEFAULT_CATEGORIES } from './categories.js';
 import { purgeLayoutForItem } from './layoutStorage.js';
+import { normalizeTileSize } from './tileGeometry.js';
 
 function normalizeItemTileSize(tileSize) {
-    if (tileSize === 'label' || tileSize === 'compact' || tileSize === 'note') return tileSize;
-    return 'compact';
+    return normalizeTileSize(tileSize);
 }
 
 const DEFAULT_DATABASE_SEED = {
@@ -23,7 +23,7 @@ const DEFAULT_DATABASE_SEED = {
         "endDateTime": "",
         "created_at": 1775080000,
         "updated_at": 1775080000,
-        "tileSize": "compact"
+        "tileSize": "large"
     }]
 };
 
@@ -48,7 +48,7 @@ function repairDatabase(db) {
 
     repaired.items = repaired.items.map((item) => {
         if (!item || typeof item !== 'object') return item;
-        const tileSize = item.tileSize ? normalizeItemTileSize(item.tileSize) : 'compact';
+        const tileSize = item.tileSize ? normalizeItemTileSize(item.tileSize) : 'large';
         if (item.tileSize === tileSize) return item;
         return { ...item, tileSize };
     });

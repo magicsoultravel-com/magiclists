@@ -13,6 +13,13 @@ import { resetCustomizationToDefaults } from './customizationReset.js';
 import { ACTION_ICONS } from './ui.js';
 import { AppTheme, buildThemeOptionsHtml, isAppThemeCustomized, readAppTheme } from './appTheme.js';
 import { positionPopoverBelowAnchor } from './popoverPosition.js';
+import {
+    applyTileSmallFootprint,
+    DEFAULT_TILE_SMALL_FOOTPRINT,
+    isTileSmallFootprintCustomized,
+    readTileSmallFootprint,
+    writeTileSmallFootprint
+} from './tileFootprint.js';
 
 const STORAGE_KEY = 'matrix_display_options';
 
@@ -61,6 +68,7 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     root.dataset.desktopGradient = options.desktopGradient ? '1' : '0';
     root.dataset.cardAnimations = options.cardAnimations ? '1' : '0';
     applyNoteFont(options.noteFontId);
+    applyTileSmallFootprint(readTileSmallFootprint());
 }
 
 function isCustomized(options) {
@@ -75,7 +83,8 @@ function isCustomized(options) {
         || NoteFontScale.isCustomized()
         || DesktopZoom.isCustomized()
         || ChromeBackground.isCustomized()
-        || DesktopBackground.isCustomized();
+        || DesktopBackground.isCustomized()
+        || isTileSmallFootprintCustomized();
 }
 
 export const DisplayOptions = {
@@ -209,6 +218,31 @@ export const DisplayOptions = {
         </button>`;
     },
 
+    tileFootprintOptionsHtml(selectedId) {
+        const options = [
+            { id: 'label', label: 'Label', size: '96×28' },
+            { id: 'card', label: 'Card', size: '96×56' },
+            { id: 'wide', label: 'Wide card', size: '128×96' }
+        ];
+        return options.map((opt) => {
+            const selected = opt.id === selectedId;
+            return `<button type="button" class="tile-footprint-option${selected ? ' is-selected' : ''}" data-footprint="${opt.id}" role="menuitemradio" aria-checked="${selected}">
+                <span class="tile-footprint-option-meta">
+                    <span class="tile-footprint-option-label">${escapeHtml(opt.label)}</span>
+                    <span class="tile-footprint-option-desc">${escapeHtml(opt.size)}</span>
+                </span>
+                ${selected ? '<span class="clock-style-check" aria-hidden="true">✓</span>' : ''}
+            </button>`;
+        }).join('');
+    },
+
+    setTileSmallFootprint(footprint) {
+        const next = writeTileSmallFootprint(footprint);
+        applyTileSmallFootprint(next);
+        window.dispatchEvent(new CustomEvent('appearance:tile_footprint_changed', { detail: next }));
+        this.syncButtonState();
+    },
+
     noteFontOptionsHtml(selectedId) {
         return NOTE_FONTS.map((font) => {
             const selected = font.id === selectedId;
@@ -251,6 +285,7 @@ export const DisplayOptions = {
         const noteScalePct = `${Math.round(NoteFontScale.getScale() * 100)}%`;
         const desktopZoomPct = `${Math.round(DesktopZoom.getScale() * 100)}%`;
         const desktopZoomEnabled = this.isDesktopZoomEnabled();
+        const tileFootprint = readTileSmallFootprint();
 
         popover.innerHTML = `
             <div class="display-options-list focus-mode-list">
@@ -263,6 +298,8 @@ export const DisplayOptions = {
                 ${this.optionRow('display-opt-created', 'Created date', '', opts.showCreatedDate)}
                 ${this.optionRow('display-opt-note-size', 'Note size', '', opts.showNoteSize)}
                 ${this.optionRow('display-opt-note-lines', 'Number of lines', '', opts.showLineCount)}
+                <p class="display-options-subheading">Collapsed note size</p>
+                <div class="tile-footprint-list">${this.tileFootprintOptionsHtml(tileFootprint)}</div>
                 <div class="focus-mode-divider" role="separator"></div>
                 <p class="display-options-heading">Theme</p>
                 <div class="display-options-theme-list clock-style-list app-theme-list">${buildThemeOptionsHtml(readAppTheme())}</div>
@@ -316,6 +353,15 @@ export const DisplayOptions = {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 AppTheme.setTheme(btn.dataset.theme);
+                this.openPopover();
+            });
+        });
+
+        popover.querySelectorAll('.tile-footprint-option').forEach((btn) => {
+            btn.addEventListener('mousedown', (e) => e.stopPropagation());
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.setTileSmallFootprint(btn.dataset.footprint);
                 this.openPopover();
             });
         });

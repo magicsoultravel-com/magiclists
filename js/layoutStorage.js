@@ -8,13 +8,15 @@ import { pruneFileCabinetOrder } from './fileCabinet.js';
 import {
     clampSpatialSize,
     getLabelRect,
+    getSmallRect,
     getTileDefaultRect,
-    isAtLabelSize,
+    isAtSmallSize,
     LEGACY_TILE_SIZE,
     normalizeTileSize,
     readRememberedSize,
     resolveTileSize
 } from './tileGeometry.js';
+import { readTileSmallFootprint } from './tileFootprint.js';
 import { SIDEBAR_BACKUP_KEYS } from './sidebarPrefs.js';
 import { readViewSessions, writeViewSessions, VIEW_MODES } from './viewSession.js';
 
@@ -263,10 +265,10 @@ function migrateSpatialLayoutEntry(saved, tileSize) {
         delete entry.rememberedH;
     }
 
-    if (isAtLabelSize(entry.w, entry.h)) {
-        const label = getLabelRect();
-        entry.w = label.w;
-        entry.h = label.h;
+    if (isAtSmallSize(entry.w, entry.h, readTileSmallFootprint())) {
+        const small = getSmallRect(readTileSmallFootprint());
+        entry.w = small.w;
+        entry.h = small.h;
         delete entry.rememberedW;
         delete entry.rememberedH;
     }
@@ -484,7 +486,7 @@ export function normalizeSavedCardRect(saved, tileSize) {
         return { changed: true, value: null };
     }
 
-    const label = getLabelRect();
+    const small = getSmallRect(readTileSmallFootprint());
     const defaults = getTileDefaultRect(tier);
     if (!hasSize) {
         w = defaults.w;
@@ -499,10 +501,10 @@ export function normalizeSavedCardRect(saved, tileSize) {
         changed = true;
     }
 
-    if (isAtLabelSize(w, h)) {
-        if (w !== label.w || h !== label.h) {
-            w = label.w;
-            h = label.h;
+    if (isAtSmallSize(w, h, readTileSmallFootprint())) {
+        if (w !== small.w || h !== small.h) {
+            w = small.w;
+            h = small.h;
             changed = true;
         }
     }
@@ -521,7 +523,7 @@ export function normalizeSavedCardRect(saved, tileSize) {
         const mem = clampSpatialSize(rw, rh, tier);
         rw = mem.w;
         rh = mem.h;
-        if (isAtLabelSize(rw, rh)) {
+        if (isAtSmallSize(rw, rh, readTileSmallFootprint())) {
             rw = undefined;
             rh = undefined;
             changed = true;

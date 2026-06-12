@@ -1,8 +1,13 @@
+import {
+    getSmallFootprintRect,
+    readTileSmallFootprint
+} from './tileFootprint.js';
+
 export const FREEFORM_DEFAULT_W = 96;
 export const FREEFORM_DEFAULT_H = 56;
 export const FREEFORM_EXPANDED_W = 196;
 export const FREEFORM_MIN_W = 72;
-export const FREEFORM_MIN_H = 56;
+export const FREEFORM_MIN_H = 28;
 export const FREEFORM_EXPANDED_DEFAULT_H = 120;
 
 export const COLUMN_GRID_CELL_W = FREEFORM_DEFAULT_W;
@@ -21,24 +26,25 @@ export const CANVAS_LAYOUT_ORIGIN = 16;
 export const CANVAS_PACK_GAP = COLUMN_GRID_GAP;
 
 export const TILE_LABEL_H = 28;
-export const TILE_RESIZE_MIN_W = COLUMN_GRID_CELL_W;
+export const TILE_LARGE_W_CELLS = 2.5;
+export const TILE_LARGE_H_CELLS = 5;
+/** @deprecated */
+export const TILE_NOTE_W_CELLS = TILE_LARGE_W_CELLS;
+/** @deprecated */
+export const TILE_NOTE_H_CELLS = TILE_LARGE_H_CELLS;
+export const TILE_RESIZE_MIN_W = 72;
 export const TILE_RESIZE_MIN_H = TILE_LABEL_H;
-export const TILE_NOTE_W_CELLS = 2.5;
-export const TILE_NOTE_H_CELLS = 5;
-export const TILE_LABEL_COMPACT_H_UP = 40;
-export const TILE_LABEL_COMPACT_H_DOWN = 36;
-export const TILE_COMPACT_NOTE_W_UP = 104;
-export const TILE_COMPACT_NOTE_H_UP = 64;
-export const TILE_COMPACT_NOTE_W_DOWN = 100;
-export const TILE_COMPACT_NOTE_H_DOWN = 60;
-export const TILE_SIZES = ['label', 'compact', 'note'];
-export const DEFAULT_TILE_SIZE = 'note';
-export const LEGACY_TILE_SIZE = 'compact';
 
-const LABEL_RECT = { w: COLUMN_GRID_CELL_W, h: TILE_LABEL_H };
+export const TILE_SIZES = ['small', 'large'];
+export const DEFAULT_TILE_SIZE = 'large';
+export const LEGACY_TILE_SIZE = 'large';
+
+const TIER_HYSTERESIS = 4;
 
 export function normalizeTileSize(tileSize) {
-    if (tileSize === 'label' || tileSize === 'compact' || tileSize === 'note') return tileSize;
+    if (tileSize === 'small' || tileSize === 'large') return tileSize;
+    if (tileSize === 'label') return 'small';
+    if (tileSize === 'compact' || tileSize === 'note') return 'large';
     return LEGACY_TILE_SIZE;
 }
 
@@ -68,72 +74,62 @@ export function softSnapPx(value) {
     return Math.round(Math.max(0, value) / 2) * 2;
 }
 
-export function getTileDefaultRect(tileSize) {
-    const size = normalizeTileSize(tileSize);
-    if (size === 'label') {
-        return { w: COLUMN_GRID_CELL_W, h: TILE_LABEL_H };
-    }
-    if (size === 'note') {
-        return {
-            w: cellsToSpanW(TILE_NOTE_W_CELLS),
-            h: cellsToSpanH(TILE_NOTE_H_CELLS)
-        };
-    }
-    return { w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H };
-}
-
-export function getLabelRect() {
-    return { ...LABEL_RECT };
-}
-
-export function isCustomTileRect(w, h, tileSize = LEGACY_TILE_SIZE) {
-    const def = getTileDefaultRect(tileSize);
-    return Math.abs(w - def.w) > 2 || Math.abs(h - def.h) > 2;
-}
-
-export function isAtLabelSize(w, h) {
-    return w <= LABEL_RECT.w + 2 && h <= LABEL_RECT.h + 2;
-}
-
-export function resolveExpandedDefaultRect(tileSize, saved = null) {
-    const tileDefault = getTileDefaultRect(tileSize);
+export function getLargeDefaultRect() {
     return {
-        w: saved?.w ?? Math.max(FREEFORM_EXPANDED_W, tileDefault.w),
-        h: saved?.h ?? Math.max(FREEFORM_EXPANDED_DEFAULT_H, tileDefault.h)
+        w: cellsToSpanW(TILE_LARGE_W_CELLS),
+        h: cellsToSpanH(TILE_LARGE_H_CELLS)
     };
 }
 
-export function isAtOrBelowCompactZone(w, h, tileSize = LEGACY_TILE_SIZE) {
-    const prev = normalizeTileSize(tileSize);
-    if (prev === 'note') {
-        return w <= TILE_COMPACT_NOTE_W_DOWN && h <= TILE_COMPACT_NOTE_H_DOWN;
-    }
-    return !(w > TILE_COMPACT_NOTE_W_UP || h > TILE_COMPACT_NOTE_H_UP);
+export function getSmallRect(footprint = readTileSmallFootprint()) {
+    return getSmallFootprintRect(footprint);
 }
 
-export function inferCollapsedTileTier(w, h, prevTier = LEGACY_TILE_SIZE) {
-    const prev = normalizeTileSize(prevTier);
-    if (h <= TILE_LABEL_COMPACT_H_DOWN) return 'label';
-
-    let inNoteZone;
-    if (prev === 'note') {
-        inNoteZone = !(w <= TILE_COMPACT_NOTE_W_DOWN && h <= TILE_COMPACT_NOTE_H_DOWN);
-    } else {
-        inNoteZone = w > TILE_COMPACT_NOTE_W_UP || h > TILE_COMPACT_NOTE_H_UP;
-    }
-    if (inNoteZone) return 'note';
-
-    if (prev === 'label') {
-        return h > TILE_LABEL_COMPACT_H_UP ? 'compact' : 'label';
-    }
-    if (prev === 'compact') {
-        return h < TILE_LABEL_COMPACT_H_DOWN ? 'label' : 'compact';
-    }
-    return h < TILE_LABEL_COMPACT_H_DOWN ? 'label' : 'compact';
+export function getLabelRect() {
+    return getSmallFootprintRect('label');
 }
 
-export function resolveCollapsedTierRect(w, h, prevTier = LEGACY_TILE_SIZE) {
-    const tier = inferCollapsedTileTier(w, h, prevTier);
+export function getTileDefaultRect(tileSize, footprint = readTileSmallFootprint()) {
+    const size = normalizeTileSize(tileSize);
+    if (size === 'small') return getSmallRect(footprint);
+    return getLargeDefaultRect();
+}
+
+export function isCustomTileRect(w, h, tileSize = LEGACY_TILE_SIZE, footprint = readTileSmallFootprint()) {
+    const def = getTileDefaultRect(tileSize, footprint);
+    return Math.abs(w - def.w) > 2 || Math.abs(h - def.h) > 2;
+}
+
+export function isAtSmallSize(w, h, footprint = readTileSmallFootprint()) {
+    const small = getSmallRect(footprint);
+    return w <= small.w + 2 && h <= small.h + 2;
+}
+
+/** @deprecated use isAtSmallSize */
+export function isAtLabelSize(w, h) {
+    return isAtSmallSize(w, h, 'label');
+}
+
+export function isLargeRelativeToSmall(w, h, footprint = readTileSmallFootprint(), prevTier = LEGACY_TILE_SIZE) {
+    const small = getSmallRect(footprint);
+    const tier = normalizeTileSize(prevTier);
+    if (tier === 'large') {
+        return !(w <= small.w + TIER_HYSTERESIS && h <= small.h + TIER_HYSTERESIS);
+    }
+    return w > small.w + TIER_HYSTERESIS || h > small.h + TIER_HYSTERESIS;
+}
+
+export function inferTileTier(w, h, prevTier = LEGACY_TILE_SIZE, footprint = readTileSmallFootprint()) {
+    return isLargeRelativeToSmall(w, h, footprint, prevTier) ? 'large' : 'small';
+}
+
+/** @deprecated */
+export function inferCollapsedTileTier(w, h, prevTier = LEGACY_TILE_SIZE, footprint = readTileSmallFootprint()) {
+    return inferTileTier(w, h, prevTier, footprint);
+}
+
+export function resolveCollapsedTierRect(w, h, prevTier = LEGACY_TILE_SIZE, footprint = readTileSmallFootprint()) {
+    const tier = inferTileTier(w, h, prevTier, footprint);
     return {
         tier,
         w: softSnapPx(Math.max(TILE_RESIZE_MIN_W, w)),
@@ -141,28 +137,41 @@ export function resolveCollapsedTierRect(w, h, prevTier = LEGACY_TILE_SIZE) {
     };
 }
 
-export function clampSpatialSize(w, h, prevTier = LEGACY_TILE_SIZE) {
-    const resolved = resolveCollapsedTierRect(w, h, prevTier);
+export function clampSpatialSize(w, h, prevTier = LEGACY_TILE_SIZE, footprint = readTileSmallFootprint()) {
+    const resolved = resolveCollapsedTierRect(w, h, prevTier, footprint);
     return { w: resolved.w, h: resolved.h };
 }
 
-export function resolveSpatialFallbackRect(tileSize = LEGACY_TILE_SIZE) {
-    const size = normalizeTileSize(tileSize);
-    return getTileDefaultRect(size === 'label' ? DEFAULT_TILE_SIZE : size);
+export function resolveExpandedDefaultRect(tileSize, saved = null, footprint = readTileSmallFootprint()) {
+    const tileDefault = getTileDefaultRect(tileSize, footprint);
+    return {
+        w: saved?.w ?? Math.max(FREEFORM_EXPANDED_W, tileDefault.w),
+        h: saved?.h ?? Math.max(FREEFORM_EXPANDED_DEFAULT_H, tileDefault.h)
+    };
 }
 
-export function readRememberedSize(saved) {
+export function resolveSpatialFallbackRect(tileSize = LEGACY_TILE_SIZE, footprint = readTileSmallFootprint()) {
+    const size = normalizeTileSize(tileSize);
+    return getTileDefaultRect(size === 'small' ? DEFAULT_TILE_SIZE : size, footprint);
+}
+
+export function readRememberedSize(saved, footprint = readTileSmallFootprint()) {
     if (!saved || typeof saved !== 'object') return null;
     const rw = Number(saved.rememberedW);
     const rh = Number(saved.rememberedH);
-    if (Number.isFinite(rw) && Number.isFinite(rh) && !(rw <= LABEL_RECT.w + 2 && rh <= LABEL_RECT.h + 2)) {
-        return clampSpatialSize(rw, rh);
+    if (Number.isFinite(rw) && Number.isFinite(rh) && !isAtSmallSize(rw, rh, footprint)) {
+        return clampSpatialSize(rw, rh, 'large', footprint);
     }
     if (saved.customCompact === true
         && Number.isFinite(saved.w)
         && Number.isFinite(saved.h)
-        && !isAtLabelSize(saved.w, saved.h)) {
-        return clampSpatialSize(saved.w, saved.h);
+        && !isAtSmallSize(saved.w, saved.h, footprint)) {
+        return clampSpatialSize(saved.w, saved.h, 'large', footprint);
     }
     return null;
+}
+
+/** @deprecated */
+export function isAtOrBelowCompactZone(w, h, tileSize = LEGACY_TILE_SIZE, footprint = readTileSmallFootprint()) {
+    return !isLargeRelativeToSmall(w, h, footprint, tileSize);
 }

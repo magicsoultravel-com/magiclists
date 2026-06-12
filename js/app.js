@@ -18,6 +18,7 @@ import { ClockStyle } from './clockStyle.js';
 import { ColorPicker, PALETTE_NOTE, randomNoteColor } from './colorPicker.js';
 import { FocusMode } from './focusMode.js';
 import { DisplayOptions } from './displayOptions.js';
+import { applyTileSmallFootprint } from './tileFootprint.js';
 import { AppTheme } from './appTheme.js';
 import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
@@ -69,6 +70,7 @@ class Application {
         DisplayOptions.init({
             getLoggedIn: () => AppState.user.isLoggedIn
         });
+        applyTileSmallFootprint();
         AppTheme.init();
         readViewSessions();
         localStorage.setItem('matrix_desktop_layout', AppState.viewSettings.sortBy);
@@ -860,7 +862,13 @@ class Application {
             gridSqueezeTimer = setTimeout(() => this.squeezeGridIfActive(), 120);
         });
         window.addEventListener('desktop:zoom_changed', () => {
+            const canvas = document.getElementById('app-canvas');
+            UI.updateBoardCanvasMinHeight(canvas);
             this.squeezeGridIfActive();
+        });
+
+        window.addEventListener('appearance:tile_footprint_changed', () => {
+            UI.reapplySmallFootprintOnBoard();
         });
 
         window.addEventListener('item:selected_for_edit', (e) => {
@@ -998,7 +1006,7 @@ class Application {
                 hiddenFromBoard: false,
                 steps: [],
                 editorBodyLayout: 'content',
-                tileSize: 'note'
+                tileSize: 'large'
             };
             Editor.open(newItem, AppState.categories);
         });

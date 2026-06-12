@@ -338,7 +338,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
             UI.applyNoteRect(card, { x: 0, y: 0, w: label.w, h: label.h }, { settling: false });
             UI.applyDesktopTilePresentation(card, item);
             UI.finalizeDesktopCard(card);
-            card.classList.add('spatial-at-label', 'tile-label');
+            card.classList.add('spatial-at-small', 'tile-small');
             UI.syncSpatialToggleButton(card);
             stack.appendChild(card);
         });

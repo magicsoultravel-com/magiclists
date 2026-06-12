@@ -58,6 +58,7 @@ import {
     shouldFileItem,
     FILE_CABINET_ORDER_KEY
 } from './fileCabinet.js';
+import { readTileSmallFootprint } from './tileFootprint.js';
 import {
     FREEFORM_DEFAULT_W,
     FREEFORM_DEFAULT_H,
@@ -82,14 +83,10 @@ import {
     TILE_LABEL_H,
     TILE_RESIZE_MIN_W,
     TILE_RESIZE_MIN_H,
+    TILE_LARGE_W_CELLS,
+    TILE_LARGE_H_CELLS,
     TILE_NOTE_W_CELLS,
     TILE_NOTE_H_CELLS,
-    TILE_LABEL_COMPACT_H_UP,
-    TILE_LABEL_COMPACT_H_DOWN,
-    TILE_COMPACT_NOTE_W_UP,
-    TILE_COMPACT_NOTE_H_UP,
-    TILE_COMPACT_NOTE_W_DOWN,
-    TILE_COMPACT_NOTE_H_DOWN,
     TILE_SIZES,
     DEFAULT_TILE_SIZE,
     LEGACY_TILE_SIZE,
@@ -101,12 +98,14 @@ import {
     spanToCellsH as geoSpanToCellsH,
     softSnapPx as geoSoftSnapPx,
     getTileDefaultRect as geoGetTileDefaultRect,
+    getSmallRect,
+    getLargeDefaultRect,
     getLabelRect,
     isCustomTileRect as geoIsCustomTileRect,
-    isAtLabelSize,
+    isAtSmallSize,
     resolveExpandedDefaultRect as geoResolveExpandedDefaultRect,
     isAtOrBelowCompactZone as geoIsAtOrBelowCompactZone,
-    inferCollapsedTileTier as geoInferCollapsedTileTier,
+    inferTileTier as geoInferTileTier,
     resolveCollapsedTierRect as geoResolveCollapsedTierRect,
     clampSpatialSize as geoClampSpatialSize,
     readRememberedSize as geoReadRememberedSize,
@@ -137,14 +136,10 @@ export {
     TILE_LABEL_H,
     TILE_RESIZE_MIN_W,
     TILE_RESIZE_MIN_H,
+    TILE_LARGE_W_CELLS,
+    TILE_LARGE_H_CELLS,
     TILE_NOTE_W_CELLS,
     TILE_NOTE_H_CELLS,
-    TILE_LABEL_COMPACT_H_UP,
-    TILE_LABEL_COMPACT_H_DOWN,
-    TILE_COMPACT_NOTE_W_UP,
-    TILE_COMPACT_NOTE_H_UP,
-    TILE_COMPACT_NOTE_W_DOWN,
-    TILE_COMPACT_NOTE_H_DOWN,
     TILE_SIZES,
     DEFAULT_TILE_SIZE,
     LEGACY_TILE_SIZE,
@@ -1202,7 +1197,7 @@ export const UI = {
 
         let rw = rememberedW;
         let rh = rememberedH;
-        if (updateRemembered && !isAtLabelSize(entry.w, entry.h)) {
+        if (updateRemembered && !this.isAtCurrentSmallSize(entry.w, entry.h)) {
             rw = entry.w;
             rh = entry.h;
         }
@@ -1210,7 +1205,7 @@ export const UI = {
             rw = prev?.rememberedW;
             rh = prev?.rememberedH;
         }
-        if (Number.isFinite(rw) && Number.isFinite(rh) && !isAtLabelSize(rw, rh)) {
+        if (Number.isFinite(rw) && Number.isFinite(rh) && !this.isAtCurrentSmallSize(rw, rh)) {
             const mem = geoClampSpatialSize(rw, rh, tileSize);
             entry.rememberedW = Math.round(mem.w);
             entry.rememberedH = Math.round(mem.h);
@@ -1220,7 +1215,7 @@ export const UI = {
 
     persistRememberedSpatialSize(itemId, w, h, tileSize = LEGACY_TILE_SIZE) {
         if (!itemId || !Number.isFinite(w) || !Number.isFinite(h)) return;
-        if (isAtLabelSize(w, h)) return;
+        if (this.isAtCurrentSmallSize(w, h)) return;
         const clamped = geoClampSpatialSize(w, h, tileSize);
         if (isSnapLayoutMode(activeBoardViewMode)) {
             const layout = this.getGridLayout();
@@ -1246,9 +1241,9 @@ export const UI = {
     resolveCardRect(card, item, { mode } = {}) {
         const pos = card ? this.readNoteRect(card) : { x: 0, y: 0, w: 0, h: 0 };
         const saved = this.getSavedLayoutRect(card, item);
-        if (mode === 'label') {
-            const label = getLabelRect();
-            return { x: pos.x, y: pos.y, w: label.w, h: label.h };
+        if (mode === 'small' || mode === 'label') {
+            const small = getSmallRect(readTileSmallFootprint());
+            return { x: pos.x, y: pos.y, w: small.w, h: small.h };
         }
         if (mode === 'editor' && saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
             return { x: pos.x, y: pos.y, w: saved.w, h: saved.h };
@@ -1289,10 +1284,13 @@ export const UI = {
     },
 
     applyCollapsedTileClasses(card, tileSize) {
-        card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note');
+        card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note', 'tile-small', 'tile-large');
         const size = normalizeTileSize(tileSize);
-        card.classList.add(`tile-${size}`);
-        if (size === 'compact') card.classList.add('compact');
+        card.classList.add(size === 'small' ? 'tile-small' : 'tile-large');
+    },
+
+    isAtCurrentSmallSize(w, h) {
+        return isAtSmallSize(w, h, readTileSmallFootprint());
     },
 
     applyDesktopTilePresentation(card, item) {
@@ -1300,7 +1298,7 @@ export const UI = {
         card.classList.remove('expanded');
         card.classList.add('note-surface');
         const { w, h } = this.readNoteRect(card);
-        const tier = geoInferCollapsedTileTier(w, h, resolveTileSize(item));
+        const tier = geoInferTileTier(w, h, resolveTileSize(item));
         this.applyCollapsedTileClasses(card, tier);
     },
 
@@ -1309,17 +1307,17 @@ export const UI = {
         const toggleBtn = card.querySelector('.card-act--toggle');
         if (!toggleBtn) return;
         const { w, h } = this.readNoteRect(card);
-        const atLabel = isAtLabelSize(w, h);
+        const atSmall = this.isAtCurrentSmallSize(w, h);
         const inFileCabinet = !!card.closest('#file-cabinet');
         let expandTitle;
         let lastIcon;
         if (isFileCabinetActive()) {
-            const labels = getFileCabinetToggleLabels(inFileCabinet, atLabel);
+            const labels = getFileCabinetToggleLabels(inFileCabinet, atSmall);
             expandTitle = labels.title;
             lastIcon = labels.iconKey === 'expand' ? CARD_ICONS.expand : CARD_ICONS.collapse;
         } else {
-            expandTitle = atLabel ? 'Expand' : 'Collapse to label';
-            lastIcon = atLabel ? CARD_ICONS.expand : CARD_ICONS.collapse;
+            expandTitle = atSmall ? 'Expand' : 'Collapse to small';
+            lastIcon = atSmall ? CARD_ICONS.expand : CARD_ICONS.collapse;
         }
         toggleBtn.innerHTML = lastIcon;
         toggleBtn.setAttribute('title', expandTitle);
@@ -1349,8 +1347,8 @@ export const UI = {
         return geoResolveExpandedDefaultRect(tileSize, saved);
     },
 
-    shouldSnapPanelCollapse(w, h, tileSize = LEGACY_TILE_SIZE, { isExpanded = false } = {}) {
-        return isAtLabelSize(w, h);
+    shouldSnapPanelCollapse(w, h) {
+        return this.isAtCurrentSmallSize(w, h);
     },
 
     isAtOrBelowCompactZone(w, h, tileSize = LEGACY_TILE_SIZE) {
@@ -1366,7 +1364,7 @@ export const UI = {
     },
 
     inferCollapsedTileTier(w, h, prevTier = LEGACY_TILE_SIZE) {
-        return geoInferCollapsedTileTier(w, h, prevTier);
+        return geoInferTileTier(w, h, prevTier);
     },
 
     resolveCollapsedTierRect(w, h, prevTier = LEGACY_TILE_SIZE) {
@@ -1496,8 +1494,8 @@ export const UI = {
 
         this.collapseSnapPanelCard(card, item);
 
-        const labelRect = this.resolveCardRect(card, item, { mode: 'label' });
-        this.applyTileTierRect(card, item, 'label', labelRect, ctx);
+        const labelRect = this.resolveCardRect(card, item, { mode: 'small' });
+        this.applyTileTierRect(card, item, 'small', labelRect, ctx);
 
         return true;
     },
@@ -1505,7 +1503,7 @@ export const UI = {
     saveTileLayoutFromCard(card, item, rect, tileSize) {
         const id = item?.id || card.dataset.id;
         if (!id || !isDesktopCard(card)) return;
-        const updateRemembered = !isAtLabelSize(rect.w, rect.h);
+        const updateRemembered = !this.isAtCurrentSmallSize(rect.w, rect.h);
         if (isSnapLayoutMode(activeBoardViewMode)) {
             this.saveGridLayout(id, rect, { updateRemembered });
         } else {
@@ -1577,13 +1575,13 @@ export const UI = {
 
         const pos = this.readNoteRect(card);
         const tileSize = resolveTileSize(item);
-        if (isAtLabelSize(pos.w, pos.h)) {
+        if (this.isAtCurrentSmallSize(pos.w, pos.h)) {
             const rect = this.resolveCardRect(card, item, { mode: 'remembered' });
             this.applySpatialToggleRect(card, item, rect, ctx);
         } else {
             this.persistRememberedSpatialSize(item.id, pos.w, pos.h, tileSize);
-            const labelRect = this.resolveCardRect(card, item, { mode: 'label' });
-            this.applySpatialToggleRect(card, item, labelRect, ctx);
+            const smallRect = this.resolveCardRect(card, item, { mode: 'small' });
+            this.applySpatialToggleRect(card, item, smallRect, ctx);
         }
     },
 
@@ -1595,7 +1593,7 @@ export const UI = {
             removeFromFileCabinetOrder(item.id);
             let rect = this.resolveCardRect(card, item, { mode: 'remembered' });
             const expandedMin = this.resolveExpandedDefaultRect(tileSize, null);
-            if (isAtLabelSize(rect.w, rect.h)) {
+            if (this.isAtCurrentSmallSize(rect.w, rect.h)) {
                 rect = { ...rect, w: expandedMin.w, h: expandedMin.h };
             }
             const savedGrid = this.getGridLayout()[item.id];
@@ -1613,10 +1611,10 @@ export const UI = {
             const pos = this.readNoteRect(card);
             this.persistRememberedSpatialSize(item.id, pos.w, pos.h, tileSize);
             addToFileCabinetOrder(getItemCategoryName(item), item.id);
-            const labelRect = this.resolveCardRect(card, item, { mode: 'label' });
             const x = pos.x ?? 8;
             const y = pos.y ?? 8;
-            const filedRect = { x, y, w: labelRect.w, h: labelRect.h };
+            const fileTabRect = getLabelRect();
+            const filedRect = { x, y, w: fileTabRect.w, h: fileTabRect.h };
             if (isSnapLayoutMode(activeBoardViewMode)) {
                 this.saveGridLayout(item.id, filedRect, { updateRemembered: true });
             } else {
@@ -1626,6 +1624,38 @@ export const UI = {
         }
 
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
+    },
+
+    reapplySmallFootprintOnBoard() {
+        const canvas = document.getElementById('app-canvas');
+        if (!canvas) return;
+        const footprint = readTileSmallFootprint();
+        const smallRect = getSmallRect(footprint);
+        canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
+            if (card.closest('#file-cabinet')) return;
+            const item = this.resolveBoardItem(card.dataset.id);
+            if (!item) return;
+            const rect = this.readNoteRect(card);
+            const wasSmall = isAtSmallSize(rect.w, rect.h, 'label')
+                || isAtSmallSize(rect.w, rect.h, 'card')
+                || isAtSmallSize(rect.w, rect.h, 'wide')
+                || resolveTileSize(item) === 'small';
+            if (!wasSmall) return;
+            const next = { x: rect.x, y: rect.y, w: smallRect.w, h: smallRect.h };
+            this.applyNoteRect(card, next, { settling: false });
+            if (this.canEditInline() && resolveTileSize(item) !== 'small') {
+                this.mutateItem(item, (it) => { it.tileSize = 'small'; }, { preserveView: true, skipRerender: true });
+                item.tileSize = 'small';
+                boardItemsById.set(item.id, item);
+            }
+            this.applyDesktopTilePresentation(card, item);
+            this.saveTileLayoutFromCard(card, item, next, 'small');
+            this.finalizeDesktopCard(card);
+        });
+        this.updateBoardCanvasMinHeight(canvas);
+        if (isSnapLayoutMode(activeBoardViewMode)) {
+            requestAnimationFrame(() => this.reflowGridBoard(canvas, null, { animate: true }));
+        }
     },
 
     gridBoardRectForCard(card, savedRect, isExpanded) {
@@ -1863,14 +1893,14 @@ export const UI = {
             expandTitle = 'Show on board';
             lastIcon = CARD_ICONS.collapse;
         } else if (spatialTile) {
-            const atLabel = isAtLabelSize(tileW, tileH);
+            const atSmall = isAtSmallSize(tileW, tileH, readTileSmallFootprint());
             if (isFileCabinetActive()) {
-                const labels = getFileCabinetToggleLabels(atLabel, atLabel);
+                const labels = getFileCabinetToggleLabels(atSmall, atSmall);
                 expandTitle = labels.title;
                 lastIcon = labels.iconKey === 'expand' ? CARD_ICONS.expand : CARD_ICONS.collapse;
             } else {
-                expandTitle = atLabel ? 'Expand' : 'Collapse to label';
-                lastIcon = atLabel ? CARD_ICONS.expand : CARD_ICONS.collapse;
+                expandTitle = atSmall ? 'Expand' : 'Collapse to small';
+                lastIcon = atSmall ? CARD_ICONS.expand : CARD_ICONS.collapse;
             }
         } else {
             expandTitle = isExpanded ? 'Collapse note' : 'Expand note';
@@ -2354,7 +2384,7 @@ export const UI = {
     finalizeDesktopCard(card) {
         if (!isDesktopCard(card)) return;
         const { w, h } = this.readNoteRect(card);
-        card.classList.toggle('spatial-at-label', isAtLabelSize(w, h));
+        card.classList.toggle('spatial-at-small', this.isAtCurrentSmallSize(w, h));
         this.setupFreeformChrome(card);
         if (isSnapLayoutMode(activeBoardViewMode)) {
             this.applyDesktopSize(card);
@@ -2653,7 +2683,7 @@ export const UI = {
 
         if (expanded) {
             if (!animate) {
-                card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note');
+                card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note', 'tile-small', 'tile-large');
                 card.classList.add('expanded');
                 this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
                 finishExpand();
@@ -2669,7 +2699,7 @@ export const UI = {
 
             this.lockCardAnimationDimensions(card, compactW, compactH);
 
-            card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note');
+            card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note', 'tile-small', 'tile-large');
             card.classList.add('expanded');
             this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
 
@@ -2760,7 +2790,7 @@ export const UI = {
         } else {
             const isExpanded = getExpandedCards(activeBoardViewMode)[item.id] === true;
             if (isExpanded) {
-                card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note');
+                card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note', 'tile-small', 'tile-large');
                 card.classList.add('expanded');
                 this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
             } else {
@@ -3132,7 +3162,7 @@ export const UI = {
             const tileSize = resolveTileSize(item);
             let rect = this.resolveCardRect(null, item, { mode: 'remembered' });
             const expandedMin = this.resolveExpandedDefaultRect(tileSize, null);
-            if (isAtLabelSize(rect.w, rect.h)) {
+            if (this.isAtCurrentSmallSize(rect.w, rect.h)) {
                 rect = { ...rect, w: expandedMin.w, h: expandedMin.h };
             }
             const savedGrid = this.getGridLayout()[item.id];
@@ -4827,7 +4857,7 @@ export const UI = {
         if (!isDesktopCard(card)) return;
         const { w, h } = this.readFreeformCardSize(card);
         this.saveFreeformSize(card.dataset.id, w, h, {
-            updateRemembered: !isAtLabelSize(w, h)
+            updateRemembered: !isAtSmallSize(w, h, readTileSmallFootprint())
         });
     },
 
@@ -5051,7 +5081,7 @@ export const UI = {
                             { w: saved.w, h: saved.h },
                             resolveTileSize(item),
                             {
-                                updateRemembered: !isAtLabelSize(saved.w, saved.h),
+                                updateRemembered: !isAtSmallSize(saved.w, saved.h, readTileSmallFootprint()),
                                 rememberedW: saved.rememberedW,
                                 rememberedH: saved.rememberedH
                             }
@@ -5064,7 +5094,7 @@ export const UI = {
                 this.saveFreeformPosition(item.id, rect.x, rect.y);
                 const { w, h } = this.readFreeformCardSize(card);
                 this.saveFreeformSize(item.id, w, h, {
-                    updateRemembered: !isAtLabelSize(w, h)
+                    updateRemembered: !isAtSmallSize(w, h, readTileSmallFootprint())
                 });
             });
             return;
@@ -5146,7 +5176,7 @@ export const UI = {
                     rect,
                     resolveTileSize(item),
                     {
-                        updateRemembered: !isAtLabelSize(rect.w, rect.h),
+                        updateRemembered: !isAtSmallSize(rect.w, rect.h, readTileSmallFootprint()),
                         rememberedW: freeSaved?.rememberedW ?? gridPrev.rememberedW,
                         rememberedH: freeSaved?.rememberedH ?? gridPrev.rememberedH
                     }

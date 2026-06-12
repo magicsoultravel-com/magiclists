@@ -8,6 +8,7 @@ import {
 import {
     UI,
     itemHasCategory,
+    isDesktopCard,
     FREEFORM_MIN_W,
     FREEFORM_MIN_H,
     CANVAS_GRID_W,
@@ -17,7 +18,8 @@ import {
     COLUMN_GRID_CELL_W,
     COLUMN_GRID_CELL_H
 } from './ui.js';
-import { isAtLabelSize } from './tileGeometry.js';
+import { isAtSmallSize } from './tileGeometry.js';
+import { readTileSmallFootprint } from './tileFootprint.js';
 import { initFileCabinetDrag, isFileCabinetActive } from './fileCabinet.js';
 
 const DRAG_THRESHOLD = 4;
@@ -80,18 +82,19 @@ function finishSnapPanelGesture(card, {
     UI.applyNoteRect(card, rect, { settling: animate });
 
     const item = currentItems.find((i) => i.id === card.dataset.id);
-    let tileSize = item ? UI.getCardTileSize(card, item) : 'compact';
+    let tileSize = item ? UI.getCardTileSize(card, item) : 'large';
     if (item && tierResizeState && UI.isCollapsedTile(card)) {
         tileSize = UI.commitTierResize(card, item, tierResizeState);
     }
-    if (item && card.classList.contains('expanded') && UI.shouldSnapPanelCollapse(rect.w, rect.h, tileSize, { isExpanded: true })) {
+    if (item && card.classList.contains('expanded') && !isDesktopCard(card)
+        && UI.shouldSnapPanelCollapse(rect.w, rect.h)) {
         onCollapseFromResize(card, item, rect, { animate, bounds });
         cleanupActive?.();
         return;
     }
 
     saveLayout(card, rect, {
-        updateRemembered: UI.isCollapsedTile(card) && !isAtLabelSize(rect.w, rect.h)
+        updateRemembered: UI.isCollapsedTile(card) && !isAtSmallSize(rect.w, rect.h, readTileSmallFootprint())
     });
     reflow(card, { animate });
     cleanupActive?.();
@@ -292,7 +295,7 @@ export const DragDropEngine = {
                     );
                     UI.applyNoteRect(c, finalRect, { settling: animate });
                     UI.saveGridLayout(c.dataset.id, finalRect, {
-                        updateRemembered: !isAtLabelSize(finalRect.w, finalRect.h)
+                        updateRemembered: !isAtSmallSize(finalRect.w, finalRect.h, readTileSmallFootprint())
                     });
                     UI.reflowGridBoard(canvas, c.dataset.id, { animate });
                 },
@@ -458,7 +461,7 @@ export const DragDropEngine = {
                         const tileSize = UI.commitTierResize(card, item, tierResizeState);
                         const { w, h } = UI.readFreeformCardSize(card);
                         UI.saveFreeformSize(card.dataset.id, w, h, {
-                            updateRemembered: !isAtLabelSize(w, h)
+                            updateRemembered: !isAtSmallSize(w, h, readTileSmallFootprint())
                         });
                         UI.finalizeDesktopCard(card);
                     } else {

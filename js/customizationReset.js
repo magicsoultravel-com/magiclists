@@ -5,6 +5,7 @@ import { ChromeBackground } from './chromeBackground.js';
 import { ClockStyle } from './clockStyle.js';
 import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
+import { applyTileSmallFootprint, writeTileSmallFootprint } from './tileFootprint.js';
 
 const CUSTOMIZATION_KEYS = [
     'matrix_app_theme',
@@ -15,7 +16,8 @@ const CUSTOMIZATION_KEYS = [
     'matrix_editor_zoom',
     'matrix_note_font',
     'matrix_note_font_scale',
-    'matrix_display_options'
+    'matrix_display_options',
+    'matrix_tile_small_footprint'
 ];
 
 const DISPLAY_DEFAULTS = {
@@ -54,6 +56,8 @@ export function resetCustomizationToDefaults() {
 
     DesktopZoom.setScale(1);
     NoteFontScale.setScale(1);
+    writeTileSmallFootprint('card');
+    applyTileSmallFootprint('card');
 
     window.dispatchEvent(new CustomEvent('customization:reset'));
     return true;

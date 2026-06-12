@@ -13,6 +13,16 @@
     --note-font-scale: 1;
     --tile-cell-w: 96px;
     --tile-cell-h: 56px;
+    --tile-small-w-label: 96px;
+    --tile-small-h-label: 28px;
+    --tile-small-w-card: 96px;
+    --tile-small-h-card: 56px;
+    --tile-small-w-wide: 128px;
+    --tile-small-h-wide: 96px;
+    --tile-small-w: 96px;
+    --tile-small-h: 56px;
+    --tile-large-w: 246px;
+    --tile-large-h: 296px;
     --tile-label-h: 28px;
     --tile-note-w: 246px;
     --tile-note-h: 296px;
@@ -24,6 +34,21 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+}
+
+html[data-tile-small-footprint="label"] {
+    --tile-small-w: var(--tile-small-w-label);
+    --tile-small-h: var(--tile-small-h-label);
+}
+
+html[data-tile-small-footprint="card"] {
+    --tile-small-w: var(--tile-small-w-card);
+    --tile-small-h: var(--tile-small-h-card);
+}
+
+html[data-tile-small-footprint="wide"] {
+    --tile-small-w: var(--tile-small-w-wide);
+    --tile-small-h: var(--tile-small-h-wide);
 }
 
 .is-hidden {
@@ -1422,6 +1447,58 @@ html[data-desktop-gradient="1"] #app-canvas.view-grid {
     margin: 0.08rem 0;
 }
 
+.display-options-subheading {
+    margin: 0.2rem 0.18rem 0.05rem;
+    font-size: 0.52rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.tile-footprint-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.12rem;
+    padding: 0 0.12rem 0.08rem;
+}
+
+.tile-footprint-option {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: 100%;
+    padding: 0.28rem 0.35rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-card);
+    color: var(--text-main);
+    font: inherit;
+    cursor: pointer;
+    text-align: left;
+}
+
+.tile-footprint-option.is-selected {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, var(--bg-card));
+}
+
+.tile-footprint-option-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.05rem;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.tile-footprint-option-label {
+    font-size: 0.62rem;
+    font-weight: 600;
+}
+
+.tile-footprint-option-desc {
+    font-size: 0.52rem;
+    color: var(--text-muted);
+}
+
 .display-options-heading {
     margin: 0.08rem 0.18rem 0.05rem;
     font-size: 0.52rem;
@@ -1911,68 +1988,46 @@ html[data-note-font="kalam"] .mini-card .step-text {
     cursor: grabbing;
 }
 
-.mini-card.compact {
-    padding: 0.3rem 0.38rem !important;
-    height: 56px !important;
-    min-height: 56px !important;
-    max-height: 56px !important;
+/* Spatial tile tiers — small / large, unified editor shell */
+#app-canvas.view-grid .mini-card[data-desktop="1"],
+#app-canvas.view-freeform .mini-card[data-desktop="1"] {
+    padding: 0.38rem 0.45rem !important;
     overflow: hidden !important;
-    width: 96px !important;
     box-sizing: border-box;
 }
 
-.mini-card.compact:hover,
-.mini-card.compact:focus-within {
-    overflow: visible !important;
-    z-index: 25;
+.mini-card.tile-small {
+    width: var(--tile-small-w) !important;
+    min-width: var(--tile-small-w) !important;
+    max-width: var(--tile-small-w) !important;
+    height: var(--tile-small-h) !important;
+    min-height: var(--tile-small-h) !important;
+    max-height: var(--tile-small-h) !important;
 }
 
-.mini-card.compact .mini-card-title {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+.mini-card.tile-large {
+    min-width: var(--tile-large-w);
+    min-height: var(--tile-large-h);
 }
 
-/* Collapsed tile tiers */
-.mini-card.tile-label {
-    padding: 0.15rem 0.38rem !important;
-    height: 28px !important;
-    min-height: 28px !important;
-    max-height: 28px !important;
-    overflow: hidden !important;
-    width: 96px !important;
-    box-sizing: border-box;
-}
-
-.mini-card.tile-label .tile-label-header {
-    min-height: 0;
-}
-
-.mini-card.tile-label .mini-card-title {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 0.72rem;
-    line-height: 1.2;
-}
-
-.mini-card.tile-label .editor-note-topline,
-.mini-card.compact .editor-note-topline {
-    flex: 1 1 auto;
+.mini-card.tile-small .editor-note-topline,
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline {
+    flex: 0 0 auto;
     min-height: 0;
     min-width: 0;
     width: 100%;
+    position: relative;
 }
 
-.mini-card.tile-label .editor-note-topline .mini-card-title,
-.mini-card.compact .editor-note-topline .mini-card-title {
+.mini-card.tile-small .editor-note-topline .mini-card-title,
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.mini-card.tile-label .editor-note-topline .note-editor-toolbar,
-.mini-card[data-desktop="1"].spatial-at-label .editor-note-topline .note-editor-toolbar {
+.mini-card.tile-small .editor-note-topline .note-editor-toolbar,
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .note-editor-toolbar {
     position: absolute;
     right: 0;
     top: 0;
@@ -1981,105 +2036,23 @@ html[data-note-font="kalam"] .mini-card .step-text {
     transition: opacity 0.12s ease;
 }
 
-.mini-card.tile-label:hover .editor-note-topline .note-editor-toolbar,
-.mini-card.tile-label:focus-within .editor-note-topline .note-editor-toolbar,
-.mini-card[data-desktop="1"].spatial-at-label:hover .editor-note-topline .note-editor-toolbar,
-.mini-card[data-desktop="1"].spatial-at-label:focus-within .editor-note-topline .note-editor-toolbar {
+.mini-card.tile-small:hover .editor-note-topline .note-editor-toolbar,
+.mini-card.tile-small:focus-within .editor-note-topline .note-editor-toolbar,
+.mini-card[data-desktop="1"].spatial-at-small:hover .editor-note-topline .note-editor-toolbar,
+.mini-card[data-desktop="1"].spatial-at-small:focus-within .editor-note-topline .note-editor-toolbar {
     opacity: 1;
     pointer-events: auto;
 }
 
-.mini-card.tile-label .editor-note-topline,
-.mini-card[data-desktop="1"].spatial-at-label .editor-note-topline {
-    position: relative;
-}
-
-.mini-card.tile-label .editor-note-topline .editor-note-header,
-.mini-card[data-desktop="1"].spatial-at-label .editor-note-topline .editor-note-header {
+.mini-card.tile-small .editor-note-topline .editor-note-header,
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .editor-note-header {
     padding-right: 0.1rem;
 }
 
-.mini-card.tile-compact,
-.mini-card.compact.tile-compact {
-    padding: 0.3rem 0.38rem !important;
-    height: 56px !important;
-    min-height: 56px !important;
-    max-height: 56px !important;
-    overflow: hidden !important;
-    width: 96px !important;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
-}
-
-.mini-card.tile-note {
-    padding: 0.38rem 0.45rem !important;
-    min-width: var(--tile-note-w);
-    min-height: var(--tile-note-h);
-    overflow: hidden !important;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-}
-
-.mini-card.tile-compact .tile-preview,
-.mini-card.compact .tile-preview,
-.mini-card.tile-note .tile-preview {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: hidden;
-    line-height: 1.25;
-    opacity: 0.88;
-}
-
-.mini-card.tile-compact .tile-preview,
-.mini-card.compact .tile-preview {
-    font-size: 0.62rem;
-}
-
-.mini-card.tile-note .tile-preview {
-    font-size: 0.68rem;
-}
-
-.mini-card.tile-compact .tile-preview,
-.mini-card.compact .tile-preview {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
-}
-
-.mini-card.tile-compact .tile-preview .card-content-preview,
-.mini-card.compact .tile-preview .card-content-preview,
-.mini-card.tile-compact .tile-preview .expanded-checklist,
-.mini-card.compact .tile-preview .expanded-checklist {
-    overflow: hidden;
-}
-
-.mini-card.tile-note .tile-preview {
-    overflow-x: hidden;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-}
-
-.mini-card.tile-note .tile-preview::-webkit-scrollbar {
-    width: 4px;
-}
-
-.mini-card.tile-note .tile-preview::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.22);
-    border-radius: 4px;
-}
-
-.mini-card.tile-label:hover,
-.mini-card.tile-label:focus-within,
-.mini-card.tile-compact:hover,
-.mini-card.tile-compact:focus-within,
-.mini-card.tile-note:hover,
-.mini-card.tile-note:focus-within {
-    overflow: visible !important;
+.mini-card.tile-small:hover,
+.mini-card.tile-small:focus-within,
+.mini-card.tile-large:hover,
+.mini-card.tile-large:focus-within {
     z-index: 25;
 }
 
@@ -2087,13 +2060,14 @@ html[data-note-font="kalam"] .mini-card .step-text {
     overflow: hidden !important;
 }
 
-.mini-card.is-tier-resizing.tile-label,
-.mini-card.is-tier-resizing.tile-compact,
-.mini-card.is-tier-resizing.tile-note {
+.mini-card.is-tier-resizing.tile-small,
+.mini-card.is-tier-resizing.tile-large {
     width: auto !important;
     height: auto !important;
     min-height: unset !important;
     max-height: none !important;
+    min-width: unset !important;
+    max-width: none !important;
 }
 
 .mini-card.expanded {
@@ -4162,22 +4136,22 @@ textarea.form-input {
     scrollbar-width: thin;
 }
 
-#app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-label .editor-note-body,
-#app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-label .editor-note-body,
-#app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-label .editor-meta-wrap,
-#app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-label .editor-meta-wrap {
+html[data-tile-small-footprint="label"] #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small .editor-note-body,
+html[data-tile-small-footprint="label"] #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small .editor-note-body,
+html[data-tile-small-footprint="label"] #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small .editor-meta-wrap,
+html[data-tile-small-footprint="label"] #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small .editor-meta-wrap {
     display: none;
 }
 
-#app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-label .editor-note-topline.card-drag-zone,
-#app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-label .editor-note-topline.card-drag-zone {
+#app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline.card-drag-zone,
+#app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline.card-drag-zone {
     flex: 1 1 auto;
     min-height: 0;
     cursor: grab;
 }
 
-#app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-label .editor-note-topline.card-drag-zone:active,
-#app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-label .editor-note-topline.card-drag-zone:active,
+#app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline.card-drag-zone:active,
+#app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline.card-drag-zone:active,
 #app-canvas.view-grid .mini-card[data-desktop="1"].is-grid-dragging .editor-note-topline.card-drag-zone,
 #app-canvas.view-freeform .mini-card[data-desktop="1"].is-freeform-dragging .editor-note-topline.card-drag-zone {
     cursor: grabbing;
@@ -4229,19 +4203,8 @@ textarea.form-input {
     margin-top: auto;
 }
 
-#app-canvas.view-freeform .mini-card.tile-label {
-    width: 96px !important;
-    display: flex;
-    flex-direction: column;
-}
-
-#app-canvas.view-freeform .mini-card.tile-note {
-    display: flex;
-    flex-direction: column;
-}
-
-#app-canvas.view-freeform .mini-card.tile-compact {
-    width: 96px !important;
+#app-canvas.view-freeform .mini-card.tile-small,
+#app-canvas.view-freeform .mini-card.tile-large {
     display: flex;
     flex-direction: column;
 }
@@ -5153,40 +5116,31 @@ textarea.form-input {
     cursor: grabbing;
 }
 
-#app-canvas.view-grid .mini-card.compact,
-#app-canvas.view-grid .mini-card.tile-label,
-#app-canvas.view-grid .mini-card.tile-compact,
-#app-canvas.view-grid .mini-card.tile-note {
+#app-canvas.view-grid .mini-card.tile-small,
+#app-canvas.view-grid .mini-card.tile-large {
     display: flex;
     flex-direction: column;
     width: auto !important;
     height: auto !important;
-    min-width: 96px;
-    min-height: 28px;
+    min-width: var(--tile-small-w);
+    min-height: var(--tile-label-h);
     max-width: none !important;
     max-height: none !important;
     overflow: hidden !important;
     box-sizing: border-box;
 }
 
-#app-canvas.view-grid .mini-card.tile-note {
-    min-width: var(--tile-note-w);
-    min-height: var(--tile-note-h);
+#app-canvas.view-grid .mini-card.tile-large {
+    min-width: var(--tile-large-w);
+    min-height: var(--tile-large-h);
 }
 
-#app-canvas.view-grid .mini-card.compact:hover,
-#app-canvas.view-grid .mini-card.compact:focus-within,
-#app-canvas.view-grid .mini-card.compact.is-grid-resizing,
-#app-canvas.view-grid .mini-card.tile-label:hover,
-#app-canvas.view-grid .mini-card.tile-label:focus-within,
-#app-canvas.view-grid .mini-card.tile-label.is-grid-resizing,
-#app-canvas.view-grid .mini-card.tile-compact:hover,
-#app-canvas.view-grid .mini-card.tile-compact:focus-within,
-#app-canvas.view-grid .mini-card.tile-compact.is-grid-resizing,
-#app-canvas.view-grid .mini-card.tile-note:hover,
-#app-canvas.view-grid .mini-card.tile-note:focus-within,
-#app-canvas.view-grid .mini-card.tile-note.is-grid-resizing {
-    overflow: visible !important;
+#app-canvas.view-grid .mini-card.tile-small:hover,
+#app-canvas.view-grid .mini-card.tile-small:focus-within,
+#app-canvas.view-grid .mini-card.tile-small.is-grid-resizing,
+#app-canvas.view-grid .mini-card.tile-large:hover,
+#app-canvas.view-grid .mini-card.tile-large:focus-within,
+#app-canvas.view-grid .mini-card.tile-large.is-grid-resizing {
     z-index: 25;
 }
 
