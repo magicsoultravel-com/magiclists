@@ -495,7 +495,6 @@ class Application {
                 const cleanColor = color && color.trim() ? color.trim() : '#64748b';
                 AppState.categories.push({ name: cleanName, color: cleanColor });
                 localStorage.setItem('matrix_custom_categories', JSON.stringify(AppState.categories));
-                UI.appendToCanvasOrder({ type: 'category', name: cleanName });
                 this.syncDataStore();
             }
         });

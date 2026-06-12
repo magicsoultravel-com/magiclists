@@ -4,34 +4,18 @@ import {
     UNCATEGORIZED_CATEGORY
 } from './categories.js';
 import { showAppToast } from './toast.js';
+import {
+    getLabelRect,
+    getTileDefaultRect,
+    isAtLabelSize,
+    isCustomTileRect,
+    LEGACY_TILE_SIZE,
+    resolveCollapsedTierRect,
+    resolveExpandedDefaultRect,
+    resolveTileSize,
+    softSnapPx
+} from './tileGeometry.js';
 import { readViewSessions, writeViewSessions, VIEW_MODES } from './viewSession.js';
-
-const FREEFORM_DEFAULT_W = 96;
-const FREEFORM_DEFAULT_H = 56;
-const COLUMN_GRID_CELL_W = FREEFORM_DEFAULT_W;
-const COLUMN_GRID_CELL_H = FREEFORM_DEFAULT_H;
-const COLUMN_GRID_GAP = 4;
-const LEGACY_TILE_SIZE = 'compact';
-const TILE_LABEL_H = 28;
-const TILE_RESIZE_MIN_W = COLUMN_GRID_CELL_W;
-const TILE_RESIZE_MIN_H = TILE_LABEL_H;
-const TILE_NOTE_W_CELLS = 2.5;
-const TILE_NOTE_H_CELLS = 5;
-const TILE_LABEL_COMPACT_H_UP = 40;
-const TILE_LABEL_COMPACT_H_DOWN = 36;
-const TILE_COMPACT_NOTE_W_UP = 104;
-const TILE_COMPACT_NOTE_H_UP = 64;
-const TILE_COMPACT_NOTE_W_DOWN = 100;
-const TILE_COMPACT_NOTE_H_DOWN = 60;
-
-function normalizeTileSize(tileSize) {
-    if (tileSize === 'label' || tileSize === 'compact' || tileSize === 'note') return tileSize;
-    return LEGACY_TILE_SIZE;
-}
-
-function resolveTileSize(item) {
-    return normalizeTileSize(item?.tileSize);
-}
 
 const GRID_LAYOUT_KEY = 'matrix_grid_layout';
 const GRID_PINS_KEY = 'matrix_grid_pins';
@@ -226,37 +210,8 @@ export function clearPresentationLayoutKeys() {
     });
 }
 
-export function migrateLegacyColumnsFloatStorage(writeState = null) {
-    const floatPos = readJson('matrix_columns_float_positions', {});
-    const floatSizes = readJson('matrix_columns_float_sizes', {});
-    const posIds = Object.keys(floatPos || {});
-    const sizeIds = Object.keys(floatSizes || {});
-    if (!posIds.length && !sizeIds.length) return false;
-
-    const layout = readJson('matrix_column_note_layout', {});
-    const cat = UNCATEGORIZED_CATEGORY;
-    if (!layout[cat]) layout[cat] = {};
-    const allIds = new Set([...posIds, ...sizeIds]);
-    allIds.forEach((id) => {
-        if (layout[cat][id]) return;
-        const pos = floatPos[id];
-        const size = floatSizes[id];
-        layout[cat][id] = {
-            x: pos?.x ?? 0,
-            y: pos?.y ?? 0,
-            w: size?.w ?? FREEFORM_DEFAULT_W,
-            h: size?.h ?? FREEFORM_DEFAULT_H
-        };
-    });
-
-    writeJsonIfChanged('matrix_column_note_layout', layout, writeState);
-    try {
-        localStorage.removeItem('matrix_columns_float_positions');
-        localStorage.removeItem('matrix_columns_float_sizes');
-    } catch {
-        /* ignore */
-    }
-    return true;
+export function migrateLegacyColumnsFloatStorage() {
+    return false;
 }
 
 function createReconcileStats() {
@@ -292,33 +247,6 @@ function applyReconcileWrites(context, stats, writeState) {
             context.tileSizeById,
             stats,
             'matrix_freeform_sizes'
-        ),
-        writeState
-    );
-    if (writeState.quotaExceeded) return;
-
-    writeJsonIfChanged(
-        'matrix_column_positions',
-        pruneCategoryMap(readJson('matrix_column_positions', {}), context.catNames, stats, 'matrix_column_positions'),
-        writeState
-    );
-    if (writeState.quotaExceeded) return;
-
-    writeJsonIfChanged(
-        'matrix_column_sizes',
-        pruneCategoryMap(readJson('matrix_column_sizes', {}), context.catNames, stats, 'matrix_column_sizes'),
-        writeState
-    );
-    if (writeState.quotaExceeded) return;
-
-    writeJsonIfChanged(
-        'matrix_column_note_layout',
-        normalizeColumnNoteLayout(
-            readJson('matrix_column_note_layout', {}),
-            context.liveIds,
-            context.tileSizeById,
-            context.catNames,
-            stats
         ),
         writeState
     );
@@ -390,71 +318,8 @@ function reportReconcileStats(stats, showToast) {
     }
 }
 
-function cellsToSpanW(cells) {
-    const n = Math.max(1, cells);
-    return Math.round(n * COLUMN_GRID_CELL_W + (n - 1) * COLUMN_GRID_GAP);
-}
-
-function cellsToSpanH(cells) {
-    const n = Math.max(1, cells);
-    return Math.round(n * COLUMN_GRID_CELL_H + (n - 1) * COLUMN_GRID_GAP);
-}
-
-function softSnapPx(value) {
-    return Math.round(Math.max(0, value) / 2) * 2;
-}
-
-function getTileDefaultRect(tileSize) {
-    const size = normalizeTileSize(tileSize);
-    if (size === 'label') {
-        return { w: COLUMN_GRID_CELL_W, h: TILE_LABEL_H };
-    }
-    if (size === 'note') {
-        return {
-            w: cellsToSpanW(TILE_NOTE_W_CELLS),
-            h: cellsToSpanH(TILE_NOTE_H_CELLS)
-        };
-    }
-    return { w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H };
-}
-
-function isCustomTileRect(w, h, tileSize = LEGACY_TILE_SIZE) {
-    const def = getTileDefaultRect(tileSize);
-    return Math.abs(w - def.w) > 2 || Math.abs(h - def.h) > 2;
-}
-
-function inferCollapsedTileTier(w, h, prevTier = LEGACY_TILE_SIZE) {
-    const prev = normalizeTileSize(prevTier);
-    if (h <= TILE_LABEL_COMPACT_H_DOWN) return 'label';
-
-    let inNoteZone;
-    if (prev === 'note') {
-        inNoteZone = !(w <= TILE_COMPACT_NOTE_W_DOWN && h <= TILE_COMPACT_NOTE_H_DOWN);
-    } else {
-        inNoteZone = w > TILE_COMPACT_NOTE_W_UP || h > TILE_COMPACT_NOTE_H_UP;
-    }
-    if (inNoteZone) return 'note';
-
-    if (prev === 'label') {
-        return h > TILE_LABEL_COMPACT_H_UP ? 'compact' : 'label';
-    }
-    if (prev === 'compact') {
-        return h < TILE_LABEL_COMPACT_H_DOWN ? 'label' : 'compact';
-    }
-    return h < TILE_LABEL_COMPACT_H_DOWN ? 'label' : 'compact';
-}
-
-function resolveCollapsedTierRect(w, h, prevTier = LEGACY_TILE_SIZE) {
-    const tier = inferCollapsedTileTier(w, h, prevTier);
-    return {
-        tier,
-        w: softSnapPx(Math.max(TILE_RESIZE_MIN_W, w)),
-        h: softSnapPx(Math.max(TILE_RESIZE_MIN_H, h))
-    };
-}
-
-function isExpandedRect(w, h) {
-    return w >= cellsToSpanW(2) - 2 && h >= cellsToSpanH(2) - 2;
+function isSpatialExpandedRect(w, h) {
+    return !isAtLabelSize(w, h);
 }
 
 export function normalizeSavedCardRect(saved, tileSize, { expanded = false } = {}) {
@@ -474,6 +339,7 @@ export function normalizeSavedCardRect(saved, tileSize, { expanded = false } = {
         return { changed: true, value: null };
     }
 
+    const label = getLabelRect();
     const defaults = getTileDefaultRect(tier);
     if (!hasSize) {
         w = defaults.w;
@@ -483,17 +349,26 @@ export function normalizeSavedCardRect(saved, tileSize, { expanded = false } = {
     let customCompact = saved.customCompact === true;
     let changed = false;
 
-    if (expanded || isExpandedRect(w, h)) {
-        const minW = cellsToSpanW(2);
-        const minH = cellsToSpanH(2);
-        const nw = Math.max(minW, softSnapPx(w));
-        const nh = Math.max(minH, softSnapPx(h));
+    if (isAtLabelSize(w, h)) {
+        if (w !== label.w || h !== label.h) {
+            w = label.w;
+            h = label.h;
+            changed = true;
+        }
+        if (customCompact) {
+            customCompact = false;
+            changed = true;
+        }
+    } else if (expanded || isSpatialExpandedRect(w, h)) {
+        const spatialMin = resolveExpandedDefaultRect(tier);
+        const nw = Math.max(spatialMin.w, softSnapPx(w));
+        const nh = Math.max(spatialMin.h, softSnapPx(h));
         if (nw !== w || nh !== h) {
             w = nw;
             h = nh;
             changed = true;
         }
-        if (customCompact) {
+        if (customCompact && !isCustomTileRect(w, h, tier)) {
             customCompact = false;
             changed = true;
         }
@@ -596,7 +471,7 @@ function normalizeIdRectMap(map, liveIds, tileSizeById, stats, label) {
         if (!liveIds.has(id)) return;
         const tileSize = tileSizeById.get(id) || LEGACY_TILE_SIZE;
         const saved = next[id];
-        const expanded = saved && isExpandedRect(Number(saved.w), Number(saved.h));
+        const expanded = saved && isSpatialExpandedRect(Number(saved.w), Number(saved.h));
         const result = normalizeSavedCardRect(saved, tileSize, { expanded });
         if (result.value === null) {
             delete next[id];
@@ -622,7 +497,7 @@ function normalizeSizeOnlyMap(map, liveIds, tileSizeById, stats, label) {
         if (!liveIds.has(id)) return;
         const tileSize = tileSizeById.get(id) || LEGACY_TILE_SIZE;
         const saved = next[id];
-        const expanded = saved && isExpandedRect(Number(saved.w), Number(saved.h));
+        const expanded = saved && isSpatialExpandedRect(Number(saved.w), Number(saved.h));
         const result = normalizeSavedCardRect(saved, tileSize, { expanded });
         if (result.value === null) {
             delete next[id];
@@ -657,49 +532,6 @@ function pruneCategoryMap(map, catNames, stats, label) {
         }
     });
     if (changed) stats.touched.add(label);
-    return next;
-}
-
-function normalizeColumnNoteLayout(all, liveIds, tileSizeById, catNames, stats) {
-    if (!all || typeof all !== 'object') return all;
-    let changed = false;
-    const next = pruneCategoryMap({ ...all }, catNames, stats, 'matrix_column_note_layout');
-    Object.keys(next).forEach((cat) => {
-        const bucket = { ...next[cat] };
-        let bucketChanged = false;
-        Object.keys(bucket).forEach((id) => {
-            if (!liveIds.has(id)) {
-                delete bucket[id];
-                stats.removed += 1;
-                bucketChanged = true;
-                return;
-            }
-            const tileSize = tileSizeById.get(id) || LEGACY_TILE_SIZE;
-            const saved = bucket[id];
-            const expanded = saved && isExpandedRect(Number(saved.w), Number(saved.h));
-            const result = normalizeSavedCardRect(saved, tileSize, { expanded });
-            if (result.value === null) {
-                delete bucket[id];
-                stats.removed += 1;
-                bucketChanged = true;
-                return;
-            }
-            if (result.changed) {
-                bucket[id] = result.value;
-                stats.normalized += 1;
-                bucketChanged = true;
-            }
-        });
-        if (bucketChanged) {
-            next[cat] = bucket;
-            changed = true;
-        }
-        if (next[cat] && Object.keys(next[cat]).length === 0) {
-            delete next[cat];
-            changed = true;
-        }
-    });
-    if (changed) stats.touched.add('matrix_column_note_layout');
     return next;
 }
 
@@ -807,9 +639,9 @@ export function sanitizeLayoutSnapshot(snapshot, context) {
 
     next.freeformPositions = pruneIdMap(next.freeformPositions || {}, ctx.liveIds, stats, 'snapshot.freeformPositions');
     next.freeformSizes = normalizeSizeOnlyMap(next.freeformSizes || {}, ctx.liveIds, ctx.tileSizeById, stats, 'snapshot.freeformSizes');
-    next.columnPositions = pruneCategoryMap(next.columnPositions || {}, ctx.catNames, stats, 'snapshot.columnPositions');
-    next.columnSizes = pruneCategoryMap(next.columnSizes || {}, ctx.catNames, stats, 'snapshot.columnSizes');
-    next.columnNoteLayout = normalizeColumnNoteLayout(next.columnNoteLayout || {}, ctx.liveIds, ctx.tileSizeById, ctx.catNames, stats);
+    delete next.columnPositions;
+    delete next.columnSizes;
+    delete next.columnNoteLayout;
     delete next.columnsFloatPositions;
     delete next.columnsFloatSizes;
     next.gridLayout = normalizeIdRectMap(next.gridLayout || {}, ctx.liveIds, ctx.tileSizeById, stats, 'snapshot.gridLayout');

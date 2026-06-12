@@ -11,6 +11,11 @@
     --border-color: #323238;
     --desktop-drag-opacity: 0.55;
     --note-font-scale: 1;
+    --tile-cell-w: 96px;
+    --tile-cell-h: 56px;
+    --tile-label-h: 28px;
+    --tile-note-w: 246px;
+    --tile-note-h: 296px;
 
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background-color: var(--desktop-bg, var(--bg-primary));
@@ -1188,24 +1193,13 @@ html[data-show-note-lines="0"] .editor-note-lines {
 
 /* Display options — gradient desktop */
 html[data-desktop-gradient="1"] #app-canvas.view-freeform,
-html[data-desktop-gradient="1"] #app-canvas.view-grid,
-html[data-desktop-gradient="1"] #app-canvas.view-columns {
+html[data-desktop-gradient="1"] #app-canvas.view-grid {
     background-color: var(--desktop-bg, var(--bg-primary));
     background-image:
         radial-gradient(ellipse 120% 75% at 8% -15%, rgba(99, 102, 241, 0.16), transparent 58%),
         radial-gradient(ellipse 90% 65% at 100% 108%, rgba(139, 92, 246, 0.11), transparent 52%),
         radial-gradient(ellipse 55% 45% at 48% 42%, rgba(255, 255, 255, 0.035), transparent 72%),
         linear-gradient(168deg, rgba(255, 255, 255, 0.03) 0%, transparent 38%, rgba(0, 0, 0, 0.14) 100%);
-}
-
-html[data-desktop-gradient="1"] #app-canvas.view-columns.is-layout-active {
-    background-image:
-        radial-gradient(ellipse 120% 75% at 8% -15%, rgba(99, 102, 241, 0.16), transparent 58%),
-        radial-gradient(ellipse 90% 65% at 100% 108%, rgba(139, 92, 246, 0.11), transparent 52%),
-        linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-    background-size: auto, auto, 100px 60px, 100px 60px;
-    background-position: 0 0, 0 0, 1.25rem 0.65rem, 1.25rem 0.65rem;
 }
 
 .display-options-popover {
@@ -1589,27 +1583,6 @@ html[data-note-font="kalam"] .mini-card .step-text {
     color: var(--text-muted, #94a3b8);
 }
 
-#app-canvas.view-columns .column-empty-slot {
-    min-height: 56px;
-    border: 1px dashed rgba(255, 255, 255, 0.16);
-    border-radius: 6px;
-    box-sizing: border-box;
-}
-
-#app-canvas.view-columns .canvas-column.is-category-drop-target .column-empty-slot {
-    border-color: var(--accent);
-    background: rgba(99, 102, 241, 0.08);
-}
-
-#app-canvas.view-columns .mini-card.is-column-cat-dragging {
-    opacity: 0.55;
-    outline: 1px dashed var(--accent);
-}
-
-#app-canvas.view-columns .note-editor-toolbar .grab-handle--note-cat {
-    margin-right: 0.25rem;
-}
-
 .nav-drawer-section {
     display: flex;
     flex-direction: column;
@@ -1738,169 +1711,6 @@ html[data-note-font="kalam"] .mini-card .step-text {
     gap: 0.75rem !important;
 }
 
-/* CATEGORY COLUMNS VIEW - absolute layout with snap grid */
-#app-canvas.view-columns {
-    position: relative;
-    display: block !important;
-    min-height: 100%;
-    gap: 0 !important;
-    padding: 0.65rem 0.85rem 0.75rem 1.25rem;
-}
-
-#app-canvas.view-columns.is-layout-active {
-    background-image:
-        linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-    background-size: 100px 60px;
-    background-position: 1.25rem 0.65rem;
-}
-
-#app-canvas.view-columns .canvas-column {
-    position: absolute;
-    box-sizing: border-box;
-    background-color: var(--bg-surface);
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    padding: 0.3rem;
-    display: flex !important;
-    flex-direction: column;
-    gap: 0.25rem;
-    overflow: visible;
-    min-width: 196px;
-}
-
-#app-canvas.view-columns .column-notes {
-    position: relative;
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: visible;
-}
-
-#app-canvas.view-columns .column-notes .mini-card,
-#app-canvas.view-columns > .mini-card {
-    position: absolute;
-    box-sizing: border-box;
-    margin: 0 !important;
-    width: auto !important;
-    max-width: none !important;
-}
-
-#app-canvas.view-columns .column-notes .mini-card.compact,
-#app-canvas.view-columns > .mini-card.compact,
-#app-canvas.view-columns .column-notes .mini-card.tile-label,
-#app-canvas.view-columns .column-notes .mini-card.tile-compact,
-#app-canvas.view-columns .column-notes .mini-card.tile-note,
-#app-canvas.view-columns > .mini-card.tile-label,
-#app-canvas.view-columns > .mini-card.tile-compact,
-#app-canvas.view-columns > .mini-card.tile-note {
-    min-height: unset !important;
-    max-height: none !important;
-    overflow: hidden !important;
-}
-
-#app-canvas.view-columns .layout-settling {
-    transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease;
-}
-
-.column-header {
-    font-size: 0.8rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding-bottom: 0.4rem;
-    border-bottom: 1px solid var(--border-color);
-    margin-bottom: 0.25rem;
-    display: flex !important;
-    align-items: center !important;
-    gap: 0.2rem;
-    min-width: 0;
-    overflow: hidden;
-}
-
-.column-header .grab-handle--col {
-    flex-shrink: 0;
-}
-
-.column-title {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.column-header-actions {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2rem;
-    flex-shrink: 0;
-    margin-left: auto;
-}
-
-.column-resize-btn {
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.15rem;
-    height: 1.15rem;
-    padding: 0;
-    border: none;
-    border-radius: 3px;
-    background: transparent;
-    color: inherit;
-    opacity: 0.55;
-    transition: opacity 0.2s, background-color 0.2s;
-}
-
-.column-resize-btn:hover,
-.column-resize-btn.active {
-    opacity: 1;
-    background: rgba(255, 255, 255, 0.06);
-}
-
-.column-collapse-btn {
-    cursor: pointer;
-    font-size: 0.72rem;
-    line-height: 1;
-    padding: 0.1rem 0.25rem;
-    border: none;
-    border-radius: 3px;
-    background: transparent;
-    color: inherit;
-    opacity: 0.65;
-    transition: opacity 0.2s, background-color 0.2s;
-}
-
-.column-collapse-btn:hover {
-    opacity: 1;
-    background: rgba(255, 255, 255, 0.06);
-}
-
-.column-hide-btn {
-    cursor: pointer;
-    font-size: 0.9rem;
-    line-height: 1;
-    font-weight: bold;
-    opacity: 0.6;
-    flex-shrink: 0;
-    transition: opacity 0.2s;
-}
-
-.column-hide-btn:hover {
-    opacity: 1;
-}
-
-.canvas-column.is-collapsed > .column-notes {
-    display: none !important;
-    min-height: 0 !important;
-}
-
-.canvas-column.is-collapsed {
-    align-self: start;
-    overflow: hidden;
-}
-
 /* ==========================================================================
    4. INTERACTIVE OBJECT CARDS - COMPACT & SMALLER
    ========================================================================== */
@@ -1949,14 +1759,6 @@ html[data-note-font="kalam"] .mini-card .step-text {
     z-index: 25;
 }
 
-#app-canvas.view-columns .column-notes .mini-card.compact:hover,
-#app-canvas.view-columns .column-notes .mini-card.compact:focus-within,
-#app-canvas.view-columns .column-notes .mini-card.compact.is-column-resizing,
-#app-canvas.view-columns > .mini-card.compact:hover,
-#app-canvas.view-columns > .mini-card.compact:focus-within {
-    overflow: visible !important;
-}
-
 .mini-card.compact .mini-card-title {
     white-space: nowrap;
     overflow: hidden;
@@ -2002,10 +1804,8 @@ html[data-note-font="kalam"] .mini-card .step-text {
 
 .mini-card.tile-note {
     padding: 0.38rem 0.45rem !important;
-    width: 246px !important;
-    height: 296px !important;
-    min-height: 296px !important;
-    max-height: 296px !important;
+    min-width: var(--tile-note-w);
+    min-height: var(--tile-note-h);
     overflow: hidden !important;
     box-sizing: border-box;
     display: flex;
@@ -2296,8 +2096,7 @@ html[data-note-font="kalam"] .mini-card .step-text {
 }
 
 #app-canvas.view-freeform .mini-card.expanded .note-editor-toolbar .card-actions,
-#app-canvas.view-grid .mini-card.expanded .note-editor-toolbar .card-actions,
-#app-canvas.view-columns .mini-card.expanded .note-editor-toolbar .card-actions {
+#app-canvas.view-grid .mini-card.expanded .note-editor-toolbar .card-actions {
     opacity: 1;
     pointer-events: auto;
 }
@@ -4151,8 +3950,6 @@ textarea.form-input {
 }
 
 #app-canvas.view-freeform .mini-card.tile-note {
-    width: 246px !important;
-    height: 296px !important;
     display: flex;
     flex-direction: column;
 }
@@ -4210,8 +4007,7 @@ textarea.form-input {
 
 #app-canvas.view-freeform .mini-card.expanded .mini-card-meta,
 #app-canvas.view-freeform .mini-card.expanded .editor-meta-wrap,
-#app-canvas.view-grid .mini-card.expanded .editor-meta-wrap,
-#app-canvas.view-columns .mini-card.expanded .editor-meta-wrap {
+#app-canvas.view-grid .mini-card.expanded .editor-meta-wrap {
     flex: 0 0 auto;
     flex-shrink: 0;
     margin-top: auto;
@@ -4256,10 +4052,8 @@ textarea.form-input {
 /* Editable shell above chrome layer; resize handles stay on top via .ff-resize */
 #app-canvas.view-freeform .mini-card.expanded .editor-note-shell,
 #app-canvas.view-grid .mini-card.expanded .editor-note-shell,
-#app-canvas.view-columns .mini-card.expanded .editor-note-shell,
 #app-canvas.view-freeform .mini-card.is-editing-inline .editor-note-shell,
-#app-canvas.view-grid .mini-card.is-editing-inline .editor-note-shell,
-#app-canvas.view-columns .mini-card.is-editing-inline .editor-note-shell {
+#app-canvas.view-grid .mini-card.is-editing-inline .editor-note-shell {
     position: relative;
     z-index: 20;
     isolation: isolate;
@@ -4325,45 +4119,36 @@ textarea.form-input {
 
 #app-canvas.view-freeform .mini-card.expanded .ff-chrome,
 #app-canvas.view-grid .mini-card.expanded .ff-chrome,
-#app-canvas.view-columns .mini-card.expanded .ff-chrome,
 #app-canvas.view-freeform .mini-card.is-editing-inline .ff-chrome,
-#app-canvas.view-grid .mini-card.is-editing-inline .ff-chrome,
-#app-canvas.view-columns .mini-card.is-editing-inline .ff-chrome {
+#app-canvas.view-grid .mini-card.is-editing-inline .ff-chrome {
     pointer-events: none !important;
 }
 
 #app-canvas.view-freeform .mini-card.expanded .ff-drag-gutter,
 #app-canvas.view-grid .mini-card.expanded .ff-drag-gutter,
-#app-canvas.view-columns .mini-card.expanded .ff-drag-gutter,
 #app-canvas.view-freeform .mini-card.is-editing-inline .ff-drag-gutter,
-#app-canvas.view-grid .mini-card.is-editing-inline .ff-drag-gutter,
-#app-canvas.view-columns .mini-card.is-editing-inline .ff-drag-gutter {
+#app-canvas.view-grid .mini-card.is-editing-inline .ff-drag-gutter {
     pointer-events: none !important;
 }
 
 /* Expanded notes: disable all spatial chrome hit targets while editing inline */
 #app-canvas.view-freeform .mini-card.expanded .ff-resize-layer,
 #app-canvas.view-grid .mini-card.expanded .ff-resize-layer,
-#app-canvas.view-columns .mini-card.expanded .ff-resize-layer,
 #app-canvas.view-freeform .mini-card.is-editing-inline .ff-resize-layer,
-#app-canvas.view-grid .mini-card.is-editing-inline .ff-resize-layer,
-#app-canvas.view-columns .mini-card.is-editing-inline .ff-resize-layer {
+#app-canvas.view-grid .mini-card.is-editing-inline .ff-resize-layer {
     pointer-events: none !important;
 }
 
 #app-canvas.view-freeform .mini-card.expanded .ff-resize-layer .ff-resize,
 #app-canvas.view-grid .mini-card.expanded .ff-resize-layer .ff-resize,
-#app-canvas.view-columns .mini-card.expanded .ff-resize-layer .ff-resize,
 #app-canvas.view-freeform .mini-card.is-editing-inline .ff-resize-layer .ff-resize,
-#app-canvas.view-grid .mini-card.is-editing-inline .ff-resize-layer .ff-resize,
-#app-canvas.view-columns .mini-card.is-editing-inline .ff-resize-layer .ff-resize {
+#app-canvas.view-grid .mini-card.is-editing-inline .ff-resize-layer .ff-resize {
     z-index: 0;
     pointer-events: none !important;
 }
 
 #app-canvas.view-freeform .ff-resize-layer,
-#app-canvas.view-grid .ff-resize-layer,
-#app-canvas.view-columns .ff-resize-layer {
+#app-canvas.view-grid .ff-resize-layer {
     position: absolute;
     inset: 0;
     z-index: 10;
@@ -4372,8 +4157,7 @@ textarea.form-input {
 }
 
 #app-canvas.view-freeform .mini-card:not(.expanded) .ff-resize-layer .ff-resize,
-#app-canvas.view-grid .mini-card:not(.expanded) .ff-resize-layer .ff-resize,
-#app-canvas.view-columns .mini-card:not(.expanded) .ff-resize-layer .ff-resize {
+#app-canvas.view-grid .mini-card:not(.expanded) .ff-resize-layer .ff-resize {
     pointer-events: auto;
 }
 
@@ -4432,219 +4216,6 @@ textarea.form-input {
     transition: none !important;
 }
 
-#app-canvas.view-columns .canvas-column {
-    transition: transform 0.16s ease, opacity 0.16s ease, outline-color 0.16s ease;
-}
-
-#app-canvas.view-columns .column-header {
-    width: 100%;
-    box-sizing: border-box;
-    flex-shrink: 0;
-}
-
-#app-canvas.view-columns .grab-handle--note-cat {
-    cursor: grab;
-    flex-shrink: 0;
-    opacity: 0.55;
-    font-size: 0.65rem;
-    line-height: 1;
-    padding-right: 0.15rem;
-}
-
-#app-canvas.view-columns .grab-handle--note-cat:active {
-    cursor: grabbing;
-}
-
-#app-canvas.view-columns .grab-handle--note-cat[draggable="false"] {
-    opacity: 0.35;
-    cursor: not-allowed;
-}
-
-#app-canvas.view-columns .card-drag-zone {
-    cursor: grab;
-}
-
-#app-canvas.view-columns .card-drag-zone:active {
-    cursor: grabbing;
-}
-
-#app-canvas.view-columns .mini-card.expanded .editor-note-header.card-drag-zone {
-    cursor: grab;
-}
-
-#app-canvas.view-freeform .mini-card.expanded .editor-note-header.card-drag-zone {
-    cursor: grab;
-}
-
-#app-canvas.view-columns .mini-card.expanded {
-    display: flex !important;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.25rem;
-    overflow: hidden !important;
-    max-height: none !important;
-    min-height: unset !important;
-    height: unset !important;
-    grid-column: unset !important;
-    padding: 0.6rem !important;
-}
-
-#app-canvas.view-columns .column-notes .mini-card,
-#app-canvas.view-columns > .mini-card {
-    grid-column: unset !important;
-}
-
-#app-canvas.view-columns .mini-card.expanded .editor-note-shell {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    flex: 1 1 auto;
-}
-
-#app-canvas.view-columns .mini-card.expanded .editor-note-body {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-}
-
-#app-canvas.view-columns .mini-card.expanded .card-header,
-#app-canvas.view-columns .mini-card.expanded .note-editor-toolbar,
-#app-canvas.view-columns .mini-card.expanded .editor-note-header,
-#app-canvas.view-columns .mini-card.expanded .card-body,
-#app-canvas.view-columns .mini-card.expanded .editor-note-body,
-#app-canvas.view-columns .mini-card.expanded .card-content-preview {
-    min-width: 0;
-    max-width: 100%;
-}
-
-#app-canvas.view-columns .ff-chrome {
-    position: absolute;
-    inset: 0;
-    z-index: 4;
-    pointer-events: none;
-}
-
-#app-canvas.view-columns .ff-drag-gutter {
-    position: absolute;
-    pointer-events: auto;
-    cursor: grab;
-    z-index: 5;
-}
-
-#app-canvas.view-columns .ff-drag-gutter--edge {
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 12px;
-}
-
-#app-canvas.view-columns .ff-drag-gutter--top {
-    left: 12px;
-    right: 12px;
-    top: 0;
-    height: 10px;
-}
-
-#app-canvas.view-columns .mini-card:hover .ff-drag-gutter--edge,
-#app-canvas.view-columns .mini-card.is-column-dragging .ff-drag-gutter--edge {
-    background: linear-gradient(to right, rgba(255, 255, 255, 0.1), transparent);
-}
-
-#app-canvas.view-columns .mini-card:hover .ff-drag-gutter--top,
-#app-canvas.view-columns .mini-card.is-column-dragging .ff-drag-gutter--top {
-    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.1), transparent);
-}
-
-#app-canvas.view-columns .ff-resize {
-    position: absolute;
-}
-
-#app-canvas.view-columns .mini-card:not(.expanded):not(.is-editing-inline) .ff-resize {
-    pointer-events: auto;
-    z-index: 6;
-}
-
-#app-canvas.view-columns .ff-resize-n,
-#app-canvas.view-columns .ff-resize-s {
-    left: 8px;
-    right: 8px;
-    height: 8px;
-}
-
-#app-canvas.view-columns .ff-resize-e,
-#app-canvas.view-columns .ff-resize-w {
-    top: 8px;
-    bottom: 8px;
-    width: 8px;
-}
-
-#app-canvas.view-columns .ff-resize-n { top: 0; cursor: n-resize; }
-#app-canvas.view-columns .ff-resize-s { bottom: 0; cursor: s-resize; }
-#app-canvas.view-columns .ff-resize-e { right: 0; cursor: e-resize; }
-#app-canvas.view-columns .ff-resize-w { left: 0; cursor: w-resize; }
-#app-canvas.view-columns .ff-resize-nw { top: 0; left: 0; width: 12px; height: 12px; cursor: nw-resize; }
-#app-canvas.view-columns .ff-resize-ne { top: 0; right: 0; width: 12px; height: 12px; cursor: ne-resize; }
-#app-canvas.view-columns .ff-resize-sw { bottom: 0; left: 0; width: 12px; height: 12px; cursor: sw-resize; }
-#app-canvas.view-columns .ff-resize-se { bottom: 0; right: 0; width: 12px; height: 12px; cursor: se-resize; }
-
-#app-canvas.view-columns .mini-card.is-column-dragging,
-#app-canvas.view-columns .mini-card.is-column-resizing,
-#app-canvas.view-columns .canvas-column.is-canvas-col-dragging {
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
-    transform: none !important;
-    transition: none !important;
-    z-index: 20;
-}
-
-#app-canvas.view-columns .column-chrome {
-    position: absolute;
-    inset: 0;
-    z-index: 8;
-    pointer-events: none;
-}
-
-#app-canvas.view-columns .col-resize {
-    position: absolute;
-    pointer-events: auto;
-    z-index: 9;
-}
-
-#app-canvas.view-columns .col-resize-n,
-#app-canvas.view-columns .col-resize-s {
-    left: 8px;
-    right: 8px;
-    height: 8px;
-}
-
-#app-canvas.view-columns .col-resize-e,
-#app-canvas.view-columns .col-resize-w {
-    top: 8px;
-    bottom: 8px;
-    width: 8px;
-}
-
-#app-canvas.view-columns .col-resize-nw,
-#app-canvas.view-columns .col-resize-ne,
-#app-canvas.view-columns .col-resize-sw,
-#app-canvas.view-columns .col-resize-se {
-    width: 12px;
-    height: 12px;
-}
-
-#app-canvas.view-columns .col-resize-n { top: 0; cursor: n-resize; }
-#app-canvas.view-columns .col-resize-s { bottom: 0; cursor: s-resize; }
-#app-canvas.view-columns .col-resize-e { right: 0; cursor: e-resize; }
-#app-canvas.view-columns .col-resize-w { left: 0; cursor: w-resize; }
-#app-canvas.view-columns .col-resize-nw { top: 0; left: 0; cursor: nw-resize; }
-#app-canvas.view-columns .col-resize-ne { top: 0; right: 0; cursor: ne-resize; }
-#app-canvas.view-columns .col-resize-sw { bottom: 0; left: 0; cursor: sw-resize; }
-#app-canvas.view-columns .col-resize-se { bottom: 0; right: 0; cursor: se-resize; }
-
-#app-canvas.view-columns .canvas-column.is-column-resizing {
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35);
-    z-index: 22;
-}
-
 #app-canvas.view-list .mini-card {
     width: 96px !important;
 }
@@ -4665,17 +4236,6 @@ textarea.form-input {
 
 .category-name {
     max-width: 58px !important;
-}
-
-.canvas-column.is-category-dragging {
-    opacity: 0.62;
-    transform: scale(0.98);
-}
-
-.canvas-column.is-category-drop-target {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    background: #202026;
 }
 
 #editor-overlay {
@@ -5285,8 +4845,8 @@ textarea.form-input {
 }
 
 #app-canvas.view-grid .mini-card.tile-note {
-    min-width: 246px;
-    min-height: 296px;
+    min-width: var(--tile-note-w);
+    min-height: var(--tile-note-h);
 }
 
 #app-canvas.view-grid .mini-card.compact:hover,
@@ -5394,24 +4954,8 @@ textarea.form-input {
     transition: left 0.12s ease, top 0.12s ease, width 0.12s ease, height 0.12s ease;
 }
 
-#app-canvas.view-grid .mini-card.layout-preview,
-#app-canvas.view-columns .column-notes .mini-card.layout-preview {
+#app-canvas.view-grid .mini-card.layout-preview {
     opacity: 0.9;
-}
-
-#app-canvas.view-columns .column-notes.is-layout-active {
-    background-image:
-        linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-    background-size: 100px 60px;
-    background-position: 0 0;
-}
-
-#app-canvas.view-columns .column-notes .mini-card.is-column-dragging,
-#app-canvas.view-columns .column-notes .mini-card.is-column-resizing,
-#app-canvas.view-columns .column-notes .mini-card.is-column-front {
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
-    transition: none !important;
 }
 
 #app-canvas.view-grid:not(.is-grid-forcing) {
@@ -5446,8 +4990,7 @@ textarea.form-input {
 
 /* Zoomed-out: subtle snap grid on all spatial desktop views */
 #workspace-main.desktop-zoom-expanded #app-canvas.view-grid,
-#workspace-main.desktop-zoom-expanded #app-canvas.view-freeform,
-#workspace-main.desktop-zoom-expanded #app-canvas.view-columns {
+#workspace-main.desktop-zoom-expanded #app-canvas.view-freeform {
     background-image:
         linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
         linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
@@ -5485,12 +5028,7 @@ html[data-app-theme="black"] {
 }
 
 html[data-app-theme="black"][data-desktop-gradient="1"] #app-canvas.view-freeform,
-html[data-app-theme="black"][data-desktop-gradient="1"] #app-canvas.view-grid,
-html[data-app-theme="black"][data-desktop-gradient="1"] #app-canvas.view-columns {
-    background-image: none;
-}
-
-html[data-app-theme="black"][data-desktop-gradient="1"] #app-canvas.view-columns.is-layout-active {
+html[data-app-theme="black"][data-desktop-gradient="1"] #app-canvas.view-grid {
     background-image: none;
 }
 

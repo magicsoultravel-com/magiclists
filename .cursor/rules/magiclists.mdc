@@ -7,7 +7,7 @@ alwaysApply: true
 
 Vanilla JS ES modules + plain CSS. Client-only; data via `js/api.js` → localStorage. Entry: `index.html` → `js/app.js`. No React/TS/bundler unless asked.
 
-**Architecture:** `app.js` orchestrates; modules use `window` CustomEvents (`namespace:action`); item CRUD through `API` only. Tools: `js/tools/*.js` with `@tool` header + `init(mount)`; run `node scripts/build-tools-list.mjs` after tool changes.
+**Architecture:** `app.js` orchestrates; modules use `window` CustomEvents (`namespace:action`); item CRUD through `API` only. Tools: `js/tools/*.js` with `@tool` header + `init(mount)`; run `node scripts/build-tools-list.mjs` after tool changes. Board views: grid + freeform only (columns view removed).
 
 **Before editing:** grep/read existing patterns in the area you touch and its callers. Minimal diff; no dead code or half-migrations. Reuse `CARD_ICONS` / `ACTION_ICONS` from `ui.js`.
 

@@ -25,7 +25,6 @@ import {
 } from './noteBodyConversion.js';
 import { hasRichMarkup, linkifyPlainUrls, sanitizeHref, sanitizeRichHtml, stripRichText } from './richText.js';
 import {
-    migrateLegacyColumnsFloatStorage,
     safeSetItem,
     sanitizeLayoutSnapshot
 } from './layoutStorage.js';
@@ -43,6 +42,96 @@ import {
     setExpandedCardsMap,
     normalizeViewMode
 } from './viewSession.js';
+import {
+    FREEFORM_DEFAULT_W,
+    FREEFORM_DEFAULT_H,
+    FREEFORM_EXPANDED_W,
+    FREEFORM_MIN_W,
+    FREEFORM_MIN_H,
+    FREEFORM_EXPANDED_DEFAULT_H,
+    COLUMN_GRID_CELL_W,
+    COLUMN_GRID_CELL_H,
+    COLUMN_GRID_GAP,
+    COLUMN_MIN_COLS,
+    COLUMN_INNER_PAD,
+    COLUMN_MIN_INNER_W,
+    COLUMN_HEADER_APPROX_H,
+    COLUMN_MIN_CANVAS_H,
+    CANVAS_COL_GAP,
+    CANVAS_GRID_W,
+    COLUMN_STRIDE_X,
+    COLUMN_STRIDE_Y,
+    CANVAS_LAYOUT_ORIGIN,
+    CANVAS_PACK_GAP,
+    TILE_LABEL_H,
+    TILE_RESIZE_MIN_W,
+    TILE_RESIZE_MIN_H,
+    TILE_NOTE_W_CELLS,
+    TILE_NOTE_H_CELLS,
+    TILE_LABEL_COMPACT_H_UP,
+    TILE_LABEL_COMPACT_H_DOWN,
+    TILE_COMPACT_NOTE_W_UP,
+    TILE_COMPACT_NOTE_H_UP,
+    TILE_COMPACT_NOTE_W_DOWN,
+    TILE_COMPACT_NOTE_H_DOWN,
+    TILE_SIZES,
+    DEFAULT_TILE_SIZE,
+    LEGACY_TILE_SIZE,
+    normalizeTileSize,
+    resolveTileSize,
+    cellsToSpanW as geoCellsToSpanW,
+    cellsToSpanH as geoCellsToSpanH,
+    spanToCellsW as geoSpanToCellsW,
+    spanToCellsH as geoSpanToCellsH,
+    softSnapPx as geoSoftSnapPx,
+    getTileDefaultRect as geoGetTileDefaultRect,
+    getLabelRect,
+    isCustomTileRect as geoIsCustomTileRect,
+    isAtLabelSize,
+    resolveExpandedDefaultRect as geoResolveExpandedDefaultRect,
+    isAtOrBelowCompactZone as geoIsAtOrBelowCompactZone,
+    inferCollapsedTileTier as geoInferCollapsedTileTier,
+    resolveCollapsedTierRect as geoResolveCollapsedTierRect
+} from './tileGeometry.js';
+
+export {
+    FREEFORM_DEFAULT_W,
+    FREEFORM_DEFAULT_H,
+    FREEFORM_EXPANDED_W,
+    FREEFORM_MIN_W,
+    FREEFORM_MIN_H,
+    FREEFORM_EXPANDED_DEFAULT_H,
+    COLUMN_GRID_CELL_W,
+    COLUMN_GRID_CELL_H,
+    COLUMN_GRID_GAP,
+    COLUMN_MIN_COLS,
+    COLUMN_INNER_PAD,
+    COLUMN_MIN_INNER_W,
+    COLUMN_HEADER_APPROX_H,
+    COLUMN_MIN_CANVAS_H,
+    CANVAS_COL_GAP,
+    CANVAS_GRID_W,
+    COLUMN_STRIDE_X,
+    COLUMN_STRIDE_Y,
+    CANVAS_LAYOUT_ORIGIN,
+    CANVAS_PACK_GAP,
+    TILE_LABEL_H,
+    TILE_RESIZE_MIN_W,
+    TILE_RESIZE_MIN_H,
+    TILE_NOTE_W_CELLS,
+    TILE_NOTE_H_CELLS,
+    TILE_LABEL_COMPACT_H_UP,
+    TILE_LABEL_COMPACT_H_DOWN,
+    TILE_COMPACT_NOTE_W_UP,
+    TILE_COMPACT_NOTE_H_UP,
+    TILE_COMPACT_NOTE_W_DOWN,
+    TILE_COMPACT_NOTE_H_DOWN,
+    TILE_SIZES,
+    DEFAULT_TILE_SIZE,
+    LEGACY_TILE_SIZE,
+    normalizeTileSize,
+    resolveTileSize
+} from './tileGeometry.js';
 
 const UNCATEGORIZED_COLOR = '#64748b';
 
@@ -51,57 +140,11 @@ const EDITOR_ZOOM_MIN = 0.85;
 const EDITOR_ZOOM_MAX = 1.25;
 const EDITOR_ZOOM_STEP = 0.05;
 
-export const FREEFORM_DEFAULT_W = 96;
-export const FREEFORM_DEFAULT_H = 56;
-export const FREEFORM_EXPANDED_W = 196;
-export const FREEFORM_MIN_W = 72;
-export const FREEFORM_MIN_H = 56;
-export const FREEFORM_EXPANDED_DEFAULT_H = 120;
-
-export const COLUMN_GRID_CELL_W = FREEFORM_DEFAULT_W;
-export const COLUMN_GRID_CELL_H = FREEFORM_DEFAULT_H;
-export const COLUMN_GRID_GAP = 4;
-export const COLUMN_MIN_COLS = 2;
-export const COLUMN_INNER_PAD = 8;
-export const COLUMN_MIN_INNER_W = COLUMN_MIN_COLS * COLUMN_GRID_CELL_W + (COLUMN_MIN_COLS - 1) * COLUMN_GRID_GAP;
-export const COLUMN_HEADER_APPROX_H = 40;
-export const COLUMN_MIN_CANVAS_H = COLUMN_HEADER_APPROX_H + COLUMN_INNER_PAD + COLUMN_GRID_CELL_H;
-export const CANVAS_COL_GAP = 8;
-export const CANVAS_GRID_W = COLUMN_MIN_INNER_W + COLUMN_INNER_PAD * 2;
-export const COLUMN_STRIDE_X = COLUMN_GRID_CELL_W + COLUMN_GRID_GAP;
-export const COLUMN_STRIDE_Y = COLUMN_GRID_CELL_H + COLUMN_GRID_GAP;
-export const CANVAS_LAYOUT_ORIGIN = 16;
-export const CANVAS_PACK_GAP = COLUMN_GRID_GAP;
-const CANVAS_LAYOUT_ORDER_KEY = 'matrix_canvas_layout_order';
 const GRID_LAYOUT_KEY = 'matrix_grid_layout';
 const GRID_PINS_KEY = 'matrix_grid_pins';
 const GRID_EXPANDED_KEY = 'matrix_grid_expanded_id';
 const CARD_ANIM_MS = 300;
 const CARD_COMPACT_H = 56;
-
-export const TILE_LABEL_H = 28;
-export const TILE_RESIZE_MIN_W = COLUMN_GRID_CELL_W;
-export const TILE_RESIZE_MIN_H = TILE_LABEL_H;
-export const TILE_NOTE_W_CELLS = 2.5;
-export const TILE_NOTE_H_CELLS = 5;
-export const TILE_LABEL_COMPACT_H_UP = 40;
-export const TILE_LABEL_COMPACT_H_DOWN = 36;
-export const TILE_COMPACT_NOTE_W_UP = 104;
-export const TILE_COMPACT_NOTE_H_UP = 64;
-export const TILE_COMPACT_NOTE_W_DOWN = 100;
-export const TILE_COMPACT_NOTE_H_DOWN = 60;
-export const TILE_SIZES = ['label', 'compact', 'note'];
-export const DEFAULT_TILE_SIZE = 'note';
-export const LEGACY_TILE_SIZE = 'compact';
-
-export function normalizeTileSize(tileSize) {
-    if (tileSize === 'label' || tileSize === 'compact' || tileSize === 'note') return tileSize;
-    return LEGACY_TILE_SIZE;
-}
-
-export function resolveTileSize(item) {
-    return normalizeTileSize(item?.tileSize);
-}
 
 const cardAnimSessions = new WeakMap();
 
@@ -1109,27 +1152,48 @@ export const UI = {
         return boardItemsById.get(itemId) || null;
     },
 
+    getSavedLayoutRect(card, item) {
+        const id = item?.id || card?.dataset?.id;
+        if (!id) return null;
+        if (isSnapLayoutMode(activeBoardViewMode)) {
+            return this.getGridLayout()[id] || null;
+        }
+        return this.getFreeformSizes()[id] || null;
+    },
+
+    resolveSpatialExpandTarget(item, saved) {
+        const tileSize = resolveTileSize(item);
+        if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)
+            && geoIsCustomTileRect(saved.w, saved.h, tileSize)) {
+            return { w: saved.w, h: saved.h };
+        }
+        return geoResolveExpandedDefaultRect(tileSize, saved);
+    },
+
+    resolveCardRect(card, item, { mode } = {}) {
+        const pos = card ? this.readNoteRect(card) : { x: 0, y: 0, w: 0, h: 0 };
+        if (mode === 'label') {
+            const label = getLabelRect();
+            return { x: pos.x, y: pos.y, w: label.w, h: label.h };
+        }
+        const saved = this.getSavedLayoutRect(card, item);
+        if (mode === 'editor' && saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
+            return { x: pos.x, y: pos.y, w: saved.w, h: saved.h };
+        }
+        const target = this.resolveSpatialExpandTarget(item, saved);
+        return { x: pos.x, y: pos.y, w: target.w, h: target.h };
+    },
+
     isGridMultiCellSize(w, h) {
         return w > COLUMN_GRID_CELL_W + 2 || h > COLUMN_GRID_CELL_H + 2;
     },
 
     isCustomTileRect(w, h, tileSize = LEGACY_TILE_SIZE) {
-        const def = this.getTileDefaultRect(tileSize);
-        return Math.abs(w - def.w) > 2 || Math.abs(h - def.h) > 2;
+        return geoIsCustomTileRect(w, h, tileSize);
     },
 
     getTileDefaultRect(tileSize) {
-        const size = normalizeTileSize(tileSize);
-        if (size === 'label') {
-            return { w: COLUMN_GRID_CELL_W, h: TILE_LABEL_H };
-        }
-        if (size === 'note') {
-            return {
-                w: this.cellsToSpanW(TILE_NOTE_W_CELLS),
-                h: this.cellsToSpanH(TILE_NOTE_H_CELLS)
-            };
-        }
-        return { w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H };
+        return geoGetTileDefaultRect(tileSize);
     },
 
     getCardTileSize(card, item = null) {
@@ -1149,71 +1213,31 @@ export const UI = {
     },
 
     resolveExpandedDefaultRect(tileSize, saved = null) {
-        const tileDefault = this.getTileDefaultRect(tileSize);
-        return {
-            w: saved?.w ?? Math.max(FREEFORM_EXPANDED_W, tileDefault.w),
-            h: saved?.h ?? Math.max(FREEFORM_EXPANDED_DEFAULT_H, tileDefault.h)
-        };
+        return geoResolveExpandedDefaultRect(tileSize, saved);
     },
 
     shouldSnapPanelCollapse(w, h, tileSize = LEGACY_TILE_SIZE, { isExpanded = false } = {}) {
-        if (isExpanded) {
-            return w < this.cellsToSpanW(2) || h < this.cellsToSpanH(2);
-        }
-        const size = normalizeTileSize(tileSize);
-        if (size === 'note') {
-            const def = this.getTileDefaultRect('note');
-            return w < def.w || h < def.h;
-        }
-        return w < this.cellsToSpanW(2) || h < this.cellsToSpanH(2);
+        return isAtLabelSize(w, h);
     },
 
     isAtOrBelowCompactZone(w, h, tileSize = LEGACY_TILE_SIZE) {
-        const prev = normalizeTileSize(tileSize);
-        if (prev === 'note') {
-            return w <= TILE_COMPACT_NOTE_W_DOWN && h <= TILE_COMPACT_NOTE_H_DOWN;
-        }
-        return !(w > TILE_COMPACT_NOTE_W_UP || h > TILE_COMPACT_NOTE_H_UP);
+        return geoIsAtOrBelowCompactZone(w, h, tileSize);
     },
 
     usesTileTierBoard(card) {
-        return isDesktopCard(card)
-            || card?.dataset?.columnNote === '1'
-            || card?.dataset?.columnsFloat === '1';
+        return isDesktopCard(card);
     },
 
     softSnapPx(value) {
-        return Math.round(Math.max(0, value) / 2) * 2;
+        return geoSoftSnapPx(value);
     },
 
     inferCollapsedTileTier(w, h, prevTier = LEGACY_TILE_SIZE) {
-        const prev = normalizeTileSize(prevTier);
-        if (h <= TILE_LABEL_COMPACT_H_DOWN) return 'label';
-
-        let inNoteZone;
-        if (prev === 'note') {
-            inNoteZone = !(w <= TILE_COMPACT_NOTE_W_DOWN && h <= TILE_COMPACT_NOTE_H_DOWN);
-        } else {
-            inNoteZone = w > TILE_COMPACT_NOTE_W_UP || h > TILE_COMPACT_NOTE_H_UP;
-        }
-        if (inNoteZone) return 'note';
-
-        if (prev === 'label') {
-            return h > TILE_LABEL_COMPACT_H_UP ? 'compact' : 'label';
-        }
-        if (prev === 'compact') {
-            return h < TILE_LABEL_COMPACT_H_DOWN ? 'label' : 'compact';
-        }
-        return h < TILE_LABEL_COMPACT_H_DOWN ? 'label' : 'compact';
+        return geoInferCollapsedTileTier(w, h, prevTier);
     },
 
     resolveCollapsedTierRect(w, h, prevTier = LEGACY_TILE_SIZE) {
-        const tier = this.inferCollapsedTileTier(w, h, prevTier);
-        return {
-            tier,
-            w: this.softSnapPx(Math.max(TILE_RESIZE_MIN_W, w)),
-            h: this.softSnapPx(Math.max(TILE_RESIZE_MIN_H, h))
-        };
+        return geoResolveCollapsedTierRect(w, h, prevTier);
     },
 
     createTierResizeSession(card, item) {
@@ -1264,10 +1288,6 @@ export const UI = {
 
         if (isDesktopCard(card)) {
             this.finalizeDesktopCard(card);
-        } else if (card.dataset.columnNote === '1') {
-            this.finalizeColumnNote(card, card.dataset.category || targetCatName);
-        } else if (card.dataset.columnsFloat === '1') {
-            this.finalizeColumnsFloat(card);
         }
     },
 
@@ -1319,65 +1339,22 @@ export const UI = {
         const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
         if (isDesktopCard(card)) {
             setExpandedCard(activeBoardViewMode, item.id, false);
-        } else if (card.dataset.columnNote === '1') {
-            setExpandedCard('columns', item.id, false);
         }
         this.cancelCardAnimation(card);
         card.classList.remove('expanded', 'card-state-changing', 'card-animating');
         this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
         if (isDesktopCard(card)) {
             this.finalizeDesktopCard(card);
-        } else if (card.dataset.columnNote === '1') {
-            const cat = card.dataset.category || targetCatName;
-            this.finalizeColumnNote(card, cat);
         }
     },
 
     collapseLegacyExpandedTile(card, item, ctx = {}) {
         if (!card?.classList.contains('expanded')) return false;
 
-        const activeCategories = ctx.activeCategories ?? readStoredCategories();
-        const targetCatName = ctx.targetCatName ?? this.getCardRenderContext(item, activeCategories).targetCatName;
-        const categoryColor = ctx.categoryColor ?? this.getCardRenderContext(item, activeCategories).categoryColor;
-
-        if (isDesktopCard(card)) {
-            setExpandedCard(activeBoardViewMode, item.id, false);
-        } else if (card.dataset.columnNote === '1') {
-            setExpandedCard('columns', item.id, false);
-        } else if (card.dataset.columnsFloat === '1') {
-            setExpandedCard('columns', item.id, false);
-        }
-
         this.collapseSnapPanelCard(card, item);
 
-        if (isDesktopCard(card)) {
-            if (isSnapLayoutMode(activeBoardViewMode)) {
-                this.applyDesktopSize(card);
-                const canvas = card.closest('#app-canvas');
-                if (canvas?.classList.contains('view-grid')) {
-                    this.finalizeDesktopCard(card);
-                    requestAnimationFrame(() => this.reflowGridBoard(canvas, item.id, { animate: true }));
-                }
-            } else {
-                this.applyFreeformSize(card);
-                this.finalizeDesktopCard(card);
-            }
-        } else if (card.dataset.columnNote === '1') {
-            const cat = card.dataset.category || targetCatName;
-            this.finalizeColumnNote(card, cat);
-            const columnNotes = card.closest('.column-notes');
-            if (columnNotes) {
-                requestAnimationFrame(() => this.reflowColumnNotesPanel(columnNotes, item.id, { animate: true }));
-            }
-        } else if (card.dataset.columnsFloat === '1') {
-            this.finalizeColumnsFloat(card);
-            const canvas = card.closest('#app-canvas');
-            if (canvas?.classList.contains('view-columns')) {
-                requestAnimationFrame(() => {
-                    this.reflowCanvasFromOrderEntry(canvas, { type: 'float', id: item.id }, { animate: true });
-                });
-            }
-        }
+        const labelRect = this.resolveCardRect(card, item, { mode: 'label' });
+        this.applyTileTierRect(card, item, 'label', labelRect, ctx);
 
         return true;
     },
@@ -1387,23 +1364,12 @@ export const UI = {
         const id = item?.id || card.dataset.id;
         if (!id) return;
 
-        if (isDesktopCard(card)) {
-            if (isSnapLayoutMode(activeBoardViewMode)) {
-                this.saveGridLayout(id, rect, { customCompact });
-            } else {
-                this.saveFreeformSize(id, rect.w, rect.h, { customCompact });
-                this.saveFreeformPosition(id, rect.x, rect.y);
-            }
-            return;
-        }
-        if (card.dataset.columnNote === '1') {
-            const cat = card.dataset.category;
-            if (cat) this.saveColumnNoteLayout(cat, id, rect, { customCompact });
-            return;
-        }
-        if (card.dataset.columnsFloat === '1') {
-            this.saveColumnsFloatPosition(id, rect.x, rect.y);
-            this.saveColumnsFloatSize(id, rect.w, rect.h, { customCompact });
+        if (!isDesktopCard(card)) return;
+        if (isSnapLayoutMode(activeBoardViewMode)) {
+            this.saveGridLayout(id, rect, { customCompact });
+        } else {
+            this.saveFreeformSize(id, rect.w, rect.h, { customCompact });
+            this.saveFreeformPosition(id, rect.x, rect.y);
         }
     },
 
@@ -1425,28 +1391,12 @@ export const UI = {
         this.applyNoteRect(card, rect, { settling: false });
         this.saveTileLayoutFromCard(card, item, rect, normalizedTier);
 
-        if (isDesktopCard(card)) {
-            this.finalizeDesktopCard(card);
-            if (isSnapLayoutMode(activeBoardViewMode)) {
-                const canvas = card.closest('#app-canvas');
-                if (canvas?.classList.contains('view-grid')) {
-                    requestAnimationFrame(() => this.reflowGridBoard(canvas, item.id, { animate: true }));
-                }
-            }
-        } else if (card.dataset.columnNote === '1') {
-            const cat = card.dataset.category || targetCatName;
-            this.finalizeColumnNote(card, cat);
-            const columnNotes = card.closest('.column-notes');
-            if (columnNotes) {
-                requestAnimationFrame(() => this.reflowColumnNotesPanel(columnNotes, item.id, { animate: true }));
-            }
-        } else if (card.dataset.columnsFloat === '1') {
-            this.finalizeColumnsFloat(card);
+        if (!isDesktopCard(card)) return;
+        this.finalizeDesktopCard(card);
+        if (isSnapLayoutMode(activeBoardViewMode)) {
             const canvas = card.closest('#app-canvas');
-            if (canvas?.classList.contains('view-columns')) {
-                requestAnimationFrame(() => {
-                    this.reflowCanvasFromOrderEntry(canvas, { type: 'float', id: item.id }, { animate: true });
-                });
+            if (canvas?.classList.contains('view-grid')) {
+                requestAnimationFrame(() => this.reflowGridBoard(canvas, item.id, { animate: true }));
             }
         }
     },
@@ -1460,18 +1410,14 @@ export const UI = {
         if (this.collapseLegacyExpandedTile(card, item, ctx)) return;
 
         const pos = this.readNoteRect(card);
-        const tileSize = this.getCardTileSize(card, item);
-        const atOrBelow = this.isAtOrBelowCompactZone(pos.w, pos.h, tileSize);
-        const nextTier = atOrBelow ? 'note' : 'compact';
-        const defaults = this.getTileDefaultRect(nextTier);
-        const rect = {
-            x: pos.x,
-            y: pos.y,
-            w: defaults.w,
-            h: defaults.h
-        };
-
-        this.applyTileTierRect(card, item, nextTier, rect, ctx);
+        if (isAtLabelSize(pos.w, pos.h)) {
+            const rect = this.resolveCardRect(card, item, { mode: 'toggleTarget' });
+            const tier = resolveTileSize(item) === 'label' ? DEFAULT_TILE_SIZE : resolveTileSize(item);
+            this.applyTileTierRect(card, item, tier, rect, ctx);
+        } else {
+            const labelRect = this.resolveCardRect(card, item, { mode: 'label' });
+            this.applyTileTierRect(card, item, 'label', labelRect, ctx);
+        }
     },
 
     gridBoardRectForCard(card, savedRect, isExpanded) {
@@ -1493,10 +1439,6 @@ export const UI = {
         return this.gridTileRect(this.getCardTileSize(card, item), base, savedRect);
     },
 
-    columnNoteRectForCard(card, savedRect, isExpanded) {
-        return this.gridBoardRectForCard(card, savedRect, isExpanded);
-    },
-
     gridTileRect(tileSize, base, saved) {
         const source = saved && Number.isFinite(saved.w) ? saved : base;
         if (source?.customCompact && this.isCustomTileRect(source.w, source.h, tileSize)) {
@@ -1516,8 +1458,7 @@ export const UI = {
 
     syncCardDraggable(card) {
         const hasSession = !!localStorage.getItem('admin_token');
-        const isColumnLayout = card.dataset.columnNote === '1' || card.dataset.columnsFloat === '1';
-        if (!hasSession || isDesktopCard(card) || isColumnLayout || card.classList.contains('expanded')) {
+        if (!hasSession || isDesktopCard(card) || card.classList.contains('expanded')) {
             card.removeAttribute('draggable');
             return;
         }
@@ -1529,9 +1470,6 @@ export const UI = {
     },
 
     freeformDragZoneClass(card) {
-        if (card.dataset.columnNote === '1' || card.dataset.columnsFloat === '1') {
-            return ' card-drag-zone';
-        }
         return isDesktopCard(card) ? ' card-drag-zone' : '';
     },
 
@@ -1570,13 +1508,7 @@ export const UI = {
         this.applyItemCardTheme(card, item);
         card.style.borderLeftColor = categoryColor;
 
-        if (card.dataset.columnNote === '1') {
-            this.finalizeColumnNote(card, card.dataset.category || targetCatName);
-            const notesEl = card.closest('.column-notes');
-            if (notesEl) requestAnimationFrame(() => this.autoArrangeColumnNotes(notesEl, { animate: false }));
-        } else if (card.dataset.columnsFloat === '1') {
-            this.finalizeColumnsFloat(card);
-        } else if (isDesktopCard(card)) {
+        if (isDesktopCard(card)) {
             this.finalizeDesktopCard(card);
         }
 
@@ -1648,9 +1580,17 @@ export const UI = {
                             { maxW: packW, maxH }
                         );
                     } else {
-                        const tileDefaults = this.getTileDefaultRect(resolveTileSize(item));
-                        const w = isExpanded ? this.cellsToSpanW(2) : tileDefaults.w;
-                        const h = isExpanded ? this.cellsToSpanH(2) : tileDefaults.h;
+                        const tileDefaults = geoGetTileDefaultRect(resolveTileSize(item));
+                        let w;
+                        let h;
+                        if (isExpanded) {
+                            const target = this.resolveSpatialExpandTarget(item, null);
+                            w = target.w;
+                            h = target.h;
+                        } else {
+                            w = tileDefaults.w;
+                            h = tileDefaults.h;
+                        }
                         rect = this.findFirstCanvasSlot(w, h, placed, packW + origin * 2, { origin });
                     }
 
@@ -1688,113 +1628,6 @@ export const UI = {
         this.restoreScrollState(canvas, scrollState);
     },
 
-    createColumnStructure(categoryName, catColor, columnItems, activeCategories) {
-        const colWrapper = document.createElement('div');
-        colWrapper.classList.add('canvas-column');
-        colWrapper.dataset.category = categoryName;
-        colWrapper.style.borderTop = `3px solid ${catColor}`;
-
-        const isCollapsed = this.isCategoryCollapsed(categoryName);
-        if (isCollapsed) colWrapper.classList.add('is-collapsed');
-
-        const hideControl = isUncategorizedCategory(categoryName)
-            ? ''
-            : '<span class="column-hide-btn" title="Hide this category">×</span>';
-        colWrapper.innerHTML = `
-            <div class="column-header" data-category="${this.escapeAttr(categoryName)}" style="color: ${catColor};">
-                <span class="grab-handle grab-handle--col" title="Drag to reposition category">⋮⋮</span>
-                <span class="column-title">${this.escapeHTML(categoryName)} (${columnItems.length})</span>
-                <span class="column-header-actions">
-                    <button type="button" class="column-collapse-btn" title="${isCollapsed ? 'Expand category' : 'Collapse category'}" aria-label="${isCollapsed ? 'Expand category' : 'Collapse category'}">${isCollapsed ? '▶' : '▼'}</button>
-                    ${hideControl}
-                </span>
-            </div>
-        `;
-
-        this.setupColumnResizeChrome(colWrapper);
-        this.applySavedColumnSize(colWrapper);
-
-        const collapseBtn = colWrapper.querySelector('.column-collapse-btn');
-        collapseBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const nowCollapsed = this.toggleCategoryCollapsed(categoryName);
-            colWrapper.classList.toggle('is-collapsed', nowCollapsed);
-            collapseBtn.textContent = nowCollapsed ? '▶' : '▼';
-            collapseBtn.title = nowCollapsed ? 'Expand category' : 'Collapse category';
-            collapseBtn.setAttribute('aria-label', collapseBtn.title);
-            const notesEl = colWrapper.querySelector('.column-notes');
-            if (!nowCollapsed && notesEl) {
-                const itemIds = [...notesEl.querySelectorAll('.mini-card')]
-                    .map((c) => c.dataset.id)
-                    .filter(Boolean);
-                this.autoPackColumnNotes(notesEl, itemIds, categoryName);
-                this.autoArrangeColumnNotes(notesEl, { animate: true });
-            } else {
-                this.resizeColumnToFit(colWrapper, { animate: true });
-            }
-            const canvas = document.getElementById('app-canvas');
-            if (canvas?.classList.contains('view-columns')) {
-                this.reflowCanvasFromOrderEntry(
-                    canvas,
-                    { type: 'category', name: categoryName },
-                    { animate: true }
-                );
-            }
-        });
-
-        const hideBtn = colWrapper.querySelector('.column-hide-btn');
-        if (hideBtn) {
-            hideBtn.addEventListener('mouseenter', () => { hideBtn.style.opacity = '1'; });
-            hideBtn.addEventListener('mouseleave', () => { hideBtn.style.opacity = '0.6'; });
-            hideBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                let currentHidden = JSON.parse(localStorage.getItem('matrix_hidden_categories') || '[]');
-                if (!currentHidden.includes(categoryName)) {
-                    currentHidden.push(categoryName);
-                    localStorage.setItem('matrix_hidden_categories', JSON.stringify(currentHidden));
-                    window.location.reload();
-                }
-            });
-        }
-
-        const notesHost = document.createElement('div');
-        notesHost.className = 'column-notes';
-        notesHost.dataset.category = categoryName;
-
-        columnItems.forEach(item => {
-            const card = this.createCardComponent(item, activeCategories, {
-                columnNote: true,
-                categoryName: isUncategorizedCategory(categoryName) ? '' : categoryName
-            });
-            this.finalizeColumnNote(card, categoryName);
-            notesHost.appendChild(card);
-        });
-
-        if (!isCollapsed && columnItems.length === 0) {
-            const slot = document.createElement('div');
-            slot.className = 'column-empty-slot';
-            slot.setAttribute('aria-hidden', 'true');
-            notesHost.appendChild(slot);
-        }
-
-        colWrapper.appendChild(notesHost);
-        if (!isCollapsed) {
-            requestAnimationFrame(() => this.resizeColumnToFit(colWrapper, { animate: false }));
-        }
-        return colWrapper;
-    },
-
-    buildCategoryDragHandleHtml(card) {
-        if (card?.dataset?.columnNote !== '1') return '';
-        const loggedIn = !!localStorage.getItem('admin_token');
-        const title = loggedIn ? 'Drag to another category' : 'Login to move between categories';
-        return `<span class="grab-handle grab-handle--note-cat" draggable="${loggedIn ? 'true' : 'false'}" title="${this.escapeAttr(title)}" aria-label="${this.escapeAttr(title)}">⋮⋮</span>`;
-    },
-
-    migrateColumnsFloatLayouts() {
-        migrateLegacyColumnsFloatStorage();
-    },
-
     buildNoteQuickActionsHtml(item, {
         surface = 'board',
         isExpanded = false,
@@ -1814,9 +1647,9 @@ export const UI = {
             expandTitle = 'Show on board';
             lastIcon = CARD_ICONS.collapse;
         } else if (spatialTile) {
-            const atOrBelow = legacyExpanded || this.isAtOrBelowCompactZone(tileW, tileH, tileSize);
-            expandTitle = atOrBelow ? 'Expand to note' : 'Collapse to compact';
-            lastIcon = atOrBelow ? CARD_ICONS.expand : CARD_ICONS.collapse;
+            const atLabel = legacyExpanded || isAtLabelSize(tileW, tileH);
+            expandTitle = atLabel ? 'Expand' : 'Collapse to label';
+            lastIcon = atLabel ? CARD_ICONS.expand : CARD_ICONS.collapse;
         } else {
             expandTitle = isExpanded ? 'Collapse note' : 'Expand note';
             lastIcon = isExpanded ? CARD_ICONS.collapse : CARD_ICONS.expand;
@@ -1950,9 +1783,7 @@ export const UI = {
 
     getCardActionsOptions(card) {
         const hasSession = !!localStorage.getItem('admin_token');
-        const spatial = isDesktopCard(card)
-            || card?.dataset?.columnNote === '1'
-            || card?.dataset?.columnsFloat === '1';
+        const spatial = isDesktopCard(card);
         const opts = {
             pinned: this.isBoardPinned(card?.dataset?.id),
             showDrag: hasSession && spatial
@@ -2170,28 +2001,6 @@ export const UI = {
         applyCardTheme(card, color);
     },
 
-    setupColumnResizeChrome(columnEl) {
-        if (!columnEl?.classList.contains('canvas-column')) return;
-        let chrome = columnEl.querySelector('.column-chrome');
-        if (!chrome) {
-            chrome = document.createElement('div');
-            chrome.className = 'column-chrome';
-            columnEl.appendChild(chrome);
-        }
-        if (!chrome.querySelector('.col-resize-se')) {
-            chrome.insertAdjacentHTML('beforeend', `
-                <span class="col-resize col-resize-n" data-axis="n" aria-hidden="true"></span>
-                <span class="col-resize col-resize-s" data-axis="s" aria-hidden="true"></span>
-                <span class="col-resize col-resize-e" data-axis="e" aria-hidden="true"></span>
-                <span class="col-resize col-resize-w" data-axis="w" aria-hidden="true"></span>
-                <span class="col-resize col-resize-nw" data-axis="nw" aria-hidden="true"></span>
-                <span class="col-resize col-resize-ne" data-axis="ne" aria-hidden="true"></span>
-                <span class="col-resize col-resize-sw" data-axis="sw" aria-hidden="true"></span>
-                <span class="col-resize col-resize-se" data-axis="se" aria-hidden="true"></span>
-            `);
-        }
-    },
-
     setupFreeformChrome(card) {
         const shell = card.querySelector('.editor-note-shell');
 
@@ -2300,14 +2109,14 @@ export const UI = {
         let w;
         let h;
         if (isExpanded) {
-            const expanded = this.resolveExpandedDefaultRect(tileSize, saved);
-            w = expanded.w;
-            h = expanded.h;
-        } else if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) {
+            const editorRect = this.resolveCardRect(card, item, { mode: 'editor' });
+            w = editorRect.w;
+            h = editorRect.h;
+        } else if (saved?.customCompact && geoIsCustomTileRect(saved.w, saved.h, tileSize)) {
             w = saved.w;
             h = saved.h;
         } else {
-            const defaults = this.getTileDefaultRect(tileSize);
+            const defaults = geoGetTileDefaultRect(tileSize);
             w = defaults.w;
             h = defaults.h;
         }
@@ -2390,9 +2199,7 @@ export const UI = {
     },
 
     usesAnimPixelLock(card) {
-        return isDesktopCard(card)
-            || card.dataset.columnNote === '1'
-            || card.dataset.columnsFloat === '1';
+        return isDesktopCard(card);
     },
 
     isListLayoutCard(card) {
@@ -2451,15 +2258,6 @@ export const UI = {
             }
             return tileDefaultW;
         }
-        if (card.dataset.columnsFloat === '1') return tileDefaultW;
-        if (card.dataset.columnNote === '1' && id) {
-            const cat = card.dataset.category;
-            const saved = cat ? this.getColumnNoteLayout()[cat]?.[id] : null;
-            if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) {
-                return saved.w;
-            }
-            return tileDefaultW;
-        }
         if (this.isListLayoutCard(card)) return tileDefaultW;
         return Math.round(this.readNoteRect(card).w) || tileDefaultW;
     },
@@ -2471,22 +2269,10 @@ export const UI = {
             if (isSnapLayoutMode(activeBoardViewMode)) {
                 const saved = this.getGridLayout()[id];
                 if (saved && Number.isFinite(saved.w)) return saved.w;
-                return this.resolveExpandedDefaultRect(tileSize).w;
+                return geoResolveExpandedDefaultRect(tileSize).w;
             }
             const saved = this.getFreeformSizes()[id];
-            if (saved?.customCompact) return FREEFORM_EXPANDED_W;
-            return this.resolveExpandedDefaultRect(tileSize, saved).w;
-        }
-        if (card.dataset.columnsFloat === '1' && id) {
-            const saved = this.getColumnsFloatSizes()[id];
-            if (saved?.customCompact) return FREEFORM_EXPANDED_W;
-            return this.resolveExpandedDefaultRect(tileSize, saved).w;
-        }
-        if (card.dataset.columnNote === '1' && id) {
-            const cat = card.dataset.category;
-            const saved = cat ? this.getColumnNoteLayout()[cat]?.[id] : null;
-            if (saved?.w) return saved.w;
-            return this.resolveExpandedDefaultRect(tileSize, saved).w;
+            return geoResolveExpandedDefaultRect(tileSize, saved).w;
         }
         if (this.isListLayoutCard(card)) return FREEFORM_EXPANDED_W;
         return Math.round(this.readNoteRect(card).w) || FREEFORM_EXPANDED_W;
@@ -2505,20 +2291,8 @@ export const UI = {
             );
             return compact.h;
         }
-        if (card.dataset.columnNote === '1') {
-            const cat = card.dataset.category;
-            const saved = cat ? this.getColumnNoteLayout()[cat]?.[card.dataset.id] : null;
-            const compact = this.gridTileRect(
-                tileSize,
-                { x: 0, y: 0, w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H },
-                saved
-            );
-            return compact.h;
-        }
-        if (isDesktopCard(card) || card.dataset.columnsFloat === '1') {
-            const saved = isDesktopCard(card)
-                ? this.getFreeformSizes()[card.dataset.id]
-                : this.getColumnsFloatSizes()[card.dataset.id];
+        if (isDesktopCard(card)) {
+            const saved = this.getFreeformSizes()[card.dataset.id];
             if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) return saved.h;
             return tileDefaultH;
         }
@@ -2537,20 +2311,11 @@ export const UI = {
                 const saved = this.getGridLayout()[id];
                 h = saved && Number.isFinite(saved.h)
                     ? saved.h
-                    : this.resolveExpandedDefaultRect(tileSize).h;
+                    : geoResolveExpandedDefaultRect(tileSize).h;
             } else {
                 const saved = this.getFreeformSizes()[id];
-                if (saved?.customCompact) h = FREEFORM_EXPANDED_DEFAULT_H;
-                else h = this.resolveExpandedDefaultRect(tileSize, saved).h;
+                h = geoResolveExpandedDefaultRect(tileSize, saved).h;
             }
-        } else if (card.dataset.columnsFloat === '1') {
-            const saved = this.getColumnsFloatSizes()[id];
-            if (saved?.customCompact) h = FREEFORM_EXPANDED_DEFAULT_H;
-            else h = this.resolveExpandedDefaultRect(tileSize, saved).h;
-        } else if (card.dataset.columnNote === '1') {
-            const cat = card.dataset.category;
-            const saved = cat ? this.getColumnNoteLayout()[cat]?.[id] : null;
-            h = saved?.h ?? this.resolveExpandedDefaultRect(tileSize, saved).h;
         } else {
             h = this.measureExpandedCardHeight(card, w);
         }
@@ -2625,31 +2390,6 @@ export const UI = {
             card.style.removeProperty('max-height');
         };
 
-        const reflowColumnNote = () => {
-            if (card.dataset.columnNote !== '1') return;
-            const notesEl = card.closest('.column-notes');
-            if (!notesEl) return;
-            const cat = card.dataset.category || targetCatName;
-            this.finalizeColumnNote(card, cat);
-            requestAnimationFrame(() => {
-                this.autoArrangeColumnNotes(notesEl, { animate: true });
-                const canvas = document.getElementById('app-canvas');
-                if (canvas?.classList.contains('view-columns') && cat) {
-                    this.reflowCanvasFromOrderEntry(canvas, { type: 'category', name: cat }, { animate: true });
-                }
-            });
-        };
-
-        const reflowColumnsFloat = () => {
-            if (card.dataset.columnsFloat !== '1') return;
-            const canvas = document.getElementById('app-canvas');
-            if (!canvas?.classList.contains('view-columns')) return;
-            this.finalizeColumnsFloat(card);
-            requestAnimationFrame(() => {
-                this.reflowCanvasFromOrderEntry(canvas, { type: 'float', id: card.dataset.id }, { animate: true });
-            });
-        };
-
         const reflowGridBoard = () => {
             if (options.skipGridReflow) return;
             if (!snapLayout) return;
@@ -2667,8 +2407,6 @@ export const UI = {
                 else this.applyFreeformSize(card);
             }
             clearListAnimDimensions();
-            reflowColumnNote();
-            reflowColumnsFloat();
             reflowGridBoard();
             this.cleanupCardAnimation(card);
             if (isDesktop) this.syncSpatialChromeForEditing(card);
@@ -2686,8 +2424,6 @@ export const UI = {
                 }
             }
             clearListAnimDimensions();
-            reflowColumnNote();
-            reflowColumnsFloat();
             this.cleanupCardAnimation(card);
         };
 
@@ -2755,80 +2491,6 @@ export const UI = {
                 });
             });
         });
-    },
-
-    updateColumnsFloatCard(card, item, { expanded, dimensions = null } = {}) {
-        if (card.dataset.columnsFloat !== '1') return;
-        setExpandedCard('columns', item.id, expanded);
-
-        const activeCategories = readStoredCategories();
-        const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
-
-        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, {
-            skipAnimation: dimensions != null
-        });
-
-        if (dimensions) {
-            this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
-        } else if (expanded) {
-            this.finalizeColumnsFloat(card);
-        }
-    },
-
-    updateColumnNoteCard(card, item, { expanded, dimensions = null, deferReflow = false } = {}) {
-        if (card.dataset.columnNote !== '1') return;
-
-        const columnNotes = card.closest('.column-notes');
-        const canvas = card.closest('#app-canvas');
-        const activeCategories = readStoredCategories();
-        const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
-
-        if (expanded && columnNotes) {
-            columnNotes.querySelectorAll('.mini-card[data-column-note="1"].expanded').forEach((other) => {
-                if (other === card) return;
-                const otherItem = this.resolveBoardItem(other.dataset.id);
-                if (otherItem) {
-                    this.updateColumnNoteCard(other, otherItem, { expanded: false, deferReflow: true });
-                }
-            });
-        }
-
-        setExpandedCard('columns', item.id, expanded);
-
-        this.applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, {
-            skipAnimation: dimensions != null
-        });
-
-        if (dimensions) {
-            this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
-        } else if (!expanded) {
-            const pos = this.readNoteRect(card);
-            const cat = card.dataset.category || targetCatName;
-            const saved = cat ? this.getColumnNoteLayout()[cat]?.[item.id] : null;
-            const compact = this.gridTileRect(resolveTileSize(item), pos, saved);
-            const compactRect = { x: pos.x, y: pos.y, w: compact.w, h: compact.h };
-            this.applyNoteRect(card, compactRect, { settling: false });
-            if (cat) {
-                this.saveColumnNoteLayout(cat, item.id, compactRect, {
-                    customCompact: this.isCustomTileRect(compactRect.w, compactRect.h, resolveTileSize(item))
-                });
-            }
-        }
-
-        if (dimensions) {
-            const cat = card.dataset.category || targetCatName;
-            if (cat) {
-                this.saveColumnNoteLayout(cat, item.id, this.readNoteRect(card));
-            }
-        }
-
-        if (columnNotes && canvas?.classList.contains('view-columns') && !deferReflow) {
-            const cat = card.dataset.category || targetCatName;
-            this.finalizeColumnNote(card, cat);
-            requestAnimationFrame(() => {
-                this.reflowColumnNotesPanel(columnNotes, item.id, { animate: true });
-            });
-        }
     },
 
     toggleCardExpanded(card, item, ctx) {
@@ -3161,14 +2823,6 @@ export const UI = {
 
         if (isDesktopCard(card)) {
             this.updateDesktopCard(card, item, { expanded: false });
-            return;
-        }
-        if (card.dataset.columnNote === '1') {
-            this.updateColumnNoteCard(card, item, { expanded: false });
-            return;
-        }
-        if (card.dataset.columnsFloat === '1') {
-            this.updateColumnsFloatCard(card, item, { expanded: false });
             return;
         }
 
@@ -3671,12 +3325,6 @@ export const UI = {
         this.attachCardActions(card, item, ctx);
         this.bindCollapsedPreviewExpand(card, item, ctx);
         this.finalizeDesktopCard(card);
-        if (card.dataset.columnNote === '1') {
-            this.finalizeColumnNote(card, card.dataset.category || targetCatName);
-        }
-        if (card.dataset.columnsFloat === '1') {
-            this.finalizeColumnsFloat(card);
-        }
         this.syncCardDraggable(card);
         this.syncBoardPinClass(card);
     },
@@ -3696,10 +3344,8 @@ export const UI = {
     renderLabelCard(card, item, activeCategories, targetCatName, categoryColor) {
         card.classList.remove('note-surface');
         const dragZone = this.freeformDragZoneClass(card);
-        const catDragHandle = this.buildCategoryDragHandleHtml(card);
         card.innerHTML = `
             <div class="card-header tile-label-header${dragZone}">
-                ${catDragHandle}
                 ${this.buildNoteTitleHtml(item, false)}
                 ${this.buildCardActionsHtml(item, false, this.getCardActionsOptions(card))}
             </div>
@@ -3711,11 +3357,9 @@ export const UI = {
         card.classList.remove('note-surface');
         const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
         const dragZone = this.freeformDragZoneClass(card);
-        const catDragHandle = this.buildCategoryDragHandleHtml(card);
         const previewHtml = this.buildCollapsedPreviewHtml(item);
         card.innerHTML = `
             <div class="card-header${dragZone}">
-                ${catDragHandle}
                 ${this.buildNoteTitleHtml(item, false)}
                 ${this.buildCardActionsHtml(item, false, this.getCardActionsOptions(card))}
             </div>
@@ -3733,11 +3377,9 @@ export const UI = {
         const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
         const isExpanded = false;
         const dragZone = this.freeformDragZoneClass(card);
-        const catDragHandle = this.buildCategoryDragHandleHtml(card);
         const previewHtml = this.buildCollapsedPreviewHtml(item);
         card.innerHTML = `
             <div class="card-header${dragZone}">
-                ${catDragHandle}
                 ${this.buildNoteTitleHtml(item, false)}
                 ${this.buildCardActionsHtml(item, isExpanded, this.getCardActionsOptions(card))}
             </div>
@@ -3846,11 +3488,10 @@ export const UI = {
         const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
         const dragZone = this.freeformDragZoneClass(card);
 
-        const catDragHandle = this.buildCategoryDragHandleHtml(card);
         card.innerHTML = this.buildNoteEditorShell(item, {
             canEdit,
             richEdit: canEdit,
-            toolbarHtml: `${catDragHandle}${this.buildCardActionsHtml(item, true, this.getCardActionsOptions(card))}`,
+            toolbarHtml: this.buildCardActionsHtml(item, true, this.getCardActionsOptions(card)),
             toolbarDragZone: dragZone,
             footerDragZone: dragZone,
             metaMode: 'inline',
@@ -3866,15 +3507,9 @@ export const UI = {
         this.bindNoteEditorShell(card, item, {
             richEdit: canEdit,
             refresh: () => this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor),
-            stopMousedownPropagation: isDesktopCard(card) || this.isColumnLayoutCard(card)
+            stopMousedownPropagation: isDesktopCard(card)
         });
         this.finalizeDesktopCard(card);
-        if (card.dataset.columnNote === '1') {
-            this.finalizeColumnNote(card, card.dataset.category || targetCatName);
-        }
-        if (card.dataset.columnsFloat === '1') {
-            this.finalizeColumnsFloat(card);
-        }
         this.syncCardDraggable(card);
         this.syncBoardPinClass(card);
         this.focusPendingBoardField(card);
@@ -4986,11 +4621,6 @@ export const UI = {
             scroll: this.captureScrollState(canvas),
             freeformPositions: this.getFreeformPositions(),
             freeformSizes: this.getFreeformSizes(),
-            columnPositions: this.getColumnPositions(),
-            columnSizes: this.getColumnSizes(),
-            columnNoteLayout: this.getColumnNoteLayout(),
-            columnsFloatPositions: this.getColumnsFloatPositions(),
-            columnsFloatSizes: this.getColumnsFloatSizes(),
             gridLayout: this.getGridLayout(),
             gridPins: this.getGridPins(),
             expandedCards: getExpandedCards(viewMode),
@@ -5108,12 +4738,6 @@ export const UI = {
         if (writeState.quotaExceeded) return false;
         writeJson('matrix_freeform_sizes', snapshot.freeformSizes || {});
         if (writeState.quotaExceeded) return false;
-        writeJson('matrix_column_positions', snapshot.columnPositions || {});
-        if (writeState.quotaExceeded) return false;
-        writeJson('matrix_column_sizes', snapshot.columnSizes || {});
-        if (writeState.quotaExceeded) return false;
-        writeJson('matrix_column_note_layout', snapshot.columnNoteLayout || {});
-        if (writeState.quotaExceeded) return false;
         writeJson(GRID_LAYOUT_KEY, snapshot.gridLayout || {});
         if (writeState.quotaExceeded) return false;
         writeJson(GRID_PINS_KEY, snapshot.gridPins || []);
@@ -5138,13 +4762,6 @@ export const UI = {
         writeJson('matrix_collapsed_categories', snapshot.collapsedCategories || []);
         if (writeState.quotaExceeded) return false;
 
-        migrateLegacyColumnsFloatStorage(writeState);
-        try {
-            localStorage.removeItem('matrix_columns_float_positions');
-            localStorage.removeItem('matrix_columns_float_sizes');
-        } catch {
-            /* ignore */
-        }
         return !writeState.quotaExceeded;
     },
 
@@ -5217,9 +4834,15 @@ export const UI = {
                     }
                     customCompact = !!saved.customCompact && !isExpanded;
                 } else {
-                    const tileDefaults = this.getTileDefaultRect(resolveTileSize(item));
-                    w = isExpanded ? this.cellsToSpanW(2) : tileDefaults.w;
-                    h = isExpanded ? this.cellsToSpanH(2) : tileDefaults.h;
+                    const tileDefaults = geoGetTileDefaultRect(resolveTileSize(item));
+                    if (isExpanded) {
+                        const target = this.resolveSpatialExpandTarget(item, null);
+                        w = target.w;
+                        h = target.h;
+                    } else {
+                        w = tileDefaults.w;
+                        h = tileDefaults.h;
+                    }
                 }
 
                 let x;
@@ -5262,17 +4885,6 @@ export const UI = {
         localStorage.removeItem('matrix_freeform_positions');
         localStorage.removeItem('matrix_freeform_sizes');
         clearViewSessionExpanded('freeform');
-        window.dispatchEvent(new CustomEvent('board:visibility_changed'));
-    },
-
-    resetColumnsLayout() {
-        localStorage.removeItem('matrix_column_positions');
-        localStorage.removeItem('matrix_column_sizes');
-        localStorage.removeItem('matrix_column_note_layout');
-        localStorage.removeItem('matrix_columns_float_positions');
-        localStorage.removeItem('matrix_columns_float_sizes');
-        localStorage.removeItem('matrix_canvas_layout_order');
-        clearViewSessionExpanded('columns');
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
     },
 
@@ -5385,12 +4997,11 @@ export const UI = {
             );
             w = compact.w;
             h = compact.h;
-        } else if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
-            w = saved.w;
-            h = saved.h;
         } else {
-            w = this.cellsToSpanW(2);
-            h = this.cellsToSpanH(2);
+            const item = this.resolveBoardItem(card.dataset.id);
+            const editorRect = this.resolveCardRect(card, item, { mode: 'editor' });
+            w = editorRect.w;
+            h = editorRect.h;
         }
         this.applyFreeformDimensions(card, w, h);
     },
@@ -5500,14 +5111,6 @@ export const UI = {
         return layout;
     },
 
-    getColumnNotesSnapBounds(columnNotesEl) {
-        return {
-            origin: 0,
-            packW: this.getColumnNotesInnerWidth(columnNotesEl),
-            maxH: this.getColumnNotesMaxHeight(columnNotesEl)
-        };
-    },
-
     computeSnapPanelLayout({
         panelEl,
         cardSelector,
@@ -5568,65 +5171,10 @@ export const UI = {
         });
     },
 
-    computeColumnNotesLayout(columnNotesEl, actorId, actorRect = null) {
-        if (!columnNotesEl) return new Map();
-        const categoryName = columnNotesEl.dataset.category;
-        const bounds = this.getColumnNotesSnapBounds(columnNotesEl);
-        return this.computeSnapPanelLayout({
-            panelEl: columnNotesEl,
-            cardSelector: '.mini-card[data-column-note="1"]',
-            getSavedRect: (id) => (categoryName ? this.getColumnNoteLayout()[categoryName]?.[id] : null),
-            rectForCard: (card, saved, isExpanded) => this.columnNoteRectForCard(card, saved, isExpanded),
-            isCardExpanded: (id, card) => getExpandedCards('columns')[id] === true || card.classList.contains('expanded'),
-            actorId,
-            actorRect,
-            bounds
-        });
-    },
-
     clearSnapPanelPreview(panelEl) {
         panelEl?.querySelectorAll('.mini-card.layout-preview').forEach((c) => {
             c.classList.remove('layout-preview');
         });
-    },
-
-    applyColumnNotesLayout(columnNotesEl, layout, { animate = true, save = true, preview = false } = {}) {
-        if (!columnNotesEl || !layout?.size) return [];
-        const categoryName = columnNotesEl.dataset.category;
-        const placed = [];
-        layout.forEach((rect, id) => {
-            const card = columnNotesEl.querySelector(`.mini-card[data-column-note="1"][data-id="${CSS.escape(id)}"]`);
-            if (!card) return;
-            this.applyNoteRect(card, rect, { settling: animate });
-            card.classList.toggle('layout-preview', preview);
-            if (save && categoryName) {
-                const layoutItem = this.resolveBoardItem(id);
-                const tileSize = this.getCardTileSize(card, layoutItem);
-                this.saveColumnNoteLayout(categoryName, id, rect, {
-                    customCompact: this.isCollapsedTile(card)
-                        && this.isCustomTileRect(rect.w, rect.h, tileSize)
-                });
-            }
-            placed.push(rect);
-        });
-        const bottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
-        columnNotesEl.style.minHeight = `${bottom + COLUMN_GRID_GAP}px`;
-        const column = columnNotesEl.closest('.canvas-column');
-        if (column) this.resizeColumnToFit(column, { animate });
-        if (animate && !preview) {
-            window.setTimeout(() => {
-                columnNotesEl.querySelectorAll('.mini-card.layout-settling').forEach((c) => {
-                    c.classList.remove('layout-settling');
-                });
-            }, 160);
-        }
-        return placed;
-    },
-
-    reflowColumnNotesPanel(columnNotesEl, actorId, { animate = true } = {}) {
-        if (!columnNotesEl) return;
-        const layout = this.computeColumnNotesLayout(columnNotesEl, actorId);
-        this.applyColumnNotesLayout(columnNotesEl, layout, { animate, save: true });
     },
 
     applyGridBoardLayout(canvas, layout, { animate = true, save = true, preview = false } = {}) {
@@ -5767,21 +5315,6 @@ export const UI = {
         this.initDesktopCardStack(card, orderIndex);
     },
 
-    raiseLayoutCard(card) {
-        if (!card) return;
-        raiseDesktopElement(card);
-        if (isDesktopCard(card)) {
-            this.raiseDesktopCard(card);
-            return;
-        }
-        if (card.dataset.columnNote === '1') {
-            card.classList.add('is-column-front');
-            card.closest('.column-notes')?.querySelectorAll('.mini-card.is-column-front').forEach((other) => {
-                if (other !== card) other.classList.remove('is-column-front');
-            });
-        }
-    },
-
     raiseDesktopCard(card) {
         if (!isDesktopCard(card)) return;
         raiseDesktopElement(card);
@@ -5796,143 +5329,8 @@ export const UI = {
         this.raiseDesktopCard(card);
     },
 
-    getCanvasLayoutOrder() {
-        try {
-            const raw = JSON.parse(localStorage.getItem(CANVAS_LAYOUT_ORDER_KEY) || '[]');
-            return Array.isArray(raw) ? raw : [];
-        } catch {
-            return [];
-        }
-    },
-
-    saveCanvasLayoutOrder(order) {
-        localStorage.setItem(CANVAS_LAYOUT_ORDER_KEY, JSON.stringify(order));
-    },
-
-    appendToCanvasOrder(entry) {
-        const order = this.getCanvasLayoutOrder();
-        const exists = order.some((e) => {
-            if (entry.type === 'category' && e.type === 'category') {
-                return String(e.name).toLowerCase() === String(entry.name).toLowerCase();
-            }
-            if (entry.type === 'float' && e.type === 'float') return e.id === entry.id;
-            return false;
-        });
-        if (!exists) {
-            order.push(entry);
-            this.saveCanvasLayoutOrder(order);
-        }
-    },
-
-    getCanvasOrderIndex(entry) {
-        return this.getCanvasLayoutOrder().findIndex((e) => {
-            if (entry.type === 'category' && e.type === 'category') {
-                return String(e.name).toLowerCase() === String(entry.name).toLowerCase();
-            }
-            if (entry.type === 'float' && e.type === 'float') return e.id === entry.id;
-            return false;
-        });
-    },
-
-    buildInitialCanvasOrder(activeCategories, visibleItems) {
-        const events = [];
-        activeCategories.forEach((catObj, idx) => {
-            const name = typeof catObj === 'string' ? catObj : catObj.name;
-            const inCat = visibleItems.filter((item) => {
-                if (!itemHasCategory(item)) return false;
-                return String(item.categories[0]).toLowerCase() === String(name).toLowerCase();
-            });
-            const ts = inCat.length
-                ? Math.min(...inCat.map((item) => Number(item.created_at || 0)))
-                : 1e15 + idx;
-            events.push({ type: 'category', name, ts, tie: idx });
-        });
-        const uncatItems = visibleItems.filter((item) => !itemHasCategory(item));
-        if (uncatItems.length > 0) {
-            const ts = Math.min(...uncatItems.map((item) => Number(item.created_at || 0)));
-            events.push({ type: 'category', name: UNCATEGORIZED_CATEGORY, ts, tie: 9999 });
-        }
-        events.sort((a, b) => a.ts - b.ts || a.tie - b.tie);
-        return events.map(({ type, name }) => ({ type, name }));
-    },
-
-    syncCanvasLayoutOrder(activeCategories, visibleItems) {
-        let order = this.getCanvasLayoutOrder().map((entry) => {
-            if (entry.type === 'float') return { type: 'category', name: UNCATEGORIZED_CATEGORY };
-            return entry;
-        });
-        const visibleCatNames = new Set(
-            activeCategories.map((c) => (typeof c === 'string' ? c : c.name))
-        );
-        const hasUncat = visibleItems.some((item) => !itemHasCategory(item));
-        if (hasUncat) visibleCatNames.add(UNCATEGORIZED_CATEGORY);
-
-        const seen = new Set();
-        order = order.filter((entry) => {
-            if (entry.type !== 'category') return false;
-            const key = categoryKey(entry.name);
-            if (seen.has(key)) return false;
-            if (!visibleCatNames.has(entry.name)) return false;
-            seen.add(key);
-            return true;
-        });
-
-        activeCategories.forEach((catObj) => {
-            const name = typeof catObj === 'string' ? catObj : catObj.name;
-            if (!order.some((e) => e.type === 'category' && categoryKey(e.name) === categoryKey(name))) {
-                order.push({ type: 'category', name });
-            }
-        });
-
-        if (hasUncat && !order.some((e) => isUncategorizedCategory(e.name))) {
-            order.push({ type: 'category', name: UNCATEGORIZED_CATEGORY });
-        }
-
-        if (order.length === 0) {
-            order = this.buildInitialCanvasOrder(activeCategories, visibleItems);
-        }
-
-        this.saveCanvasLayoutOrder(order);
-        return order;
-    },
-
-    getCanvasElementForOrderEntry(canvas, entry) {
-        if (!canvas || !entry) return null;
-        if (entry.type === 'category') {
-            return [...canvas.querySelectorAll('.canvas-column')].find(
-                (col) => col.dataset.category?.toLowerCase() === String(entry.name).toLowerCase()
-            ) || null;
-        }
-        if (entry.type === 'float') {
-            return canvas.querySelector(`.canvas-column[data-category="${UNCATEGORIZED_CATEGORY}"]`)
-                || canvas.querySelector(`.mini-card[data-columns-float="1"][data-id="${entry.id}"]`);
-        }
-        return null;
-    },
-
-    measureCanvasOrderEntry(el) {
-        if (!el) return { w: CANVAS_GRID_W, h: 200 };
-        if (el.classList.contains('canvas-column')) {
-            return {
-                w: el.offsetWidth || CANVAS_GRID_W,
-                h: el.offsetHeight || COLUMN_HEADER_APPROX_H + COLUMN_GRID_CELL_H
-            };
-        }
-        const rect = this.readNoteRect(el);
-        return { w: rect.w, h: rect.h };
-    },
-
     snapCanvasCoord(value, origin = CANVAS_LAYOUT_ORIGIN, stride = COLUMN_STRIDE_X) {
         return origin + this.snapGridCoord(Math.max(0, value - origin), stride);
-    },
-
-    getCanvasPackBounds(canvas) {
-        const canvasW = Math.max(canvas?.clientWidth || 320, CANVAS_GRID_W + CANVAS_LAYOUT_ORIGIN * 2);
-        return {
-            origin: CANVAS_LAYOUT_ORIGIN,
-            packW: canvasW - CANVAS_LAYOUT_ORIGIN * 2,
-            canvasW
-        };
     },
 
     findFirstCanvasSlot(w, h, placed, canvasW, { origin = CANVAS_LAYOUT_ORIGIN } = {}) {
@@ -5961,178 +5359,24 @@ export const UI = {
         return { x: xOrigin, y: origin, w, h };
     },
 
-    applyCanvasOrderEntryPosition(el, entry, rect, { animate = false, snap = true } = {}) {
-        if (!el || !entry) return;
-        if (entry.type === 'category') {
-            el.style.position = 'absolute';
-            el.style.left = `${rect.x}px`;
-            el.style.top = `${rect.y}px`;
-            el.classList.toggle('layout-settling', animate);
-            if (entry.name) this.saveColumnPosition(entry.name, rect.x, rect.y);
-            return;
-        }
-        if (entry.type === 'float') {
-            const maxW = el.closest('#app-canvas')?.clientWidth || window.innerWidth;
-            const maxH = Math.max(
-                el.closest('#app-canvas')?.scrollHeight || 0,
-                window.innerHeight
-            );
-            const finalRect = snap
-                ? this.snapNoteRect(rect, { maxW, maxH })
-                : this.clampManualNoteRect(rect, { maxW, maxH });
-            this.applyNoteRect(el, finalRect, { settling: animate });
-            if (el.dataset.id) {
-                this.saveColumnsFloatPosition(el.dataset.id, finalRect.x, finalRect.y);
-                if (el.classList.contains('expanded')) {
-                    this.saveColumnsFloatSize(el.dataset.id, finalRect.w, finalRect.h);
-                }
-            }
-        }
-    },
-
-    layoutColumnInners(canvas, { animate = false } = {}) {
-        if (!canvas) return;
-        [...canvas.querySelectorAll('.canvas-column')].forEach((col) => {
-            col.style.position = 'absolute';
-            const cat = col.dataset.category;
-            const notesEl = col.querySelector('.column-notes');
-            if (!notesEl || !cat) return;
-            if (col.classList.contains('is-collapsed')) {
-                this.resizeColumnToFit(col, { animate });
-                return;
-            }
-            const itemIds = [...notesEl.querySelectorAll('.mini-card')]
-                .map((c) => c.dataset.id)
-                .filter(Boolean);
-            this.autoPackColumnNotes(notesEl, itemIds, cat);
-            this.autoArrangeColumnNotes(notesEl, { animate });
-        });
-    },
-
-    packCanvasInOrder(canvas, { animate = false, fromIndex = 0, pinned = null } = {}) {
-        if (!canvas) return;
-        const order = this.getCanvasLayoutOrder();
-        if (!order.length) return;
-
-        this.layoutColumnInners(canvas, { animate: false });
-
-        const { packW, canvasW, origin } = this.getCanvasPackBounds(canvas);
-        const placed = [];
-
-        order.forEach((entry, index) => {
-            const el = this.getCanvasElementForOrderEntry(canvas, entry);
-            if (!el) return;
-
-            const { w, h } = this.measureCanvasOrderEntry(el);
-            let rect;
-
-            const savedPos = this.getSavedCanvasPosition(entry);
-            let snap = false;
-
-            if (pinned && pinned.index === index && pinned.rect) {
-                rect = { x: pinned.rect.x, y: pinned.rect.y, w, h };
-            } else if (savedPos) {
-                rect = { x: savedPos.x, y: savedPos.y, w, h };
-            } else if (index < fromIndex) {
-                rect = {
-                    x: parseFloat(el.style.left) || origin,
-                    y: parseFloat(el.style.top) || origin,
-                    w,
-                    h
-                };
-            } else {
-                rect = this.findFirstCanvasSlot(w, h, placed, packW + origin * 2, { origin });
-                snap = true;
-            }
-
-            this.applyCanvasOrderEntryPosition(el, entry, rect, { animate, snap });
-            placed.push(rect);
-        });
-
-        const maxBottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
-        canvas.style.minHeight = `${maxBottom + origin + CANVAS_COL_GAP}px`;
-
-        if (animate) {
-            setTimeout(() => {
-                canvas.querySelectorAll('.layout-settling').forEach((node) => {
-                    node.classList.remove('layout-settling');
-                });
-            }, 140);
-        }
-    },
-
-    layoutColumnView(canvas, { animate = false, fromIndex = 0, pinned = null } = {}) {
-        if (!canvas) return;
-        this.layoutColumnInners(canvas, { animate: false });
-        requestAnimationFrame(() => {
-            this.packCanvasInOrder(canvas, { animate, fromIndex, pinned });
-        });
-    },
-
-    reflowCanvasFromOrderEntry(canvas, entry, { animate = true } = {}) {
-        if (!canvas) return;
-        const index = this.getCanvasOrderIndex(entry);
-        if (index < 0) {
-            this.layoutColumnView(canvas, { animate });
-            return;
-        }
-        const el = this.getCanvasElementForOrderEntry(canvas, entry);
-        if (!el) return;
-        const { w, h } = this.measureCanvasOrderEntry(el);
-        const rect = {
-            x: parseFloat(el.style.left) || 0,
-            y: parseFloat(el.style.top) || 0,
-            w,
-            h
-        };
-        this.layoutColumnView(canvas, {
-            animate,
-            fromIndex: index + 1,
-            pinned: { index, rect }
-        });
-    },
-
-    layoutColumnViewAfterRender(canvas, options = {}) {
-        this.layoutColumnView(canvas, options);
-    },
-
     snapGridCoord(value, stride = COLUMN_STRIDE_X) {
         return Math.max(0, Math.round(value / stride) * stride);
     },
 
     cellsToSpanW(cells) {
-        const n = Math.max(1, cells);
-        return Math.round(n * COLUMN_GRID_CELL_W + (n - 1) * COLUMN_GRID_GAP);
+        return geoCellsToSpanW(cells);
     },
 
     cellsToSpanH(cells) {
-        const n = Math.max(1, cells);
-        return Math.round(n * COLUMN_GRID_CELL_H + (n - 1) * COLUMN_GRID_GAP);
+        return geoCellsToSpanH(cells);
     },
 
     spanToCellsW(span) {
-        return Math.max(1, Math.round((span + COLUMN_GRID_GAP) / COLUMN_STRIDE_X));
+        return geoSpanToCellsW(span);
     },
 
     spanToCellsH(span) {
-        return Math.max(1, Math.round((span + COLUMN_GRID_GAP) / COLUMN_STRIDE_Y));
-    },
-
-    getSavedCanvasPosition(entry) {
-        if (!entry) return null;
-        if (entry.type === 'category') {
-            const pos = this.getColumnPositions()[entry.name];
-            if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
-                return { x: pos.x, y: pos.y };
-            }
-        }
-        if (entry.type === 'float') {
-            const pos = this.getColumnsFloatPositions()[entry.id];
-            if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
-                return { x: pos.x, y: pos.y };
-            }
-        }
-        return null;
+        return geoSpanToCellsH(span);
     },
 
     clampManualNoteRect(rect, { maxW = Infinity, maxH = Infinity } = {}) {
@@ -6187,186 +5431,6 @@ export const UI = {
         };
     },
 
-    getColumnPositions() {
-        try {
-            return JSON.parse(localStorage.getItem('matrix_column_positions') || '{}');
-        } catch {
-            return {};
-        }
-    },
-
-    saveColumnPosition(categoryName, x, y) {
-        const positions = this.getColumnPositions();
-        positions[categoryName] = { x: Math.round(x), y: Math.round(y) };
-        localStorage.setItem('matrix_column_positions', JSON.stringify(positions));
-    },
-
-    getColumnSizes() {
-        try {
-            return JSON.parse(localStorage.getItem('matrix_column_sizes') || '{}');
-        } catch {
-            return {};
-        }
-    },
-
-    saveColumnSize(categoryName, w, h) {
-        const sizes = this.getColumnSizes();
-        sizes[categoryName] = { w: Math.round(w), h: Math.round(h) };
-        localStorage.setItem('matrix_column_sizes', JSON.stringify(sizes));
-    },
-
-    applyColumnCanvasSize(columnEl, w, h, { animate = false } = {}) {
-        if (!columnEl) return;
-        const collapsed = columnEl.classList.contains('is-collapsed');
-        const colW = Math.max(CANVAS_GRID_W, Math.round(w));
-        const colH = Math.max(COLUMN_MIN_CANVAS_H, Math.round(h));
-        columnEl.style.width = `${colW}px`;
-        columnEl.style.minHeight = `${colH}px`;
-        if (collapsed) {
-            columnEl.style.height = `${colH}px`;
-        } else {
-            columnEl.style.height = '';
-        }
-        const notesEl = columnEl.querySelector('.column-notes');
-        if (notesEl && !collapsed) {
-            const chromePad = 6;
-            const notesH = Math.max(COLUMN_GRID_CELL_H, colH - COLUMN_HEADER_APPROX_H - COLUMN_INNER_PAD - chromePad);
-            notesEl.style.minHeight = `${notesH}px`;
-        }
-        columnEl.classList.toggle('layout-settling', animate);
-    },
-
-    applySavedColumnSize(columnEl) {
-        const cat = columnEl?.dataset.category;
-        if (!cat) return;
-        const saved = this.getColumnSizes()[cat];
-        if (saved?.w && saved?.h) {
-            this.applyColumnCanvasSize(columnEl, saved.w, saved.h);
-        }
-    },
-
-    readColumnCanvasRect(columnEl) {
-        if (!columnEl) return { x: 0, y: 0, w: CANVAS_GRID_W, h: COLUMN_MIN_CANVAS_H };
-        return {
-            x: parseFloat(columnEl.style.left) || 0,
-            y: parseFloat(columnEl.style.top) || 0,
-            w: columnEl.offsetWidth || CANVAS_GRID_W,
-            h: columnEl.offsetHeight || parseFloat(columnEl.style.minHeight) || COLUMN_MIN_CANVAS_H
-        };
-    },
-
-    getCanvasEntryRect(canvas, entry) {
-        const el = this.getCanvasElementForOrderEntry(canvas, entry);
-        if (!el) return null;
-        if (entry.type === 'category') return this.readColumnCanvasRect(el);
-        return this.readNoteRect(el);
-    },
-
-    pushOverlappingCanvasItems(canvas, pinnedEntry, { animate = true } = {}) {
-        if (!canvas || !pinnedEntry) return;
-        const order = this.getCanvasLayoutOrder();
-        const pinnedIndex = this.getCanvasOrderIndex(pinnedEntry);
-        if (pinnedIndex < 0) return;
-
-        const pinnedRect = this.getCanvasEntryRect(canvas, pinnedEntry);
-        if (!pinnedRect) return;
-
-        const { origin } = this.getCanvasPackBounds(canvas);
-        const canvasPackW = Math.max(canvas.clientWidth, CANVAS_GRID_W + origin * 2);
-        const placed = [{ ...pinnedRect }];
-
-        order.forEach((entry, index) => {
-            if (index === pinnedIndex) return;
-            const el = this.getCanvasElementForOrderEntry(canvas, entry);
-            if (!el) return;
-
-            let rect = this.getCanvasEntryRect(canvas, entry);
-            if (!rect) return;
-
-            const blocked = placed.some((p) => this.rectsOverlap(rect, p, CANVAS_PACK_GAP));
-            if (!blocked) {
-                placed.push({ ...rect });
-                return;
-            }
-
-            const slot = this.findFirstCanvasSlot(rect.w, rect.h, placed, canvasPackW, { origin });
-            rect = { x: slot.x, y: slot.y, w: rect.w, h: rect.h };
-            this.applyCanvasOrderEntryPosition(el, entry, rect, {
-                animate,
-                snap: entry.type === 'float'
-            });
-            placed.push({ ...rect });
-        });
-
-        const maxBottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
-        canvas.style.minHeight = `${maxBottom + origin + CANVAS_COL_GAP}px`;
-    },
-
-    getColumnNoteLayout() {
-        try {
-            return JSON.parse(localStorage.getItem('matrix_column_note_layout') || '{}');
-        } catch {
-            return {};
-        }
-    },
-
-    saveColumnNoteLayout(categoryName, itemId, rect, { customCompact = false } = {}) {
-        const all = this.getColumnNoteLayout();
-        if (!all[categoryName]) all[categoryName] = {};
-        const entry = {
-            x: Math.round(rect.x),
-            y: Math.round(rect.y),
-            w: Math.round(rect.w),
-            h: Math.round(rect.h)
-        };
-        if (customCompact) entry.customCompact = true;
-        all[categoryName][itemId] = entry;
-        localStorage.setItem('matrix_column_note_layout', JSON.stringify(all));
-    },
-
-    removeColumnNoteLayout(itemId, categoryName = null) {
-        const all = this.getColumnNoteLayout();
-        if (categoryName) {
-            if (all[categoryName]) delete all[categoryName][itemId];
-        } else {
-            Object.keys(all).forEach((cat) => delete all[cat][itemId]);
-        }
-        localStorage.setItem('matrix_column_note_layout', JSON.stringify(all));
-    },
-
-    getColumnsFloatPositions() {
-        try {
-            return JSON.parse(localStorage.getItem('matrix_columns_float_positions') || '{}');
-        } catch {
-            return {};
-        }
-    },
-
-    saveColumnsFloatPosition(itemId, x, y) {
-        const positions = this.getColumnsFloatPositions();
-        positions[itemId] = { x: Math.round(x), y: Math.round(y) };
-        localStorage.setItem('matrix_columns_float_positions', JSON.stringify(positions));
-    },
-
-    getColumnsFloatSizes() {
-        try {
-            return JSON.parse(localStorage.getItem('matrix_columns_float_sizes') || '{}');
-        } catch {
-            return {};
-        }
-    },
-
-    saveColumnsFloatSize(itemId, w, h, { customCompact = false } = {}) {
-        const sizes = this.getColumnsFloatSizes();
-        const entry = {
-            w: Math.round(Math.max(FREEFORM_MIN_W, w)),
-            h: Math.round(Math.max(FREEFORM_MIN_H, h))
-        };
-        if (customCompact) entry.customCompact = true;
-        sizes[itemId] = entry;
-        localStorage.setItem('matrix_columns_float_sizes', JSON.stringify(sizes));
-    },
-
     readNoteRect(card) {
         return {
             x: parseFloat(card.style.left) || 0,
@@ -6384,26 +5448,6 @@ export const UI = {
         card.classList.toggle('layout-settling', settling);
     },
 
-    getColumnNotesInnerWidth(columnNotesEl) {
-        const column = columnNotesEl?.closest('.canvas-column');
-        const w = column?.offsetWidth || CANVAS_GRID_W;
-        return Math.max(COLUMN_MIN_INNER_W, w - COLUMN_INNER_PAD * 2);
-    },
-
-    getColumnNotesMaxHeight(columnNotesEl) {
-        const column = columnNotesEl?.closest('.canvas-column');
-        const cat = column?.dataset.category;
-        const manual = cat ? this.getColumnSizes()[cat] : null;
-        if (manual?.h) {
-            const inner = manual.h - COLUMN_HEADER_APPROX_H - COLUMN_INNER_PAD - 6;
-            return Math.max(this.cellsToSpanH(2), inner);
-        }
-        const canvas = columnNotesEl?.closest('#app-canvas');
-        const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
-        const canvasH = canvas?.clientHeight || vh;
-        return Math.max(this.cellsToSpanH(2), canvasH - COLUMN_HEADER_APPROX_H - 24);
-    },
-
     rectsOverlap(a, b, gap = COLUMN_GRID_GAP) {
         return !(
             a.x + a.w + gap <= b.x
@@ -6411,227 +5455,6 @@ export const UI = {
             || a.y + a.h + gap <= b.y
             || b.y + b.h + gap <= a.y
         );
-    },
-
-    autoPackColumnNotes(columnNotesEl, itemIds, categoryName) {
-        const innerW = this.getColumnNotesInnerWidth(columnNotesEl);
-        const saved = this.getColumnNoteLayout()[categoryName] || {};
-        const expandedCards = getExpandedCards('columns');
-        let rowX = 0;
-        let rowY = 0;
-        let rowMaxH = COLUMN_GRID_CELL_H;
-
-        itemIds.forEach((itemId) => {
-            const card = columnNotesEl.querySelector(`.mini-card[data-id="${itemId}"]`);
-            if (!card) return;
-            const isExpanded = expandedCards[itemId] === true || card.classList.contains('expanded');
-            let rect = saved[itemId];
-
-            if (rect && Number.isFinite(rect.x) && Number.isFinite(rect.w)) {
-                this.applyNoteRect(card, rect);
-                return;
-            }
-
-            if (isExpanded) {
-                const w = Math.min(innerW, this.cellsToSpanW(COLUMN_MIN_COLS));
-                const h = this.cellsToSpanH(2);
-                if (rowX > 0) {
-                    rowY += rowMaxH + COLUMN_GRID_GAP;
-                    rowX = 0;
-                    rowMaxH = COLUMN_GRID_CELL_H;
-                }
-                rect = { x: 0, y: rowY, w, h };
-                rowY += h + COLUMN_GRID_GAP;
-                rowMaxH = COLUMN_GRID_CELL_H;
-                rowX = 0;
-            } else {
-                const item = this.resolveBoardItem(itemId);
-                const defaults = this.getTileDefaultRect(resolveTileSize(item));
-                const w = Math.min(defaults.w, innerW);
-                const h = defaults.h;
-                if (rowX + w > innerW + 1) {
-                    rowY += rowMaxH + COLUMN_GRID_GAP;
-                    rowX = 0;
-                    rowMaxH = COLUMN_GRID_CELL_H;
-                }
-                rect = { x: rowX, y: rowY, w, h };
-                rowX += w + COLUMN_GRID_GAP;
-                rowMaxH = Math.max(rowMaxH, h);
-            }
-            this.applyNoteRect(card, rect);
-        });
-    },
-
-    autoArrangeColumnNotes(columnNotesEl, { animate = false } = {}) {
-        if (!columnNotesEl) return;
-        const cards = [...columnNotesEl.querySelectorAll('.mini-card[data-column-note="1"]')];
-        if (cards.length === 0) {
-            const collapsed = columnNotesEl.closest('.canvas-column')?.classList.contains('is-collapsed');
-            columnNotesEl.querySelector('.column-empty-slot')?.remove();
-            if (!collapsed) {
-                const slot = document.createElement('div');
-                slot.className = 'column-empty-slot';
-                slot.setAttribute('aria-hidden', 'true');
-                columnNotesEl.appendChild(slot);
-            }
-            columnNotesEl.style.minHeight = collapsed ? '0' : `${COLUMN_GRID_CELL_H}px`;
-            const column = columnNotesEl.closest('.canvas-column');
-            if (column) this.resizeColumnToFit(column, { animate });
-            return;
-        }
-        columnNotesEl.querySelector('.column-empty-slot')?.remove();
-        this.reflowColumnNotesPanel(columnNotesEl, null, { animate });
-    },
-
-    resizeColumnToFit(columnEl, { animate = false } = {}) {
-        if (!columnEl) return;
-        const collapsed = columnEl.classList.contains('is-collapsed');
-        const cat = columnEl.dataset.category;
-        const manual = cat ? this.getColumnSizes()[cat] : null;
-        const notesEl = columnEl.querySelector('.column-notes');
-        let innerW = COLUMN_MIN_INNER_W;
-        let contentH = 0;
-
-        if (!collapsed && notesEl) {
-            const cards = [...notesEl.querySelectorAll('.mini-card')];
-            innerW = cards.reduce((max, card) => {
-                const r = this.readNoteRect(card);
-                return Math.max(max, r.x + r.w);
-            }, COLUMN_MIN_INNER_W);
-            contentH = cards.reduce((max, card) => {
-                const r = this.readNoteRect(card);
-                return Math.max(max, r.y + r.h);
-            }, 0);
-            if (cards.length === 0) contentH = COLUMN_GRID_CELL_H;
-            contentH = Math.max(contentH + COLUMN_GRID_GAP, parseFloat(notesEl.style.minHeight) || 0, notesEl.offsetHeight);
-        } else if (notesEl) {
-            notesEl.style.minHeight = '0';
-        }
-
-        const contentColW = Math.max(CANVAS_GRID_W, innerW + COLUMN_INNER_PAD * 2);
-        const contentColH = COLUMN_HEADER_APPROX_H + contentH + COLUMN_INNER_PAD;
-        const colW = manual?.w ? Math.max(manual.w, contentColW) : contentColW;
-        const colH = manual?.h ? Math.max(manual.h, collapsed ? COLUMN_HEADER_APPROX_H + COLUMN_INNER_PAD : contentColH) : contentColH;
-
-        if (manual?.w || manual?.h) {
-            this.applyColumnCanvasSize(columnEl, colW, colH, { animate });
-            return;
-        }
-
-        columnEl.style.width = `${colW}px`;
-        columnEl.style.minHeight = `${colH}px`;
-        columnEl.style.height = collapsed ? `${colH}px` : '';
-        if (notesEl && !collapsed) {
-            const notesH = Math.max(COLUMN_GRID_CELL_H, colH - COLUMN_HEADER_APPROX_H - COLUMN_INNER_PAD - 6);
-            notesEl.style.minHeight = `${notesH}px`;
-        }
-        if (animate) columnEl.classList.add('layout-settling');
-        else columnEl.classList.remove('layout-settling');
-    },
-
-    autoArrangeCanvasColumns(canvas, { animate = false } = {}) {
-        if (!canvas) return;
-        const columns = [...canvas.querySelectorAll('.canvas-column')];
-        if (!columns.length) return;
-
-        const canvasW = Math.max(canvas.clientWidth, 320);
-        const sorted = columns
-            .map((col) => {
-                const x = parseFloat(col.style.left) || 0;
-                const y = parseFloat(col.style.top) || 0;
-                return { col, x, y, w: col.offsetWidth, h: col.offsetHeight };
-            })
-            .sort((a, b) => a.y - b.y || a.x - b.x);
-
-        const placed = [];
-        sorted.forEach(({ col, x, y, w, h }) => {
-            let nx = this.snapGridCoord(x, CANVAS_GRID_W);
-            let ny = this.snapGridCoord(y, CANVAS_GRID_W);
-            let guard = 0;
-            let box = { x: nx, y: ny, w, h };
-            while (placed.some((p) => this.rectsOverlap(box, p, CANVAS_COL_GAP)) && guard < 100) {
-                const blocker = placed.find((p) => this.rectsOverlap(box, p, CANVAS_COL_GAP));
-                if (!blocker) break;
-                if (nx + w + CANVAS_COL_GAP + w <= canvasW) {
-                    nx = blocker.x + blocker.w + CANVAS_COL_GAP;
-                } else {
-                    nx = 0;
-                    ny = blocker.y + blocker.h + CANVAS_COL_GAP;
-                }
-                box = { x: nx, y: ny, w, h };
-                guard += 1;
-            }
-            col.style.position = 'absolute';
-            col.style.left = `${nx}px`;
-            col.style.top = `${ny}px`;
-            col.classList.toggle('layout-settling', animate);
-            placed.push(box);
-            const cat = col.dataset.category;
-            if (cat) this.saveColumnPosition(cat, nx, ny);
-        });
-
-        const maxBottom = placed.reduce((m, b) => Math.max(m, b.y + b.h), 0);
-        canvas.style.minHeight = `${maxBottom + CANVAS_COL_GAP}px`;
-    },
-
-    finalizeColumnNote(card, categoryName) {
-        if (card.dataset.columnNote !== '1') return;
-        card.style.position = 'absolute';
-        this.setupFreeformChrome(card);
-        if (card.dataset.tierResizePreview === '1') return;
-        const saved = this.getColumnNoteLayout()[categoryName]?.[card.dataset.id];
-        const isExpanded = card.classList.contains('expanded');
-        if (!isExpanded) {
-            const item = this.resolveBoardItem(card.dataset.id);
-            const columnNotesEl = card.closest('.column-notes');
-            const innerW = columnNotesEl ? this.getColumnNotesInnerWidth(columnNotesEl) : null;
-            const compact = this.gridTileRect(
-                this.getCardTileSize(card, item),
-                { x: 0, y: 0, w: COLUMN_GRID_CELL_W, h: COLUMN_GRID_CELL_H },
-                saved
-            );
-            const w = innerW ? Math.min(compact.w, innerW) : compact.w;
-            this.applyFreeformDimensions(card, w, compact.h);
-        } else if (saved?.w && saved?.h) {
-            this.applyFreeformDimensions(card, saved.w, saved.h);
-        } else {
-            const innerW = this.cellsToSpanW(COLUMN_MIN_COLS);
-            this.applyFreeformDimensions(card, innerW, this.cellsToSpanH(2));
-        }
-    },
-
-    finalizeColumnsFloat(card) {
-        if (card.dataset.columnsFloat !== '1') return;
-        card.style.position = 'absolute';
-        this.setupFreeformChrome(card);
-        if (card.dataset.tierResizePreview === '1') return;
-        const saved = this.getColumnsFloatSizes()[card.dataset.id];
-        const isExpanded = card.classList.contains('expanded');
-        if (isExpanded) {
-            const w = saved?.w ?? FREEFORM_EXPANDED_W;
-            const h = saved?.h ?? FREEFORM_EXPANDED_DEFAULT_H;
-            this.applyFreeformDimensions(card, w, h);
-        } else {
-            const item = this.resolveBoardItem(card.dataset.id);
-            const tileSize = this.getCardTileSize(card, item);
-            if (saved?.customCompact && this.isCustomTileRect(saved.w, saved.h, tileSize)) {
-                this.applyFreeformDimensions(card, saved.w, saved.h);
-            } else {
-                const defaults = this.getTileDefaultRect(tileSize);
-                this.applyFreeformDimensions(card, defaults.w, defaults.h);
-            }
-        }
-    },
-
-    isColumnLayoutCard(card) {
-        return card?.dataset?.columnNote === '1' || card?.dataset?.columnsFloat === '1';
-    },
-
-    columnDragZoneClass(card) {
-        if (card.dataset.columnNote === '1' || card.dataset.columnsFloat === '1') {
-            return ' card-drag-zone';
-        }
-        return this.freeformDragZoneClass(card);
     },
 
     initFreeformCardStack(card, orderIndex = 0) {
