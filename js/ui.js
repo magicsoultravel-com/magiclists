@@ -5122,35 +5122,72 @@ export const UI = {
         }
 
         if (toMode === 'grid') {
+            const gridLayout = this.getGridLayout();
+            const freeformPositions = this.getFreeformPositions();
             const placed = [];
             const { origin, packW, maxH } = this.getGridBoardBounds(canvas);
+
             visible.forEach((item) => {
                 const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
-                const pos = this.getFreeformPositions()[item.id];
-                const size = this.getFreeformSizes()[item.id];
                 const isExpanded = getExpandedCards('grid')[item.id] === true;
-                let rect;
-                if (card) {
-                    rect = this.readNoteRect(card);
-                    const { w, h } = this.readFreeformCardSize(card);
-                    rect = { ...rect, w, h };
-                } else if (pos && size) {
-                    rect = { x: pos.x, y: pos.y, w: size.w, h: size.h, customCompact: size.customCompact };
+                const saved = gridLayout[item.id];
+                let w;
+                let h;
+                let customCompact = false;
+
+                if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
+                    if (card) {
+                        const sized = this.gridBoardRectForCard(card, saved, isExpanded);
+                        w = sized.w;
+                        h = sized.h;
+                    } else if (isExpanded) {
+                        w = saved.w;
+                        h = saved.h;
+                    } else {
+                        const tileSize = resolveTileSize(item);
+                        const compact = this.gridTileRect(
+                            tileSize,
+                            { x: 0, y: 0, w: saved.w, h: saved.h },
+                            saved
+                        );
+                        w = compact.w;
+                        h = compact.h;
+                    }
+                    customCompact = !!saved.customCompact && !isExpanded;
                 } else {
                     const tileDefaults = this.getTileDefaultRect(resolveTileSize(item));
-                    const w = isExpanded ? this.cellsToSpanW(2) : tileDefaults.w;
-                    const h = isExpanded ? this.cellsToSpanH(2) : tileDefaults.h;
-                    rect = this.findFirstCanvasSlot(w, h, placed, packW + origin * 2, { origin });
+                    w = isExpanded ? this.cellsToSpanW(2) : tileDefaults.w;
+                    h = isExpanded ? this.cellsToSpanH(2) : tileDefaults.h;
                 }
-                rect = this.snapNoteRect(rect, { maxW: packW, maxH });
+
+                let x;
+                let y;
+                if (card) {
+                    const pos = this.readNoteRect(card);
+                    x = pos.x;
+                    y = pos.y;
+                } else if (freeformPositions[item.id]) {
+                    x = freeformPositions[item.id].x;
+                    y = freeformPositions[item.id].y;
+                } else {
+                    const slot = this.findFirstCanvasSlot(w, h, placed, packW + origin * 2, { origin });
+                    this.saveGridLayout(item.id, slot, {
+                        customCompact: customCompact || this.isCustomTileRect(slot.w, slot.h, resolveTileSize(item))
+                    });
+                    placed.push(slot);
+                    return;
+                }
+
+                let rect = this.snapNotePosition({ x, y, w, h }, { maxW: packW, maxH, origin });
                 if (placed.some((p) => this.rectsOverlap(rect, p))) {
-                    rect = this.findNearestGridSlot(rect, rect.w, rect.h, placed, { packW, origin, maxH });
+                    rect = this.findNearestGridSlot(rect, w, h, placed, { packW, origin, maxH });
                 }
                 this.saveGridLayout(item.id, rect, {
-                    customCompact: !!rect.customCompact || this.isCustomTileRect(rect.w, rect.h, resolveTileSize(item))
+                    customCompact: customCompact || this.isCustomTileRect(rect.w, rect.h, resolveTileSize(item))
                 });
                 placed.push(rect);
             });
+
             const layout = this.computeGridBoardLayout(canvas, null);
             layout.forEach((rect, id) => {
                 if (!ids.has(id)) return;
@@ -6044,6 +6081,25 @@ export const UI = {
         let y = Math.max(0, Math.round(rect.y));
         if (maxW < Infinity && x + w > maxW) x = Math.max(0, maxW - w);
         if (maxH < Infinity && y + h > maxH) y = Math.max(0, maxH - h);
+        return { x, y, w, h };
+    },
+
+    snapNotePosition(rect, { maxW = Infinity, maxH = Infinity, origin = CANVAS_LAYOUT_ORIGIN } = {}) {
+        const w = Math.max(FREEFORM_MIN_W, Math.round(rect.w));
+        const h = Math.max(FREEFORM_MIN_H, Math.round(rect.h));
+        let x = this.snapGridCoord(rect.x, COLUMN_STRIDE_X);
+        let y = this.snapGridCoord(rect.y, COLUMN_STRIDE_Y);
+        x = Math.max(origin, x);
+        y = Math.max(origin, y);
+        if (maxW < Infinity) {
+            const rightLimit = origin + maxW;
+            if (x + w > rightLimit + 1) {
+                x = Math.max(origin, rightLimit - w);
+            }
+        }
+        if (maxH < Infinity && y + h > maxH + 1) {
+            y = Math.max(origin, maxH - h);
+        }
         return { x, y, w, h };
     },
 

@@ -685,9 +685,7 @@ export const DragDropEngine = {
                 return;
             }
 
-            const clamped = snapEnabled
-                ? UI.clampGridResize(nextW, nextH, { packW: UI.getGridBoardBounds(canvas).packW })
-                : clampSize(nextW, nextH);
+            const clamped = clampSize(nextW, nextH);
             if (axis.includes('w')) nextX = origX + (origW - clamped.w);
             if (axis.includes('n')) nextY = origY + (origH - clamped.h);
 
