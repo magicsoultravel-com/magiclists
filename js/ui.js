@@ -118,18 +118,25 @@ export function isSnapLayoutMode(mode) {
 
 // #region agent log
 const _dbgInline = (location, message, data, hypothesisId) => {
+    const entry = {
+        sessionId: '6a1093',
+        location,
+        message,
+        data,
+        timestamp: Date.now(),
+        hypothesisId,
+        runId: 'post-fix'
+    };
+    try {
+        const key = 'debug-inline-6a1093';
+        const prev = JSON.parse(sessionStorage.getItem(key) || '[]');
+        prev.push(entry);
+        sessionStorage.setItem(key, JSON.stringify(prev.slice(-80)));
+    } catch (_) { /* ignore */ }
     fetch('http://127.0.0.1:7471/ingest/493faa61-dc8e-4db4-9c89-bbbc5a2ee789', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6a1093' },
-        body: JSON.stringify({
-            sessionId: '6a1093',
-            location,
-            message,
-            data,
-            timestamp: Date.now(),
-            hypothesisId,
-            runId: 'pre-fix'
-        })
+        body: JSON.stringify(entry)
     }).catch(() => {});
 };
 // #endregion
@@ -2252,17 +2259,32 @@ export const UI = {
     syncSpatialChromeForEditing(card) {
         if (!card?.querySelector?.('.ff-chrome')) return;
         const expanded = card.classList.contains('expanded');
+        card.classList.toggle('is-editing-inline', expanded);
         const layer = card.querySelector('.ff-resize-layer');
         const gutters = card.querySelectorAll('.ff-drag-gutter');
         if (layer) {
             layer.style.pointerEvents = expanded ? 'none' : '';
+            layer.style.zIndex = expanded ? '0' : '';
             layer.querySelectorAll('.ff-resize').forEach((handle) => {
                 handle.style.pointerEvents = expanded ? 'none' : '';
+                handle.style.zIndex = expanded ? '0' : '';
             });
         }
         gutters.forEach((g) => {
             g.style.pointerEvents = expanded ? 'none' : '';
         });
+        if (expanded) {
+            const shell = card.querySelector('.editor-note-shell');
+            if (shell) card.appendChild(shell);
+        }
+        // #region agent log
+        _dbgInline('ui.js:syncSpatialChromeForEditing', 'chrome sync', {
+            cardId: card.dataset.id,
+            expanded,
+            layerPe: layer?.style.pointerEvents || '',
+            shellZ: card.querySelector('.editor-note-shell')?.style.zIndex || '(css)'
+        }, 'B');
+        // #endregion
     },
 
     readFreeformCardSize(card) {
