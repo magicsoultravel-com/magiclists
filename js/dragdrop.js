@@ -780,38 +780,6 @@ export const DragDropEngine = {
             card.addEventListener('mousedown', (e) => {
                 if (e.button !== 0) return;
 
-                if (card.classList.contains('expanded') && e.target.closest('.editor-note-shell')) {
-                    const stack = document.elementsFromPoint(e.clientX, e.clientY).slice(0, 6).map((el) => {
-                        const cls = el.className && typeof el.className === 'string' ? el.className.slice(0, 50) : el.tagName;
-                        return cls;
-                    });
-                    const hitsEditor = pointerHitsNoteEditor(e.clientX, e.clientY, card);
-                    const onInline = !!e.target.closest('.card-inline-edit');
-                    const willDrag = !hitsEditor && !onInline && shouldStartCardDrag(e.target);
-                    // #region agent log
-                    fetch('http://127.0.0.1:7471/ingest/493faa61-dc8e-4db4-9c89-bbbc5a2ee789', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6a1093' },
-                        body: JSON.stringify({
-                            sessionId: '6a1093',
-                            location: 'dragdrop.js:cardMousedown',
-                            message: 'expanded editor click',
-                            data: {
-                                cardId: card.dataset.id,
-                                onInline,
-                                hitsEditor,
-                                willDrag,
-                                targetClass: e.target?.className?.slice?.(0, 50) || e.target?.tagName,
-                                stack
-                            },
-                            timestamp: Date.now(),
-                            hypothesisId: hitsEditor || onInline ? 'B' : 'D',
-                            runId: 'pre-fix'
-                        })
-                    }).catch(() => {});
-                    // #endregion
-                }
-
                 const resizeHandle = e.target.closest('.ff-resize');
                 if (resizeHandle) {
                     if (cardIsPinned(card)) return;

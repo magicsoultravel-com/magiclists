@@ -116,31 +116,6 @@ export function isSnapLayoutMode(mode) {
     return normalizeViewMode(mode) === 'grid';
 }
 
-// #region agent log
-const _dbgInline = (location, message, data, hypothesisId) => {
-    const entry = {
-        sessionId: '6a1093',
-        location,
-        message,
-        data,
-        timestamp: Date.now(),
-        hypothesisId,
-        runId: 'post-fix'
-    };
-    try {
-        const key = 'debug-inline-6a1093';
-        const prev = JSON.parse(sessionStorage.getItem(key) || '[]');
-        prev.push(entry);
-        sessionStorage.setItem(key, JSON.stringify(prev.slice(-80)));
-    } catch (_) { /* ignore */ }
-    fetch('http://127.0.0.1:7471/ingest/493faa61-dc8e-4db4-9c89-bbbc5a2ee789', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '6a1093' },
-        body: JSON.stringify(entry)
-    }).catch(() => {});
-};
-// #endregion
-
 export function isDesktopCard(card) {
     return card?.dataset?.desktop === '1';
 }
@@ -2277,14 +2252,6 @@ export const UI = {
             const shell = card.querySelector('.editor-note-shell');
             if (shell) card.appendChild(shell);
         }
-        // #region agent log
-        _dbgInline('ui.js:syncSpatialChromeForEditing', 'chrome sync', {
-            cardId: card.dataset.id,
-            expanded,
-            layerPe: layer?.style.pointerEvents || '',
-            shellZ: card.querySelector('.editor-note-shell')?.style.zIndex || '(css)'
-        }, 'B');
-        // #endregion
     },
 
     readFreeformCardSize(card) {
@@ -3902,22 +3869,6 @@ export const UI = {
         this.syncCardDraggable(card);
         this.syncBoardPinClass(card);
         this.syncSpatialChromeForEditing(card);
-        // #region agent log
-        const _shell = card.querySelector('.editor-note-shell');
-        const _edits = _shell?.querySelectorAll('.card-inline-edit') || [];
-        const _layer = card.querySelector('.ff-resize-layer');
-        const _handle = _layer?.querySelector('.ff-resize');
-        _dbgInline('ui.js:renderExpandedCard', 'expanded card rendered', {
-            cardId: card.dataset.id,
-            canEdit,
-            isDesktop: isDesktopCard(card),
-            inlineEditCount: _edits.length,
-            fields: [..._edits].map((e) => ({ field: e.dataset.field, ce: e.getAttribute('contenteditable') })),
-            layerPe: _layer?.style.pointerEvents || '(css)',
-            handlePe: _handle?.style.pointerEvents || '(css)',
-            canvasView: document.getElementById('app-canvas')?.className || ''
-        }, 'A');
-        // #endregion
     },
 
     refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor) {
@@ -4062,13 +4013,6 @@ export const UI = {
 
     focusInlineEdit(el, edge = 'end') {
         if (!el) return;
-        // #region agent log
-        _dbgInline('ui.js:focusInlineEdit', 'focus attempt', {
-            field: el?.dataset?.field,
-            onDesktop: !!el?.closest?.('.mini-card[data-desktop="1"]'),
-            hadFocusBefore: document.activeElement === el
-        }, 'E');
-        // #endregion
         el.focus();
         const range = document.createRange();
         range.selectNodeContents(el);
@@ -4076,13 +4020,6 @@ export const UI = {
         const sel = window.getSelection();
         sel?.removeAllRanges();
         sel?.addRange(range);
-        // #region agent log
-        _dbgInline('ui.js:focusInlineEdit', 'after focus', {
-            field: el?.dataset?.field,
-            activeIsEl: document.activeElement === el,
-            activeClass: document.activeElement?.className?.slice?.(0, 80) || ''
-        }, 'E');
-        // #endregion
     },
 
     setCaretAtPlainOffset(el, offset) {
@@ -4380,14 +4317,6 @@ export const UI = {
                 });
                 el.addEventListener('mousedown', (e) => {
                     if (e.button !== 0) return;
-                    // #region agent log
-                    _dbgInline('ui.js:inlineEditMousedown', 'handler fired', {
-                        field: el.dataset.field,
-                        targetClass: e.target?.className?.slice?.(0, 60) || e.target?.nodeName,
-                        stopMousedownPropagation,
-                        onDesktop: !!el.closest('.mini-card[data-desktop="1"]')
-                    }, 'C');
-                    // #endregion
                     if (el.classList.contains('rich-text--edit') && e.target.closest('a[href]')) {
                         e.preventDefault();
                     }
@@ -4397,14 +4326,6 @@ export const UI = {
                     if (document.activeElement !== el) {
                         this.focusInlineEdit(el, 'end');
                     }
-                });
-                el.addEventListener('blur', () => {
-                    // #region agent log
-                    _dbgInline('ui.js:inlineEditBlur', 'blur', {
-                        field: el.dataset.field,
-                        newActiveClass: document.activeElement?.className?.slice?.(0, 60) || document.activeElement?.tagName
-                    }, 'E');
-                    // #endregion
                 });
                 el.addEventListener('focus', () => {
                     const card = root.closest('.mini-card');
@@ -4663,13 +4584,6 @@ export const UI = {
             if (this.canEditInline() || localOnly) {
                 this.attachChecklistDrag(root, item, applyMutate, refresh, localOnly);
             }
-        } else {
-            // #region agent log
-            _dbgInline('ui.js:attachNoteBodyInteractions', 'skipped no auth', {
-                onDesktop: !!root.closest('.mini-card[data-desktop="1"]'),
-                inlineCount: root.querySelectorAll('.card-inline-edit').length
-            }, 'A');
-            // #endregion
         }
     },
 
