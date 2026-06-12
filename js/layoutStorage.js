@@ -548,7 +548,7 @@ export function normalizeSavedCardRect(saved, tileSize) {
         entry.x = Math.round(x);
         entry.y = Math.round(y);
     }
-    if (Number.isFinite(rw) && Number.isFinite(rh) && !isAtLabelSize(rw, rh)) {
+    if (Number.isFinite(rw) && Number.isFinite(rh) && !isAtSmallSize(rw, rh, readTileSmallFootprint())) {
         entry.rememberedW = Math.round(rw);
         entry.rememberedH = Math.round(rh);
     }
