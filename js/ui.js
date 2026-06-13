@@ -2013,13 +2013,13 @@ export const UI = {
             ? `<button type="button" id="modal-archive-btn" class="card-act card-act--archive" title="Archive note" aria-label="Archive note">${CARD_ICONS.delete}</button>`
             : '';
         const actionsHtml = `<div class="card-actions${isModal ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
-            ${dragBtn}
+            ${calBtn}
             <button type="button" class="card-act card-act--copy" title="Copy note as text" aria-label="Copy note as text">${CARD_ICONS.copy}</button>
             ${pinBtn}
             <button type="button" class="card-act card-act--color" title="Note color" aria-label="Note color" aria-haspopup="dialog">${CARD_ICONS.color}</button>
             <button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>
             <button type="button" class="card-act card-act--edit" title="Edit note" aria-label="Edit note">${CARD_ICONS.edit}</button>
-            ${calBtn}
+            ${dragBtn}
             <button type="button" class="card-act ${lastClass}"${lastId} title="${expandTitle}" aria-label="${expandTitle}">${lastIcon}</button>
         </div>`;
         return isModal ? `${archiveBtn}${actionsHtml}` : actionsHtml;

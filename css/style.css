@@ -1184,17 +1184,10 @@ html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
     word-break: break-word;
 }
 
-.note-surface .mini-card-title {
+.mini-card[data-desktop="1"]:not(.spatial-at-small):not(.tile-small) .note-surface .mini-card-title {
     white-space: normal;
     overflow-wrap: anywhere;
     word-break: break-word;
-}
-
-.mini-card[data-desktop="1"].spatial-at-small .note-surface .mini-card-title,
-.mini-card.tile-small .note-surface .mini-card-title {
-    white-space: nowrap;
-    overflow-wrap: normal;
-    word-break: normal;
 }
 
 .note-surface .editor-meta-row--footer.editor-meta-row--inline {
@@ -2225,13 +2218,24 @@ html[data-note-font="kalam"] .mini-card .step-text {
 
 .mini-card.tile-small .editor-note-topline .mini-card-title,
 .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title,
-.file-cabinet .file-cabinet-tab .mini-card-title {
+.file-cabinet .file-cabinet-tab .mini-card-title,
+.mini-card.tile-small .editor-note-topline .mini-card-title.card-inline-edit,
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title.card-inline-edit,
+.file-cabinet .file-cabinet-tab .mini-card-title.card-inline-edit {
     width: 100%;
     max-width: 100%;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    overflow-wrap: normal;
+    word-break: normal;
     line-height: 1.2;
+}
+
+.mini-card.tile-small .editor-note-header .mini-card-title,
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-header .mini-card-title,
+.file-cabinet .file-cabinet-tab .editor-note-header .mini-card-title {
+    padding: 0;
 }
 
 html[data-tile-small-footprint="label"] .mini-card.tile-small .editor-note-topline .mini-card-title,
@@ -4400,15 +4404,21 @@ textarea.form-input {
     scrollbar-width: thin;
 }
 
-html[data-tile-small-footprint="label"] #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small .editor-note-body,
-html[data-tile-small-footprint="label"] #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small .editor-note-body,
-html[data-tile-small-footprint="label"] #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small .editor-meta-wrap,
-html[data-tile-small-footprint="label"] #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small .editor-meta-wrap {
+#app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small .editor-note-body,
+#app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small .editor-note-body,
+#app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small .editor-meta-wrap,
+#app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small .editor-meta-wrap,
+#app-canvas.view-grid .mini-card[data-desktop="1"].tile-small .editor-note-body,
+#app-canvas.view-freeform .mini-card[data-desktop="1"].tile-small .editor-note-body,
+#app-canvas.view-grid .mini-card[data-desktop="1"].tile-small .editor-meta-wrap,
+#app-canvas.view-freeform .mini-card[data-desktop="1"].tile-small .editor-meta-wrap {
     display: none;
 }
 
 #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline.card-drag-zone,
-#app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline.card-drag-zone {
+#app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline.card-drag-zone,
+#app-canvas.view-grid .mini-card[data-desktop="1"].tile-small .editor-note-topline.card-drag-zone,
+#app-canvas.view-freeform .mini-card[data-desktop="1"].tile-small .editor-note-topline.card-drag-zone {
     flex: 1 1 auto;
     min-height: 0;
     align-items: center;
@@ -4540,34 +4550,36 @@ html[data-tile-small-footprint="label"] #app-canvas.view-freeform .mini-card[dat
     opacity: var(--desktop-drag-opacity);
 }
 
-#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.spatial-at-small) .editor-note-header .mini-card-title,
-#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.spatial-at-small) .editor-note-header .mini-card-title {
+#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.spatial-at-small):not(.tile-small) .editor-note-header .mini-card-title,
+#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.spatial-at-small):not(.tile-small) .editor-note-header .mini-card-title {
     cursor: text;
     width: max-content;
     max-width: 100%;
 }
 
 #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small .editor-note-header .mini-card-title,
-#app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small .editor-note-header .mini-card-title {
+#app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small .editor-note-header .mini-card-title,
+#app-canvas.view-freeform .mini-card[data-desktop="1"].tile-small .editor-note-header .mini-card-title,
+#app-canvas.view-grid .mini-card[data-desktop="1"].tile-small .editor-note-header .mini-card-title {
     cursor: text;
     width: 100%;
     max-width: 100%;
 }
 
-#app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-note-header .mini-card-title.card-inline-edit,
-#app-canvas.view-grid .mini-card[data-desktop="1"] .editor-note-header .mini-card-title.card-inline-edit {
+#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.spatial-at-small):not(.tile-small) .editor-note-header .mini-card-title.card-inline-edit,
+#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.spatial-at-small):not(.tile-small) .editor-note-header .mini-card-title.card-inline-edit {
     field-sizing: content;
 }
 
-#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.spatial-at-small) .editor-note-topline .editor-note-header,
-#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.spatial-at-small) .editor-note-topline .editor-note-header {
+#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.spatial-at-small):not(.tile-small) .editor-note-topline .editor-note-header,
+#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.spatial-at-small):not(.tile-small) .editor-note-topline .editor-note-header {
     flex: 0 1 auto;
     min-width: 0;
     max-width: calc(100% - 7rem);
 }
 
-#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.spatial-at-small) .editor-note-topline .note-editor-toolbar,
-#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.spatial-at-small) .editor-note-topline .note-editor-toolbar {
+#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.spatial-at-small):not(.tile-small) .editor-note-topline .note-editor-toolbar,
+#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.spatial-at-small):not(.tile-small) .editor-note-topline .note-editor-toolbar {
     margin-left: auto;
 }
 
