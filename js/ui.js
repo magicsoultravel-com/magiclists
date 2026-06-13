@@ -46,6 +46,7 @@ import {
     FILE_CABINET_FILED_CATEGORIES_KEY,
     getFileCabinetFiledCategories
 } from './fileCabinet.js';
+import { raiseDesktopElement, syncDesktopStackSeq } from './desktopStack.js';
 import { readTileSmallFootprint } from './tileFootprint.js';
 import { getGridMetrics, cellsToSpanW as gridCellsToSpanW, cellsToSpanH as gridCellsToSpanH } from './gridDensity.js';
 import {
