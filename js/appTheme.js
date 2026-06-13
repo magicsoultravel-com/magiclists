@@ -206,6 +206,24 @@ export const APP_THEMES = [
             '--desktop-bg': '#1a1c20',
             '--chrome-bg': '#22252b'
         }
+    },
+    {
+        id: 'wood',
+        label: 'Wood',
+        desc: 'Old furniture desk',
+        special: 'wood',
+        swatch: ['#a67c3a', '#f5e8b8', '#c9a227'],
+        tokens: {
+            '--bg-primary': '#3d2817',
+            '--bg-surface': '#4a3220',
+            '--bg-card': '#f5e8b8',
+            '--text-main': '#f0e6d0',
+            '--text-muted': '#b8a080',
+            '--accent': '#c9a227',
+            '--border-color': '#6b4c2a',
+            '--desktop-bg': '#a67c3a',
+            '--chrome-bg': '#5c3317'
+        }
     }
 ];
 
