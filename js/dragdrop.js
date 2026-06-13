@@ -11,12 +11,9 @@ import {
     isDesktopCard,
     FREEFORM_MIN_W,
     FREEFORM_MIN_H,
-    CANVAS_GRID_W,
     CANVAS_COL_GAP,
     CANVAS_LAYOUT_ORIGIN,
-    COLUMN_MIN_CANVAS_H,
-    COLUMN_GRID_CELL_W,
-    COLUMN_GRID_CELL_H
+    getGridMetrics
 } from './ui.js';
 import { isAtSmallSize } from './tileGeometry.js';
 import { readTileSmallFootprint } from './tileFootprint.js';
@@ -94,9 +91,10 @@ function finishSnapPanelGesture(card, {
     const bounds = getBounds();
     const live = UI.readNoteRect(card);
     const origin = bounds.origin ?? CANVAS_LAYOUT_ORIGIN;
+    const edgePad = bounds.edgePad ?? getGridMetrics().edgePad;
     const rect = snapMode === 'position'
-        ? UI.snapNotePosition(live, { maxW: bounds.packW, maxH: bounds.maxH, origin })
-        : UI.snapNoteRect(live, { maxW: bounds.packW, maxH: bounds.maxH, origin });
+        ? UI.snapNotePosition(live, { maxW: bounds.packW, maxH: bounds.maxH, origin, edgePad })
+        : UI.snapNoteRect(live, { maxW: bounds.packW, maxH: bounds.maxH, origin, edgePad });
     UI.applyNoteRect(card, rect, { settling: animate });
 
     const item = currentItems.find((i) => i.id === card.dataset.id);
@@ -277,7 +275,7 @@ export const DragDropEngine = {
                 const zoom = getCanvasZoom(canvas);
                 const { origin, viewportH } = UI.getGridViewportBounds(canvas);
                 const scrollY = canvas.scrollTop / zoom;
-                const maxH = origin + scrollY + viewportH + COLUMN_GRID_CELL_H;
+                const maxH = origin + scrollY + viewportH + getGridMetrics().cellH;
                 const layout = UI.computeGridBoardLayout(
                     canvas,
                     actorCard.dataset.id,
@@ -365,9 +363,11 @@ export const DragDropEngine = {
                 }
             }
             e.preventDefault();
-            const origin = snapEnabled ? (UI.getGridBoardBounds(canvas).origin ?? 0) : 0;
-            const x = Math.max(origin, dragActive.origX + dx);
-            const y = Math.max(origin, dragActive.origY + dy);
+            const boardBounds = snapEnabled ? UI.getGridBoardBounds(canvas) : null;
+            const origin = boardBounds?.origin ?? 0;
+            const minCoord = origin + (boardBounds?.edgePad ?? 0);
+            const x = Math.max(minCoord, dragActive.origX + dx);
+            const y = Math.max(minCoord, dragActive.origY + dy);
             dragActive.card.style.left = `${x}px`;
             dragActive.card.style.top = `${y}px`;
             if (snapEnabled) {
@@ -388,11 +388,9 @@ export const DragDropEngine = {
                 if (snapEnabled) {
                     finishSnapDrop(card);
                 } else {
-                    UI.saveFreeformPosition(
-                        card.dataset.id,
-                        parseFloat(card.style.left) || 0,
-                        parseFloat(card.style.top) || 0
-                    );
+                    const rect = UI.clampNoteToBoardEdges(UI.readNoteRect(card), UI.getGridBoardBounds(canvas));
+                    UI.applyNoteRect(card, rect, { settling: false });
+                    UI.saveFreeformPosition(card.dataset.id, rect.x, rect.y);
                     UI.updateBoardCanvasExtents(canvas);
                 }
             } else if (snapEnabled) {
@@ -424,7 +422,9 @@ export const DragDropEngine = {
                 }
             }
             const item = currentItems.find((i) => i.id === card.dataset.id);
-            const origin = snapEnabled ? (UI.getGridBoardBounds(canvas).origin ?? 0) : 0;
+            const boardBounds = snapEnabled ? UI.getGridBoardBounds(canvas) : null;
+            const origin = boardBounds?.origin ?? 0;
+            const minCoord = origin + (boardBounds?.edgePad ?? 0);
 
             let nextX = origX;
             let nextY = origY;
@@ -443,9 +443,9 @@ export const DragDropEngine = {
             }
 
             if (item && UI.isCollapsedTile(card) && tierResizeState) {
-                nextX = Math.max(origin, nextX);
-                nextY = Math.max(origin, nextY);
-                const bounds = snapEnabled ? UI.getGridBoardBounds(canvas) : null;
+                nextX = Math.max(minCoord, nextX);
+                nextY = Math.max(minCoord, nextY);
+                const bounds = boardBounds;
                 const maxW = bounds ? bounds.packW + origin : undefined;
                 UI.processCollapsedTierResizeMove(card, item, tierResizeState, {
                     x: nextX,
@@ -467,8 +467,8 @@ export const DragDropEngine = {
             if (axis.includes('w')) nextX = origX + (origW - clamped.w);
             if (axis.includes('n')) nextY = origY + (origH - clamped.h);
 
-            nextX = Math.max(origin, nextX);
-            nextY = Math.max(origin, nextY);
+            nextX = Math.max(minCoord, nextX);
+            nextY = Math.max(minCoord, nextY);
             const finalW = clamped.w;
             const finalH = clamped.h;
 

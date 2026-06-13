@@ -25,6 +25,7 @@ import { ColorPicker, PALETTE_NOTE, randomNoteColor } from './colorPicker.js';
 import { FocusMode } from './focusMode.js';
 import { DisplayOptions } from './displayOptions.js';
 import { applyTileSmallFootprint } from './tileFootprint.js';
+import { GridFineness, migrateLegacyGridLayoutIfNeeded } from './gridDensity.js';
 import { AppTheme } from './appTheme.js';
 import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
@@ -78,6 +79,8 @@ class Application {
         DesktopBackground.init();
         ChromeBackground.init();
         NoteFontScale.init();
+        migrateLegacyGridLayoutIfNeeded();
+        GridFineness.apply();
         DisplayOptions.init({
             getLoggedIn: () => AppState.user.isLoggedIn
         });
@@ -894,6 +897,14 @@ class Application {
 
         window.addEventListener('appearance:tile_footprint_changed', () => {
             UI.reapplySmallFootprintOnBoard();
+        });
+
+        window.addEventListener('appearance:grid_fineness_changed', (e) => {
+            applyTileSmallFootprint();
+            const { prevMetrics, nextMetrics } = e.detail || {};
+            if (prevMetrics && nextMetrics) {
+                UI.reapplyGridFinenessOnBoard(prevMetrics, nextMetrics);
+            }
         });
 
         window.addEventListener('item:selected_for_edit', (e) => {

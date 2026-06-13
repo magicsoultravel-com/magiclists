@@ -14,10 +14,12 @@ import { ACTION_ICONS, CARD_ICONS } from './ui.js';
 import { AppTheme, buildThemeOptionsHtml, isAppThemeCustomized, readAppTheme } from './appTheme.js';
 import {
     applyTileSmallFootprint,
+    getSmallFootprintRect,
     isTileSmallFootprintCustomized,
     readTileSmallFootprint,
     writeTileSmallFootprint
 } from './tileFootprint.js';
+import { GridFineness } from './gridDensity.js';
 
 const STORAGE_KEY = 'matrix_display_options';
 
@@ -27,6 +29,7 @@ const DEFAULTS = {
     showNoteSize: true,
     showLineCount: false,
     desktopGradient: false,
+    desktopGridLines: false,
     cardAnimations: true,
     noteFontId: 'default'
 };
@@ -43,6 +46,7 @@ export function readDisplayOptions() {
             showNoteSize: raw.showNoteSize !== false,
             showLineCount: raw.showLineCount === true,
             desktopGradient: raw.desktopGradient === true,
+            desktopGridLines: raw.desktopGridLines === true,
             cardAnimations: raw.cardAnimations !== false,
             noteFontId
         };
@@ -64,6 +68,7 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     root.dataset.showNoteSize = options.showNoteSize ? '1' : '0';
     root.dataset.showNoteLines = options.showLineCount ? '1' : '0';
     root.dataset.desktopGradient = options.desktopGradient ? '1' : '0';
+    root.dataset.desktopGridLines = options.desktopGridLines ? '1' : '0';
     root.dataset.cardAnimations = options.cardAnimations ? '1' : '0';
     applyNoteFont(options.noteFontId);
     applyTileSmallFootprint(readTileSmallFootprint());
@@ -75,6 +80,7 @@ function isCustomized(options) {
         || !options.showNoteSize
         || options.showLineCount
         || options.desktopGradient
+        || options.desktopGridLines
         || !options.cardAnimations
         || isNoteFontCustomized(options.noteFontId)
         || isAppThemeCustomized()
@@ -82,7 +88,8 @@ function isCustomized(options) {
         || DesktopZoom.isCustomized()
         || ChromeBackground.isCustomized()
         || DesktopBackground.isCustomized()
-        || isTileSmallFootprintCustomized();
+        || isTileSmallFootprintCustomized()
+        || GridFineness.isCustomized();
 }
 
 export const DisplayOptions = {
@@ -109,7 +116,7 @@ export const DisplayOptions = {
             this.toggleModal();
         });
 
-        window.addEventListener('desktop:zoom_changed', () => this.syncButtonState());
+        window.addEventListener('appearance:grid_fineness_changed', () => this.syncButtonState());
         window.addEventListener('note:font_scale_changed', () => this.syncButtonState());
         window.addEventListener('appearance:color_changed', () => this.syncButtonState());
         window.addEventListener('app:theme_changed', () => this.syncButtonState());
@@ -222,16 +229,17 @@ export const DisplayOptions = {
 
     tileFootprintOptionsHtml(selectedId) {
         const options = [
-            { id: 'label', label: 'Label', size: '96×28' },
-            { id: 'card', label: 'Card', size: '96×56' },
-            { id: 'wide', label: 'Wide card', size: '128×96' }
+            { id: 'label', label: 'Label', size: getSmallFootprintRect('label') },
+            { id: 'card', label: 'Card', size: getSmallFootprintRect('card') },
+            { id: 'wide', label: 'Wide card', size: getSmallFootprintRect('wide') }
         ];
         return options.map((opt) => {
             const selected = opt.id === selectedId;
+            const sizeLabel = `${opt.size.w}×${opt.size.h}`;
             return `<button type="button" class="tile-footprint-option${selected ? ' is-selected' : ''}" data-footprint="${opt.id}" role="menuitemradio" aria-checked="${selected}">
                 <span class="tile-footprint-option-meta">
                     <span class="tile-footprint-option-label">${escapeHtml(opt.label)}</span>
-                    <span class="tile-footprint-option-desc">${escapeHtml(opt.size)}</span>
+                    <span class="tile-footprint-option-desc">${escapeHtml(sizeLabel)}</span>
                 </span>
                 ${selected ? '<span class="clock-style-check" aria-hidden="true">✓</span>' : ''}
             </button>`;
@@ -281,6 +289,7 @@ export const DisplayOptions = {
         const desktopZoomPct = `${Math.round(DesktopZoom.getScale() * 100)}%`;
         const desktopZoomEnabled = this.isDesktopZoomEnabled();
         const tileFootprint = readTileSmallFootprint();
+        const gridFinenessLabel = GridFineness.getCellLabel();
 
         return `
             <div class="modal modal--wide display-options-modal">
@@ -325,8 +334,16 @@ export const DisplayOptions = {
                         </section>
                         <section class="display-options-section display-options-section--desktop">
                             <h3 class="display-options-heading">Desktop</h3>
+                            <div class="display-options-scale-row">
+                                ${this.stepperRow({
+                                    idPrefix: 'display-opt-grid-fineness',
+                                    label: 'Grid fineness',
+                                    valuePercent: gridFinenessLabel
+                                })}
+                            </div>
                             <div class="display-options-check-grid display-options-check-grid--inline">
                                 ${this.optionRow('display-opt-gradient', 'Gradient background', opts.desktopGradient)}
+                                ${this.optionRow('display-opt-grid-lines', 'Show grid lines', opts.desktopGridLines)}
                                 ${this.optionRow('display-opt-animations', 'Card animations', opts.cardAnimations)}
                             </div>
                         </section>
@@ -362,6 +379,7 @@ export const DisplayOptions = {
         bindToggle('display-opt-note-size', 'showNoteSize');
         bindToggle('display-opt-note-lines', 'showLineCount');
         bindToggle('display-opt-gradient', 'desktopGradient');
+        bindToggle('display-opt-grid-lines', 'desktopGridLines');
         bindToggle('display-opt-animations', 'cardAnimations');
 
         root.querySelectorAll('.app-theme-option').forEach((btn) => {
@@ -399,6 +417,12 @@ export const DisplayOptions = {
             disabled: !this.isDesktopZoomEnabled(),
             onOut: () => DesktopZoom.step(-DesktopZoom.ZOOM_STEP),
             onIn: () => DesktopZoom.step(DesktopZoom.ZOOM_STEP)
+        });
+
+        this.bindStepper(root, {
+            idPrefix: 'display-opt-grid-fineness',
+            onOut: () => GridFineness.step(-1),
+            onIn: () => GridFineness.step(1)
         });
 
         root.querySelector('#display-opt-chrome-bg')?.addEventListener('click', (e) => {

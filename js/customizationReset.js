@@ -6,6 +6,7 @@ import { ClockStyle } from './clockStyle.js';
 import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
 import { applyTileSmallFootprint, writeTileSmallFootprint } from './tileFootprint.js';
+import { GridFineness } from './gridDensity.js';
 
 const CUSTOMIZATION_KEYS = [
     'matrix_app_theme',
@@ -17,7 +18,9 @@ const CUSTOMIZATION_KEYS = [
     'matrix_note_font',
     'matrix_note_font_scale',
     'matrix_display_options',
-    'matrix_tile_small_footprint'
+    'matrix_tile_small_footprint',
+    'matrix_grid_fineness',
+    'matrix_grid_fineness_migrated'
 ];
 
 const DISPLAY_DEFAULTS = {
@@ -26,6 +29,7 @@ const DISPLAY_DEFAULTS = {
     showNoteSize: true,
     showLineCount: false,
     desktopGradient: false,
+    desktopGridLines: false,
     cardAnimations: true,
     noteFontId: 'default'
 };
@@ -57,6 +61,7 @@ export function resetCustomizationToDefaults() {
     DesktopZoom.setScale(1);
     NoteFontScale.setScale(1);
     writeTileSmallFootprint('card');
+    GridFineness.setStep(GridFineness.DEFAULT_FINENESS_STEP);
     applyTileSmallFootprint('card');
 
     window.dispatchEvent(new CustomEvent('customization:reset'));

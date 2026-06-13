@@ -1,45 +1,67 @@
 import {
+    getGridMetrics,
+    cellsToSpanW,
+    cellsToSpanH,
+    spanToCellsW,
+    spanToCellsH,
+    CANVAS_LAYOUT_ORIGIN,
+    COLUMN_GRID_GAP,
+    CANVAS_COL_GAP
+} from './gridDensity.js';
+import {
     getSmallFootprintRect,
     readTileSmallFootprint
 } from './tileFootprint.js';
 
-export const FREEFORM_DEFAULT_W = 96;
-export const FREEFORM_DEFAULT_H = 56;
+export {
+    getGridMetrics,
+    cellsToSpanW,
+    cellsToSpanH,
+    spanToCellsW,
+    spanToCellsH,
+    CANVAS_LAYOUT_ORIGIN,
+    COLUMN_GRID_GAP,
+    CANVAS_COL_GAP
+} from './gridDensity.js';
+
 export const FREEFORM_EXPANDED_W = 196;
 export const FREEFORM_MIN_W = 72;
 export const FREEFORM_MIN_H = 28;
 export const FREEFORM_EXPANDED_DEFAULT_H = 120;
 
-export const COLUMN_GRID_CELL_W = FREEFORM_DEFAULT_W;
-export const COLUMN_GRID_CELL_H = FREEFORM_DEFAULT_H;
-export const COLUMN_GRID_GAP = 4;
-export const COLUMN_MIN_COLS = 2;
-export const COLUMN_INNER_PAD = 8;
-export const COLUMN_MIN_INNER_W = COLUMN_MIN_COLS * COLUMN_GRID_CELL_W + (COLUMN_MIN_COLS - 1) * COLUMN_GRID_GAP;
-export const COLUMN_HEADER_APPROX_H = 40;
-export const COLUMN_MIN_CANVAS_H = COLUMN_HEADER_APPROX_H + COLUMN_INNER_PAD + COLUMN_GRID_CELL_H;
-export const CANVAS_COL_GAP = 8;
-export const CANVAS_GRID_W = COLUMN_MIN_INNER_W + COLUMN_INNER_PAD * 2;
-export const COLUMN_STRIDE_X = COLUMN_GRID_CELL_W + COLUMN_GRID_GAP;
-export const COLUMN_STRIDE_Y = COLUMN_GRID_CELL_H + COLUMN_GRID_GAP;
-export const CANVAS_LAYOUT_ORIGIN = 16;
-export const CANVAS_PACK_GAP = COLUMN_GRID_GAP;
-
-export const TILE_LABEL_H = 28;
-export const TILE_LARGE_W_CELLS = 2.5;
-export const TILE_LARGE_H_CELLS = 5;
+export const TILE_LARGE_W_CELLS = 3;
+export const TILE_LARGE_H_CELLS = 4;
 /** @deprecated */
 export const TILE_NOTE_W_CELLS = TILE_LARGE_W_CELLS;
 /** @deprecated */
 export const TILE_NOTE_H_CELLS = TILE_LARGE_H_CELLS;
 export const TILE_RESIZE_MIN_W = 72;
-export const TILE_RESIZE_MIN_H = TILE_LABEL_H;
 
 export const TILE_SIZES = ['small', 'large'];
 export const DEFAULT_TILE_SIZE = 'large';
 export const LEGACY_TILE_SIZE = 'large';
 
 const TIER_HYSTERESIS = 4;
+
+export function getFreformDefaultW() {
+    return getSmallFootprintRect('card').w;
+}
+
+export function getFreformDefaultH() {
+    return getGridMetrics().cellS;
+}
+
+/** @deprecated use getFreformDefaultW */
+export const FREEFORM_DEFAULT_W = 112;
+/** @deprecated use getFreformDefaultH */
+export const FREEFORM_DEFAULT_H = 56;
+
+export function getTileLabelH() {
+    return getSmallFootprintRect('label').h;
+}
+
+export const TILE_LABEL_H = 28;
+export const TILE_RESIZE_MIN_H = TILE_LABEL_H;
 
 export function normalizeTileSize(tileSize) {
     if (tileSize === 'small' || tileSize === 'large') return tileSize;
@@ -50,24 +72,6 @@ export function normalizeTileSize(tileSize) {
 
 export function resolveTileSize(item) {
     return normalizeTileSize(item?.tileSize);
-}
-
-export function cellsToSpanW(cells) {
-    const n = Math.max(1, cells);
-    return Math.round(n * COLUMN_GRID_CELL_W + (n - 1) * COLUMN_GRID_GAP);
-}
-
-export function cellsToSpanH(cells) {
-    const n = Math.max(1, cells);
-    return Math.round(n * COLUMN_GRID_CELL_H + (n - 1) * COLUMN_GRID_GAP);
-}
-
-export function spanToCellsW(span) {
-    return Math.max(1, Math.round((span + COLUMN_GRID_GAP) / COLUMN_STRIDE_X));
-}
-
-export function spanToCellsH(span) {
-    return Math.max(1, Math.round((span + COLUMN_GRID_GAP) / COLUMN_STRIDE_Y));
 }
 
 export function softSnapPx(value) {
@@ -117,17 +121,18 @@ export function matchesSmallFootprintRect(w, h, footprint = readTileSmallFootpri
 
 export function getPackStrideY(footprint = readTileSmallFootprint()) {
     const small = getSmallRect(footprint);
-    if (small.h <= TILE_LABEL_H + 2) {
+    const labelH = getTileLabelH();
+    if (small.h <= labelH + 2) {
         return small.h + COLUMN_GRID_GAP;
     }
-    return COLUMN_STRIDE_Y;
+    return getGridMetrics().strideY;
 }
 
 export function getPackStrideYForRect(w, h, footprint = readTileSmallFootprint()) {
     if (isAtSmallSize(w, h, footprint)) {
         return getSmallRect(footprint).h + COLUMN_GRID_GAP;
     }
-    return COLUMN_STRIDE_Y;
+    return getGridMetrics().strideY;
 }
 
 export function getGridSnapMinH(footprint = readTileSmallFootprint()) {

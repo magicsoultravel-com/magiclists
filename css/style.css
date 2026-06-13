@@ -11,21 +11,27 @@
     --border-color: #323238;
     --desktop-drag-opacity: 0.55;
     --note-font-scale: 1;
-    --tile-cell-w: 96px;
+    --tile-cell-w: 56px;
     --tile-cell-h: 56px;
-    --tile-small-w-label: 96px;
+    --tile-small-w-label: 112px;
     --tile-small-h-label: 28px;
-    --tile-small-w-card: 96px;
+    --tile-small-w-card: 112px;
     --tile-small-h-card: 56px;
     --tile-small-w-wide: 128px;
     --tile-small-h-wide: 96px;
-    --tile-small-w: 96px;
+    --tile-small-w: 112px;
     --tile-small-h: 56px;
-    --tile-large-w: 246px;
-    --tile-large-h: 296px;
+    --tile-large-w: 176px;
+    --tile-large-h: 236px;
     --tile-label-h: 28px;
-    --tile-note-w: 246px;
-    --tile-note-h: 296px;
+    --tile-note-w: 176px;
+    --tile-note-h: 236px;
+    --grid-cell-s: 56px;
+    --grid-gap: 4px;
+    --grid-stride-x: 60px;
+    --grid-stride-y: 60px;
+    --grid-origin: 16px;
+    --grid-edge-pad: 28px;
     --board-area-inset: 0.875rem;
 
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -4310,11 +4316,15 @@ textarea.form-input {
 #app-canvas.view-grid {
     position: relative;
     display: block !important;
-    min-height: 100%;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
 }
 
-#app-canvas.view-freeform {
-    overflow: auto;
+.desktop-board-pane {
+    position: relative;
+    min-height: 100%;
+    box-sizing: border-box;
 }
 
 #app-canvas.view-grid .mini-card[data-desktop="1"],
@@ -5535,12 +5545,21 @@ html[data-tile-small-footprint="label"] #app-canvas.view-grid .mini-card[data-de
     cursor: not-allowed;
 }
 
+html[data-desktop-grid-lines="1"] #app-canvas.view-grid,
+html[data-desktop-grid-lines="1"] #app-canvas.view-freeform {
+    background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: var(--grid-stride-x) var(--grid-stride-y);
+    background-position: var(--grid-origin) var(--grid-origin);
+}
+
 #app-canvas.view-grid.is-layout-active {
     background-image:
         linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
         linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-    background-size: 100px 60px;
-    background-position: 1rem 1rem;
+    background-size: var(--grid-stride-x) var(--grid-stride-y);
+    background-position: var(--grid-origin) var(--grid-origin);
 }
 
 #app-canvas.view-grid .layout-settling {
@@ -5549,14 +5568,6 @@ html[data-tile-small-footprint="label"] #app-canvas.view-grid .mini-card[data-de
 
 #app-canvas.view-grid .mini-card.layout-preview {
     opacity: 0.9;
-}
-
-#app-canvas.view-grid:not(.is-grid-forcing) {
-    overflow-y: hidden;
-}
-
-#app-canvas.view-grid.is-grid-forcing {
-    overflow-y: auto;
 }
 
 .desktop-zoom-controls {
@@ -5587,8 +5598,8 @@ html[data-tile-small-footprint="label"] #app-canvas.view-grid .mini-card[data-de
     background-image:
         linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
         linear-gradient(to bottom, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
-    background-size: 100px 60px;
-    background-position: var(--board-area-inset) var(--board-area-inset);
+    background-size: var(--grid-stride-x) var(--grid-stride-y);
+    background-position: var(--grid-origin) var(--grid-origin);
 }
 
 /* ==========================================================================
