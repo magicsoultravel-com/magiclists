@@ -653,7 +653,7 @@ export function initFileCabinetCategoryActions(mount, signal) {
             const cat = col?.dataset.category;
             if (cat) {
                 toggleFileCabinetCategoryFiled(cat);
-                window.dispatchEvent(new CustomEvent('filecabinet:layout_changed'));
+                window.dispatchEvent(new CustomEvent('filecabinet:layout_changed', { detail: { flushLayout: false } }));
             }
             return;
         }
@@ -665,7 +665,7 @@ export function initFileCabinetCategoryActions(mount, signal) {
             const cat = chip?.dataset.category;
             if (cat) {
                 toggleFileCabinetCategoryFiled(cat);
-                window.dispatchEvent(new CustomEvent('filecabinet:layout_changed'));
+                window.dispatchEvent(new CustomEvent('filecabinet:layout_changed', { detail: { flushLayout: false } }));
             }
         }
     }, { signal });
@@ -748,7 +748,7 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
             UI
         });
         state.card.classList.remove('is-file-cabinet-dragging');
-        window.dispatchEvent(new CustomEvent('filecabinet:layout_changed'));
+        window.dispatchEvent(new CustomEvent('filecabinet:layout_changed', { detail: { flushLayout: false } }));
     };
     const runPreview = (clientX, clientY) => {
         if (!dragState?.active) return;

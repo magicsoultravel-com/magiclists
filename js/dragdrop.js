@@ -17,7 +17,7 @@ import {
 } from './ui.js';
 import { isAtSmallSize } from './tileGeometry.js';
 import { readTileSmallFootprint } from './tileFootprint.js';
-import { initFileCabinetDrag, isFileCabinetActive } from './fileCabinet.js';
+import { initFileCabinetDrag, isFileCabinetActive, shouldFileItem } from './fileCabinet.js';
 
 const DRAG_THRESHOLD = 4;
 const GRID_SCROLL_EDGE = 40;
@@ -71,6 +71,15 @@ function cardIsPinned(card) {
     return !!id && UI.isBoardPinned(id);
 }
 
+function maybeRepartitionFileCabinetAfterResize(canvas, card, currentItems) {
+    if (!isFileCabinetActive() || !canvas || !card?.dataset?.id) return;
+    const sortBy = canvas.classList.contains('view-grid') ? 'grid' : 'freeform';
+    const item = currentItems.find((i) => i.id === card.dataset.id);
+    if (item && shouldFileItem(item, sortBy, UI)) {
+        window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
+    }
+}
+
 function finishSnapPanelGesture(card, {
     canvas,
     currentItems,
@@ -105,6 +114,7 @@ function finishSnapPanelGesture(card, {
     if (item && card.classList.contains('expanded') && !isDesktopCard(card)
         && UI.shouldSnapPanelCollapse(rect.w, rect.h)) {
         onCollapseFromResize(card, item, rect, { animate, bounds });
+        maybeRepartitionFileCabinetAfterResize(canvas, card, currentItems);
         cleanupActive?.();
         return;
     }
@@ -116,6 +126,7 @@ function finishSnapPanelGesture(card, {
     if (isDesktopCard(card)) {
         UI.finalizeDesktopCard(card);
     }
+    maybeRepartitionFileCabinetAfterResize(canvas, card, currentItems);
     cleanupActive?.();
 }
 
@@ -534,6 +545,7 @@ export const DragDropEngine = {
                         }
                     }
                     UI.updateBoardCanvasExtents(canvas);
+                    maybeRepartitionFileCabinetAfterResize(canvas, card, currentItems);
                 }
             } else if (snapEnabled) {
                 clearLayoutPreview(true);

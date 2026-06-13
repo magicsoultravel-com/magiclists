@@ -37,6 +37,7 @@ import { Fullscreen } from './fullscreen.js';
 import { SidebarRadio } from './sidebarRadio.js';
 import { SidebarTv } from './sidebarTv.js';
 import {
+    isFileCabinetActive,
     migrateItemsToFileCabinet,
     setFileCabinetActive
 } from './fileCabinet.js';
@@ -203,7 +204,7 @@ class Application {
     async _syncDataStoreInner() {
         const canvas = document.getElementById('app-canvas');
         try {
-            if (canvas && AppState.workspaceMode !== 'drawing') {
+            if (canvas && AppState.workspaceMode !== 'drawing' && !isFileCabinetActive()) {
                 UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
             }
 
@@ -567,6 +568,7 @@ class Application {
         AppState.viewSettings.fileCabinet = next;
         setFileCabinetActive(next);
         if (next) {
+            UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
             migrateItemsToFileCabinet(AppState.items, AppState.viewSettings.sortBy, UI);
         }
         this.updateViewToggleState();
@@ -991,9 +993,10 @@ class Application {
             await this.syncDataStore();
         });
 
-        window.addEventListener('board:visibility_changed', async () => {
+        window.addEventListener('board:visibility_changed', async (e) => {
             const canvas = document.getElementById('app-canvas');
-            if (canvas) {
+            const skipFlush = e.detail?.flushLayout === false || isFileCabinetActive();
+            if (canvas && !skipFlush) {
                 UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
             }
             UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
@@ -1001,9 +1004,10 @@ class Application {
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         });
 
-        window.addEventListener('filecabinet:layout_changed', async () => {
+        window.addEventListener('filecabinet:layout_changed', async (e) => {
             const canvas = document.getElementById('app-canvas');
-            if (canvas) {
+            const skipFlush = e.detail?.flushLayout === false || isFileCabinetActive();
+            if (canvas && !skipFlush) {
                 UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
             }
             UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
