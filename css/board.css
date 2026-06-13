@@ -600,7 +600,6 @@ html[data-tile-small-footprint="label"] #app-canvas.view-freeform .mini-card[dat
 }
 
 #app-canvas.view-freeform .mini-card.expanded .card-header,
-#app-canvas.view-freeform .mini-card.expanded .note-editor-toolbar,
 #app-canvas.view-freeform .mini-card.expanded .editor-note-header {
     flex: 0 0 auto;
     min-width: 0;

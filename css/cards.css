@@ -92,7 +92,6 @@
     min-width: 0;
     max-width: 100%;
     overflow: hidden;
-    padding-right: 0.15rem;
 }
 
 .mini-card.tile-small .editor-note-topline .mini-card-title,
@@ -125,24 +124,19 @@ html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-ca
     padding-bottom: 0;
 }
 
-.mini-card.tile-small .editor-note-topline .note-editor-toolbar,
-.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .note-editor-toolbar,
-.file-cabinet .file-cabinet-tab .note-editor-toolbar {
+.editor-note-topline .note-editor-toolbar {
     position: absolute;
     right: 0;
     top: 0;
     z-index: 9;
-    flex: 0 0 auto;
     min-height: unset;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.12s ease;
 }
 
-.mini-card.tile-small:hover .editor-note-topline .note-editor-toolbar,
-.mini-card.tile-small:focus-within .editor-note-topline .note-editor-toolbar,
-.mini-card[data-desktop="1"].spatial-at-small:hover .editor-note-topline .note-editor-toolbar,
-.mini-card[data-desktop="1"].spatial-at-small:focus-within .editor-note-topline .note-editor-toolbar,
+.mini-card:hover .editor-note-topline .note-editor-toolbar,
+.mini-card:focus-within .editor-note-topline .note-editor-toolbar,
 .file-cabinet .file-cabinet-tab:hover .note-editor-toolbar,
 .file-cabinet .file-cabinet-tab:focus-within .note-editor-toolbar {
     opacity: 1;
@@ -188,7 +182,6 @@ html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-ca
 
 .mini-card.expanded .card-header,
 .mini-card.expanded .editor-note-topline,
-.mini-card.expanded .note-editor-toolbar,
 .mini-card.expanded .editor-note-header {
     flex: 0 0 auto;
 }
@@ -285,14 +278,23 @@ html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-ca
     pointer-events: none;
 }
 
-.mini-card.compact .card-actions,
-.mini-card.tile-small .note-editor-toolbar .card-actions,
-.mini-card[data-desktop="1"].spatial-at-small .note-editor-toolbar .card-actions,
-.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-actions,
-.mini-card.expanded .note-editor-toolbar .card-actions {
+.mini-card.compact .card-actions {
     position: static;
     top: auto;
     right: auto;
+    gap: 1px;
+    padding: 1px 2px;
+    border-radius: 0 4px 0 5px;
+    z-index: 12;
+    display: inline-flex;
+    width: max-content;
+    max-width: none;
+    box-sizing: border-box;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.mini-card .note-editor-toolbar .card-actions {
     gap: 1px;
     padding: 1px 2px;
     border-radius: 0 4px 0 5px;
@@ -411,19 +413,7 @@ html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-ca
 }
 
 .mini-card:hover .card-actions,
-.mini-card:focus-within .card-actions,
-.mini-card:hover .editor-note-topline .card-actions,
-.mini-card:focus-within .editor-note-topline .card-actions,
-.mini-card.expanded:hover .note-editor-toolbar .card-actions,
-.mini-card.expanded:focus-within .note-editor-toolbar .card-actions {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-#app-canvas.view-freeform .mini-card.expanded .note-editor-toolbar .card-actions,
-#app-canvas.view-grid .mini-card.expanded .note-editor-toolbar .card-actions,
-#app-canvas.view-freeform .mini-card.expanded .editor-note-topline .card-actions,
-#app-canvas.view-grid .mini-card.expanded .editor-note-topline .card-actions {
+.mini-card:focus-within .card-actions {
     opacity: 1;
     pointer-events: auto;
 }
@@ -441,23 +431,12 @@ html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-ca
 .editor-note-topline .editor-note-header {
     flex: 1 1 auto;
     min-width: 0;
-}
-
-.editor-note-topline .note-editor-toolbar {
-    flex: 0 0 auto;
-    min-height: unset;
-}
-
-.editor-note-topline .note-editor-toolbar .card-actions {
-    position: static;
-    top: auto;
-    right: auto;
+    width: 100%;
 }
 
 .note-editor-toolbar {
     position: relative;
     min-width: 0;
-    min-height: 1rem;
 }
 
 .note-editor-toolbar .card-actions {
