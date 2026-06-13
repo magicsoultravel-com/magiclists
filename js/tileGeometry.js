@@ -105,6 +105,35 @@ export function isAtSmallSize(w, h, footprint = readTileSmallFootprint()) {
     return w <= small.w + 2 && h <= small.h + 2;
 }
 
+/** @deprecated alias for isAtSmallSize */
+export function isCollapsedFootprintSize(w, h, footprint = readTileSmallFootprint()) {
+    return isAtSmallSize(w, h, footprint);
+}
+
+export function matchesSmallFootprintRect(w, h, footprint = readTileSmallFootprint()) {
+    const small = getSmallRect(footprint);
+    return Math.abs(w - small.w) <= 2 && Math.abs(h - small.h) <= 2;
+}
+
+export function getPackStrideY(footprint = readTileSmallFootprint()) {
+    const small = getSmallRect(footprint);
+    if (small.h <= TILE_LABEL_H + 2) {
+        return small.h + COLUMN_GRID_GAP;
+    }
+    return COLUMN_STRIDE_Y;
+}
+
+export function getPackStrideYForRect(w, h, footprint = readTileSmallFootprint()) {
+    if (isAtSmallSize(w, h, footprint)) {
+        return getSmallRect(footprint).h + COLUMN_GRID_GAP;
+    }
+    return COLUMN_STRIDE_Y;
+}
+
+export function getGridSnapMinH(footprint = readTileSmallFootprint()) {
+    return getSmallRect(footprint).h;
+}
+
 /** @deprecated use isAtSmallSize */
 export function isAtLabelSize(w, h) {
     return isAtSmallSize(w, h, 'label');

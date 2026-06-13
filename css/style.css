@@ -4148,7 +4148,20 @@ html[data-tile-small-footprint="label"] #app-canvas.view-freeform .mini-card[dat
 #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline.card-drag-zone {
     flex: 1 1 auto;
     min-height: 0;
+    align-items: center;
     cursor: grab;
+}
+
+#app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .editor-note-header,
+#app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .editor-note-header {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+}
+
+html[data-tile-small-footprint="label"] #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small,
+html[data-tile-small-footprint="label"] #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small {
+    padding: 0.2rem 0.35rem !important;
 }
 
 #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline.card-drag-zone:active,

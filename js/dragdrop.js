@@ -78,7 +78,7 @@ function finishSnapPanelGesture(card, {
     const origin = bounds.origin ?? CANVAS_LAYOUT_ORIGIN;
     const rect = snapMode === 'position'
         ? UI.snapNotePosition(live, { maxW: bounds.packW, maxH: bounds.maxH, origin })
-        : UI.snapNoteRect(live, { maxW: bounds.packW, maxH: bounds.maxH });
+        : UI.snapNoteRect(live, { maxW: bounds.packW, maxH: bounds.maxH, origin });
     UI.applyNoteRect(card, rect, { settling: animate });
 
     const item = currentItems.find((i) => i.id === card.dataset.id);
@@ -97,6 +97,9 @@ function finishSnapPanelGesture(card, {
         updateRemembered: UI.isCollapsedTile(card) && !isAtSmallSize(rect.w, rect.h, readTileSmallFootprint())
     });
     reflow(card, { animate });
+    if (isDesktopCard(card)) {
+        UI.finalizeDesktopCard(card);
+    }
     cleanupActive?.();
 }
 

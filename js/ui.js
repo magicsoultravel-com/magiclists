@@ -104,6 +104,10 @@ import {
     getLabelRect,
     isCustomTileRect as geoIsCustomTileRect,
     isAtSmallSize,
+    matchesSmallFootprintRect,
+    getPackStrideY,
+    getPackStrideYForRect,
+    getGridSnapMinH,
     resolveExpandedDefaultRect as geoResolveExpandedDefaultRect,
     isAtOrBelowCompactZone as geoIsAtOrBelowCompactZone,
     inferTileTier as geoInferTileTier,
@@ -1572,7 +1576,7 @@ export const UI = {
     collapseBoardCardToSmallFootprint(card, item, { deferReflow = false } = {}) {
         if (!card || !item?.id || isFileCabinetActive()) return;
         const pos = this.readNoteRect(card);
-        if (this.isAtCurrentSmallSize(pos.w, pos.h)) return;
+        if (matchesSmallFootprintRect(pos.w, pos.h)) return;
         const tileSize = resolveTileSize(item);
         this.persistRememberedSpatialSize(item.id, pos.w, pos.h, tileSize);
         const smallRect = this.resolveCardRect(card, item, { mode: 'small' });
@@ -5117,10 +5121,28 @@ export const UI = {
             this.updateBoardCanvasMinHeight(canvas);
         }
 
+        const mirrorInactiveLayout = () => {
+            if (!canvas) return;
+            visibleItems.forEach((item) => {
+                const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
+                if (!card) return;
+                const rect = this.readNoteRect(card);
+                if (mode === 'grid') {
+                    this.saveFreeformPosition(item.id, rect.x, rect.y);
+                    this.saveFreeformSize(item.id, rect.w, rect.h);
+                } else {
+                    this.saveGridLayout(item.id, rect);
+                }
+            });
+        };
+
         if (mode === 'grid' && canvas?.classList.contains('view-grid')) {
             requestAnimationFrame(() => {
                 this.repackGridBoardFromOrigin(canvas, { animate: true, items: visibleItems });
+                mirrorInactiveLayout();
             });
+        } else {
+            mirrorInactiveLayout();
         }
     },
 
@@ -5255,9 +5277,21 @@ export const UI = {
     },
 
     clampGridResize(w, h, { packW } = {}) {
+        const footprint = readTileSmallFootprint();
         const minW = COLUMN_GRID_CELL_W;
-        const minH = COLUMN_GRID_CELL_H;
+        const minH = getGridSnapMinH(footprint);
         const maxCellsW = Math.max(1, this.spanToCellsW(packW || CANVAS_GRID_W));
+
+        if (isAtSmallSize(w, h, footprint)) {
+            const small = getSmallRect(footprint);
+            let wCells = Math.max(1, this.spanToCellsW(Math.max(minW, small.w)));
+            wCells = Math.min(wCells, maxCellsW);
+            return {
+                w: this.cellsToSpanW(wCells),
+                h: small.h
+            };
+        }
+
         let wCells = Math.max(1, this.spanToCellsW(Math.max(minW, w)));
         let hCells = Math.max(1, this.spanToCellsH(Math.max(minH, h)));
         wCells = Math.min(wCells, maxCellsW);
@@ -5427,10 +5461,9 @@ export const UI = {
             this.applyNoteRect(card, rect, { settling: animate });
             card.classList.toggle('layout-preview', preview);
             if (save) {
-                const layoutItem = this.resolveBoardItem(id);
-                const tileSize = this.getCardTileSize(card, layoutItem);
                 this.saveGridLayout(id, rect);
             }
+            this.finalizeDesktopCard(card);
             placed.push(rect);
         });
         this.updateGridCanvasMinHeight(canvas, placed, origin);
@@ -5598,6 +5631,7 @@ export const UI = {
         const packW = Math.max(CANVAS_GRID_W, canvasW - origin * 2);
         const xOrigin = origin + (w <= COLUMN_GRID_CELL_W + 1 ? COLUMN_INNER_PAD : 0);
         const rowStride = w <= COLUMN_GRID_CELL_W + 1 ? COLUMN_STRIDE_X : CANVAS_GRID_W;
+        const yStride = getPackStrideYForRect(w, h);
         let y = origin;
         let guard = 0;
         while (guard < 800) {
@@ -5605,7 +5639,7 @@ export const UI = {
             while (x + w <= origin + packW + 1) {
                 const candidate = {
                     x: this.snapCanvasCoord(x, origin, COLUMN_STRIDE_X),
-                    y: this.snapCanvasCoord(y, origin, COLUMN_STRIDE_Y),
+                    y: this.snapCanvasCoord(y, origin, yStride),
                     w,
                     h
                 };
@@ -5614,7 +5648,7 @@ export const UI = {
                 }
                 x += rowStride;
             }
-            y += COLUMN_STRIDE_Y;
+            y += yStride;
             guard += 1;
         }
         return { x: xOrigin, y: origin, w, h };
@@ -5653,10 +5687,15 @@ export const UI = {
     },
 
     snapNotePosition(rect, { maxW = Infinity, maxH = Infinity, origin = CANVAS_LAYOUT_ORIGIN } = {}) {
+        const footprint = readTileSmallFootprint();
         const w = Math.max(FREEFORM_MIN_W, Math.round(rect.w));
         const h = Math.max(FREEFORM_MIN_H, Math.round(rect.h));
+        const atSmall = isAtSmallSize(w, h, footprint);
+        const yStride = atSmall ? getPackStrideYForRect(w, h, footprint) : COLUMN_STRIDE_Y;
         let x = this.snapGridCoord(rect.x, COLUMN_STRIDE_X);
-        let y = this.snapGridCoord(rect.y, COLUMN_STRIDE_Y);
+        let y = atSmall
+            ? this.snapCanvasCoord(rect.y, origin, yStride)
+            : this.snapGridCoord(rect.y, yStride);
         x = Math.max(origin, x);
         y = Math.max(origin, y);
         if (maxW < Infinity) {
@@ -5671,7 +5710,19 @@ export const UI = {
         return { x, y, w, h };
     },
 
-    snapNoteRect(rect, { maxW = Infinity, maxH = Infinity } = {}) {
+    snapNoteRect(rect, { maxW = Infinity, maxH = Infinity, origin = CANVAS_LAYOUT_ORIGIN } = {}) {
+        const footprint = readTileSmallFootprint();
+        if (isAtSmallSize(rect.w, rect.h, footprint)) {
+            const small = getSmallRect(footprint);
+            const yStride = getPackStrideYForRect(small.w, small.h, footprint);
+            return {
+                x: this.snapCanvasCoord(rect.x, origin, COLUMN_STRIDE_X),
+                y: this.snapCanvasCoord(rect.y, origin, yStride),
+                w: small.w,
+                h: small.h
+            };
+        }
+
         const wCells = Math.max(1, this.spanToCellsW(rect.w));
         const hCells = Math.max(1, this.spanToCellsH(rect.h));
         let w = this.cellsToSpanW(wCells);
