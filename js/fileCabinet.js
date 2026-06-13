@@ -785,7 +785,7 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
 
     mount.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
-        if (e.target.closest('.card-act, button, input, textarea, a')) return;
+        if (e.target.closest('.card-act:not(.card-act--drag), button:not(.card-act--drag), input, textarea, a')) return;
         const card = e.target.closest('.file-cabinet-tab');
         if (!card) return;
         const stack = card.closest('.file-cabinet-tab-stack');

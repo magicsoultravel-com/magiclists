@@ -265,9 +265,15 @@ export function isAppThemeCustomized() {
     return readAppTheme() !== 'dark';
 }
 
-export function buildThemeOptionsHtml(selectedId) {
+export function buildThemeOptionsHtml(selectedId, { compact = false } = {}) {
     return APP_THEMES.map((theme) => {
         const selected = theme.id === selectedId;
+        if (compact) {
+            return `<button type="button" class="app-theme-option app-theme-option--compact${selected ? ' is-selected' : ''}" data-theme="${theme.id}" role="menuitemradio" aria-checked="${selected}" title="${escapeHtml(theme.label)}" aria-label="${escapeHtml(theme.label)}">
+                ${swatchHtml(theme.swatch)}
+                ${selected ? '<span class="clock-style-check" aria-hidden="true">✓</span>' : ''}
+            </button>`;
+        }
         return `<button type="button" class="clock-style-option app-theme-option${selected ? ' is-selected' : ''}" data-theme="${theme.id}" role="menuitemradio" aria-checked="${selected}">
             ${swatchHtml(theme.swatch)}
             <span class="clock-style-meta">

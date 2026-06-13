@@ -94,6 +94,7 @@ function isCustomized(options) {
 
 export const DisplayOptions = {
     triggerBtn: null,
+    triggerAbort: null,
     activeAnchor: null,
     overlay: null,
     backdropHandler: null,
@@ -109,12 +110,9 @@ export const DisplayOptions = {
         applyDisplayOptions(this.options);
 
         this.triggerBtn = document.getElementById('btn-display-options');
-        if (!this.triggerBtn) return;
-
-        this.triggerBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.toggleModal();
-        });
+        if (this.triggerBtn) {
+            this.bindTriggerClick(this.triggerBtn);
+        }
 
         window.addEventListener('appearance:grid_fineness_changed', () => this.syncButtonState());
         window.addEventListener('note:font_scale_changed', () => this.syncButtonState());
@@ -129,13 +127,19 @@ export const DisplayOptions = {
         this.syncButtonState();
     },
 
+    bindTriggerClick(btn) {
+        this.triggerAbort?.abort();
+        this.triggerAbort = new AbortController();
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleModal();
+        }, { signal: this.triggerAbort.signal });
+    },
+
     rebindTrigger() {
         this.triggerBtn = document.getElementById('btn-display-options');
         if (!this.triggerBtn) return;
-        this.triggerBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.toggleModal();
-        });
+        this.bindTriggerClick(this.triggerBtn);
         this.syncButtonState();
     },
 
@@ -221,8 +225,7 @@ export const DisplayOptions = {
     },
 
     bgRow(id, label, cssVar) {
-        return `<button type="button" class="display-options-bg-row" id="${id}">
-            <span class="display-options-row-label">${escapeHtml(label)}</span>
+        return `<button type="button" class="display-options-bg-btn btn btn--compact btn--icon" id="${id}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">
             <span class="display-options-swatch" style="background: var(${cssVar})" aria-hidden="true"></span>
         </button>`;
     },
@@ -233,14 +236,23 @@ export const DisplayOptions = {
             { id: 'card', label: 'Card', size: getSmallFootprintRect('card') },
             { id: 'wide', label: 'Wide card', size: getSmallFootprintRect('wide') }
         ];
+        const maxDim = 24;
         return options.map((opt) => {
             const selected = opt.id === selectedId;
             const sizeLabel = `${opt.size.w}×${opt.size.h}`;
-            return `<button type="button" class="tile-footprint-option${selected ? ' is-selected' : ''}" data-footprint="${opt.id}" role="menuitemradio" aria-checked="${selected}">
-                <span class="tile-footprint-option-meta">
-                    <span class="tile-footprint-option-label">${escapeHtml(opt.label)}</span>
-                    <span class="tile-footprint-option-desc">${escapeHtml(sizeLabel)}</span>
-                </span>
+            const aspect = opt.size.w / opt.size.h;
+            let pw;
+            let ph;
+            if (aspect >= 1) {
+                pw = maxDim;
+                ph = Math.max(8, Math.round(maxDim / aspect));
+            } else {
+                ph = maxDim;
+                pw = Math.max(8, Math.round(maxDim * aspect));
+            }
+            const title = `${opt.label} (${sizeLabel})`;
+            return `<button type="button" class="tile-footprint-option${selected ? ' is-selected' : ''}" data-footprint="${opt.id}" role="menuitemradio" aria-checked="${selected}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">
+                <span class="tile-footprint-preview" style="width:${pw}px;height:${ph}px" aria-hidden="true"></span>
                 ${selected ? '<span class="clock-style-check" aria-hidden="true">✓</span>' : ''}
             </button>`;
         }).join('');
@@ -256,17 +268,50 @@ export const DisplayOptions = {
     noteFontOptionsHtml(selectedId) {
         return NOTE_FONTS.map((font) => {
             const selected = font.id === selectedId;
-            const sampleFamily = font.family || "system-ui, sans-serif";
-            const sampleClass = font.compact ? ' note-font-sample--compact' : '';
-            return `<button type="button" class="note-font-option${selected ? ' is-selected' : ''}" data-font="${font.id}" role="menuitemradio" aria-checked="${selected}">
-                <span class="note-font-option-meta">
-                    <span class="note-font-option-label">${escapeHtml(font.label)}</span>
-                    <span class="note-font-option-desc">${escapeHtml(font.desc)}</span>
-                </span>
-                <span class="note-font-sample${sampleClass}" style="font-family:${sampleFamily}">Aa</span>
+            const family = font.family || "system-ui, sans-serif";
+            const compactClass = font.compact ? ' note-font-option-label--compact' : '';
+            const styleAttr = font.id === 'default' ? '' : ` style="font-family:${family}"`;
+            return `<button type="button" class="note-font-option${selected ? ' is-selected' : ''}" data-font="${font.id}" role="menuitemradio" aria-checked="${selected}" title="${escapeHtml(font.desc)}">
+                <span class="note-font-option-label${compactClass}"${styleAttr}>${escapeHtml(font.label)}</span>
                 ${selected ? '<span class="clock-style-check" aria-hidden="true">✓</span>' : ''}
             </button>`;
         }).join('');
+    },
+
+    setRadioGroupSelection(root, selector, selectedId, dataAttr) {
+        root.querySelectorAll(selector).forEach((btn) => {
+            const selected = btn.dataset[dataAttr] === selectedId;
+            btn.classList.toggle('is-selected', selected);
+            btn.setAttribute('aria-checked', String(selected));
+            let check = btn.querySelector('.clock-style-check');
+            if (selected && !check) {
+                check = document.createElement('span');
+                check.className = 'clock-style-check';
+                check.setAttribute('aria-hidden', 'true');
+                check.textContent = '✓';
+                btn.appendChild(check);
+            } else if (!selected && check) {
+                check.remove();
+            }
+        });
+    },
+
+    syncModalUi(root = this.overlay) {
+        if (!root) return;
+
+        this.setRadioGroupSelection(root, '.app-theme-option', readAppTheme(), 'theme');
+        this.setRadioGroupSelection(root, '.note-font-option', this.options.noteFontId, 'font');
+        this.setRadioGroupSelection(root, '.tile-footprint-option', readTileSmallFootprint(), 'footprint');
+
+        NoteFontScale.updateLabels();
+        DesktopZoom.updateButtons();
+
+        const gridLabel = root.querySelector('#display-opt-grid-fineness-label');
+        if (gridLabel) {
+            gridLabel.textContent = GridFineness.getCellLabel();
+        }
+
+        this.syncButtonState();
     },
 
     bindStepper(root, { idPrefix, onOut, onIn, disabled = false }) {
@@ -274,12 +319,12 @@ export const DisplayOptions = {
         root.querySelector(`#${idPrefix}-out`)?.addEventListener('click', (e) => {
             e.stopPropagation();
             onOut();
-            this.openModal();
+            this.syncModalUi(root);
         });
         root.querySelector(`#${idPrefix}-in`)?.addEventListener('click', (e) => {
             e.stopPropagation();
             onIn();
-            this.openModal();
+            this.syncModalUi(root);
         });
     },
 
@@ -301,7 +346,7 @@ export const DisplayOptions = {
                     <div class="display-options-grid">
                         <section class="display-options-section display-options-section--theme">
                             <h3 class="display-options-heading">Theme</h3>
-                            <div class="display-options-theme-grid app-theme-list">${buildThemeOptionsHtml(readAppTheme())}</div>
+                            <div class="display-options-theme-grid app-theme-list">${buildThemeOptionsHtml(readAppTheme(), { compact: true })}</div>
                         </section>
                         <section class="display-options-section display-options-section--typography">
                             <h3 class="display-options-heading">Typography</h3>
@@ -357,9 +402,7 @@ export const DisplayOptions = {
                     </div>
                 </div>
                 <div class="display-options-footer">
-                    <button type="button" class="btn display-options-reset" id="display-opt-reset">
-                        <span class="display-options-reset-label">${ACTION_ICONS.resetCustomization}<span>Reset to defaults</span></span>
-                    </button>
+                    <button type="button" class="btn btn--compact btn--icon display-options-reset" id="display-opt-reset" title="Reset to defaults" aria-label="Reset to defaults">${ACTION_ICONS.resetCustomization}</button>
                 </div>
             </div>
         `;
@@ -370,7 +413,6 @@ export const DisplayOptions = {
             root.querySelector(`#${id}`)?.addEventListener('change', (e) => {
                 e.stopPropagation();
                 this.setOptions({ [key]: e.target.checked });
-                this.openModal();
             });
         };
 
@@ -386,7 +428,7 @@ export const DisplayOptions = {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 AppTheme.setTheme(btn.dataset.theme);
-                this.openModal();
+                this.syncModalUi(root);
             });
         });
 
@@ -394,7 +436,7 @@ export const DisplayOptions = {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.setTileSmallFootprint(btn.dataset.footprint);
-                this.openModal();
+                this.syncModalUi(root);
             });
         });
 
@@ -402,7 +444,7 @@ export const DisplayOptions = {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.setNoteFont(btn.dataset.font);
-                this.openModal();
+                this.syncModalUi(root);
             });
         });
 
@@ -441,13 +483,30 @@ export const DisplayOptions = {
             this.options = readDisplayOptions();
             applyDisplayOptions(this.options);
             this.onChange?.(this.options);
-            this.openModal();
+            this.rebuildModal();
         });
 
         root.querySelector('#display-opt-close')?.addEventListener('click', (e) => {
             e.stopPropagation();
             this.closeModal();
         });
+    },
+
+    rebuildModal() {
+        const overlay = this.ensureOverlay();
+        const body = overlay.querySelector('.display-options-body');
+        const scrollTop = body?.scrollTop ?? 0;
+
+        overlay.innerHTML = this.buildModalHtml();
+        this.bindModalInteractions(overlay);
+
+        const newBody = overlay.querySelector('.display-options-body');
+        if (newBody) {
+            newBody.scrollTop = scrollTop;
+        }
+
+        NoteFontScale.updateLabels();
+        DesktopZoom.updateButtons();
     },
 
     openModal(anchor) {
