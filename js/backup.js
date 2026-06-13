@@ -1,9 +1,77 @@
 import {
     ensureUncategorizedCategory,
     normalizeCategories,
+    readStoredCategories,
     writeStoredCategories
 } from './categories.js';
-import { applyLayoutBackupKeys } from './layoutStorage.js';
+import { applyLayoutBackupKeys, getLayoutBackupKeys } from './layoutStorage.js';
+
+export const BACKUP_FILE_PREFIX = 'matrix_workspace_backup_';
+
+export function backupFilename(timestamp = Math.floor(Date.now() / 1000)) {
+    return `${BACKUP_FILE_PREFIX}${timestamp}.json`;
+}
+
+export function buildBackupPackage() {
+    const categories = readStoredCategories({ keepEmpty: true });
+    writeStoredCategories(categories, { keepEmpty: true });
+
+    const databasePayload = localStorage.getItem('matrix_database');
+    let matrix_database = databasePayload ? JSON.parse(databasePayload) : null;
+    if (matrix_database) {
+        matrix_database = {
+            ...matrix_database,
+            settings: {
+                ...(matrix_database.settings || {}),
+                categories: categories.map((cat) => cat.name)
+            }
+        };
+    }
+
+    const layoutKeys = getLayoutBackupKeys();
+    return {
+        timestamp: Math.floor(Date.now() / 1000),
+        matrix_database,
+        matrix_custom_categories: categories,
+        ...Object.fromEntries(
+            Object.entries(layoutKeys).map(([key, raw]) => {
+                try {
+                    return [key, JSON.parse(raw)];
+                } catch {
+                    return [key, raw];
+                }
+            })
+        )
+    };
+}
+
+export function serializeBackupPackage(pkg) {
+    return JSON.stringify(pkg, null, 2);
+}
+
+export function parseBackupPackage(text) {
+    const parsed = typeof text === 'string' ? JSON.parse(text) : text;
+    if (!parsed || typeof parsed !== 'object') {
+        throw new Error('Invalid backup package');
+    }
+    if (!parsed.matrix_database && !parsed.matrix_custom_categories) {
+        throw new Error('Not a Magic Lists backup file (missing matrix_database).');
+    }
+    return parsed;
+}
+
+export function isBackupFilename(name) {
+    return typeof name === 'string'
+        && name.startsWith(BACKUP_FILE_PREFIX)
+        && name.endsWith('.json');
+}
+
+export function timestampFromBackupFilename(name) {
+    if (!isBackupFilename(name)) return null;
+    const raw = name.slice(BACKUP_FILE_PREFIX.length, -'.json'.length);
+    const ts = Number(raw);
+    return Number.isFinite(ts) ? ts : null;
+}
 
 let stepIdSeq = 0;
 

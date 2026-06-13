@@ -100,6 +100,7 @@
 .mini-card.tile-small .editor-note-topline .mini-card-title.card-inline-edit,
 .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title.card-inline-edit,
 .file-cabinet .file-cabinet-tab .mini-card-title.card-inline-edit {
+    font-size: calc(0.62rem * var(--note-font-scale, 1));
     width: 100%;
     max-width: 100%;
     white-space: nowrap;

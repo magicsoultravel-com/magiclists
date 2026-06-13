@@ -5,11 +5,8 @@ import { DragDropEngine } from './dragdrop.js';
 import { ToolsManager } from './toolsManager.js';
 import { Calendar } from './calendar.js';
 import { SidePanel } from './hamburger.js';
-import { applyBackupToStorage } from './backup.js';
-import {
-    getLayoutBackupKeys,
-    reconcileLayoutStorage
-} from './layoutStorage.js';
+import { applyBackupToStorage, buildBackupPackage, parseBackupPackage, serializeBackupPackage } from './backup.js';
+import { reconcileLayoutStorage } from './layoutStorage.js';
 import {
     DEFAULT_CATEGORIES,
     isUncategorizedCategory,
@@ -36,6 +33,7 @@ import { SidebarRadio } from './sidebarRadio.js';
 import { SidebarTv } from './sidebarTv.js';
 import { SidebarQuickActions } from './sidebarQuickActions.js';
 import { SidebarTools } from './sidebarTools.js';
+import { CloudBackup } from './cloudBackup.js';
 import {
     migrateItemsToFileCabinet,
     pruneFileCabinetOrderByLayout,
@@ -113,6 +111,8 @@ class Application {
         DesktopZoom.init();
         this.setupSearchBar();
         this.setupBackupInterface();
+        CloudBackup.init({ getLoggedIn: () => AppState.user.isLoggedIn });
+        CloudBackup.ensureConnected().finally(() => CloudBackup.updateButtons());
         this.setupFab();
         this.setupUndo();
         this.setupDrawingMode();
@@ -290,6 +290,9 @@ class Application {
         } else {
             const accountGroup = `
                 <button type="button" class="btn btn--compact btn--icon" id="btn-add-category" title="Add category" aria-label="Add category">${ACTION_ICONS.category}</button>
+                <button type="button" class="btn btn--compact btn--icon" id="btn-cloud" title="Cloud backup" aria-label="Cloud backup">${ACTION_ICONS.cloud}</button>
+                <button type="button" class="btn btn--compact btn--icon" id="btn-cloud-export" data-enabled-title="Export to cloud" title="Connect cloud first (Cloud icon)" aria-label="Export to cloud" disabled>${ACTION_ICONS.cloudExport}</button>
+                <button type="button" class="btn btn--compact btn--icon" id="btn-cloud-import" data-enabled-title="Import from cloud" title="Connect cloud first (Cloud icon)" aria-label="Import from cloud" disabled>${ACTION_ICONS.cloudImport}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="btn-export-db" title="Export backup" aria-label="Export backup">${ACTION_ICONS.export}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="btn-import-db" title="Import backup" aria-label="Import backup">${ACTION_ICONS.import}</button>
                 <button type="button" class="btn btn--compact btn--icon btn--icon-danger" id="btn-auth-logout" title="Logout" aria-label="Logout">${ACTION_ICONS.logout}</button>
@@ -324,6 +327,15 @@ class Application {
         });
 
         document.getElementById('btn-add-category')?.addEventListener('click', () => this.executeAddCategoryPrompt());
+        document.getElementById('btn-cloud')?.addEventListener('click', (e) => {
+            CloudBackup.handleCloudClick(e.currentTarget);
+        });
+        document.getElementById('btn-cloud-export')?.addEventListener('click', (e) => {
+            CloudBackup.exportCheckpoint(e.currentTarget);
+        });
+        document.getElementById('btn-cloud-import')?.addEventListener('click', (e) => {
+            CloudBackup.handleImportClick(e.currentTarget);
+        });
         document.getElementById('btn-export-db')?.addEventListener('click', () => this.executeDataBackupExport());
         document.getElementById('btn-import-db')?.addEventListener('click', () => document.getElementById('system-import-file-picker').click());
         document.getElementById('btn-auth-logout')?.addEventListener('click', () => this.executeLogout());
@@ -332,6 +344,7 @@ class Application {
         this.updateLayoutResetVisibility();
         this.updateViewToggleState();
         UndoManager.updateToolbar();
+        CloudBackup.updateButtons();
     }
 
     setupFab() {
@@ -406,40 +419,11 @@ class Application {
     }
 
     executeDataBackupExport() {
-        const categories = readStoredCategories({ keepEmpty: true });
-        writeStoredCategories(categories, { keepEmpty: true });
-
-        const databasePayload = localStorage.getItem('matrix_database');
-        let matrix_database = databasePayload ? JSON.parse(databasePayload) : null;
-        if (matrix_database) {
-            matrix_database = {
-                ...matrix_database,
-                settings: {
-                    ...(matrix_database.settings || {}),
-                    categories: categories.map((cat) => cat.name)
-                }
-            };
-        }
-
-        const layoutKeys = getLayoutBackupKeys();
-        const backupPackage = {
-            timestamp: Math.floor(Date.now() / 1000),
-            matrix_database,
-            matrix_custom_categories: categories,
-            ...Object.fromEntries(
-                Object.entries(layoutKeys).map(([key, raw]) => {
-                    try {
-                        return [key, JSON.parse(raw)];
-                    } catch {
-                        return [key, raw];
-                    }
-                })
-            )
-        };
-        const blob = new Blob([JSON.stringify(backupPackage, null, 2)], { type: 'application/json' });
+        const backupPackage = buildBackupPackage();
+        const blob = new Blob([serializeBackupPackage(backupPackage)], { type: 'application/json' });
         const virtualLink = document.createElement('a');
         virtualLink.href = URL.createObjectURL(blob);
-        virtualLink.download = `matrix_workspace_backup_${Math.floor(Date.now()/1000)}.json`;
+        virtualLink.download = `matrix_workspace_backup_${backupPackage.timestamp}.json`;
         virtualLink.click();
         URL.revokeObjectURL(virtualLink.href);
     }
@@ -453,11 +437,7 @@ class Application {
             const reader = new FileReader();
             reader.onload = async (event) => {
                 try {
-                    const parsedBackup = JSON.parse(event.target.result);
-                    if (!parsedBackup.matrix_database && !parsedBackup.matrix_custom_categories) {
-                        alert('Import Aborted: Not a Magic Lists backup file (missing matrix_database).');
-                        return;
-                    }
+                    const parsedBackup = parseBackupPackage(event.target.result);
                     applyBackupToStorage(parsedBackup);
                     const itemCount = parsedBackup.matrix_database?.items?.length ?? 0;
                     const token = parsedBackup.matrix_database?.auth?.admin_token;
