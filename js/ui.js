@@ -4,11 +4,6 @@ import {
     readStoredCategories,
     UNCATEGORIZED_CATEGORY
 } from './categories.js';
-import {
-    applyFocusToCategories,
-    applyFocusToItems,
-    focusIncludesUncategorized
-} from './focusFilter.js';
 import { applyCardTheme } from './cardTheme.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor, THEME_DEFAULT_COLOR } from './colorPicker.js';
 import {
@@ -25,17 +20,9 @@ import {
 } from './noteBodyConversion.js';
 import { hasRichMarkup, linkifyPlainUrls, sanitizeHref, sanitizeRichHtml, stripRichText } from './richText.js';
 import {
-    safeSetItem,
-    sanitizeLayoutSnapshot
-} from './layoutStorage.js';
-import { UndoManager } from './undo.js';
-import { raiseDesktopElement, syncDesktopStackSeq } from './desktopStack.js';
-import {
-    applyViewSessionsFromSnapshot,
     clearExpandedCards,
     clearViewSessionExpanded,
     getExpandedCards,
-    getViewSessionsForSnapshot,
     persistViewSession,
     restoreViewSession,
     setExpandedCard,
@@ -164,7 +151,7 @@ export function isDesktopCard(card) {
 }
 
 // Chrome icon trope: stroke-first, currentColor, fill="none" on paths/shapes (see ACTION_ICONS).
-// CARD_ICONS 11×12; ACTION_ICONS 12×12. Minimal fills only when semantically needed (e.g. focusMode dot).
+// CARD_ICONS 11×12; ACTION_ICONS 12×12.
 
 function paletteIconSvg(size) {
   const body = `<path d="M6 1.8c-2.3 0-4.2 1.7-4.2 3.9 0 1.4.9 2.5 2.1 3.1L4.8 10h2.4l.9-1.2c1.2-.6 2.1-1.7 2.1-3.1C10.2 3.5 8.3 1.8 6 1.8z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><circle cx="4.4" cy="4.8" r="0.75" fill="none" stroke="currentColor" stroke-width="0.85"/><circle cx="6.2" cy="3.8" r="0.65" fill="none" stroke="currentColor" stroke-width="0.85" opacity="0.85"/><circle cx="7.5" cy="5.2" r="0.6" fill="none" stroke="currentColor" stroke-width="0.85" opacity="0.65"/>`;
@@ -217,7 +204,6 @@ export const ACTION_ICONS = {
     viewFileCabinet: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="2.2" width="9.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="1.4" y="4.8" width="9.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="1.4" y="7.4" width="9.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
     category: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="1.4" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.7" y="1.4" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="1.4" y="6.7" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.7" y="6.7" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/></svg>',
     export: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.6v5.8M3.7 5.1 6 7.4 8.3 5.1" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.2 10.4h7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
-    exportCode: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.3 7.6 6.8 6 5.9 4.4 6.8Z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/><circle cx="6" cy="4.1" r="0.75" fill="none" stroke="currentColor" stroke-width="0.8"/><path d="M4.4 6.8 3.4 8.8M7.6 6.8 8.6 8.8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/><path d="M5.3 7.4 6 9.4 6.7 7.4" fill="none" stroke="currentColor" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     import: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 10.4V4.6M3.7 6.9 6 4.6 8.3 6.9" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.2 10.4h7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
     logout: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M4.6 2.1H3.1v7.8h1.5" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/><path d="M6.8 6 10 6M10 6 8.4 4.4M10 6 8.4 7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     undo: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.4 5.6H7.2a2.4 2.4 0 1 1 0 4.8H6.6M3.4 5.6 5.1 3.9M3.4 5.6 5.1 7.3" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -227,9 +213,6 @@ export const ACTION_ICONS = {
     desktopBg: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="2.2" width="9.2" height="6.8" rx="0.7" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M2.2 8.4h7.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/><circle cx="4.1" cy="5.4" r="1.1" fill="currentColor" opacity="0.85"/><circle cx="6.6" cy="4.6" r="0.85" fill="currentColor" opacity="0.65"/><circle cx="8.1" cy="6.2" r="0.75" fill="currentColor" opacity="0.5"/></svg>',
     chromeBg: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.3" y="1.8" width="3.6" height="8.4" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="5.5" y="1.8" width="5.2" height="2.4" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="5.5" y="5" width="5.2" height="5.2" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
     clockStyle: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.2V6l2 1.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    saveView: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.8 2.4h6.4v7.2L6 7.6 2.8 9.6V2.4z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M6 5.2v2.8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    recallView: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.8 2.2h6.4v7.4L6 7.6 2.8 9.6V2.2z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M6 5.2v2.8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    focusMode: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.95"/><circle cx="6" cy="6" r="1.6" fill="currentColor"/></svg>',
     displayOptions: paletteIconSvg(12),
     appTheme: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="3.6" cy="4.2" r="1.5" fill="currentColor" opacity="0.9"/><circle cx="6.8" cy="3.4" r="1.5" fill="currentColor" opacity="0.65"/><circle cx="8.4" cy="6.8" r="1.5" fill="currentColor" opacity="0.45"/><path d="M1.4 10.2h9.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
     resetCustomization: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 2.2a3.6 3.6 0 1 0 2.3 6.4L7.2 9.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.1 7.4 7.2 9.5 9.3 7.4" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -290,9 +273,6 @@ export const DRAWING_ICONS = {
     zoomOut: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="5.2" cy="5.2" r="3.2" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M7.6 7.6 10 10M3.6 5.2h3.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
     exportPng: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="2" y="2.4" width="8" height="6.4" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M4.4 7.2 5.8 5.6 7.2 7.2M2 10h8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>'
 };
-
-const SAVED_VIEWS_KEY = 'matrix_saved_views';
-const SAVED_VIEWS_SLOTS = 3;
 
 export function itemHasCategory(item) {
     const name = item?.categories?.[0];
@@ -1798,14 +1778,13 @@ export const UI = {
         };
     },
 
-    updateSingleCard(canvas, item, hiddenCategories = [], focusCategories = []) {
+    updateSingleCard(canvas, item, hiddenCategories = []) {
         if (!canvas || !item?.id) return false;
         const card = canvas.querySelector(`.mini-card[data-id="${item.id}"]`);
         if (!card) return false;
 
         let activeCategories = readStoredCategories()
             .filter((cat) => !hiddenCategories.includes(cat.name));
-        activeCategories = applyFocusToCategories(activeCategories, focusCategories);
         const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
 
         if (isDesktopCard(card)) {
@@ -1825,19 +1804,16 @@ export const UI = {
         return true;
     },
 
-    render(canvas, items, viewMode, hiddenCategories = [], focusCategories = []) {
+    render(canvas, items, viewMode, hiddenCategories = []) {
         if (!canvas) return;
         canvas.innerHTML = '';
 
         const safeItems = Array.isArray(items) ? items : [];
-        let visibleItems = this.getVisibleItems(safeItems);
-        const focusActive = Array.isArray(focusCategories) && focusCategories.length > 0;
-        visibleItems = applyFocusToItems(visibleItems, focusCategories);
+        const visibleItems = this.getVisibleItems(safeItems);
         boardItemsById = new Map(visibleItems.map((item) => [item.id, item]));
 
         let activeCategories = readStoredCategories();
         activeCategories = activeCategories.filter(cat => !hiddenCategories.includes(cat.name));
-        activeCategories = applyFocusToCategories(activeCategories, focusCategories);
 
         const resolvedMode = normalizeViewMode(viewMode);
         const snapLayout = isSnapLayoutMode(resolvedMode);
@@ -1845,8 +1821,7 @@ export const UI = {
         activeBoardViewMode = resolvedMode;
         canvas.className = snapLayout ? 'view-grid' : 'view-freeform';
         if (fileCabinetActive) canvas.classList.add('file-cabinet-bottom');
-        if (focusActive) canvas.dataset.focusActive = '1';
-        else delete canvas.dataset.focusActive;
+        delete canvas.dataset.focusActive;
 
         let boardItems = visibleItems;
         if (fileCabinetActive) {
@@ -1864,9 +1839,7 @@ export const UI = {
                 return;
             }
             const hiddenCount = safeItems.length - this.getVisibleItems(safeItems).length;
-            if (focusActive && this.getVisibleItems(safeItems).length > 0) {
-                canvas.innerHTML = `<div class="system-status-msg">Focus active — no notes in the selected categories on the desktop. Use the sidebar to open any note, or reset focus.</div>`;
-            } else if (safeItems.length > 0 && hiddenCount === safeItems.length) {
+            if (safeItems.length > 0 && hiddenCount === safeItems.length) {
                 canvas.innerHTML = `<div class="system-status-msg">All objects are hidden. Use the footer to restore them.</div>`;
             } else {
                 canvas.innerHTML = `<div class="system-status-msg">Workspace clean. Click "+ New" to commit an entity.</div>`;
@@ -3170,7 +3143,7 @@ export const UI = {
         setExpandedCard(activeBoardViewMode, itemId, false);
     },
 
-    collapseBoardCardIfExpanded(card, item, hiddenCategories = [], focusCategories = []) {
+    collapseBoardCardIfExpanded(card, item, hiddenCategories = []) {
         if (!card || !item?.id || !card.classList.contains('expanded')) return;
 
         if (isDesktopCard(card)) {
@@ -3180,7 +3153,6 @@ export const UI = {
 
         let activeCategories = readStoredCategories()
             .filter((cat) => !hiddenCategories.includes(cat.name));
-        activeCategories = applyFocusToCategories(activeCategories, focusCategories);
         const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
         this.applyCardExpandCollapse(card, item, false, activeCategories, targetCatName, categoryColor);
     },
@@ -4861,188 +4833,6 @@ export const UI = {
         }
     },
 
-    captureViewSnapshot(viewMode, focusCategories = []) {
-        const canvas = document.getElementById('app-canvas');
-        this.persistViewSessionForMode(viewMode, canvas);
-        let collapsedCategories = [];
-        try {
-            collapsedCategories = JSON.parse(localStorage.getItem('matrix_collapsed_categories') || '[]');
-        } catch {
-            collapsedCategories = [];
-        }
-        return {
-            version: 3,
-            savedAt: Date.now(),
-            viewMode,
-            focusCategories: Array.isArray(focusCategories) ? [...focusCategories] : [],
-            fileCabinet: isFileCabinetActive(),
-            fileCabinetOrder: getFileCabinetOrder(),
-            fileCabinetFiledCategories: getFileCabinetFiledCategories(),
-            freeformPositions: this.getFreeformPositions(),
-            freeformSizes: this.getFreeformSizes(),
-            gridLayout: this.getGridLayout(),
-            gridPins: this.getGridPins(),
-            expandedCards: getExpandedCards(viewMode),
-            collapsedCategories,
-            viewSessions: getViewSessionsForSnapshot()
-        };
-    },
-
-    migrateLegacySavedView() {
-        try {
-            const legacy = localStorage.getItem('matrix_saved_view');
-            if (!legacy || localStorage.getItem(SAVED_VIEWS_KEY)) return;
-            const parsed = JSON.parse(legacy);
-            if (!parsed) return;
-            const store = {
-                version: 2,
-                slots: Array.from({ length: SAVED_VIEWS_SLOTS }, (_, id) => ({
-                    id,
-                    savedAt: null,
-                    label: `View ${id + 1}`,
-                    snapshot: null
-                }))
-            };
-            store.slots[0] = {
-                id: 0,
-                savedAt: parsed.savedAt || Date.now(),
-                label: 'View 1',
-                snapshot: { ...parsed, version: 2, focusCategories: parsed.focusCategories || [] }
-            };
-            localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(store));
-            localStorage.removeItem('matrix_saved_view');
-        } catch {
-            /* ignore */
-        }
-    },
-
-    getSavedViewsStore() {
-        this.migrateLegacySavedView();
-        try {
-            const raw = localStorage.getItem(SAVED_VIEWS_KEY);
-            if (!raw) {
-                return {
-                    version: 2,
-                    slots: Array.from({ length: SAVED_VIEWS_SLOTS }, (_, id) => ({
-                        id,
-                        savedAt: null,
-                        label: `View ${id + 1}`,
-                        snapshot: null
-                    }))
-                };
-            }
-            const parsed = JSON.parse(raw);
-            if (!parsed?.slots?.length) throw new Error('invalid');
-            while (parsed.slots.length < SAVED_VIEWS_SLOTS) {
-                parsed.slots.push({
-                    id: parsed.slots.length,
-                    savedAt: null,
-                    label: `View ${parsed.slots.length + 1}`,
-                    snapshot: null
-                });
-            }
-            return parsed;
-        } catch {
-            return {
-                version: 2,
-                slots: Array.from({ length: SAVED_VIEWS_SLOTS }, (_, id) => ({
-                    id,
-                    savedAt: null,
-                    label: `View ${id + 1}`,
-                    snapshot: null
-                }))
-            };
-        }
-    },
-
-    saveViewSnapshotToSlot(slotIndex, viewMode, focusCategories = []) {
-        const snapshot = this.captureViewSnapshot(viewMode, focusCategories);
-        const store = this.getSavedViewsStore();
-        const idx = Math.max(0, Math.min(SAVED_VIEWS_SLOTS - 1, slotIndex));
-        store.slots[idx] = {
-            id: idx,
-            savedAt: snapshot.savedAt,
-            label: `View ${idx + 1}`,
-            snapshot
-        };
-        localStorage.setItem(SAVED_VIEWS_KEY, JSON.stringify(store));
-        return snapshot;
-    },
-
-    getSavedViewSlot(slotIndex) {
-        const store = this.getSavedViewsStore();
-        const idx = Math.max(0, Math.min(SAVED_VIEWS_SLOTS - 1, slotIndex));
-        return store.slots[idx]?.snapshot || null;
-    },
-
-    hasAnySavedViewSlot() {
-        return this.getSavedViewsStore().slots.some((slot) => slot?.snapshot);
-    },
-
-    getSavedViewSnapshot(slotIndex = 0) {
-        return this.getSavedViewSlot(slotIndex);
-    },
-
-    hasSavedViewSnapshot() {
-        return this.hasAnySavedViewSlot();
-    },
-
-    applyViewSnapshot(snapshot) {
-        if (!snapshot || (snapshot.version !== 1 && snapshot.version !== 2 && snapshot.version !== 3)) return false;
-        snapshot = sanitizeLayoutSnapshot(snapshot);
-        const writeState = { quotaExceeded: false, failedKey: null };
-        const writeJson = (key, value) => safeSetItem(key, JSON.stringify(value), writeState);
-
-        writeJson('matrix_freeform_positions', snapshot.freeformPositions || {});
-        if (writeState.quotaExceeded) return false;
-        writeJson('matrix_freeform_sizes', snapshot.freeformSizes || {});
-        if (writeState.quotaExceeded) return false;
-        writeJson(GRID_LAYOUT_KEY, snapshot.gridLayout || {});
-        if (writeState.quotaExceeded) return false;
-        writeJson(GRID_PINS_KEY, snapshot.gridPins || []);
-        if (writeState.quotaExceeded) return false;
-
-        if (snapshot.version >= 3 && snapshot.viewSessions) {
-            applyViewSessionsFromSnapshot(snapshot.viewSessions);
-        } else {
-            if (snapshot.gridExpandedId) {
-                if (!safeSetItem(GRID_EXPANDED_KEY, snapshot.gridExpandedId, writeState)) return false;
-            } else {
-                try {
-                    localStorage.removeItem(GRID_EXPANDED_KEY);
-                } catch {
-                    /* ignore */
-                }
-            }
-            writeJson('matrix_expanded_cards', snapshot.expandedCards || {});
-            if (writeState.quotaExceeded) return false;
-        }
-
-        writeJson('matrix_collapsed_categories', snapshot.collapsedCategories || []);
-        if (writeState.quotaExceeded) return false;
-
-        if (snapshot.fileCabinet != null) {
-            setFileCabinetActive(!!snapshot.fileCabinet);
-        }
-        if (snapshot.fileCabinetOrder) {
-            writeJson(FILE_CABINET_ORDER_KEY, snapshot.fileCabinetOrder);
-            if (writeState.quotaExceeded) return false;
-        }
-        if (snapshot.fileCabinetFiledCategories) {
-            writeJson(FILE_CABINET_FILED_CATEGORIES_KEY, snapshot.fileCabinetFiledCategories);
-            if (writeState.quotaExceeded) return false;
-        }
-
-        return !writeState.quotaExceeded;
-    },
-
-    restoreSavedViewSnapshot(slotIndex = 0) {
-        const snapshot = this.getSavedViewSlot(slotIndex);
-        if (!snapshot) return null;
-        this.applyViewSnapshot(snapshot);
-        return snapshot;
-    },
-
     applyDesktopLayoutModeSwitch(canvas, mode) {
         if (!canvas) return;
         const resolvedMode = normalizeViewMode(mode);
@@ -5260,16 +5050,13 @@ export const UI = {
         }
     },
 
-    resetBoardLayout(sortBy, items, { fileCabinetActive, focusCategories } = {}) {
+    resetBoardLayout(sortBy, items, { fileCabinetActive } = {}) {
         const visibleItems = this.getVisibleItems(items || []);
         const mode = normalizeViewMode(sortBy);
         clearViewSessionExpanded('grid');
         clearViewSessionExpanded('freeform');
 
-        let boardItems = visibleItems;
-        if (Array.isArray(focusCategories) && focusCategories.length > 0) {
-            boardItems = applyFocusToItems(visibleItems, focusCategories);
-        }
+        const boardItems = visibleItems;
 
         const fcActive = fileCabinetActive ?? isFileCabinetActive();
 

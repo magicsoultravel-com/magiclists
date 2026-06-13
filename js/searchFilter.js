@@ -1,5 +1,4 @@
 import { stripRichText } from './richText.js';
-import { UNCATEGORIZED_CATEGORY } from './categories.js';
 
 const STOPWORDS = new Set(['a', 'an', 'the', 'and', 'or', 'of', 'to', 'in', 'for', 'on', 'at', 'is']);
 const MIN_TOKEN_LENGTH = 2;
@@ -7,7 +6,6 @@ const MIN_QUERY_MEANINGFUL_LENGTH = 3;
 
 const CAP_TITLES = 8;
 const CAP_CONTENT = 10;
-const CAP_CATEGORIES = 5;
 const FUZZY_MIN_TERM_LENGTH = 5;
 const FUZZY_MAX_DISTANCE = 1;
 const FUZZY_SCORE_PENALTY = 100;
@@ -276,17 +274,15 @@ function plainTitle(item) {
     return stripRichText(item?.title || '') || 'Untitled';
 }
 
-export function querySearch(items, categories, query) {
+export function querySearch(items, query) {
     const parsed = parseSearchQuery(query);
     if (!isSearchActive(parsed)) {
-        return { titles: [], content: [], categories: [], parsed };
+        return { titles: [], content: [], parsed };
     }
 
     const safeItems = Array.isArray(items) ? items : [];
-    const safeCategories = Array.isArray(categories) ? categories : [];
     const titles = [];
     const content = [];
-    const categoryHits = [];
 
     for (const item of safeItems) {
         const titleText = stripRichText(item.title || '');
@@ -340,38 +336,9 @@ export function querySearch(items, categories, query) {
     titles.sort(sortByScoreThenAge);
     content.sort(sortByScoreThenAge);
 
-    const hasUncategorized = safeItems.some((item) => {
-        const name = item?.categories?.[0];
-        return typeof name !== 'string' || !name.trim();
-    });
-
-    for (const cat of safeCategories) {
-        const name = typeof cat === 'string' ? cat : cat?.name;
-        if (!name) continue;
-        if (!itemMatchesQuery(name, parsed)) continue;
-        categoryHits.push({
-            name,
-            color: cat?.color || '#64748b',
-            score: scoreTextMatch(name, parsed),
-            updatedAt: 0
-        });
-    }
-
-    if (hasUncategorized && itemMatchesQuery(UNCATEGORIZED_CATEGORY, parsed)) {
-        categoryHits.push({
-            name: UNCATEGORIZED_CATEGORY,
-            color: '#64748b',
-            score: scoreTextMatch(UNCATEGORIZED_CATEGORY, parsed),
-            updatedAt: 0
-        });
-    }
-
-    categoryHits.sort(sortByScoreThenAge);
-
     return {
         titles: titles.slice(0, CAP_TITLES),
         content: content.slice(0, CAP_CONTENT),
-        categories: categoryHits.slice(0, CAP_CATEGORIES),
         parsed
     };
 }

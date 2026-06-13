@@ -29,15 +29,11 @@ export const SearchBar = {
     resultRows: [],
 
     getItems: null,
-    getCategories: null,
     onOpenItem: null,
-    onFocusCategory: null,
 
-    init({ getItems, getCategories, onOpenItem, onFocusCategory }) {
+    init({ getItems, onOpenItem }) {
         this.getItems = getItems;
-        this.getCategories = getCategories;
         this.onOpenItem = onOpenItem;
-        this.onFocusCategory = onFocusCategory;
 
         this.root = document.getElementById('side-panel-search');
         this.input = document.getElementById('workspace-search-input');
@@ -94,19 +90,15 @@ export const SearchBar = {
             return;
         }
 
-        const results = querySearch(
-            this.getItems?.() || [],
-            this.getCategories?.() || [],
-            query
-        );
+        const results = querySearch(this.getItems?.() || [], query);
 
         this.renderPanel(results, query);
         this.openPanel();
     },
 
     renderPanel(results, query) {
-        const { titles, content, categories } = results;
-        const hasAny = titles.length || content.length || categories.length;
+        const { titles, content } = results;
+        const hasAny = titles.length || content.length;
 
         if (!hasAny) {
             this.panel.innerHTML = `<div class="search-results-empty">No matches for "${escapeHtml(query.trim())}"</div>`;
@@ -130,14 +122,6 @@ export const SearchBar = {
                 <div class="search-results-section">
                     <div class="search-results-section-title">Content</div>
                     ${content.map((hit) => this.renderContentRow(hit)).join('')}
-                </div>`);
-        }
-
-        if (categories.length) {
-            sections.push(`
-                <div class="search-results-section">
-                    <div class="search-results-section-title">Categories</div>
-                    ${categories.map((hit) => this.renderCategoryRow(hit)).join('')}
                 </div>`);
         }
 
@@ -195,15 +179,6 @@ export const SearchBar = {
             </button>`;
     },
 
-    renderCategoryRow(hit) {
-        return `
-            <button type="button" class="search-results-item search-results-item--category"
-                data-action="focus-category" data-category="${escapeAttr(hit.name)}"
-                style="--note-accent:${escapeAttr(hit.color)}">
-                <span class="search-results-item-primary has-note-color">${escapeHtml(hit.name)}</span>
-            </button>`;
-    },
-
     bindRowClicks() {
         this.panel.querySelectorAll('.search-results-item').forEach((row) => {
             row.addEventListener('click', () => this.activateRow(row));
@@ -218,14 +193,6 @@ export const SearchBar = {
             const item = (this.getItems?.() || []).find((entry) => entry.id === itemId);
             if (item) {
                 this.onOpenItem?.(item);
-                this.closePanel(false);
-            }
-            return;
-        }
-        if (action === 'focus-category') {
-            const name = row.dataset.category;
-            if (name) {
-                this.onFocusCategory?.(name);
                 this.closePanel(false);
             }
         }

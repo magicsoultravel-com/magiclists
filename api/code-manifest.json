@@ -2,7 +2,6 @@
   "paths": [
     "README.md",
     "api/code-manifest.json",
-    "api/export-code.php",
     "api/tools-list.json",
     "api/tools-list.php",
     "css/base.css",
@@ -36,7 +35,6 @@
     "js/categories.js",
     "js/chromeBackground.js",
     "js/clockStyle.js",
-    "js/codeExport.js",
     "js/colorPicker.js",
     "js/customizationReset.js",
     "js/desktopBackground.js",
@@ -48,7 +46,6 @@
     "js/editor.js",
     "js/editorModalChrome.js",
     "js/focusFilter.js",
-    "js/focusMode.js",
     "js/fullscreen.js",
     "js/hamburger.js",
     "js/holidays.js",

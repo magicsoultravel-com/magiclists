@@ -410,12 +410,12 @@ export const ClockStyle = {
         }).join('');
 
         popover.innerHTML = `
-            <label class="clock-style-hide-row focus-mode-row" for="clock-opt-hidden">
+            <label class="clock-style-hide-row" for="clock-opt-hidden">
                 <input type="checkbox" class="display-options-checkbox" id="clock-opt-hidden"${this.isHidden ? ' checked' : ''}>
-                <span class="focus-mode-row-label">Hide clock</span>
-                <span class="focus-mode-row-hint">Quick actions</span>
+                <span class="clock-style-hide-label">Hide clock</span>
+                <span class="clock-style-hide-hint">Quick actions</span>
             </label>
-            <div class="focus-mode-divider" role="separator"></div>
+            <div class="clock-style-divider" role="separator"></div>
             <div class="clock-style-list">${optionsHtml}</div>
         `;
 

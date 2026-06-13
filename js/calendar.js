@@ -1,6 +1,5 @@
 import { Holidays } from './holidays.js';
 import { readStoredCategories } from './categories.js';
-import { applyFocusToItems } from './focusFilter.js';
 import { CARD_ICONS } from './ui.js';
 import { resolveNoteColor } from './colorPicker.js';
 import { stripRichText } from './richText.js';
@@ -16,7 +15,6 @@ export const Calendar = {
     selectedDate: null,
     items: [],
     hiddenCategories: [],
-    focusCategories: [],
     autoSaveTimer: null,
     
     isItemCalendarHidden(itemId) {
@@ -49,7 +47,6 @@ export const Calendar = {
     
     open(items, options = {}) {
         this.items = items;
-        this.focusCategories = options.focusCategories || [];
         this.hiddenCategories = JSON.parse(localStorage.getItem('matrix_hidden_categories') || '[]');
         this.inlineMode = !!options.inline;
         this.onInlineClose = options.onClose || null;
@@ -85,14 +82,13 @@ export const Calendar = {
         if (this.overlay) this.overlay.classList.add('is-hidden');
     },
     
-    refresh(focusCategories = null) {
-        if (focusCategories !== null) this.focusCategories = focusCategories;
+    refresh() {
         this.hiddenCategories = JSON.parse(localStorage.getItem('matrix_hidden_categories') || '[]');
         this.render();
     },
 
     getFilteredItems() {
-        return applyFocusToItems(this.items || [], this.focusCategories);
+        return this.items || [];
     },
     
     saveState() {

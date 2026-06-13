@@ -15,11 +15,9 @@ export const ToolsManager = {
     openPanels: new Map(),
     registry: [],
     getItems: null,
-    getFocusCategories: null,
 
-    async init(getItems, getFocusCategories) {
+    async init(getItems) {
         this.getItems = getItems || null;
-        this.getFocusCategories = getFocusCategories || null;
         this.desktop = document.getElementById('tools-desktop');
         this.dropdown = document.getElementById('toolbox-dropdown');
 

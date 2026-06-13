@@ -23,7 +23,6 @@ import { readViewSessions, writeViewSessions, VIEW_MODES } from './viewSession.j
 const GRID_LAYOUT_KEY = 'matrix_grid_layout';
 const GRID_PINS_KEY = 'matrix_grid_pins';
 const GRID_EXPANDED_KEY = 'matrix_grid_expanded_id';
-const SAVED_VIEWS_KEY = 'matrix_saved_views';
 const LEGACY_EXPANDED_KEY = 'matrix_expanded_cards';
 const SPATIAL_LAYOUT_SCHEMA_KEY = 'matrix_spatial_layout_schema';
 const SPATIAL_LAYOUT_SCHEMA_VERSION = 2;
@@ -34,7 +33,9 @@ const DEAD_LAYOUT_KEYS = [
     'matrix_column_note_layout',
     'matrix_columns_float_positions',
     'matrix_columns_float_sizes',
-    'matrix_canvas_layout_order'
+    'matrix_canvas_layout_order',
+    'matrix_saved_views',
+    'matrix_saved_view'
 ];
 
 const LAYOUT_BACKUP_KEYS = [
@@ -50,7 +51,6 @@ const LAYOUT_BACKUP_KEYS = [
     'matrix_columns_float_sizes',
     'matrix_canvas_layout_order',
     'matrix_view_sessions',
-    SAVED_VIEWS_KEY,
     LEGACY_EXPANDED_KEY,
     'matrix_hidden_board_ids',
     'matrix_calendar_hidden_ids',
@@ -149,7 +149,7 @@ function confirmStorageRecovery() {
                 <p class="storage-quota-body">
                     Your <strong>notes are safe</strong> and will not be deleted.
                     The app needs a little space to save board layout.
-                    You can clear saved views and card positions (you can rearrange cards afterwards).
+                    You can clear card positions (you can rearrange cards afterwards).
                 </p>
                 <div class="storage-quota-actions">
                     <button type="button" class="btn" data-action="hold">Keep my layout</button>
@@ -441,11 +441,6 @@ function applyReconcileWrites(context, stats, writeState, { lightTouch = false }
     const sessionsPayload = JSON.stringify(sanitizeViewSessions(readViewSessions(), context.liveIds, stats));
     if (localStorage.getItem('matrix_view_sessions') !== sessionsPayload) {
         if (!safeSetItem('matrix_view_sessions', sessionsPayload, writeState)) return;
-    }
-
-    const savedViews = readJson(SAVED_VIEWS_KEY, null);
-    if (savedViews) {
-        writeJsonIfChanged(SAVED_VIEWS_KEY, sanitizeSavedViewsStore(savedViews, context), writeState);
     }
 }
 
@@ -797,21 +792,6 @@ export function sanitizeLayoutSnapshot(snapshot, context) {
     return next;
 }
 
-function sanitizeSavedViewsStore(store, context) {
-    if (!store?.slots?.length) return store;
-    let changed = false;
-    const slots = store.slots.map((slot) => {
-        if (!slot?.snapshot) return slot;
-        const cleaned = sanitizeLayoutSnapshot(slot.snapshot, context);
-        if (JSON.stringify(cleaned) !== JSON.stringify(slot.snapshot)) {
-            changed = true;
-            return { ...slot, snapshot: cleaned };
-        }
-        return slot;
-    });
-    return changed ? { ...store, slots } : store;
-}
-
 export function migrateColumnLayoutKey(oldName, newName) {
     if (!oldName || !newName || categoryKey(oldName) === categoryKey(newName)) return false;
     let changed = false;
@@ -925,23 +905,6 @@ export function purgeLayoutForItem(itemId) {
     if (sessionChanged) {
         writeViewSessions(nextSessions);
         changed = true;
-    }
-
-    const savedViews = readJson(SAVED_VIEWS_KEY, null);
-    if (savedViews?.slots) {
-        let viewsChanged = false;
-        const slots = savedViews.slots.map((slot) => {
-            if (!slot?.snapshot) return slot;
-            const cleaned = purgeItemFromSnapshot(slot.snapshot, itemId);
-            if (JSON.stringify(cleaned) !== JSON.stringify(slot.snapshot)) {
-                viewsChanged = true;
-                return { ...slot, snapshot: cleaned };
-            }
-            return slot;
-        });
-        if (viewsChanged) {
-            changed = writeJsonIfChanged(SAVED_VIEWS_KEY, { ...savedViews, slots }) || changed;
-        }
     }
 
     return changed;

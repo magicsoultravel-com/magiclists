@@ -22,14 +22,12 @@ import { DesktopBackground } from './desktopBackground.js';
 import { ChromeBackground } from './chromeBackground.js';
 import { ClockStyle } from './clockStyle.js';
 import { ColorPicker, PALETTE_NOTE, randomNoteColor } from './colorPicker.js';
-import { FocusMode } from './focusMode.js';
 import { DisplayOptions } from './displayOptions.js';
 import { applyTileSmallFootprint } from './tileFootprint.js';
 import { GridFineness, migrateLegacyGridLayoutIfNeeded } from './gridDensity.js';
 import { AppTheme } from './appTheme.js';
 import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
-import { exportAppCode } from './codeExport.js';
 import { readViewSessions, restoreViewSession } from './viewSession.js';
 import { DrawingBoard } from './drawingBoard.js';
 import { SearchBar } from './searchBar.js';
@@ -52,7 +50,6 @@ const AppState = {
     items: [],
     categories: [...DEFAULT_CATEGORIES],
     hiddenCategories: JSON.parse(localStorage.getItem('matrix_hidden_categories') || '[]'),
-    focusCategories: [],
     expandedCards: {},
     workspaceMode: (() => {
         const mode = localStorage.getItem('matrix_workspace_mode');
@@ -94,7 +91,7 @@ class Application {
         AppState.expandedCards = UI.readExpandedCardsForMode(AppState.viewSettings.sortBy);
         this.checkAuthSession();
         Editor.init();
-        await ToolsManager.init(() => AppState.items, () => AppState.focusCategories);
+        await ToolsManager.init(() => AppState.items);
         Calendar.init();
         this.renderControlBar();
         this.loadCategoriesStore();
@@ -112,7 +109,6 @@ class Application {
         SidePanel.setupStatusClickHandlers(); /* after radio/tv shells exist */
         ClockStyle.init();
         DesktopZoom.init();
-        this.setupFocusModeButton();
         this.setupSearchBar();
         this.setupBackupInterface();
         this.setupFab();
@@ -154,7 +150,7 @@ class Application {
 
         if (preserveView) {
             const canvas = document.getElementById('app-canvas');
-            UI.updateSingleCard(canvas, item, AppState.hiddenCategories, AppState.focusCategories);
+            UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
             if (['freeform', 'grid'].includes(AppState.viewSettings.sortBy)) {
                 DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
             }
@@ -218,7 +214,7 @@ class Application {
             } else if (AppState.items.length === 0 && !data?.write_access && (data?.total_items || 0) > 0) {
                 canvas.innerHTML = `<div class="system-status-msg">Notes are in local storage but require admin login. Use Quick actions → Login (default dev token: dev-admin-secret-2026).</div>`;
             } else {
-                UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
+                UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories);
             }
 
             DesktopZoom.apply();
@@ -275,9 +271,6 @@ class Application {
 
         const displayGroup = `
             <button type="button" id="btn-display-options" class="btn btn--compact btn--icon" title="Display options" aria-label="Display options" aria-expanded="false" aria-haspopup="menu"></button>
-            <button type="button" id="btn-focus-mode" class="btn btn--compact btn--icon" title="Focus mode" aria-label="Focus mode" aria-expanded="false" aria-haspopup="menu"></button>
-            <button type="button" id="btn-save-view" class="btn btn--compact btn--icon" title="Save view" aria-label="Save view"></button>
-            <button type="button" id="btn-recall-view" class="btn btn--compact btn--icon" title="Restore saved view" aria-label="Restore saved view" disabled></button>
         `;
 
         const layoutGroup = `
@@ -296,7 +289,6 @@ class Application {
             const accountGroup = `
                 <button type="button" class="btn btn--compact btn--icon" id="btn-add-category" title="Add category" aria-label="Add category">${ACTION_ICONS.category}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="btn-export-db" title="Export backup" aria-label="Export backup">${ACTION_ICONS.export}</button>
-                <button type="button" class="btn btn--compact btn--icon" id="btn-export-code" title="Export app code" aria-label="Export app code">${ACTION_ICONS.exportCode}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="btn-import-db" title="Import backup" aria-label="Import backup">${ACTION_ICONS.import}</button>
                 <button type="button" class="btn btn--compact btn--icon btn--icon-danger" id="btn-auth-logout" title="Logout" aria-label="Logout">${ACTION_ICONS.logout}</button>
             `;
@@ -317,15 +309,9 @@ class Application {
         const displayBtn = document.getElementById('btn-display-options');
         if (displayBtn) displayBtn.innerHTML = ACTION_ICONS.displayOptions;
         DisplayOptions.rebindTrigger();
-
-        const focusBtn = document.getElementById('btn-focus-mode');
-        if (focusBtn) focusBtn.innerHTML = ACTION_ICONS.focusMode;
-        FocusMode.rebindTrigger();
         ClockStyle.rebindTrigger();
 
         this.setupLayoutResetButton();
-        this.setupSaveViewButton();
-        this.setupRecallViewButton();
         Fullscreen.rebindMainButton();
 
         document.getElementById('btn-freeform-toggle')?.addEventListener('click', () => this.toggleFreeformLayout());
@@ -337,7 +323,6 @@ class Application {
 
         document.getElementById('btn-add-category')?.addEventListener('click', () => this.executeAddCategoryPrompt());
         document.getElementById('btn-export-db')?.addEventListener('click', () => this.executeDataBackupExport());
-        document.getElementById('btn-export-code')?.addEventListener('click', () => this.executeCodeExport());
         document.getElementById('btn-import-db')?.addEventListener('click', () => document.getElementById('system-import-file-picker').click());
         document.getElementById('btn-auth-logout')?.addEventListener('click', () => this.executeLogout());
         document.getElementById('btn-auth-login')?.addEventListener('click', () => this.executeLoginPrompt());
@@ -345,7 +330,6 @@ class Application {
         this.updateLayoutResetVisibility();
         this.updateViewToggleState();
         UndoManager.updateToolbar();
-        FocusMode.syncButtonState();
     }
 
     setupFab() {
@@ -409,7 +393,7 @@ class Application {
             this.updateDesktopZoomVisibility();
 
             if (AppState.items.length) {
-                UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
+                UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories);
                 DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
             }
         }
@@ -417,20 +401,6 @@ class Application {
         this.updateFabVisibility();
         this.updateLayoutResetVisibility();
         this.updateViewToggleState();
-    }
-
-    async executeCodeExport() {
-        if (!AppState.user.isLoggedIn) return;
-        const btn = document.getElementById('btn-export-code');
-        if (btn) btn.disabled = true;
-        try {
-            await exportAppCode(AppState.user.token);
-        } catch (err) {
-            console.error('[Code export]', err);
-            alert(err?.message || 'Could not export app code.');
-        } finally {
-            if (btn) btn.disabled = false;
-        }
     }
 
     executeDataBackupExport() {
@@ -654,228 +624,19 @@ class Application {
                 this.switchWorkspaceMode('notes');
             }
             UI.resetBoardLayout(AppState.viewSettings.sortBy, AppState.items, {
-                fileCabinetActive: AppState.viewSettings.fileCabinet,
-                focusCategories: AppState.focusCategories
+                fileCabinetActive: AppState.viewSettings.fileCabinet
             });
             AppState.expandedCards = UI.readExpandedCardsForMode(AppState.viewSettings.sortBy);
         });
     }
 
-    setupFocusModeButton() {
-        FocusMode.init({
-            getState: () => AppState.focusCategories,
-            setState: (next) => {
-                AppState.focusCategories = Array.isArray(next) ? next : [];
-            },
-            getHiddenCategories: () => AppState.hiddenCategories,
-            onChange: () => this.onFocusChange()
-        });
-    }
-
-    onFocusChange() {
-        const canvas = document.getElementById('app-canvas');
-        if (canvas) {
-            UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
-            DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
-        }
-        if (Calendar.isActive()) {
-            Calendar.items = AppState.items;
-            Calendar.refresh(AppState.focusCategories);
-        }
-        FocusMode.syncButtonState();
-        window.dispatchEvent(new CustomEvent('board:focus_changed', {
-            detail: [...AppState.focusCategories]
-        }));
-    }
-
     setupSearchBar() {
         SearchBar.init({
             getItems: () => AppState.items,
-            getCategories: () => AppState.categories,
             onOpenItem: (item) => {
                 window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: item }));
-            },
-            onFocusCategory: (name) => {
-                AppState.focusCategories = [name];
-                this.onFocusChange();
             }
         });
-    }
-
-    setupViewSlotPopover(btn, { ariaLabel, emptyLabel, onPick, requireSnapshot = false }) {
-        if (!btn) return;
-        let popover = null;
-        let outsideHandler = null;
-        let keyHandler = null;
-
-        const close = () => {
-            if (!popover) return;
-            popover.classList.add('is-hidden');
-            btn.setAttribute('aria-expanded', 'false');
-            if (outsideHandler) {
-                document.removeEventListener('mousedown', outsideHandler, true);
-                outsideHandler = null;
-            }
-            if (keyHandler) {
-                document.removeEventListener('keydown', keyHandler);
-                keyHandler = null;
-            }
-        };
-
-        const position = () => {
-            positionPopoverBelowAnchor(popover, btn);
-        };
-
-        const open = () => {
-            close();
-            if (!popover) {
-                popover = document.createElement('div');
-                popover.className = 'view-slot-popover clock-style-popover is-hidden';
-                popover.setAttribute('role', 'menu');
-                popover.setAttribute('aria-label', ariaLabel);
-                document.body.appendChild(popover);
-            }
-
-            const store = UI.getSavedViewsStore();
-            popover.innerHTML = `<div class="view-slot-list">${store.slots.map((slot, idx) => {
-                const snap = slot?.snapshot;
-                const when = snap?.savedAt
-                    ? new Date(snap.savedAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
-                    : emptyLabel;
-                const mode = snap?.viewMode === 'freeform' ? 'Freeform' : 'Bento grid';
-                const focus = snap?.focusCategories?.length
-                    ? ` · Focus: ${snap.focusCategories.join(', ')}`
-                    : '';
-                const disabled = requireSnapshot && !snap;
-                return `<button type="button" class="view-slot-option${snap ? '' : ' is-empty'}" data-slot="${idx}" role="menuitem"${disabled ? ' disabled' : ''}>
-                    <span class="view-slot-label">${slot.label || `View ${idx + 1}`}</span>
-                    <span class="view-slot-meta">${snap ? `${mode} · ${when}${focus}` : when}</span>
-                </button>`;
-            }).join('')}</div>`;
-
-            popover.querySelectorAll('.view-slot-option:not([disabled])').forEach((option) => {
-                option.addEventListener('mousedown', (e) => e.stopPropagation());
-                option.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    const slot = Number(option.dataset.slot);
-                    close();
-                    await onPick(slot, option);
-                });
-            });
-
-            popover.classList.remove('is-hidden');
-            btn.setAttribute('aria-expanded', 'true');
-            position();
-
-            outsideHandler = (e) => {
-                if (popover.contains(e.target) || btn.contains(e.target)) return;
-                close();
-            };
-            keyHandler = (e) => {
-                if (e.key === 'Escape') close();
-            };
-            requestAnimationFrame(() => {
-                document.addEventListener('mousedown', outsideHandler, true);
-                document.addEventListener('keydown', keyHandler);
-            });
-        };
-
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (popover && !popover.classList.contains('is-hidden')) close();
-            else open();
-        });
-    }
-
-    setupSaveViewButton() {
-        const btn = document.getElementById('btn-save-view');
-        if (!btn) return;
-        btn.innerHTML = ACTION_ICONS.saveView;
-        btn.title = 'Save view';
-        btn.setAttribute('aria-label', 'Save view');
-        btn.setAttribute('aria-haspopup', 'menu');
-
-        this.setupViewSlotPopover(btn, {
-            ariaLabel: 'Save view slot',
-            emptyLabel: 'Empty — click to save',
-            onPick: async (slot) => {
-                const mode = AppState.viewSettings.sortBy;
-                UI.saveViewSnapshotToSlot(slot, mode, AppState.focusCategories);
-                this.updateRecallViewButtonState();
-                btn.classList.add('is-saved');
-                setTimeout(() => btn.classList.remove('is-saved'), 1600);
-            }
-        });
-    }
-
-    setupRecallViewButton() {
-        const btn = document.getElementById('btn-recall-view');
-        if (!btn) return;
-        btn.innerHTML = ACTION_ICONS.recallView;
-        btn.setAttribute('aria-haspopup', 'menu');
-        this.updateRecallViewButtonState();
-
-        this.setupViewSlotPopover(btn, {
-            ariaLabel: 'Restore saved view',
-            emptyLabel: 'Empty',
-            requireSnapshot: true,
-            onPick: async (slot) => {
-                const ok = await this.restoreSavedView(slot);
-                if (!ok) {
-                    this.updateRecallViewButtonState();
-                    return;
-                }
-                btn.classList.add('is-recalled');
-                setTimeout(() => {
-                    btn.classList.remove('is-recalled');
-                    this.updateRecallViewButtonState();
-                }, 1600);
-            }
-        });
-    }
-
-    updateRecallViewButtonState() {
-        const btn = document.getElementById('btn-recall-view');
-        if (!btn) return;
-        const hasAny = UI.hasAnySavedViewSlot();
-        btn.disabled = !hasAny;
-        const defaultTitle = 'Restore saved view';
-        btn.title = hasAny ? defaultTitle : 'No saved views';
-        btn.setAttribute('aria-label', btn.title);
-    }
-
-    async restoreSavedView(slotIndex = 0) {
-        const snapshot = UI.restoreSavedViewSnapshot(slotIndex);
-        if (!snapshot) return false;
-
-        AppState.focusCategories = Array.isArray(snapshot.focusCategories)
-            ? [...snapshot.focusCategories]
-            : [];
-        FocusMode.syncButtonState();
-
-        let mode = snapshot.viewMode === 'freeform' ? 'freeform' : 'grid';
-        if (AppState.viewSettings.sortBy !== mode) {
-            AppState.viewSettings.sortBy = mode;
-            localStorage.setItem('matrix_desktop_layout', mode);
-            localStorage.setItem('matrix_preferred_view', mode);
-            window.dispatchEvent(new CustomEvent('view:mode_changed', { detail: mode }));
-            this.updateViewToggleState();
-            this.updateLayoutResetVisibility();
-        }
-
-        UI.restoreViewSessionForMode(mode);
-        AppState.expandedCards = UI.readExpandedCardsForMode(mode);
-        AppState.viewSettings.fileCabinet = localStorage.getItem('matrix_file_cabinet') === 'true';
-        this.updateViewToggleState();
-
-        await this.syncDataStore();
-
-        if (Calendar.isActive()) {
-            Calendar.items = AppState.items;
-            Calendar.refresh(AppState.focusCategories);
-        }
-
-        return true;
     }
 
     updateLayoutResetVisibility() {
@@ -948,7 +709,7 @@ class Application {
                 await this.syncDataStore();
                 card = canvas?.querySelector(`.mini-card[data-id="${item.id}"]`);
             } else {
-                UI.collapseBoardCardIfExpanded(card, item, AppState.hiddenCategories, AppState.focusCategories);
+                UI.collapseBoardCardIfExpanded(card, item, AppState.hiddenCategories);
             }
 
             requestAnimationFrame(() => {
@@ -995,7 +756,7 @@ class Application {
             if (preserveView) {
                 if (!detail?.skipRerender) {
                     const canvas = document.getElementById('app-canvas');
-                    UI.updateSingleCard(canvas, item, AppState.hiddenCategories, AppState.focusCategories);
+                    UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
                     if (['freeform', 'grid'].includes(AppState.viewSettings.sortBy)) {
                         DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
                     }
@@ -1012,7 +773,7 @@ class Application {
             if (canvas && !skipFlush) {
                 UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
             }
-            UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
+            UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories);
             this.updateWorkspaceCounter();
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         });
@@ -1023,7 +784,7 @@ class Application {
             if (canvas && !skipFlush) {
                 UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
             }
-            UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
+            UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories);
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         });
 
@@ -1048,7 +809,7 @@ class Application {
             }
             if (Calendar.isActive()) {
                 Calendar.items = AppState.items;
-                Calendar.refresh(AppState.focusCategories);
+                Calendar.refresh();
             }
         });
 
