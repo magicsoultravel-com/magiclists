@@ -62,6 +62,222 @@ export function historyLabelForItem(item) {
     return title ? `Edit "${title}"` : 'Edit note';
 }
 
+const DETAIL_MAX_LINES = 12;
+const DETAIL_MAX_LINE_CHARS = 320;
+const DETAIL_TEXT_PREVIEW = 280;
+const DETAIL_MAX_STEP_CHANGES = 5;
+
+const DETAIL_SKIP_KEYS = new Set(['id', 'owner_id', 'created_at', 'updated_at']);
+
+const DETAIL_FIELD_LABELS = {
+    title: 'Title',
+    content: 'Content',
+    steps: 'Checklist',
+    status: 'Status',
+    visibility: 'Visibility',
+    type: 'Type',
+    categories: 'Categories',
+    backgroundColor: 'Color',
+    tileSize: 'Tile size',
+    editorBodyLayout: 'Editor layout',
+    startDateTime: 'Start',
+    endDateTime: 'End',
+    hiddenFromBoard: 'Hidden from board',
+    hideFromCalendar: 'Hidden from calendar',
+    isRecurring: 'Recurring',
+    attachments: 'Attachments'
+};
+
+function truncateDetailText(text, max = DETAIL_MAX_LINE_CHARS) {
+    const value = String(text ?? '');
+    if (value.length <= max) return value;
+    return `${value.slice(0, max - 1)}…`;
+}
+
+function plainFieldText(value) {
+    return stripRichText(value || '').trim();
+}
+
+function formatEmptyLabel(text) {
+    return text ? text : '(empty)';
+}
+
+function formatTextChange(beforeVal, afterVal, { hugeSummaryLabel = 'Content' } = {}) {
+    const before = plainFieldText(beforeVal);
+    const after = plainFieldText(afterVal);
+    if (!before && !after) return null;
+    const totalLen = before.length + after.length;
+    if (totalLen > DETAIL_TEXT_PREVIEW * 2) {
+        const delta = after.length - before.length;
+        const sign = delta >= 0 ? '+' : '';
+        return `${hugeSummaryLabel} updated (${sign}${delta} chars)`;
+    }
+    const left = truncateDetailText(formatEmptyLabel(before), DETAIL_TEXT_PREVIEW);
+    const right = truncateDetailText(formatEmptyLabel(after), DETAIL_TEXT_PREVIEW);
+    return `${left} → ${right}`;
+}
+
+function formatScalarChange(label, beforeVal, afterVal) {
+    const left = beforeVal == null || beforeVal === '' ? '(empty)' : String(beforeVal);
+    const right = afterVal == null || afterVal === '' ? '(empty)' : String(afterVal);
+    if (left === right) return null;
+    return `${label}: ${truncateDetailText(left)} → ${truncateDetailText(right)}`;
+}
+
+function formatBoolChange(label, beforeVal, afterVal) {
+    const left = beforeVal === true ? 'yes' : 'no';
+    const right = afterVal === true ? 'yes' : 'no';
+    if (left === right) return null;
+    return `${label}: ${left} → ${right}`;
+}
+
+function formatCategoriesChange(beforeVal, afterVal) {
+    const left = Array.isArray(beforeVal) ? beforeVal.filter(Boolean).join(', ') : '';
+    const right = Array.isArray(afterVal) ? afterVal.filter(Boolean).join(', ') : '';
+    return formatScalarChange('Categories', left || '(none)', right || '(none)');
+}
+
+function describeStepsChange(beforeSteps, afterSteps) {
+    const before = Array.isArray(beforeSteps) ? beforeSteps : [];
+    const after = Array.isArray(afterSteps) ? afterSteps : [];
+    const beforeById = new Map(before.map((step) => [step.id, step]));
+    const afterById = new Map(after.map((step) => [step.id, step]));
+    const changes = [];
+
+    after.forEach((step) => {
+        if (!beforeById.has(step.id)) {
+            const text = truncateDetailText(plainFieldText(step.text) || '(empty step)', DETAIL_TEXT_PREVIEW);
+            changes.push(`+ ${text}`);
+        }
+    });
+
+    before.forEach((step) => {
+        if (!afterById.has(step.id)) {
+            const text = truncateDetailText(plainFieldText(step.text) || '(empty step)', DETAIL_TEXT_PREVIEW);
+            changes.push(`− ${text}`);
+        }
+    });
+
+    after.forEach((step) => {
+        const prev = beforeById.get(step.id);
+        if (!prev) return;
+        if (!!prev.completed !== !!step.completed) {
+            const mark = step.completed ? '✓' : '☐';
+            const text = truncateDetailText(plainFieldText(step.text) || '(step)', DETAIL_TEXT_PREVIEW);
+            changes.push(`${mark} ${text}`);
+            return;
+        }
+        const prevText = plainFieldText(prev.text);
+        const nextText = plainFieldText(step.text);
+        if (prevText !== nextText) {
+            changes.push(`${truncateDetailText(formatEmptyLabel(prevText), DETAIL_TEXT_PREVIEW)} → ${truncateDetailText(formatEmptyLabel(nextText), DETAIL_TEXT_PREVIEW)}`);
+        }
+        if (Number(prev.level) !== Number(step.level)) {
+            changes.push(`Level ${prev.level ?? 0} → ${step.level ?? 0}: ${truncateDetailText(nextText || prevText || '(step)', DETAIL_TEXT_PREVIEW)}`);
+        }
+    });
+
+    if (!changes.length) return null;
+    const shown = changes.slice(0, DETAIL_MAX_STEP_CHANGES);
+    const rest = changes.length - shown.length;
+    if (rest > 0) shown.push(`…and ${rest} more`);
+    return shown.map((line) => `Checklist: ${line}`);
+}
+
+function describeChangeEntry(entry) {
+    const before = entry.before;
+    const delta = entry.forwardDelta || {};
+    const after = applyForwardDelta(before, delta);
+    const changedKeys = Object.keys(delta).filter((key) => !DETAIL_SKIP_KEYS.has(key));
+    const lines = [];
+
+    const pushLine = (line) => {
+        if (!line || lines.length >= DETAIL_MAX_LINES) return;
+        lines.push(truncateDetailText(line));
+    };
+
+    const orderedKeys = [
+        'title', 'content', 'steps', 'status', 'visibility', 'type', 'categories',
+        'backgroundColor', 'tileSize', 'editorBodyLayout', 'startDateTime', 'endDateTime',
+        'hiddenFromBoard', 'hideFromCalendar', 'isRecurring', 'attachments'
+    ];
+    const keys = [
+        ...orderedKeys.filter((key) => changedKeys.includes(key)),
+        ...changedKeys.filter((key) => !orderedKeys.includes(key))
+    ];
+
+    keys.forEach((key) => {
+        if (lines.length >= DETAIL_MAX_LINES) return;
+        const label = DETAIL_FIELD_LABELS[key] || key;
+        const beforeVal = before?.[key];
+        const afterVal = after?.[key];
+
+        if (key === 'title' || key === 'content') {
+            const line = formatTextChange(beforeVal, afterVal, {
+                hugeSummaryLabel: label
+            });
+            if (line) pushLine(`${label}: ${line}`);
+            return;
+        }
+        if (key === 'steps') {
+            describeStepsChange(beforeVal, afterVal)?.forEach(pushLine);
+            return;
+        }
+        if (key === 'categories') {
+            pushLine(formatCategoriesChange(beforeVal, afterVal));
+            return;
+        }
+        if (key === 'hiddenFromBoard' || key === 'hideFromCalendar' || key === 'isRecurring') {
+            pushLine(formatBoolChange(label, beforeVal, afterVal));
+            return;
+        }
+        if (key === 'attachments') {
+            pushLine('Attachments changed');
+            return;
+        }
+        pushLine(formatScalarChange(label, beforeVal, afterVal));
+    });
+
+    if (!lines.length) {
+        lines.push('Changes recorded');
+    }
+    return lines;
+}
+
+function describeDeletionEntry(entry) {
+    const item = entry.item || {};
+    const title = plainFieldText(item.title) || 'Untitled';
+    const content = plainFieldText(item.content);
+    const lines = [`Deleted "${truncateDetailText(title, DETAIL_TEXT_PREVIEW)}"`];
+    if (content) {
+        lines.push(`Content: ${truncateDetailText(content, DETAIL_TEXT_PREVIEW)}`);
+    }
+    return lines;
+}
+
+/** Lazy detail for sidebar history hover; caches on entry._detailCache. */
+export function describeHistoryEntry(entry) {
+    if (!entry) {
+        return { title: 'Edit', lines: ['No details'], summary: 'No details' };
+    }
+    if (entry._detailCache) return entry._detailCache;
+
+    const title = entry.label || 'Edit';
+    let lines = [];
+
+    if (entry.kind === 'change' && entry.before && entry.forwardDelta) {
+        lines = describeChangeEntry(entry);
+    } else if (entry.kind === 'deletion' && entry.item) {
+        lines = describeDeletionEntry(entry);
+    } else {
+        lines = ['Changes recorded'];
+    }
+
+    const summary = lines[0] || title;
+    entry._detailCache = { title, lines, summary };
+    return entry._detailCache;
+}
+
 function serializeEntry(entry) {
     if (!entry?.kind) return null;
     if (entry.kind === 'change') {
@@ -284,6 +500,7 @@ export const UndoManager = {
             top.redo = () => this.applyItem(afterMerged, { preserveView });
             top.label = entryLabel;
             top.mergedAt = now;
+            delete top._detailCache;
             this.redoStack = [];
             this.updateToolbar();
             return;
@@ -367,15 +584,23 @@ export const UndoManager = {
         this.redoBtn?.classList.toggle('is-hidden', !enabled);
         if (this.undoBtn) {
             this.undoBtn.disabled = !enabled || this.busy || this.undoStack.length === 0;
-            this.undoBtn.title = this.undoStack.length
-                ? `Undo: ${this.undoStack[this.undoStack.length - 1].label} (Ctrl+Z)`
-                : 'Undo (Ctrl+Z)';
+            if (this.undoStack.length) {
+                const entry = this.undoStack[this.undoStack.length - 1];
+                const summary = describeHistoryEntry(entry).summary;
+                this.undoBtn.title = `Undo: ${entry.label} — ${summary} (Ctrl+Z)`;
+            } else {
+                this.undoBtn.title = 'Undo (Ctrl+Z)';
+            }
         }
         if (this.redoBtn) {
             this.redoBtn.disabled = !enabled || this.busy || this.redoStack.length === 0;
-            this.redoBtn.title = this.redoStack.length
-                ? `Redo: ${this.redoStack[this.redoStack.length - 1].label} (Ctrl+Y)`
-                : 'Redo (Ctrl+Y)';
+            if (this.redoStack.length) {
+                const entry = this.redoStack[this.redoStack.length - 1];
+                const summary = describeHistoryEntry(entry).summary;
+                this.redoBtn.title = `Redo: ${entry.label} — ${summary} (Ctrl+Y)`;
+            } else {
+                this.redoBtn.title = 'Redo (Ctrl+Y)';
+            }
         }
         if (enabled) this.persistStacks();
         handlers.onStackChange?.();

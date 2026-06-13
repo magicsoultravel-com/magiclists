@@ -806,7 +806,33 @@ html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    cursor: default;
+    cursor: help;
+}
+
+.sidebar-history-tip {
+    width: min(260px, calc(100vw - 16px));
+    max-height: min(240px, calc(100vh - 24px));
+    overflow-y: auto;
+    padding: 0.35rem 0.45rem;
+    font-size: 0.52rem;
+    line-height: 1.25;
+    pointer-events: none;
+}
+
+.sidebar-history-tip__title {
+    font-weight: 600;
+    color: var(--text-main);
+    margin-bottom: 0.2rem;
+}
+
+.sidebar-history-tip__line {
+    color: var(--text-muted);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.sidebar-history-tip__line + .sidebar-history-tip__line {
+    margin-top: 0.12rem;
 }
 
 .sidebar-history-item--redo {

@@ -4,7 +4,8 @@ import { ACTION_ICONS, CARD_ICONS, UI, formatStorageSize, getStorageBreakdown } 
 import { getLocalStorageByteEstimate, getLocalStorageUsageBreakdown } from './layoutStorage.js';
 import { resolveNoteColor } from './colorPicker.js';
 import { hasRichMarkup, stripRichText } from './richText.js';
-import { UndoManager } from './undo.js';
+import { describeHistoryEntry, UndoManager } from './undo.js';
+import { positionPanelBelowElement } from './popoverPosition.js';
 import {
     readNotesListSort as loadNotesListSort,
     readPanelCollapsed,
@@ -36,6 +37,9 @@ export const SidePanel = {
     appState: null,
     notesListSort: null,
     notesListSortBound: false,
+    historyTipEl: null,
+    historyTipHideTimer: null,
+    historyTipBound: false,
 
     init(appState) {
         this.appState = appState;
@@ -109,6 +113,7 @@ export const SidePanel = {
         this.bindCollapsable('history-section-header', 'history-section', true);
         this.bindCollapsable('stats-section-header', 'stats-section', true);
         this.setupNotesListSortControls();
+        this.bindHistoryTipHandlers();
     },
 
     bindCollapsable(headerId, sectionId, startCollapsed = false, ignoreSelector = null, toggleSelector = null) {
@@ -234,11 +239,89 @@ export const SidePanel = {
         };
     },
 
-    renderHistoryItem(label, { redo = false } = {}) {
-        const safe = this.escapeHTML(label || 'Edit');
-        const tip = this.escapeAttr(label || 'Edit');
+    renderHistoryItem(entry, { redo = false, index = 0 } = {}) {
+        const label = entry?.label || 'Edit';
+        const safe = this.escapeHTML(label);
+        const aria = this.escapeAttr(label);
         const redoClass = redo ? ' sidebar-history-item--redo' : '';
-        return `<div class="sidebar-history-item${redoClass}" title="${tip}">${safe}</div>`;
+        const stack = redo ? 'redo' : 'undo';
+        return `<div class="sidebar-history-item${redoClass}" data-history-stack="${stack}" data-history-index="${index}" aria-label="${aria}">${safe}</div>`;
+    },
+
+    getHistoryEntryFromRow(row) {
+        if (!row?.dataset) return null;
+        const stack = row.dataset.historyStack;
+        const index = Number(row.dataset.historyIndex);
+        if (!stack || Number.isNaN(index)) return null;
+        const entries = stack === 'redo'
+            ? [...UndoManager.redoStack].reverse()
+            : [...UndoManager.undoStack].reverse();
+        return entries[index] || null;
+    },
+
+    ensureHistoryTip() {
+        if (this.historyTipEl) return this.historyTipEl;
+        const tip = document.createElement('div');
+        tip.className = 'sidebar-history-tip clock-style-popover is-hidden';
+        tip.setAttribute('role', 'tooltip');
+        tip.setAttribute('aria-hidden', 'true');
+        document.body.appendChild(tip);
+        this.historyTipEl = tip;
+        return tip;
+    },
+
+    hideHistoryTip() {
+        if (this.historyTipHideTimer) {
+            clearTimeout(this.historyTipHideTimer);
+            this.historyTipHideTimer = null;
+        }
+        if (!this.historyTipEl) return;
+        this.historyTipEl.classList.add('is-hidden');
+        this.historyTipEl.setAttribute('aria-hidden', 'true');
+    },
+
+    showHistoryTip(entry, anchorEl) {
+        if (!entry || !anchorEl) return;
+        const tip = this.ensureHistoryTip();
+        const detail = describeHistoryEntry(entry);
+        const titleHtml = this.escapeHTML(detail.title);
+        const linesHtml = detail.lines
+            .map((line) => `<div class="sidebar-history-tip__line">${this.escapeHTML(line)}</div>`)
+            .join('');
+        tip.innerHTML = `<div class="sidebar-history-tip__title">${titleHtml}</div>${linesHtml}`;
+        tip.classList.remove('is-hidden');
+        tip.setAttribute('aria-hidden', 'false');
+        positionPanelBelowElement(tip, anchorEl, { gap: 6, margin: 8 });
+    },
+
+    bindHistoryTipHandlers() {
+        if (this.historyTipBound) return;
+        const undoList = document.getElementById('sidebar-history-undo-list');
+        const redoList = document.getElementById('sidebar-history-redo-list');
+        if (!undoList && !redoList) return;
+        this.historyTipBound = true;
+
+        [undoList, redoList].forEach((list) => {
+            if (!list) return;
+
+            list.addEventListener('mouseover', (e) => {
+                const row = e.target.closest('.sidebar-history-item');
+                if (!row || !list.contains(row)) return;
+                if (this.historyTipHideTimer) {
+                    clearTimeout(this.historyTipHideTimer);
+                    this.historyTipHideTimer = null;
+                }
+                const entry = this.getHistoryEntryFromRow(row);
+                if (entry) this.showHistoryTip(entry, row);
+            });
+
+            list.addEventListener('mouseleave', () => {
+                this.historyTipHideTimer = setTimeout(() => this.hideHistoryTip(), 80);
+            });
+        });
+
+        document.addEventListener('scroll', () => this.hideHistoryTip(), true);
+        window.addEventListener('resize', () => this.hideHistoryTip());
     },
 
     renderHistoryPanel() {
@@ -250,7 +333,10 @@ export const SidePanel = {
 
         const enabled = !!this.appState?.user?.isLoggedIn;
         section.classList.toggle('is-hidden', !enabled);
-        if (!enabled) return;
+        if (!enabled) {
+            this.hideHistoryTip();
+            return;
+        }
 
         const undoEntries = [...UndoManager.undoStack].reverse();
         const redoEntries = [...UndoManager.redoStack].reverse();
@@ -261,20 +347,22 @@ export const SidePanel = {
             undoList.innerHTML = '<div class="sidebar-notes-list-empty">No history yet</div>';
             redoList.innerHTML = '';
             redoList.classList.add('is-hidden');
+            this.hideHistoryTip();
             return;
         }
 
         undoList.innerHTML = undoEntries.length
-            ? undoEntries.map((entry) => this.renderHistoryItem(entry.label)).join('')
+            ? undoEntries.map((entry, index) => this.renderHistoryItem(entry, { index })).join('')
             : '<div class="sidebar-notes-list-empty">Nothing to undo</div>';
 
         if (redoEntries.length) {
             redoList.classList.remove('is-hidden');
-            redoList.innerHTML = `<div class="sidebar-history-subheader">Redo</div>${redoEntries.map((entry) => this.renderHistoryItem(entry.label, { redo: true })).join('')}`;
+            redoList.innerHTML = `<div class="sidebar-history-subheader">Redo</div>${redoEntries.map((entry, index) => this.renderHistoryItem(entry, { redo: true, index })).join('')}`;
         } else {
             redoList.innerHTML = '';
             redoList.classList.add('is-hidden');
         }
+        this.hideHistoryTip();
     },
 
     renderNotesListZone(zoneId, listItems, allItems, { variant = 'active' } = {}) {
