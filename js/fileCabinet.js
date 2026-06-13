@@ -785,7 +785,7 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
 
     mount.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
-        if (e.target.closest('.card-act, .card-inline-edit, button, input, textarea, a')) return;
+        if (e.target.closest('.card-act, button, input, textarea, a')) return;
         const card = e.target.closest('.file-cabinet-tab');
         if (!card) return;
         const stack = card.closest('.file-cabinet-tab-stack');
@@ -803,6 +803,9 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
             if (!dragState?.active && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
 
             if (!dragState) {
+                ev.preventDefault();
+                window.getSelection?.()?.removeAllRanges?.();
+                card.querySelector('.card-inline-edit:focus')?.blur?.();
                 const rect = card.getBoundingClientRect();
                 dragState = {
                     active: true,
@@ -852,7 +855,7 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
 
         document.addEventListener('mousemove', onMove);
         document.addEventListener('mouseup', onUp);
-    }, { signal });
+    }, { signal, capture: true });
 
     mount.addEventListener('mouseover', (e) => {
         const tab = e.target.closest('.file-cabinet-tab');
