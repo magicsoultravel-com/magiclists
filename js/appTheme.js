@@ -224,6 +224,147 @@ export const APP_THEMES = [
             '--desktop-bg': '#a67c3a',
             '--chrome-bg': '#5c3317'
         }
+    },
+    {
+        id: 'corkboard',
+        label: 'Corkboard',
+        desc: 'Bulletin board',
+        special: 'corkboard',
+        swatch: ['#c4a06a', '#faf6ef', '#c0392b'],
+        tokens: {
+            '--bg-primary': '#5c4028',
+            '--bg-surface': '#6b5030',
+            '--bg-card': '#faf6ef',
+            '--text-main': '#f0ece6',
+            '--text-muted': '#c4a888',
+            '--accent': '#c0392b',
+            '--border-color': '#8b6840',
+            '--desktop-bg': '#c4a06a',
+            '--chrome-bg': '#6b5030'
+        }
+    },
+    {
+        id: 'slate',
+        label: 'Slate',
+        desc: 'Chalkboard',
+        special: 'slate',
+        swatch: ['#2a3d32', '#344a3f', '#d4c896'],
+        tokens: {
+            '--bg-primary': '#1e2e26',
+            '--bg-surface': '#243830',
+            '--bg-card': '#344a3f',
+            '--text-main': '#e8e4dc',
+            '--text-muted': '#9aa898',
+            '--accent': '#d4c896',
+            '--border-color': '#3d5548',
+            '--desktop-bg': '#2a3d32',
+            '--chrome-bg': '#1e2e26'
+        }
+    },
+    {
+        id: 'library',
+        label: 'Library',
+        desc: 'Study desk',
+        special: 'library',
+        swatch: ['#3d2e1f', '#f4ecd8', '#3d6b4f'],
+        tokens: {
+            '--bg-primary': '#2a2018',
+            '--bg-surface': '#3d2e1f',
+            '--bg-card': '#f4ecd8',
+            '--text-main': '#f0ece6',
+            '--text-muted': '#b8a890',
+            '--accent': '#3d6b4f',
+            '--border-color': '#5c4a38',
+            '--desktop-bg': '#3d2e1f',
+            '--chrome-bg': '#4a2820'
+        }
+    },
+    {
+        id: 'parchment',
+        label: 'Parchment',
+        desc: 'Archive desk',
+        special: 'parchment',
+        swatch: ['#2a1f14', '#e8d5a8', '#9a4a3a'],
+        tokens: {
+            '--bg-primary': '#2a1f14',
+            '--bg-surface': '#352818',
+            '--bg-card': '#e8d5a8',
+            '--text-main': '#f0ece6',
+            '--text-muted': '#b8a080',
+            '--accent': '#9a4a3a',
+            '--border-color': '#5c4030',
+            '--desktop-bg': '#2a1f14',
+            '--chrome-bg': '#3d2817'
+        }
+    },
+    {
+        id: 'neon',
+        label: 'Neon',
+        desc: 'Soft synthwave',
+        special: 'neon',
+        swatch: ['#12101a', '#1a1628', '#5ec8d8'],
+        tokens: {
+            '--bg-primary': '#12101a',
+            '--bg-surface': '#161422',
+            '--bg-card': '#1a1628',
+            '--text-main': '#d8e8f0',
+            '--text-muted': '#8aa0b0',
+            '--accent': '#5ec8d8',
+            '--border-color': '#2a2840',
+            '--desktop-bg': '#12101a',
+            '--chrome-bg': '#0e0c16'
+        }
+    },
+    {
+        id: 'rose',
+        label: 'Rose',
+        desc: 'Soft blush',
+        swatch: ['#f5ecec', '#ffffff', '#e11d48'],
+        tokens: {
+            '--bg-primary': '#faf5f5',
+            '--bg-surface': '#ffffff',
+            '--bg-card': '#ffffff',
+            '--text-main': '#3d2a2a',
+            '--text-muted': '#9a7070',
+            '--accent': '#e11d48',
+            '--border-color': '#f0d4d4',
+            '--desktop-bg': '#f5ecec',
+            '--chrome-bg': '#ffffff'
+        }
+    },
+    {
+        id: 'amber',
+        label: 'Amber',
+        desc: 'Honey gold',
+        swatch: ['#1a1408', '#2e2410', '#f59e0b'],
+        tokens: {
+            '--bg-primary': '#1a1408',
+            '--bg-surface': '#241c0c',
+            '--bg-card': '#2e2410',
+            '--text-main': '#f5e6c8',
+            '--text-muted': '#c4a060',
+            '--accent': '#f59e0b',
+            '--border-color': '#4a3820',
+            '--desktop-bg': '#1a1408',
+            '--chrome-bg': '#241c0c'
+        }
+    },
+    {
+        id: 'arctic',
+        label: 'Arctic',
+        desc: 'Icy light',
+        swatch: ['#e4f0f8', '#ffffff', '#0ea5e9'],
+        tokens: {
+            '--bg-primary': '#eef4f8',
+            '--bg-surface': '#f8fbfd',
+            '--bg-card': '#ffffff',
+            '--text-main': '#1e3a4f',
+            '--text-muted': '#6b8fa8',
+            '--accent': '#0ea5e9',
+            '--border-color': '#d0e4f0',
+            '--desktop-bg': '#e4f0f8',
+            '--chrome-bg': '#f8fbfd'
+        }
     }
 ];
 
