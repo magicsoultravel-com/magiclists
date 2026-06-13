@@ -1157,7 +1157,7 @@ html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
     min-height: 1.15em;
     max-height: 1.15em;
     margin: 0;
-    font-size: calc(0.56rem * var(--note-font-scale, 1));
+    font-size: calc(0.48rem * var(--note-font-scale, 1));
     color: var(--text-muted);
 }
 
