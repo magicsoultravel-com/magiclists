@@ -24,8 +24,6 @@
     --tile-large-w: 176px;
     --tile-large-h: 236px;
     --tile-label-h: 28px;
-    --card-act-size: 16px;
-    --compact-action-strip-w: calc(var(--card-act-size) * 7 + 6px);
     --tile-note-w: 176px;
     --tile-note-h: 236px;
     --grid-cell-s: 56px;

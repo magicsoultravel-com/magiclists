@@ -76,26 +76,22 @@
 
 /* Compact note chrome — smallest tiles (board spatial-at-small + file cabinet tabs) */
 .mini-card.tile-small .editor-note-topline,
-.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline,
-.file-cabinet .file-cabinet-tab .editor-note-topline {
-    display: block;
-    position: relative;
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline {
     flex: 0 0 auto;
     min-height: 0;
     min-width: 0;
     width: 100%;
+    position: relative;
 }
 
 .mini-card.tile-small .editor-note-topline .editor-note-header,
 .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .editor-note-header,
 .file-cabinet .file-cabinet-tab .editor-note-header {
-    display: block;
-    width: 100%;
-    max-width: 100%;
+    flex: 1 1 auto;
     min-width: 0;
+    max-width: 100%;
     overflow: hidden;
-    padding-right: var(--compact-action-strip-w, 7.5rem);
-    box-sizing: border-box;
+    padding-right: 0.15rem;
 }
 
 .mini-card.tile-small .editor-note-topline .mini-card-title,
@@ -126,13 +122,6 @@ html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-ca
     line-height: 1.15;
     padding-top: 0;
     padding-bottom: 0;
-}
-
-.mini-card.tile-small .editor-note-topline .mini-card-title.rich-text *,
-.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title.rich-text *,
-.file-cabinet .file-cabinet-tab .mini-card-title.rich-text * {
-    display: inline;
-    white-space: inherit;
 }
 
 .mini-card.tile-small .editor-note-topline .note-editor-toolbar,
@@ -295,22 +284,7 @@ html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-ca
     pointer-events: none;
 }
 
-.mini-card.compact .card-actions {
-    position: static;
-    top: auto;
-    right: auto;
-    gap: 1px;
-    padding: 1px 2px;
-    border-radius: 0 4px 0 5px;
-    z-index: 12;
-    display: inline-flex;
-    width: max-content;
-    max-width: none;
-    box-sizing: border-box;
-    opacity: 1;
-    pointer-events: auto;
-}
-
+.mini-card.compact .card-actions,
 .mini-card.tile-small .note-editor-toolbar .card-actions,
 .mini-card[data-desktop="1"].spatial-at-small .note-editor-toolbar .card-actions,
 .file-cabinet .file-cabinet-tab .note-editor-toolbar .card-actions {
@@ -326,15 +300,6 @@ html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-ca
     max-width: none;
     box-sizing: border-box;
     opacity: 1;
-    pointer-events: none;
-}
-
-.mini-card.tile-small:hover .note-editor-toolbar .card-actions,
-.mini-card.tile-small:focus-within .note-editor-toolbar .card-actions,
-.mini-card[data-desktop="1"].spatial-at-small:hover .note-editor-toolbar .card-actions,
-.mini-card[data-desktop="1"].spatial-at-small:focus-within .note-editor-toolbar .card-actions,
-.file-cabinet .file-cabinet-tab:hover .note-editor-toolbar .card-actions,
-.file-cabinet .file-cabinet-tab:focus-within .note-editor-toolbar .card-actions {
     pointer-events: auto;
 }
 
