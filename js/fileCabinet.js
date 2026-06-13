@@ -210,7 +210,7 @@ export function fileItemToCabinet(item, sortBy, UI, { x = 8, y = 8, rememberW, r
     }
 
     const label = getLabelRect();
-    UI.saveFiledCabinetLayout(item.id, { x, y, w: label.w, h: label.h }, sortBy);
+    UI.saveFiledCabinetLayout(item.id, { x, y, w: FILE_CABINET_TAB_WIDTH, h: label.h }, sortBy);
     addToFileCabinetOrder(getItemCategoryName(item), item.id);
 }
 
@@ -607,7 +607,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
             card.classList.add('file-cabinet-tab');
             card.dataset.fileCabinetCategory = catName;
             card.dataset.fileCabinetStackIndex = String(index);
-            UI.applyNoteRect(card, { x: 0, y: 0, w: label.w, h: label.h }, { settling: false });
+            UI.applyNoteRect(card, { x: 0, y: 0, w: FILE_CABINET_TAB_WIDTH, h: label.h }, { settling: false });
             UI.applyDesktopTilePresentation(card, item);
             UI.finalizeDesktopCard(card);
             card.classList.add('spatial-at-small', 'tile-small');
