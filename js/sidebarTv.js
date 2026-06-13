@@ -290,7 +290,7 @@ export const SidebarTv = {
                     </button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-tv__action" data-tv-open="browse" title="Browse channels" aria-label="Browse channels" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.tvBrowse}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-tv__action sidebar-tv__action--heart is-hidden" data-tv-favorite title="Add favorite" aria-label="Add favorite" aria-pressed="false">${CARD_ICONS.heart}</button>
-                    <button type="button" class="btn btn--compact btn-icon sidebar-tv__action" data-tv-open="special" title="TV settings" aria-label="TV settings" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.tvSpecial}</button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-tv__action" data-tv-open="special" title="TV settings" aria-label="TV settings" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioSpecial}</button>
                 </div>
             </div>
         `;
@@ -435,11 +435,22 @@ export const SidebarTv = {
         TvPopover.setTitle('TV settings');
         TvPopover.setBackVisible(false);
         TvPopover.setToolbarHtml('');
+        TvPopover.syncVideoMount();
+
         const settings = TvProviderRegistry.getSettings();
+        const providers = TvProviderRegistry.listProviders();
         const body = TvPopover.getBodyEl();
         if (!body) return;
+
         body.innerHTML = `
             <div class="tv-special-form">
+                <p class="tv-special-form__help">Browse free live TV by country. Channels come from the catalog below — <strong>iptv-org</strong> is the built-in world list. Use <strong>Browse</strong> to pick a country, then a channel. Many streams are geo-blocked or offline; try another channel or <strong>Refresh catalog</strong> if lists look empty.</p>
+                <label class="tv-special-form__row">
+                    <span class="tv-special-form__label">Catalog source</span>
+                    <select class="form-input tv-special-form__select" data-tv-provider>
+                        ${providers.map((p) => `<option value="${escapeHtml(p.id)}"${p.id === settings.catalogProvider ? ' selected' : ''}>${escapeHtml(p.label)}</option>`).join('')}
+                    </select>
+                </label>
                 <label class="tv-special-form__row tv-special-form__row--check">
                     <input type="checkbox" data-tv-hide-offline${settings.hideOfflineChannels !== false ? ' checked' : ''}>
                     <span>Hide offline channels</span>
@@ -450,10 +461,25 @@ export const SidebarTv = {
                 </div>
             </div>
         `;
+
+        body.querySelector('[data-tv-provider]')?.addEventListener('change', async (e) => {
+            TvProviderRegistry.setActiveProvider(e.target.value);
+            this.countries = [];
+            await this.prefetchCountries();
+            if (TvPopover.mode === 'browse' && !TvPopover.panel?.classList.contains('is-hidden')) {
+                this.browseView = 'countries';
+                this.browseCountry = null;
+                await this.renderBrowseCountries();
+            }
+        });
+
         body.querySelector('[data-tv-hide-offline]')?.addEventListener('change', (e) => {
             TvProviderRegistry.setHideOffline(e.target.checked);
-            if (TvPopover.mode === 'browse' && this.browseView === 'country') this.renderBrowseCountry();
+            if (TvPopover.mode === 'browse' && this.browseView === 'country') {
+                this.renderBrowseCountry();
+            }
         });
+
         body.querySelector('[data-tv-refresh-catalog]')?.addEventListener('click', async () => {
             await TvProviderRegistry.refreshCatalog();
             this.countries = await TvProviderRegistry.getCountries({ refresh: true });
@@ -463,7 +489,11 @@ export const SidebarTv = {
                 await this.renderBrowseCountries();
             }
         });
-        body.querySelector('[data-tv-clear-cache]')?.addEventListener('click', () => TvProviderRegistry.clearAllCaches());
+
+        body.querySelector('[data-tv-clear-cache]')?.addEventListener('click', () => {
+            TvProviderRegistry.clearAllCaches();
+        });
+
         TvPopover.reposition();
     },
 

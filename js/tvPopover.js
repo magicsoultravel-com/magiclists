@@ -183,10 +183,14 @@ export const TvPopover = {
     syncVideoMount() {
         const slot = this.getVideoSlot();
         const wrap = this.panel?.querySelector('[data-tv-video-wrap]');
+        const inSettings = this.mode === 'special';
         const hasChannel = !!TvPlayer.channel;
-        wrap?.classList.toggle('is-hidden', !hasChannel);
-        if (hasChannel && slot && !this.panel?.classList.contains('is-hidden')) {
+        const showVideo = hasChannel && !inSettings && !this.panel?.classList.contains('is-hidden');
+        wrap?.classList.toggle('is-hidden', !showVideo);
+        if (showVideo && slot) {
             TvPlayer.mountVideo(slot);
+        } else if (inSettings || this.panel?.classList.contains('is-hidden')) {
+            TvPlayer.mountToHolder();
         }
     },
 

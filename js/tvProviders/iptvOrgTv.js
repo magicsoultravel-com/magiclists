@@ -7,7 +7,7 @@ const IPTV_BLOCKLIST_URL = 'https://iptv-org.github.io/api/blocklist.json';
 const CACHE_KEY = 'matrix_tv_iptv_cache';
 const TTL = 24 * 60 * 60 * 1000;
 
-function loadCache() {
+function loadCacheEntry() {
     try {
         return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
     } catch {
@@ -15,19 +15,67 @@ function loadCache() {
     }
 }
 
-function saveCache(data) {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ cachedAt: Date.now(), data }));
-}
-
 function isFresh(entry) {
     return entry && Number.isFinite(entry.cachedAt) && (Date.now() - entry.cachedAt) < TTL;
 }
 
-async function loadCatalog(refresh = false) {
-    const cached = loadCache();
-    if (!refresh && isFresh(cached) && cached.data) {
-        return cached.data;
+function isValidCachedData(data) {
+    return data
+        && Array.isArray(data.channels)
+        && Array.isArray(data.countryList);
+}
+
+function hydrateCatalog(data) {
+    if (!isValidCachedData(data)) return null;
+
+    const channels = data.channels;
+    const byId = new Map(channels.map((s) => [s.id, s]));
+    const byCountry = new Map();
+    channels.forEach((s) => {
+        if (!s.country) return;
+        if (!byCountry.has(s.country)) byCountry.set(s.country, []);
+        byCountry.get(s.country).push(s);
+    });
+
+    return {
+        channels,
+        countryList: data.countryList,
+        byId,
+        byCountry
+    };
+}
+
+function saveCachePayload(data) {
+    const payload = {
+        channels: data.channels,
+        countryList: data.countryList
+    };
+    try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ cachedAt: Date.now(), data: payload }));
+    } catch {
+        /* quota or private mode — in-memory catalog still works this session */
     }
+}
+
+function invalidateCacheStorage() {
+    localStorage.removeItem(CACHE_KEY);
+}
+
+function readCachedCatalog(refresh) {
+    if (refresh) return null;
+    const entry = loadCacheEntry();
+    if (!isFresh(entry) || !entry.data) return null;
+    const catalog = hydrateCatalog(entry.data);
+    if (!catalog) {
+        invalidateCacheStorage();
+        return null;
+    }
+    return catalog;
+}
+
+async function loadCatalog(refresh = false) {
+    const cached = readCachedCatalog(refresh);
+    if (cached) return cached;
 
     const [channelsRes, streamsRes, countriesRes, blocklistRes] = await Promise.all([
         fetch(IPTV_CHANNELS_URL),
@@ -101,16 +149,8 @@ async function loadCatalog(refresh = false) {
         }))
         .sort((a, b) => b.stationcount - a.stationcount);
 
-    const byId = new Map(channelsOut.map((s) => [s.id, s]));
-    const byCountry = new Map();
-    channelsOut.forEach((s) => {
-        if (!s.country) return;
-        if (!byCountry.has(s.country)) byCountry.set(s.country, []);
-        byCountry.get(s.country).push(s);
-    });
-
-    const catalog = { channels: channelsOut, countryList, byId, byCountry };
-    saveCache(catalog);
+    const catalog = hydrateCatalog({ channels: channelsOut, countryList });
+    saveCachePayload(catalog);
     return catalog;
 }
 
@@ -166,10 +206,10 @@ export const IptvOrgTvProvider = {
     },
 
     invalidateCache() {
-        localStorage.removeItem(CACHE_KEY);
+        invalidateCacheStorage();
     },
 
     clearCache() {
-        localStorage.removeItem(CACHE_KEY);
+        invalidateCacheStorage();
     }
 };

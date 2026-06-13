@@ -395,6 +395,18 @@
     gap: 0.45rem;
 }
 
+.tv-special-form__help {
+    margin: 0;
+    font-size: 0.58rem;
+    line-height: 1.45;
+    color: var(--text-muted);
+}
+
+.tv-special-form__help strong {
+    font-weight: 600;
+    color: var(--text-main);
+}
+
 .tv-special-form__row {
     display: flex;
     flex-direction: column;
