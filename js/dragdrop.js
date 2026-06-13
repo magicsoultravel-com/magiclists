@@ -17,7 +17,8 @@ import {
 } from './ui.js';
 import { isAtSmallSize } from './tileGeometry.js';
 import { readTileSmallFootprint } from './tileFootprint.js';
-import { initFileCabinetDrag, isFileCabinetActive, shouldFileItem } from './fileCabinet.js';
+import { initFileCabinetDrag, isFileCabinetActive, fileItemToCabinet, shouldFileItem } from './fileCabinet.js';
+import { isAtOrBelowCompactZone } from './tileGeometry.js';
 
 const DRAG_THRESHOLD = 4;
 const GRID_SCROLL_EDGE = 40;
@@ -75,7 +76,11 @@ function maybeRepartitionFileCabinetAfterResize(canvas, card, currentItems) {
     if (!isFileCabinetActive() || !canvas || !card?.dataset?.id) return;
     const sortBy = canvas.classList.contains('view-grid') ? 'grid' : 'freeform';
     const item = currentItems.find((i) => i.id === card.dataset.id);
-    if (item && shouldFileItem(item, sortBy, UI)) {
+    if (!item) return;
+    const rect = UI.readNoteRect(card);
+    const tileSize = UI.getCardTileSize(card, item);
+    if (shouldFileItem(item, sortBy, UI) || isAtOrBelowCompactZone(rect.w, rect.h, tileSize)) {
+        fileItemToCabinet(item, sortBy, UI, { x: rect.x, y: rect.y, rememberW: rect.w, rememberH: rect.h });
         window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
     }
 }

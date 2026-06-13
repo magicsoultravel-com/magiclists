@@ -599,12 +599,10 @@ class Application {
 
         UI.applyDesktopLayoutModeSwitch(canvas, mode);
 
+        window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
         window.dispatchEvent(new CustomEvent('view:mode_changed', { detail: mode }));
         this.updateViewToggleState();
         this.updateLayoutResetVisibility();
-        if (AppState.workspaceMode !== 'drawing') {
-            DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
-        }
         this.updateWorkspaceCounter();
     }
 
@@ -650,8 +648,14 @@ class Application {
         const btn = document.getElementById('btn-layout-reset');
         if (btn) btn.innerHTML = ACTION_ICONS.layoutReset;
         btn?.addEventListener('click', () => {
-            if (AppState.workspaceMode === 'drawing') return;
-            UI.resetBoardLayout(AppState.viewSettings.sortBy, AppState.items);
+            if (AppState.workspaceMode === 'drawing') {
+                this.switchWorkspaceMode('notes');
+            }
+            UI.resetBoardLayout(AppState.viewSettings.sortBy, AppState.items, {
+                fileCabinetActive: AppState.viewSettings.fileCabinet,
+                focusCategories: AppState.focusCategories
+            });
+            AppState.expandedCards = UI.readExpandedCardsForMode(AppState.viewSettings.sortBy);
         });
     }
 
@@ -874,7 +878,14 @@ class Application {
 
     updateLayoutResetVisibility() {
         const show = AppState.user.isLoggedIn;
-        document.getElementById('btn-layout-reset')?.classList.toggle('is-hidden', !show);
+        const btn = document.getElementById('btn-layout-reset');
+        btn?.classList.toggle('is-hidden', !show);
+        if (btn && show) {
+            const fc = AppState.viewSettings.fileCabinet && AppState.workspaceMode !== 'drawing';
+            const title = fc ? 'File all to cabinet' : 'Reset layout';
+            btn.title = title;
+            btn.setAttribute('aria-label', title);
+        }
         this.updateDesktopZoomVisibility();
     }
 
