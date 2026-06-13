@@ -53,12 +53,19 @@ function pointerDelta(canvas, clientX, clientY, startX, startY) {
     };
 }
 
-function autoScrollGridCanvas(canvas, clientY) {
+function autoScrollDesktopCanvas(canvas, clientX, clientY, { scrollX = true } = {}) {
     const rect = canvas.getBoundingClientRect();
     if (clientY > rect.bottom - GRID_SCROLL_EDGE) {
         canvas.scrollTop += GRID_SCROLL_STEP;
     } else if (clientY < rect.top + GRID_SCROLL_EDGE) {
         canvas.scrollTop = Math.max(0, canvas.scrollTop - GRID_SCROLL_STEP);
+    }
+    if (scrollX && clientX != null) {
+        if (clientX > rect.right - GRID_SCROLL_EDGE) {
+            canvas.scrollLeft += GRID_SCROLL_STEP;
+        } else if (clientX < rect.left + GRID_SCROLL_EDGE) {
+            canvas.scrollLeft = Math.max(0, canvas.scrollLeft - GRID_SCROLL_STEP);
+        }
     }
 }
 
@@ -234,6 +241,15 @@ export const DragDropEngine = {
         let resizeActive = null;
         let previewFrame = null;
         let previewBaseline = null;
+        let extentsFrame = null;
+
+        const runExtentsUpdate = () => {
+            if (extentsFrame) return;
+            extentsFrame = requestAnimationFrame(() => {
+                extentsFrame = null;
+                UI.updateBoardCanvasExtents(canvas);
+            });
+        };
 
         const snapshotPreviewBaseline = () => {
             previewBaseline = new Map();
@@ -355,8 +371,11 @@ export const DragDropEngine = {
             dragActive.card.style.left = `${x}px`;
             dragActive.card.style.top = `${y}px`;
             if (snapEnabled) {
-                autoScrollGridCanvas(canvas, e.clientY);
+                autoScrollDesktopCanvas(canvas, e.clientX, e.clientY, { scrollX: false });
                 runLayoutPreview(dragActive.card);
+            } else {
+                runExtentsUpdate();
+                autoScrollDesktopCanvas(canvas, e.clientX, e.clientY);
             }
         };
 
@@ -374,12 +393,16 @@ export const DragDropEngine = {
                         parseFloat(card.style.left) || 0,
                         parseFloat(card.style.top) || 0
                     );
-                    UI.updateBoardCanvasMinHeight(canvas);
+                    UI.updateBoardCanvasExtents(canvas);
                 }
             } else if (snapEnabled) {
                 clearLayoutPreview(true);
                 UI.updateGridScrollPolicy(canvas, { forcing: false });
                 canvas.classList.remove('is-layout-active', 'is-grid-forcing');
+            }
+            if (extentsFrame) {
+                cancelAnimationFrame(extentsFrame);
+                extentsFrame = null;
             }
             dragActive = null;
             document.removeEventListener('mousemove', onDragMove);
@@ -431,8 +454,11 @@ export const DragDropEngine = {
                     h: nextH
                 }, { axis, maxW });
                 if (snapEnabled) {
-                    autoScrollGridCanvas(canvas, e.clientY);
+                    autoScrollDesktopCanvas(canvas, e.clientX, e.clientY, { scrollX: false });
                     runLayoutPreview(card);
+                } else {
+                    runExtentsUpdate();
+                    autoScrollDesktopCanvas(canvas, e.clientX, e.clientY);
                 }
                 return;
             }
@@ -453,8 +479,11 @@ export const DragDropEngine = {
                 UI.syncSpatialAtSmallFromRect(card, finalW, finalH);
             }
             if (snapEnabled) {
-                autoScrollGridCanvas(canvas, e.clientY);
+                autoScrollDesktopCanvas(canvas, e.clientX, e.clientY, { scrollX: false });
                 runLayoutPreview(card);
+            } else {
+                runExtentsUpdate();
+                autoScrollDesktopCanvas(canvas, e.clientX, e.clientY);
             }
         };
 
@@ -504,12 +533,16 @@ export const DragDropEngine = {
                             UI.finalizeDesktopCard(card);
                         }
                     }
-                    UI.updateBoardCanvasMinHeight(canvas);
+                    UI.updateBoardCanvasExtents(canvas);
                 }
             } else if (snapEnabled) {
                 clearLayoutPreview(true);
                 UI.updateGridScrollPolicy(canvas, { forcing: false });
                 canvas.classList.remove('is-layout-active', 'is-grid-forcing');
+            }
+            if (extentsFrame) {
+                cancelAnimationFrame(extentsFrame);
+                extentsFrame = null;
             }
             resizeActive = null;
             document.removeEventListener('mousemove', onResizeMove);

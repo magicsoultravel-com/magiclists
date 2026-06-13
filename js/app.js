@@ -888,7 +888,7 @@ class Application {
         });
         window.addEventListener('desktop:zoom_changed', () => {
             const canvas = document.getElementById('app-canvas');
-            UI.updateBoardCanvasMinHeight(canvas);
+            UI.updateBoardCanvasExtents(canvas);
             this.squeezeGridIfActive();
         });
 

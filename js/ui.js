@@ -5001,7 +5001,13 @@ export const UI = {
         canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
             this.finalizeDesktopCard(card);
         });
-        this.updateBoardCanvasMinHeight(canvas);
+        if (snapLayout) {
+            this.updateGridScrollPolicy(canvas, { forcing: false });
+        } else {
+            canvas.style.overflowY = '';
+            this.updateFreeformScrollPolicy(canvas);
+        }
+        this.updateBoardCanvasExtents(canvas);
     },
 
     convertDesktopLayoutForModeChange(canvas, fromMode, toMode, items) {
@@ -5317,18 +5323,37 @@ export const UI = {
         canvas.style.minHeight = `${bottom + origin + CANVAS_COL_GAP}px`;
     },
 
-    updateBoardCanvasMinHeight(canvas) {
+    updateBoardCanvasExtents(canvas) {
         if (!canvas) return;
         const cards = canvas.querySelectorAll('.mini-card[data-desktop="1"]');
         if (!cards.length) {
             canvas.style.minHeight = '';
+            canvas.style.minWidth = '';
             return;
         }
+        const zoom = parseFloat(canvas?.dataset?.desktopZoom) || 1;
         const origin = canvas.classList.contains('view-grid')
             ? this.getGridBoardBounds(canvas).origin
             : CANVAS_LAYOUT_ORIGIN;
         const placed = [...cards].map((c) => this.readNoteRect(c));
-        this.updateGridCanvasMinHeight(canvas, placed, origin);
+        const bottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
+        const right = placed.reduce((m, r) => Math.max(m, r.x + r.w), 0);
+        canvas.style.minHeight = `${bottom + origin + CANVAS_COL_GAP}px`;
+        const viewportW = (canvas.clientWidth || 320) / zoom;
+        canvas.style.minWidth = `${Math.max(viewportW, right + origin + CANVAS_COL_GAP)}px`;
+        if (canvas.classList.contains('view-freeform')) {
+            this.updateFreeformScrollPolicy(canvas);
+        }
+    },
+
+    updateBoardCanvasMinHeight(canvas) {
+        this.updateBoardCanvasExtents(canvas);
+    },
+
+    updateFreeformScrollPolicy(canvas) {
+        if (!canvas?.classList.contains('view-freeform')) return;
+        canvas.style.overflow = 'auto';
+        canvas.style.overflowY = '';
     },
 
     applyDesktopSize(card) {
