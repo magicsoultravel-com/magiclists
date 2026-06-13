@@ -143,7 +143,7 @@ export function moveItemBetweenCategories({ itemId, fromCategory, toCategory, to
             ...item,
             categories: toCat === 'Uncategorized' ? [] : [toCat]
         };
-        UI.emitItemMutation(updated, { preserveView: true, beforeItem, skipRerender: false });
+        UI.emitItemMutation(updated, { preserveView: true, beforeItem, skipRerender: true });
         return true;
     }
     return fromCat !== toCat;
@@ -379,10 +379,10 @@ function restoreStackPreview(stackEl, baseline) {
     applyFileCabinetStackPositions(stackEl);
 }
 
-function updateStackPreviewDimensions(stackEl, slotCount) {
+function updateStackPreviewDimensions(stackEl, slotCount, { minSlotCount = 0 } = {}) {
     if (!stackEl) return;
     const label = getLabelRect();
-    const count = Math.max(slotCount, 1);
+    const count = Math.max(slotCount, minSlotCount, 1);
     const stackWidth = FILE_CABINET_TAB_WIDTH + (count - 1) * FILE_CABINET_STACK_OFFSET_X;
     const stackHeight = label.h + (count - 1) * FILE_CABINET_STACK_OFFSET_Y;
     stackEl.style.width = `${stackWidth}px`;
@@ -395,7 +395,7 @@ function updateStackPreviewDimensions(stackEl, slotCount) {
     }
 }
 
-function applyStackPreviewPositions(stackEl, { draggedId, insertIndex = null, settling = true } = {}) {
+function applyStackPreviewPositions(stackEl, { draggedId, insertIndex = null, settling = true, minSlotCount = 0 } = {}) {
     if (!stackEl) return;
     const tabs = [...stackEl.querySelectorAll('.file-cabinet-tab')].filter((t) => t.dataset.id !== draggedId);
     const label = getLabelRect();
@@ -413,7 +413,7 @@ function applyStackPreviewPositions(stackEl, { draggedId, insertIndex = null, se
         visualIndex++;
     });
     const slotCount = tabs.length + (insertIndex != null ? 1 : 0);
-    updateStackPreviewDimensions(stackEl, slotCount);
+    updateStackPreviewDimensions(stackEl, slotCount, { minSlotCount });
 }
 
 function resolveFileCabinetDropTarget(clientX, clientY, dragState, mount) {
@@ -739,7 +739,6 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
             return;
         }
 
-        resetDraggedTabStyles(state.card, state.sourceStack);
         moveItemBetweenCategories({
             itemId,
             fromCategory,
@@ -748,6 +747,8 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
             item,
             UI
         });
+        state.card.classList.remove('is-file-cabinet-dragging');
+        window.dispatchEvent(new CustomEvent('filecabinet:layout_changed'));
     };
     const runPreview = (clientX, clientY) => {
         if (!dragState?.active) return;
@@ -761,7 +762,13 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
             setFileCabinetDropTarget(mount, target);
 
             const draggedId = dragState.card.dataset.id;
-            applyStackPreviewPositions(dragState.sourceStack, { draggedId, insertIndex: null, settling: true });
+            const sourceMinSlots = dragState.sourceTabCount || 0;
+            applyStackPreviewPositions(dragState.sourceStack, {
+                draggedId,
+                insertIndex: null,
+                settling: true,
+                minSlotCount: sourceMinSlots
+            });
 
             if (target?.targetStack && target.targetStack !== dragState.sourceStack) {
                 if (dragState.targetStack !== target.targetStack) {
@@ -784,7 +791,8 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
                 applyStackPreviewPositions(dragState.sourceStack, {
                     draggedId,
                     insertIndex: target.insertIndex,
-                    settling: true
+                    settling: true,
+                    minSlotCount: dragState.sourceTabCount || 0
                 });
             }
 
@@ -819,6 +827,7 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
                     sourceStack: stack,
                     sourceCategory: stack.dataset.category || 'Uncategorized',
                     startIndex,
+                    sourceTabCount: tabs.length,
                     sourceBaseline: snapshotStackTabs(stack),
                     targetStack: null,
                     targetBaseline: null,
