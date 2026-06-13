@@ -31,7 +31,7 @@
     --grid-stride-x: 60px;
     --grid-stride-y: 60px;
     --grid-origin: 16px;
-    --grid-edge-pad: 28px;
+    --grid-edge-pad: 7px;
     --board-area-inset: 0.875rem;
 
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;

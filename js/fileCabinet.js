@@ -188,8 +188,11 @@ export function partitionItemsForFileCabinet(items, sortBy, UI) {
     const filed = [];
     const expanded = [];
     (items || []).forEach((item) => {
-        if (shouldFileItem(item, sortBy, UI)) filed.push(item);
-        else expanded.push(item);
+        if (shouldFileItem(item, sortBy, UI) || isItemInFileCabinetOrder(item.id)) {
+            filed.push(item);
+        } else {
+            expanded.push(item);
+        }
     });
     return { filed, expanded };
 }
@@ -242,17 +245,7 @@ export function migrateItemsToFileCabinet(items, sortBy, UI) {
 
 export function reconcileFileCabinetOrderWithItems(filedItems) {
     const order = getFileCabinetOrder();
-    const filedIds = new Set((filedItems || []).map((item) => item.id));
     let changed = false;
-
-    Object.keys(order).forEach((cat) => {
-        const next = (order[cat] || []).filter((id) => filedIds.has(id));
-        if (next.length !== (order[cat] || []).length) {
-            order[cat] = next;
-            changed = true;
-        }
-        if (order[cat]?.length === 0) delete order[cat];
-    });
 
     (filedItems || []).forEach((item) => {
         const cat = getItemCategoryName(item);

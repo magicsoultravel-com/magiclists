@@ -1663,6 +1663,9 @@ export const UI = {
         if (isSnapLayoutMode(activeBoardViewMode)) {
             requestAnimationFrame(() => this.reflowGridBoard(canvas, null, { animate: true }));
         }
+        if (isFileCabinetActive()) {
+            window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
+        }
     },
 
     reapplyGridFinenessOnBoard(prevMetrics, nextMetrics) {
@@ -1709,6 +1712,9 @@ export const UI = {
         this.updateBoardCanvasMinHeight(canvas);
         if (isSnapLayoutMode(activeBoardViewMode)) {
             requestAnimationFrame(() => this.reflowGridBoard(canvas, null, { animate: true }));
+        }
+        if (isFileCabinetActive()) {
+            window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
         }
     },
 
@@ -5324,23 +5330,26 @@ export const UI = {
     saveFiledCabinetLayout(itemId, rect, sortBy) {
         if (!itemId || !rect) return;
         const mode = normalizeViewMode(sortBy);
-        const item = this.resolveBoardItem(itemId);
-        const tileSize = resolveTileSize(item);
+        const entry = {
+            w: Math.round(rect.w),
+            h: Math.round(rect.h)
+        };
+        if (Number.isFinite(rect.x)) entry.x = Math.round(rect.x);
+        if (Number.isFinite(rect.y)) entry.y = Math.round(rect.y);
+
         if (isSnapLayoutMode(mode)) {
             const layout = this.getGridLayout();
             const prev = layout[itemId] || {};
-            const entry = this.mergeSpatialLayoutEntry(prev, rect, tileSize, { updateRemembered: false });
-            delete entry.rememberedW;
-            delete entry.rememberedH;
-            layout[itemId] = entry;
+            layout[itemId] = { ...prev, ...entry };
+            delete layout[itemId].rememberedW;
+            delete layout[itemId].rememberedH;
             localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layout));
         } else {
             const sizes = this.getFreeformSizes();
             const prev = sizes[itemId] || {};
-            const entry = this.mergeSpatialLayoutEntry(prev, rect, tileSize, { updateRemembered: false });
-            delete entry.rememberedW;
-            delete entry.rememberedH;
-            sizes[itemId] = entry;
+            sizes[itemId] = { ...prev, ...entry };
+            delete sizes[itemId].rememberedW;
+            delete sizes[itemId].rememberedH;
             localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
             if (Number.isFinite(rect.x) && Number.isFinite(rect.y)) {
                 this.saveFreeformPosition(itemId, rect.x, rect.y);
