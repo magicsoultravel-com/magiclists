@@ -1787,11 +1787,6 @@ export const UI = {
         return isDesktopCard(card) ? ' card-drag-zone' : '';
     },
 
-    buildNoteSizeHtml(item) {
-        const kb = computeNoteSizeKb(item);
-        return `<span class="note-size" title="Note content size">${kb} KB</span>`;
-    },
-
     createBlankChecklistStep() {
         return {
             id: `step_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,

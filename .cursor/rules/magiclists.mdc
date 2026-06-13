@@ -13,6 +13,8 @@ Vanilla JS ES modules + plain CSS. Client-only; data via `js/api.js` → localSt
 
 **Design:** Minimal, lightweight, smooth, modern, compact. Dark default; use CSS variables and existing theme pickers. Reuse classes (`.btn`, `.card-act`, `.collapsable-*`, `.overlay`) — ask before inventing new ones. Modular files; same tropes across tiles, editor, sidebar, tools. Match existing interaction patterns (hover, overlay, persistent). UX first.
 
+**Note footer:** `.editor-meta-wrap` → `.editor-meta-row--footer.editor-meta-row--inline`. One CSS block in `style.css`; single-line `0.56rem` × `--note-font-scale`. Do not add per-view font-size overrides unless user explicitly asks.
+
 **Deliver:** concise, no preamble; audit shared styles/components for regressions across board, editor, sidebar, calendar, tools.
 
 ## Git / GitHub (required — magiclists workspace only)
