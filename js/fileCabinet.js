@@ -604,12 +604,13 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
 
         items.forEach((item, index) => {
             const card = UI.createCardComponent(item, activeCategories, { desktop: true });
-            card.classList.add('file-cabinet-tab', 'spatial-at-small', 'tile-small');
+            card.classList.add('file-cabinet-tab');
             card.dataset.fileCabinetCategory = catName;
             card.dataset.fileCabinetStackIndex = String(index);
             UI.applyNoteRect(card, { x: 0, y: 0, w: label.w, h: label.h }, { settling: false });
             UI.applyDesktopTilePresentation(card, item);
             UI.finalizeDesktopCard(card);
+            card.classList.add('spatial-at-small', 'tile-small');
             UI.syncSpatialToggleButton(card);
             stack.appendChild(card);
         });
