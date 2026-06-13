@@ -10,12 +10,10 @@ import { DesktopZoom } from './desktopZoom.js';
 import { ChromeBackground } from './chromeBackground.js';
 import { DesktopBackground } from './desktopBackground.js';
 import { resetCustomizationToDefaults } from './customizationReset.js';
-import { ACTION_ICONS } from './ui.js';
+import { ACTION_ICONS, CARD_ICONS } from './ui.js';
 import { AppTheme, buildThemeOptionsHtml, isAppThemeCustomized, readAppTheme } from './appTheme.js';
-import { positionPopoverBelowAnchor } from './popoverPosition.js';
 import {
     applyTileSmallFootprint,
-    DEFAULT_TILE_SMALL_FOOTPRINT,
     isTileSmallFootprintCustomized,
     readTileSmallFootprint,
     writeTileSmallFootprint
@@ -90,8 +88,8 @@ function isCustomized(options) {
 export const DisplayOptions = {
     triggerBtn: null,
     activeAnchor: null,
-    popover: null,
-    outsideHandler: null,
+    overlay: null,
+    backdropHandler: null,
     keyHandler: null,
     options: { ...DEFAULTS },
     onChange: null,
@@ -108,7 +106,7 @@ export const DisplayOptions = {
 
         this.triggerBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            this.togglePopover();
+            this.toggleModal();
         });
 
         window.addEventListener('desktop:zoom_changed', () => this.syncButtonState());
@@ -129,7 +127,7 @@ export const DisplayOptions = {
         if (!this.triggerBtn) return;
         this.triggerBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            this.togglePopover();
+            this.toggleModal();
         });
         this.syncButtonState();
     },
@@ -162,26 +160,31 @@ export const DisplayOptions = {
         return Boolean(this.getLoggedIn?.()) && DesktopZoom.isDesktopViewport();
     },
 
-    ensurePopover() {
-        if (!this.popover) {
-            this.popover = document.createElement('div');
-            this.popover.className = 'display-options-popover clock-style-popover is-hidden';
-            this.popover.setAttribute('role', 'menu');
-            this.popover.setAttribute('aria-label', 'Display options');
-            document.body.appendChild(this.popover);
-        }
-        return this.popover;
+    isOpen() {
+        return this.overlay && !this.overlay.classList.contains('is-hidden');
     },
 
-    closePopover() {
-        if (!this.popover) return;
-        this.popover.classList.add('is-hidden');
+    ensureOverlay() {
+        if (!this.overlay) {
+            this.overlay = document.createElement('div');
+            this.overlay.className = 'overlay display-options-overlay is-hidden';
+            this.overlay.setAttribute('role', 'dialog');
+            this.overlay.setAttribute('aria-modal', 'true');
+            this.overlay.setAttribute('aria-labelledby', 'display-options-title');
+            document.body.appendChild(this.overlay);
+        }
+        return this.overlay;
+    },
+
+    closeModal() {
+        if (!this.overlay) return;
+        this.overlay.classList.add('is-hidden');
         this.triggerBtn?.setAttribute('aria-expanded', 'false');
         this.activeAnchor?.setAttribute('aria-expanded', 'false');
         this.activeAnchor = null;
-        if (this.outsideHandler) {
-            document.removeEventListener('mousedown', this.outsideHandler, true);
-            this.outsideHandler = null;
+        if (this.backdropHandler) {
+            this.overlay.removeEventListener('mousedown', this.backdropHandler);
+            this.backdropHandler = null;
         }
         if (this.keyHandler) {
             document.removeEventListener('keydown', this.keyHandler);
@@ -189,11 +192,10 @@ export const DisplayOptions = {
         }
     },
 
-    optionRow(id, label, hint, checked) {
-        return `<label class="focus-mode-row display-options-row" for="${id}">
+    optionRow(id, label, checked) {
+        return `<label class="display-options-row" for="${id}">
             <input type="checkbox" class="display-options-checkbox" id="${id}"${checked ? ' checked' : ''}>
-            <span class="focus-mode-row-label">${escapeHtml(label)}</span>
-            ${hint ? `<span class="focus-mode-row-hint">${escapeHtml(hint)}</span>` : ''}
+            <span class="display-options-row-label">${escapeHtml(label)}</span>
         </label>`;
     },
 
@@ -202,7 +204,7 @@ export const DisplayOptions = {
         const disabledAttr = disabled ? ' disabled' : '';
         return `<div class="display-options-stepper-row${disabledClass}">
             <span class="display-options-stepper-label">${escapeHtml(label)}</span>
-            ${disabled && disabledHint ? `<span class="focus-mode-row-hint">${escapeHtml(disabledHint)}</span>` : ''}
+            ${disabled && disabledHint ? `<span class="display-options-row-hint">${escapeHtml(disabledHint)}</span>` : ''}
             <span class="display-options-stepper" aria-label="${escapeHtml(label)}">
                 <button type="button" id="${idPrefix}-out" class="btn btn--compact btn--icon display-options-stepper-btn" title="Decrease" aria-label="Decrease ${escapeHtml(label)}"${disabledAttr}>−</button>
                 <span id="${idPrefix}-label" class="display-options-stepper-value">${escapeHtml(valuePercent)}</span>
@@ -212,8 +214,8 @@ export const DisplayOptions = {
     },
 
     bgRow(id, label, cssVar) {
-        return `<button type="button" class="display-options-bg-row focus-mode-row" id="${id}" role="menuitem">
-            <span class="focus-mode-row-label">${escapeHtml(label)}</span>
+        return `<button type="button" class="display-options-bg-row" id="${id}">
+            <span class="display-options-row-label">${escapeHtml(label)}</span>
             <span class="display-options-swatch" style="background: var(${cssVar})" aria-hidden="true"></span>
         </button>`;
     },
@@ -259,85 +261,99 @@ export const DisplayOptions = {
         }).join('');
     },
 
-    bindStepper(popover, { idPrefix, onOut, onIn, disabled = false }) {
+    bindStepper(root, { idPrefix, onOut, onIn, disabled = false }) {
         if (disabled) return;
-        popover.querySelector(`#${idPrefix}-out`)?.addEventListener('click', (e) => {
+        root.querySelector(`#${idPrefix}-out`)?.addEventListener('click', (e) => {
             e.stopPropagation();
             onOut();
-            this.openPopover();
+            this.openModal();
         });
-        popover.querySelector(`#${idPrefix}-in`)?.addEventListener('click', (e) => {
+        root.querySelector(`#${idPrefix}-in`)?.addEventListener('click', (e) => {
             e.stopPropagation();
             onIn();
-            this.openPopover();
+            this.openModal();
         });
     },
 
-    openPopover(anchor) {
-        const savedAnchor = anchor || this.activeAnchor;
-        const target = savedAnchor || this.triggerBtn;
-        if (!target) return;
-        this.closePopover();
-        this.activeAnchor = savedAnchor || null;
-
-        const popover = this.ensurePopover();
+    buildModalHtml() {
         const opts = this.options;
         const noteScalePct = `${Math.round(NoteFontScale.getScale() * 100)}%`;
         const desktopZoomPct = `${Math.round(DesktopZoom.getScale() * 100)}%`;
         const desktopZoomEnabled = this.isDesktopZoomEnabled();
         const tileFootprint = readTileSmallFootprint();
 
-        popover.innerHTML = `
-            <div class="display-options-list focus-mode-list">
-                <button type="button" class="focus-mode-row focus-mode-reset display-options-reset display-options-reset--top" id="display-opt-reset" role="menuitem">
-                    <span class="focus-mode-row-label display-options-reset-label">${ACTION_ICONS.resetCustomization}<span>Reset to defaults</span></span>
-                </button>
-                <div class="focus-mode-divider" role="separator"></div>
-                <p class="display-options-heading">Notes on desktop</p>
-                ${this.optionRow('display-opt-category', 'Category name', '', opts.showCategoryName)}
-                ${this.optionRow('display-opt-created', 'Created date', '', opts.showCreatedDate)}
-                ${this.optionRow('display-opt-note-size', 'Note size', '', opts.showNoteSize)}
-                ${this.optionRow('display-opt-note-lines', 'Number of lines', '', opts.showLineCount)}
-                <p class="display-options-subheading">Collapsed note size</p>
-                <div class="tile-footprint-list">${this.tileFootprintOptionsHtml(tileFootprint)}</div>
-                <div class="focus-mode-divider" role="separator"></div>
-                <p class="display-options-heading">Theme</p>
-                <div class="display-options-theme-list clock-style-list app-theme-list">${buildThemeOptionsHtml(readAppTheme())}</div>
-                <div class="focus-mode-divider" role="separator"></div>
-                <p class="display-options-heading">Text</p>
-                <div class="note-font-list">${this.noteFontOptionsHtml(opts.noteFontId)}</div>
-                <div class="focus-mode-divider" role="separator"></div>
-                <p class="display-options-heading">Scale</p>
-                <div class="display-options-scale-group">
-                    ${this.stepperRow({
-                        idPrefix: 'display-opt-note-scale',
-                        label: 'Text size',
-                        valuePercent: noteScalePct
-                    })}
-                    ${this.stepperRow({
-                        idPrefix: 'display-opt-desktop-zoom',
-                        label: 'Desktop zoom',
-                        valuePercent: desktopZoomPct,
-                        disabled: !desktopZoomEnabled,
-                        disabledHint: desktopZoomEnabled ? '' : 'Desktop only'
-                    })}
+        return `
+            <div class="modal modal--wide display-options-modal">
+                <div class="display-options-header">
+                    <h2 id="display-options-title" class="display-options-title">Display options</h2>
+                    <button type="button" class="card-act card-act--close display-options-close" id="display-opt-close" title="Close" aria-label="Close">${CARD_ICONS.close}</button>
                 </div>
-                <div class="focus-mode-divider" role="separator"></div>
-                <p class="display-options-heading">Desktop</p>
-                ${this.optionRow('display-opt-gradient', 'Gradient background', '', opts.desktopGradient)}
-                ${this.optionRow('display-opt-animations', 'Card animations', '', opts.cardAnimations)}
-                <div class="focus-mode-divider" role="separator"></div>
-                <p class="display-options-heading">Backgrounds</p>
-                ${this.bgRow('display-opt-chrome-bg', 'Panel & header', '--chrome-bg')}
-                ${this.bgRow('display-opt-desktop-bg', 'Desktop', '--desktop-bg')}
+                <div class="display-options-body modal-body">
+                    <div class="display-options-grid">
+                        <section class="display-options-section display-options-section--theme">
+                            <h3 class="display-options-heading">Theme</h3>
+                            <div class="display-options-theme-grid app-theme-list">${buildThemeOptionsHtml(readAppTheme())}</div>
+                        </section>
+                        <section class="display-options-section display-options-section--typography">
+                            <h3 class="display-options-heading">Typography</h3>
+                            <div class="display-options-font-grid">${this.noteFontOptionsHtml(opts.noteFontId)}</div>
+                            <div class="display-options-scale-row">
+                                ${this.stepperRow({
+                                    idPrefix: 'display-opt-note-scale',
+                                    label: 'Text size',
+                                    valuePercent: noteScalePct
+                                })}
+                                ${this.stepperRow({
+                                    idPrefix: 'display-opt-desktop-zoom',
+                                    label: 'Desktop zoom',
+                                    valuePercent: desktopZoomPct,
+                                    disabled: !desktopZoomEnabled,
+                                    disabledHint: desktopZoomEnabled ? '' : 'Desktop only'
+                                })}
+                            </div>
+                        </section>
+                        <section class="display-options-section display-options-section--notes">
+                            <h3 class="display-options-heading">Notes on desktop</h3>
+                            <div class="display-options-check-grid">
+                                ${this.optionRow('display-opt-category', 'Category name', opts.showCategoryName)}
+                                ${this.optionRow('display-opt-created', 'Created date', opts.showCreatedDate)}
+                                ${this.optionRow('display-opt-note-size', 'Note size', opts.showNoteSize)}
+                                ${this.optionRow('display-opt-note-lines', 'Number of lines', opts.showLineCount)}
+                            </div>
+                            <p class="display-options-subheading">Collapsed note size</p>
+                            <div class="tile-footprint-list">${this.tileFootprintOptionsHtml(tileFootprint)}</div>
+                        </section>
+                        <section class="display-options-section display-options-section--desktop">
+                            <h3 class="display-options-heading">Desktop</h3>
+                            <div class="display-options-check-grid display-options-check-grid--inline">
+                                ${this.optionRow('display-opt-gradient', 'Gradient background', opts.desktopGradient)}
+                                ${this.optionRow('display-opt-animations', 'Card animations', opts.cardAnimations)}
+                            </div>
+                        </section>
+                        <section class="display-options-section display-options-section--backgrounds display-options-section--full">
+                            <h3 class="display-options-heading">Backgrounds</h3>
+                            <div class="display-options-bg-row-group">
+                                ${this.bgRow('display-opt-chrome-bg', 'Panel & header', '--chrome-bg')}
+                                ${this.bgRow('display-opt-desktop-bg', 'Desktop', '--desktop-bg')}
+                            </div>
+                        </section>
+                    </div>
+                </div>
+                <div class="display-options-footer">
+                    <button type="button" class="btn display-options-reset" id="display-opt-reset">
+                        <span class="display-options-reset-label">${ACTION_ICONS.resetCustomization}<span>Reset to defaults</span></span>
+                    </button>
+                </div>
             </div>
         `;
+    },
 
+    bindModalInteractions(root) {
         const bindToggle = (id, key) => {
-            popover.querySelector(`#${id}`)?.addEventListener('change', (e) => {
+            root.querySelector(`#${id}`)?.addEventListener('change', (e) => {
                 e.stopPropagation();
                 this.setOptions({ [key]: e.target.checked });
-                this.openPopover();
+                this.openModal();
             });
         };
 
@@ -348,100 +364,131 @@ export const DisplayOptions = {
         bindToggle('display-opt-gradient', 'desktopGradient');
         bindToggle('display-opt-animations', 'cardAnimations');
 
-        popover.querySelectorAll('.app-theme-option').forEach((btn) => {
-            btn.addEventListener('mousedown', (e) => e.stopPropagation());
+        root.querySelectorAll('.app-theme-option').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 AppTheme.setTheme(btn.dataset.theme);
-                this.openPopover();
+                this.openModal();
             });
         });
 
-        popover.querySelectorAll('.tile-footprint-option').forEach((btn) => {
-            btn.addEventListener('mousedown', (e) => e.stopPropagation());
+        root.querySelectorAll('.tile-footprint-option').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.setTileSmallFootprint(btn.dataset.footprint);
-                this.openPopover();
+                this.openModal();
             });
         });
 
-        popover.querySelectorAll('.note-font-option').forEach((btn) => {
-            btn.addEventListener('mousedown', (e) => e.stopPropagation());
+        root.querySelectorAll('.note-font-option').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.setNoteFont(btn.dataset.font);
-                this.openPopover();
+                this.openModal();
             });
         });
 
-        this.bindStepper(popover, {
+        this.bindStepper(root, {
             idPrefix: 'display-opt-note-scale',
             onOut: () => NoteFontScale.step(-NoteFontScale.SCALE_STEP),
             onIn: () => NoteFontScale.step(NoteFontScale.SCALE_STEP)
         });
 
-        this.bindStepper(popover, {
+        this.bindStepper(root, {
             idPrefix: 'display-opt-desktop-zoom',
-            disabled: !desktopZoomEnabled,
+            disabled: !this.isDesktopZoomEnabled(),
             onOut: () => DesktopZoom.step(-DesktopZoom.ZOOM_STEP),
             onIn: () => DesktopZoom.step(DesktopZoom.ZOOM_STEP)
         });
 
-        popover.querySelector('#display-opt-chrome-bg')?.addEventListener('click', (e) => {
+        root.querySelector('#display-opt-chrome-bg')?.addEventListener('click', (e) => {
             e.stopPropagation();
             ChromeBackground.openPicker(e.currentTarget);
         });
 
-        popover.querySelector('#display-opt-desktop-bg')?.addEventListener('click', (e) => {
+        root.querySelector('#display-opt-desktop-bg')?.addEventListener('click', (e) => {
             e.stopPropagation();
             DesktopBackground.openPicker(e.currentTarget);
         });
 
-        popover.querySelector('#display-opt-reset')?.addEventListener('click', (e) => {
+        root.querySelector('#display-opt-reset')?.addEventListener('click', (e) => {
             e.stopPropagation();
             if (!resetCustomizationToDefaults()) return;
             this.options = readDisplayOptions();
             applyDisplayOptions(this.options);
             this.onChange?.(this.options);
-            this.openPopover();
+            this.openModal();
         });
 
-        popover.querySelectorAll('.display-options-row, .display-options-bg-row').forEach((row) => {
-            row.addEventListener('mousedown', (e) => e.stopPropagation());
+        root.querySelector('#display-opt-close')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.closeModal();
         });
+    },
+
+    openModal(anchor) {
+        const savedAnchor = anchor || this.activeAnchor;
+        const target = savedAnchor || this.triggerBtn;
+        if (!target && !this.isOpen()) return;
+
+        const wasOpen = this.isOpen();
+        if (!wasOpen) {
+            this.activeAnchor = savedAnchor || null;
+        }
+
+        const overlay = this.ensureOverlay();
+        overlay.innerHTML = this.buildModalHtml();
+        this.bindModalInteractions(overlay);
 
         NoteFontScale.updateLabels();
         DesktopZoom.updateButtons();
 
-        popover.classList.remove('is-hidden');
-        positionPopoverBelowAnchor(popover, target);
-        target.setAttribute('aria-expanded', 'true');
+        overlay.classList.remove('is-hidden');
+        target?.setAttribute('aria-expanded', 'true');
 
-        this.outsideHandler = (e) => {
-            if (popover.contains(e.target) || target.contains(e.target)) return;
-            this.closePopover();
-        };
-        this.keyHandler = (e) => {
-            if (e.key === 'Escape') this.closePopover();
-        };
-        requestAnimationFrame(() => {
-            document.addEventListener('mousedown', this.outsideHandler, true);
+        if (!this.backdropHandler) {
+            this.backdropHandler = (e) => {
+                if (e.target !== overlay) return;
+                this.closeModal();
+            };
+            overlay.addEventListener('mousedown', this.backdropHandler);
+        }
+
+        if (!this.keyHandler) {
+            this.keyHandler = (e) => {
+                if (e.key === 'Escape') this.closeModal();
+            };
             document.addEventListener('keydown', this.keyHandler);
-        });
+        }
+
+        if (!wasOpen) {
+            overlay.querySelector('#display-opt-close')?.focus();
+        }
+    },
+
+    toggleModal() {
+        this.toggleFrom(this.triggerBtn);
     },
 
     togglePopover() {
-        this.toggleFrom(this.triggerBtn);
+        this.toggleModal();
     },
 
     toggleFrom(anchor) {
         if (!anchor) return;
-        if (this.popover && !this.popover.classList.contains('is-hidden') && this.activeAnchor === anchor) {
-            this.closePopover();
+        if (this.isOpen() && this.activeAnchor === anchor) {
+            this.closeModal();
         } else {
-            this.openPopover(anchor);
+            this.openModal(anchor);
         }
+    },
+
+    closePopover() {
+        this.closeModal();
+    },
+
+    openPopover(anchor) {
+        this.openModal(anchor);
     }
 };
 

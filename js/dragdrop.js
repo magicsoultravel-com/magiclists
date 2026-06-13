@@ -23,6 +23,8 @@ import { readTileSmallFootprint } from './tileFootprint.js';
 import { initFileCabinetDrag, isFileCabinetActive } from './fileCabinet.js';
 
 const DRAG_THRESHOLD = 4;
+const GRID_SCROLL_EDGE = 40;
+const GRID_SCROLL_STEP = 10;
 
 function teardownCanvasInit(canvas) {
     if (canvas?._dragDropAbort) {
@@ -49,6 +51,15 @@ function pointerDelta(canvas, clientX, clientY, startX, startY) {
         dx: (clientX - startX) / zoom,
         dy: (clientY - startY) / zoom
     };
+}
+
+function autoScrollGridCanvas(canvas, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    if (clientY > rect.bottom - GRID_SCROLL_EDGE) {
+        canvas.scrollTop += GRID_SCROLL_STEP;
+    } else if (clientY < rect.top + GRID_SCROLL_EDGE) {
+        canvas.scrollTop = Math.max(0, canvas.scrollTop - GRID_SCROLL_STEP);
+    }
 }
 
 function cardIsPinned(card) {
@@ -247,20 +258,31 @@ export const DragDropEngine = {
             previewFrame = requestAnimationFrame(() => {
                 previewFrame = null;
                 const actorRect = UI.readNoteRect(actorCard);
-                const layout = UI.computeGridBoardLayout(canvas, actorCard.dataset.id, actorRect);
-                layout.forEach((rect, id) => {
+                const zoom = getCanvasZoom(canvas);
+                const { origin, viewportH } = UI.getGridViewportBounds(canvas);
+                const scrollY = canvas.scrollTop / zoom;
+                const maxH = origin + scrollY + viewportH + COLUMN_GRID_CELL_H;
+                const layout = UI.computeGridBoardLayout(
+                    canvas,
+                    actorCard.dataset.id,
+                    actorRect,
+                    { maxH }
+                );
+                previewBaseline?.forEach((base, id) => {
                     if (id === actorCard.dataset.id) return;
                     const other = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(id)}"]`);
                     if (!other) return;
-                    const base = previewBaseline?.get(id);
-                    const changed = !base
-                        || base.x !== rect.x
+                    const rect = layout.get(id) ?? base;
+                    const pushed = base.x !== rect.x
                         || base.y !== rect.y
                         || base.w !== rect.w
                         || base.h !== rect.h;
-                    if (changed) {
+                    if (pushed) {
                         UI.applyNoteRect(other, rect, { settling: true });
                         other.classList.add('layout-preview');
+                    } else if (other.classList.contains('layout-preview')) {
+                        UI.applyNoteRect(other, base, { settling: true });
+                        other.classList.remove('layout-preview');
                     }
                 });
             });
@@ -332,7 +354,10 @@ export const DragDropEngine = {
             const y = Math.max(origin, dragActive.origY + dy);
             dragActive.card.style.left = `${x}px`;
             dragActive.card.style.top = `${y}px`;
-            if (snapEnabled) runLayoutPreview(dragActive.card);
+            if (snapEnabled) {
+                autoScrollGridCanvas(canvas, e.clientY);
+                runLayoutPreview(dragActive.card);
+            }
         };
 
         const onDragUp = () => {
@@ -405,7 +430,10 @@ export const DragDropEngine = {
                     w: nextW,
                     h: nextH
                 }, { axis, maxW });
-                if (snapEnabled) runLayoutPreview(card);
+                if (snapEnabled) {
+                    autoScrollGridCanvas(canvas, e.clientY);
+                    runLayoutPreview(card);
+                }
                 return;
             }
 
@@ -420,11 +448,14 @@ export const DragDropEngine = {
 
             card.style.left = `${nextX}px`;
             card.style.top = `${nextY}px`;
-            card.style.setProperty('width', `${finalW}px`, 'important');
-            card.style.setProperty('height', `${finalH}px`, 'important');
-            card.style.setProperty('min-height', `${finalH}px`, 'important');
-            card.style.setProperty('max-height', `${finalH}px`, 'important');
-            if (snapEnabled) runLayoutPreview(card);
+            UI.applyFreeformDimensions(card, finalW, finalH);
+            if (isDesktopCard(card)) {
+                UI.syncSpatialAtSmallFromRect(card, finalW, finalH);
+            }
+            if (snapEnabled) {
+                autoScrollGridCanvas(canvas, e.clientY);
+                runLayoutPreview(card);
+            }
         };
 
         const onResizeUp = () => {
@@ -469,6 +500,9 @@ export const DragDropEngine = {
                         UI.finalizeDesktopCard(card);
                     } else {
                         UI.saveFreeformSizeFromCard(card);
+                        if (isDesktopCard(card)) {
+                            UI.finalizeDesktopCard(card);
+                        }
                     }
                     UI.updateBoardCanvasMinHeight(canvas);
                 }
@@ -514,6 +548,9 @@ export const DragDropEngine = {
                     };
                     card.classList.add(snapEnabled ? 'is-grid-resizing' : 'is-freeform-resizing');
                     card.dataset.skipExpand = '1';
+                    if (isDesktopCard(card)) {
+                        card.classList.remove('spatial-at-small');
+                    }
                     document.addEventListener('mousemove', onResizeMove);
                     document.addEventListener('mouseup', onResizeUp);
                     return;

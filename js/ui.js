@@ -1415,6 +1415,9 @@ export const UI = {
         }
 
         this.applyTierResizeBox(card, rect);
+        if (isDesktopCard(card)) {
+            this.syncSpatialAtSmallFromRect(card, rect.w, rect.h);
+        }
     },
 
     revertTierResizePreview(card, item, resizeState) {
@@ -2380,8 +2383,22 @@ export const UI = {
     applyFreeformDimensions(card, w, h) {
         card.style.setProperty('width', `${w}px`, 'important');
         card.style.setProperty('height', `${h}px`, 'important');
+        card.style.setProperty('min-width', `${w}px`, 'important');
+        card.style.setProperty('max-width', `${w}px`, 'important');
         card.style.setProperty('min-height', `${h}px`, 'important');
         card.style.setProperty('max-height', `${h}px`, 'important');
+    },
+
+    isCardActivelyResizing(card) {
+        if (!card) return false;
+        return card.classList.contains('is-tier-resizing')
+            || card.classList.contains('is-freeform-resizing')
+            || card.classList.contains('is-grid-resizing');
+    },
+
+    syncSpatialAtSmallFromRect(card, w, h) {
+        if (!isDesktopCard(card)) return;
+        card.classList.toggle('spatial-at-small', this.isAtCurrentSmallSize(w, h));
     },
 
     applyFreeformSize(card) {
@@ -5390,7 +5407,7 @@ export const UI = {
                 }
             }
         }
-        candidates.sort((a, b) => a.dist - b.dist);
+        candidates.sort((a, b) => a.dist - b.dist || a.rect.y - b.rect.y || a.rect.x - b.rect.x);
         for (const { rect } of candidates) {
             if (!placed.some((p) => this.rectsOverlap(rect, p))) return rect;
         }
@@ -5406,6 +5423,16 @@ export const UI = {
         }
         const blocker = placed.find((p) => this.rectsOverlap(rect, p));
         if (blocker) {
+            candidate = snapRect({
+                x: rect.x,
+                y: blocker.y - rect.h - COLUMN_GRID_GAP,
+                w: rect.w,
+                h: rect.h
+            });
+            if (candidate.y >= origin - 1
+                && !placed.some((p) => this.rectsOverlap(candidate, p))) {
+                return candidate;
+            }
             candidate = snapRect({
                 x: rect.x,
                 y: blocker.y + blocker.h + COLUMN_GRID_GAP,
@@ -5825,19 +5852,20 @@ export const UI = {
         const styleH = parseFloat(card.style.height);
         const hasInlineW = Number.isFinite(styleW) && styleW > 0;
         const hasInlineH = Number.isFinite(styleH) && styleH > 0;
+        const activelyResizing = this.isCardActivelyResizing(card);
         const footprint = readTileSmallFootprint();
         const small = getSmallRect(footprint);
         let w = hasInlineW ? styleW : null;
         let h = hasInlineH ? styleH : null;
         if (w == null) {
-            if (card.classList?.contains('spatial-at-small')) {
+            if (card.classList?.contains('spatial-at-small') && !activelyResizing) {
                 w = small.w;
             } else {
                 w = card.offsetWidth || FREEFORM_DEFAULT_W;
             }
         }
         if (h == null) {
-            if (card.classList?.contains('spatial-at-small')) {
+            if (card.classList?.contains('spatial-at-small') && !activelyResizing) {
                 h = small.h;
             } else {
                 h = card.offsetHeight || FREEFORM_DEFAULT_H;
