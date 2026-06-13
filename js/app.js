@@ -70,6 +70,10 @@ const AppState = {
 };
 
 class Application {
+    constructor() {
+        this._syncQueue = Promise.resolve();
+    }
+
     async init() {
         DesktopBackground.init();
         ChromeBackground.init();
@@ -91,7 +95,8 @@ class Application {
         this.loadCategoriesStore();
         await reconcileLayoutStorage({
             items: API._getLocalDB().items,
-            categories: AppState.categories
+            categories: AppState.categories,
+            lightTouch: true
         });
         await this.syncDataStore();
         this.setupCoreListeners();
@@ -187,8 +192,18 @@ class Application {
     }
 
     async syncDataStore() {
+        const task = this._syncQueue.then(() => this._syncDataStoreInner());
+        this._syncQueue = task.catch(() => {});
+        return task;
+    }
+
+    async _syncDataStoreInner() {
         const canvas = document.getElementById('app-canvas');
         try {
+            if (canvas && AppState.workspaceMode !== 'drawing') {
+                UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
+            }
+
             const data = await API.fetchItems(AppState.user.token);
             AppState.items = Array.isArray(data?.items) ? data.items : [];
 
@@ -567,6 +582,7 @@ class Application {
 
         const canvas = document.getElementById('app-canvas');
         UI.flushAllInlineEditsFromCanvas(canvas, AppState.items);
+        UI.flushLayoutFromCanvas(canvas, prevMode);
         UI.persistViewSessionForMode(prevMode, canvas);
         UI.convertDesktopLayoutForModeChange(canvas, prevMode, mode, AppState.items);
 
@@ -965,13 +981,21 @@ class Application {
         });
 
         window.addEventListener('board:visibility_changed', async () => {
-            UI.render(document.getElementById('app-canvas'), AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
+            const canvas = document.getElementById('app-canvas');
+            if (canvas) {
+                UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
+            }
+            UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
             this.updateWorkspaceCounter();
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         });
 
         window.addEventListener('filecabinet:layout_changed', async () => {
-            UI.render(document.getElementById('app-canvas'), AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
+            const canvas = document.getElementById('app-canvas');
+            if (canvas) {
+                UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
+            }
+            UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         });
 

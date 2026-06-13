@@ -1848,7 +1848,7 @@ export const UI = {
             })
             .forEach((item, index) => {
                 const card = this.createCardComponent(item, activeCategories, { desktop: true });
-                const isExpanded = false;
+                const isExpanded = getExpandedCards(resolvedMode)[item.id] === true;
 
                 if (snapLayout) {
                     const { origin, packW, maxH } = bounds;

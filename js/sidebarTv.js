@@ -6,6 +6,7 @@ import { clampPanelToViewport } from './popoverPosition.js';
 import { escapeHtml, countryFlagEmoji, debounce, syncMarquee, bindFaviconImage } from './tvUtils.js';
 import { ACTION_ICONS, CARD_ICONS } from './ui.js';
 import { applySectionCollapse } from './hamburger.js';
+import { showAppToast } from './toast.js';
 
 const BROWSE_PAGE_SIZE = 60;
 const BROWSE_SORT_OPTIONS = [{ value: 'name', label: 'Name' }];
@@ -444,7 +445,7 @@ export const SidebarTv = {
 
         body.innerHTML = `
             <div class="tv-special-form">
-                <p class="tv-special-form__help">Browse free live TV by country. Channels come from the catalog below — <strong>iptv-org</strong> is the built-in world list. Use <strong>Browse</strong> to pick a country, then a channel. Many streams are geo-blocked or offline; try another channel or <strong>Refresh catalog</strong> if lists look empty.</p>
+                <p class="tv-special-form__help">Browse free live TV by country. Channels come from the catalog below — <strong>iptv-org</strong> is the built-in world list. Use <strong>Browse</strong> to pick a country, then a channel. Many streams are geo-blocked or offline; try another channel or <strong>Refresh catalog</strong> if lists look empty. If country lists load but channels fail, or lists look empty or wrong, use <strong>Clear cache</strong> then browse again.</p>
                 <label class="tv-special-form__row">
                     <span class="tv-special-form__label">Catalog source</span>
                     <select class="form-input tv-special-form__select" data-tv-provider>
@@ -459,6 +460,7 @@ export const SidebarTv = {
                     <button type="button" class="btn btn--compact" data-tv-refresh-catalog>Refresh catalog</button>
                     <button type="button" class="btn btn--compact" data-tv-clear-cache>Clear cache</button>
                 </div>
+                <p class="tv-special-form__help"><strong>Refresh catalog</strong> re-downloads from iptv-org. <strong>Clear cache</strong> wipes the stored catalog; the next browse fetches fresh.</p>
             </div>
         `;
 
@@ -490,8 +492,20 @@ export const SidebarTv = {
             }
         });
 
-        body.querySelector('[data-tv-clear-cache]')?.addEventListener('click', () => {
+        body.querySelector('[data-tv-clear-cache]')?.addEventListener('click', async () => {
             TvProviderRegistry.clearAllCaches();
+            this.countries = [];
+            try {
+                await this.prefetchCountries();
+                if (TvPopover.mode === 'browse' && !TvPopover.panel?.classList.contains('is-hidden')) {
+                    this.browseView = 'countries';
+                    this.browseCountry = null;
+                    await this.renderBrowseCountries();
+                }
+                showAppToast('TV catalog cache cleared');
+            } catch {
+                showAppToast('Cache cleared — reopen Browse to reload');
+            }
         });
 
         TvPopover.reposition();

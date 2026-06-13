@@ -83,7 +83,6 @@ export function setExpandedCard(mode, itemId, expanded) {
     else delete bucket.expandedCards[itemId];
     store[m] = bucket;
     writeViewSessions(store);
-    syncWorkingExpandedCards(m, bucket.expandedCards);
 }
 
 export function setExpandedCardsMap(mode, map) {
@@ -93,7 +92,6 @@ export function setExpandedCardsMap(mode, map) {
     bucket.expandedCards = { ...(map || {}) };
     store[m] = bucket;
     writeViewSessions(store);
-    syncWorkingExpandedCards(m, bucket.expandedCards);
 }
 
 export function clearExpandedCards(mode) {
@@ -106,40 +104,21 @@ export function isCardExpanded(mode, itemId) {
     return readViewSessions()[m]?.expandedCards?.[itemId] === true;
 }
 
-function syncWorkingExpandedCards(mode, map) {
-    try {
-        localStorage.setItem(LEGACY_EXPANDED_KEY, JSON.stringify(map || {}));
-    } catch {
-        /* ignore */
-    }
-}
-
 export function persistViewSession(mode, { canvas, flushLayout } = {}) {
     const m = normalizeViewMode(mode);
     const store = readViewSessions();
-    const bucket = store[m] || emptyBucket();
+    const bucket = stripScrollFromBucket(store[m] || emptyBucket());
 
     if (typeof flushLayout === 'function' && canvas) {
         flushLayout(canvas, m);
     }
 
-    try {
-        bucket.expandedCards = JSON.parse(localStorage.getItem(LEGACY_EXPANDED_KEY) || '{}');
-    } catch {
-        bucket.expandedCards = {};
-    }
-
-    delete bucket.scroll;
-
     store[m] = bucket;
     writeViewSessions(store);
 }
 
-export function restoreViewSession(mode) {
-    const m = normalizeViewMode(mode);
-    const store = readViewSessions();
-    const bucket = store[m] || emptyBucket();
-    syncWorkingExpandedCards(m, bucket.expandedCards || {});
+export function restoreViewSession(_mode) {
+    /* view sessions are authoritative; render reads getExpandedCards(mode) directly */
 }
 
 export function getViewSessionsForSnapshot() {
