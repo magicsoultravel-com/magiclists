@@ -5197,6 +5197,14 @@ html[data-tile-small-footprint="label"] #app-canvas.view-freeform .mini-card[dat
     min-height: var(--tile-large-h);
 }
 
+#app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small,
+#app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small {
+    min-width: var(--tile-small-w) !important;
+    min-height: var(--tile-label-h) !important;
+    max-width: var(--tile-small-w) !important;
+    max-height: var(--tile-small-h) !important;
+}
+
 #app-canvas.view-grid .mini-card.tile-small:hover,
 #app-canvas.view-grid .mini-card.tile-small:focus-within,
 #app-canvas.view-grid .mini-card.tile-small.is-grid-resizing,

@@ -576,10 +576,15 @@ class Application {
         UI.restoreViewSessionForMode(mode);
         AppState.expandedCards = UI.readExpandedCardsForMode(mode);
 
+        UI.applyDesktopLayoutModeSwitch(canvas, mode);
+
         window.dispatchEvent(new CustomEvent('view:mode_changed', { detail: mode }));
         this.updateViewToggleState();
         this.updateLayoutResetVisibility();
-        await this.syncDataStore();
+        if (AppState.workspaceMode !== 'drawing') {
+            DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+        }
+        this.updateWorkspaceCounter();
     }
 
     updateViewToggleState() {

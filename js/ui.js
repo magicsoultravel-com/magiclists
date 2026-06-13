@@ -1576,7 +1576,16 @@ export const UI = {
     collapseBoardCardToSmallFootprint(card, item, { deferReflow = false } = {}) {
         if (!card || !item?.id || isFileCabinetActive()) return;
         const pos = this.readNoteRect(card);
-        if (matchesSmallFootprintRect(pos.w, pos.h)) return;
+        const footprintRect = { x: pos.x, y: pos.y, ...getSmallRect(readTileSmallFootprint()) };
+
+        if (matchesSmallFootprintRect(pos.w, pos.h)) {
+            this.applyNoteRect(card, footprintRect, { settling: false });
+            this.applyDesktopTilePresentation(card, item);
+            this.saveTileLayoutFromCard(card, item, footprintRect, resolveTileSize(item));
+            this.finalizeDesktopCard(card);
+            return;
+        }
+
         const tileSize = resolveTileSize(item);
         this.persistRememberedSpatialSize(item.id, pos.w, pos.h, tileSize);
         const smallRect = this.resolveCardRect(card, item, { mode: 'small' });
@@ -4958,28 +4967,49 @@ export const UI = {
         return snapshot;
     },
 
+    applyDesktopLayoutModeSwitch(canvas, mode) {
+        if (!canvas) return;
+        const resolvedMode = normalizeViewMode(mode);
+        activeBoardViewMode = resolvedMode;
+        const snapLayout = isSnapLayoutMode(resolvedMode);
+        canvas.classList.toggle('view-grid', snapLayout);
+        canvas.classList.toggle('view-freeform', !snapLayout);
+        canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
+            this.finalizeDesktopCard(card);
+        });
+        this.updateBoardCanvasMinHeight(canvas);
+    },
+
     convertDesktopLayoutForModeChange(canvas, fromMode, toMode, items) {
         if (!canvas || fromMode === toMode) return;
         const visible = this.getVisibleItems(Array.isArray(items) ? items : []);
         const ids = new Set(visible.map((item) => item.id));
 
         if (toMode === 'freeform') {
+            const footprint = readTileSmallFootprint();
+            const small = getSmallRect(footprint);
             visible.forEach((item) => {
                 const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
+                const gridSaved = fromMode === 'grid' ? this.getGridLayout()[item.id] : null;
                 if (!card) {
-                    const saved = this.getGridLayout()[item.id];
-                    if (saved) {
-                        this.saveFreeformPosition(item.id, saved.x, saved.y);
+                    if (gridSaved) {
+                        let w = gridSaved.w;
+                        let h = gridSaved.h;
+                        if (matchesSmallFootprintRect(w, h, footprint) || isAtSmallSize(w, h, footprint)) {
+                            w = small.w;
+                            h = small.h;
+                        }
+                        this.saveFreeformPosition(item.id, gridSaved.x, gridSaved.y);
                         const sizes = this.getFreeformSizes();
                         const prev = sizes[item.id] || {};
                         sizes[item.id] = this.mergeSpatialLayoutEntry(
                             prev,
-                            { w: saved.w, h: saved.h },
+                            { w, h },
                             resolveTileSize(item),
                             {
-                                updateRemembered: !isAtSmallSize(saved.w, saved.h, readTileSmallFootprint()),
-                                rememberedW: saved.rememberedW,
-                                rememberedH: saved.rememberedH
+                                updateRemembered: !isAtSmallSize(w, h, footprint),
+                                rememberedW: gridSaved.rememberedW,
+                                rememberedH: gridSaved.rememberedH
                             }
                         );
                         localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
@@ -4987,11 +5017,36 @@ export const UI = {
                     return;
                 }
                 const rect = this.readNoteRect(card);
-                this.saveFreeformPosition(item.id, rect.x, rect.y);
-                const { w, h } = this.readFreeformCardSize(card);
-                this.saveFreeformSize(item.id, w, h, {
-                    updateRemembered: !isAtSmallSize(w, h, readTileSmallFootprint())
-                });
+                let w;
+                let h;
+                if (gridSaved && Number.isFinite(gridSaved.w) && Number.isFinite(gridSaved.h)) {
+                    w = gridSaved.w;
+                    h = gridSaved.h;
+                } else {
+                    const size = this.readFreeformCardSize(card);
+                    w = size.w;
+                    h = size.h;
+                }
+                if (matchesSmallFootprintRect(w, h, footprint) || isAtSmallSize(w, h, footprint)) {
+                    w = small.w;
+                    h = small.h;
+                }
+                const x = gridSaved?.x ?? rect.x;
+                const y = gridSaved?.y ?? rect.y;
+                this.saveFreeformPosition(item.id, x, y);
+                const sizes = this.getFreeformSizes();
+                const prev = sizes[item.id] || {};
+                sizes[item.id] = this.mergeSpatialLayoutEntry(
+                    prev,
+                    { w, h },
+                    resolveTileSize(item),
+                    {
+                        updateRemembered: !isAtSmallSize(w, h, footprint),
+                        rememberedW: gridSaved?.rememberedW ?? prev.rememberedW,
+                        rememberedH: gridSaved?.rememberedH ?? prev.rememberedH
+                    }
+                );
+                localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
             });
             return;
         }
@@ -5123,15 +5178,16 @@ export const UI = {
 
         const mirrorInactiveLayout = () => {
             if (!canvas) return;
+            const small = getSmallRect(readTileSmallFootprint());
             visibleItems.forEach((item) => {
                 const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
                 if (!card) return;
                 const rect = this.readNoteRect(card);
                 if (mode === 'grid') {
                     this.saveFreeformPosition(item.id, rect.x, rect.y);
-                    this.saveFreeformSize(item.id, rect.w, rect.h);
+                    this.saveFreeformSize(item.id, small.w, small.h);
                 } else {
-                    this.saveGridLayout(item.id, rect);
+                    this.saveGridLayout(item.id, { x: rect.x, y: rect.y, w: small.w, h: small.h });
                 }
             });
         };
@@ -5144,6 +5200,16 @@ export const UI = {
         } else {
             mirrorInactiveLayout();
         }
+    },
+
+    clampRectToFootprintIfSmall(rect) {
+        if (!rect) return rect;
+        const footprint = readTileSmallFootprint();
+        if (!matchesSmallFootprintRect(rect.w, rect.h, footprint) && !isAtSmallSize(rect.w, rect.h, footprint)) {
+            return rect;
+        }
+        const small = getSmallRect(footprint);
+        return { ...rect, w: small.w, h: small.h };
     },
 
     getGridLayout() {
@@ -5489,7 +5555,7 @@ export const UI = {
         return { origin, packW, viewportH };
     },
 
-    squeezeGridBoardToViewport(canvas, { animate = true } = {}) {
+    squeezeGridBoardToViewport(canvas, { animate = true, footprintPack = false } = {}) {
         if (!canvas?.classList.contains('view-grid')) return;
         const { origin, packW, viewportH } = this.getGridViewportBounds(canvas);
         const bottomLimit = origin + viewportH;
@@ -5499,13 +5565,21 @@ export const UI = {
         const layout = new Map();
         const snapOpts = { packW, origin, maxH: bottomLimit + COLUMN_GRID_CELL_H };
 
+        const rectForSqueeze = (card, isExpanded) => {
+            let rect = this.gridBoardRectForCard(card, this.readNoteRect(card), isExpanded);
+            if (footprintPack) {
+                rect = this.clampRectToFootprintIfSmall(rect);
+            }
+            return rect;
+        };
+
         cards.forEach((card) => {
             const id = card.dataset.id;
             if (!id || !pinnedIds.has(id)) return;
             const isExpanded = card.classList.contains('expanded');
             const rect = this.snapNoteRect(
-                this.gridBoardRectForCard(card, this.readNoteRect(card), isExpanded),
-                { maxW: packW, maxH: snapOpts.maxH }
+                rectForSqueeze(card, isExpanded),
+                { maxW: packW, maxH: snapOpts.maxH, origin }
             );
             layout.set(id, rect);
             placed.push({ ...rect });
@@ -5519,7 +5593,7 @@ export const UI = {
             .map((card) => {
                 const id = card.dataset.id;
                 const isExpanded = getExpandedCards('grid')[id] === true || card.classList.contains('expanded');
-                const rect = this.gridBoardRectForCard(card, this.readNoteRect(card), isExpanded);
+                const rect = rectForSqueeze(card, isExpanded);
                 return { id, card, rect };
             })
             .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x);
@@ -5529,7 +5603,7 @@ export const UI = {
             if (preferred.y + preferred.h > bottomLimit + 2) {
                 preferred = { ...preferred, y: origin };
             }
-            let snapped = this.snapNoteRect(preferred, { maxW: packW, maxH: snapOpts.maxH });
+            let snapped = this.snapNoteRect(preferred, { maxW: packW, maxH: snapOpts.maxH, origin });
             if (placed.some((p) => this.rectsOverlap(snapped, p))) {
                 snapped = this.findNearestGridSlot(preferred, snapped.w, snapped.h, placed, snapOpts);
             }
@@ -5575,6 +5649,7 @@ export const UI = {
     repackGridBoardFromOrigin(canvas, { animate = true, items = [] } = {}) {
         if (!canvas?.classList.contains('view-grid')) return;
         const { origin, packW, maxH } = this.getGridBoardBounds(canvas);
+        const small = getSmallRect(readTileSmallFootprint());
         const byId = new Map((items || []).map((item) => [item.id, item]));
         const cards = [...canvas.querySelectorAll('.mini-card[data-desktop="1"]')].sort((a, b) => {
             const itemA = byId.get(a.dataset.id) || this.resolveBoardItem(a.dataset.id);
@@ -5588,14 +5663,16 @@ export const UI = {
         cards.forEach((card) => {
             const id = card.dataset.id;
             if (!id) return;
-            const { w, h } = this.readNoteRect(card);
-            let slot = this.findFirstCanvasSlot(w, h, placed, packW + origin * 2, { origin });
-            slot = this.snapNoteRect(slot, { maxW: packW, maxH });
+            let slot = this.findFirstCanvasSlot(small.w, small.h, placed, packW + origin * 2, { origin });
+            slot = this.snapNoteRect(
+                { ...slot, w: small.w, h: small.h },
+                { maxW: packW, maxH, origin }
+            );
             layout.set(id, slot);
             placed.push(slot);
         });
         this.applyGridBoardLayout(canvas, layout, { animate, save: true });
-        this.squeezeGridBoardToViewport(canvas, { animate });
+        this.squeezeGridBoardToViewport(canvas, { animate, footprintPack: true });
     },
 
     initDesktopCardStack(card, orderIndex = 0) {
@@ -5712,7 +5789,7 @@ export const UI = {
 
     snapNoteRect(rect, { maxW = Infinity, maxH = Infinity, origin = CANVAS_LAYOUT_ORIGIN } = {}) {
         const footprint = readTileSmallFootprint();
-        if (isAtSmallSize(rect.w, rect.h, footprint)) {
+        if (matchesSmallFootprintRect(rect.w, rect.h, footprint) || isAtSmallSize(rect.w, rect.h, footprint)) {
             const small = getSmallRect(footprint);
             const yStride = getPackStrideYForRect(small.w, small.h, footprint);
             return {
@@ -5744,11 +5821,33 @@ export const UI = {
     },
 
     readNoteRect(card) {
+        const styleW = parseFloat(card.style.width);
+        const styleH = parseFloat(card.style.height);
+        const hasInlineW = Number.isFinite(styleW) && styleW > 0;
+        const hasInlineH = Number.isFinite(styleH) && styleH > 0;
+        const footprint = readTileSmallFootprint();
+        const small = getSmallRect(footprint);
+        let w = hasInlineW ? styleW : null;
+        let h = hasInlineH ? styleH : null;
+        if (w == null) {
+            if (card.classList?.contains('spatial-at-small')) {
+                w = small.w;
+            } else {
+                w = card.offsetWidth || FREEFORM_DEFAULT_W;
+            }
+        }
+        if (h == null) {
+            if (card.classList?.contains('spatial-at-small')) {
+                h = small.h;
+            } else {
+                h = card.offsetHeight || FREEFORM_DEFAULT_H;
+            }
+        }
         return {
             x: parseFloat(card.style.left) || 0,
             y: parseFloat(card.style.top) || 0,
-            w: parseFloat(card.style.width) || card.offsetWidth || FREEFORM_DEFAULT_W,
-            h: parseFloat(card.style.height) || card.offsetHeight || FREEFORM_DEFAULT_H
+            w,
+            h
         };
     },
 
