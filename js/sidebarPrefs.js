@@ -1,11 +1,13 @@
 export const PANEL_COLLAPSED_KEY = 'matrix_panel_collapsed';
 export const SIDEBAR_SECTIONS_KEY = 'matrix_sidebar_sections';
 export const NOTES_LIST_SORT_KEY = 'matrix_notes_list_sort';
+export const QUICK_ACTIONS_DOCK_KEY = 'matrix_quick_actions_dock';
 
 export const SIDEBAR_BACKUP_KEYS = [
     PANEL_COLLAPSED_KEY,
     SIDEBAR_SECTIONS_KEY,
-    NOTES_LIST_SORT_KEY
+    NOTES_LIST_SORT_KEY,
+    QUICK_ACTIONS_DOCK_KEY
 ];
 
 const DEFAULT_NOTES_LIST_SORT = { field: 'date', dir: 'desc' };
@@ -53,10 +55,32 @@ export function writeNotesListSort(sort) {
     localStorage.setItem(NOTES_LIST_SORT_KEY, JSON.stringify(sort));
 }
 
+export function readQuickActionsDock() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(QUICK_ACTIONS_DOCK_KEY) || 'null');
+        if (!raw || typeof raw !== 'object') {
+            return { docked: true, x: null, y: null };
+        }
+        return {
+            docked: raw.docked !== false,
+            x: Number.isFinite(raw.x) ? raw.x : null,
+            y: Number.isFinite(raw.y) ? raw.y : null
+        };
+    } catch {
+        return { docked: true, x: null, y: null };
+    }
+}
+
+export function writeQuickActionsDock(patch) {
+    const next = { ...readQuickActionsDock(), ...patch };
+    localStorage.setItem(QUICK_ACTIONS_DOCK_KEY, JSON.stringify(next));
+}
+
 export function readSidebarPrefs() {
     return {
         panelCollapsed: readPanelCollapsed(),
         sections: readSidebarSections(),
-        notesListSort: readNotesListSort()
+        notesListSort: readNotesListSort(),
+        quickActionsDock: readQuickActionsDock()
     };
 }

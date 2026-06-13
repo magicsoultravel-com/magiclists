@@ -36,6 +36,7 @@ import { SearchBar } from './searchBar.js';
 import { Fullscreen } from './fullscreen.js';
 import { SidebarRadio } from './sidebarRadio.js';
 import { SidebarTv } from './sidebarTv.js';
+import { SidebarQuickActions } from './sidebarQuickActions.js';
 import {
     isFileCabinetActive,
     migrateItemsToFileCabinet,
@@ -105,6 +106,7 @@ class Application {
         await this.syncDataStore();
         this.setupCoreListeners();
         SidePanel.init(AppState);
+        SidebarQuickActions.init();
         SidebarRadio.init();
         SidebarTv.init();
         SidePanel.setupStatusClickHandlers(); /* after radio/tv shells exist */
@@ -285,6 +287,7 @@ class Application {
         const shellGroup = `
             <button type="button" id="btn-fullscreen" class="btn btn--compact btn--icon" title="Full screen" aria-label="Full screen" aria-pressed="false"></button>
             <button type="button" id="btn-show-clock" class="btn btn--compact btn--icon is-hidden" title="Show clock" aria-label="Show clock"></button>
+            <button type="button" id="btn-quick-actions-dock" class="btn btn--compact btn--icon" title="Undock quick actions" aria-label="Undock quick actions"></button>
         `;
 
         if (!AppState.user.isLoggedIn) {
@@ -344,6 +347,7 @@ class Application {
         this.updateViewToggleState();
         UndoManager.updateToolbar();
         FocusMode.syncButtonState();
+        SidebarQuickActions.updateDockButton();
     }
 
     setupFab() {

@@ -101,7 +101,7 @@ export const SidePanel = {
     setupStatusClickHandlers() {
         this.bindCollapsable('radio-section-header', 'radio-section', true, '.sidebar-radio__dock', '.collapsable-toggle');
         this.bindCollapsable('tv-section-header', 'tv-section', true, '.sidebar-tv__dock', '.collapsable-toggle');
-        this.bindCollapsable('quick-actions-header', 'quick-actions-section', true);
+        this.bindCollapsable('quick-actions-header', 'quick-actions-section', true, '#btn-quick-actions-dock', '.collapsable-toggle');
         this.bindCollapsable('categories-section-header', 'categories-section', true);
         this.bindCollapsable('categories-list-active-header', 'categories-list-active-section', true);
         this.bindCollapsable('categories-list-hidden-header', 'categories-list-hidden-section', true);

@@ -113,10 +113,22 @@ export const SidebarTv = {
     },
 
     restoreToSidebar() {
+        if (this.root.parentElement !== document.body) return;
+        const scroll = document.querySelector('.side-panel-scroll');
+        if (!scroll) return;
         const radio = document.getElementById('sidebar-radio');
-        if (radio && this.root.parentElement === document.body) {
+        if (radio && radio.parentElement === scroll) {
             radio.insertAdjacentElement('afterend', this.root);
+            return;
         }
+        const quickActions = document.getElementById('sidebar-quick-actions');
+        if (quickActions && quickActions.parentElement === scroll) {
+            quickActions.insertAdjacentElement('afterend', this.root);
+            return;
+        }
+        const first = scroll.firstElementChild;
+        if (first) first.insertAdjacentElement('afterend', this.root);
+        else scroll.appendChild(this.root);
     },
 
     updateDockButton() {
