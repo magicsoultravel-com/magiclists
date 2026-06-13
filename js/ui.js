@@ -249,6 +249,8 @@ export const ACTION_ICONS = {
     appTheme: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="3.6" cy="4.2" r="1.5" fill="currentColor" opacity="0.9"/><circle cx="6.8" cy="3.4" r="1.5" fill="currentColor" opacity="0.65"/><circle cx="8.4" cy="6.8" r="1.5" fill="currentColor" opacity="0.45"/><path d="M1.4 10.2h9.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
     resetCustomization: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 2.2a3.6 3.6 0 1 0 2.3 6.4L7.2 9.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.1 7.4 7.2 9.5 9.3 7.4" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     radioBrowse: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.4" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M2.2 6h7.6M6 2.2v7.6" fill="none" stroke="currentColor" stroke-width="0.75" opacity="0.7"/><ellipse cx="6" cy="6" rx="2.2" ry="4.4" fill="none" stroke="currentColor" stroke-width="0.75" opacity="0.55"/></svg>',
+    tvBrowse: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.8" y="2.8" width="8.4" height="5.6" rx="0.8" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M4.2 9.2h3.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
+    tvSpecial: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="2.2" y="3" width="7.6" height="5.2" rx="0.6" fill="none" stroke="currentColor" stroke-width="0.9"/><circle cx="6" cy="5.6" r="1.1" fill="none" stroke="currentColor" stroke-width="0.75"/><path d="M4.4 9.4h3.2" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linecap="round"/></svg>',
     radioRecents: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.4V6l1.8 1.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.8 2.2v1.4h-1.4" fill="none" stroke="currentColor" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     radioPlay: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M4.2 2.8 9.4 6 4.2 9.2Z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/></svg>',
     radioPause: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.8 2.6v6.8M8.2 2.6v6.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
@@ -5117,8 +5119,7 @@ export const UI = {
 
         if (mode === 'grid' && canvas?.classList.contains('view-grid')) {
             requestAnimationFrame(() => {
-                this.reflowGridBoard(canvas, null, { animate: true });
-                this.squeezeGridBoardToViewport(canvas, { animate: true });
+                this.repackGridBoardFromOrigin(canvas, { animate: true, items: visibleItems });
             });
         }
     },
@@ -5534,6 +5535,32 @@ export const UI = {
     reflowGridBoard(canvas, actorId, { animate = true } = {}) {
         if (!canvas?.classList.contains('view-grid')) return;
         const layout = this.computeGridBoardLayout(canvas, actorId);
+        this.applyGridBoardLayout(canvas, layout, { animate, save: true });
+        this.squeezeGridBoardToViewport(canvas, { animate });
+    },
+
+    repackGridBoardFromOrigin(canvas, { animate = true, items = [] } = {}) {
+        if (!canvas?.classList.contains('view-grid')) return;
+        const { origin, packW, maxH } = this.getGridBoardBounds(canvas);
+        const byId = new Map((items || []).map((item) => [item.id, item]));
+        const cards = [...canvas.querySelectorAll('.mini-card[data-desktop="1"]')].sort((a, b) => {
+            const itemA = byId.get(a.dataset.id) || this.resolveBoardItem(a.dataset.id);
+            const itemB = byId.get(b.dataset.id) || this.resolveBoardItem(b.dataset.id);
+            const aTime = Number(itemA?.created_at || itemA?.updated_at || 0);
+            const bTime = Number(itemB?.created_at || itemB?.updated_at || 0);
+            return aTime - bTime;
+        });
+        const placed = [];
+        const layout = new Map();
+        cards.forEach((card) => {
+            const id = card.dataset.id;
+            if (!id) return;
+            const { w, h } = this.readNoteRect(card);
+            let slot = this.findFirstCanvasSlot(w, h, placed, packW + origin * 2, { origin });
+            slot = this.snapNoteRect(slot, { maxW: packW, maxH });
+            layout.set(id, slot);
+            placed.push(slot);
+        });
         this.applyGridBoardLayout(canvas, layout, { animate, save: true });
         this.squeezeGridBoardToViewport(canvas, { animate });
     },

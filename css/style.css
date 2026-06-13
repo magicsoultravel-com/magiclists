@@ -742,7 +742,9 @@ html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
 
 .side-panel-scroll > .nav-drawer-section + .nav-drawer-section,
 .side-panel-scroll > .nav-drawer-section + .sidebar-radio,
-.side-panel-scroll > .sidebar-radio + .nav-drawer-section {
+.side-panel-scroll > .sidebar-radio + .nav-drawer-section,
+.side-panel-scroll > .sidebar-radio + .sidebar-tv,
+.side-panel-scroll > .sidebar-tv + .nav-drawer-section {
     margin-top: 0.12rem;
     padding-top: 0.12rem;
     border-top: 1px solid var(--border-color);

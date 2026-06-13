@@ -34,6 +34,7 @@ import { DrawingBoard } from './drawingBoard.js';
 import { SearchBar } from './searchBar.js';
 import { Fullscreen } from './fullscreen.js';
 import { SidebarRadio } from './sidebarRadio.js';
+import { SidebarTv } from './sidebarTv.js';
 import {
     migrateItemsToFileCabinet,
     setFileCabinetActive
@@ -96,7 +97,8 @@ class Application {
         this.setupCoreListeners();
         SidePanel.init(AppState);
         SidebarRadio.init();
-        SidePanel.setupStatusClickHandlers(); /* after radio shell exists */
+        SidebarTv.init();
+        SidePanel.setupStatusClickHandlers(); /* after radio/tv shells exist */
         ClockStyle.init();
         DesktopZoom.init();
         this.setupFocusModeButton();
