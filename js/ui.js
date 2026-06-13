@@ -57,7 +57,9 @@ import {
     seedFileCabinetOrderFromItems,
     setFileCabinetActive,
     shouldFileItem,
-    FILE_CABINET_ORDER_KEY
+    FILE_CABINET_ORDER_KEY,
+    FILE_CABINET_FILED_CATEGORIES_KEY,
+    getFileCabinetFiledCategories
 } from './fileCabinet.js';
 import { readTileSmallFootprint } from './tileFootprint.js';
 import {
@@ -4823,6 +4825,7 @@ export const UI = {
             focusCategories: Array.isArray(focusCategories) ? [...focusCategories] : [],
             fileCabinet: isFileCabinetActive(),
             fileCabinetOrder: getFileCabinetOrder(),
+            fileCabinetFiledCategories: getFileCabinetFiledCategories(),
             freeformPositions: this.getFreeformPositions(),
             freeformSizes: this.getFreeformSizes(),
             gridLayout: this.getGridLayout(),
@@ -4971,6 +4974,10 @@ export const UI = {
         }
         if (snapshot.fileCabinetOrder) {
             writeJson(FILE_CABINET_ORDER_KEY, snapshot.fileCabinetOrder);
+            if (writeState.quotaExceeded) return false;
+        }
+        if (snapshot.fileCabinetFiledCategories) {
+            writeJson(FILE_CABINET_FILED_CATEGORIES_KEY, snapshot.fileCabinetFiledCategories);
             if (writeState.quotaExceeded) return false;
         }
 

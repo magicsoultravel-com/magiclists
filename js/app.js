@@ -970,6 +970,11 @@ class Application {
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         });
 
+        window.addEventListener('filecabinet:layout_changed', async () => {
+            UI.render(document.getElementById('app-canvas'), AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, AppState.focusCategories);
+            DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+        });
+
         window.addEventListener('board:cards_reflowed', () => {
             const canvas = document.getElementById('app-canvas');
             if (canvas?.classList.contains('view-grid')) {

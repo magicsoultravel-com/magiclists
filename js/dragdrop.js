@@ -223,7 +223,7 @@ export const DragDropEngine = {
         if (isFileCabinetActive()) {
             const fileCabinet = document.getElementById('file-cabinet');
             if (fileCabinet) {
-                initFileCabinetDrag(fileCabinet, signal);
+                initFileCabinetDrag(fileCabinet, currentItems, UI, signal);
             }
         }
     },
