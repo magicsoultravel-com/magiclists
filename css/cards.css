@@ -76,7 +76,8 @@
 
 /* Compact note chrome — smallest tiles (board spatial-at-small + file cabinet tabs) */
 .mini-card.tile-small .editor-note-topline,
-.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline {
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline,
+.file-cabinet .file-cabinet-tab .editor-note-topline {
     flex: 0 0 auto;
     min-height: 0;
     min-width: 0;
@@ -85,8 +86,7 @@
 }
 
 .mini-card.tile-small .editor-note-topline .editor-note-header,
-.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .editor-note-header,
-.file-cabinet .file-cabinet-tab .editor-note-header {
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .editor-note-header {
     flex: 1 1 auto;
     min-width: 0;
     max-width: 100%;
@@ -96,10 +96,8 @@
 
 .mini-card.tile-small .editor-note-topline .mini-card-title,
 .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title,
-.file-cabinet .file-cabinet-tab .mini-card-title,
 .mini-card.tile-small .editor-note-topline .mini-card-title.card-inline-edit,
-.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title.card-inline-edit,
-.file-cabinet .file-cabinet-tab .mini-card-title.card-inline-edit {
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title.card-inline-edit {
     width: 100%;
     max-width: 100%;
     white-space: nowrap;
@@ -111,39 +109,36 @@
 }
 
 .mini-card.tile-small .editor-note-header .mini-card-title,
-.mini-card[data-desktop="1"].spatial-at-small .editor-note-header .mini-card-title,
-.file-cabinet .file-cabinet-tab .editor-note-header .mini-card-title {
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-header .mini-card-title {
     padding: 0;
 }
 
 html[data-tile-small-footprint="label"] .mini-card.tile-small .editor-note-topline .mini-card-title,
-html[data-tile-small-footprint="label"] .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title,
-html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-card-title {
+html[data-tile-small-footprint="label"] .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title {
     line-height: 1.15;
     padding-top: 0;
     padding-bottom: 0;
 }
 
-.mini-card.tile-small .editor-note-topline .note-editor-toolbar,
-.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .note-editor-toolbar,
-.file-cabinet .file-cabinet-tab .note-editor-toolbar {
+/* Desktop + expanded — quick actions overlay title (all tile sizes) */
+.mini-card[data-desktop="1"] .editor-note-topline .note-editor-toolbar,
+.mini-card.expanded .editor-note-topline .note-editor-toolbar {
     position: absolute;
     right: 0;
     top: 0;
     z-index: 9;
-    flex: 0 0 auto;
+    flex: none;
     min-height: unset;
+}
+
+.mini-card[data-desktop="1"]:not(.expanded) .editor-note-topline .note-editor-toolbar {
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.12s ease;
 }
 
-.mini-card.tile-small:hover .editor-note-topline .note-editor-toolbar,
-.mini-card.tile-small:focus-within .editor-note-topline .note-editor-toolbar,
-.mini-card[data-desktop="1"].spatial-at-small:hover .editor-note-topline .note-editor-toolbar,
-.mini-card[data-desktop="1"].spatial-at-small:focus-within .editor-note-topline .note-editor-toolbar,
-.file-cabinet .file-cabinet-tab:hover .note-editor-toolbar,
-.file-cabinet .file-cabinet-tab:focus-within .note-editor-toolbar {
+.mini-card[data-desktop="1"]:not(.expanded):hover .editor-note-topline .note-editor-toolbar,
+.mini-card[data-desktop="1"]:not(.expanded):focus-within .editor-note-topline .note-editor-toolbar {
     opacity: 1;
     pointer-events: auto;
 }
@@ -153,9 +148,7 @@ html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-ca
 .mini-card[data-desktop="1"].spatial-at-small:hover,
 .mini-card[data-desktop="1"].spatial-at-small:focus-within,
 .mini-card.tile-large:hover,
-.mini-card.tile-large:focus-within,
-.file-cabinet .file-cabinet-tab:hover,
-.file-cabinet .file-cabinet-tab:focus-within {
+.mini-card.tile-large:focus-within {
     z-index: 25;
 }
 
@@ -285,9 +278,8 @@ html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-ca
 }
 
 .mini-card.compact .card-actions,
-.mini-card.tile-small .note-editor-toolbar .card-actions,
-.mini-card[data-desktop="1"].spatial-at-small .note-editor-toolbar .card-actions,
-.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-actions {
+.mini-card[data-desktop="1"] .note-editor-toolbar .card-actions,
+.mini-card.expanded .note-editor-toolbar .card-actions {
     position: static;
     top: auto;
     right: auto;
@@ -312,9 +304,8 @@ html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-ca
 
 /* Backdrop hugs the visible icon count (flex shrink-wrap + max-content) */
 .mini-card.compact .card-actions::before,
-.mini-card.tile-small .note-editor-toolbar .card-actions::before,
-.mini-card[data-desktop="1"].spatial-at-small .note-editor-toolbar .card-actions::before,
-.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-actions::before {
+.mini-card[data-desktop="1"] .note-editor-toolbar .card-actions::before,
+.mini-card.expanded .note-editor-toolbar .card-actions::before {
     content: '';
     position: absolute;
     top: -1px;
@@ -330,63 +321,54 @@ html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-ca
 }
 
 .mini-card.compact.has-custom-bg .card-actions::before,
-.mini-card.tile-small.has-custom-bg .note-editor-toolbar .card-actions::before,
-.mini-card[data-desktop="1"].spatial-at-small.has-custom-bg .note-editor-toolbar .card-actions::before,
-.file-cabinet .file-cabinet-tab.has-custom-bg .note-editor-toolbar .card-actions::before {
+.mini-card[data-desktop="1"].has-custom-bg .note-editor-toolbar .card-actions::before,
+.mini-card.expanded.has-custom-bg .note-editor-toolbar .card-actions::before {
     background: var(--card-action-bg);
     box-shadow: 0 0 0 1px var(--card-border-subtle);
 }
 
 .mini-card.compact .card-act,
-.mini-card.tile-small .note-editor-toolbar .card-act,
-.mini-card[data-desktop="1"].spatial-at-small .note-editor-toolbar .card-act,
-.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-act {
+.mini-card[data-desktop="1"] .note-editor-toolbar .card-act,
+.mini-card.expanded .note-editor-toolbar .card-act {
     background: transparent;
     box-shadow: none;
 }
 
 .mini-card.compact.has-custom-bg .card-act,
-.mini-card.tile-small.has-custom-bg .note-editor-toolbar .card-act,
-.mini-card[data-desktop="1"].spatial-at-small.has-custom-bg .note-editor-toolbar .card-act,
-.file-cabinet .file-cabinet-tab.has-custom-bg .note-editor-toolbar .card-act {
+.mini-card[data-desktop="1"].has-custom-bg .note-editor-toolbar .card-act,
+.mini-card.expanded.has-custom-bg .note-editor-toolbar .card-act {
     background: transparent;
     color: var(--card-action-fg);
     box-shadow: none;
 }
 
 .mini-card.compact .card-act:hover,
-.mini-card.tile-small .note-editor-toolbar .card-act:hover,
-.mini-card[data-desktop="1"].spatial-at-small .note-editor-toolbar .card-act:hover,
-.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-act:hover {
+.mini-card[data-desktop="1"] .note-editor-toolbar .card-act:hover,
+.mini-card.expanded .note-editor-toolbar .card-act:hover {
     background: color-mix(in srgb, var(--bg-surface) 88%, #fff 12%);
 }
 
 .mini-card.compact.has-custom-bg .card-act:hover,
-.mini-card.tile-small.has-custom-bg .note-editor-toolbar .card-act:hover,
-.mini-card[data-desktop="1"].spatial-at-small.has-custom-bg .note-editor-toolbar .card-act:hover,
-.file-cabinet .file-cabinet-tab.has-custom-bg .note-editor-toolbar .card-act:hover {
+.mini-card[data-desktop="1"].has-custom-bg .note-editor-toolbar .card-act:hover,
+.mini-card.expanded.has-custom-bg .note-editor-toolbar .card-act:hover {
     background: color-mix(in srgb, var(--card-action-bg) 82%, #fff 18%);
 }
 
 .mini-card.compact:hover .card-act,
 .mini-card.compact:focus-within .card-act,
-.mini-card.tile-small:hover .note-editor-toolbar .card-act,
-.mini-card.tile-small:focus-within .note-editor-toolbar .card-act,
-.mini-card[data-desktop="1"].spatial-at-small:hover .note-editor-toolbar .card-act,
-.mini-card[data-desktop="1"].spatial-at-small:focus-within .note-editor-toolbar .card-act,
-.file-cabinet .file-cabinet-tab:hover .note-editor-toolbar .card-act,
-.file-cabinet .file-cabinet-tab:focus-within .note-editor-toolbar .card-act {
+.mini-card[data-desktop="1"]:hover .note-editor-toolbar .card-act,
+.mini-card[data-desktop="1"]:focus-within .note-editor-toolbar .card-act,
+.mini-card.expanded:hover .note-editor-toolbar .card-act,
+.mini-card.expanded:focus-within .note-editor-toolbar .card-act {
     color: var(--text-main);
 }
 
 .mini-card.compact.has-custom-bg:hover .card-act,
 .mini-card.compact.has-custom-bg:focus-within .card-act,
-.mini-card.tile-small.has-custom-bg:hover .note-editor-toolbar .card-act,
-.mini-card.tile-small.has-custom-bg:focus-within .note-editor-toolbar .card-act,
-.mini-card[data-desktop="1"].spatial-at-small.has-custom-bg:hover .note-editor-toolbar .card-act,
-.mini-card[data-desktop="1"].spatial-at-small.has-custom-bg:focus-within .note-editor-toolbar .card-act,
-.file-cabinet .file-cabinet-tab.has-custom-bg:hover .note-editor-toolbar .card-act,
-.file-cabinet .file-cabinet-tab.has-custom-bg:focus-within .note-editor-toolbar .card-act {
+.mini-card[data-desktop="1"].has-custom-bg:hover .note-editor-toolbar .card-act,
+.mini-card[data-desktop="1"].has-custom-bg:focus-within .note-editor-toolbar .card-act,
+.mini-card.expanded.has-custom-bg:hover .note-editor-toolbar .card-act,
+.mini-card.expanded.has-custom-bg:focus-within .note-editor-toolbar .card-act {
     color: var(--card-action-fg);
 }
 
@@ -429,17 +411,6 @@ html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-ca
 .editor-note-topline .editor-note-header {
     flex: 1 1 auto;
     min-width: 0;
-}
-
-.editor-note-topline .note-editor-toolbar {
-    flex: 0 0 auto;
-    min-height: unset;
-}
-
-.editor-note-topline .note-editor-toolbar .card-actions {
-    position: static;
-    top: auto;
-    right: auto;
 }
 
 .note-editor-toolbar {

@@ -590,6 +590,12 @@ body {
     position: relative;
 }
 
+.file-cabinet .file-cabinet-tab .editor-note-topline .mini-card-title {
+    line-height: 1.15;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
 body.is-file-cabinet-drag-active {
     user-select: none;
 }

@@ -666,18 +666,6 @@ html[data-tile-small-footprint="label"] #app-canvas.view-freeform .mini-card[dat
     field-sizing: content;
 }
 
-#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.spatial-at-small):not(.tile-small) .editor-note-topline .editor-note-header,
-#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.spatial-at-small):not(.tile-small) .editor-note-topline .editor-note-header {
-    flex: 0 1 auto;
-    min-width: 0;
-    max-width: calc(100% - 7rem);
-}
-
-#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.spatial-at-small):not(.tile-small) .editor-note-topline .note-editor-toolbar,
-#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.spatial-at-small):not(.tile-small) .editor-note-topline .note-editor-toolbar {
-    margin-left: auto;
-}
-
 #app-canvas.view-freeform .ff-chrome {
     position: absolute;
     inset: 0;
