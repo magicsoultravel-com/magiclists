@@ -1,0 +1,529 @@
+/* ==========================================================================
+   DRAWING BOARD
+   ========================================================================== */
+
+#workspace-shell[data-drawing-mode] #app-canvas {
+    display: none !important;
+}
+
+.control-bar-actions-group.is-hidden {
+    display: none !important;
+}
+
+.drawing-toolbar-panel {
+    position: absolute;
+    z-index: 12;
+    left: 12px;
+    top: 12px;
+    max-width: calc(100% - 24px);
+    display: flex;
+    flex-direction: column;
+    background: var(--chrome-bg, var(--bg-surface));
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+}
+
+.drawing-toolbar-panel.is-hidden,
+.drawing-toolbar-panel.is-collapsed {
+    display: none !important;
+}
+
+.drawing-toolbar-panel__header {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.28rem 0.35rem;
+    border-bottom: 1px solid var(--border-color);
+    cursor: grab;
+    user-select: none;
+    touch-action: none;
+}
+
+.drawing-toolbar-panel__header:active {
+    cursor: grabbing;
+}
+
+.drawing-toolbar-panel__grip {
+    color: var(--text-muted);
+    font-size: 0.62rem;
+    letter-spacing: -0.12em;
+    line-height: 1;
+}
+
+.drawing-toolbar-panel__title {
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--text-main);
+}
+
+.drawing-toolbar-panel__spacer {
+    flex: 1;
+}
+
+.drawing-toolbar-panel__collapse {
+    flex-shrink: 0;
+}
+
+.drawing-toolbar-panel__body {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    padding: 0.4rem 0.45rem;
+    max-width: min(92vw, 52rem);
+}
+
+.drawing-toolbar-chip {
+    position: absolute;
+    z-index: 12;
+    display: flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.2rem 0.25rem 0.2rem 0.2rem;
+    background: var(--chrome-bg, var(--bg-surface));
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+.drawing-toolbar-chip.is-hidden {
+    display: none !important;
+}
+
+.drawing-toolbar-chip__drag {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.65rem;
+    height: 1.65rem;
+    border: none;
+    border-radius: 50%;
+    background: rgba(79, 70, 229, 0.15);
+    color: var(--text-main);
+    cursor: grab;
+    touch-action: none;
+    padding: 0;
+}
+
+.drawing-toolbar-chip__drag:active {
+    cursor: grabbing;
+}
+
+.drawing-toolbar-chip__icon {
+    font-size: 0.85rem;
+    line-height: 1;
+}
+
+.drawing-toolbar-chip__expand {
+    flex-shrink: 0;
+}
+
+.drawing-board {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    overflow: hidden;
+    background: var(--desktop-bg, var(--bg-primary));
+}
+
+.canvas-viewport {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    touch-action: none;
+}
+
+.canvas-viewport-inner {
+    position: relative;
+    will-change: transform;
+}
+
+.canvas-viewport-inner.is-paged-canvas {
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12), 0 4px 24px rgba(0, 0, 0, 0.45);
+}
+
+.drawing-bg-canvas,
+.drawing-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: block;
+}
+
+.drawing-canvas {
+    z-index: 1;
+}
+
+.canvas-text-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.canvas-text-box {
+    position: absolute;
+    min-width: 4rem;
+    min-height: 1.2em;
+    padding: 0.15rem 0.25rem;
+    pointer-events: auto;
+    outline: 1px dashed rgba(255, 255, 255, 0.35);
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 0.2rem;
+    white-space: pre-wrap;
+}
+
+.canvas-text-box:empty::before {
+    content: attr(data-placeholder);
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+.drawing-color-chip-btn {
+    padding: 0.2rem !important;
+}
+
+.drawing-color-chip-btn .drawing-color-chip {
+    width: 1rem;
+    height: 1rem;
+}
+
+.drawing-board.is-hidden {
+    display: none !important;
+}
+
+.drawing-canvas {
+    touch-action: none;
+    cursor: crosshair;
+}
+
+.drawing-toolbar-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+
+.drawing-width-control {
+    gap: 0.15rem;
+}
+
+.drawing-width-label {
+    font-size: 0.62rem;
+    font-variant-numeric: tabular-nums;
+    min-width: 2.2rem;
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.drawing-color-row {
+    gap: 0.18rem;
+}
+
+.drawing-color-swatch {
+    width: 1.05rem;
+    height: 1.05rem;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.drawing-color-swatch.is-active {
+    box-shadow: 0 0 0 2px var(--accent);
+}
+
+.drawing-color-input {
+    width: 1.2rem;
+    height: 1.2rem;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+}
+
+.drawing-color-input::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+
+.drawing-color-input::-webkit-color-swatch {
+    border: none;
+    border-radius: 50%;
+}
+
+.drawing-toolbar-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.62rem;
+    color: var(--text-muted);
+}
+
+.drawing-color-chip {
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.drawing-style-chip {
+    display: inline-flex;
+    align-items: center;
+}
+
+.drawing-toolbar-dropdown {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    padding: 0.15rem 0.35rem !important;
+    min-height: 26px;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.drawing-toolbar-dropdown:hover {
+    background: rgba(79, 70, 229, 0.12);
+}
+
+.drawing-dropdown-icon {
+    display: inline-flex;
+    align-items: center;
+    line-height: 0;
+}
+
+.drawing-dropdown-label {
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    min-width: 1.1rem;
+    text-align: center;
+}
+
+.drawing-dropdown-chevron {
+    display: inline-flex;
+    opacity: 0.55;
+    line-height: 0;
+}
+
+.drawing-toolbar-menu {
+    position: fixed;
+    z-index: 2600;
+    min-width: 10.5rem;
+    padding: 0.45rem;
+    background: rgba(20, 20, 24, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.48);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.drawing-toolbar-menu.is-hidden {
+    display: none;
+}
+
+.drawing-menu-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+    max-height: min(420px, calc(100vh - 24px));
+    overflow-y: auto;
+}
+
+.drawing-menu-heading {
+    margin: 0.35rem 0.45rem 0.15rem;
+    padding: 0;
+}
+
+.drawing-menu-heading:first-child {
+    margin-top: 0.1rem;
+}
+
+.drawing-menu-stepper-row {
+    margin: 0.15rem 0.25rem 0.25rem;
+    padding: 0.35rem 0.45rem;
+    border-radius: 6px;
+}
+
+.drawing-dropdown-width {
+    font-size: 0.58rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted);
+    min-width: 1.6rem;
+    text-align: center;
+}
+
+.drawing-menu-option {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    width: 100%;
+    padding: 0.35rem 0.45rem;
+    border: none;
+    border-radius: 5px;
+    background: transparent;
+    color: inherit;
+    font-size: 0.72rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.drawing-menu-option:hover:not(:disabled) {
+    background: rgba(79, 70, 229, 0.15);
+}
+
+.drawing-menu-option.is-selected {
+    background: rgba(79, 70, 229, 0.2);
+}
+
+.drawing-menu-option:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.drawing-menu-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    width: 1rem;
+    justify-content: center;
+    line-height: 0;
+}
+
+.drawing-menu-label {
+    flex: 1;
+}
+
+.drawing-menu-check {
+    font-size: 0.65rem;
+    color: var(--accent);
+}
+
+.drawing-menu-swatch {
+    display: block;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 0.2rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.drawing-menu-divider {
+    height: 1px;
+    margin: 0.2rem 0.15rem;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.drawing-color-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    max-width: 100%;
+}
+
+.drawing-color-rollout {
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    max-width: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        max-width 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 0.18s ease,
+        margin 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+    margin-left: 0;
+}
+
+.drawing-color-rollout.is-open {
+    max-width: 28rem;
+    opacity: 1;
+    pointer-events: auto;
+    margin-left: 0.25rem;
+}
+
+.drawing-color-rollout.is-opening .color-picker-tile {
+    animation: drawColorTileIn 0.2s cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+
+.drawing-color-rollout.is-opening .color-picker-tile:nth-child(1) { animation-delay: 0ms; }
+.drawing-color-rollout.is-opening .color-picker-tile:nth-child(2) { animation-delay: 20ms; }
+.drawing-color-rollout.is-opening .color-picker-tile:nth-child(3) { animation-delay: 40ms; }
+.drawing-color-rollout.is-opening .color-picker-tile:nth-child(4) { animation-delay: 60ms; }
+.drawing-color-rollout.is-opening .color-picker-tile:nth-child(5) { animation-delay: 80ms; }
+.drawing-color-rollout.is-opening .color-picker-tile:nth-child(6) { animation-delay: 100ms; }
+.drawing-color-rollout.is-opening .color-picker-tile:nth-child(7) { animation-delay: 120ms; }
+.drawing-color-rollout.is-opening .color-picker-tile:nth-child(8) { animation-delay: 140ms; }
+
+@keyframes drawColorTileIn {
+    from {
+        opacity: 0;
+        transform: scale(0.82) translateX(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateX(0);
+    }
+}
+
+.color-picker-body--inline {
+    padding: 0;
+}
+
+.color-picker-body--inline .color-picker-main {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-wrap: nowrap;
+}
+
+.color-picker-grid--inline {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.2rem;
+    grid-template-columns: unset;
+    grid-template-rows: unset;
+}
+
+.color-picker-grid--inline .color-picker-tile,
+.color-picker-grid--inline-user .color-picker-tile {
+    width: 1.05rem;
+    height: 1.05rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.color-picker-divider--inline {
+    width: 1px;
+    height: 1.05rem;
+    margin: 0 0.1rem;
+}
+
+.color-picker-grid--inline-user {
+    display: flex;
+    gap: 0.2rem;
+}
+
+.drawing-color-chip-btn[aria-expanded="true"] {
+    box-shadow: 0 0 0 2px var(--accent);
+}
+
+.drawing-toolbar-panel__body .draw-style-btn.active,
+.drawing-toolbar-panel__body .draw-tool-btn.active,
+.drawing-toolbar-panel__body .draw-mode-btn.active,
+.drawing-toolbar-panel__body .draw-bg-btn.active {
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+    color: var(--text-main);
+}
+
+#btn-drawing-mode.active {
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+#btn-fullscreen.is-active {
+    color: var(--accent);
+}
+

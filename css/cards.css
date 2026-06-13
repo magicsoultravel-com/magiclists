@@ -1,0 +1,1070 @@
+/* ==========================================================================
+   3. THE FLUID WORKING CANVAS (MULTI-DIMENSIONAL ENGINE)
+   ========================================================================== */
+#app-canvas {
+    flex: 1;
+    padding: var(--board-area-inset);
+    display: grid;
+    gap: var(--board-area-inset);
+    align-items: start;
+    overflow-y: auto;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+/* LIST VIEW - cards in a grid */
+#app-canvas.view-list {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+    gap: var(--board-area-inset) !important;
+}
+
+/* ==========================================================================
+   4. INTERACTIVE OBJECT CARDS - COMPACT & SMALLER
+   ========================================================================== */
+.mini-card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-left: 4px solid #64748b;
+    border-radius: 6px;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.045);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    position: relative;
+    cursor: default;
+    user-select: none;
+    width: 100% !important;
+    margin: 0 !important;
+}
+
+/* Expanded card takes full width (both columns) */
+.mini-card.expanded {
+    grid-column: span 2 !important;
+}
+
+.mini-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.07), 0 4px 12px rgba(0, 0, 0, 0.3);
+    border-color: var(--text-muted);
+}
+
+.mini-card:active {
+    cursor: grabbing;
+}
+
+/* Spatial tile tiers — small / large, unified editor shell */
+#app-canvas.view-grid .mini-card[data-desktop="1"],
+#app-canvas.view-freeform .mini-card[data-desktop="1"] {
+    padding: 0.38rem 0.45rem !important;
+    overflow: hidden !important;
+    box-sizing: border-box;
+}
+
+.mini-card.tile-small {
+    width: var(--tile-small-w) !important;
+    min-width: var(--tile-small-w) !important;
+    max-width: var(--tile-small-w) !important;
+    height: var(--tile-small-h) !important;
+    min-height: var(--tile-small-h) !important;
+    max-height: var(--tile-small-h) !important;
+}
+
+.mini-card.tile-large {
+    min-width: var(--tile-large-w);
+    min-height: var(--tile-large-h);
+}
+
+/* Compact note chrome — smallest tiles (board spatial-at-small + file cabinet tabs) */
+.mini-card.tile-small .editor-note-topline,
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline {
+    flex: 0 0 auto;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    position: relative;
+}
+
+.mini-card.tile-small .editor-note-topline .editor-note-header,
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .editor-note-header,
+.file-cabinet .file-cabinet-tab .editor-note-header {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    padding-right: 0.15rem;
+}
+
+.mini-card.tile-small .editor-note-topline .mini-card-title,
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title,
+.file-cabinet .file-cabinet-tab .mini-card-title,
+.mini-card.tile-small .editor-note-topline .mini-card-title.card-inline-edit,
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title.card-inline-edit,
+.file-cabinet .file-cabinet-tab .mini-card-title.card-inline-edit {
+    width: 100%;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    overflow-wrap: normal;
+    word-break: normal;
+    line-height: 1.2;
+}
+
+.mini-card.tile-small .editor-note-header .mini-card-title,
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-header .mini-card-title,
+.file-cabinet .file-cabinet-tab .editor-note-header .mini-card-title {
+    padding: 0;
+}
+
+html[data-tile-small-footprint="label"] .mini-card.tile-small .editor-note-topline .mini-card-title,
+html[data-tile-small-footprint="label"] .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title,
+html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-card-title {
+    line-height: 1.15;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+.mini-card.tile-small .editor-note-topline .note-editor-toolbar,
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .note-editor-toolbar,
+.file-cabinet .file-cabinet-tab .note-editor-toolbar {
+    position: absolute;
+    right: 0;
+    top: 0;
+    z-index: 9;
+    flex: 0 0 auto;
+    min-height: unset;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+.mini-card.tile-small:hover .editor-note-topline .note-editor-toolbar,
+.mini-card.tile-small:focus-within .editor-note-topline .note-editor-toolbar,
+.mini-card[data-desktop="1"].spatial-at-small:hover .editor-note-topline .note-editor-toolbar,
+.mini-card[data-desktop="1"].spatial-at-small:focus-within .editor-note-topline .note-editor-toolbar,
+.file-cabinet .file-cabinet-tab:hover .note-editor-toolbar,
+.file-cabinet .file-cabinet-tab:focus-within .note-editor-toolbar {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.mini-card.tile-small:hover,
+.mini-card.tile-small:focus-within,
+.mini-card[data-desktop="1"].spatial-at-small:hover,
+.mini-card[data-desktop="1"].spatial-at-small:focus-within,
+.mini-card.tile-large:hover,
+.mini-card.tile-large:focus-within,
+.file-cabinet .file-cabinet-tab:hover,
+.file-cabinet .file-cabinet-tab:focus-within {
+    z-index: 25;
+}
+
+.mini-card.is-tier-resizing {
+    overflow: hidden !important;
+}
+
+.mini-card.is-tier-resizing.tile-small,
+.mini-card.is-tier-resizing.tile-large {
+    width: auto !important;
+    height: auto !important;
+    min-height: unset !important;
+    max-height: none !important;
+    min-width: unset !important;
+    max-width: none !important;
+}
+
+.mini-card.expanded {
+    padding: 0.6rem !important;
+    height: auto !important;
+    min-height: unset !important;
+    max-height: min(72vh, 680px) !important;
+    overflow: hidden !important;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.3rem;
+}
+
+.mini-card.expanded .card-header,
+.mini-card.expanded .editor-note-topline,
+.mini-card.expanded .note-editor-toolbar,
+.mini-card.expanded .editor-note-header {
+    flex: 0 0 auto;
+}
+
+.mini-card.expanded .editor-meta-wrap {
+    flex: 0 0 auto;
+    flex-shrink: 0;
+    z-index: 1;
+}
+
+.mini-card.expanded .editor-note-shell {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    gap: 0.3rem;
+    position: relative;
+    z-index: 20;
+    pointer-events: auto;
+}
+
+.mini-card.expanded .editor-note-header,
+.mini-card.expanded .editor-note-body {
+    pointer-events: auto;
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+.mini-card.expanded .card-body,
+.mini-card.expanded .editor-note-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.mini-card.expanded .card-body::-webkit-scrollbar,
+.mini-card.expanded .editor-note-body::-webkit-scrollbar {
+    width: 5px;
+}
+
+.mini-card.expanded .card-body::-webkit-scrollbar-thumb,
+.mini-card.expanded .editor-note-body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.22);
+    border-radius: 4px;
+}
+
+.mini-card.expanded .card-content-preview,
+.mini-card.expanded .expanded-checklist {
+    flex: 0 0 auto;
+    overflow: visible;
+}
+
+/* Card Header */
+.card-header {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+}
+
+.mini-card-title {
+    font-size: calc(0.68rem * var(--note-font-scale, 1));
+    font-weight: 600;
+    color: var(--text-main);
+    line-height: 1.3;
+    display: block;
+    width: 100%;
+    min-width: 0;
+}
+
+.mini-card.expanded .mini-card-title {
+    white-space: normal;
+}
+
+/* Card quick actions — toggle is last in DOM, aligned to the far right */
+.card-actions {
+    position: absolute;
+    top: 0;
+    right: 1px;
+    z-index: 8;
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1px;
+    padding: 0;
+    opacity: 0;
+    background: none;
+    pointer-events: none;
+}
+
+.mini-card.compact .card-actions,
+.mini-card.tile-small .note-editor-toolbar .card-actions,
+.mini-card[data-desktop="1"].spatial-at-small .note-editor-toolbar .card-actions,
+.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-actions {
+    position: static;
+    top: auto;
+    right: auto;
+    gap: 1px;
+    padding: 1px 2px;
+    border-radius: 0 4px 0 5px;
+    z-index: 12;
+    display: inline-flex;
+    width: max-content;
+    max-width: none;
+    box-sizing: border-box;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.mini-card.compact:not(.note-surface) .card-actions {
+    position: absolute;
+    top: -1px;
+    right: 0;
+    max-width: calc(100% + 0.35rem);
+}
+
+/* Backdrop hugs the visible icon count (flex shrink-wrap + max-content) */
+.mini-card.compact .card-actions::before,
+.mini-card.tile-small .note-editor-toolbar .card-actions::before,
+.mini-card[data-desktop="1"].spatial-at-small .note-editor-toolbar .card-actions::before,
+.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-actions::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    bottom: -1px;
+    left: -1px;
+    width: auto;
+    z-index: -1;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--bg-card) 96%, #0a0a0c);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-color) 80%, transparent);
+    pointer-events: none;
+}
+
+.mini-card.compact.has-custom-bg .card-actions::before,
+.mini-card.tile-small.has-custom-bg .note-editor-toolbar .card-actions::before,
+.mini-card[data-desktop="1"].spatial-at-small.has-custom-bg .note-editor-toolbar .card-actions::before,
+.file-cabinet .file-cabinet-tab.has-custom-bg .note-editor-toolbar .card-actions::before {
+    background: var(--card-action-bg);
+    box-shadow: 0 0 0 1px var(--card-border-subtle);
+}
+
+.mini-card.compact .card-act,
+.mini-card.tile-small .note-editor-toolbar .card-act,
+.mini-card[data-desktop="1"].spatial-at-small .note-editor-toolbar .card-act,
+.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-act {
+    background: transparent;
+    box-shadow: none;
+}
+
+.mini-card.compact.has-custom-bg .card-act,
+.mini-card.tile-small.has-custom-bg .note-editor-toolbar .card-act,
+.mini-card[data-desktop="1"].spatial-at-small.has-custom-bg .note-editor-toolbar .card-act,
+.file-cabinet .file-cabinet-tab.has-custom-bg .note-editor-toolbar .card-act {
+    background: transparent;
+    color: var(--card-action-fg);
+    box-shadow: none;
+}
+
+.mini-card.compact .card-act:hover,
+.mini-card.tile-small .note-editor-toolbar .card-act:hover,
+.mini-card[data-desktop="1"].spatial-at-small .note-editor-toolbar .card-act:hover,
+.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-act:hover {
+    background: color-mix(in srgb, var(--bg-surface) 88%, #fff 12%);
+}
+
+.mini-card.compact.has-custom-bg .card-act:hover,
+.mini-card.tile-small.has-custom-bg .note-editor-toolbar .card-act:hover,
+.mini-card[data-desktop="1"].spatial-at-small.has-custom-bg .note-editor-toolbar .card-act:hover,
+.file-cabinet .file-cabinet-tab.has-custom-bg .note-editor-toolbar .card-act:hover {
+    background: color-mix(in srgb, var(--card-action-bg) 82%, #fff 18%);
+}
+
+.mini-card.compact:hover .card-act,
+.mini-card.compact:focus-within .card-act,
+.mini-card.tile-small:hover .note-editor-toolbar .card-act,
+.mini-card.tile-small:focus-within .note-editor-toolbar .card-act,
+.mini-card[data-desktop="1"].spatial-at-small:hover .note-editor-toolbar .card-act,
+.mini-card[data-desktop="1"].spatial-at-small:focus-within .note-editor-toolbar .card-act,
+.file-cabinet .file-cabinet-tab:hover .note-editor-toolbar .card-act,
+.file-cabinet .file-cabinet-tab:focus-within .note-editor-toolbar .card-act {
+    color: var(--text-main);
+}
+
+.mini-card.compact.has-custom-bg:hover .card-act,
+.mini-card.compact.has-custom-bg:focus-within .card-act,
+.mini-card.tile-small.has-custom-bg:hover .note-editor-toolbar .card-act,
+.mini-card.tile-small.has-custom-bg:focus-within .note-editor-toolbar .card-act,
+.mini-card[data-desktop="1"].spatial-at-small.has-custom-bg:hover .note-editor-toolbar .card-act,
+.mini-card[data-desktop="1"].spatial-at-small.has-custom-bg:focus-within .note-editor-toolbar .card-act,
+.file-cabinet .file-cabinet-tab.has-custom-bg:hover .note-editor-toolbar .card-act,
+.file-cabinet .file-cabinet-tab.has-custom-bg:focus-within .note-editor-toolbar .card-act {
+    color: var(--card-action-fg);
+}
+
+.mini-card.compact .card-header {
+    padding-right: 0.1rem;
+}
+
+.mini-card.compact .mini-card-title {
+    padding-right: 0.15rem;
+}
+
+.mini-card:hover .card-actions,
+.mini-card:focus-within .card-actions,
+.mini-card:hover .editor-note-topline .card-actions,
+.mini-card:focus-within .editor-note-topline .card-actions,
+.mini-card.expanded:hover .note-editor-toolbar .card-actions,
+.mini-card.expanded:focus-within .note-editor-toolbar .card-actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+#app-canvas.view-freeform .mini-card.expanded .note-editor-toolbar .card-actions,
+#app-canvas.view-grid .mini-card.expanded .note-editor-toolbar .card-actions,
+#app-canvas.view-freeform .mini-card.expanded .editor-note-topline .card-actions,
+#app-canvas.view-grid .mini-card.expanded .editor-note-topline .card-actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.editor-note-topline {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.2rem;
+    min-width: 0;
+    flex: 0 0 auto;
+    position: relative;
+}
+
+.editor-note-topline .editor-note-header {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.editor-note-topline .note-editor-toolbar {
+    flex: 0 0 auto;
+    min-height: unset;
+}
+
+.editor-note-topline .note-editor-toolbar .card-actions {
+    position: static;
+    top: auto;
+    right: auto;
+}
+
+.note-editor-toolbar {
+    position: relative;
+    min-width: 0;
+    min-height: 1rem;
+}
+
+.note-editor-toolbar .card-actions {
+    top: 0;
+    right: 0;
+}
+
+.card-act {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: none;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.12s ease, background 0.12s ease;
+}
+
+.card-act svg {
+    display: block;
+}
+
+.card-act--pin.is-active {
+    color: #fbbf24;
+    opacity: 1;
+}
+
+.card-act:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.card-act--drag {
+    cursor: grab;
+}
+
+.card-act--drag:active {
+    cursor: grabbing;
+}
+
+.mini-card.is-board-pinned .card-act--drag {
+    display: none;
+}
+
+.card-act--cal.is-on {
+    color: #6ee7b7;
+}
+
+.card-act--cal.is-off {
+    color: var(--text-muted);
+    opacity: 0.45;
+}
+
+.card-act--edit:hover {
+    color: #a5b4fc;
+}
+
+.card-act--danger:hover,
+.card-act--delete:hover {
+    color: #fca5a5;
+}
+
+/* Custom note background — auto contrast (inline cards + modal editor) */
+.has-custom-bg {
+    color: var(--card-fg);
+}
+
+.has-custom-bg .mini-card-title,
+.has-custom-bg .card-content-preview,
+.has-custom-bg .step-text {
+    color: var(--card-fg) !important;
+}
+
+.has-custom-bg .category-name,
+.has-custom-bg .checklist-badge,
+.has-custom-bg .editor-created-date,
+.has-custom-bg .editor-note-size,
+.has-custom-bg .editor-note-lines {
+    color: var(--card-muted) !important;
+}
+
+.has-custom-bg .editor-meta-row--footer {
+    border-top-color: var(--card-border-subtle);
+}
+
+.has-custom-bg .step-text.completed {
+    color: var(--card-muted);
+    opacity: 0.82;
+    text-decoration: line-through;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.has-custom-bg .step-text.completed.card-inline-edit:focus {
+    white-space: pre-wrap;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+.has-custom-bg .card-inline-edit:empty::before {
+    color: var(--card-placeholder);
+}
+
+.has-custom-bg .card-inline-edit:focus {
+    background: var(--card-focus-bg);
+    box-shadow: 0 0 0 1px var(--card-focus-ring);
+}
+
+.has-custom-bg .card-act {
+    color: var(--card-action-fg);
+}
+
+.has-custom-bg .card-act:hover {
+    color: var(--card-fg);
+}
+
+.has-custom-bg .grab-handle--step {
+    color: var(--card-action-fg);
+}
+
+.has-custom-bg .step-row--display:hover .grab-handle--step,
+.has-custom-bg .step-row--display:focus-within .grab-handle--step {
+    color: var(--card-fg);
+}
+
+.card-theme-light .card-act--cal.is-on {
+    color: #047857;
+}
+
+.card-theme-light .card-act--cal.is-off {
+    color: #b45309;
+}
+
+.card-theme-dark .card-act--cal.is-on {
+    color: #6ee7b7;
+}
+
+.card-theme-dark .card-act--cal.is-off {
+    color: #fbbf24;
+}
+
+/* Default note text (overridden inside .has-custom-bg) */
+.mini-card:not(.has-custom-bg) .category-name,
+.mini-card:not(.has-custom-bg) .checklist-badge,
+.mini-card:not(.has-custom-bg) .card-content-preview,
+.mini-card:not(.has-custom-bg) .step-row--display .step-text {
+    color: var(--text-main) !important;
+}
+
+.badge-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+}
+
+.badge-dot[title] {
+    cursor: help;
+}
+
+.checklist-badge {
+    font-size: calc(0.55rem * var(--note-font-scale, 1));
+    background: rgba(255, 255, 255, 0.1);
+    padding: 0.1rem 0.25rem;
+    border-radius: 3px;
+}
+
+/* Expanded Card Content - vertical layout */
+.card-content-preview {
+    font-size: calc(0.65rem * var(--note-font-scale, 1));
+    margin: 0;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+}
+
+.expanded-checklist {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+
+.checklist-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+    margin: 0 0 0.15rem;
+    min-height: 0;
+}
+
+.checklist-toolbar .checklist-expand-collapse-all-btn {
+    opacity: 0.55;
+}
+
+.note-surface:hover .checklist-toolbar .checklist-expand-collapse-all-btn,
+.note-surface:focus-within .checklist-toolbar .checklist-expand-collapse-all-btn,
+.checklist-toolbar .checklist-expand-collapse-all-btn:focus-visible {
+    opacity: 1;
+}
+
+.expanded-checklist .step-collapse-btn,
+.expanded-checklist .step-collapse-spacer {
+    width: 10px;
+    margin-left: -0.05rem;
+}
+
+.checklist-done-divider {
+    flex: 0 0 auto;
+    width: 100%;
+    height: 1px;
+    margin: 0.28rem 0 0.18rem;
+    background: var(--border-color);
+    border: none;
+}
+
+.has-custom-bg .checklist-done-divider {
+    background: var(--card-border-subtle);
+}
+
+.expanded-checklist .step-row--done .step-text.completed {
+    opacity: 0.82;
+}
+
+.expanded-checklist .step-row--done .step-row-actions {
+    align-self: center;
+}
+
+.checklist-done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: 100%;
+    padding: 0.25rem 0.35rem;
+    margin: 0.15rem 0 0.05rem;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.72rem;
+    cursor: pointer;
+    text-align: left;
+}
+
+.checklist-done-toggle:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.78);
+}
+
+.checklist-done-toggle-icon {
+    flex: 0 0 auto;
+    width: 10px;
+    font-size: 0.62rem;
+    line-height: 1;
+}
+
+.checklist-done-section.is-hidden {
+    display: none;
+}
+
+.checklist-rows-zone {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+/* Unified color picker */
+.color-picker-popover {
+    position: fixed;
+    z-index: 2500;
+    padding: 0.5rem;
+    background: rgba(20, 20, 24, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.48);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+}
+
+.color-picker-body {
+    position: relative;
+}
+
+.color-picker-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 32px);
+    gap: 0.38rem;
+}
+
+.color-picker-grid--presets {
+    grid-template-rows: repeat(4, 32px);
+}
+
+.color-picker-grid--user {
+    grid-template-rows: 32px;
+}
+
+.color-picker-divider {
+    height: 1px;
+    margin: 0.4rem 0;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.color-picker-tile {
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 7px;
+    background: var(--tile, var(--bg-card));
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+
+.color-picker-tile:hover {
+    transform: scale(1.06);
+    border-color: rgba(255, 255, 255, 0.28);
+}
+
+.color-picker-tile.is-selected {
+    box-shadow: 0 0 0 2px var(--accent);
+    border-color: var(--accent);
+}
+
+.color-picker-tile--user.is-active-slot {
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.45);
+    border-color: rgba(255, 255, 255, 0.45);
+}
+
+.color-picker-tile--none {
+    background: repeating-linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.06) 0 4px,
+        rgba(255, 255, 255, 0.02) 4px 8px
+    );
+    border-style: dashed;
+}
+
+.color-picker-tile--user {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.color-picker-tile--user-empty {
+    background: var(--bg-card);
+}
+
+.color-picker-wheel {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: conic-gradient(
+        #ef4444,
+        #f59e0b,
+        #eab308,
+        #22c55e,
+        #06b6d4,
+        #3b82f6,
+        #8b5cf6,
+        #ef4444
+    );
+    pointer-events: none;
+}
+
+.color-picker-editor {
+    position: relative;
+    margin-top: 0.35rem;
+    padding-top: 0.4rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.color-picker-editor.is-hidden {
+    display: none;
+}
+
+.color-picker-editor-content {
+    position: relative;
+}
+
+.color-picker-back {
+    position: absolute;
+    top: 0.42rem;
+    left: 0;
+    z-index: 3;
+    opacity: 0.82;
+    pointer-events: auto;
+    transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+
+.color-picker-editor:hover .color-picker-back,
+.color-picker-editor:focus-within .color-picker-back,
+.color-picker-back:focus-visible {
+    opacity: 1;
+}
+
+.color-picker-eyedropper-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    margin-top: 0.35rem;
+    padding: 0.28rem 0.4rem;
+    gap: 0.3rem;
+    border: 1px dashed rgba(255, 255, 255, 0.18);
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-muted);
+    font-size: 0.58rem;
+    cursor: pointer;
+    transition: color 0.12s ease, border-color 0.12s ease, background 0.12s ease;
+}
+
+.color-picker-eyedropper-btn:hover,
+.color-picker-eyedropper-btn:focus-visible {
+    color: var(--text-main);
+    border-color: rgba(255, 255, 255, 0.32);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.color-picker-eyedropper-btn--inline {
+    width: 22px;
+    height: 22px;
+    margin-top: 0;
+    padding: 0;
+    flex-shrink: 0;
+    border-style: solid;
+}
+
+.color-picker-eyedropper {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    cursor: crosshair;
+    background: transparent;
+}
+
+.color-picker-eyedropper-hint {
+    position: fixed;
+    z-index: 3001;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.22rem 0.42rem;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 6px;
+    background: rgba(18, 18, 20, 0.92);
+    color: var(--text-muted);
+    font-size: 0.58rem;
+    pointer-events: none;
+    white-space: nowrap;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.color-picker-eyedropper-swatch {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    flex-shrink: 0;
+}
+
+.color-picker-sv {
+    position: relative;
+    width: 100%;
+    height: 102px;
+    border-radius: 6px;
+    cursor: crosshair;
+    touch-action: none;
+    background-color: hsl(var(--sv-hue, 240deg), 100%, 50%);
+    background-image:
+        linear-gradient(to top, #000, transparent),
+        linear-gradient(to right, #fff, transparent);
+}
+
+.color-picker-sv-cursor {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    margin: -6px 0 0 -6px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+}
+
+.color-picker-hue {
+    width: 100%;
+    height: 12px;
+    margin: 0.4rem 0 0.35rem;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: linear-gradient(
+        to right,
+        #ef4444,
+        #f59e0b,
+        #eab308,
+        #22c55e,
+        #06b6d4,
+        #3b82f6,
+        #8b5cf6,
+        #ef4444
+    );
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.color-picker-hue::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+}
+
+.color-picker-hue::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+}
+
+.color-picker-hex-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.1rem;
+}
+
+.color-picker-preview {
+    width: 22px;
+    height: 22px;
+    flex-shrink: 0;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.color-picker-hex {
+    flex: 1;
+    min-width: 0;
+    height: 22px;
+    padding: 0 0.35rem;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-main);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.58rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+.color-picker-hex:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
+}
+
+.color-picker-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    width: 100%;
+    min-height: 28px;
+    padding: 0.22rem 0.4rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-card);
+    color: var(--text-main);
+    font-size: 0.62rem;
+    cursor: pointer;
+    transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.color-picker-trigger:hover {
+    border-color: rgba(255, 255, 255, 0.22);
+}
+
+.color-picker-trigger-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: var(--tile, transparent);
+    flex-shrink: 0;
+}
+
+.color-picker-trigger--empty .color-picker-trigger-dot {
+    background: repeating-linear-gradient(
+        135deg,
+        rgba(255, 255, 255, 0.08) 0 3px,
+        rgba(255, 255, 255, 0.02) 3px 6px
+    );
+}
+
+.color-picker-trigger-label {
+    color: var(--text-muted);
+}
+
+.card-act--color:hover {
+    color: #c4b5fd;
+}
+

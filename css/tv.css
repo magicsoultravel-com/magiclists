@@ -1,5 +1,5 @@
-﻿/* ==========================================================================
-   SIDEBAR TV â€” collapsible mini player, now playing, popover browser
+/* ==========================================================================
+   SIDEBAR TV — collapsible mini player, now playing, popover browser
    ========================================================================== */
 
 .sidebar-tv {
@@ -8,7 +8,7 @@
     font-size: 0.66rem;
 }
 
-/* Match .side-panel control sizing when radio is undocked on body */
+/* Match .side-panel control sizing when TV is undocked on body */
 .sidebar-tv .btn,
 .sidebar-tv .btn--compact,
 .tv-popover .btn,

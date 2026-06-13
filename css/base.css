@@ -1,0 +1,63 @@
+/* ==========================================================================
+   1. CORE SETUP & MODERN DEFAULTS
+   ========================================================================== */
+:root {
+    --bg-primary: #121214;
+    --bg-surface: #121214;
+    --bg-card: #26262b;
+    --text-main: #e2e2e9;
+    --text-muted: #8b8b93;
+    --accent: #4f46e5;
+    --border-color: #323238;
+    --desktop-drag-opacity: 0.55;
+    --note-font-scale: 1;
+    --tile-cell-w: 56px;
+    --tile-cell-h: 56px;
+    --tile-small-w-label: 112px;
+    --tile-small-h-label: 28px;
+    --tile-small-w-card: 112px;
+    --tile-small-h-card: 56px;
+    --tile-small-w-wide: 128px;
+    --tile-small-h-wide: 96px;
+    --tile-small-w: 112px;
+    --tile-small-h: 56px;
+    --tile-large-w: 176px;
+    --tile-large-h: 236px;
+    --tile-label-h: 28px;
+    --tile-note-w: 176px;
+    --tile-note-h: 236px;
+    --grid-cell-s: 56px;
+    --grid-gap: 4px;
+    --grid-stride-x: 60px;
+    --grid-stride-y: 60px;
+    --grid-origin: 16px;
+    --grid-edge-pad: 7px;
+    --board-area-inset: 0.875rem;
+
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--desktop-bg, var(--bg-primary));
+    color: var(--text-main);
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html[data-tile-small-footprint="label"] {
+    --tile-small-w: var(--tile-small-w-label);
+    --tile-small-h: var(--tile-small-h-label);
+}
+
+html[data-tile-small-footprint="card"] {
+    --tile-small-w: var(--tile-small-w-card);
+    --tile-small-h: var(--tile-small-h-card);
+}
+
+html[data-tile-small-footprint="wide"] {
+    --tile-small-w: var(--tile-small-w-wide);
+    --tile-small-h: var(--tile-small-h-wide);
+}
+
+.is-hidden {
+    display: none !important;
+}
+
