@@ -9,7 +9,7 @@ export const SidebarQuickActions = {
         this.root = document.getElementById('sidebar-quick-actions');
         if (!this.root) return;
 
-        this.bindDockDelegation();
+        this.bindDockButton();
         this.bindDrag();
         this.bindViewportClamp();
         this.applyInitialDockState();
@@ -76,21 +76,17 @@ export const SidebarQuickActions = {
     },
 
     updateDockButton() {
-        const btn = document.getElementById('btn-quick-actions-dock');
+        const btn = this.root?.querySelector('[data-quick-actions-dock]');
         if (!btn) return;
         const undocked = this.isUndocked();
         btn.innerHTML = undocked ? CARD_ICONS.pin : CARD_ICONS.unpin;
-        const label = undocked ? 'Dock in sidebar' : 'Undock quick actions';
+        const label = undocked ? 'Dock in sidebar' : 'Undock to canvas';
         btn.setAttribute('title', label);
         btn.setAttribute('aria-label', label);
     },
 
-    bindDockDelegation() {
-        const zone = document.getElementById('quick-actions-zone');
-        if (!zone || zone.dataset.quickActionsDockBound === 'true') return;
-        zone.dataset.quickActionsDockBound = 'true';
-        zone.addEventListener('click', (e) => {
-            if (!e.target.closest('#btn-quick-actions-dock')) return;
+    bindDockButton() {
+        this.root.querySelector('[data-quick-actions-dock]')?.addEventListener('click', (e) => {
             e.stopPropagation();
             this.toggleDock();
         });
@@ -141,7 +137,7 @@ export const SidebarQuickActions = {
 
         header.addEventListener('pointerdown', (e) => {
             if (!this.isUndocked()) return;
-            if (e.target.closest('.collapsable-toggle')) return;
+            if (e.target.closest('[data-quick-actions-dock]') || e.target.closest('.collapsable-toggle')) return;
             if (e.button !== 0) return;
 
             e.preventDefault();

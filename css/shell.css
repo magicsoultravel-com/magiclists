@@ -910,6 +910,15 @@ html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
     color: #fff;
 }
 
+.sidebar-quick-actions__dock {
+    flex-shrink: 0;
+    opacity: 0.8;
+}
+
+.sidebar-quick-actions__dock:hover {
+    opacity: 1;
+}
+
 .sidebar-quick-actions--undocked {
     position: fixed;
     z-index: 341;

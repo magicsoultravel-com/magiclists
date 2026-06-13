@@ -287,7 +287,6 @@ class Application {
         const shellGroup = `
             <button type="button" id="btn-fullscreen" class="btn btn--compact btn--icon" title="Full screen" aria-label="Full screen" aria-pressed="false"></button>
             <button type="button" id="btn-show-clock" class="btn btn--compact btn--icon is-hidden" title="Show clock" aria-label="Show clock"></button>
-            <button type="button" id="btn-quick-actions-dock" class="btn btn--compact btn--icon" title="Undock quick actions" aria-label="Undock quick actions"></button>
         `;
 
         if (!AppState.user.isLoggedIn) {
@@ -347,7 +346,6 @@ class Application {
         this.updateViewToggleState();
         UndoManager.updateToolbar();
         FocusMode.syncButtonState();
-        SidebarQuickActions.updateDockButton();
     }
 
     setupFab() {
