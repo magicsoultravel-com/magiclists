@@ -35,9 +35,10 @@ import { Fullscreen } from './fullscreen.js';
 import { SidebarRadio } from './sidebarRadio.js';
 import { SidebarTv } from './sidebarTv.js';
 import { SidebarQuickActions } from './sidebarQuickActions.js';
+import { SidebarTools } from './sidebarTools.js';
 import {
-    isFileCabinetActive,
     migrateItemsToFileCabinet,
+    pruneFileCabinetOrderByLayout,
     setFileCabinetActive
 } from './fileCabinet.js';
 
@@ -106,6 +107,7 @@ class Application {
         SidebarQuickActions.init();
         SidebarRadio.init();
         SidebarTv.init();
+        SidebarTools.init();
         SidePanel.setupStatusClickHandlers(); /* after radio/tv shells exist */
         ClockStyle.init();
         DesktopZoom.init();
@@ -202,7 +204,7 @@ class Application {
     async _syncDataStoreInner() {
         const canvas = document.getElementById('app-canvas');
         try {
-            if (canvas && AppState.workspaceMode !== 'drawing' && !isFileCabinetActive()) {
+            if (canvas && AppState.workspaceMode !== 'drawing') {
                 UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
             }
 
@@ -541,7 +543,10 @@ class Application {
         setFileCabinetActive(next);
         if (next) {
             UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
+            pruneFileCabinetOrderByLayout(AppState.items, AppState.viewSettings.sortBy, UI);
             migrateItemsToFileCabinet(AppState.items, AppState.viewSettings.sortBy, UI);
+        } else {
+            pruneFileCabinetOrderByLayout(AppState.items, AppState.viewSettings.sortBy, UI);
         }
         this.updateViewToggleState();
         this.updateLayoutResetVisibility();
@@ -769,7 +774,7 @@ class Application {
 
         window.addEventListener('board:visibility_changed', async (e) => {
             const canvas = document.getElementById('app-canvas');
-            const skipFlush = e.detail?.flushLayout === false || isFileCabinetActive();
+            const skipFlush = e.detail?.flushLayout === false;
             if (canvas && !skipFlush) {
                 UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
             }
@@ -780,7 +785,7 @@ class Application {
 
         window.addEventListener('filecabinet:layout_changed', async (e) => {
             const canvas = document.getElementById('app-canvas');
-            const skipFlush = e.detail?.flushLayout === false || isFileCabinetActive();
+            const skipFlush = e.detail?.flushLayout === false;
             if (canvas && !skipFlush) {
                 UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
             }

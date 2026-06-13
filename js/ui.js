@@ -1570,6 +1570,7 @@ export const UI = {
         const pos = this.readNoteRect(card);
         const tileSize = resolveTileSize(item);
         if (this.isAtCurrentSmallSize(pos.w, pos.h)) {
+            removeFromFileCabinetOrder(item.id);
             const rect = this.resolveCardRect(card, item, { mode: 'remembered' });
             this.applySpatialToggleRect(card, item, rect, ctx);
         } else {

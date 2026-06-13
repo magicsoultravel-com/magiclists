@@ -105,7 +105,7 @@ export const SidePanel = {
         this.bindCollapsable('categories-section-header', 'categories-section', true);
         this.bindCollapsable('categories-list-active-header', 'categories-list-active-section', true);
         this.bindCollapsable('categories-list-hidden-header', 'categories-list-hidden-section', true);
-        this.bindCollapsable('tools-section-header', 'tools-section', true);
+        this.bindCollapsable('tools-section-header', 'tools-section', true, '.sidebar-tools__dock', '.collapsable-toggle');
         this.bindCollapsable('notes-list-section-header', 'notes-list-section', false, '.sidebar-notes-list-sort');
         this.bindCollapsable('notes-list-active-header', 'notes-list-active-section');
         this.bindCollapsable('notes-list-hidden-header', 'notes-list-hidden-section', true);

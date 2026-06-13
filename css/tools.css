@@ -254,6 +254,11 @@
     border-left: 2px solid var(--accent);
 }
 
+.tools-launcher-grid .menu-tool-trigger.is-on-desktop {
+    background: none;
+    border-left: none;
+}
+
 .menu-tool-trigger.is-on-desktop .menu-tool-label {
     color: #a5b4fc;
 }
@@ -609,6 +614,37 @@
     display: flex;
     flex-direction: column;
     gap: 0.1rem;
+}
+
+.tools-launcher-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
+    gap: 0.25rem;
+}
+
+.tools-launcher-grid .menu-tool-trigger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;
+    min-height: 28px;
+    padding: 0.3rem;
+    text-align: center;
+    background: none;
+    border: none;
+    border-radius: 3px;
+    font-family: inherit;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.tools-launcher-grid .menu-tool-trigger:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.tools-launcher-grid .menu-tool-trigger.active {
+    color: var(--accent);
 }
 
 .menu-tool-trigger {

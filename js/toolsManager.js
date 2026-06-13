@@ -74,10 +74,7 @@ export const ToolsManager = {
         this.dropdown.innerHTML = this.registry.map((tool) => {
             const icon = renderToolIcon(tool.icon);
             const onDesktop = this.isOnDesktop(tool.id);
-            return `<button type="button" class="btn btn--compact menu-tool-trigger${onDesktop ? ' is-on-desktop' : ''}" data-target="${tool.id}">
-                <span class="menu-tool-icon">${icon}</span>
-                <span class="menu-tool-label">${escapeHtml(tool.label)}</span>
-            </button>`;
+            return `<button type="button" class="btn btn--compact btn--icon menu-tool-trigger${onDesktop ? ' active' : ''}" data-target="${tool.id}" title="${escapeHtml(tool.label)}" aria-label="${escapeHtml(tool.label)}">${icon}</button>`;
         }).join('');
 
         this.dropdown.querySelectorAll('.menu-tool-trigger').forEach((btn) => {

@@ -171,6 +171,36 @@ export function isItemInFileCabinetOrder(itemId) {
     return Object.values(order).some((ids) => Array.isArray(ids) && ids.includes(itemId));
 }
 
+function isSpatiallyEligibleForFileCabinet(item, sortBy, UI) {
+    if (!item?.id) return false;
+    const tileSize = resolveTileSize(item);
+    const size = getStoredItemSize(item.id, sortBy, UI) ?? getTileDefaultRect(tileSize);
+    if (isAtLabelSize(size.w, size.h)) return true;
+    return isAtOrBelowCompactZone(size.w, size.h, tileSize);
+}
+
+/** Drop order entries for notes no longer at label/compact size in the current mode. */
+export function pruneFileCabinetOrderByLayout(items, sortBy, UI) {
+    const itemsById = new Map((items || []).map((item) => [item.id, item]));
+    const order = getFileCabinetOrder();
+    let changed = false;
+    Object.keys(order).forEach((cat) => {
+        const before = order[cat] || [];
+        const next = before.filter((id) => {
+            const item = itemsById.get(id);
+            if (!item || !isSpatiallyEligibleForFileCabinet(item, sortBy, UI)) {
+                changed = true;
+                return false;
+            }
+            return true;
+        });
+        if (next.length === 0) delete order[cat];
+        else order[cat] = next;
+    });
+    if (changed) saveFileCabinetOrder(order);
+    return changed;
+}
+
 export function shouldFileItem(item, sortBy, UI) {
     if (!item?.id) return false;
     if (isItemInFileCabinetOrder(item.id)) return true;
