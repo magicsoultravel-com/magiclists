@@ -1952,6 +1952,11 @@ export const UI = {
             });
 
         this.updateBoardCanvasExtents(canvas);
+        if (snapLayout) {
+            requestAnimationFrame(() => {
+                this.reflowGridBoard(canvas, null, { animate: false });
+            });
+        }
     },
 
     buildNoteQuickActionsHtml(item, {
@@ -5866,7 +5871,14 @@ export const UI = {
 
     reflowGridBoard(canvas, actorId, { animate = true } = {}) {
         if (!canvas?.classList.contains('view-grid')) return;
-        const layout = this.computeGridBoardLayout(canvas, actorId);
+        let actorRect = null;
+        if (actorId) {
+            const actorCard = canvas.querySelector(
+                `.mini-card[data-desktop="1"][data-id="${CSS.escape(actorId)}"]`
+            );
+            if (actorCard) actorRect = this.readNoteRect(actorCard);
+        }
+        const layout = this.computeGridBoardLayout(canvas, actorId, actorRect);
         this.applyGridBoardLayout(canvas, layout, { animate, save: true });
         this.squeezeGridBoardToViewport(canvas, { animate });
     },
