@@ -492,6 +492,7 @@ body {
     align-items: flex-start;
     gap: 0.55rem;
     min-width: min-content;
+    overflow: visible;
 }
 
 .file-cabinet-filed-rail {
@@ -501,6 +502,11 @@ body {
     gap: 0.35rem;
     padding-right: 0.45rem;
     border-right: 1px solid color-mix(in srgb, var(--text-muted) 22%, var(--border-color));
+    overflow: visible;
+}
+
+.file-cabinet-filed-slot {
+    position: relative;
 }
 
 .file-cabinet-filed-chip {
@@ -529,10 +535,11 @@ body {
 
 .file-cabinet-filed-chip-count {
     flex: 0 0 auto;
+    flex-shrink: 0;
     font-size: 0.46rem;
     font-weight: 400;
     color: var(--text-muted);
-    opacity: 0.75;
+    opacity: 0.85;
 }
 
 .file-cabinet-filed-chip .file-cabinet-filed-chip-expand {
@@ -552,27 +559,55 @@ body {
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--file-cabinet-category-color, var(--accent-color)) 28%, transparent);
 }
 
-.file-cabinet-folded-preview {
-    position: fixed;
-    z-index: 120;
-    pointer-events: auto;
-    padding-left: 10px;
-    margin-left: -10px;
-    max-height: min(45vh, 520px);
-    overflow: auto;
-    border-radius: 0.35rem;
+.file-cabinet-filed-rollout {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    z-index: 130;
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+    transition: max-height 0.16s ease, opacity 0.12s ease;
+    border-radius: 0 0 0.3rem 0.3rem;
     background: color-mix(in srgb, var(--bg-surface) 94%, var(--bg-primary));
     box-shadow:
-        0 4px 16px rgba(0, 0, 0, 0.18),
+        0 4px 12px rgba(0, 0, 0, 0.16),
         0 0 0 1px color-mix(in srgb, var(--text-muted) 18%, var(--border-color));
 }
 
-.file-cabinet-folded-preview.is-hidden {
-    display: none;
+.file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout {
+    max-height: min(45vh, 520px);
+    overflow-y: auto;
+    opacity: 1;
+    pointer-events: auto;
+    padding: 0.25rem 0 0.3rem;
 }
 
-.file-cabinet-folded-preview .file-cabinet-category {
-    padding: 0.35rem 0.4rem 0.45rem;
+.file-cabinet-tab-stack--filed-rollout {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    position: relative;
+    height: auto;
+    min-width: 0;
+    width: 100%;
+}
+
+.file-cabinet-tab-stack--filed-rollout .file-cabinet-tab {
+    position: relative;
+    left: auto;
+    top: auto;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    flex: 0 0 auto;
+    z-index: auto;
+}
+
+.file-cabinet-tab-stack--filed-rollout .file-cabinet-tab.is-filed-rollout-insert-before {
+    box-shadow: 0 -2px 0 0 var(--file-cabinet-category-color, var(--accent-color));
 }
 
 .file-cabinet-row {

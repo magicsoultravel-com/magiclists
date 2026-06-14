@@ -18,6 +18,7 @@ export const FILE_CABINET_TAB_WIDTH = 160;
 export const FILE_CABINET_TAB_HEIGHT = 28;
 export const FILE_CABINET_STACK_OFFSET_Y = 18;
 export const FILE_CABINET_STACK_OFFSET_X = 10;
+export const FILE_CABINET_FILED_ROLLOUT_GAP = 4;
 export const FILE_CABINET_DRAWER_HEADER_PAD = 48;
 
 const DRAG_THRESHOLD = 4;
@@ -378,6 +379,12 @@ function snapshotStackTabs(stackEl) {
 
 function restoreStackPreview(stackEl, baseline) {
     if (!stackEl || !baseline) return;
+    if (isFiledRolloutStack(stackEl)) {
+        stackEl.querySelectorAll('.file-cabinet-tab').forEach((tab) => {
+            tab.classList.remove('layout-settling', 'layout-preview', 'is-filed-rollout-insert-before');
+        });
+        return;
+    }
     baseline.forEach((pos, id) => {
         const tab = stackEl.querySelector(`.file-cabinet-tab[data-id="${CSS.escape(id)}"]`);
         if (!tab) return;
@@ -408,8 +415,25 @@ function updateStackPreviewDimensions(stackEl, slotCount, { minSlotCount = 0 } =
     }
 }
 
+function isFiledRolloutStack(stackEl) {
+    return stackEl?.classList?.contains('file-cabinet-tab-stack--filed-rollout');
+}
+
+function getFiledRolloutRowStep(label = getLabelRect()) {
+    return label.h + FILE_CABINET_FILED_ROLLOUT_GAP;
+}
+
 function applyStackPreviewPositions(stackEl, { draggedId, insertIndex = null, settling = true, minSlotCount = 0 } = {}) {
     if (!stackEl) return;
+    if (isFiledRolloutStack(stackEl)) {
+        const tabs = [...stackEl.querySelectorAll('.file-cabinet-tab')].filter((t) => t.dataset.id !== draggedId);
+        tabs.forEach((tab, i) => {
+            tab.classList.toggle('layout-settling', settling);
+            tab.classList.toggle('layout-preview', settling);
+            tab.classList.toggle('is-filed-rollout-insert-before', insertIndex != null && i === insertIndex);
+        });
+        return;
+    }
     const tabs = [...stackEl.querySelectorAll('.file-cabinet-tab')].filter((t) => t.dataset.id !== draggedId);
     const label = getLabelRect();
     let visualIndex = 0;
@@ -459,9 +483,17 @@ function resolveFileCabinetDropTarget(clientX, clientY, dragState, mount) {
         const tabs = [...stack.querySelectorAll('.file-cabinet-tab')].filter(
             (t) => t.dataset.id !== dragState?.card?.dataset?.id
         );
-        let insertIndex = Math.floor((clientY - rect.top) / FILE_CABINET_STACK_OFFSET_Y);
+        const rowStep = isFiledRolloutStack(stack)
+            ? getFiledRolloutRowStep()
+            : FILE_CABINET_STACK_OFFSET_Y;
+        let insertIndex = Math.floor((clientY - rect.top) / rowStep);
         insertIndex = Math.max(0, Math.min(tabs.length, insertIndex));
-        return { targetStack: stack, targetCategory: category, insertIndex, isFolded: false };
+        return {
+            targetStack: stack,
+            targetCategory: category,
+            insertIndex,
+            isFolded: isFiledRolloutStack(stack)
+        };
     }
 
     const col = el.closest('.file-cabinet-category');
@@ -509,7 +541,7 @@ function resetDraggedTabStyles(card, stack) {
     card.style.margin = '';
     card.style.zIndex = '';
     card.style.pointerEvents = '';
-    if (stack?.contains(card)) applyFileCabinetStackPositions(stack);
+    if (stack?.contains(card) && !isFiledRolloutStack(stack)) applyFileCabinetStackPositions(stack);
 }
 
 export function applyFileCabinetStackPositions(stackEl) {
@@ -550,7 +582,8 @@ export function syncFileCabinetDrawerHeight(mount) {
     const label = getLabelRect();
     let maxStackH = label.h;
     mount.querySelectorAll('.file-cabinet-tab-stack').forEach((stack) => {
-        if (stack.closest('.file-cabinet-folded-preview')) return;
+        if (stack.closest('.file-cabinet-filed-rollout')) return;
+        if (isFiledRolloutStack(stack)) return;
         maxStackH = Math.max(maxStackH, stack.offsetHeight || 0);
     });
     mount.style.minHeight = `${maxStackH + FILE_CABINET_DRAWER_HEADER_PAD}px`;
@@ -603,101 +636,101 @@ function buildFileCabinetCategoryColumn({
     return col;
 }
 
-function positionFileCabinetFoldedPreview(previewShell, chip) {
-    if (!previewShell || !chip) return;
-    const chipRect = chip.getBoundingClientRect();
-    const gap = 4;
-    let left = chipRect.right + gap;
-    let top = chipRect.top;
-    const previewRect = previewShell.getBoundingClientRect();
-    const margin = 8;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+function buildFileCabinetFiledRolloutStack({ catName, items, activeCategories, UI }) {
+    const label = getLabelRect();
+    const matched = activeCategories.find((c) => c.name?.toLowerCase() === catName.toLowerCase());
+    const color = matched?.color || '#64748b';
 
-    if (left + previewRect.width > vw - margin) {
-        left = Math.max(margin, chipRect.left - previewRect.width - gap);
-    }
-    if (top + previewRect.height > vh - margin) {
-        top = Math.max(margin, vh - margin - previewRect.height);
-    }
-    if (top < margin) top = margin;
+    const stack = document.createElement('div');
+    stack.className = 'file-cabinet-tab-stack file-cabinet-tab-stack--filed-rollout';
+    stack.dataset.category = catName;
+    stack.style.setProperty('--file-cabinet-category-color', color);
 
-    previewShell.style.left = `${left}px`;
-    previewShell.style.top = `${top}px`;
+    items.forEach((item, index) => {
+        const card = UI.createCardComponent(item, activeCategories, { desktop: true });
+        card.classList.add('file-cabinet-tab');
+        card.dataset.fileCabinetCategory = catName;
+        card.dataset.fileCabinetStackIndex = String(index);
+        UI.applyNoteRect(card, { x: 0, y: 0, w: label.w, h: label.h }, { settling: false });
+        UI.applyDesktopTilePresentation(card, item);
+        UI.finalizeDesktopCard(card);
+        card.classList.add('spatial-at-small', 'tile-small');
+        UI.syncSpatialToggleButton(card);
+        stack.appendChild(card);
+    });
+
+    return stack;
 }
 
 export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, signal) {
     if (!mount || !signal) return null;
 
-    let previewShell = null;
-    let activeChip = null;
+    let activeSlot = null;
     let pinnedByDrag = false;
 
-    const ensurePreviewShell = () => {
-        if (previewShell?.isConnected) return previewShell;
-        previewShell = mount.querySelector('.file-cabinet-folded-preview');
-        if (previewShell?.isConnected) return previewShell;
-        previewShell = document.createElement('div');
-        previewShell.className = 'file-cabinet-folded-preview is-hidden';
-        previewShell.setAttribute('aria-hidden', 'true');
-        mount.appendChild(previewShell);
-        return previewShell;
+    const getSlotChip = (slot) => slot?.querySelector('.file-cabinet-filed-chip');
+    const getSlotRollout = (slot) => slot?.querySelector('.file-cabinet-filed-rollout');
+
+    const closeSlot = (slot) => {
+        if (!slot?.isConnected) return;
+        const rollout = getSlotRollout(slot);
+        if (rollout) {
+            rollout.innerHTML = '';
+            rollout.setAttribute('aria-hidden', 'true');
+        }
+        slot.classList.remove('is-fold-rollout-open');
+        getSlotChip(slot)?.classList.remove('is-fold-preview-source');
     };
 
     const isInsidePreviewZone = (el) => {
-        if (!el) return false;
-        return !!(activeChip?.contains(el) || ensurePreviewShell().contains(el));
+        if (!el || !activeSlot?.isConnected) return false;
+        return activeSlot.contains(el);
     };
 
     const hidePreview = (force = false) => {
         if (!force && pinnedByDrag) return;
         if (!force && document.body.classList.contains('is-file-cabinet-drag-active')) return;
-        const shell = previewShell?.isConnected ? previewShell : null;
-        if (!shell) {
-            activeChip?.classList.remove('is-fold-preview-source');
-            activeChip = null;
-            return;
-        }
-        shell.classList.add('is-hidden');
-        shell.innerHTML = '';
-        shell.setAttribute('aria-hidden', 'true');
-        activeChip?.classList.remove('is-fold-preview-source');
-        activeChip = null;
+        mount.querySelectorAll('.file-cabinet-filed-slot.is-fold-rollout-open').forEach((slot) => {
+            closeSlot(slot);
+        });
+        activeSlot = null;
     };
 
-    const showPreview = (chip) => {
+    const showPreview = (slot) => {
         if (document.body.classList.contains('is-file-cabinet-drag-active')) return;
         const ctx = getPreviewContext?.();
-        if (!ctx) return;
+        if (!ctx || !slot) return;
 
-        const catName = chip?.dataset?.category;
+        const catName = slot.dataset.category;
         if (!catName) return;
 
         const items = ctx.byCategory?.get(catName);
         if (!items?.length) return;
 
+        const rollout = getSlotRollout(slot);
+        const chip = getSlotChip(slot);
+        if (!rollout) return;
+
+        if (activeSlot === slot && rollout.querySelector('.file-cabinet-tab-stack--filed-rollout')) {
+            slot.classList.add('is-fold-rollout-open');
+            chip?.classList.add('is-fold-preview-source');
+            return;
+        }
+
+        if (activeSlot && activeSlot !== slot) closeSlot(activeSlot);
+        activeSlot = slot;
+
         const sorted = sortItemsByFileCabinetOrder(items, catName, ctx.order || getFileCabinetOrder());
-        const shell = ensurePreviewShell();
-
-        if (activeChip === chip && shell.querySelector('.file-cabinet-category')) return;
-
-        activeChip?.classList.remove('is-fold-preview-source');
-        activeChip = chip;
-        chip.classList.add('is-fold-preview-source');
-
-        shell.innerHTML = '';
-        const col = buildFileCabinetCategoryColumn({
+        rollout.innerHTML = '';
+        rollout.appendChild(buildFileCabinetFiledRolloutStack({
             catName,
             items: sorted,
             activeCategories: ctx.activeCategories,
-            UI: ctx.UI,
-            showFoldButton: false
-        });
-        col.classList.add('file-cabinet-category--fold-preview');
-        shell.appendChild(col);
-        shell.classList.remove('is-hidden');
-        shell.setAttribute('aria-hidden', 'false');
-        positionFileCabinetFoldedPreview(shell, chip);
+            UI: ctx.UI
+        }));
+        rollout.setAttribute('aria-hidden', 'false');
+        slot.classList.add('is-fold-rollout-open');
+        chip?.classList.add('is-fold-preview-source');
     };
 
     const maybeHidePreview = (relatedTarget) => {
@@ -707,32 +740,30 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
     };
 
     mount.addEventListener('pointerover', (e) => {
-        const chip = e.target.closest('.file-cabinet-filed-chip');
-        if (!chip || !mount.contains(chip)) return;
-        if (e.relatedTarget && chip.contains(e.relatedTarget)) return;
+        const slot = e.target.closest('.file-cabinet-filed-slot');
+        if (!slot || !mount.contains(slot)) return;
+        if (e.relatedTarget && slot.contains(e.relatedTarget)) return;
         if (document.body.classList.contains('is-file-cabinet-drag-active')) return;
-        showPreview(chip);
+        showPreview(slot);
     }, { signal });
 
     mount.addEventListener('pointerout', (e) => {
-        const chip = e.target.closest('.file-cabinet-filed-chip');
-        const shell = previewShell?.isConnected ? previewShell : null;
-        const fromPreview = shell?.contains(e.target);
-        if (!chip && !fromPreview) return;
+        const slot = e.target.closest('.file-cabinet-filed-slot');
+        const fromRollout = e.target.closest('.file-cabinet-filed-rollout');
+        if (!slot && !fromRollout) return;
         maybeHidePreview(e.relatedTarget);
     }, { signal });
 
     mount.addEventListener('focusin', (e) => {
-        const chip = e.target.closest('.file-cabinet-filed-chip');
-        if (!chip) return;
-        showPreview(chip);
+        const slot = e.target.closest('.file-cabinet-filed-slot');
+        if (!slot) return;
+        showPreview(slot);
     }, { signal });
 
     mount.addEventListener('focusout', (e) => {
-        const chip = e.target.closest('.file-cabinet-filed-chip');
-        const shell = previewShell?.isConnected ? previewShell : null;
-        const fromPreview = shell?.contains(e.target);
-        if (!chip && !fromPreview) return;
+        const slot = e.target.closest('.file-cabinet-filed-slot');
+        const fromRollout = e.target.closest('.file-cabinet-filed-rollout');
+        if (!slot && !fromRollout) return;
         requestAnimationFrame(() => {
             if (isInsidePreviewZone(document.activeElement)) return;
             if (pinnedByDrag || document.body.classList.contains('is-file-cabinet-drag-active')) return;
@@ -742,8 +773,7 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
 
     return {
         onDragStart(stack) {
-            const shell = previewShell?.isConnected ? previewShell : null;
-            if (shell?.contains(stack)) pinnedByDrag = true;
+            if (stack?.closest('.file-cabinet-filed-rollout')) pinnedByDrag = true;
         },
         onDragEnd() {
             const wasPinned = pinnedByDrag;
@@ -802,12 +832,24 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
                 const matched = activeCategories.find((c) => c.name?.toLowerCase() === catName.toLowerCase());
                 const color = matched?.color || '#64748b';
 
+                const slot = document.createElement('div');
+                slot.className = 'file-cabinet-filed-slot';
+                slot.dataset.category = catName;
+                slot.style.setProperty('--file-cabinet-category-color', color);
+
                 const chip = document.createElement('div');
                 chip.className = 'file-cabinet-filed-chip';
                 chip.dataset.category = catName;
                 chip.style.setProperty('--file-cabinet-category-color', color);
                 chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${UI.escapeAttr(color)}"></span><span class="file-cabinet-filed-chip-name u-truncate">${UI.escapeHTML(catName)}</span><span class="file-cabinet-filed-chip-count">${items.length}</span><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
-                rail.appendChild(chip);
+
+                const rollout = document.createElement('div');
+                rollout.className = 'file-cabinet-filed-rollout';
+                rollout.setAttribute('aria-hidden', 'true');
+
+                slot.appendChild(chip);
+                slot.appendChild(rollout);
+                rail.appendChild(slot);
             });
 
         inner.appendChild(rail);
@@ -930,9 +972,13 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
                 const moved = tabs.splice(startIndex, 1)[0];
                 tabs.splice(finalIndex, 0, moved);
                 tabs.forEach((tab) => state.sourceStack.appendChild(tab));
+            }
+            if (!isFiledRolloutStack(state.sourceStack)) {
                 applyFileCabinetStackPositions(state.sourceStack);
             } else {
-                applyFileCabinetStackPositions(state.sourceStack);
+                [...state.sourceStack.querySelectorAll('.file-cabinet-tab')].forEach((tab, index) => {
+                    tab.dataset.fileCabinetStackIndex = String(index);
+                });
             }
             syncFileCabinetDrawerHeight(mount);
             return;
@@ -1084,7 +1130,7 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
         const tab = e.target.closest('.file-cabinet-tab');
         if (!tab || tab.classList.contains('is-file-cabinet-dragging')) return;
         const stack = tab.closest('.file-cabinet-tab-stack');
-        if (stack && !dragState?.active) applyFileCabinetStackPositions(stack);
+        if (stack && !dragState?.active && !isFiledRolloutStack(stack)) applyFileCabinetStackPositions(stack);
     }, { signal });
 }
 
