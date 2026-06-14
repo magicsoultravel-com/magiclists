@@ -1289,24 +1289,15 @@ export const UI = {
 
     isSpatiallyCollapsed(card) {
         if (!card) return true;
-        const { w, h } = this.readNoteRect(card);
-        return this.isAtCurrentSmallSize(w, h);
-    },
-
-    normalizeSmallFootprintIfNear(card, item) {
-        if (!isDesktopCard(card) || card.closest('#file-cabinet')) return;
-        const footprint = readTileSmallFootprint();
-        const small = getSmallRect(footprint);
-        const { x, y, w, h } = this.readNoteRect(card);
-        if (w <= small.w + 4 && h <= small.h + 4) {
-            if (!matchesSmallFootprintRect(w, h, footprint)) {
-                const rect = { x, y, w: small.w, h: small.h };
-                this.applyNoteRect(card, rect);
-                if (item?.id) {
-                    this.saveTileLayoutFromCard(card, item, rect, 'small');
-                }
+        if (isDesktopCard(card) && !card.closest('#file-cabinet')) {
+            const item = this.resolveBoardItem(card.dataset.id);
+            const saved = this.getSavedLayoutRect(card, item);
+            if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
+                return this.isAtCurrentSmallSize(saved.w, saved.h);
             }
         }
+        const { w, h } = this.readNoteRect(card);
+        return this.isAtCurrentSmallSize(w, h);
     },
 
     syncSpatialCollapseState(card, item, w, h) {
@@ -1609,7 +1600,7 @@ export const UI = {
 
         const pos = this.readNoteRect(card);
         const tileSize = resolveTileSize(item);
-        if (this.isAtCurrentSmallSize(pos.w, pos.h)) {
+        if (this.isSpatiallyCollapsed(card)) {
             removeFromFileCabinetOrder(item.id);
             const rect = this.resolveBoardExpandPlacement(card, item);
             this.applySpatialToggleRect(card, item, rect, { ...ctx, actorRect: rect });
@@ -1620,16 +1611,9 @@ export const UI = {
                 });
             }
         } else {
-            const footprint = readTileSmallFootprint();
-            const small = getSmallRect(footprint);
-            const smallRect = { x: pos.x, y: pos.y, w: small.w, h: small.h };
-            if (matchesSmallFootprintRect(pos.w, pos.h, footprint)) {
-                this.applyNoteRect(card, smallRect, { settling: false });
-                this.saveTileLayoutFromCard(card, item, smallRect, 'small');
-                this.finalizeDesktopCard(card);
-                return;
-            }
             this.persistRememberedSpatialSize(item.id, pos.w, pos.h, tileSize);
+            const small = getSmallRect(readTileSmallFootprint());
+            const smallRect = { x: pos.x, y: pos.y, w: small.w, h: small.h };
             this.applySpatialToggleRect(card, item, smallRect, { ...ctx, deferReflow: true });
         }
     },
@@ -1913,11 +1897,7 @@ export const UI = {
             })
             .forEach((item, index) => {
                 const card = this.createCardComponent(item, activeCategories, { desktop: true });
-                const savedForLayout = layout?.[item.id];
-                const footprint = readTileSmallFootprint();
-                const isLayoutExpanded = savedForLayout && Number.isFinite(savedForLayout.w)
-                    ? !isAtSmallSize(savedForLayout.w, savedForLayout.h, footprint)
-                    : normalizeTileSize(resolveTileSize(item)) !== 'small';
+                const isLayoutExpanded = this.isCardExpanded(card, item);
 
                 if (snapLayout) {
                     const { origin, packW, maxH, edgePad } = bounds;
@@ -2509,7 +2489,6 @@ export const UI = {
         } else {
             this.applyFreeformSize(card);
         }
-        this.normalizeSmallFootprintIfNear(card, item);
         const { w, h } = this.readNoteRect(card);
         this.syncSpatialCollapseState(card, item, w, h);
         this.syncSpatialChromeForEditing(card);
@@ -5151,8 +5130,6 @@ export const UI = {
 
     saveCompactBoardLayout(itemId, slot, sortBy) {
         if (!itemId || !slot) return;
-        const item = this.resolveBoardItem(itemId);
-        const tileSize = resolveTileSize(item);
         const footprint = readTileSmallFootprint();
         const small = getSmallRect(footprint);
         const rect = {
@@ -5163,7 +5140,7 @@ export const UI = {
         };
 
         const layout = this.getGridLayout();
-        const gridEntry = this.mergeSpatialLayoutEntry({}, rect, tileSize, { updateRemembered: false });
+        const gridEntry = this.mergeSpatialLayoutEntry({}, rect, 'small', { updateRemembered: false });
         delete gridEntry.rememberedW;
         delete gridEntry.rememberedH;
         delete gridEntry.customCompact;
@@ -5171,7 +5148,7 @@ export const UI = {
         localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layout));
 
         const sizes = this.getFreeformSizes();
-        const ffEntry = this.mergeSpatialLayoutEntry({}, { w: rect.w, h: rect.h }, tileSize, { updateRemembered: false });
+        const ffEntry = this.mergeSpatialLayoutEntry({}, { w: rect.w, h: rect.h }, 'small', { updateRemembered: false });
         delete ffEntry.rememberedW;
         delete ffEntry.rememberedH;
         delete ffEntry.customCompact;
