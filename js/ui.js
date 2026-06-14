@@ -1207,6 +1207,13 @@ export const UI = {
             entry.rememberedW = Math.round(mem.w);
             entry.rememberedH = Math.round(mem.h);
         }
+        if (this.isAtCurrentSmallSize(entry.w, entry.h)) {
+            const small = getSmallRect(readTileSmallFootprint());
+            entry.w = small.w;
+            entry.h = small.h;
+            delete entry.rememberedW;
+            delete entry.rememberedH;
+        }
         return entry;
     },
 
@@ -1289,22 +1296,21 @@ export const UI = {
 
     isSpatiallyCollapsed(card) {
         if (!card) return true;
-        if (isDesktopCard(card) && !card.closest('#file-cabinet')) {
-            const item = this.resolveBoardItem(card.dataset.id);
-            const saved = this.getSavedLayoutRect(card, item);
-            if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
-                return this.isAtCurrentSmallSize(saved.w, saved.h);
-            }
-        }
         const { w, h } = this.readNoteRect(card);
         return this.isAtCurrentSmallSize(w, h);
+    },
+
+    isSavedLayoutExpanded(itemId, footprint = readTileSmallFootprint()) {
+        const saved = this.getGridLayout()[itemId];
+        if (!saved || !Number.isFinite(saved.w) || !Number.isFinite(saved.h)) return false;
+        return !isAtSmallSize(saved.w, saved.h, footprint);
     },
 
     syncSpatialCollapseState(card, item, w, h) {
         if (!isDesktopCard(card)) return;
         card.classList.remove('expanded');
         card.classList.add('note-surface');
-        card.classList.toggle('spatial-at-small', this.isAtCurrentSmallSize(w, h));
+        card.classList.toggle('spatial-at-small', this.isSpatiallyCollapsed(card));
         const resolvedItem = item || this.resolveBoardItem(card?.dataset?.id);
         const tier = geoInferTileTier(w, h, resolveTileSize(resolvedItem));
         this.applyCollapsedTileClasses(card, tier);
@@ -1556,7 +1562,15 @@ export const UI = {
 
     applySpatialToggleRect(card, item, rect, ctx = {}) {
         this.applyNoteRect(card, rect, { settling: false });
-        this.saveTileLayoutFromCard(card, item, rect, resolveTileSize(item));
+        const tier = this.isAtCurrentSmallSize(rect.w, rect.h) ? 'small' : 'large';
+        if (this.canEditInline() && tier !== resolveTileSize(item)) {
+            this.mutateItem(item, (it) => {
+                it.tileSize = tier;
+            }, { preserveView: true, skipRerender: true });
+            item.tileSize = tier;
+            boardItemsById.set(item.id, item);
+        }
+        this.saveTileLayoutFromCard(card, item, rect, tier);
 
         if (!isDesktopCard(card)) return;
         this.finalizeDesktopCard(card);
@@ -1831,7 +1845,7 @@ export const UI = {
         return true;
     },
 
-    render(canvas, items, viewMode, hiddenCategories = []) {
+    render(canvas, items, viewMode, hiddenCategories = [], renderOptions = {}) {
         if (!canvas) return;
         canvas.innerHTML = '';
 
@@ -1897,7 +1911,7 @@ export const UI = {
             })
             .forEach((item, index) => {
                 const card = this.createCardComponent(item, activeCategories, { desktop: true });
-                const isLayoutExpanded = this.isCardExpanded(card, item);
+                const isLayoutExpanded = this.isSavedLayoutExpanded(item.id);
 
                 if (snapLayout) {
                     const { origin, packW, maxH, edgePad } = bounds;
@@ -1954,7 +1968,7 @@ export const UI = {
             });
 
         this.updateBoardCanvasExtents(canvas);
-        if (snapLayout) {
+        if (snapLayout && !renderOptions.skipGridReflow) {
             requestAnimationFrame(() => {
                 this.reflowGridBoard(canvas, null, { animate: false });
             });
@@ -5068,7 +5082,9 @@ export const UI = {
 
         const canvas = document.getElementById('app-canvas');
         this.repackBoardLayoutStorage(mode, boardItems, canvas);
-        window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
+        window.dispatchEvent(new CustomEvent('board:visibility_changed', {
+            detail: { flushLayout: false, skipGridReflow: true }
+        }));
     },
 
     clampRectToFootprintIfSmall(rect) {
@@ -5512,7 +5528,7 @@ export const UI = {
             cardSelector: '.mini-card[data-desktop="1"]',
             getSavedRect: (id) => this.getGridLayout()[id],
             rectForCard: (card, saved, isExpanded) => this.gridBoardRectForCard(card, saved, isExpanded),
-            isCardExpanded: (id, card) => this.isCardExpanded(card, this.resolveBoardItem(id)),
+            isCardExpanded: (id) => this.isSavedLayoutExpanded(id),
             actorId,
             actorRect,
             bounds: { origin, packW, maxH: maxH ?? boardMaxH, edgePad }
@@ -5585,8 +5601,7 @@ export const UI = {
         cards.forEach((card) => {
             const id = card.dataset.id;
             if (!id || !pinnedIds.has(id)) return;
-            const item = this.resolveBoardItem(id);
-            const isExpanded = this.isCardExpanded(card, item);
+            const isExpanded = this.isSavedLayoutExpanded(id);
             const rect = this.snapNoteRect(
                 rectForSqueeze(card, isExpanded),
                 { maxW: packW, maxH: snapOpts.maxH, origin, edgePad }
@@ -5602,8 +5617,7 @@ export const UI = {
             })
             .map((card) => {
                 const id = card.dataset.id;
-                const item = this.resolveBoardItem(id);
-                const isExpanded = this.isCardExpanded(card, item);
+                const isExpanded = this.isSavedLayoutExpanded(id);
                 const rect = rectForSqueeze(card, isExpanded);
                 return { id, card, rect };
             })

@@ -769,7 +769,9 @@ class Application {
             if (canvas && !skipFlush) {
                 UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
             }
-            UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories);
+            UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, {
+                skipGridReflow: e.detail?.skipGridReflow === true
+            });
             this.updateWorkspaceCounter();
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         });
