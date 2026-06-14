@@ -57,7 +57,8 @@ const LAYOUT_BACKUP_KEYS = [
     'matrix_collapsed_categories',
     'matrix_file_cabinet',
     'matrix_file_cabinet_order',
-    'matrix_file_cabinet_filed_categories'
+    'matrix_file_cabinet_filed_categories',
+    'matrix_file_cabinet_height'
 ];
 
 const PRESENTATION_CLEAR_KEYS = [...new Set(LAYOUT_BACKUP_KEYS)];

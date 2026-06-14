@@ -19,6 +19,7 @@ import {
     writePanelCollapsed,
     writeSidebarSection
 } from './sidebarPrefs.js';
+import { onSidebarCollapseChanged } from './shellResize.js';
 
 export function applySectionCollapse(sectionId, headerId, startCollapsed = false) {
     const header = document.getElementById(headerId);
@@ -100,6 +101,7 @@ export const SidePanel = {
         this.toggleBtn?.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         this.toggleFab?.classList.toggle('is-hidden', !collapsed);
         if (persist) writePanelCollapsed(collapsed);
+        onSidebarCollapseChanged();
     },
 
     toggle() {

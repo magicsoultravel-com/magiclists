@@ -3,13 +3,18 @@ export const SIDEBAR_SECTIONS_KEY = 'matrix_sidebar_sections';
 export const NOTES_LIST_SORT_KEY = 'matrix_notes_list_sort';
 export const QUICK_ACTIONS_DOCK_KEY = 'matrix_quick_actions_dock';
 export const TOOLS_DOCK_KEY = 'matrix_tools_dock';
+export const SIDEBAR_WIDTH_KEY = 'matrix_sidebar_width';
+
+export const SIDEBAR_DEFAULT_WIDTH = 220;
+export const SIDEBAR_MIN_WIDTH = 160;
 
 export const SIDEBAR_BACKUP_KEYS = [
     PANEL_COLLAPSED_KEY,
     SIDEBAR_SECTIONS_KEY,
     NOTES_LIST_SORT_KEY,
     QUICK_ACTIONS_DOCK_KEY,
-    TOOLS_DOCK_KEY
+    TOOLS_DOCK_KEY,
+    SIDEBAR_WIDTH_KEY
 ];
 
 const DEFAULT_NOTES_LIST_SORT = { field: 'date', dir: 'desc' };
@@ -99,12 +104,26 @@ export function writeToolsDock(patch) {
     localStorage.setItem(TOOLS_DOCK_KEY, JSON.stringify(next));
 }
 
+export function readSidebarWidth() {
+    const raw = parseFloat(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+    return Number.isFinite(raw) && raw > 0 ? raw : null;
+}
+
+export function writeSidebarWidth(width) {
+    if (!Number.isFinite(width) || width <= 0) {
+        localStorage.removeItem(SIDEBAR_WIDTH_KEY);
+        return;
+    }
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, String(Math.round(width)));
+}
+
 export function readSidebarPrefs() {
     return {
         panelCollapsed: readPanelCollapsed(),
         sections: readSidebarSections(),
         notesListSort: readNotesListSort(),
         quickActionsDock: readQuickActionsDock(),
-        toolsDock: readToolsDock()
+        toolsDock: readToolsDock(),
+        sidebarWidth: readSidebarWidth()
     };
 }

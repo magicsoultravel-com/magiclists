@@ -10,6 +10,10 @@ import {
 export const FILE_CABINET_KEY = 'matrix_file_cabinet';
 export const FILE_CABINET_ORDER_KEY = 'matrix_file_cabinet_order';
 export const FILE_CABINET_FILED_CATEGORIES_KEY = 'matrix_file_cabinet_filed_categories';
+export const FILE_CABINET_HEIGHT_KEY = 'matrix_file_cabinet_height';
+
+export const FILE_CABINET_MIN_HEIGHT = 96;
+export const FILE_CABINET_BOARD_MIN_HEIGHT = 200;
 
 const FOLD_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3 7l3-3 3 3" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const EXPAND_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3 5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -28,6 +32,23 @@ export function isFileCabinetActive() {
 
 export function setFileCabinetActive(active) {
     localStorage.setItem(FILE_CABINET_KEY, active ? 'true' : 'false');
+}
+
+export function readFileCabinetHeight() {
+    const raw = parseFloat(localStorage.getItem(FILE_CABINET_HEIGHT_KEY));
+    return Number.isFinite(raw) && raw > 0 ? raw : null;
+}
+
+export function writeFileCabinetHeight(height) {
+    if (!Number.isFinite(height) || height <= 0) {
+        localStorage.removeItem(FILE_CABINET_HEIGHT_KEY);
+        return;
+    }
+    localStorage.setItem(FILE_CABINET_HEIGHT_KEY, String(Math.round(height)));
+}
+
+export function hasFixedFileCabinetHeight() {
+    return readFileCabinetHeight() !== null;
 }
 
 export function getFileCabinetOrder() {
@@ -579,15 +600,32 @@ export function applyFileCabinetStackPositions(stackEl) {
     });
 }
 
-export function syncFileCabinetDrawerHeight(mount) {
-    if (!mount) return;
+export function getFileCabinetContentMinHeight(mount) {
+    if (!mount) return FILE_CABINET_MIN_HEIGHT;
     const label = getLabelRect();
     let maxStackH = label.h;
     mount.querySelectorAll('.file-cabinet-tab-stack').forEach((stack) => {
         if (stack.closest('.file-cabinet-filed-rollout')) return;
         maxStackH = Math.max(maxStackH, stack.offsetHeight || 0);
     });
-    mount.style.minHeight = `${maxStackH + FILE_CABINET_DRAWER_HEADER_PAD}px`;
+    return maxStackH + FILE_CABINET_DRAWER_HEADER_PAD;
+}
+
+export function syncFileCabinetDrawerHeight(mount) {
+    if (!mount) return;
+    const contentMin = getFileCabinetContentMinHeight(mount);
+    mount.style.minHeight = `${contentMin}px`;
+    const savedHeight = readFileCabinetHeight();
+    if (savedHeight !== null) {
+        mount.dataset.fixedHeight = 'true';
+        mount.style.flex = '0 0 auto';
+        mount.style.height = `${Math.max(contentMin, savedHeight)}px`;
+        mount.style.maxHeight = '';
+        return;
+    }
+    delete mount.dataset.fixedHeight;
+    mount.style.flex = '';
+    mount.style.height = '';
     mount.style.maxHeight = 'none';
 }
 

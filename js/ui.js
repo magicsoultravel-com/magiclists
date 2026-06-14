@@ -46,6 +46,7 @@ import {
     FILE_CABINET_FILED_CATEGORIES_KEY,
     getFileCabinetFiledCategories
 } from './fileCabinet.js';
+import { syncCabinetSplitter } from './shellResize.js';
 import { raiseDesktopElement, syncDesktopStackSeq } from './desktopStack.js';
 import { readTileSmallFootprint } from './tileFootprint.js';
 import { getGridMetrics, cellsToSpanW as gridCellsToSpanW, cellsToSpanH as gridCellsToSpanH } from './gridDensity.js';
@@ -1834,9 +1835,11 @@ export const UI = {
             seedFileCabinetOrderFromItems(filed);
             const mount = ensureFileCabinetMount(true);
             renderFileCabinet(mount, filed, activeCategories, this);
+            syncCabinetSplitter();
             boardItems = expanded;
         } else {
             ensureFileCabinetMount(false);
+            syncCabinetSplitter();
         }
 
         if (boardItems.length === 0) {
