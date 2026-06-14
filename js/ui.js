@@ -1129,7 +1129,7 @@ export const UI = {
 
     isCardExpanded(card, item) {
         if (isDesktopCard(card)) {
-            return !this.isSpatiallyCollapsed(card, item);
+            return !this.isSpatiallyCollapsed(card);
         }
         if (card?.classList.contains('expanded')) return true;
         return getExpandedCards(activeBoardViewMode)[item?.id] === true;
@@ -1257,10 +1257,6 @@ export const UI = {
         return resolveTileSize(resolved);
     },
 
-    isCollapsedTile(card) {
-        return !!card && !card.classList.contains('expanded');
-    },
-
     applyCollapsedTileClasses(card, tileSize) {
         card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note', 'tile-small', 'tile-large');
         const size = normalizeTileSize(tileSize);
@@ -1271,7 +1267,7 @@ export const UI = {
         return isAtSmallSize(w, h, readTileSmallFootprint());
     },
 
-    isSpatiallyCollapsed(card, item) {
+    isSpatiallyCollapsed(card) {
         if (!card) return true;
         const { w, h } = this.readNoteRect(card);
         return this.isAtCurrentSmallSize(w, h);
@@ -1285,12 +1281,6 @@ export const UI = {
         const resolvedItem = item || this.resolveBoardItem(card?.dataset?.id);
         const tier = geoInferTileTier(w, h, resolveTileSize(resolvedItem));
         this.applyCollapsedTileClasses(card, tier);
-    },
-
-    applyDesktopTilePresentation(card, item) {
-        if (!isDesktopCard(card)) return;
-        const { w, h } = this.readNoteRect(card);
-        this.syncSpatialCollapseState(card, item, w, h);
     },
 
     syncSpatialToggleButton(card) {
@@ -1522,9 +1512,7 @@ export const UI = {
             boardItemsById.set(item.id, item);
         }
 
-        if (isDesktopCard(card)) {
-            this.applyDesktopTilePresentation(card, item);
-        } else {
+        if (!isDesktopCard(card)) {
             this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
         }
         this.applyNoteRect(card, rect, { settling: false });
@@ -1652,7 +1640,6 @@ export const UI = {
                 item.tileSize = 'small';
                 boardItemsById.set(item.id, item);
             }
-            this.applyDesktopTilePresentation(card, item);
             this.saveTileLayoutFromCard(card, item, next, 'small');
             this.finalizeDesktopCard(card);
         });
@@ -1699,9 +1686,6 @@ export const UI = {
                 rect = this.clampNoteToBoardEdges(rect, { packW, maxH, origin, edgePad });
             }
             this.applyNoteRect(card, rect, { settling: false });
-            if (isAtSmallSize(rect.w, rect.h, footprint)) {
-                this.applyDesktopTilePresentation(card, item);
-            }
             this.saveTileLayoutFromCard(card, item, rect, this.getCardTileSize(card, item));
             this.finalizeDesktopCard(card);
         });
@@ -1761,10 +1745,6 @@ export const UI = {
         }
         const defaults = this.getTileDefaultRect(tileSize);
         return { ...base, w: defaults.w, h: defaults.h };
-    },
-
-    gridCompactRect(base, saved, tileSize = LEGACY_TILE_SIZE) {
-        return this.gridTileRect(tileSize, base, saved);
     },
 
     syncCardDraggable(card) {
@@ -2442,12 +2422,6 @@ export const UI = {
             || card.classList.contains('is-grid-resizing');
     },
 
-    syncSpatialAtSmallFromRect(card, w, h) {
-        if (!isDesktopCard(card)) return;
-        const item = this.resolveBoardItem(card?.dataset?.id);
-        this.syncSpatialCollapseState(card, item, w, h);
-    },
-
     applyFreeformSize(card) {
         if (!isDesktopCard(card) || isSnapLayoutMode(activeBoardViewMode)) return;
         if (card.dataset.tierResizePreview === '1') return;
@@ -2466,10 +2440,6 @@ export const UI = {
             h = defaults.h;
         }
         this.applyFreeformDimensions(card, w, h);
-    },
-
-    finalizeFreeformCard(card) {
-        this.finalizeDesktopCard(card);
     },
 
     /** Canonical desktop card finalizer — syncs collapse classes, chrome, saved size, toggle label. */
@@ -2501,8 +2471,6 @@ export const UI = {
         const snapLayout = isSnapLayoutMode(activeBoardViewMode);
         const canvas = card.closest('#app-canvas');
 
-        this.applyDesktopTilePresentation(card, item);
-
         if (dimensions) {
             this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
         } else if (snapLayout) {
@@ -2518,14 +2486,6 @@ export const UI = {
                 this.reflowGridBoard(canvas, item.id, { animate: true });
             });
         }
-    },
-
-    updateGridBoardCard(card, item, opts = {}) {
-        return this.updateDesktopCard(card, item, opts);
-    },
-
-    updateFreeformCard(card, item, opts = {}) {
-        return this.updateDesktopCard(card, item, opts);
     },
 
     usesAnimPixelLock(card) {
@@ -2694,18 +2654,6 @@ export const UI = {
     },
 
     applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, options = {}) {
-        if (isDesktopCard(card)) {
-            if (expanded) {
-                const rect = this.resolveCardRect(card, item, { mode: 'remembered' });
-                this.applySpatialToggleRect(card, item, rect, { deferReflow: options.skipGridReflow });
-            } else {
-                this.collapseBoardCardToSmallFootprint(card, item, { deferReflow: options.skipGridReflow });
-            }
-            this.cleanupCardAnimation(card);
-            this.syncSpatialChromeForEditing(card);
-            return;
-        }
-
         if (options.skipAnimation) {
             this.cancelCardAnimation(card);
         }
@@ -3144,7 +3092,7 @@ export const UI = {
         if (!card || !item?.id) return;
 
         if (isDesktopCard(card)) {
-            if (!this.isSpatiallyCollapsed(card, item)) {
+            if (!this.isSpatiallyCollapsed(card)) {
                 this.collapseBoardCardToSmallFootprint(card, item);
             }
             return;
@@ -3321,8 +3269,7 @@ export const UI = {
 
         if (placement.viewMode === 'grid' && placement.rect) {
             this.applyNoteRect(card, placement.rect);
-            this.finalizeGridBoardCard(card);
-            this.updateGridBoardCard(card, item, {
+            this.updateDesktopCard(card, item, {
                 expanded: true,
                 dimensions: { w: placement.rect.w, h: placement.rect.h }
             });
@@ -3341,7 +3288,7 @@ export const UI = {
                 card.style.top = `${placement.position.y}px`;
                 this.saveFreeformPosition(item.id, placement.position.x, placement.position.y);
             }
-            this.updateFreeformCard(card, item, {
+            this.updateDesktopCard(card, item, {
                 expanded: true,
                 dimensions: placement.size || null
             });
@@ -3720,7 +3667,6 @@ export const UI = {
             stopMousedownPropagation: true
         });
         this.bindBoardEditorFocusChrome(card);
-        this.applyDesktopTilePresentation(card, item);
         this.finalizeDesktopCard(card);
         this.syncCardDraggable(card);
         this.syncBoardPinClass(card);
@@ -5338,14 +5284,6 @@ export const UI = {
             h = compact.h;
         }
         this.applyFreeformDimensions(card, w, h);
-    },
-
-    finalizeGridBoardCard(card) {
-        this.finalizeDesktopCard(card);
-    },
-
-    applyGridBoardSize(card) {
-        this.applyDesktopSize(card);
     },
 
     clampGridResize(w, h, { packW } = {}) {

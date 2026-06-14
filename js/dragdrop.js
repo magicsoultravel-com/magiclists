@@ -113,7 +113,7 @@ function finishSnapPanelGesture(card, {
 
     const item = currentItems.find((i) => i.id === card.dataset.id);
     let tileSize = item ? UI.getCardTileSize(card, item) : 'large';
-    if (item && tierResizeState && UI.isSpatiallyCollapsed(card, item)) {
+    if (item && tierResizeState && UI.isSpatiallyCollapsed(card)) {
         tileSize = UI.commitTierResize(card, item, tierResizeState);
     }
     if (item && card.classList.contains('expanded') && !isDesktopCard(card)
@@ -125,7 +125,7 @@ function finishSnapPanelGesture(card, {
     }
 
     saveLayout(card, rect, {
-        updateRemembered: UI.isSpatiallyCollapsed(card, item) && !isAtSmallSize(rect.w, rect.h, readTileSmallFootprint())
+        updateRemembered: UI.isSpatiallyCollapsed(card) && !isAtSmallSize(rect.w, rect.h, readTileSmallFootprint())
     });
     reflow(card, { animate });
     if (isDesktopCard(card)) {
@@ -458,7 +458,7 @@ export const DragDropEngine = {
                 nextY = origY + dy;
             }
 
-            if (item && UI.isSpatiallyCollapsed(card, item) && tierResizeState) {
+            if (item && UI.isSpatiallyCollapsed(card) && tierResizeState) {
                 nextX = Math.max(minCoord, nextX);
                 nextY = Math.max(minCoord, nextY);
                 const bounds = boardBounds;
@@ -492,7 +492,7 @@ export const DragDropEngine = {
             card.style.top = `${nextY}px`;
             UI.applyFreeformDimensions(card, finalW, finalH);
             if (isDesktopCard(card)) {
-                UI.syncSpatialAtSmallFromRect(card, finalW, finalH);
+                UI.syncSpatialCollapseState(card, item, finalW, finalH);
             }
             if (snapEnabled) {
                 autoScrollDesktopCanvas(canvas, e.clientX, e.clientY, { scrollX: false });
@@ -519,7 +519,7 @@ export const DragDropEngine = {
             } else if (moved) {
                 card.dataset.skipExpand = '1';
                 if (snapEnabled) {
-                    if (item && tierResizeState && UI.isSpatiallyCollapsed(card, item)) {
+                    if (item && tierResizeState && UI.isSpatiallyCollapsed(card)) {
                         const { w, h } = UI.readFreeformCardSize(card);
                         tierResizeState.previewTier = UI.inferCollapsedTileTier(
                             w,
@@ -536,7 +536,7 @@ export const DragDropEngine = {
                         parseFloat(card.style.left) || 0,
                         parseFloat(card.style.top) || 0
                     );
-                    if (item && tierResizeState && UI.isSpatiallyCollapsed(card, item)) {
+                    if (item && tierResizeState && UI.isSpatiallyCollapsed(card)) {
                         const tileSize = UI.commitTierResize(card, item, tierResizeState);
                         const { w, h } = UI.readFreeformCardSize(card);
                         UI.saveFreeformSize(card.dataset.id, w, h, {
@@ -581,7 +581,7 @@ export const DragDropEngine = {
                     if (snapEnabled) UI.raiseDesktopCard(card);
                     const { w: startW, h: startH } = UI.readFreeformCardSize(card);
                     const itemMatch = currentItems.find((i) => i.id === card.dataset.id);
-                    const tierResizeState = itemMatch && UI.isSpatiallyCollapsed(card, itemMatch)
+                    const tierResizeState = itemMatch && UI.isSpatiallyCollapsed(card)
                         ? UI.createTierResizeSession(card, itemMatch)
                         : null;
                     resizeActive = {

@@ -1564,12 +1564,6 @@ body.is-shell-resizing--h * {
     word-break: break-word;
 }
 
-.mini-card[data-desktop="1"]:not(.spatial-at-small) .note-surface .mini-card-title {
-    white-space: normal;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-}
-
 .note-surface .expanded-checklist {
     font-size: calc(0.6rem * var(--note-font-scale, 1));
 }
