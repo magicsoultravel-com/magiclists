@@ -41,7 +41,7 @@ import {
     pruneFileCabinetOrderByLayout,
     setFileCabinetActive
 } from './fileCabinet.js';
-import { initShellResize, syncCabinetSplitter } from './shellResize.js';
+import { initShellResize } from './shellResize.js';
 
 function countHiddenFromBoard(items) {
     return items.filter(item => UI.isHiddenFromBoard(item)).length;
@@ -548,7 +548,6 @@ class Application {
         }
         this.updateViewToggleState();
         this.updateLayoutResetVisibility();
-        syncCabinetSplitter();
         await this.syncDataStore();
     }
 

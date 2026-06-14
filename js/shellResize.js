@@ -10,7 +10,6 @@ import {
     writeFileCabinetHeight,
     getFileCabinetDragMinHeight,
     syncFileCabinetDrawerHeight,
-    FILE_CABINET_MIN_HEIGHT,
     FILE_CABINET_BOARD_MIN_HEIGHT,
     FILE_CABINET_REF_HEIGHT
 } from './fileCabinet.js';
@@ -20,7 +19,6 @@ const DESKTOP_MIN_WIDTH = 280;
 let verticalSplitter = null;
 let horizontalSplitter = null;
 let sidebarPanel = null;
-let workspaceShell = null;
 let bound = false;
 
 function clamp(value, min, max) {
@@ -64,7 +62,7 @@ function sidebarScaleForWidth(width) {
 function getCabinetHeightBounds(mount) {
     const surface = document.getElementById('desktop-surface');
     const surfaceH = surface?.clientHeight || window.innerHeight;
-    const min = Math.max(FILE_CABINET_MIN_HEIGHT, getFileCabinetDragMinHeight());
+    const min = getFileCabinetDragMinHeight();
     const maxByRatio = surfaceH * 0.5;
     const maxByBoard = surfaceH - FILE_CABINET_BOARD_MIN_HEIGHT;
     const max = Math.max(min, Math.min(maxByRatio, maxByBoard));
@@ -173,7 +171,7 @@ function ensureSidebarScaleInner() {
 
 function ensureVerticalSplitter() {
     if (verticalSplitter?.isConnected) return verticalSplitter;
-    if (!workspaceShell || !sidebarPanel) return null;
+    if (!sidebarPanel) return null;
 
     verticalSplitter = document.createElement('div');
     verticalSplitter.id = 'shell-splitter-v';
@@ -197,7 +195,7 @@ function ensureHorizontalSplitter() {
     }
 
     if (horizontalSplitter?.isConnected && horizontalSplitter.previousElementSibling === mount) {
-        applyCabinetUiScale(mount);
+        applyCabinetAutoHeight(mount);
         return horizontalSplitter;
     }
 
@@ -299,11 +297,7 @@ function bindSplitterDrag(handle, axis) {
             const mount = document.getElementById('file-cabinet');
             if (!mount) return;
             const next = clampCabinetHeight(startSize + (e.clientY - startY), mount);
-            mount.dataset.fixedHeight = 'true';
-            mount.style.flex = '0 0 auto';
-            mount.style.height = `${next}px`;
-            mount.style.maxHeight = '';
-            applyCabinetUiScale(mount, next);
+            applyCabinetHeight(mount, next);
         }
     });
 
@@ -343,7 +337,6 @@ export function syncCabinetSplitter() {
     const mount = document.getElementById('file-cabinet');
     if (mount) {
         ensureHorizontalSplitter();
-        applyCabinetAutoHeight(mount);
     } else {
         removeHorizontalSplitter();
     }
@@ -360,9 +353,8 @@ export function onSidebarCollapseChanged() {
 }
 
 export function initShellResize() {
-    workspaceShell = document.getElementById('workspace-shell');
     sidebarPanel = document.getElementById('side-panel');
-    if (!workspaceShell || !sidebarPanel) return;
+    if (!sidebarPanel) return;
 
     ensureSidebarScaleInner();
 

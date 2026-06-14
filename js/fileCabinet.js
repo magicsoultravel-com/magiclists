@@ -53,10 +53,6 @@ export function writeFileCabinetHeight(height) {
     localStorage.setItem(FILE_CABINET_HEIGHT_KEY, String(Math.round(height)));
 }
 
-export function hasFixedFileCabinetHeight() {
-    return readFileCabinetHeight() !== null;
-}
-
 export function getFileCabinetOrder() {
     try {
         const raw = localStorage.getItem(FILE_CABINET_ORDER_KEY);
