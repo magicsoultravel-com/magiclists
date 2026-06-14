@@ -188,6 +188,7 @@ function pointerHitsNoteEditor(clientX, clientY, card) {
 
 function shouldYieldToNoteEditor(e, card) {
     if (!e || !card) return false;
+    if (e.target?.closest?.('.card-act--drag')) return false;
     if (pointerHitsNoteEditor(e.clientX, e.clientY, card)) return true;
     return !!e.target?.closest?.(
         '.editor-note-shell .card-inline-edit, '
@@ -570,8 +571,6 @@ export const DragDropEngine = {
             card.addEventListener('mousedown', (e) => {
                 if (e.button !== 0) return;
 
-                if (shouldYieldToNoteEditor(e, card)) return;
-
                 const resizeHandle = e.target.closest('.ff-resize');
                 if (resizeHandle) {
                     if (cardIsPinned(card)) return;
@@ -603,8 +602,11 @@ export const DragDropEngine = {
                     return;
                 }
 
+                const wantsDrag = shouldStartCardDrag(e.target);
+                if (!wantsDrag && shouldYieldToNoteEditor(e, card)) return;
+
                 if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
-                if (!shouldStartCardDrag(e.target)) return;
+                if (!wantsDrag) return;
                 if (cardIsPinned(card)) return;
 
                 const scrollHost = e.target.closest('.editor-note-body') || e.target.closest('.card-body');

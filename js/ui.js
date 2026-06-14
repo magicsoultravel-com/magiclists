@@ -1605,8 +1605,9 @@ export const UI = {
             }
         } else {
             this.persistRememberedSpatialSize(item.id, pos.w, pos.h, tileSize);
-            const smallRect = this.resolveCardRect(card, item, { mode: 'small' });
-            this.applySpatialToggleRect(card, item, smallRect, ctx);
+            const small = getSmallRect(readTileSmallFootprint());
+            const smallRect = { x: pos.x, y: pos.y, w: small.w, h: small.h };
+            this.applySpatialToggleRect(card, item, smallRect, { ...ctx, deferReflow: true });
         }
     },
 

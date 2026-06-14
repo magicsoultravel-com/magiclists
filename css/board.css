@@ -606,6 +606,19 @@
     min-width: 0;
 }
 
+#app-canvas.view-grid .mini-card[data-desktop="1"] .editor-meta-row--footer.editor-meta-row--inline,
+#app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-meta-row--footer.editor-meta-row--inline {
+    min-height: 1.5em;
+    max-height: 1.5em;
+    font-size: calc(0.58rem * var(--note-font-scale, 1));
+    padding: 0.2rem 0;
+}
+
+#app-canvas.view-grid .mini-card[data-desktop="1"] .editor-meta-wrap.card-drag-zone,
+#app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-meta-wrap.card-drag-zone {
+    cursor: grab;
+}
+
 #app-canvas.view-grid .mini-card[data-desktop="1"] .editor-note-body,
 #app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-note-body {
     flex: 1 1 auto;
