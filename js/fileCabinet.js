@@ -878,11 +878,10 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
         UI
     };
 
-    let rowParent = mount;
-    if (hasRail) {
-        const inner = document.createElement('div');
-        inner.className = 'file-cabinet-inner';
+    const inner = document.createElement('div');
+    inner.className = 'file-cabinet-inner';
 
+    if (hasRail) {
         const rail = document.createElement('aside');
         rail.className = 'file-cabinet-filed-rail';
         rail.setAttribute('aria-label', 'Folded categories');
@@ -915,8 +914,6 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
             });
 
         inner.appendChild(rail);
-        rowParent = inner;
-        mount.appendChild(inner);
     }
 
     const row = document.createElement('div');
@@ -933,8 +930,8 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
         }));
     });
 
-    rowParent.appendChild(row);
-    syncFileCabinetDrawerHeight(mount);
+    inner.appendChild(row);
+    mount.appendChild(inner);
 }
 
 export function initFileCabinetCategoryActions(mount, signal) {

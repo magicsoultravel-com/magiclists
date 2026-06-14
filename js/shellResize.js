@@ -71,7 +71,11 @@ function getCabinetHeightBounds(mount) {
 function cabinetScaleForHeight(height, mount) {
     const contentMin = getFileCabinetContentMinHeight(mount);
     if (!contentMin || !height) return 1;
-    return Math.min(1, height / contentMin);
+    const styles = getComputedStyle(mount);
+    const padY = (parseFloat(styles.paddingTop) || 0) + (parseFloat(styles.paddingBottom) || 0);
+    const innerH = Math.max(1, height - padY);
+    const stackMin = Math.max(1, contentMin - padY);
+    return Math.min(1, innerH / stackMin);
 }
 
 function applySidebarUiScale(width) {
@@ -184,7 +188,6 @@ function ensureHorizontalSplitter() {
 
     mount.insertAdjacentElement('afterend', horizontalSplitter);
     bindSplitterDrag(horizontalSplitter, 'h');
-    applyCabinetAutoHeight(mount);
     return horizontalSplitter;
 }
 
@@ -313,6 +316,7 @@ export function syncCabinetSplitter() {
     const mount = document.getElementById('file-cabinet');
     if (mount) {
         ensureHorizontalSplitter();
+        applyCabinetAutoHeight(mount);
     } else {
         removeHorizontalSplitter();
     }

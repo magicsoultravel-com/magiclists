@@ -467,6 +467,8 @@ body {
 }
 
 .file-cabinet {
+    position: relative;
+    z-index: 30;
     flex: 0 0 auto;
     min-height: 72px;
     overflow: hidden;
@@ -781,6 +783,8 @@ body.is-file-cabinet-drag-active {
 }
 
 #app-canvas.file-cabinet-bottom {
+    position: relative;
+    z-index: 1;
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
@@ -1131,9 +1135,10 @@ html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
 
 .shell-splitter--h {
     height: 6px;
-    margin: -2px 0;
+    margin: 0;
     cursor: row-resize;
     flex-shrink: 0;
+    z-index: 5;
 }
 
 .shell-splitter::before {
