@@ -563,51 +563,17 @@ body {
     position: absolute;
     top: 100%;
     left: 0;
-    right: 0;
     z-index: 130;
-    max-height: 0;
-    overflow: hidden;
+    overflow: visible;
     opacity: 0;
     pointer-events: none;
-    transition: max-height 0.16s ease, opacity 0.12s ease;
+    transition: opacity 0.12s ease;
     border-radius: 0 0 0.3rem 0.3rem;
-    background: color-mix(in srgb, var(--bg-surface) 94%, var(--bg-primary));
-    box-shadow:
-        0 4px 12px rgba(0, 0, 0, 0.16),
-        0 0 0 1px color-mix(in srgb, var(--text-muted) 18%, var(--border-color));
 }
 
 .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout {
-    max-height: min(45vh, 520px);
-    overflow-y: auto;
     opacity: 1;
     pointer-events: auto;
-    padding: 0.25rem 0 0.3rem;
-}
-
-.file-cabinet-tab-stack--filed-rollout {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    position: relative;
-    height: auto;
-    min-width: 0;
-    width: 100%;
-}
-
-.file-cabinet-tab-stack--filed-rollout .file-cabinet-tab {
-    position: relative;
-    left: auto;
-    top: auto;
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
-    flex: 0 0 auto;
-    z-index: auto;
-}
-
-.file-cabinet-tab-stack--filed-rollout .file-cabinet-tab.is-filed-rollout-insert-before {
-    box-shadow: 0 -2px 0 0 var(--file-cabinet-category-color, var(--accent-color));
 }
 
 .file-cabinet-row {
