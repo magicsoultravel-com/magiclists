@@ -1307,8 +1307,7 @@ export const UI = {
         if (!isDesktopCard(card)) return;
         const toggleBtn = card.querySelector('.card-act--toggle');
         if (!toggleBtn) return;
-        const { w, h } = this.readNoteRect(card);
-        const atSmall = this.isAtCurrentSmallSize(w, h);
+        const atSmall = this.isSpatiallyCollapsed(card);
         const inFileCabinet = !!card.closest('#file-cabinet');
         let expandTitle;
         let lastIcon;
@@ -2454,9 +2453,16 @@ export const UI = {
         let w;
         let h;
         if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
-            const clamped = geoClampSpatialSize(saved.w, saved.h, tileSize);
-            w = clamped.w;
-            h = clamped.h;
+            const footprint = readTileSmallFootprint();
+            if (isAtSmallSize(saved.w, saved.h, footprint)) {
+                const small = getSmallRect(footprint);
+                w = small.w;
+                h = small.h;
+            } else {
+                const clamped = geoClampSpatialSize(saved.w, saved.h, tileSize);
+                w = clamped.w;
+                h = clamped.h;
+            }
         } else {
             const defaults = geoGetTileDefaultRect(tileSize);
             w = defaults.w;
@@ -2469,14 +2475,14 @@ export const UI = {
     finalizeDesktopCard(card) {
         if (!isDesktopCard(card)) return;
         const item = this.resolveBoardItem(card.dataset.id);
-        const { w, h } = this.readNoteRect(card);
-        this.syncSpatialCollapseState(card, item, w, h);
         this.setupFreeformChrome(card);
         if (isSnapLayoutMode(activeBoardViewMode)) {
             this.applyDesktopSize(card);
         } else {
             this.applyFreeformSize(card);
         }
+        const { w, h } = this.readNoteRect(card);
+        this.syncSpatialCollapseState(card, item, w, h);
         this.syncSpatialChromeForEditing(card);
         this.syncSpatialToggleButton(card);
     },
@@ -5290,13 +5296,17 @@ export const UI = {
         let w;
         let h;
         if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
-            const clamped = geoClampSpatialSize(
-                saved.w,
-                saved.h,
-                this.getCardTileSize(card, item)
-            );
-            w = clamped.w;
-            h = clamped.h;
+            const tileSize = this.getCardTileSize(card, item);
+            const footprint = readTileSmallFootprint();
+            if (isAtSmallSize(saved.w, saved.h, footprint)) {
+                const small = getSmallRect(footprint);
+                w = small.w;
+                h = small.h;
+            } else {
+                const clamped = geoClampSpatialSize(saved.w, saved.h, tileSize);
+                w = clamped.w;
+                h = clamped.h;
+            }
         } else {
             const compact = this.gridTileRect(
                 this.getCardTileSize(card, item),
