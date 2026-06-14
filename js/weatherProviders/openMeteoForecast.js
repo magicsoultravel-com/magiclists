@@ -32,19 +32,10 @@ export const OpenMeteoForecastProvider = {
         const wmoCurrent = current.weather_code;
         const condition = conditionFromWmoCode(wmoCurrent);
 
-        const hourly = [];
         const hTimes = raw.hourly?.time || [];
         const hTemps = raw.hourly?.temperature_2m || [];
         const hCodes = raw.hourly?.weather_code || [];
-        for (let i = 0; i < Math.min(hTimes.length, 24); i++) {
-            const code = hCodes[i];
-            hourly.push({
-                date: hTimes[i],
-                temp: num(hTemps[i]),
-                icon: code,
-                condition: conditionFromWmoCode(code)
-            });
-        }
+        const hourly = buildHourlyFromNow(hTimes, hTemps, hCodes, current.time, 12);
 
         const daily = [];
         const dTimes = raw.daily?.time || [];
@@ -86,4 +77,33 @@ function num(v) {
     if (v == null || v === '') return null;
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
+}
+
+/** First hourly index at or after the anchor time's hour (local). */
+function hourlyStartIndex(times, anchorIso) {
+    if (!times.length) return 0;
+    const anchor = anchorIso ? new Date(anchorIso) : new Date();
+    const floor = new Date(anchor);
+    floor.setMinutes(0, 0, 0);
+    const floorMs = floor.getTime();
+    for (let i = 0; i < times.length; i++) {
+        const slotMs = new Date(times[i]).getTime();
+        if (Number.isFinite(slotMs) && slotMs >= floorMs) return i;
+    }
+    return 0;
+}
+
+function buildHourlyFromNow(times, temps, codes, anchorIso, count) {
+    const start = hourlyStartIndex(times, anchorIso);
+    const hourly = [];
+    for (let i = start; i < Math.min(times.length, start + count); i++) {
+        const code = codes[i];
+        hourly.push({
+            date: times[i],
+            temp: num(temps[i]),
+            icon: code,
+            condition: conditionFromWmoCode(code)
+        });
+    }
+    return hourly;
 }

@@ -46,18 +46,7 @@ export const ImgwForecastProvider = {
                 icon: currentIcon,
                 updatedAt: current.date || null
             },
-            hourly: (raw.hourly || []).slice(0, 24).map((h) => ({
-                date: h.date,
-                temp: num(h.temp),
-                feelsLike: num(h.feels_like),
-                precip: num(h.precip),
-                rain: num(h.rain),
-                snow: num(h.snow),
-                cloud: num(h.cloud),
-                windSpeed: num(h.wind_speed),
-                icon: h.icon,
-                condition: h.icon ? conditionFromIcon(h.icon) : conditionFromMetrics(h)
-            })),
+            hourly: buildImgwHourlyFromNow(raw.hourly || [], current.date, 12),
             daily: (raw.daily || []).slice(0, 4).map((d) => ({
                 date: d.date,
                 tempMin: num(d.temp_min),
@@ -92,7 +81,38 @@ async function parseJsonResponse(res) {
     }
 }
 
-function num(v) {    if (v == null || v === '') return null;
+function num(v) {
+    if (v == null || v === '') return null;
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
+}
+
+function hourlyStartIndex(times, anchorIso) {
+    if (!times.length) return 0;
+    const anchor = anchorIso ? new Date(anchorIso) : new Date();
+    const floor = new Date(anchor);
+    floor.setMinutes(0, 0, 0);
+    const floorMs = floor.getTime();
+    for (let i = 0; i < times.length; i++) {
+        const slotMs = new Date(times[i]).getTime();
+        if (Number.isFinite(slotMs) && slotMs >= floorMs) return i;
+    }
+    return 0;
+}
+
+function buildImgwHourlyFromNow(rows, anchorIso, count) {
+    const times = rows.map((h) => h.date);
+    const start = hourlyStartIndex(times, anchorIso);
+    return rows.slice(start, start + count).map((h) => ({
+        date: h.date,
+        temp: num(h.temp),
+        feelsLike: num(h.feels_like),
+        precip: num(h.precip),
+        rain: num(h.rain),
+        snow: num(h.snow),
+        cloud: num(h.cloud),
+        windSpeed: num(h.wind_speed),
+        icon: h.icon,
+        condition: h.icon ? conditionFromIcon(h.icon) : conditionFromMetrics(h)
+    }));
 }

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Easel note icon">
+  <rect width="512" height="512" rx="96" fill="#121214"/>
+  <!-- easel legs -->
+  <polygon points="160,420 200,180 240,420" fill="#5C3D28"/>
+  <polygon points="352,420 312,180 272,420" fill="#5C3D28"/>
+  <rect x="168" y="168" width="176" height="16" rx="4" fill="#8B5E3C" transform="rotate(-8 256 176)"/>
+  <!-- note leaning -->
+  <g transform="rotate(-10 256 260)">
+    <rect x="144" y="148" width="224" height="280" rx="10" fill="#FFFEF9"/>
+    <rect x="168" y="188" width="176" height="24" rx="5" fill="#FF6EC7"/>
+    <rect x="168" y="228" width="176" height="24" rx="5" fill="#00F5FF"/>
+    <rect x="168" y="268" width="176" height="24" rx="5" fill="#B026FF"/>
+    <rect x="168" y="308" width="176" height="24" rx="5" fill="#FFE566"/>
+  </g>
+  <!-- leg highlights -->
+  <polygon points="176,420 196,220 212,420" fill="#C4A574" opacity="0.45"/>
+  <polygon points="336,420 316,220 300,420" fill="#C4A574" opacity="0.45"/>
+</svg>
