@@ -6,7 +6,8 @@ export const TOOLS_DOCK_KEY = 'matrix_tools_dock';
 export const SIDEBAR_WIDTH_KEY = 'matrix_sidebar_width';
 
 export const SIDEBAR_DEFAULT_WIDTH = 220;
-export const SIDEBAR_MIN_WIDTH = 160;
+/** 33% below prior 160px floor — narrower drag allowed */
+export const SIDEBAR_MIN_WIDTH = Math.round(160 * (1 - 1 / 3));
 
 export const SIDEBAR_BACKUP_KEYS = [
     PANEL_COLLAPSED_KEY,

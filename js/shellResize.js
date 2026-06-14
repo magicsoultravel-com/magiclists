@@ -63,9 +63,8 @@ function getCabinetHeightBounds(mount) {
     const surface = document.getElementById('desktop-surface');
     const surfaceH = surface?.clientHeight || window.innerHeight;
     const min = getFileCabinetDragMinHeight();
-    const maxByRatio = surfaceH * 0.5;
-    const maxByBoard = surfaceH - FILE_CABINET_BOARD_MIN_HEIGHT;
-    const max = Math.max(min, Math.min(maxByRatio, maxByBoard));
+    const splitterH = horizontalSplitter?.offsetHeight || 0;
+    const max = Math.max(min, surfaceH - FILE_CABINET_BOARD_MIN_HEIGHT - splitterH);
     return { min, max };
 }
 

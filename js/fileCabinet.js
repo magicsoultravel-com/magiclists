@@ -627,7 +627,7 @@ export function syncFileCabinetDrawerHeight(mount) {
     if (savedHeight !== null || mount.dataset.fixedHeight === 'true') {
         mount.dataset.fixedHeight = 'true';
         mount.style.flex = '0 0 auto';
-        mount.style.maxHeight = '';
+        mount.style.maxHeight = 'none';
         mount.style.minHeight = `${dragMin}px`;
         return;
     }
@@ -635,7 +635,7 @@ export function syncFileCabinetDrawerHeight(mount) {
     delete mount.dataset.fixedHeight;
     mount.style.flex = '';
     mount.style.height = '';
-    mount.style.maxHeight = 'none';
+    mount.style.maxHeight = '';
 }
 
 function buildFileCabinetCategoryColumn({
