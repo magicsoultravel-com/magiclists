@@ -125,6 +125,45 @@ html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-ca
     padding-bottom: 0;
 }
 
+/* File cabinet drag ghost (reparented to body during drag) */
+.file-cabinet-tab.is-file-cabinet-dragging .editor-note-topline {
+    flex: 0 0 auto;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    position: relative;
+}
+
+.file-cabinet-tab.is-file-cabinet-dragging .editor-note-topline .editor-note-header {
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.file-cabinet-tab.is-file-cabinet-dragging .mini-card-title,
+.file-cabinet-tab.is-file-cabinet-dragging .mini-card-title.card-inline-edit {
+    font-size: calc(0.62rem * var(--note-font-scale, 1));
+    width: 100%;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    overflow-wrap: normal;
+    word-break: normal;
+    line-height: 1.2;
+}
+
+.file-cabinet-tab.is-file-cabinet-dragging .editor-note-header .mini-card-title {
+    padding: 0;
+}
+
+html[data-tile-small-footprint="label"] .file-cabinet-tab.is-file-cabinet-dragging .mini-card-title {
+    line-height: 1.15;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
 .editor-note-topline .note-editor-toolbar {
     position: absolute;
     right: 0;
