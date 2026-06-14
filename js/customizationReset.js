@@ -31,7 +31,8 @@ const DISPLAY_DEFAULTS = {
     desktopGradient: false,
     desktopGridLines: false,
     cardAnimations: true,
-    noteFontId: 'default'
+    noteFontId: 'default',
+    brandIconId: 'clipboard'
 };
 
 export function resetCustomizationToDefaults() {

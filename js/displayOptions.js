@@ -20,6 +20,12 @@ import {
     writeTileSmallFootprint
 } from './tileFootprint.js';
 import { GridFineness } from './gridDensity.js';
+import {
+    applyBrandIcon,
+    buildBrandIconOptionsHtml,
+    isBrandIconCustomized,
+    resolveBrandIconId
+} from './brandIcon.js';
 
 const STORAGE_KEY = 'matrix_display_options';
 
@@ -31,7 +37,8 @@ const DEFAULTS = {
     desktopGradient: false,
     desktopGridLines: false,
     cardAnimations: true,
-    noteFontId: 'default'
+    noteFontId: 'default',
+    brandIconId: 'clipboard'
 };
 
 export function readDisplayOptions() {
@@ -48,7 +55,8 @@ export function readDisplayOptions() {
             desktopGradient: raw.desktopGradient === true,
             desktopGridLines: raw.desktopGridLines === true,
             cardAnimations: raw.cardAnimations !== false,
-            noteFontId
+            noteFontId,
+            brandIconId: resolveBrandIconId(raw.brandIconId)
         };
     } catch {
         return { ...DEFAULTS, noteFontId: readNoteFont() };
@@ -72,6 +80,7 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     root.dataset.cardAnimations = options.cardAnimations ? '1' : '0';
     applyNoteFont(options.noteFontId);
     applyTileSmallFootprint(readTileSmallFootprint());
+    applyBrandIcon(options.brandIconId);
 }
 
 function isCustomized(options) {
@@ -89,7 +98,8 @@ function isCustomized(options) {
         || ChromeBackground.isCustomized()
         || DesktopBackground.isCustomized()
         || isTileSmallFootprintCustomized()
-        || GridFineness.isCustomized();
+        || GridFineness.isCustomized()
+        || isBrandIconCustomized(options.brandIconId);
 }
 
 export const DisplayOptions = {
@@ -302,6 +312,7 @@ export const DisplayOptions = {
         this.setRadioGroupSelection(root, '.app-theme-option', readAppTheme(), 'theme');
         this.setRadioGroupSelection(root, '.note-font-option', this.options.noteFontId, 'font');
         this.setRadioGroupSelection(root, '.tile-footprint-option', readTileSmallFootprint(), 'footprint');
+        this.setRadioGroupSelection(root, '.brand-icon-option', this.options.brandIconId, 'brandIcon');
 
         NoteFontScale.updateLabels();
         DesktopZoom.updateButtons();
@@ -347,6 +358,8 @@ export const DisplayOptions = {
                         <section class="display-options-section display-options-section--theme">
                             <h3 class="display-options-heading">Theme</h3>
                             <div class="display-options-theme-grid app-theme-list">${buildThemeOptionsHtml(readAppTheme(), { compact: true })}</div>
+                            <p class="display-options-subheading">Site icon</p>
+                            <div class="brand-icon-list">${buildBrandIconOptionsHtml(opts.brandIconId)}</div>
                         </section>
                         <section class="display-options-section display-options-section--typography">
                             <h3 class="display-options-heading">Typography</h3>
@@ -444,6 +457,14 @@ export const DisplayOptions = {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.setNoteFont(btn.dataset.font);
+                this.syncModalUi(root);
+            });
+        });
+
+        root.querySelectorAll('.brand-icon-option').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.setOptions({ brandIconId: btn.dataset.brandIcon });
                 this.syncModalUi(root);
             });
         });

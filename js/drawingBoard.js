@@ -198,7 +198,11 @@ export const DrawingBoard = {
             this.renderToolbar();
             requestAnimationFrame(() => this.resize());
         };
-        if (this.brandEl) this.brandNotesText = this.brandEl.textContent || 'magicNotes';
+        if (this.brandEl) {
+            this.brandNotesText = this.brandEl.querySelector('.app-brand__text')?.textContent?.trim()
+                || this.brandEl.textContent?.trim()
+                || 'magicNotes';
+        }
 
         if (!this.canvas || !this.boardEl) return;
         this.ctx = this.canvas.getContext('2d');
