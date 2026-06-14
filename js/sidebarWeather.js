@@ -109,7 +109,15 @@ export const SidebarWeather = {
         const hourly = (snapshot.hourly || []).slice(0, 12);
         const daily = (snapshot.daily || []).slice(0, 4);
         const stale = snapshot.sources?.some((s) => s.stale);
-        const forecastError = (snapshot.errors || []).find((e) => e.providerId === 'imgw-forecast');
+        const forecastError = (snapshot.errors || []).find((e) =>
+            e.providerId === 'open-meteo-forecast' || e.providerId === 'imgw-forecast'
+        );
+        const cityLabel = settings.label || snapshot.location?.label || '';
+        const locations = WeatherApi.listLocations();
+        const locationOptions = locations.map((loc) => {
+            const sel = loc.id === settings.locationId ? 'selected' : '';
+            return `<option value="${escapeHtml(loc.id)}" ${sel}>${escapeHtml(loc.label)}</option>`;
+        }).join('');
         const pogodaUrl = WeatherApi.getPogodaUrl(settings.lat, settings.lon);
         const showSynop = this.isSourceEnabled(settings, 'imgw-synop') && snapshot.observation?.stationName;
         const showWarnings = this.isSourceEnabled(settings, 'imgw-warnings') && (snapshot.alerts?.length || 0) > 0;
@@ -160,6 +168,7 @@ export const SidebarWeather = {
             <div class="sidebar-weather__now">
                 <span class="sidebar-weather__now-icon">${weatherIconSvgFromCode(current.icon, current, { size: 36 })}</span>
                 <div class="sidebar-weather__now-meta">
+                    ${cityLabel ? `<span class="sidebar-weather__now-place">${escapeHtml(cityLabel)}</span>` : ''}
                     <span class="sidebar-weather__now-temp">${current.temp != null ? `${Math.round(current.temp)}°` : '—'}</span>
                     <span class="sidebar-weather__now-label">${escapeHtml(conditionLabel(current.condition))}</span>
                     ${current.feelsLike != null ? `<span class="sidebar-weather__now-feels">Feels ${Math.round(current.feelsLike)}°</span>` : ''}
@@ -188,19 +197,9 @@ export const SidebarWeather = {
                 </button>
                 <div class="sidebar-weather__settings-panel ${this.settingsOpen ? '' : 'is-hidden'}" data-weather-settings-panel>
                     <label class="form-group">
-                        <span>Label</span>
-                        <input type="text" class="form-input" data-weather-label value="${escapeHtml(settings.label || '')}" autocomplete="off">
+                        <span>Location</span>
+                        <select class="form-input" data-weather-location aria-label="Weather location">${locationOptions}</select>
                     </label>
-                    <div class="sidebar-weather__coords">
-                        <label class="form-group">
-                            <span>Lat</span>
-                            <input type="number" step="any" class="form-input" data-weather-lat value="${settings.lat}">
-                        </label>
-                        <label class="form-group">
-                            <span>Lon</span>
-                            <input type="number" step="any" class="form-input" data-weather-lon value="${settings.lon}">
-                        </label>
-                    </div>
                     <label class="form-group">
                         <span>Refresh (min)</span>
                         <input type="number" min="5" max="120" step="5" class="form-input" data-weather-refresh-min value="${settings.refreshMinutes || 15}">
@@ -219,22 +218,18 @@ export const SidebarWeather = {
         });
 
         this.root.querySelector('[data-weather-save-settings]')?.addEventListener('click', () => {
-            const label = this.root.querySelector('[data-weather-label]')?.value?.trim() || settings.label;
-            const lat = parseFloat(this.root.querySelector('[data-weather-lat]')?.value);
-            const lon = parseFloat(this.root.querySelector('[data-weather-lon]')?.value);
+            const locationId = this.root.querySelector('[data-weather-location]')?.value;
             const refreshMinutes = parseInt(this.root.querySelector('[data-weather-refresh-min]')?.value, 10);
             const enabledSources = [...this.root.querySelectorAll('[data-weather-source]')]
                 .filter((el) => el.checked)
                 .map((el) => el.dataset.weatherSource);
 
-            if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+            if (!locationId) return;
 
             WeatherApi.saveSettings({
-                label,
-                lat,
-                lon,
+                locationId,
                 refreshMinutes: Number.isFinite(refreshMinutes) ? refreshMinutes : 15,
-                enabledSources: enabledSources.length ? enabledSources : ['imgw-forecast']
+                enabledSources: enabledSources.length ? enabledSources : ['open-meteo-forecast']
             });
             WeatherApi.restartPolling();
         });

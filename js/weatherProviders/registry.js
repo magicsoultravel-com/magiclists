@@ -1,8 +1,10 @@
 import { ImgwForecastProvider } from './imgwForecast.js';
 import { ImgwSynopProvider } from './imgwSynop.js';
 import { ImgwWarningsProvider } from './imgwWarnings.js';
+import { OpenMeteoForecastProvider } from './openMeteoForecast.js';
 
 const PROVIDERS = [
+    OpenMeteoForecastProvider,
     ImgwForecastProvider,
     ImgwSynopProvider,
     ImgwWarningsProvider

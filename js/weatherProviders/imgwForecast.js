@@ -6,7 +6,7 @@ export const ImgwForecastProvider = {
     id: 'imgw-forecast',
     label: 'IMGW forecast',
     kind: 'forecast',
-    defaultEnabled: true,
+    defaultEnabled: false,
     ttlMs: 15 * 60 * 1000,
 
     async fetch(ctx) {

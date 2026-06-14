@@ -1,15 +1,16 @@
 import { WeatherProviderRegistry } from './weatherProviders/registry.js';
-import { DEFAULT_TERYT } from './weatherProviders/imgwWarnings.js';
+import { resolveLocationSettings, listLocations } from './weatherProviders/weatherLocations.js';
 
 const CACHE_KEY = 'magiclists_weather_cache';
 const SETTINGS_KEY = 'magiclists_weather_settings';
 
 const DEFAULT_SETTINGS = {
+    locationId: 'warsaw',
     lat: 52.19638889,
     lon: 21.04638889,
     label: 'Warsaw',
-    teryt: DEFAULT_TERYT,
-    enabledSources: ['imgw-forecast'],
+    teryt: '146501',
+    enabledSources: ['open-meteo-forecast'],
     refreshMinutes: 15
 };
 
@@ -37,14 +38,22 @@ function saveCache(cache) {
 function loadSettings() {
     try {
         const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
-        return { ...DEFAULT_SETTINGS, ...raw };
+        const merged = { ...DEFAULT_SETTINGS, ...raw };
+        if (Array.isArray(merged.enabledSources) && merged.enabledSources.length) {
+            merged.enabledSources = merged.enabledSources.map((id) =>
+                id === 'imgw-forecast' ? 'open-meteo-forecast' : id
+            );
+            merged.enabledSources = [...new Set(merged.enabledSources)];
+        }
+        return resolveLocationSettings(merged);
     } catch {
-        return { ...DEFAULT_SETTINGS };
+        return resolveLocationSettings(DEFAULT_SETTINGS);
     }
 }
 
 function saveSettings(patch) {
-    const next = { ...loadSettings(), ...patch };
+    const merged = { ...loadSettings(), ...patch };
+    const next = resolveLocationSettings(merged);
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
     return next;
 }
@@ -182,6 +191,10 @@ export const WeatherApi = {
             lastRefreshAt: state.lastRefreshAt,
             settings: loadSettings()
         };
+    },
+
+    listLocations() {
+        return listLocations();
     },
 
     getPogodaUrl(lat, lon) {

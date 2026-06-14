@@ -1,9 +1,23 @@
-/**
- * Map IMGW HYBRID icon codes (e.g. n0z00d, n5z80d) to forecast condition keys.
- * Pattern: [optional n/d][precip 0-9]z[cloud 00-99][d/n]
- */
+export function conditionFromWmoCode(code) {
+    const c = Number(code);
+    if (!Number.isFinite(c)) return 'unknown';
+    if (c === 0) return 'clear';
+    if (c >= 1 && c <= 3) return 'partly-cloudy';
+    if (c === 45 || c === 48) return 'fog';
+    if (c >= 51 && c <= 67) return 'rain';
+    if (c >= 71 && c <= 77) return 'snow';
+    if (c >= 80 && c <= 82) return 'rain';
+    if (c >= 85 && c <= 86) return 'snow';
+    if (c >= 95) return 'storm';
+    return 'cloudy';
+}
+
+/** Map IMGW HYBRID icon codes (e.g. n0z00d, n5z80d) to forecast condition keys. */
 export function conditionFromIcon(icon) {
-    if (!icon) return 'unknown';
+    if (icon == null || icon === '') return 'unknown';
+    if (typeof icon === 'number' || (typeof icon === 'string' && /^\d+$/.test(icon))) {
+        return conditionFromWmoCode(icon);
+    }
     const s = String(icon).toLowerCase();
 
     const imgw = s.match(/^[nd]?(\d)z(\d{2})/);
