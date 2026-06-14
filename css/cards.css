@@ -147,6 +147,30 @@ html[data-tile-small-footprint="label"] .file-cabinet-tab.is-file-cabinet-draggi
     padding-bottom: 0;
 }
 
+.file-cabinet .file-cabinet-tab .editor-note-topline {
+    --card-actions-reserve: 7.5rem;
+    isolation: unset;
+}
+
+.file-cabinet .file-cabinet-tab .editor-note-header {
+    max-width: calc(100% - var(--card-actions-reserve));
+}
+
+.file-cabinet .file-cabinet-tab .editor-note-header .mini-card-title,
+.file-cabinet .file-cabinet-tab .editor-note-header .mini-card-title.card-inline-edit {
+    width: auto;
+    max-width: 100%;
+    display: block;
+}
+
+.file-cabinet .file-cabinet-tab .note-editor-toolbar {
+    z-index: 30;
+}
+
+.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-actions::before {
+    pointer-events: auto;
+}
+
 .editor-note-topline .note-editor-toolbar {
     position: absolute;
     right: 0;
