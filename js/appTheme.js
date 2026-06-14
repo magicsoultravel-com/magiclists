@@ -1,5 +1,6 @@
 import { DesktopBackground } from './desktopBackground.js';
 import { ChromeBackground } from './chromeBackground.js';
+import { syncClockStyleForTheme } from './clockStyle.js';
 
 const STORAGE_KEY = 'matrix_app_theme';
 
@@ -299,20 +300,20 @@ export const APP_THEMES = [
     },
     {
         id: 'neon',
-        label: 'Neon',
-        desc: 'Soft synthwave',
+        label: 'Miami',
+        desc: 'Cyan & rose sunset',
         special: 'neon',
-        swatch: ['#12101a', '#1a1628', '#5ec8d8'],
+        swatch: ['#2d1545', '#f472b6', '#2dd4f4'],
         tokens: {
-            '--bg-primary': '#12101a',
-            '--bg-surface': '#161422',
-            '--bg-card': '#1a1628',
-            '--text-main': '#d8e8f0',
-            '--text-muted': '#8aa0b0',
-            '--accent': '#5ec8d8',
-            '--border-color': '#2a2840',
-            '--desktop-bg': '#12101a',
-            '--chrome-bg': '#0e0c16'
+            '--bg-primary': '#1a0a28',
+            '--bg-surface': '#221030',
+            '--bg-card': '#1e1630',
+            '--text-main': '#e8f0f8',
+            '--text-muted': '#a8a0b8',
+            '--accent': '#2dd4f4',
+            '--border-color': '#3d2858',
+            '--desktop-bg': '#1a0a28',
+            '--chrome-bg': '#140c20'
         }
     },
     {
@@ -408,6 +409,7 @@ export function applyAppTheme(themeId, { silent = false } = {}) {
     document.body.style.backgroundColor = desktop;
 
     if (!silent) writeAppTheme(theme.id);
+    syncClockStyleForTheme(theme.id);
 }
 
 function escapeHtml(str) {

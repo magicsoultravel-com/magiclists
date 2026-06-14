@@ -55,7 +55,7 @@ export function resetCustomizationToDefaults() {
 
     DisplayOptions.setOptions({ ...DISPLAY_DEFAULTS });
 
-    ClockStyle.applyStyle('digital', { silent: true });
+    ClockStyle.applyStyle('digital', { silent: true, manual: true });
     ClockStyle.applyHidden(false, { silent: true });
 
     DesktopZoom.setScale(1);

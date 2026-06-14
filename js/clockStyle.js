@@ -11,7 +11,8 @@ export const CLOCK_STYLES = [
     { id: 'compact', label: 'Compact', desc: 'Date & time inline' },
     { id: 'military', label: '24-hour', desc: 'Military time' },
     { id: 'retro', label: 'Retro LED', desc: 'Glowing display' },
-    { id: 'segment', label: '7-segment', desc: 'Classic 88 display' }
+    { id: 'segment', label: '7-segment', desc: 'Classic 88 display' },
+    { id: 'mantel', label: 'Mantel', desc: 'Vintage desk clock' }
 ];
 
 const SEG_POS = {
@@ -147,6 +148,11 @@ function previewMarkup(style, now) {
     if (style === 'segment') {
         return `<span class="clock-style-preview clock-style-preview--segment"><span class="clock-style-preview-segment-row">${renderSegmentRow(formatSegmentTime(now), 'seg-digit--preview')}</span></span>`;
     }
+    if (style === 'mantel') {
+        const date = formatStationDate(now);
+        const time = formatTime(now, 'digital');
+        return `<span class="clock-style-preview clock-style-preview--mantel"><span class="clock-style-preview-mantel-face"><span class="clock-style-preview-mantel-date">${date}</span><span class="clock-style-preview-mantel-time">${time}</span></span></span>`;
+    }
     const time = formatTime(now, style === 'compact' ? 'digital' : style);
     const date = formatDate(now, style);
     if (style === 'compact') {
@@ -165,6 +171,8 @@ export const ClockStyle = {
     analogEl: null,
     analogDateEl: null,
     segmentTimeEl: null,
+    mantelDateEl: null,
+    mantelTimeEl: null,
     triggerBtn: null,
     showBtn: null,
     clockChromeEl: null,
@@ -175,6 +183,8 @@ export const ClockStyle = {
     outsideHandler: null,
     keyHandler: null,
     previewIntervalId: null,
+    _themeAutoActive: false,
+    _styleBeforeThemeAuto: null,
 
     init() {
         this.zone = document.getElementById('digital-clock');
@@ -183,6 +193,8 @@ export const ClockStyle = {
         this.analogEl = document.getElementById('clock-analog');
         this.analogDateEl = document.getElementById('clock-analog-date');
         this.segmentTimeEl = document.getElementById('clock-segment-time');
+        this.mantelDateEl = document.getElementById('clock-mantel-date');
+        this.mantelTimeEl = document.getElementById('clock-mantel-time');
         if (!this.zone || !this.dateEl || !this.timeEl) return;
 
         const analogFaceMount = this.analogEl?.querySelector('.clock-departure-face');
@@ -193,12 +205,15 @@ export const ClockStyle = {
         this.triggerBtn = document.getElementById('clock-display');
         this.clockChromeEl = this.zone.closest('.side-panel-clock');
 
-        this.currentStyle = this.readStored();
-        this.applyStyle(this.currentStyle, { silent: true });
-
         this.showBtn = document.getElementById('btn-show-clock');
         this.isHidden = this.readHidden();
         this.applyHidden(this.isHidden, { silent: true });
+
+        const themeId = document.documentElement.dataset.appTheme || 'dark';
+        syncClockStyleForTheme(themeId);
+        if (!this._themeAutoActive) {
+            this.applyStyle(this.readStored(), { silent: true });
+        }
 
         if (this.triggerBtn && this.triggerBtn.dataset.clockBound !== 'true') {
             this.triggerBtn.dataset.clockBound = 'true';
@@ -282,9 +297,23 @@ export const ClockStyle = {
         return 'digital';
     },
 
-    applyStyle(styleId, { silent = false } = {}) {
+    applyStyle(styleId, { silent = false, manual = false } = {}) {
+        if (manual) {
+            this._themeAutoActive = false;
+            this._styleBeforeThemeAuto = null;
+        }
         const style = CLOCK_STYLES.find((s) => s.id === styleId)?.id || 'digital';
         this.currentStyle = style;
+        if (!this.zone) {
+            if (!silent) {
+                try {
+                    localStorage.setItem(STORAGE_KEY, style);
+                } catch {
+                    /* ignore */
+                }
+            }
+            return;
+        }
         this.zone.dataset.clockStyle = style;
         if (!silent) {
             try {
@@ -312,6 +341,14 @@ export const ClockStyle = {
                 this.segmentTimeEl.innerHTML = renderSegmentRow(segmentStr);
                 this.segmentTimeEl.setAttribute('aria-label', segmentStr);
             }
+            return;
+        }
+
+        if (style === 'mantel') {
+            const dateStr = formatStationDate(now);
+            const timeStr = formatTime(now, 'digital');
+            if (this.mantelDateEl) this.mantelDateEl.textContent = dateStr;
+            if (this.mantelTimeEl) this.mantelTimeEl.textContent = timeStr;
             return;
         }
 
@@ -374,6 +411,13 @@ export const ClockStyle = {
                 if (row) row.innerHTML = renderSegmentRow(formatSegmentTime(now), 'seg-digit--preview');
                 return;
             }
+            if (style === 'mantel') {
+                const dateEl = preview?.querySelector('.clock-style-preview-mantel-date');
+                const timeEl = preview?.querySelector('.clock-style-preview-mantel-time');
+                if (dateEl) dateEl.textContent = formatStationDate(now);
+                if (timeEl) timeEl.textContent = formatTime(now, 'digital');
+                return;
+            }
             if (!preview) return;
             const time = formatTime(now, style === 'compact' ? 'digital' : style);
             const date = formatDate(now, style);
@@ -429,7 +473,7 @@ export const ClockStyle = {
             btn.addEventListener('mousedown', (e) => e.stopPropagation());
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                this.applyStyle(btn.dataset.style);
+                this.applyStyle(btn.dataset.style, { manual: true });
                 if (this.isHidden) this.applyHidden(false);
                 this.closePopover();
             });
@@ -465,3 +509,25 @@ export const ClockStyle = {
         }
     }
 };
+
+const THEME_CLOCK_STYLE = {
+    wood: 'mantel'
+};
+
+export function syncClockStyleForTheme(themeId) {
+    const autoStyle = THEME_CLOCK_STYLE[themeId];
+    if (autoStyle) {
+        if (!ClockStyle._themeAutoActive) {
+            ClockStyle._styleBeforeThemeAuto = ClockStyle.currentStyle;
+            ClockStyle._themeAutoActive = true;
+        }
+        ClockStyle.applyStyle(autoStyle, { silent: true });
+        return;
+    }
+    if (ClockStyle._themeAutoActive) {
+        ClockStyle._themeAutoActive = false;
+        const restore = ClockStyle._styleBeforeThemeAuto || 'digital';
+        ClockStyle._styleBeforeThemeAuto = null;
+        ClockStyle.applyStyle(restore, { silent: true });
+    }
+}
