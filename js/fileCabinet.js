@@ -640,9 +640,6 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
         previewShell = document.createElement('div');
         previewShell.className = 'file-cabinet-folded-preview is-hidden';
         previewShell.setAttribute('aria-hidden', 'true');
-        previewShell.addEventListener('pointerleave', (e) => {
-            maybeHidePreview(e.relatedTarget);
-        }, { signal });
         mount.appendChild(previewShell);
         return previewShell;
     };
@@ -682,6 +679,8 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
         const sorted = sortItemsByFileCabinetOrder(items, catName, ctx.order || getFileCabinetOrder());
         const shell = ensurePreviewShell();
 
+        if (activeChip === chip && shell.querySelector('.file-cabinet-category')) return;
+
         activeChip?.classList.remove('is-fold-preview-source');
         activeChip = chip;
         chip.classList.add('is-fold-preview-source');
@@ -707,13 +706,15 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
         hidePreview();
     };
 
-    mount.addEventListener('pointerenter', (e) => {
+    mount.addEventListener('pointerover', (e) => {
         const chip = e.target.closest('.file-cabinet-filed-chip');
         if (!chip || !mount.contains(chip)) return;
+        if (e.relatedTarget && chip.contains(e.relatedTarget)) return;
+        if (document.body.classList.contains('is-file-cabinet-drag-active')) return;
         showPreview(chip);
     }, { signal });
 
-    mount.addEventListener('pointerleave', (e) => {
+    mount.addEventListener('pointerout', (e) => {
         const chip = e.target.closest('.file-cabinet-filed-chip');
         const shell = previewShell?.isConnected ? previewShell : null;
         const fromPreview = shell?.contains(e.target);

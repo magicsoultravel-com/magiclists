@@ -542,7 +542,8 @@ body {
 }
 
 .file-cabinet-filed-chip:hover .file-cabinet-filed-chip-expand,
-.file-cabinet-filed-chip:focus-within .file-cabinet-filed-chip-expand {
+.file-cabinet-filed-chip:focus-within .file-cabinet-filed-chip-expand,
+.file-cabinet-filed-chip.is-fold-preview-source .file-cabinet-filed-chip-expand {
     opacity: 1;
 }
 
