@@ -178,8 +178,6 @@
     font-weight: 400;
     font-family: inherit;
     color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
 }
 
 .cal-text--default { color: var(--text-main); }

@@ -35,8 +35,6 @@
     padding: 0.2rem 0.85rem 0.35rem;
     font-size: 0.62rem;
     font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
     color: var(--text-muted, #64748b);
 }
 
@@ -332,8 +330,6 @@ html[data-desktop-gradient="1"] #app-canvas.view-grid {
     margin: 0;
     font-size: 0.62rem;
     font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
     color: var(--text-muted);
 }
 
@@ -688,9 +684,7 @@ html[data-note-font="kalam"] .mini-card .step-text {
 .nav-drawer-label {
     font-size: 0.7rem;
     font-weight: 600;
-    text-transform: uppercase;
     color: var(--text-muted);
-    letter-spacing: 0.04em;
 }
 
 .btn {

@@ -57,9 +57,11 @@ export function applyNoteFont(fontId = readNoteFont()) {
     if (font.id === 'default') {
         root.dataset.noteFont = 'default';
         root.style.removeProperty('--note-font-family');
+        root.style.removeProperty('font-family');
     } else {
         root.dataset.noteFont = font.id;
         root.style.setProperty('--note-font-family', font.family);
+        root.style.setProperty('font-family', font.family);
     }
 }
 

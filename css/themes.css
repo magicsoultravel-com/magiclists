@@ -367,6 +367,11 @@ html[data-app-theme="casual-dark"][data-note-font="default"] #editor-overlay .ed
     line-height: 1.35rem;
 }
 
+html[data-app-theme="casual"][data-note-font="default"],
+html[data-app-theme="casual-dark"][data-note-font="default"] {
+    font-family: 'Patrick Hand', 'Segoe Print', 'Comic Neue', cursive;
+}
+
 html[data-app-theme="casual-dark"] .mini-card .category-name,
 html[data-app-theme="casual-dark"] .mini-card .editor-created-date,
 html[data-app-theme="casual-dark"] .mini-card .editor-note-lines,
@@ -2102,12 +2107,6 @@ html[data-app-theme="spaceship"] .tool-panel { border-left-color: #e8922a; }
 html[data-app-theme="spaceship"] .tool-chip { border-color: color-mix(in srgb, #e8922a 40%, #3a4555); }
 html[data-app-theme="spaceship"] .card-act--cal.is-on { color: #e8922a; }
 html[data-app-theme="spaceship"] #btn-drawing-mode.active { background: color-mix(in srgb, #e8922a 28%, transparent); }
-
-html[data-app-theme="spaceship"] .collapsable-heading {
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    font-size: 0.92em;
-}
 
 /* Night Sky — starfield desktop with twinkling stars */
 @keyframes night-sky-twinkle-slow {
