@@ -566,6 +566,8 @@ body {
 
 .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout {
     z-index: 500;
+    box-sizing: content-box;
+    padding: 0.3rem;
     opacity: 1;
     pointer-events: auto;
     background-color: color-mix(in srgb, var(--bg-surface) 90%, var(--bg-primary));
