@@ -71,6 +71,16 @@ function cardIsPinned(card) {
     return !!id && UI.isBoardPinned(id);
 }
 
+function promoteExpandedResizeToLargeTier(card, item) {
+    if (!item || !isDesktopCard(card) || UI.isSpatiallyCollapsed(card)) return resolveTileSize(item);
+    if (resolveTileSize(item) !== 'small' || !UI.canEditInline()) return resolveTileSize(item);
+    UI.mutateItem(item, (it) => {
+        it.tileSize = 'large';
+    }, { preserveView: true, skipRerender: true });
+    item.tileSize = 'large';
+    return 'large';
+}
+
 function maybeRepartitionFileCabinetAfterResize(canvas, card, currentItems) {
     if (!isFileCabinetActive() || !canvas || !card?.dataset?.id) return;
     const sortBy = canvas.classList.contains('view-grid') ? 'grid' : 'freeform';
@@ -114,6 +124,8 @@ function finishSnapPanelGesture(card, {
     let tileSize = item ? UI.getCardTileSize(card, item) : 'large';
     if (item && tierResizeState && UI.isSpatiallyCollapsed(card)) {
         tileSize = UI.commitTierResize(card, item, tierResizeState);
+    } else if (item) {
+        tileSize = promoteExpandedResizeToLargeTier(card, item);
     }
     if (item && card.classList.contains('expanded') && !isDesktopCard(card)
         && isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(item))) {
@@ -546,6 +558,7 @@ export const DragDropEngine = {
                     } else {
                         UI.saveFreeformSizeFromCard(card);
                         if (isDesktopCard(card)) {
+                            if (item) promoteExpandedResizeToLargeTier(card, item);
                             UI.finalizeDesktopCard(card);
                         }
                     }

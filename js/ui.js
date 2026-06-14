@@ -1297,20 +1297,22 @@ export const UI = {
     },
 
     syncSpatialCollapseState(card, item, w, h) {
-        if (!isDesktopCard(card)) return;
+        if (!isDesktopCard(card)) return false;
         card.classList.remove('expanded');
         card.classList.add('note-surface');
-        card.classList.toggle('spatial-at-small', this.isSpatiallyCollapsed(card));
+        const atSmall = this.isSpatiallyCollapsed(card);
+        card.classList.toggle('spatial-at-small', atSmall);
         const resolvedItem = item || this.resolveBoardItem(card?.dataset?.id);
         const tier = geoInferTileTier(w, h, resolveTileSize(resolvedItem));
         this.applyCollapsedTileClasses(card, tier);
+        return atSmall;
     },
 
-    syncSpatialToggleButton(card) {
+    syncSpatialToggleButton(card, atSmall) {
         if (!isDesktopCard(card)) return;
         const toggleBtn = card.querySelector('.card-act--toggle');
         if (!toggleBtn) return;
-        const atSmall = this.isSpatiallyCollapsed(card);
+        if (atSmall === undefined) atSmall = this.isSpatiallyCollapsed(card);
         const inFileCabinet = !!card.closest('#file-cabinet');
         let expandTitle;
         let lastIcon;
@@ -1546,7 +1548,7 @@ export const UI = {
         this.saveTileLayoutFromCard(card, item, rect, normalizedTier);
 
         if (!isDesktopCard(card)) return;
-        this.finalizeDesktopCard(card);
+        this.finalizeDesktopCard(card, { skipSizeReapply: !!ctx.skipSizeReapply });
         const canvas = card.closest('#app-canvas');
         if (ctx.scheduleExtents) {
             this.scheduleBoardCanvasExtents(canvas);
@@ -1564,7 +1566,7 @@ export const UI = {
     },
 
     applySpatialToggleRect(card, item, rect, ctx = {}) {
-        this.commitSpatialRect(card, item, rect, { ...ctx, scheduleExtents: true });
+        this.commitSpatialRect(card, item, rect, { ...ctx, scheduleExtents: true, skipSizeReapply: true });
     },
 
     collapseSpatialAtCurrentPos(card, item, ctx = {}) {
@@ -1600,6 +1602,8 @@ export const UI = {
         } else {
             this.collapseSpatialAtCurrentPos(card, item, ctx);
         }
+        const atSmall = this.isSpatiallyCollapsed(card);
+        this.syncSpatialToggleButton(card, atSmall);
     },
 
     applyFileCabinetZoneToggle(card, item, ctx = {}) {
@@ -2471,19 +2475,21 @@ export const UI = {
     },
 
     /** Canonical desktop card finalizer — syncs collapse classes, chrome, saved size, toggle label. */
-    finalizeDesktopCard(card) {
+    finalizeDesktopCard(card, { skipSizeReapply = false } = {}) {
         if (!isDesktopCard(card)) return;
         const item = this.resolveBoardItem(card.dataset.id);
         this.setupFreeformChrome(card);
-        if (isSnapLayoutMode(activeBoardViewMode)) {
-            this.applyDesktopSize(card);
-        } else {
-            this.applyFreeformSize(card);
+        if (!skipSizeReapply) {
+            if (isSnapLayoutMode(activeBoardViewMode)) {
+                this.applyDesktopSize(card);
+            } else {
+                this.applyFreeformSize(card);
+            }
         }
         const { w, h } = this.readNoteRect(card);
-        this.syncSpatialCollapseState(card, item, w, h);
+        const atSmall = this.syncSpatialCollapseState(card, item, w, h);
         this.syncSpatialChromeForEditing(card);
-        this.syncSpatialToggleButton(card);
+        this.syncSpatialToggleButton(card, atSmall);
     },
 
     getCardRenderContext(item, activeCategories) {
