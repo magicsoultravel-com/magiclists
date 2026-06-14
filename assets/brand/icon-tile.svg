@@ -1,13 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Neon tile note icon">
-  <rect width="512" height="512" rx="96" fill="#121214"/>
-  <!-- rounded note tile -->
-  <rect x="96" y="96" width="320" height="320" rx="48" fill="#FFFEF9"/>
-  <!-- neon lines -->
-  <rect x="128" y="144" width="256" height="32" rx="8" fill="#FF6EC7"/>
-  <rect x="128" y="196" width="256" height="32" rx="8" fill="#00F5FF"/>
-  <rect x="128" y="248" width="256" height="32" rx="8" fill="#B026FF"/>
-  <rect x="128" y="300" width="256" height="32" rx="8" fill="#FFE566"/>
-  <!-- spark -->
-  <polygon points="360,128 372,156 400,168 372,180 360,208 348,180 320,168 348,156" fill="#FFE566"/>
-  <circle cx="360" cy="168" r="10" fill="#00F5FF"/>
+  <rect width="512" height="512" rx="96" fill="#050506"/>
+  <rect x="96" y="96" width="320" height="320" rx="48" fill="#BDB3A3"/>
+  <rect x="128" y="156" width="256" height="36" rx="8" fill="#A83888"/>
+  <rect x="128" y="220" width="256" height="36" rx="8" fill="#008899"/>
+  <rect x="128" y="284" width="256" height="36" rx="8" fill="#601898"/>
+  <polygon points="360,128 372,156 400,168 372,180 360,208 348,180 320,168 348,156" fill="#8A7018"/>
+  <circle cx="360" cy="168" r="10" fill="#008899"/>
 </svg>

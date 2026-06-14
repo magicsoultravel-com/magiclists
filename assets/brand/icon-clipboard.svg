@@ -1,16 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Clipboard note icon">
-  <rect width="512" height="512" rx="96" fill="#121214"/>
-  <!-- clipboard board -->
-  <rect x="96" y="88" width="320" height="384" rx="36" fill="#8B5E3C"/>
-  <rect x="112" y="104" width="288" height="352" rx="28" fill="#C4A574"/>
-  <!-- metal clip -->
-  <rect x="196" y="72" width="120" height="56" rx="12" fill="#4A4A52"/>
-  <rect x="208" y="80" width="96" height="40" rx="8" fill="#6B6B75"/>
-  <!-- note paper -->
-  <rect x="128" y="128" width="256" height="296" rx="8" fill="#FFFEF9"/>
-  <!-- neon lines -->
-  <rect x="152" y="168" width="208" height="28" rx="6" fill="#FF6EC7"/>
-  <rect x="152" y="216" width="208" height="28" rx="6" fill="#00F5FF"/>
-  <rect x="152" y="264" width="208" height="28" rx="6" fill="#B026FF"/>
-  <rect x="152" y="312" width="208" height="28" rx="6" fill="#FFE566"/>
+  <rect width="512" height="512" rx="96" fill="#050506"/>
+  <rect x="96" y="88" width="320" height="384" rx="36" fill="#4A3018"/>
+  <rect x="112" y="104" width="288" height="352" rx="28" fill="#6E4E30"/>
+  <rect x="196" y="72" width="120" height="56" rx="12" fill="#242428"/>
+  <rect x="208" y="80" width="96" height="40" rx="8" fill="#3A3A42"/>
+  <rect x="128" y="128" width="256" height="296" rx="8" fill="#BDB3A3"/>
+  <rect x="152" y="176" width="208" height="32" rx="6" fill="#A83888"/>
+  <rect x="152" y="236" width="208" height="32" rx="6" fill="#008899"/>
+  <rect x="152" y="296" width="208" height="32" rx="6" fill="#601898"/>
 </svg>

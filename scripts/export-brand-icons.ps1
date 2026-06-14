@@ -39,23 +39,23 @@ function Draw-NeonLines($g, $x, $y, $w, $lineH, $gap, $colors) {
 
 function Draw-Icon($g, $id, $size) {
     $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-    $bg = New-Object System.Drawing.SolidBrush (Get-Color '#121214')
+    $bg = New-Object System.Drawing.SolidBrush (Get-Color '#050506')
     Fill-RoundedRect $g $bg 0 0 $size $size ($size * 0.19)
     $bg.Dispose()
 
-    $colors = @('#FF6EC7', '#00F5FF', '#B026FF', '#FFE566')
-    $paper = New-Object System.Drawing.SolidBrush (Get-Color '#FFFEF9')
-    $wood = New-Object System.Drawing.SolidBrush (Get-Color '#8B5E3C')
-    $woodDark = New-Object System.Drawing.SolidBrush (Get-Color '#5C3D28')
-    $woodHi = New-Object System.Drawing.SolidBrush (Get-Color '#C4A574')
-    $clip = New-Object System.Drawing.SolidBrush (Get-Color '#4A4A52')
+    $colors = @('#A83888', '#008899', '#601898')
+    $paper = New-Object System.Drawing.SolidBrush (Get-Color '#BDB3A3')
+    $wood = New-Object System.Drawing.SolidBrush (Get-Color '#4A3018')
+    $woodDark = New-Object System.Drawing.SolidBrush (Get-Color '#261810')
+    $woodHi = New-Object System.Drawing.SolidBrush (Get-Color '#6E4E30')
+    $clip = New-Object System.Drawing.SolidBrush (Get-Color '#242428')
 
     switch ($id) {
         'clipboard' {
             Fill-RoundedRect $g $wood ($size * 0.19) ($size * 0.17) ($size * 0.62) ($size * 0.75) ($size * 0.07)
             Fill-RoundedRect $g $clip ($size * 0.38) ($size * 0.14) ($size * 0.24) ($size * 0.11) ($size * 0.02)
             Fill-RoundedRect $g $paper ($size * 0.25) ($size * 0.25) ($size * 0.5) ($size * 0.58) ($size * 0.02)
-            Draw-NeonLines $g ($size * 0.30) ($size * 0.33) ($size * 0.41) ($size * 0.055) ($size * 0.03) $colors
+            Draw-NeonLines $g ($size * 0.30) ($size * 0.34) ($size * 0.41) ($size * 0.062) ($size * 0.045) $colors
         }
         'easel' {
             $ptsL = @(
@@ -75,20 +75,20 @@ function Draw-Icon($g, $id, $size) {
             $g.RotateTransform(-10)
             $g.TranslateTransform(-$size * 0.5, -$size * 0.5)
             Fill-RoundedRect $g $paper ($size * 0.28) ($size * 0.29) ($size * 0.44) ($size * 0.55) ($size * 0.02)
-            Draw-NeonLines $g ($size * 0.33) ($size * 0.37) ($size * 0.34) ($size * 0.047) ($size * 0.025) $colors
+            Draw-NeonLines $g ($size * 0.33) ($size * 0.38) ($size * 0.34) ($size * 0.055) ($size * 0.038) $colors
             $g.Restore($state)
         }
         'block' {
             Fill-RoundedRect $g $woodDark ($size * 0.22) ($size * 0.64) ($size * 0.56) ($size * 0.19) ($size * 0.03)
             Fill-RoundedRect $g $wood ($size * 0.23) ($size * 0.66) ($size * 0.53) ($size * 0.14) ($size * 0.025)
-            Fill-RoundedRect $g (New-Object System.Drawing.SolidBrush (Get-Color '#F5F0E6')) ($size * 0.33) ($size * 0.22) ($size * 0.41) ($size * 0.45) ($size * 0.02)
+            Fill-RoundedRect $g (New-Object System.Drawing.SolidBrush (Get-Color '#A69C8C')) ($size * 0.33) ($size * 0.22) ($size * 0.41) ($size * 0.45) ($size * 0.02)
             Fill-RoundedRect $g $paper ($size * 0.27) ($size * 0.25) ($size * 0.47) ($size * 0.5) ($size * 0.02)
-            Draw-NeonLines $g ($size * 0.31) ($size * 0.32) ($size * 0.38) ($size * 0.05) ($size * 0.025) $colors
+            Draw-NeonLines $g ($size * 0.31) ($size * 0.34) ($size * 0.38) ($size * 0.058) ($size * 0.038) $colors
         }
         'tile' {
             Fill-RoundedRect $g $paper ($size * 0.19) ($size * 0.19) ($size * 0.62) ($size * 0.62) ($size * 0.09)
-            Draw-NeonLines $g ($size * 0.25) ($size * 0.28) ($size * 0.5) ($size * 0.062) ($size * 0.03) $colors
-            $spark = New-Object System.Drawing.SolidBrush (Get-Color '#FFE566')
+            Draw-NeonLines $g ($size * 0.25) ($size * 0.30) ($size * 0.5) ($size * 0.07) ($size * 0.04) $colors
+            $spark = New-Object System.Drawing.SolidBrush (Get-Color '#8A7018')
             $g.FillEllipse($spark, $size * 0.66, $size * 0.28, $size * 0.08, $size * 0.08)
             $spark.Dispose()
         }
