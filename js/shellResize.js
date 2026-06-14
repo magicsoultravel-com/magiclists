@@ -9,6 +9,7 @@ import {
     readFileCabinetHeight,
     writeFileCabinetHeight,
     getFileCabinetDragMinHeight,
+    clampFileCabinetScroll,
     syncFileCabinetDrawerHeight,
     FILE_CABINET_BOARD_MIN_HEIGHT,
     FILE_CABINET_REF_HEIGHT
@@ -95,6 +96,7 @@ function applyCabinetUiScale(mount, height) {
     mount.style.setProperty('--file-cabinet-ui-scale', String(scale));
     syncFileCabinetDrawerHeight(mount);
     syncCabinetInnerLayout(mount);
+    clampFileCabinetScroll(mount);
 }
 
 function syncCabinetInnerLayout(mount) {

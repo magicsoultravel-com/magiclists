@@ -618,24 +618,39 @@ export function getFileCabinetContentMinHeight(mount) {
     return maxStackH + FILE_CABINET_DRAWER_HEADER_PAD;
 }
 
+/** Reset spurious scroll offsets after layout / fold changes (zoom layout vs visual mismatch). */
+export function clampFileCabinetScroll(mount) {
+    if (!mount) return;
+    const trim = (el) => {
+        if (!el) return;
+        if (el.scrollWidth <= el.clientWidth + 1) el.scrollLeft = 0;
+        if (el.scrollHeight <= el.clientHeight + 1) el.scrollTop = 0;
+    };
+    trim(mount);
+    trim(mount.querySelector('.file-cabinet-inner'));
+}
+
 export function syncFileCabinetDrawerHeight(mount) {
     if (!mount) return;
     const contentMin = getFileCabinetContentMinHeight(mount);
-    const scale = getFileCabinetUiScale(mount);
     const dragMin = getFileCabinetDragMinHeight();
     const savedHeight = readFileCabinetHeight();
-    if (savedHeight !== null || mount.dataset.fixedHeight === 'true') {
+    const isFixed = savedHeight !== null || mount.dataset.fixedHeight === 'true';
+    if (isFixed) {
         mount.dataset.fixedHeight = 'true';
         mount.style.flex = '0 0 auto';
         mount.style.maxHeight = 'none';
         mount.style.minHeight = `${dragMin}px`;
+        clampFileCabinetScroll(mount);
         return;
     }
-    mount.style.minHeight = `${Math.max(dragMin, contentMin * scale)}px`;
+    const autoMax = Math.min(window.innerHeight * 0.45, 520);
+    mount.style.minHeight = `${Math.min(Math.max(dragMin, contentMin), autoMax)}px`;
     delete mount.dataset.fixedHeight;
     mount.style.flex = '';
     mount.style.height = '';
     mount.style.maxHeight = '';
+    clampFileCabinetScroll(mount);
 }
 
 function buildFileCabinetCategoryColumn({
@@ -745,6 +760,7 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
         });
         mount.classList.remove('is-rollout-active');
         activeSlot = null;
+        clampFileCabinetScroll(mount);
     };
 
     const showPreview = (slot) => {
