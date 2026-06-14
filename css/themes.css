@@ -1475,21 +1475,205 @@ html[data-app-theme="parchment"] .tool-chip { border-color: color-mix(in srgb, #
 html[data-app-theme="parchment"] .card-act--cal.is-on { color: #9a4a3a; }
 html[data-app-theme="parchment"] #btn-drawing-mode.active { background: color-mix(in srgb, #9a4a3a 28%, transparent); }
 
-/* Miami / Neon — cyan & rose Vice sunset */
+/* Neon — soft synthwave */
 html[data-app-theme="neon"] #app-canvas,
 html[data-app-theme="neon"] #app-canvas.file-cabinet-bottom {
-    background-color: #1a0a28;
+    background-color: #12101a;
     background-image:
-        repeating-linear-gradient(90deg, transparent 0, transparent 31px, rgba(45, 212, 244, 0.06) 31px, rgba(45, 212, 244, 0.06) 32px),
-        radial-gradient(ellipse 130% 45% at 50% 100%, rgba(45, 212, 244, 0.2), transparent 58%),
-        radial-gradient(ellipse 90% 40% at 50% 88%, rgba(244, 114, 182, 0.16), transparent 52%),
-        linear-gradient(180deg, #1a0a28 0%, #2d1545 38%, #4a2040 72%, #1a2848 100%);
+        repeating-linear-gradient(0deg, transparent 0, transparent 23px, rgba(94, 200, 216, 0.05) 23px, rgba(94, 200, 216, 0.05) 24px),
+        repeating-linear-gradient(90deg, transparent 0, transparent 23px, rgba(94, 200, 216, 0.04) 23px, rgba(94, 200, 216, 0.04) 24px),
+        radial-gradient(ellipse 80% 60% at 50% 100%, rgba(184, 120, 200, 0.08), transparent 55%);
 }
 
 html[data-app-theme="neon"][data-desktop-gradient="1"] #app-canvas.view-freeform,
 html[data-app-theme="neon"][data-desktop-gradient="1"] #app-canvas.view-grid,
 html[data-app-theme="neon"][data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-freeform,
 html[data-app-theme="neon"][data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
+    background-color: #12101a;
+    background-image:
+        repeating-linear-gradient(0deg, transparent 0, transparent 23px, rgba(94, 200, 216, 0.05) 23px, rgba(94, 200, 216, 0.05) 24px),
+        repeating-linear-gradient(90deg, transparent 0, transparent 23px, rgba(94, 200, 216, 0.04) 23px, rgba(94, 200, 216, 0.04) 24px),
+        radial-gradient(ellipse 80% 60% at 50% 100%, rgba(184, 120, 200, 0.08), transparent 55%);
+}
+
+html[data-app-theme="neon"] .mini-card,
+html[data-app-theme="neon"] #editor-overlay .editor-note-shell,
+html[data-app-theme="neon"] .calendar-note-item,
+html[data-app-theme="neon"] .calendar-hour-note {
+    background-color: #1a1628 !important;
+    background-image: none !important;
+    border-left-color: transparent !important;
+    border-radius: 2px 4px 4px 2px !important;
+    border-color: color-mix(in srgb, #5ec8d8 40%, #2a2840) !important;
+    box-shadow:
+        0 0 0 1px color-mix(in srgb, #5ec8d8 20%, transparent),
+        0 2px 8px rgba(0, 0, 0, 0.25) !important;
+    color: #d8e8f0 !important;
+    --card-fg: #d8e8f0;
+    --card-muted: #8aa0b0;
+    --card-action-bg: rgba(94, 200, 216, 0.1);
+    --card-action-fg: #5ec8d8;
+    --card-border-subtle: rgba(94, 200, 216, 0.18);
+    --card-focus-bg: rgba(94, 200, 216, 0.1);
+    --card-focus-ring: rgba(94, 200, 216, 0.25);
+    --card-link: #7ad8e8;
+    --card-placeholder: #7a90a0;
+    --card-input-bg: rgba(0, 0, 0, 0.2);
+    --card-toolbar-bg: #161222;
+    --card-panel-bg: #121018;
+}
+
+html[data-app-theme="neon"] .mini-card .mini-card-title,
+html[data-app-theme="neon"] .mini-card .card-content-preview,
+html[data-app-theme="neon"] .mini-card .step-text,
+html[data-app-theme="neon"] #editor-overlay .mini-card-title,
+html[data-app-theme="neon"] #editor-overlay .step-text {
+    color: #d8e8f0 !important;
+}
+
+html[data-app-theme="neon"] .mini-card .category-name,
+html[data-app-theme="neon"] .mini-card .editor-created-date,
+html[data-app-theme="neon"] .mini-card .editor-note-lines,
+html[data-app-theme="neon"] .mini-card .checklist-badge {
+    color: #8aa0b0 !important;
+}
+
+html[data-app-theme="neon"] .mini-card.compact .card-actions::before {
+    background: rgba(26, 22, 40, 0.94);
+    box-shadow: 0 0 0 1px rgba(94, 200, 216, 0.14);
+}
+
+html[data-app-theme="neon"] .side-panel,
+html[data-app-theme="neon"] .side-panel-toggle-fab {
+    background-color: #0e0c16;
+    background-image: none;
+    box-shadow:
+        inset 0 0 0 1px rgba(94, 200, 216, 0.12),
+        inset 4px 0 8px rgba(0, 0, 0, 0.2);
+}
+
+html[data-app-theme="neon"] .side-panel-toggle-fab {
+    box-shadow: inset 0 0 0 1px rgba(94, 200, 216, 0.12), 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+html[data-app-theme="neon"] .side-panel-brand-host,
+html[data-app-theme="neon"] .side-panel-chrome.side-panel-clock,
+html[data-app-theme="neon"] .side-panel-chrome.side-panel-search {
+    border-bottom-color: rgba(94, 200, 216, 0.1);
+}
+
+html[data-app-theme="neon"] .file-cabinet {
+    background-color: #0e0c16;
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.3);
+    border-bottom-color: rgba(94, 200, 216, 0.1);
+}
+
+html[data-app-theme="neon"] .file-cabinet-filed-rail {
+    background-color: #0a0812;
+    border-right-color: rgba(94, 200, 216, 0.1);
+    padding: 0.25rem 0.45rem 0.25rem 0;
+    border-radius: 0 2px 2px 0;
+}
+
+html[data-app-theme="neon"] .file-cabinet-filed-chip {
+    position: relative;
+    background-color: #161422;
+    border-left-color: transparent;
+    border-radius: 2px;
+    padding: 0.35rem 0.4rem 0.35rem 0.55rem;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(94, 200, 216, 0.08);
+    color: #b0c0d0;
+}
+
+html[data-app-theme="neon"] .file-cabinet-filed-chip::after {
+    content: '';
+    position: absolute;
+    right: 1.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #80e0f0, #5ec8d8 60%, #4098a8);
+    box-shadow: 0 0 4px rgba(94, 200, 216, 0.2);
+}
+
+html[data-app-theme="neon"] .file-cabinet-filed-chip.is-file-cabinet-drop-target {
+    background: color-mix(in srgb, #5ec8d8 14%, #161422);
+    box-shadow: inset 0 0 0 1px rgba(94, 200, 216, 0.35), inset 0 2px 4px rgba(0, 0, 0, 0.22);
+}
+
+html[data-app-theme="neon"] .file-cabinet-category {
+    background-color: #1a1628;
+    border-radius: 0 0 6px 6px;
+    padding: 0 0.35rem 0.45rem;
+    box-shadow:
+        inset 0 0 0 1px rgba(94, 200, 216, 0.12),
+        inset 3px 0 6px rgba(0, 0, 0, 0.14),
+        inset -3px 0 6px rgba(0, 0, 0, 0.14),
+        inset 0 -4px 8px rgba(0, 0, 0, 0.2);
+}
+
+html[data-app-theme="neon"] .file-cabinet-category-header {
+    background-color: #121018;
+    margin: 0 -0.35rem 0.3rem;
+    padding: 0.25rem 0.35rem;
+    border-radius: 2px 2px 0 0;
+    color: #d8e8f0;
+}
+
+html[data-app-theme="neon"] .file-cabinet-category.is-file-cabinet-drop-target {
+    background: color-mix(in srgb, #5ec8d8 10%, #1a1628);
+    box-shadow: inset 0 0 0 1px rgba(94, 200, 216, 0.3), inset 3px 0 6px rgba(0, 0, 0, 0.1), inset -3px 0 6px rgba(0, 0, 0, 0.1), inset 0 -4px 8px rgba(0, 0, 0, 0.16);
+}
+
+html[data-app-theme="neon"] .file-cabinet-tab-stack { background: transparent; }
+html[data-app-theme="neon"] .file-cabinet .file-cabinet-tab { border-left-color: transparent; }
+html[data-app-theme="neon"] .file-cabinet-empty { color: #8aa0b0; }
+
+html[data-app-theme="neon"] #workspace-footer {
+    background-color: #0e0c16;
+    border-top-color: rgba(94, 200, 216, 0.1);
+}
+
+html[data-app-theme="neon"] .btn {
+    background-color: #161422;
+    border-color: #2a2840;
+    color: #d8e8f0;
+}
+
+html[data-app-theme="neon"] .btn:hover {
+    border-color: color-mix(in srgb, #5ec8d8 50%, #2a2840);
+    box-shadow: 0 0 0 1px rgba(94, 200, 216, 0.2);
+}
+
+html[data-app-theme="neon"] .btn--accent {
+    background-color: color-mix(in srgb, #5ec8d8 25%, #161422);
+    border-color: color-mix(in srgb, #5ec8d8 50%, #2a2840);
+    color: #d8e8f0;
+}
+
+html[data-app-theme="neon"] mark.search-hit {
+    background: rgba(94, 200, 216, 0.22);
+    color: inherit;
+}
+
+html[data-app-theme="neon"] .btn.active {
+    background: color-mix(in srgb, #5ec8d8 35%, #1a1628);
+    border-color: color-mix(in srgb, #5ec8d8 50%, #2a2840);
+    color: #e8f4f8;
+}
+
+html[data-app-theme="neon"] .quick-actions-grid .btn--icon.active { color: #e8f4f8; }
+html[data-app-theme="neon"] .menu-tool-trigger.active { color: #5ec8d8; }
+html[data-app-theme="neon"] .tool-panel { border-left-color: #5ec8d8; }
+html[data-app-theme="neon"] .tool-chip { border-color: color-mix(in srgb, #5ec8d8 35%, #2a2840); }
+html[data-app-theme="neon"] .card-act--cal.is-on { color: #5ec8d8; }
+html[data-app-theme="neon"] #btn-drawing-mode.active { background: color-mix(in srgb, #5ec8d8 28%, transparent); }
+
+/* Miami — cyan & rose Vice sunset */
+html[data-app-theme="miami"] #app-canvas,
+html[data-app-theme="miami"] #app-canvas.file-cabinet-bottom {
     background-color: #1a0a28;
     background-image:
         repeating-linear-gradient(90deg, transparent 0, transparent 31px, rgba(45, 212, 244, 0.06) 31px, rgba(45, 212, 244, 0.06) 32px),
@@ -1498,10 +1682,22 @@ html[data-app-theme="neon"][data-desktop-gradient="1"] #app-canvas.file-cabinet-
         linear-gradient(180deg, #1a0a28 0%, #2d1545 38%, #4a2040 72%, #1a2848 100%);
 }
 
-html[data-app-theme="neon"] .mini-card,
-html[data-app-theme="neon"] #editor-overlay .editor-note-shell,
-html[data-app-theme="neon"] .calendar-note-item,
-html[data-app-theme="neon"] .calendar-hour-note {
+html[data-app-theme="miami"][data-desktop-gradient="1"] #app-canvas.view-freeform,
+html[data-app-theme="miami"][data-desktop-gradient="1"] #app-canvas.view-grid,
+html[data-app-theme="miami"][data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-freeform,
+html[data-app-theme="miami"][data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
+    background-color: #1a0a28;
+    background-image:
+        repeating-linear-gradient(90deg, transparent 0, transparent 31px, rgba(45, 212, 244, 0.06) 31px, rgba(45, 212, 244, 0.06) 32px),
+        radial-gradient(ellipse 130% 45% at 50% 100%, rgba(45, 212, 244, 0.2), transparent 58%),
+        radial-gradient(ellipse 90% 40% at 50% 88%, rgba(244, 114, 182, 0.16), transparent 52%),
+        linear-gradient(180deg, #1a0a28 0%, #2d1545 38%, #4a2040 72%, #1a2848 100%);
+}
+
+html[data-app-theme="miami"] .mini-card,
+html[data-app-theme="miami"] #editor-overlay .editor-note-shell,
+html[data-app-theme="miami"] .calendar-note-item,
+html[data-app-theme="miami"] .calendar-hour-note {
     background-color: #1e1630 !important;
     background-image:
         linear-gradient(135deg, rgba(45, 212, 244, 0.06) 0%, transparent 40%, rgba(244, 114, 182, 0.06) 100%) !important;
@@ -1529,28 +1725,28 @@ html[data-app-theme="neon"] .calendar-hour-note {
     --card-panel-bg: #161020;
 }
 
-html[data-app-theme="neon"] .mini-card .mini-card-title,
-html[data-app-theme="neon"] .mini-card .card-content-preview,
-html[data-app-theme="neon"] .mini-card .step-text,
-html[data-app-theme="neon"] #editor-overlay .mini-card-title,
-html[data-app-theme="neon"] #editor-overlay .step-text {
+html[data-app-theme="miami"] .mini-card .mini-card-title,
+html[data-app-theme="miami"] .mini-card .card-content-preview,
+html[data-app-theme="miami"] .mini-card .step-text,
+html[data-app-theme="miami"] #editor-overlay .mini-card-title,
+html[data-app-theme="miami"] #editor-overlay .step-text {
     color: #e8f0f8 !important;
 }
 
-html[data-app-theme="neon"] .mini-card .category-name,
-html[data-app-theme="neon"] .mini-card .editor-created-date,
-html[data-app-theme="neon"] .mini-card .editor-note-lines,
-html[data-app-theme="neon"] .mini-card .checklist-badge {
+html[data-app-theme="miami"] .mini-card .category-name,
+html[data-app-theme="miami"] .mini-card .editor-created-date,
+html[data-app-theme="miami"] .mini-card .editor-note-lines,
+html[data-app-theme="miami"] .mini-card .checklist-badge {
     color: #a8a0b8 !important;
 }
 
-html[data-app-theme="neon"] .mini-card.compact .card-actions::before {
+html[data-app-theme="miami"] .mini-card.compact .card-actions::before {
     background: rgba(30, 22, 48, 0.94);
     box-shadow: 0 0 0 1px rgba(45, 212, 244, 0.18);
 }
 
-html[data-app-theme="neon"] .side-panel,
-html[data-app-theme="neon"] .side-panel-toggle-fab {
+html[data-app-theme="miami"] .side-panel,
+html[data-app-theme="miami"] .side-panel-toggle-fab {
     background-color: #140c20;
     background-image:
         linear-gradient(180deg, rgba(45, 212, 244, 0.07) 0%, rgba(244, 114, 182, 0.1) 48%, rgba(45, 212, 244, 0.05) 100%);
@@ -1560,34 +1756,34 @@ html[data-app-theme="neon"] .side-panel-toggle-fab {
         inset 4px 0 10px rgba(0, 0, 0, 0.18);
 }
 
-html[data-app-theme="neon"] .side-panel-toggle-fab {
+html[data-app-theme="miami"] .side-panel-toggle-fab {
     box-shadow:
         inset 0 0 0 1px rgba(244, 114, 182, 0.2),
         0 2px 10px rgba(45, 212, 244, 0.12),
         0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
-html[data-app-theme="neon"] .side-panel-brand-host,
-html[data-app-theme="neon"] .side-panel-chrome.side-panel-clock,
-html[data-app-theme="neon"] .side-panel-chrome.side-panel-search {
+html[data-app-theme="miami"] .side-panel-brand-host,
+html[data-app-theme="miami"] .side-panel-chrome.side-panel-clock,
+html[data-app-theme="miami"] .side-panel-chrome.side-panel-search {
     border-bottom-color: rgba(244, 114, 182, 0.14);
 }
 
-html[data-app-theme="neon"] .file-cabinet {
+html[data-app-theme="miami"] .file-cabinet {
     background-color: #140c20;
     background-image: linear-gradient(90deg, rgba(45, 212, 244, 0.04) 0%, rgba(244, 114, 182, 0.04) 100%);
     box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.28);
     border-bottom-color: rgba(45, 212, 244, 0.14);
 }
 
-html[data-app-theme="neon"] .file-cabinet-filed-rail {
+html[data-app-theme="miami"] .file-cabinet-filed-rail {
     background-color: #100818;
     border-right-color: rgba(244, 114, 182, 0.14);
     padding: 0.25rem 0.45rem 0.25rem 0;
     border-radius: 0 2px 2px 0;
 }
 
-html[data-app-theme="neon"] .file-cabinet-filed-chip {
+html[data-app-theme="miami"] .file-cabinet-filed-chip {
     position: relative;
     background-color: #1e1630;
     border-left-color: transparent;
@@ -1599,7 +1795,7 @@ html[data-app-theme="neon"] .file-cabinet-filed-chip {
     color: #c8c0d8;
 }
 
-html[data-app-theme="neon"] .file-cabinet-filed-chip::after {
+html[data-app-theme="miami"] .file-cabinet-filed-chip::after {
     content: '';
     position: absolute;
     right: 1.65rem;
@@ -1612,12 +1808,12 @@ html[data-app-theme="neon"] .file-cabinet-filed-chip::after {
     box-shadow: 0 0 5px rgba(244, 114, 182, 0.35);
 }
 
-html[data-app-theme="neon"] .file-cabinet-filed-chip.is-file-cabinet-drop-target {
+html[data-app-theme="miami"] .file-cabinet-filed-chip.is-file-cabinet-drop-target {
     background: color-mix(in srgb, #f472b6 14%, #1e1630);
     box-shadow: inset 0 0 0 1px rgba(244, 114, 182, 0.38), inset 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-html[data-app-theme="neon"] .file-cabinet-category {
+html[data-app-theme="miami"] .file-cabinet-category {
     background-color: #221830;
     border-radius: 0 0 6px 6px;
     padding: 0 0.35rem 0.45rem;
@@ -1629,7 +1825,7 @@ html[data-app-theme="neon"] .file-cabinet-category {
         inset 0 -4px 8px rgba(0, 0, 0, 0.18);
 }
 
-html[data-app-theme="neon"] .file-cabinet-category-header {
+html[data-app-theme="miami"] .file-cabinet-category-header {
     background: linear-gradient(90deg, #1a1028 0%, #241838 50%, #1a1028 100%);
     margin: 0 -0.35rem 0.3rem;
     padding: 0.25rem 0.35rem;
@@ -1638,7 +1834,7 @@ html[data-app-theme="neon"] .file-cabinet-category-header {
     box-shadow: inset 0 -1px 0 rgba(45, 212, 244, 0.2);
 }
 
-html[data-app-theme="neon"] .file-cabinet-category.is-file-cabinet-drop-target {
+html[data-app-theme="miami"] .file-cabinet-category.is-file-cabinet-drop-target {
     background: color-mix(in srgb, #2dd4f4 12%, #221830);
     box-shadow:
         inset 0 0 0 1px rgba(45, 212, 244, 0.32),
@@ -1647,53 +1843,272 @@ html[data-app-theme="neon"] .file-cabinet-category.is-file-cabinet-drop-target {
         inset 0 -4px 8px rgba(0, 0, 0, 0.14);
 }
 
-html[data-app-theme="neon"] .file-cabinet-tab-stack { background: transparent; }
-html[data-app-theme="neon"] .file-cabinet .file-cabinet-tab { border-left-color: transparent; }
-html[data-app-theme="neon"] .file-cabinet-empty { color: #a8a0b8; }
+html[data-app-theme="miami"] .file-cabinet-tab-stack { background: transparent; }
+html[data-app-theme="miami"] .file-cabinet .file-cabinet-tab { border-left-color: transparent; }
+html[data-app-theme="miami"] .file-cabinet-empty { color: #a8a0b8; }
 
-html[data-app-theme="neon"] #workspace-footer {
+html[data-app-theme="miami"] #workspace-footer {
     background-color: #140c20;
     border-top-color: rgba(244, 114, 182, 0.12);
 }
 
-html[data-app-theme="neon"] .btn {
+html[data-app-theme="miami"] .btn {
     background-color: #1e1630;
     border-color: #3d2858;
     color: #e8f0f8;
 }
 
-html[data-app-theme="neon"] .btn:hover {
+html[data-app-theme="miami"] .btn:hover {
     border-color: #2dd4f4;
     box-shadow: 0 0 0 1px rgba(45, 212, 244, 0.28), 0 0 8px rgba(244, 114, 182, 0.1);
 }
 
-html[data-app-theme="neon"] .btn--accent {
+html[data-app-theme="miami"] .btn--accent {
     background: linear-gradient(135deg, color-mix(in srgb, #2dd4f4 30%, #1e1630), color-mix(in srgb, #f472b6 22%, #1e1630));
     border-color: color-mix(in srgb, #2dd4f4 55%, #f472b6);
     color: #e8f0f8;
 }
 
-html[data-app-theme="neon"] mark.search-hit {
+html[data-app-theme="miami"] mark.search-hit {
     background: rgba(244, 114, 182, 0.28);
     color: inherit;
 }
 
-html[data-app-theme="neon"] .btn.active {
+html[data-app-theme="miami"] .btn.active {
     background: linear-gradient(135deg, color-mix(in srgb, #2dd4f4 65%, #1a0a28), color-mix(in srgb, #f472b6 45%, #1a0a28));
     border-color: #2dd4f4;
     color: #f0f8ff;
 }
 
-html[data-app-theme="neon"] .quick-actions-grid .btn--icon.active { color: #f0f8ff; }
-html[data-app-theme="neon"] .menu-tool-trigger.active { color: #f472b6; }
-html[data-app-theme="neon"] .tool-panel {
+html[data-app-theme="miami"] .quick-actions-grid .btn--icon.active { color: #f0f8ff; }
+html[data-app-theme="miami"] .menu-tool-trigger.active { color: #f472b6; }
+html[data-app-theme="miami"] .tool-panel {
     border-left-color: #2dd4f4;
     box-shadow: 0 0 0 1px rgba(244, 114, 182, 0.08);
 }
-html[data-app-theme="neon"] .tool-chip {
+html[data-app-theme="miami"] .tool-chip {
     border-color: color-mix(in srgb, #2dd4f4 40%, #f472b6);
 }
-html[data-app-theme="neon"] .card-act--cal.is-on { color: #f472b6; }
-html[data-app-theme="neon"] #btn-drawing-mode.active {
+html[data-app-theme="miami"] .card-act--cal.is-on { color: #f472b6; }
+html[data-app-theme="miami"] #btn-drawing-mode.active {
     background: linear-gradient(135deg, color-mix(in srgb, #2dd4f4 28%, transparent), color-mix(in srgb, #f472b6 18%, transparent));
+}
+
+/* Spaceship — Star Citizen cockpit deck */
+html[data-app-theme="spaceship"] #app-canvas,
+html[data-app-theme="spaceship"] #app-canvas.file-cabinet-bottom {
+    background-color: #12161e;
+    background-image:
+        repeating-linear-gradient(-11deg, transparent 0, transparent 10px, rgba(255, 255, 255, 0.014) 10px, rgba(255, 255, 255, 0.014) 11px),
+        repeating-linear-gradient(90deg, transparent 0, transparent 47px, rgba(110, 181, 255, 0.03) 47px, rgba(110, 181, 255, 0.03) 48px),
+        radial-gradient(ellipse 55% 40% at 8% 12%, rgba(110, 181, 255, 0.07), transparent 52%),
+        radial-gradient(ellipse 35% 28% at 92% 88%, rgba(232, 146, 42, 0.09), transparent 48%),
+        linear-gradient(180deg, #161c26 0%, #101418 55%, #0e1218 100%);
+}
+
+html[data-app-theme="spaceship"][data-desktop-gradient="1"] #app-canvas.view-freeform,
+html[data-app-theme="spaceship"][data-desktop-gradient="1"] #app-canvas.view-grid,
+html[data-app-theme="spaceship"][data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-freeform,
+html[data-app-theme="spaceship"][data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
+    background-color: #12161e;
+    background-image:
+        repeating-linear-gradient(-11deg, transparent 0, transparent 10px, rgba(255, 255, 255, 0.014) 10px, rgba(255, 255, 255, 0.014) 11px),
+        repeating-linear-gradient(90deg, transparent 0, transparent 47px, rgba(110, 181, 255, 0.03) 47px, rgba(110, 181, 255, 0.03) 48px),
+        radial-gradient(ellipse 55% 40% at 8% 12%, rgba(110, 181, 255, 0.07), transparent 52%),
+        radial-gradient(ellipse 35% 28% at 92% 88%, rgba(232, 146, 42, 0.09), transparent 48%),
+        linear-gradient(180deg, #161c26 0%, #101418 55%, #0e1218 100%);
+}
+
+html[data-app-theme="spaceship"] .mini-card,
+html[data-app-theme="spaceship"] #editor-overlay .editor-note-shell,
+html[data-app-theme="spaceship"] .calendar-note-item,
+html[data-app-theme="spaceship"] .calendar-hour-note {
+    background-color: #242b36 !important;
+    background-image:
+        linear-gradient(180deg, rgba(110, 181, 255, 0.04) 0%, transparent 28%),
+        linear-gradient(180deg, #2a323e 0%, #222830 100%) !important;
+    background-size: 100% 100% !important;
+    background-repeat: no-repeat !important;
+    border-left-color: transparent !important;
+    border-top: 2px solid #e8922a !important;
+    border-radius: 0 2px 4px 4px !important;
+    border-color: #3a4555 !important;
+    box-shadow:
+        inset 0 1px 0 rgba(110, 181, 255, 0.06),
+        0 2px 10px rgba(0, 0, 0, 0.32) !important;
+    color: #d0dae8 !important;
+    --card-fg: #d0dae8;
+    --card-muted: #7a8898;
+    --card-action-bg: rgba(232, 146, 42, 0.12);
+    --card-action-fg: #e8922a;
+    --card-border-subtle: rgba(110, 181, 255, 0.16);
+    --card-focus-bg: rgba(232, 146, 42, 0.1);
+    --card-focus-ring: rgba(232, 146, 42, 0.28);
+    --card-link: #6eb5ff;
+    --card-placeholder: #687888;
+    --card-input-bg: rgba(0, 0, 0, 0.22);
+    --card-toolbar-bg: #1e242e;
+    --card-panel-bg: #1a2028;
+}
+
+html[data-app-theme="spaceship"] .mini-card .mini-card-title,
+html[data-app-theme="spaceship"] .mini-card .card-content-preview,
+html[data-app-theme="spaceship"] .mini-card .step-text,
+html[data-app-theme="spaceship"] #editor-overlay .mini-card-title,
+html[data-app-theme="spaceship"] #editor-overlay .step-text {
+    color: #d0dae8 !important;
+}
+
+html[data-app-theme="spaceship"] .mini-card .category-name,
+html[data-app-theme="spaceship"] .mini-card .editor-created-date,
+html[data-app-theme="spaceship"] .mini-card .editor-note-lines,
+html[data-app-theme="spaceship"] .mini-card .checklist-badge {
+    color: #7a8898 !important;
+}
+
+html[data-app-theme="spaceship"] .mini-card.compact .card-actions::before {
+    background: rgba(36, 43, 54, 0.94);
+    box-shadow: 0 0 0 1px rgba(232, 146, 42, 0.16);
+}
+
+html[data-app-theme="spaceship"] .side-panel,
+html[data-app-theme="spaceship"] .side-panel-toggle-fab {
+    background-color: #181e28;
+    background-image:
+        repeating-linear-gradient(180deg, transparent 0, transparent 2px, rgba(255, 255, 255, 0.02) 2px, rgba(255, 255, 255, 0.02) 3px),
+        linear-gradient(180deg, #1e242e 0%, #161c24 100%);
+    box-shadow:
+        inset 3px 0 0 rgba(232, 146, 42, 0.55),
+        inset 0 0 0 1px rgba(110, 181, 255, 0.08),
+        inset 4px 0 10px rgba(0, 0, 0, 0.2);
+}
+
+html[data-app-theme="spaceship"] .side-panel-toggle-fab {
+    box-shadow: inset 0 0 0 1px rgba(110, 181, 255, 0.1), 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+html[data-app-theme="spaceship"] .side-panel-brand-host,
+html[data-app-theme="spaceship"] .side-panel-chrome.side-panel-clock,
+html[data-app-theme="spaceship"] .side-panel-chrome.side-panel-search {
+    border-bottom-color: rgba(232, 146, 42, 0.18);
+}
+
+html[data-app-theme="spaceship"] .file-cabinet {
+    background-color: #141820;
+    background-image: repeating-linear-gradient(90deg, transparent 0, transparent 11px, rgba(255, 255, 255, 0.02) 11px, rgba(255, 255, 255, 0.02) 12px);
+    box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.32);
+    border-bottom-color: rgba(232, 146, 42, 0.15);
+}
+
+html[data-app-theme="spaceship"] .file-cabinet-filed-rail {
+    background-color: #101418;
+    border-right-color: rgba(232, 146, 42, 0.15);
+    padding: 0.25rem 0.45rem 0.25rem 0;
+    border-radius: 0 2px 2px 0;
+}
+
+html[data-app-theme="spaceship"] .file-cabinet-filed-chip {
+    position: relative;
+    background-color: #1c222c;
+    border-left-color: transparent;
+    border-radius: 2px;
+    padding: 0.35rem 0.4rem 0.35rem 0.55rem;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.32), 0 0 0 1px rgba(58, 69, 85, 0.8);
+    color: #a0aab8;
+}
+
+html[data-app-theme="spaceship"] .file-cabinet-filed-chip::after {
+    content: '';
+    position: absolute;
+    right: 1.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 6px;
+    height: 3px;
+    border-radius: 1px;
+    background: linear-gradient(180deg, #f0a840, #e8922a 60%, #c07018);
+    box-shadow: 0 0 4px rgba(232, 146, 42, 0.35);
+}
+
+html[data-app-theme="spaceship"] .file-cabinet-filed-chip.is-file-cabinet-drop-target {
+    background: color-mix(in srgb, #e8922a 14%, #1c222c);
+    box-shadow: inset 0 0 0 1px rgba(232, 146, 42, 0.4), inset 0 2px 4px rgba(0, 0, 0, 0.22);
+}
+
+html[data-app-theme="spaceship"] .file-cabinet-category {
+    background-color: #222830;
+    border-radius: 0 0 4px 4px;
+    padding: 0 0.35rem 0.45rem;
+    box-shadow:
+        inset 0 2px 0 rgba(232, 146, 42, 0.35),
+        inset 3px 0 6px rgba(0, 0, 0, 0.14),
+        inset -3px 0 6px rgba(0, 0, 0, 0.14),
+        inset 0 -4px 8px rgba(0, 0, 0, 0.22);
+}
+
+html[data-app-theme="spaceship"] .file-cabinet-category-header {
+    background: linear-gradient(90deg, #1a2028 0%, #242b36 50%, #1a2028 100%);
+    margin: 0 -0.35rem 0.3rem;
+    padding: 0.25rem 0.35rem;
+    border-radius: 2px 2px 0 0;
+    color: #d0dae8;
+    box-shadow: inset 0 -1px 0 rgba(232, 146, 42, 0.25);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: calc(0.56rem * var(--note-font-scale, 1));
+}
+
+html[data-app-theme="spaceship"] .file-cabinet-category.is-file-cabinet-drop-target {
+    background: color-mix(in srgb, #e8922a 10%, #222830);
+    box-shadow: inset 0 0 0 1px rgba(232, 146, 42, 0.32), inset 3px 0 6px rgba(0, 0, 0, 0.1), inset -3px 0 6px rgba(0, 0, 0, 0.1), inset 0 -4px 8px rgba(0, 0, 0, 0.16);
+}
+
+html[data-app-theme="spaceship"] .file-cabinet-tab-stack { background: transparent; }
+html[data-app-theme="spaceship"] .file-cabinet .file-cabinet-tab { border-left-color: transparent; }
+html[data-app-theme="spaceship"] .file-cabinet-empty { color: #7a8898; }
+
+html[data-app-theme="spaceship"] #workspace-footer {
+    background-color: #141820;
+    border-top-color: rgba(232, 146, 42, 0.12);
+}
+
+html[data-app-theme="spaceship"] .btn {
+    background-color: #1c222c;
+    border-color: #3a4555;
+    color: #d0dae8;
+}
+
+html[data-app-theme="spaceship"] .btn:hover {
+    border-color: #e8922a;
+    box-shadow: 0 0 0 1px rgba(232, 146, 42, 0.28);
+}
+
+html[data-app-theme="spaceship"] .btn--accent {
+    background-color: color-mix(in srgb, #e8922a 22%, #1c222c);
+    border-color: #e8922a;
+    color: #f0e8d8;
+}
+
+html[data-app-theme="spaceship"] mark.search-hit {
+    background: rgba(232, 146, 42, 0.28);
+    color: inherit;
+}
+
+html[data-app-theme="spaceship"] .btn.active {
+    background: color-mix(in srgb, #e8922a 55%, #141820);
+    border-color: #e8922a;
+    color: #f8f4ec;
+}
+
+html[data-app-theme="spaceship"] .quick-actions-grid .btn--icon.active { color: #f8f4ec; }
+html[data-app-theme="spaceship"] .menu-tool-trigger.active { color: #e8922a; }
+html[data-app-theme="spaceship"] .tool-panel { border-left-color: #e8922a; }
+html[data-app-theme="spaceship"] .tool-chip { border-color: color-mix(in srgb, #e8922a 40%, #3a4555); }
+html[data-app-theme="spaceship"] .card-act--cal.is-on { color: #e8922a; }
+html[data-app-theme="spaceship"] #btn-drawing-mode.active { background: color-mix(in srgb, #e8922a 28%, transparent); }
+
+html[data-app-theme="spaceship"] .collapsable-heading {
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 0.92em;
 }
