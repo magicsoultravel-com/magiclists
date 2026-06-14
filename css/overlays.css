@@ -301,7 +301,7 @@ textarea.form-input {
     user-select: none;
     transition: color 0.15s ease;
     font-size: 0.66rem;
-    font-weight: 400;
+    font-weight: 500;
 }
 
 .collapsable-header:hover {

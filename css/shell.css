@@ -427,8 +427,9 @@ body {
     min-width: 0;
     padding: 0.2rem 0.15rem;
     border-radius: 0.25rem;
-    font-size: calc(0.56rem * var(--note-font-scale, 1));
-    color: var(--text-muted);
+    font-size: 0.52rem;
+    font-weight: 600;
+    color: var(--text-main);
     line-height: 1.2;
     border-left: 2px solid var(--file-cabinet-category-color, var(--border-color));
 }
@@ -441,14 +442,13 @@ body {
 .file-cabinet-filed-chip-name {
     flex: 1 1 auto;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .file-cabinet-filed-chip-count {
     flex: 0 0 auto;
-    font-size: calc(0.5rem * var(--note-font-scale, 1));
+    font-size: 0.46rem;
+    font-weight: 400;
+    color: var(--text-muted);
     opacity: 0.75;
 }
 
@@ -483,8 +483,9 @@ body {
     gap: 0.3rem;
     margin-bottom: 0.3rem;
     min-width: 0;
-    font-size: calc(0.58rem * var(--note-font-scale, 1));
-    color: var(--text-muted);
+    font-size: 0.52rem;
+    font-weight: 600;
+    color: var(--text-main);
     line-height: 1.2;
 }
 
@@ -533,14 +534,13 @@ body {
 .file-cabinet-category-name {
     flex: 1 1 auto;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .file-cabinet-category-count {
     flex: 0 0 auto;
-    font-size: calc(0.52rem * var(--note-font-scale, 1));
+    font-size: 0.46rem;
+    font-weight: 400;
+    color: var(--text-muted);
     opacity: 0.75;
 }
 

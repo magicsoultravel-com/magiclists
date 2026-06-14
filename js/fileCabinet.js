@@ -601,7 +601,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
                 chip.className = 'file-cabinet-filed-chip';
                 chip.dataset.category = catName;
                 chip.style.setProperty('--file-cabinet-category-color', color);
-                chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${UI.escapeAttr(color)}"></span><span class="file-cabinet-filed-chip-name">${UI.escapeHTML(catName)}</span><span class="file-cabinet-filed-chip-count">${items.length}</span><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
+                chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${UI.escapeAttr(color)}"></span><span class="file-cabinet-filed-chip-name u-truncate">${UI.escapeHTML(catName)}</span><span class="file-cabinet-filed-chip-count">${items.length}</span><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
                 rail.appendChild(chip);
             });
 
@@ -625,7 +625,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
 
         const header = document.createElement('div');
         header.className = 'file-cabinet-category-header';
-        header.innerHTML = `<span class="file-cabinet-category-dot" style="background:${UI.escapeAttr(color)}"></span><span class="file-cabinet-category-name">${UI.escapeHTML(catName)}</span><span class="file-cabinet-category-count">${items.length}</span><button type="button" class="card-act file-cabinet-category-fold-btn" title="Fold category" aria-label="Fold category">${FOLD_ICON}</button>`;
+        header.innerHTML = `<span class="file-cabinet-category-dot" style="background:${UI.escapeAttr(color)}"></span><span class="file-cabinet-category-name u-truncate">${UI.escapeHTML(catName)}</span><span class="file-cabinet-category-count">${items.length}</span><button type="button" class="card-act file-cabinet-category-fold-btn" title="Fold category" aria-label="Fold category">${FOLD_ICON}</button>`;
         col.appendChild(header);
 
         const stack = document.createElement('div');
