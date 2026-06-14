@@ -681,9 +681,7 @@ function buildFileCabinetCategoryColumn({
         card.dataset.fileCabinetCategory = catName;
         card.dataset.fileCabinetStackIndex = String(index);
         UI.applyNoteRect(card, { x: 0, y: 0, w: label.w, h: label.h }, { settling: false });
-        UI.applyDesktopTilePresentation(card, item);
         UI.finalizeDesktopCard(card);
-        card.classList.add('spatial-at-small', 'tile-small');
         UI.syncSpatialToggleButton(card);
         stack.appendChild(card);
     });
@@ -709,9 +707,7 @@ function buildFileCabinetRolloutStack({ catName, items, activeCategories, UI }) 
         card.dataset.fileCabinetCategory = catName;
         card.dataset.fileCabinetStackIndex = String(index);
         UI.applyNoteRect(card, { x: 0, y: 0, w: label.w, h: label.h }, { settling: false });
-        UI.applyDesktopTilePresentation(card, item);
         UI.finalizeDesktopCard(card);
-        card.classList.add('spatial-at-small', 'tile-small');
         UI.syncSpatialToggleButton(card);
         stack.appendChild(card);
     });

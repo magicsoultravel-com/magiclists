@@ -1564,7 +1564,7 @@ body.is-shell-resizing--h * {
     word-break: break-word;
 }
 
-.mini-card[data-desktop="1"]:not(.spatial-at-small):not(.tile-small) .note-surface .mini-card-title {
+.mini-card[data-desktop="1"]:not(.spatial-at-small) .note-surface .mini-card-title {
     white-space: normal;
     overflow-wrap: anywhere;
     word-break: break-word;
