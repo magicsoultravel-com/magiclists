@@ -8,7 +8,7 @@ import {
 import {
     readFileCabinetHeight,
     writeFileCabinetHeight,
-    getFileCabinetContentMinHeight,
+    getFileCabinetDragMinHeight,
     syncFileCabinetDrawerHeight,
     FILE_CABINET_MIN_HEIGHT,
     FILE_CABINET_BOARD_MIN_HEIGHT,
@@ -64,8 +64,7 @@ function sidebarScaleForWidth(width) {
 function getCabinetHeightBounds(mount) {
     const surface = document.getElementById('desktop-surface');
     const surfaceH = surface?.clientHeight || window.innerHeight;
-    const contentMin = mount ? getFileCabinetContentMinHeight(mount) : FILE_CABINET_MIN_HEIGHT;
-    const min = Math.max(FILE_CABINET_MIN_HEIGHT, contentMin);
+    const min = Math.max(FILE_CABINET_MIN_HEIGHT, getFileCabinetDragMinHeight());
     const maxByRatio = surfaceH * 0.5;
     const maxByBoard = surfaceH - FILE_CABINET_BOARD_MIN_HEIGHT;
     const max = Math.max(min, Math.min(maxByRatio, maxByBoard));
