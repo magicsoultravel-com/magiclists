@@ -477,6 +477,10 @@ body {
     background: color-mix(in srgb, var(--bg-surface) 88%, var(--bg-primary));
 }
 
+.file-cabinet.is-rollout-active {
+    overflow: visible;
+}
+
 .file-cabinet-empty {
     font-size: calc(0.62rem * var(--note-font-scale, 1));
     color: var(--text-muted);
@@ -570,6 +574,10 @@ body {
 }
 
 .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 500;
     opacity: 1;
     pointer-events: auto;
     background-color: color-mix(in srgb, var(--bg-surface) 90%, var(--bg-primary));

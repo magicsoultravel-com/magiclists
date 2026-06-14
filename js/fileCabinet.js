@@ -1,4 +1,5 @@
 import { getItemCategoryName } from './focusFilter.js';
+import { positionPanelBelowElement } from './popoverPosition.js';
 import {
     isAtLabelSize,
     getLabelRect,
@@ -653,6 +654,15 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
     const getSlotChip = (slot) => slot?.querySelector('.file-cabinet-filed-chip');
     const getSlotRollout = (slot) => slot?.querySelector('.file-cabinet-filed-rollout');
 
+    const positionActiveRollout = () => {
+        const slot = activeSlot?.classList?.contains('is-fold-rollout-open') ? activeSlot : null;
+        if (!slot) return;
+        const chip = getSlotChip(slot);
+        const rollout = getSlotRollout(slot);
+        if (!chip || !rollout) return;
+        positionPanelBelowElement(rollout, chip, { gap: 2, margin: 8 });
+    };
+
     const closeSlot = (slot) => {
         if (!slot?.isConnected) return;
         const rollout = getSlotRollout(slot);
@@ -676,6 +686,7 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
         mount.querySelectorAll('.file-cabinet-filed-slot.is-fold-rollout-open').forEach((slot) => {
             closeSlot(slot);
         });
+        mount.classList.remove('is-rollout-active');
         activeSlot = null;
     };
 
@@ -697,6 +708,8 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
         if (activeSlot === slot && rollout.querySelector('.file-cabinet-tab-stack')) {
             slot.classList.add('is-fold-rollout-open');
             chip?.classList.add('is-fold-preview-source');
+            mount.classList.add('is-rollout-active');
+            requestAnimationFrame(() => positionActiveRollout());
             return;
         }
 
@@ -714,6 +727,8 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
         rollout.setAttribute('aria-hidden', 'false');
         slot.classList.add('is-fold-rollout-open');
         chip?.classList.add('is-fold-preview-source');
+        mount.classList.add('is-rollout-active');
+        requestAnimationFrame(() => positionActiveRollout());
     };
 
     const maybeHidePreview = (relatedTarget) => {
@@ -752,6 +767,14 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
             if (pinnedByDrag || document.body.classList.contains('is-file-cabinet-drag-active')) return;
             hidePreview();
         });
+    }, { signal });
+
+    mount.addEventListener('scroll', () => {
+        if (mount.classList.contains('is-rollout-active')) positionActiveRollout();
+    }, { signal, capture: true });
+
+    window.addEventListener('resize', () => {
+        if (mount.classList.contains('is-rollout-active')) positionActiveRollout();
     }, { signal });
 
     return {
