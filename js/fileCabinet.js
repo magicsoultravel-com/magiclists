@@ -635,17 +635,23 @@ export function syncFileCabinetDrawerHeight(mount) {
     const contentMin = getFileCabinetContentMinHeight(mount);
     const dragMin = getFileCabinetDragMinHeight();
     const savedHeight = readFileCabinetHeight();
+    const inlineHeight = parseFloat(mount.style.height);
     const isFixed = savedHeight !== null || mount.dataset.fixedHeight === 'true';
     if (isFixed) {
         mount.dataset.fixedHeight = 'true';
         mount.style.flex = '0 0 auto';
         mount.style.maxHeight = 'none';
         mount.style.minHeight = `${dragMin}px`;
+        const targetH = (Number.isFinite(inlineHeight) && inlineHeight > 0)
+            ? inlineHeight
+            : savedHeight;
+        if (Number.isFinite(targetH) && targetH > 0) {
+            mount.style.height = `${targetH}px`;
+        }
         clampFileCabinetScroll(mount);
         return;
     }
-    const autoMax = Math.min(window.innerHeight * 0.45, 520);
-    mount.style.minHeight = `${Math.min(Math.max(dragMin, contentMin), autoMax)}px`;
+    mount.style.minHeight = `${Math.max(dragMin, contentMin)}px`;
     delete mount.dataset.fixedHeight;
     mount.style.flex = '';
     mount.style.height = '';

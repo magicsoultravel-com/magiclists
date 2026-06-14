@@ -94,7 +94,6 @@ function applyCabinetUiScale(mount, height) {
     if (!effectiveHeight) return;
     const scale = cabinetScaleForHeight(effectiveHeight, mount);
     mount.style.setProperty('--file-cabinet-ui-scale', String(scale));
-    syncFileCabinetDrawerHeight(mount);
     syncCabinetInnerLayout(mount);
     clampFileCabinetScroll(mount);
 }
@@ -142,7 +141,8 @@ function applyCabinetHeight(mount, height, { persist = false } = {}) {
     mount.dataset.fixedHeight = 'true';
     mount.style.flex = '0 0 auto';
     mount.style.height = `${clamped}px`;
-    mount.style.maxHeight = '';
+    mount.style.maxHeight = 'none';
+    mount.style.minHeight = `${getFileCabinetDragMinHeight()}px`;
     applyCabinetUiScale(mount, clamped);
     if (persist) writeFileCabinetHeight(clamped);
     return clamped;
@@ -151,6 +151,11 @@ function applyCabinetHeight(mount, height, { persist = false } = {}) {
 function applyCabinetAutoHeight(mount) {
     if (!mount) return;
     const saved = readFileCabinetHeight();
+    const inlineH = parseFloat(mount.style.height);
+    if (mount.dataset.fixedHeight === 'true' && Number.isFinite(inlineH) && inlineH > 0) {
+        applyCabinetHeight(mount, inlineH);
+        return;
+    }
     if (saved !== null) {
         applyCabinetHeight(mount, saved);
         return;
@@ -160,6 +165,7 @@ function applyCabinetAutoHeight(mount) {
     mount.style.height = '';
     mount.style.maxHeight = '';
     applyCabinetUiScale(mount, mount.offsetHeight || FILE_CABINET_REF_HEIGHT);
+    syncFileCabinetDrawerHeight(mount);
 }
 
 function ensureSidebarScaleInner() {
@@ -196,7 +202,6 @@ function ensureHorizontalSplitter() {
     }
 
     if (horizontalSplitter?.isConnected && horizontalSplitter.previousElementSibling === mount) {
-        applyCabinetAutoHeight(mount);
         return horizontalSplitter;
     }
 
@@ -321,7 +326,10 @@ function reclampAll() {
     }
     const mount = document.getElementById('file-cabinet');
     if (mount && mount.dataset.fixedHeight === 'true') {
-        const height = readFileCabinetHeight() ?? mount.offsetHeight;
+        const inlineH = parseFloat(mount.style.height);
+        const height = (Number.isFinite(inlineH) && inlineH > 0)
+            ? inlineH
+            : (readFileCabinetHeight() ?? mount.offsetHeight);
         const clamped = applyCabinetHeight(mount, height, { persist: true });
         if (clamped !== height) dispatchDesktopBoundsChanged();
     } else if (mount) {
@@ -350,6 +358,7 @@ export function onSidebarCollapseChanged() {
     } else {
         applyStoredSidebarWidth();
     }
+    reclampAll();
     dispatchDesktopBoundsChanged();
 }
 
