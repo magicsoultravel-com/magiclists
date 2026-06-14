@@ -553,15 +553,6 @@
     opacity: 0.9;
 }
 
-#app-canvas.view-list {
-    align-content: start !important;
-    align-items: start !important;
-    gap: var(--board-area-inset) !important;
-    grid-template-columns: repeat(auto-fill, 96px) !important;
-    grid-auto-rows: min-content !important;
-    justify-content: start !important;
-}
-
 #app-canvas.view-freeform,
 #app-canvas.view-grid {
     position: relative;
@@ -969,15 +960,6 @@ html[data-tile-small-footprint="label"] #app-canvas.view-grid .mini-card[data-de
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
     transform: none !important;
     transition: none !important;
-}
-
-#app-canvas.view-list .mini-card {
-    width: 96px !important;
-}
-
-#app-canvas.view-list .mini-card.expanded {
-    grid-column: span 2 !important;
-    width: 196px !important;
 }
 
 #editor-overlay {

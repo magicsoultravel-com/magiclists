@@ -6,7 +6,8 @@ import {
     spanToCellsH,
     CANVAS_LAYOUT_ORIGIN,
     COLUMN_GRID_GAP,
-    CANVAS_COL_GAP
+    CANVAS_COL_GAP,
+    getCanvasColGap
 } from './gridDensity.js';
 import {
     getSmallFootprintRect,
@@ -21,7 +22,8 @@ export {
     spanToCellsH,
     CANVAS_LAYOUT_ORIGIN,
     COLUMN_GRID_GAP,
-    CANVAS_COL_GAP
+    CANVAS_COL_GAP,
+    getCanvasColGap
 } from './gridDensity.js';
 
 export const FREEFORM_EXPANDED_W = 196;

@@ -58,6 +58,7 @@ import {
     FREEFORM_MIN_H,
     FREEFORM_EXPANDED_DEFAULT_H,
     CANVAS_COL_GAP,
+    getCanvasColGap,
     CANVAS_LAYOUT_ORIGIN,
     COLUMN_GRID_GAP,
     TILE_LABEL_H,
@@ -103,6 +104,7 @@ export {
     FREEFORM_MIN_H,
     FREEFORM_EXPANDED_DEFAULT_H,
     CANVAS_COL_GAP,
+    getCanvasColGap,
     CANVAS_LAYOUT_ORIGIN,
     COLUMN_GRID_GAP,
     TILE_LABEL_H,
@@ -199,7 +201,6 @@ export const ACTION_ICONS = {
     layoutReset: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 2.8h3.2M2.2 2.8V6M2.2 2.8l2.4 2.4M9.8 9.2H6.6M9.8 9.2V5.8M9.8 9.2 7.4 6.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><rect x="4.2" y="4.2" width="3.6" height="3.6" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
     collapseAll: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 8.2 6 4.4l3.8 3.8M2.2 4.6 6 0.8l3.8 3.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     expandAll: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 3.8 6 7.6l3.8-3.8M2.2 7.4 6 11.2l3.8-3.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    viewList: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 3.2h7.6M2.2 6h7.6M2.2 8.8h7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
     viewCols: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.6" y="2.2" width="3.6" height="7.6" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.8" y="2.2" width="3.6" height="7.6" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.95"/></svg>',
     viewFree: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.5" y="2" width="3.2" height="2.6" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="7.3" y="2" width="3.2" height="3.8" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="2.8" y="7.2" width="4.4" height="2.8" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
     viewGrid: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="1.6" width="3.8" height="3.8" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="6.8" y="1.6" width="3.8" height="3.8" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="1.4" y="6.6" width="8.2" height="3.8" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
@@ -1654,7 +1655,7 @@ export const UI = {
         }
     },
 
-    reapplyGridFinenessOnBoard(prevMetrics, nextMetrics) {
+    reapplyBoardMetricsOnBoard(prevMetrics, nextMetrics) {
         const canvas = document.getElementById('app-canvas');
         if (!canvas) return;
         const footprint = readTileSmallFootprint();
@@ -1702,6 +1703,14 @@ export const UI = {
         if (isFileCabinetActive()) {
             window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
         }
+    },
+
+    reapplyGridFinenessOnBoard(prevMetrics, nextMetrics) {
+        this.reapplyBoardMetricsOnBoard(prevMetrics, nextMetrics);
+    },
+
+    reapplyBoardSpacingOnBoard(prevMetrics, nextMetrics) {
+        this.reapplyBoardMetricsOnBoard(prevMetrics, nextMetrics);
     },
 
     clampNoteToBoardEdges(rect, { packW, maxH, origin, edgePad } = {}) {
@@ -2518,11 +2527,6 @@ export const UI = {
         return isDesktopCard(card);
     },
 
-    isListLayoutCard(card) {
-        const canvas = card.closest('#app-canvas');
-        return !!canvas?.classList.contains('view-list') && !this.usesAnimPixelLock(card);
-    },
-
     lockCardAnimationDimensions(card, w, h) {
         card.style.setProperty('width', `${w}px`, 'important');
         card.style.setProperty('height', `${h}px`, 'important');
@@ -2572,7 +2576,6 @@ export const UI = {
             }
             return tileDefaultW;
         }
-        if (this.isListLayoutCard(card)) return tileDefaultW;
         return Math.round(this.readNoteRect(card).w) || tileDefaultW;
     },
 
@@ -2588,7 +2591,6 @@ export const UI = {
             const saved = this.getFreeformSizes()[id];
             return geoResolveExpandedDefaultRect(tileSize, saved).w;
         }
-        if (this.isListLayoutCard(card)) return FREEFORM_EXPANDED_W;
         return Math.round(this.readNoteRect(card).w) || FREEFORM_EXPANDED_W;
     },
 
@@ -2610,7 +2612,6 @@ export const UI = {
             if (saved && Number.isFinite(saved.h)) return saved.h;
             return tileDefaultH;
         }
-        if (this.isListLayoutCard(card)) return tileDefaultH;
         return tileDefaultH;
     },
 
@@ -2715,14 +2716,6 @@ export const UI = {
         const snapLayout = false;
         const animate = cardAnimationsEnabled() && !options.skipAnimation;
 
-        const clearListAnimDimensions = () => {
-            if (!this.isListLayoutCard(card)) return;
-            card.style.removeProperty('width');
-            card.style.removeProperty('height');
-            card.style.removeProperty('min-height');
-            card.style.removeProperty('max-height');
-        };
-
         const reflowGridBoard = () => {
             if (options.skipGridReflow) return;
             if (!snapLayout) return;
@@ -2739,7 +2732,6 @@ export const UI = {
                 if (snapLayout) this.applyDesktopSize(card);
                 else this.applyFreeformSize(card);
             }
-            clearListAnimDimensions();
             reflowGridBoard();
             this.cleanupCardAnimation(card);
             if (isDesktop) this.syncSpatialChromeForEditing(card);
@@ -2756,7 +2748,6 @@ export const UI = {
                     this.applyFreeformSize(card);
                 }
             }
-            clearListAnimDimensions();
             this.cleanupCardAnimation(card);
         };
 
@@ -5272,7 +5263,7 @@ export const UI = {
         const pane = this.ensureDesktopBoardPane(canvas);
         if (!pane) return;
         const bottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
-        pane.style.minHeight = `${bottom + origin + CANVAS_COL_GAP}px`;
+        pane.style.minHeight = `${bottom + origin + getCanvasColGap()}px`;
     },
 
     updateBoardCanvasExtents(canvas) {
@@ -5303,9 +5294,9 @@ export const UI = {
         const placed = [...cards].map((c) => this.readNoteRect(c));
         const bottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
         const right = placed.reduce((m, r) => Math.max(m, r.x + r.w), 0);
-        boardPane.style.minHeight = `${bottom + origin + CANVAS_COL_GAP}px`;
+        boardPane.style.minHeight = `${bottom + origin + getCanvasColGap()}px`;
         const viewportW = (canvas.clientWidth || 320) / zoom;
-        boardPane.style.minWidth = `${Math.max(viewportW, right + origin + CANVAS_COL_GAP)}px`;
+        boardPane.style.minWidth = `${Math.max(viewportW, right + origin + getCanvasColGap())}px`;
         this.updateDesktopScrollPolicy(canvas);
     },
 

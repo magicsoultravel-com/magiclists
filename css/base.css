@@ -32,7 +32,9 @@
     --grid-stride-y: 60px;
     --grid-origin: 16px;
     --grid-edge-pad: 7px;
-    --board-area-inset: 0.875rem;
+    --board-area-inset-base: 0.875rem;
+    --board-padding-scale: 1;
+    --board-area-inset: calc(var(--board-area-inset-base) * var(--board-padding-scale, 1));
 
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background-color: var(--desktop-bg, var(--bg-primary));

@@ -1,3 +1,5 @@
+import { getBoardPaddingScale } from './boardPadding.js';
+
 export const STORAGE_KEY = 'matrix_grid_fineness';
 export const LEGACY_MIGRATION_FLAG = 'matrix_grid_fineness_migrated';
 export const FINENESS_STEPS = [32, 40, 48, 56, 64, 72, 80];
@@ -52,13 +54,19 @@ export function isGridFinenessCustomized(step = readGridFinenessStep()) {
     return step != null && step !== DEFAULT_FINENESS_STEP;
 }
 
+export function getCanvasColGap() {
+    const scale = getBoardPaddingScale();
+    return Math.max(2, Math.round(CANVAS_COL_GAP * scale));
+}
+
 export function getGridMetrics(step = readGridFinenessStep() ?? DEFAULT_FINENESS_STEP) {
     const index = clampStep(step) - 1;
     const cellS = FINENESS_STEPS[index];
-    const gap = COLUMN_GRID_GAP;
+    const scale = getBoardPaddingScale();
+    const gap = Math.max(0, Math.round(COLUMN_GRID_GAP * scale));
     const stride = cellS + gap;
-    const edgePad = Math.round(cellS / 8);
-    const origin = CANVAS_LAYOUT_ORIGIN;
+    const edgePad = Math.max(1, Math.round((cellS / 8) * scale));
+    const origin = Math.max(2, Math.round(CANVAS_LAYOUT_ORIGIN * scale));
     const columnMinInnerW = COLUMN_MIN_COLS * cellS + (COLUMN_MIN_COLS - 1) * gap;
     const canvasGridW = columnMinInnerW + COLUMN_INNER_PAD * 2;
     return {

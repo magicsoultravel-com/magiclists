@@ -22,6 +22,7 @@ import { ColorPicker, PALETTE_NOTE, randomNoteColor } from './colorPicker.js';
 import { DisplayOptions } from './displayOptions.js';
 import { applyTileSmallFootprint } from './tileFootprint.js';
 import { GridFineness, migrateLegacyGridLayoutIfNeeded } from './gridDensity.js';
+import { BoardPadding } from './boardPadding.js';
 import { AppTheme } from './appTheme.js';
 import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
@@ -83,6 +84,7 @@ class Application {
             DesktopBackground.init();
             ChromeBackground.init();
             NoteFontScale.init();
+            BoardPadding.init();
             migrateLegacyGridLayoutIfNeeded();
             GridFineness.apply();
             DisplayOptions.init({
@@ -683,6 +685,13 @@ class Application {
             const { prevMetrics, nextMetrics } = e.detail || {};
             if (prevMetrics && nextMetrics) {
                 UI.reapplyGridFinenessOnBoard(prevMetrics, nextMetrics);
+            }
+        });
+
+        window.addEventListener('appearance:board_padding_changed', (e) => {
+            const { prevMetrics, nextMetrics } = e.detail || {};
+            if (prevMetrics && nextMetrics) {
+                UI.reapplyBoardSpacingOnBoard(prevMetrics, nextMetrics);
             }
         });
 

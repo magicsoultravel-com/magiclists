@@ -6,6 +6,7 @@ import {
     writeNoteFont
 } from './noteFont.js';
 import { NoteFontScale } from './noteFontScale.js';
+import { BoardPadding } from './boardPadding.js';
 import { DesktopZoom } from './desktopZoom.js';
 import { ChromeBackground } from './chromeBackground.js';
 import { DesktopBackground } from './desktopBackground.js';
@@ -99,6 +100,7 @@ function isCustomized(options) {
         || DesktopBackground.isCustomized()
         || isTileSmallFootprintCustomized()
         || GridFineness.isCustomized()
+        || BoardPadding.isCustomized()
         || isBrandIconCustomized(options.brandIconId);
 }
 
@@ -125,6 +127,7 @@ export const DisplayOptions = {
         }
 
         window.addEventListener('appearance:grid_fineness_changed', () => this.syncButtonState());
+        window.addEventListener('appearance:board_padding_changed', () => this.syncButtonState());
         window.addEventListener('note:font_scale_changed', () => this.syncButtonState());
         window.addEventListener('appearance:color_changed', () => this.syncButtonState());
         window.addEventListener('app:theme_changed', () => this.syncButtonState());
@@ -316,6 +319,7 @@ export const DisplayOptions = {
 
         NoteFontScale.updateLabels();
         DesktopZoom.updateButtons();
+        BoardPadding.updateLabels();
 
         const gridLabel = root.querySelector('#display-opt-grid-fineness-label');
         if (gridLabel) {
@@ -346,6 +350,7 @@ export const DisplayOptions = {
         const desktopZoomEnabled = this.isDesktopZoomEnabled();
         const tileFootprint = readTileSmallFootprint();
         const gridFinenessLabel = GridFineness.getCellLabel();
+        const boardSpacingLabel = BoardPadding.getLabel();
 
         return `
             <div class="modal modal--wide display-options-modal">
@@ -397,6 +402,11 @@ export const DisplayOptions = {
                                     idPrefix: 'display-opt-grid-fineness',
                                     label: 'Grid fineness',
                                     valuePercent: gridFinenessLabel
+                                })}
+                                ${this.stepperRow({
+                                    idPrefix: 'display-opt-board-spacing',
+                                    label: 'Board spacing',
+                                    valuePercent: boardSpacingLabel
                                 })}
                             </div>
                             <div class="display-options-check-grid display-options-check-grid--inline">
@@ -488,6 +498,12 @@ export const DisplayOptions = {
             onIn: () => GridFineness.step(1)
         });
 
+        this.bindStepper(root, {
+            idPrefix: 'display-opt-board-spacing',
+            onOut: () => BoardPadding.step(-1),
+            onIn: () => BoardPadding.step(1)
+        });
+
         root.querySelector('#display-opt-chrome-bg')?.addEventListener('click', (e) => {
             e.stopPropagation();
             ChromeBackground.openPicker(e.currentTarget);
@@ -528,6 +544,7 @@ export const DisplayOptions = {
 
         NoteFontScale.updateLabels();
         DesktopZoom.updateButtons();
+        BoardPadding.updateLabels();
     },
 
     openModal(anchor) {

@@ -7,6 +7,7 @@ import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
 import { applyTileSmallFootprint, writeTileSmallFootprint } from './tileFootprint.js';
 import { GridFineness } from './gridDensity.js';
+import { BoardPadding } from './boardPadding.js';
 
 const CUSTOMIZATION_KEYS = [
     'matrix_app_theme',
@@ -20,7 +21,8 @@ const CUSTOMIZATION_KEYS = [
     'matrix_display_options',
     'matrix_tile_small_footprint',
     'matrix_grid_fineness',
-    'matrix_grid_fineness_migrated'
+    'matrix_grid_fineness_migrated',
+    'matrix_board_padding'
 ];
 
 const DISPLAY_DEFAULTS = {
@@ -61,6 +63,7 @@ export function resetCustomizationToDefaults() {
 
     DesktopZoom.setScale(1);
     NoteFontScale.setScale(1);
+    BoardPadding.apply();
     writeTileSmallFootprint('card');
     GridFineness.setStep(GridFineness.DEFAULT_FINENESS_STEP);
     applyTileSmallFootprint('card');
