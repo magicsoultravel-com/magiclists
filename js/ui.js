@@ -1175,10 +1175,6 @@ export const UI = {
         });
     },
 
-    resolveSpatialExpandTarget(item, saved) {
-        return this.resolveRememberedSpatialSize(saved, item);
-    },
-
     mergeSpatialLayoutEntry(prev, rect, tileSize = LEGACY_TILE_SIZE, {
         updateRemembered = false,
         rememberedW = null,
@@ -1360,10 +1356,6 @@ export const UI = {
         return geoResolveExpandedDefaultRect(tileSize, saved);
     },
 
-    shouldSnapPanelCollapse(w, h) {
-        return this.isAtCurrentSmallSize(w, h);
-    },
-
     isAtOrBelowCompactZone(w, h, tileSize = LEGACY_TILE_SIZE) {
         return geoIsAtOrBelowCompactZone(w, h, tileSize);
     },
@@ -1530,11 +1522,9 @@ export const UI = {
         this.saveTileLayoutFromCard(card, item, rect, tileSize || resolveTileSize(item));
     },
 
-    applyTileTierRect(card, item, nextTier, rect, ctx = {}) {
-        const activeCategories = ctx.activeCategories ?? readStoredCategories();
-        const targetCatName = ctx.targetCatName ?? this.getCardRenderContext(item, activeCategories).targetCatName;
-        const categoryColor = ctx.categoryColor ?? this.getCardRenderContext(item, activeCategories).categoryColor;
-        const normalizedTier = normalizeTileSize(nextTier);
+    commitSpatialRect(card, item, rect, ctx = {}) {
+        const tier = ctx.tier ?? (this.isAtCurrentSmallSize(rect.w, rect.h) ? 'small' : 'large');
+        const normalizedTier = normalizeTileSize(tier);
 
         if (this.canEditInline() && normalizedTier !== resolveTileSize(item)) {
             this.mutateItem(item, (it) => {
@@ -1545,63 +1535,54 @@ export const UI = {
         }
 
         if (!isDesktopCard(card)) {
-            this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
+            const activeCategories = ctx.activeCategories ?? readStoredCategories();
+            const renderCtx = ctx.targetCatName != null
+                ? { targetCatName: ctx.targetCatName, categoryColor: ctx.categoryColor }
+                : this.getCardRenderContext(item, activeCategories);
+            this.renderCollapsedCard(
+                card,
+                item,
+                activeCategories,
+                renderCtx.targetCatName,
+                renderCtx.categoryColor
+            );
         }
+
         this.applyNoteRect(card, rect, { settling: false });
         this.saveTileLayoutFromCard(card, item, rect, normalizedTier);
 
         if (!isDesktopCard(card)) return;
         this.finalizeDesktopCard(card);
-        if (isSnapLayoutMode(activeBoardViewMode)) {
-            const canvas = card.closest('#app-canvas');
-            if (canvas?.classList.contains('view-grid')) {
-                requestAnimationFrame(() => this.reflowGridBoard(canvas, item.id, { animate: true }));
-            }
+        const canvas = card.closest('#app-canvas');
+        if (ctx.scheduleExtents) {
+            this.scheduleBoardCanvasExtents(canvas);
         }
+        if (ctx.deferReflow) return;
+        if (isSnapLayoutMode(activeBoardViewMode) && canvas?.classList.contains('view-grid')) {
+            const reflowOpts = { animate: true };
+            if (ctx.actorRect) reflowOpts.actorRect = ctx.actorRect;
+            requestAnimationFrame(() => this.reflowGridBoard(canvas, item.id, reflowOpts));
+        }
+    },
+
+    applyTileTierRect(card, item, nextTier, rect, ctx = {}) {
+        this.commitSpatialRect(card, item, rect, { ...ctx, tier: nextTier });
     },
 
     applySpatialToggleRect(card, item, rect, ctx = {}) {
-        this.applyNoteRect(card, rect, { settling: false });
-        const tier = this.isAtCurrentSmallSize(rect.w, rect.h) ? 'small' : 'large';
-        if (this.canEditInline() && tier !== resolveTileSize(item)) {
-            this.mutateItem(item, (it) => {
-                it.tileSize = tier;
-            }, { preserveView: true, skipRerender: true });
-            item.tileSize = tier;
-            boardItemsById.set(item.id, item);
-        }
-        this.saveTileLayoutFromCard(card, item, rect, tier);
-
-        if (!isDesktopCard(card)) return;
-        this.finalizeDesktopCard(card);
-        const canvas = card.closest('#app-canvas');
-        this.scheduleBoardCanvasExtents(canvas);
-        if (ctx.deferReflow) return;
-        if (isSnapLayoutMode(activeBoardViewMode)) {
-            if (canvas?.classList.contains('view-grid')) {
-                const reflowOpts = { animate: true };
-                if (ctx.actorRect) reflowOpts.actorRect = ctx.actorRect;
-                requestAnimationFrame(() => this.reflowGridBoard(canvas, item.id, reflowOpts));
-            }
-        }
+        this.commitSpatialRect(card, item, rect, { ...ctx, scheduleExtents: true });
     },
 
-    collapseBoardCardToSmallFootprint(card, item, { deferReflow = false } = {}) {
-        if (!card || !item?.id || isFileCabinetActive()) return;
+    collapseSpatialAtCurrentPos(card, item, ctx = {}) {
         const pos = this.readNoteRect(card);
-        const footprintRect = { x: pos.x, y: pos.y, ...getSmallRect(readTileSmallFootprint()) };
+        this.persistRememberedSpatialSize(item.id, pos.w, pos.h, resolveTileSize(item));
+        const small = getSmallRect(readTileSmallFootprint());
+        this.applySpatialToggleRect(card, item, { x: pos.x, y: pos.y, w: small.w, h: small.h }, { deferReflow: true, ...ctx });
+    },
 
-        if (matchesSmallFootprintRect(pos.w, pos.h)) {
-            this.applyNoteRect(card, footprintRect, { settling: false });
-            this.saveTileLayoutFromCard(card, item, footprintRect, resolveTileSize(item));
-            this.finalizeDesktopCard(card);
-            return;
-        }
-
-        const tileSize = resolveTileSize(item);
-        this.persistRememberedSpatialSize(item.id, pos.w, pos.h, tileSize);
-        const smallRect = this.resolveCardRect(card, item, { mode: 'small' });
-        this.applySpatialToggleRect(card, item, smallRect, { deferReflow });
+    collapseBoardCardToSmallFootprint(card, item, ctx = {}) {
+        if (!card || !item?.id || isFileCabinetActive() || this.isSpatiallyCollapsed(card)) return;
+        this.collapseSpatialAtCurrentPos(card, item, ctx);
     },
 
     applyTileZoneToggle(card, item, ctx = {}) {
@@ -1612,8 +1593,6 @@ export const UI = {
             return;
         }
 
-        const pos = this.readNoteRect(card);
-        const tileSize = resolveTileSize(item);
         if (this.isSpatiallyCollapsed(card)) {
             removeFromFileCabinetOrder(item.id);
             const rect = this.resolveBoardExpandPlacement(card, item);
@@ -1625,10 +1604,7 @@ export const UI = {
                 });
             }
         } else {
-            this.persistRememberedSpatialSize(item.id, pos.w, pos.h, tileSize);
-            const small = getSmallRect(readTileSmallFootprint());
-            const smallRect = { x: pos.x, y: pos.y, w: small.w, h: small.h };
-            this.applySpatialToggleRect(card, item, smallRect, { ...ctx, deferReflow: true });
+            this.collapseSpatialAtCurrentPos(card, item, ctx);
         }
     },
 
@@ -1928,7 +1904,7 @@ export const UI = {
                         let w;
                         let h;
                         if (isLayoutExpanded) {
-                            const target = this.resolveSpatialExpandTarget(item, null);
+                            const target = this.resolveRememberedSpatialSize(null, item);
                             w = target.w;
                             h = target.h;
                         } else {
@@ -2709,42 +2685,15 @@ export const UI = {
             this.cancelCardAnimation(card);
         }
 
-        const isDesktop = false;
-        const snapLayout = false;
         const animate = cardAnimationsEnabled() && !options.skipAnimation;
 
-        const reflowGridBoard = () => {
-            if (options.skipGridReflow) return;
-            if (!snapLayout) return;
-            const canvas = document.getElementById('app-canvas');
-            if (!canvas?.classList.contains('view-grid')) return;
-            this.finalizeDesktopCard(card);
-            requestAnimationFrame(() => {
-                this.reflowGridBoard(canvas, card.dataset.id, { animate: true });
-            });
-        };
-
         const finishExpand = () => {
-            if (isDesktop) {
-                if (snapLayout) this.applyDesktopSize(card);
-                else this.applyFreeformSize(card);
-            }
-            reflowGridBoard();
             this.cleanupCardAnimation(card);
-            if (isDesktop) this.syncSpatialChromeForEditing(card);
         };
 
         const finishCollapse = () => {
             card.classList.remove('expanded');
             this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
-            if (isDesktop) {
-                if (snapLayout) {
-                    this.applyDesktopSize(card);
-                    reflowGridBoard();
-                } else {
-                    this.applyFreeformSize(card);
-                }
-            }
             this.cleanupCardAnimation(card);
         };
 
@@ -4860,8 +4809,7 @@ export const UI = {
                     && gridSaved
                     && Number.isFinite(gridSaved.x)
                     && Number.isFinite(gridSaved.y)
-                    && (matchesSmallFootprintRect(gridSaved.w, gridSaved.h, footprint)
-                        || isAtSmallSize(gridSaved.w, gridSaved.h, footprint))
+                    && isAtSmallSize(gridSaved.w, gridSaved.h, footprint)
                 ) {
                     this.saveCompactBoardLayout(item.id, {
                         x: gridSaved.x,
@@ -4877,7 +4825,7 @@ export const UI = {
                     if (gridSaved) {
                         let w = gridSaved.w;
                         let h = gridSaved.h;
-                        if (matchesSmallFootprintRect(w, h, footprint) || isAtSmallSize(w, h, footprint)) {
+                        if (isAtSmallSize(w, h, footprint)) {
                             w = small.w;
                             h = small.h;
                         }
@@ -4909,7 +4857,7 @@ export const UI = {
                     w = size.w;
                     h = size.h;
                 }
-                if (matchesSmallFootprintRect(w, h, footprint) || isAtSmallSize(w, h, footprint)) {
+                if (isAtSmallSize(w, h, footprint)) {
                     w = small.w;
                     h = small.h;
                 }
@@ -4951,8 +4899,7 @@ export const UI = {
                     && freePos
                     && Number.isFinite(freePos.x)
                     && Number.isFinite(freePos.y)
-                    && (matchesSmallFootprintRect(freeSaved.w, freeSaved.h, footprint)
-                        || isAtSmallSize(freeSaved.w, freeSaved.h, footprint))
+                    && isAtSmallSize(freeSaved.w, freeSaved.h, footprint)
                 ) {
                     const slot = this.snapNoteRect(
                         { x: freePos.x, y: freePos.y, w: small.w, h: small.h },
@@ -5087,16 +5034,6 @@ export const UI = {
         }));
     },
 
-    clampRectToFootprintIfSmall(rect) {
-        if (!rect) return rect;
-        const footprint = readTileSmallFootprint();
-        if (!matchesSmallFootprintRect(rect.w, rect.h, footprint) && !isAtSmallSize(rect.w, rect.h, footprint)) {
-            return rect;
-        }
-        const small = getSmallRect(footprint);
-        return { ...rect, w: small.w, h: small.h };
-    },
-
     getGridLayout() {
         try {
             return JSON.parse(localStorage.getItem(GRID_LAYOUT_KEY) || '{}');
@@ -5146,8 +5083,7 @@ export const UI = {
 
     saveCompactBoardLayout(itemId, slot, sortBy) {
         if (!itemId || !slot) return;
-        const footprint = readTileSmallFootprint();
-        const small = getSmallRect(footprint);
+        const small = getSmallRect(readTileSmallFootprint());
         const rect = {
             x: Math.round(slot.x),
             y: Math.round(slot.y),
@@ -5157,16 +5093,12 @@ export const UI = {
 
         const layout = this.getGridLayout();
         const gridEntry = this.mergeSpatialLayoutEntry({}, rect, 'small', { updateRemembered: false });
-        delete gridEntry.rememberedW;
-        delete gridEntry.rememberedH;
         delete gridEntry.customCompact;
         layout[itemId] = gridEntry;
         localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layout));
 
         const sizes = this.getFreeformSizes();
         const ffEntry = this.mergeSpatialLayoutEntry({}, { w: rect.w, h: rect.h }, 'small', { updateRemembered: false });
-        delete ffEntry.rememberedW;
-        delete ffEntry.rememberedH;
         delete ffEntry.customCompact;
         sizes[itemId] = ffEntry;
         localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
@@ -5592,8 +5524,9 @@ export const UI = {
 
         const rectForSqueeze = (card, isExpanded) => {
             let rect = this.gridBoardRectForCard(card, this.readNoteRect(card), isExpanded);
-            if (footprintPack) {
-                rect = this.clampRectToFootprintIfSmall(rect);
+            if (footprintPack && this.isAtCurrentSmallSize(rect.w, rect.h)) {
+                const small = getSmallRect(readTileSmallFootprint());
+                rect = { ...rect, w: small.w, h: small.h };
             }
             return rect;
         };

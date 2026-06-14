@@ -117,7 +117,7 @@ function finishSnapPanelGesture(card, {
         tileSize = UI.commitTierResize(card, item, tierResizeState);
     }
     if (item && card.classList.contains('expanded') && !isDesktopCard(card)
-        && UI.shouldSnapPanelCollapse(rect.w, rect.h)) {
+        && isAtSmallSize(rect.w, rect.h, readTileSmallFootprint())) {
         onCollapseFromResize(card, item, rect, { animate, bounds });
         maybeRepartitionFileCabinetAfterResize(canvas, card, currentItems);
         cleanupActive?.();
