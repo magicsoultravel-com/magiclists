@@ -593,14 +593,12 @@
     flex: 0 0 auto;
     min-width: 0;
     isolation: unset;
-    --card-actions-reserve: min(7.5rem, 45%);
 }
 
 #app-canvas.view-grid .mini-card[data-desktop="1"] .editor-note-header,
 #app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-note-header {
     flex: 1 1 auto;
     min-width: 0;
-    max-width: calc(100% - var(--card-actions-reserve, 0px));
     overflow: hidden;
 }
 

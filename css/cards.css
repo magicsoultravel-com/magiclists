@@ -76,7 +76,6 @@
     min-width: 0;
     width: 100%;
     position: relative;
-    --card-actions-reserve: min(7.5rem, 45%);
 }
 
 .mini-card.tile-small .editor-note-topline .editor-note-header,
@@ -84,7 +83,6 @@
 .file-cabinet .file-cabinet-tab .editor-note-header {
     flex: 1 1 auto;
     min-width: 0;
-    max-width: calc(100% - var(--card-actions-reserve, 0px));
     overflow: hidden;
 }
 
@@ -122,13 +120,11 @@ html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-ca
     min-width: 0;
     width: 100%;
     position: relative;
-    --card-actions-reserve: min(7.5rem, 45%);
 }
 
 .file-cabinet-tab.is-file-cabinet-dragging .editor-note-topline .editor-note-header {
     flex: 1 1 auto;
     min-width: 0;
-    max-width: calc(100% - var(--card-actions-reserve, 0px));
     overflow: hidden;
 }
 
