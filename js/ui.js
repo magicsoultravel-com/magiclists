@@ -83,7 +83,6 @@ import {
     getLargeDefaultRect,
     isCustomTileRect as geoIsCustomTileRect,
     isCollapsedSpatialSize,
-    snapRectToCollapsedFootprint,
     getPackStrideYForRect,
     getGridSnapMinH,
     resolveExpandedDefaultRect as geoResolveExpandedDefaultRect,
@@ -1753,9 +1752,9 @@ export const UI = {
 
     gridTileRect(tileSize, base, saved) {
         if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
-            const snapped = snapRectToCollapsedFootprint(saved.w, saved.h, tileSize);
-            if (snapped.w !== saved.w || snapped.h !== saved.h) {
-                return { ...base, w: snapped.w, h: snapped.h };
+            if (isCollapsedSpatialSize(saved.w, saved.h, tileSize)) {
+                const small = getSmallRect(readTileSmallFootprint());
+                return { ...base, w: small.w, h: small.h };
             }
             const clamped = geoClampSpatialSize(saved.w, saved.h, tileSize);
             return { ...base, w: clamped.w, h: clamped.h };
@@ -2116,8 +2115,13 @@ export const UI = {
         if (spatial && card) {
             opts.spatialTile = true;
             const item = this.resolveBoardItem(card.dataset.id);
-            const { w, h } = this.readNoteRect(card);
+            let { w, h } = this.readNoteRect(card);
             opts.tileSize = this.getCardTileSize(card, item);
+            if (!(w > 0 && h > 0)) {
+                const saved = this.getSavedLayoutRect(card, item);
+                w = saved?.w ?? 0;
+                h = saved?.h ?? 0;
+            }
             opts.tileW = w;
             opts.tileH = h;
         }
