@@ -1588,8 +1588,6 @@ export const UI = {
             return;
         }
 
-        this.syncCollapsedFootprintFromStorage(card, item);
-
         if (this.isSpatiallyCollapsed(card)) {
             removeFromFileCabinetOrder(item.id);
             const rect = this.resolveBoardExpandPlacement(card, item);
@@ -1633,25 +1631,6 @@ export const UI = {
         }
 
         window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
-    },
-
-    syncCollapsedFootprintFromStorage(card, item) {
-        if (!isDesktopCard(card) || !item?.id) return;
-        const tileSize = resolveTileSize(item);
-        const saved = isSnapLayoutMode(activeBoardViewMode)
-            ? this.getGridLayout()[item.id]
-            : this.getFreeformSizes()[item.id];
-        if (!saved || !Number.isFinite(saved.w) || !Number.isFinite(saved.h)) return;
-        if (!isCollapsedSpatialSize(saved.w, saved.h, tileSize)) return;
-
-        const pos = this.readNoteRect(card);
-        if (isCollapsedSpatialSize(pos.w, pos.h, tileSize)) return;
-
-        const small = getSmallRect(readTileSmallFootprint());
-        const rect = { x: pos.x, y: pos.y, w: small.w, h: small.h };
-        this.applyNoteRect(card, rect, { settling: false });
-        this.saveTileLayoutFromCard(card, item, rect, tileSize);
-        this.finalizeDesktopCard(card);
     },
 
     reapplySmallFootprintOnBoard() {
@@ -5843,39 +5822,22 @@ export const UI = {
         const styleH = parseFloat(card.style.height);
         const hasInlineW = Number.isFinite(styleW) && styleW > 0;
         const hasInlineH = Number.isFinite(styleH) && styleH > 0;
-        const activelyResizing = this.isCardActivelyResizing(card);
-        const footprint = readTileSmallFootprint();
-        const small = getSmallRect(footprint);
         const offsetW = card.offsetWidth || 0;
         const offsetH = card.offsetHeight || 0;
 
-        if (!activelyResizing && isDesktopCard(card)) {
+        let w = hasInlineW ? styleW : (offsetW || FREEFORM_DEFAULT_W);
+        let h = hasInlineH ? styleH : (offsetH || FREEFORM_DEFAULT_H);
+
+        if (isDesktopCard(card) && !this.isCardActivelyResizing(card)) {
             const item = this.resolveBoardItem(card?.dataset?.id);
             const tileSize = resolveTileSize(item);
-            const saved = isSnapLayoutMode(activeBoardViewMode)
-                ? this.getGridLayout()[card.dataset.id]
-                : this.getFreeformSizes()[card.dataset.id];
-            const candidateW = hasInlineW ? styleW : (offsetW || FREEFORM_DEFAULT_W);
-            const candidateH = hasInlineH ? styleH : (offsetH || FREEFORM_DEFAULT_H);
-            const savedCollapsed = saved
-                && Number.isFinite(saved.w)
-                && Number.isFinite(saved.h)
-                && isCollapsedSpatialSize(saved.w, saved.h, tileSize);
-            const collapsed = card.classList.contains('spatial-at-small')
-                || savedCollapsed
-                || isCollapsedSpatialSize(candidateW, candidateH, tileSize);
-            if (collapsed) {
-                return {
-                    x: parseFloat(card.style.left) || 0,
-                    y: parseFloat(card.style.top) || 0,
-                    w: small.w,
-                    h: small.h
-                };
+            if (isCollapsedSpatialSize(w, h, tileSize)) {
+                const small = getSmallRect(readTileSmallFootprint());
+                w = small.w;
+                h = small.h;
             }
         }
 
-        let w = hasInlineW ? styleW : (offsetW || FREEFORM_DEFAULT_W);
-        let h = hasInlineH ? styleH : (offsetH || FREEFORM_DEFAULT_H);
         return {
             x: parseFloat(card.style.left) || 0,
             y: parseFloat(card.style.top) || 0,
