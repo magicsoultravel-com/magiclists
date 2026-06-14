@@ -14,6 +14,7 @@ export const FILE_CABINET_HEIGHT_KEY = 'matrix_file_cabinet_height';
 
 export const FILE_CABINET_MIN_HEIGHT = 96;
 export const FILE_CABINET_BOARD_MIN_HEIGHT = 200;
+export const FILE_CABINET_REF_HEIGHT = 220;
 
 const FOLD_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3 7l3-3 3 3" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const EXPAND_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3 5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -600,6 +601,11 @@ export function applyFileCabinetStackPositions(stackEl) {
     });
 }
 
+export function getFileCabinetUiScale(mount) {
+    const raw = parseFloat(mount?.style.getPropertyValue('--file-cabinet-ui-scale'));
+    return Number.isFinite(raw) && raw > 0 ? raw : 1;
+}
+
 export function getFileCabinetContentMinHeight(mount) {
     if (!mount) return FILE_CABINET_MIN_HEIGHT;
     const label = getLabelRect();
@@ -614,12 +620,12 @@ export function getFileCabinetContentMinHeight(mount) {
 export function syncFileCabinetDrawerHeight(mount) {
     if (!mount) return;
     const contentMin = getFileCabinetContentMinHeight(mount);
-    mount.style.minHeight = `${contentMin}px`;
+    const scale = getFileCabinetUiScale(mount);
+    mount.style.minHeight = `${contentMin * scale}px`;
     const savedHeight = readFileCabinetHeight();
     if (savedHeight !== null) {
         mount.dataset.fixedHeight = 'true';
         mount.style.flex = '0 0 auto';
-        mount.style.height = `${Math.max(contentMin, savedHeight)}px`;
         mount.style.maxHeight = '';
         return;
     }

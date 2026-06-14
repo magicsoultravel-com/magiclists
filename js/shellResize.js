@@ -9,8 +9,10 @@ import {
     readFileCabinetHeight,
     writeFileCabinetHeight,
     getFileCabinetContentMinHeight,
+    syncFileCabinetDrawerHeight,
     FILE_CABINET_MIN_HEIGHT,
-    FILE_CABINET_BOARD_MIN_HEIGHT
+    FILE_CABINET_BOARD_MIN_HEIGHT,
+    FILE_CABINET_REF_HEIGHT
 } from './fileCabinet.js';
 
 const DESKTOP_MIN_WIDTH = 280;
@@ -41,17 +43,22 @@ function getSidebarWidthBounds() {
     return { min: SIDEBAR_MIN_WIDTH, max };
 }
 
+function getSidebarScaleBounds() {
+    const { min, max } = getSidebarWidthBounds();
+    return {
+        min: min / SIDEBAR_DEFAULT_WIDTH,
+        max: max / SIDEBAR_DEFAULT_WIDTH
+    };
+}
+
 function clampSidebarWidth(width) {
     const { min, max } = getSidebarWidthBounds();
     return clamp(width, min, max);
 }
 
-function applySidebarWidth(width) {
-    if (!sidebarPanel || isSidebarCollapsed()) return;
-    const clamped = clampSidebarWidth(width);
-    sidebarPanel.style.width = `${clamped}px`;
-    sidebarPanel.style.setProperty('--sidebar-width', `${clamped}px`);
-    return clamped;
+function sidebarScaleForWidth(width) {
+    const { min, max } = getSidebarScaleBounds();
+    return clamp(width / SIDEBAR_DEFAULT_WIDTH, min, max);
 }
 
 function getCabinetHeightBounds(mount) {
@@ -63,6 +70,46 @@ function getCabinetHeightBounds(mount) {
     const maxByBoard = surfaceH - FILE_CABINET_BOARD_MIN_HEIGHT;
     const max = Math.max(min, Math.min(maxByRatio, maxByBoard));
     return { min, max };
+}
+
+function getCabinetScaleBounds(mount) {
+    const { min, max } = getCabinetHeightBounds(mount);
+    return {
+        min: min / FILE_CABINET_REF_HEIGHT,
+        max: max / FILE_CABINET_REF_HEIGHT
+    };
+}
+
+function cabinetScaleForHeight(height, mount) {
+    const { min, max } = getCabinetScaleBounds(mount);
+    return clamp(height / FILE_CABINET_REF_HEIGHT, min, max);
+}
+
+function applySidebarUiScale(width) {
+    if (!sidebarPanel || isSidebarCollapsed()) return;
+    const scale = sidebarScaleForWidth(width);
+    sidebarPanel.style.setProperty('--sidebar-ui-scale', String(scale));
+}
+
+function applyCabinetUiScale(mount, height) {
+    if (!mount) return;
+    const effectiveHeight = height ?? mount.offsetHeight;
+    if (!effectiveHeight) return;
+    const scale = cabinetScaleForHeight(effectiveHeight, mount);
+    mount.style.setProperty('--file-cabinet-ui-scale', String(scale));
+    syncFileCabinetDrawerHeight(mount);
+}
+
+function clearSidebarAppliedWidth() {
+    sidebarPanel?.style.removeProperty('width');
+}
+
+function applySidebarWidth(width) {
+    if (!sidebarPanel || isSidebarCollapsed()) return;
+    const clamped = clampSidebarWidth(width);
+    sidebarPanel.style.setProperty('--sidebar-width', `${clamped}px`);
+    applySidebarUiScale(clamped);
+    return clamped;
 }
 
 function clampCabinetHeight(height, mount) {
@@ -77,6 +124,7 @@ function applyCabinetHeight(mount, height, { persist = false } = {}) {
     mount.style.flex = '0 0 auto';
     mount.style.height = `${clamped}px`;
     mount.style.maxHeight = '';
+    applyCabinetUiScale(mount, clamped);
     if (persist) writeFileCabinetHeight(clamped);
     return clamped;
 }
@@ -92,6 +140,15 @@ function applyCabinetAutoHeight(mount) {
     mount.style.flex = '';
     mount.style.height = '';
     mount.style.maxHeight = '';
+    applyCabinetUiScale(mount, mount.offsetHeight || FILE_CABINET_REF_HEIGHT);
+}
+
+function ensureSidebarScaleInner() {
+    if (!sidebarPanel || sidebarPanel.querySelector('.side-panel-scale-inner')) return;
+    const inner = document.createElement('div');
+    inner.className = 'side-panel-scale-inner';
+    while (sidebarPanel.firstChild) inner.appendChild(sidebarPanel.firstChild);
+    sidebarPanel.appendChild(inner);
 }
 
 function ensureVerticalSplitter() {
@@ -120,6 +177,7 @@ function ensureHorizontalSplitter() {
     }
 
     if (horizontalSplitter?.isConnected && horizontalSplitter.previousElementSibling === mount) {
+        applyCabinetUiScale(mount);
         return horizontalSplitter;
     }
 
@@ -215,8 +273,8 @@ function bindSplitterDrag(handle, axis) {
 
         if (axis === 'v') {
             const next = clampSidebarWidth(startSize + (e.clientX - startX));
-            sidebarPanel.style.width = `${next}px`;
             sidebarPanel.style.setProperty('--sidebar-width', `${next}px`);
+            applySidebarUiScale(next);
         } else {
             const mount = document.getElementById('file-cabinet');
             if (!mount) return;
@@ -225,6 +283,7 @@ function bindSplitterDrag(handle, axis) {
             mount.style.flex = '0 0 auto';
             mount.style.height = `${next}px`;
             mount.style.maxHeight = '';
+            applyCabinetUiScale(mount, next);
         }
     });
 
@@ -235,12 +294,16 @@ function bindSplitterDrag(handle, axis) {
 function applyStoredSidebarWidth() {
     const stored = readSidebarWidth();
     const width = stored ?? SIDEBAR_DEFAULT_WIDTH;
-    applySidebarWidth(width);
-    if (stored !== null && stored !== width) writeSidebarWidth(width);
+    const clamped = applySidebarWidth(width);
+    if (stored !== null && clamped !== stored) writeSidebarWidth(clamped);
 }
 
 function reclampAll() {
-    applyStoredSidebarWidth();
+    if (!isSidebarCollapsed()) {
+        applyStoredSidebarWidth();
+    } else {
+        clearSidebarAppliedWidth();
+    }
     const mount = document.getElementById('file-cabinet');
     if (mount && mount.dataset.fixedHeight === 'true') {
         const height = readFileCabinetHeight() ?? mount.offsetHeight;
@@ -268,11 +331,21 @@ export function syncCabinetSplitter() {
 
 export function onSidebarCollapseChanged() {
     updateVerticalSplitterVisibility();
-    if (!isSidebarCollapsed()) applyStoredSidebarWidth();
+    if (isSidebarCollapsed()) {
+        clearSidebarAppliedWidth();
+    } else {
+        applyStoredSidebarWidth();
+    }
     dispatchDesktopBoundsChanged();
 }
 
 export function initShellResize() {
+    workspaceShell = document.getElementById('workspace-shell');
+    sidebarPanel = document.getElementById('side-panel');
+    if (!workspaceShell || !sidebarPanel) return;
+
+    ensureSidebarScaleInner();
+
     if (bound) {
         reclampAll();
         syncCabinetSplitter();
@@ -280,12 +353,9 @@ export function initShellResize() {
         return;
     }
 
-    workspaceShell = document.getElementById('workspace-shell');
-    sidebarPanel = document.getElementById('side-panel');
-    if (!workspaceShell || !sidebarPanel) return;
-
     bound = true;
-    applyStoredSidebarWidth();
+    clearSidebarAppliedWidth();
+    if (!isSidebarCollapsed()) applyStoredSidebarWidth();
     ensureVerticalSplitter();
     updateVerticalSplitterVisibility();
     syncCabinetSplitter();
