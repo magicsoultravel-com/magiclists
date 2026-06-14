@@ -1152,7 +1152,27 @@ export const UI = {
     resolveRememberedSpatialSize(saved, item) {
         const remembered = geoReadRememberedSize(saved);
         if (remembered) return remembered;
-        return geoResolveSpatialFallbackRect(resolveTileSize(item));
+        return this.resolveExpandedDefaultRect(resolveTileSize(item), null);
+    },
+
+    resolveBoardExpandRect(card, item) {
+        const saved = this.getSavedLayoutRect(card, item);
+        const tileSize = resolveTileSize(item);
+        const remembered = geoReadRememberedSize(saved);
+        const size = remembered
+            ? remembered
+            : this.resolveExpandedDefaultRect(tileSize, null);
+        const pos = this.readNoteRect(card);
+        return { x: pos.x, y: pos.y, w: size.w, h: size.h };
+    },
+
+    resolveBoardExpandPlacement(card, item) {
+        const sizeRect = this.resolveBoardExpandRect(card, item);
+        if (!isSnapLayoutMode(activeBoardViewMode)) return sizeRect;
+        const canvas = card.closest('#app-canvas');
+        return this.findDesktopCenterSlot(sizeRect.w, sizeRect.h, canvas, 'grid', {
+            excludeId: item.id
+        });
     },
 
     resolveSpatialExpandTarget(item, saved) {
@@ -1539,7 +1559,9 @@ export const UI = {
         if (ctx.deferReflow) return;
         if (isSnapLayoutMode(activeBoardViewMode)) {
             if (canvas?.classList.contains('view-grid')) {
-                requestAnimationFrame(() => this.reflowGridBoard(canvas, item.id, { animate: true }));
+                const reflowOpts = { animate: true };
+                if (ctx.actorRect) reflowOpts.actorRect = ctx.actorRect;
+                requestAnimationFrame(() => this.reflowGridBoard(canvas, item.id, reflowOpts));
             }
         }
     },
@@ -1574,8 +1596,14 @@ export const UI = {
         const tileSize = resolveTileSize(item);
         if (this.isAtCurrentSmallSize(pos.w, pos.h)) {
             removeFromFileCabinetOrder(item.id);
-            const rect = this.resolveCardRect(card, item, { mode: 'remembered' });
-            this.applySpatialToggleRect(card, item, rect, ctx);
+            const rect = this.resolveBoardExpandPlacement(card, item);
+            this.applySpatialToggleRect(card, item, rect, { ...ctx, actorRect: rect });
+            if (isSnapLayoutMode(activeBoardViewMode)) {
+                this.raiseGridBoardCard(card);
+                requestAnimationFrame(() => {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                });
+            }
         } else {
             this.persistRememberedSpatialSize(item.id, pos.w, pos.h, tileSize);
             const smallRect = this.resolveCardRect(card, item, { mode: 'small' });
@@ -1585,15 +1613,10 @@ export const UI = {
 
     applyFileCabinetZoneToggle(card, item, ctx = {}) {
         const inFileCabinet = !!card.closest('#file-cabinet');
-        const tileSize = resolveTileSize(item);
 
         if (inFileCabinet) {
             removeFromFileCabinetOrder(item.id);
-            let rect = this.resolveCardRect(card, item, { mode: 'remembered' });
-            const expandedMin = this.resolveExpandedDefaultRect(tileSize, null);
-            if (this.isAtCurrentSmallSize(rect.w, rect.h)) {
-                rect = { ...rect, w: expandedMin.w, h: expandedMin.h };
-            }
+            let rect = this.resolveBoardExpandRect(card, item);
             const savedGrid = this.getGridLayout()[item.id];
             const savedPos = this.getFreeformPositions()[item.id];
             const x = savedGrid?.x ?? savedPos?.x ?? 8;
@@ -5597,10 +5620,10 @@ export const UI = {
         this.updateDesktopScrollPolicy(canvas);
     },
 
-    reflowGridBoard(canvas, actorId, { animate = true } = {}) {
+    reflowGridBoard(canvas, actorId, { animate = true, actorRect: explicitActorRect = null } = {}) {
         if (!canvas?.classList.contains('view-grid')) return;
-        let actorRect = null;
-        if (actorId) {
+        let actorRect = explicitActorRect;
+        if (!actorRect && actorId) {
             const actorCard = canvas.querySelector(
                 `.mini-card[data-desktop="1"][data-id="${CSS.escape(actorId)}"]`
             );
