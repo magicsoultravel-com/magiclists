@@ -550,10 +550,207 @@ export function syncFileCabinetDrawerHeight(mount) {
     const label = getLabelRect();
     let maxStackH = label.h;
     mount.querySelectorAll('.file-cabinet-tab-stack').forEach((stack) => {
+        if (stack.closest('.file-cabinet-folded-preview')) return;
         maxStackH = Math.max(maxStackH, stack.offsetHeight || 0);
     });
     mount.style.minHeight = `${maxStackH + FILE_CABINET_DRAWER_HEADER_PAD}px`;
     mount.style.maxHeight = 'none';
+}
+
+function buildFileCabinetCategoryColumn({
+    catName,
+    items,
+    activeCategories,
+    UI,
+    showFoldButton = true
+}) {
+    const label = getLabelRect();
+    const matched = activeCategories.find((c) => c.name?.toLowerCase() === catName.toLowerCase());
+    const color = matched?.color || '#64748b';
+
+    const col = document.createElement('div');
+    col.className = 'file-cabinet-category';
+    col.dataset.category = catName;
+    col.style.setProperty('--file-cabinet-category-color', color);
+
+    const header = document.createElement('div');
+    header.className = 'file-cabinet-category-header';
+    const foldBtnHtml = showFoldButton
+        ? `<button type="button" class="card-act file-cabinet-category-fold-btn" title="Fold category" aria-label="Fold category">${FOLD_ICON}</button>`
+        : '';
+    header.innerHTML = `<span class="file-cabinet-category-dot" style="background:${UI.escapeAttr(color)}"></span><span class="file-cabinet-category-name u-truncate">${UI.escapeHTML(catName)}</span><span class="file-cabinet-category-count">${items.length}</span>${foldBtnHtml}`;
+    col.appendChild(header);
+
+    const stack = document.createElement('div');
+    stack.className = 'file-cabinet-tab-stack';
+    stack.dataset.category = catName;
+
+    items.forEach((item, index) => {
+        const card = UI.createCardComponent(item, activeCategories, { desktop: true });
+        card.classList.add('file-cabinet-tab');
+        card.dataset.fileCabinetCategory = catName;
+        card.dataset.fileCabinetStackIndex = String(index);
+        UI.applyNoteRect(card, { x: 0, y: 0, w: label.w, h: label.h }, { settling: false });
+        UI.applyDesktopTilePresentation(card, item);
+        UI.finalizeDesktopCard(card);
+        card.classList.add('spatial-at-small', 'tile-small');
+        UI.syncSpatialToggleButton(card);
+        stack.appendChild(card);
+    });
+
+    applyFileCabinetStackPositions(stack);
+    col.appendChild(stack);
+    return col;
+}
+
+function positionFileCabinetFoldedPreview(previewShell, chip) {
+    if (!previewShell || !chip) return;
+    const chipRect = chip.getBoundingClientRect();
+    const gap = 4;
+    let left = chipRect.right + gap;
+    let top = chipRect.top;
+    const previewRect = previewShell.getBoundingClientRect();
+    const margin = 8;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    if (left + previewRect.width > vw - margin) {
+        left = Math.max(margin, chipRect.left - previewRect.width - gap);
+    }
+    if (top + previewRect.height > vh - margin) {
+        top = Math.max(margin, vh - margin - previewRect.height);
+    }
+    if (top < margin) top = margin;
+
+    previewShell.style.left = `${left}px`;
+    previewShell.style.top = `${top}px`;
+}
+
+export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, signal) {
+    if (!mount || !signal) return null;
+
+    let previewShell = null;
+    let activeChip = null;
+    let pinnedByDrag = false;
+
+    const ensurePreviewShell = () => {
+        if (previewShell?.isConnected) return previewShell;
+        previewShell = mount.querySelector('.file-cabinet-folded-preview');
+        if (previewShell?.isConnected) return previewShell;
+        previewShell = document.createElement('div');
+        previewShell.className = 'file-cabinet-folded-preview is-hidden';
+        previewShell.setAttribute('aria-hidden', 'true');
+        previewShell.addEventListener('pointerleave', (e) => {
+            maybeHidePreview(e.relatedTarget);
+        }, { signal });
+        mount.appendChild(previewShell);
+        return previewShell;
+    };
+
+    const isInsidePreviewZone = (el) => {
+        if (!el) return false;
+        return !!(activeChip?.contains(el) || ensurePreviewShell().contains(el));
+    };
+
+    const hidePreview = (force = false) => {
+        if (!force && pinnedByDrag) return;
+        if (!force && document.body.classList.contains('is-file-cabinet-drag-active')) return;
+        const shell = previewShell?.isConnected ? previewShell : null;
+        if (!shell) {
+            activeChip?.classList.remove('is-fold-preview-source');
+            activeChip = null;
+            return;
+        }
+        shell.classList.add('is-hidden');
+        shell.innerHTML = '';
+        shell.setAttribute('aria-hidden', 'true');
+        activeChip?.classList.remove('is-fold-preview-source');
+        activeChip = null;
+    };
+
+    const showPreview = (chip) => {
+        if (document.body.classList.contains('is-file-cabinet-drag-active')) return;
+        const ctx = getPreviewContext?.();
+        if (!ctx) return;
+
+        const catName = chip?.dataset?.category;
+        if (!catName) return;
+
+        const items = ctx.byCategory?.get(catName);
+        if (!items?.length) return;
+
+        const sorted = sortItemsByFileCabinetOrder(items, catName, ctx.order || getFileCabinetOrder());
+        const shell = ensurePreviewShell();
+
+        activeChip?.classList.remove('is-fold-preview-source');
+        activeChip = chip;
+        chip.classList.add('is-fold-preview-source');
+
+        shell.innerHTML = '';
+        const col = buildFileCabinetCategoryColumn({
+            catName,
+            items: sorted,
+            activeCategories: ctx.activeCategories,
+            UI: ctx.UI,
+            showFoldButton: false
+        });
+        col.classList.add('file-cabinet-category--fold-preview');
+        shell.appendChild(col);
+        shell.classList.remove('is-hidden');
+        shell.setAttribute('aria-hidden', 'false');
+        positionFileCabinetFoldedPreview(shell, chip);
+    };
+
+    const maybeHidePreview = (relatedTarget) => {
+        if (isInsidePreviewZone(relatedTarget)) return;
+        if (pinnedByDrag || document.body.classList.contains('is-file-cabinet-drag-active')) return;
+        hidePreview();
+    };
+
+    mount.addEventListener('pointerenter', (e) => {
+        const chip = e.target.closest('.file-cabinet-filed-chip');
+        if (!chip || !mount.contains(chip)) return;
+        showPreview(chip);
+    }, { signal });
+
+    mount.addEventListener('pointerleave', (e) => {
+        const chip = e.target.closest('.file-cabinet-filed-chip');
+        const shell = previewShell?.isConnected ? previewShell : null;
+        const fromPreview = shell?.contains(e.target);
+        if (!chip && !fromPreview) return;
+        maybeHidePreview(e.relatedTarget);
+    }, { signal });
+
+    mount.addEventListener('focusin', (e) => {
+        const chip = e.target.closest('.file-cabinet-filed-chip');
+        if (!chip) return;
+        showPreview(chip);
+    }, { signal });
+
+    mount.addEventListener('focusout', (e) => {
+        const chip = e.target.closest('.file-cabinet-filed-chip');
+        const shell = previewShell?.isConnected ? previewShell : null;
+        const fromPreview = shell?.contains(e.target);
+        if (!chip && !fromPreview) return;
+        requestAnimationFrame(() => {
+            if (isInsidePreviewZone(document.activeElement)) return;
+            if (pinnedByDrag || document.body.classList.contains('is-file-cabinet-drag-active')) return;
+            hidePreview();
+        });
+    }, { signal });
+
+    return {
+        onDragStart(stack) {
+            const shell = previewShell?.isConnected ? previewShell : null;
+            if (shell?.contains(stack)) pinnedByDrag = true;
+        },
+        onDragEnd() {
+            const wasPinned = pinnedByDrag;
+            pinnedByDrag = false;
+            if (wasPinned) hidePreview(true);
+        },
+        hidePreview
+    };
 }
 
 export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
@@ -564,6 +761,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
         mount.innerHTML = '<div class="file-cabinet-empty">No filed notes — use File away on a note to add tabs here.</div>';
         mount.style.minHeight = '';
         mount.style.maxHeight = '';
+        delete mount.__fcPreviewContext;
         return;
     }
 
@@ -579,7 +777,13 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
     const filedCategoryNames = getFileCabinetFiledCategories().filter((c) => byCategory.has(c));
     const visibleCategories = allCategories.filter((c) => !isFileCabinetCategoryFiled(c));
     const hasRail = filedCategoryNames.length > 0;
-    const label = getLabelRect();
+
+    mount.__fcPreviewContext = {
+        byCategory,
+        activeCategories,
+        order,
+        UI
+    };
 
     let rowParent = mount;
     if (hasRail) {
@@ -615,39 +819,13 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
 
     visibleCategories.forEach((catName) => {
         const items = sortItemsByFileCabinetOrder(byCategory.get(catName), catName, order);
-        const matched = activeCategories.find((c) => c.name?.toLowerCase() === catName.toLowerCase());
-        const color = matched?.color || '#64748b';
-
-        const col = document.createElement('div');
-        col.className = 'file-cabinet-category';
-        col.dataset.category = catName;
-        col.style.setProperty('--file-cabinet-category-color', color);
-
-        const header = document.createElement('div');
-        header.className = 'file-cabinet-category-header';
-        header.innerHTML = `<span class="file-cabinet-category-dot" style="background:${UI.escapeAttr(color)}"></span><span class="file-cabinet-category-name u-truncate">${UI.escapeHTML(catName)}</span><span class="file-cabinet-category-count">${items.length}</span><button type="button" class="card-act file-cabinet-category-fold-btn" title="Fold category" aria-label="Fold category">${FOLD_ICON}</button>`;
-        col.appendChild(header);
-
-        const stack = document.createElement('div');
-        stack.className = 'file-cabinet-tab-stack';
-        stack.dataset.category = catName;
-
-        items.forEach((item, index) => {
-            const card = UI.createCardComponent(item, activeCategories, { desktop: true });
-            card.classList.add('file-cabinet-tab');
-            card.dataset.fileCabinetCategory = catName;
-            card.dataset.fileCabinetStackIndex = String(index);
-            UI.applyNoteRect(card, { x: 0, y: 0, w: label.w, h: label.h }, { settling: false });
-            UI.applyDesktopTilePresentation(card, item);
-            UI.finalizeDesktopCard(card);
-            card.classList.add('spatial-at-small', 'tile-small');
-            UI.syncSpatialToggleButton(card);
-            stack.appendChild(card);
-        });
-
-        applyFileCabinetStackPositions(stack);
-        col.appendChild(stack);
-        row.appendChild(col);
+        row.appendChild(buildFileCabinetCategoryColumn({
+            catName,
+            items,
+            activeCategories,
+            UI,
+            showFoldButton: true
+        }));
     });
 
     rowParent.appendChild(row);
@@ -689,6 +867,12 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
 
     initFileCabinetCategoryActions(mount, signal);
 
+    const foldedHoverPreview = initFileCabinetFoldedHoverPreview(
+        mount,
+        () => mount.__fcPreviewContext,
+        signal
+    );
+
     const itemsById = () => new Map((currentItems || []).map((item) => [item.id, item]));
     let dragState = null;
     let previewFrame = null;
@@ -708,6 +892,7 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
         document.body.classList.remove('is-file-cabinet-drag-active');
         mount.classList.remove('is-layout-active');
         clearFileCabinetDropTargets(mount);
+        foldedHoverPreview?.onDragEnd();
 
         if (!state.active) {
             if (state.sourceBaseline) restorePreviewFromState(state);
@@ -861,6 +1046,7 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
                 card.style.height = `${rect.height}px`;
                 card.style.margin = '0';
                 card.style.zIndex = '9999';
+                foldedHoverPreview?.onDragStart(stack);
             }
 
             card.style.left = `${ev.clientX - dragState.fixedOffsetX}px`;

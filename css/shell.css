@@ -546,6 +546,34 @@ body {
     opacity: 1;
 }
 
+.file-cabinet-filed-chip.is-fold-preview-source {
+    background: color-mix(in srgb, var(--file-cabinet-category-color, var(--accent-color)) 12%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--file-cabinet-category-color, var(--accent-color)) 28%, transparent);
+}
+
+.file-cabinet-folded-preview {
+    position: fixed;
+    z-index: 120;
+    pointer-events: auto;
+    padding-left: 10px;
+    margin-left: -10px;
+    max-height: min(45vh, 520px);
+    overflow: auto;
+    border-radius: 0.35rem;
+    background: color-mix(in srgb, var(--bg-surface) 94%, var(--bg-primary));
+    box-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.18),
+        0 0 0 1px color-mix(in srgb, var(--text-muted) 18%, var(--border-color));
+}
+
+.file-cabinet-folded-preview.is-hidden {
+    display: none;
+}
+
+.file-cabinet-folded-preview .file-cabinet-category {
+    padding: 0.35rem 0.4rem 0.45rem;
+}
+
 .file-cabinet-row {
     display: flex;
     flex-direction: row;
