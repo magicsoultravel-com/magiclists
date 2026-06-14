@@ -7,6 +7,7 @@ export const PREVIOUS_DEFAULT_FINENESS_STEP = 4;
 export const PREVIOUS_DEFAULT_PADDING_STEP = 5;
 
 export const COMPACT_MIGRATION_FLAG = 'matrix_compact_defaults_migrated';
+export const CARD_MINIMUM_MIGRATION_FLAG = 'matrix_card_minimum_migrated';
 export const LEGACY_MIGRATION_FLAG = 'matrix_grid_fineness_migrated';
 
 export const CANVAS_LAYOUT_ORIGIN = 16;
@@ -248,13 +249,13 @@ export function remapLayoutRect(rect, prevMetrics, nextMetrics) {
     return next;
 }
 
-function snapSmallRectToLabel(rect, nextMetrics) {
+function snapSmallRectToMinimum(rect) {
     if (!rect || !Number.isFinite(rect.w) || !Number.isFinite(rect.h)) return rect;
-    const label = getScaledFootprintRects().label;
+    const minimum = getScaledFootprintRects().card;
     const next = { ...rect };
     if (isAtAnySmallFootprintSize(rect.w, rect.h)) {
-        next.w = label.w;
-        next.h = label.h;
+        next.w = minimum.w;
+        next.h = minimum.h;
     }
     if (Number.isFinite(rect.rememberedW) && Number.isFinite(rect.rememberedH)
         && isAtAnySmallFootprintSize(rect.rememberedW, rect.rememberedH)) {
@@ -262,6 +263,11 @@ function snapSmallRectToLabel(rect, nextMetrics) {
         delete next.rememberedH;
     }
     return next;
+}
+
+/** @deprecated alias */
+function snapSmallRectToLabel(rect, _nextMetrics) {
+    return snapSmallRectToMinimum(rect);
 }
 
 export function migrateCompactDefaultsIfNeeded() {
@@ -279,7 +285,7 @@ export function migrateCompactDefaultsIfNeeded() {
     const gridNext = {};
     Object.keys(grid).forEach((id) => {
         let entry = remapLayoutRect(grid[id], prevMetrics, nextMetrics);
-        entry = snapSmallRectToLabel(entry, nextMetrics);
+        entry = snapSmallRectToMinimum(entry);
         gridNext[id] = entry;
         if (JSON.stringify(entry) !== JSON.stringify(grid[id])) changed = true;
     });
@@ -317,7 +323,7 @@ export function migrateCompactDefaultsIfNeeded() {
     const sizesNext = {};
     Object.keys(sizes).forEach((id) => {
         let entry = remapLayoutRect(sizes[id], prevMetrics, nextMetrics);
-        entry = snapSmallRectToLabel(entry, nextMetrics);
+        entry = snapSmallRectToMinimum(entry);
         sizesNext[id] = entry;
         if (JSON.stringify(entry) !== JSON.stringify(sizes[id])) changed = true;
     });
@@ -333,6 +339,42 @@ export function migrateCompactDefaultsIfNeeded() {
 
     try {
         localStorage.setItem(COMPACT_MIGRATION_FLAG, '1');
+    } catch { /* ignore */ }
+
+    return changed;
+}
+
+export function migrateCardMinimumFootprintIfNeeded() {
+    try {
+        if (localStorage.getItem(CARD_MINIMUM_MIGRATION_FLAG) === '1') return false;
+    } catch {
+        return false;
+    }
+
+    let changed = false;
+
+    const grid = readJson(GRID_LAYOUT_KEY);
+    const gridNext = {};
+    Object.keys(grid).forEach((id) => {
+        const entry = snapSmallRectToMinimum(grid[id]);
+        gridNext[id] = entry;
+        if (JSON.stringify(entry) !== JSON.stringify(grid[id])) changed = true;
+    });
+    if (changed) writeJsonIfChanged(GRID_LAYOUT_KEY, gridNext, grid);
+
+    const sizes = readJson(FREEFORM_SIZES_KEY);
+    const sizesNext = {};
+    Object.keys(sizes).forEach((id) => {
+        const entry = snapSmallRectToMinimum(sizes[id]);
+        sizesNext[id] = entry;
+        if (JSON.stringify(entry) !== JSON.stringify(sizes[id])) changed = true;
+    });
+    if (Object.keys(sizesNext).length) {
+        changed = writeJsonIfChanged(FREEFORM_SIZES_KEY, sizesNext, sizes) || changed;
+    }
+
+    try {
+        localStorage.setItem(CARD_MINIMUM_MIGRATION_FLAG, '1');
     } catch { /* ignore */ }
 
     return changed;
@@ -397,7 +439,7 @@ export function applyGridFineness() {
     style.setProperty('--tile-small-h-wide', `${footprints.wide.h}px`);
     style.setProperty('--tile-large-w', `${largeW}px`);
     style.setProperty('--tile-large-h', `${largeH}px`);
-    style.setProperty('--tile-label-h', `${footprints.label.h}px`);
+    style.setProperty('--tile-label-h', `${footprints.card.h}px`);
     style.setProperty('--tile-note-w', `${largeW}px`);
     style.setProperty('--tile-note-h', `${largeH}px`);
 

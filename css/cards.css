@@ -105,9 +105,9 @@
     padding: 0;
 }
 
-html[data-tile-small-footprint="label"] .mini-card.tile-small .editor-note-topline .mini-card-title,
-html[data-tile-small-footprint="label"] .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title,
-html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-card-title {
+html[data-tile-small-footprint="card"] .mini-card.tile-small .editor-note-topline .mini-card-title,
+html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title,
+html[data-tile-small-footprint="card"] .file-cabinet .file-cabinet-tab .mini-card-title {
     line-height: 1.15;
     padding-top: 0;
     padding-bottom: 0;
@@ -141,7 +141,7 @@ html[data-tile-small-footprint="label"] .file-cabinet .file-cabinet-tab .mini-ca
     padding: 0;
 }
 
-html[data-tile-small-footprint="label"] .file-cabinet-tab.is-file-cabinet-dragging .mini-card-title {
+html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-dragging .mini-card-title {
     line-height: 1.15;
     padding-top: 0;
     padding-bottom: 0;

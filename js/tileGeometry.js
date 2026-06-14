@@ -27,8 +27,8 @@ export {
 } from './gridDensity.js';
 
 export const FREEFORM_EXPANDED_W = 196;
-export const FREEFORM_MIN_W = 72;
-export const FREEFORM_MIN_H = 28;
+export const FREEFORM_MIN_W = 64;
+export const FREEFORM_MIN_H = 32;
 export const FREEFORM_EXPANDED_DEFAULT_H = 120;
 
 export const TILE_LARGE_W_CELLS = 3;
@@ -37,7 +37,7 @@ export const TILE_LARGE_H_CELLS = 4;
 export const TILE_NOTE_W_CELLS = TILE_LARGE_W_CELLS;
 /** @deprecated */
 export const TILE_NOTE_H_CELLS = TILE_LARGE_H_CELLS;
-export const TILE_RESIZE_MIN_W = 72;
+export const TILE_RESIZE_MIN_W = 64;
 
 export const TILE_SIZES = ['small', 'large'];
 export const DEFAULT_TILE_SIZE = 'large';
@@ -46,7 +46,7 @@ export const LEGACY_TILE_SIZE = 'large';
 const TIER_HYSTERESIS = 4;
 
 export function getFreformDefaultW() {
-    return getSmallFootprintRect('label').w;
+    return getSmallFootprintRect().w;
 }
 
 export function getFreformDefaultH() {
@@ -59,10 +59,10 @@ export const FREEFORM_DEFAULT_W = 64;
 export const FREEFORM_DEFAULT_H = 20;
 
 export function getTileLabelH() {
-    return getSmallFootprintRect('label').h;
+    return getSmallFootprintRect().h;
 }
 
-export const TILE_LABEL_H = 28;
+export const TILE_LABEL_H = 32;
 export const TILE_RESIZE_MIN_H = TILE_LABEL_H;
 
 export function normalizeTileSize(tileSize) {
@@ -92,11 +92,11 @@ export function getSmallRect(footprint = readTileSmallFootprint()) {
 }
 
 export function getLabelRect() {
-    return getSmallFootprintRect('label');
+    return getSmallFootprintRect();
 }
 
 export function getCollapsedFootprintRect() {
-    return getLabelRect();
+    return getSmallFootprintRect();
 }
 
 export function isCollapsedSpatialSize(

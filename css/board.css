@@ -654,8 +654,8 @@
     overflow: visible;
 }
 
-html[data-tile-small-footprint="label"] #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small,
-html[data-tile-small-footprint="label"] #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small {
+html[data-tile-small-footprint="card"] #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small,
+html[data-tile-small-footprint="card"] #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small {
     padding: 0.2rem 0.35rem !important;
 }
 
@@ -936,10 +936,10 @@ html[data-tile-small-footprint="label"] #app-canvas.view-freeform .mini-card[dat
     height: 8px;
 }
 
-html[data-tile-small-footprint="label"] #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small:not(.expanded) .ff-resize-n,
-html[data-tile-small-footprint="label"] #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small:not(.expanded) .ff-resize-s,
-html[data-tile-small-footprint="label"] #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small:not(.expanded) .ff-resize-n,
-html[data-tile-small-footprint="label"] #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small:not(.expanded) .ff-resize-s {
+html[data-tile-small-footprint="card"] #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small:not(.expanded) .ff-resize-n,
+html[data-tile-small-footprint="card"] #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small:not(.expanded) .ff-resize-s,
+html[data-tile-small-footprint="card"] #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small:not(.expanded) .ff-resize-n,
+html[data-tile-small-footprint="card"] #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small:not(.expanded) .ff-resize-s {
     height: 10px;
 }
 

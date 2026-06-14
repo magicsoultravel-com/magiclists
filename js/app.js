@@ -24,6 +24,7 @@ import { applyTileSmallFootprint } from './tileFootprint.js';
 import {
     initGridMetrics,
     migrateCompactDefaultsIfNeeded,
+    migrateCardMinimumFootprintIfNeeded,
     migrateLegacyGridLayoutIfNeeded
 } from './gridDensity.js';
 import { AppTheme } from './appTheme.js';
@@ -91,6 +92,7 @@ class Application {
             initGridMetrics();
             applyTileSmallFootprint();
             migrateCompactDefaultsIfNeeded();
+            migrateCardMinimumFootprintIfNeeded();
             DisplayOptions.init({
                 getLoggedIn: () => AppState.user.isLoggedIn
             });

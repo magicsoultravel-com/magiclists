@@ -20,10 +20,10 @@
     --tile-small-w-wide: 73px;
     --tile-small-h-wide: 55px;
     --tile-small-w: 64px;
-    --tile-small-h: 20px;
+    --tile-small-h: 32px;
     --tile-large-w: 98px;
     --tile-large-h: 131px;
-    --tile-label-h: 20px;
+    --tile-label-h: 32px;
     --tile-note-w: 98px;
     --tile-note-h: 131px;
     --grid-cell-s: 32px;
@@ -44,9 +44,9 @@
     box-sizing: border-box;
 }
 
-html[data-tile-small-footprint="label"] {
-    --tile-small-w: var(--tile-small-w-label);
-    --tile-small-h: var(--tile-small-h-label);
+html[data-tile-small-footprint="card"] {
+    --tile-small-w: var(--tile-small-w-card);
+    --tile-small-h: var(--tile-small-h-card);
 }
 
 .is-hidden {
