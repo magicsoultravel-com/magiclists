@@ -9,7 +9,7 @@ const DEFAULT_SETTINGS = {
     lon: 21.04638889,
     label: 'Warsaw',
     teryt: DEFAULT_TERYT,
-    enabledSources: null,
+    enabledSources: ['imgw-forecast'],
     refreshMinutes: 15
 };
 

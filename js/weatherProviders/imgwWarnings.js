@@ -8,7 +8,7 @@ export const ImgwWarningsProvider = {
     id: 'imgw-warnings',
     label: 'IMGW warnings',
     kind: 'alert',
-    defaultEnabled: true,
+    defaultEnabled: false,
     ttlMs: 10 * 60 * 1000,
 
     async fetch(ctx) {

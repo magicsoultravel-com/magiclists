@@ -1,5 +1,4 @@
 import { getItemCategoryName } from './focusFilter.js';
-import { positionPanelBelowElement } from './popoverPosition.js';
 import {
     isAtLabelSize,
     getLabelRect,
@@ -654,15 +653,6 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
     const getSlotChip = (slot) => slot?.querySelector('.file-cabinet-filed-chip');
     const getSlotRollout = (slot) => slot?.querySelector('.file-cabinet-filed-rollout');
 
-    const positionActiveRollout = () => {
-        const slot = activeSlot?.classList?.contains('is-fold-rollout-open') ? activeSlot : null;
-        if (!slot) return;
-        const chip = getSlotChip(slot);
-        const rollout = getSlotRollout(slot);
-        if (!chip || !rollout) return;
-        positionPanelBelowElement(rollout, chip, { gap: 2, margin: 8 });
-    };
-
     const closeSlot = (slot) => {
         if (!slot?.isConnected) return;
         const rollout = getSlotRollout(slot);
@@ -709,7 +699,6 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
             slot.classList.add('is-fold-rollout-open');
             chip?.classList.add('is-fold-preview-source');
             mount.classList.add('is-rollout-active');
-            requestAnimationFrame(() => positionActiveRollout());
             return;
         }
 
@@ -728,7 +717,6 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
         slot.classList.add('is-fold-rollout-open');
         chip?.classList.add('is-fold-preview-source');
         mount.classList.add('is-rollout-active');
-        requestAnimationFrame(() => positionActiveRollout());
     };
 
     const maybeHidePreview = (relatedTarget) => {
@@ -767,14 +755,6 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
             if (pinnedByDrag || document.body.classList.contains('is-file-cabinet-drag-active')) return;
             hidePreview();
         });
-    }, { signal });
-
-    mount.addEventListener('scroll', () => {
-        if (mount.classList.contains('is-rollout-active')) positionActiveRollout();
-    }, { signal, capture: true });
-
-    window.addEventListener('resize', () => {
-        if (mount.classList.contains('is-rollout-active')) positionActiveRollout();
     }, { signal });
 
     return {
@@ -847,7 +827,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
                 chip.className = 'file-cabinet-filed-chip';
                 chip.dataset.category = catName;
                 chip.style.setProperty('--file-cabinet-category-color', color);
-                chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${UI.escapeAttr(color)}"></span><span class="file-cabinet-filed-chip-name u-truncate">${UI.escapeHTML(catName)}</span><span class="file-cabinet-filed-chip-count">${items.length}</span><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
+                chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${UI.escapeAttr(color)}"></span><span class="file-cabinet-filed-chip-name u-truncate">${UI.escapeHTML(catName)} (${items.length})</span><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
 
                 const rollout = document.createElement('div');
                 rollout.className = 'file-cabinet-filed-rollout';

@@ -535,15 +535,6 @@ body {
     min-width: 0;
 }
 
-.file-cabinet-filed-chip-count {
-    flex: 0 0 auto;
-    flex-shrink: 0;
-    font-size: 0.46rem;
-    font-weight: 400;
-    color: var(--text-muted);
-    opacity: 0.85;
-}
-
 .file-cabinet-filed-chip .file-cabinet-filed-chip-expand {
     flex: 0 0 auto;
     opacity: 0.55;
@@ -574,9 +565,6 @@ body {
 }
 
 .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout {
-    position: fixed;
-    top: 0;
-    left: 0;
     z-index: 500;
     opacity: 1;
     pointer-events: auto;

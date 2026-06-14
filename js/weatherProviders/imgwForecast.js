@@ -1,7 +1,6 @@
-import { conditionFromIcon } from './weatherIcons.js';
+import { conditionFromIcon, conditionFromMetrics } from './weatherIcons.js';
 
 const FORECAST_PROXY = 'https://imgw-api-proxy.evtlab.pl/forecast';
-const LOCAL_PROXY = './api/weather-proxy.php';
 
 export const ImgwForecastProvider = {
     id: 'imgw-forecast',
@@ -13,22 +12,17 @@ export const ImgwForecastProvider = {
     async fetch(ctx) {
         const { lat, lon, signal } = ctx;
         const qs = `lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
-        try {
-            return await fetchForecast(`${FORECAST_PROXY}?${qs}`, signal);
-        } catch (err) {
-            if (isCorsOrNetworkError(err)) {
-                return fetchForecast(`${LOCAL_PROXY}?${qs}`, signal);
-            }
-            throw err;
-        }
+        return fetchForecast(`${FORECAST_PROXY}?${qs}`, signal);
     },
-
     normalize(raw) {
         if (!raw || typeof raw !== 'object') return {};
 
         const current = raw.current || {};
-        const dailyIcon = raw.daily?.[0]?.icon;
-        const condition = conditionFromIcon(dailyIcon);
+        const firstHourly = raw.hourly?.[0];
+        const currentIcon = current.icon || firstHourly?.icon || null;
+        const condition = currentIcon
+            ? conditionFromIcon(currentIcon)
+            : conditionFromMetrics(current);
 
         return {
             location: raw.location ? {
@@ -46,8 +40,10 @@ export const ImgwForecastProvider = {
                 windDir: num(current.wind_dir),
                 cloud: num(current.cloud),
                 precip: num(current.precip),
+                rain: num(current.rain),
+                snow: num(current.snow),
                 condition,
-                icon: dailyIcon,
+                icon: currentIcon,
                 updatedAt: current.date || null
             },
             hourly: (raw.hourly || []).slice(0, 24).map((h) => ({
@@ -56,9 +52,11 @@ export const ImgwForecastProvider = {
                 feelsLike: num(h.feels_like),
                 precip: num(h.precip),
                 rain: num(h.rain),
+                snow: num(h.snow),
+                cloud: num(h.cloud),
                 windSpeed: num(h.wind_speed),
                 icon: h.icon,
-                condition: conditionFromIcon(h.icon)
+                condition: h.icon ? conditionFromIcon(h.icon) : conditionFromMetrics(h)
             })),
             daily: (raw.daily || []).slice(0, 4).map((d) => ({
                 date: d.date,
@@ -66,8 +64,9 @@ export const ImgwForecastProvider = {
                 tempMax: num(d.temp_max),
                 precip: num(d.precip),
                 rain: num(d.rain),
+                snow: num(d.snow),
                 icon: d.icon,
-                condition: conditionFromIcon(d.icon)
+                condition: d.icon ? conditionFromIcon(d.icon) : conditionFromMetrics(d)
             })),
             model: raw.model || null
         };
@@ -77,17 +76,23 @@ export const ImgwForecastProvider = {
 async function fetchForecast(url, signal) {
     const res = await fetch(url, { signal, headers: { Accept: 'application/json' } });
     if (!res.ok) throw new Error(`IMGW forecast HTTP ${res.status}`);
-    return res.json();
+    return parseJsonResponse(res);
 }
 
-function isCorsOrNetworkError(err) {
-    if (!err) return false;
-    if (err.name === 'TypeError') return true;
-    return /failed to fetch|network|cors/i.test(String(err.message || err));
+async function parseJsonResponse(res) {
+    const text = await res.text();
+    const trimmed = text.trimStart();
+    if (trimmed.startsWith('<?php') || trimmed.startsWith('<!')) {
+        throw new Error('Forecast response was not JSON (server returned HTML/PHP)');
+    }
+    try {
+        return JSON.parse(text);
+    } catch {
+        throw new Error('Forecast response was not valid JSON');
+    }
 }
 
-function num(v) {
-    if (v == null || v === '') return null;
+function num(v) {    if (v == null || v === '') return null;
     const n = Number(v);
     return Number.isFinite(n) ? n : null;
 }

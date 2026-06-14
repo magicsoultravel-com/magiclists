@@ -2,7 +2,7 @@ import { WeatherApi } from './weatherApi.js';
 import { applySectionCollapse } from './hamburger.js';
 import { escapeHtml } from './radioUtils.js';
 import { ACTION_ICONS } from './ui.js';
-import { conditionLabel, weatherIconSvg } from './weatherProviders/weatherIcons.js';
+import { conditionLabel, weatherIconSvg, weatherIconSvgFromCode } from './weatherProviders/weatherIcons.js';
 
 const REFRESH_ICON = ACTION_ICONS.resetCustomization;
 
@@ -37,9 +37,8 @@ export const SidebarWeather = {
             <div class="collapsable-header list-row--header" id="weather-section-header">
                 <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Weather</span>
                 <div class="sidebar-weather__compact" data-weather-compact>
+                    <span class="sidebar-weather__compact-icon" data-weather-compact-icon></span>
                     <span class="sidebar-weather__compact-temp" data-weather-compact-temp>—</span>
-                    <span class="sidebar-weather__compact-label" data-weather-compact-label></span>
-                    <span class="sidebar-weather__alert-dot is-hidden" data-weather-alert-dot title="Active warnings"></span>
                 </div>
                 <button type="button" class="btn btn--compact btn-icon sidebar-weather__refresh" data-weather-refresh title="Refresh weather" aria-label="Refresh weather">${REFRESH_ICON}</button>
             </div>
@@ -79,36 +78,41 @@ export const SidebarWeather = {
 
     updateCompact(snapshot, loading) {
         const tempEl = this.root?.querySelector('[data-weather-compact-temp]');
-        const labelEl = this.root?.querySelector('[data-weather-compact-label]');
-        const dotEl = this.root?.querySelector('[data-weather-alert-dot]');
+        const iconEl = this.root?.querySelector('[data-weather-compact-icon]');
         const refreshBtn = this.root?.querySelector('[data-weather-refresh]');
 
         refreshBtn?.classList.toggle('sidebar-weather__refresh--loading', !!loading);
 
         if (!snapshot?.current) {
             tempEl.textContent = loading ? '…' : '—';
-            labelEl.textContent = '';
-            dotEl?.classList.add('is-hidden');
+            if (iconEl) iconEl.innerHTML = '';
             return;
         }
 
-        const temp = snapshot.current.temp;
-        tempEl.textContent = temp != null ? `${Math.round(temp)}°` : '—';
-        labelEl.textContent = conditionLabel(snapshot.current.condition);
-        const hasAlerts = (snapshot.alerts?.length || 0) > 0;
-        dotEl?.classList.toggle('is-hidden', !hasAlerts);
+        const current = snapshot.current;
+        tempEl.textContent = current.temp != null ? `${Math.round(current.temp)}°` : '—';
+        if (iconEl) {
+            iconEl.innerHTML = weatherIconSvgFromCode(current.icon, current, { size: 16 });
+        }
+    },
+
+    isSourceEnabled(settings, id) {
+        const providers = WeatherApi.listProviders();
+        const enabled = settings.enabledSources?.length
+            ? settings.enabledSources
+            : providers.filter((p) => p.defaultEnabled).map((p) => p.id);
+        return enabled.includes(id);
     },
 
     buildExpandedHtml(snapshot, lastRefreshAt, settings) {
         const current = snapshot.current || {};
-        const condition = current.condition || 'unknown';
         const hourly = (snapshot.hourly || []).slice(0, 12);
-        const daily = (snapshot.daily || []).slice(0, 3);
-        const obs = snapshot.observation;
-        const alerts = snapshot.alerts || [];
+        const daily = (snapshot.daily || []).slice(0, 4);
         const stale = snapshot.sources?.some((s) => s.stale);
-        const errors = snapshot.errors || [];
+        const forecastError = (snapshot.errors || []).find((e) => e.providerId === 'imgw-forecast');
         const pogodaUrl = WeatherApi.getPogodaUrl(settings.lat, settings.lon);
+        const showSynop = this.isSourceEnabled(settings, 'imgw-synop') && snapshot.observation?.stationName;
+        const showWarnings = this.isSourceEnabled(settings, 'imgw-warnings') && (snapshot.alerts?.length || 0) > 0;
         const providers = WeatherApi.listProviders();
         const enabled = new Set(
             settings.enabledSources?.length
@@ -121,25 +125,24 @@ export const SidebarWeather = {
             const temp = h.temp != null ? `${Math.round(h.temp)}°` : '—';
             return `<div class="sidebar-weather__hour" title="${escapeHtml(conditionLabel(h.condition))}">
                 <span class="sidebar-weather__hour-time">${escapeHtml(time)}</span>
-                <span class="sidebar-weather__hour-icon">${weatherIconSvg(h.condition, { size: 14 })}</span>
+                <span class="sidebar-weather__hour-icon">${weatherIconSvgFromCode(h.icon, h, { size: 20 })}</span>
                 <span class="sidebar-weather__hour-temp">${escapeHtml(temp)}</span>
             </div>`;
         }).join('');
 
         const dailyHtml = daily.map((d) => {
-            const day = formatDay(d.date);
-            const range = d.tempMin != null && d.tempMax != null
-                ? `${Math.round(d.tempMin)}° / ${Math.round(d.tempMax)}°`
-                : '—';
-            return `<div class="sidebar-weather__day">
+            const day = formatDayShort(d.date);
+            const hi = d.tempMax != null ? `${Math.round(d.tempMax)}°` : '—';
+            const lo = d.tempMin != null ? `${Math.round(d.tempMin)}°` : '—';
+            return `<div class="sidebar-weather__day" title="${escapeHtml(conditionLabel(d.condition))}">
                 <span class="sidebar-weather__day-name">${escapeHtml(day)}</span>
-                <span class="sidebar-weather__day-icon">${weatherIconSvg(d.condition, { size: 14 })}</span>
-                <span class="sidebar-weather__day-range">${escapeHtml(range)}</span>
+                <span class="sidebar-weather__day-icon">${weatherIconSvgFromCode(d.icon, d, { size: 22 })}</span>
+                <span class="sidebar-weather__day-temps"><span class="sidebar-weather__day-hi">${escapeHtml(hi)}</span><span class="sidebar-weather__day-lo">${escapeHtml(lo)}</span></span>
             </div>`;
         }).join('');
 
-        const alertsHtml = alerts.length
-            ? alerts.map((a) => `<div class="sidebar-weather__alert sidebar-weather__alert--level-${Math.min(3, Math.max(1, a.level || 1))}">
+        const alertsHtml = showWarnings
+            ? snapshot.alerts.map((a) => `<div class="sidebar-weather__alert sidebar-weather__alert--level-${Math.min(3, Math.max(1, a.level || 1))}">
                 <div class="sidebar-weather__alert-name">${escapeHtml(a.name)}</div>
                 ${a.text ? `<div class="sidebar-weather__alert-text">${escapeHtml(a.text)}</div>` : ''}
             </div>`).join('')
@@ -154,28 +157,30 @@ export const SidebarWeather = {
         }).join('');
 
         return `
-            <div class="sidebar-weather__current">
-                <div class="sidebar-weather__current-main">
-                    <span class="sidebar-weather__current-icon">${weatherIconSvg(condition, { size: 28 })}</span>
-                    <div class="sidebar-weather__current-temps">
-                        <span class="sidebar-weather__current-temp">${current.temp != null ? `${Math.round(current.temp)}°` : '—'}</span>
-                        <span class="sidebar-weather__current-feels">${current.feelsLike != null ? `Feels ${Math.round(current.feelsLike)}°` : ''}</span>
-                    </div>
-                </div>
-                <div class="sidebar-weather__current-meta">
-                    ${metaChip('Wind', formatWind(current.windSpeed, current.windDir))}
-                    ${metaChip('Humidity', current.humidity != null ? `${Math.round(current.humidity)}%` : null)}
-                    ${metaChip('Pressure', current.pressure != null ? `${Math.round(current.pressure)} hPa` : null)}
+            <div class="sidebar-weather__now">
+                <span class="sidebar-weather__now-icon">${weatherIconSvgFromCode(current.icon, current, { size: 36 })}</span>
+                <div class="sidebar-weather__now-meta">
+                    <span class="sidebar-weather__now-temp">${current.temp != null ? `${Math.round(current.temp)}°` : '—'}</span>
+                    <span class="sidebar-weather__now-label">${escapeHtml(conditionLabel(current.condition))}</span>
+                    ${current.feelsLike != null ? `<span class="sidebar-weather__now-feels">Feels ${Math.round(current.feelsLike)}°</span>` : ''}
                 </div>
             </div>
-            ${obs?.stationName ? `<div class="sidebar-weather__synop">Nearest synop: <strong>${escapeHtml(obs.stationName)}</strong>${obs.temp != null ? ` · ${Math.round(obs.temp)}°` : ''}${obs.distanceKm != null ? ` · ${obs.distanceKm} km` : ''}</div>` : ''}
-            ${hourly.length ? `<div class="sidebar-weather__hourly" aria-label="Hourly forecast">${hourlyHtml}</div>` : ''}
-            ${daily.length ? `<div class="sidebar-weather__daily" aria-label="Daily forecast">${dailyHtml}</div>` : ''}
-            ${alertsHtml ? `<div class="sidebar-weather__alerts">${snapshot.alertsUnfiltered ? '<p class="sidebar-weather__alerts-note">Showing broader warnings — area filter uncertain.</p>' : ''}${alertsHtml}</div>` : ''}
-            ${errors.length ? `<p class="tool-msg sidebar-weather__msg sidebar-weather__msg--warn">${escapeHtml(errors.map((e) => e.message).join(' · '))}</p>` : ''}
+            ${hourly.length ? `
+            <div class="sidebar-weather__block">
+                <div class="sidebar-weather__block-title">Next hours</div>
+                <div class="sidebar-weather__hourly" aria-label="Hourly forecast">${hourlyHtml}</div>
+            </div>` : ''}
+            ${daily.length ? `
+            <div class="sidebar-weather__block">
+                <div class="sidebar-weather__block-title">Next days</div>
+                <div class="sidebar-weather__daily" aria-label="Daily forecast">${dailyHtml}</div>
+            </div>` : ''}
+            ${showSynop ? `<div class="sidebar-weather__synop">Synop ${escapeHtml(snapshot.observation.stationName)}${snapshot.observation.temp != null ? ` · ${Math.round(snapshot.observation.temp)}°` : ''}</div>` : ''}
+            ${alertsHtml ? `<div class="sidebar-weather__alerts">${alertsHtml}</div>` : ''}
+            ${forecastError ? `<p class="tool-msg sidebar-weather__msg sidebar-weather__msg--warn">${escapeHtml(forecastError.message)}</p>` : ''}
             <div class="sidebar-weather__footer">
                 <span class="sidebar-weather__updated">${formatUpdated(lastRefreshAt, stale)}</span>
-                <a class="sidebar-weather__link" href="${escapeHtml(pogodaUrl)}" target="_blank" rel="noopener noreferrer">IMGW pogoda ↗</a>
+                <a class="sidebar-weather__link" href="${escapeHtml(pogodaUrl)}" target="_blank" rel="noopener noreferrer">IMGW ↗</a>
             </div>
             <div class="sidebar-weather__settings">
                 <button type="button" class="btn btn--compact sidebar-weather__settings-toggle" data-weather-settings-toggle aria-expanded="${this.settingsOpen}">
@@ -229,24 +234,12 @@ export const SidebarWeather = {
                 lat,
                 lon,
                 refreshMinutes: Number.isFinite(refreshMinutes) ? refreshMinutes : 15,
-                enabledSources: enabledSources.length ? enabledSources : null
+                enabledSources: enabledSources.length ? enabledSources : ['imgw-forecast']
             });
             WeatherApi.restartPolling();
         });
     }
 };
-
-function metaChip(label, value) {
-    if (!value) return '';
-    return `<span class="sidebar-weather__chip"><span class="sidebar-weather__chip-label">${escapeHtml(label)}</span> ${escapeHtml(value)}</span>`;
-}
-
-function formatWind(speed, dir) {
-    if (speed == null) return null;
-    const s = `${Math.round(speed)} m/s`;
-    if (dir == null) return s;
-    return `${s} · ${Math.round(dir)}°`;
-}
 
 function formatHour(iso) {
     if (!iso) return '—';
@@ -257,10 +250,10 @@ function formatHour(iso) {
     }
 }
 
-function formatDay(iso) {
+function formatDayShort(iso) {
     if (!iso) return '—';
     try {
-        return new Date(iso).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+        return new Date(iso).toLocaleDateString(undefined, { weekday: 'short' });
     } catch {
         return '—';
     }

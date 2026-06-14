@@ -6,7 +6,7 @@ export const ImgwSynopProvider = {
     id: 'imgw-synop',
     label: 'IMGW synop',
     kind: 'observation',
-    defaultEnabled: true,
+    defaultEnabled: false,
     ttlMs: 30 * 60 * 1000,
 
     async fetch(ctx) {
