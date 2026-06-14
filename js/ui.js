@@ -1293,6 +1293,22 @@ export const UI = {
         return this.isAtCurrentSmallSize(w, h);
     },
 
+    normalizeSmallFootprintIfNear(card, item) {
+        if (!isDesktopCard(card) || card.closest('#file-cabinet')) return;
+        const footprint = readTileSmallFootprint();
+        const small = getSmallRect(footprint);
+        const { x, y, w, h } = this.readNoteRect(card);
+        if (w <= small.w + 4 && h <= small.h + 4) {
+            if (!matchesSmallFootprintRect(w, h, footprint)) {
+                const rect = { x, y, w: small.w, h: small.h };
+                this.applyNoteRect(card, rect);
+                if (item?.id) {
+                    this.saveTileLayoutFromCard(card, item, rect, 'small');
+                }
+            }
+        }
+    },
+
     syncSpatialCollapseState(card, item, w, h) {
         if (!isDesktopCard(card)) return;
         card.classList.remove('expanded');
@@ -1604,9 +1620,16 @@ export const UI = {
                 });
             }
         } else {
-            this.persistRememberedSpatialSize(item.id, pos.w, pos.h, tileSize);
-            const small = getSmallRect(readTileSmallFootprint());
+            const footprint = readTileSmallFootprint();
+            const small = getSmallRect(footprint);
             const smallRect = { x: pos.x, y: pos.y, w: small.w, h: small.h };
+            if (matchesSmallFootprintRect(pos.w, pos.h, footprint)) {
+                this.applyNoteRect(card, smallRect, { settling: false });
+                this.saveTileLayoutFromCard(card, item, smallRect, 'small');
+                this.finalizeDesktopCard(card);
+                return;
+            }
+            this.persistRememberedSpatialSize(item.id, pos.w, pos.h, tileSize);
             this.applySpatialToggleRect(card, item, smallRect, { ...ctx, deferReflow: true });
         }
     },
@@ -1890,7 +1913,11 @@ export const UI = {
             })
             .forEach((item, index) => {
                 const card = this.createCardComponent(item, activeCategories, { desktop: true });
-                const isExpanded = getExpandedCards(resolvedMode)[item.id] === true;
+                const savedForLayout = layout?.[item.id];
+                const footprint = readTileSmallFootprint();
+                const isLayoutExpanded = savedForLayout && Number.isFinite(savedForLayout.w)
+                    ? !isAtSmallSize(savedForLayout.w, savedForLayout.h, footprint)
+                    : normalizeTileSize(resolveTileSize(item)) !== 'small';
 
                 if (snapLayout) {
                     const { origin, packW, maxH, edgePad } = bounds;
@@ -1899,14 +1926,14 @@ export const UI = {
 
                     if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.w)) {
                         rect = this.snapNoteRect(
-                            this.gridBoardRectForCard(card, saved, isExpanded),
+                            this.gridBoardRectForCard(card, saved, isLayoutExpanded),
                             { maxW: packW, maxH, origin, edgePad }
                         );
                     } else {
                         const tileDefaults = geoGetTileDefaultRect(resolveTileSize(item));
                         let w;
                         let h;
-                        if (isExpanded) {
+                        if (isLayoutExpanded) {
                             const target = this.resolveSpatialExpandTarget(item, null);
                             w = target.w;
                             h = target.h;
@@ -2482,6 +2509,7 @@ export const UI = {
         } else {
             this.applyFreeformSize(card);
         }
+        this.normalizeSmallFootprintIfNear(card, item);
         const { w, h } = this.readNoteRect(card);
         this.syncSpatialCollapseState(card, item, w, h);
         this.syncSpatialChromeForEditing(card);
@@ -5692,6 +5720,11 @@ export const UI = {
 
         sorted.forEach((item) => {
             if (!item?.id) return;
+            if (this.canEditInline() && resolveTileSize(item) !== 'small') {
+                this.mutateItem(item, (it) => { it.tileSize = 'small'; }, { preserveView: true, skipRerender: true });
+                item.tileSize = 'small';
+                boardItemsById.set(item.id, item);
+            }
             let slot = this.findFirstCanvasSlot(small.w, small.h, placed, packW + origin * 2, { origin, edgePad });
             slot = this.snapNoteRect(
                 { ...slot, w: small.w, h: small.h },
