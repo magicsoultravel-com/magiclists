@@ -81,9 +81,45 @@ function buildFolderPath(folder) {
     return parts.length ? `/${parts.join('/')}` : '/';
 }
 
+function fileEntries(folder) {
+    if (!folder?.children) return [];
+    return folder.children
+        .filter((entry) => entry && !entry.directory)
+        .map((entry) => ({
+            id: entry.nodeId,
+            name: entry.name,
+            size: entry.size || 0,
+            timestamp: entry.timestamp || 0
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+}
+
+function getDirectoryMeta(parentId) {
+    if (!parentId) {
+        return { id: null, path: '/', name: 'Root', parentId: null };
+    }
+    const folder = resolveFolder(parentId);
+    if (!folder) return null;
+    return {
+        id: folder.nodeId,
+        name: folder.name,
+        path: buildFolderPath(folder),
+        parentId: folder.parent && folder.parent !== storage.root ? folder.parent.nodeId : null
+    };
+}
+
 function resolveFolder(folderId) {
     if (!storage || !folderId) return null;
     return storage.files[folderId] || null;
+}
+
+function promisifyDelete(node) {
+    return new Promise((resolve, reject) => {
+        node.delete(true, (err) => {
+            if (err) reject(err);
+            else resolve();
+        });
+    });
 }
 
 async function ensureFolderPath(pathParts) {
@@ -183,13 +219,22 @@ export const MegaProvider = {
     },
 
     getFolderMeta(folderId) {
-        const folder = resolveFolder(folderId);
-        if (!folder) return null;
+        return getDirectoryMeta(folderId);
+    },
+
+    getDirectoryMeta(parentId = null) {
+        return getDirectoryMeta(parentId);
+    },
+
+    listDirectoryContents(parentId = null) {
+        const folder = parentId ? resolveFolder(parentId) : storage?.root;
+        if (!folder?.directory) {
+            return { meta: getDirectoryMeta(parentId), folders: [], files: [] };
+        }
         return {
-            id: folder.nodeId,
-            name: folder.name,
-            path: buildFolderPath(folder),
-            parentId: folder.parent && folder.parent !== storage.root ? folder.parent.nodeId : null
+            meta: getDirectoryMeta(parentId),
+            folders: folderEntries(folder),
+            files: fileEntries(folder)
         };
     },
 
@@ -259,6 +304,19 @@ export const MegaProvider = {
         if (!file || file.directory) throw new Error('Checkpoint not found');
         const buffer = await file.downloadBuffer();
         return buffer.toString('utf8');
+    },
+
+    async deleteBackup(id) {
+        const file = storage?.files?.[id];
+        if (!file || file.directory) throw new Error('Checkpoint not found');
+        await promisifyDelete(file);
+    },
+
+    async deleteBackups(ids) {
+        const list = Array.isArray(ids) ? ids : [];
+        for (const id of list) {
+            await this.deleteBackup(id);
+        }
     }
 };
 

@@ -7,6 +7,7 @@ import {
 import { applyLayoutBackupKeys, getLayoutBackupKeys } from './layoutStorage.js';
 
 export const BACKUP_FILE_PREFIX = 'matrix_workspace_backup_';
+export const ENCRYPTED_BACKUP_MARKER = 'matrix_encrypted_backup';
 export const LAST_LOCAL_EXPORT_KEY = 'matrix_last_local_export_at';
 const CLOUD_CONFIG_KEY = 'matrix_cloud_config';
 
@@ -85,10 +86,87 @@ export function parseBackupPackage(text) {
     if (!parsed || typeof parsed !== 'object') {
         throw new Error('Invalid backup package');
     }
+    if (parsed[ENCRYPTED_BACKUP_MARKER]) {
+        throw new Error('Encrypted backup — passphrase required.');
+    }
     if (!parsed.matrix_database && !parsed.matrix_custom_categories) {
         throw new Error('Not a Magic Lists backup file (missing matrix_database).');
     }
     return parsed;
+}
+
+export function isEncryptedBackupPackage(parsed) {
+    return !!(parsed && typeof parsed === 'object' && parsed[ENCRYPTED_BACKUP_MARKER]);
+}
+
+function bytesToBase64(bytes) {
+    let binary = '';
+    bytes.forEach((b) => { binary += String.fromCharCode(b); });
+    return btoa(binary);
+}
+
+function base64ToBytes(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+}
+
+async function deriveKey(passphrase, salt) {
+    const enc = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+        'raw',
+        enc.encode(passphrase),
+        'PBKDF2',
+        false,
+        ['deriveKey']
+    );
+    return crypto.subtle.deriveKey(
+        { name: 'PBKDF2', salt, iterations: 120000, hash: 'SHA-256' },
+        keyMaterial,
+        { name: 'AES-GCM', length: 256 },
+        false,
+        ['encrypt', 'decrypt']
+    );
+}
+
+export async function encryptBackupPackage(jsonString, passphrase) {
+    const clean = String(passphrase || '').trim();
+    if (!clean) throw new Error('Passphrase is required for encryption.');
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await deriveKey(clean, salt);
+    const enc = new TextEncoder();
+    const cipher = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        key,
+        enc.encode(jsonString)
+    );
+    return JSON.stringify({
+        [ENCRYPTED_BACKUP_MARKER]: true,
+        v: 1,
+        salt: bytesToBase64(salt),
+        iv: bytesToBase64(iv),
+        data: bytesToBase64(new Uint8Array(cipher))
+    });
+}
+
+export async function decryptBackupPackage(text, passphrase) {
+    const parsed = typeof text === 'string' ? JSON.parse(text) : text;
+    if (!isEncryptedBackupPackage(parsed)) {
+        return parseBackupPackage(parsed);
+    }
+    const clean = String(passphrase || '').trim();
+    if (!clean) throw new Error('Passphrase required for encrypted backup.');
+    const salt = base64ToBytes(parsed.salt);
+    const iv = base64ToBytes(parsed.iv);
+    const data = base64ToBytes(parsed.data);
+    const key = await deriveKey(clean, salt);
+    const dec = new TextDecoder();
+    const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
+    return parseBackupPackage(dec.decode(plain));
 }
 
 export function isBackupFilename(name) {

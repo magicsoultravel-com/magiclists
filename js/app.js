@@ -31,6 +31,7 @@ import { SearchBar } from './searchBar.js';
 import { Fullscreen } from './fullscreen.js';
 import { SidebarRadio } from './sidebarRadio.js';
 import { SidebarTv } from './sidebarTv.js';
+import { SidebarWeather } from './sidebarWeather.js';
 import { SidebarQuickActions } from './sidebarQuickActions.js';
 import { SidebarTools } from './sidebarTools.js';
 import { CloudBackup } from './cloudBackup.js';
@@ -114,8 +115,9 @@ class Application {
             SidebarQuickActions.init();
             SidebarRadio.init();
             SidebarTv.init();
+            SidebarWeather.init();
             SidebarTools.init();
-            SidePanel.setupStatusClickHandlers(); /* after radio/tv shells exist */
+            SidePanel.setupStatusClickHandlers(); /* after radio/tv/weather shells exist */
             ClockStyle.init();
             DesktopZoom.init();
             this.setupSearchBar();
