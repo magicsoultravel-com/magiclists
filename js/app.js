@@ -110,8 +110,7 @@ class Application {
             BootProgress.set(40, 'Categories…');
             await reconcileLayoutStorage({
                 items: API._getLocalDB().items,
-                categories: AppState.categories,
-                lightTouch: true
+                categories: AppState.categories
             });
             BootProgress.set(60, 'Layout…');
             await this.syncDataStore();

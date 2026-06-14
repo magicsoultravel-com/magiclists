@@ -83,6 +83,7 @@ import {
     getLargeDefaultRect,
     isCustomTileRect as geoIsCustomTileRect,
     isCollapsedSpatialSize,
+    snapRectToCollapsedFootprint,
     getPackStrideYForRect,
     getGridSnapMinH,
     resolveExpandedDefaultRect as geoResolveExpandedDefaultRect,
@@ -1587,6 +1588,8 @@ export const UI = {
             return;
         }
 
+        this.syncCollapsedFootprintFromStorage(card, item);
+
         if (this.isSpatiallyCollapsed(card)) {
             removeFromFileCabinetOrder(item.id);
             const rect = this.resolveBoardExpandPlacement(card, item);
@@ -1630,6 +1633,25 @@ export const UI = {
         }
 
         window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
+    },
+
+    syncCollapsedFootprintFromStorage(card, item) {
+        if (!isDesktopCard(card) || !item?.id) return;
+        const tileSize = resolveTileSize(item);
+        const saved = isSnapLayoutMode(activeBoardViewMode)
+            ? this.getGridLayout()[item.id]
+            : this.getFreeformSizes()[item.id];
+        if (!saved || !Number.isFinite(saved.w) || !Number.isFinite(saved.h)) return;
+        if (!isCollapsedSpatialSize(saved.w, saved.h, tileSize)) return;
+
+        const pos = this.readNoteRect(card);
+        if (isCollapsedSpatialSize(pos.w, pos.h, tileSize)) return;
+
+        const small = getSmallRect(readTileSmallFootprint());
+        const rect = { x: pos.x, y: pos.y, w: small.w, h: small.h };
+        this.applyNoteRect(card, rect, { settling: false });
+        this.saveTileLayoutFromCard(card, item, rect, tileSize);
+        this.finalizeDesktopCard(card);
     },
 
     reapplySmallFootprintOnBoard() {
@@ -1752,6 +1774,10 @@ export const UI = {
 
     gridTileRect(tileSize, base, saved) {
         if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
+            const snapped = snapRectToCollapsedFootprint(saved.w, saved.h, tileSize);
+            if (snapped.w !== saved.w || snapped.h !== saved.h) {
+                return { ...base, w: snapped.w, h: snapped.h };
+            }
             const clamped = geoClampSpatialSize(saved.w, saved.h, tileSize);
             return { ...base, w: clamped.w, h: clamped.h };
         }
@@ -5224,7 +5250,7 @@ export const UI = {
     },
 
     updateBoardCanvasMinHeight(canvas) {
-        this.updateBoardCanvasExtents(canvas);
+        this.scheduleBoardCanvasExtents(canvas);
     },
 
     updateDesktopScrollPolicy(canvas) {
@@ -5480,7 +5506,7 @@ export const UI = {
             this.finalizeDesktopCard(card);
             placed.push(rect);
         });
-        this.updateBoardCanvasExtents(canvas);
+        this.scheduleBoardCanvasExtents(canvas);
         if (animate && !preview) {
             window.setTimeout(() => {
                 canvas.querySelectorAll('.mini-card.layout-settling').forEach((c) => {
@@ -5571,7 +5597,7 @@ export const UI = {
     updateGridScrollPolicy(canvas, { forcing = false } = {}) {
         if (!canvas?.classList.contains('view-grid')) return;
         canvas.classList.toggle('is-grid-forcing', forcing);
-        this.updateBoardCanvasExtents(canvas);
+        this.scheduleBoardCanvasExtents(canvas);
         this.updateDesktopScrollPolicy(canvas);
     },
 
@@ -5820,26 +5846,36 @@ export const UI = {
         const activelyResizing = this.isCardActivelyResizing(card);
         const footprint = readTileSmallFootprint();
         const small = getSmallRect(footprint);
-        let w = hasInlineW ? styleW : null;
-        let h = hasInlineH ? styleH : null;
-        if (w == null) {
-            const offsetW = card.offsetWidth || 0;
-            if (card.classList?.contains('spatial-at-small') && !activelyResizing
-                && !(offsetW > small.w + 2)) {
-                w = small.w;
-            } else {
-                w = offsetW || FREEFORM_DEFAULT_W;
+        const offsetW = card.offsetWidth || 0;
+        const offsetH = card.offsetHeight || 0;
+
+        if (!activelyResizing && isDesktopCard(card)) {
+            const item = this.resolveBoardItem(card?.dataset?.id);
+            const tileSize = resolveTileSize(item);
+            const saved = isSnapLayoutMode(activeBoardViewMode)
+                ? this.getGridLayout()[card.dataset.id]
+                : this.getFreeformSizes()[card.dataset.id];
+            const candidateW = hasInlineW ? styleW : (offsetW || FREEFORM_DEFAULT_W);
+            const candidateH = hasInlineH ? styleH : (offsetH || FREEFORM_DEFAULT_H);
+            const savedCollapsed = saved
+                && Number.isFinite(saved.w)
+                && Number.isFinite(saved.h)
+                && isCollapsedSpatialSize(saved.w, saved.h, tileSize);
+            const collapsed = card.classList.contains('spatial-at-small')
+                || savedCollapsed
+                || isCollapsedSpatialSize(candidateW, candidateH, tileSize);
+            if (collapsed) {
+                return {
+                    x: parseFloat(card.style.left) || 0,
+                    y: parseFloat(card.style.top) || 0,
+                    w: small.w,
+                    h: small.h
+                };
             }
         }
-        if (h == null) {
-            const offsetH = card.offsetHeight || 0;
-            if (card.classList?.contains('spatial-at-small') && !activelyResizing
-                && !(offsetH > small.h + 2)) {
-                h = small.h;
-            } else {
-                h = offsetH || FREEFORM_DEFAULT_H;
-            }
-        }
+
+        let w = hasInlineW ? styleW : (offsetW || FREEFORM_DEFAULT_W);
+        let h = hasInlineH ? styleH : (offsetH || FREEFORM_DEFAULT_H);
         return {
             x: parseFloat(card.style.left) || 0,
             y: parseFloat(card.style.top) || 0,

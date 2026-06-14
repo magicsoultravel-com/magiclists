@@ -25,7 +25,7 @@ const GRID_PINS_KEY = 'matrix_grid_pins';
 const GRID_EXPANDED_KEY = 'matrix_grid_expanded_id';
 const LEGACY_EXPANDED_KEY = 'matrix_expanded_cards';
 const SPATIAL_LAYOUT_SCHEMA_KEY = 'matrix_spatial_layout_schema';
-const SPATIAL_LAYOUT_SCHEMA_VERSION = 2;
+const SPATIAL_LAYOUT_SCHEMA_VERSION = 3;
 
 const DEAD_LAYOUT_KEYS = [
     'matrix_column_positions',
@@ -247,33 +247,8 @@ export function migrateLegacyColumnsFloatStorage(writeState = null) {
 }
 
 function migrateSpatialLayoutEntry(saved, tileSize) {
-    if (!saved || typeof saved !== 'object') return saved;
-    const tier = normalizeTileSize(tileSize);
-    const entry = { ...saved };
-    delete entry.customCompact;
-
-    if (Number.isFinite(Number(saved.w)) && Number.isFinite(Number(saved.h))) {
-        const clamped = clampSpatialSize(Number(saved.w), Number(saved.h), tier);
-        entry.w = clamped.w;
-        entry.h = clamped.h;
-    }
-
-    const remembered = readRememberedSize(saved);
-    if (remembered) {
-        entry.rememberedW = remembered.w;
-        entry.rememberedH = remembered.h;
-    } else {
-        delete entry.rememberedW;
-        delete entry.rememberedH;
-    }
-
-    if (isCollapsedSpatialSize(entry.w, entry.h, tier)) {
-        const small = getSmallRect(readTileSmallFootprint());
-        entry.w = small.w;
-        entry.h = small.h;
-    }
-
-    return entry;
+    const result = normalizeSavedCardRect(saved, tileSize);
+    return result.value ?? saved;
 }
 
 export function migrateSpatialLayoutSchema(writeState = null) {
@@ -367,13 +342,11 @@ function createReconcileStats() {
     return { removed: 0, normalized: 0, clamped: 0, touched: new Set() };
 }
 
-function applyReconcileWrites(context, stats, writeState, { lightTouch = false } = {}) {
+function applyReconcileWrites(context, stats, writeState) {
     const gridLayout = pruneIdMap(readJson(GRID_LAYOUT_KEY, {}), context.liveIds, stats, GRID_LAYOUT_KEY);
     writeJsonIfChanged(
         GRID_LAYOUT_KEY,
-        lightTouch
-            ? gridLayout
-            : normalizeIdRectMap(gridLayout, context.liveIds, context.tileSizeById, stats, GRID_LAYOUT_KEY),
+        normalizeIdRectMap(gridLayout, context.liveIds, context.tileSizeById, stats, GRID_LAYOUT_KEY),
         writeState
     );
     if (writeState.quotaExceeded) return;
@@ -388,9 +361,7 @@ function applyReconcileWrites(context, stats, writeState, { lightTouch = false }
     const freeformSizes = pruneIdMap(readJson('matrix_freeform_sizes', {}), context.liveIds, stats, 'matrix_freeform_sizes');
     writeJsonIfChanged(
         'matrix_freeform_sizes',
-        lightTouch
-            ? freeformSizes
-            : normalizeSizeOnlyMap(freeformSizes, context.liveIds, context.tileSizeById, stats, 'matrix_freeform_sizes'),
+        normalizeSizeOnlyMap(freeformSizes, context.liveIds, context.tileSizeById, stats, 'matrix_freeform_sizes'),
         writeState
     );
     if (writeState.quotaExceeded) return;
@@ -542,12 +513,12 @@ export function normalizeSavedCardRect(saved, tileSize) {
         entry.rememberedH = Math.round(rh);
     }
 
-    if (saved.customCompact != null) changed = true;
-
     if (!changed) {
         const comparable = { ...saved };
         delete comparable.customCompact;
         changed = JSON.stringify(entry) !== JSON.stringify(comparable);
+    } else if (saved.customCompact != null) {
+        changed = true;
     }
 
     return { changed, value: entry };
@@ -909,16 +880,15 @@ export function purgeLayoutForItem(itemId) {
     return changed;
 }
 
-export async function reconcileLayoutStorage({ items = [], categories = [], showToast = true, lightTouch = false } = {}) {
+export async function reconcileLayoutStorage({ items = [], categories = [], showToast = true } = {}) {
     const context = buildContext(items, categories);
     const migrateState = { quotaExceeded: false, failedKey: null };
     migrateSpatialLayoutSchema(migrateState);
     migrateLegacyColumnsFloatStorage(migrateState);
 
-    const reconcileOpts = { lightTouch };
     let stats = createReconcileStats();
     let writeState = { quotaExceeded: migrateState.quotaExceeded, failedKey: migrateState.failedKey };
-    applyReconcileWrites(context, stats, writeState, reconcileOpts);
+    applyReconcileWrites(context, stats, writeState);
 
     if (writeState.quotaExceeded) {
         const choice = await confirmStorageRecovery();
@@ -926,7 +896,7 @@ export async function reconcileLayoutStorage({ items = [], categories = [], show
             clearPresentationLayoutKeys();
             stats = createReconcileStats();
             writeState = { quotaExceeded: false, failedKey: null };
-            applyReconcileWrites(context, stats, writeState, reconcileOpts);
+            applyReconcileWrites(context, stats, writeState);
 
             if (writeState.quotaExceeded) {
                 const clearDrawing = await confirmClearDrawing();
@@ -939,7 +909,7 @@ export async function reconcileLayoutStorage({ items = [], categories = [], show
                     }
                     stats = createReconcileStats();
                     writeState = { quotaExceeded: false, failedKey: null };
-                    applyReconcileWrites(context, stats, writeState, reconcileOpts);
+                    applyReconcileWrites(context, stats, writeState);
                 }
             }
 
@@ -974,6 +944,17 @@ export function getLayoutBackupKeys() {
         if (raw != null) payload[key] = raw;
     });
     return payload;
+}
+
+export function repairSpatialLayoutStorage({ items = [], categories = [] } = {}) {
+    const context = buildContext(items, categories);
+    const migrateState = { quotaExceeded: false, failedKey: null };
+    migrateSpatialLayoutSchema(migrateState);
+    migrateLegacyColumnsFloatStorage(migrateState);
+    const stats = createReconcileStats();
+    const writeState = { quotaExceeded: migrateState.quotaExceeded, failedKey: migrateState.failedKey };
+    applyReconcileWrites(context, stats, writeState);
+    return stats;
 }
 
 export function applyLayoutBackupKeys(payload = {}) {

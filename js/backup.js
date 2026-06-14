@@ -4,7 +4,7 @@ import {
     readStoredCategories,
     writeStoredCategories
 } from './categories.js';
-import { applyLayoutBackupKeys, getLayoutBackupKeys } from './layoutStorage.js';
+import { applyLayoutBackupKeys, getLayoutBackupKeys, repairSpatialLayoutStorage } from './layoutStorage.js';
 
 export const BACKUP_FILE_PREFIX = 'matrix_workspace_backup_';
 export const ENCRYPTED_BACKUP_MARKER = 'matrix_encrypted_backup';
@@ -280,4 +280,12 @@ export function applyBackupToStorage(parsedBackup) {
     localStorage.removeItem('matrix_calendar_hidden_ids');
 
     applyLayoutBackupKeys(parsedBackup);
+
+    try {
+        const db = JSON.parse(localStorage.getItem('matrix_database') || '{}');
+        const categories = readStoredCategories({ keepEmpty: true });
+        repairSpatialLayoutStorage({ items: db.items || [], categories });
+    } catch {
+        /* ignore layout repair failures on import */
+    }
 }

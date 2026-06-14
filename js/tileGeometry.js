@@ -124,14 +124,27 @@ export function isAtSmallSize(w, h, footprint = readTileSmallFootprint()) {
     return w <= small.w + 2 && h <= small.h + 2;
 }
 
-/** @deprecated alias for isAtSmallSize */
-export function isCollapsedFootprintSize(w, h, footprint = readTileSmallFootprint()) {
-    return isAtSmallSize(w, h, footprint);
+export function snapRectToCollapsedFootprint(
+    w,
+    h,
+    tileSize = LEGACY_TILE_SIZE,
+    footprint = readTileSmallFootprint()
+) {
+    if (!isCollapsedSpatialSize(w, h, tileSize, footprint)) {
+        return { w, h };
+    }
+    const small = getSmallRect(footprint);
+    return { w: small.w, h: small.h };
 }
 
-export function matchesSmallFootprintRect(w, h, footprint = readTileSmallFootprint()) {
-    const small = getSmallRect(footprint);
-    return Math.abs(w - small.w) <= 2 && Math.abs(h - small.h) <= 2;
+export function readRememberedSize(saved, footprint = readTileSmallFootprint()) {
+    if (!saved || typeof saved !== 'object') return null;
+    const rw = Number(saved.rememberedW);
+    const rh = Number(saved.rememberedH);
+    if (Number.isFinite(rw) && Number.isFinite(rh) && !isAtSmallSize(rw, rh, footprint)) {
+        return clampSpatialSize(rw, rh, 'large', footprint);
+    }
+    return null;
 }
 
 export function getPackStrideY(footprint = readTileSmallFootprint()) {
@@ -202,22 +215,6 @@ export function resolveExpandedDefaultRect(tileSize, saved = null, footprint = r
 export function resolveSpatialFallbackRect(tileSize = LEGACY_TILE_SIZE, footprint = readTileSmallFootprint()) {
     const size = normalizeTileSize(tileSize);
     return getTileDefaultRect(size === 'small' ? DEFAULT_TILE_SIZE : size, footprint);
-}
-
-export function readRememberedSize(saved, footprint = readTileSmallFootprint()) {
-    if (!saved || typeof saved !== 'object') return null;
-    const rw = Number(saved.rememberedW);
-    const rh = Number(saved.rememberedH);
-    if (Number.isFinite(rw) && Number.isFinite(rh) && !isAtSmallSize(rw, rh, footprint)) {
-        return clampSpatialSize(rw, rh, 'large', footprint);
-    }
-    if (saved.customCompact === true
-        && Number.isFinite(saved.w)
-        && Number.isFinite(saved.h)
-        && !isAtSmallSize(saved.w, saved.h, footprint)) {
-        return clampSpatialSize(saved.w, saved.h, 'large', footprint);
-    }
-    return null;
 }
 
 /** @deprecated */

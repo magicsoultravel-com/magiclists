@@ -1,8 +1,7 @@
 import { getItemCategoryName } from './focusFilter.js';
 import {
-    isAtLabelSize,
+    isCollapsedSpatialSize,
     getLabelRect,
-    isAtOrBelowCompactZone,
     getTileDefaultRect,
     resolveTileSize
 } from './tileGeometry.js';
@@ -196,12 +195,15 @@ export function isItemInFileCabinetOrder(itemId) {
     return Object.values(order).some((ids) => Array.isArray(ids) && ids.includes(itemId));
 }
 
+function isCollapsedForFileCabinet(w, h, tileSize) {
+    return isCollapsedSpatialSize(w, h, tileSize);
+}
+
 function isSpatiallyEligibleForFileCabinet(item, sortBy, UI) {
     if (!item?.id) return false;
     const tileSize = resolveTileSize(item);
     const size = getStoredItemSize(item.id, sortBy, UI) ?? getTileDefaultRect(tileSize);
-    if (isAtLabelSize(size.w, size.h)) return true;
-    return isAtOrBelowCompactZone(size.w, size.h, tileSize);
+    return isCollapsedForFileCabinet(size.w, size.h, tileSize);
 }
 
 /** Drop order entries for notes no longer at label/compact size in the current mode. */
@@ -231,8 +233,7 @@ export function shouldFileItem(item, sortBy, UI) {
     if (isItemInFileCabinetOrder(item.id)) return true;
     const tileSize = resolveTileSize(item);
     const size = getStoredItemSize(item.id, sortBy, UI) ?? getTileDefaultRect(tileSize);
-    if (isAtLabelSize(size.w, size.h)) return true;
-    return isAtOrBelowCompactZone(size.w, size.h, tileSize);
+    return isCollapsedForFileCabinet(size.w, size.h, tileSize);
 }
 
 export function isItemFiled(item, sortBy, UI) {
@@ -260,7 +261,7 @@ export function fileItemToCabinet(item, sortBy, UI, { x = 8, y = 8, rememberW, r
     const rw = Number.isFinite(rememberW) ? rememberW : stored?.w;
     const rh = Number.isFinite(rememberH) ? rememberH : stored?.h;
 
-    if (Number.isFinite(rw) && Number.isFinite(rh) && !isAtLabelSize(rw, rh)) {
+    if (Number.isFinite(rw) && Number.isFinite(rh) && !isCollapsedSpatialSize(rw, rh, tileSize)) {
         UI.persistRememberedSpatialSize(item.id, rw, rh, tileSize);
     }
 
