@@ -25,6 +25,7 @@ import {
     initGridMetrics,
     migrateCompactDefaultsIfNeeded,
     migrateCardMinimumFootprintIfNeeded,
+    migrateGridSpanCardWidthIfNeeded,
     migrateLegacyGridLayoutIfNeeded
 } from './gridDensity.js';
 import { AppTheme } from './appTheme.js';
@@ -93,6 +94,7 @@ class Application {
             applyTileSmallFootprint();
             migrateCompactDefaultsIfNeeded();
             migrateCardMinimumFootprintIfNeeded();
+            migrateGridSpanCardWidthIfNeeded();
             DisplayOptions.init({
                 getLoggedIn: () => AppState.user.isLoggedIn
             });

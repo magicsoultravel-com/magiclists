@@ -27,7 +27,7 @@ export {
 } from './gridDensity.js';
 
 export const FREEFORM_EXPANDED_W = 196;
-export const FREEFORM_MIN_W = 64;
+export const FREEFORM_MIN_W = 65;
 export const FREEFORM_MIN_H = 32;
 export const FREEFORM_EXPANDED_DEFAULT_H = 120;
 
@@ -37,7 +37,7 @@ export const TILE_LARGE_H_CELLS = 4;
 export const TILE_NOTE_W_CELLS = TILE_LARGE_W_CELLS;
 /** @deprecated */
 export const TILE_NOTE_H_CELLS = TILE_LARGE_H_CELLS;
-export const TILE_RESIZE_MIN_W = 64;
+export const TILE_RESIZE_MIN_W = 65;
 
 export const TILE_SIZES = ['small', 'large'];
 export const DEFAULT_TILE_SIZE = 'large';
@@ -54,7 +54,7 @@ export function getFreformDefaultH() {
 }
 
 /** @deprecated use getFreformDefaultW */
-export const FREEFORM_DEFAULT_W = 64;
+export const FREEFORM_DEFAULT_W = 65;
 /** @deprecated use getFreformDefaultH */
 export const FREEFORM_DEFAULT_H = 20;
 
@@ -150,15 +150,16 @@ export function readRememberedSize(saved, footprint = readTileSmallFootprint()) 
 export function getPackStrideY(footprint = readTileSmallFootprint()) {
     const small = getSmallRect(footprint);
     const labelH = getTileLabelH();
+    const { gap } = getGridMetrics();
     if (small.h <= labelH + 2) {
-        return small.h + COLUMN_GRID_GAP;
+        return small.h + gap;
     }
     return getGridMetrics().strideY;
 }
 
 export function getPackStrideYForRect(w, h, footprint = readTileSmallFootprint()) {
     if (isAtSmallSize(w, h, footprint)) {
-        return getSmallRect(footprint).h + COLUMN_GRID_GAP;
+        return getSmallRect(footprint).h + getGridMetrics().gap;
     }
     return getGridMetrics().strideY;
 }

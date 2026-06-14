@@ -5343,11 +5343,20 @@ export const UI = {
         return snapped;
     },
 
+    gridColumnStride(w, h, metrics = getGridMetrics()) {
+        if (isCollapsedSpatialSize(w, h)) {
+            return w + metrics.gap;
+        }
+        const wCells = Math.max(1, this.spanToCellsW(w));
+        return this.cellsToSpanW(wCells) + metrics.gap;
+    },
+
     pushGridCardRect(rect, placed, { packW, origin, maxH, edgePad }) {
         const metrics = getGridMetrics();
         const pad = edgePad ?? metrics.edgePad;
         const snapRect = (r) => this.snapNoteRect(r, { maxW: packW, maxH, origin, edgePad: pad });
-        let candidate = snapRect({ ...rect, x: rect.x + metrics.strideX });
+        const colStride = this.gridColumnStride(rect.w, rect.h, metrics);
+        let candidate = snapRect({ ...rect, x: rect.x + colStride });
         if (candidate.x + candidate.w <= origin + pad + packW + 1
             && !placed.some((p) => this.rectsOverlap(candidate, p))) {
             return candidate;
@@ -5356,7 +5365,7 @@ export const UI = {
         if (blocker) {
             candidate = snapRect({
                 x: rect.x,
-                y: blocker.y - rect.h - COLUMN_GRID_GAP,
+                y: blocker.y - rect.h - metrics.gap,
                 w: rect.w,
                 h: rect.h
             });
@@ -5366,7 +5375,7 @@ export const UI = {
             }
             candidate = snapRect({
                 x: rect.x,
-                y: blocker.y + blocker.h + COLUMN_GRID_GAP,
+                y: blocker.y + blocker.h + metrics.gap,
                 w: rect.w,
                 h: rect.h
             });
@@ -5702,7 +5711,7 @@ export const UI = {
         const packW = Math.max(metrics.canvasGridW, canvasW - origin * 2 - pad * 2);
         const xOrigin = origin + pad;
         const yOrigin = origin + pad;
-        const rowStride = metrics.strideX;
+        const rowStride = this.gridColumnStride(w, h, metrics);
         const yStride = getPackStrideYForRect(w, h);
         let y = yOrigin;
         let guard = 0;
@@ -5864,12 +5873,13 @@ export const UI = {
         card.classList.toggle('layout-settling', settling);
     },
 
-    rectsOverlap(a, b, gap = COLUMN_GRID_GAP) {
+    rectsOverlap(a, b, gap) {
+        const g = gap ?? getGridMetrics().gap;
         return !(
-            a.x + a.w + gap <= b.x
-            || b.x + b.w + gap <= a.x
-            || a.y + a.h + gap <= b.y
-            || b.y + b.h + gap <= a.y
+            a.x + a.w + g <= b.x
+            || b.x + b.w + g <= a.x
+            || a.y + a.h + g <= b.y
+            || b.y + b.h + g <= a.y
         );
     },
 

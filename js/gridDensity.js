@@ -8,6 +8,7 @@ export const PREVIOUS_DEFAULT_PADDING_STEP = 5;
 
 export const COMPACT_MIGRATION_FLAG = 'matrix_compact_defaults_migrated';
 export const CARD_MINIMUM_MIGRATION_FLAG = 'matrix_card_minimum_migrated';
+export const GRID_SPAN_CARD_MIGRATION_FLAG = 'matrix_grid_span_card_migrated';
 export const LEGACY_MIGRATION_FLAG = 'matrix_grid_fineness_migrated';
 
 export const CANVAS_LAYOUT_ORIGIN = 16;
@@ -127,7 +128,7 @@ export function getScaledFootprintRects(
     const labelH = Math.max(20, Math.round(28 * cellS / 56));
     return {
         label: { w: cellsToSpanW(2, metrics), h: labelH },
-        card: { w: cellS * 2, h: cellS },
+        card: { w: cellsToSpanW(2, metrics), h: cellS },
         wide: {
             w: Math.round(128 * cellS / 56),
             h: Math.round(96 * cellS / 56)
@@ -252,13 +253,18 @@ export function remapLayoutRect(rect, prevMetrics, nextMetrics) {
 function snapSmallRectToMinimum(rect) {
     if (!rect || !Number.isFinite(rect.w) || !Number.isFinite(rect.h)) return rect;
     const minimum = getScaledFootprintRects().card;
+    const metrics = getGridMetrics();
+    const legacyCardW = metrics.cellS * 2;
     const next = { ...rect };
-    if (isAtAnySmallFootprintSize(rect.w, rect.h)) {
+    const atSmall = isAtAnySmallFootprintSize(rect.w, rect.h)
+        || (rect.w <= legacyCardW + 2 && rect.h <= minimum.h + 2);
+    if (atSmall) {
         next.w = minimum.w;
         next.h = minimum.h;
     }
     if (Number.isFinite(rect.rememberedW) && Number.isFinite(rect.rememberedH)
-        && isAtAnySmallFootprintSize(rect.rememberedW, rect.rememberedH)) {
+        && (isAtAnySmallFootprintSize(rect.rememberedW, rect.rememberedH)
+            || (rect.rememberedW <= legacyCardW + 2 && rect.rememberedH <= minimum.h + 2))) {
         delete next.rememberedW;
         delete next.rememberedH;
     }
@@ -375,6 +381,42 @@ export function migrateCardMinimumFootprintIfNeeded() {
 
     try {
         localStorage.setItem(CARD_MINIMUM_MIGRATION_FLAG, '1');
+    } catch { /* ignore */ }
+
+    return changed;
+}
+
+export function migrateGridSpanCardWidthIfNeeded() {
+    try {
+        if (localStorage.getItem(GRID_SPAN_CARD_MIGRATION_FLAG) === '1') return false;
+    } catch {
+        return false;
+    }
+
+    let changed = false;
+
+    const grid = readJson(GRID_LAYOUT_KEY);
+    const gridNext = {};
+    Object.keys(grid).forEach((id) => {
+        const entry = snapSmallRectToMinimum(grid[id]);
+        gridNext[id] = entry;
+        if (JSON.stringify(entry) !== JSON.stringify(grid[id])) changed = true;
+    });
+    if (changed) writeJsonIfChanged(GRID_LAYOUT_KEY, gridNext, grid);
+
+    const sizes = readJson(FREEFORM_SIZES_KEY);
+    const sizesNext = {};
+    Object.keys(sizes).forEach((id) => {
+        const entry = snapSmallRectToMinimum(sizes[id]);
+        sizesNext[id] = entry;
+        if (JSON.stringify(entry) !== JSON.stringify(sizes[id])) changed = true;
+    });
+    if (Object.keys(sizesNext).length) {
+        changed = writeJsonIfChanged(FREEFORM_SIZES_KEY, sizesNext, sizes) || changed;
+    }
+
+    try {
+        localStorage.setItem(GRID_SPAN_CARD_MIGRATION_FLAG, '1');
     } catch { /* ignore */ }
 
     return changed;

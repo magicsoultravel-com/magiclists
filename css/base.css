@@ -15,11 +15,11 @@
     --tile-cell-h: 32px;
     --tile-small-w-label: 64px;
     --tile-small-h-label: 20px;
-    --tile-small-w-card: 64px;
+    --tile-small-w-card: 65px;
     --tile-small-h-card: 32px;
     --tile-small-w-wide: 73px;
     --tile-small-h-wide: 55px;
-    --tile-small-w: 64px;
+    --tile-small-w: 65px;
     --tile-small-h: 32px;
     --tile-large-w: 98px;
     --tile-large-h: 131px;
