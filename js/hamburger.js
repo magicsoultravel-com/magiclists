@@ -7,6 +7,11 @@ import { hasRichMarkup, stripRichText } from './richText.js';
 import { describeHistoryEntry, UndoManager } from './undo.js';
 import { positionPanelBelowElement } from './popoverPosition.js';
 import {
+    formatExportTimestamp,
+    readLastCloudExportAt,
+    readLastLocalExportAt
+} from './backup.js';
+import {
     readNotesListSort as loadNotesListSort,
     readPanelCollapsed,
     readSidebarSections,
@@ -73,12 +78,16 @@ export const SidePanel = {
         const hintLine = keyBreakdown.length
             ? '<span class="sidebar-storage-stat sidebar-storage-stat--hint">Hover for largest items</span>'
             : '';
+        const localExportAt = formatExportTimestamp(readLastLocalExportAt());
+        const cloudExportAt = formatExportTimestamp(readLastCloudExportAt());
 
         container.innerHTML = `
             <span class="sidebar-storage-stat">Notes: ${formatStorageSize(notes)}</span>
             <span class="sidebar-storage-stat">Matrix: ${formatStorageSize(matrix)}</span>
             <span class="sidebar-storage-stat">App: ${formatStorageSize(app)}</span>
             <span class="sidebar-storage-stat">${totalLine}</span>
+            <span class="sidebar-storage-stat">Local export: ${localExportAt}</span>
+            <span class="sidebar-storage-stat">Cloud export: ${cloudExportAt}</span>
             ${hintLine}
         `;
         container.title = detail

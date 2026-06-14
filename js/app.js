@@ -5,7 +5,7 @@ import { DragDropEngine } from './dragdrop.js';
 import { ToolsManager } from './toolsManager.js';
 import { Calendar } from './calendar.js';
 import { SidePanel } from './hamburger.js';
-import { applyBackupToStorage, buildBackupPackage, parseBackupPackage, serializeBackupPackage } from './backup.js';
+import { applyBackupToStorage, buildBackupPackage, parseBackupPackage, serializeBackupPackage, writeLastLocalExportAt } from './backup.js';
 import { reconcileLayoutStorage } from './layoutStorage.js';
 import {
     DEFAULT_CATEGORIES,
@@ -34,6 +34,7 @@ import { SidebarTv } from './sidebarTv.js';
 import { SidebarQuickActions } from './sidebarQuickActions.js';
 import { SidebarTools } from './sidebarTools.js';
 import { CloudBackup } from './cloudBackup.js';
+import { BootProgress } from './bootProgress.js';
 import {
     migrateItemsToFileCabinet,
     pruneFileCabinetOrderByLayout,
@@ -74,52 +75,63 @@ class Application {
     }
 
     async init() {
-        DesktopBackground.init();
-        ChromeBackground.init();
-        NoteFontScale.init();
-        migrateLegacyGridLayoutIfNeeded();
-        GridFineness.apply();
-        DisplayOptions.init({
-            getLoggedIn: () => AppState.user.isLoggedIn
-        });
-        applyTileSmallFootprint();
-        AppTheme.init();
-        readViewSessions();
-        localStorage.setItem('matrix_desktop_layout', AppState.viewSettings.sortBy);
-        restoreViewSession(AppState.viewSettings.sortBy);
-        AppState.expandedCards = UI.readExpandedCardsForMode(AppState.viewSettings.sortBy);
-        this.checkAuthSession();
-        Editor.init();
-        await ToolsManager.init(() => AppState.items);
-        Calendar.init();
-        this.renderControlBar();
-        this.loadCategoriesStore();
-        await reconcileLayoutStorage({
-            items: API._getLocalDB().items,
-            categories: AppState.categories,
-            lightTouch: true
-        });
-        await this.syncDataStore();
-        this.setupCoreListeners();
-        SidePanel.init(AppState);
-        SidebarQuickActions.init();
-        SidebarRadio.init();
-        SidebarTv.init();
-        SidebarTools.init();
-        SidePanel.setupStatusClickHandlers(); /* after radio/tv shells exist */
-        ClockStyle.init();
-        DesktopZoom.init();
-        this.setupSearchBar();
-        this.setupBackupInterface();
-        CloudBackup.init({ getLoggedIn: () => AppState.user.isLoggedIn });
-        CloudBackup.ensureConnected().finally(() => CloudBackup.updateButtons());
-        this.setupFab();
-        this.setupUndo();
-        this.setupDrawingMode();
-        Fullscreen.init();
-        DrawingBoard.init();
-        if (AppState.workspaceMode === 'drawing') {
-            requestAnimationFrame(() => this.applyWorkspaceMode('drawing', { skipPersist: true }));
+        BootProgress.init();
+        BootProgress.set(8, 'Starting…');
+        try {
+            DesktopBackground.init();
+            ChromeBackground.init();
+            NoteFontScale.init();
+            migrateLegacyGridLayoutIfNeeded();
+            GridFineness.apply();
+            DisplayOptions.init({
+                getLoggedIn: () => AppState.user.isLoggedIn
+            });
+            applyTileSmallFootprint();
+            AppTheme.init();
+            readViewSessions();
+            localStorage.setItem('matrix_desktop_layout', AppState.viewSettings.sortBy);
+            restoreViewSession(AppState.viewSettings.sortBy);
+            AppState.expandedCards = UI.readExpandedCardsForMode(AppState.viewSettings.sortBy);
+            BootProgress.set(20, 'Preferences…');
+            this.checkAuthSession();
+            Editor.init();
+            await ToolsManager.init(() => AppState.items);
+            BootProgress.set(30, 'Tools…');
+            Calendar.init();
+            this.renderControlBar();
+            this.loadCategoriesStore();
+            BootProgress.set(40, 'Categories…');
+            await reconcileLayoutStorage({
+                items: API._getLocalDB().items,
+                categories: AppState.categories,
+                lightTouch: true
+            });
+            BootProgress.set(60, 'Layout…');
+            await this.syncDataStore();
+            BootProgress.set(85, 'Workspace…');
+            this.setupCoreListeners();
+            SidePanel.init(AppState);
+            SidebarQuickActions.init();
+            SidebarRadio.init();
+            SidebarTv.init();
+            SidebarTools.init();
+            SidePanel.setupStatusClickHandlers(); /* after radio/tv shells exist */
+            ClockStyle.init();
+            DesktopZoom.init();
+            this.setupSearchBar();
+            this.setupBackupInterface();
+            CloudBackup.init({ getLoggedIn: () => AppState.user.isLoggedIn });
+            CloudBackup.ensureConnected().finally(() => CloudBackup.updateButtons());
+            this.setupFab();
+            this.setupUndo();
+            this.setupDrawingMode();
+            Fullscreen.init();
+            DrawingBoard.init();
+            if (AppState.workspaceMode === 'drawing') {
+                requestAnimationFrame(() => this.applyWorkspaceMode('drawing', { skipPersist: true }));
+            }
+        } finally {
+            await BootProgress.complete();
         }
     }
 
@@ -426,6 +438,8 @@ class Application {
         virtualLink.download = `matrix_workspace_backup_${backupPackage.timestamp}.json`;
         virtualLink.click();
         URL.revokeObjectURL(virtualLink.href);
+        writeLastLocalExportAt(backupPackage.timestamp);
+        SidePanel.updateStorageFooter();
     }
 
     setupBackupInterface() {

@@ -2102,3 +2102,295 @@ html[data-app-theme="spaceship"] .tool-panel { border-left-color: #e8922a; }
 html[data-app-theme="spaceship"] .tool-chip { border-color: color-mix(in srgb, #e8922a 40%, #3a4555); }
 html[data-app-theme="spaceship"] .card-act--cal.is-on { color: #e8922a; }
 html[data-app-theme="spaceship"] #btn-drawing-mode.active { background: color-mix(in srgb, #e8922a 28%, transparent); }
+
+html[data-app-theme="spaceship"] .collapsable-heading {
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    font-size: 0.92em;
+}
+
+/* Night Sky — starfield desktop with twinkling stars */
+@keyframes night-sky-twinkle-slow {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.9; }
+}
+
+@keyframes night-sky-twinkle-fast {
+    0%, 100% { opacity: 0.65; }
+    35% { opacity: 0.12; }
+    70% { opacity: 1; }
+}
+
+html[data-app-theme="night-sky"] #app-canvas,
+html[data-app-theme="night-sky"] #app-canvas.file-cabinet-bottom {
+    position: relative;
+    isolation: isolate;
+    background-color: #0c1428;
+    background-image:
+        radial-gradient(1px 1px at 17% 33%, rgba(255, 255, 255, 0.35), transparent),
+        radial-gradient(1px 1px at 53% 12%, rgba(255, 255, 255, 0.28), transparent),
+        radial-gradient(1px 1px at 78% 58%, rgba(255, 255, 255, 0.22), transparent),
+        radial-gradient(1px 1px at 31% 78%, rgba(255, 255, 255, 0.3), transparent),
+        radial-gradient(1px 1px at 89% 22%, rgba(255, 255, 255, 0.25), transparent),
+        radial-gradient(ellipse 70% 45% at 65% 12%, rgba(80, 100, 160, 0.18), transparent 58%),
+        radial-gradient(ellipse 100% 70% at 50% 100%, rgba(4, 8, 24, 0.75), transparent 62%),
+        linear-gradient(180deg, #060a16 0%, #0c1838 42%, #142850 68%, #0a1020 100%);
+}
+
+html[data-app-theme="night-sky"] #app-canvas::before,
+html[data-app-theme="night-sky"] #app-canvas.file-cabinet-bottom::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image:
+        radial-gradient(1.5px 1.5px at 8% 14%, rgba(255, 255, 255, 0.95), transparent),
+        radial-gradient(1px 1px at 22% 38%, rgba(255, 255, 255, 0.7), transparent),
+        radial-gradient(1px 1px at 41% 8%, rgba(255, 255, 255, 0.85), transparent),
+        radial-gradient(1.5px 1.5px at 58% 28%, rgba(255, 255, 255, 0.6), transparent),
+        radial-gradient(1px 1px at 72% 52%, rgba(255, 255, 255, 0.75), transparent),
+        radial-gradient(1px 1px at 15% 68%, rgba(255, 255, 255, 0.55), transparent),
+        radial-gradient(1px 1px at 36% 82%, rgba(255, 255, 255, 0.8), transparent),
+        radial-gradient(1px 1px at 63% 72%, rgba(255, 255, 255, 0.65), transparent),
+        radial-gradient(1.5px 1.5px at 84% 18%, rgba(255, 255, 255, 0.9), transparent),
+        radial-gradient(1px 1px at 92% 44%, rgba(255, 255, 255, 0.5), transparent),
+        radial-gradient(1px 1px at 48% 48%, rgba(255, 255, 255, 0.45), transparent),
+        radial-gradient(1px 1px at 27% 55%, rgba(255, 255, 255, 0.6), transparent);
+    animation: night-sky-twinkle-slow 6s ease-in-out infinite;
+}
+
+html[data-app-theme="night-sky"] #app-canvas::after,
+html[data-app-theme="night-sky"] #app-canvas.file-cabinet-bottom::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image:
+        radial-gradient(1px 1px at 12% 24%, rgba(200, 220, 255, 0.8), transparent),
+        radial-gradient(1.5px 1.5px at 33% 16%, rgba(255, 255, 255, 0.95), transparent),
+        radial-gradient(1px 1px at 51% 62%, rgba(255, 255, 255, 0.7), transparent),
+        radial-gradient(1px 1px at 67% 34%, rgba(255, 255, 255, 0.55), transparent),
+        radial-gradient(1px 1px at 79% 76%, rgba(255, 255, 255, 0.85), transparent),
+        radial-gradient(1px 1px at 6% 52%, rgba(255, 255, 255, 0.5), transparent),
+        radial-gradient(1.5px 1.5px at 44% 88%, rgba(255, 248, 220, 0.75), transparent),
+        radial-gradient(1px 1px at 88% 62%, rgba(255, 255, 255, 0.65), transparent),
+        radial-gradient(1px 1px at 19% 88%, rgba(255, 255, 255, 0.4), transparent),
+        radial-gradient(1px 1px at 55% 22%, rgba(255, 255, 255, 0.72), transparent),
+        radial-gradient(1px 1px at 95% 8%, rgba(255, 255, 255, 0.58), transparent);
+    animation: night-sky-twinkle-fast 3.8s ease-in-out infinite;
+}
+
+html[data-app-theme="night-sky"][data-desktop-gradient="1"] #app-canvas.view-freeform,
+html[data-app-theme="night-sky"][data-desktop-gradient="1"] #app-canvas.view-grid,
+html[data-app-theme="night-sky"][data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-freeform,
+html[data-app-theme="night-sky"][data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
+    background-color: #0c1428;
+    background-image:
+        radial-gradient(1px 1px at 17% 33%, rgba(255, 255, 255, 0.35), transparent),
+        radial-gradient(1px 1px at 53% 12%, rgba(255, 255, 255, 0.28), transparent),
+        radial-gradient(1px 1px at 78% 58%, rgba(255, 255, 255, 0.22), transparent),
+        radial-gradient(1px 1px at 31% 78%, rgba(255, 255, 255, 0.3), transparent),
+        radial-gradient(1px 1px at 89% 22%, rgba(255, 255, 255, 0.25), transparent),
+        radial-gradient(ellipse 70% 45% at 65% 12%, rgba(80, 100, 160, 0.18), transparent 58%),
+        radial-gradient(ellipse 100% 70% at 50% 100%, rgba(4, 8, 24, 0.75), transparent 62%),
+        linear-gradient(180deg, #060a16 0%, #0c1838 42%, #142850 68%, #0a1020 100%);
+}
+
+html[data-app-theme="night-sky"] .mini-card,
+html[data-app-theme="night-sky"] #editor-overlay .editor-note-shell,
+html[data-app-theme="night-sky"] .calendar-note-item,
+html[data-app-theme="night-sky"] .calendar-hour-note {
+    background-color: #152038 !important;
+    background-image:
+        radial-gradient(ellipse 100% 55% at 50% 0%, rgba(200, 220, 255, 0.1), transparent 52%),
+        linear-gradient(180deg, rgba(30, 45, 75, 0.35) 0%, rgba(15, 22, 40, 0.15) 100%) !important;
+    background-size: 100% 100% !important;
+    background-repeat: no-repeat !important;
+    border-left-color: transparent !important;
+    border-radius: 2px 4px 4px 2px !important;
+    border-color: color-mix(in srgb, #a8c8ff 22%, #283858) !important;
+    box-shadow:
+        0 0 0 1px rgba(168, 200, 255, 0.1),
+        0 2px 12px rgba(0, 0, 0, 0.35) !important;
+    color: #e8eef8 !important;
+    --card-fg: #e8eef8;
+    --card-muted: #8898b8;
+    --card-action-bg: rgba(168, 200, 255, 0.1);
+    --card-action-fg: #a8c8ff;
+    --card-border-subtle: rgba(168, 200, 255, 0.16);
+    --card-focus-bg: rgba(168, 200, 255, 0.1);
+    --card-focus-ring: rgba(168, 200, 255, 0.28);
+    --card-link: #c8dcff;
+    --card-placeholder: #687888;
+    --card-input-bg: rgba(0, 0, 0, 0.22);
+    --card-toolbar-bg: #121c30;
+    --card-panel-bg: #0e1628;
+}
+
+html[data-app-theme="night-sky"] .mini-card .mini-card-title,
+html[data-app-theme="night-sky"] .mini-card .card-content-preview,
+html[data-app-theme="night-sky"] .mini-card .step-text,
+html[data-app-theme="night-sky"] #editor-overlay .mini-card-title,
+html[data-app-theme="night-sky"] #editor-overlay .step-text {
+    color: #e8eef8 !important;
+}
+
+html[data-app-theme="night-sky"] .mini-card .category-name,
+html[data-app-theme="night-sky"] .mini-card .editor-created-date,
+html[data-app-theme="night-sky"] .mini-card .editor-note-lines,
+html[data-app-theme="night-sky"] .mini-card .checklist-badge {
+    color: #8898b8 !important;
+}
+
+html[data-app-theme="night-sky"] .mini-card.compact .card-actions::before {
+    background: rgba(21, 32, 56, 0.94);
+    box-shadow: 0 0 0 1px rgba(168, 200, 255, 0.12);
+}
+
+html[data-app-theme="night-sky"] .side-panel,
+html[data-app-theme="night-sky"] .side-panel-toggle-fab {
+    background-color: #0a1020;
+    background-image:
+        radial-gradient(1px 1px at 20% 30%, rgba(255, 255, 255, 0.12), transparent),
+        radial-gradient(1px 1px at 70% 60%, rgba(255, 255, 255, 0.08), transparent),
+        radial-gradient(1px 1px at 45% 85%, rgba(255, 255, 255, 0.1), transparent),
+        linear-gradient(180deg, #0e1628 0%, #080e1a 100%);
+    box-shadow:
+        inset 0 0 0 1px rgba(168, 200, 255, 0.08),
+        inset 4px 0 10px rgba(0, 0, 0, 0.22);
+}
+
+html[data-app-theme="night-sky"] .side-panel-toggle-fab {
+    box-shadow: inset 0 0 0 1px rgba(168, 200, 255, 0.1), 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+html[data-app-theme="night-sky"] .side-panel-brand-host,
+html[data-app-theme="night-sky"] .side-panel-chrome.side-panel-clock,
+html[data-app-theme="night-sky"] .side-panel-chrome.side-panel-search {
+    border-bottom-color: rgba(168, 200, 255, 0.1);
+}
+
+html[data-app-theme="night-sky"] .file-cabinet {
+    background-color: #080e1a;
+    background-image:
+        radial-gradient(1px 1px at 10% 20%, rgba(255, 255, 255, 0.06), transparent),
+        radial-gradient(1px 1px at 60% 40%, rgba(255, 255, 255, 0.05), transparent);
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.35);
+    border-bottom-color: rgba(168, 200, 255, 0.1);
+}
+
+html[data-app-theme="night-sky"] .file-cabinet-filed-rail {
+    background-color: #060a14;
+    border-right-color: rgba(168, 200, 255, 0.1);
+    padding: 0.25rem 0.45rem 0.25rem 0;
+    border-radius: 0 2px 2px 0;
+}
+
+html[data-app-theme="night-sky"] .file-cabinet-filed-chip {
+    position: relative;
+    background-color: #0e1628;
+    border-left-color: transparent;
+    border-radius: 2px;
+    padding: 0.35rem 0.4rem 0.35rem 0.55rem;
+    box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(40, 56, 88, 0.6);
+    color: #a8b4c8;
+}
+
+html[data-app-theme="night-sky"] .file-cabinet-filed-chip::after {
+    content: '';
+    position: absolute;
+    right: 1.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #f0f4ff, #a8c8ff 55%, #6888b8);
+    box-shadow: 0 0 4px rgba(168, 200, 255, 0.45);
+}
+
+html[data-app-theme="night-sky"] .file-cabinet-filed-chip.is-file-cabinet-drop-target {
+    background: color-mix(in srgb, #a8c8ff 12%, #0e1628);
+    box-shadow: inset 0 0 0 1px rgba(168, 200, 255, 0.35), inset 0 2px 5px rgba(0, 0, 0, 0.28);
+}
+
+html[data-app-theme="night-sky"] .file-cabinet-category {
+    background-color: #121c30;
+    border-radius: 0 0 6px 6px;
+    padding: 0 0.35rem 0.45rem;
+    box-shadow:
+        inset 0 0 0 1px rgba(168, 200, 255, 0.08),
+        inset 3px 0 8px rgba(0, 0, 0, 0.18),
+        inset -3px 0 8px rgba(0, 0, 0, 0.18),
+        inset 0 -4px 10px rgba(0, 0, 0, 0.28);
+}
+
+html[data-app-theme="night-sky"] .file-cabinet-category-header {
+    background: linear-gradient(90deg, #0a1020 0%, #141e34 50%, #0a1020 100%);
+    margin: 0 -0.35rem 0.3rem;
+    padding: 0.25rem 0.35rem;
+    border-radius: 2px 2px 0 0;
+    color: #e8eef8;
+    box-shadow: inset 0 -1px 0 rgba(168, 200, 255, 0.15);
+}
+
+html[data-app-theme="night-sky"] .file-cabinet-category.is-file-cabinet-drop-target {
+    background: color-mix(in srgb, #a8c8ff 10%, #121c30);
+    box-shadow: inset 0 0 0 1px rgba(168, 200, 255, 0.28), inset 3px 0 8px rgba(0, 0, 0, 0.12), inset -3px 0 8px rgba(0, 0, 0, 0.12), inset 0 -4px 10px rgba(0, 0, 0, 0.2);
+}
+
+html[data-app-theme="night-sky"] .file-cabinet-tab-stack { background: transparent; }
+html[data-app-theme="night-sky"] .file-cabinet .file-cabinet-tab { border-left-color: transparent; }
+html[data-app-theme="night-sky"] .file-cabinet-empty { color: #8898b8; }
+
+html[data-app-theme="night-sky"] #workspace-footer {
+    background-color: #080e1a;
+    border-top-color: rgba(168, 200, 255, 0.1);
+}
+
+html[data-app-theme="night-sky"] .btn {
+    background-color: #0e1628;
+    border-color: #283858;
+    color: #e8eef8;
+}
+
+html[data-app-theme="night-sky"] .btn:hover {
+    border-color: #a8c8ff;
+    box-shadow: 0 0 0 1px rgba(168, 200, 255, 0.22);
+}
+
+html[data-app-theme="night-sky"] .btn--accent {
+    background-color: color-mix(in srgb, #a8c8ff 18%, #0e1628);
+    border-color: color-mix(in srgb, #a8c8ff 45%, #283858);
+    color: #e8eef8;
+}
+
+html[data-app-theme="night-sky"] mark.search-hit {
+    background: rgba(168, 200, 255, 0.25);
+    color: inherit;
+}
+
+html[data-app-theme="night-sky"] .btn.active {
+    background: color-mix(in srgb, #a8c8ff 40%, #0a1020);
+    border-color: #a8c8ff;
+    color: #f4f8ff;
+}
+
+html[data-app-theme="night-sky"] .quick-actions-grid .btn--icon.active { color: #f4f8ff; }
+html[data-app-theme="night-sky"] .menu-tool-trigger.active { color: #a8c8ff; }
+html[data-app-theme="night-sky"] .tool-panel { border-left-color: #a8c8ff; }
+html[data-app-theme="night-sky"] .tool-chip { border-color: color-mix(in srgb, #a8c8ff 35%, #283858); }
+html[data-app-theme="night-sky"] .card-act--cal.is-on { color: #a8c8ff; }
+html[data-app-theme="night-sky"] #btn-drawing-mode.active { background: color-mix(in srgb, #a8c8ff 25%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+    html[data-app-theme="night-sky"] #app-canvas::before,
+    html[data-app-theme="night-sky"] #app-canvas.file-cabinet-bottom::before,
+    html[data-app-theme="night-sky"] #app-canvas::after,
+    html[data-app-theme="night-sky"] #app-canvas.file-cabinet-bottom::after {
+        animation: none;
+        opacity: 0.65;
+    }
+}

@@ -353,6 +353,24 @@ export const APP_THEMES = [
         }
     },
     {
+        id: 'night-sky',
+        label: 'Night Sky',
+        desc: 'Starry sky & moonlight',
+        special: 'night-sky',
+        swatch: ['#0c1428', '#152038', '#a8c8ff'],
+        tokens: {
+            '--bg-primary': '#0a1020',
+            '--bg-surface': '#0e1628',
+            '--bg-card': '#152038',
+            '--text-main': '#e8eef8',
+            '--text-muted': '#8898b8',
+            '--accent': '#a8c8ff',
+            '--border-color': '#283858',
+            '--desktop-bg': '#0c1428',
+            '--chrome-bg': '#0a1020'
+        }
+    },
+    {
         id: 'rose',
         label: 'Rose',
         desc: 'Soft blush',

@@ -2,11 +2,13 @@ import {
     applyBackupToStorage,
     backupFilename,
     buildBackupPackage,
+    formatExportTimestamp,
     parseBackupPackage,
     serializeBackupPackage
 } from './backup.js';
 import { formatCloudError, getCloudProvider } from './cloud/cloudProvider.js';
 import './cloud/megaProvider.js';
+import { SidePanel } from './hamburger.js';
 import { positionPopoverBelowAnchor } from './popoverPosition.js';
 import { showAppToast } from './toast.js';
 import { CARD_ICONS } from './ui.js';
@@ -36,8 +38,7 @@ function formatBytes(size) {
 }
 
 function formatCheckpointDate(timestamp) {
-    if (!timestamp) return 'Unknown date';
-    return new Date(timestamp * 1000).toLocaleString();
+    return formatExportTimestamp(timestamp);
 }
 
 export const CloudBackup = {
@@ -617,6 +618,7 @@ export const CloudBackup = {
             writeConfig(config);
 
             this.updateButtons();
+            SidePanel.updateStorageFooter();
             showAppToast('Checkpoint saved');
         } catch (err) {
             showAppToast(formatCloudError(err));

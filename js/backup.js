@@ -7,6 +7,37 @@ import {
 import { applyLayoutBackupKeys, getLayoutBackupKeys } from './layoutStorage.js';
 
 export const BACKUP_FILE_PREFIX = 'matrix_workspace_backup_';
+export const LAST_LOCAL_EXPORT_KEY = 'matrix_last_local_export_at';
+const CLOUD_CONFIG_KEY = 'matrix_cloud_config';
+
+export function formatExportTimestamp(timestamp) {
+    if (!timestamp) return 'Never';
+    return new Date(timestamp * 1000).toLocaleString();
+}
+
+export function readLastLocalExportAt() {
+    try {
+        const ts = Number(localStorage.getItem(LAST_LOCAL_EXPORT_KEY));
+        return Number.isFinite(ts) ? ts : null;
+    } catch {
+        return null;
+    }
+}
+
+export function writeLastLocalExportAt(timestamp) {
+    if (!Number.isFinite(timestamp)) return;
+    localStorage.setItem(LAST_LOCAL_EXPORT_KEY, String(timestamp));
+}
+
+export function readLastCloudExportAt() {
+    try {
+        const config = JSON.parse(localStorage.getItem(CLOUD_CONFIG_KEY) || 'null');
+        const ts = Number(config?.lastCheckpointAt);
+        return Number.isFinite(ts) ? ts : null;
+    } catch {
+        return null;
+    }
+}
 
 export function backupFilename(timestamp = Math.floor(Date.now() / 1000)) {
     return `${BACKUP_FILE_PREFIX}${timestamp}.json`;
