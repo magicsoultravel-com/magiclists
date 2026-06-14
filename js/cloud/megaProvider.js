@@ -111,6 +111,25 @@ function backupEntries(folder) {
         .sort((a, b) => b.timestamp - a.timestamp);
 }
 
+export function mapMegaLoginError(err) {
+    const raw = formatCloudError(err);
+    const upper = raw.toUpperCase();
+
+    if (upper.includes('EMFAREQUIRED') || upper.includes('(-26)') || upper.includes('MULTI-FACTOR')) {
+        return {
+            message: 'Two-factor code required. Open your authenticator app, enter the 6-digit code, and try again.',
+            mfaRequired: true
+        };
+    }
+    if (upper.includes('ENOENT') || upper.includes('(-9)') || upper.includes('WRONG PASSWORD')) {
+        return { message: 'Email or password incorrect.', mfaRequired: false };
+    }
+    if (upper.includes('FAILED TO FETCH') || upper.includes('NETWORKERROR') || upper.includes('ECONNREFUSED')) {
+        return { message: 'Could not reach MEGA. Check your connection and try again.', mfaRequired: false };
+    }
+    return { message: raw, mfaRequired: false };
+}
+
 export const MegaProvider = {
     id: 'mega',
     label: 'MEGA',
@@ -127,7 +146,8 @@ export const MegaProvider = {
         } catch (err) {
             storage = null;
             backupFolder = null;
-            return { ok: false, error: formatCloudError(err) };
+            const mapped = mapMegaLoginError(err);
+            return { ok: false, error: mapped.message, mfaRequired: mapped.mfaRequired };
         }
     },
 

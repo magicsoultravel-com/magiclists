@@ -46,6 +46,8 @@ export const CloudBackup = {
     step: null,
     folderParentId: null,
     busy: false,
+    show2fa: false,
+    loginDraft: null,
     getLoggedIn: () => false,
     outsideHandler: null,
     keyHandler: null,
@@ -166,6 +168,7 @@ export const CloudBackup = {
         this.step = null;
         this.folderParentId = null;
         this.busy = false;
+        this.loginDraft = null;
     },
 
     setTitle(text) {
@@ -224,6 +227,8 @@ export const CloudBackup = {
         `);
 
         this.panel.querySelector('[data-cloud-continue]')?.addEventListener('click', () => {
+            this.show2fa = false;
+            this.loginDraft = null;
             this.step = 'login';
             this.renderStep();
         });
@@ -231,39 +236,86 @@ export const CloudBackup = {
 
     renderLoginStep() {
         this.setTitle('Connect to MEGA');
+        const config = readConfig();
+        const draft = this.loginDraft || {};
+        const show2fa = this.show2fa;
+
         this.setBody(`
-            <p class="cloud-popover__hint">Uses an unofficial API. Credentials stay in this browser tab only.</p>
-            <label class="cloud-popover__field">
-                <span>Email</span>
-                <input type="email" class="cloud-popover__input" data-cloud-email autocomplete="username">
-            </label>
-            <label class="cloud-popover__field">
-                <span>Password</span>
-                <input type="password" class="cloud-popover__input" data-cloud-password autocomplete="current-password">
-            </label>
-            <label class="cloud-popover__field">
-                <span>2FA code <em class="cloud-popover__optional">(if enabled)</em></span>
-                <input type="text" class="cloud-popover__input" data-cloud-2fa inputmode="numeric" autocomplete="one-time-code">
-            </label>
-            <p class="cloud-popover__error is-hidden" data-cloud-error></p>
-            <div class="cloud-popover__actions cloud-popover__actions--split">
-                <button type="button" class="btn btn--compact" data-cloud-back>Back</button>
-                <button type="button" class="btn btn--compact" data-cloud-connect>Connect</button>
-            </div>
+            <p class="cloud-popover__hint">Enter your MEGA email and password, then click Connect. Credentials stay in this browser tab only.</p>
+            <p class="cloud-popover__hint">No authenticator app? You don't need a 2FA code unless two-factor is enabled on your MEGA account.</p>
+            <form class="cloud-popover__login-form" data-cloud-login-form>
+                <label class="cloud-popover__field">
+                    <span>Email</span>
+                    <input type="email" class="cloud-popover__input" data-cloud-email autocomplete="username" required>
+                </label>
+                <label class="cloud-popover__field">
+                    <span>Password</span>
+                    <input type="password" class="cloud-popover__input" data-cloud-password autocomplete="current-password" required>
+                </label>
+                <button type="button" class="cloud-popover__2fa-toggle ${show2fa ? 'is-hidden' : ''}" data-cloud-show-2fa>I use two-factor authentication</button>
+                <div class="cloud-popover__2fa-block ${show2fa ? '' : 'is-hidden'}" data-cloud-2fa-block>
+                    <label class="cloud-popover__field">
+                        <span>Authenticator code</span>
+                        <input type="text" class="cloud-popover__input" data-cloud-2fa inputmode="numeric" autocomplete="one-time-code" maxlength="8">
+                    </label>
+                    <p class="cloud-popover__hint">Open your authenticator app (Google Authenticator, Authy, etc.) and enter the current 6-digit code. MEGA does not send this code by email.</p>
+                </div>
+                <p class="cloud-popover__error is-hidden" data-cloud-error></p>
+                <p class="cloud-popover__connecting is-hidden" data-cloud-connecting>Connecting to MEGA…</p>
+                <div class="cloud-popover__actions cloud-popover__actions--split">
+                    <button type="button" class="btn btn--compact" data-cloud-back>Back</button>
+                    <button type="submit" class="btn btn--compact" data-cloud-connect>Connect</button>
+                </div>
+            </form>
         `);
 
-        const config = readConfig();
         const emailInput = this.panel.querySelector('[data-cloud-email]');
-        if (emailInput && config?.email) emailInput.value = config.email;
+        const passwordInput = this.panel.querySelector('[data-cloud-password]');
+        const tfaInput = this.panel.querySelector('[data-cloud-2fa]');
+
+        if (emailInput) emailInput.value = draft.email || config?.email || '';
+        if (passwordInput) passwordInput.value = draft.password || '';
+        if (tfaInput) tfaInput.value = draft.secondFactorCode || '';
 
         this.panel.querySelector('[data-cloud-back]')?.addEventListener('click', () => {
+            if (this.busy) return;
+            this.show2fa = false;
+            this.loginDraft = null;
             this.step = 'provider';
             this.renderStep();
         });
 
-        this.panel.querySelector('[data-cloud-connect]')?.addEventListener('click', () => {
+        this.panel.querySelector('[data-cloud-show-2fa]')?.addEventListener('click', () => {
+            this.loginDraft = {
+                email: this.panel.querySelector('[data-cloud-email]')?.value?.trim() || '',
+                password: this.panel.querySelector('[data-cloud-password]')?.value || '',
+                secondFactorCode: ''
+            };
+            this.show2fa = true;
+            this.renderLoginStep();
+        });
+
+        this.panel.querySelector('[data-cloud-login-form]')?.addEventListener('submit', (e) => {
+            e.preventDefault();
             this.handleConnect();
         });
+
+        if (show2fa) {
+            requestAnimationFrame(() => tfaInput?.focus());
+        }
+    },
+
+    setLoginBusy(busy) {
+        this.busy = busy;
+        const back = this.panel?.querySelector('[data-cloud-back]');
+        const connect = this.panel?.querySelector('[data-cloud-connect]');
+        const status = this.panel?.querySelector('[data-cloud-connecting]');
+        if (back) back.disabled = busy;
+        if (connect) {
+            connect.disabled = busy;
+            connect.textContent = busy ? 'Connecting…' : 'Connect';
+        }
+        status?.classList.toggle('is-hidden', !busy);
     },
 
     async handleConnect() {
@@ -281,22 +333,36 @@ export const CloudBackup = {
             return;
         }
 
-        this.busy = true;
+        this.loginDraft = { email, password, secondFactorCode };
+        this.setLoginBusy(true);
         if (errorEl) errorEl.classList.add('is-hidden');
+
+        const slowToast = window.setTimeout(() => {
+            showAppToast('Connecting to MEGA…');
+        }, 2000);
 
         const provider = getCloudProvider('mega');
         const result = await provider.connect({ email, password, secondFactorCode });
 
-        this.busy = false;
+        window.clearTimeout(slowToast);
+        this.setLoginBusy(false);
 
         if (!result.ok) {
-            if (errorEl) {
-                errorEl.textContent = result.error || 'Connection failed';
-                errorEl.classList.remove('is-hidden');
+            if (result.mfaRequired) {
+                this.show2fa = true;
+                this.renderLoginStep();
+            }
+            const errNode = this.panel.querySelector('[data-cloud-error]');
+            if (errNode) {
+                errNode.textContent = result.error || 'Connection failed';
+                errNode.classList.remove('is-hidden');
             }
             return;
         }
 
+        this.loginDraft = null;
+        this.show2fa = false;
+        showAppToast('Connected to MEGA');
         this.folderParentId = null;
         this.step = 'folder';
         this.renderStep();
@@ -459,6 +525,8 @@ export const CloudBackup = {
         `);
 
         this.panel.querySelector('[data-cloud-reconnect]')?.addEventListener('click', () => {
+            this.show2fa = false;
+            this.loginDraft = null;
             this.step = 'login';
             this.renderStep();
         });
