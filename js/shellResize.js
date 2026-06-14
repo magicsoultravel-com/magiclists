@@ -9,10 +9,9 @@ import {
     readFileCabinetHeight,
     writeFileCabinetHeight,
     getFileCabinetDragMinHeight,
-    clampFileCabinetScroll,
+    getFileCabinetContentMinHeight,
     syncFileCabinetDrawerHeight,
-    FILE_CABINET_BOARD_MIN_HEIGHT,
-    FILE_CABINET_REF_HEIGHT
+    FILE_CABINET_BOARD_MIN_HEIGHT
 } from './fileCabinet.js';
 
 const DESKTOP_MIN_WIDTH = 280;
@@ -69,17 +68,10 @@ function getCabinetHeightBounds(mount) {
     return { min, max };
 }
 
-function getCabinetScaleBounds(mount) {
-    const { min, max } = getCabinetHeightBounds(mount);
-    return {
-        min: min / FILE_CABINET_REF_HEIGHT,
-        max: max / FILE_CABINET_REF_HEIGHT
-    };
-}
-
 function cabinetScaleForHeight(height, mount) {
-    const { min, max } = getCabinetScaleBounds(mount);
-    return clamp(height / FILE_CABINET_REF_HEIGHT, min, max);
+    const contentMin = getFileCabinetContentMinHeight(mount);
+    if (!contentMin || !height) return 1;
+    return Math.min(1, height / contentMin);
 }
 
 function applySidebarUiScale(width) {
@@ -94,28 +86,6 @@ function applyCabinetUiScale(mount, height) {
     if (!effectiveHeight) return;
     const scale = cabinetScaleForHeight(effectiveHeight, mount);
     mount.style.setProperty('--file-cabinet-ui-scale', String(scale));
-    syncCabinetInnerLayout(mount);
-    clampFileCabinetScroll(mount);
-}
-
-function syncCabinetInnerLayout(mount) {
-    const inner = mount?.querySelector('.file-cabinet-inner');
-    if (!inner) return;
-    const scale = parseFloat(mount.style.getPropertyValue('--file-cabinet-ui-scale')) || 1;
-    if (typeof CSS !== 'undefined' && CSS.supports('zoom', '1')) {
-        inner.style.marginRight = '';
-        inner.style.marginBottom = '';
-        return;
-    }
-    if (Math.abs(scale - 1) < 0.001) {
-        inner.style.marginRight = '';
-        inner.style.marginBottom = '';
-        return;
-    }
-    const w = inner.offsetWidth;
-    const h = inner.offsetHeight;
-    inner.style.marginRight = `${w * (scale - 1)}px`;
-    inner.style.marginBottom = `${h * (scale - 1)}px`;
 }
 
 function clearSidebarAppliedWidth() {
@@ -162,9 +132,6 @@ function applyCabinetAutoHeight(mount) {
     }
     delete mount.dataset.fixedHeight;
     mount.style.flex = '';
-    mount.style.height = '';
-    mount.style.maxHeight = '';
-    applyCabinetUiScale(mount, mount.offsetHeight || FILE_CABINET_REF_HEIGHT);
     syncFileCabinetDrawerHeight(mount);
 }
 

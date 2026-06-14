@@ -469,7 +469,6 @@ body {
 .file-cabinet {
     flex: 0 0 auto;
     min-height: 72px;
-    max-height: min(45vh, 520px);
     overflow: hidden;
     padding: var(--board-area-inset-base);
     border-bottom: 2px solid color-mix(in srgb, var(--text-muted) 35%, var(--border-color));
@@ -506,21 +505,12 @@ body {
     overflow-y: hidden;
     overscroll-behavior: contain;
     zoom: var(--file-cabinet-ui-scale, 1);
-    width: calc(100% / var(--file-cabinet-ui-scale, 1));
 }
 
 .file-cabinet[data-fixed-height="true"] .file-cabinet-inner {
     flex: 1 1 auto;
     min-height: 0;
     max-height: 100%;
-}
-
-@supports not (zoom: 1) {
-    .file-cabinet-inner {
-        zoom: unset;
-        transform: scale(var(--file-cabinet-ui-scale, 1));
-        transform-origin: top left;
-    }
 }
 
 .file-cabinet-filed-rail {

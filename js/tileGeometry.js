@@ -46,7 +46,7 @@ export const LEGACY_TILE_SIZE = 'large';
 const TIER_HYSTERESIS = 4;
 
 export function getFreformDefaultW() {
-    return getSmallFootprintRect('card').w;
+    return getSmallFootprintRect('label').w;
 }
 
 export function getFreformDefaultH() {
@@ -54,9 +54,9 @@ export function getFreformDefaultH() {
 }
 
 /** @deprecated use getFreformDefaultW */
-export const FREEFORM_DEFAULT_W = 112;
+export const FREEFORM_DEFAULT_W = 64;
 /** @deprecated use getFreformDefaultH */
-export const FREEFORM_DEFAULT_H = 56;
+export const FREEFORM_DEFAULT_H = 20;
 
 export function getTileLabelH() {
     return getSmallFootprintRect('label').h;

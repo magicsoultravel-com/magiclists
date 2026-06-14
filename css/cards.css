@@ -169,10 +169,18 @@ html[data-tile-small-footprint="label"] .file-cabinet-tab.is-file-cabinet-draggi
 }
 
 .mini-card:hover .editor-note-topline .note-editor-toolbar,
-.mini-card:focus-within .editor-note-topline .note-editor-toolbar,
+.mini-card:focus-within .editor-note-topline .note-editor-toolbar {
+    opacity: 1;
+    pointer-events: auto;
+}
+
 .file-cabinet .file-cabinet-tab:hover .note-editor-toolbar,
 .file-cabinet .file-cabinet-tab:focus-within .note-editor-toolbar {
     opacity: 1;
+    pointer-events: none;
+}
+
+.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-act {
     pointer-events: auto;
 }
 

@@ -6,21 +6,12 @@ import {
     writeNoteFont
 } from './noteFont.js';
 import { NoteFontScale } from './noteFontScale.js';
-import { BoardPadding } from './boardPadding.js';
 import { DesktopZoom } from './desktopZoom.js';
 import { ChromeBackground } from './chromeBackground.js';
 import { DesktopBackground } from './desktopBackground.js';
 import { resetCustomizationToDefaults } from './customizationReset.js';
 import { ACTION_ICONS, CARD_ICONS } from './ui.js';
 import { AppTheme, buildThemeOptionsHtml, isAppThemeCustomized, readAppTheme } from './appTheme.js';
-import {
-    applyTileSmallFootprint,
-    getSmallFootprintRect,
-    isTileSmallFootprintCustomized,
-    readTileSmallFootprint,
-    writeTileSmallFootprint
-} from './tileFootprint.js';
-import { GridFineness } from './gridDensity.js';
 import {
     applyBrandIcon,
     buildBrandIconOptionsHtml,
@@ -80,7 +71,6 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     root.dataset.desktopGridLines = options.desktopGridLines ? '1' : '0';
     root.dataset.cardAnimations = options.cardAnimations ? '1' : '0';
     applyNoteFont(options.noteFontId);
-    applyTileSmallFootprint(readTileSmallFootprint());
     applyBrandIcon(options.brandIconId);
 }
 
@@ -98,9 +88,6 @@ function isCustomized(options) {
         || DesktopZoom.isCustomized()
         || ChromeBackground.isCustomized()
         || DesktopBackground.isCustomized()
-        || isTileSmallFootprintCustomized()
-        || GridFineness.isCustomized()
-        || BoardPadding.isCustomized()
         || isBrandIconCustomized(options.brandIconId);
 }
 
@@ -126,8 +113,6 @@ export const DisplayOptions = {
             this.bindTriggerClick(this.triggerBtn);
         }
 
-        window.addEventListener('appearance:grid_fineness_changed', () => this.syncButtonState());
-        window.addEventListener('appearance:board_padding_changed', () => this.syncButtonState());
         window.addEventListener('note:font_scale_changed', () => this.syncButtonState());
         window.addEventListener('appearance:color_changed', () => this.syncButtonState());
         window.addEventListener('app:theme_changed', () => this.syncButtonState());
@@ -243,41 +228,6 @@ export const DisplayOptions = {
         </button>`;
     },
 
-    tileFootprintOptionsHtml(selectedId) {
-        const options = [
-            { id: 'label', label: 'Label', size: getSmallFootprintRect('label') },
-            { id: 'card', label: 'Card', size: getSmallFootprintRect('card') },
-            { id: 'wide', label: 'Wide card', size: getSmallFootprintRect('wide') }
-        ];
-        const maxDim = 24;
-        return options.map((opt) => {
-            const selected = opt.id === selectedId;
-            const sizeLabel = `${opt.size.w}×${opt.size.h}`;
-            const aspect = opt.size.w / opt.size.h;
-            let pw;
-            let ph;
-            if (aspect >= 1) {
-                pw = maxDim;
-                ph = Math.max(8, Math.round(maxDim / aspect));
-            } else {
-                ph = maxDim;
-                pw = Math.max(8, Math.round(maxDim * aspect));
-            }
-            const title = `${opt.label} (${sizeLabel})`;
-            return `<button type="button" class="tile-footprint-option${selected ? ' is-selected' : ''}" data-footprint="${opt.id}" role="menuitemradio" aria-checked="${selected}" title="${escapeHtml(title)}" aria-label="${escapeHtml(title)}">
-                <span class="tile-footprint-preview" style="width:${pw}px;height:${ph}px" aria-hidden="true"></span>
-                ${selected ? '<span class="clock-style-check" aria-hidden="true">✓</span>' : ''}
-            </button>`;
-        }).join('');
-    },
-
-    setTileSmallFootprint(footprint) {
-        const next = writeTileSmallFootprint(footprint);
-        applyTileSmallFootprint(next);
-        window.dispatchEvent(new CustomEvent('appearance:tile_footprint_changed', { detail: next }));
-        this.syncButtonState();
-    },
-
     noteFontOptionsHtml(selectedId) {
         return NOTE_FONTS.map((font) => {
             const selected = font.id === selectedId;
@@ -314,17 +264,10 @@ export const DisplayOptions = {
 
         this.setRadioGroupSelection(root, '.app-theme-option', readAppTheme(), 'theme');
         this.setRadioGroupSelection(root, '.note-font-option', this.options.noteFontId, 'font');
-        this.setRadioGroupSelection(root, '.tile-footprint-option', readTileSmallFootprint(), 'footprint');
         this.setRadioGroupSelection(root, '.brand-icon-option', this.options.brandIconId, 'brandIcon');
 
         NoteFontScale.updateLabels();
         DesktopZoom.updateButtons();
-        BoardPadding.updateLabels();
-
-        const gridLabel = root.querySelector('#display-opt-grid-fineness-label');
-        if (gridLabel) {
-            gridLabel.textContent = GridFineness.getCellLabel();
-        }
 
         this.syncButtonState();
     },
@@ -348,9 +291,6 @@ export const DisplayOptions = {
         const noteScalePct = `${Math.round(NoteFontScale.getScale() * 100)}%`;
         const desktopZoomPct = `${Math.round(DesktopZoom.getScale() * 100)}%`;
         const desktopZoomEnabled = this.isDesktopZoomEnabled();
-        const tileFootprint = readTileSmallFootprint();
-        const gridFinenessLabel = GridFineness.getCellLabel();
-        const boardSpacingLabel = BoardPadding.getLabel();
 
         return `
             <div class="modal modal--wide display-options-modal">
@@ -363,6 +303,11 @@ export const DisplayOptions = {
                         <section class="display-options-section display-options-section--theme">
                             <h3 class="display-options-heading">Theme</h3>
                             <div class="display-options-theme-grid app-theme-list">${buildThemeOptionsHtml(readAppTheme(), { compact: true })}</div>
+                            <p class="display-options-subheading">Backgrounds</p>
+                            <div class="display-options-bg-row-group">
+                                ${this.bgRow('display-opt-chrome-bg', 'Panel & header', '--chrome-bg')}
+                                ${this.bgRow('display-opt-desktop-bg', 'Desktop', '--desktop-bg')}
+                            </div>
                             <p class="display-options-subheading">Site icon</p>
                             <div class="brand-icon-list">${buildBrandIconOptionsHtml(opts.brandIconId)}</div>
                         </section>
@@ -392,34 +337,11 @@ export const DisplayOptions = {
                                 ${this.optionRow('display-opt-note-size', 'Note size', opts.showNoteSize)}
                                 ${this.optionRow('display-opt-note-lines', 'Number of lines', opts.showLineCount)}
                             </div>
-                            <p class="display-options-subheading">Collapsed note size</p>
-                            <div class="tile-footprint-list">${this.tileFootprintOptionsHtml(tileFootprint)}</div>
-                        </section>
-                        <section class="display-options-section display-options-section--desktop">
-                            <h3 class="display-options-heading">Desktop</h3>
-                            <div class="display-options-scale-row">
-                                ${this.stepperRow({
-                                    idPrefix: 'display-opt-grid-fineness',
-                                    label: 'Grid fineness',
-                                    valuePercent: gridFinenessLabel
-                                })}
-                                ${this.stepperRow({
-                                    idPrefix: 'display-opt-board-spacing',
-                                    label: 'Board spacing',
-                                    valuePercent: boardSpacingLabel
-                                })}
-                            </div>
+                            <p class="display-options-subheading">Desktop appearance</p>
                             <div class="display-options-check-grid display-options-check-grid--inline">
                                 ${this.optionRow('display-opt-gradient', 'Gradient background', opts.desktopGradient)}
                                 ${this.optionRow('display-opt-grid-lines', 'Show grid lines', opts.desktopGridLines)}
                                 ${this.optionRow('display-opt-animations', 'Card animations', opts.cardAnimations)}
-                            </div>
-                        </section>
-                        <section class="display-options-section display-options-section--backgrounds display-options-section--full">
-                            <h3 class="display-options-heading">Backgrounds</h3>
-                            <div class="display-options-bg-row-group">
-                                ${this.bgRow('display-opt-chrome-bg', 'Panel & header', '--chrome-bg')}
-                                ${this.bgRow('display-opt-desktop-bg', 'Desktop', '--desktop-bg')}
                             </div>
                         </section>
                     </div>
@@ -455,14 +377,6 @@ export const DisplayOptions = {
             });
         });
 
-        root.querySelectorAll('.tile-footprint-option').forEach((btn) => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.setTileSmallFootprint(btn.dataset.footprint);
-                this.syncModalUi(root);
-            });
-        });
-
         root.querySelectorAll('.note-font-option').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -490,18 +404,6 @@ export const DisplayOptions = {
             disabled: !this.isDesktopZoomEnabled(),
             onOut: () => DesktopZoom.step(-DesktopZoom.ZOOM_STEP),
             onIn: () => DesktopZoom.step(DesktopZoom.ZOOM_STEP)
-        });
-
-        this.bindStepper(root, {
-            idPrefix: 'display-opt-grid-fineness',
-            onOut: () => GridFineness.step(-1),
-            onIn: () => GridFineness.step(1)
-        });
-
-        this.bindStepper(root, {
-            idPrefix: 'display-opt-board-spacing',
-            onOut: () => BoardPadding.step(-1),
-            onIn: () => BoardPadding.step(1)
         });
 
         root.querySelector('#display-opt-chrome-bg')?.addEventListener('click', (e) => {
@@ -544,7 +446,6 @@ export const DisplayOptions = {
 
         NoteFontScale.updateLabels();
         DesktopZoom.updateButtons();
-        BoardPadding.updateLabels();
     },
 
     openModal(anchor) {

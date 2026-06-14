@@ -21,8 +21,11 @@ import { ClockStyle } from './clockStyle.js';
 import { ColorPicker, PALETTE_NOTE, randomNoteColor } from './colorPicker.js';
 import { DisplayOptions } from './displayOptions.js';
 import { applyTileSmallFootprint } from './tileFootprint.js';
-import { GridFineness, migrateLegacyGridLayoutIfNeeded } from './gridDensity.js';
-import { BoardPadding } from './boardPadding.js';
+import {
+    initGridMetrics,
+    migrateCompactDefaultsIfNeeded,
+    migrateLegacyGridLayoutIfNeeded
+} from './gridDensity.js';
 import { AppTheme } from './appTheme.js';
 import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
@@ -84,13 +87,13 @@ class Application {
             DesktopBackground.init();
             ChromeBackground.init();
             NoteFontScale.init();
-            BoardPadding.init();
             migrateLegacyGridLayoutIfNeeded();
-            GridFineness.apply();
+            initGridMetrics();
+            applyTileSmallFootprint();
+            migrateCompactDefaultsIfNeeded();
             DisplayOptions.init({
                 getLoggedIn: () => AppState.user.isLoggedIn
             });
-            applyTileSmallFootprint();
             AppTheme.init();
             readViewSessions();
             localStorage.setItem('matrix_desktop_layout', AppState.viewSettings.sortBy);
@@ -674,25 +677,6 @@ class Application {
             const canvas = document.getElementById('app-canvas');
             UI.updateBoardCanvasExtents(canvas);
             this.squeezeGridIfActive();
-        });
-
-        window.addEventListener('appearance:tile_footprint_changed', () => {
-            UI.reapplySmallFootprintOnBoard();
-        });
-
-        window.addEventListener('appearance:grid_fineness_changed', (e) => {
-            applyTileSmallFootprint();
-            const { prevMetrics, nextMetrics } = e.detail || {};
-            if (prevMetrics && nextMetrics) {
-                UI.reapplyGridFinenessOnBoard(prevMetrics, nextMetrics);
-            }
-        });
-
-        window.addEventListener('appearance:board_padding_changed', (e) => {
-            const { prevMetrics, nextMetrics } = e.detail || {};
-            if (prevMetrics && nextMetrics) {
-                UI.reapplyBoardSpacingOnBoard(prevMetrics, nextMetrics);
-            }
         });
 
         window.addEventListener('item:selected_for_edit', (e) => {

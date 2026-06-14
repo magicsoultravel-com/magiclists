@@ -1705,14 +1705,6 @@ export const UI = {
         }
     },
 
-    reapplyGridFinenessOnBoard(prevMetrics, nextMetrics) {
-        this.reapplyBoardMetricsOnBoard(prevMetrics, nextMetrics);
-    },
-
-    reapplyBoardSpacingOnBoard(prevMetrics, nextMetrics) {
-        this.reapplyBoardMetricsOnBoard(prevMetrics, nextMetrics);
-    },
-
     clampNoteToBoardEdges(rect, { packW, maxH, origin, edgePad } = {}) {
         const metrics = getGridMetrics();
         const o = origin ?? metrics.origin;

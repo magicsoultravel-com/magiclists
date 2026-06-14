@@ -1,15 +1,24 @@
-import { getBoardPaddingScale } from './boardPadding.js';
-
-export const STORAGE_KEY = 'matrix_grid_fineness';
-export const LEGACY_MIGRATION_FLAG = 'matrix_grid_fineness_migrated';
 export const FINENESS_STEPS = [32, 40, 48, 56, 64, 72, 80];
-export const DEFAULT_FINENESS_STEP = 4;
+export const FIXED_FINENESS_STEP = 1;
+/** Target for migrateLegacyGridLayoutIfNeeded (old rect→square migration). */
+export const LEGACY_MIGRATION_TARGET_STEP = 4;
+/** Previous user-facing defaults before compact lock-in. */
+export const PREVIOUS_DEFAULT_FINENESS_STEP = 4;
+export const PREVIOUS_DEFAULT_PADDING_STEP = 5;
+
+export const COMPACT_MIGRATION_FLAG = 'matrix_compact_defaults_migrated';
+export const LEGACY_MIGRATION_FLAG = 'matrix_grid_fineness_migrated';
+
 export const CANVAS_LAYOUT_ORIGIN = 16;
 export const COLUMN_GRID_GAP = 4;
 export const COLUMN_MIN_COLS = 2;
 export const COLUMN_INNER_PAD = 8;
 export const COLUMN_HEADER_APPROX_H = 40;
 export const CANVAS_COL_GAP = 8;
+
+export const INSET_BASE_PX = 14;
+export const PADDING_STEPS_PX = [2, 5, 8, 11, 14, 15, 17];
+export const FIXED_PADDING_STEP = 1;
 
 export const LEGACY_RECT_METRICS = {
     cellW: 96,
@@ -23,35 +32,36 @@ export const LEGACY_RECT_METRICS = {
 };
 
 const GRID_LAYOUT_KEY = 'matrix_grid_layout';
+const FREEFORM_POSITIONS_KEY = 'matrix_freeform_positions';
+const FREEFORM_SIZES_KEY = 'matrix_freeform_sizes';
+const OBSOLETE_KEYS = [
+    'matrix_tile_small_footprint',
+    'matrix_grid_fineness',
+    'matrix_board_padding'
+];
 
-function clampStep(step) {
+function clampStep(step, fallback = FIXED_FINENESS_STEP) {
     const n = Number(step);
-    if (!Number.isFinite(n)) return DEFAULT_FINENESS_STEP;
+    if (!Number.isFinite(n)) return fallback;
     return Math.max(1, Math.min(FINENESS_STEPS.length, Math.round(n)));
 }
 
-export function readGridFinenessStep() {
-    try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw == null) return null;
-        return clampStep(parseInt(raw, 10));
-    } catch {
-        return null;
-    }
+function clampPaddingStep(step, fallback = FIXED_PADDING_STEP) {
+    const n = Number(step);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(1, Math.min(PADDING_STEPS_PX.length, Math.round(n)));
 }
 
-export function writeGridFinenessStep(step) {
-    const next = clampStep(step);
-    try {
-        localStorage.setItem(STORAGE_KEY, String(next));
-    } catch {
-        /* ignore */
-    }
-    return next;
+export function getBoardPaddingScale(paddingStep = FIXED_PADDING_STEP) {
+    const index = clampPaddingStep(paddingStep) - 1;
+    return PADDING_STEPS_PX[index] / INSET_BASE_PX;
 }
 
-export function isGridFinenessCustomized(step = readGridFinenessStep()) {
-    return step != null && step !== DEFAULT_FINENESS_STEP;
+export function applyBoardPadding() {
+    document.documentElement.style.setProperty(
+        '--board-padding-scale',
+        String(getBoardPaddingScale())
+    );
 }
 
 export function getCanvasColGap() {
@@ -59,10 +69,13 @@ export function getCanvasColGap() {
     return Math.max(2, Math.round(CANVAS_COL_GAP * scale));
 }
 
-export function getGridMetrics(step = readGridFinenessStep() ?? DEFAULT_FINENESS_STEP) {
-    const index = clampStep(step) - 1;
+export function getGridMetrics(
+    finenessStep = FIXED_FINENESS_STEP,
+    paddingStep = FIXED_PADDING_STEP
+) {
+    const index = clampStep(finenessStep) - 1;
     const cellS = FINENESS_STEPS[index];
-    const scale = getBoardPaddingScale();
+    const scale = getBoardPaddingScale(paddingStep);
     const gap = Math.max(0, Math.round(COLUMN_GRID_GAP * scale));
     const stride = cellS + gap;
     const edgePad = Math.max(1, Math.round((cellS / 8) * scale));
@@ -104,8 +117,11 @@ export function spanToCellsH(span, metrics = getGridMetrics()) {
     return Math.max(1, Math.round((span + metrics.gap) / metrics.strideY));
 }
 
-export function getScaledFootprintRects(step = readGridFinenessStep() ?? DEFAULT_FINENESS_STEP) {
-    const { cellS } = getGridMetrics(step);
+export function getScaledFootprintRects(
+    finenessStep = FIXED_FINENESS_STEP,
+    paddingStep = FIXED_PADDING_STEP
+) {
+    const { cellS } = getGridMetrics(finenessStep, paddingStep);
     const labelH = Math.max(20, Math.round(28 * cellS / 56));
     return {
         label: { w: cellS * 2, h: labelH },
@@ -154,7 +170,7 @@ export function migrateRectEntryToSquare(entry) {
         ({ wCells, hCells } = remapLegacyLargeCells(wCells, hCells));
     }
 
-    const metrics = getGridMetrics(DEFAULT_FINENESS_STEP);
+    const metrics = getGridMetrics(LEGACY_MIGRATION_TARGET_STEP, PREVIOUS_DEFAULT_PADDING_STEP);
     const next = {
         w: cellsToSpanW(wCells, metrics),
         h: cellsToSpanH(hCells, metrics)
@@ -181,10 +197,150 @@ export function migrateRectEntryToSquare(entry) {
     return next;
 }
 
+function readJson(key, fallback = {}) {
+    try {
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+function writeJsonIfChanged(key, next, prev) {
+    if (JSON.stringify(next) === JSON.stringify(prev)) return false;
+    try {
+        localStorage.setItem(key, JSON.stringify(next));
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function isAtAnySmallFootprintSize(w, h) {
+    const rects = getScaledFootprintRects(PREVIOUS_DEFAULT_FINENESS_STEP, PREVIOUS_DEFAULT_PADDING_STEP);
+    return ['label', 'card', 'wide'].some((tier) => {
+        const r = rects[tier];
+        return w <= r.w + 2 && h <= r.h + 2;
+    });
+}
+
+export function remapLayoutRect(rect, prevMetrics, nextMetrics) {
+    if (!rect || !Number.isFinite(rect.w) || !Number.isFinite(rect.h)) return rect;
+    const wCells = Math.max(1, Math.round((rect.w + prevMetrics.gap) / prevMetrics.strideX));
+    const hCells = Math.max(1, Math.round((rect.h + prevMetrics.gap) / prevMetrics.strideY));
+    const next = {
+        w: cellsToSpanW(wCells, nextMetrics),
+        h: cellsToSpanH(hCells, nextMetrics)
+    };
+    if (Number.isFinite(rect.x) && Number.isFinite(rect.y)) {
+        const xCells = Math.round((rect.x - prevMetrics.origin) / prevMetrics.strideX);
+        const yCells = Math.round((rect.y - prevMetrics.origin) / prevMetrics.strideY);
+        next.x = nextMetrics.origin + xCells * nextMetrics.strideX;
+        next.y = nextMetrics.origin + yCells * nextMetrics.strideY;
+    }
+    if (Number.isFinite(rect.rememberedW) && Number.isFinite(rect.rememberedH)) {
+        const rwCells = Math.max(1, Math.round((rect.rememberedW + prevMetrics.gap) / prevMetrics.strideX));
+        const rhCells = Math.max(1, Math.round((rect.rememberedH + prevMetrics.gap) / prevMetrics.strideY));
+        next.rememberedW = cellsToSpanW(rwCells, nextMetrics);
+        next.rememberedH = cellsToSpanH(rhCells, nextMetrics);
+    }
+    return next;
+}
+
+function snapSmallRectToLabel(rect, nextMetrics) {
+    if (!rect || !Number.isFinite(rect.w) || !Number.isFinite(rect.h)) return rect;
+    const label = getScaledFootprintRects().label;
+    const next = { ...rect };
+    if (isAtAnySmallFootprintSize(rect.w, rect.h)) {
+        next.w = label.w;
+        next.h = label.h;
+    }
+    if (Number.isFinite(rect.rememberedW) && Number.isFinite(rect.rememberedH)
+        && isAtAnySmallFootprintSize(rect.rememberedW, rect.rememberedH)) {
+        delete next.rememberedW;
+        delete next.rememberedH;
+    }
+    return next;
+}
+
+export function migrateCompactDefaultsIfNeeded() {
+    try {
+        if (localStorage.getItem(COMPACT_MIGRATION_FLAG) === '1') return false;
+    } catch {
+        return false;
+    }
+
+    const prevMetrics = getGridMetrics(PREVIOUS_DEFAULT_FINENESS_STEP, PREVIOUS_DEFAULT_PADDING_STEP);
+    const nextMetrics = getGridMetrics();
+    let changed = false;
+
+    const grid = readJson(GRID_LAYOUT_KEY);
+    const gridNext = {};
+    Object.keys(grid).forEach((id) => {
+        let entry = remapLayoutRect(grid[id], prevMetrics, nextMetrics);
+        entry = snapSmallRectToLabel(entry, nextMetrics);
+        gridNext[id] = entry;
+        if (JSON.stringify(entry) !== JSON.stringify(grid[id])) changed = true;
+    });
+    if (changed) writeJsonIfChanged(GRID_LAYOUT_KEY, gridNext, grid);
+
+    const positions = readJson(FREEFORM_POSITIONS_KEY);
+    const positionsNext = {};
+    Object.keys(positions).forEach((id) => {
+        const entry = positions[id];
+        if (!entry || typeof entry !== 'object') {
+            positionsNext[id] = entry;
+            return;
+        }
+        const x = Number(entry.x);
+        const y = Number(entry.y);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+            positionsNext[id] = entry;
+            return;
+        }
+        const xCells = Math.round((x - prevMetrics.origin) / prevMetrics.strideX);
+        const yCells = Math.round((y - prevMetrics.origin) / prevMetrics.strideY);
+        const next = {
+            ...entry,
+            x: nextMetrics.origin + xCells * nextMetrics.strideX,
+            y: nextMetrics.origin + yCells * nextMetrics.strideY
+        };
+        positionsNext[id] = next;
+        if (JSON.stringify(next) !== JSON.stringify(entry)) changed = true;
+    });
+    if (Object.keys(positionsNext).length) {
+        changed = writeJsonIfChanged(FREEFORM_POSITIONS_KEY, positionsNext, positions) || changed;
+    }
+
+    const sizes = readJson(FREEFORM_SIZES_KEY);
+    const sizesNext = {};
+    Object.keys(sizes).forEach((id) => {
+        let entry = remapLayoutRect(sizes[id], prevMetrics, nextMetrics);
+        entry = snapSmallRectToLabel(entry, nextMetrics);
+        sizesNext[id] = entry;
+        if (JSON.stringify(entry) !== JSON.stringify(sizes[id])) changed = true;
+    });
+    if (Object.keys(sizesNext).length) {
+        changed = writeJsonIfChanged(FREEFORM_SIZES_KEY, sizesNext, sizes) || changed;
+    }
+
+    OBSOLETE_KEYS.forEach((key) => {
+        try {
+            localStorage.removeItem(key);
+        } catch { /* ignore */ }
+    });
+
+    try {
+        localStorage.setItem(COMPACT_MIGRATION_FLAG, '1');
+    } catch { /* ignore */ }
+
+    return changed;
+}
+
 export function migrateLegacyGridLayoutIfNeeded() {
     try {
         if (localStorage.getItem(LEGACY_MIGRATION_FLAG) === '1') return false;
-        if (readGridFinenessStep() != null) {
+        if (localStorage.getItem('matrix_grid_fineness') != null) {
             localStorage.setItem(LEGACY_MIGRATION_FLAG, '1');
             return false;
         }
@@ -207,7 +363,6 @@ export function migrateLegacyGridLayoutIfNeeded() {
                 localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(next));
             }
         }
-        writeGridFinenessStep(DEFAULT_FINENESS_STEP);
         localStorage.setItem(LEGACY_MIGRATION_FLAG, '1');
         return changed;
     } catch {
@@ -215,9 +370,9 @@ export function migrateLegacyGridLayoutIfNeeded() {
     }
 }
 
-export function applyGridFineness(step = readGridFinenessStep() ?? DEFAULT_FINENESS_STEP) {
-    const metrics = getGridMetrics(step);
-    const footprints = getScaledFootprintRects(step);
+export function applyGridFineness() {
+    const metrics = getGridMetrics();
+    const footprints = getScaledFootprintRects();
     const largeW = cellsToSpanW(3, metrics);
     const largeH = cellsToSpanH(4, metrics);
     const root = document.documentElement;
@@ -248,40 +403,7 @@ export function applyGridFineness(step = readGridFinenessStep() ?? DEFAULT_FINEN
     return metrics;
 }
 
-export const GridFineness = {
-    FINENESS_STEPS,
-    DEFAULT_FINENESS_STEP,
-    STEP_MIN: 1,
-    STEP_MAX: FINENESS_STEPS.length,
-
-    getStep() {
-        return readGridFinenessStep() ?? DEFAULT_FINENESS_STEP;
-    },
-
-    getCellLabel(step = this.getStep()) {
-        const { cellS } = getGridMetrics(step);
-        return `${cellS}px`;
-    },
-
-    setStep(step) {
-        const prev = getGridMetrics();
-        const nextStep = writeGridFinenessStep(step);
-        const next = applyGridFineness(nextStep);
-        window.dispatchEvent(new CustomEvent('appearance:grid_fineness_changed', {
-            detail: { step: nextStep, prevMetrics: prev, nextMetrics: next }
-        }));
-        return nextStep;
-    },
-
-    step(delta) {
-        return this.setStep(this.getStep() + delta);
-    },
-
-    apply() {
-        return applyGridFineness(this.getStep());
-    },
-
-    isCustomized() {
-        return isGridFinenessCustomized();
-    }
-};
+export function initGridMetrics() {
+    applyBoardPadding();
+    return applyGridFineness();
+}

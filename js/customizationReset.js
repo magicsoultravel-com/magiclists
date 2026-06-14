@@ -5,9 +5,8 @@ import { ChromeBackground } from './chromeBackground.js';
 import { ClockStyle } from './clockStyle.js';
 import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
-import { applyTileSmallFootprint, writeTileSmallFootprint } from './tileFootprint.js';
-import { GridFineness } from './gridDensity.js';
-import { BoardPadding } from './boardPadding.js';
+import { applyTileSmallFootprint } from './tileFootprint.js';
+import { initGridMetrics } from './gridDensity.js';
 
 const CUSTOMIZATION_KEYS = [
     'matrix_app_theme',
@@ -63,10 +62,8 @@ export function resetCustomizationToDefaults() {
 
     DesktopZoom.setScale(1);
     NoteFontScale.setScale(1);
-    BoardPadding.apply();
-    writeTileSmallFootprint('card');
-    GridFineness.setStep(GridFineness.DEFAULT_FINENESS_STEP);
-    applyTileSmallFootprint('card');
+    initGridMetrics();
+    applyTileSmallFootprint();
 
     window.dispatchEvent(new CustomEvent('customization:reset'));
     return true;
