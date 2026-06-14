@@ -24,7 +24,10 @@ export function getFileCabinetDragMinHeight() {
 const FOLD_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3 7l3-3 3 3" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const EXPAND_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3 5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
-export const FILE_CABINET_TAB_WIDTH = 160;
+function collapsedTabWidth() {
+    return getLabelRect().w;
+}
+
 export const FILE_CABINET_STACK_OFFSET_Y = 18;
 export const FILE_CABINET_STACK_OFFSET_X = 10;
 const FILE_CABINET_CATEGORY_HEADER_PAD = 20;
@@ -435,7 +438,8 @@ function updateStackPreviewDimensions(stackEl, slotCount, { minSlotCount = 0 } =
     if (!stackEl) return;
     const label = getLabelRect();
     const count = Math.max(slotCount, minSlotCount, 1);
-    const stackWidth = FILE_CABINET_TAB_WIDTH + (count - 1) * FILE_CABINET_STACK_OFFSET_X;
+    const tabW = collapsedTabWidth();
+    const stackWidth = tabW + (count - 1) * FILE_CABINET_STACK_OFFSET_X;
     const stackHeight = label.h + (count - 1) * FILE_CABINET_STACK_OFFSET_Y;
     stackEl.style.width = `${stackWidth}px`;
     stackEl.style.height = `${Math.max(stackHeight, label.h)}px`;
@@ -463,7 +467,7 @@ function applyStackPreviewPositions(stackEl, { draggedId, insertIndex = null, se
         tab.style.position = 'absolute';
         tab.style.left = `${visualIndex * FILE_CABINET_STACK_OFFSET_X}px`;
         tab.style.top = `${visualIndex * FILE_CABINET_STACK_OFFSET_Y}px`;
-        tab.style.width = `${FILE_CABINET_TAB_WIDTH}px`;
+        tab.style.width = `${collapsedTabWidth()}px`;
         tab.style.height = `${label.h}px`;
         tab.style.zIndex = String(visualIndex + 1);
         tab.classList.toggle('layout-settling', settling);
@@ -563,9 +567,10 @@ export function applyFileCabinetStackPositions(stackEl) {
     const tabs = [...stackEl.querySelectorAll('.file-cabinet-tab')];
     const label = getLabelRect();
     const count = tabs.length;
+    const tabW = collapsedTabWidth();
     const stackWidth = count > 0
-        ? FILE_CABINET_TAB_WIDTH + (count - 1) * FILE_CABINET_STACK_OFFSET_X
-        : FILE_CABINET_TAB_WIDTH;
+        ? tabW + (count - 1) * FILE_CABINET_STACK_OFFSET_X
+        : tabW;
     const stackHeight = count > 0
         ? label.h + (count - 1) * FILE_CABINET_STACK_OFFSET_Y
         : label.h;
@@ -593,7 +598,7 @@ export function applyFileCabinetStackPositions(stackEl) {
         card.style.position = 'absolute';
         card.style.left = `${layoutIndex * FILE_CABINET_STACK_OFFSET_X}px`;
         card.style.top = `${layoutIndex * FILE_CABINET_STACK_OFFSET_Y}px`;
-        card.style.width = `${FILE_CABINET_TAB_WIDTH}px`;
+        card.style.width = `${collapsedTabWidth()}px`;
         card.style.height = `${label.h}px`;
         card.style.zIndex = String(layoutIndex + 1);
         card.dataset.fileCabinetStackIndex = String(layoutIndex);

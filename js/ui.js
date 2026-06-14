@@ -82,9 +82,7 @@ import {
     getSmallRect,
     getLargeDefaultRect,
     isCustomTileRect as geoIsCustomTileRect,
-    isAtSmallSize,
-    matchesSmallFootprintRect,
-    getPackStrideY,
+    isCollapsedSpatialSize,
     getPackStrideYForRect,
     getGridSnapMinH,
     resolveExpandedDefaultRect as geoResolveExpandedDefaultRect,
@@ -1190,7 +1188,7 @@ export const UI = {
 
         let rw = rememberedW;
         let rh = rememberedH;
-        if (updateRemembered && !this.isAtCurrentSmallSize(entry.w, entry.h)) {
+        if (updateRemembered && !isCollapsedSpatialSize(entry.w, entry.h, tileSize)) {
             rw = entry.w;
             rh = entry.h;
         }
@@ -1198,24 +1196,22 @@ export const UI = {
             rw = prev?.rememberedW;
             rh = prev?.rememberedH;
         }
-        if (Number.isFinite(rw) && Number.isFinite(rh) && !this.isAtCurrentSmallSize(rw, rh)) {
+        if (Number.isFinite(rw) && Number.isFinite(rh) && !isCollapsedSpatialSize(rw, rh, tileSize)) {
             const mem = geoClampSpatialSize(rw, rh, tileSize);
             entry.rememberedW = Math.round(mem.w);
             entry.rememberedH = Math.round(mem.h);
         }
-        if (this.isAtCurrentSmallSize(entry.w, entry.h)) {
+        if (isCollapsedSpatialSize(entry.w, entry.h, tileSize)) {
             const small = getSmallRect(readTileSmallFootprint());
             entry.w = small.w;
             entry.h = small.h;
-            delete entry.rememberedW;
-            delete entry.rememberedH;
         }
         return entry;
     },
 
     persistRememberedSpatialSize(itemId, w, h, tileSize = LEGACY_TILE_SIZE) {
         if (!itemId || !Number.isFinite(w) || !Number.isFinite(h)) return;
-        if (this.isAtCurrentSmallSize(w, h)) return;
+        if (isCollapsedSpatialSize(w, h, tileSize)) return;
         const clamped = geoClampSpatialSize(w, h, tileSize);
         if (isSnapLayoutMode(activeBoardViewMode)) {
             const layout = this.getGridLayout();
@@ -1286,20 +1282,18 @@ export const UI = {
         card.classList.add(size === 'small' ? 'tile-small' : 'tile-large');
     },
 
-    isAtCurrentSmallSize(w, h) {
-        return isAtSmallSize(w, h, readTileSmallFootprint());
-    },
-
     isSpatiallyCollapsed(card) {
         if (!card) return true;
         const { w, h } = this.readNoteRect(card);
-        return this.isAtCurrentSmallSize(w, h);
+        const item = this.resolveBoardItem(card?.dataset?.id);
+        return isCollapsedSpatialSize(w, h, resolveTileSize(item));
     },
 
     isSavedLayoutExpanded(itemId, footprint = readTileSmallFootprint()) {
         const saved = this.getGridLayout()[itemId];
         if (!saved || !Number.isFinite(saved.w) || !Number.isFinite(saved.h)) return false;
-        return !isAtSmallSize(saved.w, saved.h, footprint);
+        const item = this.resolveBoardItem(itemId);
+        return !isCollapsedSpatialSize(saved.w, saved.h, resolveTileSize(item), footprint);
     },
 
     syncSpatialCollapseState(card, item, w, h) {
@@ -1507,7 +1501,7 @@ export const UI = {
     saveTileLayoutFromCard(card, item, rect, tileSize) {
         const id = item?.id || card.dataset.id;
         if (!id || !isDesktopCard(card)) return;
-        const updateRemembered = !this.isAtCurrentSmallSize(rect.w, rect.h);
+        const updateRemembered = !isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(item));
         if (isSnapLayoutMode(activeBoardViewMode)) {
             this.saveGridLayout(id, rect, { updateRemembered });
         } else {
@@ -1523,7 +1517,7 @@ export const UI = {
     },
 
     commitSpatialRect(card, item, rect, ctx = {}) {
-        const tier = ctx.tier ?? (this.isAtCurrentSmallSize(rect.w, rect.h) ? 'small' : 'large');
+        const tier = ctx.tier ?? (isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(item)) ? 'small' : 'large');
         const normalizedTier = normalizeTileSize(tier);
 
         if (this.canEditInline() && normalizedTier !== resolveTileSize(item)) {
@@ -1648,9 +1642,7 @@ export const UI = {
             const item = this.resolveBoardItem(card.dataset.id);
             if (!item) return;
             const rect = this.readNoteRect(card);
-            const wasSmall = isAtSmallSize(rect.w, rect.h, 'label')
-                || isAtSmallSize(rect.w, rect.h, 'card')
-                || isAtSmallSize(rect.w, rect.h, 'wide')
+            const wasSmall = isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(item))
                 || resolveTileSize(item) === 'small';
             if (!wasSmall) return;
             const next = { x: rect.x, y: rect.y, w: smallRect.w, h: smallRect.h };
@@ -1969,7 +1961,7 @@ export const UI = {
             expandTitle = 'Show on board';
             lastIcon = CARD_ICONS.collapse;
         } else if (spatialTile) {
-            const atSmall = isAtSmallSize(tileW, tileH, readTileSmallFootprint());
+            const atSmall = isCollapsedSpatialSize(tileW, tileH, tileSize);
             if (isFileCabinetActive()) {
                 const labels = getFileCabinetToggleLabels(atSmall, atSmall);
                 expandTitle = labels.title;
@@ -2452,7 +2444,7 @@ export const UI = {
         let h;
         if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
             const footprint = readTileSmallFootprint();
-            if (isAtSmallSize(saved.w, saved.h, footprint)) {
+            if (isCollapsedSpatialSize(saved.w, saved.h, tileSize)) {
                 const small = getSmallRect(footprint);
                 w = small.w;
                 h = small.h;
@@ -4752,7 +4744,7 @@ export const UI = {
         if (!isDesktopCard(card)) return;
         const { w, h } = this.readFreeformCardSize(card);
         this.saveFreeformSize(card.dataset.id, w, h, {
-            updateRemembered: !isAtSmallSize(w, h, readTileSmallFootprint())
+            updateRemembered: !isCollapsedSpatialSize(w, h, resolveTileSize(this.resolveBoardItem(card.dataset.id)))
         });
     },
 
@@ -4809,7 +4801,7 @@ export const UI = {
                     && gridSaved
                     && Number.isFinite(gridSaved.x)
                     && Number.isFinite(gridSaved.y)
-                    && isAtSmallSize(gridSaved.w, gridSaved.h, footprint)
+                    && isCollapsedSpatialSize(gridSaved.w, gridSaved.h, resolveTileSize(item))
                 ) {
                     this.saveCompactBoardLayout(item.id, {
                         x: gridSaved.x,
@@ -4825,7 +4817,7 @@ export const UI = {
                     if (gridSaved) {
                         let w = gridSaved.w;
                         let h = gridSaved.h;
-                        if (isAtSmallSize(w, h, footprint)) {
+                        if (isCollapsedSpatialSize(w, h, resolveTileSize(item))) {
                             w = small.w;
                             h = small.h;
                         }
@@ -4837,7 +4829,7 @@ export const UI = {
                             { w, h },
                             resolveTileSize(item),
                             {
-                                updateRemembered: !isAtSmallSize(w, h, footprint),
+                                updateRemembered: !isCollapsedSpatialSize(w, h, resolveTileSize(item)),
                                 rememberedW: gridSaved.rememberedW,
                                 rememberedH: gridSaved.rememberedH
                             }
@@ -4857,7 +4849,7 @@ export const UI = {
                     w = size.w;
                     h = size.h;
                 }
-                if (isAtSmallSize(w, h, footprint)) {
+                if (isCollapsedSpatialSize(w, h, resolveTileSize(item))) {
                     w = small.w;
                     h = small.h;
                 }
@@ -4871,7 +4863,7 @@ export const UI = {
                     { w, h },
                     resolveTileSize(item),
                     {
-                        updateRemembered: !isAtSmallSize(w, h, footprint),
+                        updateRemembered: !isCollapsedSpatialSize(w, h, resolveTileSize(item)),
                         rememberedW: gridSaved?.rememberedW ?? prev.rememberedW,
                         rememberedH: gridSaved?.rememberedH ?? prev.rememberedH
                     }
@@ -4899,7 +4891,7 @@ export const UI = {
                     && freePos
                     && Number.isFinite(freePos.x)
                     && Number.isFinite(freePos.y)
-                    && isAtSmallSize(freeSaved.w, freeSaved.h, footprint)
+                    && isCollapsedSpatialSize(freeSaved.w, freeSaved.h, resolveTileSize(item))
                 ) {
                     const slot = this.snapNoteRect(
                         { x: freePos.x, y: freePos.y, w: small.w, h: small.h },
@@ -4978,7 +4970,7 @@ export const UI = {
                     rect,
                     resolveTileSize(item),
                     {
-                        updateRemembered: !isAtSmallSize(rect.w, rect.h, readTileSmallFootprint()),
+                        updateRemembered: !isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(item)),
                         rememberedW: freeSaved?.rememberedW ?? gridPrev.rememberedW,
                         rememberedH: freeSaved?.rememberedH ?? gridPrev.rememberedH
                     }
@@ -5252,7 +5244,7 @@ export const UI = {
         if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
             const tileSize = this.getCardTileSize(card, item);
             const footprint = readTileSmallFootprint();
-            if (isAtSmallSize(saved.w, saved.h, footprint)) {
+            if (isCollapsedSpatialSize(saved.w, saved.h, tileSize)) {
                 const small = getSmallRect(footprint);
                 w = small.w;
                 h = small.h;
@@ -5280,7 +5272,7 @@ export const UI = {
         const minH = getGridSnapMinH(footprint);
         const maxCellsW = Math.max(1, this.spanToCellsW(packW || canvasGridW));
 
-        if (isAtSmallSize(w, h, footprint)) {
+        if (isCollapsedSpatialSize(w, h)) {
             const small = getSmallRect(footprint);
             let wCells = Math.max(1, this.spanToCellsW(Math.max(minW, small.w)));
             wCells = Math.min(wCells, maxCellsW);
@@ -5524,7 +5516,7 @@ export const UI = {
 
         const rectForSqueeze = (card, isExpanded) => {
             let rect = this.gridBoardRectForCard(card, this.readNoteRect(card), isExpanded);
-            if (footprintPack && this.isAtCurrentSmallSize(rect.w, rect.h)) {
+            if (footprintPack && isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(this.resolveBoardItem(card?.dataset?.id)))) {
                 const small = getSmallRect(readTileSmallFootprint());
                 rect = { ...rect, w: small.w, h: small.h };
             }
@@ -5758,7 +5750,7 @@ export const UI = {
         const footprint = readTileSmallFootprint();
         const w = Math.max(FREEFORM_MIN_W, Math.round(rect.w));
         const h = Math.max(FREEFORM_MIN_H, Math.round(rect.h));
-        const atSmall = isAtSmallSize(w, h, footprint);
+        const atSmall = isCollapsedSpatialSize(w, h);
         const yStride = atSmall ? getPackStrideYForRect(w, h, footprint) : metrics.strideY;
         let x = this.snapGridCoord(rect.x, metrics.strideX);
         let y = atSmall
@@ -5787,7 +5779,7 @@ export const UI = {
         const metrics = getGridMetrics();
         const pad = edgePad ?? metrics.edgePad;
         const footprint = readTileSmallFootprint();
-        if (matchesSmallFootprintRect(rect.w, rect.h, footprint) || isAtSmallSize(rect.w, rect.h, footprint)) {
+        if (isCollapsedSpatialSize(rect.w, rect.h)) {
             const small = getSmallRect(footprint);
             const yStride = getPackStrideYForRect(small.w, small.h, footprint);
             const snapped = {

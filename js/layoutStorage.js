@@ -10,7 +10,7 @@ import {
     getLabelRect,
     getSmallRect,
     getTileDefaultRect,
-    isAtSmallSize,
+    isCollapsedSpatialSize,
     LEGACY_TILE_SIZE,
     normalizeTileSize,
     readRememberedSize,
@@ -267,12 +267,10 @@ function migrateSpatialLayoutEntry(saved, tileSize) {
         delete entry.rememberedH;
     }
 
-    if (isAtSmallSize(entry.w, entry.h, readTileSmallFootprint())) {
+    if (isCollapsedSpatialSize(entry.w, entry.h, tier)) {
         const small = getSmallRect(readTileSmallFootprint());
         entry.w = small.w;
         entry.h = small.h;
-        delete entry.rememberedW;
-        delete entry.rememberedH;
     }
 
     return entry;
@@ -492,7 +490,7 @@ export function normalizeSavedCardRect(saved, tileSize) {
         changed = true;
     }
 
-    if (isAtSmallSize(w, h, readTileSmallFootprint())) {
+    if (isCollapsedSpatialSize(w, h, tier)) {
         if (w !== small.w || h !== small.h) {
             w = small.w;
             h = small.h;
@@ -514,7 +512,7 @@ export function normalizeSavedCardRect(saved, tileSize) {
         const mem = clampSpatialSize(rw, rh, tier);
         rw = mem.w;
         rh = mem.h;
-        if (isAtSmallSize(rw, rh, readTileSmallFootprint())) {
+        if (isCollapsedSpatialSize(rw, rh, tier)) {
             rw = undefined;
             rh = undefined;
             changed = true;
@@ -539,7 +537,7 @@ export function normalizeSavedCardRect(saved, tileSize) {
         entry.x = Math.round(x);
         entry.y = Math.round(y);
     }
-    if (Number.isFinite(rw) && Number.isFinite(rh) && !isAtSmallSize(rw, rh, readTileSmallFootprint())) {
+    if (Number.isFinite(rw) && Number.isFinite(rh) && !isCollapsedSpatialSize(rw, rh, tier)) {
         entry.rememberedW = Math.round(rw);
         entry.rememberedH = Math.round(rh);
     }

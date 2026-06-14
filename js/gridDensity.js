@@ -121,10 +121,11 @@ export function getScaledFootprintRects(
     finenessStep = FIXED_FINENESS_STEP,
     paddingStep = FIXED_PADDING_STEP
 ) {
-    const { cellS } = getGridMetrics(finenessStep, paddingStep);
+    const metrics = getGridMetrics(finenessStep, paddingStep);
+    const { cellS } = metrics;
     const labelH = Math.max(20, Math.round(28 * cellS / 56));
     return {
-        label: { w: cellS * 2, h: labelH },
+        label: { w: cellsToSpanW(2, metrics), h: labelH },
         card: { w: cellS * 2, h: cellS },
         wide: {
             w: Math.round(128 * cellS / 56),

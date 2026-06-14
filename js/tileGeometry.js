@@ -95,6 +95,19 @@ export function getLabelRect() {
     return getSmallFootprintRect('label');
 }
 
+export function getCollapsedFootprintRect() {
+    return getLabelRect();
+}
+
+export function isCollapsedSpatialSize(
+    w,
+    h,
+    tileSize = LEGACY_TILE_SIZE,
+    footprint = readTileSmallFootprint()
+) {
+    return !isLargeRelativeToSmall(w, h, footprint, tileSize);
+}
+
 export function getTileDefaultRect(tileSize, footprint = readTileSmallFootprint()) {
     const size = normalizeTileSize(tileSize);
     if (size === 'small') return getSmallRect(footprint);

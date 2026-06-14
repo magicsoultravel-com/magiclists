@@ -15,9 +15,6 @@ export function applyTileSmallFootprint() {
     return DEFAULT_TILE_SMALL_FOOTPRINT;
 }
 
-export function getSmallFootprintRect(footprint = DEFAULT_TILE_SMALL_FOOTPRINT) {
-    const rects = getScaledFootprintRects();
-    if (footprint === 'card') return { ...rects.card };
-    if (footprint === 'wide') return { ...rects.wide };
-    return { ...rects.label };
+export function getSmallFootprintRect(_footprint = DEFAULT_TILE_SMALL_FOOTPRINT) {
+    return { ...getScaledFootprintRects().label };
 }
