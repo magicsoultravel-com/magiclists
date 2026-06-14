@@ -480,6 +480,9 @@ body {
 
 .file-cabinet[data-fixed-height="true"] {
     max-height: none;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .file-cabinet.is-rollout-active {
@@ -498,11 +501,24 @@ body {
     flex-direction: row;
     align-items: flex-start;
     gap: 0.55rem;
-    min-width: min-content;
-    overflow: visible;
-    transform: scale(var(--file-cabinet-ui-scale, 1));
-    transform-origin: top left;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: auto;
+    zoom: var(--file-cabinet-ui-scale, 1);
     width: calc(100% / var(--file-cabinet-ui-scale, 1));
+}
+
+.file-cabinet[data-fixed-height="true"] .file-cabinet-inner {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+@supports not (zoom: 1) {
+    .file-cabinet-inner {
+        zoom: unset;
+        transform: scale(var(--file-cabinet-ui-scale, 1));
+        transform-origin: top left;
+    }
 }
 
 .file-cabinet-filed-rail {

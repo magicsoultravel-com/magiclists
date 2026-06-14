@@ -97,6 +97,27 @@ function applyCabinetUiScale(mount, height) {
     const scale = cabinetScaleForHeight(effectiveHeight, mount);
     mount.style.setProperty('--file-cabinet-ui-scale', String(scale));
     syncFileCabinetDrawerHeight(mount);
+    syncCabinetInnerLayout(mount);
+}
+
+function syncCabinetInnerLayout(mount) {
+    const inner = mount?.querySelector('.file-cabinet-inner');
+    if (!inner) return;
+    const scale = parseFloat(mount.style.getPropertyValue('--file-cabinet-ui-scale')) || 1;
+    if (typeof CSS !== 'undefined' && CSS.supports('zoom', '1')) {
+        inner.style.marginRight = '';
+        inner.style.marginBottom = '';
+        return;
+    }
+    if (Math.abs(scale - 1) < 0.001) {
+        inner.style.marginRight = '';
+        inner.style.marginBottom = '';
+        return;
+    }
+    const w = inner.offsetWidth;
+    const h = inner.offsetHeight;
+    inner.style.marginRight = `${w * (scale - 1)}px`;
+    inner.style.marginBottom = `${h * (scale - 1)}px`;
 }
 
 function clearSidebarAppliedWidth() {
