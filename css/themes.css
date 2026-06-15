@@ -65,8 +65,7 @@ html[data-app-theme="monochrome"] #editor-overlay .step-text {
 html[data-app-theme="monochrome"] .mini-card .category-name,
 html[data-app-theme="monochrome"] .mini-card .editor-created-date,
 html[data-app-theme="monochrome"] .mini-card .editor-note-lines,
-html[data-app-theme="monochrome"] .mini-card .badge-dot,
-html[data-app-theme="monochrome"] .mini-card .checklist-badge {
+html[data-app-theme="monochrome"] .mini-card .badge-dot {
     color: #9ca3af !important;
     filter: grayscale(1);
 }
@@ -208,8 +207,7 @@ html[data-app-theme="matrix"]:not([data-note-font="default"]) .mini-card .step-t
 
 html[data-app-theme="matrix"] .mini-card .category-name,
 html[data-app-theme="matrix"] .mini-card .editor-created-date,
-html[data-app-theme="matrix"] .mini-card .editor-note-lines,
-html[data-app-theme="matrix"] .mini-card .checklist-badge {
+html[data-app-theme="matrix"] .mini-card .editor-note-lines {
     color: rgba(57, 255, 101, 0.55) !important;
 }
 
@@ -289,8 +287,7 @@ html[data-app-theme="casual"][data-note-font="default"] #editor-overlay .editor-
 
 html[data-app-theme="casual"] .mini-card .category-name,
 html[data-app-theme="casual"] .mini-card .editor-created-date,
-html[data-app-theme="casual"] .mini-card .editor-note-lines,
-html[data-app-theme="casual"] .mini-card .checklist-badge {
+html[data-app-theme="casual"] .mini-card .editor-note-lines {
     color: #6b8ab0 !important;
 }
 
@@ -374,8 +371,7 @@ html[data-app-theme="casual-dark"][data-note-font="default"] {
 
 html[data-app-theme="casual-dark"] .mini-card .category-name,
 html[data-app-theme="casual-dark"] .mini-card .editor-created-date,
-html[data-app-theme="casual-dark"] .mini-card .editor-note-lines,
-html[data-app-theme="casual-dark"] .mini-card .checklist-badge {
+html[data-app-theme="casual-dark"] .mini-card .editor-note-lines {
     color: #8fa8c4 !important;
 }
 
@@ -472,8 +468,7 @@ html[data-app-theme="wood"] #editor-overlay .step-text {
 
 html[data-app-theme="wood"] .mini-card .category-name,
 html[data-app-theme="wood"] .mini-card .editor-created-date,
-html[data-app-theme="wood"] .mini-card .editor-note-lines,
-html[data-app-theme="wood"] .mini-card .checklist-badge {
+html[data-app-theme="wood"] .mini-card .editor-note-lines {
     color: #8b7355 !important;
 }
 
@@ -759,8 +754,7 @@ html[data-app-theme="corkboard"] #editor-overlay .step-text {
 
 html[data-app-theme="corkboard"] .mini-card .category-name,
 html[data-app-theme="corkboard"] .mini-card .editor-created-date,
-html[data-app-theme="corkboard"] .mini-card .editor-note-lines,
-html[data-app-theme="corkboard"] .mini-card .checklist-badge {
+html[data-app-theme="corkboard"] .mini-card .editor-note-lines {
     color: #7a6a58 !important;
 }
 
@@ -955,8 +949,7 @@ html[data-app-theme="slate"] #editor-overlay .step-text {
 
 html[data-app-theme="slate"] .mini-card .category-name,
 html[data-app-theme="slate"] .mini-card .editor-created-date,
-html[data-app-theme="slate"] .mini-card .editor-note-lines,
-html[data-app-theme="slate"] .mini-card .checklist-badge {
+html[data-app-theme="slate"] .mini-card .editor-note-lines {
     color: #9aa898 !important;
 }
 
@@ -1148,8 +1141,7 @@ html[data-app-theme="library"] #editor-overlay .step-text {
 
 html[data-app-theme="library"] .mini-card .category-name,
 html[data-app-theme="library"] .mini-card .editor-created-date,
-html[data-app-theme="library"] .mini-card .editor-note-lines,
-html[data-app-theme="library"] .mini-card .checklist-badge {
+html[data-app-theme="library"] .mini-card .editor-note-lines {
     color: #7a6a58 !important;
 }
 
@@ -1343,8 +1335,7 @@ html[data-app-theme="parchment"] #editor-overlay .step-text {
 
 html[data-app-theme="parchment"] .mini-card .category-name,
 html[data-app-theme="parchment"] .mini-card .editor-created-date,
-html[data-app-theme="parchment"] .mini-card .editor-note-lines,
-html[data-app-theme="parchment"] .mini-card .checklist-badge {
+html[data-app-theme="parchment"] .mini-card .editor-note-lines {
     color: #8a7058 !important;
 }
 
@@ -1537,8 +1528,7 @@ html[data-app-theme="neon"] #editor-overlay .step-text {
 
 html[data-app-theme="neon"] .mini-card .category-name,
 html[data-app-theme="neon"] .mini-card .editor-created-date,
-html[data-app-theme="neon"] .mini-card .editor-note-lines,
-html[data-app-theme="neon"] .mini-card .checklist-badge {
+html[data-app-theme="neon"] .mini-card .editor-note-lines {
     color: #8aa0b0 !important;
 }
 
@@ -1739,8 +1729,7 @@ html[data-app-theme="miami"] #editor-overlay .step-text {
 
 html[data-app-theme="miami"] .mini-card .category-name,
 html[data-app-theme="miami"] .mini-card .editor-created-date,
-html[data-app-theme="miami"] .mini-card .editor-note-lines,
-html[data-app-theme="miami"] .mini-card .checklist-badge {
+html[data-app-theme="miami"] .mini-card .editor-note-lines {
     color: #a8a0b8 !important;
 }
 
@@ -1965,8 +1954,7 @@ html[data-app-theme="spaceship"] #editor-overlay .step-text {
 
 html[data-app-theme="spaceship"] .mini-card .category-name,
 html[data-app-theme="spaceship"] .mini-card .editor-created-date,
-html[data-app-theme="spaceship"] .mini-card .editor-note-lines,
-html[data-app-theme="spaceship"] .mini-card .checklist-badge {
+html[data-app-theme="spaceship"] .mini-card .editor-note-lines {
     color: #7a8898 !important;
 }
 
@@ -2238,8 +2226,7 @@ html[data-app-theme="night-sky"] #editor-overlay .step-text {
 
 html[data-app-theme="night-sky"] .mini-card .category-name,
 html[data-app-theme="night-sky"] .mini-card .editor-created-date,
-html[data-app-theme="night-sky"] .mini-card .editor-note-lines,
-html[data-app-theme="night-sky"] .mini-card .checklist-badge {
+html[data-app-theme="night-sky"] .mini-card .editor-note-lines {
     color: #8898b8 !important;
 }
 

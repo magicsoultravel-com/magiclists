@@ -1322,13 +1322,6 @@ html[data-tile-small-footprint="card"] #app-canvas.view-grid .mini-card[data-des
     gap: 0.35rem;
 }
 
-#checklist-rows-active,
-#checklist-rows-done {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-}
-
 .collapsable-header.is-locked-open {
     cursor: default;
 }

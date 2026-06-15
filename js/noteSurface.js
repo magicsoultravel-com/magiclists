@@ -914,7 +914,7 @@ export const NoteSurface = {
         const renderRowHtml = (step, { hasKids = false, isCollapsed = false, collapseKey = '', isDoneSection = false, treeLines = [], isBranchEnd = false } = {}) => {
             const level = getStepLevel(step);
             const collapseControl = !isDoneSection && hasKids
-                ? `<button type="button" class="step-collapse-btn" data-collapse-key="${this.escapeAttr(collapseKey)}" title="${isCollapsed ? 'Expand group' : 'Collapse group'}" aria-label="${isCollapsed ? 'Expand group' : 'Collapse group'}">${isCollapsed ? '▶' : '▼'}</button>`
+                ? `<button type="button" class="step-collapse-btn" data-collapse-key="${this.escapeAttr(collapseKey)}" title="${isCollapsed ? 'Expand group' : 'Collapse group'}" aria-label="${isCollapsed ? 'Expand group' : 'Collapse group'}">${isCollapsed ? CARD_ICONS.chevronRight : CARD_ICONS.chevronDown}</button>`
                 : '<span class="step-collapse-spacer" aria-hidden="true"></span>';
             const dragHandle = !canEdit
                 ? ''
@@ -984,7 +984,7 @@ export const NoteSurface = {
             const toggleTitle = doneCollapsed
                 ? `Show ${done.length} completed item${done.length === 1 ? '' : 's'}`
                 : 'Collapse completed items';
-            const toggleIcon = doneCollapsed ? '▶' : '▼';
+            const toggleIcon = doneCollapsed ? CARD_ICONS.chevronRight : CARD_ICONS.chevronDown;
             const toggleLabel = doneCollapsed
                 ? `Hidden items (${done.length})`
                 : 'Completed';

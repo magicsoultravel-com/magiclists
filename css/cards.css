@@ -547,7 +547,6 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 }
 
 .has-custom-bg .category-name,
-.has-custom-bg .checklist-badge,
 .has-custom-bg .editor-created-date,
 .has-custom-bg .editor-note-size,
 .has-custom-bg .editor-note-lines {
@@ -621,7 +620,6 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 
 /* Default note text (overridden inside .has-custom-bg) */
 .mini-card:not(.has-custom-bg) .category-name,
-.mini-card:not(.has-custom-bg) .checklist-badge,
 .mini-card:not(.has-custom-bg) .card-content-preview,
 .mini-card:not(.has-custom-bg) .step-row--display .step-text {
     color: var(--text-main) !important;
@@ -637,13 +635,6 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 
 .badge-dot[title] {
     cursor: help;
-}
-
-.checklist-badge {
-    font-size: calc(0.55rem * var(--note-font-scale, 1));
-    background: rgba(255, 255, 255, 0.1);
-    padding: 0.1rem 0.25rem;
-    border-radius: 3px;
 }
 
 /* Expanded Card Content - vertical layout */
@@ -686,7 +677,6 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 .checklist-toolbar .checklist-expand-collapse-all-btn {
     width: 13px;
     height: 13px;
-    min-width: 13px;
     opacity: 0.65;
 }
 
@@ -710,16 +700,7 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
     display: flex;
     flex-shrink: 0;
     align-self: stretch;
-    align-items: stretch;
     margin-right: 0.08rem;
-}
-
-.step-row-leading .step-tree-rail {
-    order: 2;
-}
-
-.step-row-leading .step-check {
-    order: 3;
 }
 
 .step-tree-line {
@@ -759,10 +740,6 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
     background: var(--card-border-subtle);
 }
 
-.expanded-checklist .step-row--done .step-text.completed {
-    opacity: 0.82;
-}
-
 .expanded-checklist .step-row--done .step-row-actions {
     align-self: center;
 }
@@ -790,20 +767,20 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 
 .checklist-done-toggle-icon {
     flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 9px;
-    font-size: 0.5rem;
-    line-height: 1;
+    height: 9px;
     color: var(--text-muted);
+}
+
+.checklist-done-toggle-icon svg {
+    display: block;
 }
 
 .checklist-done-section.is-hidden {
     display: none;
-}
-
-.checklist-rows-zone {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
 }
 
 /* Unified color picker */
