@@ -1921,6 +1921,43 @@ export const UI = {
         };
     },
 
+    packExpandedAlignGrid(canvas, expandedItems, pinnedIds, {
+        placed,
+        layout,
+        anchor,
+        bounds,
+        metrics,
+        direction = 'horizontal'
+    }) {
+        const { origin, packW, viewportBottom, edgePad } = bounds;
+        const { maxH } = this.getGridBoardBounds(canvas);
+        const snapBounds = { maxW: packW, maxH, origin, edgePad };
+        const unpinned = expandedItems.filter((item) => item?.id && !pinnedIds.has(item.id));
+        if (!unpinned.length) return;
+
+        const slots = getExpandedAlignSlots(unpinned.length, direction);
+        const region = computeAlignRegion({
+            packW,
+            startX: anchor.startX,
+            startY: anchor.startY,
+            regionW: anchor.regionW,
+            viewportBottom,
+            origin,
+            edgePad,
+            metrics
+        });
+        const rects = slotsToRegionRects(slots, region, { gap: metrics.gap });
+
+        unpinned.forEach((item, index) => {
+            const raw = rects[index];
+            if (!raw) return;
+            let slot = this.snapNoteRect(raw, snapBounds);
+            slot = this.clampNoteToBoardEdges(slot, snapBounds);
+            layout.set(item.id, slot);
+            placed.push({ ...slot });
+        });
+    },
+
     packExpandedAlignFreeform(canvas, expandedItems, pinnedIds, {
         placed,
         anchor,
@@ -1949,15 +1986,7 @@ export const UI = {
         unpinned.forEach((item, index) => {
             const raw = rects[index];
             if (!raw) return;
-            let slot = this.clampManualNoteRect(raw, { maxW: canvasW, maxH: viewportBottom });
-            if (placed.some((p) => this.rectsOverlap(slot, p, metrics.gap))) {
-                const near = this.findFreeformSortSlot(slot.w, slot.h, placed, canvasW, {
-                    startX: slot.x,
-                    startY: slot.y,
-                    direction: 'horizontal'
-                });
-                slot = { ...near, w: slot.w, h: slot.h };
-            }
+            const slot = this.clampManualNoteRect(raw, { maxW: canvasW, maxH: viewportBottom });
             this.saveFreeformPosition(item.id, slot.x, slot.y);
             this.saveFreeformSize(item.id, slot.w, slot.h, { updateRemembered: true });
             const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
@@ -2361,7 +2390,7 @@ export const UI = {
         }
 
         window.dispatchEvent(new CustomEvent('board:visibility_changed', {
-            detail: { flushLayout: false, skipGridReflow: true }
+            detail: { flushLayout: false, skipGridReflow: true, skipRender: true }
         }));
     },
 
