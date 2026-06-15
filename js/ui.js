@@ -5284,7 +5284,7 @@ export const UI = {
             { origin, edgePad, packW, yStart, metrics }
         );
 
-        if (sortPrefs.alignExpanded && unpinnedExpanded.length) {
+        if (unpinnedExpanded.length) {
             const viewport = this.getGridViewportBounds(canvas);
             this.packExpandedAlignGrid(canvas, expandedItems, pinnedIds, {
                 placed,
@@ -5299,11 +5299,9 @@ export const UI = {
                 metrics,
                 direction
             });
-        } else {
-            packGroup(expandedItems, expandedAnchor);
         }
         this.applyGridBoardLayout(canvas, layout, { animate: true, save: true });
-        if (sortPrefs.alignExpanded && unpinnedExpanded.length) {
+        if (unpinnedExpanded.length) {
             unpinnedExpanded.forEach((item) => {
                 const rect = layout.get(item.id);
                 if (rect) this.saveGridLayout(item.id, rect, { updateRemembered: true });
@@ -5370,7 +5368,17 @@ export const UI = {
         if (!unpinned.length) return;
 
         const sizes = unpinned.map((item) => this.resolveSortItemSize(item, 'freeform', true));
-        const rects = computeCascadeRects(sizes, anchor);
+        const region = computeAlignRegion({
+            packW,
+            startX: anchor.startX,
+            startY: anchor.startY,
+            regionW: anchor.regionW,
+            viewportBottom,
+            origin,
+            edgePad,
+            metrics
+        });
+        const rects = computeCascadeRects(sizes, anchor, { region });
 
         unpinned.forEach((item, index) => {
             const raw = rects[index];
@@ -5489,9 +5497,8 @@ export const UI = {
             hasExpandedGap ? collapsedRects : [],
             { origin, edgePad, packW, yStart: minCoord, metrics }
         );
-        const expandedStart = { x: expandedAnchor.startX, y: expandedAnchor.startY };
 
-        if (sortPrefs.alignExpanded && unpinnedExpanded.length) {
+        if (unpinnedExpanded.length) {
             const viewport = this.getGridViewportBounds(canvas);
             this.packExpandedAlignFreeform(canvas, expandedItems, pinnedIds, {
                 placed,
@@ -5500,8 +5507,6 @@ export const UI = {
                 metrics,
                 direction
             });
-        } else {
-            packGroup(expandedItems, expandedStart);
         }
         this.updateBoardCanvasExtents(canvas);
     },

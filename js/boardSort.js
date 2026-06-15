@@ -40,7 +40,6 @@ export function sortBoardItems(items, sortPrefs) {
 
 function buildMenuItems(prefs, viewMode = 'grid') {
     const isFreeform = viewMode === 'freeform';
-    const cascadeOn = prefs.cascade === true;
     return [
         { heading: 'Direction' },
         { id: 'dir:horizontal', label: 'Horizontally', selected: prefs.direction === 'horizontal' },
@@ -57,15 +56,6 @@ function buildMenuItems(prefs, viewMode = 'grid') {
         { id: 'order:desc', label: 'Descending', selected: prefs.dir === 'desc' },
         { divider: true },
         { heading: 'Expanded layout' },
-        {
-            checkbox: true,
-            id: 'alignExpanded',
-            inputId: 'board-sort-align-expanded',
-            label: 'Align expanded',
-            hint: 'Expanded notes fill space below collapsed (3-note row/column follows direction)',
-            checked: prefs.alignExpanded === true,
-            disabled: isFreeform && cascadeOn
-        },
         {
             checkbox: true,
             id: 'cascade',
@@ -120,17 +110,6 @@ export const BoardSort = {
         }
     },
 
-    toggleAlignExpanded(checked) {
-        const prefs = readBoardSort();
-        prefs.alignExpanded = !!checked;
-        writeBoardSort(prefs);
-        this.ctx?.onSort?.(prefs);
-        this.syncButtonState();
-        if (DrawingToolbarMenu.isOpen()) {
-            DrawingToolbarMenu.setItems(buildMenuItems(prefs, this.getViewMode()));
-        }
-    },
-
     toggleCascade(checked) {
         if (this.getViewMode() !== 'freeform') return;
         const prefs = readBoardSort();
@@ -149,7 +128,7 @@ export const BoardSort = {
         this.triggerBtn.classList.toggle('is-active', isBoardSortCustomized(prefs));
         const dirLabel = prefs.direction === 'vertical' ? 'vertically' : 'horizontally';
         const orderLabel = prefs.dir === 'asc' ? 'ascending' : 'descending';
-        const layoutSuffix = prefs.cascade ? ', cascade' : (prefs.alignExpanded ? ', align expanded' : '');
+        const layoutSuffix = prefs.cascade ? ', cascade' : '';
         const title = `Sort board (${sortFieldLabel(prefs.field)}, ${orderLabel}, ${dirLabel}${layoutSuffix})`;
         this.triggerBtn.title = title;
         this.triggerBtn.setAttribute('aria-label', title);
@@ -172,8 +151,7 @@ export const BoardSort = {
                 closeOnSelect: false,
                 onSelect: (id) => this.applyPref(id),
                 onToggle: (id, checked) => {
-                    if (id === 'alignExpanded') this.toggleAlignExpanded(checked);
-                    else if (id === 'cascade') this.toggleCascade(checked);
+                    if (id === 'cascade') this.toggleCascade(checked);
                 }
             });
         };

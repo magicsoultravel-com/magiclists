@@ -17,18 +17,33 @@ export const CASCADE_OFFSET_X = 24;
 export const CASCADE_OFFSET_Y = 20;
 
 export function computeCascadeRects(sizes, anchor, {
+    region = null,
     offsetX = CASCADE_OFFSET_X,
     offsetY = CASCADE_OFFSET_Y,
     margin = ALIGN_REGION_MARGIN
 } = {}) {
-    if (!sizes?.length || !anchor) return [];
-    const startX = (anchor.startX ?? 0) + margin;
-    const startY = (anchor.startY ?? 0) + margin;
-    return sizes.map((size, index) => ({
-        x: Math.round(startX + index * offsetX),
-        y: Math.round(startY + index * offsetY),
+    if (!sizes?.length) return [];
+    const relRects = sizes.map((size, index) => ({
+        x: index * offsetX,
+        y: index * offsetY,
         w: Math.max(1, Math.round(size.w)),
         h: Math.max(1, Math.round(size.h))
+    }));
+    const stackW = Math.max(...relRects.map((rect) => rect.x + rect.w), 1);
+    const stackH = Math.max(...relRects.map((rect) => rect.y + rect.h), 1);
+
+    let originX = (anchor?.startX ?? 0) + margin;
+    let originY = (anchor?.startY ?? 0) + margin;
+    if (region) {
+        originX = region.x + Math.max(0, (region.w - stackW) / 2);
+        originY = region.y + Math.max(0, (region.h - stackH) / 2);
+    }
+
+    return relRects.map((rect) => ({
+        x: Math.round(originX + rect.x),
+        y: Math.round(originY + rect.y),
+        w: rect.w,
+        h: rect.h
     }));
 }
 
@@ -104,10 +119,23 @@ export function slotsToRegionRects(slots, region, { gap } = {}) {
     const innerH = Math.max(1, region.h - slotGap * Math.max(0, rows - 1));
     const cellW = innerW / cols;
     const cellH = innerH / rows;
+    const gridW = cols * cellW + Math.max(0, cols - 1) * slotGap;
+    const gridH = rows * cellH + Math.max(0, rows - 1) * slotGap;
+    const originX = region.x + Math.max(0, (region.w - gridW) / 2);
+    const originY = region.y + Math.max(0, (region.h - gridH) / 2);
+
+    const rowCounts = new Map();
+    slots.forEach((slot) => {
+        rowCounts.set(slot.row, (rowCounts.get(slot.row) || 0) + 1);
+    });
 
     return slots.map((slot) => {
-        const x = region.x + slot.col * (cellW + slotGap);
-        const y = region.y + slot.row * (cellH + slotGap);
+        const rowCount = rowCounts.get(slot.row) || 1;
+        const rowOffset = rowCount < cols
+            ? ((cols - rowCount) * (cellW + slotGap)) / 2
+            : 0;
+        const x = originX + rowOffset + slot.col * (cellW + slotGap);
+        const y = originY + slot.row * (cellH + slotGap);
         const w = slot.colSpan * cellW + (slot.colSpan - 1) * slotGap;
         const h = slot.rowSpan * cellH + (slot.rowSpan - 1) * slotGap;
         return {

@@ -119,8 +119,10 @@ export const Timezone = {
     compactMode: false,
     adjustOpen: false,
     savedPanelHeight: null,
+    savedPanelWidth: null,
     onDocumentPointerDown: null,
     onKeyDown: null,
+    onPanelIconClick: null,
 
     init(mountElement) {
         this.container = mountElement;
@@ -128,8 +130,12 @@ export const Timezone = {
         if (panel?.style.height) {
             this.savedPanelHeight = panel.style.height;
         }
+        if (panel?.style.width) {
+            this.savedPanelWidth = panel.style.width;
+        }
         this.loadPrefs();
         this.render();
+        this.bindPanelIcon();
     },
 
     loadPrefs() {
@@ -203,7 +209,7 @@ export const Timezone = {
         this.setupListeners();
         this.updateTimeMatrix(now);
         this.applyFilter();
-        this.syncPanelFit();
+        this.applyCompactMode();
         if (!this.compactMode) {
             requestAnimationFrame(() => this.scrollToUtc());
         }
@@ -243,10 +249,10 @@ export const Timezone = {
 
         listHeader?.addEventListener('click', (e) => {
             if (e.target.closest('.tz-toolbar')) return;
-            this.compactMode = !this.compactMode;
+            if (this.compactMode) return;
+            this.compactMode = true;
             this.savePrefs();
             this.applyCompactMode();
-            this.syncPanelFit();
         });
 
         slider?.addEventListener('input', (e) => {
@@ -288,7 +294,6 @@ export const Timezone = {
             this.savePrefs();
             this.applyFilter();
             this.applyCompactMode();
-            this.syncPanelFit();
         });
 
         stack?.addEventListener('change', (e) => {
@@ -304,7 +309,6 @@ export const Timezone = {
             }
             this.savePrefs();
             this.applyFilter();
-            this.syncPanelFit();
         });
 
         this.onDocumentPointerDown = (e) => {
@@ -323,16 +327,77 @@ export const Timezone = {
         document.addEventListener('keydown', this.onKeyDown);
     },
 
+    bindPanelIcon() {
+        const panel = this.container?.closest('.tool-panel');
+        const iconEl = panel?.querySelector('.tool-panel__icon');
+        if (!iconEl) return;
+
+        this.onPanelIconClick = (e) => {
+            if (!this.compactMode) return;
+            e.stopPropagation();
+            this.compactMode = false;
+            this.savePrefs();
+            this.applyCompactMode();
+        };
+        iconEl.addEventListener('click', this.onPanelIconClick);
+    },
+
     applyCompactMode() {
+        const panel = this.container?.closest('.tool-panel');
+        const iconEl = panel?.querySelector('.tool-panel__icon');
         const stack = this.container?.querySelector('.tz-tool-stack');
         const toggle = this.container?.querySelector('.collapsable-toggle');
+
         stack?.classList.toggle('tz-tool-stack--compact', this.compactMode);
         toggle?.classList.toggle('collapsed', this.compactMode);
+        panel?.classList.toggle('tool-panel--tz-compact', this.compactMode);
         this.container?.querySelector('.tz-filter-hint')?.classList.toggle('is-hidden', !this.filterSelectedOnly || this.compactMode);
+
+        if (iconEl) {
+            if (this.compactMode) {
+                iconEl.setAttribute('role', 'button');
+                iconEl.setAttribute('tabindex', '0');
+                iconEl.setAttribute('aria-label', 'Expand timezones');
+                this.closeAdjustPopover();
+            } else {
+                iconEl.removeAttribute('role');
+                iconEl.removeAttribute('tabindex');
+                iconEl.removeAttribute('aria-label');
+            }
+        }
 
         this.container?.querySelectorAll('.tz-card').forEach((card) => {
             card.classList.toggle('tz-card--compact', this.compactMode);
         });
+
+        this.syncPanelFit();
+        this.syncPanelWidth();
+    },
+
+    syncPanelWidth() {
+        const panel = this.container?.closest('.tool-panel');
+        if (!panel) return;
+
+        if (this.compactMode) {
+            if (!this.savedPanelWidth) {
+                this.savedPanelWidth = panel.style.width || `${panel.offsetWidth}px`;
+            }
+            requestAnimationFrame(() => {
+                const body = panel.querySelector('.tool-panel__body');
+                const cards = document.getElementById('tz-cards-stack');
+                const header = panel.querySelector('.tool-panel__header');
+                const bodyPad = body
+                    ? (parseFloat(getComputedStyle(body).paddingLeft) || 0)
+                        + (parseFloat(getComputedStyle(body).paddingRight) || 0)
+                    : 16;
+                const contentW = cards?.scrollWidth || 0;
+                const headerW = header?.scrollWidth || 0;
+                const fitW = Math.ceil(Math.max(contentW + bodyPad, headerW)) + 2;
+                panel.style.width = `${Math.max(fitW, 88)}px`;
+            });
+        } else {
+            panel.style.width = this.savedPanelWidth || `${340}px`;
+        }
     },
 
     openAdjustPopover() {
@@ -367,6 +432,7 @@ export const Timezone = {
         });
 
         this.syncPanelFit();
+        this.syncPanelWidth();
     },
 
     getVisibleRowCount() {
@@ -435,10 +501,25 @@ export const Timezone = {
                 if (dateEl) dateEl.textContent = '';
             }
         });
+
+        if (this.compactMode) {
+            this.syncPanelWidth();
+        }
     },
 
     destroy() {
         this.closeAdjustPopover();
+        const panel = this.container?.closest('.tool-panel');
+        const iconEl = panel?.querySelector('.tool-panel__icon');
+        if (iconEl && this.onPanelIconClick) {
+            iconEl.removeEventListener('click', this.onPanelIconClick);
+        }
+        if (panel && this.compactMode) {
+            panel.classList.remove('tool-panel--tz-compact', 'tool-panel--tz-fit', 'tool-panel--auto-height');
+            if (this.savedPanelWidth) {
+                panel.style.width = this.savedPanelWidth;
+            }
+        }
         if (this.onDocumentPointerDown) {
             document.removeEventListener('pointerdown', this.onDocumentPointerDown);
         }
@@ -447,6 +528,7 @@ export const Timezone = {
         }
         this.onDocumentPointerDown = null;
         this.onKeyDown = null;
+        this.onPanelIconClick = null;
         this.container = null;
     }
 };

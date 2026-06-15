@@ -738,21 +738,6 @@ body {
     display: none !important;
 }
 
-.file-cabinet-tab.is-file-cabinet-dragging .editor-note-topline {
-    flex: 1 1 auto;
-    min-height: 0;
-    min-width: 0;
-    width: 100%;
-    height: 100%;
-    position: relative;
-}
-
-.file-cabinet-tab.is-file-cabinet-dragging .editor-note-topline .mini-card-title {
-    line-height: 1.15;
-    padding-top: 0;
-    padding-bottom: 0;
-}
-
 .file-cabinet .ff-chrome,
 .file-cabinet .ff-resize-layer {
     display: none !important;
@@ -761,21 +746,6 @@ body {
 .file-cabinet .file-cabinet-tab .editor-note-body,
 .file-cabinet .file-cabinet-tab .editor-meta-wrap {
     display: none !important;
-}
-
-.file-cabinet .file-cabinet-tab .editor-note-topline {
-    flex: 1 1 auto;
-    min-height: 0;
-    min-width: 0;
-    width: 100%;
-    height: 100%;
-    position: relative;
-}
-
-.file-cabinet .file-cabinet-tab .editor-note-topline .mini-card-title {
-    line-height: 1.15;
-    padding-top: 0;
-    padding-bottom: 0;
 }
 
 body.is-file-cabinet-drag-active {
