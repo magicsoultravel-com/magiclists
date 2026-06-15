@@ -602,6 +602,7 @@ class Application {
         this.updateViewToggleState();
         this.updateLayoutResetVisibility();
         this.updateWorkspaceCounter();
+        BoardSort.refreshMenu();
     }
 
     updateViewToggleState() {
@@ -631,6 +632,7 @@ class Application {
         }
         document.getElementById('btn-drawing-mode')?.classList.toggle('active', drawing);
         this.updateDesktopZoomVisibility();
+        BoardSort.refreshMenu();
     }
 
     updateDesktopZoomVisibility() {

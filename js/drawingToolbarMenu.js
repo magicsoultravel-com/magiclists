@@ -52,8 +52,9 @@ function renderItemsHtml(items, selected) {
         }
         if (item.checkbox) {
             const inputId = item.inputId || `drawing-menu-cb-${item.id}`;
-            return `<label class="drawing-menu-checkbox-row" for="${escapeHtml(inputId)}">
-                <input type="checkbox" class="display-options-checkbox drawing-menu-checkbox" id="${escapeHtml(inputId)}" data-toggle-id="${escapeHtml(item.id)}"${item.checked ? ' checked' : ''}>
+            const disabled = item.disabled === true;
+            return `<label class="drawing-menu-checkbox-row${disabled ? ' is-disabled' : ''}" for="${escapeHtml(inputId)}">
+                <input type="checkbox" class="display-options-checkbox drawing-menu-checkbox" id="${escapeHtml(inputId)}" data-toggle-id="${escapeHtml(item.id)}"${item.checked ? ' checked' : ''}${disabled ? ' disabled' : ''}>
                 <span class="drawing-menu-label">${escapeHtml(item.label)}</span>
                 ${item.hint ? `<span class="drawing-menu-checkbox-hint">${escapeHtml(item.hint)}</span>` : ''}
             </label>`;
@@ -94,14 +95,14 @@ function bindMenuInteractions(menu, { onSelect, onStepper, onToggle, closeOnSele
         });
     });
 
-    menu.querySelectorAll('.drawing-menu-checkbox').forEach((input) => {
+    menu.querySelectorAll('.drawing-menu-checkbox:not(:disabled)').forEach((input) => {
         input.addEventListener('mousedown', (e) => e.stopPropagation());
         input.addEventListener('change', (e) => {
             e.stopPropagation();
             onToggle?.(input.dataset.toggleId, input.checked);
         });
     });
-    menu.querySelectorAll('.drawing-menu-checkbox-row').forEach((row) => {
+    menu.querySelectorAll('.drawing-menu-checkbox-row:not(.is-disabled)').forEach((row) => {
         row.addEventListener('mousedown', (e) => e.stopPropagation());
     });
 }

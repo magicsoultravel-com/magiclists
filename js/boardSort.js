@@ -38,7 +38,9 @@ export function sortBoardItems(items, sortPrefs) {
     return [...(items || [])].sort((a, b) => compareBoardItems(a, b, sortPrefs));
 }
 
-function buildMenuItems(prefs) {
+function buildMenuItems(prefs, viewMode = 'grid') {
+    const isFreeform = viewMode === 'freeform';
+    const cascadeOn = prefs.cascade === true;
     return [
         { heading: 'Direction' },
         { id: 'dir:horizontal', label: 'Horizontally', selected: prefs.direction === 'horizontal' },
@@ -61,7 +63,17 @@ function buildMenuItems(prefs) {
             inputId: 'board-sort-align-expanded',
             label: 'Align expanded',
             hint: 'Expanded notes fill space below collapsed (3-note row/column follows direction)',
-            checked: prefs.alignExpanded === true
+            checked: prefs.alignExpanded === true,
+            disabled: isFreeform && cascadeOn
+        },
+        {
+            checkbox: true,
+            id: 'cascade',
+            inputId: 'board-sort-cascade',
+            label: 'Cascade',
+            hint: 'Freeform: 4-wide collapsed rows, expanded notes stacked with offset',
+            checked: prefs.cascade === true,
+            disabled: !isFreeform
         }
     ];
 }
@@ -82,6 +94,17 @@ export const BoardSort = {
         this.ctx = ctx;
     },
 
+    getViewMode() {
+        const mode = this.ctx?.getViewMode?.();
+        return mode === 'freeform' ? 'freeform' : 'grid';
+    },
+
+    refreshMenu() {
+        if (!DrawingToolbarMenu.isOpen()) return;
+        const prefs = readBoardSort();
+        DrawingToolbarMenu.setItems(buildMenuItems(prefs, this.getViewMode()));
+    },
+
     applyPref(id) {
         const prefs = readBoardSort();
         if (id.startsWith('dir:')) prefs.direction = id.slice(4) === 'vertical' ? 'vertical' : 'horizontal';
@@ -93,7 +116,7 @@ export const BoardSort = {
         this.ctx?.onSort?.(prefs);
         this.syncButtonState();
         if (DrawingToolbarMenu.isOpen()) {
-            DrawingToolbarMenu.setItems(buildMenuItems(prefs));
+            DrawingToolbarMenu.setItems(buildMenuItems(prefs, this.getViewMode()));
         }
     },
 
@@ -104,7 +127,19 @@ export const BoardSort = {
         this.ctx?.onSort?.(prefs);
         this.syncButtonState();
         if (DrawingToolbarMenu.isOpen()) {
-            DrawingToolbarMenu.setItems(buildMenuItems(prefs));
+            DrawingToolbarMenu.setItems(buildMenuItems(prefs, this.getViewMode()));
+        }
+    },
+
+    toggleCascade(checked) {
+        if (this.getViewMode() !== 'freeform') return;
+        const prefs = readBoardSort();
+        prefs.cascade = !!checked;
+        writeBoardSort(prefs);
+        this.ctx?.onSort?.(prefs);
+        this.syncButtonState();
+        if (DrawingToolbarMenu.isOpen()) {
+            DrawingToolbarMenu.setItems(buildMenuItems(prefs, this.getViewMode()));
         }
     },
 
@@ -114,8 +149,8 @@ export const BoardSort = {
         this.triggerBtn.classList.toggle('is-active', isBoardSortCustomized(prefs));
         const dirLabel = prefs.direction === 'vertical' ? 'vertically' : 'horizontally';
         const orderLabel = prefs.dir === 'asc' ? 'ascending' : 'descending';
-        const alignSuffix = prefs.alignExpanded ? ', align expanded' : '';
-        const title = `Sort board (${sortFieldLabel(prefs.field)}, ${orderLabel}, ${dirLabel}${alignSuffix})`;
+        const layoutSuffix = prefs.cascade ? ', cascade' : (prefs.alignExpanded ? ', align expanded' : '');
+        const title = `Sort board (${sortFieldLabel(prefs.field)}, ${orderLabel}, ${dirLabel}${layoutSuffix})`;
         this.triggerBtn.title = title;
         this.triggerBtn.setAttribute('aria-label', title);
     },
@@ -133,11 +168,12 @@ export const BoardSort = {
             DrawingToolbarMenu.toggle({
                 anchor: btn,
                 ariaLabel: 'Sort board',
-                items: buildMenuItems(prefs),
+                items: buildMenuItems(prefs, this.getViewMode()),
                 closeOnSelect: false,
                 onSelect: (id) => this.applyPref(id),
                 onToggle: (id, checked) => {
                     if (id === 'alignExpanded') this.toggleAlignExpanded(checked);
+                    else if (id === 'cascade') this.toggleCascade(checked);
                 }
             });
         };

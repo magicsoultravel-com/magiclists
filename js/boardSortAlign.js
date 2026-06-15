@@ -9,6 +9,29 @@ export const ALIGN_REGION_MARGIN = 8;
 /** Extra spacing between aligned expanded notes (added to grid gap). */
 export const ALIGN_NOTE_GAP_EXTRA = 4;
 
+/** Collapsed notes per row/column in freeform cascade sort. */
+export const CASCADE_PER_LINE = 4;
+
+/** Stagger between cascaded expanded notes. */
+export const CASCADE_OFFSET_X = 24;
+export const CASCADE_OFFSET_Y = 20;
+
+export function computeCascadeRects(sizes, anchor, {
+    offsetX = CASCADE_OFFSET_X,
+    offsetY = CASCADE_OFFSET_Y,
+    margin = ALIGN_REGION_MARGIN
+} = {}) {
+    if (!sizes?.length || !anchor) return [];
+    const startX = (anchor.startX ?? 0) + margin;
+    const startY = (anchor.startY ?? 0) + margin;
+    return sizes.map((size, index) => ({
+        x: Math.round(startX + index * offsetX),
+        y: Math.round(startY + index * offsetY),
+        w: Math.max(1, Math.round(size.w)),
+        h: Math.max(1, Math.round(size.h))
+    }));
+}
+
 export function getAlignGridDims(count, direction = 'horizontal') {
     const n = Math.max(0, Math.floor(count));
     if (n <= 0) return { cols: 0, rows: 0 };
@@ -46,7 +69,9 @@ export function getExpandedAlignSlots(count, direction = 'horizontal') {
 
 export function computeAlignRegion({
     packW,
+    startX,
     startY,
+    regionW,
     viewportBottom,
     origin,
     edgePad,
@@ -55,15 +80,14 @@ export function computeAlignRegion({
     const pad = edgePad ?? metrics.edgePad;
     const o = origin ?? metrics.origin;
     const margin = ALIGN_REGION_MARGIN;
+    const minX = o + pad;
     const minRegionH = cellsToSpanH(MIN_REGION_ROWS, metrics);
+    const x = (startX ?? minX) + margin;
+    const y = startY + margin;
+    const w = Math.max(1, (regionW ?? packW ?? metrics.canvasGridW) - margin * 2);
     const availableH = Math.max(0, (viewportBottom ?? minRegionH) - startY - pad - margin);
     const h = Math.max(minRegionH, availableH - margin);
-    return {
-        x: o + pad + margin,
-        y: startY + margin,
-        w: Math.max(1, (packW ?? metrics.canvasGridW) - margin * 2),
-        h
-    };
+    return { x, y, w, h };
 }
 
 export function slotsToRegionRects(slots, region, { gap } = {}) {

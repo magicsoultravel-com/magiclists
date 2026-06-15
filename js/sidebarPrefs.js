@@ -21,7 +21,7 @@ export const SIDEBAR_BACKUP_KEYS = [
 ];
 
 const DEFAULT_NOTES_LIST_SORT = { field: 'date', dir: 'desc' };
-const DEFAULT_BOARD_SORT = { direction: 'horizontal', field: 'date', dir: 'desc', alignExpanded: false };
+const DEFAULT_BOARD_SORT = { direction: 'horizontal', field: 'date', dir: 'desc', alignExpanded: false, cascade: false };
 
 export function readPanelCollapsed() {
     const stored = localStorage.getItem(PANEL_COLLAPSED_KEY);
@@ -76,7 +76,8 @@ export function readBoardSort() {
             : DEFAULT_BOARD_SORT.field;
         const dir = stored.dir === 'asc' ? 'asc' : 'desc';
         const alignExpanded = stored.alignExpanded === true;
-        return { direction, field, dir, alignExpanded };
+        const cascade = stored.cascade === true;
+        return { direction, field, dir, alignExpanded, cascade };
     } catch {
         return { ...DEFAULT_BOARD_SORT };
     }
@@ -90,7 +91,8 @@ export function isBoardSortCustomized(sort = readBoardSort()) {
     return sort.direction !== DEFAULT_BOARD_SORT.direction
         || sort.field !== DEFAULT_BOARD_SORT.field
         || sort.dir !== DEFAULT_BOARD_SORT.dir
-        || sort.alignExpanded === true;
+        || sort.alignExpanded === true
+        || sort.cascade === true;
 }
 
 export function readQuickActionsDock() {
