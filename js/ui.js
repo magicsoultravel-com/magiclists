@@ -5052,22 +5052,23 @@ export const UI = {
         return { collapsed, expanded };
     },
 
-    findFirstCanvasSlotVertical(w, h, placed, canvasW, { origin = CANVAS_LAYOUT_ORIGIN, edgePad, xMin, yMin } = {}) {
+    findFirstCanvasSlotVertical(w, h, placed, canvasW, { origin = CANVAS_LAYOUT_ORIGIN, edgePad, xMin, yMin, maxH } = {}) {
         const metrics = getGridMetrics();
         const pad = edgePad ?? metrics.edgePad;
         const packW = Math.max(metrics.canvasGridW, canvasW - origin * 2 - pad * 2);
         const xOrigin = Math.max(origin + pad, xMin ?? origin + pad);
-        let yOrigin = Math.max(origin + pad, yMin ?? origin + pad);
+        const yOrigin = Math.max(origin + pad, yMin ?? origin + pad);
         const colStride = this.gridColumnStride(w, h, metrics);
         const yStride = getPackStrideYForRect(w, h);
+        const bottomLimit = (maxH ?? origin + metrics.strideY * 40) + 1;
         let x = xOrigin;
-        while (true) {
+        let guard = 0;
+        while (guard < 800) {
             let y = yOrigin;
-            while (true) {
-                if (x + w > origin + pad + packW + 1) break;
+            while (y + h <= bottomLimit) {
                 const candidate = this.snapNoteRect(
                     { x, y, w, h },
-                    { maxW: packW, origin, edgePad: pad }
+                    { maxW: packW, origin, edgePad: pad, maxH }
                 );
                 if (!placed.some((p) => this.rectsOverlap(candidate, p, metrics.gap))) {
                     return candidate;
@@ -5075,11 +5076,9 @@ export const UI = {
                 y += yStride;
             }
             x += colStride;
-            if (x + w > origin + pad + packW + 1) {
-                x = xOrigin;
-                yOrigin += yStride;
-            }
+            guard += 1;
         }
+        return { x: xOrigin, y: yOrigin, w, h };
     },
 
     computeExpandedAlignAnchor(direction, collapsedRects, {
@@ -5151,8 +5150,8 @@ export const UI = {
         metrics,
         direction = 'horizontal'
     }) {
-        const { origin, packW, boardMaxH, edgePad } = bounds;
-        const clampBounds = { packW, maxH: boardMaxH, origin, edgePad };
+        const { origin, packW, viewportBottom, edgePad } = bounds;
+        const clampBounds = { packW, maxH: viewportBottom, origin, edgePad };
         const unpinned = expandedItems.filter((item) => item?.id && !pinnedIds.has(item.id));
         if (!unpinned.length) return;
 
@@ -5162,7 +5161,7 @@ export const UI = {
             startX: anchor.startX,
             startY: anchor.startY,
             regionW: anchor.regionW,
-            viewportBottom: boardMaxH,
+            viewportBottom,
             origin,
             edgePad,
             metrics
@@ -5172,14 +5171,7 @@ export const UI = {
         unpinned.forEach((item, index) => {
             const raw = rects[index];
             if (!raw) return;
-            let slot = this.clampNoteToBoardEdges(raw, clampBounds);
-            if (placed.some((p) => this.rectsOverlap(slot, p, metrics.gap))) {
-                slot = this.findFirstCanvasSlot(slot.w, slot.h, placed, packW + origin * 2, {
-                    origin,
-                    edgePad,
-                    yMin: slot.y
-                });
-            }
+            const slot = this.clampNoteToBoardEdges(raw, clampBounds);
             layout.set(item.id, slot);
             placed.push({ ...slot });
         });
@@ -5288,7 +5280,7 @@ export const UI = {
         );
 
         if (unpinnedExpanded.length) {
-            const { maxH: boardMaxH } = this.getGridBoardBounds(canvas);
+            const viewport = this.getGridViewportBounds(canvas);
             this.packExpandedAlignGrid(canvas, expandedItems, pinnedIds, {
                 placed,
                 layout,
@@ -5296,7 +5288,7 @@ export const UI = {
                 bounds: {
                     origin,
                     packW,
-                    boardMaxH,
+                    viewportBottom: viewport.viewportBottom,
                     edgePad
                 },
                 metrics,
