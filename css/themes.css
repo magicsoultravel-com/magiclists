@@ -665,10 +665,6 @@ html[data-app-theme="wood"] .quick-actions-grid .btn--icon.active {
     color: #f5e8b8;
 }
 
-html[data-app-theme="wood"] .menu-tool-trigger.active {
-    color: #c9a227;
-}
-
 html[data-app-theme="wood"] .tool-panel {
     border-left-color: #c9a227;
 }
@@ -900,7 +896,6 @@ html[data-app-theme="corkboard"] .btn.active {
 }
 
 html[data-app-theme="corkboard"] .quick-actions-grid .btn--icon.active { color: #faf6ef; }
-html[data-app-theme="corkboard"] .menu-tool-trigger.active { color: #c0392b; }
 html[data-app-theme="corkboard"] .tool-panel { border-left-color: #c0392b; }
 html[data-app-theme="corkboard"] .tool-chip { border-color: color-mix(in srgb, #c0392b 35%, #8b6840); }
 html[data-app-theme="corkboard"] .card-act--cal.is-on { color: #c0392b; }
@@ -1092,7 +1087,6 @@ html[data-app-theme="slate"] .btn.active {
 }
 
 html[data-app-theme="slate"] .quick-actions-grid .btn--icon.active { color: #1e2e26; }
-html[data-app-theme="slate"] .menu-tool-trigger.active { color: #d4c896; }
 html[data-app-theme="slate"] .tool-panel { border-left-color: #d4c896; }
 html[data-app-theme="slate"] .tool-chip { border-color: color-mix(in srgb, #d4c896 35%, #3d5548); }
 html[data-app-theme="slate"] .card-act--cal.is-on { color: #d4c896; }
@@ -1287,7 +1281,6 @@ html[data-app-theme="library"] .btn.active {
 }
 
 html[data-app-theme="library"] .quick-actions-grid .btn--icon.active { color: #f0ece6; }
-html[data-app-theme="library"] .menu-tool-trigger.active { color: #3d6b4f; }
 html[data-app-theme="library"] .tool-panel { border-left-color: #3d6b4f; }
 html[data-app-theme="library"] .tool-chip { border-color: color-mix(in srgb, #3d6b4f 35%, #5c4a38); }
 html[data-app-theme="library"] .card-act--cal.is-on { color: #3d6b4f; }
@@ -1480,7 +1473,6 @@ html[data-app-theme="parchment"] .btn.active {
 }
 
 html[data-app-theme="parchment"] .quick-actions-grid .btn--icon.active { color: #f0ece6; }
-html[data-app-theme="parchment"] .menu-tool-trigger.active { color: #9a4a3a; }
 html[data-app-theme="parchment"] .tool-panel { border-left-color: #9a4a3a; }
 html[data-app-theme="parchment"] .tool-chip { border-color: color-mix(in srgb, #9a4a3a 35%, #5c4030); }
 html[data-app-theme="parchment"] .card-act--cal.is-on { color: #9a4a3a; }
@@ -1675,7 +1667,6 @@ html[data-app-theme="neon"] .btn.active {
 }
 
 html[data-app-theme="neon"] .quick-actions-grid .btn--icon.active { color: #e8f4f8; }
-html[data-app-theme="neon"] .menu-tool-trigger.active { color: #5ec8d8; }
 html[data-app-theme="neon"] .tool-panel { border-left-color: #5ec8d8; }
 html[data-app-theme="neon"] .tool-chip { border-color: color-mix(in srgb, #5ec8d8 35%, #2a2840); }
 html[data-app-theme="neon"] .card-act--cal.is-on { color: #5ec8d8; }
@@ -1890,7 +1881,6 @@ html[data-app-theme="miami"] .btn.active {
 }
 
 html[data-app-theme="miami"] .quick-actions-grid .btn--icon.active { color: #f0f8ff; }
-html[data-app-theme="miami"] .menu-tool-trigger.active { color: #f472b6; }
 html[data-app-theme="miami"] .tool-panel {
     border-left-color: #2dd4f4;
     box-shadow: 0 0 0 1px rgba(244, 114, 182, 0.08);
@@ -2106,7 +2096,6 @@ html[data-app-theme="spaceship"] .btn.active {
 }
 
 html[data-app-theme="spaceship"] .quick-actions-grid .btn--icon.active { color: #f8f4ec; }
-html[data-app-theme="spaceship"] .menu-tool-trigger.active { color: #e8922a; }
 html[data-app-theme="spaceship"] .tool-panel { border-left-color: #e8922a; }
 html[data-app-theme="spaceship"] .tool-chip { border-color: color-mix(in srgb, #e8922a 40%, #3a4555); }
 html[data-app-theme="spaceship"] .card-act--cal.is-on { color: #e8922a; }
@@ -2381,7 +2370,6 @@ html[data-app-theme="night-sky"] .btn.active {
 }
 
 html[data-app-theme="night-sky"] .quick-actions-grid .btn--icon.active { color: #f4f8ff; }
-html[data-app-theme="night-sky"] .menu-tool-trigger.active { color: #a8c8ff; }
 html[data-app-theme="night-sky"] .tool-panel { border-left-color: #a8c8ff; }
 html[data-app-theme="night-sky"] .tool-chip { border-color: color-mix(in srgb, #a8c8ff 35%, #283858); }
 html[data-app-theme="night-sky"] .card-act--cal.is-on { color: #a8c8ff; }

@@ -99,8 +99,8 @@ function loadSavedCoord(value, min, max, size, fallback) {
 }
 
 function chipAnchorFromPanel(panel, chip) {
-    const chipW = chip?.offsetWidth || 48;
-    const chipH = chip?.offsetHeight || 48;
+    const chipW = chip?.offsetWidth || 40;
+    const chipH = chip?.offsetHeight || 40;
     return {
         x: panel.offsetLeft + panel.offsetWidth - chipW - 4,
         y: panel.offsetTop + 4
@@ -212,8 +212,8 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     const positionChip = (anchorToPanel = false) => {
         if (!chip) return;
         const desktopBounds = getDesktopBounds();
-        const chipW = chip.offsetWidth || 48;
-        const chipH = chip.offsetHeight || 48;
+        const chipW = chip.offsetWidth || 40;
+        const chipH = chip.offsetHeight || 40;
         const panelAnchor = chipAnchorFromPanel(panel, chip);
         const fallbackX = panelAnchor.x;
         const fallbackY = panelAnchor.y;

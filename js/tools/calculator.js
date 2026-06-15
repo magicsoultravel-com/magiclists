@@ -71,12 +71,12 @@ export const Calculator = {
                     <button type="button" class="btn btn--accent calc-btn" data-val="=">=</button>
                 </div>
                 <div class="calc-history-block">
-                    <div class="calc-history-header" id="calc-history-header" role="button" tabindex="0" aria-expanded="false">
+                    <div class="collapsable-header" id="calc-history-header" role="button" tabindex="0" aria-expanded="false">
                         <span class="collapsable-heading">
                             <span class="collapsable-toggle collapsed" id="calc-history-toggle">▼</span>History
                         </span>
                     </div>
-                    <div class="calc-history-section" id="calc-history-section">
+                    <div class="collapsable-section collapsed calc-history-section" id="calc-history-section">
                         <div id="calc-history" class="calc-history" aria-label="Calculation history"></div>
                     </div>
                 </div>
@@ -105,7 +105,7 @@ export const Calculator = {
         const section = this.container.querySelector('#calc-history-section');
         const toggle = this.container.querySelector('#calc-history-toggle');
         const header = this.container.querySelector('#calc-history-header');
-        section?.classList.toggle('is-open', this.historyOpen);
+        section?.classList.toggle('collapsed', !this.historyOpen);
         toggle?.classList.toggle('collapsed', !this.historyOpen);
         header?.classList.toggle('is-expanded', this.historyOpen);
         header?.setAttribute('aria-expanded', this.historyOpen ? 'true' : 'false');

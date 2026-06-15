@@ -1,4 +1,4 @@
-/** @tool {"label":"Globe","order":5,"defaultSize":{"w":480,"h":520},"minSize":{"w":320,"h":400}} */
+/** @tool {"label":"Globe","order":5,"mountClass":"tool-mount--globe","defaultSize":{"w":480,"h":520},"minSize":{"w":320,"h":400}} */
 /** @tool-icon <circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M1.8 6h8.4M6 1.8c1.2 1.4 1.8 3 1.8 4.2S7.2 8.8 6 10.2M6 1.8C4.8 3.2 4.2 4.8 4.2 6s.6 2.8 1.8 4.2" fill="none" stroke="currentColor" stroke-width="0.85"/> */
 export const Globe = {
     container: null,
@@ -61,7 +61,7 @@ export const Globe = {
     render() {
         this.container.innerHTML = `
             <div class="globe-tool">
-                <div class="globe-tool__controls map-tool__control-row">
+                <div class="toolbar toolbar--spread globe-tool__controls">
                     <button type="button" class="btn btn--compact globe-layer-btn active" data-layer="political">Political</button>
                     <button type="button" class="btn btn--compact globe-layer-btn" data-layer="geological">Geological</button>
                     <button type="button" class="btn btn--compact globe-layer-btn" data-layer="timezones">Time zones</button>

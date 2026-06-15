@@ -67,7 +67,7 @@ export const Cosmos = {
 
         this.container.innerHTML = `
             <div class="cosmos-tool">
-                <div class="cosmos-tool__tabs map-tool__control-row">
+                <div class="toolbar toolbar--spread cosmos-tool__tabs">
                     ${tabs}
                     <span class="cosmos-tool__tabs-spacer" aria-hidden="true"></span>
                     <button type="button" class="btn btn--compact btn--icon cosmos-expand-btn" title="Expand" aria-label="Expand">${ACTION_ICONS.fullscreenEnter}</button>

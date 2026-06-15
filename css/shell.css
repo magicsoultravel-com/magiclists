@@ -1195,7 +1195,9 @@ body.is-shell-resizing--h * {
 }
 
 .quick-actions-grid .btn--icon.active {
-    color: #fff;
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border-color));
 }
 
 .sidebar-quick-actions__dock {
@@ -1207,11 +1209,13 @@ body.is-shell-resizing--h * {
     opacity: 1;
 }
 
-.sidebar-quick-actions--undocked {
+.sidebar-quick-actions--undocked,
+.sidebar-tools--undocked,
+.sidebar-radio--undocked,
+.sidebar-tv--undocked {
     position: fixed;
     z-index: 341;
     box-sizing: border-box;
-    width: 200px;
     padding: 0 0.5rem 0.45rem;
     margin-bottom: 0;
     border-bottom: none;
@@ -1223,14 +1227,34 @@ body.is-shell-resizing--h * {
     pointer-events: auto;
 }
 
-.sidebar-quick-actions--undocked .collapsable-header {
+.sidebar-quick-actions--undocked,
+.sidebar-tools--undocked {
+    width: 200px;
+}
+
+.sidebar-radio--undocked,
+.sidebar-tv--undocked {
+    width: 220px;
+}
+
+.sidebar-tv--undocked {
+    z-index: 343;
+}
+
+.sidebar-quick-actions--undocked .collapsable-header,
+.sidebar-tools--undocked .collapsable-header,
+.sidebar-radio--undocked .collapsable-header,
+.sidebar-tv--undocked .collapsable-header {
     padding: 0.28rem 0.35rem;
     padding-right: 0.15rem;
     cursor: grab;
     user-select: none;
 }
 
-.sidebar-quick-actions--dragging .collapsable-header {
+.sidebar-quick-actions--dragging .collapsable-header,
+.sidebar-tools--dragging .collapsable-header,
+.sidebar-radio--dragging .collapsable-header,
+.sidebar-tv--dragging .collapsable-header {
     cursor: grabbing;
     opacity: var(--desktop-drag-opacity, 0.85);
 }
@@ -1242,34 +1266,6 @@ body.is-shell-resizing--h * {
 
 .sidebar-tools__dock:hover {
     opacity: 1;
-}
-
-.sidebar-tools--undocked {
-    position: fixed;
-    z-index: 341;
-    box-sizing: border-box;
-    width: 200px;
-    padding: 0 0.5rem 0.45rem;
-    margin-bottom: 0;
-    border-bottom: none;
-    background: var(--chrome-bg, var(--bg-surface));
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-    overflow: hidden;
-    pointer-events: auto;
-}
-
-.sidebar-tools--undocked .collapsable-header {
-    padding: 0.28rem 0.35rem;
-    padding-right: 0.15rem;
-    cursor: grab;
-    user-select: none;
-}
-
-.sidebar-tools--dragging .collapsable-header {
-    cursor: grabbing;
-    opacity: var(--desktop-drag-opacity, 0.85);
 }
 
 .btn--icon {

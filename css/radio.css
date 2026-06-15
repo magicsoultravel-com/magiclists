@@ -47,34 +47,6 @@
     opacity: 1;
 }
 
-.sidebar-radio--undocked {
-    position: fixed;
-    z-index: 341;
-    box-sizing: border-box;
-    width: 220px;
-    padding: 0 0.5rem 0.45rem;
-    margin-bottom: 0;
-    border-bottom: none;
-    background: var(--chrome-bg, var(--bg-surface));
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-    overflow: hidden;
-    pointer-events: auto;
-}
-
-.sidebar-radio--undocked .collapsable-header {
-    padding: 0.28rem 0.35rem;
-    padding-right: 0.15rem;
-    cursor: grab;
-    user-select: none;
-}
-
-.sidebar-radio--dragging .collapsable-header {
-    cursor: grabbing;
-    opacity: var(--desktop-drag-opacity, 0.85);
-}
-
 /* Now playing block */
 .sidebar-radio__now-playing {
     display: grid;

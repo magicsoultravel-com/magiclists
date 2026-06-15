@@ -26,7 +26,7 @@ export const Alphabets = {
         this.container.innerHTML = `
             <div class="tool-stack alphabet-tool">
                 <div class="toolbar toolbar--spread alphabet-tool__toolbar">
-                    <div class="calendar-nav alphabet-tool__nav">
+                    <div class="alphabet-tool__nav">
                         <div class="alphabet-tool__nav-start">
                             <button type="button" class="btn btn--compact btn-icon alphabet-tool__menu-btn" data-alph-menu aria-label="Alphabet list" aria-expanded="false" aria-haspopup="true">☰</button>
                             <div class="alphabet-tool__menu is-hidden" data-alph-menu-panel role="menu">

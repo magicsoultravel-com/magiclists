@@ -24,25 +24,25 @@
 }
 
 .calendar-toolbar {
-    margin-bottom: 0.4rem;
+    margin-bottom: 0.3rem;
 }
 
 .calendar-footer {
-    margin-top: 0.4rem;
+    margin-top: 0.3rem;
 }
 
 .calendar-nav,
 .calendar-view-buttons {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.25rem;
 }
 
 .calendar-title {
-    min-width: 140px;
+    min-width: 120px;
     color: var(--text-main);
-    font-size: 0.95rem;
-    font-weight: 750;
+    font-size: 0.75rem;
+    font-weight: 600;
     text-align: center;
 }
 
@@ -178,7 +178,7 @@
 }
 
 .calendar-year-month-title-highlight {
-    color: #a5b4fc;
+    color: var(--accent);
 }
 
 .calendar-year-weekdays,

@@ -33,7 +33,7 @@ export const TOOLS_REGISTRY = [
         "order": 2,
         "icon": "<path d=\"M3.2 4.2h5.2M7.6 3.4 8.8 4.2 7.6 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M8.8 7.8H3.6M4.4 7 3.2 7.8 4.4 8.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
         "wide": false,
-        "mountClass": "",
+        "mountClass": "tool-mount--converter",
         "defaultSize": { "w": 340, "h": 320 }
     },
     {
@@ -54,7 +54,7 @@ export const TOOLS_REGISTRY = [
         "order": 4,
         "icon": "<circle cx=\"6\" cy=\"6\" r=\"4.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.95\"/><path d=\"M1.8 6h8.4M3.5 4h5M3.5 8h5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.85\"/>",
         "wide": false,
-        "mountClass": "",
+        "mountClass": "tool-mount--globe-tz",
         "defaultSize": { "w": 400, "h": 480 },
         "minSize": { "w": 320, "h": 360 }
     },
@@ -64,7 +64,7 @@ export const TOOLS_REGISTRY = [
         "order": 5,
         "icon": "<circle cx=\"6\" cy=\"6\" r=\"4.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.95\"/><path d=\"M1.8 6h8.4M6 1.8c1.2 1.4 1.8 3 1.8 4.2S7.2 8.8 6 10.2M6 1.8C4.8 3.2 4.2 4.8 4.2 6s.6 2.8 1.8 4.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.85\"/>",
         "wide": false,
-        "mountClass": "",
+        "mountClass": "tool-mount--globe",
         "defaultSize": { "w": 480, "h": 520 },
         "minSize": { "w": 320, "h": 400 }
     },

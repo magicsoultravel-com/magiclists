@@ -8,6 +8,10 @@
 }
 
 .tool-panel {
+    --tool-gap: 0.25rem;
+    --tool-accent-tint: color-mix(in srgb, var(--accent) 12%, transparent);
+    --tool-accent-border: color-mix(in srgb, var(--accent) 35%, var(--border-color));
+    --tool-surface: var(--bg-primary);
     position: absolute;
     pointer-events: auto;
     display: flex;
@@ -16,7 +20,7 @@
     min-height: 120px;
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
-    border-radius: 6px;
+    border-radius: 5px;
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.045);
     border-left: 3px solid var(--accent);
     overflow: hidden;
@@ -42,9 +46,9 @@
 .tool-panel__header {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
+    gap: 0.3rem;
     flex-shrink: 0;
-    padding: 0.28rem 0.35rem 0.28rem 0.45rem;
+    padding: 0.22rem 0.32rem 0.22rem 0.4rem;
     border-bottom: 1px solid var(--border-color);
     background: rgba(255, 255, 255, 0.02);
     cursor: grab;
@@ -56,7 +60,7 @@
 }
 
 .tool-panel__title {
-    font-size: 0.7rem;
+    font-size: 0.68rem;
     font-weight: 600;
     color: var(--text-main);
     line-height: 1.3;
@@ -96,7 +100,7 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow: auto;
-    padding: 0.5rem 0.55rem 0.55rem;
+    padding: 0.35rem 0.4rem 0.4rem;
 }
 
 .tool-panel__resize-e,
@@ -154,11 +158,11 @@
 .tool-chip {
     position: absolute;
     pointer-events: auto;
-    width: 48px;
-    height: 48px;
+    width: 40px;
+    height: 40px;
     padding: 0;
     border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border-color));
-    border-radius: 14px;
+    border-radius: 10px;
     background: color-mix(in srgb, var(--bg-card) 85%, var(--accent) 15%);
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.22), 0 0 0 1px rgba(255, 255, 255, 0.06);
     color: var(--text-muted);
@@ -249,51 +253,37 @@
     background: color-mix(in srgb, var(--bg-card) 82%, var(--accent) 18%);
 }
 
-.menu-tool-trigger.is-on-desktop {
-    background: rgba(79, 70, 229, 0.12);
-    border-left: 2px solid var(--accent);
-}
-
-.tools-launcher-grid .menu-tool-trigger.is-on-desktop {
-    background: none;
-    border-left: none;
-}
-
-.menu-tool-trigger.is-on-desktop .menu-tool-label {
-    color: #a5b4fc;
-}
-
 /* ==========================================================================
    TOOL BODY LAYOUT
    ========================================================================== */
 .tool-stack {
     display: grid;
-    gap: 0.35rem;
+    gap: var(--tool-gap, 0.25rem);
 }
 
 .tool-grid-4 {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 0.3rem;
+    gap: var(--tool-gap, 0.25rem);
 }
 
 .tool-grid-2 {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 0.35rem;
+    gap: var(--tool-gap, 0.25rem);
     align-items: center;
 }
 
 .tool-readout,
 .calc-display {
     width: 100%;
-    background: var(--bg-primary);
+    background: var(--tool-surface, var(--bg-primary));
     border: 1px solid var(--border-color);
     color: var(--text-main);
-    padding: 0.4rem;
+    padding: 0.32rem 0.35rem;
     text-align: right;
     font-family: monospace;
-    font-size: 1.1rem;
+    font-size: 0.78rem;
     border-radius: 4px;
     box-sizing: border-box;
 }
@@ -355,7 +345,7 @@
 }
 
 .tool-mount--calculator .calc-display {
-    font-size: calc(1.1rem * var(--calc-scale));
+    font-size: calc(0.78rem * var(--calc-scale));
 }
 
 .tool-mount--calculator .tool-grid-4 {
@@ -376,60 +366,22 @@
     margin-top: 0.15rem;
 }
 
-.calc-history-header {
-    display: flex;
-    align-items: center;
-    padding: 0.18rem 0.22rem;
-    cursor: pointer;
-    user-select: none;
-    font-size: 0.66rem;
-    color: var(--text-muted);
-    border-radius: 3px;
+.calc-history-block .collapsable-header {
     position: sticky;
     top: 0;
     z-index: 2;
     background: var(--bg-card);
 }
 
-.calc-history-header.is-expanded .collapsable-toggle {
-    transform: rotate(180deg);
-}
-
-.calc-history-header.is-expanded .collapsable-toggle.collapsed {
-    transform: rotate(180deg);
-}
-
-.calc-history-header:hover {
-    color: var(--text-main);
-    background: rgba(255, 255, 255, 0.04);
-}
-
-.calc-history-section {
-    display: none;
-}
-
-.calc-history-section.is-open {
-    display: block;
+.calc-history-section:not(.collapsed) {
     margin-top: 0.15rem;
-    animation: calc-history-roll 0.2s ease;
 }
 
-@keyframes calc-history-roll {
-    from {
-        opacity: 0;
-        transform: translateY(-4px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-.calc-history-section.is-open .calc-history {
+.calc-history-section:not(.collapsed) .calc-history {
     max-height: 110px;
     overflow-y: auto;
     overflow-x: hidden;
-    background: rgba(255, 255, 255, 0.02);
+    background: color-mix(in srgb, var(--text-main) 2%, transparent);
     border: 1px solid var(--border-color);
     border-radius: 4px;
     padding: 0.25rem;
@@ -480,19 +432,19 @@
 
 .calc-history-result {
     flex-shrink: 0;
-    color: #10b981;
+    color: var(--accent);
     font-weight: 600;
 }
 
 .conv-output {
-    background: var(--bg-primary);
+    background: var(--tool-surface, var(--bg-primary));
     border: 1px solid var(--border-color);
-    color: #10b981;
-    padding: 0.4rem;
+    color: var(--accent);
+    padding: 0.32rem 0.35rem;
     font-family: monospace;
-    font-size: 1rem;
+    font-size: 0.78rem;
     border-radius: 4px;
-    min-height: 34px;
+    min-height: 30px;
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -501,7 +453,7 @@
 
 .conv-input {
     font-family: monospace;
-    font-size: 1rem;
+    font-size: 0.78rem;
 }
 
 .tool-mount--timezone {
@@ -831,11 +783,12 @@
     overflow: hidden;
 }
 
-.globe-tool__controls {
+.globe-tool__controls,
+.globe-tool .toolbar {
     flex-shrink: 0;
-    padding: 0.35rem;
+    padding: 0.28rem 0.35rem;
     border-bottom: 1px solid var(--border-color);
-    gap: 0.25rem;
+    gap: 0.2rem;
     flex-wrap: wrap;
 }
 
@@ -851,7 +804,7 @@
     flex: 1 1 auto;
     min-height: 0;
     position: relative;
-    background: #050510;
+    background: var(--tool-surface, var(--bg-primary));
 }
 
 .globe-tool__hint {
@@ -867,44 +820,6 @@
     display: flex;
     flex-direction: column;
     gap: 0.1rem;
-}
-
-.tools-launcher-grid {
-    --launcher-icon-size: 15px;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
-    gap: 0.25rem;
-}
-
-.tools-launcher-grid .menu-tool-trigger {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: auto;
-    min-height: 28px;
-    padding: 0.25rem;
-    text-align: center;
-    background: none;
-    border: none;
-    border-radius: 3px;
-    font-family: inherit;
-    color: var(--text-muted);
-    cursor: pointer;
-}
-
-.tools-launcher-grid .menu-tool-trigger:hover {
-    color: var(--text-main);
-    background: rgba(255, 255, 255, 0.05);
-}
-
-.tools-launcher-grid .menu-tool-trigger.active {
-    color: var(--accent);
-}
-
-.tools-launcher-grid .menu-tool-icon,
-.tools-launcher-grid .menu-tool-icon svg {
-    width: var(--launcher-icon-size);
-    height: var(--launcher-icon-size);
 }
 
 .menu-tool-trigger {
@@ -1012,13 +927,16 @@
 .alphabet-tool__nav {
     flex: 1;
     min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
 }
 
 .alphabet-tool__nav .calendar-title {
     min-width: 0;
     flex: 1;
     max-width: 5.5rem;
-    font-size: 0.82rem;
+    font-size: 0.75rem;
 }
 
 .alphabet-tool__nav-start {
@@ -1253,4 +1171,114 @@
     font-size: 0.85rem;
     color: var(--text-muted);
     opacity: 0.35;
+}
+
+/* ==========================================================================
+   MAP TOOL
+   ========================================================================== */
+
+.tool-mount--map {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    height: 100%;
+}
+
+.map-tool {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: 200px;
+}
+
+.map-tool__controls {
+    flex-shrink: 0;
+}
+
+.map-tool__control-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+}
+
+.map-tool__btn {
+    border: 1px solid var(--border-color);
+    background: var(--bg-surface);
+    color: var(--text-main);
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.map-tool__btn:hover {
+    border-color: var(--accent);
+}
+
+.map-tool__btn--active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--text-main);
+}
+
+.map-tool__btn--overlay.map-tool__btn--active {
+    background: color-mix(in srgb, var(--accent) 70%, #0d9488);
+    border-color: color-mix(in srgb, var(--accent) 70%, #0d9488);
+}
+
+.map-tool__btn--loading {
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.map-tool-airport-label {
+    padding: 1px 4px;
+    border: 1px solid rgba(0, 0, 0, 0.35);
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.92);
+    color: #000;
+    font-size: 0.58rem;
+    font-weight: 700;
+    line-height: 1.2;
+    box-shadow: none;
+}
+
+.map-tool-tz-offset {
+    background: none !important;
+    border: none !important;
+}
+
+.map-tool-tz-offset span {
+    display: block;
+    transform: translate(-50%, 0);
+    font-size: 0.54rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #111;
+    white-space: nowrap;
+    pointer-events: none;
+    text-shadow:
+        -1px -1px 0 #fff,
+        1px -1px 0 #fff,
+        -1px 1px 0 #fff,
+        1px 1px 0 #fff;
+}
+
+.map-tool__canvas {
+    flex: 1 1 auto;
+    min-height: 160px;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border-color);
+    background: color-mix(in srgb, var(--bg-primary) 85%, var(--text-muted));
+}
+
+.map-tool__canvas .leaflet-container {
+    height: 100%;
+    width: 100%;
+    font-family: inherit;
 }
