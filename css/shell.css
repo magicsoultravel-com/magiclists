@@ -199,22 +199,9 @@
 .step-row--display {
     align-items: flex-start;
     margin-bottom: 0.2rem;
-    margin-left: -0.12rem;
     gap: 0.28rem;
     font-size: calc(0.65rem * var(--note-font-scale, 1));
     min-width: 0;
-}
-
-.expanded-checklist {
-    --checklist-row-gutter: 0.2rem;
-}
-
-.expanded-checklist .step-row--display {
-    margin-left: 0;
-}
-
-.expanded-checklist .step-row-leading {
-    padding-left: var(--checklist-row-gutter);
 }
 
 .step-row-leading {
@@ -245,6 +232,10 @@
     font-size: 0.5rem;
     line-height: 1;
     cursor: pointer;
+}
+
+.step-collapse-btn {
+    position: relative;
 }
 
 .step-collapse-btn:hover {
@@ -1597,6 +1588,10 @@ body.is-shell-resizing--h * {
 .calendar-note-item,
 .calendar-hour-note {
     font-family: var(--note-font-family, inherit);
+}
+
+.note-surface {
+    --note-text-inset: 0.18rem;
 }
 
 .note-surface .card-content-preview {

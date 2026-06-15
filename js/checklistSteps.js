@@ -335,3 +335,25 @@ export function buildVisibleChecklistSteps(steps, itemId, collapsedKeys = {}) {
 
     return visible;
 }
+
+export function annotateChecklistTreeGuides(visibleRows) {
+    return (visibleRows || []).map((row, i) => {
+        const level = getStepLevel(row.step);
+        const treeLines = [];
+        for (let d = 0; d < level; d++) {
+            let show = false;
+            for (let j = i + 1; j < visibleRows.length; j++) {
+                if (getStepLevel(visibleRows[j].step) > d) {
+                    show = true;
+                    break;
+                }
+            }
+            treeLines.push(show);
+        }
+        const nextLevel = i < visibleRows.length - 1
+            ? getStepLevel(visibleRows[i + 1].step)
+            : -1;
+        const isBranchEnd = nextLevel < level;
+        return { ...row, treeLines, isBranchEnd };
+    });
+}

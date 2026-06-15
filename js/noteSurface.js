@@ -37,7 +37,8 @@ import {
     reorderActiveStepsFromDomOrder,
     stepHasDescendants,
     checklistHasIndentations,
-    buildVisibleChecklistSteps
+    buildVisibleChecklistSteps,
+    annotateChecklistTreeGuides
 } from './checklistSteps.js';
 import { UndoManager } from './undo.js';
 import { escapeHTML, escapeAttr, escapeQuotes } from './domEscape.js';
@@ -610,13 +611,11 @@ export const NoteSurface = {
         bodyId = ''
     } = {}) {
         const titleHtml = this.buildNoteTitleHtml(item, canEdit, { richEdit });
-        const { showContent, showChecklist } = this.resolveNoteBodyVisibility(item, { canEdit, inModalEditor });
         const bodyHtml = this.buildNoteBodyHtml(item, {
             canEdit,
             inModalEditor,
             richEdit
         });
-        const bodyModifier = showChecklist && !showContent ? ' editor-note-body--checklist-only' : '';
         const formatHtml = showFormat ? this.buildNoteFormatPanelHtml(item) : '';
         const configHtml = showConfig
             ? this.buildNoteConfigPanelHtml(item, { categoryOptionsHtml, startParts, endParts })
@@ -641,7 +640,7 @@ export const NoteSurface = {
                 ${toplineHtml}
                 ${formatHtml}
                 ${configHtml}
-                <div class="card-body editor-note-body${bodyModifier}"${bodyIdAttr}>
+                <div class="card-body editor-note-body"${bodyIdAttr}>
                     ${bodyHtml}
                 </div>
                 <div class="${footerDragZone ? `editor-meta-wrap${footerDragZone}` : 'editor-meta-wrap'}">
@@ -912,7 +911,7 @@ export const NoteSurface = {
         let html = '<div class="expanded-checklist">';
         html += this.buildChecklistExpandCollapseAllHtml(item);
 
-        const renderRowHtml = (step, { hasKids = false, isCollapsed = false, collapseKey = '', isDoneSection = false } = {}) => {
+        const renderRowHtml = (step, { hasKids = false, isCollapsed = false, collapseKey = '', isDoneSection = false, treeLines = [], isBranchEnd = false } = {}) => {
             const level = getStepLevel(step);
             const collapseControl = !isDoneSection && hasKids
                 ? `<button type="button" class="step-collapse-btn" data-collapse-key="${this.escapeAttr(collapseKey)}" title="${isCollapsed ? 'Expand group' : 'Collapse group'}" aria-label="${isCollapsed ? 'Expand group' : 'Collapse group'}">${isCollapsed ? '▶' : '▼'}</button>`
@@ -943,8 +942,22 @@ export const NoteSurface = {
                 const richClass = stepRich ? ' rich-text' : '';
                 textHtml = `<span class="step-text${richClass} ${step.completed ? 'completed' : ''}">${this.renderRichHtml(stepText)}</span>`;
             }
+            const groupOpenClass = !isDoneSection && hasKids && !isCollapsed ? ' step-row--group-open' : '';
+            let treeRailHtml = '';
+            if (!isDoneSection && level > 0 && treeLines.length > 0) {
+                const lineSpans = treeLines.map((show, d) => {
+                    const endClass = d === treeLines.length - 1 && isBranchEnd ? ' step-tree-line--end' : '';
+                    const offClass = show ? '' : ' step-tree-line--off';
+                    return `<span class="step-tree-line${endClass}${offClass}"></span>`;
+                }).join('');
+                treeRailHtml = `<span class="step-tree-rail" aria-hidden="true">${lineSpans}</span>`;
+            } else if (isDoneSection && level > 0) {
+                const spacers = Array.from({ length: level }, () => '<span class="step-tree-line step-tree-line--off"></span>').join('');
+                treeRailHtml = `<span class="step-tree-rail" aria-hidden="true">${spacers}</span>`;
+            }
             return `
-                <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}" data-step-id="${step.id}" data-level="${level}" style="padding-left:${level * 0.45}rem">
+                <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}${groupOpenClass}" data-step-id="${step.id}" data-level="${level}">
+                    ${treeRailHtml}
                     <div class="step-row-leading">
                         ${collapseControl}
                         ${dragHandle}
@@ -960,7 +973,7 @@ export const NoteSurface = {
             `;
         };
 
-        buildVisibleChecklistSteps(active, item.id, collapsedKeys)
+        annotateChecklistTreeGuides(buildVisibleChecklistSteps(active, item.id, collapsedKeys))
             .forEach((row) => { html += renderRowHtml(row.step, row); });
 
         if (canEdit) {

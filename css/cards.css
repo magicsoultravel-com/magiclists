@@ -650,7 +650,7 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 .card-content-preview {
     font-size: calc(0.65rem * var(--note-font-scale, 1));
     margin: 0;
-    padding-left: 0.18rem;
+    padding-left: var(--note-text-inset, 0.18rem);
     line-height: 1.4;
     white-space: pre-wrap;
     word-wrap: break-word;
@@ -665,6 +665,10 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
     border: none;
 }
 
+.expanded-checklist .step-row-leading {
+    padding-left: 0.2rem;
+}
+
 .checklist-toolbar {
     display: flex;
     justify-content: flex-end;
@@ -673,7 +677,7 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
     min-height: 0;
 }
 
-.editor-note-body--checklist-only .checklist-toolbar {
+.editor-note-body:has(.expanded-checklist):not(:has(.card-content-preview)) .checklist-toolbar {
     position: relative;
     z-index: 5;
     padding-right: 2.8rem;
@@ -683,11 +687,7 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
     width: 13px;
     height: 13px;
     min-width: 13px;
-    opacity: 0.7;
-}
-
-.editor-note-body--checklist-only .checklist-toolbar .checklist-expand-collapse-all-btn {
-    opacity: 0.75;
+    opacity: 0.65;
 }
 
 .checklist-toolbar .checklist-expand-collapse-all-btn svg {
@@ -704,6 +704,53 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 .expanded-checklist .step-collapse-btn,
 .expanded-checklist .step-collapse-spacer {
     width: 10px;
+}
+
+.step-tree-rail {
+    display: flex;
+    flex-shrink: 0;
+    align-self: stretch;
+}
+
+.step-tree-line {
+    flex-shrink: 0;
+    width: 0.45rem;
+    position: relative;
+}
+
+.step-tree-line::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: color-mix(in srgb, var(--border-color) 55%, transparent);
+}
+
+.step-tree-line--off::before {
+    display: none;
+}
+
+.step-tree-line--end::before {
+    bottom: 50%;
+}
+
+.step-row--group-open .step-collapse-btn::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 100%;
+    width: 1px;
+    height: 0.35rem;
+    background: color-mix(in srgb, var(--border-color) 55%, transparent);
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+.has-custom-bg .step-tree-line::before,
+.has-custom-bg .step-row--group-open .step-collapse-btn::after {
+    background: color-mix(in srgb, var(--card-border-subtle) 70%, transparent);
 }
 
 .checklist-done-divider {
