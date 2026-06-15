@@ -119,6 +119,7 @@ export const Timezone = {
     sectionCollapsed: false,
     adjustOpen: false,
     savedPanelHeight: null,
+    savedPanelWidth: null,
     onDocumentPointerDown: null,
     onKeyDown: null,
 
@@ -127,6 +128,9 @@ export const Timezone = {
         const panel = mountElement.closest('.tool-panel');
         if (panel?.style.height) {
             this.savedPanelHeight = panel.style.height;
+        }
+        if (panel?.style.width) {
+            this.savedPanelWidth = panel.style.width;
         }
         this.loadPrefs();
         this.render();
@@ -172,13 +176,13 @@ export const Timezone = {
     render() {
         const now = new Date();
         const currentHours = now.getHours() + now.getMinutes() / 60;
-        const filterClass = this.filterSelectedOnly ? ' tz-tool-stack--filter-selected' : '';
         const toggleClass = this.sectionCollapsed ? ' collapsed' : '';
 
         this.container.innerHTML = `
-            <div class="tool-stack tz-tool-stack${filterClass}">
+            <div class="tool-stack tz-tool-stack">
                 <div class="collapsable-header list-row--header" id="tz-section-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle${toggleClass}">▼</span>Timezones</span>
+                    <button type="button" class="collapsable-toggle tz-header-toggle${toggleClass}" aria-expanded="${this.sectionCollapsed ? 'false' : 'true'}" aria-label="${this.sectionCollapsed ? 'Expand timezones' : 'Collapse timezones'}">▼</button>
+                    <span class="tz-header-title">Timezones</span>
                     <div class="tz-tool__compact" data-tz-compact></div>
                     <div class="tz-toolbar toolbar toolbar--end">
                         <div class="tz-toolbar__adjust-wrap">
@@ -223,14 +227,19 @@ export const Timezone = {
 
     buildZoneList() {
         const tbody = document.getElementById('tz-table-body');
-        if (!tbody) return;
+        const compact = this.container?.querySelector('[data-tz-compact]');
+        if (!tbody || !compact) return;
 
-        tbody.innerHTML = this.sortedZones.map((zone) => {
+        const tableRows = [];
+        const compactRows = [];
+
+        this.sortedZones.forEach((zone) => {
             const isUtc = zone.offsetMinutes === 0;
-            const extraClass = isUtc ? ' tz-row--utc' : '';
+            const rowClass = isUtc ? ' tz-row--utc' : '';
+            const compactClass = isUtc ? ' tz-compact-row--accent' : '';
             const checked = this.selectedOffsets.has(zone.offsetMinutes) ? ' checked' : '';
-            return `
-                <tr class="tz-row${extraClass}" data-offset="${zone.offsetMinutes}" data-zone-id="${zone.zoneId}" data-abbr="${zone.abbr}">
+            tableRows.push(`
+                <tr class="tz-row${rowClass}" data-offset="${zone.offsetMinutes}" data-zone-id="${zone.zoneId}" data-abbr="${zone.abbr}">
                     <td class="tz-col-check">
                         <input type="checkbox" class="tz-row-check"${checked} aria-label="Show ${zone.city}">
                     </td>
@@ -239,8 +248,21 @@ export const Timezone = {
                     <td class="tz-col-time"></td>
                     <td class="tz-col-date"></td>
                 </tr>
-            `;
-        }).join('');
+            `);
+            compactRows.push(`
+                <div class="tz-compact-row${compactClass}" data-offset="${zone.offsetMinutes}">
+                    <span class="tz-compact-city u-truncate">${zone.city}</span>
+                    <span class="tz-compact-time"></span>
+                </div>
+            `);
+        });
+
+        tbody.innerHTML = tableRows.join('');
+        compact.innerHTML = compactRows.join('');
+    },
+
+    compactRowForOffset(offset) {
+        return this.container?.querySelector(`.tz-compact-row[data-offset="${offset}"]`);
     },
 
     setupListeners() {
@@ -249,7 +271,7 @@ export const Timezone = {
         const adjustBtn = this.container?.querySelector('.tz-adjust-btn');
         const adjustPopover = this.container?.querySelector('.tz-adjust-popover');
         const filterBtn = this.container?.querySelector('.tz-filter-btn');
-        const toggle = this.container?.querySelector('#tz-section-header .collapsable-toggle');
+        const toggle = this.container?.querySelector('.tz-header-toggle');
         const tbody = document.getElementById('tz-table-body');
 
         toggle?.addEventListener('click', (e) => {
@@ -293,8 +315,6 @@ export const Timezone = {
             filterBtn.classList.toggle('is-active', this.filterSelectedOnly);
             filterBtn.setAttribute('aria-pressed', this.filterSelectedOnly ? 'true' : 'false');
             filterBtn.innerHTML = this.filterSelectedOnly ? CARD_ICONS.hide : CARD_ICONS.show;
-            this.container?.querySelector('.tz-tool-stack')?.classList.toggle('tz-tool-stack--filter-selected', this.filterSelectedOnly);
-            this.container?.querySelector('.tz-filter-hint')?.classList.toggle('is-hidden', !this.filterSelectedOnly || this.sectionCollapsed);
             this.savePrefs();
             this.applyFilter();
             this.applySectionCollapsed(false);
@@ -332,11 +352,17 @@ export const Timezone = {
     },
 
     applySectionCollapsed(scrollOnExpand) {
+        const panel = this.container?.closest('.tool-panel');
+        const stack = this.container?.querySelector('.tz-tool-stack');
         const section = this.container?.querySelector('#tz-section');
-        const toggle = this.container?.querySelector('#tz-section-header .collapsable-toggle');
+        const toggle = this.container?.querySelector('.tz-header-toggle');
 
         section?.classList.toggle('collapsed', this.sectionCollapsed);
+        stack?.classList.toggle('tz-tool-stack--collapsed', this.sectionCollapsed);
         toggle?.classList.toggle('collapsed', this.sectionCollapsed);
+        toggle?.setAttribute('aria-expanded', this.sectionCollapsed ? 'false' : 'true');
+        toggle?.setAttribute('aria-label', this.sectionCollapsed ? 'Expand timezones' : 'Collapse timezones');
+        panel?.classList.toggle('tool-panel--tz-collapsed', this.sectionCollapsed);
         this.container?.querySelector('.tz-filter-hint')?.classList.toggle('is-hidden', !this.filterSelectedOnly || this.sectionCollapsed);
 
         if (this.sectionCollapsed) {
@@ -345,8 +371,50 @@ export const Timezone = {
             requestAnimationFrame(() => this.scrollToUtc());
         }
 
-        this.syncPanelFit();
-        this.updateCompactPreview();
+        this.syncPanelLayout();
+    },
+
+    syncPanelLayout() {
+        const panel = this.container?.closest('.tool-panel');
+        if (!panel) return;
+
+        const tbody = document.getElementById('tz-table-body');
+        const visibleCount = tbody?.querySelectorAll('.tz-row:not(.is-hidden)').length ?? 0;
+        const shouldFit = this.sectionCollapsed
+            || (this.filterSelectedOnly && visibleCount > 0 && visibleCount <= FIT_VISIBLE_THRESHOLD);
+
+        if (shouldFit) {
+            if (!this.savedPanelHeight && panel.style.height) {
+                this.savedPanelHeight = panel.style.height;
+            }
+            panel.classList.add('tool-panel--auto-height', 'tool-panel--tz-fit');
+            panel.style.height = '';
+        } else {
+            panel.classList.remove('tool-panel--auto-height', 'tool-panel--tz-fit');
+            if (this.savedPanelHeight) {
+                panel.style.height = this.savedPanelHeight;
+            } else {
+                panel.style.height = `${DEFAULT_PANEL_HEIGHT}px`;
+            }
+        }
+
+        if (this.sectionCollapsed) {
+            if (!this.savedPanelWidth) {
+                this.savedPanelWidth = panel.style.width || `${panel.offsetWidth}px`;
+            }
+            requestAnimationFrame(() => {
+                const header = this.container?.querySelector('#tz-section-header');
+                const body = panel.querySelector('.tool-panel__body');
+                const bodyPad = body
+                    ? (parseFloat(getComputedStyle(body).paddingLeft) || 0)
+                        + (parseFloat(getComputedStyle(body).paddingRight) || 0)
+                    : 16;
+                const fitW = Math.ceil((header?.scrollWidth || 0) + bodyPad + 3);
+                panel.style.width = `${Math.max(fitW, 108)}px`;
+            });
+        } else if (this.savedPanelWidth) {
+            panel.style.width = this.savedPanelWidth;
+        }
     },
 
     openAdjustPopover() {
@@ -378,64 +446,10 @@ export const Timezone = {
             const check = row.querySelector('.tz-row-check');
             const show = !filterActive || check?.checked;
             row.classList.toggle('is-hidden', !show);
+            this.compactRowForOffset(row.dataset.offset)?.classList.toggle('is-hidden', !show);
         });
 
-        this.syncPanelFit();
-        this.updateCompactPreview();
-    },
-
-    getVisibleRows() {
-        const tbody = document.getElementById('tz-table-body');
-        if (!tbody) return [];
-        return [...tbody.querySelectorAll('.tz-row:not(.is-hidden)')];
-    },
-
-    getVisibleRowCount() {
-        return this.getVisibleRows().length;
-    },
-
-    updateCompactPreview() {
-        const mount = this.container?.querySelector('[data-tz-compact]');
-        if (!mount) return;
-
-        const rows = this.getVisibleRows();
-        if (!rows.length) {
-            mount.innerHTML = '<span class="tz-compact-empty">No timezones</span>';
-            return;
-        }
-
-        mount.innerHTML = rows.map((row) => {
-            const city = row.querySelector('.tz-col-city')?.textContent?.trim() || '';
-            const time = row.querySelector('.tz-col-time')?.textContent?.trim() || '—';
-            const extraClass = row.classList.contains('tz-row--utc') || row.classList.contains('tz-row--local')
-                ? ' tz-compact-row--accent'
-                : '';
-            return `<div class="tz-compact-row${extraClass}"><span class="tz-compact-city u-truncate">${city}</span><span class="tz-compact-time">${time}</span></div>`;
-        }).join('');
-    },
-
-    syncPanelFit() {
-        const panel = this.container?.closest('.tool-panel');
-        if (!panel) return;
-
-        const visibleCount = this.getVisibleRowCount();
-        const shouldFit = this.sectionCollapsed
-            || (this.filterSelectedOnly && visibleCount > 0 && visibleCount <= FIT_VISIBLE_THRESHOLD);
-
-        if (shouldFit) {
-            if (!this.savedPanelHeight && panel.style.height) {
-                this.savedPanelHeight = panel.style.height;
-            }
-            panel.classList.add('tool-panel--auto-height', 'tool-panel--tz-fit');
-            panel.style.height = '';
-        } else {
-            panel.classList.remove('tool-panel--auto-height', 'tool-panel--tz-fit');
-            if (this.savedPanelHeight) {
-                panel.style.height = this.savedPanelHeight;
-            } else {
-                panel.style.height = `${DEFAULT_PANEL_HEIGHT}px`;
-            }
-        }
+        this.syncPanelLayout();
     },
 
     scrollToUtc() {
@@ -462,6 +476,8 @@ export const Timezone = {
             const abbrEl = row.querySelector('.tz-col-abbr');
             const timeEl = row.querySelector('.tz-col-time');
             const dateEl = row.querySelector('.tz-col-date');
+            const compactRow = this.compactRowForOffset(row.dataset.offset);
+            const compactTimeEl = compactRow?.querySelector('.tz-compact-time');
 
             if (abbrEl) abbrEl.textContent = getZoneAbbr(baseDate, zoneId, fallbackAbbr);
 
@@ -469,20 +485,29 @@ export const Timezone = {
                 const formatted = formatZoneTime(baseDate, zoneId);
                 if (timeEl) timeEl.textContent = formatted.time;
                 if (dateEl) dateEl.textContent = formatted.date;
+                if (compactTimeEl) compactTimeEl.textContent = formatted.time;
             } catch {
                 if (timeEl) timeEl.textContent = '—';
                 if (dateEl) dateEl.textContent = '';
+                if (compactTimeEl) compactTimeEl.textContent = '—';
             }
+
+            compactRow?.classList.toggle('tz-compact-row--accent', isUtc || isLocal);
         });
 
-        this.updateCompactPreview();
+        if (this.sectionCollapsed) {
+            this.syncPanelLayout();
+        }
     },
 
     destroy() {
         this.closeAdjustPopover();
         const panel = this.container?.closest('.tool-panel');
         if (panel) {
-            panel.classList.remove('tool-panel--tz-fit', 'tool-panel--auto-height');
+            panel.classList.remove('tool-panel--tz-fit', 'tool-panel--tz-collapsed', 'tool-panel--auto-height');
+            if (this.savedPanelWidth) {
+                panel.style.width = this.savedPanelWidth;
+            }
         }
         if (this.onDocumentPointerDown) {
             document.removeEventListener('pointerdown', this.onDocumentPointerDown);
