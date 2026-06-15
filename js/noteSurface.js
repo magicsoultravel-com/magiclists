@@ -80,6 +80,15 @@ function formatNoteLineCount(n) {
     return n === 1 ? '1 line' : `${n} lines`;
 }
 
+function escapeHTML(str) {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function escapeAttr(str) {
+    return escapeHTML(str).replace(/"/g, '&quot;');
+}
+
 export const NoteSurface = {
     snapshotItem(item) {
         return JSON.parse(JSON.stringify(item));
@@ -224,13 +233,13 @@ export const NoteSurface = {
         if (!str) return '';
         const prepared = String(str).replace(/\u2028/g, '<br>').replace(/\n/g, '<br>');
         if (hasRichMarkup(prepared)) return sanitizeRichHtml(prepared);
-        return sanitizeRichHtml(this.escapeHTML(prepared));
+        return sanitizeRichHtml(escapeHTML(prepared));
     },
 
     prepareContentForEdit(content) {
         const prepared = String(content || '').replace(/\u2028/g, '<br>').replace(/\n/g, '<br>');
         if (hasRichMarkup(prepared)) return sanitizeRichHtml(prepared);
-        return sanitizeRichHtml(this.escapeHTML(prepared));
+        return sanitizeRichHtml(escapeHTML(prepared));
     },
 
     tryOpenRichEditLink(e, host) {
@@ -1932,38 +1941,31 @@ export const NoteSurface = {
             <button type="button" class="card-act checklist-expand-collapse-all-btn" title="${this.escapeAttr(label)}" aria-label="${this.escapeAttr(label)}">${icon}</button>
         </div>`;
     },
-    escapeHTML(str) {
-        if (!str) return '';
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    },
 
-    escapeAttr(str) {
-        return this.escapeHTML(str).replace(/"/g, '&quot;');
-    }
+    escapeHTML,
+    escapeAttr
 };
 
-export const {
-    snapshotItem,
-    emitItemMutation,
-    mutateItem,
-    commitInlineChecklistOp,
-    commitInlineTextOp,
-    syncInlineFieldToItem,
-    syncItemBodyFromDom,
-    renderRichHtml,
-    buildNoteEditorShell,
-    bindNoteEditorShell,
-    attachNoteBodyInteractions,
-    buildNoteBodyHtml,
-    buildNoteQuickActionsHtml,
-    canEditInline,
-    focusInlineEdit,
-    focusPendingChecklistStep,
-    escapeHTML,
-    escapeAttr,
-    escapeQuotes,
-    resolveEditorBodyLayoutUnchecked,
-    updateConvertButtons,
-    updateNoteMetaStats,
-    formatNoteListDate
-} = NoteSurface;
+export { escapeHTML, escapeAttr };
+
+export const snapshotItem = NoteSurface.snapshotItem.bind(NoteSurface);
+export const emitItemMutation = NoteSurface.emitItemMutation.bind(NoteSurface);
+export const mutateItem = NoteSurface.mutateItem.bind(NoteSurface);
+export const commitInlineChecklistOp = NoteSurface.commitInlineChecklistOp.bind(NoteSurface);
+export const commitInlineTextOp = NoteSurface.commitInlineTextOp.bind(NoteSurface);
+export const syncInlineFieldToItem = NoteSurface.syncInlineFieldToItem.bind(NoteSurface);
+export const syncItemBodyFromDom = NoteSurface.syncItemBodyFromDom.bind(NoteSurface);
+export const renderRichHtml = NoteSurface.renderRichHtml.bind(NoteSurface);
+export const buildNoteEditorShell = NoteSurface.buildNoteEditorShell.bind(NoteSurface);
+export const bindNoteEditorShell = NoteSurface.bindNoteEditorShell.bind(NoteSurface);
+export const attachNoteBodyInteractions = NoteSurface.attachNoteBodyInteractions.bind(NoteSurface);
+export const buildNoteBodyHtml = NoteSurface.buildNoteBodyHtml.bind(NoteSurface);
+export const buildNoteQuickActionsHtml = NoteSurface.buildNoteQuickActionsHtml.bind(NoteSurface);
+export const canEditInline = NoteSurface.canEditInline.bind(NoteSurface);
+export const focusInlineEdit = NoteSurface.focusInlineEdit.bind(NoteSurface);
+export const focusPendingChecklistStep = NoteSurface.focusPendingChecklistStep.bind(NoteSurface);
+export const escapeQuotes = NoteSurface.escapeQuotes.bind(NoteSurface);
+export const resolveEditorBodyLayoutUnchecked = NoteSurface.resolveEditorBodyLayoutUnchecked.bind(NoteSurface);
+export const updateConvertButtons = NoteSurface.updateConvertButtons.bind(NoteSurface);
+export const updateNoteMetaStats = NoteSurface.updateNoteMetaStats.bind(NoteSurface);
+export const formatNoteListDate = NoteSurface.formatNoteListDate.bind(NoteSurface);
