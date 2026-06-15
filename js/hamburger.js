@@ -1,7 +1,7 @@
 import { UNCATEGORIZED_CATEGORY } from './categories.js';
 import { itemHasCategory } from './focusFilter.js';
-import { ACTION_ICONS, CARD_ICONS, UI, formatStorageSize, getStorageBreakdown } from './ui.js';
-import { getLocalStorageByteEstimate, getLocalStorageUsageBreakdown } from './layoutStorage.js';
+import { ACTION_ICONS, CARD_ICONS } from './icons.js';
+import { formatStorageSize, getLocalStorageByteEstimate, getLocalStorageUsageBreakdown, getStorageBreakdown } from './layoutStorage.js';
 import { resolveNoteColor } from './colorPicker.js';
 import { hasRichMarkup, stripRichText } from './richText.js';
 import { describeHistoryEntry, UndoManager } from './undo.js';

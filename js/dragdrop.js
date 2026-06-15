@@ -5,19 +5,18 @@ import {
     readStoredCategories,
     UNCATEGORIZED_CATEGORY
 } from './categories.js';
+import { UI, isDesktopCard } from './ui.js';
+import { itemHasCategory } from './focusFilter.js';
 import {
-    UI,
-    itemHasCategory,
-    isDesktopCard,
     FREEFORM_MIN_W,
     FREEFORM_MIN_H,
-    CANVAS_COL_GAP,
-    CANVAS_LAYOUT_ORIGIN,
-    getGridMetrics
-} from './ui.js';
-import { isCollapsedSpatialSize, resolveTileSize } from './tileGeometry.js';
+    isCollapsedSpatialSize,
+    resolveTileSize,
+    isAtOrBelowCompactZone,
+    inferTileTier
+} from './tileGeometry.js';
+import { CANVAS_COL_GAP, CANVAS_LAYOUT_ORIGIN, getGridMetrics } from './gridDensity.js';
 import { initFileCabinetDrag, isFileCabinetActive, fileItemToCabinet, shouldFileItem } from './fileCabinet.js';
-import { isAtOrBelowCompactZone } from './tileGeometry.js';
 
 const DRAG_THRESHOLD = 4;
 const GRID_SCROLL_EDGE = 40;
@@ -127,14 +126,6 @@ function finishSnapPanelGesture(card, {
     } else if (item) {
         tileSize = promoteExpandedResizeToLargeTier(card, item);
     }
-    if (item && card.classList.contains('expanded') && !isDesktopCard(card)
-        && isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(item))) {
-        onCollapseFromResize(card, item, rect, { animate, bounds });
-        maybeRepartitionFileCabinetAfterResize(canvas, card, currentItems);
-        cleanupActive?.();
-        return;
-    }
-
     saveLayout(card, rect, {
         updateRemembered: !isCollapsedSpatialSize(rect.w, rect.h, tileSize)
     });
@@ -530,7 +521,7 @@ export const DragDropEngine = {
                 if (snapEnabled) {
                     if (item && tierResizeState && UI.isSpatiallyCollapsed(card)) {
                         const { w, h } = UI.readFreeformCardSize(card);
-                        tierResizeState.previewTier = UI.inferCollapsedTileTier(
+                        tierResizeState.previewTier = inferTileTier(
                             w,
                             h,
                             tierResizeState.previewTier
@@ -585,7 +576,6 @@ export const DragDropEngine = {
                     if (cardIsPinned(card)) return;
                     e.preventDefault();
                     e.stopPropagation();
-                    UI.cancelCardAnimation(card);
                     if (snapEnabled) UI.raiseDesktopCard(card);
                     const { w: startW, h: startH } = UI.readFreeformCardSize(card);
                     const itemMatch = currentItems.find((i) => i.id === card.dataset.id);

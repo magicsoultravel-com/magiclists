@@ -1,5 +1,5 @@
 import { clampPanelToViewport } from './popoverPosition.js';
-import { CARD_ICONS } from './ui.js';
+import { CARD_ICONS } from './icons.js';
 import { readQuickActionsDock, writeQuickActionsDock, writeSidebarSection } from './sidebarPrefs.js';
 
 export const SidebarQuickActions = {

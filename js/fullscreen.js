@@ -1,4 +1,4 @@
-import { ACTION_ICONS } from './ui.js';
+import { ACTION_ICONS } from './icons.js';
 
 function isSupported() {
     return typeof document.documentElement.requestFullscreen === 'function';

@@ -4,7 +4,7 @@ import { TvPlayer } from './tvPlayer.js';
 import { TvPopover } from './tvPopover.js';
 import { clampPanelToViewport } from './popoverPosition.js';
 import { escapeHtml, countryFlagEmoji, debounce, syncMarquee, bindFaviconImage } from './tvUtils.js';
-import { ACTION_ICONS, CARD_ICONS } from './ui.js';
+import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { applySectionCollapse } from './hamburger.js';
 import { showAppToast } from './toast.js';
 

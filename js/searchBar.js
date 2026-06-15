@@ -1,5 +1,5 @@
 import { isSearchActive, querySearch } from './searchFilter.js';
-import { CARD_ICONS } from './ui.js';
+import { CARD_ICONS } from './icons.js';
 import { SidePanel } from './hamburger.js';
 
 const DEBOUNCE_MS = 150;

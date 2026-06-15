@@ -4,7 +4,7 @@ import { RadioPlayer } from './radioPlayer.js';
 import { RadioPopover } from './radioPopover.js';
 import { clampPanelToViewport } from './popoverPosition.js';
 import { escapeHtml, countryFlagEmoji, debounce, syncMarquee, bindFaviconImage } from './radioUtils.js';
-import { ACTION_ICONS, CARD_ICONS } from './ui.js';
+import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { applySectionCollapse } from './hamburger.js';
 
 const BROWSE_PAGE_SIZE = 60;

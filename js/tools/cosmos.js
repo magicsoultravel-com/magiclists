@@ -2,7 +2,7 @@
 /** @tool-icon <circle cx="6" cy="6" r="1.1" fill="currentColor" opacity="0.9"/><circle cx="9.2" cy="4.2" r="0.55" fill="none" stroke="currentColor" stroke-width="0.75"/><path d="M2.5 8.5c1.2-1.8 2.8-2.7 4.8-2.7M9.8 3.2l.4 1.1 1.1.2-.9.7.3 1.1-1-.7-1 .7.3-1.1-.9-.7 1.1-.2z" fill="none" stroke="currentColor" stroke-width="0.7" stroke-linecap="round" stroke-linejoin="round"/> */
 import { COSMOS_VIEWS } from './cosmos-data.js';
 import { createCosmosViewport } from './cosmos-viewport.js';
-import { ACTION_ICONS } from '../ui.js';
+import { ACTION_ICONS } from '../icons.js';
 
 const STORAGE_KEY = 'cosmos_view';
 

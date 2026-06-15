@@ -15,7 +15,7 @@ import './cloud/megaProvider.js';
 import { SidePanel } from './hamburger.js';
 import { clampPanelToViewport, positionPopoverBelowAnchor } from './popoverPosition.js';
 import { showAppToast } from './toast.js';
-import { CARD_ICONS } from './ui.js';
+import { CARD_ICONS } from './icons.js';
 
 const CONFIG_KEY = 'matrix_cloud_config';
 const POPOVER_POS_KEY = 'matrix_cloud_popover_pos';

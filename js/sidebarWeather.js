@@ -1,7 +1,7 @@
 import { WeatherApi } from './weatherApi.js';
 import { applySectionCollapse } from './hamburger.js';
 import { escapeHtml } from './radioUtils.js';
-import { ACTION_ICONS } from './ui.js';
+import { ACTION_ICONS } from './icons.js';
 import { conditionLabel, weatherIconSvg, weatherIconSvgFromCode } from './weatherProviders/weatherIcons.js';
 
 const REFRESH_ICON = ACTION_ICONS.resetCustomization;

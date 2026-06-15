@@ -1,6 +1,6 @@
 import { positionPanelBelowElement, clampPanelToViewport } from './popoverPosition.js';
 import { RadioPlayer } from './radioPlayer.js';
-import { CARD_ICONS } from './ui.js';
+import { CARD_ICONS } from './icons.js';
 
 const MIN_BROWSER_W = 240;
 const MIN_BROWSER_H = 200;

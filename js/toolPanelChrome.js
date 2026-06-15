@@ -1,6 +1,6 @@
 // js/toolPanelChrome.js — floating desktop tool panels (drag, resize, collapse chip)
 import { raiseDesktopElement } from './desktopStack.js';
-import { CARD_ICONS } from './ui.js';
+import { CARD_ICONS } from './icons.js';
 
 const STORAGE_KEY = 'magiclists_tool_panels';
 

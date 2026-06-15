@@ -10,7 +10,7 @@ import { DesktopZoom } from './desktopZoom.js';
 import { ChromeBackground } from './chromeBackground.js';
 import { DesktopBackground } from './desktopBackground.js';
 import { resetCustomizationToDefaults } from './customizationReset.js';
-import { ACTION_ICONS, CARD_ICONS } from './ui.js';
+import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { AppTheme, buildThemeOptionsHtml, isAppThemeCustomized, readAppTheme } from './appTheme.js';
 import {
     applyBrandIcon,

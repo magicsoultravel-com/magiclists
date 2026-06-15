@@ -1,5 +1,7 @@
 ﻿import { API } from './api.js';
-import { UI, ACTION_ICONS, createNoteId } from './ui.js';
+import { ACTION_ICONS } from './icons.js';
+import { createNoteId } from './noteModel.js';
+import { UI } from './ui.js';
 import { Editor } from './editor.js';
 import { DragDropEngine } from './dragdrop.js';
 import { ToolsManager } from './toolsManager.js';

@@ -2,7 +2,14 @@
 import { ColorPicker, PALETTE_NOTE, randomNoteColor, resolveNoteColor } from './colorPicker.js';
 import { EditorModalChrome } from './editorModalChrome.js';
 import { sanitizeRichHtml, stripRichText } from './richText.js';
-import { CARD_ICONS, UI, createNoteId, defaultStartDateTimeNow, noteHasSavableContent, normalizeItemForSave } from './ui.js';
+import { CARD_ICONS } from './icons.js';
+import {
+    createNoteId,
+    defaultStartDateTimeNow,
+    noteHasSavableContent,
+    normalizeItemForSave
+} from './noteModel.js';
+import { UI } from './ui.js';
 
 export const Editor = {
     overlay: null,

@@ -108,32 +108,49 @@ import {
     readRememberedSize as geoReadRememberedSize,
     resolveSpatialFallbackRect as geoResolveSpatialFallbackRect
 } from './tileGeometry.js';
+import { CARD_ICONS, FORMAT_ICONS, ACTION_ICONS, DRAWING_ICONS } from './icons.js';
+import {
+    deriveNoteTitle,
+    createNoteId,
+    noteHasSavableContent,
+    formatLocalDateTimeParts,
+    defaultStartDateTimeNow,
+    normalizeItemForSave
+} from './noteModel.js';
+import {
+    getStepLevel,
+    partitionChecklistSteps,
+    reorderStepsByCompletion,
+    moveStepOnCompletionChange,
+    collectStepSubtree,
+    collectStepSubtreeIds,
+    findStepParentIndex,
+    applySubtreeLevelDelta,
+    normalizeChecklistLevels,
+    previewDropTargetLevel,
+    resolveDropTarget,
+    computeChecklistInsertBounds,
+    computeVisibleInsertBounds,
+    resolvePointerDropTarget,
+    getStepRowLevel,
+    collectDomRowBlock,
+    clampChecklistInsertIndex,
+    reorderActiveStepsFromDomOrder,
+    stepHasDescendants,
+    levelListHasDescendants,
+    checklistHasIndentations,
+    buildVisibleChecklistSteps
+} from './checklistSteps.js';
 
+export { CARD_ICONS, FORMAT_ICONS, ACTION_ICONS, DRAWING_ICONS } from './icons.js';
 export {
-    FREEFORM_DEFAULT_W,
-    FREEFORM_DEFAULT_H,
-    FREEFORM_EXPANDED_W,
-    FREEFORM_MIN_W,
-    FREEFORM_MIN_H,
-    FREEFORM_EXPANDED_DEFAULT_H,
-    CANVAS_COL_GAP,
-    getCanvasColGap,
-    CANVAS_LAYOUT_ORIGIN,
-    COLUMN_GRID_GAP,
-    TILE_LABEL_H,
-    TILE_RESIZE_MIN_W,
-    TILE_RESIZE_MIN_H,
-    TILE_LARGE_W_CELLS,
-    TILE_LARGE_H_CELLS,
-    TILE_NOTE_W_CELLS,
-    TILE_NOTE_H_CELLS,
-    TILE_SIZES,
-    DEFAULT_TILE_SIZE,
-    LEGACY_TILE_SIZE,
-    normalizeTileSize,
-    resolveTileSize
-} from './tileGeometry.js';
-export { getGridMetrics } from './gridDensity.js';
+    deriveNoteTitle,
+    createNoteId,
+    noteHasSavableContent,
+    formatLocalDateTimeParts,
+    defaultStartDateTimeNow,
+    normalizeItemForSave
+} from './noteModel.js';
 
 const UNCATEGORIZED_COLOR = '#64748b';
 
@@ -145,16 +162,8 @@ const EDITOR_ZOOM_STEP = 0.05;
 const GRID_LAYOUT_KEY = 'matrix_grid_layout';
 const GRID_PINS_KEY = 'matrix_grid_pins';
 const GRID_EXPANDED_KEY = 'matrix_grid_expanded_id';
-const CARD_ANIM_MS = 300;
-const CARD_COMPACT_H = 56;
 const DESKTOP_BOARD_PANE_CLASS = 'desktop-board-pane';
 const boardExtentsFrames = new WeakMap();
-
-const cardAnimSessions = new WeakMap();
-
-export function cardAnimationsEnabled() {
-    return document.documentElement.dataset.cardAnimations !== '0';
-}
 
 let boardItemsById = new Map();
 let activeBoardViewMode = 'grid';
@@ -165,540 +174,6 @@ export function isSnapLayoutMode(mode) {
 
 export function isDesktopCard(card) {
     return card?.dataset?.desktop === '1';
-}
-
-// Chrome icon trope: stroke-first, currentColor, fill="none" on paths/shapes (see ACTION_ICONS).
-// CARD_ICONS 11×12; ACTION_ICONS 12×12.
-
-function paletteIconSvg(size) {
-  const body = `<path d="M6 1.8c-2.3 0-4.2 1.7-4.2 3.9 0 1.4.9 2.5 2.1 3.1L4.8 10h2.4l.9-1.2c1.2-.6 2.1-1.7 2.1-3.1C10.2 3.5 8.3 1.8 6 1.8z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><circle cx="4.4" cy="4.8" r="0.75" fill="none" stroke="currentColor" stroke-width="0.85"/><circle cx="6.2" cy="3.8" r="0.65" fill="none" stroke="currentColor" stroke-width="0.85" opacity="0.85"/><circle cx="7.5" cy="5.2" r="0.6" fill="none" stroke="currentColor" stroke-width="0.85" opacity="0.65"/>`;
-  return `<svg viewBox="0 0 12 12" width="${size}" height="${size}" focusable="false">${body}</svg>`;
-}
-
-export const CARD_ICONS = {
-    calendar: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.5" y="2.5" width="9" height="8" rx="0.8" fill="none" stroke="currentColor" stroke-width="1"/><path d="M1.5 5.2h9M4 1.5v1.6M8 1.5v1.6" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>',
-    expand: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3 5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    collapse: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3 7l3-3 3 3" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    hide: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M1.2 6s1.6-2.8 4.8-2.8S10.8 6 10.8 6 9.2 8.8 6 8.8 1.2 6 1.2 6z" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="6" cy="6" r="1.4" fill="none" stroke="currentColor" stroke-width="1"/><path d="M2 10L10 2" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>',
-    show: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M1.2 6s1.6-2.8 4.8-2.8S10.8 6 10.8 6 9.2 8.8 6 8.8 1.2 6 1.2 6z" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="6" cy="6" r="1.4" fill="none" stroke="currentColor" stroke-width="1"/></svg>',
-    edit: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M8.2 1.8l2 2-6.4 6.4H1.8V8.2L8.2 1.8z" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/></svg>',
-    save: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 6.2l2.6 2.6L9.8 3.8" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    close: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.5 2.5l7 7M9.5 2.5l-7 7" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>',
-    color: paletteIconSvg(11),
-    delete: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3 3.2h6M4.2 3.2V2.4h3.6v.8M4.4 5v4.2M7.6 5v4.2M3.8 3.2l.5 6.3h3.4l.5-6.3" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    archive: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 4.4h7.6v5.4H2.2z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M2 4.4h8V3.5H7.5L6.7 2.5H5.3L4.5 3.5H2v.9z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M5 6.2v2.2M7 6.2v2.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    unarchive: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 5.8h7.6v4H2.2z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M2 5.8h8V4.9H7.5L6.7 3.9H5.3L4.5 4.9H2v.9z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M6 3.2V6.4M6 3.2 4.6 4.6M6 3.2 7.4 4.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    bringFront: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.4" y="4.6" width="7.2" height="5.2" rx="0.55" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M3.4 2.4h7.2v5.2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    pin: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><circle cx="6" cy="3.4" r="2.1" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M6 5.4v4.8M4.6 10.2h2.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
-    unpin: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><circle cx="6" cy="3.4" r="2.1" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M6 5.4v4.8M4.6 10.2h2.8M2.2 2.2l7.6 7.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg>',
-    resize: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M8.2 8.2 10.6 10.6M8.2 8.2V5.8M8.2 8.2H5.8M3.4 3.4 1 1M3.4 3.4V5.8M3.4 3.4H5.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    copy: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="3.5" y="3.8" width="5.8" height="6.4" rx="0.6" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M5.2 2.6h4.2a0.8 0.8 0 0 1 0.8 0.8v4.2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
-    drag: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><circle cx="4.4" cy="3.1" r="0.85" fill="currentColor"/><circle cx="7.6" cy="3.1" r="0.85" fill="currentColor"/><circle cx="4.4" cy="6" r="0.85" fill="currentColor"/><circle cx="7.6" cy="6" r="0.85" fill="currentColor"/><circle cx="4.4" cy="8.9" r="0.85" fill="currentColor"/><circle cx="7.6" cy="8.9" r="0.85" fill="currentColor"/></svg>',
-    star: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M6 1.8 7.4 4.6 10.5 5l-2.2 2.1.5 3.1L6 9.4 3.2 10.2l.5-3.1L1.5 5 4.6 4.6 6 1.8z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
-    starFilled: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M6 1.8 7.4 4.6 10.5 5l-2.2 2.1.5 3.1L6 9.4 3.2 10.2l.5-3.1L1.5 5 4.6 4.6 6 1.8z" fill="currentColor" stroke="currentColor" stroke-width="0.35" stroke-linejoin="round"/></svg>',
-    heart: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M6 10.2S1.5 7.1 1.5 4.4a2.2 2.2 0 0 1 3.8-1.5L6 4.1l.7-.7A2.2 2.2 0 0 1 10.5 4.4C10.5 7.1 6 10.2 6 10.2z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
-    heartFilled: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M6 10.2S1.5 7.1 1.5 4.4a2.2 2.2 0 0 1 3.8-1.5L6 4.1l.7-.7A2.2 2.2 0 0 1 10.5 4.4C10.5 7.1 6 10.2 6 10.2z" fill="currentColor" stroke="currentColor" stroke-width="0.35" stroke-linejoin="round"/></svg>'
-};
-
-export const FORMAT_ICONS = {
-    bold: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3.2 2.2h3.4a2.2 2.2 0 0 1 0 4.4H3.2V2.2zm0 4.2h3.8a2.2 2.2 0 0 1 0 4.4H3.2V6.4z" fill="currentColor"/></svg>',
-    italic: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M5.2 2.2h3.6M6.4 2.2 4.4 9.8M3.2 9.8h3.6" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>',
-    strike: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 6h7.6M4.2 3.2h4.8a2 2 0 0 1 0 4M4.2 8.8h4.4a2 2 0 0 0 0-4" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
-    smaller: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><text x="1.5" y="9" font-size="6" fill="currentColor" font-family="system-ui,sans-serif">A</text><path d="M8 8.5l2.5 1.5" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    larger: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><text x="1" y="9.5" font-size="8" fill="currentColor" font-family="system-ui,sans-serif">A</text><path d="M8.5 7.5l2.5 2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    toChecklist: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.8" y="2.4" width="2.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="1.8" y="5.4" width="2.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="1.8" y="8.4" width="2.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><path d="M5.2 3.5h5M5.2 6.5h5M5.2 9.5h4" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg>',
-    toNotes: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 3.2h7.6M2.2 6h7.6M2.2 8.8h5.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>'
-};
-
-export const ACTION_ICONS = {
-    layoutReset: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 2.8h3.2M2.2 2.8V6M2.2 2.8l2.4 2.4M9.8 9.2H6.6M9.8 9.2V5.8M9.8 9.2 7.4 6.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><rect x="4.2" y="4.2" width="3.6" height="3.6" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
-    collapseAll: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 8.2 6 4.4l3.8 3.8M2.2 4.6 6 0.8l3.8 3.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    expandAll: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 3.8 6 7.6l3.8-3.8M2.2 7.4 6 11.2l3.8-3.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    viewCols: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.6" y="2.2" width="3.6" height="7.6" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.8" y="2.2" width="3.6" height="7.6" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.95"/></svg>',
-    viewFree: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.5" y="2" width="3.2" height="2.6" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="7.3" y="2" width="3.2" height="3.8" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="2.8" y="7.2" width="4.4" height="2.8" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
-    viewGrid: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="1.6" width="3.8" height="3.8" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="6.8" y="1.6" width="3.8" height="3.8" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="1.4" y="6.6" width="8.2" height="3.8" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
-    viewFileCabinet: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="2.2" width="9.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="1.4" y="4.8" width="9.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="1.4" y="7.4" width="9.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
-    category: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="1.4" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.7" y="1.4" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="1.4" y="6.7" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.7" y="6.7" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/></svg>',
-    export: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 2.4h7.6v7.2H2.2z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M2.2 2.4h3.4v2.6H2.2z" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linejoin="round"/><path d="M3.2 6.8h5.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/><rect x="7.8" y="5.6" width="1.2" height="1.2" rx="0.15" fill="none" stroke="currentColor" stroke-width="0.75"/></svg>',
-    import: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 10.4V4.6M3.7 6.9 6 4.6 8.3 6.9" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.2 10.4h7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
-    cloud: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.4 8.8h5.4a2.4 2.4 0 0 0 .2-4.8A3 3 0 0 0 3.6 2.6 2.6 2.6 0 0 0 1.2 6.2 2.4 2.4 0 0 0 3.4 8.8z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/></svg>',
-    cloudExport: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.8 7.2h4.8a1.8 1.8 0 0 0 .1-3.6A2.2 2.2 0 0 0 3 2.8 1.9 1.9 0 0 0 1.2 5.2 1.8 1.8 0 0 0 2.8 7.2z" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linejoin="round"/><path d="M8.8 4.2V8M7.5 5.5 8.8 4.2 10.1 5.5" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    cloudImport: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.8 7.2h4.8a1.8 1.8 0 0 0 .1-3.6A2.2 2.2 0 0 0 3 2.8 1.9 1.9 0 0 0 1.2 5.2 1.8 1.8 0 0 0 2.8 7.2z" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linejoin="round"/><path d="M8.8 7.8V4.4M7.5 6.7 8.8 7.8 10.1 6.7" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    logout: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M4.6 2.1H3.1v7.8h1.5" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/><path d="M6.8 6 10 6M10 6 8.4 4.4M10 6 8.4 7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    undo: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.4 5.6H7.2a2.4 2.4 0 1 1 0 4.8H6.6M3.4 5.6 5.1 3.9M3.4 5.6 5.1 7.3" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    redo: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M8.6 5.6H4.8a2.4 2.4 0 0 0 0 4.8h.6M8.6 5.6 6.9 3.9M8.6 5.6 6.9 7.3" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    sortAlpha: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M1.8 3.2h3.4M1.8 8.4h3.4M1.8 3.2l3.4 5.2" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.4 3v6M7.5 4.1l0.9-1.1 0.9 1.1M7.5 7.9l0.9 1.1 0.9-1.1" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    sortDate: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="4.8" cy="6" r="3.1" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M4.8 4.4V6l1.3 0.9" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.2 3v6M8.3 4.1l0.9-1.1 0.9 1.1M8.3 7.9l0.9 1.1 0.9-1.1" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    desktopBg: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="2.2" width="9.2" height="6.8" rx="0.7" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M2.2 8.4h7.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/><circle cx="4.1" cy="5.4" r="1.1" fill="currentColor" opacity="0.85"/><circle cx="6.6" cy="4.6" r="0.85" fill="currentColor" opacity="0.65"/><circle cx="8.1" cy="6.2" r="0.75" fill="currentColor" opacity="0.5"/></svg>',
-    chromeBg: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.3" y="1.8" width="3.6" height="8.4" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="5.5" y="1.8" width="5.2" height="2.4" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="5.5" y="5" width="5.2" height="5.2" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
-    clockStyle: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.2V6l2 1.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    displayOptions: paletteIconSvg(12),
-    appTheme: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="3.6" cy="4.2" r="1.5" fill="currentColor" opacity="0.9"/><circle cx="6.8" cy="3.4" r="1.5" fill="currentColor" opacity="0.65"/><circle cx="8.4" cy="6.8" r="1.5" fill="currentColor" opacity="0.45"/><path d="M1.4 10.2h9.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    resetCustomization: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 2.2a3.6 3.6 0 1 0 2.3 6.4L7.2 9.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.1 7.4 7.2 9.5 9.3 7.4" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    radioBrowse: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.4" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M2.2 6h7.6M6 2.2v7.6" fill="none" stroke="currentColor" stroke-width="0.75" opacity="0.7"/><ellipse cx="6" cy="6" rx="2.2" ry="4.4" fill="none" stroke="currentColor" stroke-width="0.75" opacity="0.55"/></svg>',
-    tvBrowse: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.8" y="2.8" width="8.4" height="5.6" rx="0.8" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M4.2 9.2h3.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    tvSpecial: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="2.2" y="3" width="7.6" height="5.2" rx="0.6" fill="none" stroke="currentColor" stroke-width="0.9"/><circle cx="6" cy="5.6" r="1.1" fill="none" stroke="currentColor" stroke-width="0.75"/><path d="M4.4 9.4h3.2" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linecap="round"/></svg>',
-    radioRecents: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.4V6l1.8 1.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.8 2.2v1.4h-1.4" fill="none" stroke="currentColor" stroke-width="0.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    radioPlay: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M4.2 2.8 9.4 6 4.2 9.2Z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/></svg>',
-    radioPause: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.8 2.6v6.8M8.2 2.6v6.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
-    radioLoading: '<svg class="sidebar-radio__spin-icon" viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.4a4.6 4.6 0 0 1 4.6 4.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
-    radioSpecial: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="2.2" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.5V2.2M6 9.8v-1.3M3.5 6H2.2M9.8 6H8.5M4.2 4.2 3.2 3.2M8.8 8.8l-1-1M7.8 4.2l1-1M4.2 7.8l-1 1" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linecap="round"/></svg>',
-    drawingPencil: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M8.4 1.4 10.6 3.6 4.8 9.4 2.2 9.8l.4-2.6 5.8-5.8z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M7.2 2.6 9.4 4.8" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linecap="round"/></svg>',
-    drawingExit: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.4 6h6.8M5.2 3.2 2.4 6l2.8 2.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><rect x="7.6" y="2.4" width="2" height="7.2" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
-    fullscreenEnter: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.4 2.4h2.8M2.4 2.4v2.8M9.6 2.4H6.8M9.6 2.4v2.8M2.4 9.6h2.8M2.4 9.6V6.8M9.6 9.6H6.8M9.6 9.6V6.8" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg>',
-    fullscreenExit: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M4.2 4.2H2.8M4.2 4.2V2.8M7.8 4.2h1.4M7.8 4.2V2.8M4.2 7.8H2.8M4.2 7.8v1.4M7.8 7.8h1.4M7.8 7.8v1.4" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg>'
-};
-
-export const DRAWING_ICONS = {
-    pen: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M8.8 1.2 10.8 3.2 4.6 9.4 2.2 9.8l.4-2.4 6.2-6.2z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
-    marker: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.4 8.8h7.2M3.2 8.8l4-5.6 2.4 2.4-4 5.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    highlighter: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2 9.2h8M3.6 9.2l3.2-6 2.4 2.4-3.2 6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
-    pencil: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M7.6 1.6 10.4 4.4 4.2 10.6 1.8 10.8l.2-2.4 5.6-6.8z" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linejoin="round"/></svg>',
-    spray: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="4" cy="5" r="1.2" fill="currentColor" opacity="0.7"/><circle cx="6.5" cy="4" r="0.9" fill="currentColor" opacity="0.5"/><circle cx="8" cy="6.5" r="1" fill="currentColor" opacity="0.6"/><path d="M2 10h8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    calligraphy: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3 9.2c2-5 5-7 7-7" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>',
-    brush: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M8.2 1.8c.8.8.8 2 0 2.8L4.8 8l-2.6.4.4-2.6 3.4-3.4c.8-.8 2-.8 2.8 0z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
-    eraser: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.4 7.6 6.4 3.6l3.2 3.2-4 4H2.4z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/><path d="M5.6 10.8h4.8" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg>',
-    shapes: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.8" y="4.2" width="4.2" height="4.2" rx="0.3" fill="none" stroke="currentColor" stroke-width="0.85"/><circle cx="8.2" cy="4.8" r="2.1" fill="none" stroke="currentColor" stroke-width="0.85"/><path d="M7.2 9.2 9.6 7.2 10.8 9.8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    line: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 9.8 9.8 2.2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
-    arrow: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2 6h6.2M6.8 3.4 10 6l-3.2 2.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    rect: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="2.2" y="3.2" width="7.6" height="5.6" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
-    rounded_rect: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="2.2" y="3.4" width="7.6" height="5.4" rx="1.6" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
-    ellipse: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><ellipse cx="6" cy="6" rx="4" ry="2.8" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
-    triangle: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 2.4 10.2 9.6H1.8Z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
-    diamond: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.8 10.2 6 6 10.2 1.8 6Z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
-    star: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.6 7.4 4.8 10.8 5.1 8.2 7.2 9 10.6 6 8.9 3 10.6 3.8 7.2 1.2 5.1 4.6 4.8Z" fill="none" stroke="currentColor" stroke-width="0.8" stroke-linejoin="round"/></svg>',
-    chevron: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.4 2.4 7.8 6 2.4 9.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    trapezoid: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.2 3.2h5.6L10.2 8.8H1.8Z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
-    parallelogram: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.6 3.2h6.6L9 8.8H2.4Z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
-    cube: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.4 5.2V9.2h5.2V5.2M2.4 5.2l2.6-2 5.2 2M7.6 3.2V7.2l2.6 2V5.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linejoin="round"/></svg>',
-    pyramid: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.8 10.2 9H1.8ZM6 1.8 1.8 9M6 1.8 10.2 9" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linejoin="round"/></svg>',
-    cylinder: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><ellipse cx="6" cy="3.6" rx="3.6" ry="1.2" fill="none" stroke="currentColor" stroke-width="0.85"/><path d="M2.4 3.6V8.4M9.6 3.6V8.4" fill="none" stroke="currentColor" stroke-width="0.85"/><ellipse cx="6" cy="8.4" rx="3.6" ry="1.2" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
-    sphere: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" stroke-width="0.85"/><ellipse cx="6" cy="6" rx="4" ry="1.5" fill="none" stroke="currentColor" stroke-width="0.75"/><path d="M6 2v8" fill="none" stroke="currentColor" stroke-width="0.75"/></svg>',
-    text: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.2 2.8h5.6M6 2.8V9.6M4.4 9.6h3.2" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg>',
-    grid: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 2.2v7.6h7.6M4.8 2.2v7.6M7.4 2.2v7.6M2.2 4.8h7.6M2.2 7.4h7.6" fill="none" stroke="currentColor" stroke-width="0.75"/></svg>',
-    dots: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="3" cy="3" r="0.7" fill="currentColor"/><circle cx="6" cy="3" r="0.7" fill="currentColor"/><circle cx="9" cy="3" r="0.7" fill="currentColor"/><circle cx="3" cy="6" r="0.7" fill="currentColor"/><circle cx="6" cy="6" r="0.7" fill="currentColor"/><circle cx="9" cy="6" r="0.7" fill="currentColor"/><circle cx="3" cy="9" r="0.7" fill="currentColor"/><circle cx="6" cy="9" r="0.7" fill="currentColor"/><circle cx="9" cy="9" r="0.7" fill="currentColor"/></svg>',
-    graph: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2 2v8h8M4 2v8M6 2v8M8 2v8M2 4h8M2 6h8M2 8h8" fill="none" stroke="currentColor" stroke-width="0.55"/><path d="M2 2v8h8" fill="none" stroke="currentColor" stroke-width="0.95"/></svg>',
-    coarse: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M1.8 1.8v8.4h8.4M6 1.8v8.4M1.8 6h8.4" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
-    isometric: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M1.5 10 6 2.5 10.5 10M3 7.5h6" fill="none" stroke="currentColor" stroke-width="0.8" stroke-linejoin="round"/></svg>',
-    ruled: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M1.8 3.6h8.4M1.8 6h8.4M1.8 8.4h8.4" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    hex: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.8 9.6 3.8v4L6 9.8 2.4 7.8v-4Z" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linejoin="round"/></svg>',
-    notebook: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.6 1.8v8.4M2.2 4h7.6M2.2 6h7.6M2.2 8h7.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    staff: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 3.2c.6-1 1.4-1.4 2.2-1.2-.4 2.2.2 4.2 1.6 5.6M1.8 4.8h8M1.8 6h8M1.8 7.2h8M1.8 8.4h8" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linecap="round"/></svg>',
-    blank: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="2.4" y="2.4" width="7.2" height="7.2" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.85" stroke-dasharray="1.6 1.2"/></svg>',
-    pagePrev: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M7 2.4 3.4 6 7 9.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    pageNext: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M5 2.4 8.6 6 5 9.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    pageAdd: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="2.4" y="2" width="7.2" height="8" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 4.4v3.2M4.4 6h3.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    zoomIn: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="5.2" cy="5.2" r="3.2" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M7.6 7.6 10 10M5.2 3.6v3.2M3.6 5.2h3.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    zoomOut: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="5.2" cy="5.2" r="3.2" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M7.6 7.6 10 10M3.6 5.2h3.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
-    exportPng: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="2" y="2.4" width="8" height="6.4" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M4.4 7.2 5.8 5.6 7.2 7.2M2 10h8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>'
-};
-
-export function itemHasCategory(item) {
-    const name = item?.categories?.[0];
-    return typeof name === 'string' && name.trim() !== '';
-}
-
-export function deriveNoteTitle({ title = '', content = '', steps = [] } = {}) {
-    const trimmedTitle = stripRichText(title).trim();
-    if (trimmedTitle) return trimmedTitle;
-
-    const contentLine = stripRichText(content)
-        .trim()
-        .split(/\r?\n/)
-        .map((line) => line.trim())
-        .find(Boolean);
-    if (contentLine) return contentLine.slice(0, 72);
-
-    for (const step of steps || []) {
-        const text = stripRichText(step?.text || '').trim();
-        if (!text) continue;
-        const label = text.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
-        return (label || text).slice(0, 72);
-    }
-
-    return 'Untitled';
-}
-
-export function createNoteId() {
-    return `item_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
-}
-
-export function noteHasSavableContent({ title = '', content = '', steps = [] } = {}) {
-    if (stripRichText(title).trim()) return true;
-    if (stripRichText(content).trim()) return true;
-    return (steps || []).some((step) => stripRichText(step?.text || '').trim());
-}
-
-export function formatLocalDateTimeParts(date = new Date()) {
-    const pad = (n) => String(n).padStart(2, '0');
-    return {
-        date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
-        time: `${pad(date.getHours())}:${pad(date.getMinutes())}`
-    };
-}
-
-export function defaultStartDateTimeNow() {
-    const { date, time } = formatLocalDateTimeParts();
-    return `${date}T${time}`;
-}
-
-export function normalizeItemForSave(item, { preserveEmptySteps = false } = {}) {
-    if (!item) return item;
-
-    const content = String(item.content || '');
-    const allSteps = item.steps || [];
-    const steps = preserveEmptySteps
-        ? [...allSteps]
-        : allSteps.filter((step) => stripRichText(step?.text || '').trim());
-    const hasTitle = stripRichText(item.title || '').trim();
-    const startDateTime = String(item.startDateTime || '').trim()
-        ? item.startDateTime
-        : defaultStartDateTimeNow();
-
-    return {
-        ...item,
-        steps,
-        type: steps.length > 0 ? 'checklist' : 'note',
-        title: hasTitle ? item.title : deriveNoteTitle({ content, steps }),
-        startDateTime,
-        tileSize: normalizeTileSize(item.tileSize)
-    };
-}
-
-export function getStepLevel(step) {
-    const n = Number(step?.level);
-    if (!Number.isFinite(n) || n <= 0) return 0;
-    return Math.min(4, Math.floor(n));
-}
-
-export function partitionChecklistSteps(steps) {
-    const active = [];
-    const done = [];
-    (steps || []).forEach(step => {
-        if (step.completed) done.push(step);
-        else active.push(step);
-    });
-    return { active, done };
-}
-
-export function reorderStepsByCompletion(steps) {
-    if (!steps?.length) return;
-    const { active, done } = partitionChecklistSteps(steps);
-    steps.splice(0, steps.length, ...active, ...done);
-}
-
-export function moveStepOnCompletionChange(steps, step, completed) {
-    step.completed = completed;
-    if (completed) {
-        step.text = wrapLineAsStruck(step.text || '');
-    } else {
-        step.text = unwrapLineStrike(step.text || '');
-    }
-    reorderStepsByCompletion(steps);
-}
-
-export function collectStepSubtree(steps, startIndex) {
-    if (!steps?.length || startIndex < 0 || startIndex >= steps.length) return [];
-    const rootLevel = getStepLevel(steps[startIndex]);
-    const subtree = [steps[startIndex]];
-    for (let i = startIndex + 1; i < steps.length; i++) {
-        if (getStepLevel(steps[i]) <= rootLevel) break;
-        subtree.push(steps[i]);
-    }
-    return subtree;
-}
-
-export function collectStepSubtreeIds(steps, startIndex) {
-    return collectStepSubtree(steps, startIndex).map((step) => step.id);
-}
-
-export function findStepParentIndex(steps, index) {
-    const level = getStepLevel(steps[index]);
-    if (level <= 0) return -1;
-    for (let i = index - 1; i >= 0; i--) {
-        if (getStepLevel(steps[i]) < level) return i;
-    }
-    return -1;
-}
-
-export function applySubtreeLevelDelta(steps, startIndex, delta) {
-    const subtree = collectStepSubtree(steps, startIndex);
-    if (!subtree.length || !delta) return;
-    const rootLevel = getStepLevel(subtree[0]);
-    let effectiveDelta = delta;
-    if (delta < 0 && rootLevel + delta < 0) {
-        effectiveDelta = -rootLevel;
-    }
-    for (const step of subtree) {
-        step.level = Math.max(0, Math.min(4, getStepLevel(step) + effectiveDelta));
-    }
-}
-
-export function normalizeChecklistLevels(steps) {
-    if (!steps?.length) return;
-    for (let i = 0; i < steps.length; i++) {
-        const maxLevel = i === 0 ? 0 : getStepLevel(steps[i - 1]) + 1;
-        const current = getStepLevel(steps[i]);
-        steps[i].level = Math.max(0, Math.min(4, Math.min(current, maxLevel)));
-    }
-}
-
-export function previewDropTargetLevel(rows, insertIndex, dropMode, getLevel = getStepRowLevel) {
-    if (insertIndex <= 0) return 0;
-    if (dropMode === 'child') {
-        const parent = rows[insertIndex - 1];
-        return parent ? Math.min(4, getLevel(parent) + 1) : 0;
-    }
-    const next = rows[insertIndex];
-    if (next) return getLevel(next);
-    const prev = rows[insertIndex - 1];
-    return prev ? getLevel(prev) : 0;
-}
-
-export function resolveDropTarget(steps, blockRootId, { mode = 'sibling' } = {}) {
-    const blockStartIndex = steps.findIndex((step) => step.id === blockRootId);
-    if (blockStartIndex < 0) return null;
-    const subtree = collectStepSubtree(steps, blockStartIndex);
-    const oldRootLevel = getStepLevel(subtree[0]);
-    let newRootLevel = oldRootLevel;
-
-    if (mode === 'child' && blockStartIndex > 0) {
-        const parent = steps[blockStartIndex - 1];
-        newRootLevel = Math.min(4, getStepLevel(parent) + 1);
-    } else if (blockStartIndex === 0) {
-        newRootLevel = 0;
-    } else {
-        const nextIndex = blockStartIndex + subtree.length;
-        newRootLevel = nextIndex < steps.length
-            ? getStepLevel(steps[nextIndex])
-            : getStepLevel(steps[blockStartIndex - 1]);
-    }
-
-    const delta = newRootLevel - oldRootLevel;
-    if (delta) applySubtreeLevelDelta(steps, blockStartIndex, delta);
-
-    const parentId = mode === 'child' && blockStartIndex > 0
-        ? steps[blockStartIndex - 1].id
-        : null;
-    return { parentId };
-}
-
-export function computeChecklistInsertBounds(steps, startIndex) {
-    const blockLevel = getStepLevel(steps[startIndex]);
-    const subtree = collectStepSubtree(steps, startIndex);
-    const parentIdx = findStepParentIndex(steps, startIndex);
-
-    let minIndex = 0;
-    if (parentIdx >= 0) minIndex = parentIdx + 1;
-
-    let maxIndex = steps.length;
-    for (let i = startIndex + subtree.length; i < steps.length; i++) {
-        if (getStepLevel(steps[i]) < blockLevel) {
-            maxIndex = i;
-            break;
-        }
-    }
-
-    return { minIndex, maxIndex, blockLevel, subtreeIds: subtree.map((step) => step.id) };
-}
-
-export function computeVisibleInsertBounds(activeSteps, startIndex, visibleIds, blockIds) {
-    const { minIndex, maxIndex, subtreeIds } = computeChecklistInsertBounds(activeSteps, startIndex);
-    const blockIdSet = new Set(blockIds || subtreeIds);
-    const others = visibleIds.filter((id) => !blockIdSet.has(id));
-
-    let minAmongOthers = 0;
-    if (minIndex > 0) {
-        const parentId = activeSteps[minIndex - 1]?.id;
-        const parentPos = others.indexOf(parentId);
-        minAmongOthers = parentPos >= 0 ? parentPos + 1 : 0;
-    }
-
-    let maxAmongOthers = others.length;
-    if (maxIndex < activeSteps.length) {
-        const boundaryId = activeSteps[maxIndex]?.id;
-        const boundaryPos = others.indexOf(boundaryId);
-        maxAmongOthers = boundaryPos >= 0 ? boundaryPos : others.length;
-    }
-
-    return { minAmongOthers, maxAmongOthers, subtreeIds: subtreeIds || [...blockIdSet], others };
-}
-
-export function resolvePointerDropTarget(clientY, visibleRows, blockRows, { bounds = null, isSingleLeaf = false } = {}) {
-    const blockSet = new Set(blockRows);
-    const others = visibleRows.filter((row) => !blockSet.has(row));
-    let insertIndex = others.length;
-    let dropMode = 'sibling';
-
-    for (let i = 0; i < others.length; i++) {
-        const box = others[i].getBoundingClientRect();
-        const midY = box.top + box.height / 2;
-
-        if (clientY < box.top) {
-            insertIndex = i;
-            if (i > 0 && getStepRowLevel(others[i - 1]) < getStepRowLevel(others[i])) {
-                dropMode = 'child';
-            } else {
-                dropMode = 'sibling';
-            }
-            break;
-        }
-        if (clientY <= midY) {
-            insertIndex = i;
-            dropMode = 'sibling';
-            break;
-        }
-        if (clientY <= box.bottom) {
-            insertIndex = i + 1;
-            dropMode = 'child';
-            break;
-        }
-    }
-
-    if (bounds && !isSingleLeaf) {
-        insertIndex = Math.max(bounds.minAmongOthers, Math.min(bounds.maxAmongOthers, insertIndex));
-        if (dropMode === 'child' && insertIndex > 0 && insertIndex <= others.length) {
-            const parentRow = others[insertIndex - 1];
-            if (!parentRow) dropMode = 'sibling';
-        }
-    }
-
-    const targetLevel = previewDropTargetLevel(others, insertIndex, dropMode);
-    return { insertIndex, dropMode, others, targetLevel };
-}
-
-export function getStepRowLevel(row) {
-    const n = Number(row?.dataset?.level);
-    if (!Number.isFinite(n) || n <= 0) return 0;
-    return Math.min(4, Math.floor(n));
-}
-
-export function collectDomRowBlock(rows, row) {
-    const idx = rows.indexOf(row);
-    if (idx < 0) return [row];
-    const level = getStepRowLevel(row);
-    const block = [row];
-    for (let i = idx + 1; i < rows.length; i++) {
-        if (getStepRowLevel(rows[i]) <= level) break;
-        block.push(rows[i]);
-    }
-    return block;
-}
-
-function findParentRowIndex(rows, rowIndex) {
-    const level = getStepRowLevel(rows[rowIndex]);
-    if (level <= 0) return -1;
-    for (let i = rowIndex - 1; i >= 0; i--) {
-        if (getStepRowLevel(rows[i]) < level) return i;
-    }
-    return -1;
-}
-
-export function clampChecklistInsertIndex(allRows, block, insertIndexInOthers, bounds = null) {
-    if (bounds) {
-        return Math.max(bounds.minAmongOthers, Math.min(bounds.maxAmongOthers, insertIndexInOthers));
-    }
-
-    const others = allRows.filter((row) => !block.includes(row));
-    const firstIdx = allRows.indexOf(block[0]);
-    if (firstIdx < 0) return insertIndexInOthers;
-
-    const blockLevel = getStepRowLevel(block[0]);
-    const parentIdx = findParentRowIndex(allRows, firstIdx);
-    let minIndex = 0;
-    if (parentIdx >= 0) {
-        const parentRow = allRows[parentIdx];
-        const parentInOthers = others.indexOf(parentRow);
-        minIndex = parentInOthers >= 0 ? parentInOthers + 1 : 0;
-    }
-
-    let maxIndex = others.length;
-    for (let i = firstIdx + block.length; i < allRows.length; i++) {
-        if (getStepRowLevel(allRows[i]) < blockLevel) {
-            const boundaryInOthers = others.indexOf(allRows[i]);
-            maxIndex = boundaryInOthers >= 0 ? boundaryInOthers : others.length;
-            break;
-        }
-    }
-
-    return Math.max(minIndex, Math.min(maxIndex, insertIndexInOthers));
-}
-
-export function reorderActiveStepsFromDomOrder(activeSteps, visibleOrderIds, itemId, collapsedKeys = {}) {
-    const stepById = new Map(activeSteps.map((step) => [step.id, step]));
-    const visibleSet = new Set(visibleOrderIds);
-    const placed = new Set();
-    const result = [];
-
-    for (const id of visibleOrderIds) {
-        const step = stepById.get(id);
-        if (!step || placed.has(id)) continue;
-        result.push(step);
-        placed.add(id);
-
-        const idx = activeSteps.findIndex((s) => s.id === id);
-        const collapseKey = `${itemId}:${id}`;
-        if (idx < 0 || !collapsedKeys[collapseKey] || !stepHasDescendants(activeSteps, idx)) continue;
-
-        const rootLevel = getStepLevel(step);
-        for (let i = idx + 1; i < activeSteps.length; i++) {
-            const child = activeSteps[i];
-            const level = getStepLevel(child);
-            if (level <= rootLevel) break;
-            if (visibleSet.has(child.id) || placed.has(child.id)) continue;
-            result.push(child);
-            placed.add(child.id);
-        }
-    }
-
-    for (const step of activeSteps) {
-        if (!placed.has(step.id)) result.push(step);
-    }
-
-    return result;
-}
-
-export function stepHasDescendants(steps, index) {
-    const level = getStepLevel(steps[index]);
-    for (let i = index + 1; i < steps.length; i++) {
-        const nextLevel = getStepLevel(steps[i]);
-        if (nextLevel <= level) return false;
-        if (nextLevel > level) return true;
-    }
-    return false;
-}
-
-export function levelListHasDescendants(levels, index) {
-    const level = levels[index];
-    for (let i = index + 1; i < levels.length; i++) {
-        if (levels[i] <= level) return false;
-        if (levels[i] > level) return true;
-    }
-    return false;
-}
-
-export function checklistHasIndentations(steps) {
-    return (steps || []).some((step) => getStepLevel(step) > 0);
-}
-
-export function buildVisibleChecklistSteps(steps, itemId, collapsedKeys = {}) {
-    const visible = [];
-    let suppressBelow = -1;
-
-    (steps || []).forEach((step, index) => {
-        const level = getStepLevel(step);
-        if (suppressBelow >= 0 && level > suppressBelow) return;
-
-        suppressBelow = -1;
-        const hasKids = stepHasDescendants(steps, index);
-        const collapseKey = `${itemId}:${step.id}`;
-        const isCollapsed = !!collapsedKeys[collapseKey];
-
-        visible.push({ step, hasKids, isCollapsed, collapseKey });
-        if (hasKids && isCollapsed) suppressBelow = level;
-    });
-
-    return visible;
 }
 
 export function computeNoteSizeKb(item) {
@@ -732,85 +207,6 @@ export function computeNoteLineCount(item) {
 
 export function formatNoteLineCount(n) {
     return n === 1 ? '1 line' : `${n} lines`;
-}
-
-const MATRIX_DATABASE_KEY = 'matrix_database';
-
-function utf16Bytes(str) {
-    return (str?.length ?? 0) * 2;
-}
-
-export function getLocalStorageKeyBytes(key) {
-    const value = localStorage.getItem(key);
-    if (value === null) return 0;
-    return utf16Bytes(key) + utf16Bytes(value);
-}
-
-/** UTF-16 estimate of all keys on this origin — cheap O(n) scan, no network. */
-export function getLocalStorageUsedBytes() {
-    let chars = 0;
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (!key) continue;
-        const value = localStorage.getItem(key);
-        chars += key.length + (value?.length ?? 0);
-    }
-    return chars * 2;
-}
-
-export function getStorageBreakdown() {
-    let notes = 0;
-    let matrix = 0;
-    let app = 0;
-
-    for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (!key) continue;
-
-        if (key === MATRIX_DATABASE_KEY) {
-            const raw = localStorage.getItem(key);
-            if (!raw) continue;
-            try {
-                const db = JSON.parse(raw);
-                notes += utf16Bytes(JSON.stringify(db.items ?? []));
-                matrix += utf16Bytes(key) + utf16Bytes(JSON.stringify({ auth: db.auth, settings: db.settings }));
-            } catch {
-                matrix += getLocalStorageKeyBytes(key);
-            }
-            continue;
-        }
-
-        if (key.startsWith('matrix_')) {
-            matrix += getLocalStorageKeyBytes(key);
-            continue;
-        }
-
-        app += getLocalStorageKeyBytes(key);
-    }
-
-    const total = notes + matrix + app;
-    return { notes, matrix, app, total };
-}
-
-export function formatStorageSize(bytes) {
-    if (!bytes) return '0 KB';
-    const kb = bytes / 1024;
-    if (kb < 0.1) return '<0.1 KB';
-    if (kb < 10) return `${kb.toFixed(1)} KB`;
-    if (kb < 1024) return `${Math.round(kb)} KB`;
-    const mb = kb / 1024;
-    return mb < 10 ? `${mb.toFixed(1)} MB` : `${Math.round(mb)} MB`;
-}
-
-export function attachAutoGrow(textarea, { maxHeight = 120 } = {}) {
-    if (!textarea) return;
-    textarea.classList.add('input-grow');
-    const grow = () => {
-        textarea.style.height = 'auto';
-        textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
-    };
-    textarea.addEventListener('input', grow);
-    grow();
 }
 
 export const UI = {
@@ -1165,7 +561,7 @@ export const UI = {
     resolveRememberedSpatialSize(saved, item) {
         const remembered = geoReadRememberedSize(saved);
         if (remembered) return remembered;
-        return this.resolveExpandedDefaultRect(resolveTileSize(item), null);
+        return geoResolveExpandedDefaultRect(resolveTileSize(item), null);
     },
 
     resolveBoardExpandRect(card, item) {
@@ -1174,7 +570,7 @@ export const UI = {
         const remembered = geoReadRememberedSize(saved);
         const size = remembered
             ? remembered
-            : this.resolveExpandedDefaultRect(tileSize, null);
+            : geoResolveExpandedDefaultRect(tileSize, null);
         const pos = this.readNoteRect(card);
         return { x: pos.x, y: pos.y, w: size.w, h: size.h };
     },
@@ -1278,14 +674,6 @@ export const UI = {
         return w > cellW + 2 || h > cellW + 2;
     },
 
-    isCustomTileRect(w, h, tileSize = LEGACY_TILE_SIZE) {
-        return geoIsCustomTileRect(w, h, tileSize);
-    },
-
-    getTileDefaultRect(tileSize) {
-        return geoGetTileDefaultRect(tileSize);
-    },
-
     getCardTileSize(card, item = null) {
         const resolved = item || this.resolveBoardItem(card?.dataset?.id);
         return resolveTileSize(resolved);
@@ -1363,30 +751,6 @@ export const UI = {
         });
     },
 
-    resolveExpandedDefaultRect(tileSize, saved = null) {
-        return geoResolveExpandedDefaultRect(tileSize, saved);
-    },
-
-    isAtOrBelowCompactZone(w, h, tileSize = LEGACY_TILE_SIZE) {
-        return geoIsAtOrBelowCompactZone(w, h, tileSize);
-    },
-
-    usesTileTierBoard(card) {
-        return isDesktopCard(card);
-    },
-
-    softSnapPx(value) {
-        return geoSoftSnapPx(value);
-    },
-
-    inferCollapsedTileTier(w, h, prevTier = LEGACY_TILE_SIZE) {
-        return geoInferTileTier(w, h, prevTier);
-    },
-
-    resolveCollapsedTierRect(w, h, prevTier = LEGACY_TILE_SIZE) {
-        return geoResolveCollapsedTierRect(w, h, prevTier);
-    },
-
     createTierResizeSession(card, item) {
         const rect = this.readNoteRect(card);
         const startTier = this.getCardTileSize(card, item);
@@ -1410,23 +774,14 @@ export const UI = {
         card.dataset.tierResizePreview = '1';
 
         if (resizeState.previewTier !== normalized) {
-            if (isDesktopCard(card)) {
-                this.applyCollapsedTileClasses(card, normalized);
-            } else {
-                const activeCategories = readStoredCategories();
-                const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
-                const previewItem = { ...item, tileSize: normalized };
-                this.renderCollapsedCard(card, previewItem, activeCategories, targetCatName, categoryColor);
-            }
+            this.applyCollapsedTileClasses(card, normalized);
             resizeState.previewTier = normalized;
             card.dataset.tierResizePreview = '1';
             card.classList.add('is-tier-resizing');
         }
 
         this.applyTierResizeBox(card, rect);
-        if (isDesktopCard(card)) {
-            this.syncSpatialCollapseState(card, item, rect.w, rect.h);
-        }
+        this.syncSpatialCollapseState(card, item, rect.w, rect.h);
     },
 
     revertTierResizePreview(card, item, resizeState) {
@@ -1434,19 +789,9 @@ export const UI = {
         delete card.dataset.tierResizePreview;
         card.classList.remove('is-tier-resizing');
 
-        if (isDesktopCard(card)) {
-            this.applyCollapsedTileClasses(card, resizeState.startTier);
-        } else {
-            const activeCategories = readStoredCategories();
-            const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
-            const restoreItem = { ...item, tileSize: resizeState.startTier };
-            this.renderCollapsedCard(card, restoreItem, activeCategories, targetCatName, categoryColor);
-        }
+        this.applyCollapsedTileClasses(card, resizeState.startTier);
         this.applyTierResizeBox(card, resizeState.startRect);
-
-        if (isDesktopCard(card)) {
-            this.finalizeDesktopCard(card);
-        }
+        this.finalizeDesktopCard(card);
     },
 
     commitTierResize(card, item, resizeState) {
@@ -1466,7 +811,7 @@ export const UI = {
     },
 
     processCollapsedTierResizeMove(card, item, resizeState, rect, { maxW = Infinity, axis = 'se' } = {}) {
-        const resolved = this.resolveCollapsedTierRect(rect.w, rect.h, resizeState.previewTier);
+        const resolved = geoResolveCollapsedTierRect(rect.w, rect.h, resizeState.previewTier);
         let finalW = resolved.w;
         let finalH = resolved.h;
         let finalX = rect.x;
@@ -1493,26 +838,8 @@ export const UI = {
     },
 
     collapseSnapPanelCard(card, item) {
-        const activeCategories = readStoredCategories();
-        const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
-        this.cancelCardAnimation(card);
         card.classList.remove('expanded', 'card-state-changing', 'card-animating');
-        if (isDesktopCard(card)) {
-            this.finalizeDesktopCard(card);
-        } else {
-            this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
-        }
-    },
-
-    collapseLegacyExpandedTile(card, item, ctx = {}) {
-        if (!card?.classList.contains('expanded')) return false;
-
-        this.collapseSnapPanelCard(card, item);
-
-        const labelRect = this.resolveCardRect(card, item, { mode: 'small' });
-        this.applyTileTierRect(card, item, 'small', labelRect, ctx);
-
-        return true;
+        this.finalizeDesktopCard(card);
     },
 
     saveTileLayoutFromCard(card, item, rect, tileSize) {
@@ -1545,24 +872,8 @@ export const UI = {
             boardItemsById.set(item.id, item);
         }
 
-        if (!isDesktopCard(card)) {
-            const activeCategories = ctx.activeCategories ?? readStoredCategories();
-            const renderCtx = ctx.targetCatName != null
-                ? { targetCatName: ctx.targetCatName, categoryColor: ctx.categoryColor }
-                : this.getCardRenderContext(item, activeCategories);
-            this.renderCollapsedCard(
-                card,
-                item,
-                activeCategories,
-                renderCtx.targetCatName,
-                renderCtx.categoryColor
-            );
-        }
-
         this.applyNoteRect(card, rect, { settling: false });
         this.saveTileLayoutFromCard(card, item, rect, normalizedTier);
-
-        if (!isDesktopCard(card)) return;
         this.finalizeDesktopCard(card, { skipSizeReapply: !!ctx.skipSizeReapply });
         const canvas = card.closest('#app-canvas');
         if (ctx.scheduleExtents) {
@@ -1596,8 +907,6 @@ export const UI = {
     },
 
     applyTileZoneToggle(card, item, ctx = {}) {
-        if (!isDesktopCard(card) && this.collapseLegacyExpandedTile(card, item, ctx)) return;
-
         if (isFileCabinetActive()) {
             this.applyFileCabinetZoneToggle(card, item, ctx);
             return;
@@ -1673,7 +982,7 @@ export const UI = {
             this.saveTileLayoutFromCard(card, item, next, 'small');
             this.finalizeDesktopCard(card);
         });
-        this.updateBoardCanvasMinHeight(canvas);
+        this.scheduleBoardCanvasExtents(canvas);
         if (isSnapLayoutMode(activeBoardViewMode)) {
             requestAnimationFrame(() => this.reflowGridBoard(canvas, null, { animate: true }));
         }
@@ -1720,7 +1029,7 @@ export const UI = {
             this.finalizeDesktopCard(card);
         });
 
-        this.updateBoardCanvasMinHeight(canvas);
+        this.scheduleBoardCanvasExtents(canvas);
         if (isSnapLayoutMode(activeBoardViewMode)) {
             requestAnimationFrame(() => this.reflowGridBoard(canvas, null, { animate: true }));
         }
@@ -1756,7 +1065,7 @@ export const UI = {
         if (isExpanded) {
             const item = this.resolveBoardItem(card.dataset.id);
             const tileSize = this.getCardTileSize(card, item);
-            const expandedMin = this.resolveExpandedDefaultRect(tileSize, savedRect);
+            const expandedMin = geoResolveExpandedDefaultRect(tileSize, savedRect);
             if (base.w >= expandedMin.w && base.h >= expandedMin.h) return base;
             return {
                 ...base,
@@ -1777,25 +1086,16 @@ export const UI = {
             const clamped = geoClampSpatialSize(saved.w, saved.h, tileSize);
             return { ...base, w: clamped.w, h: clamped.h };
         }
-        const defaults = this.getTileDefaultRect(tileSize);
+        const defaults = geoGetTileDefaultRect(tileSize);
         return { ...base, w: defaults.w, h: defaults.h };
     },
 
     syncCardDraggable(card) {
-        const hasSession = !!localStorage.getItem('admin_token');
-        if (!hasSession || isDesktopCard(card) || card.classList.contains('expanded')) {
-            card.removeAttribute('draggable');
-            return;
-        }
-        card.setAttribute('draggable', 'true');
+        card.removeAttribute('draggable');
     },
 
     isGridBoardCard(card) {
         return isDesktopCard(card) && isSnapLayoutMode(activeBoardViewMode);
-    },
-
-    freeformDragZoneClass(card) {
-        return isDesktopCard(card) ? ' card-drag-zone' : '';
     },
 
     createBlankChecklistStep() {
@@ -1818,19 +1118,10 @@ export const UI = {
             .filter((cat) => !hiddenCategories.includes(cat.name));
         const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
 
-        if (isDesktopCard(card)) {
-            this.renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
-        } else if (card.classList.contains('expanded')) {
-            this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
-        } else {
-            this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
-        }
+        this.renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
         this.applyItemCardTheme(card, item);
         card.style.borderLeftColor = categoryColor;
-
-        if (isDesktopCard(card)) {
-            this.finalizeDesktopCard(card);
-        }
+        this.finalizeDesktopCard(card);
 
         return true;
     },
@@ -1900,7 +1191,7 @@ export const UI = {
                 return aTime - bTime;
             })
             .forEach((item, index) => {
-                const card = this.createCardComponent(item, activeCategories, { desktop: true });
+                const card = this.createCardComponent(item, activeCategories);
                 const isLayoutExpanded = this.isSavedLayoutExpanded(item.id);
 
                 if (snapLayout) {
@@ -2206,13 +1497,7 @@ export const UI = {
             });
             toggleBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (isDesktopCard(card)) {
-                    delete card.dataset.skipExpand;
-                } else {
-                    const isExpanded = card.classList.contains('expanded');
-                    if (!isExpanded && consumeSkipExpand()) return;
-                    if (card.dataset.skipExpand) delete card.dataset.skipExpand;
-                }
+                delete card.dataset.skipExpand;
                 if (ctx) this.toggleCardExpanded(card, item, { ...ctx, fromToolbar: true });
             });
         }
@@ -2536,283 +1821,15 @@ export const UI = {
         }
     },
 
-    usesAnimPixelLock(card) {
-        return isDesktopCard(card);
-    },
-
-    lockCardAnimationDimensions(card, w, h) {
-        card.style.setProperty('width', `${w}px`, 'important');
-        card.style.setProperty('height', `${h}px`, 'important');
-        card.style.setProperty('min-height', `${h}px`, 'important');
-        card.style.setProperty('max-height', `${h}px`, 'important');
-    },
-
-    measureExpandedCardHeight(card, widthPx) {
-        const cap = Math.min(Math.round(window.innerHeight * 0.72), 680);
-        const prev = {
-            width: card.style.width,
-            height: card.style.height,
-            minHeight: card.style.minHeight,
-            maxHeight: card.style.maxHeight,
-            overflow: card.style.overflow
-        };
-        card.style.setProperty('width', `${widthPx}px`, 'important');
-        card.style.setProperty('height', 'auto', 'important');
-        card.style.setProperty('min-height', '0', 'important');
-        card.style.setProperty('max-height', `${cap}px`, 'important');
-        card.style.overflow = 'hidden';
-        const measured = Math.max(CARD_COMPACT_H, Math.ceil(card.scrollHeight));
-        if (prev.width) card.style.setProperty('width', prev.width, 'important');
-        else card.style.removeProperty('width');
-        if (prev.height) card.style.setProperty('height', prev.height, 'important');
-        else card.style.removeProperty('height');
-        if (prev.minHeight) card.style.setProperty('min-height', prev.minHeight, 'important');
-        else card.style.removeProperty('min-height');
-        if (prev.maxHeight) card.style.setProperty('max-height', prev.maxHeight, 'important');
-        else card.style.removeProperty('max-height');
-        card.style.overflow = prev.overflow || '';
-        return Math.min(measured, cap);
-    },
-
-    resolveAnimCompactWidth(card) {
-        const id = card.dataset?.id;
-        const item = this.resolveBoardItem(id);
-        const tileSize = this.getCardTileSize(card, item);
-        const tileDefaultW = this.getTileDefaultRect(tileSize).w;
-        if (isDesktopCard(card) && id) {
-            if (isSnapLayoutMode(activeBoardViewMode)) {
-                const saved = this.getGridLayout()[id];
-                if (saved && Number.isFinite(saved.w)) return saved.w;
-            } else {
-                const saved = this.getFreeformSizes()[id];
-                if (saved && Number.isFinite(saved.w)) return saved.w;
-            }
-            return tileDefaultW;
-        }
-        return Math.round(this.readNoteRect(card).w) || tileDefaultW;
-    },
-
-    resolveAnimExpandedWidth(card, item) {
-        const id = card.dataset?.id || item?.id;
-        const tileSize = this.getCardTileSize(card, item);
-        if (isDesktopCard(card) && id) {
-            if (isSnapLayoutMode(activeBoardViewMode)) {
-                const saved = this.getGridLayout()[id];
-                if (saved && Number.isFinite(saved.w)) return saved.w;
-                return geoResolveExpandedDefaultRect(tileSize).w;
-            }
-            const saved = this.getFreeformSizes()[id];
-            return geoResolveExpandedDefaultRect(tileSize, saved).w;
-        }
-        return Math.round(this.readNoteRect(card).w) || FREEFORM_EXPANDED_W;
-    },
-
-    resolveAnimCompactHeight(card) {
-        const item = this.resolveBoardItem(card.dataset?.id);
-        const tileSize = this.getCardTileSize(card, item);
-        const tileDefaultH = this.getTileDefaultRect(tileSize).h;
-        if (isDesktopCard(card) && isSnapLayoutMode(activeBoardViewMode)) {
-            const saved = this.getGridLayout()[card.dataset.id];
-            const compact = this.gridTileRect(
-                tileSize,
-                { x: 0, y: 0, w: getGridMetrics().cellW, h: getGridMetrics().cellH },
-                saved
-            );
-            return compact.h;
-        }
-        if (isDesktopCard(card)) {
-            const saved = this.getFreeformSizes()[card.dataset.id];
-            if (saved && Number.isFinite(saved.h)) return saved.h;
-            return tileDefaultH;
-        }
-        return tileDefaultH;
-    },
-
-    measureAnimTargetSize(card, item) {
-        const w = this.resolveAnimExpandedWidth(card, item);
-        const id = item?.id || card.dataset?.id;
-        const tileSize = this.getCardTileSize(card, item);
-        let h;
-
-        if (isDesktopCard(card)) {
-            if (isSnapLayoutMode(activeBoardViewMode)) {
-                const saved = this.getGridLayout()[id];
-                h = saved && Number.isFinite(saved.h)
-                    ? saved.h
-                    : geoResolveExpandedDefaultRect(tileSize).h;
-            } else {
-                const saved = this.getFreeformSizes()[id];
-                h = geoResolveExpandedDefaultRect(tileSize, saved).h;
-            }
-        } else {
-            h = this.measureExpandedCardHeight(card, w);
-        }
-
-        return { w, h };
-    },
-
-    isCardAnimating(card) {
-        return !!card?.classList.contains('card-animating');
-    },
-
-    cancelCardAnimation(card) {
-        if (!card) return;
-        const session = cardAnimSessions.get(card);
-        if (session) {
-            if (session.transitionCleanup) session.transitionCleanup();
-            cardAnimSessions.delete(card);
-        }
-        this.cleanupCardAnimation(card);
-    },
-
-    cleanupCardAnimation(card) {
-        if (!card) return;
-        card.classList.remove('card-state-changing', 'card-animating');
-        card.style.removeProperty('--card-anim-duration');
-        card.style.removeProperty('overflow');
-        card.style.removeProperty('transition');
-    },
-
-    waitCardTransition(card, { properties = ['width', 'height'], timeoutMs = CARD_ANIM_MS + 80 } = {}) {
-        return new Promise((resolve) => {
-            let finished = false;
-            const propSet = new Set(properties);
-            const finish = () => {
-                if (finished) return;
-                finished = true;
-                card.removeEventListener('transitionend', onEnd);
-                clearTimeout(timer);
-                const session = cardAnimSessions.get(card);
-                if (session?.transitionCleanup === finish) {
-                    session.transitionCleanup = null;
-                }
-                resolve();
-            };
-            const onEnd = (e) => {
-                if (e.target !== card) return;
-                if (!propSet.has(e.propertyName)) return;
-                finish();
-            };
-            card.addEventListener('transitionend', onEnd);
-            const timer = setTimeout(finish, timeoutMs);
-            const session = cardAnimSessions.get(card) || {};
-            session.transitionCleanup = finish;
-            cardAnimSessions.set(card, session);
-        });
-    },
-
-    applyCardExpandCollapse(card, item, expanded, activeCategories, targetCatName, categoryColor, options = {}) {
-        if (options.skipAnimation) {
-            this.cancelCardAnimation(card);
-        }
-
-        const animate = cardAnimationsEnabled() && !options.skipAnimation;
-
-        const finishExpand = () => {
-            this.cleanupCardAnimation(card);
-        };
-
-        const finishCollapse = () => {
-            card.classList.remove('expanded');
-            this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
-            this.cleanupCardAnimation(card);
-        };
-
-        if (expanded) {
-            if (!animate) {
-                card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note', 'tile-small', 'tile-large');
-                card.classList.add('expanded');
-                this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
-                finishExpand();
-                return;
-            }
-
-            const compactW = this.resolveAnimCompactWidth(card);
-            const compactH = Math.round(this.readNoteRect(card).h) || this.resolveAnimCompactHeight(card);
-
-            card.classList.add('card-animating', 'card-state-changing');
-            card.style.setProperty('--card-anim-duration', `${CARD_ANIM_MS}ms`);
-            card.style.overflow = 'hidden';
-
-            this.lockCardAnimationDimensions(card, compactW, compactH);
-
-            card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note', 'tile-small', 'tile-large');
-            card.classList.add('expanded');
-            this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
-
-            this.lockCardAnimationDimensions(card, compactW, compactH);
-
-            const target = this.measureAnimTargetSize(card, item);
-
-            void card.offsetHeight;
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    this.lockCardAnimationDimensions(card, target.w, target.h);
-
-                    void this.waitCardTransition(card).then(() => {
-                        finishExpand();
-                    });
-                });
-            });
-            return;
-        }
-
-        if (!animate) {
-            finishCollapse();
-            return;
-        }
-
-        const expandedRect = this.readNoteRect(card);
-        const expandedW = Math.round(expandedRect.w) || this.resolveAnimExpandedWidth(card, item);
-        const expandedH = Math.round(expandedRect.h) || this.measureAnimTargetSize(card, item).h;
-        const compactW = this.resolveAnimCompactWidth(card);
-        const compactH = this.resolveAnimCompactHeight(card);
-
-        card.classList.add('card-animating', 'card-state-changing');
-        card.style.setProperty('--card-anim-duration', `${CARD_ANIM_MS}ms`);
-        card.style.overflow = 'hidden';
-        this.lockCardAnimationDimensions(card, expandedW, expandedH);
-
-        void card.offsetHeight;
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                this.lockCardAnimationDimensions(card, compactW, compactH);
-                void this.waitCardTransition(card).then(() => {
-                    finishCollapse();
-                });
-            });
-        });
-    },
-
     toggleCardExpanded(card, item, ctx) {
-        if (this.isCardAnimating(card)) return;
-
-        if (this.usesTileTierBoard(card)) {
-            this.applyTileZoneToggle(card, item, ctx);
-            return;
-        }
-
-        const willExpand = !card.classList.contains('expanded');
-
-        setExpandedCard(activeBoardViewMode, item.id, willExpand);
-
-        this.applyCardExpandCollapse(
-            card,
-            item,
-            willExpand,
-            ctx.activeCategories,
-            ctx.targetCatName,
-            ctx.categoryColor
-        );
-        window.dispatchEvent(new CustomEvent('board:cards_reflowed'));
+        this.applyTileZoneToggle(card, item, ctx);
     },
 
-    createCardComponent(item, activeCategories, { desktop = false, freeform = false, gridBoard = false } = {}) {
+    createCardComponent(item, activeCategories) {
         const card = document.createElement('div');
         card.classList.add('mini-card');
-
         card.dataset.id = item.id;
-        if (desktop || freeform || gridBoard) card.dataset.desktop = '1';
+        card.dataset.desktop = '1';
 
         const targetCatName = (item.categories && item.categories.length > 0) ? item.categories[0] : '';
         const matchedCat = activeCategories.find(c => c.name?.toLowerCase() === targetCatName.toLowerCase());
@@ -2820,27 +1837,8 @@ export const UI = {
 
         this.applyItemCardTheme(card, item);
         card.style.borderLeftColor = categoryColor;
-
-        if (desktop || freeform || gridBoard) {
-            card.classList.remove('expanded');
-            this.renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
-        } else {
-            const isExpanded = getExpandedCards(activeBoardViewMode)[item.id] === true;
-            if (isExpanded) {
-                card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note', 'tile-small', 'tile-large');
-                card.classList.add('expanded');
-                this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
-            } else {
-                card.classList.remove('expanded');
-                this.renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor);
-            }
-        }
-
-        if (isDesktopCard(card)) {
-            card.addEventListener('mousedown', () => this.raiseDesktopCard(card), true);
-        }
-
-        this.syncCardDraggable(card);
+        this.renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
+        card.addEventListener('mousedown', () => this.raiseDesktopCard(card), true);
         this.syncBoardPinClass(card);
         return card;
     },
@@ -3111,20 +2109,9 @@ export const UI = {
 
     collapseBoardCardIfExpanded(card, item, hiddenCategories = []) {
         if (!card || !item?.id) return;
-
-        if (isDesktopCard(card)) {
-            if (!this.isSpatiallyCollapsed(card)) {
-                this.collapseBoardCardToSmallFootprint(card, item);
-            }
-            return;
+        if (!this.isSpatiallyCollapsed(card)) {
+            this.collapseBoardCardToSmallFootprint(card, item);
         }
-
-        if (!card.classList.contains('expanded')) return;
-
-        let activeCategories = readStoredCategories()
-            .filter((cat) => !hiddenCategories.includes(cat.name));
-        const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
-        this.applyCardExpandCollapse(card, item, false, activeCategories, targetCatName, categoryColor);
     },
 
     revealNoteOnBoard(item) {
@@ -3197,8 +2184,8 @@ export const UI = {
     },
 
     resolveNoteDesktopPlacement(itemId, { restoreContext = null, modalGeometry = null } = {}) {
-        const gridW = modalGeometry?.w || this.cellsToSpanW(2);
-        const gridH = modalGeometry?.h || this.cellsToSpanH(2);
+        const gridW = modalGeometry?.w || geoCellsToSpanW(2);
+        const gridH = modalGeometry?.h || geoCellsToSpanH(2);
         const ffW = modalGeometry?.w || FREEFORM_EXPANDED_W;
         const ffH = modalGeometry?.h || FREEFORM_EXPANDED_DEFAULT_H;
         const canvas = document.getElementById('app-canvas');
@@ -3313,7 +2300,7 @@ export const UI = {
                 expanded: true,
                 dimensions: placement.size || null
             });
-            this.raiseFreeformCard(card);
+            this.raiseDesktopCard(card);
             card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
     },
@@ -3567,10 +2554,6 @@ export const UI = {
         this.bindCollapsable('config-section-header', 'config-section', true);
     },
 
-    renderCollapsedCard(card, item, activeCategories, targetCatName, categoryColor) {
-        this.renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
-    },
-
     canEditInline() {
         return !!localStorage.getItem('admin_token');
     },
@@ -3664,7 +2647,7 @@ export const UI = {
     renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor) {
         const canEdit = this.canEditInline();
         const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
-        const dragZone = this.freeformDragZoneClass(card);
+        const dragZone = ' card-drag-zone';
 
         card.classList.remove('expanded');
         card.innerHTML = this.buildNoteEditorShell(item, {
@@ -3689,38 +2672,6 @@ export const UI = {
         });
         this.bindBoardEditorFocusChrome(card);
         this.finalizeDesktopCard(card);
-        this.syncCardDraggable(card);
-        this.syncBoardPinClass(card);
-        this.focusPendingBoardField(card);
-    },
-
-    renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor) {
-        card.classList.add('expanded');
-        const canEdit = this.canEditInline();
-        const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
-        const dragZone = this.freeformDragZoneClass(card);
-
-        card.innerHTML = this.buildNoteEditorShell(item, {
-            canEdit,
-            richEdit: canEdit,
-            toolbarHtml: this.buildCardActionsHtml(item, true, this.getCardActionsOptions(card)),
-            toolbarDragZone: dragZone,
-            footerDragZone: dragZone,
-            targetCatName,
-            categoryColor: dotColor
-        });
-
-        this.attachCardActions(card, item, {
-            activeCategories,
-            targetCatName,
-            categoryColor
-        });
-        this.bindNoteEditorShell(card, item, {
-            richEdit: canEdit,
-            refresh: () => this.refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor),
-            stopMousedownPropagation: false
-        });
-        this.syncCardDraggable(card);
         this.syncBoardPinClass(card);
         this.focusPendingBoardField(card);
     },
@@ -3763,34 +2714,6 @@ export const UI = {
             }
             if (el) this.focusInlineEdit(el, 'start');
         });
-    },
-
-    refreshExpandedCard(card, item, activeCategories, targetCatName, categoryColor) {
-        const shell = card.querySelector('.editor-note-shell');
-        // Skip DOM→item sync while a checklist row op is in flight — stale DOM would undo splits/merges.
-        if (shell && !card.dataset.pendingFocusStepId) {
-            this.syncItemBodyFromDom(shell, item);
-        }
-        const body = card.querySelector('.editor-note-body') || card.querySelector('.card-body');
-        const scrollTop = body?.scrollTop ?? 0;
-        const pendingFocusStepId = card.dataset.pendingFocusStepId;
-        const pendingFocusEdge = card.dataset.pendingFocusEdge;
-        const pendingFocusPlainOffset = card.dataset.pendingFocusPlainOffset;
-        if (isDesktopCard(card)) {
-            this.refreshBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
-            return;
-        }
-        this.renderExpandedCard(card, item, activeCategories, targetCatName, categoryColor);
-        const newBody = card.querySelector('.editor-note-body') || card.querySelector('.card-body');
-        if (newBody) newBody.scrollTop = scrollTop;
-        if (pendingFocusStepId) {
-            card.dataset.pendingFocusStepId = pendingFocusStepId;
-            if (pendingFocusEdge) card.dataset.pendingFocusEdge = pendingFocusEdge;
-            if (pendingFocusPlainOffset != null) {
-                card.dataset.pendingFocusPlainOffset = pendingFocusPlainOffset;
-            }
-            this.focusPendingChecklistStep(card);
-        }
     },
 
     splitInlineEditAtCaret(el) {
@@ -5855,10 +4778,6 @@ export const UI = {
         this.updateDesktopScrollPolicy(canvas);
     },
 
-    updateBoardCanvasMinHeight(canvas) {
-        this.scheduleBoardCanvasExtents(canvas);
-    },
-
     updateDesktopScrollPolicy(canvas) {
         if (!canvas?.classList.contains('view-grid') && !canvas?.classList.contains('view-freeform')) return;
         canvas.style.overflow = 'auto';
@@ -5902,24 +4821,24 @@ export const UI = {
         const { cellW, canvasGridW } = getGridMetrics();
         const minW = cellW;
         const minH = getGridSnapMinH(footprint);
-        const maxCellsW = Math.max(1, this.spanToCellsW(packW || canvasGridW));
+        const maxCellsW = Math.max(1, geoSpanToCellsW(packW || canvasGridW));
 
         if (isCollapsedSpatialSize(w, h)) {
             const small = getSmallRect(footprint);
-            let wCells = Math.max(1, this.spanToCellsW(Math.max(minW, small.w)));
+            let wCells = Math.max(1, geoSpanToCellsW(Math.max(minW, small.w)));
             wCells = Math.min(wCells, maxCellsW);
             return {
-                w: this.cellsToSpanW(wCells),
+                w: geoCellsToSpanW(wCells),
                 h: small.h
             };
         }
 
-        let wCells = Math.max(1, this.spanToCellsW(Math.max(minW, w)));
-        let hCells = Math.max(1, this.spanToCellsH(Math.max(minH, h)));
+        let wCells = Math.max(1, geoSpanToCellsW(Math.max(minW, w)));
+        let hCells = Math.max(1, geoSpanToCellsH(Math.max(minH, h)));
         wCells = Math.min(wCells, maxCellsW);
         return {
-            w: this.cellsToSpanW(wCells),
-            h: this.cellsToSpanH(hCells)
+            w: geoCellsToSpanW(wCells),
+            h: geoCellsToSpanH(hCells)
         };
     },
 
@@ -5927,16 +4846,16 @@ export const UI = {
         if (isCollapsedSpatialSize(w, h)) {
             return w + metrics.gap;
         }
-        const wCells = Math.max(1, this.spanToCellsW(w));
-        return this.cellsToSpanW(wCells) + metrics.gap;
+        const wCells = Math.max(1, geoSpanToCellsW(w));
+        return geoCellsToSpanW(wCells) + metrics.gap;
     },
 
     gridRowStride(w, h, metrics = getGridMetrics()) {
         if (isCollapsedSpatialSize(w, h)) {
             return h + metrics.gap;
         }
-        const hCells = Math.max(1, this.spanToCellsH(h));
-        return this.cellsToSpanH(hCells) + metrics.gap;
+        const hCells = Math.max(1, geoSpanToCellsH(h));
+        return geoCellsToSpanH(hCells) + metrics.gap;
     },
 
     snapPackCoord(value, origin, pad, packStride) {
@@ -6302,22 +5221,6 @@ export const UI = {
         return Math.max(0, Math.round(value / step) * step);
     },
 
-    cellsToSpanW(cells) {
-        return geoCellsToSpanW(cells);
-    },
-
-    cellsToSpanH(cells) {
-        return geoCellsToSpanH(cells);
-    },
-
-    spanToCellsW(span) {
-        return geoSpanToCellsW(span);
-    },
-
-    spanToCellsH(span) {
-        return geoSpanToCellsH(span);
-    },
-
     clampManualNoteRect(rect, { maxW = Infinity, maxH = Infinity } = {}) {
         let w = Math.max(FREEFORM_MIN_W, Math.round(rect.w));
         let h = Math.max(FREEFORM_MIN_H, Math.round(rect.h));
@@ -6383,17 +5286,17 @@ export const UI = {
             return this.snapNotePosition(snapped, { maxW, maxH, origin, edgePad: pad });
         }
 
-        const wCells = Math.max(1, this.spanToCellsW(rect.w));
-        const hCells = Math.max(1, this.spanToCellsH(rect.h));
-        let w = this.cellsToSpanW(wCells);
-        let h = this.cellsToSpanH(hCells);
+        const wCells = Math.max(1, geoSpanToCellsW(rect.w));
+        const hCells = Math.max(1, geoSpanToCellsH(rect.h));
+        let w = geoCellsToSpanW(wCells);
+        let h = geoCellsToSpanH(hCells);
         if (maxW < Infinity) {
-            const maxCells = Math.max(1, this.spanToCellsW(maxW));
-            w = this.cellsToSpanW(Math.min(wCells, maxCells));
+            const maxCells = Math.max(1, geoSpanToCellsW(maxW));
+            w = geoCellsToSpanW(Math.min(wCells, maxCells));
         }
         if (maxH < Infinity) {
-            const maxCells = Math.max(1, this.spanToCellsH(maxH));
-            h = this.cellsToSpanH(Math.min(hCells, maxCells));
+            const maxCells = Math.max(1, geoSpanToCellsH(maxH));
+            h = geoCellsToSpanH(Math.min(hCells, maxCells));
         }
         const snapped = {
             x: this.snapGridCoord(rect.x, metrics.strideX),
@@ -6449,14 +5352,6 @@ export const UI = {
             || a.y + a.h + g <= b.y
             || b.y + b.h + g <= a.y
         );
-    },
-
-    initFreeformCardStack(card, orderIndex = 0) {
-        this.initDesktopCardStack(card, orderIndex);
-    },
-
-    raiseFreeformCard(card) {
-        this.raiseDesktopCard(card);
     },
 
     getCollapsedCategories() {

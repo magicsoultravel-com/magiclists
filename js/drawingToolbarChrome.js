@@ -1,4 +1,4 @@
-import { CARD_ICONS } from './ui.js';
+import { CARD_ICONS } from './icons.js';
 
 const STORAGE_KEY = 'matrix_drawing_toolbar';
 

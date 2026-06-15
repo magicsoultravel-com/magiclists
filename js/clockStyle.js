@@ -1,4 +1,4 @@
-import { ACTION_ICONS } from './ui.js';
+import { ACTION_ICONS } from './icons.js';
 import { positionPopoverBelowAnchor } from './popoverPosition.js';
 
 const STORAGE_KEY = 'matrix_clock_style';

@@ -1,4 +1,4 @@
-import { ACTION_ICONS, DRAWING_ICONS } from './ui.js';
+import { ACTION_ICONS, DRAWING_ICONS } from './icons.js';
 import { ColorPicker, PALETTE_UNIFIED } from './colorPicker.js';
 import { DrawingToolbarMenu, CHEVRON } from './drawingToolbarMenu.js';
 import { DisplayOptions } from './displayOptions.js';

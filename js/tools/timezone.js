@@ -1,6 +1,6 @@
 /** @tool {"label":"Timezone","order":3,"resizable":true,"resizeMode":"fill","mountClass":"tool-mount--timezone","defaultSize":{"w":340,"h":440},"minSize":{"w":260,"h":280}} */
 /** @tool-icon <circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M6 3.6V6l2 1.2" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/> */
-import { ACTION_ICONS, CARD_ICONS } from '../ui.js';
+import { ACTION_ICONS, CARD_ICONS } from '../icons.js';
 
 const STORAGE_SELECTED = 'tz_selected_offsets';
 const STORAGE_FILTER = 'tz_filter_selected';

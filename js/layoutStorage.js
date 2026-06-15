@@ -967,3 +967,59 @@ export function applyLayoutBackupKeys(payload = {}) {
         }
     });
 }
+
+const MATRIX_DATABASE_KEY = 'matrix_database';
+
+function utf16Bytes(str) {
+    return (str?.length ?? 0) * 2;
+}
+
+export function getLocalStorageKeyBytes(key) {
+    const value = localStorage.getItem(key);
+    if (value === null) return 0;
+    return utf16Bytes(key) + utf16Bytes(value);
+}
+
+export function getStorageBreakdown() {
+    let notes = 0;
+    let matrix = 0;
+    let app = 0;
+
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+
+        if (key === MATRIX_DATABASE_KEY) {
+            const raw = localStorage.getItem(key);
+            if (!raw) continue;
+            try {
+                const db = JSON.parse(raw);
+                notes += utf16Bytes(JSON.stringify(db.items ?? []));
+                matrix += utf16Bytes(key) + utf16Bytes(JSON.stringify({ auth: db.auth, settings: db.settings }));
+            } catch {
+                matrix += getLocalStorageKeyBytes(key);
+            }
+            continue;
+        }
+
+        if (key.startsWith('matrix_')) {
+            matrix += getLocalStorageKeyBytes(key);
+            continue;
+        }
+
+        app += getLocalStorageKeyBytes(key);
+    }
+
+    const total = notes + matrix + app;
+    return { notes, matrix, app, total };
+}
+
+export function formatStorageSize(bytes) {
+    if (!bytes) return '0 KB';
+    const kb = bytes / 1024;
+    if (kb < 0.1) return '<0.1 KB';
+    if (kb < 10) return `${kb.toFixed(1)} KB`;
+    if (kb < 1024) return `${Math.round(kb)} KB`;
+    const mb = kb / 1024;
+    return mb < 10 ? `${mb.toFixed(1)} MB` : `${Math.round(mb)} MB`;
+}

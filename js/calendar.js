@@ -1,6 +1,6 @@
 import { Holidays } from './holidays.js';
 import { readStoredCategories } from './categories.js';
-import { CARD_ICONS } from './ui.js';
+import { CARD_ICONS } from './icons.js';
 import { resolveNoteColor } from './colorPicker.js';
 import { stripRichText } from './richText.js';
 
