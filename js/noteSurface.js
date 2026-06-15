@@ -942,25 +942,24 @@ export const NoteSurface = {
                 const richClass = stepRich ? ' rich-text' : '';
                 textHtml = `<span class="step-text${richClass} ${step.completed ? 'completed' : ''}">${this.renderRichHtml(stepText)}</span>`;
             }
-            const groupOpenClass = !isDoneSection && hasKids && !isCollapsed ? ' step-row--group-open' : '';
+            const indentStyle = level > 0 ? ` style="padding-left:${level * 0.45}rem"` : '';
             let treeRailHtml = '';
             if (!isDoneSection && level > 0 && treeLines.length > 0) {
                 const lineSpans = treeLines.map((show, d) => {
+                    if (!show) return '';
                     const endClass = d === treeLines.length - 1 && isBranchEnd ? ' step-tree-line--end' : '';
-                    const offClass = show ? '' : ' step-tree-line--off';
-                    return `<span class="step-tree-line${endClass}${offClass}"></span>`;
+                    return `<span class="step-tree-line${endClass}"></span>`;
                 }).join('');
-                treeRailHtml = `<span class="step-tree-rail" aria-hidden="true">${lineSpans}</span>`;
-            } else if (isDoneSection && level > 0) {
-                const spacers = Array.from({ length: level }, () => '<span class="step-tree-line step-tree-line--off"></span>').join('');
-                treeRailHtml = `<span class="step-tree-rail" aria-hidden="true">${spacers}</span>`;
+                if (lineSpans) {
+                    treeRailHtml = `<span class="step-tree-rail" aria-hidden="true">${lineSpans}</span>`;
+                }
             }
             return `
-                <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}${groupOpenClass}" data-step-id="${step.id}" data-level="${level}">
-                    ${treeRailHtml}
+                <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}" data-step-id="${step.id}" data-level="${level}"${indentStyle}>
                     <div class="step-row-leading">
                         ${collapseControl}
                         ${dragHandle}
+                        ${treeRailHtml}
                         <input type="checkbox" class="step-check" ${step.completed ? 'checked' : ''}>
                     </div>
                     ${textHtml}

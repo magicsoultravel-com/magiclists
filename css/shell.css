@@ -234,10 +234,6 @@
     cursor: pointer;
 }
 
-.step-collapse-btn {
-    position: relative;
-}
-
 .step-collapse-btn:hover {
     color: var(--text-main);
 }

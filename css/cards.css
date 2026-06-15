@@ -710,46 +710,39 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
     display: flex;
     flex-shrink: 0;
     align-self: stretch;
+    align-items: stretch;
+    margin-right: 0.08rem;
+}
+
+.step-row-leading .step-tree-rail {
+    order: 2;
+}
+
+.step-row-leading .step-check {
+    order: 3;
 }
 
 .step-tree-line {
     flex-shrink: 0;
-    width: 0.45rem;
+    width: 0.12rem;
     position: relative;
 }
 
 .step-tree-line::before {
     content: '';
     position: absolute;
-    left: 50%;
-    top: 0;
+    right: 0;
+    top: 0.06rem;
     bottom: 0;
     width: 1px;
     background: color-mix(in srgb, var(--border-color) 55%, transparent);
 }
 
-.step-tree-line--off::before {
-    display: none;
-}
-
 .step-tree-line--end::before {
-    bottom: 50%;
+    bottom: 55%;
 }
 
-.step-row--group-open .step-collapse-btn::after {
-    content: '';
-    position: absolute;
-    left: 50%;
-    top: 100%;
-    width: 1px;
-    height: 0.35rem;
-    background: color-mix(in srgb, var(--border-color) 55%, transparent);
-    transform: translateX(-50%);
-    pointer-events: none;
-}
-
-.has-custom-bg .step-tree-line::before,
-.has-custom-bg .step-row--group-open .step-collapse-btn::after {
+.has-custom-bg .step-tree-line::before {
     background: color-mix(in srgb, var(--card-border-subtle) 70%, transparent);
 }
 
