@@ -300,10 +300,7 @@ export const DragDropEngine = {
             previewFrame = requestAnimationFrame(() => {
                 previewFrame = null;
                 const actorRect = UI.readNoteRect(actorCard);
-                const zoom = getCanvasZoom(canvas);
-                const { origin, viewportH } = UI.getGridViewportBounds(canvas);
-                const scrollY = canvas.scrollTop / zoom;
-                const maxH = origin + scrollY + viewportH + getGridMetrics().cellH;
+                const { maxH } = UI.getGridBoardBounds(canvas);
                 const layout = UI.computeGridBoardLayout(
                     canvas,
                     actorCard.dataset.id,

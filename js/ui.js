@@ -1568,7 +1568,6 @@ export const UI = {
         if (ctx.scheduleExtents) {
             this.scheduleBoardCanvasExtents(canvas);
         }
-        if (ctx.deferReflow) return;
         if (isSnapLayoutMode(activeBoardViewMode) && canvas?.classList.contains('view-grid')) {
             const reflowOpts = { animate: true };
             if (ctx.actorRect) reflowOpts.actorRect = ctx.actorRect;
@@ -1588,7 +1587,7 @@ export const UI = {
         const pos = this.readNoteRect(card);
         this.persistRememberedSpatialSize(item.id, pos.w, pos.h, resolveTileSize(item));
         const small = getSmallRect(readTileSmallFootprint());
-        this.applySpatialToggleRect(card, item, { x: pos.x, y: pos.y, w: small.w, h: small.h }, { deferReflow: true, ...ctx });
+        this.applySpatialToggleRect(card, item, { x: pos.x, y: pos.y, w: small.w, h: small.h }, ctx);
     },
 
     collapseBoardCardToSmallFootprint(card, item, ctx = {}) {
@@ -2514,7 +2513,7 @@ export const UI = {
         return { targetCatName, categoryColor };
     },
 
-    updateDesktopCard(card, item, { expanded, dimensions = null, deferReflow = false } = {}) {
+    updateDesktopCard(card, item, { expanded, dimensions = null } = {}) {
         if (!isDesktopCard(card)) return;
 
         const snapLayout = isSnapLayoutMode(activeBoardViewMode);
@@ -2530,7 +2529,7 @@ export const UI = {
 
         this.finalizeDesktopCard(card);
 
-        if (snapLayout && canvas && !deferReflow) {
+        if (snapLayout && canvas) {
             requestAnimationFrame(() => {
                 this.reflowGridBoard(canvas, item.id, { animate: true });
             });
@@ -3163,22 +3162,23 @@ export const UI = {
     findDesktopCenterSlot(w, h, canvas, viewMode, { excludeId = null } = {}) {
         const host = canvas || document.getElementById('app-canvas');
         if (viewMode === 'grid') {
-            const { origin, packW, viewportH } = this.getGridViewportBounds(host);
+            const { origin, packW, viewportH, edgePad } = this.getGridViewportBounds(host);
+            const { maxH: boardMaxH } = this.getGridBoardBounds(host);
             let rect = {
                 x: origin + Math.max(0, (packW - w) / 2),
                 y: origin + Math.max(0, (viewportH - h) / 2),
                 w,
                 h
             };
-            rect = this.snapNoteRect(rect, { maxW: packW, maxH: origin + viewportH });
+            rect = this.snapNoteRect(rect, { maxW: packW, maxH: boardMaxH });
             const placed = [...(host?.querySelectorAll('.mini-card[data-desktop="1"]') || [])]
                 .filter((c) => c.dataset.id !== excludeId)
                 .map((c) => this.readNoteRect(c));
             if (placed.some((p) => this.rectsOverlap(rect, p))) {
-                rect = this.findNearestGridSlot(rect, rect.w, rect.h, placed, {
-                    packW,
+                rect = this.findFirstCanvasSlot(rect.w, rect.h, placed, packW + origin * 2, {
                     origin,
-                    maxH: origin + viewportH
+                    edgePad,
+                    yMin: rect.y
                 });
             }
             return rect;
@@ -3298,7 +3298,6 @@ export const UI = {
             this.raiseGridBoardCard(card);
             requestAnimationFrame(() => {
                 this.reflowGridBoard(canvas, item.id, { animate: true });
-                this.squeezeGridBoardToViewport(canvas, { animate: true });
                 card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             });
             return;
@@ -5053,23 +5052,22 @@ export const UI = {
         return { collapsed, expanded };
     },
 
-    findFirstCanvasSlotVertical(w, h, placed, canvasW, { origin = CANVAS_LAYOUT_ORIGIN, edgePad, xMin, yMin, maxH } = {}) {
+    findFirstCanvasSlotVertical(w, h, placed, canvasW, { origin = CANVAS_LAYOUT_ORIGIN, edgePad, xMin, yMin } = {}) {
         const metrics = getGridMetrics();
         const pad = edgePad ?? metrics.edgePad;
         const packW = Math.max(metrics.canvasGridW, canvasW - origin * 2 - pad * 2);
         const xOrigin = Math.max(origin + pad, xMin ?? origin + pad);
-        const yOrigin = Math.max(origin + pad, yMin ?? origin + pad);
+        let yOrigin = Math.max(origin + pad, yMin ?? origin + pad);
         const colStride = this.gridColumnStride(w, h, metrics);
         const yStride = getPackStrideYForRect(w, h);
-        const bottomLimit = (maxH ?? origin + metrics.strideY * 40) + 1;
         let x = xOrigin;
-        let guard = 0;
-        while (guard < 800) {
+        while (true) {
             let y = yOrigin;
-            while (y + h <= bottomLimit) {
+            while (true) {
+                if (x + w > origin + pad + packW + 1) break;
                 const candidate = this.snapNoteRect(
                     { x, y, w, h },
-                    { maxW: packW, origin, edgePad: pad, maxH }
+                    { maxW: packW, origin, edgePad: pad }
                 );
                 if (!placed.some((p) => this.rectsOverlap(candidate, p, metrics.gap))) {
                     return candidate;
@@ -5077,9 +5075,11 @@ export const UI = {
                 y += yStride;
             }
             x += colStride;
-            guard += 1;
+            if (x + w > origin + pad + packW + 1) {
+                x = xOrigin;
+                yOrigin += yStride;
+            }
         }
-        return { x: xOrigin, y: yOrigin, w, h };
     },
 
     computeExpandedAlignAnchor(direction, collapsedRects, {
@@ -5151,8 +5151,8 @@ export const UI = {
         metrics,
         direction = 'horizontal'
     }) {
-        const { origin, packW, viewportBottom, edgePad } = bounds;
-        const clampBounds = { packW, maxH: viewportBottom, origin, edgePad };
+        const { origin, packW, boardMaxH, edgePad } = bounds;
+        const clampBounds = { packW, maxH: boardMaxH, origin, edgePad };
         const unpinned = expandedItems.filter((item) => item?.id && !pinnedIds.has(item.id));
         if (!unpinned.length) return;
 
@@ -5162,7 +5162,7 @@ export const UI = {
             startX: anchor.startX,
             startY: anchor.startY,
             regionW: anchor.regionW,
-            viewportBottom,
+            viewportBottom: boardMaxH,
             origin,
             edgePad,
             metrics
@@ -5174,13 +5174,11 @@ export const UI = {
             if (!raw) return;
             let slot = this.clampNoteToBoardEdges(raw, clampBounds);
             if (placed.some((p) => this.rectsOverlap(slot, p, metrics.gap))) {
-                const near = this.findNearestGridSlot(slot, slot.w, slot.h, placed, {
-                    packW,
+                slot = this.findFirstCanvasSlot(slot.w, slot.h, placed, packW + origin * 2, {
                     origin,
-                    maxH: viewportBottom,
-                    edgePad
+                    edgePad,
+                    yMin: slot.y
                 });
-                slot = { ...near, w: slot.w, h: slot.h };
             }
             layout.set(item.id, slot);
             placed.push({ ...slot });
@@ -5290,7 +5288,7 @@ export const UI = {
         );
 
         if (unpinnedExpanded.length) {
-            const viewport = this.getGridViewportBounds(canvas);
+            const { maxH: boardMaxH } = this.getGridBoardBounds(canvas);
             this.packExpandedAlignGrid(canvas, expandedItems, pinnedIds, {
                 placed,
                 layout,
@@ -5298,7 +5296,7 @@ export const UI = {
                 bounds: {
                     origin,
                     packW,
-                    viewportBottom: viewport.viewportBottom,
+                    boardMaxH,
                     edgePad
                 },
                 metrics,
@@ -5311,10 +5309,8 @@ export const UI = {
                 const rect = layout.get(item.id);
                 if (rect) this.saveGridLayout(item.id, rect, { updateRemembered: true });
             });
-            this.updateGridScrollPolicy(canvas, { forcing: false });
-        } else {
-            this.squeezeGridBoardToViewport(canvas, { animate: true });
         }
+        this.updateGridScrollPolicy(canvas, { forcing: false });
     },
 
     getCascadeZIndexBase(canvas, pinnedIds) {
@@ -5937,43 +5933,6 @@ export const UI = {
         };
     },
 
-    findNearestGridSlot(preferred, w, h, placed, { packW, origin = CANVAS_LAYOUT_ORIGIN, maxH = Infinity, edgePad } = {}) {
-        const metrics = getGridMetrics();
-        const pad = edgePad ?? metrics.edgePad;
-        const bounds = { maxW: packW, maxH };
-        const snapped = this.snapNoteRect({ x: preferred.x, y: preferred.y, w, h }, { ...bounds, origin, edgePad: pad });
-        if (!placed.some((p) => this.rectsOverlap(snapped, p))) return snapped;
-
-        const prefX = snapped.x;
-        const prefY = snapped.y;
-        const candidates = [];
-        const minX = origin + pad;
-        const minY = origin + pad;
-        const maxRight = origin + pad + packW;
-        const maxBottom = maxH - pad;
-
-        for (let ring = 0; ring <= 32; ring++) {
-            for (let dy = -ring; dy <= ring; dy++) {
-                for (let dx = -ring; dx <= ring; dx++) {
-                    if (ring > 0 && Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
-                    const x = prefX + dx * metrics.strideX;
-                    const y = prefY + dy * metrics.strideY;
-                    const c = this.snapNoteRect({ x, y, w, h }, { ...bounds, origin, edgePad: pad });
-                    if (c.x < minX - 1) continue;
-                    if (c.x + c.w > maxRight + 1) continue;
-                    if (c.y < minY - 1) continue;
-                    if (c.y + c.h > maxBottom + 1) continue;
-                    candidates.push({ rect: c, dist: Math.abs(c.x - prefX) + Math.abs(c.y - prefY) });
-                }
-            }
-        }
-        candidates.sort((a, b) => a.dist - b.dist || a.rect.y - b.rect.y || a.rect.x - b.rect.x);
-        for (const { rect } of candidates) {
-            if (!placed.some((p) => this.rectsOverlap(rect, p))) return rect;
-        }
-        return snapped;
-    },
-
     gridColumnStride(w, h, metrics = getGridMetrics()) {
         if (isCollapsedSpatialSize(w, h)) {
             return w + metrics.gap;
@@ -5997,44 +5956,10 @@ export const UI = {
         return anchor + Math.round(rel / step) * step;
     },
 
-    pushGridCardRect(rect, placed, { packW, origin, maxH, edgePad }) {
-        const metrics = getGridMetrics();
-        const pad = edgePad ?? metrics.edgePad;
-        const snapRect = (r) => this.snapNoteRect(r, { maxW: packW, maxH, origin, edgePad: pad });
-        const colStride = this.gridColumnStride(rect.w, rect.h, metrics);
-        let candidate = snapRect({ ...rect, x: rect.x + colStride });
-        if (candidate.x + candidate.w <= origin + pad + packW + 1
-            && !placed.some((p) => this.rectsOverlap(candidate, p))) {
-            return candidate;
-        }
-        const blocker = placed.find((p) => this.rectsOverlap(rect, p));
-        if (blocker) {
-            candidate = snapRect({
-                x: rect.x,
-                y: blocker.y - rect.h - metrics.gap,
-                w: rect.w,
-                h: rect.h
-            });
-            if (candidate.y >= origin + pad - 1
-                && !placed.some((p) => this.rectsOverlap(candidate, p))) {
-                return candidate;
-            }
-            candidate = snapRect({
-                x: rect.x,
-                y: blocker.y + blocker.h + metrics.gap,
-                w: rect.w,
-                h: rect.h
-            });
-            if (!placed.some((p) => this.rectsOverlap(candidate, p))) return candidate;
-        }
-        return this.findNearestGridSlot(rect, rect.w, rect.h, placed, { packW, origin, maxH, edgePad: pad });
-    },
-
     resolveGridPushLayout({ cardEntries, actorId, actorRect, pinnedIds, packW, origin, maxH, edgePad }) {
         const pad = edgePad ?? getGridMetrics().edgePad;
         const layout = new Map();
         const placed = [];
-        const snapOpts = { packW, origin, maxH, edgePad: pad };
         const snapBounds = { maxW: packW, maxH, origin, edgePad: pad };
 
         cardEntries.forEach(({ id, rect }) => {
@@ -6045,7 +5970,11 @@ export const UI = {
         });
 
         if (actorId && actorRect) {
-            const snapped = this.findNearestGridSlot(actorRect, actorRect.w, actorRect.h, placed, snapOpts);
+            const snapped = this.findFirstCanvasSlot(actorRect.w, actorRect.h, placed, packW + origin * 2, {
+                origin,
+                edgePad: pad,
+                yMin: actorRect.y
+            });
             layout.set(actorId, snapped);
             placed.push({ ...snapped });
         }
@@ -6057,7 +5986,11 @@ export const UI = {
         others.forEach(({ id, rect }) => {
             let snapped = this.snapNoteRect(rect, snapBounds);
             if (placed.some((p) => this.rectsOverlap(snapped, p))) {
-                snapped = this.pushGridCardRect(snapped, placed, snapOpts);
+                snapped = this.findFirstCanvasSlot(snapped.w, snapped.h, placed, packW + origin * 2, {
+                    origin,
+                    edgePad: pad,
+                    yMin: snapped.y
+                });
             }
             layout.set(id, snapped);
             placed.push({ ...snapped });
@@ -6175,71 +6108,6 @@ export const UI = {
         return { origin, packW, viewportH, edgePad, scrollY, viewportBottom };
     },
 
-    squeezeGridBoardToViewport(canvas, { animate = true, footprintPack = false } = {}) {
-        if (!canvas?.classList.contains('view-grid')) return;
-        const { origin, packW, viewportH, edgePad } = this.getGridViewportBounds(canvas);
-        const { cellH } = getGridMetrics();
-        const bottomLimit = origin + viewportH;
-        const cards = [...canvas.querySelectorAll('.mini-card[data-desktop="1"]')];
-        const pinnedIds = new Set(this.getBoardPins());
-        const placed = [];
-        const layout = new Map();
-        const snapOpts = { packW, origin, edgePad, maxH: bottomLimit + cellH };
-
-        const rectForSqueeze = (card, isExpanded) => {
-            let rect = this.gridBoardRectForCard(card, this.readNoteRect(card), isExpanded);
-            if (footprintPack && isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(this.resolveBoardItem(card?.dataset?.id)))) {
-                const small = getSmallRect(readTileSmallFootprint());
-                rect = { ...rect, w: small.w, h: small.h };
-            }
-            return rect;
-        };
-
-        cards.forEach((card) => {
-            const id = card.dataset.id;
-            if (!id || !pinnedIds.has(id)) return;
-            const isExpanded = this.isSavedLayoutExpanded(id);
-            const rect = this.snapNoteRect(
-                rectForSqueeze(card, isExpanded),
-                { maxW: packW, maxH: snapOpts.maxH, origin, edgePad }
-            );
-            layout.set(id, rect);
-            placed.push({ ...rect });
-        });
-
-        const unpinned = cards
-            .filter((card) => {
-                const id = card.dataset.id;
-                return id && !pinnedIds.has(id);
-            })
-            .map((card) => {
-                const id = card.dataset.id;
-                const isExpanded = this.isSavedLayoutExpanded(id);
-                const rect = rectForSqueeze(card, isExpanded);
-                return { id, card, rect };
-            })
-            .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x);
-
-        unpinned.forEach(({ id, rect }) => {
-            let preferred = { ...rect };
-            if (preferred.y + preferred.h > bottomLimit + 2) {
-                preferred = { ...preferred, y: origin + edgePad };
-            }
-            let snapped = this.snapNoteRect(preferred, { maxW: packW, maxH: snapOpts.maxH, origin, edgePad });
-            if (placed.some((p) => this.rectsOverlap(snapped, p))) {
-                snapped = this.findNearestGridSlot(preferred, snapped.w, snapped.h, placed, snapOpts);
-            }
-            if (placed.some((p) => this.rectsOverlap(snapped, p))) {
-                snapped = this.pushGridCardRect(snapped, placed, snapOpts);
-            }
-            layout.set(id, snapped);
-            placed.push({ ...snapped });
-        });
-
-        this.applyGridBoardLayout(canvas, layout, { animate, save: true });
-        this.updateGridScrollPolicy(canvas, { forcing: false });
-    },
-
     updateGridScrollPolicy(canvas, { forcing = false } = {}) {
         if (!canvas?.classList.contains('view-grid')) return;
         canvas.classList.toggle('is-grid-forcing', forcing);
@@ -6258,7 +6126,6 @@ export const UI = {
         }
         const layout = this.computeGridBoardLayout(canvas, actorId, actorRect);
         this.applyGridBoardLayout(canvas, layout, { animate, save: true });
-        this.squeezeGridBoardToViewport(canvas, { animate });
     },
 
     repackGridBoardFromOrigin(canvas, { animate = true, items = [] } = {}) {
@@ -6287,7 +6154,6 @@ export const UI = {
             placed.push(slot);
         });
         this.applyGridBoardLayout(canvas, layout, { animate, save: true });
-        this.squeezeGridBoardToViewport(canvas, { animate, footprintPack: true });
     },
 
     repackBoardLayoutStorage(mode, items, canvas) {
@@ -6362,8 +6228,7 @@ export const UI = {
         const rowStride = this.gridColumnStride(w, h, metrics);
         const yStride = getPackStrideYForRect(w, h);
         let y = yOrigin;
-        let guard = 0;
-        while (guard < 800) {
+        while (true) {
             let x = xOrigin;
             while (x + w <= origin + pad + packW + 1) {
                 const candidate = this.snapNoteRect(
@@ -6376,9 +6241,7 @@ export const UI = {
                 x += rowStride;
             }
             y += yStride;
-            guard += 1;
         }
-        return { x: xOrigin, y: yOrigin, w, h };
     },
 
     snapGridCoord(value, stride) {

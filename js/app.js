@@ -683,23 +683,15 @@ class Application {
         this.updateDesktopZoomVisibility();
     }
 
-    squeezeGridIfActive() {
-        const canvas = document.getElementById('app-canvas');
-        if (!canvas?.classList.contains('view-grid')) return;
-        UI.squeezeGridBoardToViewport(canvas, { animate: true });
-    }
-
     setupCoreListeners() {
-        let gridSqueezeTimer = null;
         window.addEventListener('resize', () => {
             this.updateDesktopZoomVisibility();
-            clearTimeout(gridSqueezeTimer);
-            gridSqueezeTimer = setTimeout(() => this.squeezeGridIfActive(), 120);
+            const canvas = document.getElementById('app-canvas');
+            if (canvas) UI.updateBoardCanvasExtents(canvas);
         });
         window.addEventListener('desktop:zoom_changed', () => {
             const canvas = document.getElementById('app-canvas');
             UI.updateBoardCanvasExtents(canvas);
-            this.squeezeGridIfActive();
         });
 
         window.addEventListener('item:selected_for_edit', (e) => {
