@@ -1,4 +1,5 @@
 import { getItemCategoryName } from './focusFilter.js';
+import { emitItemMutation, escapeAttr, escapeHTML, snapshotItem } from './noteSurface.js';
 import { sortBoardItems } from './boardSort.js';
 import { readBoardSort } from './sidebarPrefs.js';
 import {
@@ -164,12 +165,12 @@ export function moveItemBetweenCategories({ itemId, fromCategory, toCategory, to
     saveFileCabinetOrder(order);
 
     if (fromCat !== toCat && item && UI) {
-        const beforeItem = UI.snapshotItem(item);
+        const beforeItem = snapshotItem(item);
         const updated = {
             ...item,
             categories: toCat === 'Uncategorized' ? [] : [toCat]
         };
-        UI.emitItemMutation(updated, { preserveView: true, beforeItem, skipRerender: true });
+        emitItemMutation(updated, { preserveView: true, beforeItem, skipRerender: true });
         return true;
     }
     return fromCat !== toCat;
@@ -691,7 +692,7 @@ function buildFileCabinetCategoryColumn({
     const foldBtnHtml = showFoldButton
         ? `<button type="button" class="card-act file-cabinet-category-fold-btn" title="Fold category" aria-label="Fold category">${FOLD_ICON}</button>`
         : '';
-    header.innerHTML = `<span class="file-cabinet-category-dot" style="background:${UI.escapeAttr(color)}"></span><span class="file-cabinet-category-name u-truncate">${UI.escapeHTML(catName)}</span><span class="file-cabinet-category-count">${items.length}</span>${foldBtnHtml}`;
+    header.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span class="file-cabinet-category-name u-truncate">${escapeHTML(catName)}</span><span class="file-cabinet-category-count">${items.length}</span>${foldBtnHtml}`;
     col.appendChild(header);
 
     const stack = document.createElement('div');
@@ -929,7 +930,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
                 chip.className = 'file-cabinet-filed-chip';
                 chip.dataset.category = catName;
                 chip.style.setProperty('--file-cabinet-category-color', color);
-                chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${UI.escapeAttr(color)}"></span><span class="file-cabinet-filed-chip-name u-truncate">${UI.escapeHTML(catName)} (${items.length})</span><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
+                chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span class="file-cabinet-filed-chip-name u-truncate">${escapeHTML(catName)} (${items.length})</span><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
 
                 const rollout = document.createElement('div');
                 rollout.className = 'file-cabinet-filed-rollout';

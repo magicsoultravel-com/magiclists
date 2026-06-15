@@ -1,5 +1,6 @@
 import { isFileCabinetActive, getFileCabinetToggleLabels } from './fileCabinet.js';
 import { isCollapsedSpatialSize, LEGACY_TILE_SIZE } from './tileGeometry.js';
+import { copyPlainTextToClipboard } from './clipboard.js';
 import {
     contentHasConvertibleText,
     convertChecklistToContent,
@@ -7,6 +8,7 @@ import {
     deriveEditorBodyLayout,
     itemToPlainCopyText,
     SOFT_BREAK,
+    stepToPlainCopyLine,
     unwrapLineStrike,
     wrapLineAsStruck,
     stepsHaveConvertibleText
@@ -1665,7 +1667,7 @@ export const NoteSurface = {
                     const stepId = row?.dataset.stepId;
                     const step = item.steps?.find((s) => s.id === stepId);
                     if (!step) return;
-                    const ok = await this.copyPlainTextToClipboard(stepToPlainCopyLine(step));
+                    const ok = await copyPlainTextToClipboard(stepToPlainCopyLine(step));
                     if (ok) this.flashCopyFeedback(btn);
                     else this.flashCopyFeedback(btn, 'Copy failed', { failed: true });
                 });
@@ -1962,5 +1964,6 @@ export const {
     escapeQuotes,
     resolveEditorBodyLayoutUnchecked,
     updateConvertButtons,
-    updateNoteMetaStats
+    updateNoteMetaStats,
+    formatNoteListDate
 } = NoteSurface;

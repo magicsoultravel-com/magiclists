@@ -21,7 +21,6 @@ export const Editor = {
     metaLabelTimer: null,
     hasUserInteracted: false,
     isNewUnsavedNote: false,
-    desktopRestoreContext: null,
 
     isColorPickerOpen() {
         if (ColorPicker.eyedropperCleanup) return true;
@@ -68,8 +67,7 @@ export const Editor = {
     open(item = null, categoriesList = [], { sourceCard = null } = {}) {
         this.availableCategories = categoriesList;
         this.hasUserInteracted = false;
-        this.desktopRestoreContext = UI.captureDesktopRestoreContext(sourceCard);
-        
+
         const isNew = !item;
         this.activeItem = item ? JSON.parse(JSON.stringify(item)) : {
             id: createNoteId(),
@@ -246,7 +244,6 @@ export const Editor = {
         this.activeItem = null;
         this.hasUserInteracted = false;
         this.isNewUnsavedNote = false;
-        this.desktopRestoreContext = null;
         const modal = this.overlay?.querySelector('.modal');
         if (modal) EditorModalChrome.teardown(modal);
         if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);

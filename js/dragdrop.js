@@ -6,6 +6,7 @@ import {
     UNCATEGORIZED_CATEGORY
 } from './categories.js';
 import { UI, isDesktopCard } from './ui.js';
+import { canEditInline, mutateItem } from './noteSurface.js';
 import { itemHasCategory } from './focusFilter.js';
 import {
     FREEFORM_MIN_W,
@@ -72,8 +73,8 @@ function cardIsPinned(card) {
 
 function promoteExpandedResizeToLargeTier(card, item) {
     if (!item || !isDesktopCard(card) || UI.isSpatiallyCollapsed(card)) return resolveTileSize(item);
-    if (resolveTileSize(item) !== 'small' || !UI.canEditInline()) return resolveTileSize(item);
-    UI.mutateItem(item, (it) => {
+    if (resolveTileSize(item) !== 'small' || !canEditInline()) return resolveTileSize(item);
+    mutateItem(item, (it) => {
         it.tileSize = 'large';
     }, { preserveView: true, skipRerender: true });
     item.tileSize = 'large';

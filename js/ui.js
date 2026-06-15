@@ -100,6 +100,7 @@ import {
     resolveSpatialFallbackRect as geoResolveSpatialFallbackRect
 } from './tileGeometry.js';
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
+import { copyPlainTextToClipboard } from './clipboard.js';
 
 import { NoteSurface } from './noteSurface.js';
 
@@ -112,27 +113,6 @@ export {
     defaultStartDateTimeNow,
     normalizeItemForSave
 } from './noteModel.js';
-export {
-    snapshotItem,
-    emitItemMutation,
-    mutateItem,
-    renderRichHtml,
-    buildNoteEditorShell,
-    bindNoteEditorShell,
-    attachNoteBodyInteractions,
-    buildNoteBodyHtml,
-    buildNoteQuickActionsHtml,
-    canEditInline,
-    focusInlineEdit,
-    focusPendingChecklistStep,
-    escapeHTML,
-    escapeAttr,
-    escapeQuotes,
-    resolveEditorBodyLayoutUnchecked,
-    syncItemBodyFromDom,
-    updateConvertButtons,
-    updateNoteMetaStats
-} from './noteSurface.js';
 
 const UNCATEGORIZED_COLOR = '#64748b';
 
@@ -206,9 +186,9 @@ export const UI = {
 
     hideFromBoard(item) {
         if (localStorage.getItem('admin_token')) {
-            this.emitItemMutation(
+            NoteSurface.emitItemMutation(
                 { ...item, hiddenFromBoard: true },
-                { beforeItem: this.snapshotItem(item) }
+                { beforeItem: NoteSurface.snapshotItem(item) }
             );
             return;
         }
@@ -222,9 +202,9 @@ export const UI = {
         const ids = this.getLocalHiddenIds().filter(id => id !== item.id);
         localStorage.setItem('matrix_hidden_board_ids', JSON.stringify(ids));
         if (localStorage.getItem('admin_token')) {
-            this.emitItemMutation(
+            NoteSurface.emitItemMutation(
                 { ...item, hiddenFromBoard: false },
-                { beforeItem: this.snapshotItem(item) }
+                { beforeItem: NoteSurface.snapshotItem(item) }
             );
             return;
         }
@@ -245,7 +225,7 @@ export const UI = {
     },
 
     toggleCardCalendar(item, btn) {
-        const beforeItem = this.snapshotItem(item);
+        const beforeItem = NoteSurface.snapshotItem(item);
         const willHide = !this.isHiddenFromCalendar(item);
         const updated = { ...item, hideFromCalendar: willHide };
         item.hideFromCalendar = willHide;
@@ -255,7 +235,7 @@ export const UI = {
         localStorage.setItem('matrix_calendar_hidden_ids', JSON.stringify(ids));
 
         if (localStorage.getItem('admin_token')) {
-            this.emitItemMutation(updated, { beforeItem });
+            NoteSurface.emitItemMutation(updated, { beforeItem });
         }
 
         window.dispatchEvent(new CustomEvent('calendar:items_changed', { detail: updated }));
@@ -277,14 +257,14 @@ export const UI = {
         canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
             const item = byId.get(card.dataset.id);
             if (!item) return;
-            this.commitFocusedInlineField(card, item);
+            NoteSurface.commitFocusedInlineField(card, item);
             if (card.dataset.pendingFocusStepId) return;
             const shell = card.querySelector('.editor-note-shell');
             if (!shell) return;
-            const beforeItem = this.snapshotItem(item);
-            this.syncItemBodyFromDom(shell, item);
-            if (JSON.stringify(beforeItem) !== JSON.stringify(this.snapshotItem(item))) {
-                this.emitItemMutation(item, { preserveView: true, beforeItem, skipRerender: true });
+            const beforeItem = NoteSurface.snapshotItem(item);
+            NoteSurface.syncItemBodyFromDom(shell, item);
+            if (JSON.stringify(beforeItem) !== JSON.stringify(NoteSurface.snapshotItem(item))) {
+                NoteSurface.emitItemMutation(item, { preserveView: true, beforeItem, skipRerender: true });
             }
         });
     },
@@ -573,8 +553,8 @@ export const UI = {
         card.classList.remove('is-tier-resizing');
 
         const finalTier = normalizeTileSize(resizeState.previewTier);
-        if (finalTier !== resolveTileSize(item) && this.canEditInline()) {
-            this.mutateItem(item, (it) => {
+        if (finalTier !== resolveTileSize(item) && NoteSurface.canEditInline()) {
+            NoteSurface.mutateItem(item, (it) => {
                 it.tileSize = finalTier;
             }, { preserveView: true, skipRerender: true });
             item.tileSize = finalTier;
@@ -637,8 +617,8 @@ export const UI = {
         const tier = ctx.tier ?? (isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(item)) ? 'small' : 'large');
         const normalizedTier = normalizeTileSize(tier);
 
-        if (this.canEditInline() && normalizedTier !== resolveTileSize(item)) {
-            this.mutateItem(item, (it) => {
+        if (NoteSurface.canEditInline() && normalizedTier !== resolveTileSize(item)) {
+            NoteSurface.mutateItem(item, (it) => {
                 it.tileSize = normalizedTier;
             }, { preserveView: true, skipRerender: true });
             item.tileSize = normalizedTier;
@@ -747,8 +727,8 @@ export const UI = {
             if (!wasSmall) return;
             const next = { x: rect.x, y: rect.y, w: smallRect.w, h: smallRect.h };
             this.applyNoteRect(card, next, { settling: false });
-            if (this.canEditInline() && resolveTileSize(item) !== 'small') {
-                this.mutateItem(item, (it) => { it.tileSize = 'small'; }, { preserveView: true, skipRerender: true });
+            if (NoteSurface.canEditInline() && resolveTileSize(item) !== 'small') {
+                NoteSurface.mutateItem(item, (it) => { it.tileSize = 'small'; }, { preserveView: true, skipRerender: true });
                 item.tileSize = 'small';
                 boardItemsById.set(item.id, item);
             }
@@ -1060,31 +1040,6 @@ export const UI = {
         });
     },
 
-    async copyPlainTextToClipboard(text) {
-        const value = String(text ?? '');
-        if (!value) return false;
-        try {
-            if (navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(value);
-                return true;
-            }
-        } catch { /* fallback below */ }
-        try {
-            const ta = document.createElement('textarea');
-            ta.value = value;
-            ta.setAttribute('readonly', '');
-            ta.style.position = 'fixed';
-            ta.style.left = '-9999px';
-            document.body.appendChild(ta);
-            ta.select();
-            const ok = document.execCommand('copy');
-            document.body.removeChild(ta);
-            return ok;
-        } catch {
-            return false;
-        }
-    },
-
 
     getCardActionsOptions(card) {
         const hasSession = !!localStorage.getItem('admin_token');
@@ -1136,18 +1091,18 @@ export const UI = {
         };
 
         this.attachCardActionButton(copyBtn, async () => {
-            this.commitFocusedInlineField(card, item);
+            NoteSurface.commitFocusedInlineField(card, item);
             const shell = card.querySelector('.editor-note-shell');
-            if (shell) this.syncItemBodyFromDom(shell, item);
-            const ok = await this.copyPlainTextToClipboard(itemToPlainCopyText(item));
-            if (ok) this.flashCopyFeedback(copyBtn);
-            else this.flashCopyFeedback(copyBtn, 'Copy failed', { failed: true });
+            if (shell) NoteSurface.syncItemBodyFromDom(shell, item);
+            const ok = await copyPlainTextToClipboard(itemToPlainCopyText(item));
+            if (ok) NoteSurface.flashCopyFeedback(copyBtn);
+            else NoteSurface.flashCopyFeedback(copyBtn, 'Copy failed', { failed: true });
         });
 
         const toolbar = card.querySelector('.note-editor-toolbar');
         toolbar?.addEventListener('mousedown', (e) => {
             if (e.button !== 0) return;
-            this.commitFocusedInlineField(card, item);
+            NoteSurface.commitFocusedInlineField(card, item);
         }, true);
 
         this.attachCardActionButton(pinBtn, () => {
@@ -1175,7 +1130,7 @@ export const UI = {
         }
 
         this.attachCardActionButton(colorBtn, () => {
-            this.commitFocusedInlineField(card, item);
+            NoteSurface.commitFocusedInlineField(card, item);
             if (isDesktopCard(card)) this.raiseDesktopCard(card);
             if (!localStorage.getItem('admin_token')) return;
             ColorPicker.open({
@@ -1184,7 +1139,7 @@ export const UI = {
                 value: resolveNoteColor(item.backgroundColor),
                 align: 'end',
                 onSelect: (color) => {
-                    this.mutateItem(item, (it) => {
+                    NoteSurface.mutateItem(item, (it) => {
                         it.backgroundColor = color || THEME_DEFAULT_COLOR;
                     }, { preserveView: true, skipRerender: true });
                     this.applyItemCardTheme(card, item);
@@ -1193,12 +1148,12 @@ export const UI = {
         });
 
         this.attachCardActionButton(hideBtn, () => {
-            this.commitFocusedInlineField(card, item);
+            NoteSurface.commitFocusedInlineField(card, item);
             this.hideFromBoard(item);
         });
 
         this.attachCardActionButton(editBtn, () => {
-            this.commitFocusedInlineField(card, item);
+            NoteSurface.commitFocusedInlineField(card, item);
             if (isDesktopCard(card)) this.raiseDesktopCard(card);
             if (consumeSkipExpand()) return;
             if (!localStorage.getItem('admin_token')) return;
@@ -1210,7 +1165,7 @@ export const UI = {
         if (calBtn) {
             this.syncCalendarButtonUI(item, calBtn);
             this.attachCardActionButton(calBtn, () => {
-                this.commitFocusedInlineField(card, item);
+                NoteSurface.commitFocusedInlineField(card, item);
                 this.toggleCardCalendar(item, calBtn);
             });
         }
@@ -1255,9 +1210,9 @@ export const UI = {
         this.attachCardActionButton(copyBtn, async () => {
             editor.syncActiveItemFromDom();
             const data = editor.collectFormData();
-            const ok = await this.copyPlainTextToClipboard(itemToPlainCopyText(data));
-            if (ok) this.flashCopyFeedback(copyBtn);
-            else this.flashCopyFeedback(copyBtn, 'Copy failed', { failed: true });
+            const ok = await copyPlainTextToClipboard(itemToPlainCopyText(data));
+            if (ok) NoteSurface.flashCopyFeedback(copyBtn);
+            else NoteSurface.flashCopyFeedback(copyBtn, 'Copy failed', { failed: true });
         });
 
         this.attachCardActionButton(pinBtn, () => {
@@ -1283,7 +1238,7 @@ export const UI = {
 
         this.attachCardActionButton(editBtn, () => {
             const titleEl = editor.mountZone?.querySelector('[data-field="title"]');
-            if (titleEl) this.focusInlineEdit(titleEl, 'end');
+            if (titleEl) NoteSurface.focusInlineEdit(titleEl, 'end');
         });
 
         if (calBtn) {
@@ -3094,8 +3049,8 @@ export const UI = {
 
         sorted.forEach((item) => {
             if (!item?.id) return;
-            if (this.canEditInline() && resolveTileSize(item) !== 'small') {
-                this.mutateItem(item, (it) => { it.tileSize = 'small'; }, { preserveView: true, skipRerender: true });
+            if (NoteSurface.canEditInline() && resolveTileSize(item) !== 'small') {
+                NoteSurface.mutateItem(item, (it) => { it.tileSize = 'small'; }, { preserveView: true, skipRerender: true });
                 item.tileSize = 'small';
                 boardItemsById.set(item.id, item);
             }
@@ -3324,18 +3279,5 @@ export const UI = {
         }
         localStorage.setItem('matrix_collapsed_categories', JSON.stringify(collapsed));
         return idx < 0;
-    },
-
-    snapshotItem(item) { return NoteSurface.snapshotItem(item); },
-    emitItemMutation(item, opts) { return NoteSurface.emitItemMutation(item, opts); },
-    mutateItem(item, mutator, opts) { return NoteSurface.mutateItem(item, mutator, opts); },
-    commitFocusedInlineField(card, item) { return NoteSurface.commitFocusedInlineField(card, item); },
-    syncItemBodyFromDom(root, item) { return NoteSurface.syncItemBodyFromDom(root, item); },
-    canEditInline() { return NoteSurface.canEditInline(); },
-    flashCopyFeedback(btn, message, opts) { return NoteSurface.flashCopyFeedback(btn, message, opts); },
-    focusInlineEdit(el, edge) { return NoteSurface.focusInlineEdit(el, edge); },
-    renderRichHtml(str) { return NoteSurface.renderRichHtml(str); },
-    formatNoteListDate(item) { return NoteSurface.formatNoteListDate(item); },
-    escapeHTML(str) { return NoteSurface.escapeHTML(str); },
-    escapeAttr(str) { return NoteSurface.escapeAttr(str); }
+    }
 };

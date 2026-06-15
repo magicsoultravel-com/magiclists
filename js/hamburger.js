@@ -1,4 +1,5 @@
 import { UI } from './ui.js';
+import { formatNoteListDate, renderRichHtml } from './noteSurface.js';
 import { UNCATEGORIZED_CATEGORY } from './categories.js';
 import { itemHasCategory } from './focusFilter.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
@@ -247,7 +248,7 @@ export const SidePanel = {
         const plainTitle = stripRichText(item.title || '') || 'Untitled';
         const titleRich = hasRichMarkup(item.title);
         const titleHtml = titleRich
-            ? UI.renderRichHtml(item.title || '')
+            ? renderRichHtml(item.title || '')
             : this.escapeHTML(plainTitle);
         return {
             titleAttr: this.escapeAttr(plainTitle),
@@ -401,7 +402,7 @@ export const SidePanel = {
         zone.innerHTML = sorted.map((item) => {
             const accent = resolveNoteColor(item.backgroundColor);
             const accentStyle = ` style="--note-accent:${this.escapeAttr(accent)}"`;
-            const dateLabel = UI.formatNoteListDate(item);
+            const dateLabel = formatNoteListDate(item);
             const { titleAttr, titleHtml, richClass } = this.buildSidebarNoteTitle(item);
 
             if (variant === 'hidden') {
