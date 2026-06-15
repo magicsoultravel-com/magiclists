@@ -80,9 +80,11 @@
 
 .mini-card.tile-small .editor-note-topline .editor-note-header,
 .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .editor-note-header,
-.file-cabinet .file-cabinet-tab .editor-note-header {
-    flex: 1 1 auto;
+.file-cabinet .file-cabinet-tab .editor-note-topline .editor-note-header {
+    flex: 0 1 auto;
     min-width: 0;
+    width: auto;
+    max-width: calc(100% - 7rem);
     overflow: hidden;
 }
 
@@ -93,10 +95,14 @@
 .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title.card-inline-edit,
 .file-cabinet .file-cabinet-tab .mini-card-title.card-inline-edit {
     font-size: calc(0.62rem * var(--note-font-scale, 1));
-    width: auto;
+    width: max-content;
     max-width: 100%;
     display: block;
     line-height: 1.2;
+}
+
+.file-cabinet .file-cabinet-tab .mini-card-title.card-inline-edit {
+    field-sizing: content;
 }
 
 .mini-card.tile-small .editor-note-header .mini-card-title,
@@ -123,18 +129,24 @@ html[data-tile-small-footprint="card"] .file-cabinet .file-cabinet-tab .mini-car
 }
 
 .file-cabinet-tab.is-file-cabinet-dragging .editor-note-topline .editor-note-header {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
+    width: auto;
+    max-width: calc(100% - 7rem);
     overflow: hidden;
 }
 
 .file-cabinet-tab.is-file-cabinet-dragging .mini-card-title,
 .file-cabinet-tab.is-file-cabinet-dragging .mini-card-title.card-inline-edit {
     font-size: calc(0.62rem * var(--note-font-scale, 1));
-    width: auto;
+    width: max-content;
     max-width: 100%;
     display: block;
     line-height: 1.2;
+}
+
+.file-cabinet-tab.is-file-cabinet-dragging .mini-card-title.card-inline-edit {
+    field-sizing: content;
 }
 
 .file-cabinet-tab.is-file-cabinet-dragging .editor-note-header .mini-card-title {
@@ -250,19 +262,6 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-}
-
-.mini-card.expanded .card-body::-webkit-scrollbar,
-.mini-card.expanded .editor-note-body::-webkit-scrollbar {
-    width: 5px;
-}
-
-.mini-card.expanded .card-body::-webkit-scrollbar-thumb,
-.mini-card.expanded .editor-note-body::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.22);
-    border-radius: 4px;
 }
 
 .mini-card.expanded .card-content-preview,
@@ -462,6 +461,15 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 .editor-note-topline .editor-note-header {
     flex: 1 1 auto;
     min-width: 0;
+    width: 100%;
+}
+
+#editor-overlay .editor-note-topline .editor-note-header {
+    flex: 1 1 auto;
+    width: 100%;
+}
+
+#editor-overlay .editor-note-header .mini-card-title {
     width: 100%;
 }
 

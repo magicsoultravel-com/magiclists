@@ -22,11 +22,20 @@
     min-width: 2.6rem;
 }
 
-/* OLED Black — true black surfaces, no gradient halos */
-html[data-app-theme="black"] {
+html {
     color-scheme: dark;
 }
 
+html[data-app-theme="light"],
+html[data-app-theme="white"],
+html[data-app-theme="arctic"],
+html[data-app-theme="parchment"],
+html[data-app-theme="casual"],
+html[data-app-theme="rose"] {
+    color-scheme: light;
+}
+
+/* OLED Black — true black surfaces, no gradient halos */
 html[data-app-theme="black"][data-desktop-gradient="1"] #app-canvas.view-freeform,
 html[data-app-theme="black"][data-desktop-gradient="1"] #app-canvas.view-grid {
     background-image: none;
@@ -75,8 +84,15 @@ html[data-app-theme="monochrome"] .card-act--cal.is-on {
     filter: grayscale(1);
 }
 
+html[data-app-theme="monochrome"] {
+    --scrollbar-thumb: color-mix(in srgb, #9ca3af 42%, var(--border-color));
+    --scrollbar-thumb-hover: color-mix(in srgb, #d4d4d8 55%, var(--border-color));
+}
+
 /* Matrix — full UI terminal green (independent from Monochrome) */
 html[data-app-theme="matrix"] {
+    --scrollbar-thumb: color-mix(in srgb, #39ff65 35%, var(--border-color));
+    --scrollbar-thumb-hover: color-mix(in srgb, #39ff65 52%, var(--border-color));
     font-family: 'Overpass Mono', 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
     font-weight: 400;
     letter-spacing: 0.02em;

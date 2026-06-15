@@ -593,12 +593,15 @@
     flex: 0 0 auto;
     min-width: 0;
     isolation: unset;
+    --card-actions-reserve: min(7.5rem, 45%);
 }
 
-#app-canvas.view-grid .mini-card[data-desktop="1"] .editor-note-header,
-#app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-note-header {
-    flex: 1 1 auto;
+#app-canvas.view-grid .mini-card[data-desktop="1"] .editor-note-topline .editor-note-header,
+#app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-note-topline .editor-note-header {
+    flex: 0 1 auto;
     min-width: 0;
+    width: auto;
+    max-width: calc(100% - var(--card-actions-reserve, 7rem));
     overflow: hidden;
 }
 
@@ -627,7 +630,6 @@
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
-    scrollbar-width: thin;
 }
 
 #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small .editor-note-body,
@@ -768,9 +770,14 @@ html[data-tile-small-footprint="card"] #app-canvas.view-freeform .mini-card[data
 #app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-note-header .mini-card-title,
 #app-canvas.view-grid .mini-card[data-desktop="1"] .editor-note-header .mini-card-title {
     cursor: text;
-    width: auto;
+    width: max-content;
     max-width: 100%;
     display: block;
+}
+
+#app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-note-header .mini-card-title.card-inline-edit,
+#app-canvas.view-grid .mini-card[data-desktop="1"] .editor-note-header .mini-card-title.card-inline-edit {
+    field-sizing: content;
 }
 
 #app-canvas .mini-card[data-desktop="1"] .editor-note-topline .note-editor-toolbar {
