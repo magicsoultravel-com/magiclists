@@ -67,10 +67,9 @@
     min-height: var(--tile-large-h);
 }
 
-/* Compact note chrome — smallest tiles (board spatial-at-small + file cabinet tabs) */
+/* Compact note chrome — smallest tiles (spatial-at-small) */
 .mini-card.tile-small .editor-note-topline,
-.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline,
-.file-cabinet .file-cabinet-tab .editor-note-topline {
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline {
     flex: 0 0 auto;
     min-height: 0;
     min-width: 0;
@@ -79,8 +78,7 @@
 }
 
 .mini-card.tile-small .editor-note-topline .editor-note-header,
-.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .editor-note-header,
-.file-cabinet .file-cabinet-tab .editor-note-topline .editor-note-header {
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .editor-note-header {
     flex: 1 1 auto;
     min-width: 0;
     overflow: hidden;
@@ -88,10 +86,8 @@
 
 .mini-card.tile-small .editor-note-topline .mini-card-title,
 .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title,
-.file-cabinet .file-cabinet-tab .mini-card-title,
 .mini-card.tile-small .editor-note-topline .mini-card-title.card-inline-edit,
-.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title.card-inline-edit,
-.file-cabinet .file-cabinet-tab .mini-card-title.card-inline-edit {
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title.card-inline-edit {
     font-size: calc(0.62rem * var(--note-font-scale, 1));
     width: auto;
     max-width: 100%;
@@ -100,48 +96,12 @@
 }
 
 .mini-card.tile-small .editor-note-header .mini-card-title,
-.mini-card[data-desktop="1"].spatial-at-small .editor-note-header .mini-card-title,
-.file-cabinet .file-cabinet-tab .editor-note-header .mini-card-title {
+.mini-card[data-desktop="1"].spatial-at-small .editor-note-header .mini-card-title {
     padding: 0;
 }
 
 html[data-tile-small-footprint="card"] .mini-card.tile-small .editor-note-topline .mini-card-title,
-html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title,
-html[data-tile-small-footprint="card"] .file-cabinet .file-cabinet-tab .mini-card-title {
-    line-height: 1.15;
-    padding-top: 0;
-    padding-bottom: 0;
-}
-
-/* File cabinet drag ghost (reparented to body during drag) */
-.file-cabinet-tab.is-file-cabinet-dragging .editor-note-topline {
-    flex: 0 0 auto;
-    min-height: 0;
-    min-width: 0;
-    width: 100%;
-    position: relative;
-}
-
-.file-cabinet-tab.is-file-cabinet-dragging .editor-note-topline .editor-note-header {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-}
-
-.file-cabinet-tab.is-file-cabinet-dragging .mini-card-title,
-.file-cabinet-tab.is-file-cabinet-dragging .mini-card-title.card-inline-edit {
-    font-size: calc(0.62rem * var(--note-font-scale, 1));
-    width: auto;
-    max-width: 100%;
-    display: block;
-    line-height: 1.2;
-}
-
-.file-cabinet-tab.is-file-cabinet-dragging .editor-note-header .mini-card-title {
-    padding: 0;
-}
-
-html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-dragging .mini-card-title {
+html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title {
     line-height: 1.15;
     padding-top: 0;
     padding-bottom: 0;
@@ -164,15 +124,8 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
     pointer-events: none;
 }
 
-.mini-card .note-editor-toolbar .card-act,
-.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-act {
+.mini-card .note-editor-toolbar .card-act {
     pointer-events: auto;
-}
-
-.file-cabinet .file-cabinet-tab:hover .note-editor-toolbar,
-.file-cabinet .file-cabinet-tab:focus-within .note-editor-toolbar {
-    opacity: 1;
-    pointer-events: none;
 }
 
 .mini-card.tile-small:hover,
@@ -180,9 +133,7 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 .mini-card[data-desktop="1"].spatial-at-small:hover,
 .mini-card[data-desktop="1"].spatial-at-small:focus-within,
 .mini-card.tile-large:hover,
-.mini-card.tile-large:focus-within,
-.file-cabinet .file-cabinet-tab:hover,
-.file-cabinet .file-cabinet-tab:focus-within {
+.mini-card.tile-large:focus-within {
     z-index: 25;
 }
 
@@ -337,7 +288,6 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 .mini-card.compact .card-actions::before,
 .mini-card.tile-small .note-editor-toolbar .card-actions::before,
 .mini-card[data-desktop="1"].spatial-at-small .note-editor-toolbar .card-actions::before,
-.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-actions::before,
 .mini-card.expanded .note-editor-toolbar .card-actions::before {
     content: '';
     position: absolute;
@@ -356,7 +306,6 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 .mini-card.compact.has-custom-bg .card-actions::before,
 .mini-card.tile-small.has-custom-bg .note-editor-toolbar .card-actions::before,
 .mini-card[data-desktop="1"].spatial-at-small.has-custom-bg .note-editor-toolbar .card-actions::before,
-.file-cabinet .file-cabinet-tab.has-custom-bg .note-editor-toolbar .card-actions::before,
 .mini-card.expanded.has-custom-bg .note-editor-toolbar .card-actions::before {
     background: var(--card-action-bg);
     box-shadow: 0 0 0 1px var(--card-border-subtle);
@@ -365,7 +314,6 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 .mini-card.compact .card-act,
 .mini-card.tile-small .note-editor-toolbar .card-act,
 .mini-card[data-desktop="1"].spatial-at-small .note-editor-toolbar .card-act,
-.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-act,
 .mini-card.expanded .note-editor-toolbar .card-act {
     background: transparent;
     box-shadow: none;
@@ -374,7 +322,6 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 .mini-card.compact.has-custom-bg .card-act,
 .mini-card.tile-small.has-custom-bg .note-editor-toolbar .card-act,
 .mini-card[data-desktop="1"].spatial-at-small.has-custom-bg .note-editor-toolbar .card-act,
-.file-cabinet .file-cabinet-tab.has-custom-bg .note-editor-toolbar .card-act,
 .mini-card.expanded.has-custom-bg .note-editor-toolbar .card-act {
     background: transparent;
     color: var(--card-action-fg);
@@ -384,7 +331,6 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 .mini-card.compact .card-act:hover,
 .mini-card.tile-small .note-editor-toolbar .card-act:hover,
 .mini-card[data-desktop="1"].spatial-at-small .note-editor-toolbar .card-act:hover,
-.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-act:hover,
 .mini-card.expanded .note-editor-toolbar .card-act:hover {
     background: color-mix(in srgb, var(--bg-surface) 88%, #fff 12%);
 }
@@ -392,7 +338,6 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 .mini-card.compact.has-custom-bg .card-act:hover,
 .mini-card.tile-small.has-custom-bg .note-editor-toolbar .card-act:hover,
 .mini-card[data-desktop="1"].spatial-at-small.has-custom-bg .note-editor-toolbar .card-act:hover,
-.file-cabinet .file-cabinet-tab.has-custom-bg .note-editor-toolbar .card-act:hover,
 .mini-card.expanded.has-custom-bg .note-editor-toolbar .card-act:hover {
     background: color-mix(in srgb, var(--card-action-bg) 82%, #fff 18%);
 }
@@ -403,8 +348,6 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 .mini-card.tile-small:focus-within .note-editor-toolbar .card-act,
 .mini-card[data-desktop="1"].spatial-at-small:hover .note-editor-toolbar .card-act,
 .mini-card[data-desktop="1"].spatial-at-small:focus-within .note-editor-toolbar .card-act,
-.file-cabinet .file-cabinet-tab:hover .note-editor-toolbar .card-act,
-.file-cabinet .file-cabinet-tab:focus-within .note-editor-toolbar .card-act,
 .mini-card.expanded:hover .note-editor-toolbar .card-act,
 .mini-card.expanded:focus-within .note-editor-toolbar .card-act {
     color: var(--text-main);
@@ -416,8 +359,6 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 .mini-card.tile-small.has-custom-bg:focus-within .note-editor-toolbar .card-act,
 .mini-card[data-desktop="1"].spatial-at-small.has-custom-bg:hover .note-editor-toolbar .card-act,
 .mini-card[data-desktop="1"].spatial-at-small.has-custom-bg:focus-within .note-editor-toolbar .card-act,
-.file-cabinet .file-cabinet-tab.has-custom-bg:hover .note-editor-toolbar .card-act,
-.file-cabinet .file-cabinet-tab.has-custom-bg:focus-within .note-editor-toolbar .card-act,
 .mini-card.expanded.has-custom-bg:hover .note-editor-toolbar .card-act,
 .mini-card.expanded.has-custom-bg:focus-within .note-editor-toolbar .card-act {
     color: var(--card-action-fg);
@@ -1233,7 +1174,6 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 
 .mini-card.tile-small .note-editor-toolbar .note-quick-actions-stack.is-icon-board-open::before,
 .mini-card[data-desktop="1"].spatial-at-small .note-editor-toolbar .note-quick-actions-stack.is-icon-board-open::before,
-.file-cabinet .file-cabinet-tab .note-editor-toolbar .note-quick-actions-stack.is-icon-board-open::before,
 .mini-card.expanded .note-editor-toolbar .note-quick-actions-stack.is-icon-board-open::before,
 .modal-card-actions.note-quick-actions-stack.is-icon-board-open::before,
 .note-editor-toolbar .note-quick-actions-stack.is-icon-board-open::before {

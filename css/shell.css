@@ -734,33 +734,12 @@ body {
     position: absolute;
     left: 0;
     cursor: grab;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
-    border-radius: 0.25rem;
-    overflow: hidden;
-    border-left: 2px solid var(--file-cabinet-category-color, var(--border-color));
 }
 
-.file-cabinet .file-cabinet-tab:hover {
-    z-index: 100 !important;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
-}
-
-.file-cabinet .file-cabinet-tab.is-file-cabinet-dragging {
-    cursor: grabbing;
-    opacity: var(--desktop-drag-opacity, 0.88);
-    z-index: 9999 !important;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-}
-
-/* Drag ghost is reparented to body — cannot rely on .file-cabinet ancestor */
 .file-cabinet-tab.is-file-cabinet-dragging {
     cursor: grabbing;
     opacity: var(--desktop-drag-opacity, 0.88);
     z-index: 9999 !important;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-    overflow: hidden;
-    border-radius: 0.25rem;
-    border-left: 2px solid var(--file-cabinet-category-color, var(--border-color));
 }
 
 .file-cabinet-tab.is-file-cabinet-dragging .ff-chrome,
@@ -768,16 +747,6 @@ body {
 .file-cabinet-tab.is-file-cabinet-dragging .editor-note-body,
 .file-cabinet-tab.is-file-cabinet-dragging .editor-meta-wrap,
 .file-cabinet-tab.is-file-cabinet-dragging .note-editor-toolbar {
-    display: none !important;
-}
-
-.file-cabinet .ff-chrome,
-.file-cabinet .ff-resize-layer {
-    display: none !important;
-}
-
-.file-cabinet .file-cabinet-tab .editor-note-body,
-.file-cabinet .file-cabinet-tab .editor-meta-wrap {
     display: none !important;
 }
 
@@ -1492,8 +1461,7 @@ body.is-shell-resizing--h * {
 
 /* Title-only surfaces — no divider */
 .mini-card.spatial-at-small .editor-note-topline,
-.mini-card[data-desktop="1"].tile-small:not(.expanded) .editor-note-topline,
-.file-cabinet .file-cabinet-tab .editor-note-topline {
+.mini-card[data-desktop="1"].tile-small:not(.expanded) .editor-note-topline {
     border-bottom: none;
     padding-bottom: 0;
     margin-bottom: 0;

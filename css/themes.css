@@ -619,7 +619,7 @@ html[data-app-theme="wood"] .file-cabinet-tab-stack {
     background: transparent;
 }
 
-html[data-app-theme="wood"] .file-cabinet .file-cabinet-tab {
+html[data-app-theme="wood"] .file-cabinet .mini-card[data-desktop="1"].spatial-at-small {
     border-left-color: transparent;
 }
 
@@ -863,7 +863,7 @@ html[data-app-theme="corkboard"] .file-cabinet-category.is-file-cabinet-drop-tar
 }
 
 html[data-app-theme="corkboard"] .file-cabinet-tab-stack { background: transparent; }
-html[data-app-theme="corkboard"] .file-cabinet .file-cabinet-tab { border-left-color: transparent; }
+html[data-app-theme="corkboard"] .file-cabinet .mini-card[data-desktop="1"].spatial-at-small { border-left-color: transparent; }
 html[data-app-theme="corkboard"] .file-cabinet-empty { color: #c4a888; }
 
 html[data-app-theme="corkboard"] #workspace-footer {
@@ -1055,7 +1055,7 @@ html[data-app-theme="slate"] .file-cabinet-category.is-file-cabinet-drop-target 
 }
 
 html[data-app-theme="slate"] .file-cabinet-tab-stack { background: transparent; }
-html[data-app-theme="slate"] .file-cabinet .file-cabinet-tab { border-left-color: transparent; }
+html[data-app-theme="slate"] .file-cabinet .mini-card[data-desktop="1"].spatial-at-small { border-left-color: transparent; }
 html[data-app-theme="slate"] .file-cabinet-empty { color: #9aa898; }
 
 html[data-app-theme="slate"] #workspace-footer {
@@ -1250,7 +1250,7 @@ html[data-app-theme="library"] .file-cabinet-category.is-file-cabinet-drop-targe
 }
 
 html[data-app-theme="library"] .file-cabinet-tab-stack { background: transparent; }
-html[data-app-theme="library"] .file-cabinet .file-cabinet-tab { border-left-color: transparent; }
+html[data-app-theme="library"] .file-cabinet .mini-card[data-desktop="1"].spatial-at-small { border-left-color: transparent; }
 html[data-app-theme="library"] .file-cabinet-empty { color: #b8a890; }
 
 html[data-app-theme="library"] #workspace-footer {
@@ -1443,7 +1443,7 @@ html[data-app-theme="parchment"] .file-cabinet-category.is-file-cabinet-drop-tar
 }
 
 html[data-app-theme="parchment"] .file-cabinet-tab-stack { background: transparent; }
-html[data-app-theme="parchment"] .file-cabinet .file-cabinet-tab { border-left-color: transparent; }
+html[data-app-theme="parchment"] .file-cabinet .mini-card[data-desktop="1"].spatial-at-small { border-left-color: transparent; }
 html[data-app-theme="parchment"] .file-cabinet-empty { color: #b8a080; }
 
 html[data-app-theme="parchment"] #workspace-footer {
@@ -1638,7 +1638,7 @@ html[data-app-theme="neon"] .file-cabinet-category.is-file-cabinet-drop-target {
 }
 
 html[data-app-theme="neon"] .file-cabinet-tab-stack { background: transparent; }
-html[data-app-theme="neon"] .file-cabinet .file-cabinet-tab { border-left-color: transparent; }
+html[data-app-theme="neon"] .file-cabinet .mini-card[data-desktop="1"].spatial-at-small { border-left-color: transparent; }
 html[data-app-theme="neon"] .file-cabinet-empty { color: #8aa0b0; }
 
 html[data-app-theme="neon"] #workspace-footer {
@@ -1853,7 +1853,7 @@ html[data-app-theme="miami"] .file-cabinet-category.is-file-cabinet-drop-target 
 }
 
 html[data-app-theme="miami"] .file-cabinet-tab-stack { background: transparent; }
-html[data-app-theme="miami"] .file-cabinet .file-cabinet-tab { border-left-color: transparent; }
+html[data-app-theme="miami"] .file-cabinet .mini-card[data-desktop="1"].spatial-at-small { border-left-color: transparent; }
 html[data-app-theme="miami"] .file-cabinet-empty { color: #a8a0b8; }
 
 html[data-app-theme="miami"] #workspace-footer {
@@ -2069,7 +2069,7 @@ html[data-app-theme="spaceship"] .file-cabinet-category.is-file-cabinet-drop-tar
 }
 
 html[data-app-theme="spaceship"] .file-cabinet-tab-stack { background: transparent; }
-html[data-app-theme="spaceship"] .file-cabinet .file-cabinet-tab { border-left-color: transparent; }
+html[data-app-theme="spaceship"] .file-cabinet .mini-card[data-desktop="1"].spatial-at-small { border-left-color: transparent; }
 html[data-app-theme="spaceship"] .file-cabinet-empty { color: #7a8898; }
 
 html[data-app-theme="spaceship"] #workspace-footer {
@@ -2344,7 +2344,7 @@ html[data-app-theme="night-sky"] .file-cabinet-category.is-file-cabinet-drop-tar
 }
 
 html[data-app-theme="night-sky"] .file-cabinet-tab-stack { background: transparent; }
-html[data-app-theme="night-sky"] .file-cabinet .file-cabinet-tab { border-left-color: transparent; }
+html[data-app-theme="night-sky"] .file-cabinet .mini-card[data-desktop="1"].spatial-at-small { border-left-color: transparent; }
 html[data-app-theme="night-sky"] .file-cabinet-empty { color: #8898b8; }
 
 html[data-app-theme="night-sky"] #workspace-footer {
