@@ -782,15 +782,12 @@ class Application {
         window.addEventListener('board:visibility_changed', async (e) => {
             const canvas = document.getElementById('app-canvas');
             const skipFlush = e.detail?.flushLayout === false;
-            const skipRender = e.detail?.skipRender === true;
             if (canvas && !skipFlush) {
                 UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
             }
-            if (!skipRender) {
-                UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, {
-                    skipGridReflow: e.detail?.skipGridReflow === true
-                });
-            }
+            UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories, {
+                skipGridReflow: e.detail?.skipGridReflow === true
+            });
             this.updateWorkspaceCounter();
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         });

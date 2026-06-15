@@ -1930,8 +1930,6 @@ export const UI = {
         direction = 'horizontal'
     }) {
         const { origin, packW, viewportBottom, edgePad } = bounds;
-        const { maxH } = this.getGridBoardBounds(canvas);
-        const snapBounds = { maxW: packW, maxH, origin, edgePad };
         const unpinned = expandedItems.filter((item) => item?.id && !pinnedIds.has(item.id));
         if (!unpinned.length) return;
 
@@ -1949,12 +1947,10 @@ export const UI = {
         const rects = slotsToRegionRects(slots, region, { gap: metrics.gap });
 
         unpinned.forEach((item, index) => {
-            const raw = rects[index];
-            if (!raw) return;
-            let slot = this.snapNoteRect(raw, snapBounds);
-            slot = this.clampNoteToBoardEdges(slot, snapBounds);
-            layout.set(item.id, slot);
-            placed.push({ ...slot });
+            const rect = rects[index];
+            if (!rect) return;
+            layout.set(item.id, rect);
+            placed.push({ ...rect });
         });
     },
 
@@ -2390,7 +2386,7 @@ export const UI = {
         }
 
         window.dispatchEvent(new CustomEvent('board:visibility_changed', {
-            detail: { flushLayout: false, skipGridReflow: true, skipRender: true }
+            detail: { flushLayout: false, skipGridReflow: true }
         }));
     },
 

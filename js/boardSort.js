@@ -103,11 +103,7 @@ export const BoardSort = {
             if (['date', 'name', 'category', 'edited'].includes(field)) prefs.field = field;
         } else if (id.startsWith('order:')) prefs.dir = id.slice(6) === 'asc' ? 'asc' : 'desc';
         writeBoardSort(prefs);
-        try {
-            this.ctx?.onSort?.(prefs);
-        } catch (err) {
-            console.error('Board sort failed:', err);
-        }
+        this.ctx?.onSort?.(prefs);
         this.syncButtonState();
         if (DrawingToolbarMenu.isOpen()) {
             DrawingToolbarMenu.setItems(buildMenuItems(prefs, this.getViewMode()));
@@ -119,11 +115,7 @@ export const BoardSort = {
         const prefs = readBoardSort();
         prefs.cascade = !!checked;
         writeBoardSort(prefs);
-        try {
-            this.ctx?.onSort?.(prefs);
-        } catch (err) {
-            console.error('Board sort failed:', err);
-        }
+        this.ctx?.onSort?.(prefs);
         this.syncButtonState();
         if (DrawingToolbarMenu.isOpen()) {
             DrawingToolbarMenu.setItems(buildMenuItems(prefs, this.getViewMode()));
