@@ -303,7 +303,8 @@ export const NoteSurface = {
         spatialTile = false,
         tileSize = LEGACY_TILE_SIZE,
         tileW = 0,
-        tileH = 0
+        tileH = 0,
+        calHidden = !!(item?.hideFromCalendar)
     } = {}) {
         const isModal = surface === 'modal';
         let expandTitle;
@@ -329,7 +330,6 @@ export const NoteSurface = {
         const lastId = isModal ? ' id="modal-close-btn"' : '';
         const pinTitle = pinned ? 'Unpin (unlock drag)' : 'Pin position (locks drag)';
         const pinBtn = `<button type="button" class="card-act card-act--pin${pinned ? ' is-active' : ''}" title="${pinTitle}" aria-label="${pinTitle}" aria-pressed="${pinned ? 'true' : 'false'}">${pinned ? CARD_ICONS.unpin : CARD_ICONS.pin}</button>`;
-        const calHidden = options.calHidden ?? !!(item?.hideFromCalendar);
         const calTitle = calHidden
             ? 'Hidden from calendar — click to show'
             : 'Shown on calendar — click to hide';
