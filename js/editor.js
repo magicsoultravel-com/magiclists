@@ -514,13 +514,11 @@ export const Editor = {
         });
     },
 
-    openIconPicker() {
-        if (!this.iconBtn || !this.activeItem) return;
+    toggleIconBoard() {
+        if (!this.iconBtn || !this.activeItem || !this.iconBoardStack) return;
         const root = this.mountZone?.querySelector('.editor-note-shell') || this.mountZone;
-        const savedContext = NoteSurface.saveIconInsertContext(root);
-        NoteSurface.openIconPickerForNote(root, this.iconBtn, this.activeItem, {
+        NoteSurface.toggleIconBoard(this.iconBoardStack, root, this.activeItem, {
             localOnly: true,
-            savedContext,
             onChange: () => {
                 this.markInteracted();
                 this.triggerAutoSave();

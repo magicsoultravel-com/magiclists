@@ -15,7 +15,7 @@ import {
 } from './noteBodyConversion.js';
 import { hasRichMarkup, linkifyPlainUrls, sanitizeHref, sanitizeRichHtml, stripRichText } from './richText.js';
 import { hydrateNoteIcons, hydrateNoteIconsHtml, isNoteIconId, noteIconTokenMarkup } from './noteIcons.js';
-import { IconPicker } from './iconPicker.js';
+import { IconBoard, buildIconBoardHtml } from './iconPicker.js';
 import { normalizeItemForSave } from './noteModel.js';
 import { CARD_ICONS, FORMAT_ICONS, ACTION_ICONS } from './icons.js';
 import {
@@ -356,18 +356,24 @@ export const NoteSurface = {
         return true;
     },
 
-    openIconPickerForNote(root, anchor, item, { localOnly = false, onChange = () => {}, savedContext = null } = {}) {
-        if (!anchor || !root) return;
-        const ctx = savedContext || this.saveIconInsertContext(root);
-        IconPicker.open({
-            anchor,
-            align: 'end',
-            onSelect: (iconId) => {
-                if (!ctx.target) return;
+    attachIconBoard(stack, root, item, { localOnly = false, onChange = () => {} } = {}) {
+        if (!stack || !root) return;
+        IconBoard.attach(stack, {
+            getContext: () => this.saveIconInsertContext(root),
+            insertIcon: (ctx, iconId) => {
+                if (!ctx?.target) return;
                 this.restoreIconInsertRange(ctx.target, ctx.range);
                 this.insertNoteIconAtCaret(ctx.target, iconId, { item, localOnly, onChange });
             }
         });
+    },
+
+    toggleIconBoard(stack, root, item, { localOnly = false, onChange = () => {} } = {}) {
+        if (!stack) return;
+        if (!stack.dataset.iconBoardBound) {
+            this.attachIconBoard(stack, root, item, { localOnly, onChange });
+        }
+        stack._iconBoardToggle?.();
     },
 
     canInlineEditText(text, { richEdit = false } = {}) {
@@ -444,9 +450,11 @@ export const NoteSurface = {
         const archiveBtn = showArchive
             ? `<button type="button" id="modal-archive-btn" class="card-act card-act--archive" title="Archive note" aria-label="Archive note">${CARD_ICONS.delete}</button>`
             : '';
-        const actionsHtml = `<div class="card-actions${isModal ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
+        const actionsHtml = `<div class="note-quick-actions-stack">
+            ${buildIconBoardHtml()}
+            <div class="card-actions${isModal ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
             ${calBtn}
-            <button type="button" class="card-act card-act--icon" title="Insert icon" aria-label="Insert icon" aria-haspopup="dialog">${CARD_ICONS.insertIcon}</button>
+            <button type="button" class="card-act card-act--icon" title="Insert icon" aria-label="Insert icon" aria-haspopup="true" aria-expanded="false">${CARD_ICONS.insertIcon}</button>
             <button type="button" class="card-act card-act--copy" title="Copy note as text" aria-label="Copy note as text">${CARD_ICONS.copy}</button>
             ${pinBtn}
             <button type="button" class="card-act card-act--color" title="Note color" aria-label="Note color" aria-haspopup="dialog">${CARD_ICONS.color}</button>
@@ -454,6 +462,7 @@ export const NoteSurface = {
             <button type="button" class="card-act card-act--edit" title="Edit note" aria-label="Edit note">${CARD_ICONS.edit}</button>
             ${dragBtn}
             <button type="button" class="card-act ${lastClass}"${lastId} title="${expandTitle}" aria-label="${expandTitle}">${lastIcon}</button>
+            </div>
         </div>`;
         return isModal ? `${archiveBtn}${actionsHtml}` : actionsHtml;
     },

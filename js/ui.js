@@ -1049,6 +1049,10 @@ export const UI = {
         const hideBtn = actions.querySelector('.card-act--hide');
         const editBtn = actions.querySelector('.card-act--edit');
         const calBtn = actions.querySelector('.card-act--cal');
+        const stack = actions.closest('.note-quick-actions-stack');
+        const iconRoot = card.querySelector('.editor-note-shell') || card;
+
+        if (stack) NoteSurface.attachIconBoard(stack, iconRoot, item);
 
         const consumeSkipExpand = () => {
             if (card.dataset.skipExpand) {
@@ -1116,12 +1120,10 @@ export const UI = {
         });
 
         this.attachCardActionButton(iconBtn, () => {
-            const root = card.querySelector('.editor-note-shell') || card;
-            const savedContext = NoteSurface.saveIconInsertContext(root);
             NoteSurface.commitFocusedInlineField(card, item);
             if (isDesktopCard(card)) this.raiseDesktopCard(card);
             if (!localStorage.getItem('admin_token')) return;
-            NoteSurface.openIconPickerForNote(root, iconBtn, item, { savedContext });
+            NoteSurface.toggleIconBoard(stack, iconRoot, item);
         });
 
         this.attachCardActionButton(hideBtn, () => {
@@ -1163,11 +1165,24 @@ export const UI = {
         const editBtn = actions.querySelector('.card-act--edit');
         const calBtn = actions.querySelector('.card-act--cal');
         const closeBtn = actions.querySelector('.card-act--close');
+        const stack = actions.closest('.note-quick-actions-stack');
+        const iconRoot = editor.mountZone?.querySelector('.editor-note-shell') || editor.mountZone;
 
         editor.archiveBtn = archiveBtn;
         editor.colorBtn = colorBtn;
         editor.iconBtn = iconBtn;
+        editor.iconBoardStack = stack;
         editor.calendarToggleBtn = calBtn;
+
+        if (stack && iconRoot) {
+            NoteSurface.attachIconBoard(stack, iconRoot, item, {
+                localOnly: true,
+                onChange: () => {
+                    editor.markInteracted();
+                    editor.triggerAutoSave();
+                }
+            });
+        }
 
         if (archiveBtn) {
             this.attachCardActionButton(archiveBtn, () => editor.emitArchiveAction());
@@ -1208,7 +1223,7 @@ export const UI = {
 
         this.attachCardActionButton(colorBtn, () => editor.openColorPicker());
 
-        this.attachCardActionButton(iconBtn, () => editor.openIconPicker());
+        this.attachCardActionButton(iconBtn, () => editor.toggleIconBoard());
 
         this.attachCardActionButton(hideBtn, () => {
             editor.syncActiveItemFromDom();
