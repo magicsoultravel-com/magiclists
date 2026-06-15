@@ -911,7 +911,7 @@ export const NoteSurface = {
         let html = '<div class="expanded-checklist">';
         html += this.buildChecklistExpandCollapseAllHtml(item);
 
-        const renderRowHtml = (step, { hasKids = false, isCollapsed = false, collapseKey = '', isDoneSection = false, treeLines = [], isBranchEnd = false } = {}) => {
+        const renderRowHtml = (step, { hasKids = false, isCollapsed = false, collapseKey = '', isDoneSection = false, guideRole = null } = {}) => {
             const level = getStepLevel(step);
             const collapseControl = !isDoneSection && hasKids
                 ? `<button type="button" class="step-collapse-btn" data-collapse-key="${this.escapeAttr(collapseKey)}" title="${isCollapsed ? 'Expand group' : 'Collapse group'}" aria-label="${isCollapsed ? 'Expand group' : 'Collapse group'}">${isCollapsed ? CARD_ICONS.chevronRight : CARD_ICONS.chevronDown}</button>`
@@ -943,23 +943,15 @@ export const NoteSurface = {
                 textHtml = `<span class="step-text${richClass} ${step.completed ? 'completed' : ''}">${this.renderRichHtml(stepText)}</span>`;
             }
             const indentStyle = level > 0 ? ` style="padding-left:${level * 0.45}rem"` : '';
-            let treeRailHtml = '';
-            if (!isDoneSection && level > 0 && treeLines.length > 0) {
-                const lineSpans = treeLines.map((show, d) => {
-                    if (!show) return '';
-                    const endClass = d === treeLines.length - 1 && isBranchEnd ? ' step-tree-line--end' : '';
-                    return `<span class="step-tree-line${endClass}"></span>`;
-                }).join('');
-                if (lineSpans) {
-                    treeRailHtml = `<span class="step-tree-rail" aria-hidden="true">${lineSpans}</span>`;
-                }
-            }
+            const treeGuideHtml = !isDoneSection && guideRole
+                ? `<span class="step-tree-guide step-tree-guide--${guideRole}" aria-hidden="true"></span>`
+                : '';
             return `
                 <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}" data-step-id="${step.id}" data-level="${level}"${indentStyle}>
                     <div class="step-row-leading">
-                        ${collapseControl}
                         ${dragHandle}
-                        ${treeRailHtml}
+                        ${collapseControl}
+                        ${treeGuideHtml}
                         <input type="checkbox" class="step-check" ${step.completed ? 'checked' : ''}>
                     </div>
                     ${textHtml}

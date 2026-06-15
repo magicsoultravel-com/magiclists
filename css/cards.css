@@ -704,34 +704,44 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
     width: 10px;
 }
 
-.step-tree-rail {
-    display: flex;
+.step-tree-guide {
     flex-shrink: 0;
     align-self: stretch;
-    margin-right: 0.08rem;
-}
-
-.step-tree-line {
-    flex-shrink: 0;
     width: 0.12rem;
+    margin-right: 0.08rem;
     position: relative;
 }
 
-.step-tree-line::before {
+.step-tree-guide::before {
     content: '';
     position: absolute;
     right: 0;
-    top: 0.06rem;
-    bottom: 0;
     width: 1px;
     background: color-mix(in srgb, var(--border-color) 55%, transparent);
 }
 
-.step-tree-line--end::before {
+.step-tree-guide--solo::before,
+.step-tree-guide--start::before {
+    top: 0.08rem;
+}
+
+.step-tree-guide--solo::before,
+.step-tree-guide--end::before {
     bottom: 55%;
 }
 
-.has-custom-bg .step-tree-line::before {
+.step-tree-guide--start::before,
+.step-tree-guide--mid::before,
+.step-tree-guide--end::before {
+    bottom: -0.2rem;
+}
+
+.step-tree-guide--mid::before,
+.step-tree-guide--end::before {
+    top: -0.2rem;
+}
+
+.has-custom-bg .step-tree-guide::before {
     background: color-mix(in srgb, var(--card-border-subtle) 70%, transparent);
 }
 

@@ -1502,7 +1502,7 @@ body.is-shell-resizing--h * {
 .editor-meta-row--footer.editor-meta-row--inline {
     display: flex;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: space-between;
     gap: 0.25rem;
     flex-wrap: nowrap;
     overflow: hidden;

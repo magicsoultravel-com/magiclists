@@ -339,21 +339,19 @@ export function buildVisibleChecklistSteps(steps, itemId, collapsedKeys = {}) {
 export function annotateChecklistTreeGuides(visibleRows) {
     return (visibleRows || []).map((row, i) => {
         const level = getStepLevel(row.step);
-        const treeLines = [];
-        for (let d = 0; d < level; d++) {
-            let show = false;
-            for (let j = i + 1; j < visibleRows.length; j++) {
-                if (getStepLevel(visibleRows[j].step) > d) {
-                    show = true;
-                    break;
-                }
-            }
-            treeLines.push(show);
+        let guideRole = null;
+        if (level > 0) {
+            const prevLevel = i > 0 ? getStepLevel(visibleRows[i - 1].step) : -1;
+            const nextLevel = i < visibleRows.length - 1
+                ? getStepLevel(visibleRows[i + 1].step)
+                : -1;
+            const isFirst = prevLevel < level;
+            const isLast = nextLevel < level;
+            if (isFirst && isLast) guideRole = 'solo';
+            else if (isFirst) guideRole = 'start';
+            else if (isLast) guideRole = 'end';
+            else guideRole = 'mid';
         }
-        const nextLevel = i < visibleRows.length - 1
-            ? getStepLevel(visibleRows[i + 1].step)
-            : -1;
-        const isBranchEnd = nextLevel < level;
-        return { ...row, treeLines, isBranchEnd };
+        return { ...row, guideRole };
     });
 }
