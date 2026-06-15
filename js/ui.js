@@ -2007,7 +2007,6 @@ export const UI = {
             regionW: packW
         };
     },
-    },
 
     packExpandedAlignFreeform(canvas, expandedItems, pinnedIds, {
         placed,
