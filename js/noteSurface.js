@@ -1959,5 +1959,8 @@ export const {
     focusPendingChecklistStep,
     escapeHTML,
     escapeAttr,
-    escapeQuotes
+    escapeQuotes,
+    resolveEditorBodyLayoutUnchecked,
+    updateConvertButtons,
+    updateNoteMetaStats
 } = NoteSurface;
