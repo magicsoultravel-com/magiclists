@@ -205,6 +205,18 @@
     min-width: 0;
 }
 
+.expanded-checklist {
+    --checklist-row-gutter: 0.2rem;
+}
+
+.expanded-checklist .step-row--display {
+    margin-left: 0;
+}
+
+.expanded-checklist .step-row-leading {
+    padding-left: var(--checklist-row-gutter);
+}
+
 .step-row-leading {
     display: flex;
     align-items: flex-start;
@@ -254,8 +266,32 @@
 }
 
 .step-row .step-check {
-    accent-color: var(--accent);
+    appearance: none;
+    -webkit-appearance: none;
     flex-shrink: 0;
+    box-sizing: border-box;
+    border: 1px solid color-mix(in srgb, var(--text-muted) 50%, var(--border-color));
+    border-radius: 2.5px;
+    background-color: color-mix(in srgb, var(--bg-surface, #1a1a1e) 35%, transparent);
+    transition: border-color 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.step-row .step-check:checked {
+    border-color: var(--accent);
+    background-color: var(--accent);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.4 4.2 3.2 6 6.6 2' fill='none' stroke='white' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-size: 7px 7px;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.step-row .step-check:hover {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--text-muted));
+}
+
+.step-row .step-check:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .step-row--display .step-check {
@@ -270,6 +306,11 @@
 .step-row--edit .step-check {
     width: 16px;
     height: 16px;
+    border-radius: 3px;
+}
+
+.step-row--edit .step-check:checked {
+    background-size: 10px 10px;
 }
 
 .step-row .step-text {

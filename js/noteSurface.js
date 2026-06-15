@@ -425,25 +425,30 @@ export const NoteSurface = {
         if (toContent) toContent.disabled = !stepsHaveConvertibleText(item.steps);
     },
 
-    buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false, richEdit = false } = {}) {
-        let html = '';
+    resolveNoteBodyVisibility(item, { canEdit = false, inModalEditor = false } = {}) {
         const layout = item.editorBodyLayout || 'both';
         const hasContent = stripRichText(item.content || '').trim();
 
-        let showContent;
-        let showChecklist;
         if (inModalEditor) {
-            showContent = true;
-            showChecklist = true;
-        } else if (canEdit) {
-            showContent = layout !== 'checklist'
-                && (hasContent || layout === 'both' || layout === 'content');
-            showChecklist = layout !== 'content'
-                && (layout === 'both' || layout === 'checklist' || (item.steps && item.steps.length > 0));
-        } else {
-            showContent = !!hasContent;
-            showChecklist = item.type === 'checklist' && item.steps && item.steps.length > 0;
+            return { showContent: true, showChecklist: true };
         }
+        if (canEdit) {
+            return {
+                showContent: layout !== 'checklist'
+                    && (hasContent || layout === 'both' || layout === 'content'),
+                showChecklist: layout !== 'content'
+                    && (layout === 'both' || layout === 'checklist' || (item.steps && item.steps.length > 0))
+            };
+        }
+        return {
+            showContent: !!hasContent,
+            showChecklist: item.type === 'checklist' && item.steps && item.steps.length > 0
+        };
+    },
+
+    buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false, richEdit = false } = {}) {
+        let html = '';
+        const { showContent, showChecklist } = this.resolveNoteBodyVisibility(item, { canEdit, inModalEditor });
 
         if (showContent) {
             const content = item.content || '';
@@ -605,11 +610,13 @@ export const NoteSurface = {
         bodyId = ''
     } = {}) {
         const titleHtml = this.buildNoteTitleHtml(item, canEdit, { richEdit });
+        const { showContent, showChecklist } = this.resolveNoteBodyVisibility(item, { canEdit, inModalEditor });
         const bodyHtml = this.buildNoteBodyHtml(item, {
             canEdit,
             inModalEditor,
             richEdit
         });
+        const bodyModifier = showChecklist && !showContent ? ' editor-note-body--checklist-only' : '';
         const formatHtml = showFormat ? this.buildNoteFormatPanelHtml(item) : '';
         const configHtml = showConfig
             ? this.buildNoteConfigPanelHtml(item, { categoryOptionsHtml, startParts, endParts })
@@ -634,7 +641,7 @@ export const NoteSurface = {
                 ${toplineHtml}
                 ${formatHtml}
                 ${configHtml}
-                <div class="card-body editor-note-body"${bodyIdAttr}>
+                <div class="card-body editor-note-body${bodyModifier}"${bodyIdAttr}>
                     ${bodyHtml}
                 </div>
                 <div class="${footerDragZone ? `editor-meta-wrap${footerDragZone}` : 'editor-meta-wrap'}">
