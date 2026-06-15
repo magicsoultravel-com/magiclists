@@ -595,13 +595,13 @@
     isolation: unset;
 }
 
-#app-canvas.view-grid .mini-card[data-desktop="1"] .editor-note-topline,
-#app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-note-topline {
+#app-canvas.view-grid .mini-card[data-desktop="1"]:is(.expanded, .is-editing-inline) .editor-note-topline,
+#app-canvas.view-freeform .mini-card[data-desktop="1"]:is(.expanded, .is-editing-inline) .editor-note-topline {
     --card-actions-reserve: min(7.5rem, 45%);
 }
 
-#app-canvas.view-grid .mini-card[data-desktop="1"] .editor-note-topline .editor-note-header,
-#app-canvas.view-freeform .mini-card[data-desktop="1"] .editor-note-topline .editor-note-header {
+#app-canvas.view-grid .mini-card[data-desktop="1"]:is(.expanded, .is-editing-inline) .editor-note-topline .editor-note-header,
+#app-canvas.view-freeform .mini-card[data-desktop="1"]:is(.expanded, .is-editing-inline) .editor-note-topline .editor-note-header {
     flex: 0 1 auto;
     min-width: 0;
     width: auto;
