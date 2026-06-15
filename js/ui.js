@@ -49,6 +49,12 @@ import {
     getFileCabinetFiledCategories
 } from './fileCabinet.js';
 import { sortBoardItems } from './boardSort.js';
+import {
+    computeAlignRegion,
+    getExpandedAlignSlots,
+    slotsToFreeformRects,
+    slotsToPixelRects
+} from './boardSortAlign.js';
 import { syncCabinetSplitter } from './shellResize.js';
 import { raiseDesktopElement, syncDesktopStackSeq } from './desktopStack.js';
 import { readTileSmallFootprint } from './tileFootprint.js';
@@ -207,7 +213,7 @@ export const ACTION_ICONS = {
     viewGrid: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="1.6" width="3.8" height="3.8" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="6.8" y="1.6" width="3.8" height="3.8" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="1.4" y="6.6" width="8.2" height="3.8" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
     viewFileCabinet: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="2.2" width="9.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="1.4" y="4.8" width="9.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="1.4" y="7.4" width="9.2" height="2.2" rx="0.35" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
     category: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="1.4" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.7" y="1.4" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="1.4" y="6.7" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/><rect x="6.7" y="6.7" width="3.9" height="3.9" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.95"/></svg>',
-    export: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.6v5.8M3.7 5.1 6 7.4 8.3 5.1" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.2 10.4h7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
+    export: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.2 2.4h7.6v7.2H2.2z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M2.2 2.4h3.4v2.6H2.2z" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linejoin="round"/><path d="M3.2 6.8h5.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/><rect x="7.8" y="5.6" width="1.2" height="1.2" rx="0.15" fill="none" stroke="currentColor" stroke-width="0.75"/></svg>',
     import: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 10.4V4.6M3.7 6.9 6 4.6 8.3 6.9" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M2.2 10.4h7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
     cloud: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.4 8.8h5.4a2.4 2.4 0 0 0 .2-4.8A3 3 0 0 0 3.6 2.6 2.6 2.6 0 0 0 1.2 6.2 2.4 2.4 0 0 0 3.4 8.8z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/></svg>',
     cloudExport: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.8 7.2h4.8a1.8 1.8 0 0 0 .1-3.6A2.2 2.2 0 0 0 3 2.8 1.9 1.9 0 0 0 1.2 5.2 1.8 1.8 0 0 0 2.8 7.2z" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linejoin="round"/><path d="M8.8 4.2V8M7.5 5.5 8.8 4.2 10.1 5.5" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -215,8 +221,8 @@ export const ACTION_ICONS = {
     logout: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M4.6 2.1H3.1v7.8h1.5" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/><path d="M6.8 6 10 6M10 6 8.4 4.4M10 6 8.4 7.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     undo: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.4 5.6H7.2a2.4 2.4 0 1 1 0 4.8H6.6M3.4 5.6 5.1 3.9M3.4 5.6 5.1 7.3" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     redo: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M8.6 5.6H4.8a2.4 2.4 0 0 0 0 4.8h.6M8.6 5.6 6.9 3.9M8.6 5.6 6.9 7.3" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    sortAlpha: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M1.8 3.2h3.4M1.8 8.4h3.4M1.8 3.2l3.4 5.2" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.4 3v6M7.5 4.1l0.9-1.1 0.9 1.1M7.5 7.9l0.9 1.1 0.9-1.1" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    sortDate: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><circle cx="4.8" cy="6" r="3.1" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M4.8 4.4V6l1.3 0.9" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.2 3v6M8.3 4.1l0.9-1.1 0.9 1.1M8.3 7.9l0.9 1.1 0.9-1.1" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    sortAlpha: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M1.8 3.2h3.4M1.8 8.4h3.4M1.8 3.2l3.4 5.2" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.4 3v6M7.5 4.1l0.9-1.1 0.9 1.1M7.5 7.9l0.9 1.1 0.9-1.1" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    sortDate: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="4.8" cy="6" r="3.1" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M4.8 4.4V6l1.3 0.9" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/><path d="M9.2 3v6M8.3 4.1l0.9-1.1 0.9 1.1M8.3 7.9l0.9 1.1 0.9-1.1" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     desktopBg: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.4" y="2.2" width="9.2" height="6.8" rx="0.7" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M2.2 8.4h7.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/><circle cx="4.1" cy="5.4" r="1.1" fill="currentColor" opacity="0.85"/><circle cx="6.6" cy="4.6" r="0.85" fill="currentColor" opacity="0.65"/><circle cx="8.1" cy="6.2" r="0.75" fill="currentColor" opacity="0.5"/></svg>',
     chromeBg: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="1.3" y="1.8" width="3.6" height="8.4" rx="0.5" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="5.5" y="1.8" width="5.2" height="2.4" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.9"/><rect x="5.5" y="5" width="5.2" height="5.2" rx="0.45" fill="none" stroke="currentColor" stroke-width="0.9"/></svg>',
     clockStyle: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="4.6" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.2V6l2 1.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -5099,6 +5105,79 @@ export const UI = {
         return { x: autoX, y: autoY, w, h };
     },
 
+    packExpandedAlignGrid(canvas, expandedItems, pinnedIds, {
+        placed,
+        layout,
+        expandedStartY,
+        bounds,
+        metrics
+    }) {
+        const { origin, packW, maxH, edgePad } = bounds;
+        const snapBounds = { maxW: packW, maxH, origin, edgePad };
+        const unpinned = expandedItems.filter((item) => item?.id && !pinnedIds.has(item.id));
+        if (!unpinned.length) return;
+
+        const slots = getExpandedAlignSlots(unpinned.length);
+        const region = computeAlignRegion(packW, expandedStartY, origin, edgePad, metrics);
+        const rects = slotsToPixelRects(slots, region, metrics);
+
+        unpinned.forEach((item, index) => {
+            const raw = rects[index];
+            if (!raw) return;
+            let slot = this.snapNoteRect(raw, snapBounds);
+            if (placed.some((p) => this.rectsOverlap(slot, p, metrics.gap))) {
+                slot = this.findNearestGridSlot(slot, slot.w, slot.h, placed, {
+                    packW,
+                    origin,
+                    maxH,
+                    edgePad
+                });
+            }
+            layout.set(item.id, slot);
+            placed.push({ ...slot });
+        });
+    },
+
+    packExpandedAlignFreeform(canvas, expandedItems, pinnedIds, {
+        placed,
+        expandedStartY,
+        bounds,
+        metrics
+    }) {
+        const { packW, origin, edgePad } = bounds;
+        const canvasW = Math.max(canvas?.clientWidth || 320, packW + origin * 2);
+        const unpinned = expandedItems.filter((item) => item?.id && !pinnedIds.has(item.id));
+        if (!unpinned.length) return;
+
+        const slots = getExpandedAlignSlots(unpinned.length);
+        const region = computeAlignRegion(
+            Math.min(packW, canvasW - origin * 2 - edgePad * 2),
+            expandedStartY,
+            origin,
+            edgePad,
+            metrics
+        );
+        const rects = slotsToFreeformRects(slots, region);
+
+        unpinned.forEach((item, index) => {
+            const raw = rects[index];
+            if (!raw) return;
+            let slot = this.clampManualNoteRect(raw, { maxW: canvasW });
+            if (placed.some((p) => this.rectsOverlap(slot, p, metrics.gap))) {
+                slot = this.findFreeformSortSlot(slot.w, slot.h, placed, canvasW, {
+                    startX: slot.x,
+                    startY: slot.y,
+                    direction: 'horizontal'
+                });
+            }
+            this.saveFreeformPosition(item.id, slot.x, slot.y);
+            this.saveFreeformSize(item.id, slot.w, slot.h, { updateRemembered: true });
+            const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
+            if (card) this.applyNoteRect(card, slot, { settling: true });
+            placed.push({ ...slot });
+        });
+    },
+
     packSortGridBoard(canvas, collapsedItems, expandedItems, sortPrefs, pinnedIds) {
         const { origin, packW, maxH, edgePad } = this.getGridBoardBounds(canvas);
         const metrics = getGridMetrics();
@@ -5152,8 +5231,24 @@ export const UI = {
             expandedStartY = bottom + metrics.gap + rowStride;
         }
 
-        packGroup(expandedItems, expandedStartY);
+        if (sortPrefs.alignExpanded && unpinnedExpanded.length) {
+            this.packExpandedAlignGrid(canvas, expandedItems, pinnedIds, {
+                placed,
+                layout,
+                expandedStartY,
+                bounds: { origin, packW, maxH, edgePad },
+                metrics
+            });
+        } else {
+            packGroup(expandedItems, expandedStartY);
+        }
         this.applyGridBoardLayout(canvas, layout, { animate: true, save: true });
+        if (sortPrefs.alignExpanded && unpinnedExpanded.length) {
+            unpinnedExpanded.forEach((item) => {
+                const rect = layout.get(item.id);
+                if (rect) this.saveGridLayout(item.id, rect, { updateRemembered: true });
+            });
+        }
         this.squeezeGridBoardToViewport(canvas, { animate: true });
     },
 
@@ -5207,13 +5302,22 @@ export const UI = {
 
         let expandedStart = { x: minCoord, y: minCoord };
         if (unpinnedCollapsed.length && unpinnedExpanded.length) {
-            const small = getSmallRect(readTileSmallFootprint());
             const rowStride = metrics.strideY + metrics.gap;
             const bottom = placed.reduce((max, rect) => Math.max(max, rect.y + rect.h), minCoord);
             expandedStart = { x: minCoord, y: bottom + metrics.gap + rowStride };
         }
 
-        packGroup(expandedItems, expandedStart);
+        if (sortPrefs.alignExpanded && unpinnedExpanded.length) {
+            const { origin, packW, edgePad } = this.getGridBoardBounds(canvas);
+            this.packExpandedAlignFreeform(canvas, expandedItems, pinnedIds, {
+                placed,
+                expandedStartY: expandedStart.y,
+                bounds: { packW, origin, edgePad },
+                metrics
+            });
+        } else {
+            packGroup(expandedItems, expandedStart);
+        }
         this.updateBoardCanvasExtents(canvas);
     },
 

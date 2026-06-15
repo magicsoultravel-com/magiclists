@@ -50,6 +50,14 @@ function renderItemsHtml(items, selected) {
                 </span>
             </div>`;
         }
+        if (item.checkbox) {
+            const inputId = item.inputId || `drawing-menu-cb-${item.id}`;
+            return `<label class="drawing-menu-checkbox-row" for="${escapeHtml(inputId)}">
+                <input type="checkbox" class="display-options-checkbox drawing-menu-checkbox" id="${escapeHtml(inputId)}" data-toggle-id="${escapeHtml(item.id)}"${item.checked ? ' checked' : ''}>
+                <span class="drawing-menu-label">${escapeHtml(item.label)}</span>
+                ${item.hint ? `<span class="drawing-menu-checkbox-hint">${escapeHtml(item.hint)}</span>` : ''}
+            </label>`;
+        }
         const isSelected = item.selected === true || item.id === selected;
         return `<button type="button" class="drawing-menu-option${isSelected ? ' is-selected' : ''}" data-id="${item.id}" role="menuitem"${item.disabled ? ' disabled' : ''}>
             <span class="drawing-menu-icon">${item.icon || ''}</span>
@@ -59,7 +67,7 @@ function renderItemsHtml(items, selected) {
     }).join('');
 }
 
-function bindMenuInteractions(menu, { onSelect, onStepper, closeOnSelect = true }) {
+function bindMenuInteractions(menu, { onSelect, onStepper, onToggle, closeOnSelect = true }) {
     menu.querySelectorAll('.drawing-menu-option:not([disabled])').forEach((btn) => {
         btn.addEventListener('mousedown', (e) => e.stopPropagation());
         btn.addEventListener('click', (e) => {
@@ -85,6 +93,17 @@ function bindMenuInteractions(menu, { onSelect, onStepper, closeOnSelect = true 
             onStepper?.(btn.dataset.stepperId, 1);
         });
     });
+
+    menu.querySelectorAll('.drawing-menu-checkbox').forEach((input) => {
+        input.addEventListener('mousedown', (e) => e.stopPropagation());
+        input.addEventListener('change', (e) => {
+            e.stopPropagation();
+            onToggle?.(input.dataset.toggleId, input.checked);
+        });
+    });
+    menu.querySelectorAll('.drawing-menu-checkbox-row').forEach((row) => {
+        row.addEventListener('mousedown', (e) => e.stopPropagation());
+    });
 }
 
 export const DrawingToolbarMenu = {
@@ -109,10 +128,10 @@ export const DrawingToolbarMenu = {
 
     refresh() {
         if (!menuState || !anchorEl || !menuEl) return;
-        const { items, selected, onSelect, onStepper, ariaLabel, closeOnSelect = true } = menuState;
+        const { items, selected, onSelect, onStepper, onToggle, ariaLabel, closeOnSelect = true } = menuState;
         menuEl.setAttribute('aria-label', ariaLabel || 'Menu');
         menuEl.innerHTML = `<div class="drawing-menu-list">${renderItemsHtml(items, selected)}</div>`;
-        bindMenuInteractions(menuEl, { onSelect, onStepper, closeOnSelect });
+        bindMenuInteractions(menuEl, { onSelect, onStepper, onToggle, closeOnSelect });
         positionPopoverBelowAnchor(menuEl, anchorEl);
     },
 
@@ -124,18 +143,18 @@ export const DrawingToolbarMenu = {
         this.open(state);
     },
 
-    open({ anchor, ariaLabel, items, selected, onSelect, onStepper, closeOnSelect = true }) {
+    open({ anchor, ariaLabel, items, selected, onSelect, onStepper, onToggle, closeOnSelect = true }) {
         if (!anchor || !items?.length) return;
 
         const wasSameAnchor = anchorEl === anchor && this.isOpen();
         if (!wasSameAnchor) this.close();
 
         anchorEl = anchor;
-        menuState = { anchor, ariaLabel, items, selected, onSelect, onStepper, closeOnSelect };
+        menuState = { anchor, ariaLabel, items, selected, onSelect, onStepper, onToggle, closeOnSelect };
         const menu = ensureMenu();
         menu.setAttribute('aria-label', ariaLabel || 'Menu');
         menu.innerHTML = `<div class="drawing-menu-list">${renderItemsHtml(items, selected)}</div>`;
-        bindMenuInteractions(menu, { onSelect, onStepper, closeOnSelect });
+        bindMenuInteractions(menu, { onSelect, onStepper, onToggle, closeOnSelect });
 
         menu.classList.remove('is-hidden');
         anchor.setAttribute('aria-expanded', 'true');

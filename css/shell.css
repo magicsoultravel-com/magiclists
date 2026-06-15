@@ -1201,9 +1201,19 @@ body.is-shell-resizing--h * {
 }
 
 .quick-actions-grid {
+    --launcher-icon-size: 15px;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
     gap: 0.25rem;
+}
+
+.quick-actions-grid .btn--icon {
+    padding: 0.25rem;
+}
+
+.quick-actions-grid .btn--icon svg {
+    width: var(--launcher-icon-size);
+    height: var(--launcher-icon-size);
 }
 
 .quick-actions-grid .btn--icon.active {

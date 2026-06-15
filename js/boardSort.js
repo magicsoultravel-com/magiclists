@@ -52,7 +52,17 @@ function buildMenuItems(prefs) {
         { divider: true },
         { heading: 'Order' },
         { id: 'order:asc', label: 'Ascending', selected: prefs.dir === 'asc' },
-        { id: 'order:desc', label: 'Descending', selected: prefs.dir === 'desc' }
+        { id: 'order:desc', label: 'Descending', selected: prefs.dir === 'desc' },
+        { divider: true },
+        { heading: 'Expanded layout' },
+        {
+            checkbox: true,
+            id: 'alignExpanded',
+            inputId: 'board-sort-align-expanded',
+            label: 'Align expanded',
+            hint: 'Bento mosaic for expanded notes; direction applies to collapsed only',
+            checked: prefs.alignExpanded === true
+        }
     ];
 }
 
@@ -87,13 +97,25 @@ export const BoardSort = {
         }
     },
 
+    toggleAlignExpanded(checked) {
+        const prefs = readBoardSort();
+        prefs.alignExpanded = !!checked;
+        writeBoardSort(prefs);
+        this.ctx?.onSort?.(prefs);
+        this.syncButtonState();
+        if (DrawingToolbarMenu.isOpen()) {
+            DrawingToolbarMenu.setItems(buildMenuItems(prefs));
+        }
+    },
+
     syncButtonState() {
         if (!this.triggerBtn) return;
         const prefs = readBoardSort();
         this.triggerBtn.classList.toggle('is-active', isBoardSortCustomized(prefs));
         const dirLabel = prefs.direction === 'vertical' ? 'vertically' : 'horizontally';
         const orderLabel = prefs.dir === 'asc' ? 'ascending' : 'descending';
-        const title = `Sort board (${sortFieldLabel(prefs.field)}, ${orderLabel}, ${dirLabel})`;
+        const alignSuffix = prefs.alignExpanded ? ', align expanded' : '';
+        const title = `Sort board (${sortFieldLabel(prefs.field)}, ${orderLabel}, ${dirLabel}${alignSuffix})`;
         this.triggerBtn.title = title;
         this.triggerBtn.setAttribute('aria-label', title);
     },
@@ -113,7 +135,10 @@ export const BoardSort = {
                 ariaLabel: 'Sort board',
                 items: buildMenuItems(prefs),
                 closeOnSelect: false,
-                onSelect: (id) => this.applyPref(id)
+                onSelect: (id) => this.applyPref(id),
+                onToggle: (id, checked) => {
+                    if (id === 'alignExpanded') this.toggleAlignExpanded(checked);
+                }
             });
         };
         btn.addEventListener('click', this.boundHandler);
