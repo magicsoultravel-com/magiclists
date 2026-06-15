@@ -5151,7 +5151,6 @@ export const UI = {
         direction = 'horizontal'
     }) {
         const { origin, packW, viewportBottom, edgePad } = bounds;
-        const clampBounds = { packW, maxH: viewportBottom, origin, edgePad };
         const unpinned = expandedItems.filter((item) => item?.id && !pinnedIds.has(item.id));
         if (!unpinned.length) return;
 
@@ -5169,11 +5168,10 @@ export const UI = {
         const rects = slotsToRegionRects(slots, region, { gap: metrics.gap });
 
         unpinned.forEach((item, index) => {
-            const raw = rects[index];
-            if (!raw) return;
-            const slot = this.clampNoteToBoardEdges(raw, clampBounds);
-            layout.set(item.id, slot);
-            placed.push({ ...slot });
+            const rect = rects[index];
+            if (!rect) return;
+            layout.set(item.id, rect);
+            placed.push({ ...rect });
         });
     },
 
