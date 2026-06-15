@@ -116,13 +116,11 @@ export const Timezone = {
     sortedZones: [...OFFSET_ZONES].sort((a, b) => a.offsetMinutes - b.offsetMinutes),
     selectedOffsets: new Set(),
     filterSelectedOnly: false,
-    compactMode: false,
+    sectionCollapsed: false,
     adjustOpen: false,
     savedPanelHeight: null,
-    savedPanelWidth: null,
     onDocumentPointerDown: null,
     onKeyDown: null,
-    onPanelIconClick: null,
 
     init(mountElement) {
         this.container = mountElement;
@@ -130,12 +128,8 @@ export const Timezone = {
         if (panel?.style.height) {
             this.savedPanelHeight = panel.style.height;
         }
-        if (panel?.style.width) {
-            this.savedPanelWidth = panel.style.width;
-        }
         this.loadPrefs();
         this.render();
-        this.bindPanelIcon();
     },
 
     loadPrefs() {
@@ -163,32 +157,29 @@ export const Timezone = {
 
         const compactSaved = localStorage.getItem(STORAGE_COMPACT);
         if (compactSaved === null) {
-            this.compactMode = this.filterSelectedOnly;
+            this.sectionCollapsed = this.filterSelectedOnly;
         } else {
-            this.compactMode = compactSaved === '1';
+            this.sectionCollapsed = compactSaved === '1';
         }
     },
 
     savePrefs() {
         localStorage.setItem(STORAGE_SELECTED, JSON.stringify([...this.selectedOffsets]));
         localStorage.setItem(STORAGE_FILTER, this.filterSelectedOnly ? '1' : '0');
-        localStorage.setItem(STORAGE_COMPACT, this.compactMode ? '1' : '0');
+        localStorage.setItem(STORAGE_COMPACT, this.sectionCollapsed ? '1' : '0');
     },
 
     render() {
         const now = new Date();
         const currentHours = now.getHours() + now.getMinutes() / 60;
         const filterClass = this.filterSelectedOnly ? ' tz-tool-stack--filter-selected' : '';
-        const compactClass = this.compactMode ? ' tz-tool-stack--compact' : '';
-        const toggleClass = this.compactMode ? ' collapsed' : '';
+        const toggleClass = this.sectionCollapsed ? ' collapsed' : '';
 
         this.container.innerHTML = `
-            <div class="tool-stack tz-tool-stack${filterClass}${compactClass}">
-                <div class="tz-list-header list-row--header" id="tz-list-header">
-                    <span class="collapsable-heading">
-                        <span class="collapsable-toggle${toggleClass}">▼</span>
-                        <span>Timezones</span>
-                    </span>
+            <div class="tool-stack tz-tool-stack${filterClass}">
+                <div class="collapsable-header list-row--header" id="tz-section-header">
+                    <span class="collapsable-heading"><span class="collapsable-toggle${toggleClass}">▼</span>Timezones</span>
+                    <div class="tz-tool__compact" data-tz-compact></div>
                     <div class="tz-toolbar toolbar toolbar--end">
                         <div class="tz-toolbar__adjust-wrap">
                             <button type="button" class="btn btn--compact btn-icon tz-adjust-btn" aria-haspopup="dialog" aria-expanded="false" aria-label="Adjust time">${ACTION_ICONS.clockStyle}</button>
@@ -200,40 +191,54 @@ export const Timezone = {
                         <button type="button" class="btn btn--compact btn-icon tz-filter-btn${this.filterSelectedOnly ? ' is-active' : ''}" aria-pressed="${this.filterSelectedOnly ? 'true' : 'false'}" aria-label="Show selected only">${this.filterSelectedOnly ? CARD_ICONS.hide : CARD_ICONS.show}</button>
                     </div>
                 </div>
-                <p class="tz-filter-hint tool-msg${this.filterSelectedOnly && !this.compactMode ? '' : ' is-hidden'}">Showing selected timezones only</p>
-                <div id="tz-cards-stack" class="tz-cards-stack"></div>
+                <div class="collapsable-section${this.sectionCollapsed ? ' collapsed' : ''}" id="tz-section">
+                    <p class="tz-filter-hint tool-msg${this.filterSelectedOnly && !this.sectionCollapsed ? '' : ' is-hidden'}">Showing selected timezones only</p>
+                    <div class="tz-table-wrap">
+                        <table class="tz-table">
+                            <thead>
+                                <tr>
+                                    <th class="tz-col-check"><span class="is-hidden">Select</span></th>
+                                    <th class="tz-col-city">City</th>
+                                    <th class="tz-col-abbr">TZ</th>
+                                    <th class="tz-col-time">Time</th>
+                                    <th class="tz-col-date">Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tz-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         `;
 
         this.buildZoneList();
         this.setupListeners();
+        this.applySectionCollapsed(false);
         this.updateTimeMatrix(now);
         this.applyFilter();
-        this.applyCompactMode();
-        if (!this.compactMode) {
+        if (!this.sectionCollapsed) {
             requestAnimationFrame(() => this.scrollToUtc());
         }
     },
 
     buildZoneList() {
-        const stack = document.getElementById('tz-cards-stack');
-        if (!stack) return;
+        const tbody = document.getElementById('tz-table-body');
+        if (!tbody) return;
 
-        stack.innerHTML = this.sortedZones.map((zone) => {
+        tbody.innerHTML = this.sortedZones.map((zone) => {
             const isUtc = zone.offsetMinutes === 0;
-            const extraClass = isUtc ? ' tz-card--utc' : '';
-            const compactClass = this.compactMode ? ' tz-card--compact' : '';
+            const extraClass = isUtc ? ' tz-row--utc' : '';
             const checked = this.selectedOffsets.has(zone.offsetMinutes) ? ' checked' : '';
             return `
-                <div class="tz-card${extraClass}${compactClass}" data-offset="${zone.offsetMinutes}" data-zone-id="${zone.zoneId}" data-abbr="${zone.abbr}">
-                    <input type="checkbox" class="tz-card-check"${checked} aria-label="Show ${zone.city}">
-                    <span class="tz-card-label u-truncate">${zone.city}</span>
-                    <span class="tz-card-abbr"></span>
-                    <span class="tz-card-right">
-                        <span class="tz-card-time"></span>
-                        <span class="tz-card-date"></span>
-                    </span>
-                </div>
+                <tr class="tz-row${extraClass}" data-offset="${zone.offsetMinutes}" data-zone-id="${zone.zoneId}" data-abbr="${zone.abbr}">
+                    <td class="tz-col-check">
+                        <input type="checkbox" class="tz-row-check"${checked} aria-label="Show ${zone.city}">
+                    </td>
+                    <td class="tz-col-city u-truncate">${zone.city}</td>
+                    <td class="tz-col-abbr"></td>
+                    <td class="tz-col-time"></td>
+                    <td class="tz-col-date"></td>
+                </tr>
             `;
         }).join('');
     },
@@ -244,15 +249,14 @@ export const Timezone = {
         const adjustBtn = this.container?.querySelector('.tz-adjust-btn');
         const adjustPopover = this.container?.querySelector('.tz-adjust-popover');
         const filterBtn = this.container?.querySelector('.tz-filter-btn');
-        const listHeader = this.container?.querySelector('#tz-list-header');
-        const stack = document.getElementById('tz-cards-stack');
+        const toggle = this.container?.querySelector('#tz-section-header .collapsable-toggle');
+        const tbody = document.getElementById('tz-table-body');
 
-        listHeader?.addEventListener('click', (e) => {
-            if (e.target.closest('.tz-toolbar')) return;
-            if (this.compactMode) return;
-            this.compactMode = true;
+        toggle?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.sectionCollapsed = !this.sectionCollapsed;
             this.savePrefs();
-            this.applyCompactMode();
+            this.applySectionCollapsed(true);
         });
 
         slider?.addEventListener('input', (e) => {
@@ -268,7 +272,7 @@ export const Timezone = {
             const now = new Date();
             if (slider) slider.value = now.getHours() + now.getMinutes() / 60;
             this.updateTimeMatrix(now);
-            if (!this.compactMode) this.scrollToUtc();
+            if (!this.sectionCollapsed) this.scrollToUtc();
         });
 
         adjustBtn?.addEventListener('click', (e) => {
@@ -284,23 +288,23 @@ export const Timezone = {
             e.stopPropagation();
             this.filterSelectedOnly = !this.filterSelectedOnly;
             if (this.filterSelectedOnly && localStorage.getItem(STORAGE_COMPACT) === null) {
-                this.compactMode = true;
+                this.sectionCollapsed = true;
             }
             filterBtn.classList.toggle('is-active', this.filterSelectedOnly);
             filterBtn.setAttribute('aria-pressed', this.filterSelectedOnly ? 'true' : 'false');
             filterBtn.innerHTML = this.filterSelectedOnly ? CARD_ICONS.hide : CARD_ICONS.show;
             this.container?.querySelector('.tz-tool-stack')?.classList.toggle('tz-tool-stack--filter-selected', this.filterSelectedOnly);
-            this.container?.querySelector('.tz-filter-hint')?.classList.toggle('is-hidden', !this.filterSelectedOnly || this.compactMode);
+            this.container?.querySelector('.tz-filter-hint')?.classList.toggle('is-hidden', !this.filterSelectedOnly || this.sectionCollapsed);
             this.savePrefs();
             this.applyFilter();
-            this.applyCompactMode();
+            this.applySectionCollapsed(false);
         });
 
-        stack?.addEventListener('change', (e) => {
-            const check = e.target.closest('.tz-card-check');
+        tbody?.addEventListener('change', (e) => {
+            const check = e.target.closest('.tz-row-check');
             if (!check) return;
-            const card = check.closest('.tz-card');
-            const offset = parseInt(card?.dataset.offset, 10);
+            const row = check.closest('.tz-row');
+            const offset = parseInt(row?.dataset.offset, 10);
             if (!Number.isFinite(offset)) return;
             if (check.checked) {
                 this.selectedOffsets.add(offset);
@@ -327,77 +331,22 @@ export const Timezone = {
         document.addEventListener('keydown', this.onKeyDown);
     },
 
-    bindPanelIcon() {
-        const panel = this.container?.closest('.tool-panel');
-        const iconEl = panel?.querySelector('.tool-panel__icon');
-        if (!iconEl) return;
+    applySectionCollapsed(scrollOnExpand) {
+        const section = this.container?.querySelector('#tz-section');
+        const toggle = this.container?.querySelector('#tz-section-header .collapsable-toggle');
 
-        this.onPanelIconClick = (e) => {
-            if (!this.compactMode) return;
-            e.stopPropagation();
-            this.compactMode = false;
-            this.savePrefs();
-            this.applyCompactMode();
-        };
-        iconEl.addEventListener('click', this.onPanelIconClick);
-    },
+        section?.classList.toggle('collapsed', this.sectionCollapsed);
+        toggle?.classList.toggle('collapsed', this.sectionCollapsed);
+        this.container?.querySelector('.tz-filter-hint')?.classList.toggle('is-hidden', !this.filterSelectedOnly || this.sectionCollapsed);
 
-    applyCompactMode() {
-        const panel = this.container?.closest('.tool-panel');
-        const iconEl = panel?.querySelector('.tool-panel__icon');
-        const stack = this.container?.querySelector('.tz-tool-stack');
-        const toggle = this.container?.querySelector('.collapsable-toggle');
-
-        stack?.classList.toggle('tz-tool-stack--compact', this.compactMode);
-        toggle?.classList.toggle('collapsed', this.compactMode);
-        panel?.classList.toggle('tool-panel--tz-compact', this.compactMode);
-        this.container?.querySelector('.tz-filter-hint')?.classList.toggle('is-hidden', !this.filterSelectedOnly || this.compactMode);
-
-        if (iconEl) {
-            if (this.compactMode) {
-                iconEl.setAttribute('role', 'button');
-                iconEl.setAttribute('tabindex', '0');
-                iconEl.setAttribute('aria-label', 'Expand timezones');
-                this.closeAdjustPopover();
-            } else {
-                iconEl.removeAttribute('role');
-                iconEl.removeAttribute('tabindex');
-                iconEl.removeAttribute('aria-label');
-            }
+        if (this.sectionCollapsed) {
+            this.closeAdjustPopover();
+        } else if (scrollOnExpand) {
+            requestAnimationFrame(() => this.scrollToUtc());
         }
-
-        this.container?.querySelectorAll('.tz-card').forEach((card) => {
-            card.classList.toggle('tz-card--compact', this.compactMode);
-        });
 
         this.syncPanelFit();
-        this.syncPanelWidth();
-    },
-
-    syncPanelWidth() {
-        const panel = this.container?.closest('.tool-panel');
-        if (!panel) return;
-
-        if (this.compactMode) {
-            if (!this.savedPanelWidth) {
-                this.savedPanelWidth = panel.style.width || `${panel.offsetWidth}px`;
-            }
-            requestAnimationFrame(() => {
-                const body = panel.querySelector('.tool-panel__body');
-                const cards = document.getElementById('tz-cards-stack');
-                const header = panel.querySelector('.tool-panel__header');
-                const bodyPad = body
-                    ? (parseFloat(getComputedStyle(body).paddingLeft) || 0)
-                        + (parseFloat(getComputedStyle(body).paddingRight) || 0)
-                    : 16;
-                const contentW = cards?.scrollWidth || 0;
-                const headerW = header?.scrollWidth || 0;
-                const fitW = Math.ceil(Math.max(contentW + bodyPad, headerW)) + 2;
-                panel.style.width = `${Math.max(fitW, 88)}px`;
-            });
-        } else {
-            panel.style.width = this.savedPanelWidth || `${340}px`;
-        }
+        this.updateCompactPreview();
     },
 
     openAdjustPopover() {
@@ -419,26 +368,50 @@ export const Timezone = {
     },
 
     applyFilter() {
-        const stack = document.getElementById('tz-cards-stack');
-        if (!stack) return;
+        const tbody = document.getElementById('tz-table-body');
+        if (!tbody) return;
 
-        const checkedCount = stack.querySelectorAll('.tz-card-check:checked').length;
+        const checkedCount = tbody.querySelectorAll('.tz-row-check:checked').length;
         const filterActive = this.filterSelectedOnly && checkedCount > 0;
 
-        stack.querySelectorAll('.tz-card').forEach((card) => {
-            const check = card.querySelector('.tz-card-check');
+        tbody.querySelectorAll('.tz-row').forEach((row) => {
+            const check = row.querySelector('.tz-row-check');
             const show = !filterActive || check?.checked;
-            card.classList.toggle('is-hidden', !show);
+            row.classList.toggle('is-hidden', !show);
         });
 
         this.syncPanelFit();
-        this.syncPanelWidth();
+        this.updateCompactPreview();
+    },
+
+    getVisibleRows() {
+        const tbody = document.getElementById('tz-table-body');
+        if (!tbody) return [];
+        return [...tbody.querySelectorAll('.tz-row:not(.is-hidden)')];
     },
 
     getVisibleRowCount() {
-        const stack = document.getElementById('tz-cards-stack');
-        if (!stack) return 0;
-        return stack.querySelectorAll('.tz-card:not(.is-hidden)').length;
+        return this.getVisibleRows().length;
+    },
+
+    updateCompactPreview() {
+        const mount = this.container?.querySelector('[data-tz-compact]');
+        if (!mount) return;
+
+        const rows = this.getVisibleRows();
+        if (!rows.length) {
+            mount.innerHTML = '<span class="tz-compact-empty">No timezones</span>';
+            return;
+        }
+
+        mount.innerHTML = rows.map((row) => {
+            const city = row.querySelector('.tz-col-city')?.textContent?.trim() || '';
+            const time = row.querySelector('.tz-col-time')?.textContent?.trim() || '—';
+            const extraClass = row.classList.contains('tz-row--utc') || row.classList.contains('tz-row--local')
+                ? ' tz-compact-row--accent'
+                : '';
+            return `<div class="tz-compact-row${extraClass}"><span class="tz-compact-city u-truncate">${city}</span><span class="tz-compact-time">${time}</span></div>`;
+        }).join('');
     },
 
     syncPanelFit() {
@@ -446,7 +419,7 @@ export const Timezone = {
         if (!panel) return;
 
         const visibleCount = this.getVisibleRowCount();
-        const shouldFit = this.compactMode
+        const shouldFit = this.sectionCollapsed
             || (this.filterSelectedOnly && visibleCount > 0 && visibleCount <= FIT_VISIBLE_THRESHOLD);
 
         if (shouldFit) {
@@ -466,29 +439,29 @@ export const Timezone = {
     },
 
     scrollToUtc() {
-        const utcRow = this.container?.querySelector('[data-offset="0"]:not(.is-hidden)');
+        const utcRow = this.container?.querySelector('#tz-table-body .tz-row[data-offset="0"]:not(.is-hidden)');
         utcRow?.scrollIntoView({ block: 'center', behavior: 'auto' });
     },
 
     updateTimeMatrix(baseDate) {
-        const stack = document.getElementById('tz-cards-stack');
-        if (!stack) return;
+        const tbody = document.getElementById('tz-table-body');
+        if (!tbody) return;
 
         const localOffset = getZoneOffsetMinutes(baseDate, this.localZoneId);
 
-        stack.querySelectorAll('.tz-card').forEach((card) => {
-            const zoneId = card.dataset.zoneId;
-            const offsetMinutes = parseInt(card.dataset.offset, 10);
-            const fallbackAbbr = card.dataset.abbr || '';
+        tbody.querySelectorAll('.tz-row').forEach((row) => {
+            const zoneId = row.dataset.zoneId;
+            const offsetMinutes = parseInt(row.dataset.offset, 10);
+            const fallbackAbbr = row.dataset.abbr || '';
             const isUtc = offsetMinutes === 0;
             const liveOffset = getZoneOffsetMinutes(baseDate, zoneId);
 
             const isLocal = localOffset !== null && liveOffset === localOffset && !isUtc;
-            card.classList.toggle('tz-card--local', isLocal);
+            row.classList.toggle('tz-row--local', isLocal);
 
-            const abbrEl = card.querySelector('.tz-card-abbr');
-            const timeEl = card.querySelector('.tz-card-time');
-            const dateEl = card.querySelector('.tz-card-date');
+            const abbrEl = row.querySelector('.tz-col-abbr');
+            const timeEl = row.querySelector('.tz-col-time');
+            const dateEl = row.querySelector('.tz-col-date');
 
             if (abbrEl) abbrEl.textContent = getZoneAbbr(baseDate, zoneId, fallbackAbbr);
 
@@ -502,23 +475,14 @@ export const Timezone = {
             }
         });
 
-        if (this.compactMode) {
-            this.syncPanelWidth();
-        }
+        this.updateCompactPreview();
     },
 
     destroy() {
         this.closeAdjustPopover();
         const panel = this.container?.closest('.tool-panel');
-        const iconEl = panel?.querySelector('.tool-panel__icon');
-        if (iconEl && this.onPanelIconClick) {
-            iconEl.removeEventListener('click', this.onPanelIconClick);
-        }
-        if (panel && this.compactMode) {
-            panel.classList.remove('tool-panel--tz-compact', 'tool-panel--tz-fit', 'tool-panel--auto-height');
-            if (this.savedPanelWidth) {
-                panel.style.width = this.savedPanelWidth;
-            }
+        if (panel) {
+            panel.classList.remove('tool-panel--tz-fit', 'tool-panel--auto-height');
         }
         if (this.onDocumentPointerDown) {
             document.removeEventListener('pointerdown', this.onDocumentPointerDown);
@@ -528,7 +492,6 @@ export const Timezone = {
         }
         this.onDocumentPointerDown = null;
         this.onKeyDown = null;
-        this.onPanelIconClick = null;
         this.container = null;
     }
 };

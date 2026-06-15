@@ -81,10 +81,8 @@
 .mini-card.tile-small .editor-note-topline .editor-note-header,
 .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .editor-note-header,
 .file-cabinet .file-cabinet-tab .editor-note-topline .editor-note-header {
-    flex: 0 1 auto;
+    flex: 1 1 auto;
     min-width: 0;
-    width: auto;
-    max-width: calc(100% - 7rem);
     overflow: hidden;
 }
 
@@ -95,14 +93,10 @@
 .mini-card[data-desktop="1"].spatial-at-small .editor-note-topline .mini-card-title.card-inline-edit,
 .file-cabinet .file-cabinet-tab .mini-card-title.card-inline-edit {
     font-size: calc(0.62rem * var(--note-font-scale, 1));
-    width: max-content;
+    width: auto;
     max-width: 100%;
     display: block;
     line-height: 1.2;
-}
-
-.file-cabinet .file-cabinet-tab .mini-card-title.card-inline-edit {
-    field-sizing: content;
 }
 
 .mini-card.tile-small .editor-note-header .mini-card-title,
@@ -129,24 +123,18 @@ html[data-tile-small-footprint="card"] .file-cabinet .file-cabinet-tab .mini-car
 }
 
 .file-cabinet-tab.is-file-cabinet-dragging .editor-note-topline .editor-note-header {
-    flex: 0 1 auto;
+    flex: 1 1 auto;
     min-width: 0;
-    width: auto;
-    max-width: calc(100% - 7rem);
     overflow: hidden;
 }
 
 .file-cabinet-tab.is-file-cabinet-dragging .mini-card-title,
 .file-cabinet-tab.is-file-cabinet-dragging .mini-card-title.card-inline-edit {
     font-size: calc(0.62rem * var(--note-font-scale, 1));
-    width: max-content;
+    width: auto;
     max-width: 100%;
     display: block;
     line-height: 1.2;
-}
-
-.file-cabinet-tab.is-file-cabinet-dragging .mini-card-title.card-inline-edit {
-    field-sizing: content;
 }
 
 .file-cabinet-tab.is-file-cabinet-dragging .editor-note-header .mini-card-title {
