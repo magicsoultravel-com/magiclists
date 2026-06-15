@@ -703,8 +703,7 @@ class Application {
             }
             const detail = e.detail;
             const item = detail?.item ?? detail;
-            const sourceCard = detail?.sourceCard ?? null;
-            Editor.open(item, AppState.categories, { sourceCard });
+            Editor.open(item, AppState.categories);
         });
 
         window.addEventListener('editor:reveal_on_board', async (e) => {

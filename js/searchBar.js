@@ -1,20 +1,9 @@
 import { isSearchActive, querySearch } from './searchFilter.js';
 import { CARD_ICONS } from './icons.js';
 import { SidePanel } from './hamburger.js';
+import { escapeAttr, escapeHTML } from './domEscape.js';
 
 const DEBOUNCE_MS = 150;
-
-function escapeHtml(str) {
-    return String(str ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-}
-
-function escapeAttr(str) {
-    return escapeHtml(str).replace(/'/g, '&#39;');
-}
 
 export const SearchBar = {
     root: null,
@@ -101,7 +90,7 @@ export const SearchBar = {
         const hasAny = titles.length || content.length;
 
         if (!hasAny) {
-            this.panel.innerHTML = `<div class="search-results-empty">No matches for "${escapeHtml(query.trim())}"</div>`;
+            this.panel.innerHTML = `<div class="search-results-empty">No matches for "${escapeHTML(query.trim())}"</div>`;
             this.resultRows = [];
             this.highlightedIndex = -1;
             return;
@@ -148,7 +137,7 @@ export const SearchBar = {
     renderTitleRow(hit) {
         const typeLabel = hit.type === 'checklist' ? 'Checklist' : 'Note';
         const category = hit.category
-            ? `<span class="search-results-meta">${escapeHtml(hit.category)}</span>`
+            ? `<span class="search-results-meta">${escapeHTML(hit.category)}</span>`
             : '';
         const archivedClass = this.isArchivedItem(hit.item) ? ' search-results-item--archived' : '';
         return `
@@ -156,7 +145,7 @@ export const SearchBar = {
                 data-action="open-item" data-item-id="${escapeAttr(hit.item.id)}"
                 title="${this.itemRowTitle(hit)}"
                 style="--note-accent:${escapeAttr(hit.item.backgroundColor || '#64748b')}">
-                <span class="search-results-item-primary">${escapeHtml(hit.title)}</span>
+                <span class="search-results-item-primary">${escapeHTML(hit.title)}</span>
                 ${this.renderArchivedBadge(hit.item)}
                 <span class="search-results-item-secondary">
                     <span class="search-results-badge">${typeLabel}</span>${category}
@@ -173,7 +162,7 @@ export const SearchBar = {
             <button type="button" class="search-results-item search-results-item--content${archivedClass}"
                 data-action="open-item" data-item-id="${escapeAttr(hit.item.id)}"
                 title="${this.itemRowTitle(hit)}">
-                <span class="search-results-item-primary">${escapeHtml(hit.title)}</span>
+                <span class="search-results-item-primary">${escapeHTML(hit.title)}</span>
                 ${this.renderArchivedBadge(hit.item)}
                 <span class="search-results-item-snippet">${stepPrefix}${hit.snippetHtml}</span>
             </button>`;

@@ -1,7 +1,7 @@
 ﻿import { applyCardTheme } from './cardTheme.js';
 import { ColorPicker, PALETTE_NOTE, randomNoteColor, resolveNoteColor } from './colorPicker.js';
 import { EditorModalChrome } from './editorModalChrome.js';
-import { sanitizeRichHtml, stripRichText } from './richText.js';
+import { stripRichText } from './richText.js';
 import { CARD_ICONS } from './icons.js';
 import {
     createNoteId,
@@ -64,7 +64,7 @@ export const Editor = {
         }, true);
     },
     
-    open(item = null, categoriesList = [], { sourceCard = null } = {}) {
+    open(item = null, categoriesList = []) {
         this.availableCategories = categoriesList;
         this.hasUserInteracted = false;
 
@@ -180,25 +180,7 @@ export const Editor = {
 
     syncActiveItemFromDom() {
         if (!this.activeItem || !this.mountZone) return;
-        const titleEl = this.mountZone.querySelector('[data-field="title"]');
-        const contentEl = this.mountZone.querySelector('[data-field="content"]');
-        if (titleEl) {
-            this.activeItem.title = titleEl.classList.contains('rich-text--edit')
-                ? sanitizeRichHtml(titleEl.innerHTML)
-                : titleEl.textContent.trim();
-        }
-        if (contentEl) {
-            this.activeItem.content = contentEl.classList.contains('rich-text--edit')
-                ? sanitizeRichHtml(contentEl.innerHTML)
-                : contentEl.textContent;
-        }
-        this.mountZone.querySelectorAll('[data-field="step-text"]').forEach((el) => {
-            const step = this.activeItem.steps?.find((s) => s.id === el.dataset.stepId);
-            if (!step) return;
-            step.text = el.classList.contains('rich-text--edit')
-                ? sanitizeRichHtml(el.innerHTML)
-                : el.textContent;
-        });
+        NoteSurface.syncItemBodyFromDom(this.mountZone, this.activeItem);
     },
 
     collectFormData({ normalize = false } = {}) {

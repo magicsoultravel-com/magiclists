@@ -3,6 +3,7 @@ import { readStoredCategories } from './categories.js';
 import { CARD_ICONS } from './icons.js';
 import { resolveNoteColor } from './colorPicker.js';
 import { stripRichText } from './richText.js';
+import { escapeHTML } from './domEscape.js';
 
 export const Calendar = {
     overlay: null,
@@ -520,7 +521,7 @@ export const Calendar = {
             <div class="calendar-notes-list">
                 ${events.map(event => `
                     <div class="calendar-note-item" data-id="${event.id}" data-parent="${event.parentId}" data-step="${event.stepId || ''}" style="background: ${event.backgroundColor || 'var(--bg-card)'}; border-left: 3px solid ${event.color};">
-                        <div class="calendar-note-title">${this.escapeHTML(event.title)}</div>
+                        <div class="calendar-note-title">${escapeHTML(event.title)}</div>
                         <div class="calendar-note-preview">${event.isStep ? 'Checklist item' : 'Note'}</div>
                     </div>
                 `).join('')}
@@ -579,7 +580,7 @@ export const Calendar = {
                     <div class="calendar-hour-content">
                         ${hourEvents.map(event => `
                             <div class="calendar-hour-note" data-id="${event.id}" data-parent="${event.parentId}" data-step="${event.stepId || ''}" style="background: ${event.backgroundColor || 'var(--bg-card)'}; border-left: 3px solid ${event.color};">
-                                <div class="calendar-hour-note-title">${this.escapeHTML(event.title)}</div>
+                                <div class="calendar-hour-note-title">${escapeHTML(event.title)}</div>
                             </div>
                         `).join('')}
                     </div>
@@ -612,10 +613,5 @@ export const Calendar = {
         }, 10);
         
         return timeline;
-    },
-    
-    escapeHTML(str) {
-        if (!str) return '';
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 };

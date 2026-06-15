@@ -1,3 +1,5 @@
+import { escapeAttr } from './domEscape.js';
+
 const GRID_SLOTS = 16;
 const USER_SLOTS = 4;
 const USER_PALETTE_KEY = 'matrix_user_palette';
@@ -37,11 +39,6 @@ export function resolveNoteColor(value) {
 export function randomNoteColor() {
     const accents = PALETTE_UNIFIED.slice(1).map((preset) => preset.value);
     return accents[Math.floor(Math.random() * accents.length)];
-}
-
-function escapeAttr(str) {
-    if (!str) return '';
-    return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
 }
 
 function normalizeHex(value) {

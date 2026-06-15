@@ -1,5 +1,6 @@
 import { getItemCategoryName } from './focusFilter.js';
-import { emitItemMutation, escapeAttr, escapeHTML, snapshotItem } from './noteSurface.js';
+import { emitItemMutation, snapshotItem } from './noteSurface.js';
+import { escapeAttr, escapeHTML } from './domEscape.js';
 import { sortBoardItems } from './boardSort.js';
 import { readBoardSort } from './sidebarPrefs.js';
 import {

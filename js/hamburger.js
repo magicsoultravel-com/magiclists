@@ -1,5 +1,6 @@
 import { UI } from './ui.js';
 import { formatNoteListDate, renderRichHtml } from './noteSurface.js';
+import { escapeAttr, escapeHTML } from './domEscape.js';
 import { UNCATEGORIZED_CATEGORY } from './categories.js';
 import { itemHasCategory } from './focusFilter.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
@@ -249,9 +250,9 @@ export const SidePanel = {
         const titleRich = hasRichMarkup(item.title);
         const titleHtml = titleRich
             ? renderRichHtml(item.title || '')
-            : this.escapeHTML(plainTitle);
+            : escapeHTML(plainTitle);
         return {
-            titleAttr: this.escapeAttr(plainTitle),
+            titleAttr: escapeAttr(plainTitle),
             titleHtml,
             richClass: titleRich ? ' rich-text' : ''
         };
@@ -259,8 +260,8 @@ export const SidePanel = {
 
     renderHistoryItem(entry, { redo = false, index = 0 } = {}) {
         const label = entry?.label || 'Edit';
-        const safe = this.escapeHTML(label);
-        const aria = this.escapeAttr(label);
+        const safe = escapeHTML(label);
+        const aria = escapeAttr(label);
         const redoClass = redo ? ' sidebar-history-item--redo' : '';
         const stack = redo ? 'redo' : 'undo';
         return `<div class="sidebar-history-item${redoClass}" data-history-stack="${stack}" data-history-index="${index}" aria-label="${aria}">${safe}</div>`;
@@ -302,9 +303,9 @@ export const SidePanel = {
         if (!entry || !anchorEl) return;
         const tip = this.ensureHistoryTip();
         const detail = describeHistoryEntry(entry);
-        const titleHtml = this.escapeHTML(detail.title);
+        const titleHtml = escapeHTML(detail.title);
         const linesHtml = detail.lines
-            .map((line) => `<div class="sidebar-history-tip__line">${this.escapeHTML(line)}</div>`)
+            .map((line) => `<div class="sidebar-history-tip__line">${escapeHTML(line)}</div>`)
             .join('');
         tip.innerHTML = `<div class="sidebar-history-tip__title">${titleHtml}</div>${linesHtml}`;
         tip.classList.remove('is-hidden');
@@ -401,25 +402,25 @@ export const SidePanel = {
         const sorted = this.sortNotesForList(listItems);
         zone.innerHTML = sorted.map((item) => {
             const accent = resolveNoteColor(item.backgroundColor);
-            const accentStyle = ` style="--note-accent:${this.escapeAttr(accent)}"`;
+            const accentStyle = ` style="--note-accent:${escapeAttr(accent)}"`;
             const dateLabel = formatNoteListDate(item);
             const { titleAttr, titleHtml, richClass } = this.buildSidebarNoteTitle(item);
 
             if (variant === 'hidden') {
                 return `
                 <div class="sidebar-notes-list-item has-note-color sidebar-notes-list-item--with-act"${accentStyle}>
-                    <button type="button" class="sidebar-notes-list-item-main" data-id="${this.escapeAttr(item.id)}" title="${titleAttr}">
+                    <button type="button" class="sidebar-notes-list-item-main" data-id="${escapeAttr(item.id)}" title="${titleAttr}">
                         <span class="sidebar-notes-list-item-title${richClass}">${titleHtml}</span>
-                        <span class="sidebar-notes-list-date">${this.escapeHTML(dateLabel)}</span>
+                        <span class="sidebar-notes-list-date">${escapeHTML(dateLabel)}</span>
                     </button>
-                    <button type="button" class="card-act card-act--show unhide-btn" data-id="${this.escapeAttr(item.id)}" title="Unhide" aria-label="Unhide">${CARD_ICONS.show}</button>
+                    <button type="button" class="card-act card-act--show unhide-btn" data-id="${escapeAttr(item.id)}" title="Unhide" aria-label="Unhide">${CARD_ICONS.show}</button>
                 </div>`;
             }
 
             return `
-            <button type="button" class="sidebar-notes-list-item has-note-color${variant === 'archived' ? ' is-archived' : ''}" data-id="${this.escapeAttr(item.id)}" title="${titleAttr}"${accentStyle}>
+            <button type="button" class="sidebar-notes-list-item has-note-color${variant === 'archived' ? ' is-archived' : ''}" data-id="${escapeAttr(item.id)}" title="${titleAttr}"${accentStyle}>
                 <span class="sidebar-notes-list-item-title${richClass}">${titleHtml}</span>
-                <span class="sidebar-notes-list-date">${this.escapeHTML(dateLabel)}</span>
+                <span class="sidebar-notes-list-date">${escapeHTML(dateLabel)}</span>
             </button>`;
         }).join('');
 
@@ -481,16 +482,16 @@ export const SidePanel = {
             const color = catName === UNCATEGORIZED_CATEGORY
                 ? '#64748b'
                 : (cat?.color || '#64748b');
-            const accentStyle = ` style="--note-accent:${this.escapeAttr(color)}"`;
+            const accentStyle = ` style="--note-accent:${escapeAttr(color)}"`;
             const title = catName === UNCATEGORIZED_CATEGORY && uncatCount > 0
-                ? this.escapeHTML(`${UNCATEGORIZED_CATEGORY} (${uncatCount})`)
-                : this.escapeHTML(catName);
+                ? escapeHTML(`${UNCATEGORIZED_CATEGORY} (${uncatCount})`)
+                : escapeHTML(catName);
 
             if (hidden) {
                 return `
                 <div class="sidebar-notes-list-item sidebar-notes-list-item--category sidebar-notes-list-item--with-act has-note-color"${accentStyle}>
                     <span class="sidebar-notes-list-item-title">${title}</span>
-                    <button type="button" class="card-act card-act--show show-category-btn" data-category="${this.escapeAttr(catName)}" title="Show" aria-label="Show">${CARD_ICONS.show}</button>
+                    <button type="button" class="card-act card-act--show show-category-btn" data-category="${escapeAttr(catName)}" title="Show" aria-label="Show">${CARD_ICONS.show}</button>
                 </div>`;
             }
 
@@ -534,16 +535,6 @@ export const SidePanel = {
     /** @deprecated use updateCategories */
     updateStatus(_items, categories, hiddenCategories) {
         this.updateCategories(categories, hiddenCategories);
-    },
-
-    escapeAttr(str) {
-        if (!str) return '';
-        return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-    },
-
-    escapeHTML(str) {
-        if (!str) return '';
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 };
 
