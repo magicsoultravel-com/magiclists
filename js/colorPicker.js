@@ -4,48 +4,29 @@ const USER_PALETTE_KEY = 'matrix_user_palette';
 /** Shared default for desktop, chrome, and note reset. */
 export const THEME_DEFAULT_COLOR = '#121214';
 
+/** Muted, hue-varied presets for backgrounds and drawing — one palette everywhere. */
 export const PALETTE_UNIFIED = [
     { value: '#000000', label: 'Black' },
     { value: THEME_DEFAULT_COLOR, label: 'Default' },
-    { value: '#1e293b', label: 'Slate' },
-    { value: '#312e81', label: 'Indigo' },
-    { value: '#134e4a', label: 'Teal' },
-    { value: '#365314', label: 'Olive' },
-    { value: '#78350f', label: 'Amber' },
-    { value: '#7f1d1d', label: 'Rose' },
-    { value: '#4c1d95', label: 'Violet' },
-    { value: '#1e3a5f', label: 'Navy' },
-    { value: '#0f172a', label: 'Midnight' },
-    { value: '#422006', label: 'Brown' },
-    { value: '#0c4a6e', label: 'Sky' },
-    { value: '#4a044e', label: 'Plum' },
-    { value: '#14532d', label: 'Green' },
+    { value: '#35363a', label: 'Graphite' },
+    { value: '#343841', label: 'Cool slate' },
+    { value: '#3d3538', label: 'Dusty rose' },
+    { value: '#353a36', label: 'Sage' },
+    { value: '#3a3833', label: 'Taupe' },
+    { value: '#323841', label: 'Steel blue' },
+    { value: '#38353d', label: 'Mauve' },
+    { value: '#3a3a33', label: 'Olive grey' },
+    { value: '#3d3834', label: 'Clay' },
+    { value: '#343a39', label: 'Sea mist' },
+    { value: '#3a3637', label: 'Plum grey' },
+    { value: '#d4cfc4', label: 'Soft cream' },
+    { value: '#b8b4ae', label: 'Warm grey' },
     { value: '#ffffff', label: 'White' }
 ];
 
 export const PALETTE_NOTE = PALETTE_UNIFIED;
 export const PALETTE_DESKTOP = PALETTE_UNIFIED;
 export const PALETTE_CHROME = PALETTE_UNIFIED;
-
-/** Light/bright accents for drawing on dark canvas backgrounds. */
-export const PALETTE_DRAWING = [
-    { value: '#f8fafc', label: 'White' },
-    { value: '#fbbf24', label: 'Yellow' },
-    { value: '#22d3ee', label: 'Cyan' },
-    { value: '#f472b6', label: 'Pink' },
-    { value: '#4ade80', label: 'Green' },
-    { value: '#fb923c', label: 'Orange' },
-    { value: '#f87171', label: 'Red' },
-    { value: '#60a5fa', label: 'Blue' },
-    { value: '#c084fc', label: 'Purple' },
-    { value: '#fde047', label: 'Lemon' },
-    { value: '#94a3b8', label: 'Gray' },
-    { value: '#1e293b', label: 'Ink' },
-    { value: '#ffffff', label: 'Pure' },
-    { value: '#000000', label: 'Black' },
-    { value: '#78350f', label: 'Brown' },
-    { value: '#ecfccb', label: 'Lime' }
-];
 
 export function resolveNoteColor(value) {
     if (value && /^#[0-9a-fA-F]{6}$/.test(value)) return value;

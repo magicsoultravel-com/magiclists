@@ -1,5 +1,5 @@
 import { ACTION_ICONS, DRAWING_ICONS } from './ui.js';
-import { ColorPicker, PALETTE_DRAWING } from './colorPicker.js';
+import { ColorPicker, PALETTE_UNIFIED } from './colorPicker.js';
 import { DrawingToolbarMenu, CHEVRON } from './drawingToolbarMenu.js';
 import { DisplayOptions } from './displayOptions.js';
 import { Fullscreen } from './fullscreen.js';
@@ -357,7 +357,7 @@ export const DrawingBoard = {
     openPageBackgroundPicker(anchor) {
         ColorPicker.open({
             anchor,
-            presets: PALETTE_DRAWING,
+            presets: PALETTE_UNIFIED,
             value: this.pageBackgroundFill() || this.pageBackgroundSwatch(),
             align: 'end',
             onSelect: (c) => this.setPageBackgroundColor(c)
@@ -430,7 +430,7 @@ export const DrawingBoard = {
             mode: 'inline',
             container: rollout,
             anchor,
-            presets: PALETTE_DRAWING,
+            presets: PALETTE_UNIFIED,
             value: brush.color,
             onSelect: (c) => this.setColor(c, { rerender: false }),
             onClose: () => { this.colorRolloutOpen = false; }
