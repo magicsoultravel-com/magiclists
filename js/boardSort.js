@@ -61,7 +61,7 @@ function buildMenuItems(prefs, viewMode = 'grid') {
             id: 'cascade',
             inputId: 'board-sort-cascade',
             label: 'Cascade',
-            hint: 'Freeform: 4-wide collapsed rows, expanded notes stacked with offset',
+            hint: 'Freeform: collapsed stacks of 4 (file-cabinet style); expanded in one overlapping stack',
             checked: prefs.cascade === true,
             disabled: !isFreeform
         }

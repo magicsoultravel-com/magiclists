@@ -50,10 +50,14 @@ import {
 } from './fileCabinet.js';
 import { sortBoardItems } from './boardSort.js';
 import {
-    CASCADE_PER_LINE,
+    chunkForStacks,
     computeAlignRegion,
-    computeCascadeRects,
+    computeCascadeStackRects,
+    computeStackBounds,
+    computeStackFootprint,
+    computeStackRects,
     getExpandedAlignSlots,
+    layoutStackAnchors,
     slotsToRegionRects
 } from './boardSortAlign.js';
 import { syncCabinetSplitter } from './shellResize.js';
@@ -5319,40 +5323,57 @@ export const UI = {
         metrics,
         canvasW
     }) {
-        const cardStep = metrics.strideX + metrics.gap;
-        const rowStep = metrics.strideY + metrics.gap;
-        let lineIndex = 0;
+        const unpinned = collapsedItems.filter((item) => item?.id && !pinnedIds.has(item.id));
+        if (!unpinned.length) return;
 
-        collapsedItems.forEach((item) => {
-            if (!item?.id || pinnedIds.has(item.id)) return;
-            const { w, h } = this.resolveSortItemSize(item, 'freeform', false);
-            let x;
-            let y;
-            if (direction === 'vertical') {
-                const col = Math.floor(lineIndex / CASCADE_PER_LINE);
-                const row = lineIndex % CASCADE_PER_LINE;
-                x = minCoord + col * cardStep;
-                y = minCoord + row * rowStep;
-            } else {
-                const col = lineIndex % CASCADE_PER_LINE;
-                const row = Math.floor(lineIndex / CASCADE_PER_LINE);
-                x = minCoord + col * cardStep;
-                y = minCoord + row * rowStep;
+        const chunks = chunkForStacks(unpinned);
+        const footprints = chunks.map((chunk) => {
+            const { w, h } = this.resolveSortItemSize(chunk[0], 'freeform', false);
+            return computeStackFootprint(chunk.length, w, h);
+        });
+        let anchors = layoutStackAnchors(
+            footprints,
+            direction,
+            { x: minCoord, y: minCoord },
+            metrics.gap
+        );
+
+        anchors = anchors.map((anchor, stackIndex) => {
+            const fp = footprints[stackIndex];
+            const candidate = { x: anchor.x, y: anchor.y, w: fp.w, h: fp.h };
+            if (!placed.some((p) => this.rectsOverlap(candidate, p, metrics.gap))) {
+                return anchor;
             }
-            let slot = { x, y, w, h };
-            if (placed.some((p) => this.rectsOverlap(slot, p, metrics.gap))) {
-                slot = this.findFreeformSortSlot(w, h, placed, canvasW, {
-                    startX: x,
-                    startY: y,
-                    direction
-                });
-            }
-            this.saveFreeformPosition(item.id, slot.x, slot.y);
-            this.saveFreeformSize(item.id, slot.w, slot.h, { updateRemembered: false });
-            const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
-            if (card) this.applyNoteRect(card, slot, { settling: true });
-            placed.push({ ...slot });
-            lineIndex += 1;
+            const near = this.findFreeformSortSlot(fp.w, fp.h, placed, canvasW, {
+                startX: anchor.x,
+                startY: anchor.y,
+                direction
+            });
+            return { x: near.x, y: near.y };
+        });
+
+        let zIndexBase = placed.length;
+
+        chunks.forEach((chunk, stackIndex) => {
+            const anchor = anchors[stackIndex];
+            const fp = footprints[stackIndex];
+            const sizes = chunk.map((item) => this.resolveSortItemSize(item, 'freeform', false));
+            const rects = computeStackRects(sizes, anchor.x, anchor.y, { zIndexBase });
+
+            chunk.forEach((item, itemIndex) => {
+                const slot = rects[itemIndex];
+                if (!slot) return;
+                this.saveFreeformPosition(item.id, slot.x, slot.y);
+                this.saveFreeformSize(item.id, slot.w, slot.h, { updateRemembered: false });
+                const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
+                if (card) {
+                    this.applyNoteRect(card, slot, { settling: true });
+                    this.initDesktopCardStack(card, slot.zIndex);
+                }
+            });
+
+            placed.push({ x: anchor.x, y: anchor.y, w: fp.w, h: fp.h });
+            zIndexBase += chunk.length;
         });
     },
 
@@ -5378,26 +5399,63 @@ export const UI = {
             edgePad,
             metrics
         });
-        const rects = computeCascadeRects(sizes, anchor, { region });
+        let rects = computeCascadeStackRects(sizes, region, { zIndexBase: placed.length });
+
+        const nudgeStack = (deltaX, deltaY) => {
+            if (!deltaX && !deltaY) return;
+            rects = rects.map((rect) => ({
+                ...rect,
+                x: rect.x + deltaX,
+                y: rect.y + deltaY
+            }));
+        };
+
+        let stackBounds = computeStackBounds(rects);
+        if (stackBounds.w > 0 && placed.some((p) => this.rectsOverlap(stackBounds, p, metrics.gap))) {
+            const near = this.findFreeformSortSlot(stackBounds.w, stackBounds.h, placed, canvasW, {
+                startX: stackBounds.x,
+                startY: stackBounds.y,
+                direction: 'horizontal'
+            });
+            nudgeStack(near.x - stackBounds.x, near.y - stackBounds.y);
+            stackBounds = computeStackBounds(rects);
+        }
+
+        const minX = metrics.origin + metrics.edgePad;
+        const minY = minX;
+        const rightLimit = canvasW - metrics.edgePad;
+        const bottomLimit = viewportBottom - metrics.edgePad;
+        if (stackBounds.x < minX) nudgeStack(minX - stackBounds.x, 0);
+        if (stackBounds.y < minY) nudgeStack(0, minY - stackBounds.y);
+        stackBounds = computeStackBounds(rects);
+        if (stackBounds.x + stackBounds.w > rightLimit) {
+            nudgeStack(rightLimit - (stackBounds.x + stackBounds.w), 0);
+        }
+        if (stackBounds.y + stackBounds.h > bottomLimit) {
+            nudgeStack(0, bottomLimit - (stackBounds.y + stackBounds.h));
+        }
 
         unpinned.forEach((item, index) => {
-            const raw = rects[index];
-            if (!raw) return;
-            let slot = this.clampManualNoteRect(raw, { maxW: canvasW, maxH: viewportBottom });
-            if (placed.some((p) => this.rectsOverlap(slot, p, metrics.gap))) {
-                const near = this.findFreeformSortSlot(slot.w, slot.h, placed, canvasW, {
-                    startX: slot.x,
-                    startY: slot.y,
-                    direction: 'horizontal'
-                });
-                slot = { ...near, w: slot.w, h: slot.h };
-            }
+            const slot = rects[index];
+            if (!slot) return;
             this.saveFreeformPosition(item.id, slot.x, slot.y);
             this.saveFreeformSize(item.id, slot.w, slot.h, { updateRemembered: true });
             const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
-            if (card) this.applyNoteRect(card, slot, { settling: true });
-            placed.push({ ...slot });
+            if (card) {
+                this.applyNoteRect(card, slot, { settling: true });
+                this.initDesktopCardStack(card, slot.zIndex);
+            }
         });
+
+        stackBounds = computeStackBounds(rects);
+        if (stackBounds.w > 0) {
+            placed.push({
+                x: stackBounds.x,
+                y: stackBounds.y,
+                w: stackBounds.w,
+                h: stackBounds.h
+            });
+        }
     },
 
     packSortFreeformBoard(canvas, collapsedItems, expandedItems, sortPrefs, pinnedIds) {
