@@ -14,6 +14,8 @@ import {
     stepsHaveConvertibleText
 } from './noteBodyConversion.js';
 import { hasRichMarkup, linkifyPlainUrls, sanitizeHref, sanitizeRichHtml, stripRichText } from './richText.js';
+import { hydrateNoteIcons, hydrateNoteIconsHtml, isNoteIconId, noteIconTokenMarkup } from './noteIcons.js';
+import { IconPicker } from './iconPicker.js';
 import { normalizeItemForSave } from './noteModel.js';
 import { CARD_ICONS, FORMAT_ICONS, ACTION_ICONS } from './icons.js';
 import {
@@ -225,14 +227,18 @@ export const NoteSurface = {
     renderRichHtml(str) {
         if (!str) return '';
         const prepared = String(str).replace(/\u2028/g, '<br>').replace(/\n/g, '<br>');
-        if (hasRichMarkup(prepared)) return sanitizeRichHtml(prepared);
-        return sanitizeRichHtml(escapeHTML(prepared));
+        const out = hasRichMarkup(prepared)
+            ? sanitizeRichHtml(prepared)
+            : sanitizeRichHtml(escapeHTML(prepared));
+        return hydrateNoteIconsHtml(out);
     },
 
     prepareContentForEdit(content) {
         const prepared = String(content || '').replace(/\u2028/g, '<br>').replace(/\n/g, '<br>');
-        if (hasRichMarkup(prepared)) return sanitizeRichHtml(prepared);
-        return sanitizeRichHtml(escapeHTML(prepared));
+        const out = hasRichMarkup(prepared)
+            ? sanitizeRichHtml(prepared)
+            : sanitizeRichHtml(escapeHTML(prepared));
+        return hydrateNoteIconsHtml(out);
     },
 
     tryOpenRichEditLink(e, host) {
@@ -272,6 +278,96 @@ export const NoteSurface = {
         range.collapse(false);
         sel.removeAllRanges();
         sel.addRange(range);
+    },
+
+    resolveIconInsertTarget(root) {
+        if (!root) return null;
+        const active = document.activeElement;
+        if (active?.classList?.contains('card-inline-edit')
+            && active.classList.contains('rich-text--edit')
+            && root.contains(active)) {
+            return active;
+        }
+        const title = root.querySelector('[data-field="title"].card-inline-edit.rich-text--edit');
+        if (title) {
+            this.focusInlineEdit(title, 'end');
+            return title;
+        }
+        const content = root.querySelector('[data-field="content"].card-inline-edit.rich-text--edit');
+        if (content) {
+            this.focusInlineEdit(content, 'end');
+            return content;
+        }
+        const step = root.querySelector('[data-field="step-text"].card-inline-edit.rich-text--edit');
+        if (step) {
+            this.focusInlineEdit(step, 'end');
+            return step;
+        }
+        return null;
+    },
+
+    saveIconInsertContext(root) {
+        const active = document.activeElement;
+        let target = null;
+        let range = null;
+        if (active?.classList?.contains('card-inline-edit')
+            && active.classList.contains('rich-text--edit')
+            && root?.contains(active)) {
+            target = active;
+        } else {
+            target = this.resolveIconInsertTarget(root);
+        }
+        if (target) {
+            const sel = window.getSelection();
+            if (sel?.rangeCount && target.contains(sel.getRangeAt(0).startContainer)) {
+                range = sel.getRangeAt(0).cloneRange();
+            }
+        }
+        return { target, range };
+    },
+
+    restoreIconInsertRange(target, range) {
+        if (!target) return;
+        target.focus();
+        if (!range) return;
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+    },
+
+    insertNoteIconAtCaret(el, iconId, { item, localOnly = false, onChange = () => {} } = {}) {
+        if (!el || !isNoteIconId(iconId)) return false;
+        el.focus();
+        const sel = window.getSelection();
+        if (!sel?.rangeCount || !el.contains(sel.getRangeAt(0).startContainer)) {
+            this.focusInlineEdit(el, 'end');
+        }
+        const token = sanitizeRichHtml(noteIconTokenMarkup(iconId));
+        document.execCommand('insertHTML', false, token);
+        hydrateNoteIcons(el);
+        if (item) {
+            this.syncInlineFieldToItem(el, item);
+            if (localOnly) {
+                onChange();
+            } else {
+                this.mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+            }
+        }
+        return true;
+    },
+
+    openIconPickerForNote(root, anchor, item, { localOnly = false, onChange = () => {}, savedContext = null } = {}) {
+        if (!anchor || !root) return;
+        const ctx = savedContext || this.saveIconInsertContext(root);
+        IconPicker.open({
+            anchor,
+            align: 'end',
+            onSelect: (iconId) => {
+                if (!ctx.target) return;
+                this.restoreIconInsertRange(ctx.target, ctx.range);
+                this.insertNoteIconAtCaret(ctx.target, iconId, { item, localOnly, onChange });
+            }
+        });
     },
 
     canInlineEditText(text, { richEdit = false } = {}) {
@@ -342,7 +438,7 @@ export const NoteSurface = {
         const dragBtn = showDragIcon
             ? `<button type="button" class="card-act card-act--drag${isModal ? ' card-act--decorative' : ''}" title="Drag to move" aria-label="Drag to move"${isModal ? ' tabindex="-1" aria-hidden="true"' : ''}>${CARD_ICONS.drag}</button>`
             : '';
-        let actionCount = 7;
+        let actionCount = 8;
         if (showDragIcon) actionCount += 1;
         if (showArchive) actionCount += 1;
         const archiveBtn = showArchive
@@ -350,6 +446,7 @@ export const NoteSurface = {
             : '';
         const actionsHtml = `<div class="card-actions${isModal ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
             ${calBtn}
+            <button type="button" class="card-act card-act--icon" title="Insert icon" aria-label="Insert icon" aria-haspopup="dialog">${CARD_ICONS.insertIcon}</button>
             <button type="button" class="card-act card-act--copy" title="Copy note as text" aria-label="Copy note as text">${CARD_ICONS.copy}</button>
             ${pinBtn}
             <button type="button" class="card-act card-act--color" title="Note color" aria-label="Note color" aria-haspopup="dialog">${CARD_ICONS.color}</button>
@@ -632,7 +729,7 @@ export const NoteSurface = {
                     <div class="editor-note-header">
                         ${titleHtml}
                     </div>
-                    ${toolbarHtml ? `<div class="note-editor-toolbar${toolbarDragZone}">${toolbarHtml}</div>` : ''}
+                    ${toolbarHtml ? `<div class="note-editor-toolbar">${toolbarHtml}</div>` : ''}
                 </div>`;
 
         return `
@@ -850,6 +947,7 @@ export const NoteSurface = {
         const body = shell.querySelector('.editor-note-body');
         if (header) this.attachNoteBodyInteractions(header, item, interactionOptions);
         if (body) this.attachNoteBodyInteractions(body, item, interactionOptions);
+        hydrateNoteIcons(shell);
 
         if (stopMousedownPropagation && !shell.dataset.shellBubbleBound) {
             shell.dataset.shellBubbleBound = '1';
@@ -1415,9 +1513,6 @@ export const NoteSurface = {
                 el.addEventListener('click', (e) => {
                     if (this.tryOpenRichEditLink(e, el)) return;
                     e.stopPropagation();
-                    if (document.activeElement !== el) {
-                        this.focusInlineEdit(el, 'end');
-                    }
                 });
                 el.addEventListener('mousedown', (e) => {
                     if (e.button !== 0) return;
@@ -1426,9 +1521,6 @@ export const NoteSurface = {
                     }
                     if (stopMousedownPropagation) {
                         e.stopPropagation();
-                    }
-                    if (document.activeElement !== el) {
-                        this.focusInlineEdit(el, 'end');
                     }
                 });
                 el.addEventListener('focus', () => {

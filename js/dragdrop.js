@@ -602,9 +602,9 @@ export const DragDropEngine = {
                     return;
                 }
 
-                const wantsDrag = shouldStartCardDrag(e.target);
-                if (!wantsDrag && shouldYieldToNoteEditor(e, card)) return;
+                if (shouldYieldToNoteEditor(e, card)) return;
 
+                const wantsDrag = shouldStartCardDrag(e.target);
                 if (pointerHitsStepGrab(e.clientX, e.clientY)) return;
                 if (!wantsDrag) return;
                 if (cardIsPinned(card)) return;

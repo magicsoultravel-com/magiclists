@@ -514,6 +514,20 @@ export const Editor = {
         });
     },
 
+    openIconPicker() {
+        if (!this.iconBtn || !this.activeItem) return;
+        const root = this.mountZone?.querySelector('.editor-note-shell') || this.mountZone;
+        const savedContext = NoteSurface.saveIconInsertContext(root);
+        NoteSurface.openIconPickerForNote(root, this.iconBtn, this.activeItem, {
+            localOnly: true,
+            savedContext,
+            onChange: () => {
+                this.markInteracted();
+                this.triggerAutoSave();
+            }
+        });
+    },
+
     collectAndSave() {
         this.closeAndSave({ scrollToBoard: true });
     },

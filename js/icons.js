@@ -29,7 +29,8 @@ export const CARD_ICONS = {
     star: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M6 1.8 7.4 4.6 10.5 5l-2.2 2.1.5 3.1L6 9.4 3.2 10.2l.5-3.1L1.5 5 4.6 4.6 6 1.8z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
     starFilled: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M6 1.8 7.4 4.6 10.5 5l-2.2 2.1.5 3.1L6 9.4 3.2 10.2l.5-3.1L1.5 5 4.6 4.6 6 1.8z" fill="currentColor" stroke="currentColor" stroke-width="0.35" stroke-linejoin="round"/></svg>',
     heart: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M6 10.2S1.5 7.1 1.5 4.4a2.2 2.2 0 0 1 3.8-1.5L6 4.1l.7-.7A2.2 2.2 0 0 1 10.5 4.4C10.5 7.1 6 10.2 6 10.2z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
-    heartFilled: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M6 10.2S1.5 7.1 1.5 4.4a2.2 2.2 0 0 1 3.8-1.5L6 4.1l.7-.7A2.2 2.2 0 0 1 10.5 4.4C10.5 7.1 6 10.2 6 10.2z" fill="currentColor" stroke="currentColor" stroke-width="0.35" stroke-linejoin="round"/></svg>'
+    heartFilled: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M6 10.2S1.5 7.1 1.5 4.4a2.2 2.2 0 0 1 3.8-1.5L6 4.1l.7-.7A2.2 2.2 0 0 1 10.5 4.4C10.5 7.1 6 10.2 6 10.2z" fill="currentColor" stroke="currentColor" stroke-width="0.35" stroke-linejoin="round"/></svg>',
+    insertIcon: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><circle cx="4.2" cy="4.6" r="1.15" fill="none" stroke="currentColor" stroke-width="0.85"/><circle cx="7.8" cy="4.6" r="1.15" fill="none" stroke="currentColor" stroke-width="0.85"/><path d="M3.4 8.2c.7-1.1 1.8-1.8 2.6-1.8s1.9.7 2.6 1.8" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>'
 };
 
 export const FORMAT_ICONS = {

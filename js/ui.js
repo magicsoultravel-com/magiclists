@@ -1045,6 +1045,7 @@ export const UI = {
         const dragBtn = actions.querySelector('.card-act--drag');
         const toggleBtn = actions.querySelector('.card-act--toggle');
         const colorBtn = actions.querySelector('.card-act--color');
+        const iconBtn = actions.querySelector('.card-act--icon');
         const hideBtn = actions.querySelector('.card-act--hide');
         const editBtn = actions.querySelector('.card-act--edit');
         const calBtn = actions.querySelector('.card-act--cal');
@@ -1114,6 +1115,15 @@ export const UI = {
             });
         });
 
+        this.attachCardActionButton(iconBtn, () => {
+            const root = card.querySelector('.editor-note-shell') || card;
+            const savedContext = NoteSurface.saveIconInsertContext(root);
+            NoteSurface.commitFocusedInlineField(card, item);
+            if (isDesktopCard(card)) this.raiseDesktopCard(card);
+            if (!localStorage.getItem('admin_token')) return;
+            NoteSurface.openIconPickerForNote(root, iconBtn, item, { savedContext });
+        });
+
         this.attachCardActionButton(hideBtn, () => {
             NoteSurface.commitFocusedInlineField(card, item);
             this.hideFromBoard(item);
@@ -1148,6 +1158,7 @@ export const UI = {
         const copyBtn = actions.querySelector('.card-act--copy');
         const pinBtn = actions.querySelector('.card-act--pin');
         const colorBtn = actions.querySelector('.card-act--color');
+        const iconBtn = actions.querySelector('.card-act--icon');
         const hideBtn = actions.querySelector('.card-act--hide');
         const editBtn = actions.querySelector('.card-act--edit');
         const calBtn = actions.querySelector('.card-act--cal');
@@ -1155,6 +1166,7 @@ export const UI = {
 
         editor.archiveBtn = archiveBtn;
         editor.colorBtn = colorBtn;
+        editor.iconBtn = iconBtn;
         editor.calendarToggleBtn = calBtn;
 
         if (archiveBtn) {
@@ -1195,6 +1207,8 @@ export const UI = {
         });
 
         this.attachCardActionButton(colorBtn, () => editor.openColorPicker());
+
+        this.attachCardActionButton(iconBtn, () => editor.openIconPicker());
 
         this.attachCardActionButton(hideBtn, () => {
             editor.syncActiveItemFromDom();
