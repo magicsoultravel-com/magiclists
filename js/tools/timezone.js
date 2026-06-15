@@ -4,54 +4,57 @@ import { ACTION_ICONS, CARD_ICONS } from '../ui.js';
 
 const STORAGE_SELECTED = 'tz_selected_offsets';
 const STORAGE_FILTER = 'tz_filter_selected';
+const STORAGE_COMPACT = 'tz_compact';
+const DEFAULT_PANEL_HEIGHT = 440;
+const FIT_VISIBLE_THRESHOLD = 6;
 
 const OFFSET_ZONES = [
-    { offsetMinutes: -720, city: 'Baker Island', zoneId: 'Etc/GMT+12' },
-    { offsetMinutes: -660, city: 'Pago Pago', zoneId: 'Pacific/Pago_Pago' },
-    { offsetMinutes: -600, city: 'Honolulu', zoneId: 'Pacific/Honolulu' },
-    { offsetMinutes: -540, city: 'Anchorage', zoneId: 'America/Anchorage' },
-    { offsetMinutes: -480, city: 'Los Angeles', zoneId: 'America/Los_Angeles' },
-    { offsetMinutes: -420, city: 'Denver', zoneId: 'America/Denver' },
-    { offsetMinutes: -360, city: 'Chicago', zoneId: 'America/Chicago' },
-    { offsetMinutes: -300, city: 'New York', zoneId: 'America/New_York' },
-    { offsetMinutes: -240, city: 'Halifax', zoneId: 'America/Halifax' },
-    { offsetMinutes: -180, city: 'São Paulo', zoneId: 'America/Sao_Paulo' },
-    { offsetMinutes: -120, city: 'Noronha', zoneId: 'America/Noronha' },
-    { offsetMinutes: -60, city: 'Azores', zoneId: 'Atlantic/Azores' },
-    { offsetMinutes: 0, city: 'UTC', zoneId: 'UTC' },
-    { offsetMinutes: 60, city: 'Warsaw', zoneId: 'Europe/Warsaw' },
-    { offsetMinutes: 120, city: 'Cairo', zoneId: 'Africa/Cairo' },
-    { offsetMinutes: 180, city: 'Moscow', zoneId: 'Europe/Moscow' },
-    { offsetMinutes: 210, city: 'Tehran', zoneId: 'Asia/Tehran' },
-    { offsetMinutes: 240, city: 'Dubai', zoneId: 'Asia/Dubai' },
-    { offsetMinutes: 270, city: 'Kabul', zoneId: 'Asia/Kabul' },
-    { offsetMinutes: 300, city: 'Karachi', zoneId: 'Asia/Karachi' },
-    { offsetMinutes: 330, city: 'New Delhi', zoneId: 'Asia/Kolkata' },
-    { offsetMinutes: 345, city: 'Kathmandu', zoneId: 'Asia/Kathmandu' },
-    { offsetMinutes: 360, city: 'Dhaka', zoneId: 'Asia/Dhaka' },
-    { offsetMinutes: 390, city: 'Yangon', zoneId: 'Asia/Yangon' },
-    { offsetMinutes: 420, city: 'Bangkok', zoneId: 'Asia/Bangkok' },
-    { offsetMinutes: 480, city: 'Shanghai', zoneId: 'Asia/Shanghai' },
-    { offsetMinutes: 525, city: 'Eucla', zoneId: 'Australia/Eucla' },
-    { offsetMinutes: 540, city: 'Tokyo', zoneId: 'Asia/Tokyo' },
-    { offsetMinutes: 570, city: 'Adelaide', zoneId: 'Australia/Adelaide' },
-    { offsetMinutes: 600, city: 'Sydney', zoneId: 'Australia/Sydney' },
-    { offsetMinutes: 630, city: 'Lord Howe', zoneId: 'Australia/Lord_Howe' },
-    { offsetMinutes: 660, city: 'Nouméa', zoneId: 'Pacific/Noumea' },
-    { offsetMinutes: 720, city: 'Auckland', zoneId: 'Pacific/Auckland' },
-    { offsetMinutes: 765, city: 'Chatham', zoneId: 'Pacific/Chatham' },
-    { offsetMinutes: 780, city: 'Apia', zoneId: 'Pacific/Apia' },
-    { offsetMinutes: 840, city: 'Kiritimati', zoneId: 'Pacific/Kiritimati' }
+    { offsetMinutes: -720, city: 'Baker Island', zoneId: 'Etc/GMT+12', abbr: 'BIT' },
+    { offsetMinutes: -660, city: 'Pago Pago', zoneId: 'Pacific/Pago_Pago', abbr: 'SST' },
+    { offsetMinutes: -600, city: 'Honolulu', zoneId: 'Pacific/Honolulu', abbr: 'HST' },
+    { offsetMinutes: -540, city: 'Anchorage', zoneId: 'America/Anchorage', abbr: 'AKST' },
+    { offsetMinutes: -480, city: 'Los Angeles', zoneId: 'America/Los_Angeles', abbr: 'PST' },
+    { offsetMinutes: -420, city: 'Denver', zoneId: 'America/Denver', abbr: 'MST' },
+    { offsetMinutes: -360, city: 'Chicago', zoneId: 'America/Chicago', abbr: 'CST' },
+    { offsetMinutes: -300, city: 'New York', zoneId: 'America/New_York', abbr: 'EST' },
+    { offsetMinutes: -240, city: 'Halifax', zoneId: 'America/Halifax', abbr: 'AST' },
+    { offsetMinutes: -180, city: 'São Paulo', zoneId: 'America/Sao_Paulo', abbr: 'BRT' },
+    { offsetMinutes: -120, city: 'Noronha', zoneId: 'America/Noronha', abbr: 'FNT' },
+    { offsetMinutes: -60, city: 'Azores', zoneId: 'Atlantic/Azores', abbr: 'AZOT' },
+    { offsetMinutes: 0, city: 'UTC', zoneId: 'UTC', abbr: 'UTC' },
+    { offsetMinutes: 60, city: 'Warsaw', zoneId: 'Europe/Warsaw', abbr: 'CET' },
+    { offsetMinutes: 120, city: 'Cairo', zoneId: 'Africa/Cairo', abbr: 'EET' },
+    { offsetMinutes: 180, city: 'Moscow', zoneId: 'Europe/Moscow', abbr: 'MSK' },
+    { offsetMinutes: 210, city: 'Tehran', zoneId: 'Asia/Tehran', abbr: 'IRST' },
+    { offsetMinutes: 240, city: 'Dubai', zoneId: 'Asia/Dubai', abbr: 'GST' },
+    { offsetMinutes: 270, city: 'Kabul', zoneId: 'Asia/Kabul', abbr: 'AFT' },
+    { offsetMinutes: 300, city: 'Karachi', zoneId: 'Asia/Karachi', abbr: 'PKT' },
+    { offsetMinutes: 330, city: 'New Delhi', zoneId: 'Asia/Kolkata', abbr: 'IST' },
+    { offsetMinutes: 345, city: 'Kathmandu', zoneId: 'Asia/Kathmandu', abbr: 'NPT' },
+    { offsetMinutes: 360, city: 'Dhaka', zoneId: 'Asia/Dhaka', abbr: 'BST' },
+    { offsetMinutes: 390, city: 'Yangon', zoneId: 'Asia/Yangon', abbr: 'MMT' },
+    { offsetMinutes: 420, city: 'Bangkok', zoneId: 'Asia/Bangkok', abbr: 'ICT' },
+    { offsetMinutes: 480, city: 'Shanghai', zoneId: 'Asia/Shanghai', abbr: 'CST' },
+    { offsetMinutes: 525, city: 'Eucla', zoneId: 'Australia/Eucla', abbr: 'ACWST' },
+    { offsetMinutes: 540, city: 'Tokyo', zoneId: 'Asia/Tokyo', abbr: 'JST' },
+    { offsetMinutes: 570, city: 'Adelaide', zoneId: 'Australia/Adelaide', abbr: 'ACST' },
+    { offsetMinutes: 600, city: 'Sydney', zoneId: 'Australia/Sydney', abbr: 'AEST' },
+    { offsetMinutes: 630, city: 'Lord Howe', zoneId: 'Australia/Lord_Howe', abbr: 'LHST' },
+    { offsetMinutes: 660, city: 'Nouméa', zoneId: 'Pacific/Noumea', abbr: 'NCT' },
+    { offsetMinutes: 720, city: 'Auckland', zoneId: 'Pacific/Auckland', abbr: 'NZST' },
+    { offsetMinutes: 765, city: 'Chatham', zoneId: 'Pacific/Chatham', abbr: 'CHAST' },
+    { offsetMinutes: 780, city: 'Apia', zoneId: 'Pacific/Apia', abbr: 'WST' },
+    { offsetMinutes: 840, city: 'Kiritimati', zoneId: 'Pacific/Kiritimati', abbr: 'LINT' }
 ];
 
-function formatOffsetLabel(minutes) {
-    if (minutes === 0) return 'UTC';
-    const sign = minutes > 0 ? '+' : '−';
-    const abs = Math.abs(minutes);
-    const hours = Math.floor(abs / 60);
-    const mins = abs % 60;
-    if (mins) return `UTC${sign}${hours}:${String(mins).padStart(2, '0')}`;
-    return `UTC${sign}${hours}`;
+const ABBR_BY_ZONE = Object.fromEntries(OFFSET_ZONES.map((z) => [z.zoneId, z.abbr]));
+
+function isGmtStyleAbbr(value) {
+    return /^GMT|^UTC|[+-]\d/.test(String(value || '').trim());
+}
+
+function isLetterAbbr(value) {
+    return /^[A-Z]{2,5}$/i.test(String(value || '').trim());
 }
 
 function getZoneOffsetMinutes(date, timeZone) {
@@ -74,17 +77,21 @@ function getZoneOffsetMinutes(date, timeZone) {
     return null;
 }
 
-function getZoneAbbr(date, timeZone) {
+function getZoneAbbr(date, timeZone, fallbackAbbr = '') {
     if (timeZone === 'UTC') return 'UTC';
     try {
         const parts = new Intl.DateTimeFormat('en-US', {
             timeZone,
             timeZoneName: 'short'
         }).formatToParts(date);
-        return parts.find((p) => p.type === 'timeZoneName')?.value || '';
+        const intlAbbr = parts.find((p) => p.type === 'timeZoneName')?.value || '';
+        if (intlAbbr && !isGmtStyleAbbr(intlAbbr) && isLetterAbbr(intlAbbr)) {
+            return intlAbbr.toUpperCase();
+        }
     } catch {
-        return '';
+        /* fall through */
     }
+    return fallbackAbbr || ABBR_BY_ZONE[timeZone] || '';
 }
 
 function formatZoneTime(date, timeZone) {
@@ -109,12 +116,18 @@ export const Timezone = {
     sortedZones: [...OFFSET_ZONES].sort((a, b) => a.offsetMinutes - b.offsetMinutes),
     selectedOffsets: new Set(),
     filterSelectedOnly: false,
+    compactMode: false,
     adjustOpen: false,
+    savedPanelHeight: null,
     onDocumentPointerDown: null,
     onKeyDown: null,
 
     init(mountElement) {
         this.container = mountElement;
+        const panel = mountElement.closest('.tool-panel');
+        if (panel?.style.height) {
+            this.savedPanelHeight = panel.style.height;
+        }
         this.loadPrefs();
         this.render();
     },
@@ -141,31 +154,47 @@ export const Timezone = {
         }
 
         this.filterSelectedOnly = localStorage.getItem(STORAGE_FILTER) === '1';
+
+        const compactSaved = localStorage.getItem(STORAGE_COMPACT);
+        if (compactSaved === null) {
+            this.compactMode = this.filterSelectedOnly;
+        } else {
+            this.compactMode = compactSaved === '1';
+        }
     },
 
     savePrefs() {
         localStorage.setItem(STORAGE_SELECTED, JSON.stringify([...this.selectedOffsets]));
         localStorage.setItem(STORAGE_FILTER, this.filterSelectedOnly ? '1' : '0');
+        localStorage.setItem(STORAGE_COMPACT, this.compactMode ? '1' : '0');
     },
 
     render() {
         const now = new Date();
         const currentHours = now.getHours() + now.getMinutes() / 60;
         const filterClass = this.filterSelectedOnly ? ' tz-tool-stack--filter-selected' : '';
+        const compactClass = this.compactMode ? ' tz-tool-stack--compact' : '';
+        const toggleClass = this.compactMode ? ' collapsed' : '';
 
         this.container.innerHTML = `
-            <div class="tool-stack tz-tool-stack${filterClass}">
-                <div class="tz-toolbar toolbar toolbar--end">
-                    <div class="tz-toolbar__adjust-wrap">
-                        <button type="button" class="btn btn--compact btn-icon tz-adjust-btn" aria-haspopup="dialog" aria-expanded="false" aria-label="Adjust time">${ACTION_ICONS.clockStyle}</button>
-                        <div class="tz-adjust-popover is-hidden" role="dialog" aria-label="Adjust time">
-                            <input type="range" id="tz-slider" class="tz-slider" min="0" max="24" step="0.25" value="${currentHours}">
-                            <button type="button" class="tz-adjust-reset">Reset</button>
+            <div class="tool-stack tz-tool-stack${filterClass}${compactClass}">
+                <div class="tz-list-header list-row--header" id="tz-list-header">
+                    <span class="collapsable-heading">
+                        <span class="collapsable-toggle${toggleClass}">▼</span>
+                        <span>Timezones</span>
+                    </span>
+                    <div class="tz-toolbar toolbar toolbar--end">
+                        <div class="tz-toolbar__adjust-wrap">
+                            <button type="button" class="btn btn--compact btn-icon tz-adjust-btn" aria-haspopup="dialog" aria-expanded="false" aria-label="Adjust time">${ACTION_ICONS.clockStyle}</button>
+                            <div class="tz-adjust-popover is-hidden" role="dialog" aria-label="Adjust time">
+                                <input type="range" id="tz-slider" class="tz-slider" min="0" max="24" step="0.25" value="${currentHours}">
+                                <button type="button" class="tz-adjust-reset">Reset</button>
+                            </div>
                         </div>
+                        <button type="button" class="btn btn--compact btn-icon tz-filter-btn${this.filterSelectedOnly ? ' is-active' : ''}" aria-pressed="${this.filterSelectedOnly ? 'true' : 'false'}" aria-label="Show selected only">${this.filterSelectedOnly ? CARD_ICONS.hide : CARD_ICONS.show}</button>
                     </div>
-                    <button type="button" class="btn btn--compact btn-icon tz-filter-btn${this.filterSelectedOnly ? ' is-active' : ''}" aria-pressed="${this.filterSelectedOnly ? 'true' : 'false'}" aria-label="Show selected only">${this.filterSelectedOnly ? CARD_ICONS.hide : CARD_ICONS.show}</button>
                 </div>
-                <p class="tz-filter-hint tool-msg${this.filterSelectedOnly ? '' : ' is-hidden'}">Showing selected timezones only</p>
+                <p class="tz-filter-hint tool-msg${this.filterSelectedOnly && !this.compactMode ? '' : ' is-hidden'}">Showing selected timezones only</p>
                 <div id="tz-cards-stack" class="tz-cards-stack"></div>
             </div>
         `;
@@ -174,7 +203,10 @@ export const Timezone = {
         this.setupListeners();
         this.updateTimeMatrix(now);
         this.applyFilter();
-        requestAnimationFrame(() => this.scrollToUtc());
+        this.syncPanelFit();
+        if (!this.compactMode) {
+            requestAnimationFrame(() => this.scrollToUtc());
+        }
     },
 
     buildZoneList() {
@@ -184,13 +216,13 @@ export const Timezone = {
         stack.innerHTML = this.sortedZones.map((zone) => {
             const isUtc = zone.offsetMinutes === 0;
             const extraClass = isUtc ? ' tz-card--utc' : '';
+            const compactClass = this.compactMode ? ' tz-card--compact' : '';
             const checked = this.selectedOffsets.has(zone.offsetMinutes) ? ' checked' : '';
             return `
-                <div class="tz-card${extraClass}" data-offset="${zone.offsetMinutes}" data-zone-id="${zone.zoneId}">
+                <div class="tz-card${extraClass}${compactClass}" data-offset="${zone.offsetMinutes}" data-zone-id="${zone.zoneId}" data-abbr="${zone.abbr}">
                     <input type="checkbox" class="tz-card-check"${checked} aria-label="Show ${zone.city}">
                     <span class="tz-card-label u-truncate">${zone.city}</span>
                     <span class="tz-card-abbr"></span>
-                    <span class="tz-card-offset"></span>
                     <span class="tz-card-right">
                         <span class="tz-card-time"></span>
                         <span class="tz-card-date"></span>
@@ -206,7 +238,16 @@ export const Timezone = {
         const adjustBtn = this.container?.querySelector('.tz-adjust-btn');
         const adjustPopover = this.container?.querySelector('.tz-adjust-popover');
         const filterBtn = this.container?.querySelector('.tz-filter-btn');
+        const listHeader = this.container?.querySelector('#tz-list-header');
         const stack = document.getElementById('tz-cards-stack');
+
+        listHeader?.addEventListener('click', (e) => {
+            if (e.target.closest('.tz-toolbar')) return;
+            this.compactMode = !this.compactMode;
+            this.savePrefs();
+            this.applyCompactMode();
+            this.syncPanelFit();
+        });
 
         slider?.addEventListener('input', (e) => {
             const targetHours = parseFloat(e.target.value);
@@ -221,7 +262,7 @@ export const Timezone = {
             const now = new Date();
             if (slider) slider.value = now.getHours() + now.getMinutes() / 60;
             this.updateTimeMatrix(now);
-            this.scrollToUtc();
+            if (!this.compactMode) this.scrollToUtc();
         });
 
         adjustBtn?.addEventListener('click', (e) => {
@@ -233,15 +274,21 @@ export const Timezone = {
             }
         });
 
-        filterBtn?.addEventListener('click', () => {
+        filterBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
             this.filterSelectedOnly = !this.filterSelectedOnly;
+            if (this.filterSelectedOnly && localStorage.getItem(STORAGE_COMPACT) === null) {
+                this.compactMode = true;
+            }
             filterBtn.classList.toggle('is-active', this.filterSelectedOnly);
             filterBtn.setAttribute('aria-pressed', this.filterSelectedOnly ? 'true' : 'false');
             filterBtn.innerHTML = this.filterSelectedOnly ? CARD_ICONS.hide : CARD_ICONS.show;
             this.container?.querySelector('.tz-tool-stack')?.classList.toggle('tz-tool-stack--filter-selected', this.filterSelectedOnly);
-            this.container?.querySelector('.tz-filter-hint')?.classList.toggle('is-hidden', !this.filterSelectedOnly);
+            this.container?.querySelector('.tz-filter-hint')?.classList.toggle('is-hidden', !this.filterSelectedOnly || this.compactMode);
             this.savePrefs();
             this.applyFilter();
+            this.applyCompactMode();
+            this.syncPanelFit();
         });
 
         stack?.addEventListener('change', (e) => {
@@ -257,6 +304,7 @@ export const Timezone = {
             }
             this.savePrefs();
             this.applyFilter();
+            this.syncPanelFit();
         });
 
         this.onDocumentPointerDown = (e) => {
@@ -273,6 +321,18 @@ export const Timezone = {
             }
         };
         document.addEventListener('keydown', this.onKeyDown);
+    },
+
+    applyCompactMode() {
+        const stack = this.container?.querySelector('.tz-tool-stack');
+        const toggle = this.container?.querySelector('.collapsable-toggle');
+        stack?.classList.toggle('tz-tool-stack--compact', this.compactMode);
+        toggle?.classList.toggle('collapsed', this.compactMode);
+        this.container?.querySelector('.tz-filter-hint')?.classList.toggle('is-hidden', !this.filterSelectedOnly || this.compactMode);
+
+        this.container?.querySelectorAll('.tz-card').forEach((card) => {
+            card.classList.toggle('tz-card--compact', this.compactMode);
+        });
     },
 
     openAdjustPopover() {
@@ -305,10 +365,42 @@ export const Timezone = {
             const show = !filterActive || check?.checked;
             card.classList.toggle('is-hidden', !show);
         });
+
+        this.syncPanelFit();
+    },
+
+    getVisibleRowCount() {
+        const stack = document.getElementById('tz-cards-stack');
+        if (!stack) return 0;
+        return stack.querySelectorAll('.tz-card:not(.is-hidden)').length;
+    },
+
+    syncPanelFit() {
+        const panel = this.container?.closest('.tool-panel');
+        if (!panel) return;
+
+        const visibleCount = this.getVisibleRowCount();
+        const shouldFit = this.compactMode
+            || (this.filterSelectedOnly && visibleCount > 0 && visibleCount <= FIT_VISIBLE_THRESHOLD);
+
+        if (shouldFit) {
+            if (!this.savedPanelHeight && panel.style.height) {
+                this.savedPanelHeight = panel.style.height;
+            }
+            panel.classList.add('tool-panel--auto-height', 'tool-panel--tz-fit');
+            panel.style.height = '';
+        } else {
+            panel.classList.remove('tool-panel--auto-height', 'tool-panel--tz-fit');
+            if (this.savedPanelHeight) {
+                panel.style.height = this.savedPanelHeight;
+            } else {
+                panel.style.height = `${DEFAULT_PANEL_HEIGHT}px`;
+            }
+        }
     },
 
     scrollToUtc() {
-        const utcRow = this.container?.querySelector('[data-offset="0"]');
+        const utcRow = this.container?.querySelector('[data-offset="0"]:not(.is-hidden)');
         utcRow?.scrollIntoView({ block: 'center', behavior: 'auto' });
     },
 
@@ -321,22 +413,18 @@ export const Timezone = {
         stack.querySelectorAll('.tz-card').forEach((card) => {
             const zoneId = card.dataset.zoneId;
             const offsetMinutes = parseInt(card.dataset.offset, 10);
+            const fallbackAbbr = card.dataset.abbr || '';
             const isUtc = offsetMinutes === 0;
             const liveOffset = getZoneOffsetMinutes(baseDate, zoneId);
-            const offsetLabel = liveOffset !== null
-                ? formatOffsetLabel(liveOffset)
-                : formatOffsetLabel(offsetMinutes);
 
             const isLocal = localOffset !== null && liveOffset === localOffset && !isUtc;
             card.classList.toggle('tz-card--local', isLocal);
 
             const abbrEl = card.querySelector('.tz-card-abbr');
-            const offsetEl = card.querySelector('.tz-card-offset');
             const timeEl = card.querySelector('.tz-card-time');
             const dateEl = card.querySelector('.tz-card-date');
 
-            if (abbrEl) abbrEl.textContent = getZoneAbbr(baseDate, zoneId);
-            if (offsetEl) offsetEl.textContent = offsetLabel;
+            if (abbrEl) abbrEl.textContent = getZoneAbbr(baseDate, zoneId, fallbackAbbr);
 
             try {
                 const formatted = formatZoneTime(baseDate, zoneId);

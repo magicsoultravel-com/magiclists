@@ -60,7 +60,7 @@ function buildMenuItems(prefs) {
             id: 'alignExpanded',
             inputId: 'board-sort-align-expanded',
             label: 'Align expanded',
-            hint: 'Bento mosaic for expanded notes; direction applies to collapsed only',
+            hint: 'Expanded notes fill remaining board space (direction applies to collapsed only)',
             checked: prefs.alignExpanded === true
         }
     ];
