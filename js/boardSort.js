@@ -60,7 +60,7 @@ function buildMenuItems(prefs) {
             id: 'alignExpanded',
             inputId: 'board-sort-align-expanded',
             label: 'Align expanded',
-            hint: 'Expanded notes fill remaining board space (direction applies to collapsed only)',
+            hint: 'Expanded notes fill space below collapsed (3-note row/column follows direction)',
             checked: prefs.alignExpanded === true
         }
     ];

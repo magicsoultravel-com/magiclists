@@ -5109,42 +5109,37 @@ export const UI = {
         layout,
         expandedStartY,
         bounds,
-        metrics
+        metrics,
+        direction = 'horizontal'
     }) {
-        const { origin, packW, maxH, edgePad } = bounds;
-        const snapBounds = { maxW: packW, maxH, origin, edgePad };
+        const { origin, packW, viewportBottom, edgePad } = bounds;
+        const clampBounds = { packW, maxH: viewportBottom, origin, edgePad };
         const unpinned = expandedItems.filter((item) => item?.id && !pinnedIds.has(item.id));
         if (!unpinned.length) return;
 
-        const slots = getExpandedAlignSlots(unpinned.length);
+        const slots = getExpandedAlignSlots(unpinned.length, direction);
         const region = computeAlignRegion({
             packW,
             startY: expandedStartY,
-            maxH,
+            viewportBottom,
             origin,
             edgePad,
             metrics
         });
-        const rects = slotsToRegionRects(slots, region, {
-            gap: metrics.gap,
-            slotCount: unpinned.length
-        });
+        const rects = slotsToRegionRects(slots, region, { gap: metrics.gap });
 
         unpinned.forEach((item, index) => {
             const raw = rects[index];
             if (!raw) return;
-            const targetW = raw.w;
-            const targetH = raw.h;
-            let slot = this.snapNoteRect(raw, snapBounds);
-            slot = { ...slot, w: targetW, h: targetH };
+            let slot = this.clampNoteToBoardEdges(raw, clampBounds);
             if (placed.some((p) => this.rectsOverlap(slot, p, metrics.gap))) {
-                const near = this.findNearestGridSlot(slot, targetW, targetH, placed, {
+                const near = this.findNearestGridSlot(slot, slot.w, slot.h, placed, {
                     packW,
                     origin,
-                    maxH,
+                    maxH: viewportBottom,
                     edgePad
                 });
-                slot = { ...near, w: targetW, h: targetH };
+                slot = { ...near, w: slot.w, h: slot.h };
             }
             layout.set(item.id, slot);
             placed.push({ ...slot });
@@ -5155,41 +5150,36 @@ export const UI = {
         placed,
         expandedStartY,
         bounds,
-        metrics
+        metrics,
+        direction = 'horizontal'
     }) {
-        const { packW, origin, edgePad, maxH } = bounds;
+        const { packW, origin, edgePad, viewportBottom } = bounds;
         const canvasW = Math.max(canvas?.clientWidth || 320, packW + origin * 2);
         const unpinned = expandedItems.filter((item) => item?.id && !pinnedIds.has(item.id));
         if (!unpinned.length) return;
 
-        const slots = getExpandedAlignSlots(unpinned.length);
+        const slots = getExpandedAlignSlots(unpinned.length, direction);
         const region = computeAlignRegion({
             packW,
             startY: expandedStartY,
-            maxH,
+            viewportBottom,
             origin,
             edgePad,
             metrics
         });
-        const rects = slotsToRegionRects(slots, region, {
-            gap: metrics.gap,
-            slotCount: unpinned.length
-        });
+        const rects = slotsToRegionRects(slots, region, { gap: metrics.gap });
 
         unpinned.forEach((item, index) => {
             const raw = rects[index];
             if (!raw) return;
-            const targetW = raw.w;
-            const targetH = raw.h;
-            let slot = this.clampManualNoteRect(raw, { maxW: canvasW, maxH });
-            slot = { ...slot, w: targetW, h: targetH };
+            let slot = this.clampManualNoteRect(raw, { maxW: canvasW, maxH: viewportBottom });
             if (placed.some((p) => this.rectsOverlap(slot, p, metrics.gap))) {
-                const near = this.findFreeformSortSlot(targetW, targetH, placed, canvasW, {
+                const near = this.findFreeformSortSlot(slot.w, slot.h, placed, canvasW, {
                     startX: slot.x,
                     startY: slot.y,
                     direction: 'horizontal'
                 });
-                slot = { ...near, w: targetW, h: targetH };
+                slot = { ...near, w: slot.w, h: slot.h };
             }
             this.saveFreeformPosition(item.id, slot.x, slot.y);
             this.saveFreeformSize(item.id, slot.w, slot.h, { updateRemembered: true });
@@ -5253,12 +5243,19 @@ export const UI = {
         }
 
         if (sortPrefs.alignExpanded && unpinnedExpanded.length) {
+            const viewport = this.getGridViewportBounds(canvas);
             this.packExpandedAlignGrid(canvas, expandedItems, pinnedIds, {
                 placed,
                 layout,
                 expandedStartY,
-                bounds: { origin, packW, maxH, edgePad },
-                metrics
+                bounds: {
+                    origin,
+                    packW,
+                    viewportBottom: viewport.viewportBottom,
+                    edgePad
+                },
+                metrics,
+                direction
             });
         } else {
             packGroup(expandedItems, expandedStartY);
@@ -5269,8 +5266,10 @@ export const UI = {
                 const rect = layout.get(item.id);
                 if (rect) this.saveGridLayout(item.id, rect, { updateRemembered: true });
             });
+            this.updateGridScrollPolicy(canvas, { forcing: false });
+        } else {
+            this.squeezeGridBoardToViewport(canvas, { animate: true });
         }
-        this.squeezeGridBoardToViewport(canvas, { animate: true });
     },
 
     packSortFreeformBoard(canvas, collapsedItems, expandedItems, sortPrefs, pinnedIds) {
@@ -5329,12 +5328,14 @@ export const UI = {
         }
 
         if (sortPrefs.alignExpanded && unpinnedExpanded.length) {
-            const { origin, packW, maxH, edgePad } = this.getGridBoardBounds(canvas);
+            const { origin, packW, edgePad } = this.getGridBoardBounds(canvas);
+            const viewport = this.getGridViewportBounds(canvas);
             this.packExpandedAlignFreeform(canvas, expandedItems, pinnedIds, {
                 placed,
                 expandedStartY: expandedStart.y,
-                bounds: { packW, origin, edgePad, maxH },
-                metrics
+                bounds: { packW, origin, edgePad, viewportBottom: viewport.viewportBottom },
+                metrics,
+                direction
             });
         } else {
             packGroup(expandedItems, expandedStart);
@@ -5920,7 +5921,9 @@ export const UI = {
         const pad = 24;
         const { origin, packW, edgePad } = this.getGridBoardBounds(canvas);
         const viewportH = Math.max(200, (canvas.clientHeight || 400) / zoom - pad);
-        return { origin, packW, viewportH, edgePad };
+        const scrollY = (canvas?.scrollTop || 0) / zoom;
+        const viewportBottom = origin + scrollY + viewportH;
+        return { origin, packW, viewportH, edgePad, scrollY, viewportBottom };
     },
 
     squeezeGridBoardToViewport(canvas, { animate = true, footprintPack = false } = {}) {
