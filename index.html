@@ -50,14 +50,17 @@
     </div>
 
     <div id="workspace-shell" class="workspace-shell">
-        <button type="button" id="nav-panel-toggle-fab" class="side-panel-toggle-fab is-hidden" title="Show panel" aria-label="Show side panel">☰</button>
+        <button type="button" id="nav-panel-toggle-fab" class="side-panel-toggle-fab is-hidden" title="Show panel" aria-label="Show side panel">
+            <img class="app-brand__icon" src="./assets/brand/icon-clipboard.svg" alt="" width="16" height="16" decoding="async">
+        </button>
 
         <aside id="side-panel" class="side-panel" aria-label="Side panel">
             <div id="side-panel-brand-host" class="side-panel-brand-host is-visible">
                 <div class="control-bar-brand is-in-sidebar">
-                    <button type="button" id="nav-panel-toggle" class="btn btn-icon control-bar-menu-btn" title="Hide panel" aria-label="Toggle side panel" aria-expanded="true">☰</button>
-                    <div id="app-brand" class="app-brand">
+                    <button type="button" id="nav-panel-toggle" class="side-panel-toggle-btn" title="Hide panel" aria-label="Hide side panel" aria-expanded="true">
                         <img class="app-brand__icon" src="./assets/brand/icon-clipboard.svg" alt="" width="16" height="16" decoding="async">
+                    </button>
+                    <div id="app-brand" class="app-brand">
                         <span class="app-brand__text">magicNotes</span>
                     </div>
                 </div>
@@ -227,7 +230,11 @@
                     var toggle = document.getElementById('nav-panel-toggle');
                     if (panel) panel.classList.toggle('is-collapsed', collapsed);
                     if (fab) fab.classList.toggle('is-hidden', !collapsed);
-                    if (toggle) toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                    if (toggle) {
+                        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                        toggle.setAttribute('title', collapsed ? 'Show panel' : 'Hide panel');
+                        toggle.setAttribute('aria-label', collapsed ? 'Show side panel' : 'Hide side panel');
+                    }
 
                     var sectionsRaw = localStorage.getItem('matrix_sidebar_sections');
                     if (!sectionsRaw) return;

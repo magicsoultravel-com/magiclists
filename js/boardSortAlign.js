@@ -16,9 +16,6 @@ export const ALIGN_NOTE_GAP_EXTRA = 4;
 /** Max overlapping tiles per cascade stack (file-cabinet depth). */
 export const CASCADE_PER_STACK = 4;
 
-/** Max stacks per row (horizontal sort) or per column (vertical sort). */
-export const CASCADE_STACKS_PER_LINE = 4;
-
 /** @deprecated Use CASCADE_PER_STACK */
 export const CASCADE_PER_LINE = CASCADE_PER_STACK;
 
@@ -54,58 +51,30 @@ export function computeStackRects(
     baseY,
     {
         offsetX = FILE_CABINET_STACK_OFFSET_X,
-        offsetY = FILE_CABINET_STACK_OFFSET_Y,
-        zIndexBase = 0
+        offsetY = FILE_CABINET_STACK_OFFSET_Y
     } = {}
 ) {
     return (sizes || []).map((size, index) => ({
         x: Math.round(baseX + index * offsetX),
         y: Math.round(baseY + index * offsetY),
         w: Math.max(1, Math.round(size.w)),
-        h: Math.max(1, Math.round(size.h)),
-        zIndex: zIndexBase + index + 1
+        h: Math.max(1, Math.round(size.h))
     }));
 }
 
-export function layoutStackAnchors(
-    stackFootprints,
-    direction,
-    startPos,
-    gap = 4,
-    stacksPerLine = CASCADE_STACKS_PER_LINE
-) {
-    const anchors = [];
-    let cursorX = startPos?.x ?? 0;
-    let cursorY = startPos?.y ?? 0;
-    const rowStartX = cursorX;
-    const colStartY = cursorY;
-    let rowMaxH = 0;
-    let colMaxW = 0;
-    let lineIndex = 0;
-
-    (stackFootprints || []).forEach((fp) => {
+/**
+ * One stack per row (horizontal sort) or per column (vertical sort).
+ * Each stack holds up to CASCADE_PER_STACK overlapping tiles before the next row/column.
+ */
+export function layoutCascadeChunkAnchors(footprints, direction, startPos, gap, slotFootprint) {
+    const strideX = Math.max(1, (slotFootprint?.w ?? 0) + gap);
+    const strideY = Math.max(1, (slotFootprint?.h ?? 0) + gap);
+    return (footprints || []).map((_fp, index) => {
         if (direction === 'vertical') {
-            if (lineIndex > 0 && lineIndex % stacksPerLine === 0) {
-                cursorX += colMaxW + gap;
-                cursorY = colStartY;
-                colMaxW = 0;
-            }
-            anchors.push({ x: cursorX, y: cursorY });
-            colMaxW = Math.max(colMaxW, fp.w);
-            cursorY += fp.h + gap;
-        } else {
-            if (lineIndex > 0 && lineIndex % stacksPerLine === 0) {
-                cursorY += rowMaxH + gap;
-                cursorX = rowStartX;
-                rowMaxH = 0;
-            }
-            anchors.push({ x: cursorX, y: cursorY });
-            rowMaxH = Math.max(rowMaxH, fp.h);
-            cursorX += fp.w + gap;
+            return { x: startPos.x + index * strideX, y: startPos.y };
         }
-        lineIndex += 1;
+        return { x: startPos.x, y: startPos.y + index * strideY };
     });
-    return anchors;
 }
 
 export function computeStackBounds(rects) {
@@ -130,8 +99,8 @@ export function centerStackInRegion(relRects, region) {
     }));
 }
 
-export function computeCascadeStackRects(sizes, region, { zIndexBase = 0 } = {}) {
-    const rel = computeStackRects(sizes, 0, 0, { zIndexBase });
+export function computeCascadeStackRects(sizes, region) {
+    const rel = computeStackRects(sizes, 0, 0);
     return centerStackInRegion(rel, region);
 }
 

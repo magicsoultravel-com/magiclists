@@ -61,7 +61,7 @@ function buildMenuItems(prefs, viewMode = 'grid') {
             id: 'cascade',
             inputId: 'board-sort-cascade',
             label: 'Cascade',
-            hint: 'Freeform: collapsed stacks of 4 (file-cabinet style); expanded in one overlapping stack',
+            hint: 'Freeform: fill row/column in 4s (overlapping stacks); expanded in one stack',
             checked: prefs.cascade === true,
             disabled: !isFreeform
         }

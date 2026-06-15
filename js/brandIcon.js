@@ -73,7 +73,8 @@ export function applyBrandIcon(id = DEFAULT_BRAND_ICON_ID) {
     const root = document.documentElement;
     root.dataset.brandIcon = icon.id;
 
-    document.querySelector('#app-brand .app-brand__icon')?.setAttribute('src', icon.svg);
+    document.querySelectorAll('#nav-panel-toggle .app-brand__icon, #nav-panel-toggle-fab .app-brand__icon')
+        .forEach((el) => el.setAttribute('src', icon.svg));
     document.getElementById('favicon-ico')?.setAttribute('href', icon.ico);
     document.getElementById('favicon-svg')?.setAttribute('href', icon.svg);
     document.getElementById('apple-touch-icon')?.setAttribute('href', icon.appleTouch);

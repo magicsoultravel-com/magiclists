@@ -907,9 +907,15 @@ html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
     cursor: pointer;
     color: var(--text-main);
-    font-size: 1rem;
-    line-height: 1;
+    line-height: 0;
     padding: 0;
+}
+
+.side-panel-toggle-fab .app-brand__icon {
+    width: 18px;
+    height: 18px;
+    display: block;
+    border-radius: 3px;
 }
 
 .side-panel-toggle-fab.is-hidden {

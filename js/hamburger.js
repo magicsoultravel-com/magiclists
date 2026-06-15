@@ -99,7 +99,11 @@ export const SidePanel = {
     setCollapsed(collapsed, { persist = true } = {}) {
         this.panel?.classList.toggle('is-collapsed', collapsed);
         this.toggleBtn?.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        this.toggleBtn?.setAttribute('title', collapsed ? 'Show panel' : 'Hide panel');
+        this.toggleBtn?.setAttribute('aria-label', collapsed ? 'Show side panel' : 'Hide side panel');
         this.toggleFab?.classList.toggle('is-hidden', !collapsed);
+        this.toggleFab?.setAttribute('title', collapsed ? 'Show panel' : 'Hide panel');
+        this.toggleFab?.setAttribute('aria-label', collapsed ? 'Show side panel' : 'Hide side panel');
         if (persist) writePanelCollapsed(collapsed);
         onSidebarCollapseChanged();
     },

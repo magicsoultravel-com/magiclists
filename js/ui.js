@@ -50,6 +50,7 @@ import {
 } from './fileCabinet.js';
 import { sortBoardItems } from './boardSort.js';
 import {
+    CASCADE_PER_STACK,
     chunkForStacks,
     computeAlignRegion,
     computeCascadeStackRects,
@@ -57,7 +58,7 @@ import {
     computeStackFootprint,
     computeStackRects,
     getExpandedAlignSlots,
-    layoutStackAnchors,
+    layoutCascadeChunkAnchors,
     slotsToRegionRects
 } from './boardSortAlign.js';
 import { syncCabinetSplitter } from './shellResize.js';
@@ -5316,26 +5317,47 @@ export const UI = {
         }
     },
 
+    getCascadeZIndexBase(canvas, pinnedIds) {
+        let maxZ = 0;
+        canvas?.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
+            const id = card.dataset.id;
+            if (!id || !pinnedIds?.has(id)) return;
+            const z = parseInt(card.style.zIndex, 10);
+            if (Number.isFinite(z)) maxZ = Math.max(maxZ, z);
+        });
+        return maxZ;
+    },
+
+    assignCascadeCardZ(card, zOrder) {
+        if (!card || !zOrder) return;
+        this.initDesktopCardStack(card, zOrder.next);
+        zOrder.next += 1;
+    },
+
     packCollapsedCascadeFreeform(canvas, collapsedItems, pinnedIds, {
         placed,
         direction,
         minCoord,
         metrics,
-        canvasW
+        canvasW,
+        zOrder
     }) {
         const unpinned = collapsedItems.filter((item) => item?.id && !pinnedIds.has(item.id));
         if (!unpinned.length) return;
 
         const chunks = chunkForStacks(unpinned);
+        const sample = this.resolveSortItemSize(unpinned[0], 'freeform', false);
+        const slotFootprint = computeStackFootprint(CASCADE_PER_STACK, sample.w, sample.h);
         const footprints = chunks.map((chunk) => {
             const { w, h } = this.resolveSortItemSize(chunk[0], 'freeform', false);
             return computeStackFootprint(chunk.length, w, h);
         });
-        let anchors = layoutStackAnchors(
+        let anchors = layoutCascadeChunkAnchors(
             footprints,
             direction,
             { x: minCoord, y: minCoord },
-            metrics.gap
+            metrics.gap,
+            slotFootprint
         );
 
         anchors = anchors.map((anchor, stackIndex) => {
@@ -5352,13 +5374,11 @@ export const UI = {
             return { x: near.x, y: near.y };
         });
 
-        let zIndexBase = placed.length;
-
         chunks.forEach((chunk, stackIndex) => {
             const anchor = anchors[stackIndex];
             const fp = footprints[stackIndex];
             const sizes = chunk.map((item) => this.resolveSortItemSize(item, 'freeform', false));
-            const rects = computeStackRects(sizes, anchor.x, anchor.y, { zIndexBase });
+            const rects = computeStackRects(sizes, anchor.x, anchor.y);
 
             chunk.forEach((item, itemIndex) => {
                 const slot = rects[itemIndex];
@@ -5368,12 +5388,11 @@ export const UI = {
                 const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
                 if (card) {
                     this.applyNoteRect(card, slot, { settling: true });
-                    this.initDesktopCardStack(card, slot.zIndex);
+                    this.assignCascadeCardZ(card, zOrder);
                 }
             });
 
             placed.push({ x: anchor.x, y: anchor.y, w: fp.w, h: fp.h });
-            zIndexBase += chunk.length;
         });
     },
 
@@ -5381,7 +5400,8 @@ export const UI = {
         placed,
         anchor,
         bounds,
-        metrics
+        metrics,
+        zOrder
     }) {
         const { packW, origin, edgePad, viewportBottom } = bounds;
         const canvasW = Math.max(canvas?.clientWidth || 320, packW + origin * 2);
@@ -5399,7 +5419,7 @@ export const UI = {
             edgePad,
             metrics
         });
-        let rects = computeCascadeStackRects(sizes, region, { zIndexBase: placed.length });
+        let rects = computeCascadeStackRects(sizes, region);
 
         const nudgeStack = (deltaX, deltaY) => {
             if (!deltaX && !deltaY) return;
@@ -5443,7 +5463,7 @@ export const UI = {
             const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
             if (card) {
                 this.applyNoteRect(card, slot, { settling: true });
-                this.initDesktopCardStack(card, slot.zIndex);
+                this.assignCascadeCardZ(card, zOrder);
             }
         });
 
@@ -5478,12 +5498,14 @@ export const UI = {
         const { origin, packW, edgePad } = this.getGridBoardBounds(canvas);
 
         if (sortPrefs.cascade) {
+            const zOrder = { next: this.getCascadeZIndexBase(canvas, pinnedIds) };
             this.packCollapsedCascadeFreeform(canvas, collapsedItems, pinnedIds, {
                 placed,
                 direction,
                 minCoord,
                 metrics,
-                canvasW
+                canvasW,
+                zOrder
             });
 
             const collapsedRects = unpinnedCollapsed
@@ -5505,7 +5527,8 @@ export const UI = {
                 placed,
                 anchor: expandedAnchor,
                 bounds: { packW, origin, edgePad, viewportBottom: viewport.viewportBottom },
-                metrics
+                metrics,
+                zOrder
             });
             this.updateBoardCanvasExtents(canvas);
             return;
