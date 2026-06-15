@@ -4,23 +4,23 @@ const USER_PALETTE_KEY = 'matrix_user_palette';
 /** Shared default for desktop, chrome, and note reset. */
 export const THEME_DEFAULT_COLOR = '#121214';
 
-/** Muted, hue-varied presets for backgrounds and drawing — one palette everywhere. */
+/** Rainbow / neon presets — one palette everywhere (notes, chrome, desktop, drawing). */
 export const PALETTE_UNIFIED = [
     { value: '#000000', label: 'Black' },
     { value: THEME_DEFAULT_COLOR, label: 'Default' },
-    { value: '#35363a', label: 'Graphite' },
-    { value: '#343841', label: 'Cool slate' },
-    { value: '#3d3538', label: 'Dusty rose' },
-    { value: '#353a36', label: 'Sage' },
-    { value: '#3a3833', label: 'Taupe' },
-    { value: '#323841', label: 'Steel blue' },
-    { value: '#38353d', label: 'Mauve' },
-    { value: '#3a3a33', label: 'Olive grey' },
-    { value: '#3d3834', label: 'Clay' },
-    { value: '#343a39', label: 'Sea mist' },
-    { value: '#3a3637', label: 'Plum grey' },
-    { value: '#d4cfc4', label: 'Soft cream' },
-    { value: '#b8b4ae', label: 'Warm grey' },
+    { value: '#ff3366', label: 'Hot pink' },
+    { value: '#ff5722', label: 'Orange' },
+    { value: '#ffab00', label: 'Amber' },
+    { value: '#ffee00', label: 'Yellow' },
+    { value: '#76ff03', label: 'Lime' },
+    { value: '#00e676', label: 'Green' },
+    { value: '#00e5ff', label: 'Cyan' },
+    { value: '#2979ff', label: 'Blue' },
+    { value: '#651fff', label: 'Indigo' },
+    { value: '#d500f9', label: 'Purple' },
+    { value: '#f50057', label: 'Magenta' },
+    { value: '#ff4081', label: 'Pink' },
+    { value: '#18ffff', label: 'Neon aqua' },
     { value: '#ffffff', label: 'White' }
 ];
 
