@@ -7,18 +7,9 @@ import {
 import { applyCardTheme } from './cardTheme.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor, THEME_DEFAULT_COLOR } from './colorPicker.js';
 import {
-    contentHasConvertibleText,
-    convertChecklistToContent,
-    convertContentToChecklist,
-    deriveEditorBodyLayout,
-    itemToPlainCopyText,
-    SOFT_BREAK,
-    stepToPlainCopyLine,
-    stepsHaveConvertibleText,
-    unwrapLineStrike,
-    wrapLineAsStruck
+    itemToPlainCopyText
 } from './noteBodyConversion.js';
-import { hasRichMarkup, linkifyPlainUrls, sanitizeHref, sanitizeRichHtml, stripRichText } from './richText.js';
+import { stripRichText } from './richText.js';
 import {
     clearExpandedCards,
     clearViewSessionExpanded,
@@ -108,39 +99,9 @@ import {
     readRememberedSize as geoReadRememberedSize,
     resolveSpatialFallbackRect as geoResolveSpatialFallbackRect
 } from './tileGeometry.js';
-import { CARD_ICONS, FORMAT_ICONS, ACTION_ICONS, DRAWING_ICONS } from './icons.js';
-import {
-    deriveNoteTitle,
-    createNoteId,
-    noteHasSavableContent,
-    formatLocalDateTimeParts,
-    defaultStartDateTimeNow,
-    normalizeItemForSave
-} from './noteModel.js';
-import {
-    getStepLevel,
-    partitionChecklistSteps,
-    reorderStepsByCompletion,
-    moveStepOnCompletionChange,
-    collectStepSubtree,
-    collectStepSubtreeIds,
-    findStepParentIndex,
-    applySubtreeLevelDelta,
-    normalizeChecklistLevels,
-    previewDropTargetLevel,
-    resolveDropTarget,
-    computeChecklistInsertBounds,
-    computeVisibleInsertBounds,
-    resolvePointerDropTarget,
-    getStepRowLevel,
-    collectDomRowBlock,
-    clampChecklistInsertIndex,
-    reorderActiveStepsFromDomOrder,
-    stepHasDescendants,
-    levelListHasDescendants,
-    checklistHasIndentations,
-    buildVisibleChecklistSteps
-} from './checklistSteps.js';
+import { CARD_ICONS, ACTION_ICONS } from './icons.js';
+
+import { NoteSurface } from './noteSurface.js';
 
 export { CARD_ICONS, FORMAT_ICONS, ACTION_ICONS, DRAWING_ICONS } from './icons.js';
 export {
@@ -151,13 +112,29 @@ export {
     defaultStartDateTimeNow,
     normalizeItemForSave
 } from './noteModel.js';
+export {
+    snapshotItem,
+    emitItemMutation,
+    mutateItem,
+    renderRichHtml,
+    buildNoteEditorShell,
+    bindNoteEditorShell,
+    attachNoteBodyInteractions,
+    buildNoteBodyHtml,
+    buildNoteQuickActionsHtml,
+    canEditInline,
+    focusInlineEdit,
+    focusPendingChecklistStep,
+    escapeHTML,
+    escapeAttr,
+    escapeQuotes,
+    resolveEditorBodyLayoutUnchecked,
+    syncItemBodyFromDom,
+    updateConvertButtons,
+    updateNoteMetaStats
+} from './noteSurface.js';
 
 const UNCATEGORIZED_COLOR = '#64748b';
-
-const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
-const EDITOR_ZOOM_MIN = 0.85;
-const EDITOR_ZOOM_MAX = 1.25;
-const EDITOR_ZOOM_STEP = 0.05;
 
 const GRID_LAYOUT_KEY = 'matrix_grid_layout';
 const GRID_PINS_KEY = 'matrix_grid_pins';
@@ -331,210 +308,6 @@ export const UI = {
         return getExpandedCards(mode);
     },
 
-    snapshotItem(item) {
-        return JSON.parse(JSON.stringify(item));
-    },
-
-    emitItemMutation(item, { preserveView = false, beforeItem = null, skipRerender = false } = {}) {
-        const preserveEmptySteps = preserveView && skipRerender;
-        const normalized = normalizeItemForSave(item, { preserveEmptySteps });
-        Object.assign(item, normalized);
-        const normalizedBefore = beforeItem
-            ? normalizeItemForSave(beforeItem, { preserveEmptySteps })
-            : null;
-        window.dispatchEvent(new CustomEvent('item:mutation_requested', {
-            detail: { item: normalized, preserveView, beforeItem: normalizedBefore, skipRerender }
-        }));
-    },
-
-    prepareInlineOpSnapshot(root, item, localOnly = false) {
-        const shell = root.closest('.editor-note-shell') || root;
-        this.syncItemBodyFromDom(shell, item);
-        if (localOnly) return null;
-        return this.snapshotItem(item);
-    },
-
-    ensureChecklistStepFromRow(row, item) {
-        const stepId = row?.dataset?.stepId;
-        if (!stepId || !item) return null;
-        if (!item.steps) item.steps = [];
-        let step = item.steps.find((s) => s.id === stepId);
-        if (!step) {
-            step = this.createBlankChecklistStep();
-            step.id = stepId;
-            step.level = Number(row.dataset.level) || 0;
-            step.completed = row.classList.contains('step-row--done');
-            const prevRow = this.findAdjacentChecklistStepRow(row, 'prev');
-            const prevId = prevRow?.dataset?.stepId;
-            if (prevId) {
-                const idx = item.steps.findIndex((s) => s.id === prevId);
-                item.steps.splice(idx >= 0 ? idx + 1 : item.steps.length, 0, step);
-            } else {
-                item.steps.unshift(step);
-            }
-            if (item.type !== 'checklist') item.type = 'checklist';
-        }
-        const textEl = row.querySelector('[data-field="step-text"]');
-        if (textEl) this.syncInlineFieldToItem(textEl, step);
-        return step;
-    },
-
-    expandChecklistAncestorsForStep(item, stepId) {
-        const steps = item?.steps || [];
-        const idx = steps.findIndex((s) => s.id === stepId);
-        if (idx < 0) return;
-        const collapsed = this.getChecklistCollapsedKeys();
-        let changed = false;
-        let childLevel = getStepLevel(steps[idx]);
-        for (let i = idx - 1; i >= 0 && childLevel > 0; i--) {
-            const level = getStepLevel(steps[i]);
-            if (level < childLevel) {
-                const key = `${item.id}:${steps[i].id}`;
-                if (collapsed[key]) {
-                    delete collapsed[key];
-                    changed = true;
-                }
-                childLevel = level;
-            }
-        }
-        if (changed) {
-            localStorage.setItem('matrix_checklist_collapsed', JSON.stringify(collapsed));
-        }
-    },
-
-    commitInlineChecklistOp(item, beforeItem, { localOnly = false } = {}) {
-        if (localOnly || !beforeItem) return;
-        const preserveEmptySteps = true;
-        const afterNorm = normalizeItemForSave(item, { preserveEmptySteps });
-        const beforeNorm = normalizeItemForSave(beforeItem, { preserveEmptySteps });
-        if (JSON.stringify(beforeNorm) === JSON.stringify(afterNorm)) return;
-        Object.assign(item, afterNorm);
-        window.dispatchEvent(new CustomEvent('item:mutation_requested', {
-            detail: {
-                item: afterNorm,
-                preserveView: true,
-                beforeItem: beforeNorm,
-                skipRerender: true,
-                mergeKey: `${afterNorm.id}:struct`,
-                mergeWindow: false
-            }
-        }));
-    },
-
-    commitInlineTextOp(item, beforeItem, { localOnly = false } = {}) {
-        if (localOnly || !beforeItem) return;
-        const preserveEmptySteps = true;
-        const afterNorm = normalizeItemForSave(item, { preserveEmptySteps });
-        const beforeNorm = normalizeItemForSave(beforeItem, { preserveEmptySteps });
-        if (JSON.stringify(beforeNorm) === JSON.stringify(afterNorm)) return;
-        Object.assign(item, afterNorm);
-        window.dispatchEvent(new CustomEvent('item:mutation_requested', {
-            detail: {
-                item: afterNorm,
-                preserveView: true,
-                beforeItem: beforeNorm,
-                skipRerender: true,
-                mergeKey: `${afterNorm.id}:text`,
-                mergeWindow: true
-            }
-        }));
-    },
-
-    mutateItem(item, mutator, { preserveView = false, skipRerender = false, localOnly = false } = {}) {
-        const beforeItem = this.snapshotItem(item);
-        mutator(item);
-        if (!localOnly) {
-            this.emitItemMutation(item, { preserveView, beforeItem, skipRerender });
-        }
-    },
-
-    syncInlineFieldToItem(el, item) {
-        const field = el.dataset.field;
-        if (el.classList.contains('rich-text--edit')) {
-            const val = sanitizeRichHtml(linkifyPlainUrls(el.innerHTML));
-            if (field === 'title') item.title = val;
-            else if (field === 'content') item.content = val;
-            else if (field === 'step-text') {
-                const step = item.steps?.find(s => s.id === el.dataset.stepId);
-                if (step) step.text = val;
-            }
-            return;
-        }
-        if (field === 'title') {
-            item.title = el.textContent.trim();
-        } else if (field === 'content') {
-            item.content = el.textContent;
-        } else if (field === 'step-text') {
-            const step = item.steps?.find(s => s.id === el.dataset.stepId);
-            if (step) step.text = el.textContent;
-        }
-    },
-
-    renderRichHtml(str) {
-        if (!str) return '';
-        const prepared = String(str).replace(/\u2028/g, '<br>').replace(/\n/g, '<br>');
-        if (hasRichMarkup(prepared)) return sanitizeRichHtml(prepared);
-        return sanitizeRichHtml(this.escapeHTML(prepared));
-    },
-
-    prepareContentForEdit(content) {
-        const prepared = String(content || '').replace(/\u2028/g, '<br>').replace(/\n/g, '<br>');
-        if (hasRichMarkup(prepared)) return sanitizeRichHtml(prepared);
-        return sanitizeRichHtml(this.escapeHTML(prepared));
-    },
-
-    tryOpenRichEditLink(e, host) {
-        if (!host?.classList?.contains('rich-text--edit')) return false;
-        const anchor = e.target.closest?.('a[href]');
-        if (!anchor || !host.contains(anchor)) return false;
-        const href = sanitizeHref(anchor.getAttribute('href'));
-        if (!href) return false;
-        e.preventDefault();
-        e.stopPropagation();
-        window.open(href, '_blank', 'noopener,noreferrer');
-        return true;
-    },
-
-    resolveEditorBodyLayoutUnchecked(item) {
-        return deriveEditorBodyLayout(item);
-    },
-
-    syncItemBodyFromDom(root, item) {
-        root?.querySelectorAll('.card-inline-edit').forEach((el) => {
-            const field = el.dataset.field;
-            if (field === 'title' || field === 'content' || field === 'step-text') {
-                this.syncInlineFieldToItem(el, item);
-            }
-        });
-    },
-
-    insertTextAtCaret(el, text) {
-        if (!el) return;
-        el.focus();
-        const sel = window.getSelection();
-        if (!sel?.rangeCount) return;
-        const range = sel.getRangeAt(0);
-        if (!el.contains(range.startContainer)) return;
-        range.deleteContents();
-        range.insertNode(document.createTextNode(text));
-        range.collapse(false);
-        sel.removeAllRanges();
-        sel.addRange(range);
-    },
-
-    canInlineEditText(text, { richEdit = false } = {}) {
-        if (richEdit) return true;
-        return !hasRichMarkup(text);
-    },
-
-    commitFocusedInlineField(card, item) {
-        const active = document.activeElement;
-        if (!active || !card.contains(active) || !active.classList.contains('card-inline-edit')) return;
-        this.mutateItem(item, () => {
-            this.syncInlineFieldToItem(active, item);
-        }, { preserveView: true, skipRerender: true });
-        active.dataset.skipBlurSave = '1';
-    },
 
     isCardExpanded(card, item) {
         if (isDesktopCard(card)) {
@@ -1098,17 +871,6 @@ export const UI = {
         return isDesktopCard(card) && isSnapLayoutMode(activeBoardViewMode);
     },
 
-    createBlankChecklistStep() {
-        return {
-            id: `step_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-            text: '',
-            completed: false,
-            level: 0,
-            startDateTime: '',
-            endDateTime: ''
-        };
-    },
-
     updateSingleCard(canvas, item, hiddenCategories = []) {
         if (!canvas || !item?.id) return false;
         const card = canvas.querySelector(`.mini-card[data-id="${item.id}"]`);
@@ -1256,71 +1018,14 @@ export const UI = {
         }
     },
 
-    buildNoteQuickActionsHtml(item, {
-        surface = 'board',
-        isExpanded = false,
-        pinned = false,
-        showDrag = false,
-        showArchive = false,
-        spatialTile = false,
-        tileSize = LEGACY_TILE_SIZE,
-        tileW = 0,
-        tileH = 0
-    } = {}) {
-        const isModal = surface === 'modal';
-        let expandTitle;
-        let lastIcon;
-        if (isModal) {
-            expandTitle = 'Show on board';
-            lastIcon = CARD_ICONS.collapse;
-        } else if (spatialTile) {
-            const atSmall = isCollapsedSpatialSize(tileW, tileH, tileSize);
-            if (isFileCabinetActive()) {
-                const labels = getFileCabinetToggleLabels(atSmall, atSmall);
-                expandTitle = labels.title;
-                lastIcon = labels.iconKey === 'expand' ? CARD_ICONS.expand : CARD_ICONS.collapse;
-            } else {
-                expandTitle = atSmall ? 'Expand' : 'Collapse to small';
-                lastIcon = atSmall ? CARD_ICONS.expand : CARD_ICONS.collapse;
-            }
-        } else {
-            expandTitle = isExpanded ? 'Collapse note' : 'Expand note';
-            lastIcon = isExpanded ? CARD_ICONS.collapse : CARD_ICONS.expand;
-        }
-        const lastClass = isModal ? 'card-act--close' : 'card-act--toggle';
-        const lastId = isModal ? ' id="modal-close-btn"' : '';
-        const pinTitle = pinned ? 'Unpin (unlock drag)' : 'Pin position (locks drag)';
-        const pinBtn = `<button type="button" class="card-act card-act--pin${pinned ? ' is-active' : ''}" title="${pinTitle}" aria-label="${pinTitle}" aria-pressed="${pinned ? 'true' : 'false'}">${pinned ? CARD_ICONS.unpin : CARD_ICONS.pin}</button>`;
-        const calHidden = this.isHiddenFromCalendar(item);
-        const calTitle = calHidden
-            ? 'Hidden from calendar — click to show'
-            : 'Shown on calendar — click to hide';
-        const calBtn = `<button type="button" class="card-act card-act--cal${calHidden ? ' is-off' : ' is-on'}" title="${this.escapeAttr(calTitle)}" aria-label="${this.escapeAttr(calTitle)}">${CARD_ICONS.calendar}</button>`;
-        const showDragIcon = isModal ? true : (showDrag && !pinned);
-        const dragBtn = showDragIcon
-            ? `<button type="button" class="card-act card-act--drag${isModal ? ' card-act--decorative' : ''}" title="Drag to move" aria-label="Drag to move"${isModal ? ' tabindex="-1" aria-hidden="true"' : ''}>${CARD_ICONS.drag}</button>`
-            : '';
-        let actionCount = 7;
-        if (showDragIcon) actionCount += 1;
-        if (showArchive) actionCount += 1;
-        const archiveBtn = showArchive
-            ? `<button type="button" id="modal-archive-btn" class="card-act card-act--archive" title="Archive note" aria-label="Archive note">${CARD_ICONS.delete}</button>`
-            : '';
-        const actionsHtml = `<div class="card-actions${isModal ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
-            ${calBtn}
-            <button type="button" class="card-act card-act--copy" title="Copy note as text" aria-label="Copy note as text">${CARD_ICONS.copy}</button>
-            ${pinBtn}
-            <button type="button" class="card-act card-act--color" title="Note color" aria-label="Note color" aria-haspopup="dialog">${CARD_ICONS.color}</button>
-            <button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>
-            <button type="button" class="card-act card-act--edit" title="Edit note" aria-label="Edit note">${CARD_ICONS.edit}</button>
-            ${dragBtn}
-            <button type="button" class="card-act ${lastClass}"${lastId} title="${expandTitle}" aria-label="${expandTitle}">${lastIcon}</button>
-        </div>`;
-        return isModal ? `${archiveBtn}${actionsHtml}` : actionsHtml;
-    },
 
     buildCardActionsHtml(item, isExpanded = false, options = {}) {
-        return this.buildNoteQuickActionsHtml(item, { surface: 'board', isExpanded, ...options });
+        return NoteSurface.buildNoteQuickActionsHtml(item, {
+            surface: 'board',
+            isExpanded,
+            calHidden: this.isHiddenFromCalendar(item),
+            ...options
+        });
     },
 
     syncCalendarButtonUI(item, btn) {
@@ -1380,39 +1085,6 @@ export const UI = {
         }
     },
 
-    flashCopyFeedback(btn, message = 'Copied!', { failed = false } = {}) {
-        if (!btn) return;
-        if (btn.dataset.copyFlashTimer) {
-            clearTimeout(Number(btn.dataset.copyFlashTimer));
-            delete btn.dataset.copyFlashTimer;
-        }
-
-        const row = btn.closest('.step-row--display');
-        const prevTitle = btn.getAttribute('title');
-        const prevLabel = btn.getAttribute('aria-label');
-        const prevHtml = btn.innerHTML;
-        const isCopyBtn = btn.classList.contains('step-copy-btn') || btn.classList.contains('card-act--copy');
-
-        btn.classList.remove('is-copy-flashed', 'is-copy-flash-failed');
-        row?.classList.remove('is-copy-row-flashed');
-        btn.classList.add(failed ? 'is-copy-flash-failed' : 'is-copy-flashed');
-        if (!failed) row?.classList.add('is-copy-row-flashed');
-
-        if (isCopyBtn && !failed) btn.innerHTML = CARD_ICONS.save;
-        btn.setAttribute('title', message);
-        btn.setAttribute('aria-label', message);
-
-        btn.dataset.copyFlashTimer = String(window.setTimeout(() => {
-            btn.classList.remove('is-copy-flashed', 'is-copy-flash-failed');
-            row?.classList.remove('is-copy-row-flashed');
-            if (isCopyBtn && !failed) btn.innerHTML = prevHtml;
-            if (prevTitle != null) btn.setAttribute('title', prevTitle);
-            else btn.removeAttribute('title');
-            if (prevLabel != null) btn.setAttribute('aria-label', prevLabel);
-            else btn.removeAttribute('aria-label');
-            delete btn.dataset.copyFlashTimer;
-        }, 1400));
-    },
 
     getCardActionsOptions(card) {
         const hasSession = !!localStorage.getItem('admin_token');
@@ -1843,814 +1515,15 @@ export const UI = {
         return card;
     },
 
-    formatCreatedDate(timestamp) {
-        if (!timestamp) return '';
-        const d = new Date(Number(timestamp) * 1000);
-        if (Number.isNaN(d.getTime())) return '';
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    },
 
-    formatNoteListDate(item) {
-        const ts = Number(item?.updated_at || item?.created_at || 0);
-        if (!ts) return '—';
-        const d = new Date(ts * 1000);
-        if (Number.isNaN(d.getTime())) return '—';
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    },
-
-    buildNoteBodyConvertButtonsHtml(item) {
-        const canToChecklist = contentHasConvertibleText(item?.content);
-        const canToContent = stepsHaveConvertibleText(item?.steps);
-        return `
-            <span class="format-toolbar-sep" aria-hidden="true"></span>
-            <button type="button" class="format-btn card-act editor-convert-btn" data-convert="to-checklist" title="Move content into checklist items" aria-label="To checklist"${canToChecklist ? '' : ' disabled'}>${FORMAT_ICONS.toChecklist}</button>
-            <button type="button" class="format-btn card-act editor-convert-btn" data-convert="to-content" title="Move checklist into note content" aria-label="To notes"${canToContent ? '' : ' disabled'}>${FORMAT_ICONS.toNotes}</button>
-        `;
-    },
-
-    updateConvertButtons(shell, item) {
-        if (!shell || !item) return;
-        const toChecklist = shell.querySelector('[data-convert="to-checklist"]');
-        const toContent = shell.querySelector('[data-convert="to-content"]');
-        if (toChecklist) toChecklist.disabled = !contentHasConvertibleText(item.content);
-        if (toContent) toContent.disabled = !stepsHaveConvertibleText(item.steps);
-    },
-
-    buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false, richEdit = false } = {}) {
-        let html = '';
-        const layout = item.editorBodyLayout || 'both';
-        const hasContent = stripRichText(item.content || '').trim();
-
-        let showContent;
-        let showChecklist;
-        if (inModalEditor) {
-            showContent = true;
-            showChecklist = true;
-        } else if (canEdit) {
-            showContent = layout !== 'checklist'
-                && (hasContent || layout === 'both' || layout === 'content');
-            showChecklist = layout !== 'content'
-                && (layout === 'both' || layout === 'checklist' || (item.steps && item.steps.length > 0));
-        } else {
-            showContent = !!hasContent;
-            showChecklist = item.type === 'checklist' && item.steps && item.steps.length > 0;
-        }
-
-        if (showContent) {
-            const content = item.content || '';
-            const rich = hasRichMarkup(content) || content.includes('\u2028');
-            if (canEdit && (richEdit || this.canInlineEditText(content, { richEdit }))) {
-                const inner = richEdit ? this.prepareContentForEdit(content) : this.escapeHTML(content.replace(/\u2028/g, '\n'));
-                const ce = richEdit ? 'true' : 'plaintext-only';
-                const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
-                html += `<div class="card-content-preview card-inline-edit${richClasses}" contenteditable="${ce}" spellcheck="false" data-field="content" data-placeholder="Add note…">${inner}</div>`;
-            } else {
-                const richClass = rich ? ' rich-text' : '';
-                html += `<div class="card-content-preview${richClass}">${this.renderRichHtml(content)}</div>`;
-            }
-        }
-
-        if (showChecklist) {
-            if (!item.steps) item.steps = [];
-            html += this.buildExpandedChecklistHtml(item, canEdit, { richEdit });
-        }
-        return html;
-    },
-
-    escapeQuotes(str) {
-        return str ? str.replace(/"/g, '&quot;') : '';
-    },
-
-    buildNoteTitleHtml(item, canEdit, { richEdit = false } = {}) {
-        const fullTitle = item.title || '';
-        const titleAttr = this.escapeAttr(stripRichText(fullTitle));
-        const rich = hasRichMarkup(fullTitle);
-
-        if (canEdit && (richEdit || this.canInlineEditText(fullTitle, { richEdit }))) {
-            const inner = richEdit ? sanitizeRichHtml(fullTitle) : this.escapeHTML(fullTitle);
-            const ce = richEdit ? 'true' : 'plaintext-only';
-            const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
-            return `<div class="mini-card-title card-inline-edit${richClasses}" contenteditable="${ce}" spellcheck="false" data-field="title" data-placeholder="Title…">${inner}</div>`;
-        }
-
-        const richClass = rich ? ' rich-text' : '';
-        return `<div class="mini-card-title${richClass}" title="${titleAttr}">${this.renderRichHtml(fullTitle)}</div>`;
-    },
-
-    buildNoteFormatPanelHtml(item = null) {
-        return `
-            <div class="editor-panel editor-panel--format">
-                <div class="collapsable-header" id="format-section-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Formatting</span>
-                </div>
-                <div class="collapsable-section collapsed" id="format-section">
-                    <div class="format-toolbar">
-                        <button type="button" class="format-btn card-act" data-format-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold">${FORMAT_ICONS.bold}</button>
-                        <button type="button" class="format-btn card-act" data-format-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic">${FORMAT_ICONS.italic}</button>
-                        <button type="button" class="format-btn card-act" data-format-cmd="strikeThrough" title="Strikethrough (Ctrl+Shift+S)" aria-label="Strikethrough">${FORMAT_ICONS.strike}</button>
-                        <span class="format-toolbar-sep" aria-hidden="true"></span>
-                        <button type="button" class="format-btn card-act" data-zoom="down" title="Smaller text" aria-label="Smaller text">${FORMAT_ICONS.smaller}</button>
-                        <input type="text" id="format-zoom-input" class="format-zoom-input" inputmode="numeric" title="Text size (100 = default)" aria-label="Text size" value="100">
-                        <button type="button" class="format-btn card-act" data-zoom="up" title="Larger text" aria-label="Larger text">${FORMAT_ICONS.larger}</button>
-                        <button type="button" class="format-btn card-act" data-zoom="reset" title="Reset text size" aria-label="Reset text size">${ACTION_ICONS.layoutReset}</button>
-                        ${item ? this.buildNoteBodyConvertButtonsHtml(item) : ''}
-                    </div>
-                </div>
-            </div>
-        `;
-    },
-
-    buildNoteMetaFooterHtml(item, { targetCatName = '', categoryColor = UNCATEGORIZED_COLOR } = {}) {
-        const createdLabel = this.formatCreatedDate(item.created_at);
-        const sizeLabel = computeNoteSizeKb(item);
-        const lineLabel = formatNoteLineCount(computeNoteLineCount(item));
-        const createdHtml = createdLabel
-            ? `<span class="editor-created-date" title="Created">Created ${createdLabel}</span>`
-            : '';
-        const sizeHtml = `<span class="editor-note-size" title="Note content size">${sizeLabel} KB</span>`;
-        const lineHtml = `<span class="editor-note-lines" title="Number of lines">${lineLabel}</span>`;
-        const statsHtml = `${sizeHtml}${lineHtml}${createdHtml}`;
-
-        return `
-            <div class="editor-meta-row editor-meta-row--footer editor-meta-row--inline">
-                <span class="editor-meta-badges">
-                    <span class="badge-dot" style="background-color: ${categoryColor};" title="${this.escapeAttr(targetCatName || 'Uncategorized')}"></span>
-                    ${targetCatName ? `<span class="category-name">${this.escapeHTML(targetCatName)}</span>` : ''}
-                </span>
-                <span class="editor-meta-stats">
-                    ${statsHtml}
-                </span>
-            </div>
-        `;
-    },
-
-    updateNoteMetaStats(shell, item) {
-        if (!shell || !item) return;
-        const draft = { ...item };
-        this.syncItemBodyFromDom(shell, draft);
-        const sizeEl = shell.querySelector('.editor-note-size');
-        const linesEl = shell.querySelector('.editor-note-lines');
-        if (sizeEl) sizeEl.textContent = `${computeNoteSizeKb(draft)} KB`;
-        if (linesEl) linesEl.textContent = formatNoteLineCount(computeNoteLineCount(draft));
-    },
-
-    buildNoteConfigPanelHtml(item, { categoryOptionsHtml = '', startParts = {}, endParts = {} } = {}) {
-        return `
-            <div class="editor-panel editor-panel--config">
-                <div class="collapsable-header" id="config-section-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Configuration</span>
-                </div>
-                <div class="collapsable-section collapsed" id="config-section">
-                    <div class="form-row-grid form-row-grid--2">
-                        <div class="form-group form-group--compact">
-                            <label>Visibility</label>
-                            <select id="edit-visibility" class="form-input">
-                                <option value="private" ${item.visibility === 'private' ? 'selected' : ''}>Private</option>
-                                <option value="public" ${item.visibility === 'public' ? 'selected' : ''}>Public</option>
-                            </select>
-                        </div>
-                        <div class="form-group form-group--compact">
-                            <label>Start</label>
-                            <div class="datetime-input-row">
-                                <input type="date" id="edit-start-date" class="form-input" value="${startParts.date || ''}">
-                                <input type="time" id="edit-start-time" class="form-input form-input--optional-time" value="${startParts.time || ''}" step="60" title="Optional — leave blank for date only">
-                            </div>
-                        </div>
-                        <div class="form-group form-group--compact">
-                            <label>End</label>
-                            <div class="datetime-input-row">
-                                <input type="date" id="edit-end-date" class="form-input" value="${endParts.date || ''}">
-                                <input type="time" id="edit-end-time" class="form-input form-input--optional-time" value="${endParts.time || ''}" step="60" title="Optional — leave blank for date only">
-                            </div>
-                        </div>
-                        <div class="form-group form-group--compact">
-                            <label>Category</label>
-                            <select id="edit-category" class="form-input">${categoryOptionsHtml}</select>
-                        </div>
-                        <div class="form-group form-group--compact">
-                            <label>Status</label>
-                            <select id="edit-status" class="form-input">
-                                <option value="active" ${item.status === 'active' ? 'selected' : ''}>Active</option>
-                                <option value="archived" ${item.status === 'archived' ? 'selected' : ''}>Archived</option>
-                                <option value="completed" ${item.status === 'completed' ? 'selected' : ''}>Done</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    },
-
-    buildNoteEditorShell(item, {
-        canEdit = false,
-        inModalEditor = false,
-        showConfig = false,
-        showFormat = false,
-        richEdit = false,
-        toolbarHtml = '',
-        toolbarDragZone = '',
-        footerDragZone = '',
-        targetCatName = '',
-        categoryColor = UNCATEGORIZED_COLOR,
-        categoryOptionsHtml = '',
-        startParts = {},
-        endParts = {},
-        bodyId = ''
-    } = {}) {
-        const titleHtml = this.buildNoteTitleHtml(item, canEdit, { richEdit });
-        const bodyHtml = this.buildNoteBodyHtml(item, {
-            canEdit,
-            inModalEditor,
-            richEdit
-        });
-        const formatHtml = showFormat ? this.buildNoteFormatPanelHtml(item) : '';
-        const configHtml = showConfig
-            ? this.buildNoteConfigPanelHtml(item, { categoryOptionsHtml, startParts, endParts })
-            : '';
-        const metaHtml = this.buildNoteMetaFooterHtml(item, {
-            targetCatName,
-            categoryColor
-        });
-        const bodyIdAttr = bodyId ? ` id="${bodyId}"` : '';
-
-        const toplineDragZone = toolbarDragZone || footerDragZone || '';
-        const toplineHtml = `
-                <div class="editor-note-topline${toplineDragZone}">
-                    <div class="editor-note-header">
-                        ${titleHtml}
-                    </div>
-                    ${toolbarHtml ? `<div class="note-editor-toolbar${toolbarDragZone}">${toolbarHtml}</div>` : ''}
-                </div>`;
-
-        return `
-            <div class="editor-note-shell note-surface">
-                ${toplineHtml}
-                ${formatHtml}
-                ${configHtml}
-                <div class="card-body editor-note-body"${bodyIdAttr}>
-                    ${bodyHtml}
-                </div>
-                <div class="${footerDragZone ? `editor-meta-wrap${footerDragZone}` : 'editor-meta-wrap'}">
-                    ${metaHtml}
-                </div>
-            </div>
-        `;
-    },
-
-    markNoteExpanded(itemId) {
-        if (!itemId) return;
-        setExpandedCard(activeBoardViewMode, itemId, true);
-    },
-
-    markNoteCollapsed(itemId) {
-        if (!itemId) return;
-        setExpandedCard(activeBoardViewMode, itemId, false);
-    },
-
-    collapseBoardCardIfExpanded(card, item, hiddenCategories = []) {
-        if (!card || !item?.id) return;
-        if (!this.isSpatiallyCollapsed(card)) {
-            this.collapseBoardCardToSmallFootprint(card, item);
-        }
-    },
-
-    revealNoteOnBoard(item) {
-        if (!item?.id) return;
-        window.dispatchEvent(new CustomEvent('editor:reveal_on_board', { detail: item }));
-    },
-
-    captureDesktopRestoreContext(card) {
-        if (!isDesktopCard(card)) return null;
-        const mode = activeBoardViewMode;
-        if (isSnapLayoutMode(mode)) {
-            return {
-                viewMode: 'grid',
-                rect: this.readNoteRect(card),
-                size: this.readFreeformCardSize(card)
-            };
-        }
-        return {
-            viewMode: 'freeform',
-            position: {
-                x: parseFloat(card.style.left) || 0,
-                y: parseFloat(card.style.top) || 0
-            },
-            size: this.readFreeformCardSize(card)
-        };
-    },
-
-    getPreferredDesktopViewMode() {
-        const preferred = localStorage.getItem('matrix_desktop_layout')
-            || localStorage.getItem('matrix_preferred_view');
-        if (preferred === 'freeform' || preferred === 'grid') return preferred;
-        return 'grid';
-    },
-
-    findDesktopCenterSlot(w, h, canvas, viewMode, { excludeId = null } = {}) {
-        const host = canvas || document.getElementById('app-canvas');
-        if (viewMode === 'grid') {
-            const { origin, packW, viewportH, edgePad } = this.getGridViewportBounds(host);
-            const { maxH: boardMaxH } = this.getGridBoardBounds(host);
-            let rect = {
-                x: origin + Math.max(0, (packW - w) / 2),
-                y: origin + Math.max(0, (viewportH - h) / 2),
-                w,
-                h
-            };
-            rect = this.snapNoteRect(rect, { maxW: packW, maxH: boardMaxH });
-            const placed = [...(host?.querySelectorAll('.mini-card[data-desktop="1"]') || [])]
-                .filter((c) => c.dataset.id !== excludeId)
-                .map((c) => this.readNoteRect(c));
-            if (placed.some((p) => this.rectsOverlap(rect, p))) {
-                rect = this.findFirstCanvasSlot(rect.w, rect.h, placed, packW + origin * 2, {
-                    origin,
-                    edgePad,
-                    yMin: rect.y
-                });
-            }
-            return rect;
-        }
-
-        const zoom = parseFloat(host?.dataset?.desktopZoom) || 1;
-        const pad = 8;
-        const cw = (host?.clientWidth || window.innerWidth) / zoom;
-        const ch = (host?.clientHeight || window.innerHeight) / zoom;
-        return {
-            x: Math.max(pad, (cw - w) / 2),
-            y: Math.max(pad, (ch - h) / 2),
-            w,
-            h
-        };
-    },
-
-    resolveNoteDesktopPlacement(itemId, { restoreContext = null, modalGeometry = null } = {}) {
-        const gridW = modalGeometry?.w || geoCellsToSpanW(2);
-        const gridH = modalGeometry?.h || geoCellsToSpanH(2);
-        const ffW = modalGeometry?.w || FREEFORM_EXPANDED_W;
-        const ffH = modalGeometry?.h || FREEFORM_EXPANDED_DEFAULT_H;
-        const canvas = document.getElementById('app-canvas');
-
-        if (restoreContext?.viewMode === 'grid' && restoreContext.rect) {
-            return {
-                viewMode: 'grid',
-                rect: {
-                    ...restoreContext.rect,
-                    w: modalGeometry?.w ?? restoreContext.rect.w,
-                    h: modalGeometry?.h ?? restoreContext.rect.h
-                }
-            };
-        }
-        if (restoreContext?.viewMode === 'freeform' && restoreContext.position) {
-            return {
-                viewMode: 'freeform',
-                position: { ...restoreContext.position },
-                size: {
-                    w: modalGeometry?.w ?? restoreContext.size?.w ?? ffW,
-                    h: modalGeometry?.h ?? restoreContext.size?.h ?? ffH
-                }
-            };
-        }
-
-        const gridSaved = this.getGridLayout()[itemId];
-        if (gridSaved && Number.isFinite(gridSaved.x) && Number.isFinite(gridSaved.w)) {
-            return {
-                viewMode: 'grid',
-                rect: {
-                    ...gridSaved,
-                    w: modalGeometry?.w ?? gridSaved.w,
-                    h: modalGeometry?.h ?? gridSaved.h
-                }
-            };
-        }
-
-        const ffPos = this.getFreeformPositions()[itemId];
-        if (ffPos && Number.isFinite(ffPos.x)) {
-            const ffSize = this.getFreeformSizes()[itemId];
-            return {
-                viewMode: 'freeform',
-                position: { x: ffPos.x, y: ffPos.y },
-                size: {
-                    w: modalGeometry?.w ?? ffSize?.w ?? ffW,
-                    h: modalGeometry?.h ?? ffSize?.h ?? ffH
-                }
-            };
-        }
-
-        const viewMode = this.getPreferredDesktopViewMode();
-        if (viewMode === 'grid') {
-            return {
-                viewMode: 'grid',
-                rect: this.findDesktopCenterSlot(gridW, gridH, canvas, 'grid', { excludeId: itemId })
-            };
-        }
-        const center = this.findDesktopCenterSlot(ffW, ffH, canvas, 'freeform');
-        return {
-            viewMode: 'freeform',
-            position: { x: center.x, y: center.y },
-            size: { w: center.w, h: center.h }
-        };
-    },
-
-    prepareDesktopPlacementBeforeRender(itemId, placement) {
-        if (!itemId || !placement?.viewMode) return;
-        setExpandedCard(placement.viewMode, itemId, true);
-        if (placement.viewMode === 'grid') {
-            if (placement.rect) {
-                this.saveGridLayout(itemId, placement.rect);
-            }
-            return;
-        }
-        if (placement.viewMode === 'freeform') {
-            if (placement.position) {
-                this.saveFreeformPosition(itemId, placement.position.x, placement.position.y);
-            }
-            if (placement.size) {
-                this.saveFreeformSize(itemId, placement.size.w, placement.size.h);
-            }
-        }
-    },
-
-    finishNoteDesktopReactivation(item, placement) {
-        if (!item?.id || !placement?.viewMode) return;
-        const canvas = document.getElementById('app-canvas');
-        const card = canvas?.querySelector(`.mini-card[data-id="${CSS.escape(item.id)}"]`);
-        if (!card) return;
-
-        if (placement.viewMode === 'grid' && placement.rect) {
-            this.applyNoteRect(card, placement.rect);
-            this.updateDesktopCard(card, item, {
-                expanded: true,
-                dimensions: { w: placement.rect.w, h: placement.rect.h }
-            });
-            this.raiseGridBoardCard(card);
-            requestAnimationFrame(() => {
-                this.reflowGridBoard(canvas, item.id, { animate: true });
-                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            });
-            return;
-        }
-
-        if (placement.viewMode === 'freeform') {
-            if (placement.position) {
-                card.style.left = `${placement.position.x}px`;
-                card.style.top = `${placement.position.y}px`;
-                this.saveFreeformPosition(item.id, placement.position.x, placement.position.y);
-            }
-            this.updateDesktopCard(card, item, {
-                expanded: true,
-                dimensions: placement.size || null
-            });
-            this.raiseDesktopCard(card);
-            card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }
-    },
-
-    bindCollapsable(headerId, sectionId, startCollapsed = false) {
-        const header = document.getElementById(headerId);
-        const section = document.getElementById(sectionId);
-        if (!header || !section) return;
-
-        const toggle = header.querySelector('.collapsable-toggle');
-        if (startCollapsed) {
-            section.classList.add('collapsed');
-            toggle?.classList.add('collapsed');
-        }
-
-        header.addEventListener('click', () => {
-            section.classList.toggle('collapsed');
-            toggle?.classList.toggle('collapsed');
-        });
-    },
-
-    getEditorZoom() {
-        const stored = parseFloat(localStorage.getItem(EDITOR_ZOOM_KEY));
-        if (!Number.isFinite(stored)) return 1;
-        return Math.min(EDITOR_ZOOM_MAX, Math.max(EDITOR_ZOOM_MIN, stored));
-    },
-
-    zoomToDisplay(zoom) {
-        return Math.round(zoom * 100);
-    },
-
-    displayToZoom(display) {
-        const n = parseInt(String(display).trim(), 10);
-        if (!Number.isFinite(n)) return 1;
-        const zoom = n / 100;
-        return Math.min(EDITOR_ZOOM_MAX, Math.max(EDITOR_ZOOM_MIN, zoom));
-    },
-
-    syncZoomInput(shell, zoom) {
-        const input = shell?.querySelector('#format-zoom-input')
-            || document.getElementById('format-zoom-input');
-        if (input) input.value = String(this.zoomToDisplay(zoom));
-    },
-
-    setEditorZoom(shell, zoom) {
-        const clamped = Math.min(EDITOR_ZOOM_MAX, Math.max(EDITOR_ZOOM_MIN, zoom));
-        localStorage.setItem(EDITOR_ZOOM_KEY, String(clamped));
-        shell?.style?.setProperty('--editor-zoom', String(clamped));
-        this.syncZoomInput(shell, clamped);
-        return clamped;
-    },
-
-    applyZoomFromInput(shell) {
-        const input = shell?.querySelector('#format-zoom-input')
-            || document.getElementById('format-zoom-input');
-        if (!input) return this.getEditorZoom();
-        return this.setEditorZoom(shell, this.displayToZoom(input.value));
-    },
-
-    applyFormatCommand(cmd) {
-        const el = document.activeElement;
-        if (!el?.classList?.contains('rich-text--edit')) return false;
-        document.execCommand(cmd, false, null);
-        return true;
-    },
-
-    bindBodyConvertBar(shell, item, {
-        refresh = () => {},
-        localOnly = false,
-        onChange = () => {}
-    } = {}) {
-        if (!shell || shell.dataset.convertBound) return;
-        shell.dataset.convertBound = '1';
-
-        shell.addEventListener('click', (e) => {
-            const btn = e.target.closest('[data-convert]');
-            if (!btn || !shell.contains(btn) || btn.disabled) return;
-            e.preventDefault();
-            e.stopPropagation();
-
-            const action = btn.dataset.convert;
-            this.syncItemBodyFromDom(shell, item);
-            Object.assign(item, normalizeItemForSave(item));
-
-            const applyMutate = (mutator, { persist = !localOnly } = {}) => {
-                if (persist) {
-                    this.mutateItem(item, mutator, { preserveView: true, skipRerender: true, localOnly });
-                } else {
-                    mutator(item);
-                }
-            };
-
-            const syncAndNormalize = (it) => {
-                this.syncItemBodyFromDom(shell, it);
-                Object.assign(it, normalizeItemForSave(it));
-            };
-
-            if (action === 'to-checklist') {
-                if (!contentHasConvertibleText(item.content)) return;
-                applyMutate((it) => {
-                    syncAndNormalize(it);
-                    convertContentToChecklist(it, () => this.createBlankChecklistStep());
-                    Object.assign(it, normalizeItemForSave(it));
-                });
-            } else if (action === 'to-content') {
-                if (!stepsHaveConvertibleText(item.steps)) return;
-                applyMutate((it) => {
-                    syncAndNormalize(it);
-                    convertChecklistToContent(it);
-                    Object.assign(it, normalizeItemForSave(it));
-                });
-            } else {
-                return;
-            }
-
-            refresh();
-            this.updateConvertButtons(shell, item);
-            if (localOnly) onChange();
-
-            const body = shell.querySelector('.editor-note-body');
-            requestAnimationFrame(() => {
-                if (action === 'to-checklist') {
-                    const first = body?.querySelector('[data-field="step-text"].card-inline-edit');
-                    if (first) this.focusInlineEdit(first, 'start');
-                } else if (action === 'to-content') {
-                    const content = body?.querySelector('[data-field="content"].card-inline-edit');
-                    if (content) this.focusInlineEdit(content, 'start');
-                }
-            });
-        });
-    },
-
-    bindFormatPanel(shell, { onChange = () => {} } = {}) {
-        if (!shell) return;
-        this.bindCollapsable('format-section-header', 'format-section', true);
-        this.setEditorZoom(shell, this.getEditorZoom());
-
-        shell.querySelectorAll('[data-format-cmd]').forEach((btn) => {
-            btn.addEventListener('mousedown', (e) => e.preventDefault());
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                if (this.applyFormatCommand(btn.dataset.formatCmd)) onChange();
-            });
-        });
-
-        shell.querySelectorAll('[data-zoom]').forEach((btn) => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const action = btn.dataset.zoom;
-                const current = this.getEditorZoom();
-                if (action === 'reset') this.setEditorZoom(shell, 1);
-                else if (action === 'up') this.setEditorZoom(shell, current + EDITOR_ZOOM_STEP);
-                else if (action === 'down') this.setEditorZoom(shell, current - EDITOR_ZOOM_STEP);
-            });
-        });
-
-        const zoomInput = shell.querySelector('#format-zoom-input')
-            || document.getElementById('format-zoom-input');
-        if (zoomInput) {
-            const commitZoomInput = () => {
-                this.applyZoomFromInput(shell);
-            };
-            zoomInput.addEventListener('change', commitZoomInput);
-            zoomInput.addEventListener('blur', commitZoomInput);
-            zoomInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    commitZoomInput();
-                    zoomInput.blur();
-                }
-            });
-        }
-    },
-
-    bindNoteEditorShell(root, item, {
-        showConfig = false,
-        showFormat = false,
-        richEdit = false,
-        localOnly = false,
-        refresh = () => {},
-        onChange = () => {},
-        onConfigChange = () => {},
-        onStatusChange = () => {},
-        bindDateDefaults = null,
-        stopMousedownPropagation = false
-    } = {}) {
-        const shell = root?.querySelector?.('.editor-note-shell') || root;
-        if (!shell || !item) return;
-
-        const interactionOptions = {
-            refresh,
-            localOnly,
-            onChange,
-            stopMousedownPropagation,
-            richEdit
-        };
-        const header = shell.querySelector('.editor-note-header');
-        const body = shell.querySelector('.editor-note-body');
-        if (header) this.attachNoteBodyInteractions(header, item, interactionOptions);
-        if (body) this.attachNoteBodyInteractions(body, item, interactionOptions);
-
-        if (stopMousedownPropagation && !shell.dataset.shellBubbleBound) {
-            shell.dataset.shellBubbleBound = '1';
-            shell.addEventListener('mousedown', (e) => {
-                if (e.button !== 0) return;
-                if (e.target.closest('.card-act--drag')) return;
-                if (!e.target.closest(
-                    '.card-inline-edit, .step-check, .step-text, input, textarea, button, a, '
-                    + '.card-act, .grab-handle--step, .expanded-checklist-add-btn, '
-                    + '.checklist-done-toggle, .step-collapse-btn, .step-delete-btn, '
-                    + '.step-indent-btn, .step-outdent-btn, .checklist-expand-collapse-all-btn'
-                )) return;
-                e.stopPropagation();
-            });
-        }
-
-        shell.querySelectorAll('.card-inline-edit').forEach((el) => {
-            el.addEventListener('input', () => this.updateNoteMetaStats(shell, item));
-        });
-
-        if (localOnly && onChange) {
-            shell.querySelectorAll('.card-inline-edit').forEach((el) => {
-                el.addEventListener('input', onChange);
-            });
-        }
-
-        if (showFormat) {
-            this.bindFormatPanel(shell, { onChange });
-            this.bindBodyConvertBar(shell, item, { refresh, localOnly, onChange });
-            this.updateConvertButtons(shell, item);
-        }
-
-        if (!showConfig) return;
-
-        ['edit-visibility', 'edit-status', 'edit-category', 'edit-start-date', 'edit-start-time', 'edit-end-date', 'edit-end-time'].forEach((id) => {
-            const el = document.getElementById(id);
-            if (!el) return;
-            el.addEventListener('input', onConfigChange);
-            el.addEventListener('change', () => {
-                onConfigChange();
-                if (id === 'edit-status' && onStatusChange) onStatusChange();
-            });
-        });
-
-        if (bindDateDefaults) {
-            bindDateDefaults('edit-start-date', 'edit-start-time');
-            bindDateDefaults('edit-end-date', 'edit-end-time');
-        }
-        this.bindCollapsable('config-section-header', 'config-section', true);
-    },
-
-    canEditInline() {
-        return !!localStorage.getItem('admin_token');
-    },
-
-    buildExpandedChecklistHtml(item, canEdit, { richEdit = false } = {}) {
-        const collapsedKeys = this.getChecklistCollapsedKeys();
-        const { active, done } = partitionChecklistSteps(item.steps);
-        let html = '<div class="expanded-checklist">';
-        html += this.buildChecklistExpandCollapseAllHtml(item);
-
-        const renderRowHtml = (step, { hasKids = false, isCollapsed = false, collapseKey = '', isDoneSection = false } = {}) => {
-            const level = getStepLevel(step);
-            const collapseControl = !isDoneSection && hasKids
-                ? `<button type="button" class="step-collapse-btn" data-collapse-key="${this.escapeAttr(collapseKey)}" title="${isCollapsed ? 'Expand group' : 'Collapse group'}" aria-label="${isCollapsed ? 'Expand group' : 'Collapse group'}">${isCollapsed ? '▶' : '▼'}</button>`
-                : '<span class="step-collapse-spacer" aria-hidden="true"></span>';
-            const dragHandle = !canEdit
-                ? ''
-                : isDoneSection
-                    ? '<span class="grab-handle grab-handle--step grab-handle--spacer" aria-hidden="true">⋮⋮</span>'
-                    : '<span class="grab-handle grab-handle--step" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>';
-            const nestControls = canEdit ? `
-                    <button type="button" class="card-act step-outdent-btn" title="Outdent" aria-label="Outdent"${level === 0 ? ' disabled' : ''}>‹</button>
-                    <button type="button" class="card-act step-indent-btn" title="Indent" aria-label="Indent"${level >= 4 ? ' disabled' : ''}>›</button>` : '';
-            const copyBtn = canEdit
-                ? `<button type="button" class="card-act step-copy-btn" title="Copy item" aria-label="Copy item">${CARD_ICONS.copy}</button>`
-                : '';
-            const deleteBtn = canEdit
-                ? `<button type="button" class="card-act card-act--danger step-delete-btn" title="Remove item" aria-label="Remove item">${CARD_ICONS.close}</button>`
-                : '';
-            const stepText = step.text || '';
-            const stepRich = hasRichMarkup(stepText);
-            let textHtml;
-            if (canEdit && (richEdit || this.canInlineEditText(stepText, { richEdit }))) {
-                const inner = richEdit ? sanitizeRichHtml(stepText) : this.escapeHTML(stepText);
-                const ce = richEdit ? 'true' : 'plaintext-only';
-                const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
-                textHtml = `<span class="step-text card-inline-edit${richClasses} ${step.completed ? 'completed' : ''}" contenteditable="${ce}" spellcheck="false" data-field="step-text" data-step-id="${step.id}">${inner}</span>`;
-            } else {
-                const richClass = stepRich ? ' rich-text' : '';
-                textHtml = `<span class="step-text${richClass} ${step.completed ? 'completed' : ''}">${this.renderRichHtml(stepText)}</span>`;
-            }
-            return `
-                <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}" data-step-id="${step.id}" data-level="${level}" style="padding-left:${level * 0.45}rem">
-                    <div class="step-row-leading">
-                        ${collapseControl}
-                        ${dragHandle}
-                        <input type="checkbox" class="step-check" ${step.completed ? 'checked' : ''}>
-                    </div>
-                    ${textHtml}
-                    <div class="step-row-actions">
-                        ${copyBtn}
-                        ${canEdit ? `<span class="step-nest-controls">${nestControls}</span>` : ''}
-                        ${deleteBtn}
-                    </div>
-                </div>
-            `;
-        };
-
-        buildVisibleChecklistSteps(active, item.id, collapsedKeys)
-            .forEach((row) => { html += renderRowHtml(row.step, row); });
-
-        if (canEdit) {
-            html += `<button type="button" class="card-act expanded-checklist-add-btn" title="Add checklist item" aria-label="Add checklist item">+</button>`;
-        }
-
-        if (done.length > 0) {
-            const doneCollapsed = this.isChecklistDoneSectionCollapsed(item.id);
-            const toggleTitle = doneCollapsed
-                ? `Show ${done.length} completed item${done.length === 1 ? '' : 's'}`
-                : 'Collapse completed items';
-            const toggleIcon = doneCollapsed ? '▶' : '▼';
-            const toggleLabel = doneCollapsed
-                ? `Hidden items (${done.length})`
-                : 'Completed';
-            html += `<button type="button" class="checklist-done-toggle" title="${this.escapeAttr(toggleTitle)}" aria-expanded="${doneCollapsed ? 'false' : 'true'}" aria-label="${this.escapeAttr(toggleTitle)}">
-                <span class="checklist-done-toggle-icon" aria-hidden="true">${toggleIcon}</span>
-                <span class="checklist-done-toggle-label">${this.escapeHTML(toggleLabel)}</span>
-            </button>`;
-            if (!doneCollapsed && active.length > 0) {
-                html += '<div class="checklist-done-divider" role="separator" aria-hidden="true"></div>';
-            }
-            html += `<div class="checklist-done-section${doneCollapsed ? ' is-hidden' : ''}">`;
-            done.forEach((step) => { html += renderRowHtml(step, { isDoneSection: true }); });
-            html += '</div>';
-        }
-
-        html += '</div>';
-        return html;
-    },
 
     renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor) {
-        const canEdit = this.canEditInline();
+        const canEdit = NoteSurface.canEditInline();
         const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
         const dragZone = ' card-drag-zone';
 
         card.classList.remove('expanded');
-        card.innerHTML = this.buildNoteEditorShell(item, {
+        card.innerHTML = NoteSurface.buildNoteEditorShell(item, {
             canEdit,
             richEdit: canEdit,
             toolbarHtml: this.buildCardActionsHtml(item, false, this.getCardActionsOptions(card)),
@@ -2665,10 +1538,11 @@ export const UI = {
             targetCatName,
             categoryColor
         });
-        this.bindNoteEditorShell(card, item, {
+        NoteSurface.bindNoteEditorShell(card, item, {
             richEdit: canEdit,
             refresh: () => this.refreshBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor),
-            stopMousedownPropagation: true
+            stopMousedownPropagation: true,
+            onRaiseCard: (c) => this.raiseDesktopCard(c)
         });
         this.bindBoardEditorFocusChrome(card);
         this.finalizeDesktopCard(card);
@@ -2679,7 +1553,7 @@ export const UI = {
     refreshBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor) {
         const shell = card.querySelector('.editor-note-shell');
         if (shell && !card.dataset.pendingFocusStepId) {
-            this.syncItemBodyFromDom(shell, item);
+            NoteSurface.syncItemBodyFromDom(shell, item);
         }
         const body = card.querySelector('.editor-note-body');
         const scrollTop = body?.scrollTop ?? 0;
@@ -2695,7 +1569,7 @@ export const UI = {
             if (pendingFocusPlainOffset != null) {
                 card.dataset.pendingFocusPlainOffset = pendingFocusPlainOffset;
             }
-            this.focusPendingChecklistStep(card);
+            NoteSurface.focusPendingChecklistStep(card);
         }
     },
 
@@ -2712,954 +1586,52 @@ export const UI = {
             } else {
                 el = card.querySelector('.editor-note-header .card-inline-edit[data-field="title"]');
             }
-            if (el) this.focusInlineEdit(el, 'start');
+            if (el) NoteSurface.focusInlineEdit(el, 'start');
         });
     },
 
-    splitInlineEditAtCaret(el) {
-        const rich = el.classList.contains('rich-text--edit');
-        const readFull = () => (rich
-            ? sanitizeRichHtml(linkifyPlainUrls(el.innerHTML))
-            : (el.textContent || ''));
-
-        const sel = window.getSelection();
-        if (!sel?.rangeCount) {
-            const full = readFull();
-            return { before: full, after: '' };
+    markNoteCollapsed(itemId) {
+        if (!itemId) return;
+        setExpandedCard('grid', itemId, false);
+        setExpandedCard('freeform', itemId, false);
+        const small = getSmallRect(readTileSmallFootprint());
+        const item = this.resolveBoardItem(itemId);
+        const tileSize = resolveTileSize(item);
+        const grid = this.getGridLayout();
+        if (grid[itemId]) {
+            const prev = grid[itemId];
+            grid[itemId] = this.mergeSpatialLayoutEntry(prev, {
+                x: prev.x,
+                y: prev.y,
+                w: small.w,
+                h: small.h
+            }, tileSize, { updateRemembered: false });
+            localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(grid));
         }
-
-        const range = sel.getRangeAt(0);
-        if (!el.contains(range.startContainer)) {
-            const full = readFull();
-            return { before: full, after: '' };
+        const sizes = this.getFreeformSizes();
+        if (sizes[itemId]) {
+            const prev = sizes[itemId];
+            sizes[itemId] = this.mergeSpatialLayoutEntry(prev, { w: small.w, h: small.h }, tileSize, { updateRemembered: false });
+            localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
+            const pos = this.getFreeformPositions()[itemId];
+            if (pos) this.saveFreeformPosition(itemId, pos.x, pos.y);
         }
+    },
 
-        const measureRange = range.cloneRange();
-        measureRange.selectNodeContents(el);
-        measureRange.setEnd(range.startContainer, range.startOffset);
-        const plainOffset = measureRange.toString().length;
-
-        if (!rich) {
-            const full = el.textContent || '';
-            return {
-                before: full.slice(0, plainOffset),
-                after: full.slice(plainOffset)
-            };
+    collapseBoardCardIfExpanded(card, item, hiddenCategories = []) {
+        if (!card || !item?.id) return;
+        if (!this.isSpatiallyCollapsed(card)) {
+            this.collapseBoardCardToSmallFootprint(card, item);
         }
+    },
 
-        const fullHtml = readFull();
-        const fullPlain = stripRichText(fullHtml);
-        if (plainOffset <= 0) {
-            return { before: '', after: fullHtml };
-        }
-        if (plainOffset >= fullPlain.length) {
-            return { before: fullHtml, after: '' };
-        }
-
-        const beforeRange = range.cloneRange();
-        beforeRange.selectNodeContents(el);
-        beforeRange.setEnd(range.startContainer, range.startOffset);
-
-        const afterRange = range.cloneRange();
-        afterRange.selectNodeContents(el);
-        afterRange.setStart(range.endContainer, range.endOffset);
-
-        const htmlFromFragment = (frag) => {
-            const div = document.createElement('div');
-            div.appendChild(frag);
-            return div.innerHTML;
-        };
+    captureDesktopRestoreContext(card) {
+        if (!card || !isDesktopCard(card)) return null;
         return {
-            before: sanitizeRichHtml(linkifyPlainUrls(htmlFromFragment(beforeRange.cloneContents()))),
-            after: sanitizeRichHtml(linkifyPlainUrls(htmlFromFragment(afterRange.cloneContents())))
+            viewMode: activeBoardViewMode,
+            rect: this.readNoteRect(card),
+            size: this.readFreeformCardSize(card)
         };
-    },
-
-    caretAtEdge(el, edge) {
-        const sel = window.getSelection();
-        if (!sel?.rangeCount) return true;
-        const range = sel.getRangeAt(0);
-        if (!el.contains(range.startContainer)) return false;
-        const probe = range.cloneRange();
-        probe.selectNodeContents(el);
-        if (edge === 'start') {
-            probe.setEnd(range.startContainer, range.startOffset);
-            return probe.toString().length === 0;
-        }
-        probe.setStart(range.endContainer, range.endOffset);
-        return probe.toString().length === 0;
-    },
-
-    caretAtPlainEdge(el, edge) {
-        const sel = window.getSelection();
-        if (!sel?.rangeCount) return true;
-        const range = sel.getRangeAt(0);
-        if (!el.contains(range.startContainer)) return false;
-
-        const measureRange = range.cloneRange();
-        measureRange.selectNodeContents(el);
-        measureRange.setEnd(range.startContainer, range.startOffset);
-        const plainOffset = measureRange.toString().length;
-
-        const rich = el.classList.contains('rich-text--edit');
-        const fullPlain = rich
-            ? stripRichText(sanitizeRichHtml(linkifyPlainUrls(el.innerHTML)))
-            : (el.textContent || '');
-
-        if (edge === 'start') return plainOffset <= 0;
-        return plainOffset >= fullPlain.length;
-    },
-
-    findAdjacentChecklistStepRow(row, direction) {
-        if (!row) return null;
-        let sibling = direction === 'next' ? row.nextElementSibling : row.previousElementSibling;
-        while (sibling) {
-            if (sibling.classList?.contains('step-row--display')) return sibling;
-            sibling = direction === 'next' ? sibling.nextElementSibling : sibling.previousElementSibling;
-        }
-        return null;
-    },
-
-    getAdjacentChecklistStep(item, row, direction) {
-        const stepId = row?.dataset?.stepId;
-        if (!stepId) return null;
-        const steps = item.steps || [];
-        const idx = steps.findIndex((s) => s.id === stepId);
-        if (idx < 0) return null;
-        if (direction === 'prev') {
-            return idx > 0 ? steps[idx - 1] : null;
-        }
-        return idx < steps.length - 1 ? steps[idx + 1] : null;
-    },
-
-    focusInlineEdit(el, edge = 'end') {
-        if (!el) return;
-        el.focus();
-        const range = document.createRange();
-        range.selectNodeContents(el);
-        range.collapse(edge === 'start');
-        const sel = window.getSelection();
-        sel?.removeAllRanges();
-        sel?.addRange(range);
-    },
-
-    setCaretAtPlainOffset(el, offset) {
-        if (!el) return;
-        el.focus();
-        const target = Math.max(0, Number(offset) || 0);
-        const range = document.createRange();
-        const sel = window.getSelection();
-        let remaining = target;
-        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-        let node = walker.nextNode();
-        while (node) {
-            const len = node.textContent.length;
-            if (remaining <= len) {
-                range.setStart(node, remaining);
-                range.collapse(true);
-                sel?.removeAllRanges();
-                sel?.addRange(range);
-                return;
-            }
-            remaining -= len;
-            node = walker.nextNode();
-        }
-        range.selectNodeContents(el);
-        range.collapse(false);
-        sel?.removeAllRanges();
-        sel?.addRange(range);
-    },
-
-    scheduleChecklistStepFocus(root, stepId, { edge = 'start', plainOffset = null } = {}) {
-        const host = root.closest('.mini-card') || root;
-        host.dataset.pendingFocusStepId = stepId;
-        host.dataset.pendingFocusEdge = edge;
-        if (plainOffset != null) {
-            host.dataset.pendingFocusPlainOffset = String(plainOffset);
-        } else {
-            delete host.dataset.pendingFocusPlainOffset;
-        }
-    },
-
-    getInlineEditSequence(root) {
-        const fields = [];
-        const title = root.querySelector('[data-field="title"].card-inline-edit');
-        const content = root.querySelector('[data-field="content"].card-inline-edit');
-        if (title) fields.push(title);
-        if (content) fields.push(content);
-        root.querySelectorAll('[data-field="step-text"].card-inline-edit').forEach((el) => fields.push(el));
-        return fields;
-    },
-
-    handleInlineEditArrowNav(e, root, fieldEl) {
-        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return false;
-        const sequenceRoot = fieldEl.closest('.editor-note-shell') || root;
-        const fields = this.getInlineEditSequence(sequenceRoot);
-        const idx = fields.indexOf(fieldEl);
-        if (idx < 0) return false;
-
-        if (e.key === 'ArrowDown' && this.caretAtEdge(fieldEl, 'end') && idx < fields.length - 1) {
-            e.preventDefault();
-            this.focusInlineEdit(fields[idx + 1], 'start');
-            return true;
-        }
-        if (e.key === 'ArrowUp' && this.caretAtEdge(fieldEl, 'start') && idx > 0) {
-            e.preventDefault();
-            this.focusInlineEdit(fields[idx - 1], 'end');
-            return true;
-        }
-        return false;
-    },
-
-    insertChecklistStep(root, item, refresh, applyMutate, { afterStepId = null, initialText = '' } = {}) {
-        const newStep = this.createBlankChecklistStep();
-        newStep.text = initialText ?? '';
-        applyMutate((it) => {
-            if (it.type !== 'checklist') it.type = 'checklist';
-            if (!it.steps) it.steps = [];
-            if (afterStepId) {
-                const idx = it.steps.findIndex((s) => s.id === afterStepId);
-                if (idx >= 0) {
-                    newStep.level = getStepLevel(it.steps[idx]);
-                    it.steps.splice(idx + 1, 0, newStep);
-                } else {
-                    it.steps.push(newStep);
-                }
-            } else {
-                it.steps.push(newStep);
-            }
-            reorderStepsByCompletion(it.steps);
-        }, { persist: false });
-
-        const host = root.closest('.mini-card') || root;
-        this.scheduleChecklistStepFocus(root, newStep.id, { edge: 'start' });
-        refresh();
-        this.focusPendingChecklistStep(host);
-    },
-
-    focusPendingChecklistStep(root) {
-        const focusNewStep = () => {
-            const pendingId = root.dataset.pendingFocusStepId;
-            if (!pendingId) return false;
-            const newEl = root.querySelector(
-                `[data-field="step-text"].card-inline-edit[data-step-id="${pendingId}"]`
-            );
-            if (!newEl) return false;
-            const edge = root.dataset.pendingFocusEdge || 'start';
-            const plainOffset = root.dataset.pendingFocusPlainOffset;
-            delete root.dataset.pendingFocusStepId;
-            delete root.dataset.pendingFocusEdge;
-            delete root.dataset.pendingFocusPlainOffset;
-            if (plainOffset != null && plainOffset !== '') {
-                this.setCaretAtPlainOffset(newEl, Number(plainOffset));
-            } else {
-                this.focusInlineEdit(newEl, edge);
-            }
-            return true;
-        };
-
-        requestAnimationFrame(() => {
-            if (!focusNewStep()) requestAnimationFrame(() => focusNewStep());
-        });
-    },
-
-    removeChecklistStepAndFocus(root, item, refresh, applyMutate, {
-        stepId,
-        focusStepId,
-        focusEdge = 'start',
-        plainOffset = null
-    } = {}) {
-        applyMutate((it) => {
-            it.steps = (it.steps || []).filter((s) => s.id !== stepId);
-            if (!it.steps.length) it.type = 'note';
-        }, { persist: false });
-        this.scheduleChecklistStepFocus(root, focusStepId, { edge: focusEdge, plainOffset });
-        refresh();
-        this.focusPendingChecklistStep(root.closest('.mini-card') || root);
-    },
-
-    handleChecklistBackspace(root, item, el, refresh, { applyMutate, localOnly = false } = {}) {
-        const sel = window.getSelection();
-        if (!sel?.isCollapsed) return false;
-        if (!this.caretAtPlainEdge(el, 'start')) return false;
-
-        el.dataset.skipBlurSave = '1';
-        this.syncInlineFieldToItem(el, item);
-        const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
-
-        const stepId = el.dataset.stepId;
-        const steps = item.steps || [];
-        const idx = steps.findIndex((s) => s.id === stepId);
-        if (idx < 0) return false;
-
-        const current = steps[idx];
-        const empty = !stripRichText(current.text || '').trim();
-        const row = el.closest('.step-row--display');
-
-        if (empty) {
-            if (steps.length <= 1) return true;
-            const prevRow = this.findAdjacentChecklistStepRow(row, 'prev');
-            const nextRow = this.findAdjacentChecklistStepRow(row, 'next');
-            const focusStepId = prevRow?.dataset.stepId || nextRow?.dataset.stepId;
-            if (!focusStepId) return true;
-            this.removeChecklistStepAndFocus(root, item, refresh, applyMutate, {
-                stepId,
-                focusStepId,
-                focusEdge: prevRow ? 'end' : 'start'
-            });
-            this.commitInlineChecklistOp(item, beforeItem, { localOnly });
-            return true;
-        }
-
-        const prev = this.getAdjacentChecklistStep(item, row, 'prev');
-        if (!prev || prev.completed !== current.completed) return false;
-
-        const joinAt = stripRichText(prev.text || '').length;
-        const merged = `${prev.text || ''}${current.text || ''}`;
-        const rich = el.classList.contains('rich-text--edit');
-
-        applyMutate((it) => {
-            const p = it.steps?.find((s) => s.id === prev.id);
-            const c = it.steps?.find((s) => s.id === stepId);
-            if (!p || !c) return;
-            p.text = rich ? sanitizeRichHtml(linkifyPlainUrls(merged)) : merged;
-            it.steps = it.steps.filter((s) => s.id !== stepId);
-        }, { persist: false });
-
-        this.scheduleChecklistStepFocus(root, prev.id, { plainOffset: joinAt });
-        refresh();
-        this.focusPendingChecklistStep(root.closest('.mini-card') || root);
-        this.commitInlineChecklistOp(item, beforeItem, { localOnly });
-        return true;
-    },
-
-    handleChecklistDelete(root, item, el, refresh, { applyMutate, localOnly = false } = {}) {
-        const sel = window.getSelection();
-        if (!sel?.isCollapsed) return false;
-        if (!this.caretAtPlainEdge(el, 'end')) return false;
-
-        el.dataset.skipBlurSave = '1';
-        this.syncInlineFieldToItem(el, item);
-        const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
-
-        const stepId = el.dataset.stepId;
-        const steps = item.steps || [];
-        const idx = steps.findIndex((s) => s.id === stepId);
-        if (idx < 0) return false;
-
-        const current = steps[idx];
-        const row = el.closest('.step-row--display');
-        const next = this.getAdjacentChecklistStep(item, row, 'next');
-        if (!next || next.completed !== current.completed) return false;
-
-        const nextEmpty = !stripRichText(next.text || '').trim();
-        const rich = el.classList.contains('rich-text--edit');
-
-        if (nextEmpty) {
-            applyMutate((it) => {
-                it.steps = (it.steps || []).filter((s) => s.id !== next.id);
-            }, { persist: false });
-            this.scheduleChecklistStepFocus(root, stepId, { edge: 'end' });
-            refresh();
-            this.focusPendingChecklistStep(root.closest('.mini-card') || root);
-            this.commitInlineChecklistOp(item, beforeItem, { localOnly });
-            return true;
-        }
-
-        const joinAt = stripRichText(current.text || '').length;
-        const merged = `${current.text || ''}${next.text || ''}`;
-
-        applyMutate((it) => {
-            const cur = it.steps?.find((s) => s.id === stepId);
-            if (!cur) return;
-            cur.text = rich ? sanitizeRichHtml(linkifyPlainUrls(merged)) : merged;
-            it.steps = it.steps.filter((s) => s.id !== next.id);
-        }, { persist: false });
-
-        this.scheduleChecklistStepFocus(root, stepId, { plainOffset: joinAt });
-        refresh();
-        this.focusPendingChecklistStep(root.closest('.mini-card') || root);
-        this.commitInlineChecklistOp(item, beforeItem, { localOnly });
-        return true;
-    },
-
-    handleChecklistEnter(root, item, el, refresh, { applyMutate, localOnly = false } = {}) {
-        el.dataset.skipBlurSave = '1';
-        const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
-        const stepId = el.dataset.stepId;
-        const { before, after } = this.splitInlineEditAtCaret(el);
-        applyMutate((it) => {
-            const step = it.steps?.find((s) => s.id === stepId);
-            if (step) step.text = before ?? '';
-        }, { persist: false });
-        this.insertChecklistStep(root, item, refresh, applyMutate, {
-            afterStepId: stepId,
-            initialText: after
-        });
-        this.commitInlineChecklistOp(item, beforeItem, { localOnly });
-    },
-
-    attachNoteBodyInteractions(root, item, {
-        refresh = () => {},
-        localOnly = false,
-        onChange = () => {},
-        stopMousedownPropagation = false,
-        richEdit = false
-    } = {}) {
-        const applyMutate = (mutator, { persist = !localOnly } = {}) => {
-            if (persist) {
-                this.mutateItem(item, mutator, { preserveView: true, skipRerender: true, localOnly });
-                if (localOnly) onChange();
-            } else {
-                mutator(item);
-            }
-        };
-
-        if (this.canEditInline() || localOnly) {
-            if (!root.dataset.noteInteractionsBound) {
-                root.dataset.noteInteractionsBound = '1';
-                root.addEventListener('mousedown', (e) => {
-                    if (e.button !== 0) return;
-                    const active = document.activeElement;
-                    if (!active?.classList?.contains('card-inline-edit') || !root.contains(active)) return;
-                    if (active === e.target || active.contains(e.target)) return;
-                    applyMutate(() => this.syncInlineFieldToItem(active, item));
-                    active.dataset.skipBlurSave = '1';
-                }, true);
-            }
-
-            root.querySelectorAll('.card-inline-edit').forEach((el) => {
-                el.addEventListener('click', (e) => {
-                    if (this.tryOpenRichEditLink(e, el)) return;
-                    e.stopPropagation();
-                    if (document.activeElement !== el) {
-                        this.focusInlineEdit(el, 'end');
-                    }
-                });
-                el.addEventListener('mousedown', (e) => {
-                    if (e.button !== 0) return;
-                    if (el.classList.contains('rich-text--edit') && e.target.closest('a[href]')) {
-                        e.preventDefault();
-                    }
-                    if (stopMousedownPropagation) {
-                        e.stopPropagation();
-                    }
-                    if (document.activeElement !== el) {
-                        this.focusInlineEdit(el, 'end');
-                    }
-                });
-                el.addEventListener('focus', () => {
-                    const card = root.closest('.mini-card');
-                    if (isDesktopCard(card)) this.raiseDesktopCard(card);
-                });
-                if (el.classList.contains('rich-text--edit')) {
-                    el.addEventListener('paste', (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const beforePaste = this.prepareInlineOpSnapshot(root, item, localOnly);
-                        const plain = e.clipboardData?.getData('text/plain') || '';
-                        if (plain) {
-                            document.execCommand('insertText', false, plain);
-                        } else {
-                            const html = e.clipboardData?.getData('text/html') || '';
-                            if (html) document.execCommand('insertHTML', false, sanitizeRichHtml(html));
-                        }
-                        this.syncInlineFieldToItem(el, item);
-                        this.commitInlineTextOp(item, beforePaste, { localOnly });
-                        if (localOnly) onChange();
-                    });
-                }
-                el.addEventListener('keydown', (e) => {
-                    if (el.classList.contains('rich-text--edit')) {
-                        const mod = e.ctrlKey || e.metaKey;
-                        if (mod && e.key === 'b') {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            document.execCommand('bold');
-                            if (localOnly) onChange();
-                            return;
-                        }
-                        if (mod && e.key === 'i') {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            document.execCommand('italic');
-                            if (localOnly) onChange();
-                            return;
-                        }
-                        if (mod && e.shiftKey && (e.key === 's' || e.key === 'S')) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            document.execCommand('strikeThrough');
-                            if (localOnly) onChange();
-                            return;
-                        }
-                    }
-                    if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (localOnly) {
-                            document.execCommand('undo');
-                        } else {
-                            UndoManager.undo();
-                        }
-                        return;
-                    }
-                    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (!localOnly) UndoManager.redo();
-                        return;
-                    }
-                    if (el.dataset.field === 'content' && e.key === 'Enter') {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (el.classList.contains('rich-text--edit')) {
-                            document.execCommand('insertLineBreak');
-                        } else {
-                            this.insertTextAtCaret(el, e.shiftKey ? SOFT_BREAK : '\n');
-                        }
-                        if (localOnly) onChange();
-                        return;
-                    }
-                    if (el.dataset.field === 'step-text' && e.key === 'Enter') {
-                        if (e.shiftKey) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            document.execCommand('insertLineBreak');
-                            return;
-                        }
-                        e.preventDefault();
-                        e.stopPropagation();
-                        this.handleChecklistEnter(root, item, el, refresh, { applyMutate, localOnly });
-                        return;
-                    }
-                    if (el.dataset.field === 'step-text' && e.key === 'Backspace') {
-                        if (this.handleChecklistBackspace(root, item, el, refresh, { applyMutate, localOnly })) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                        }
-                        return;
-                    }
-                    if (el.dataset.field === 'step-text' && e.key === 'Delete') {
-                        if (this.handleChecklistDelete(root, item, el, refresh, { applyMutate, localOnly })) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                        }
-                        return;
-                    }
-                    if (!this.handleInlineEditArrowNav(e, root, el)) e.stopPropagation();
-                });
-                el.addEventListener('blur', () => {
-                    if (el.dataset.skipBlurSave) {
-                        delete el.dataset.skipBlurSave;
-                        return;
-                    }
-                    applyMutate(() => this.syncInlineFieldToItem(el, item));
-                });
-            });
-        }
-
-        if (root.querySelector('.expanded-checklist') && !root.dataset.checklistInteractionsBound) {
-            root.dataset.checklistInteractionsBound = '1';
-            if (!item.steps) item.steps = [];
-
-            root.querySelector('.expanded-checklist-add-btn')?.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.insertChecklistStep(root, item, refresh, applyMutate);
-            });
-
-            root.querySelectorAll('.step-row--display').forEach((row) => {
-                const checkbox = row.querySelector('.step-check');
-                const stepId = row.dataset.stepId;
-                checkbox?.addEventListener('mousedown', (e) => {
-                    e.stopPropagation();
-                });
-                checkbox?.addEventListener('change', (e) => {
-                    e.stopPropagation();
-                    this.ensureChecklistStepFromRow(row, item);
-                    const step = item.steps?.find((s) => s.id === stepId);
-                    if (!step) return;
-                    row.classList.add('step-row--animating');
-                    applyMutate((it) => {
-                        const s = it.steps.find((st) => st.id === stepId);
-                        if (!s) return;
-                        moveStepOnCompletionChange(it.steps, s, checkbox.checked);
-                    });
-                    refresh();
-                });
-            });
-
-            root.querySelectorAll('.step-indent-btn').forEach((btn) => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const row = btn.closest('.step-row--display');
-                    const stepId = row?.dataset.stepId;
-                    if (!stepId) return;
-                    this.ensureChecklistStepFromRow(row, item);
-                    const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
-                    applyMutate((it) => {
-                        const activeSteps = it.steps.filter((step) => !step.completed);
-                        const idx = activeSteps.findIndex((s) => s.id === stepId);
-                        if (idx < 0) return;
-                        if (getStepLevel(activeSteps[idx]) >= 4) return;
-                        applySubtreeLevelDelta(activeSteps, idx, +1);
-                        normalizeChecklistLevels(activeSteps);
-                        const doneSteps = it.steps.filter((step) => step.completed);
-                        it.steps = [...activeSteps, ...doneSteps];
-                    }, { persist: false });
-                    this.expandChecklistAncestorsForStep(item, stepId);
-                    const host = root.closest('.mini-card') || root;
-                    this.scheduleChecklistStepFocus(root, stepId, { edge: 'start' });
-                    refresh();
-                    this.focusPendingChecklistStep(host);
-                    this.commitInlineChecklistOp(item, beforeItem, { localOnly });
-                });
-            });
-
-            root.querySelectorAll('.step-outdent-btn').forEach((btn) => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const row = btn.closest('.step-row--display');
-                    const stepId = row?.dataset.stepId;
-                    if (!stepId) return;
-                    this.ensureChecklistStepFromRow(row, item);
-                    const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
-                    applyMutate((it) => {
-                        const activeSteps = it.steps.filter((step) => !step.completed);
-                        const idx = activeSteps.findIndex((s) => s.id === stepId);
-                        if (idx < 0) return;
-                        if (getStepLevel(activeSteps[idx]) <= 0) return;
-                        applySubtreeLevelDelta(activeSteps, idx, -1);
-                        normalizeChecklistLevels(activeSteps);
-                        const doneSteps = it.steps.filter((step) => step.completed);
-                        it.steps = [...activeSteps, ...doneSteps];
-                    }, { persist: false });
-                    this.expandChecklistAncestorsForStep(item, stepId);
-                    const host = root.closest('.mini-card') || root;
-                    this.scheduleChecklistStepFocus(root, stepId, { edge: 'start' });
-                    refresh();
-                    this.focusPendingChecklistStep(host);
-                    this.commitInlineChecklistOp(item, beforeItem, { localOnly });
-                });
-            });
-
-            root.querySelectorAll('.step-collapse-btn').forEach((btn) => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const key = btn.dataset.collapseKey;
-                    if (!key) return;
-                    const collapsed = this.getChecklistCollapsedKeys();
-                    collapsed[key] = !collapsed[key];
-                    if (!collapsed[key]) delete collapsed[key];
-                    localStorage.setItem('matrix_checklist_collapsed', JSON.stringify(collapsed));
-                    refresh();
-                });
-            });
-
-            root.querySelectorAll('.checklist-done-toggle').forEach((btn) => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    this.toggleChecklistDoneSection(item.id);
-                    refresh();
-                });
-            });
-
-            root.querySelector('.checklist-expand-collapse-all-btn')?.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.toggleChecklistExpandCollapseAll(item);
-                refresh();
-            });
-
-            root.querySelectorAll('.step-delete-btn').forEach((btn) => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
-                    const row = btn.closest('.step-row--display');
-                    const stepId = row?.dataset.stepId;
-                    if (!stepId || !item.steps) return;
-                    if (!item.steps.some((s) => s.id === stepId)) return;
-                    applyMutate((it) => {
-                        it.steps = it.steps.filter((s) => s.id !== stepId);
-                        if (!it.steps.length) it.type = 'note';
-                    }, { persist: false });
-                    refresh();
-                    this.commitInlineChecklistOp(item, beforeItem, { localOnly });
-                });
-            });
-
-            root.querySelectorAll('.step-copy-btn').forEach((btn) => {
-                btn.addEventListener('click', async (e) => {
-                    e.stopPropagation();
-                    const shell = root.closest('.editor-note-shell') || root;
-                    this.syncItemBodyFromDom(shell, item);
-                    const row = btn.closest('.step-row--display');
-                    const stepId = row?.dataset.stepId;
-                    const step = item.steps?.find((s) => s.id === stepId);
-                    if (!step) return;
-                    const ok = await this.copyPlainTextToClipboard(stepToPlainCopyLine(step));
-                    if (ok) this.flashCopyFeedback(btn);
-                    else this.flashCopyFeedback(btn, 'Copy failed', { failed: true });
-                });
-            });
-
-            if (this.canEditInline() || localOnly) {
-                this.attachChecklistDrag(root, item, applyMutate, refresh, localOnly);
-            }
-        }
-    },
-
-    attachChecklistDrag(root, item, applyMutate, refresh, localOnly = false) {
-        if (!root.querySelector('.expanded-checklist')) return;
-        if (root.dataset.checklistDragBound) return;
-        root.dataset.checklistDragBound = '1';
-
-        const DRAG_THRESHOLD = 4;
-        let activeDrag = null;
-
-        const getList = () => root.querySelector('.expanded-checklist');
-        const getActiveRows = () => [...(getList()?.querySelectorAll('.step-row--display:not(.step-row--done)') || [])];
-
-        const getDoneAnchor = (activeList) => activeList.querySelector('.checklist-done-toggle')
-            || activeList.querySelector('.checklist-done-section')
-            || activeList.querySelector('.step-row--done');
-
-        const buildDomBlockFromIds = (rows, ids) => {
-            const idSet = new Set(ids);
-            return rows.filter((row) => idSet.has(row.dataset.stepId));
-        };
-
-        const syncDomBlock = () => {
-            if (!activeDrag) return;
-            const rows = getActiveRows();
-            activeDrag.block = buildDomBlockFromIds(rows, activeDrag.blockStepIds);
-        };
-
-        const updateDropIndicator = (activeList, ref, { mode, targetLevel = 0 } = {}) => {
-            let indicator = activeList.querySelector('.checklist-drop-indicator');
-            if (!indicator) {
-                indicator = document.createElement('div');
-                indicator.className = 'checklist-drop-indicator';
-                indicator.setAttribute('aria-hidden', 'true');
-                activeList.appendChild(indicator);
-            }
-            if (!ref) {
-                indicator.classList.remove('is-visible');
-                indicator.style.marginLeft = '';
-                return;
-            }
-            indicator.classList.add('is-visible');
-            indicator.style.marginLeft = `${targetLevel * 0.45}rem`;
-            activeList.insertBefore(indicator, ref);
-        };
-
-        const hideDropIndicator = () => {
-            const indicator = getList()?.querySelector('.checklist-drop-indicator');
-            if (!indicator) return;
-            indicator.classList.remove('is-visible');
-            indicator.style.marginLeft = '';
-        };
-
-        const reorderAt = (clientY) => {
-            const block = activeDrag?.block;
-            const activeList = getList();
-            if (!block?.length || !activeList?.contains(block[0])) return;
-
-            const allRows = getActiveRows();
-            const { insertIndex, dropMode, others, targetLevel } = resolvePointerDropTarget(
-                clientY,
-                allRows,
-                block,
-                { bounds: activeDrag.bounds, isSingleLeaf: activeDrag.isSingleLeaf }
-            );
-            activeDrag.dropMode = dropMode;
-            activeDrag.insertIndex = insertIndex;
-            activeDrag.targetLevel = targetLevel;
-
-            const ref = others[insertIndex] || getDoneAnchor(activeList);
-            block.forEach((node) => {
-                activeList.insertBefore(node, ref);
-            });
-            updateDropIndicator(activeList, ref, { mode: dropMode, targetLevel });
-        };
-
-        const finishDrag = () => {
-            if (!activeDrag) return;
-            const { block, moved, blockStepIds, dropMode } = activeDrag;
-            const blockRootId = blockStepIds[0];
-            block.forEach((r) => r.classList.remove('is-dragging'));
-            hideDropIndicator();
-            document.removeEventListener('mousemove', onMove);
-            document.removeEventListener('mouseup', onUp);
-            if (moved) {
-                const shell = root.closest('.editor-note-shell') || root;
-                this.syncItemBodyFromDom(shell, item);
-                const collapsedKeys = this.getChecklistCollapsedKeys();
-                const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
-                let parentIdToExpand = null;
-                applyMutate((it) => {
-                    const activeSteps = it.steps.filter((step) => !step.completed);
-                    const doneSteps = it.steps.filter((step) => step.completed);
-                    const visibleOrderIds = getActiveRows().map((r) => r.dataset.stepId);
-                    const reordered = reorderActiveStepsFromDomOrder(
-                        activeSteps,
-                        visibleOrderIds,
-                        item.id,
-                        collapsedKeys
-                    );
-                    const dropResult = resolveDropTarget(reordered, blockRootId, { mode: dropMode || 'sibling' });
-                    parentIdToExpand = dropResult?.parentId || null;
-                    normalizeChecklistLevels(reordered);
-                    it.steps = [...reordered, ...doneSteps];
-                }, { persist: false });
-                this.expandChecklistAncestorsForStep(item, blockRootId);
-                if (parentIdToExpand) {
-                    this.expandChecklistAncestorsForStep(item, parentIdToExpand);
-                }
-                refresh();
-                this.commitInlineChecklistOp(item, beforeItem, { localOnly });
-            }
-            activeDrag = null;
-        };
-
-        const onMove = (e) => {
-            if (!activeDrag) return;
-            if (!activeDrag.moved) {
-                const dx = Math.abs(e.clientX - activeDrag.startX);
-                const dy = Math.abs(e.clientY - activeDrag.startY);
-                if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
-                activeDrag.moved = true;
-                syncDomBlock();
-                activeDrag.block.forEach((r) => r.classList.add('is-dragging'));
-            }
-            e.preventDefault();
-            syncDomBlock();
-            reorderAt(e.clientY);
-        };
-
-        const onUp = () => finishDrag();
-
-        root.addEventListener('mousedown', (e) => {
-            if (e.button !== 0) return;
-            const handle = e.target.closest('.grab-handle--step');
-            if (!handle || !root.contains(handle)) return;
-            const row = handle.closest('.step-row--display:not(.step-row--done)');
-            if (!row) return;
-            e.preventDefault();
-            e.stopPropagation();
-
-            const stepId = row.dataset.stepId;
-            const activeSteps = (item.steps || []).filter((step) => !step.completed);
-            const stepIndex = activeSteps.findIndex((step) => step.id === stepId);
-            if (stepIndex < 0) return;
-
-            const visibleIds = getActiveRows().map((r) => r.dataset.stepId);
-            const { subtreeIds, minAmongOthers, maxAmongOthers } = computeVisibleInsertBounds(
-                activeSteps,
-                stepIndex,
-                visibleIds
-            );
-            const isSingleLeaf = subtreeIds.length === 1
-                || !stepHasDescendants(activeSteps, stepIndex);
-            const rows = getActiveRows();
-            const block = buildDomBlockFromIds(rows, subtreeIds);
-            const othersCount = visibleIds.filter((id) => !subtreeIds.includes(id)).length;
-
-            activeDrag = {
-                row,
-                block,
-                blockStepIds: subtreeIds,
-                isSingleLeaf,
-                bounds: isSingleLeaf
-                    ? { minAmongOthers: 0, maxAmongOthers: othersCount }
-                    : { minAmongOthers, maxAmongOthers },
-                dropMode: 'sibling',
-                insertIndex: 0,
-                targetLevel: 0,
-                startX: e.clientX,
-                startY: e.clientY,
-                moved: false
-            };
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
-        }, true);
-    },
-
-    getChecklistCollapsedKeys() {
-        try {
-            return JSON.parse(localStorage.getItem('matrix_checklist_collapsed') || '{}');
-        } catch {
-            return {};
-        }
-    },
-
-    getChecklistDoneCollapsed() {
-        try {
-            return JSON.parse(localStorage.getItem('matrix_checklist_done_collapsed') || '{}');
-        } catch {
-            return {};
-        }
-    },
-
-    isChecklistDoneSectionCollapsed(itemId) {
-        return !!this.getChecklistDoneCollapsed()[itemId];
-    },
-
-    toggleChecklistDoneSection(itemId) {
-        const collapsed = this.getChecklistDoneCollapsed();
-        collapsed[itemId] = !collapsed[itemId];
-        if (!collapsed[itemId]) delete collapsed[itemId];
-        localStorage.setItem('matrix_checklist_done_collapsed', JSON.stringify(collapsed));
-    },
-
-    getChecklistCollapsibleKeys(item) {
-        if (!item?.id) return [];
-        const { active } = partitionChecklistSteps(item.steps || []);
-        const keys = [];
-        active.forEach((step, index) => {
-            if (!stepHasDescendants(active, index)) return;
-            keys.push(`${item.id}:${step.id}`);
-        });
-        return keys;
-    },
-
-    checklistGroupsAnyExpanded(item) {
-        const collapsed = this.getChecklistCollapsedKeys();
-        return this.getChecklistCollapsibleKeys(item).some((key) => !collapsed[key]);
-    },
-
-    collapseAllChecklistGroups(item) {
-        const collapsed = this.getChecklistCollapsedKeys();
-        this.getChecklistCollapsibleKeys(item).forEach((key) => {
-            collapsed[key] = true;
-        });
-        localStorage.setItem('matrix_checklist_collapsed', JSON.stringify(collapsed));
-    },
-
-    expandAllChecklistGroups(item) {
-        const collapsed = this.getChecklistCollapsedKeys();
-        this.getChecklistCollapsibleKeys(item).forEach((key) => {
-            delete collapsed[key];
-        });
-        localStorage.setItem('matrix_checklist_collapsed', JSON.stringify(collapsed));
-    },
-
-    toggleChecklistExpandCollapseAll(item) {
-        if (this.checklistGroupsAnyExpanded(item)) {
-            this.collapseAllChecklistGroups(item);
-        } else {
-            this.expandAllChecklistGroups(item);
-        }
-    },
-
-    buildChecklistExpandCollapseAllHtml(item) {
-        if (!item?.id || !checklistHasIndentations(item.steps)) return '';
-        if (this.getChecklistCollapsibleKeys(item).length === 0) return '';
-        const anyExpanded = this.checklistGroupsAnyExpanded(item);
-        const label = anyExpanded ? 'Collapse all checklist groups' : 'Expand all checklist groups';
-        const icon = anyExpanded ? ACTION_ICONS.collapseAll : ACTION_ICONS.expandAll;
-        return `<div class="checklist-toolbar">
-            <button type="button" class="card-act checklist-expand-collapse-all-btn" title="${this.escapeAttr(label)}" aria-label="${this.escapeAttr(label)}">${icon}</button>
-        </div>`;
     },
 
     getFreeformPositions() {
@@ -4035,67 +2007,6 @@ export const UI = {
             regionW: packW
         };
     },
-
-    findFreeformSortSlot(w, h, placed, canvasW, { startX, startY, direction = 'horizontal' }) {
-        const metrics = getGridMetrics();
-        const cardStep = metrics.strideX + metrics.gap;
-        const rowStep = metrics.strideY + metrics.gap;
-        const minX = metrics.origin + metrics.edgePad;
-        let autoX = startX ?? minX;
-        let autoY = startY ?? minX;
-        for (let guard = 0; guard < 600; guard += 1) {
-            const candidate = { x: autoX, y: autoY, w, h };
-            if (!placed.some((p) => this.rectsOverlap(candidate, p, metrics.gap))) {
-                return candidate;
-            }
-            if (direction === 'vertical') {
-                autoY += rowStep;
-                if (autoY + h > 8000) {
-                    autoY = startY ?? minX;
-                    autoX += cardStep;
-                }
-            } else {
-                autoX += cardStep;
-                if (autoX + w > canvasW - metrics.edgePad) {
-                    autoX = minX;
-                    autoY += rowStep;
-                }
-            }
-        }
-        return { x: autoX, y: autoY, w, h };
-    },
-
-    packExpandedAlignGrid(canvas, expandedItems, pinnedIds, {
-        placed,
-        layout,
-        anchor,
-        bounds,
-        metrics,
-        direction = 'horizontal'
-    }) {
-        const { origin, packW, viewportBottom, edgePad } = bounds;
-        const unpinned = expandedItems.filter((item) => item?.id && !pinnedIds.has(item.id));
-        if (!unpinned.length) return;
-
-        const slots = getExpandedAlignSlots(unpinned.length, direction);
-        const region = computeAlignRegion({
-            packW,
-            startX: anchor.startX,
-            startY: anchor.startY,
-            regionW: anchor.regionW,
-            viewportBottom,
-            origin,
-            edgePad,
-            metrics
-        });
-        const rects = slotsToRegionRects(slots, region, { gap: metrics.gap });
-
-        unpinned.forEach((item, index) => {
-            const rect = rects[index];
-            if (!rect) return;
-            layout.set(item.id, rect);
-            placed.push({ ...rect });
-        });
     },
 
     packExpandedAlignFreeform(canvas, expandedItems, pinnedIds, {
@@ -5080,6 +2991,44 @@ export const UI = {
         return { origin, packW, viewportH, edgePad, scrollY, viewportBottom };
     },
 
+    findDesktopCenterSlot(w, h, canvas, viewMode, { excludeId = null } = {}) {
+        const host = canvas || document.getElementById('app-canvas');
+        if (!host) return { x: 8, y: 8, w, h };
+        const mode = viewMode || activeBoardViewMode;
+
+        if (isSnapLayoutMode(mode)) {
+            const { origin, packW, maxH, edgePad } = this.getGridBoardBounds(host);
+            const { viewportH, scrollY } = this.getGridViewportBounds(host);
+            let rect = {
+                x: origin + Math.max(0, (packW - w) / 2),
+                y: origin + scrollY + Math.max(0, (viewportH - h) / 2),
+                w,
+                h
+            };
+            rect = this.snapNoteRect(rect, { maxW: packW, maxH, origin, edgePad });
+            const placed = [...host.querySelectorAll('.mini-card[data-desktop="1"]')]
+                .filter((c) => c.dataset.id !== excludeId && !c.closest('#file-cabinet'))
+                .map((c) => this.readNoteRect(c));
+            if (placed.some((p) => this.rectsOverlap(rect, p))) {
+                rect = this.findNearestGridSlot(rect, w, h, placed, { packW, origin, maxH, edgePad });
+            }
+            return rect;
+        }
+
+        const zoom = parseFloat(host.dataset?.desktopZoom) || 1;
+        const pad = 8;
+        const cw = (host.clientWidth || window.innerWidth) / zoom;
+        const ch = (host.clientHeight || window.innerHeight) / zoom;
+        const scrollLeft = (host.scrollLeft || 0) / zoom;
+        const scrollTop = (host.scrollTop || 0) / zoom;
+        return {
+            x: scrollLeft + Math.max(pad, (cw - w) / 2),
+            y: scrollTop + Math.max(pad, (ch - h) / 2),
+            w,
+            h
+        };
+    },
+
     updateGridScrollPolicy(canvas, { forcing = false } = {}) {
         if (!canvas?.classList.contains('view-grid')) return;
         canvas.classList.toggle('is-grid-forcing', forcing);
@@ -5378,12 +3327,16 @@ export const UI = {
         return idx < 0;
     },
 
-    escapeHTML(str) {
-        if (!str) return '';
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    },
-
-    escapeAttr(str) {
-        return this.escapeHTML(str).replace(/"/g, '&quot;');
-    }
+    snapshotItem(item) { return NoteSurface.snapshotItem(item); },
+    emitItemMutation(item, opts) { return NoteSurface.emitItemMutation(item, opts); },
+    mutateItem(item, mutator, opts) { return NoteSurface.mutateItem(item, mutator, opts); },
+    commitFocusedInlineField(card, item) { return NoteSurface.commitFocusedInlineField(card, item); },
+    syncItemBodyFromDom(root, item) { return NoteSurface.syncItemBodyFromDom(root, item); },
+    canEditInline() { return NoteSurface.canEditInline(); },
+    flashCopyFeedback(btn, message, opts) { return NoteSurface.flashCopyFeedback(btn, message, opts); },
+    focusInlineEdit(el, edge) { return NoteSurface.focusInlineEdit(el, edge); },
+    renderRichHtml(str) { return NoteSurface.renderRichHtml(str); },
+    formatNoteListDate(item) { return NoteSurface.formatNoteListDate(item); },
+    escapeHTML(str) { return NoteSurface.escapeHTML(str); },
+    escapeAttr(str) { return NoteSurface.escapeAttr(str); }
 };

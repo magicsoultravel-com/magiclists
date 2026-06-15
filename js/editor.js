@@ -9,6 +9,7 @@ import {
     noteHasSavableContent,
     normalizeItemForSave
 } from './noteModel.js';
+import { NoteSurface } from './noteSurface.js';
 import { UI } from './ui.js';
 
 export const Editor = {
@@ -107,7 +108,7 @@ export const Editor = {
                 this.overlay?.classList.add('is-open');
                 if (this.isNewUnsavedNote) {
                     const content = this.mountZone.querySelector('[data-field="content"].card-inline-edit');
-                    if (content) UI.focusInlineEdit(content, 'start');
+                    if (content) NoteSurface.focusInlineEdit(content, 'start');
                 }
             });
         });
@@ -234,7 +235,7 @@ export const Editor = {
             isRecurring: this.activeItem.isRecurring === true,
             hideFromCalendar: this.activeItem.hideFromCalendar === true,
             hiddenFromBoard: this.activeItem.hiddenFromBoard === true,
-            editorBodyLayout: UI.resolveEditorBodyLayoutUnchecked(this.activeItem)
+            editorBodyLayout: NoteSurface.resolveEditorBodyLayoutUnchecked(this.activeItem)
         };
         return normalize ? normalizeItemForSave(data) : data;
     },
@@ -356,13 +357,13 @@ export const Editor = {
         const pendingFocusStepId = body.dataset.pendingFocusStepId;
         const pendingFocusEdge = body.dataset.pendingFocusEdge;
         const pendingFocusPlainOffset = body.dataset.pendingFocusPlainOffset;
-        body.innerHTML = UI.buildNoteBodyHtml(this.activeItem, {
+        body.innerHTML = NoteSurface.buildNoteBodyHtml(this.activeItem, {
             canEdit: true,
             inModalEditor: true,
             richEdit: true
         });
         const shell = this.mountZone?.querySelector('.editor-note-shell');
-        if (shell) UI.updateConvertButtons(shell, this.activeItem);
+        if (shell) NoteSurface.updateConvertButtons(shell, this.activeItem);
         if (pendingFocusStepId) {
             body.dataset.pendingFocusStepId = pendingFocusStepId;
             if (pendingFocusEdge) body.dataset.pendingFocusEdge = pendingFocusEdge;
@@ -372,7 +373,7 @@ export const Editor = {
         }
         delete body.dataset.noteInteractionsBound;
         delete body.dataset.checklistInteractionsBound;
-        UI.attachNoteBodyInteractions(body, this.activeItem, {
+        NoteSurface.attachNoteBodyInteractions(body, this.activeItem, {
             refresh: () => this.refreshEditorNoteBody(),
             localOnly: true,
             richEdit: true,
@@ -385,7 +386,7 @@ export const Editor = {
         body.scrollTop = scrollTop;
 
         if (body.dataset.pendingFocusStepId) {
-            UI.focusPendingChecklistStep(body);
+            NoteSurface.focusPendingChecklistStep(body);
             return;
         }
 
@@ -393,7 +394,7 @@ export const Editor = {
         const focusEl = focusStepId
             ? body.querySelector(`[data-field="step-text"][data-step-id="${focusStepId}"]`)
             : this.mountZone.querySelector(`[data-field="${focusField}"]`);
-        if (focusEl) UI.focusInlineEdit(focusEl, 'end');
+        if (focusEl) NoteSurface.focusInlineEdit(focusEl, 'end');
     },
 
     renderForm() {
@@ -410,11 +411,11 @@ export const Editor = {
             this.availableCategories.map(cat => {
                 const catName = typeof cat === 'string' ? cat : cat.name;
                 const selected = activeCategory && catName.toLowerCase() === activeCategory.toLowerCase();
-                return `<option value="${UI.escapeQuotes(catName)}" ${selected ? 'selected' : ''}>${catName}</option>`;
+                return `<option value="${NoteSurface.escapeQuotes(catName)}" ${selected ? 'selected' : ''}>${catName}</option>`;
             }).join('');
         const isExistingItem = item.created_at !== undefined;
         if (this.toolbarMount) {
-            this.toolbarMount.innerHTML = UI.buildNoteQuickActionsHtml(item, {
+            this.toolbarMount.innerHTML = NoteSurface.buildNoteQuickActionsHtml(item, {
                 surface: 'modal',
                 pinned: UI.isBoardPinned(item.id),
                 showDrag: true,
@@ -428,7 +429,7 @@ export const Editor = {
         const startParts = this.parseStoredDateTime(item.startDateTime || '');
         const endParts = this.parseStoredDateTime(item.endDateTime || '');
 
-        this.mountZone.innerHTML = UI.buildNoteEditorShell(item, {
+        this.mountZone.innerHTML = NoteSurface.buildNoteEditorShell(item, {
             canEdit: true,
             inModalEditor: true,
             showConfig: true,
@@ -446,11 +447,11 @@ export const Editor = {
             this.markInteracted();
             this.scheduleEditorSizeLabelUpdate();
             const shell = this.mountZone?.querySelector('.editor-note-shell');
-            if (shell && this.activeItem) UI.updateConvertButtons(shell, this.activeItem);
+            if (shell && this.activeItem) NoteSurface.updateConvertButtons(shell, this.activeItem);
             this.triggerAutoSave();
         };
 
-        UI.bindNoteEditorShell(this.mountZone, item, {
+        NoteSurface.bindNoteEditorShell(this.mountZone, item, {
             showConfig: true,
             showFormat: true,
             richEdit: true,
@@ -494,7 +495,7 @@ export const Editor = {
         try {
             const shell = this.mountZone?.querySelector('.editor-note-shell');
             const data = this.collectFormData();
-            if (shell) UI.updateNoteMetaStats(shell, data);
+            if (shell) NoteSurface.updateNoteMetaStats(shell, data);
         } catch {
             /* form not ready */
         }
