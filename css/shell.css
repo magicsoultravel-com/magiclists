@@ -1464,6 +1464,22 @@ body.is-shell-resizing--h * {
     border-top: 1px solid var(--border-color);
 }
 
+/* Title / body separator — shared inline board + modal */
+.editor-note-topline {
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+    padding-bottom: 0.2rem;
+    margin-bottom: 0.05rem;
+}
+
+/* Title-only surfaces — no divider */
+.mini-card.spatial-at-small .editor-note-topline,
+.mini-card[data-desktop="1"].tile-small:not(.expanded) .editor-note-topline,
+.file-cabinet .file-cabinet-tab .editor-note-topline {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: 0;
+}
+
 .editor-meta-row--footer.editor-meta-row--inline {
     display: flex;
     align-items: center;

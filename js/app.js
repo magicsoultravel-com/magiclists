@@ -39,6 +39,7 @@ import { SidebarRadio } from './sidebarRadio.js';
 import { SidebarTv } from './sidebarTv.js';
 import { SidebarWeather } from './sidebarWeather.js';
 import { SidebarQuickActions } from './sidebarQuickActions.js';
+import { BoardSort } from './boardSort.js';
 import { SidebarTools } from './sidebarTools.js';
 import { CloudBackup } from './cloudBackup.js';
 import { BootProgress } from './bootProgress.js';
@@ -123,6 +124,16 @@ class Application {
             SidePanel.init(AppState);
             initShellResize();
             SidebarQuickActions.init();
+            BoardSort.init({
+                getItems: () => AppState.items,
+                getViewMode: () => AppState.viewSettings.sortBy,
+                getFileCabinet: () => AppState.viewSettings.fileCabinet,
+                onSort: (prefs) => {
+                    UI.sortBoardLayout(AppState.viewSettings.sortBy, AppState.items, prefs, {
+                        fileCabinetActive: AppState.viewSettings.fileCabinet
+                    });
+                }
+            });
             SidebarRadio.init();
             SidebarTv.init();
             SidebarWeather.init();
@@ -300,6 +311,7 @@ class Application {
         `;
 
         const layoutGroup = `
+            <button type="button" id="btn-board-sort" class="btn btn--compact btn--icon is-hidden" title="Sort board" aria-label="Sort board" aria-expanded="false" aria-haspopup="menu"></button>
             <button type="button" id="btn-layout-reset" class="btn btn--compact btn--icon is-hidden" title="Reset" aria-label="Reset"></button>
         `;
 
@@ -341,6 +353,9 @@ class Application {
         ClockStyle.rebindTrigger();
 
         this.setupLayoutResetButton();
+        const sortBtn = document.getElementById('btn-board-sort');
+        if (sortBtn) sortBtn.innerHTML = ACTION_ICONS.sortAlpha;
+        BoardSort.rebindTrigger();
         Fullscreen.rebindMainButton();
 
         document.getElementById('btn-freeform-toggle')?.addEventListener('click', () => this.toggleFreeformLayout());
@@ -651,15 +666,18 @@ class Application {
     }
 
     updateLayoutResetVisibility() {
-        const show = AppState.user.isLoggedIn;
+        const show = AppState.user.isLoggedIn && AppState.workspaceMode !== 'drawing';
         const btn = document.getElementById('btn-layout-reset');
+        const sortBtn = document.getElementById('btn-board-sort');
         btn?.classList.toggle('is-hidden', !show);
+        sortBtn?.classList.toggle('is-hidden', !show);
         if (btn && show) {
             const fc = AppState.viewSettings.fileCabinet && AppState.workspaceMode !== 'drawing';
             const title = fc ? 'File all to cabinet' : 'Reset layout';
             btn.title = title;
             btn.setAttribute('aria-label', title);
         }
+        if (sortBtn && show) BoardSort.syncButtonState();
         this.updateDesktopZoomVisibility();
     }
 

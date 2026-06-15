@@ -1,6 +1,7 @@
 export const PANEL_COLLAPSED_KEY = 'matrix_panel_collapsed';
 export const SIDEBAR_SECTIONS_KEY = 'matrix_sidebar_sections';
 export const NOTES_LIST_SORT_KEY = 'matrix_notes_list_sort';
+export const BOARD_SORT_KEY = 'matrix_board_sort';
 export const QUICK_ACTIONS_DOCK_KEY = 'matrix_quick_actions_dock';
 export const TOOLS_DOCK_KEY = 'matrix_tools_dock';
 export const SIDEBAR_WIDTH_KEY = 'matrix_sidebar_width';
@@ -13,12 +14,14 @@ export const SIDEBAR_BACKUP_KEYS = [
     PANEL_COLLAPSED_KEY,
     SIDEBAR_SECTIONS_KEY,
     NOTES_LIST_SORT_KEY,
+    BOARD_SORT_KEY,
     QUICK_ACTIONS_DOCK_KEY,
     TOOLS_DOCK_KEY,
     SIDEBAR_WIDTH_KEY
 ];
 
 const DEFAULT_NOTES_LIST_SORT = { field: 'date', dir: 'desc' };
+const DEFAULT_BOARD_SORT = { direction: 'horizontal', field: 'date', dir: 'desc' };
 
 export function readPanelCollapsed() {
     const stored = localStorage.getItem(PANEL_COLLAPSED_KEY);
@@ -61,6 +64,31 @@ export function readNotesListSort() {
 
 export function writeNotesListSort(sort) {
     localStorage.setItem(NOTES_LIST_SORT_KEY, JSON.stringify(sort));
+}
+
+export function readBoardSort() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(BOARD_SORT_KEY) || 'null');
+        if (!stored || typeof stored !== 'object') return { ...DEFAULT_BOARD_SORT };
+        const direction = stored.direction === 'vertical' ? 'vertical' : 'horizontal';
+        const field = ['date', 'name', 'category', 'edited'].includes(stored.field)
+            ? stored.field
+            : DEFAULT_BOARD_SORT.field;
+        const dir = stored.dir === 'asc' ? 'asc' : 'desc';
+        return { direction, field, dir };
+    } catch {
+        return { ...DEFAULT_BOARD_SORT };
+    }
+}
+
+export function writeBoardSort(sort) {
+    localStorage.setItem(BOARD_SORT_KEY, JSON.stringify(sort));
+}
+
+export function isBoardSortCustomized(sort = readBoardSort()) {
+    return sort.direction !== DEFAULT_BOARD_SORT.direction
+        || sort.field !== DEFAULT_BOARD_SORT.field
+        || sort.dir !== DEFAULT_BOARD_SORT.dir;
 }
 
 export function readQuickActionsDock() {
@@ -123,6 +151,7 @@ export function readSidebarPrefs() {
         panelCollapsed: readPanelCollapsed(),
         sections: readSidebarSections(),
         notesListSort: readNotesListSort(),
+        boardSort: readBoardSort(),
         quickActionsDock: readQuickActionsDock(),
         toolsDock: readToolsDock(),
         sidebarWidth: readSidebarWidth()

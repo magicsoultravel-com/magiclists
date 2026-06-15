@@ -558,6 +558,10 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
     border-top-color: var(--card-border-subtle);
 }
 
+.has-custom-bg .editor-note-topline {
+    border-bottom-color: var(--card-border-subtle);
+}
+
 .has-custom-bg .step-text.completed {
     color: var(--card-muted);
     opacity: 0.82;

@@ -59,13 +59,13 @@ function renderItemsHtml(items, selected) {
     }).join('');
 }
 
-function bindMenuInteractions(menu, { onSelect, onStepper }) {
+function bindMenuInteractions(menu, { onSelect, onStepper, closeOnSelect = true }) {
     menu.querySelectorAll('.drawing-menu-option:not([disabled])').forEach((btn) => {
         btn.addEventListener('mousedown', (e) => e.stopPropagation());
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             const id = btn.dataset.id;
-            DrawingToolbarMenu.close();
+            if (closeOnSelect) DrawingToolbarMenu.close();
             onSelect?.(id);
         });
     });
@@ -109,10 +109,10 @@ export const DrawingToolbarMenu = {
 
     refresh() {
         if (!menuState || !anchorEl || !menuEl) return;
-        const { items, selected, onSelect, onStepper, ariaLabel } = menuState;
+        const { items, selected, onSelect, onStepper, ariaLabel, closeOnSelect = true } = menuState;
         menuEl.setAttribute('aria-label', ariaLabel || 'Menu');
         menuEl.innerHTML = `<div class="drawing-menu-list">${renderItemsHtml(items, selected)}</div>`;
-        bindMenuInteractions(menuEl, { onSelect, onStepper });
+        bindMenuInteractions(menuEl, { onSelect, onStepper, closeOnSelect });
         positionPopoverBelowAnchor(menuEl, anchorEl);
     },
 
@@ -124,18 +124,18 @@ export const DrawingToolbarMenu = {
         this.open(state);
     },
 
-    open({ anchor, ariaLabel, items, selected, onSelect, onStepper }) {
+    open({ anchor, ariaLabel, items, selected, onSelect, onStepper, closeOnSelect = true }) {
         if (!anchor || !items?.length) return;
 
         const wasSameAnchor = anchorEl === anchor && this.isOpen();
         if (!wasSameAnchor) this.close();
 
         anchorEl = anchor;
-        menuState = { anchor, ariaLabel, items, selected, onSelect, onStepper };
+        menuState = { anchor, ariaLabel, items, selected, onSelect, onStepper, closeOnSelect };
         const menu = ensureMenu();
         menu.setAttribute('aria-label', ariaLabel || 'Menu');
         menu.innerHTML = `<div class="drawing-menu-list">${renderItemsHtml(items, selected)}</div>`;
-        bindMenuInteractions(menu, { onSelect, onStepper });
+        bindMenuInteractions(menu, { onSelect, onStepper, closeOnSelect });
 
         menu.classList.remove('is-hidden');
         anchor.setAttribute('aria-expanded', 'true');

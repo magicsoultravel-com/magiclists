@@ -42,10 +42,13 @@ import {
     seedFileCabinetOrderFromItems,
     setFileCabinetActive,
     shouldFileItem,
+    applySortToFileCabinetOrder,
+    getStoredItemSize,
     FILE_CABINET_ORDER_KEY,
     FILE_CABINET_FILED_CATEGORIES_KEY,
     getFileCabinetFiledCategories
 } from './fileCabinet.js';
+import { sortBoardItems } from './boardSort.js';
 import { syncCabinetSplitter } from './shellResize.js';
 import { raiseDesktopElement, syncDesktopStackSeq } from './desktopStack.js';
 import { readTileSmallFootprint } from './tileFootprint.js';
@@ -5002,6 +5005,259 @@ export const UI = {
         }
     },
 
+    isItemLayoutExpanded(item, mode) {
+        if (!item?.id) return false;
+        const tileSize = resolveTileSize(item);
+        const saved = getStoredItemSize(item.id, mode, this);
+        if (!saved || !Number.isFinite(saved.w) || !Number.isFinite(saved.h)) return false;
+        return !isCollapsedSpatialSize(saved.w, saved.h, tileSize);
+    },
+
+    resolveSortItemSize(item, mode, isExpanded) {
+        const tileSize = resolveTileSize(item);
+        const saved = getStoredItemSize(item.id, mode, this);
+        if (isExpanded) {
+            if (saved && Number.isFinite(saved.w) && !isCollapsedSpatialSize(saved.w, saved.h, tileSize)) {
+                return { w: saved.w, h: saved.h };
+            }
+            const target = this.resolveRememberedSpatialSize(saved, item);
+            return { w: target.w, h: target.h };
+        }
+        if (saved && Number.isFinite(saved.w) && isCollapsedSpatialSize(saved.w, saved.h, tileSize)) {
+            const small = getSmallRect(readTileSmallFootprint());
+            return { w: small.w, h: small.h };
+        }
+        const small = getSmallRect(readTileSmallFootprint());
+        return { w: small.w, h: small.h };
+    },
+
+    partitionCanvasItemsByExpansion(items, mode) {
+        const collapsed = [];
+        const expanded = [];
+        (items || []).forEach((item) => {
+            if (this.isItemLayoutExpanded(item, mode)) expanded.push(item);
+            else collapsed.push(item);
+        });
+        return { collapsed, expanded };
+    },
+
+    findFirstCanvasSlotVertical(w, h, placed, canvasW, { origin = CANVAS_LAYOUT_ORIGIN, edgePad, yMin, maxH } = {}) {
+        const metrics = getGridMetrics();
+        const pad = edgePad ?? metrics.edgePad;
+        const packW = Math.max(metrics.canvasGridW, canvasW - origin * 2 - pad * 2);
+        const xOrigin = origin + pad;
+        const yOrigin = Math.max(origin + pad, yMin ?? origin + pad);
+        const colStride = this.gridColumnStride(w, h, metrics);
+        const yStride = getPackStrideYForRect(w, h);
+        const bottomLimit = (maxH ?? origin + metrics.strideY * 40) + 1;
+        let x = xOrigin;
+        let guard = 0;
+        while (guard < 800) {
+            let y = yOrigin;
+            while (y + h <= bottomLimit) {
+                const candidate = this.snapNoteRect(
+                    { x, y, w, h },
+                    { maxW: packW, origin, edgePad: pad, maxH }
+                );
+                if (!placed.some((p) => this.rectsOverlap(candidate, p, metrics.gap))) {
+                    return candidate;
+                }
+                y += yStride;
+            }
+            x += colStride;
+            guard += 1;
+        }
+        return { x: xOrigin, y: yOrigin, w, h };
+    },
+
+    findFreeformSortSlot(w, h, placed, canvasW, { startX, startY, direction = 'horizontal' }) {
+        const metrics = getGridMetrics();
+        const cardStep = metrics.strideX + metrics.gap;
+        const rowStep = metrics.strideY + metrics.gap;
+        const minX = metrics.origin + metrics.edgePad;
+        let autoX = startX ?? minX;
+        let autoY = startY ?? minX;
+        for (let guard = 0; guard < 600; guard += 1) {
+            const candidate = { x: autoX, y: autoY, w, h };
+            if (!placed.some((p) => this.rectsOverlap(candidate, p, metrics.gap))) {
+                return candidate;
+            }
+            if (direction === 'vertical') {
+                autoY += rowStep;
+                if (autoY + h > 8000) {
+                    autoY = startY ?? minX;
+                    autoX += cardStep;
+                }
+            } else {
+                autoX += cardStep;
+                if (autoX + w > canvasW - metrics.edgePad) {
+                    autoX = minX;
+                    autoY += rowStep;
+                }
+            }
+        }
+        return { x: autoX, y: autoY, w, h };
+    },
+
+    packSortGridBoard(canvas, collapsedItems, expandedItems, sortPrefs, pinnedIds) {
+        const { origin, packW, maxH, edgePad } = this.getGridBoardBounds(canvas);
+        const metrics = getGridMetrics();
+        const direction = sortPrefs.direction === 'vertical' ? 'vertical' : 'horizontal';
+        const placed = [];
+        const layout = new Map();
+        const snapBounds = { maxW: packW, maxH, origin, edgePad };
+        const canvasW = packW + origin * 2;
+
+        pinnedIds.forEach((id) => {
+            const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(id)}"]`);
+            const saved = this.getGridLayout()[id];
+            if (!saved || !Number.isFinite(saved.x)) return;
+            const item = this.resolveBoardItem(id);
+            const isExp = this.isItemLayoutExpanded(item, 'grid');
+            const rect = this.snapNoteRect(
+                card
+                    ? this.gridBoardRectForCard(card, saved, isExp)
+                    : { ...saved, ...this.resolveSortItemSize(item, 'grid', isExp) },
+                snapBounds
+            );
+            layout.set(id, rect);
+            placed.push({ ...rect });
+        });
+
+        const packGroup = (items, yMin) => {
+            items.forEach((item) => {
+                if (!item?.id || pinnedIds.has(item.id)) return;
+                const isExp = this.isItemLayoutExpanded(item, 'grid');
+                const { w, h } = this.resolveSortItemSize(item, 'grid', isExp);
+                const slotOpts = { origin, edgePad, yMin, maxH };
+                let slot = direction === 'vertical'
+                    ? this.findFirstCanvasSlotVertical(w, h, placed, canvasW, slotOpts)
+                    : this.findFirstCanvasSlot(w, h, placed, canvasW, slotOpts);
+                slot = this.snapNoteRect(slot, snapBounds);
+                layout.set(item.id, slot);
+                placed.push({ ...slot });
+            });
+        };
+
+        const yStart = origin + edgePad;
+        const unpinnedCollapsed = collapsedItems.filter((item) => !pinnedIds.has(item.id));
+        const unpinnedExpanded = expandedItems.filter((item) => !pinnedIds.has(item.id));
+        packGroup(collapsedItems, yStart);
+
+        let expandedStartY = yStart;
+        if (unpinnedCollapsed.length && unpinnedExpanded.length) {
+            const small = getSmallRect(readTileSmallFootprint());
+            const rowStride = getPackStrideYForRect(small.w, small.h);
+            const bottom = placed.reduce((max, rect) => Math.max(max, rect.y + rect.h), yStart);
+            expandedStartY = bottom + metrics.gap + rowStride;
+        }
+
+        packGroup(expandedItems, expandedStartY);
+        this.applyGridBoardLayout(canvas, layout, { animate: true, save: true });
+        this.squeezeGridBoardToViewport(canvas, { animate: true });
+    },
+
+    packSortFreeformBoard(canvas, collapsedItems, expandedItems, sortPrefs, pinnedIds) {
+        const metrics = getGridMetrics();
+        const direction = sortPrefs.direction === 'vertical' ? 'vertical' : 'horizontal';
+        const canvasW = Math.max(canvas.clientWidth || 320, 320);
+        const minCoord = metrics.origin + metrics.edgePad;
+        const placed = [];
+
+        pinnedIds.forEach((id) => {
+            const pos = this.getFreeformPositions()[id];
+            const sizes = this.getFreeformSizes()[id];
+            if (pos && sizes && Number.isFinite(pos.x) && Number.isFinite(sizes.w)) {
+                placed.push({ x: pos.x, y: pos.y, w: sizes.w, h: sizes.h });
+            }
+        });
+
+        const packGroup = (items, startPos) => {
+            let cursor = { x: startPos?.x ?? minCoord, y: startPos?.y ?? minCoord };
+            items.forEach((item) => {
+                if (!item?.id || pinnedIds.has(item.id)) return;
+                const isExp = this.isItemLayoutExpanded(item, 'freeform');
+                const { w, h } = this.resolveSortItemSize(item, 'freeform', isExp);
+                const slot = this.findFreeformSortSlot(w, h, placed, canvasW, {
+                    startX: cursor.x,
+                    startY: cursor.y,
+                    direction
+                });
+                this.saveFreeformPosition(item.id, slot.x, slot.y);
+                this.saveFreeformSize(item.id, slot.w, slot.h, {
+                    updateRemembered: isExp
+                });
+                const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
+                if (card) {
+                    this.applyNoteRect(card, slot, { settling: true });
+                }
+                placed.push({ ...slot });
+                if (direction === 'vertical') {
+                    cursor = { x: slot.x, y: slot.y + metrics.strideY + metrics.gap };
+                } else {
+                    cursor = { x: slot.x + metrics.strideX + metrics.gap, y: slot.y };
+                }
+            });
+            return placed;
+        };
+
+        const unpinnedCollapsed = collapsedItems.filter((item) => !pinnedIds.has(item.id));
+        const unpinnedExpanded = expandedItems.filter((item) => !pinnedIds.has(item.id));
+        packGroup(collapsedItems, { x: minCoord, y: minCoord });
+
+        let expandedStart = { x: minCoord, y: minCoord };
+        if (unpinnedCollapsed.length && unpinnedExpanded.length) {
+            const small = getSmallRect(readTileSmallFootprint());
+            const rowStride = metrics.strideY + metrics.gap;
+            const bottom = placed.reduce((max, rect) => Math.max(max, rect.y + rect.h), minCoord);
+            expandedStart = { x: minCoord, y: bottom + metrics.gap + rowStride };
+        }
+
+        packGroup(expandedItems, expandedStart);
+        this.updateBoardCanvasExtents(canvas);
+    },
+
+    sortBoardLayout(viewMode, items, sortPrefs, { fileCabinetActive } = {}) {
+        const visibleItems = this.getVisibleItems(items || []);
+        if (!visibleItems.length) return;
+
+        const mode = normalizeViewMode(viewMode);
+        const snapLayout = isSnapLayoutMode(mode);
+        const canvas = document.getElementById('app-canvas');
+        if (!canvas) return;
+
+        const fcActive = fileCabinetActive ?? isFileCabinetActive();
+        let canvasItems = visibleItems;
+
+        if (fcActive) {
+            const { filed, expanded } = partitionItemsForFileCabinet(visibleItems, mode, this);
+            applySortToFileCabinetOrder(filed, sortPrefs);
+            canvasItems = expanded;
+        }
+
+        if (!canvasItems.length) {
+            window.dispatchEvent(new CustomEvent('board:visibility_changed', {
+                detail: { flushLayout: false, skipGridReflow: true }
+            }));
+            return;
+        }
+
+        const { collapsed, expanded } = this.partitionCanvasItemsByExpansion(canvasItems, mode);
+        const sortedCollapsed = sortBoardItems(collapsed, sortPrefs);
+        const sortedExpanded = sortBoardItems(expanded, sortPrefs);
+        const pinnedIds = new Set(this.getBoardPins());
+
+        if (snapLayout) {
+            this.packSortGridBoard(canvas, sortedCollapsed, sortedExpanded, sortPrefs, pinnedIds);
+        } else {
+            this.packSortFreeformBoard(canvas, sortedCollapsed, sortedExpanded, sortPrefs, pinnedIds);
+        }
+
+        window.dispatchEvent(new CustomEvent('board:visibility_changed', {
+            detail: { flushLayout: false, skipGridReflow: true }
+        }));
+    },
+
     resetBoardLayout(sortBy, items, { fileCabinetActive } = {}) {
         const visibleItems = this.getVisibleItems(items || []);
         const mode = normalizeViewMode(sortBy);
@@ -5351,6 +5607,21 @@ export const UI = {
         return this.cellsToSpanW(wCells) + metrics.gap;
     },
 
+    gridRowStride(w, h, metrics = getGridMetrics()) {
+        if (isCollapsedSpatialSize(w, h)) {
+            return h + metrics.gap;
+        }
+        const hCells = Math.max(1, this.spanToCellsH(h));
+        return this.cellsToSpanH(hCells) + metrics.gap;
+    },
+
+    snapPackCoord(value, origin, pad, packStride) {
+        const anchor = origin + pad;
+        const rel = Math.max(0, value - anchor);
+        const step = packStride || getGridMetrics().strideX;
+        return anchor + Math.round(rel / step) * step;
+    },
+
     pushGridCardRect(rect, placed, { packW, origin, maxH, edgePad }) {
         const metrics = getGridMetrics();
         const pad = edgePad ?? metrics.edgePad;
@@ -5615,7 +5886,7 @@ export const UI = {
 
     repackGridBoardFromOrigin(canvas, { animate = true, items = [] } = {}) {
         if (!canvas?.classList.contains('view-grid')) return;
-        const { origin, packW, maxH } = this.getGridBoardBounds(canvas);
+        const { origin, packW, maxH, edgePad } = this.getGridBoardBounds(canvas);
         const small = getSmallRect(readTileSmallFootprint());
         const byId = new Map((items || []).map((item) => [item.id, item]));
         const cards = [...canvas.querySelectorAll('.mini-card[data-desktop="1"]')].sort((a, b) => {
@@ -5630,10 +5901,10 @@ export const UI = {
         cards.forEach((card) => {
             const id = card.dataset.id;
             if (!id) return;
-            let slot = this.findFirstCanvasSlot(small.w, small.h, placed, packW + origin * 2, { origin });
+            let slot = this.findFirstCanvasSlot(small.w, small.h, placed, packW + origin * 2, { origin, edgePad });
             slot = this.snapNoteRect(
                 { ...slot, w: small.w, h: small.h },
-                { maxW: packW, maxH, origin }
+                { maxW: packW, maxH, origin, edgePad }
             );
             layout.set(id, slot);
             placed.push(slot);
@@ -5705,12 +5976,12 @@ export const UI = {
         return origin + this.snapGridCoord(Math.max(0, value - origin), step);
     },
 
-    findFirstCanvasSlot(w, h, placed, canvasW, { origin = CANVAS_LAYOUT_ORIGIN, edgePad } = {}) {
+    findFirstCanvasSlot(w, h, placed, canvasW, { origin = CANVAS_LAYOUT_ORIGIN, edgePad, yMin } = {}) {
         const metrics = getGridMetrics();
         const pad = edgePad ?? metrics.edgePad;
         const packW = Math.max(metrics.canvasGridW, canvasW - origin * 2 - pad * 2);
         const xOrigin = origin + pad;
-        const yOrigin = origin + pad;
+        const yOrigin = Math.max(origin + pad, yMin ?? origin + pad);
         const rowStride = this.gridColumnStride(w, h, metrics);
         const yStride = getPackStrideYForRect(w, h);
         let y = yOrigin;
@@ -5718,12 +5989,10 @@ export const UI = {
         while (guard < 800) {
             let x = xOrigin;
             while (x + w <= origin + pad + packW + 1) {
-                const candidate = this.snapNoteRect({
-                    x: this.snapCanvasCoord(x, origin, metrics.strideX),
-                    y: this.snapCanvasCoord(y, origin, yStride),
-                    w,
-                    h
-                }, { maxW: packW, origin, edgePad: pad });
+                const candidate = this.snapNoteRect(
+                    { x, y, w, h },
+                    { maxW: packW, origin, edgePad: pad }
+                );
                 if (!placed.some((p) => this.rectsOverlap(candidate, p, metrics.gap))) {
                     return candidate;
                 }
@@ -5771,15 +6040,20 @@ export const UI = {
     snapNotePosition(rect, { maxW = Infinity, maxH = Infinity, origin = CANVAS_LAYOUT_ORIGIN, edgePad } = {}) {
         const metrics = getGridMetrics();
         const pad = edgePad ?? metrics.edgePad;
-        const footprint = readTileSmallFootprint();
         const w = Math.max(FREEFORM_MIN_W, Math.round(rect.w));
         const h = Math.max(FREEFORM_MIN_H, Math.round(rect.h));
         const atSmall = isCollapsedSpatialSize(w, h);
-        const yStride = atSmall ? getPackStrideYForRect(w, h, footprint) : metrics.strideY;
-        let x = this.snapGridCoord(rect.x, metrics.strideX);
-        let y = atSmall
-            ? this.snapCanvasCoord(rect.y, origin, yStride)
-            : this.snapGridCoord(rect.y, yStride);
+        let x;
+        let y;
+        if (atSmall) {
+            const xPack = this.gridColumnStride(w, h, metrics);
+            const yPack = this.gridRowStride(w, h, metrics);
+            x = this.snapPackCoord(rect.x, origin, pad, xPack);
+            y = this.snapPackCoord(rect.y, origin, pad, yPack);
+        } else {
+            x = this.snapGridCoord(rect.x, metrics.strideX);
+            y = this.snapGridCoord(rect.y, metrics.strideY);
+        }
         const minX = origin + pad;
         const minY = origin + pad;
         x = Math.max(minX, x);
@@ -5805,10 +6079,11 @@ export const UI = {
         const footprint = readTileSmallFootprint();
         if (isCollapsedSpatialSize(rect.w, rect.h)) {
             const small = getSmallRect(footprint);
-            const yStride = getPackStrideYForRect(small.w, small.h, footprint);
+            const xPack = this.gridColumnStride(small.w, small.h, metrics);
+            const yPack = this.gridRowStride(small.w, small.h, metrics);
             const snapped = {
-                x: this.snapCanvasCoord(rect.x, origin, metrics.strideX),
-                y: this.snapCanvasCoord(rect.y, origin, yStride),
+                x: this.snapPackCoord(rect.x, origin, pad, xPack),
+                y: this.snapPackCoord(rect.y, origin, pad, yPack),
                 w: small.w,
                 h: small.h
             };

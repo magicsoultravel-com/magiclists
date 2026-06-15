@@ -1,4 +1,6 @@
 import { getItemCategoryName } from './focusFilter.js';
+import { sortBoardItems } from './boardSort.js';
+import { readBoardSort } from './sidebarPrefs.js';
 import {
     isCollapsedSpatialSize,
     getLabelRect,
@@ -344,6 +346,21 @@ function sortItemsByFileCabinetOrder(items, category, order) {
         if (bi === -1) return -1;
         return ai - bi;
     });
+}
+
+export function applySortToFileCabinetOrder(filedItems, sortPrefs) {
+    if (!filedItems?.length) return;
+    const byCategory = new Map();
+    filedItems.forEach((item) => {
+        const cat = getItemCategoryName(item);
+        if (!byCategory.has(cat)) byCategory.set(cat, []);
+        byCategory.get(cat).push(item);
+    });
+    const order = getFileCabinetOrder();
+    byCategory.forEach((items, cat) => {
+        order[cat] = sortBoardItems(items, sortPrefs).map((item) => item.id);
+    });
+    saveFileCabinetOrder(order);
 }
 
 export function pruneFileCabinetOrder(liveIds) {
@@ -868,7 +885,15 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
         byCategory.get(cat).push(item);
     });
 
-    const allCategories = [...byCategory.keys()].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    const allCategories = (() => {
+        const cats = [...byCategory.keys()];
+        const boardSort = readBoardSort();
+        if (boardSort.field === 'category') {
+            const dir = boardSort.dir === 'asc' ? 1 : -1;
+            return cats.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }) * dir);
+        }
+        return cats.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    })();
     const filedCategoryNames = getFileCabinetFiledCategories().filter((c) => byCategory.has(c));
     const visibleCategories = allCategories.filter((c) => !isFileCabinetCategoryFiled(c));
     const hasRail = filedCategoryNames.length > 0;

@@ -42,8 +42,11 @@ export const TOOLS_REGISTRY = [
         "order": 3,
         "icon": "<circle cx=\"6\" cy=\"6\" r=\"4.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.95\"/><path d=\"M6 3.6V6l2 1.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.9\" stroke-linecap=\"round\"/>",
         "wide": false,
-        "mountClass": "",
-        "defaultSize": { "w": 340, "h": 380 }
+        "mountClass": "tool-mount--timezone",
+        "resizable": true,
+        "resizeMode": "fill",
+        "defaultSize": { "w": 340, "h": 440 },
+        "minSize": { "w": 260, "h": 280 }
     },
     {
         "id": "globe-tz",
