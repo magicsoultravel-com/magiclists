@@ -692,11 +692,18 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
     width: 10px;
 }
 
+.step-tree-gutter {
+    display: flex;
+    flex-shrink: 0;
+    align-self: stretch;
+    margin-right: 0.08rem;
+}
+
+.step-tree-cell,
 .step-tree-guide {
     flex-shrink: 0;
     align-self: stretch;
-    width: 0.12rem;
-    margin-right: 0.08rem;
+    width: 0.36rem;
     position: relative;
 }
 
@@ -704,8 +711,11 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
     content: '';
     position: absolute;
     right: 0;
+    top: 0;
+    bottom: 0;
     width: 1px;
-    background: color-mix(in srgb, var(--border-color) 55%, transparent);
+    background: var(--border-color);
+    opacity: 0.42;
 }
 
 .step-tree-guide--solo::before,
@@ -720,17 +730,13 @@ html[data-tile-small-footprint="card"] .file-cabinet-tab.is-file-cabinet-draggin
 
 .step-tree-guide--start::before,
 .step-tree-guide--mid::before,
-.step-tree-guide--end::before {
+.step-tree-guide--through::before {
     bottom: -0.2rem;
 }
 
-.step-tree-guide--mid::before,
-.step-tree-guide--end::before {
-    top: -0.2rem;
-}
-
 .has-custom-bg .step-tree-guide::before {
-    background: color-mix(in srgb, var(--card-border-subtle) 70%, transparent);
+    background: var(--card-border-subtle);
+    opacity: 0.55;
 }
 
 .checklist-done-divider {

@@ -339,7 +339,7 @@ export function buildVisibleChecklistSteps(steps, itemId, collapsedKeys = {}) {
 export function annotateChecklistTreeGuides(visibleRows) {
     return (visibleRows || []).map((row, i) => {
         const level = getStepLevel(row.step);
-        let guideRole = null;
+        const treeGuides = [];
         if (level > 0) {
             const prevLevel = i > 0 ? getStepLevel(visibleRows[i - 1].step) : -1;
             const nextLevel = i < visibleRows.length - 1
@@ -347,11 +347,27 @@ export function annotateChecklistTreeGuides(visibleRows) {
                 : -1;
             const isFirst = prevLevel < level;
             const isLast = nextLevel < level;
-            if (isFirst && isLast) guideRole = 'solo';
-            else if (isFirst) guideRole = 'start';
-            else if (isLast) guideRole = 'end';
-            else guideRole = 'mid';
+            let branchRole;
+            if (isFirst && isLast) branchRole = 'solo';
+            else if (isFirst) branchRole = 'start';
+            else if (isLast) branchRole = 'end';
+            else branchRole = 'mid';
+
+            for (let d = 0; d < level; d++) {
+                if (d < level - 1) {
+                    let show = false;
+                    for (let j = i + 1; j < visibleRows.length; j++) {
+                        if (getStepLevel(visibleRows[j].step) > d) {
+                            show = true;
+                            break;
+                        }
+                    }
+                    treeGuides.push({ role: show ? 'through' : null });
+                } else {
+                    treeGuides.push({ role: branchRole });
+                }
+            }
         }
-        return { ...row, guideRole };
+        return { ...row, treeGuides };
     });
 }
