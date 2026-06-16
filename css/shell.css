@@ -266,7 +266,7 @@
     -webkit-appearance: none;
     flex-shrink: 0;
     box-sizing: border-box;
-    border: 1px solid color-mix(in srgb, var(--border-color) 72%, transparent);
+    border: 1px solid var(--text-muted);
     border-radius: 2.5px;
     background-color: color-mix(in srgb, var(--bg-surface, #1a1a1e) 18%, transparent);
     transition: border-color 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease;
@@ -282,7 +282,7 @@
 }
 
 .step-row .step-check:hover {
-    border-color: color-mix(in srgb, var(--text-muted) 40%, var(--border-color));
+    border-color: color-mix(in srgb, var(--text-muted) 55%, var(--text-main));
 }
 
 .step-row .step-check:checked:hover {
