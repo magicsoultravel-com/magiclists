@@ -292,12 +292,10 @@ export const DragDropEngine = {
             previewFrame = requestAnimationFrame(() => {
                 previewFrame = null;
                 const actorRect = UI.readNoteRect(actorCard);
-                const { maxH } = UI.getGridBoardBounds(canvas);
                 const layout = UI.computeGridBoardLayout(
                     canvas,
                     actorCard.dataset.id,
-                    actorRect,
-                    { maxH }
+                    actorRect
                 );
                 previewBaseline?.forEach((base, id) => {
                     if (id === actorCard.dataset.id) return;
@@ -333,7 +331,10 @@ export const DragDropEngine = {
             finishSnapPanelGesture(card, {
                 canvas,
                 currentItems,
-                getBounds: () => UI.getGridBoardBounds(canvas),
+                getBounds: () => {
+                    const bounds = UI.getGridBoardBounds(canvas);
+                    return { ...bounds, maxH: Infinity };
+                },
                 saveLayout: (c, rect, { updateRemembered }) => {
                     UI.saveGridLayout(c.dataset.id, rect, { updateRemembered });
                 },

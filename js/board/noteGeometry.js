@@ -348,7 +348,10 @@ export function resolveGridPushLayout({ cardEntries, actorId, actorRect, pinnedI
     });
 
     if (actorId && actorRect) {
-        const snapped = findNearestGridSlot(actorRect, actorRect.w, actorRect.h, placed, snapOpts);
+        let snapped = snapNoteRect(actorRect, snapBounds);
+        if (placed.some((p) => rectsOverlap(snapped, p))) {
+            snapped = findNearestGridSlot(actorRect, actorRect.w, actorRect.h, placed, snapOpts);
+        }
         layout.set(actorId, snapped);
         placed.push({ ...snapped });
     }

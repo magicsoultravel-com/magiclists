@@ -1,9 +1,5 @@
 import { getGridMetrics } from '../gridDensity.js';
-import {
-    resolveGridPushLayout,
-    snapNotePosition,
-    snapNoteRect
-} from './noteGeometry.js';
+import { resolveGridPushLayout } from './noteGeometry.js';
 import { getGridBoardBounds } from './boardExtents.js';
 
 /**
@@ -38,7 +34,7 @@ export function computeSnapPanelLayout(deps, {
 }) {
     const origin = bounds.origin ?? 0;
     const packW = bounds.packW;
-    const limitH = bounds.maxH;
+    const limitH = bounds.maxH ?? Infinity;
     const edgePad = bounds.edgePad ?? getGridMetrics().edgePad;
     const cards = [...panelEl.querySelectorAll(cardSelector)];
     const pinnedIds = new Set(deps.getBoardPins());
@@ -52,20 +48,10 @@ export function computeSnapPanelLayout(deps, {
         return { id, card, rect };
     });
 
-    let resolvedActor = null;
-    if (actorId && actorRect) {
-        resolvedActor = snapNotePosition(actorRect, {
-            maxW: packW,
-            maxH: limitH,
-            origin,
-            edgePad
-        });
-    }
-
     return resolveGridPushLayout({
         cardEntries,
         actorId,
-        actorRect: resolvedActor,
+        actorRect,
         pinnedIds,
         packW,
         origin,
@@ -74,9 +60,9 @@ export function computeSnapPanelLayout(deps, {
     });
 }
 
-export function computeGridBoardLayout(deps, canvas, actorId, actorRect = null, { maxH } = {}) {
+export function computeGridBoardLayout(deps, canvas, actorId, actorRect = null) {
     if (!canvas?.classList.contains('view-grid')) return new Map();
-    const { origin, packW, maxH: boardMaxH, edgePad } = deps.getGridBoardBounds(canvas);
+    const { origin, packW, edgePad } = deps.getGridBoardBounds(canvas);
     return computeSnapPanelLayout(deps, {
         panelEl: canvas,
         cardSelector: '.mini-card[data-desktop="1"]',
@@ -85,7 +71,7 @@ export function computeGridBoardLayout(deps, canvas, actorId, actorRect = null, 
         isCardExpanded: (id) => deps.isSavedLayoutExpanded(id),
         actorId,
         actorRect,
-        bounds: { origin, packW, maxH: maxH ?? boardMaxH, edgePad }
+        bounds: { origin, packW, maxH: Infinity, edgePad }
     });
 }
 

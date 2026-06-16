@@ -2641,8 +2641,8 @@ export const UI = {
         return findNearestGridSlotCore(preferred, w, h, placed, opts);
     },
 
-    computeGridBoardLayout(canvas, actorId, actorRect = null, opts = {}) {
-        return computeGridBoardLayoutCore(createGridDeps(this), canvas, actorId, actorRect, opts);
+    computeGridBoardLayout(canvas, actorId, actorRect = null) {
+        return computeGridBoardLayoutCore(createGridDeps(this), canvas, actorId, actorRect);
     },
 
     clearSnapPanelPreview(panelEl) {
