@@ -633,6 +633,10 @@ export const NoteSurface = {
         html += '<h3 class="note-section-label">Action Items</h3>';
         if (!item.steps) item.steps = [];
         html += this.buildExpandedChecklistHtml(item, canEdit, { richEdit });
+        const meetingWhen = formatMeetingDateTimeBadge(item.startDateTime);
+        if (meetingWhen) {
+            html += `<p class="meeting-datetime meeting-datetime--body">${escapeHTML(meetingWhen)}</p>`;
+        }
         return html;
     },
 
@@ -801,23 +805,8 @@ export const NoteSurface = {
             categoryColor
         });
         const bodyIdAttr = bodyId ? ` id="${bodyId}"` : '';
-        const isMeeting = isMeetingTemplateActive(item);
-        const meetingBadge = isMeeting
-            ? `<span class="meeting-datetime">${escapeHTML(formatMeetingDateTimeBadge(item.startDateTime))}</span>`
-            : '';
-        const toplineExtra = isMeeting ? ' editor-note-topline--meeting' : '';
-        const toplineClass = `${toplineDragZone || footerDragZone || ''}${toplineExtra}`;
-
-        const toplineHtml = isMeeting
-            ? `
-                <div class="editor-note-topline${toplineClass}">
-                    <div class="editor-note-header">
-                        ${titleHtml}
-                    </div>
-                    ${meetingBadge}
-                    ${toolbarHtml ? `<div class="note-editor-toolbar">${toolbarHtml}</div>` : ''}
-                </div>`
-            : `
+        const toplineClass = toplineDragZone || footerDragZone || '';
+        const toplineHtml = `
                 <div class="editor-note-topline${toplineClass}">
                     <div class="editor-note-header">
                         ${titleHtml}
@@ -1058,7 +1047,7 @@ export const NoteSurface = {
                     + '.card-act, .grab-handle--step, .expanded-checklist-add-btn, '
                     + '.checklist-done-toggle, .step-collapse-btn, .step-delete-btn, '
                     + '.step-indent-btn, .step-outdent-btn, .checklist-expand-collapse-all-btn, '
-                    + '.sheet-cell-input, .sheet-toolbar'
+                    + '.sheet-cell-input, .sheet-struct-actions, .sheet-struct-actions .card-act'
                 )) return;
                 e.stopPropagation();
             });

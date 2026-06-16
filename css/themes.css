@@ -2253,6 +2253,20 @@ html[data-app-theme="night-sky"] .tool-chip { border-color: color-mix(in srgb, #
 html[data-app-theme="night-sky"] .card-act--cal.is-on { color: #a8c8ff; }
 html[data-app-theme="night-sky"] #btn-drawing-mode.active { background: color-mix(in srgb, #a8c8ff 25%, transparent); }
 
+/* Sheet grid — subtle header tint per theme */
+html[data-app-theme="parchment"] .sheet-grid-wrap,
+html[data-app-theme="wood"] .sheet-grid-wrap,
+html[data-app-theme="corkboard"] .sheet-grid-wrap {
+    --sheet-head-fg: color-mix(in srgb, var(--text-muted) 82%, var(--text-main));
+    --sheet-head-border: color-mix(in srgb, var(--border-color) 22%, transparent);
+    --sheet-grid-border: color-mix(in srgb, var(--border-color) 38%, transparent);
+}
+
+html[data-app-theme="neon"] .sheet-grid-wrap,
+html[data-app-theme="miami"] .sheet-grid-wrap {
+    --sheet-head-border: color-mix(in srgb, var(--accent-color, #6366f1) 18%, var(--border-color));
+}
+
 @media (prefers-reduced-motion: reduce) {
     html[data-app-theme="night-sky"] #app-canvas::before,
     html[data-app-theme="night-sky"] #app-canvas.file-cabinet-bottom::before,

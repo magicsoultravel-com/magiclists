@@ -1,4 +1,5 @@
 import { escapeHTML } from './domEscape.js';
+import { ACTION_ICONS } from './icons.js';
 
 export const SHEET_DEFAULT_ROWS = 6;
 export const SHEET_DEFAULT_COLS = 4;
@@ -6,10 +7,11 @@ export const MEETING_SHEET_ROWS = 2;
 export const MEETING_SHEET_COLS = 6;
 export const SHEET_MIN_ROWS = 1;
 export const SHEET_MIN_COLS = 1;
-export const SHEET_DEFAULT_COL_WIDTH_PX = 36;
-export const SHEET_MIN_COL_WIDTH_PX = 24;
+export const SHEET_DEFAULT_COL_WIDTH_PX = 45;
+export const SHEET_MIN_COL_WIDTH_PX = 30;
 export const SHEET_MAX_COL_WIDTH_PX = 400;
-export const SHEET_ROW_HEAD_WIDTH_PX = 28;
+export const SHEET_ROW_HEAD_WIDTH_PX = 35;
+export const SHEET_STRUCT_COL_WIDTH_PX = 34;
 
 function clampColWidth(px) {
     const n = Number(px);
@@ -42,14 +44,34 @@ export function setColWidth(sheet, col, px) {
     sheet.colWidths[col] = clampColWidth(px);
 }
 
-export function sheetGridTotalWidthPx(sheet) {
+export function sheetGridTotalWidthPx(sheet, { includeStructCol = false } = {}) {
     ensureColWidths(sheet);
     const cols = sheet.cols || 0;
     let sum = SHEET_ROW_HEAD_WIDTH_PX;
     for (let c = 0; c < cols; c++) {
         sum += getColWidth(sheet, c);
     }
+    if (includeStructCol) sum += SHEET_STRUCT_COL_WIDTH_PX;
     return sum;
+}
+
+/** Spreadsheet-style column label: 0 → A, 25 → Z, 26 → AA */
+export function sheetColLabel(index) {
+    let n = index;
+    let label = '';
+    do {
+        label = String.fromCharCode(65 + (n % 26)) + label;
+        n = Math.floor(n / 26) - 1;
+    } while (n >= 0);
+    return label;
+}
+
+function renderSheetStructActions({ addClass, removeClass, addTitle, removeTitle, canRemove }) {
+    const disabled = canRemove ? '' : ' disabled';
+    return `<span class="sheet-struct-actions">
+            <button type="button" class="card-act ${addClass}" title="${addTitle}" aria-label="${addTitle}">${ACTION_ICONS.plus}</button>
+            <button type="button" class="card-act ${removeClass}" title="${removeTitle}" aria-label="${removeTitle}"${disabled}>${ACTION_ICONS.minus}</button>
+        </span>`;
 }
 
 export function resolveNoteTemplate(item) {
@@ -201,12 +223,12 @@ export function removeSheetCol(sheet) {
     return true;
 }
 
-function applyColWidthToDom(block, sheet, col, widthPx) {
+function applyColWidthToDom(block, sheet, col, widthPx, { includeStructCol = false } = {}) {
     const table = block?.querySelector('.sheet-grid');
     if (!table) return;
     const colEl = table.querySelector(`colgroup col[data-col="${col}"]`);
     if (colEl) colEl.style.width = `${widthPx}px`;
-    table.style.width = `${sheetGridTotalWidthPx(sheet)}px`;
+    table.style.width = `${sheetGridTotalWidthPx(sheet, { includeStructCol })}px`;
 }
 
 export function growSheetCell(el) {
@@ -229,56 +251,75 @@ export function growSheetRowCells(rowEl) {
 }
 
 export function growSheetCells(block) {
-    block?.querySelectorAll('.sheet-grid tbody tr').forEach((row) => growSheetRowCells(row));
+    block?.querySelectorAll('.sheet-grid tbody tr:not(.sheet-grid__struct-row)').forEach((row) => growSheetRowCells(row));
 }
 
 export function renderSheetHtml(sheet, { canEdit = false, inModalEditor = false } = {}) {
     const rows = sheet?.rows || SHEET_DEFAULT_ROWS;
     const cols = sheet?.cols || SHEET_DEFAULT_COLS;
     ensureColWidths(sheet);
+    const showStruct = canEdit && inModalEditor;
+    const canRemoveRow = rows > SHEET_MIN_ROWS;
+    const canRemoveCol = cols > SHEET_MIN_COLS;
 
     let colgroup = `<col class="sheet-grid__row-head-col" style="width:${SHEET_ROW_HEAD_WIDTH_PX}px">`;
     for (let c = 0; c < cols; c++) {
         const w = getColWidth(sheet, c);
         colgroup += `<col data-col="${c}" style="width:${w}px">`;
     }
+    if (showStruct) {
+        colgroup += `<col class="sheet-grid__struct-col" style="width:${SHEET_STRUCT_COL_WIDTH_PX}px">`;
+    }
 
     let colHead = '<th class="sheet-grid__corner" scope="col"></th>';
     for (let c = 0; c < cols; c++) {
+        const label = sheetColLabel(c);
         if (canEdit) {
-            colHead += `<th class="sheet-grid__col-head" scope="col" data-col="${c}"><span class="sheet-col-head__label">${c + 1}</span><span class="sheet-col-resize" data-col="${c}" title="Drag to resize; double-click label to set width (px)"></span></th>`;
+            colHead += `<th class="sheet-grid__col-head" scope="col" data-col="${c}"><span class="sheet-col-head__label">${label}</span><span class="sheet-col-resize" data-col="${c}" title="Drag to resize; double-click label to set width (px)"></span></th>`;
         } else {
-            colHead += `<th class="sheet-grid__col-head" scope="col">${c + 1}</th>`;
+            colHead += `<th class="sheet-grid__col-head" scope="col">${label}</th>`;
         }
+    }
+    if (showStruct) {
+        colHead += `<th class="sheet-grid__struct sheet-grid__struct--col" scope="col">${renderSheetStructActions({
+            addClass: 'sheet-add-col-btn',
+            removeClass: 'sheet-remove-col-btn',
+            addTitle: 'Add column',
+            removeTitle: 'Remove last column',
+            canRemove: canRemoveCol
+        })}</th>`;
     }
 
     let body = '';
     for (let r = 0; r < rows; r++) {
         body += `<tr><th class="sheet-grid__row-head" scope="row">${r + 1}</th>`;
         for (let c = 0; c < cols; c++) {
+            const colLabel = sheetColLabel(c);
             const value = getCellValue(sheet, r, c);
             if (canEdit) {
-                body += `<td class="sheet-grid__cell"><textarea class="sheet-cell-input form-input" data-sheet-cell data-row="${r}" data-col="${c}" rows="1" spellcheck="false" aria-label="Cell ${r + 1}, ${c + 1}">${escapeHTML(value)}</textarea></td>`;
+                body += `<td class="sheet-grid__cell"><textarea class="sheet-cell-input form-input" data-sheet-cell data-row="${r}" data-col="${c}" rows="1" spellcheck="false" aria-label="Cell row ${r + 1}, column ${colLabel}">${escapeHTML(value)}</textarea></td>`;
             } else {
                 body += `<td class="sheet-grid__cell"><span class="sheet-cell-read">${escapeHTML(value)}</span></td>`;
             }
         }
+        if (showStruct) {
+            body += '<td class="sheet-grid__struct-pad"></td>';
+        }
         body += '</tr>';
     }
 
-    const canRemoveRow = rows > SHEET_MIN_ROWS;
-    const canRemoveCol = cols > SHEET_MIN_COLS;
-    const toolbar = canEdit && inModalEditor
-        ? `<div class="sheet-toolbar">
-            <button type="button" class="btn btn--compact sheet-remove-row-btn" title="Remove last row" aria-label="Remove last row"${canRemoveRow ? '' : ' disabled'}>− row</button>
-            <button type="button" class="btn btn--compact sheet-add-row-btn" title="Add row" aria-label="Add row">+ row</button>
-            <button type="button" class="btn btn--compact sheet-remove-col-btn" title="Remove last column" aria-label="Remove last column"${canRemoveCol ? '' : ' disabled'}>− column</button>
-            <button type="button" class="btn btn--compact sheet-add-col-btn" title="Add column" aria-label="Add column">+ column</button>
-        </div>`
-        : '';
+    if (showStruct) {
+        body += `<tr class="sheet-grid__struct-row"><th class="sheet-grid__struct sheet-grid__struct--row" scope="row">${renderSheetStructActions({
+            addClass: 'sheet-add-row-btn',
+            removeClass: 'sheet-remove-row-btn',
+            addTitle: 'Add row',
+            removeTitle: 'Remove last row',
+            canRemove: canRemoveRow
+        })}</th><td colspan="${cols + 1}" class="sheet-grid__struct-pad"></td></tr>`;
+    }
 
-    const tableWidth = sheetGridTotalWidthPx(sheet);
-    return `<div class="sheet-block" data-sheet-block>${toolbar}<div class="sheet-grid-wrap"><table class="sheet-grid" style="width:${tableWidth}px"><colgroup>${colgroup}</colgroup><thead><tr>${colHead}</tr></thead><tbody>${body}</tbody></table></div></div>`;
+    const tableWidth = sheetGridTotalWidthPx(sheet, { includeStructCol: showStruct });
+    return `<div class="sheet-block" data-sheet-block><div class="sheet-grid-wrap"><table class="sheet-grid" style="width:${tableWidth}px"><colgroup>${colgroup}</colgroup><thead><tr>${colHead}</tr></thead><tbody>${body}</tbody></table></div></div>`;
 }
 
 export function syncSheetFromDom(root, item) {
@@ -309,6 +350,7 @@ export function attachSheetInteractions(root, item, {
 
     ensureItemSheet(item, defaultSheetDimsForTemplate(resolveNoteTemplate(item)));
     growSheetCells(block);
+    const includeStructCol = inModalEditor && !!block.querySelector('.sheet-grid__struct-col');
 
     if (block.dataset.sheetBound === 'true') return;
     block.dataset.sheetBound = 'true';
@@ -401,7 +443,7 @@ export function attachSheetInteractions(root, item, {
                 moved = true;
                 const next = clampColWidth(startW + dx);
                 setColWidth(item.sheet, col, next);
-                applyColWidthToDom(block, item.sheet, col, next);
+                applyColWidthToDom(block, item.sheet, col, next, { includeStructCol });
             };
 
             const onEnd = (ev) => {
@@ -442,7 +484,7 @@ export function attachSheetInteractions(root, item, {
         input.max = String(SHEET_MAX_COL_WIDTH_PX);
         input.step = '1';
         input.value = String(current);
-        input.setAttribute('aria-label', `Column ${col + 1} width in pixels`);
+        input.setAttribute('aria-label', `Column ${sheetColLabel(col)} width in pixels`);
         label.replaceWith(input);
         input.focus();
         input.select();
@@ -453,12 +495,12 @@ export function attachSheetInteractions(root, item, {
             committed = true;
             if (apply) {
                 runStructure(() => setColWidth(item.sheet, col, input.value), { refreshDom: false });
-                applyColWidthToDom(block, item.sheet, col, getColWidth(item.sheet, col));
+                applyColWidthToDom(block, item.sheet, col, getColWidth(item.sheet, col), { includeStructCol });
                 growSheetCells(block);
             }
             const newLabel = document.createElement('span');
             newLabel.className = 'sheet-col-head__label';
-            newLabel.textContent = String(col + 1);
+            newLabel.textContent = sheetColLabel(col);
             input.replaceWith(newLabel);
         };
 
@@ -476,26 +518,34 @@ export function attachSheetInteractions(root, item, {
 
     if (!inModalEditor) return;
 
-    block.querySelector('.sheet-add-row-btn')?.addEventListener('click', (e) => {
-        e.preventDefault();
-        runStructure(() => addSheetRow(item.sheet));
+    block.querySelectorAll('.sheet-add-row-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            runStructure(() => addSheetRow(item.sheet));
+        });
     });
 
-    block.querySelector('.sheet-add-col-btn')?.addEventListener('click', (e) => {
-        e.preventDefault();
-        runStructure(() => addSheetCol(item.sheet));
+    block.querySelectorAll('.sheet-add-col-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            runStructure(() => addSheetCol(item.sheet));
+        });
     });
 
-    block.querySelector('.sheet-remove-row-btn')?.addEventListener('click', (e) => {
-        e.preventDefault();
-        if ((item.sheet?.rows || 1) <= SHEET_MIN_ROWS) return;
-        runStructure(() => removeSheetRow(item.sheet));
+    block.querySelectorAll('.sheet-remove-row-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if ((item.sheet?.rows || 1) <= SHEET_MIN_ROWS) return;
+            runStructure(() => removeSheetRow(item.sheet));
+        });
     });
 
-    block.querySelector('.sheet-remove-col-btn')?.addEventListener('click', (e) => {
-        e.preventDefault();
-        if ((item.sheet?.cols || 1) <= SHEET_MIN_COLS) return;
-        runStructure(() => removeSheetCol(item.sheet));
+    block.querySelectorAll('.sheet-remove-col-btn').forEach((btn) => {
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if ((item.sheet?.cols || 1) <= SHEET_MIN_COLS) return;
+            runStructure(() => removeSheetCol(item.sheet));
+        });
     });
 }
 

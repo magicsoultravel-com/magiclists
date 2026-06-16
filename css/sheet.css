@@ -7,39 +7,43 @@
     min-width: 0;
 }
 
-.sheet-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.18rem;
-    align-items: center;
-}
-
 .sheet-grid-wrap {
     overflow: auto;
     max-width: 100%;
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--sheet-grid-border, color-mix(in srgb, var(--border-color) 45%, transparent));
     border-radius: 4px;
-    background: rgba(0, 0, 0, 0.12);
+    background: rgba(0, 0, 0, 0.08);
+    --sheet-head-fg: var(--text-muted);
+    --sheet-head-bg: transparent;
+    --sheet-head-border: color-mix(in srgb, var(--border-color) 28%, transparent);
+    --sheet-grid-border: color-mix(in srgb, var(--border-color) 45%, transparent);
+}
+
+.has-custom-bg .sheet-grid-wrap {
+    --sheet-head-fg: var(--card-muted);
+    --sheet-head-border: var(--card-border-subtle);
+    --sheet-grid-border: var(--card-border-subtle);
 }
 
 .sheet-grid {
     border-collapse: collapse;
     table-layout: fixed;
-    font-size: calc(0.36rem * var(--note-font-scale, 1));
+    font-size: calc(0.45rem * var(--note-font-scale, 1));
     line-height: 1.25;
 }
 
 .sheet-grid__corner,
 .sheet-grid__col-head,
-.sheet-grid__row-head {
+.sheet-grid__row-head,
+.sheet-grid__struct {
     position: sticky;
     z-index: 1;
-    padding: 0.08rem 0.18rem;
+    padding: 0.1rem 0.22rem;
     font-weight: 500;
-    font-size: 0.31rem;
-    color: var(--text-muted);
-    background: var(--bg-surface);
-    border: 1px solid var(--border-color);
+    font-size: calc(0.39rem * var(--note-font-scale, 1));
+    color: var(--sheet-head-fg, var(--text-muted));
+    background: var(--sheet-head-bg, transparent);
+    border: 1px solid var(--sheet-head-border, color-mix(in srgb, var(--border-color) 28%, transparent));
     text-align: center;
     user-select: none;
 }
@@ -47,10 +51,13 @@
 .sheet-grid__corner {
     left: 0;
     z-index: 2;
+    border-left-color: transparent;
+    border-top-color: transparent;
 }
 
 .sheet-grid__col-head {
     top: 0;
+    position: relative;
 }
 
 .sheet-col-head__label {
@@ -73,7 +80,7 @@
 .sheet-col-head__input {
     width: 2.4rem;
     min-width: 0;
-    padding: 0.04rem 0.12rem;
+    padding: 0.05rem 0.15rem;
     font-size: inherit;
     line-height: 1.2;
     text-align: center;
@@ -88,12 +95,58 @@
 
 .sheet-grid__row-head {
     left: 0;
-    min-width: 0.7rem;
+    min-width: 0.85rem;
+}
+
+.sheet-grid__struct {
+    vertical-align: middle;
+}
+
+.sheet-grid__struct--col {
+    top: 0;
+}
+
+.sheet-grid__struct--row {
+    left: 0;
+    z-index: 2;
+}
+
+.sheet-grid__struct-pad {
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+
+.sheet-struct-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+.sheet-grid-wrap:hover .sheet-struct-actions,
+.sheet-grid-wrap:focus-within .sheet-struct-actions {
+    opacity: 1;
+    pointer-events: none;
+}
+
+.sheet-struct-actions .card-act {
+    pointer-events: auto;
+    width: 14px;
+    height: 14px;
+}
+
+.sheet-struct-actions .card-act:disabled {
+    opacity: 0.35;
+    pointer-events: none;
 }
 
 .sheet-grid__cell {
     padding: 0;
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--sheet-grid-border, color-mix(in srgb, var(--border-color) 45%, transparent));
     vertical-align: top;
     overflow: hidden;
 }
@@ -106,7 +159,7 @@
     min-height: 0;
     border: none;
     border-radius: 0;
-    padding: 0.06rem 0.18rem;
+    padding: 0.075rem 0.22rem;
     font-size: inherit;
     line-height: 1.25;
     font-family: inherit;
@@ -125,7 +178,7 @@
 #editor-overlay .sheet-grid textarea.sheet-cell-input.form-input {
     min-height: 0;
     max-height: none;
-    padding: 0.06rem 0.18rem;
+    padding: 0.075rem 0.22rem;
     font-size: inherit;
     line-height: 1.25;
     border: none;
@@ -150,7 +203,7 @@
 
 .sheet-cell-read {
     display: block;
-    padding: 0.06rem 0.18rem;
+    padding: 0.075rem 0.22rem;
     white-space: pre-wrap;
     word-break: break-word;
     overflow-wrap: anywhere;
@@ -170,25 +223,15 @@
     margin-top: 0;
 }
 
-.meeting-datetime {
-    flex-shrink: 0;
+.meeting-datetime--body {
+    margin: 0.5rem 0 0;
     font-size: calc(0.62rem * var(--note-font-scale, 1));
     color: var(--text-muted);
-    white-space: nowrap;
-    align-self: flex-start;
-    padding-top: 0.15rem;
+    line-height: 1.35;
 }
 
-.editor-note-topline--meeting {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 0.75rem;
-}
-
-.editor-note-topline--meeting .editor-note-header {
-    flex: 1 1 auto;
-    min-width: 0;
+.has-custom-bg .meeting-datetime--body {
+    color: var(--card-muted);
 }
 
 /* Template picker */
