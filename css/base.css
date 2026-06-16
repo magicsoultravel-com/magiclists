@@ -35,7 +35,7 @@
     --board-area-inset-base: 0.875rem;
     --board-padding-scale: 0.142857;
     --board-area-inset: calc(var(--board-area-inset-base) * var(--board-padding-scale, 1));
-    --scrollbar-size: 6px;
+    --scrollbar-size: 10px;
     --scrollbar-thumb: color-mix(in srgb, var(--text-muted) 38%, var(--border-color));
     --scrollbar-thumb-hover: color-mix(in srgb, var(--accent) 42%, var(--border-color));
     --scrollbar-track: transparent;
@@ -73,14 +73,14 @@ html[data-tile-small-footprint="card"] {
 
 *::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb);
-    border: 2px solid transparent;
+    border: 1px solid transparent;
     background-clip: padding-box;
     border-radius: 4px;
 }
 
 *::-webkit-scrollbar-thumb:hover {
     background: var(--scrollbar-thumb-hover);
-    border: 2px solid transparent;
+    border: 1px solid transparent;
     background-clip: padding-box;
 }
 

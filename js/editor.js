@@ -514,10 +514,10 @@ export const Editor = {
         });
     },
 
-    toggleIconBoard() {
-        if (!this.iconBtn || !this.activeItem || !this.iconBoardStack) return;
+    openEmojiPicker() {
+        if (!this.iconBtn || !this.activeItem) return;
         const root = this.mountZone?.querySelector('.editor-note-shell') || this.mountZone;
-        NoteSurface.toggleIconBoard(this.iconBoardStack, root, this.activeItem, {
+        NoteSurface.openEmojiPickerForNote(root, this.iconBtn, this.activeItem, {
             localOnly: true,
             onChange: () => {
                 this.markInteracted();

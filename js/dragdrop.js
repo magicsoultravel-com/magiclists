@@ -192,12 +192,7 @@ function pointerHitsNoteEditor(clientX, clientY, card) {
 function shouldYieldToNoteEditor(e, card) {
     if (!e || !card) return false;
     if (e.target?.closest?.('.card-act--drag')) return false;
-    if (pointerHitsNoteEditor(e.clientX, e.clientY, card)) return true;
-    return !!e.target?.closest?.(
-        '.editor-note-shell .card-inline-edit, '
-        + '.editor-note-shell .step-text, '
-        + '.editor-note-shell .step-check'
-    );
+    return pointerHitsNoteEditor(e.clientX, e.clientY, card);
 }
 
 function shouldStartCardDrag(target) {

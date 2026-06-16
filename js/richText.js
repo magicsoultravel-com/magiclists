@@ -1,8 +1,5 @@
-import { isNoteIconId } from './noteIcons.js';
-
-const ALLOWED_TAGS = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'S', 'STRIKE', 'DEL', 'BR', 'SPAN']);
-const MARKUP_RE = /<(?:\/?)(?:a|b|strong|i|em|s|strike|del|br|span)\b/i;
-const NOTE_ICON_RE = /data-note-icon\s*=/i;
+const ALLOWED_TAGS = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'S', 'STRIKE', 'DEL', 'BR']);
+const MARKUP_RE = /<(?:\/?)(?:a|b|strong|i|em|s|strike|del|br)\b/i;
 const URL_RE = /(?:https?:\/\/|www\.)[^\s<>"']+/gi;
 
 function escapeHtmlAttr(str) {
@@ -32,7 +29,7 @@ export function sanitizeHref(href) {
 
 export function hasRichMarkup(str) {
     if (!str || typeof str !== 'string') return false;
-    return MARKUP_RE.test(str) || NOTE_ICON_RE.test(str) || URL_RE.test(str);
+    return MARKUP_RE.test(str) || URL_RE.test(str);
 }
 
 export function stripRichText(html) {
@@ -41,7 +38,6 @@ export function stripRichText(html) {
     if (!/<[^>]+>/.test(raw)) return raw;
     const tpl = document.createElement('template');
     tpl.innerHTML = raw;
-    tpl.content.querySelectorAll('[data-note-icon]').forEach((el) => el.remove());
     return tpl.content.textContent || '';
 }
 
@@ -94,14 +90,6 @@ function walkNodes(node) {
         if (!href) return Array.from(node.childNodes).map(walkNodes).join('');
         const inner = Array.from(node.childNodes).map(walkNodes).join('');
         return `<a href="${escapeHtmlAttr(href)}" target="_blank" rel="noopener noreferrer">${inner}</a>`;
-    }
-
-    if (tag === 'SPAN') {
-        const iconId = node.getAttribute('data-note-icon');
-        if (iconId && isNoteIconId(iconId)) {
-            return `<span class="note-inline-icon" data-note-icon="${escapeHtmlAttr(iconId)}" contenteditable="false">\u200b</span>`;
-        }
-        return Array.from(node.childNodes).map(walkNodes).join('');
     }
 
     if (ALLOWED_TAGS.has(tag)) {

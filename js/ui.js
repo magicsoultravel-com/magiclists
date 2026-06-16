@@ -1086,14 +1086,11 @@ export const UI = {
         const dragBtn = actions.querySelector('.card-act--drag');
         const toggleBtn = actions.querySelector('.card-act--toggle');
         const colorBtn = actions.querySelector('.card-act--color');
-        const iconBtn = actions.querySelector('.card-act--icon');
+        const iconBtn = actions.querySelector('.card-act--emoji');
         const hideBtn = actions.querySelector('.card-act--hide');
         const editBtn = actions.querySelector('.card-act--edit');
         const calBtn = actions.querySelector('.card-act--cal');
-        const stack = actions.closest('.note-quick-actions-stack');
         const iconRoot = card.querySelector('.editor-note-shell') || card;
-
-        if (stack) NoteSurface.attachIconBoard(stack, iconRoot, item);
 
         const consumeSkipExpand = () => {
             if (card.dataset.skipExpand) {
@@ -1164,7 +1161,7 @@ export const UI = {
             NoteSurface.commitFocusedInlineField(card, item);
             if (isDesktopCard(card)) this.raiseDesktopCard(card);
             if (!localStorage.getItem('admin_token')) return;
-            NoteSurface.toggleIconBoard(stack, iconRoot, item);
+            NoteSurface.openEmojiPickerForNote(iconRoot, iconBtn, item);
         });
 
         this.attachCardActionButton(hideBtn, () => {
@@ -1201,29 +1198,17 @@ export const UI = {
         const copyBtn = actions.querySelector('.card-act--copy');
         const pinBtn = actions.querySelector('.card-act--pin');
         const colorBtn = actions.querySelector('.card-act--color');
-        const iconBtn = actions.querySelector('.card-act--icon');
+        const iconBtn = actions.querySelector('.card-act--emoji');
         const hideBtn = actions.querySelector('.card-act--hide');
         const editBtn = actions.querySelector('.card-act--edit');
         const calBtn = actions.querySelector('.card-act--cal');
         const closeBtn = actions.querySelector('.card-act--close');
-        const stack = actions.closest('.note-quick-actions-stack');
         const iconRoot = editor.mountZone?.querySelector('.editor-note-shell') || editor.mountZone;
 
         editor.archiveBtn = archiveBtn;
         editor.colorBtn = colorBtn;
         editor.iconBtn = iconBtn;
-        editor.iconBoardStack = stack;
         editor.calendarToggleBtn = calBtn;
-
-        if (stack && iconRoot) {
-            NoteSurface.attachIconBoard(stack, iconRoot, item, {
-                localOnly: true,
-                onChange: () => {
-                    editor.markInteracted();
-                    editor.triggerAutoSave();
-                }
-            });
-        }
 
         if (archiveBtn) {
             this.attachCardActionButton(archiveBtn, () => editor.emitArchiveAction());
@@ -1264,7 +1249,7 @@ export const UI = {
 
         this.attachCardActionButton(colorBtn, () => editor.openColorPicker());
 
-        this.attachCardActionButton(iconBtn, () => editor.toggleIconBoard());
+        this.attachCardActionButton(iconBtn, () => editor.openEmojiPicker());
 
         this.attachCardActionButton(hideBtn, () => {
             editor.syncActiveItemFromDom();
@@ -1475,7 +1460,7 @@ export const UI = {
             canEdit,
             richEdit: canEdit,
             toolbarHtml: this.buildCardActionsHtml(item, false, this.getCardActionsOptions(card)),
-            toolbarDragZone: dragZone,
+            toplineDragZone: dragZone,
             footerDragZone: dragZone,
             targetCatName,
             categoryColor: dotColor

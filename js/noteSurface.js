@@ -14,8 +14,8 @@ import {
     stepsHaveConvertibleText
 } from './noteBodyConversion.js';
 import { hasRichMarkup, linkifyPlainUrls, sanitizeHref, sanitizeRichHtml, stripRichText } from './richText.js';
-import { hydrateNoteIcons, hydrateNoteIconsHtml, isNoteIconId, noteIconTokenMarkup } from './noteIcons.js';
-import { IconBoard, buildIconBoardHtml } from './iconPicker.js';
+import { isAllowedEmoji } from './noteEmojis.js';
+import { EmojiPicker } from './iconPicker.js';
 import { normalizeItemForSave } from './noteModel.js';
 import { CARD_ICONS, FORMAT_ICONS, ACTION_ICONS } from './icons.js';
 import {
@@ -227,18 +227,14 @@ export const NoteSurface = {
     renderRichHtml(str) {
         if (!str) return '';
         const prepared = String(str).replace(/\u2028/g, '<br>').replace(/\n/g, '<br>');
-        const out = hasRichMarkup(prepared)
-            ? sanitizeRichHtml(prepared)
-            : sanitizeRichHtml(escapeHTML(prepared));
-        return hydrateNoteIconsHtml(out);
+        if (hasRichMarkup(prepared)) return sanitizeRichHtml(prepared);
+        return sanitizeRichHtml(escapeHTML(prepared));
     },
 
     prepareContentForEdit(content) {
         const prepared = String(content || '').replace(/\u2028/g, '<br>').replace(/\n/g, '<br>');
-        const out = hasRichMarkup(prepared)
-            ? sanitizeRichHtml(prepared)
-            : sanitizeRichHtml(escapeHTML(prepared));
-        return hydrateNoteIconsHtml(out);
+        if (hasRichMarkup(prepared)) return sanitizeRichHtml(prepared);
+        return sanitizeRichHtml(escapeHTML(prepared));
     },
 
     tryOpenRichEditLink(e, host) {
@@ -280,7 +276,7 @@ export const NoteSurface = {
         sel.addRange(range);
     },
 
-    resolveIconInsertTarget(root) {
+    resolveEmojiInsertTarget(root) {
         if (!root) return null;
         const active = document.activeElement;
         if (active?.classList?.contains('card-inline-edit')
@@ -306,7 +302,7 @@ export const NoteSurface = {
         return null;
     },
 
-    saveIconInsertContext(root) {
+    saveEmojiInsertContext(root) {
         const active = document.activeElement;
         let target = null;
         let range = null;
@@ -315,7 +311,7 @@ export const NoteSurface = {
             && root?.contains(active)) {
             target = active;
         } else {
-            target = this.resolveIconInsertTarget(root);
+            target = this.resolveEmojiInsertTarget(root);
         }
         if (target) {
             const sel = window.getSelection();
@@ -326,7 +322,7 @@ export const NoteSurface = {
         return { target, range };
     },
 
-    restoreIconInsertRange(target, range) {
+    restoreEmojiInsertRange(target, range) {
         if (!target) return;
         target.focus();
         if (!range) return;
@@ -335,16 +331,9 @@ export const NoteSurface = {
         sel.addRange(range);
     },
 
-    insertNoteIconAtCaret(el, iconId, { item, localOnly = false, onChange = () => {} } = {}) {
-        if (!el || !isNoteIconId(iconId)) return false;
-        el.focus();
-        const sel = window.getSelection();
-        if (!sel?.rangeCount || !el.contains(sel.getRangeAt(0).startContainer)) {
-            this.focusInlineEdit(el, 'end');
-        }
-        const token = sanitizeRichHtml(noteIconTokenMarkup(iconId));
-        document.execCommand('insertHTML', false, token);
-        hydrateNoteIcons(el);
+    insertEmojiAtCaret(el, emoji, { item, localOnly = false, onChange = () => {} } = {}) {
+        if (!el || !emoji || !isAllowedEmoji(emoji)) return false;
+        this.insertTextAtCaret(el, emoji);
         if (item) {
             this.syncInlineFieldToItem(el, item);
             if (localOnly) {
@@ -356,24 +345,18 @@ export const NoteSurface = {
         return true;
     },
 
-    attachIconBoard(stack, root, item, { localOnly = false, onChange = () => {} } = {}) {
-        if (!stack || !root) return;
-        IconBoard.attach(stack, {
-            getContext: () => this.saveIconInsertContext(root),
-            insertIcon: (ctx, iconId) => {
-                if (!ctx?.target) return;
-                this.restoreIconInsertRange(ctx.target, ctx.range);
-                this.insertNoteIconAtCaret(ctx.target, iconId, { item, localOnly, onChange });
+    openEmojiPickerForNote(root, anchor, item, { localOnly = false, onChange = () => {}, savedContext = null } = {}) {
+        if (!anchor || !root) return;
+        const ctx = savedContext || this.saveEmojiInsertContext(root);
+        EmojiPicker.open({
+            anchor,
+            align: 'end',
+            onSelect: (emoji) => {
+                if (!ctx.target) return;
+                this.restoreEmojiInsertRange(ctx.target, ctx.range);
+                this.insertEmojiAtCaret(ctx.target, emoji, { item, localOnly, onChange });
             }
         });
-    },
-
-    toggleIconBoard(stack, root, item, { localOnly = false, onChange = () => {} } = {}) {
-        if (!stack) return;
-        if (!stack.dataset.iconBoardBound) {
-            this.attachIconBoard(stack, root, item, { localOnly, onChange });
-        }
-        stack._iconBoardToggle?.();
     },
 
     canInlineEditText(text, { richEdit = false } = {}) {
@@ -450,11 +433,9 @@ export const NoteSurface = {
         const archiveBtn = showArchive
             ? `<button type="button" id="modal-archive-btn" class="card-act card-act--archive" title="Archive note" aria-label="Archive note">${CARD_ICONS.delete}</button>`
             : '';
-        const actionsHtml = `<div class="note-quick-actions-stack">
-            ${buildIconBoardHtml()}
-            <div class="card-actions${isModal ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
+        const actionsHtml = `<div class="card-actions${isModal ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
             ${calBtn}
-            <button type="button" class="card-act card-act--icon" title="Insert icon" aria-label="Insert icon" aria-haspopup="true" aria-expanded="false">${CARD_ICONS.insertIcon}</button>
+            <button type="button" class="card-act card-act--emoji" title="Insert emoji" aria-label="Insert emoji" aria-haspopup="dialog" aria-expanded="false">${CARD_ICONS.insertEmoji}</button>
             <button type="button" class="card-act card-act--copy" title="Copy note as text" aria-label="Copy note as text">${CARD_ICONS.copy}</button>
             ${pinBtn}
             <button type="button" class="card-act card-act--color" title="Note color" aria-label="Note color" aria-haspopup="dialog">${CARD_ICONS.color}</button>
@@ -462,7 +443,6 @@ export const NoteSurface = {
             <button type="button" class="card-act card-act--edit" title="Edit note" aria-label="Edit note">${CARD_ICONS.edit}</button>
             ${dragBtn}
             <button type="button" class="card-act ${lastClass}"${lastId} title="${expandTitle}" aria-label="${expandTitle}">${lastIcon}</button>
-            </div>
         </div>`;
         return isModal ? `${archiveBtn}${actionsHtml}` : actionsHtml;
     },
@@ -707,7 +687,7 @@ export const NoteSurface = {
         showFormat = false,
         richEdit = false,
         toolbarHtml = '',
-        toolbarDragZone = '',
+        toplineDragZone = '',
         footerDragZone = '',
         targetCatName = '',
         categoryColor = UNCATEGORIZED_COLOR,
@@ -732,9 +712,9 @@ export const NoteSurface = {
         });
         const bodyIdAttr = bodyId ? ` id="${bodyId}"` : '';
 
-        const toplineDragZone = toolbarDragZone || footerDragZone || '';
+        const toplineClass = toplineDragZone || footerDragZone || '';
         const toplineHtml = `
-                <div class="editor-note-topline${toplineDragZone}">
+                <div class="editor-note-topline${toplineClass}">
                     <div class="editor-note-header">
                         ${titleHtml}
                     </div>
@@ -956,7 +936,6 @@ export const NoteSurface = {
         const body = shell.querySelector('.editor-note-body');
         if (header) this.attachNoteBodyInteractions(header, item, interactionOptions);
         if (body) this.attachNoteBodyInteractions(body, item, interactionOptions);
-        hydrateNoteIcons(shell);
 
         if (stopMousedownPropagation && !shell.dataset.shellBubbleBound) {
             shell.dataset.shellBubbleBound = '1';
