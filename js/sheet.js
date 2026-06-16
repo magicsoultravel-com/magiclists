@@ -211,12 +211,25 @@ function applyColWidthToDom(block, sheet, col, widthPx) {
 
 export function growSheetCell(el) {
     if (!el) return;
-    el.style.height = 'auto';
+    el.style.height = '0';
     el.style.height = `${el.scrollHeight}px`;
 }
 
+export function growSheetRowCells(rowEl) {
+    if (!rowEl) return;
+    let maxH = 0;
+    const cells = [...rowEl.querySelectorAll('[data-sheet-cell]')];
+    cells.forEach((el) => {
+        el.style.height = '0';
+        maxH = Math.max(maxH, el.scrollHeight);
+    });
+    cells.forEach((el) => {
+        el.style.height = `${maxH}px`;
+    });
+}
+
 export function growSheetCells(block) {
-    block?.querySelectorAll('[data-sheet-cell]').forEach((el) => growSheetCell(el));
+    block?.querySelectorAll('.sheet-grid tbody tr').forEach((row) => growSheetRowCells(row));
 }
 
 export function renderSheetHtml(sheet, { canEdit = false, inModalEditor = false } = {}) {
@@ -311,7 +324,7 @@ export function attachSheetInteractions(root, item, {
 
         input.addEventListener('input', () => {
             syncSheetFromDom(block, item);
-            growSheetCell(input);
+            growSheetRowCells(input.closest('tr'));
             onChange();
         });
 
@@ -321,7 +334,7 @@ export function attachSheetInteractions(root, item, {
                 return;
             }
             syncSheetFromDom(block, item);
-            growSheetCell(input);
+            growSheetRowCells(input.closest('tr'));
             if (editBefore && commitCellEdit) {
                 commitCellEdit(editBefore);
                 editBefore = null;
