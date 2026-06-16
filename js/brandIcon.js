@@ -28,6 +28,34 @@ export const BRAND_ICONS = [
         svg: './assets/brand/icon-tile.svg',
         ico: './assets/brand/favicon-tile.ico',
         appleTouch: './assets/brand/apple-touch-tile.png'
+    },
+    {
+        id: 'synth',
+        label: 'Synth sun',
+        svg: './assets/brand/icon-synth.svg',
+        ico: './assets/brand/favicon-synth.ico',
+        appleTouch: './assets/brand/apple-touch-synth.png'
+    },
+    {
+        id: 'palm',
+        label: 'Neon palm',
+        svg: './assets/brand/icon-palm.svg',
+        ico: './assets/brand/favicon-palm.ico',
+        appleTouch: './assets/brand/apple-touch-palm.png'
+    },
+    {
+        id: 'prism',
+        label: 'Prism',
+        svg: './assets/brand/icon-prism.svg',
+        ico: './assets/brand/favicon-prism.ico',
+        appleTouch: './assets/brand/apple-touch-prism.png'
+    },
+    {
+        id: 'comet',
+        label: 'Comet list',
+        svg: './assets/brand/icon-comet.svg',
+        ico: './assets/brand/favicon-comet.ico',
+        appleTouch: './assets/brand/apple-touch-comet.png'
     }
 ];
 
@@ -62,7 +90,7 @@ export function buildBrandIconOptionsHtml(selectedId = DEFAULT_BRAND_ICON_ID) {
     return BRAND_ICONS.map((icon) => {
         const selected = icon.id === activeId ? ' is-selected' : '';
         return `<button type="button" class="brand-icon-option${selected}" data-brand-icon="${icon.id}" title="${escapeHtml(icon.label)}" aria-label="${escapeHtml(icon.label)}" aria-pressed="${selected ? 'true' : 'false'}">
-            <img class="brand-icon-preview" src="${icon.svg}" alt="" width="32" height="32" decoding="async">
+            <img class="brand-icon-preview" src="${icon.svg}" alt="" width="36" height="36" decoding="async">
             <span class="brand-icon-option-label">${escapeHtml(icon.label)}</span>
         </button>`;
     }).join('');

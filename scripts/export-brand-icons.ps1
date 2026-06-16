@@ -4,7 +4,7 @@
 Add-Type -AssemblyName System.Drawing
 
 $brandDir = Join-Path $PSScriptRoot '..\assets\brand'
-$ids = @('clipboard', 'easel', 'block', 'tile')
+$ids = @('clipboard', 'easel', 'block', 'tile', 'synth', 'palm', 'prism', 'comet')
 
 function Get-Color($hex) {
     $hex = $hex.TrimStart('#')
@@ -39,12 +39,12 @@ function Draw-NeonLines($g, $x, $y, $w, $lineH, $gap, $colors) {
 
 function Draw-Icon($g, $id, $size) {
     $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-    $bg = New-Object System.Drawing.SolidBrush (Get-Color '#050506')
+    $bg = New-Object System.Drawing.SolidBrush (Get-Color '#1B0F3A')
     Fill-RoundedRect $g $bg 0 0 $size $size ($size * 0.19)
     $bg.Dispose()
 
-    $colors = @('#A83888', '#008899', '#601898')
-    $paper = New-Object System.Drawing.SolidBrush (Get-Color '#BDB3A3')
+    $colors = @('#FF6EC7', '#00F5FF', '#B8FF3C', '#39FF14')
+    $paper = New-Object System.Drawing.SolidBrush (Get-Color '#F0EAE0')
     $wood = New-Object System.Drawing.SolidBrush (Get-Color '#4A3018')
     $woodDark = New-Object System.Drawing.SolidBrush (Get-Color '#261810')
     $woodHi = New-Object System.Drawing.SolidBrush (Get-Color '#6E4E30')
@@ -87,10 +87,70 @@ function Draw-Icon($g, $id, $size) {
         }
         'tile' {
             Fill-RoundedRect $g $paper ($size * 0.19) ($size * 0.19) ($size * 0.62) ($size * 0.62) ($size * 0.09)
-            Draw-NeonLines $g ($size * 0.25) ($size * 0.30) ($size * 0.5) ($size * 0.07) ($size * 0.04) $colors
-            $spark = New-Object System.Drawing.SolidBrush (Get-Color '#8A7018')
+            Draw-NeonLines $g ($size * 0.25) ($size * 0.28) ($size * 0.5) ($size * 0.062) ($size * 0.035) $colors
+            $spark = New-Object System.Drawing.SolidBrush (Get-Color '#FF6EC7')
             $g.FillEllipse($spark, $size * 0.66, $size * 0.28, $size * 0.08, $size * 0.08)
             $spark.Dispose()
+        }
+        'synth' {
+            $sky = New-Object System.Drawing.Drawing2D.LinearGradientBrush (
+                [System.Drawing.Point]::new(0, [int]($size * 0.12)),
+                [System.Drawing.Point]::new(0, [int]($size * 0.88)),
+                (Get-Color '#2A1050'),
+                (Get-Color '#FFB347')
+            )
+            Fill-RoundedRect $g $sky ($size * 0.12) ($size * 0.12) ($size * 0.76) ($size * 0.76) ($size * 0.09)
+            $sky.Dispose()
+            $sun = New-Object System.Drawing.SolidBrush (Get-Color '#FFB347')
+            $g.FillEllipse($sun, $size * 0.29, $size * 0.42, $size * 0.42, $size * 0.42)
+            $sun.Dispose()
+            Draw-NeonLines $g ($size * 0.17) ($size * 0.65) ($size * 0.66) ($size * 0.028) ($size * 0.018) $colors
+        }
+        'palm' {
+            $sky = New-Object System.Drawing.Drawing2D.LinearGradientBrush (
+                [System.Drawing.Point]::new(0, [int]($size * 0.14)),
+                [System.Drawing.Point]::new(0, [int]($size * 0.86)),
+                (Get-Color '#FF6EC7'),
+                (Get-Color '#00F5FF')
+            )
+            Fill-RoundedRect $g $sky ($size * 0.14) ($size * 0.14) ($size * 0.72) ($size * 0.72) ($size * 0.08)
+            $sky.Dispose()
+            $sun = New-Object System.Drawing.SolidBrush (Get-Color '#FFB347')
+            $g.FillEllipse($sun, $size * 0.62, $size * 0.18, $size * 0.16, $size * 0.16)
+            $sun.Dispose()
+            Draw-NeonLines $g ($size * 0.22) ($size * 0.58) ($size * 0.56) ($size * 0.055) ($size * 0.028) @('#FF6EC7', '#00F5FF', '#B8FF3C')
+            $trunk = New-Object System.Drawing.Pen (Get-Color '#39FF14'), ($size * 0.035)
+            $g.DrawLine($trunk, $size * 0.5, $size * 0.76, $size * 0.5, $size * 0.34)
+            $trunk.Dispose()
+        }
+        'prism' {
+            $panel = New-Object System.Drawing.SolidBrush (Get-Color '#12082A')
+            Fill-RoundedRect $g $panel ($size * 0.19) ($size * 0.19) ($size * 0.62) ($size * 0.62) ($size * 0.07)
+            $panel.Dispose()
+            $tri = @(
+                [System.Drawing.Point]::new([int]($size * 0.5), [int]($size * 0.24)),
+                [System.Drawing.Point]::new([int]($size * 0.70), [int]($size * 0.70)),
+                [System.Drawing.Point]::new([int]($size * 0.30), [int]($size * 0.70))
+            )
+            $g.FillPolygon($paper, $tri)
+            Draw-NeonLines $g ($size * 0.73) ($size * 0.34) ($size * 0.11) ($size * 0.04) ($size * 0.018) $colors
+        }
+        'comet' {
+            $panel = New-Object System.Drawing.SolidBrush (Get-Color '#12082A')
+            Fill-RoundedRect $g $panel ($size * 0.16) ($size * 0.16) ($size * 0.68) ($size * 0.68) ($size * 0.085)
+            $panel.Dispose()
+            $state = $g.Save()
+            $g.TranslateTransform($size * 0.5, $size * 0.5)
+            $g.RotateTransform(-8)
+            $g.TranslateTransform(-$size * 0.5, -$size * 0.5)
+            Draw-NeonLines $g ($size * 0.21) ($size * 0.40) ($size * 0.42) ($size * 0.047) ($size * 0.028) $colors
+            $g.Restore($state)
+            $head = New-Object System.Drawing.SolidBrush (Get-Color '#00F5FF')
+            $g.FillEllipse($head, $size * 0.68, $size * 0.16, $size * 0.14, $size * 0.14)
+            $head.Dispose()
+            $core = New-Object System.Drawing.SolidBrush (Get-Color '#FF6EC7')
+            $g.FillEllipse($core, $size * 0.72, $size * 0.19, $size * 0.07, $size * 0.07)
+            $core.Dispose()
         }
     }
 

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const brandDir = path.join(__dirname, '..', 'assets', 'brand');
-const ids = ['clipboard', 'easel', 'block', 'tile'];
+const ids = ['clipboard', 'easel', 'block', 'tile', 'synth', 'palm', 'prism', 'comet'];
 
 let sharp;
 try {
