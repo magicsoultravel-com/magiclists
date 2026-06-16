@@ -632,8 +632,8 @@
     overflow-y: auto;
 }
 
-#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.expanded):not(.is-editing-inline) .editor-note-body,
-#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.expanded):not(.is-editing-inline) .editor-note-body {
+#app-canvas.view-grid .mini-card[data-desktop="1"]:not(.is-editing-inline) .editor-note-body,
+#app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.is-editing-inline) .editor-note-body {
     margin-right: var(--note-scroll-resize-gutter);
     width: calc(100% - var(--note-scroll-resize-gutter));
 }
@@ -704,74 +704,10 @@ html[data-tile-small-footprint="card"] .file-cabinet .mini-card[data-desktop="1"
     cursor: text;
 }
 
-#app-canvas.view-freeform .mini-card.expanded .step-row--display .step-text {
-    flex: 1 1 auto;
-    min-width: 0;
-    max-width: 100%;
-}
-
-/* Compact freeform tiles (same rules as grid .mini-card.compact) */
-#app-canvas.view-freeform .mini-card.compact {
-    width: 96px !important;
-    display: flex;
-    flex-direction: column;
-}
-
-#app-canvas.view-freeform .mini-card.compact .card-header {
-    flex: 0 0 auto;
-}
-
 #app-canvas.view-freeform .mini-card.tile-small,
 #app-canvas.view-freeform .mini-card.tile-large {
     display: flex;
     flex-direction: column;
-}
-
-/* Expanded freeform: fixed box from resize; inner content scrolls */
-#app-canvas.view-freeform .mini-card.expanded {
-    display: flex !important;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.25rem;
-    overflow: hidden !important;
-    max-height: none !important;
-    min-height: unset !important;
-    height: auto;
-    width: auto !important;
-    padding: 0.6rem !important;
-}
-
-#app-canvas.view-freeform .mini-card.expanded .card-header,
-#app-canvas.view-freeform .mini-card.expanded .editor-note-header {
-    flex: 0 0 auto;
-    min-width: 0;
-}
-
-#app-canvas.view-freeform .mini-card.expanded .card-body,
-#app-canvas.view-freeform .mini-card.expanded .editor-note-body {
-    flex: 1 1 auto;
-    min-height: 0;
-}
-
-#app-canvas.view-freeform .mini-card.expanded .card-content-preview {
-    font-size: calc(0.62rem * var(--note-font-scale, 1));
-    line-height: 1.35;
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
-    word-break: break-word;
-}
-
-#app-canvas.view-freeform .mini-card.expanded .expanded-checklist {
-    font-size: calc(0.6rem * var(--note-font-scale, 1));
-}
-
-#app-canvas.view-freeform .mini-card.expanded .editor-meta-wrap,
-#app-canvas.view-grid .mini-card.expanded .editor-meta-wrap {
-    flex: 0 0 auto;
-    flex-shrink: 0;
-    margin-top: auto;
-    min-height: 1.2em;
-    overflow: visible;
 }
 
 #app-canvas.view-freeform .mini-card.is-freeform-dragging {
@@ -785,15 +721,15 @@ html[data-tile-small-footprint="card"] .file-cabinet .mini-card[data-desktop="1"
     cursor: text;
 }
 
-#app-canvas.view-freeform .mini-card[data-desktop="1"]:is(.expanded, .is-editing-inline) .editor-note-header .mini-card-title,
-#app-canvas.view-grid .mini-card[data-desktop="1"]:is(.expanded, .is-editing-inline) .editor-note-header .mini-card-title {
+#app-canvas.view-freeform .mini-card[data-desktop="1"].is-editing-inline .editor-note-header .mini-card-title,
+#app-canvas.view-grid .mini-card[data-desktop="1"].is-editing-inline .editor-note-header .mini-card-title {
     width: max-content;
     max-width: 100%;
     display: block;
 }
 
-#app-canvas.view-freeform .mini-card[data-desktop="1"]:is(.expanded, .is-editing-inline) .editor-note-header .mini-card-title.card-inline-edit,
-#app-canvas.view-grid .mini-card[data-desktop="1"]:is(.expanded, .is-editing-inline) .editor-note-header .mini-card-title.card-inline-edit {
+#app-canvas.view-freeform .mini-card[data-desktop="1"].is-editing-inline .editor-note-header .mini-card-title.card-inline-edit,
+#app-canvas.view-grid .mini-card[data-desktop="1"].is-editing-inline .editor-note-header .mini-card-title.card-inline-edit {
     field-sizing: content;
 }
 
@@ -818,20 +754,12 @@ html[data-tile-small-footprint="card"] .file-cabinet .mini-card[data-desktop="1"
 
 /* Editable shell above chrome layer when typing; resize handles stay on top via .ff-resize */
 #app-canvas.view-freeform .mini-card[data-desktop="1"].is-editing-inline .editor-note-shell,
-#app-canvas.view-grid .mini-card[data-desktop="1"].is-editing-inline .editor-note-shell,
-#app-canvas.view-freeform .mini-card.expanded .editor-note-shell,
-#app-canvas.view-grid .mini-card.expanded .editor-note-shell {
+#app-canvas.view-grid .mini-card[data-desktop="1"].is-editing-inline .editor-note-shell {
     position: relative;
     z-index: 20;
     isolation: isolate;
 }
 
-#app-canvas.view-grid .mini-card.expanded .editor-note-header .card-inline-edit,
-#app-canvas.view-grid .mini-card.expanded .editor-note-body .card-inline-edit,
-#app-canvas.view-freeform .mini-card.expanded .editor-note-header .card-inline-edit,
-#app-canvas.view-freeform .mini-card.expanded .editor-note-body .card-inline-edit,
-#app-canvas.view-grid .mini-card.expanded .step-text.card-inline-edit,
-#app-canvas.view-freeform .mini-card.expanded .step-text.card-inline-edit,
 #app-canvas.view-grid .mini-card.is-editing-inline .editor-note-header .card-inline-edit,
 #app-canvas.view-grid .mini-card.is-editing-inline .editor-note-body .card-inline-edit,
 #app-canvas.view-freeform .mini-card.is-editing-inline .editor-note-header .card-inline-edit,
@@ -844,30 +772,35 @@ html[data-tile-small-footprint="card"] .file-cabinet .mini-card[data-desktop="1"
     z-index: 1;
 }
 
-#app-canvas.view-grid .mini-card.expanded .editor-note-body,
-#app-canvas.view-freeform .mini-card.expanded .editor-note-body,
 #app-canvas.view-grid .mini-card.is-editing-inline .editor-note-body,
 #app-canvas.view-freeform .mini-card.is-editing-inline .editor-note-body {
     cursor: default;
 }
 
-#app-canvas.view-grid .mini-card.expanded .editor-note-body .card-inline-edit,
-#app-canvas.view-freeform .mini-card.expanded .editor-note-body .card-inline-edit,
 #app-canvas.view-grid .mini-card.is-editing-inline .editor-note-body .card-inline-edit,
 #app-canvas.view-freeform .mini-card.is-editing-inline .editor-note-body .card-inline-edit {
     cursor: text;
 }
 
-#app-canvas.view-grid .mini-card.expanded .expanded-checklist,
-#app-canvas.view-freeform .mini-card.expanded .expanded-checklist,
-#app-canvas.view-grid .mini-card.expanded .step-check,
-#app-canvas.view-freeform .mini-card.expanded .step-check {
-    pointer-events: auto;
+#app-canvas.view-freeform .mini-card.is-editing-inline .ff-chrome,
+#app-canvas.view-grid .mini-card.is-editing-inline .ff-chrome {
+    pointer-events: none !important;
 }
 
-#app-canvas.view-freeform .mini-card.expanded .card-inline-edit {
-    position: relative;
-    z-index: 1;
+#app-canvas.view-freeform .mini-card.is-editing-inline .ff-drag-gutter,
+#app-canvas.view-grid .mini-card.is-editing-inline .ff-drag-gutter {
+    pointer-events: none !important;
+}
+
+#app-canvas.view-freeform .mini-card.is-editing-inline .ff-resize-layer,
+#app-canvas.view-grid .mini-card.is-editing-inline .ff-resize-layer {
+    pointer-events: none !important;
+}
+
+#app-canvas.view-freeform .mini-card.is-editing-inline .ff-resize-layer .ff-resize,
+#app-canvas.view-grid .mini-card.is-editing-inline .ff-resize-layer .ff-resize {
+    z-index: 0;
+    pointer-events: none !important;
 }
 
 #app-canvas.view-freeform .ff-drag-gutter--edge {
@@ -884,36 +817,6 @@ html[data-tile-small-footprint="card"] .file-cabinet .mini-card[data-desktop="1"
     height: 10px;
 }
 
-#app-canvas.view-freeform .mini-card.expanded .ff-chrome,
-#app-canvas.view-grid .mini-card.expanded .ff-chrome,
-#app-canvas.view-freeform .mini-card.is-editing-inline .ff-chrome,
-#app-canvas.view-grid .mini-card.is-editing-inline .ff-chrome {
-    pointer-events: none !important;
-}
-
-#app-canvas.view-freeform .mini-card.expanded .ff-drag-gutter,
-#app-canvas.view-grid .mini-card.expanded .ff-drag-gutter,
-#app-canvas.view-freeform .mini-card.is-editing-inline .ff-drag-gutter,
-#app-canvas.view-grid .mini-card.is-editing-inline .ff-drag-gutter {
-    pointer-events: none !important;
-}
-
-/* Expanded notes: disable all spatial chrome hit targets while editing inline */
-#app-canvas.view-freeform .mini-card.expanded .ff-resize-layer,
-#app-canvas.view-grid .mini-card.expanded .ff-resize-layer,
-#app-canvas.view-freeform .mini-card.is-editing-inline .ff-resize-layer,
-#app-canvas.view-grid .mini-card.is-editing-inline .ff-resize-layer {
-    pointer-events: none !important;
-}
-
-#app-canvas.view-freeform .mini-card.expanded .ff-resize-layer .ff-resize,
-#app-canvas.view-grid .mini-card.expanded .ff-resize-layer .ff-resize,
-#app-canvas.view-freeform .mini-card.is-editing-inline .ff-resize-layer .ff-resize,
-#app-canvas.view-grid .mini-card.is-editing-inline .ff-resize-layer .ff-resize {
-    z-index: 0;
-    pointer-events: none !important;
-}
-
 #app-canvas.view-freeform .ff-resize-layer,
 #app-canvas.view-grid .ff-resize-layer {
     position: absolute;
@@ -923,8 +826,8 @@ html[data-tile-small-footprint="card"] .file-cabinet .mini-card[data-desktop="1"
     overflow: visible;
 }
 
-#app-canvas.view-freeform .mini-card:not(.expanded) .ff-resize-layer .ff-resize,
-#app-canvas.view-grid .mini-card:not(.expanded) .ff-resize-layer .ff-resize {
+#app-canvas.view-freeform .mini-card .ff-resize-layer .ff-resize,
+#app-canvas.view-grid .mini-card .ff-resize-layer .ff-resize {
     pointer-events: auto;
 }
 
@@ -938,7 +841,7 @@ html[data-tile-small-footprint="card"] .file-cabinet .mini-card[data-desktop="1"
     background: linear-gradient(to bottom, rgba(255, 255, 255, 0.1), transparent);
 }
 
-#app-canvas.view-freeform .mini-card:not(.expanded) .ff-resize {
+#app-canvas.view-freeform .mini-card .ff-resize {
     position: absolute;
     pointer-events: auto;
     z-index: 6;
@@ -951,10 +854,10 @@ html[data-tile-small-footprint="card"] .file-cabinet .mini-card[data-desktop="1"
     height: 8px;
 }
 
-html[data-tile-small-footprint="card"] #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small:not(.expanded) .ff-resize-n,
-html[data-tile-small-footprint="card"] #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small:not(.expanded) .ff-resize-s,
-html[data-tile-small-footprint="card"] #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small:not(.expanded) .ff-resize-n,
-html[data-tile-small-footprint="card"] #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small:not(.expanded) .ff-resize-s {
+html[data-tile-small-footprint="card"] #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small .ff-resize-n,
+html[data-tile-small-footprint="card"] #app-canvas.view-freeform .mini-card[data-desktop="1"].spatial-at-small .ff-resize-s,
+html[data-tile-small-footprint="card"] #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small .ff-resize-n,
+html[data-tile-small-footprint="card"] #app-canvas.view-grid .mini-card[data-desktop="1"].spatial-at-small .ff-resize-s {
     height: 10px;
 }
 
@@ -1688,13 +1591,6 @@ html[data-tile-small-footprint="card"] #app-canvas.view-grid .mini-card[data-des
     z-index: 25;
 }
 
-#app-canvas.view-grid .mini-card.expanded {
-    display: flex !important;
-    flex-direction: column;
-    overflow: hidden !important;
-    max-height: none !important;
-}
-
 #app-canvas.view-grid .ff-chrome {
     position: absolute;
     inset: 0;
@@ -1707,12 +1603,12 @@ html[data-tile-small-footprint="card"] #app-canvas.view-grid .mini-card[data-des
     position: absolute;
 }
 
-#app-canvas.view-grid .mini-card:not(.expanded) .ff-drag-gutter {
+#app-canvas.view-grid .mini-card .ff-drag-gutter {
     z-index: 5;
     pointer-events: auto;
 }
 
-#app-canvas.view-grid .mini-card:not(.expanded) .ff-resize {
+#app-canvas.view-grid .mini-card .ff-resize {
     pointer-events: auto;
     z-index: 14;
 }

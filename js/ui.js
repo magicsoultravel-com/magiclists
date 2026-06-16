@@ -317,7 +317,6 @@ export const UI = {
         if (isDesktopCard(card)) {
             return !this.isSpatiallyCollapsed(card);
         }
-        if (card?.classList.contains('expanded')) return true;
         return getExpandedCards(activeBoardViewMode)[item?.id] === true;
     },
 
@@ -457,7 +456,7 @@ export const UI = {
     },
 
     applyCollapsedTileClasses(card, tileSize) {
-        card.classList.remove('compact', 'tile-label', 'tile-compact', 'tile-note', 'tile-small', 'tile-large');
+        card.classList.remove('tile-label', 'tile-compact', 'tile-note', 'tile-small', 'tile-large');
         const size = normalizeTileSize(tileSize);
         card.classList.add(size === 'small' ? 'tile-small' : 'tile-large');
     },
@@ -478,7 +477,6 @@ export const UI = {
 
     syncSpatialCollapseState(card, item, w, h) {
         if (!isDesktopCard(card)) return false;
-        card.classList.remove('expanded');
         card.classList.add('note-surface');
         const atSmall = this.isSpatiallyCollapsed(card);
         card.classList.toggle('spatial-at-small', atSmall);
@@ -615,7 +613,7 @@ export const UI = {
     },
 
     collapseSnapPanelCard(card, item) {
-        card.classList.remove('expanded', 'card-state-changing', 'card-animating');
+        card.classList.remove('card-state-changing', 'card-animating');
         this.finalizeDesktopCard(card);
     },
 
@@ -1292,21 +1290,10 @@ export const UI = {
     },
 
     syncSpatialChromeForEditing(card) {
-        if (!card?.querySelector?.('.ff-chrome')) return;
+        if (!card?.querySelector?.('.ff-chrome') || !isDesktopCard(card)) return;
         const layer = card.querySelector('.ff-resize-layer');
         const gutters = card.querySelectorAll('.ff-drag-gutter');
-        let disableChrome = false;
-        if (isDesktopCard(card)) {
-            disableChrome = card.classList.contains('is-editing-inline');
-        } else {
-            const expanded = card.classList.contains('expanded');
-            card.classList.toggle('is-editing-inline', expanded);
-            disableChrome = expanded;
-            if (expanded) {
-                const shell = card.querySelector('.editor-note-shell');
-                if (shell) card.appendChild(shell);
-            }
-        }
+        const disableChrome = card.classList.contains('is-editing-inline');
         if (layer) {
             layer.style.pointerEvents = disableChrome ? 'none' : '';
             layer.style.zIndex = disableChrome ? '0' : '';
@@ -1455,7 +1442,6 @@ export const UI = {
         const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
         const dragZone = ' card-drag-zone';
 
-        card.classList.remove('expanded');
         card.innerHTML = NoteSurface.buildNoteEditorShell(item, {
             canEdit,
             richEdit: canEdit,

@@ -100,7 +100,6 @@ html[data-app-theme="matrix"] {
 }
 
 html[data-app-theme="matrix"] .side-panel,
-html[data-app-theme="matrix"] #workspace-footer,
 html[data-app-theme="matrix"] .clock-style-popover,
 html[data-app-theme="matrix"] .app-theme-popover,
 html[data-app-theme="matrix"] .display-options-modal,
@@ -306,12 +305,6 @@ html[data-app-theme="casual"] .mini-card .editor-created-date,
 html[data-app-theme="casual"] .mini-card .editor-note-lines {
     color: #6b8ab0 !important;
 }
-
-html[data-app-theme="casual"] .mini-card.compact .card-actions::before {
-    background: rgba(255, 254, 249, 0.94);
-    box-shadow: 0 0 0 1px rgba(59, 110, 168, 0.14);
-}
-
 /* Casual Dark — dark school notepad */
 html[data-app-theme="casual-dark"] #app-canvas {
     background-color: #1a1c20;
@@ -390,12 +383,6 @@ html[data-app-theme="casual-dark"] .mini-card .editor-created-date,
 html[data-app-theme="casual-dark"] .mini-card .editor-note-lines {
     color: #8fa8c4 !important;
 }
-
-html[data-app-theme="casual-dark"] .mini-card.compact .card-actions::before {
-    background: rgba(42, 46, 54, 0.94);
-    box-shadow: 0 0 0 1px rgba(107, 159, 212, 0.18);
-}
-
 /* Wood — old furniture desk */
 html[data-app-theme="wood"] #app-canvas,
 html[data-app-theme="wood"] #app-canvas.file-cabinet-bottom {
@@ -487,12 +474,6 @@ html[data-app-theme="wood"] .mini-card .editor-created-date,
 html[data-app-theme="wood"] .mini-card .editor-note-lines {
     color: #8b7355 !important;
 }
-
-html[data-app-theme="wood"] .mini-card.compact .card-actions::before {
-    background: rgba(245, 232, 184, 0.94);
-    box-shadow: 0 0 0 1px rgba(107, 76, 42, 0.18);
-}
-
 /* Sidebar — leather book cover */
 html[data-app-theme="wood"] .side-panel,
 html[data-app-theme="wood"] .side-panel-toggle-fab {
@@ -626,13 +607,6 @@ html[data-app-theme="wood"] .file-cabinet .mini-card[data-desktop="1"].spatial-a
 html[data-app-theme="wood"] .file-cabinet-empty {
     color: #b8a080;
 }
-
-/* Minor chrome */
-html[data-app-theme="wood"] #workspace-footer {
-    background-color: #3d2817;
-    border-top-color: rgba(0, 0, 0, 0.35);
-}
-
 html[data-app-theme="wood"] .btn {
     background-color: #4a3220;
     border-color: #6b4c2a;
@@ -769,12 +743,6 @@ html[data-app-theme="corkboard"] .mini-card .editor-created-date,
 html[data-app-theme="corkboard"] .mini-card .editor-note-lines {
     color: #7a6a58 !important;
 }
-
-html[data-app-theme="corkboard"] .mini-card.compact .card-actions::before {
-    background: rgba(250, 246, 239, 0.94);
-    box-shadow: 0 0 0 1px rgba(139, 104, 64, 0.18);
-}
-
 html[data-app-theme="corkboard"] .side-panel,
 html[data-app-theme="corkboard"] .side-panel-toggle-fab {
     background-color: #6b5030;
@@ -861,12 +829,6 @@ html[data-app-theme="corkboard"] .file-cabinet-category.is-file-cabinet-drop-tar
 html[data-app-theme="corkboard"] .file-cabinet-tab-stack { background: transparent; }
 html[data-app-theme="corkboard"] .file-cabinet .mini-card[data-desktop="1"].spatial-at-small { border-left-color: transparent; }
 html[data-app-theme="corkboard"] .file-cabinet-empty { color: #c4a888; }
-
-html[data-app-theme="corkboard"] #workspace-footer {
-    background-color: #5c4028;
-    border-top-color: rgba(0, 0, 0, 0.3);
-}
-
 html[data-app-theme="corkboard"] .btn {
     background-color: #6b5030;
     border-color: #8b6840;
@@ -963,12 +925,6 @@ html[data-app-theme="slate"] .mini-card .editor-created-date,
 html[data-app-theme="slate"] .mini-card .editor-note-lines {
     color: #9aa898 !important;
 }
-
-html[data-app-theme="slate"] .mini-card.compact .card-actions::before {
-    background: rgba(52, 74, 63, 0.94);
-    box-shadow: 0 0 0 1px rgba(212, 200, 150, 0.14);
-}
-
 html[data-app-theme="slate"] .side-panel,
 html[data-app-theme="slate"] .side-panel-toggle-fab {
     background-color: #1e2e26;
@@ -1052,12 +1008,6 @@ html[data-app-theme="slate"] .file-cabinet-category.is-file-cabinet-drop-target 
 html[data-app-theme="slate"] .file-cabinet-tab-stack { background: transparent; }
 html[data-app-theme="slate"] .file-cabinet .mini-card[data-desktop="1"].spatial-at-small { border-left-color: transparent; }
 html[data-app-theme="slate"] .file-cabinet-empty { color: #9aa898; }
-
-html[data-app-theme="slate"] #workspace-footer {
-    background-color: #1e2e26;
-    border-top-color: rgba(0, 0, 0, 0.35);
-}
-
 html[data-app-theme="slate"] .btn {
     background-color: #243830;
     border-color: #3d5548;
@@ -1154,12 +1104,6 @@ html[data-app-theme="library"] .mini-card .editor-created-date,
 html[data-app-theme="library"] .mini-card .editor-note-lines {
     color: #7a6a58 !important;
 }
-
-html[data-app-theme="library"] .mini-card.compact .card-actions::before {
-    background: rgba(244, 236, 216, 0.94);
-    box-shadow: 0 0 0 1px rgba(92, 74, 56, 0.16);
-}
-
 html[data-app-theme="library"] .side-panel,
 html[data-app-theme="library"] .side-panel-toggle-fab {
     background-color: #4a2820;
@@ -1246,12 +1190,6 @@ html[data-app-theme="library"] .file-cabinet-category.is-file-cabinet-drop-targe
 html[data-app-theme="library"] .file-cabinet-tab-stack { background: transparent; }
 html[data-app-theme="library"] .file-cabinet .mini-card[data-desktop="1"].spatial-at-small { border-left-color: transparent; }
 html[data-app-theme="library"] .file-cabinet-empty { color: #b8a890; }
-
-html[data-app-theme="library"] #workspace-footer {
-    background-color: #2a2018;
-    border-top-color: rgba(0, 0, 0, 0.35);
-}
-
 html[data-app-theme="library"] .btn {
     background-color: #3d2e1f;
     border-color: #5c4a38;
@@ -1347,12 +1285,6 @@ html[data-app-theme="parchment"] .mini-card .editor-created-date,
 html[data-app-theme="parchment"] .mini-card .editor-note-lines {
     color: #8a7058 !important;
 }
-
-html[data-app-theme="parchment"] .mini-card.compact .card-actions::before {
-    background: rgba(232, 213, 168, 0.94);
-    box-shadow: 0 0 0 1px rgba(92, 64, 48, 0.16);
-}
-
 html[data-app-theme="parchment"] .side-panel,
 html[data-app-theme="parchment"] .side-panel-toggle-fab {
     background-color: #3d2817;
@@ -1438,12 +1370,6 @@ html[data-app-theme="parchment"] .file-cabinet-category.is-file-cabinet-drop-tar
 html[data-app-theme="parchment"] .file-cabinet-tab-stack { background: transparent; }
 html[data-app-theme="parchment"] .file-cabinet .mini-card[data-desktop="1"].spatial-at-small { border-left-color: transparent; }
 html[data-app-theme="parchment"] .file-cabinet-empty { color: #b8a080; }
-
-html[data-app-theme="parchment"] #workspace-footer {
-    background-color: #2a1f14;
-    border-top-color: rgba(0, 0, 0, 0.35);
-}
-
 html[data-app-theme="parchment"] .btn {
     background-color: #352818;
     border-color: #5c4030;
@@ -1539,12 +1465,6 @@ html[data-app-theme="neon"] .mini-card .editor-created-date,
 html[data-app-theme="neon"] .mini-card .editor-note-lines {
     color: #8aa0b0 !important;
 }
-
-html[data-app-theme="neon"] .mini-card.compact .card-actions::before {
-    background: rgba(26, 22, 40, 0.94);
-    box-shadow: 0 0 0 1px rgba(94, 200, 216, 0.14);
-}
-
 html[data-app-theme="neon"] .side-panel,
 html[data-app-theme="neon"] .side-panel-toggle-fab {
     background-color: #0e0c16;
@@ -1632,12 +1552,6 @@ html[data-app-theme="neon"] .file-cabinet-category.is-file-cabinet-drop-target {
 html[data-app-theme="neon"] .file-cabinet-tab-stack { background: transparent; }
 html[data-app-theme="neon"] .file-cabinet .mini-card[data-desktop="1"].spatial-at-small { border-left-color: transparent; }
 html[data-app-theme="neon"] .file-cabinet-empty { color: #8aa0b0; }
-
-html[data-app-theme="neon"] #workspace-footer {
-    background-color: #0e0c16;
-    border-top-color: rgba(94, 200, 216, 0.1);
-}
-
 html[data-app-theme="neon"] .btn {
     background-color: #161422;
     border-color: #2a2840;
@@ -1739,12 +1653,6 @@ html[data-app-theme="miami"] .mini-card .editor-created-date,
 html[data-app-theme="miami"] .mini-card .editor-note-lines {
     color: #a8a0b8 !important;
 }
-
-html[data-app-theme="miami"] .mini-card.compact .card-actions::before {
-    background: rgba(30, 22, 48, 0.94);
-    box-shadow: 0 0 0 1px rgba(45, 212, 244, 0.18);
-}
-
 html[data-app-theme="miami"] .side-panel,
 html[data-app-theme="miami"] .side-panel-toggle-fab {
     background-color: #140c20;
@@ -1846,12 +1754,6 @@ html[data-app-theme="miami"] .file-cabinet-category.is-file-cabinet-drop-target 
 html[data-app-theme="miami"] .file-cabinet-tab-stack { background: transparent; }
 html[data-app-theme="miami"] .file-cabinet .mini-card[data-desktop="1"].spatial-at-small { border-left-color: transparent; }
 html[data-app-theme="miami"] .file-cabinet-empty { color: #a8a0b8; }
-
-html[data-app-theme="miami"] #workspace-footer {
-    background-color: #140c20;
-    border-top-color: rgba(244, 114, 182, 0.12);
-}
-
 html[data-app-theme="miami"] .btn {
     background-color: #1e1630;
     border-color: #3d2858;
@@ -1963,12 +1865,6 @@ html[data-app-theme="spaceship"] .mini-card .editor-created-date,
 html[data-app-theme="spaceship"] .mini-card .editor-note-lines {
     color: #7a8898 !important;
 }
-
-html[data-app-theme="spaceship"] .mini-card.compact .card-actions::before {
-    background: rgba(36, 43, 54, 0.94);
-    box-shadow: 0 0 0 1px rgba(232, 146, 42, 0.16);
-}
-
 html[data-app-theme="spaceship"] .side-panel,
 html[data-app-theme="spaceship"] .side-panel-toggle-fab {
     background-color: #181e28;
@@ -2061,12 +1957,6 @@ html[data-app-theme="spaceship"] .file-cabinet-category.is-file-cabinet-drop-tar
 html[data-app-theme="spaceship"] .file-cabinet-tab-stack { background: transparent; }
 html[data-app-theme="spaceship"] .file-cabinet .mini-card[data-desktop="1"].spatial-at-small { border-left-color: transparent; }
 html[data-app-theme="spaceship"] .file-cabinet-empty { color: #7a8898; }
-
-html[data-app-theme="spaceship"] #workspace-footer {
-    background-color: #141820;
-    border-top-color: rgba(232, 146, 42, 0.12);
-}
-
 html[data-app-theme="spaceship"] .btn {
     background-color: #1c222c;
     border-color: #3a4555;
@@ -2234,12 +2124,6 @@ html[data-app-theme="night-sky"] .mini-card .editor-created-date,
 html[data-app-theme="night-sky"] .mini-card .editor-note-lines {
     color: #8898b8 !important;
 }
-
-html[data-app-theme="night-sky"] .mini-card.compact .card-actions::before {
-    background: rgba(21, 32, 56, 0.94);
-    box-shadow: 0 0 0 1px rgba(168, 200, 255, 0.12);
-}
-
 html[data-app-theme="night-sky"] .side-panel,
 html[data-app-theme="night-sky"] .side-panel-toggle-fab {
     background-color: #0a1020;
@@ -2335,12 +2219,6 @@ html[data-app-theme="night-sky"] .file-cabinet-category.is-file-cabinet-drop-tar
 html[data-app-theme="night-sky"] .file-cabinet-tab-stack { background: transparent; }
 html[data-app-theme="night-sky"] .file-cabinet .mini-card[data-desktop="1"].spatial-at-small { border-left-color: transparent; }
 html[data-app-theme="night-sky"] .file-cabinet-empty { color: #8898b8; }
-
-html[data-app-theme="night-sky"] #workspace-footer {
-    background-color: #080e1a;
-    border-top-color: rgba(168, 200, 255, 0.1);
-}
-
 html[data-app-theme="night-sky"] .btn {
     background-color: #0e1628;
     border-color: #283858;

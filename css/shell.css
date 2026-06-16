@@ -2,9 +2,7 @@
    SHARED UTILITIES (cross-module)
    ========================================================================== */
 .u-truncate,
-.category-name,
-.column-title,
-.hidden-item-title {
+.category-name {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -228,7 +226,7 @@
     padding: 0;
     border: none;
     background: transparent;
-    color: var(--text-muted);
+    color: var(--text-main);
     line-height: 1;
     cursor: pointer;
 }
@@ -266,27 +264,18 @@
     -webkit-appearance: none;
     flex-shrink: 0;
     box-sizing: border-box;
-    border: 1px solid var(--text-muted);
+    border: none;
     border-radius: 2.5px;
     background-color: color-mix(in srgb, var(--bg-surface, #1a1a1e) 18%, transparent);
-    transition: border-color 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease;
+    transition: background-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 .step-row .step-check:checked {
-    border-color: color-mix(in srgb, var(--accent) 75%, transparent);
     background-color: color-mix(in srgb, var(--accent) 88%, transparent);
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.4 4.2 3.2 6 6.6 2' fill='none' stroke='white' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     background-size: 7px 7px;
     background-position: center;
     background-repeat: no-repeat;
-}
-
-.step-row .step-check:hover {
-    border-color: color-mix(in srgb, var(--text-muted) 55%, var(--text-main));
-}
-
-.step-row .step-check:checked:hover {
-    border-color: color-mix(in srgb, var(--accent) 85%, transparent);
 }
 
 .step-row .step-check:focus-visible {
@@ -1295,17 +1284,6 @@ body.is-shell-resizing--h * {
     pointer-events: auto;
 }
 
-.mini-card.expanded .card-inline-edit,
-.mini-card.expanded .step-text.card-inline-edit {
-    cursor: text;
-    user-select: text;
-    -webkit-user-select: text;
-}
-
-.mini-card.expanded .card-body {
-    cursor: default;
-}
-
 .card-inline-edit:focus {
     background: rgba(79, 70, 229, 0.08);
     box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.35);
@@ -1457,7 +1435,7 @@ body.is-shell-resizing--h * {
 
 /* Title-only surfaces — no divider */
 .mini-card.spatial-at-small .editor-note-topline,
-.mini-card[data-desktop="1"].tile-small:not(.expanded) .editor-note-topline {
+.mini-card[data-desktop="1"].tile-small .editor-note-topline {
     border-bottom: none;
     padding-bottom: 0;
     margin-bottom: 0;
@@ -1591,17 +1569,6 @@ body.is-shell-resizing--h * {
                 height var(--card-anim-duration, 0.3s) cubic-bezier(0.22, 1, 0.36, 1),
                 min-height var(--card-anim-duration, 0.3s) cubic-bezier(0.22, 1, 0.36, 1),
                 max-height var(--card-anim-duration, 0.3s) cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-#app-canvas.view-freeform .mini-card.card-animating.expanded,
-#app-canvas.view-grid .mini-card.card-animating.expanded {
-    min-height: unset;
-    max-height: unset;
-}
-
-.mini-card.card-animating.compact:hover {
-    overflow: hidden !important;
-    z-index: auto;
 }
 
 html[data-card-animations="0"] .mini-card.card-animating {

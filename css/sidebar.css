@@ -191,7 +191,8 @@ mark.search-hit {
 }
 
 /* Display options — note metadata */
-html[data-show-note-category="0"] .mini-card .category-name {
+html[data-show-note-category="0"] .category-name,
+html[data-show-note-category="0"] .editor-meta-badges .badge-dot {
     display: none !important;
 }
 
