@@ -20,9 +20,13 @@ import { readTileSmallFootprint } from './tileFootprint.js';
 import { SIDEBAR_BACKUP_KEYS } from './sidebarPrefs.js';
 import { readViewSessions, writeViewSessions, VIEW_MODES } from './viewSession.js';
 
-const GRID_LAYOUT_KEY = 'matrix_grid_layout';
-const GRID_PINS_KEY = 'matrix_grid_pins';
-const GRID_EXPANDED_KEY = 'matrix_grid_expanded_id';
+import {
+    GRID_LAYOUT_KEY,
+    GRID_PINS_KEY,
+    GRID_EXPANDED_KEY,
+    FREEFORM_POSITIONS_KEY,
+    FREEFORM_SIZES_KEY
+} from './board/layoutKeys.js';
 const LEGACY_EXPANDED_KEY = 'matrix_expanded_cards';
 const SPATIAL_LAYOUT_SCHEMA_KEY = 'matrix_spatial_layout_schema';
 const SPATIAL_LAYOUT_SCHEMA_VERSION = 3;
@@ -42,8 +46,8 @@ const LAYOUT_BACKUP_KEYS = [
     GRID_LAYOUT_KEY,
     GRID_PINS_KEY,
     GRID_EXPANDED_KEY,
-    'matrix_freeform_positions',
-    'matrix_freeform_sizes',
+    FREEFORM_POSITIONS_KEY,
+    FREEFORM_SIZES_KEY,
     'matrix_column_positions',
     'matrix_column_sizes',
     'matrix_column_note_layout',
@@ -282,7 +286,7 @@ export function migrateSpatialLayoutSchema(writeState = null) {
         if (writeState?.quotaExceeded) return true;
     }
 
-    const sizes = readJson('matrix_freeform_sizes', {});
+    const sizes = readJson(FREEFORM_SIZES_KEY, {});
     const sizesNext = { ...sizes };
     Object.keys(sizesNext).forEach((id) => {
         if (!context.liveIds.has(id)) return;
@@ -294,7 +298,7 @@ export function migrateSpatialLayoutSchema(writeState = null) {
         }
     });
     if (changed) {
-        writeJsonIfChanged('matrix_freeform_sizes', sizesNext, writeState);
+        writeJsonIfChanged(FREEFORM_SIZES_KEY, sizesNext, writeState);
         if (writeState?.quotaExceeded) return true;
     }
 
@@ -352,16 +356,16 @@ function applyReconcileWrites(context, stats, writeState) {
     if (writeState.quotaExceeded) return;
 
     writeJsonIfChanged(
-        'matrix_freeform_positions',
-        pruneIdMap(readJson('matrix_freeform_positions', {}), context.liveIds, stats, 'matrix_freeform_positions'),
+        FREEFORM_POSITIONS_KEY,
+        pruneIdMap(readJson(FREEFORM_POSITIONS_KEY, {}), context.liveIds, stats, FREEFORM_POSITIONS_KEY),
         writeState
     );
     if (writeState.quotaExceeded) return;
 
-    const freeformSizes = pruneIdMap(readJson('matrix_freeform_sizes', {}), context.liveIds, stats, 'matrix_freeform_sizes');
+    const freeformSizes = pruneIdMap(readJson(FREEFORM_SIZES_KEY, {}), context.liveIds, stats, FREEFORM_SIZES_KEY);
     writeJsonIfChanged(
-        'matrix_freeform_sizes',
-        normalizeSizeOnlyMap(freeformSizes, context.liveIds, context.tileSizeById, stats, 'matrix_freeform_sizes'),
+        FREEFORM_SIZES_KEY,
+        normalizeSizeOnlyMap(freeformSizes, context.liveIds, context.tileSizeById, stats, FREEFORM_SIZES_KEY),
         writeState
     );
     if (writeState.quotaExceeded) return;
@@ -791,16 +795,16 @@ export function purgeLayoutForItem(itemId) {
         changed = writeJsonIfChanged(GRID_LAYOUT_KEY, grid) || changed;
     }
 
-    const freePos = readJson('matrix_freeform_positions', {});
+    const freePos = readJson(FREEFORM_POSITIONS_KEY, {});
     if (freePos[itemId]) {
         delete freePos[itemId];
-        changed = writeJsonIfChanged('matrix_freeform_positions', freePos) || changed;
+        changed = writeJsonIfChanged(FREEFORM_POSITIONS_KEY, freePos) || changed;
     }
 
-    const freeSizes = readJson('matrix_freeform_sizes', {});
+    const freeSizes = readJson(FREEFORM_SIZES_KEY, {});
     if (freeSizes[itemId]) {
         delete freeSizes[itemId];
-        changed = writeJsonIfChanged('matrix_freeform_sizes', freeSizes) || changed;
+        changed = writeJsonIfChanged(FREEFORM_SIZES_KEY, freeSizes) || changed;
     }
 
     const floatPos = readJson('matrix_columns_float_positions', {});

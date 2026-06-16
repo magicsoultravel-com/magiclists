@@ -114,17 +114,73 @@ export {
     defaultStartDateTimeNow,
     normalizeItemForSave
 } from './noteModel.js';
+import {
+    GRID_LAYOUT_KEY,
+    GRID_PINS_KEY,
+    FREEFORM_POSITIONS_KEY,
+    FREEFORM_SIZES_KEY
+} from './board/layoutKeys.js';
+import {
+    getGridBoardBounds,
+    getGridViewportBounds,
+    getDesktopBoardPane,
+    ensureDesktopBoardPane,
+    updateBoardCanvasExtents as updateBoardCanvasExtentsCore,
+    scheduleBoardCanvasExtents as scheduleBoardCanvasExtentsCore,
+    updateDesktopScrollPolicy,
+    DESKTOP_BOARD_PANE_CLASS
+} from './board/boardExtents.js';
+import {
+    clampNoteToBoardEdges as clampNoteToBoardEdgesCore,
+    clampManualNoteRect as clampManualNoteRectCore,
+    snapNotePosition as snapNotePositionCore,
+    snapNoteRect as snapNoteRectCore,
+    readNoteRect as readNoteRectCore,
+    applyNoteRect as applyNoteRectCore,
+    findFirstCanvasSlot as findFirstCanvasSlotCore,
+    findFirstCanvasSlotVertical as findFirstCanvasSlotVerticalCore,
+    findNearestGridSlot as findNearestGridSlotCore,
+    gridColumnStride as gridColumnStrideCore,
+    gridRowStride as gridRowStrideCore,
+    snapPackCoord as snapPackCoordCore,
+    snapGridCoord as snapGridCoordCore,
+    snapCanvasCoord as snapCanvasCoordCore,
+    rectsOverlap as rectsOverlapCore
+} from './board/noteGeometry.js';
+import {
+    computeGridBoardLayout as computeGridBoardLayoutCore,
+    applyGridBoardLayout as applyGridBoardLayoutCore,
+    reflowGridBoard as reflowGridBoardCore,
+    clearSnapPanelPreview
+} from './board/gridEngine.js';
 
 const UNCATEGORIZED_COLOR = '#64748b';
 
-const GRID_LAYOUT_KEY = 'matrix_grid_layout';
-const GRID_PINS_KEY = 'matrix_grid_pins';
-const GRID_EXPANDED_KEY = 'matrix_grid_expanded_id';
-const DESKTOP_BOARD_PANE_CLASS = 'desktop-board-pane';
-const boardExtentsFrames = new WeakMap();
-
 let boardItemsById = new Map();
 let activeBoardViewMode = 'grid';
+
+function createGridDeps(ui) {
+    return {
+        getGridBoardBounds,
+        getGridLayout: () => ui.getGridLayout(),
+        saveGridLayout: (id, rect, opts) => ui.saveGridLayout(id, rect, opts),
+        getBoardPins: () => ui.getBoardPins(),
+        gridBoardRectForCard: (card, saved, isExpanded) => ui.gridBoardRectForCard(card, saved, isExpanded),
+        isSavedLayoutExpanded: (id) => ui.isSavedLayoutExpanded(id),
+        readNoteRect: (card) => ui.readNoteRect(card),
+        applyNoteRect: (card, rect, opts) => ui.applyNoteRect(card, rect, opts),
+        finalizeDesktopCard: (card, opts) => ui.finalizeDesktopCard(card, opts),
+        scheduleBoardCanvasExtents: (canvas) => ui.scheduleBoardCanvasExtents(canvas)
+    };
+}
+
+function noteRectHooks(ui, card) {
+    return {
+        normalizeCollapsed: true,
+        isActivelyResizing: ui.isCardActivelyResizing(card),
+        getTileSize: (c) => resolveTileSize(ui.resolveBoardItem(c?.dataset?.id))
+    };
+}
 
 export function isSnapLayoutMode(mode) {
     return normalizeViewMode(mode) === 'grid';
@@ -362,7 +418,7 @@ export const UI = {
                 rememberedW: Math.round(clamped.w),
                 rememberedH: Math.round(clamped.h)
             };
-            localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
+            localStorage.setItem(FREEFORM_SIZES_KEY, JSON.stringify(sizes));
         }
     },
 
@@ -759,24 +815,8 @@ export const UI = {
         }
     },
 
-    clampNoteToBoardEdges(rect, { packW, maxH, origin, edgePad } = {}) {
-        const metrics = getGridMetrics();
-        const o = origin ?? metrics.origin;
-        const pad = edgePad ?? metrics.edgePad;
-        const minX = o + pad;
-        const minY = o + pad;
-        const rightLimit = o + pad + (packW ?? 0);
-        const bottomLimit = (maxH ?? Infinity) - pad;
-        let { x, y, w, h } = rect;
-        x = Math.max(minX, x);
-        y = Math.max(minY, y);
-        if (Number.isFinite(rightLimit) && x + w > rightLimit) {
-            x = Math.max(minX, rightLimit - w);
-        }
-        if (Number.isFinite(bottomLimit) && y + h > bottomLimit) {
-            y = Math.max(minY, bottomLimit - h);
-        }
-        return { x, y, w, h };
+    clampNoteToBoardEdges(rect, opts) {
+        return clampNoteToBoardEdgesCore(rect, opts);
     },
 
     gridBoardRectForCard(card, savedRect, isExpanded) {
@@ -1307,7 +1347,7 @@ export const UI = {
         const sizes = this.getFreeformSizes();
         if (!sizes[itemId]) return;
         delete sizes[itemId];
-        localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
+        localStorage.setItem(FREEFORM_SIZES_KEY, JSON.stringify(sizes));
     },
 
     applyFreeformDimensions(card, w, h) {
@@ -1520,7 +1560,7 @@ export const UI = {
         if (sizes[itemId]) {
             const prev = sizes[itemId];
             sizes[itemId] = this.mergeSpatialLayoutEntry(prev, { w: small.w, h: small.h }, tileSize, { updateRemembered: false });
-            localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
+            localStorage.setItem(FREEFORM_SIZES_KEY, JSON.stringify(sizes));
             const pos = this.getFreeformPositions()[itemId];
             if (pos) this.saveFreeformPosition(itemId, pos.x, pos.y);
         }
@@ -1535,7 +1575,7 @@ export const UI = {
 
     getFreeformPositions() {
         try {
-            return JSON.parse(localStorage.getItem('matrix_freeform_positions') || '{}');
+            return JSON.parse(localStorage.getItem(FREEFORM_POSITIONS_KEY) || '{}');
         } catch {
             return {};
         }
@@ -1544,12 +1584,12 @@ export const UI = {
     saveFreeformPosition(itemId, x, y) {
         const positions = this.getFreeformPositions();
         positions[itemId] = { x: Math.round(x), y: Math.round(y) };
-        localStorage.setItem('matrix_freeform_positions', JSON.stringify(positions));
+        localStorage.setItem(FREEFORM_POSITIONS_KEY, JSON.stringify(positions));
     },
 
     getFreeformSizes() {
         try {
-            return JSON.parse(localStorage.getItem('matrix_freeform_sizes') || '{}');
+            return JSON.parse(localStorage.getItem(FREEFORM_SIZES_KEY) || '{}');
         } catch {
             return {};
         }
@@ -1560,7 +1600,7 @@ export const UI = {
         const prev = sizes[itemId] || {};
         const item = this.resolveBoardItem(itemId);
         sizes[itemId] = this.mergeSpatialLayoutEntry(prev, { w, h }, resolveTileSize(item), { updateRemembered });
-        localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
+        localStorage.setItem(FREEFORM_SIZES_KEY, JSON.stringify(sizes));
     },
 
     saveFreeformSizeFromCard(card) {
@@ -1657,7 +1697,7 @@ export const UI = {
                                 rememberedH: gridSaved.rememberedH
                             }
                         );
-                        localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
+                        localStorage.setItem(FREEFORM_SIZES_KEY, JSON.stringify(sizes));
                     }
                     return;
                 }
@@ -1691,7 +1731,7 @@ export const UI = {
                         rememberedH: gridSaved?.rememberedH ?? prev.rememberedH
                     }
                 );
-                localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
+                localStorage.setItem(FREEFORM_SIZES_KEY, JSON.stringify(sizes));
             });
             return;
         }
@@ -1844,35 +1884,6 @@ export const UI = {
             else collapsed.push(item);
         });
         return { collapsed, expanded };
-    },
-
-    findFirstCanvasSlotVertical(w, h, placed, canvasW, { origin = CANVAS_LAYOUT_ORIGIN, edgePad, xMin, yMin, maxH } = {}) {
-        const metrics = getGridMetrics();
-        const pad = edgePad ?? metrics.edgePad;
-        const packW = Math.max(metrics.canvasGridW, canvasW - origin * 2 - pad * 2);
-        const xOrigin = Math.max(origin + pad, xMin ?? origin + pad);
-        const yOrigin = Math.max(origin + pad, yMin ?? origin + pad);
-        const colStride = this.gridColumnStride(w, h, metrics);
-        const yStride = getPackStrideYForRect(w, h);
-        const bottomLimit = (maxH ?? origin + metrics.strideY * 40) + 1;
-        let x = xOrigin;
-        let guard = 0;
-        while (guard < 800) {
-            let y = yOrigin;
-            while (y + h <= bottomLimit) {
-                const candidate = this.snapNoteRect(
-                    { x, y, w, h },
-                    { maxW: packW, origin, edgePad: pad, maxH }
-                );
-                if (!placed.some((p) => this.rectsOverlap(candidate, p, metrics.gap))) {
-                    return candidate;
-                }
-                y += yStride;
-            }
-            x += colStride;
-            guard += 1;
-        }
-        return { x: xOrigin, y: yOrigin, w, h };
     },
 
     computeExpandedAlignAnchor(direction, collapsedRects, {
@@ -2455,7 +2466,7 @@ export const UI = {
             sizes[itemId] = { ...prev, ...entry };
             delete sizes[itemId].rememberedW;
             delete sizes[itemId].rememberedH;
-            localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
+            localStorage.setItem(FREEFORM_SIZES_KEY, JSON.stringify(sizes));
             if (Number.isFinite(rect.x) && Number.isFinite(rect.y)) {
                 this.saveFreeformPosition(itemId, rect.x, rect.y);
             }
@@ -2482,7 +2493,7 @@ export const UI = {
         const ffEntry = this.mergeSpatialLayoutEntry({}, { w: rect.w, h: rect.h }, 'small', { updateRemembered: false });
         delete ffEntry.customCompact;
         sizes[itemId] = ffEntry;
-        localStorage.setItem('matrix_freeform_sizes', JSON.stringify(sizes));
+        localStorage.setItem(FREEFORM_SIZES_KEY, JSON.stringify(sizes));
         this.saveFreeformPosition(itemId, rect.x, rect.y);
     },
 
@@ -2532,91 +2543,29 @@ export const UI = {
     },
 
     getGridBoardBounds(canvas) {
-        const zoom = parseFloat(canvas?.dataset?.desktopZoom) || 1;
-        const { origin, edgePad, canvasGridW, columnMinInnerW } = getGridMetrics();
-        const rawW = Math.max((canvas?.clientWidth || 320) / zoom, canvasGridW + origin * 2);
-        const packW = Math.max(columnMinInnerW, rawW - origin * 2 - edgePad * 2);
-        const maxH = Math.max(
-            (canvas?.scrollHeight || 0) / zoom,
-            (canvas?.clientHeight || 0) / zoom,
-            typeof window !== 'undefined' ? window.innerHeight / zoom : 800
-        );
-        return { origin, edgePad, packW, maxH, canvasW: rawW };
+        return getGridBoardBounds(canvas);
     },
 
     getDesktopBoardPane(canvas) {
-        return canvas?.querySelector(`:scope > .${DESKTOP_BOARD_PANE_CLASS}`) ?? null;
+        return getDesktopBoardPane(canvas);
     },
 
     ensureDesktopBoardPane(canvas) {
-        if (!canvas) return null;
-        let pane = this.getDesktopBoardPane(canvas);
-        if (pane) return pane;
-        pane = document.createElement('div');
-        pane.className = DESKTOP_BOARD_PANE_CLASS;
-        const cards = [...canvas.querySelectorAll(':scope > .mini-card[data-desktop="1"]')];
-        canvas.appendChild(pane);
-        cards.forEach((card) => pane.appendChild(card));
-        return pane;
+        return ensureDesktopBoardPane(canvas);
     },
 
     scheduleBoardCanvasExtents(canvas) {
-        if (!canvas) return;
-        if (boardExtentsFrames.has(canvas)) return;
-        const frame = requestAnimationFrame(() => {
-            boardExtentsFrames.delete(canvas);
-            this.updateBoardCanvasExtents(canvas);
-        });
-        boardExtentsFrames.set(canvas, frame);
-    },
-
-    updateGridCanvasMinHeight(canvas, placed, origin = CANVAS_LAYOUT_ORIGIN) {
-        if (!canvas) return;
-        const pane = this.ensureDesktopBoardPane(canvas);
-        if (!pane) return;
-        const bottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
-        pane.style.minHeight = `${bottom + origin + getCanvasColGap()}px`;
+        scheduleBoardCanvasExtentsCore(canvas, (c) => this.updateBoardCanvasExtents(c));
     },
 
     updateBoardCanvasExtents(canvas) {
-        if (!canvas) return;
-        const isSpatial = canvas.classList.contains('view-grid') || canvas.classList.contains('view-freeform');
-        if (!isSpatial) return;
-
-        canvas.style.minHeight = '';
-        canvas.style.minWidth = '';
-
-        const cards = canvas.querySelectorAll('.mini-card[data-desktop="1"]');
-        const pane = this.getDesktopBoardPane(canvas);
-        if (!cards.length) {
-            if (pane) {
-                pane.style.minHeight = '';
-                pane.style.minWidth = '';
-            }
-            return;
-        }
-
-        const boardPane = pane || this.ensureDesktopBoardPane(canvas);
-        if (!boardPane) return;
-
-        const zoom = parseFloat(canvas?.dataset?.desktopZoom) || 1;
-        const origin = canvas.classList.contains('view-grid')
-            ? this.getGridBoardBounds(canvas).origin
-            : CANVAS_LAYOUT_ORIGIN;
-        const placed = [...cards].map((c) => this.readNoteRect(c));
-        const bottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
-        const right = placed.reduce((m, r) => Math.max(m, r.x + r.w), 0);
-        boardPane.style.minHeight = `${bottom + origin + getCanvasColGap()}px`;
-        const viewportW = (canvas.clientWidth || 320) / zoom;
-        boardPane.style.minWidth = `${Math.max(viewportW, right + origin + getCanvasColGap())}px`;
-        this.updateDesktopScrollPolicy(canvas);
+        updateBoardCanvasExtentsCore(canvas, {
+            readCardRect: (card) => readNoteRectCore(card, noteRectHooks(this, card))
+        });
     },
 
     updateDesktopScrollPolicy(canvas) {
-        if (!canvas?.classList.contains('view-grid') && !canvas?.classList.contains('view-freeform')) return;
-        canvas.style.overflow = 'auto';
-        canvas.style.overflowY = '';
-        canvas.style.overflowX = '';
+        updateDesktopScrollPolicy(canvas);
     },
 
     applyDesktopSize(card) {
@@ -2676,242 +2625,40 @@ export const UI = {
         };
     },
 
-    gridColumnStride(w, h, metrics = getGridMetrics()) {
-        if (isCollapsedSpatialSize(w, h)) {
-            return w + metrics.gap;
-        }
-        const wCells = Math.max(1, geoSpanToCellsW(w));
-        return geoCellsToSpanW(wCells) + metrics.gap;
+    gridColumnStride(w, h, metrics) {
+        return gridColumnStrideCore(w, h, metrics);
     },
 
-    gridRowStride(w, h, metrics = getGridMetrics()) {
-        if (isCollapsedSpatialSize(w, h)) {
-            return h + metrics.gap;
-        }
-        const hCells = Math.max(1, geoSpanToCellsH(h));
-        return geoCellsToSpanH(hCells) + metrics.gap;
+    gridRowStride(w, h, metrics) {
+        return gridRowStrideCore(w, h, metrics);
     },
 
     snapPackCoord(value, origin, pad, packStride) {
-        const anchor = origin + pad;
-        const rel = Math.max(0, value - anchor);
-        const step = packStride || getGridMetrics().strideX;
-        return anchor + Math.round(rel / step) * step;
+        return snapPackCoordCore(value, origin, pad, packStride);
     },
 
-    findNearestGridSlot(preferred, w, h, placed, { packW, origin = CANVAS_LAYOUT_ORIGIN, maxH = Infinity, edgePad } = {}) {
-        const metrics = getGridMetrics();
-        const pad = edgePad ?? metrics.edgePad;
-        const bounds = { maxW: packW, maxH };
-        const snapped = this.snapNoteRect({ x: preferred.x, y: preferred.y, w, h }, { ...bounds, origin, edgePad: pad });
-        if (!placed.some((p) => this.rectsOverlap(snapped, p))) return snapped;
-
-        const prefX = snapped.x;
-        const prefY = snapped.y;
-        const candidates = [];
-        const minX = origin + pad;
-        const minY = origin + pad;
-        const maxRight = origin + pad + packW;
-        const maxBottom = maxH - pad;
-
-        for (let ring = 0; ring <= 32; ring++) {
-            for (let dy = -ring; dy <= ring; dy++) {
-                for (let dx = -ring; dx <= ring; dx++) {
-                    if (ring > 0 && Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
-                    const x = prefX + dx * metrics.strideX;
-                    const y = prefY + dy * metrics.strideY;
-                    const c = this.snapNoteRect({ x, y, w, h }, { ...bounds, origin, edgePad: pad });
-                    if (c.x < minX - 1) continue;
-                    if (c.x + c.w > maxRight + 1) continue;
-                    if (c.y < minY - 1) continue;
-                    if (c.y + c.h > maxBottom + 1) continue;
-                    candidates.push({ rect: c, dist: Math.abs(c.x - prefX) + Math.abs(c.y - prefY) });
-                }
-            }
-        }
-        candidates.sort((a, b) => a.dist - b.dist || a.rect.y - b.rect.y || a.rect.x - b.rect.x);
-        for (const { rect } of candidates) {
-            if (!placed.some((p) => this.rectsOverlap(rect, p))) return rect;
-        }
-        return snapped;
+    findNearestGridSlot(preferred, w, h, placed, opts) {
+        return findNearestGridSlotCore(preferred, w, h, placed, opts);
     },
 
-    pushGridCardRect(rect, placed, { packW, origin, maxH, edgePad }) {
-        const metrics = getGridMetrics();
-        const pad = edgePad ?? metrics.edgePad;
-        const snapRect = (r) => this.snapNoteRect(r, { maxW: packW, maxH, origin, edgePad: pad });
-        const colStride = this.gridColumnStride(rect.w, rect.h, metrics);
-        let candidate = snapRect({ ...rect, x: rect.x + colStride });
-        if (candidate.x + candidate.w <= origin + pad + packW + 1
-            && !placed.some((p) => this.rectsOverlap(candidate, p))) {
-            return candidate;
-        }
-        const blocker = placed.find((p) => this.rectsOverlap(rect, p));
-        if (blocker) {
-            candidate = snapRect({
-                x: rect.x,
-                y: blocker.y - rect.h - metrics.gap,
-                w: rect.w,
-                h: rect.h
-            });
-            if (candidate.y >= origin + pad - 1
-                && !placed.some((p) => this.rectsOverlap(candidate, p))) {
-                return candidate;
-            }
-            candidate = snapRect({
-                x: rect.x,
-                y: blocker.y + blocker.h + metrics.gap,
-                w: rect.w,
-                h: rect.h
-            });
-            if (!placed.some((p) => this.rectsOverlap(candidate, p))) return candidate;
-        }
-        return this.findNearestGridSlot(rect, rect.w, rect.h, placed, { packW, origin, maxH, edgePad: pad });
-    },
-
-    resolveGridPushLayout({ cardEntries, actorId, actorRect, pinnedIds, packW, origin, maxH, edgePad }) {
-        const pad = edgePad ?? getGridMetrics().edgePad;
-        const layout = new Map();
-        const placed = [];
-        const snapOpts = { packW, origin, maxH, edgePad: pad };
-        const snapBounds = { maxW: packW, maxH, origin, edgePad: pad };
-
-        cardEntries.forEach(({ id, rect }) => {
-            if (!id || !pinnedIds.has(id)) return;
-            const snapped = this.snapNoteRect(rect, snapBounds);
-            layout.set(id, snapped);
-            placed.push({ ...snapped });
-        });
-
-        if (actorId && actorRect) {
-            const snapped = this.findNearestGridSlot(actorRect, actorRect.w, actorRect.h, placed, snapOpts);
-            layout.set(actorId, snapped);
-            placed.push({ ...snapped });
-        }
-
-        const others = cardEntries
-            .filter(({ id }) => id && id !== actorId && !pinnedIds.has(id))
-            .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x);
-
-        others.forEach(({ id, rect }) => {
-            let snapped = this.snapNoteRect(rect, snapBounds);
-            if (placed.some((p) => this.rectsOverlap(snapped, p))) {
-                snapped = this.pushGridCardRect(snapped, placed, snapOpts);
-            }
-            layout.set(id, snapped);
-            placed.push({ ...snapped });
-        });
-
-        return layout;
-    },
-
-    computeSnapPanelLayout({
-        panelEl,
-        cardSelector,
-        getSavedRect,
-        rectForCard,
-        isCardExpanded,
-        actorId,
-        actorRect,
-        bounds
-    }) {
-        const origin = bounds.origin ?? 0;
-        const packW = bounds.packW;
-        const limitH = bounds.maxH;
-        const edgePad = bounds.edgePad ?? getGridMetrics().edgePad;
-        const cards = [...panelEl.querySelectorAll(cardSelector)];
-        const pinnedIds = new Set(this.getBoardPins());
-
-        const cardEntries = cards.map((card) => {
-            const id = card.dataset.id;
-            const isExpanded = isCardExpanded(id, card);
-            const saved = getSavedRect(id);
-            const source = id === actorId && actorRect ? actorRect : (saved || this.readNoteRect(card));
-            const rect = rectForCard(card, source, isExpanded);
-            return { id, card, rect };
-        });
-
-        let resolvedActor = null;
-        if (actorId && actorRect) {
-            resolvedActor = this.snapNotePosition(actorRect, {
-                maxW: packW,
-                maxH: limitH,
-                origin,
-                edgePad
-            });
-        }
-
-        return this.resolveGridPushLayout({
-            cardEntries,
-            actorId,
-            actorRect: resolvedActor,
-            pinnedIds,
-            packW,
-            origin,
-            maxH: limitH,
-            edgePad
-        });
-    },
-
-    computeGridBoardLayout(canvas, actorId, actorRect = null, { maxH } = {}) {
-        if (!canvas?.classList.contains('view-grid')) return new Map();
-        const { origin, packW, maxH: boardMaxH, edgePad } = this.getGridBoardBounds(canvas);
-        return this.computeSnapPanelLayout({
-            panelEl: canvas,
-            cardSelector: '.mini-card[data-desktop="1"]',
-            getSavedRect: (id) => this.getGridLayout()[id],
-            rectForCard: (card, saved, isExpanded) => this.gridBoardRectForCard(card, saved, isExpanded),
-            isCardExpanded: (id) => this.isSavedLayoutExpanded(id),
-            actorId,
-            actorRect,
-            bounds: { origin, packW, maxH: maxH ?? boardMaxH, edgePad }
-        });
+    computeGridBoardLayout(canvas, actorId, actorRect = null, opts = {}) {
+        return computeGridBoardLayoutCore(createGridDeps(this), canvas, actorId, actorRect, opts);
     },
 
     clearSnapPanelPreview(panelEl) {
-        panelEl?.querySelectorAll('.mini-card.layout-preview').forEach((c) => {
-            c.classList.remove('layout-preview');
-        });
+        clearSnapPanelPreview(panelEl);
     },
 
-    applyGridBoardLayout(canvas, layout, { animate = true, save = true, preview = false } = {}) {
-        if (!canvas || !layout?.size) return [];
-        const { origin } = this.getGridBoardBounds(canvas);
-        const placed = [];
-        layout.forEach((rect, id) => {
-            const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(id)}"]`);
-            if (!card) return;
-            this.applyNoteRect(card, rect, { settling: animate });
-            card.classList.toggle('layout-preview', preview);
-            if (save) {
-                this.saveGridLayout(id, rect);
-            }
-            this.finalizeDesktopCard(card);
-            placed.push(rect);
-        });
-        this.scheduleBoardCanvasExtents(canvas);
-        if (animate && !preview) {
-            window.setTimeout(() => {
-                canvas.querySelectorAll('.mini-card.layout-settling').forEach((c) => {
-                    c.classList.remove('layout-settling');
-                });
-            }, 160);
-        }
-        return placed;
+    applyGridBoardLayout(canvas, layout, opts = {}) {
+        return applyGridBoardLayoutCore(createGridDeps(this), canvas, layout, opts);
     },
 
     clearGridLayoutPreview(canvas) {
-        this.clearSnapPanelPreview(canvas);
+        clearSnapPanelPreview(canvas);
     },
 
     getGridViewportBounds(canvas) {
-        const zoom = parseFloat(canvas?.dataset?.desktopZoom) || 1;
-        const pad = 24;
-        const { origin, packW, edgePad } = this.getGridBoardBounds(canvas);
-        const viewportH = Math.max(200, (canvas.clientHeight || 400) / zoom - pad);
-        const scrollY = (canvas?.scrollTop || 0) / zoom;
-        const viewportBottom = origin + scrollY + viewportH;
-        return { origin, packW, viewportH, edgePad, scrollY, viewportBottom };
+        return getGridViewportBounds(canvas);
     },
 
     findDesktopCenterSlot(w, h, canvas, viewMode, { excludeId = null } = {}) {
@@ -2959,45 +2706,8 @@ export const UI = {
         this.updateDesktopScrollPolicy(canvas);
     },
 
-    reflowGridBoard(canvas, actorId, { animate = true, actorRect: explicitActorRect = null } = {}) {
-        if (!canvas?.classList.contains('view-grid')) return;
-        let actorRect = explicitActorRect;
-        if (!actorRect && actorId) {
-            const actorCard = canvas.querySelector(
-                `.mini-card[data-desktop="1"][data-id="${CSS.escape(actorId)}"]`
-            );
-            if (actorCard) actorRect = this.readNoteRect(actorCard);
-        }
-        const layout = this.computeGridBoardLayout(canvas, actorId, actorRect);
-        this.applyGridBoardLayout(canvas, layout, { animate, save: true });
-    },
-
-    repackGridBoardFromOrigin(canvas, { animate = true, items = [] } = {}) {
-        if (!canvas?.classList.contains('view-grid')) return;
-        const { origin, packW, maxH, edgePad } = this.getGridBoardBounds(canvas);
-        const small = getSmallRect(readTileSmallFootprint());
-        const byId = new Map((items || []).map((item) => [item.id, item]));
-        const cards = [...canvas.querySelectorAll('.mini-card[data-desktop="1"]')].sort((a, b) => {
-            const itemA = byId.get(a.dataset.id) || this.resolveBoardItem(a.dataset.id);
-            const itemB = byId.get(b.dataset.id) || this.resolveBoardItem(b.dataset.id);
-            const aTime = Number(itemA?.created_at || itemA?.updated_at || 0);
-            const bTime = Number(itemB?.created_at || itemB?.updated_at || 0);
-            return aTime - bTime;
-        });
-        const placed = [];
-        const layout = new Map();
-        cards.forEach((card) => {
-            const id = card.dataset.id;
-            if (!id) return;
-            let slot = this.findFirstCanvasSlot(small.w, small.h, placed, packW + origin * 2, { origin, edgePad });
-            slot = this.snapNoteRect(
-                { ...slot, w: small.w, h: small.h },
-                { maxW: packW, maxH, origin, edgePad }
-            );
-            layout.set(id, slot);
-            placed.push(slot);
-        });
-        this.applyGridBoardLayout(canvas, layout, { animate, save: true });
+    reflowGridBoard(canvas, actorId, opts = {}) {
+        reflowGridBoardCore(createGridDeps(this), canvas, actorId, opts);
     },
 
     repackBoardLayoutStorage(mode, items, canvas) {
@@ -3040,10 +2750,6 @@ export const UI = {
         syncDesktopStackSeq(z);
     },
 
-    initGridBoardCardStack(card, orderIndex = 0) {
-        this.initDesktopCardStack(card, orderIndex);
-    },
-
     raiseDesktopCard(card) {
         if (!isDesktopCard(card)) return;
         raiseDesktopElement(card);
@@ -3059,171 +2765,46 @@ export const UI = {
     },
 
     snapCanvasCoord(value, origin = CANVAS_LAYOUT_ORIGIN, stride) {
-        const step = stride ?? getGridMetrics().strideX;
-        return origin + this.snapGridCoord(Math.max(0, value - origin), step);
+        return snapCanvasCoordCore(value, origin, stride);
     },
 
-    findFirstCanvasSlot(w, h, placed, canvasW, { origin = CANVAS_LAYOUT_ORIGIN, edgePad, yMin } = {}) {
-        const metrics = getGridMetrics();
-        const pad = edgePad ?? metrics.edgePad;
-        const packW = Math.max(metrics.canvasGridW, canvasW - origin * 2 - pad * 2);
-        const xOrigin = origin + pad;
-        const yOrigin = Math.max(origin + pad, yMin ?? origin + pad);
-        const rowStride = this.gridColumnStride(w, h, metrics);
-        const yStride = getPackStrideYForRect(w, h);
-        let y = yOrigin;
-        while (true) {
-            let x = xOrigin;
-            while (x + w <= origin + pad + packW + 1) {
-                const candidate = this.snapNoteRect(
-                    { x, y, w, h },
-                    { maxW: packW, origin, edgePad: pad }
-                );
-                if (!placed.some((p) => this.rectsOverlap(candidate, p, metrics.gap))) {
-                    return candidate;
-                }
-                x += rowStride;
-            }
-            y += yStride;
-        }
+    findFirstCanvasSlot(w, h, placed, canvasW, opts) {
+        return findFirstCanvasSlotCore(w, h, placed, canvasW, opts);
+    },
+
+    findFirstCanvasSlotVertical(w, h, placed, canvasW, opts) {
+        return findFirstCanvasSlotVerticalCore(w, h, placed, canvasW, opts);
     },
 
     snapGridCoord(value, stride) {
-        const step = stride ?? getGridMetrics().strideX;
-        return Math.max(0, Math.round(value / step) * step);
+        return snapGridCoordCore(value, stride);
     },
 
-    clampManualNoteRect(rect, { maxW = Infinity, maxH = Infinity } = {}) {
-        let w = Math.max(FREEFORM_MIN_W, Math.round(rect.w));
-        let h = Math.max(FREEFORM_MIN_H, Math.round(rect.h));
-        if (maxW < Infinity) w = Math.min(w, maxW);
-        if (maxH < Infinity) h = Math.min(h, maxH);
-        let x = Math.max(0, Math.round(rect.x));
-        let y = Math.max(0, Math.round(rect.y));
-        if (maxW < Infinity && x + w > maxW) x = Math.max(0, maxW - w);
-        if (maxH < Infinity && y + h > maxH) y = Math.max(0, maxH - h);
-        return { x, y, w, h };
+    clampManualNoteRect(rect, opts) {
+        return clampManualNoteRectCore(rect, opts);
     },
 
-    snapNotePosition(rect, { maxW = Infinity, maxH = Infinity, origin = CANVAS_LAYOUT_ORIGIN, edgePad } = {}) {
-        const metrics = getGridMetrics();
-        const pad = edgePad ?? metrics.edgePad;
-        const w = Math.max(FREEFORM_MIN_W, Math.round(rect.w));
-        const h = Math.max(FREEFORM_MIN_H, Math.round(rect.h));
-        const atSmall = isCollapsedSpatialSize(w, h);
-        let x;
-        let y;
-        if (atSmall) {
-            const xPack = this.gridColumnStride(w, h, metrics);
-            const yPack = this.gridRowStride(w, h, metrics);
-            x = this.snapPackCoord(rect.x, origin, pad, xPack);
-            y = this.snapPackCoord(rect.y, origin, pad, yPack);
-        } else {
-            x = this.snapGridCoord(rect.x, metrics.strideX);
-            y = this.snapGridCoord(rect.y, metrics.strideY);
-        }
-        const minX = origin + pad;
-        const minY = origin + pad;
-        x = Math.max(minX, x);
-        y = Math.max(minY, y);
-        if (maxW < Infinity) {
-            const rightLimit = origin + pad + maxW;
-            if (x + w > rightLimit + 1) {
-                x = Math.max(minX, rightLimit - w);
-            }
-        }
-        if (maxH < Infinity) {
-            const bottomLimit = maxH - pad;
-            if (y + h > bottomLimit + 1) {
-                y = Math.max(minY, bottomLimit - h);
-            }
-        }
-        return { x, y, w, h };
+    snapNotePosition(rect, opts) {
+        return snapNotePositionCore(rect, opts);
     },
 
-    snapNoteRect(rect, { maxW = Infinity, maxH = Infinity, origin = CANVAS_LAYOUT_ORIGIN, edgePad } = {}) {
-        const metrics = getGridMetrics();
-        const pad = edgePad ?? metrics.edgePad;
-        const footprint = readTileSmallFootprint();
-        if (isCollapsedSpatialSize(rect.w, rect.h)) {
-            const small = getSmallRect(footprint);
-            const xPack = this.gridColumnStride(small.w, small.h, metrics);
-            const yPack = this.gridRowStride(small.w, small.h, metrics);
-            const snapped = {
-                x: this.snapPackCoord(rect.x, origin, pad, xPack),
-                y: this.snapPackCoord(rect.y, origin, pad, yPack),
-                w: small.w,
-                h: small.h
-            };
-            return this.snapNotePosition(snapped, { maxW, maxH, origin, edgePad: pad });
-        }
-
-        const wCells = Math.max(1, geoSpanToCellsW(rect.w));
-        const hCells = Math.max(1, geoSpanToCellsH(rect.h));
-        let w = geoCellsToSpanW(wCells);
-        let h = geoCellsToSpanH(hCells);
-        if (maxW < Infinity) {
-            const maxCells = Math.max(1, geoSpanToCellsW(maxW));
-            w = geoCellsToSpanW(Math.min(wCells, maxCells));
-        }
-        if (maxH < Infinity) {
-            const maxCells = Math.max(1, geoSpanToCellsH(maxH));
-            h = geoCellsToSpanH(Math.min(hCells, maxCells));
-        }
-        const snapped = {
-            x: this.snapGridCoord(rect.x, metrics.strideX),
-            y: this.snapGridCoord(rect.y, metrics.strideY),
-            w: Math.max(FREEFORM_MIN_W, w),
-            h: Math.max(FREEFORM_MIN_H, h)
-        };
-        return this.snapNotePosition(snapped, { maxW, maxH, origin, edgePad: pad });
+    snapNoteRect(rect, opts) {
+        return snapNoteRectCore(rect, opts);
     },
 
     readNoteRect(card) {
-        const styleW = parseFloat(card.style.width);
-        const styleH = parseFloat(card.style.height);
-        const hasInlineW = Number.isFinite(styleW) && styleW > 0;
-        const hasInlineH = Number.isFinite(styleH) && styleH > 0;
-        const offsetW = card.offsetWidth || 0;
-        const offsetH = card.offsetHeight || 0;
-
-        let w = hasInlineW ? styleW : (offsetW || FREEFORM_DEFAULT_W);
-        let h = hasInlineH ? styleH : (offsetH || FREEFORM_DEFAULT_H);
-
-        if (isDesktopCard(card) && !this.isCardActivelyResizing(card)) {
-            const item = this.resolveBoardItem(card?.dataset?.id);
-            const tileSize = resolveTileSize(item);
-            if (isCollapsedSpatialSize(w, h, tileSize)) {
-                const small = getSmallRect(readTileSmallFootprint());
-                w = small.w;
-                h = small.h;
-            }
-        }
-
-        return {
-            x: parseFloat(card.style.left) || 0,
-            y: parseFloat(card.style.top) || 0,
-            w,
-            h
-        };
+        return readNoteRectCore(card, noteRectHooks(this, card));
     },
 
     applyNoteRect(card, rect, { settling = false } = {}) {
-        card.style.position = 'absolute';
-        card.style.left = `${rect.x}px`;
-        card.style.top = `${rect.y}px`;
-        this.applyFreeformDimensions(card, rect.w, rect.h);
-        card.classList.toggle('layout-settling', settling);
+        applyNoteRectCore(card, rect, {
+            settling,
+            applyDimensions: (c, w, h) => this.applyFreeformDimensions(c, w, h)
+        });
     },
 
     rectsOverlap(a, b, gap) {
-        const g = gap ?? getGridMetrics().gap;
-        return !(
-            a.x + a.w + g <= b.x
-            || b.x + b.w + g <= a.x
-            || a.y + a.h + g <= b.y
-            || b.y + b.h + g <= a.y
-        );
+        return rectsOverlapCore(a, b, gap);
     },
 
     getCollapsedCategories() {

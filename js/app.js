@@ -802,14 +802,6 @@ class Application {
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         });
 
-        window.addEventListener('board:cards_reflowed', () => {
-            const canvas = document.getElementById('app-canvas');
-            if (canvas?.classList.contains('view-grid')) {
-                UI.reflowGridBoard(canvas, null, { animate: true });
-            }
-            DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
-        });
-
         window.addEventListener('calendar:items_changed', (e) => {
             const sourceItem = Editor.activeItem || e.detail;
             if (sourceItem?.id) {

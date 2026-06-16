@@ -405,10 +405,10 @@ export const DragDropEngine = {
                 if (snapEnabled) {
                     finishSnapDrop(card);
                 } else {
+                    UI.updateBoardCanvasExtents(canvas);
                     const rect = UI.clampNoteToBoardEdges(UI.readNoteRect(card), UI.getGridBoardBounds(canvas));
                     UI.applyNoteRect(card, rect, { settling: false });
                     UI.saveFreeformPosition(card.dataset.id, rect.x, rect.y);
-                    UI.updateBoardCanvasExtents(canvas);
                 }
             } else if (snapEnabled) {
                 clearLayoutPreview(true);
