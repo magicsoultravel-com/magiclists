@@ -43,7 +43,7 @@ function Draw-Icon($g, $id, $size) {
     Fill-RoundedRect $g $bg 0 0 $size $size ($size * 0.19)
     $bg.Dispose()
 
-    $colors = @('#FF6EC7', '#00F5FF', '#B8FF3C', '#39FF14')
+    $colors = @('#FF6EC7', '#A8FF60', '#0033FF')
     $paper = New-Object System.Drawing.SolidBrush (Get-Color '#F0EAE0')
     $wood = New-Object System.Drawing.SolidBrush (Get-Color '#4A3018')
     $woodDark = New-Object System.Drawing.SolidBrush (Get-Color '#261810')
@@ -118,7 +118,7 @@ function Draw-Icon($g, $id, $size) {
             $sun = New-Object System.Drawing.SolidBrush (Get-Color '#FFB347')
             $g.FillEllipse($sun, $size * 0.62, $size * 0.18, $size * 0.16, $size * 0.16)
             $sun.Dispose()
-            Draw-NeonLines $g ($size * 0.22) ($size * 0.58) ($size * 0.56) ($size * 0.055) ($size * 0.028) @('#FF6EC7', '#00F5FF', '#B8FF3C')
+            Draw-NeonLines $g ($size * 0.22) ($size * 0.58) ($size * 0.56) ($size * 0.055) ($size * 0.028) $colors
             $trunk = New-Object System.Drawing.Pen (Get-Color '#39FF14'), ($size * 0.035)
             $g.DrawLine($trunk, $size * 0.5, $size * 0.76, $size * 0.5, $size * 0.34)
             $trunk.Dispose()

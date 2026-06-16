@@ -6,8 +6,7 @@
   <rect x="196" y="72" width="120" height="56" rx="12" fill="#242428"/>
   <rect x="208" y="80" width="96" height="40" rx="8" fill="#3A3A42"/>
   <rect x="128" y="128" width="256" height="296" rx="8" fill="#F0EAE0"/>
-  <rect x="152" y="168" width="208" height="28" rx="6" fill="#FF6EC7"/>
-  <rect x="152" y="212" width="208" height="28" rx="6" fill="#00F5FF"/>
-  <rect x="152" y="256" width="208" height="28" rx="6" fill="#B8FF3C"/>
-  <rect x="152" y="300" width="208" height="28" rx="6" fill="#39FF14"/>
+  <rect x="152" y="176" width="208" height="28" rx="6" fill="#FF6EC7"/>
+  <rect x="152" y="228" width="208" height="28" rx="6" fill="#A8FF60"/>
+  <rect x="152" y="280" width="208" height="28" rx="6" fill="#0033FF"/>
 </svg>
