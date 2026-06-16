@@ -1,4 +1,5 @@
 import { sanitizeRichHtml, stripRichText } from './richText.js';
+import { sheetIsActive, sheetToTsv } from './sheet.js';
 
 export const SOFT_BREAK = '\u2028';
 
@@ -197,6 +198,26 @@ export function itemToPlainCopyText(item) {
     const blocks = [];
     const title = stripRichText(item?.title || '').trim();
     if (title) blocks.push(title);
+
+    const template = item?.noteTemplate;
+    if (template === 'meeting') {
+        const attendees = sheetIsActive(item) && item.sheet ? sheetToTsv(item.sheet).trim() : '';
+        if (attendees) blocks.push(`Attendees:\n${attendees}`);
+        const content = stripRichText(item?.content || '').replace(/\u2028/g, '\n').trim();
+        if (content) blocks.push(`Agenda:\n${content}`);
+        const lines = orderStepsActiveThenDone(item?.steps || [])
+            .map(stepToPlainCopyLine)
+            .filter((l) => l.trim());
+        if (lines.length) blocks.push(`Action Items:\n${lines.join('\n')}`);
+        return blocks.join('\n\n');
+    }
+
+    if (template === 'sheet' && item?.sheet) {
+        const tsv = sheetToTsv(item.sheet).trim();
+        if (tsv) blocks.push(tsv);
+        return blocks.join('\n\n');
+    }
+
     const content = stripRichText(item?.content || '').replace(/\u2028/g, '\n').trim();
     if (content) blocks.push(content);
     const lines = orderStepsActiveThenDone(item?.steps || [])

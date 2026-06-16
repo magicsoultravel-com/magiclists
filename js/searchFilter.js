@@ -1,4 +1,5 @@
 import { stripRichText } from './richText.js';
+import { sheetCellTexts, sheetIsActive } from './sheet.js';
 
 const STOPWORDS = new Set(['a', 'an', 'the', 'and', 'or', 'of', 'to', 'in', 'for', 'on', 'at', 'is']);
 const MIN_TOKEN_LENGTH = 2;
@@ -217,6 +218,9 @@ function getItemCombinedText(item) {
     (item?.steps || []).forEach((step) => {
         parts.push(stripRichText(step?.text || ''));
     });
+    if (sheetIsActive(item) && item?.sheet) {
+        parts.push(...sheetCellTexts(item.sheet));
+    }
     return parts.filter(Boolean).join(' ');
 }
 

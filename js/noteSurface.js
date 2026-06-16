@@ -44,6 +44,19 @@ import {
 } from './checklistSteps.js';
 import { UndoManager } from './undo.js';
 import { escapeHTML, escapeAttr, escapeQuotes } from './domEscape.js';
+import {
+    attachSheetInteractions,
+    defaultSheetDimsForTemplate,
+    ensureItemSheet,
+    formatMeetingDateTimeBadge,
+    isMeetingTemplateActive,
+    isSheetTemplateActive,
+    renderSheetHtml,
+    resolveNoteTemplate,
+    sheetCellTexts,
+    sheetIsActive,
+    syncSheetFromDom
+} from './sheet.js';
 
 const UNCATEGORIZED_COLOR = '#64748b';
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
@@ -58,7 +71,9 @@ function computeNoteSizeKb(item) {
         content: item.content || '',
         steps: item.steps || [],
         type: item.type || 'note',
-        categories: item.categories || []
+        categories: item.categories || [],
+        noteTemplate: item.noteTemplate || '',
+        sheet: sheetIsActive(item) ? item.sheet : undefined
     };
     const bytes = new TextEncoder().encode(JSON.stringify(payload)).length;
     if (bytes === 0) return '0';
@@ -77,6 +92,9 @@ function computeNoteLineCount(item) {
     };
     countText(item.content);
     for (const step of item.steps || []) countText(step.text);
+    if (sheetIsActive(item) && item.sheet) {
+        count += sheetCellTexts(item.sheet).length;
+    }
     return count;
 }
 
@@ -260,6 +278,7 @@ export const NoteSurface = {
                 this.syncInlineFieldToItem(el, item);
             }
         });
+        syncSheetFromDom(root, item);
     },
 
     insertTextAtCaret(el, text) {
@@ -495,6 +514,7 @@ export const NoteSurface = {
     },
 
     buildNoteBodyConvertButtonsHtml(item) {
+        if (isSheetTemplateActive(item)) return '';
         const canToChecklist = contentHasConvertibleText(item?.content);
         const canToContent = stepsHaveConvertibleText(item?.steps);
         return `
@@ -534,6 +554,17 @@ export const NoteSurface = {
     },
 
     buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false, richEdit = false } = {}) {
+        const template = resolveNoteTemplate(item);
+
+        if (template === 'sheet') {
+            ensureItemSheet(item, defaultSheetDimsForTemplate('sheet'));
+            return renderSheetHtml(item.sheet, { canEdit, inModalEditor });
+        }
+
+        if (template === 'meeting') {
+            return this.buildMeetingBodyHtml(item, { canEdit, inModalEditor, richEdit });
+        }
+
         let html = '';
         const { showContent, showChecklist } = this.resolveNoteBodyVisibility(item, { canEdit, inModalEditor });
 
@@ -555,6 +586,31 @@ export const NoteSurface = {
             if (!item.steps) item.steps = [];
             html += this.buildExpandedChecklistHtml(item, canEdit, { richEdit });
         }
+        return html;
+    },
+
+    buildMeetingBodyHtml(item, { canEdit = false, inModalEditor = false, richEdit = false } = {}) {
+        ensureItemSheet(item, defaultSheetDimsForTemplate('meeting'));
+        let html = '';
+        html += '<h3 class="note-section-label">Attendees</h3>';
+        html += renderSheetHtml(item.sheet, { canEdit, inModalEditor });
+        html += '<h3 class="note-section-label">Agenda</h3>';
+
+        const content = item.content || '';
+        const rich = hasRichMarkup(content) || content.includes('\u2028');
+        if (canEdit && (richEdit || this.canInlineEditText(content, { richEdit }))) {
+            const inner = richEdit ? this.prepareContentForEdit(content) : this.escapeHTML(content.replace(/\u2028/g, '\n'));
+            const ce = richEdit ? 'true' : 'plaintext-only';
+            const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
+            html += `<div class="card-content-preview card-inline-edit${richClasses}" contenteditable="${ce}" spellcheck="false" data-field="content" data-placeholder="Add agenda…">${inner}</div>`;
+        } else {
+            const richClass = rich ? ' rich-text' : '';
+            html += `<div class="card-content-preview${richClass}">${this.renderRichHtml(content)}</div>`;
+        }
+
+        html += '<h3 class="note-section-label">Action Items</h3>';
+        if (!item.steps) item.steps = [];
+        html += this.buildExpandedChecklistHtml(item, canEdit, { richEdit });
         return html;
     },
 
@@ -634,6 +690,10 @@ export const NoteSurface = {
     },
 
     buildNoteConfigPanelHtml(item, { categoryOptionsHtml = '', startParts = {}, endParts = {} } = {}) {
+        const template = resolveNoteTemplate(item);
+        const templateDefault = template === 'default' ? 'selected' : '';
+        const templateSheet = template === 'sheet' ? 'selected' : '';
+        const templateMeeting = template === 'meeting' ? 'selected' : '';
         return `
             <div class="editor-panel editor-panel--config">
                 <div class="collapsable-header" id="config-section-header">
@@ -641,6 +701,14 @@ export const NoteSurface = {
                 </div>
                 <div class="collapsable-section collapsed" id="config-section">
                     <div class="form-row-grid form-row-grid--2">
+                        <div class="form-group form-group--compact">
+                            <label for="edit-template">Template</label>
+                            <select id="edit-template" class="form-input">
+                                <option value="default" ${templateDefault}>Note / Checklist</option>
+                                <option value="sheet" ${templateSheet}>Sheet</option>
+                                <option value="meeting" ${templateMeeting}>Meeting</option>
+                            </select>
+                        </div>
                         <div class="form-group form-group--compact">
                             <label>Visibility</label>
                             <select id="edit-visibility" class="form-input">
@@ -711,9 +779,23 @@ export const NoteSurface = {
             categoryColor
         });
         const bodyIdAttr = bodyId ? ` id="${bodyId}"` : '';
+        const isMeeting = isMeetingTemplateActive(item);
+        const meetingBadge = isMeeting
+            ? `<span class="meeting-datetime">${escapeHTML(formatMeetingDateTimeBadge(item.startDateTime))}</span>`
+            : '';
+        const toplineExtra = isMeeting ? ' editor-note-topline--meeting' : '';
+        const toplineClass = `${toplineDragZone || footerDragZone || ''}${toplineExtra}`;
 
-        const toplineClass = toplineDragZone || footerDragZone || '';
-        const toplineHtml = `
+        const toplineHtml = isMeeting
+            ? `
+                <div class="editor-note-topline${toplineClass}">
+                    <div class="editor-note-header">
+                        ${titleHtml}
+                    </div>
+                    ${meetingBadge}
+                    ${toolbarHtml ? `<div class="note-editor-toolbar">${toolbarHtml}</div>` : ''}
+                </div>`
+            : `
                 <div class="editor-note-topline${toplineClass}">
                     <div class="editor-note-header">
                         ${titleHtml}
@@ -935,7 +1017,14 @@ export const NoteSurface = {
         const header = shell.querySelector('.editor-note-header');
         const body = shell.querySelector('.editor-note-body');
         if (header) this.attachNoteBodyInteractions(header, item, interactionOptions);
-        if (body) this.attachNoteBodyInteractions(body, item, interactionOptions);
+        if (body) {
+            this.attachNoteBodyInteractions(body, item, interactionOptions);
+            attachSheetInteractions(body, item, {
+                onChange,
+                refresh,
+                inModalEditor: !!body.closest('#editor-overlay')
+            });
+        }
 
         if (stopMousedownPropagation && !shell.dataset.shellBubbleBound) {
             shell.dataset.shellBubbleBound = '1';
@@ -946,13 +1035,18 @@ export const NoteSurface = {
                     '.card-inline-edit, .step-check, .step-text, input, textarea, button, a, '
                     + '.card-act, .grab-handle--step, .expanded-checklist-add-btn, '
                     + '.checklist-done-toggle, .step-collapse-btn, .step-delete-btn, '
-                    + '.step-indent-btn, .step-outdent-btn, .checklist-expand-collapse-all-btn'
+                    + '.step-indent-btn, .step-outdent-btn, .checklist-expand-collapse-all-btn, '
+                    + '.sheet-cell-input, .sheet-toolbar'
                 )) return;
                 e.stopPropagation();
             });
         }
 
         shell.querySelectorAll('.card-inline-edit').forEach((el) => {
+            el.addEventListener('input', () => this.updateNoteMetaStats(shell, item));
+        });
+
+        shell.querySelectorAll('[data-sheet-cell]').forEach((el) => {
             el.addEventListener('input', () => this.updateNoteMetaStats(shell, item));
         });
 

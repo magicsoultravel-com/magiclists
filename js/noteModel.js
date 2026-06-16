@@ -1,9 +1,15 @@
 import { stripRichText } from './richText.js';
 import { normalizeTileSize } from './tileGeometry.js';
+import { resolveNoteTemplate, sheetFirstCellText, sheetHasContent, sheetIsActive } from './sheet.js';
 
-export function deriveNoteTitle({ title = '', content = '', steps = [] } = {}) {
+export function deriveNoteTitle({ title = '', content = '', steps = [], sheet = null, noteTemplate = '' } = {}) {
     const trimmedTitle = stripRichText(title).trim();
     if (trimmedTitle) return trimmedTitle;
+
+    if (resolveNoteTemplate({ noteTemplate }) === 'sheet' && sheetHasContent(sheet)) {
+        const first = sheetFirstCellText(sheet);
+        if (first) return first.slice(0, 72);
+    }
 
     const contentLine = stripRichText(content)
         .trim()
@@ -26,9 +32,10 @@ export function createNoteId() {
     return `item_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
-export function noteHasSavableContent({ title = '', content = '', steps = [] } = {}) {
+export function noteHasSavableContent({ title = '', content = '', steps = [], sheet = null, noteTemplate = '' } = {}) {
     if (stripRichText(title).trim()) return true;
     if (stripRichText(content).trim()) return true;
+    if (sheetIsActive({ noteTemplate }) && sheetHasContent(sheet)) return true;
     return (steps || []).some((step) => stripRichText(step?.text || '').trim());
 }
 
@@ -62,7 +69,12 @@ export function normalizeItemForSave(item, { preserveEmptySteps = false } = {}) 
         ...item,
         steps,
         type: steps.length > 0 ? 'checklist' : 'note',
-        title: hasTitle ? item.title : deriveNoteTitle({ content, steps }),
+        title: hasTitle ? item.title : deriveNoteTitle({
+            content,
+            steps,
+            sheet: item.sheet,
+            noteTemplate: item.noteTemplate
+        }),
         startDateTime,
         tileSize: normalizeTileSize(item.tileSize)
     };

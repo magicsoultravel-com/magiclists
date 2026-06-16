@@ -11,6 +11,13 @@ import {
 } from './noteModel.js';
 import { NoteSurface } from './noteSurface.js';
 import { UI } from './ui.js';
+import {
+    attachSheetInteractions,
+    defaultSheetDimsForTemplate,
+    ensureItemSheet,
+    isSheetTemplateActive,
+    resolveNoteTemplate
+} from './sheet.js';
 
 export const Editor = {
     overlay: null,
@@ -105,8 +112,13 @@ export const Editor = {
             requestAnimationFrame(() => {
                 this.overlay?.classList.add('is-open');
                 if (this.isNewUnsavedNote) {
-                    const content = this.mountZone.querySelector('[data-field="content"].card-inline-edit');
-                    if (content) NoteSurface.focusInlineEdit(content, 'start');
+                    if (isSheetTemplateActive(this.activeItem)) {
+                        const cell = this.mountZone.querySelector('[data-sheet-cell]');
+                        if (cell) cell.focus();
+                    } else {
+                        const content = this.mountZone.querySelector('[data-field="content"].card-inline-edit');
+                        if (content) NoteSurface.focusInlineEdit(content, 'start');
+                    }
                 }
             });
         });
@@ -185,6 +197,12 @@ export const Editor = {
 
     collectFormData({ normalize = false } = {}) {
         this.syncActiveItemFromDom();
+        const templateEl = document.getElementById('edit-template');
+        if (templateEl) {
+            const val = templateEl.value || 'default';
+            if (val === 'default') delete this.activeItem.noteTemplate;
+            else this.activeItem.noteTemplate = val;
+        }
         const finalBgColor = resolveNoteColor(document.getElementById('edit-bg-color-value')?.value);
         const allSteps = this.activeItem.steps || [];
         const steps = normalize
@@ -215,8 +233,13 @@ export const Editor = {
             isRecurring: this.activeItem.isRecurring === true,
             hideFromCalendar: this.activeItem.hideFromCalendar === true,
             hiddenFromBoard: this.activeItem.hiddenFromBoard === true,
-            editorBodyLayout: NoteSurface.resolveEditorBodyLayoutUnchecked(this.activeItem)
+            editorBodyLayout: NoteSurface.resolveEditorBodyLayoutUnchecked(this.activeItem),
+            noteTemplate: this.activeItem.noteTemplate,
+            sheet: this.activeItem.sheet
         };
+        if (data.noteTemplate === 'default' || !data.noteTemplate) {
+            delete data.noteTemplate;
+        }
         return normalize ? normalizeItemForSave(data) : data;
     },
     
@@ -362,6 +385,15 @@ export const Editor = {
                 this.triggerAutoSave();
             }
         });
+        attachSheetInteractions(body, this.activeItem, {
+            refresh: () => this.refreshEditorNoteBody(),
+            inModalEditor: true,
+            onChange: () => {
+                this.markInteracted();
+                this.scheduleEditorSizeLabelUpdate();
+                this.triggerAutoSave();
+            }
+        });
         body.scrollTop = scrollTop;
 
         if (body.dataset.pendingFocusStepId) {
@@ -412,7 +444,7 @@ export const Editor = {
             canEdit: true,
             inModalEditor: true,
             showConfig: true,
-            showFormat: true,
+            showFormat: !isSheetTemplateActive(item),
             richEdit: true,
             targetCatName: activeCategory,
             categoryColor,
@@ -432,7 +464,7 @@ export const Editor = {
 
         NoteSurface.bindNoteEditorShell(this.mountZone, item, {
             showConfig: true,
-            showFormat: true,
+            showFormat: !isSheetTemplateActive(item),
             richEdit: true,
             localOnly: true,
             refresh: () => this.refreshEditorNoteBody(),
@@ -441,6 +473,29 @@ export const Editor = {
             onStatusChange: () => this.updateArchiveToggleUI(),
             bindDateDefaults: (dateId, timeId) => this.bindDateInputDefaults(dateId, timeId)
         });
+
+        const templateEl = document.getElementById('edit-template');
+        if (templateEl) {
+            templateEl.addEventListener('change', () => {
+                if (!this.activeItem) return;
+                this.syncActiveItemFromDom();
+                const next = templateEl.value || 'default';
+                const prev = resolveNoteTemplate(this.activeItem);
+                if (next === prev) {
+                    onEditorChange();
+                    return;
+                }
+                if (next === 'default') {
+                    delete this.activeItem.noteTemplate;
+                } else {
+                    this.activeItem.noteTemplate = next;
+                    ensureItemSheet(this.activeItem, defaultSheetDimsForTemplate(next));
+                }
+                this.markInteracted();
+                this.renderForm();
+                this.triggerAutoSave();
+            });
+        }
 
         this.syncColorFromItem(item);
         const modal = this.overlay?.querySelector('.modal');

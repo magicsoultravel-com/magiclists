@@ -45,6 +45,7 @@ import { BoardSort } from './boardSort.js';
 import { SidebarTools } from './sidebarTools.js';
 import { CloudBackup } from './cloudBackup.js';
 import { BootProgress } from './bootProgress.js';
+import { TemplatePicker } from './templatePicker.js';
 import {
     migrateItemsToFileCabinet,
     pruneFileCabinetOrderByLayout,
@@ -148,6 +149,7 @@ class Application {
             CloudBackup.init({ getLoggedIn: () => AppState.user.isLoggedIn });
             CloudBackup.ensureConnected().finally(() => CloudBackup.updateButtons());
             this.setupFab();
+            TemplatePicker.init();
             this.setupUndo();
             this.setupDrawingMode();
             Fullscreen.init();
@@ -396,7 +398,7 @@ class Application {
                 this.executeLoginPrompt();
                 return;
             }
-            Editor.open(null, AppState.categories);
+            TemplatePicker.open(AppState.categories);
         });
     }
 

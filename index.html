@@ -25,6 +25,7 @@
     <link rel="stylesheet" href="./css/radio.css?v=dev_1.0.0">
     <link rel="stylesheet" href="./css/tv.css?v=dev_1.0.0">
     <link rel="stylesheet" href="./css/weather.css?v=dev_1.0.0">
+    <link rel="stylesheet" href="./css/sheet.css?v=dev_1.0.0">
     <style>
         #app-boot {
             position: fixed;
@@ -289,6 +290,36 @@
     </div>
 
     <button type="button" id="fab-create" class="fab-create is-hidden" title="New note" aria-label="New note">+</button>
+
+    <div id="template-picker-overlay" class="overlay template-picker-overlay is-hidden" role="dialog" aria-modal="true" aria-label="Choose note template">
+        <div class="template-picker">
+            <h2 class="template-picker__title">New note</h2>
+            <div class="template-picker__tiles">
+                <button type="button" class="template-picker__tile" data-template="default">
+                    <div class="template-picker__wireframe template-picker__wireframe--note" aria-hidden="true">
+                        <span></span><span></span><span></span>
+                    </div>
+                    <span class="template-picker__label">Note / Checklist</span>
+                    <span class="template-picker__desc">Text and checklist items</span>
+                </button>
+                <button type="button" class="template-picker__tile" data-template="sheet">
+                    <div class="template-picker__wireframe template-picker__wireframe--sheet" aria-hidden="true">
+                        <span></span><span></span><span></span><span></span>
+                        <span></span><span></span><span></span><span></span>
+                    </div>
+                    <span class="template-picker__label">Sheet</span>
+                    <span class="template-picker__desc">Lightweight grid</span>
+                </button>
+                <button type="button" class="template-picker__tile" data-template="meeting">
+                    <div class="template-picker__wireframe template-picker__wireframe--meeting" aria-hidden="true">
+                        <span></span><span></span><span></span><span></span>
+                    </div>
+                    <span class="template-picker__label">Meeting</span>
+                    <span class="template-picker__desc">Attendees, agenda, actions</span>
+                </button>
+            </div>
+        </div>
+    </div>
 
     <div id="editor-overlay" class="overlay is-hidden">
         <div class="modal">
