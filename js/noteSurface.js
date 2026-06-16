@@ -193,7 +193,7 @@ export const NoteSurface = {
         }));
     },
 
-    commitInlineTextOp(item, beforeItem, { localOnly = false } = {}) {
+    commitInlineTextOp(item, beforeItem, { localOnly = false, mergeKey = null, mergeWindow = true } = {}) {
         if (localOnly || !beforeItem) return;
         const preserveEmptySteps = true;
         const afterNorm = normalizeItemForSave(item, { preserveEmptySteps });
@@ -206,8 +206,8 @@ export const NoteSurface = {
                 preserveView: true,
                 beforeItem: beforeNorm,
                 skipRerender: true,
-                mergeKey: `${afterNorm.id}:text`,
-                mergeWindow: true
+                mergeKey: mergeKey || `${afterNorm.id}:text`,
+                mergeWindow
             }
         }));
     },
@@ -218,6 +218,28 @@ export const NoteSurface = {
         if (!localOnly) {
             this.emitItemMutation(item, { preserveView, beforeItem, skipRerender });
         }
+    },
+
+    buildSheetInteractionOptions(shell, item, { localOnly = false, onChange = () => {}, refresh = () => {} } = {}) {
+        return {
+            localOnly,
+            onChange,
+            refresh,
+            inModalEditor: !!shell?.closest('#editor-overlay'),
+            prepareSnapshot: () => this.prepareInlineOpSnapshot(shell, item, localOnly),
+            commitCellEdit: (beforeItem) => {
+                this.commitInlineTextOp(item, beforeItem, {
+                    localOnly,
+                    mergeKey: `${item.id}:sheet`,
+                    mergeWindow: true
+                });
+            },
+            commitStructure: (beforeItem) => {
+                this.commitInlineChecklistOp(item, beforeItem, { localOnly });
+            },
+            onUndo: () => UndoManager.undo(),
+            onRedo: () => UndoManager.redo()
+        };
     },
 
     syncInlineFieldToItem(el, item) {
@@ -1019,11 +1041,11 @@ export const NoteSurface = {
         if (header) this.attachNoteBodyInteractions(header, item, interactionOptions);
         if (body) {
             this.attachNoteBodyInteractions(body, item, interactionOptions);
-            attachSheetInteractions(body, item, {
+            attachSheetInteractions(body, item, this.buildSheetInteractionOptions(shell, item, {
+                localOnly,
                 onChange,
-                refresh,
-                inModalEditor: !!body.closest('#editor-overlay')
-            });
+                refresh
+            }));
         }
 
         if (stopMousedownPropagation && !shell.dataset.shellBubbleBound) {

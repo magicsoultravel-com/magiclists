@@ -85,7 +85,9 @@ const DETAIL_FIELD_LABELS = {
     hiddenFromBoard: 'Hidden from board',
     hideFromCalendar: 'Hidden from calendar',
     isRecurring: 'Recurring',
-    attachments: 'Attachments'
+    attachments: 'Attachments',
+    sheet: 'Sheet',
+    noteTemplate: 'Template'
 };
 
 function truncateDetailText(text, max = DETAIL_MAX_LINE_CHARS) {

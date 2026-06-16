@@ -375,25 +375,24 @@ export const Editor = {
         }
         delete body.dataset.noteInteractionsBound;
         delete body.dataset.checklistInteractionsBound;
+        const onEditorChange = () => {
+            this.markInteracted();
+            this.scheduleEditorSizeLabelUpdate();
+            this.triggerAutoSave();
+        };
         NoteSurface.attachNoteBodyInteractions(body, this.activeItem, {
             refresh: () => this.refreshEditorNoteBody(),
             localOnly: true,
             richEdit: true,
-            onChange: () => {
-                this.markInteracted();
-                this.scheduleEditorSizeLabelUpdate();
-                this.triggerAutoSave();
-            }
+            onChange: onEditorChange
         });
-        attachSheetInteractions(body, this.activeItem, {
-            refresh: () => this.refreshEditorNoteBody(),
-            inModalEditor: true,
-            onChange: () => {
-                this.markInteracted();
-                this.scheduleEditorSizeLabelUpdate();
-                this.triggerAutoSave();
-            }
-        });
+        if (shell) {
+            attachSheetInteractions(body, this.activeItem, NoteSurface.buildSheetInteractionOptions(shell, this.activeItem, {
+                localOnly: true,
+                onChange: onEditorChange,
+                refresh: () => this.refreshEditorNoteBody()
+            }));
+        }
         body.scrollTop = scrollTop;
 
         if (body.dataset.pendingFocusStepId) {

@@ -1,9 +1,11 @@
-import { escapeAttr, escapeHTML } from './domEscape.js';
+import { escapeHTML } from './domEscape.js';
 
 export const SHEET_DEFAULT_ROWS = 6;
 export const SHEET_DEFAULT_COLS = 4;
 export const MEETING_SHEET_ROWS = 2;
 export const MEETING_SHEET_COLS = 6;
+export const SHEET_MIN_ROWS = 1;
+export const SHEET_MIN_COLS = 1;
 
 export function resolveNoteTemplate(item) {
     const t = item?.noteTemplate;
@@ -51,6 +53,11 @@ export function defaultSheetDimsForTemplate(template) {
 
 export function cellKey(row, col) {
     return `${row}:${col}`;
+}
+
+export function parseCellKey(key) {
+    const [row, col] = String(key).split(':').map(Number);
+    return { row, col };
 }
 
 export function getCellValue(sheet, row, col) {
@@ -119,6 +126,41 @@ export function addSheetCol(sheet) {
     sheet.cols = (sheet.cols || 1) + 1;
 }
 
+function purgeSheetLine(sheet, { row = null, col = null } = {}) {
+    if (!sheet?.cells) return;
+    for (const key of Object.keys(sheet.cells)) {
+        const pos = parseCellKey(key);
+        if (row != null && pos.row === row) delete sheet.cells[key];
+        if (col != null && pos.col === col) delete sheet.cells[key];
+    }
+}
+
+export function removeSheetRow(sheet) {
+    if (!sheet || (sheet.rows || 1) <= SHEET_MIN_ROWS) return false;
+    const lastRow = sheet.rows - 1;
+    purgeSheetLine(sheet, { row: lastRow });
+    sheet.rows -= 1;
+    return true;
+}
+
+export function removeSheetCol(sheet) {
+    if (!sheet || (sheet.cols || 1) <= SHEET_MIN_COLS) return false;
+    const lastCol = sheet.cols - 1;
+    purgeSheetLine(sheet, { col: lastCol });
+    sheet.cols -= 1;
+    return true;
+}
+
+export function growSheetCell(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+}
+
+export function growSheetCells(block) {
+    block?.querySelectorAll('[data-sheet-cell]').forEach((el) => growSheetCell(el));
+}
+
 export function renderSheetHtml(sheet, { canEdit = false, inModalEditor = false } = {}) {
     const rows = sheet?.rows || SHEET_DEFAULT_ROWS;
     const cols = sheet?.cols || SHEET_DEFAULT_COLS;
@@ -134,7 +176,7 @@ export function renderSheetHtml(sheet, { canEdit = false, inModalEditor = false 
         for (let c = 0; c < cols; c++) {
             const value = getCellValue(sheet, r, c);
             if (canEdit) {
-                body += `<td class="sheet-grid__cell"><input type="text" class="sheet-cell-input form-input" data-sheet-cell data-row="${r}" data-col="${c}" value="${escapeAttr(value)}" spellcheck="false" aria-label="Cell ${r + 1}, ${c + 1}"></td>`;
+                body += `<td class="sheet-grid__cell"><textarea class="sheet-cell-input form-input" data-sheet-cell data-row="${r}" data-col="${c}" rows="1" spellcheck="false" aria-label="Cell ${r + 1}, ${c + 1}">${escapeHTML(value)}</textarea></td>`;
             } else {
                 body += `<td class="sheet-grid__cell"><span class="sheet-cell-read">${escapeHTML(value)}</span></td>`;
             }
@@ -142,9 +184,13 @@ export function renderSheetHtml(sheet, { canEdit = false, inModalEditor = false 
         body += '</tr>';
     }
 
+    const canRemoveRow = rows > SHEET_MIN_ROWS;
+    const canRemoveCol = cols > SHEET_MIN_COLS;
     const toolbar = canEdit && inModalEditor
         ? `<div class="sheet-toolbar">
+            <button type="button" class="btn btn--compact sheet-remove-row-btn" title="Remove last row" aria-label="Remove last row"${canRemoveRow ? '' : ' disabled'}>− row</button>
             <button type="button" class="btn btn--compact sheet-add-row-btn" title="Add row" aria-label="Add row">+ row</button>
+            <button type="button" class="btn btn--compact sheet-remove-col-btn" title="Remove last column" aria-label="Remove last column"${canRemoveCol ? '' : ' disabled'}>− column</button>
             <button type="button" class="btn btn--compact sheet-add-col-btn" title="Add column" aria-label="Add column">+ column</button>
         </div>`
         : '';
@@ -167,48 +213,112 @@ export function syncSheetFromDom(root, item) {
 export function attachSheetInteractions(root, item, {
     onChange = () => {},
     refresh = () => {},
-    inModalEditor = false
+    inModalEditor = false,
+    localOnly = false,
+    prepareSnapshot = null,
+    commitCellEdit = null,
+    commitStructure = null,
+    onUndo = null,
+    onRedo = null
 } = {}) {
     const block = root?.querySelector?.('[data-sheet-block]') || root?.closest?.('[data-sheet-block]');
     if (!block || !item || !sheetIsActive(item)) return;
 
     ensureItemSheet(item, defaultSheetDimsForTemplate(resolveNoteTemplate(item)));
+    growSheetCells(block);
 
     if (block.dataset.sheetBound === 'true') return;
     block.dataset.sheetBound = 'true';
 
+    let editBefore = null;
+
     block.querySelectorAll('[data-sheet-cell]').forEach((input) => {
+        input.addEventListener('focus', () => {
+            if (!editBefore && prepareSnapshot) {
+                editBefore = prepareSnapshot();
+            }
+        });
+
         input.addEventListener('input', () => {
             syncSheetFromDom(block, item);
+            growSheetCell(input);
             onChange();
         });
+
+        input.addEventListener('blur', () => {
+            if (input.dataset.skipBlurSave === '1') {
+                delete input.dataset.skipBlurSave;
+                return;
+            }
+            syncSheetFromDom(block, item);
+            growSheetCell(input);
+            if (editBefore && commitCellEdit) {
+                commitCellEdit(editBefore);
+                editBefore = null;
+            }
+            onChange();
+        });
+
         input.addEventListener('keydown', (e) => {
-            if (e.key !== 'Tab') return;
-            const inputs = [...block.querySelectorAll('[data-sheet-cell]')];
-            const idx = inputs.indexOf(input);
-            if (idx < 0) return;
-            e.preventDefault();
-            const next = e.shiftKey ? inputs[idx - 1] : inputs[idx + 1];
-            if (next) next.focus();
+            if (e.key === 'Tab') {
+                const inputs = [...block.querySelectorAll('[data-sheet-cell]')];
+                const idx = inputs.indexOf(input);
+                if (idx < 0) return;
+                e.preventDefault();
+                const next = e.shiftKey ? inputs[idx - 1] : inputs[idx + 1];
+                if (next) next.focus();
+                return;
+            }
+            if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (localOnly) return;
+                editBefore = null;
+                onUndo?.();
+                return;
+            }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (localOnly) return;
+                editBefore = null;
+                onRedo?.();
+            }
         });
     });
 
     if (!inModalEditor) return;
 
-    block.querySelector('.sheet-add-row-btn')?.addEventListener('click', (e) => {
-        e.preventDefault();
+    const runStructure = (mutator) => {
         syncSheetFromDom(block, item);
-        addSheetRow(item.sheet);
+        const before = prepareSnapshot?.() ?? null;
+        mutator();
+        editBefore = null;
+        if (commitStructure && before) commitStructure(before);
         refresh();
         onChange();
+    };
+
+    block.querySelector('.sheet-add-row-btn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        runStructure(() => addSheetRow(item.sheet));
     });
 
     block.querySelector('.sheet-add-col-btn')?.addEventListener('click', (e) => {
         e.preventDefault();
-        syncSheetFromDom(block, item);
-        addSheetCol(item.sheet);
-        refresh();
-        onChange();
+        runStructure(() => addSheetCol(item.sheet));
+    });
+
+    block.querySelector('.sheet-remove-row-btn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if ((item.sheet?.rows || 1) <= SHEET_MIN_ROWS) return;
+        runStructure(() => removeSheetRow(item.sheet));
+    });
+
+    block.querySelector('.sheet-remove-col-btn')?.addEventListener('click', (e) => {
+        e.preventDefault();
+        if ((item.sheet?.cols || 1) <= SHEET_MIN_COLS) return;
+        runStructure(() => removeSheetCol(item.sheet));
     });
 }
 
