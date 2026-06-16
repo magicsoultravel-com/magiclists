@@ -6,6 +6,51 @@ export const MEETING_SHEET_ROWS = 2;
 export const MEETING_SHEET_COLS = 6;
 export const SHEET_MIN_ROWS = 1;
 export const SHEET_MIN_COLS = 1;
+export const SHEET_DEFAULT_COL_WIDTH_PX = 36;
+export const SHEET_MIN_COL_WIDTH_PX = 24;
+export const SHEET_MAX_COL_WIDTH_PX = 400;
+export const SHEET_ROW_HEAD_WIDTH_PX = 28;
+
+function clampColWidth(px) {
+    const n = Number(px);
+    if (!Number.isFinite(n)) return SHEET_DEFAULT_COL_WIDTH_PX;
+    return Math.min(SHEET_MAX_COL_WIDTH_PX, Math.max(SHEET_MIN_COL_WIDTH_PX, Math.round(n)));
+}
+
+function ensureColWidths(sheet) {
+    if (!sheet) return;
+    const cols = sheet.cols || 1;
+    if (!Array.isArray(sheet.colWidths)) sheet.colWidths = [];
+    while (sheet.colWidths.length < cols) {
+        sheet.colWidths.push(SHEET_DEFAULT_COL_WIDTH_PX);
+    }
+    if (sheet.colWidths.length > cols) {
+        sheet.colWidths.length = cols;
+    }
+    sheet.colWidths = sheet.colWidths.map(clampColWidth);
+}
+
+export function getColWidth(sheet, col) {
+    ensureColWidths(sheet);
+    return sheet.colWidths[col] ?? SHEET_DEFAULT_COL_WIDTH_PX;
+}
+
+export function setColWidth(sheet, col, px) {
+    if (!sheet) return;
+    ensureColWidths(sheet);
+    if (col < 0 || col >= (sheet.cols || 0)) return;
+    sheet.colWidths[col] = clampColWidth(px);
+}
+
+export function sheetGridTotalWidthPx(sheet) {
+    ensureColWidths(sheet);
+    const cols = sheet.cols || 0;
+    let sum = SHEET_ROW_HEAD_WIDTH_PX;
+    for (let c = 0; c < cols; c++) {
+        sum += getColWidth(sheet, c);
+    }
+    return sum;
+}
 
 export function resolveNoteTemplate(item) {
     const t = item?.noteTemplate;
@@ -27,7 +72,9 @@ export function sheetIsActive(item) {
 }
 
 export function createDefaultSheet({ rows = SHEET_DEFAULT_ROWS, cols = SHEET_DEFAULT_COLS } = {}) {
-    return { rows, cols, cells: {} };
+    const sheet = { rows, cols, cells: {} };
+    ensureColWidths(sheet);
+    return sheet;
 }
 
 export function ensureItemSheet(item, { rows = SHEET_DEFAULT_ROWS, cols = SHEET_DEFAULT_COLS } = {}) {
@@ -38,6 +85,7 @@ export function ensureItemSheet(item, { rows = SHEET_DEFAULT_ROWS, cols = SHEET_
     if (!Number.isFinite(item.sheet.rows) || item.sheet.rows < 1) item.sheet.rows = rows;
     if (!Number.isFinite(item.sheet.cols) || item.sheet.cols < 1) item.sheet.cols = cols;
     if (!item.sheet.cells || typeof item.sheet.cells !== 'object') item.sheet.cells = {};
+    ensureColWidths(item.sheet);
     return item.sheet;
 }
 
@@ -124,6 +172,7 @@ export function addSheetRow(sheet) {
 export function addSheetCol(sheet) {
     if (!sheet) return;
     sheet.cols = (sheet.cols || 1) + 1;
+    ensureColWidths(sheet);
 }
 
 function purgeSheetLine(sheet, { row = null, col = null } = {}) {
@@ -148,7 +197,16 @@ export function removeSheetCol(sheet) {
     const lastCol = sheet.cols - 1;
     purgeSheetLine(sheet, { col: lastCol });
     sheet.cols -= 1;
+    ensureColWidths(sheet);
     return true;
+}
+
+function applyColWidthToDom(block, sheet, col, widthPx) {
+    const table = block?.querySelector('.sheet-grid');
+    if (!table) return;
+    const colEl = table.querySelector(`colgroup col[data-col="${col}"]`);
+    if (colEl) colEl.style.width = `${widthPx}px`;
+    table.style.width = `${sheetGridTotalWidthPx(sheet)}px`;
 }
 
 export function growSheetCell(el) {
@@ -164,10 +222,21 @@ export function growSheetCells(block) {
 export function renderSheetHtml(sheet, { canEdit = false, inModalEditor = false } = {}) {
     const rows = sheet?.rows || SHEET_DEFAULT_ROWS;
     const cols = sheet?.cols || SHEET_DEFAULT_COLS;
+    ensureColWidths(sheet);
+
+    let colgroup = `<col class="sheet-grid__row-head-col" style="width:${SHEET_ROW_HEAD_WIDTH_PX}px">`;
+    for (let c = 0; c < cols; c++) {
+        const w = getColWidth(sheet, c);
+        colgroup += `<col data-col="${c}" style="width:${w}px">`;
+    }
 
     let colHead = '<th class="sheet-grid__corner" scope="col"></th>';
     for (let c = 0; c < cols; c++) {
-        colHead += `<th class="sheet-grid__col-head" scope="col">${c + 1}</th>`;
+        if (canEdit) {
+            colHead += `<th class="sheet-grid__col-head" scope="col" data-col="${c}"><span class="sheet-col-head__label">${c + 1}</span><span class="sheet-col-resize" data-col="${c}" title="Drag to resize; double-click label to set width (px)"></span></th>`;
+        } else {
+            colHead += `<th class="sheet-grid__col-head" scope="col">${c + 1}</th>`;
+        }
     }
 
     let body = '';
@@ -195,7 +264,8 @@ export function renderSheetHtml(sheet, { canEdit = false, inModalEditor = false 
         </div>`
         : '';
 
-    return `<div class="sheet-block" data-sheet-block>${toolbar}<div class="sheet-grid-wrap"><table class="sheet-grid"><thead><tr>${colHead}</tr></thead><tbody>${body}</tbody></table></div></div>`;
+    const tableWidth = sheetGridTotalWidthPx(sheet);
+    return `<div class="sheet-block" data-sheet-block>${toolbar}<div class="sheet-grid-wrap"><table class="sheet-grid" style="width:${tableWidth}px"><colgroup>${colgroup}</colgroup><thead><tr>${colHead}</tr></thead><tbody>${body}</tbody></table></div></div>`;
 }
 
 export function syncSheetFromDom(root, item) {
@@ -287,17 +357,111 @@ export function attachSheetInteractions(root, item, {
         });
     });
 
-    if (!inModalEditor) return;
-
-    const runStructure = (mutator) => {
+    const runStructure = (mutator, { refreshDom = true } = {}) => {
         syncSheetFromDom(block, item);
         const before = prepareSnapshot?.() ?? null;
         mutator();
         editBefore = null;
         if (commitStructure && before) commitStructure(before);
-        refresh();
+        if (refreshDom) refresh();
         onChange();
     };
+
+    block.querySelectorAll('.sheet-col-resize').forEach((handle) => {
+        handle.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            e.stopPropagation();
+
+            const col = Number(handle.dataset.col);
+            if (!Number.isFinite(col)) return;
+
+            syncSheetFromDom(block, item);
+            const before = prepareSnapshot?.() ?? null;
+            const startX = e.clientX;
+            const startW = getColWidth(item.sheet, col);
+            let moved = false;
+
+            const onMove = (ev) => {
+                const dx = ev.clientX - startX;
+                if (!moved && Math.abs(dx) < 2) return;
+                moved = true;
+                const next = clampColWidth(startW + dx);
+                setColWidth(item.sheet, col, next);
+                applyColWidthToDom(block, item.sheet, col, next);
+            };
+
+            const onEnd = (ev) => {
+                try {
+                    handle.releasePointerCapture(ev.pointerId);
+                } catch { /* ignore */ }
+                document.removeEventListener('pointermove', onMove);
+                document.removeEventListener('pointerup', onEnd);
+                document.removeEventListener('pointercancel', onEnd);
+                growSheetCells(block);
+                editBefore = null;
+                if (moved && commitStructure && before) commitStructure(before);
+                if (moved) onChange();
+            };
+
+            handle.setPointerCapture(e.pointerId);
+            document.addEventListener('pointermove', onMove);
+            document.addEventListener('pointerup', onEnd);
+            document.addEventListener('pointercancel', onEnd);
+        });
+    });
+
+    block.addEventListener('dblclick', (e) => {
+        const label = e.target.closest('.sheet-col-head__label');
+        if (!label || label.closest('[data-sheet-block]') !== block) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        const th = label.closest('.sheet-grid__col-head');
+        const col = Number(th?.dataset.col);
+        if (!Number.isFinite(col)) return;
+
+        const current = getColWidth(item.sheet, col);
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'sheet-col-head__input form-input';
+        input.min = String(SHEET_MIN_COL_WIDTH_PX);
+        input.max = String(SHEET_MAX_COL_WIDTH_PX);
+        input.step = '1';
+        input.value = String(current);
+        input.setAttribute('aria-label', `Column ${col + 1} width in pixels`);
+        label.replaceWith(input);
+        input.focus();
+        input.select();
+
+        let committed = false;
+        const finish = (apply) => {
+            if (committed) return;
+            committed = true;
+            if (apply) {
+                runStructure(() => setColWidth(item.sheet, col, input.value), { refreshDom: false });
+                applyColWidthToDom(block, item.sheet, col, getColWidth(item.sheet, col));
+                growSheetCells(block);
+            }
+            const newLabel = document.createElement('span');
+            newLabel.className = 'sheet-col-head__label';
+            newLabel.textContent = String(col + 1);
+            input.replaceWith(newLabel);
+        };
+
+        input.addEventListener('keydown', (ev) => {
+            if (ev.key === 'Enter') {
+                ev.preventDefault();
+                finish(true);
+            } else if (ev.key === 'Escape') {
+                ev.preventDefault();
+                finish(false);
+            }
+        });
+        input.addEventListener('blur', () => finish(true));
+    });
+
+    if (!inModalEditor) return;
 
     block.querySelector('.sheet-add-row-btn')?.addEventListener('click', (e) => {
         e.preventDefault();
