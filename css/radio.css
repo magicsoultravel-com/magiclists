@@ -74,7 +74,7 @@
     padding: 0;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    background: linear-gradient(145deg, rgba(79, 70, 229, 0.12), rgba(255, 255, 255, 0.03));
+    background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 12%, transparent), rgba(255, 255, 255, 0.03));
     cursor: pointer;
     overflow: hidden;
     flex-shrink: 0;
@@ -82,7 +82,7 @@
 
 .sidebar-radio__art:hover {
     border-color: rgba(255, 255, 255, 0.14);
-    background: linear-gradient(145deg, rgba(79, 70, 229, 0.18), rgba(255, 255, 255, 0.05));
+    background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 18%, transparent), rgba(255, 255, 255, 0.05));
 }
 
 .sidebar-radio__art-img {
@@ -268,7 +268,7 @@
     padding: 0;
     border: 1px solid var(--border-color);
     border-radius: 4px;
-    background: linear-gradient(145deg, rgba(79, 70, 229, 0.12), rgba(255, 255, 255, 0.03));
+    background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 12%, transparent), rgba(255, 255, 255, 0.03));
     cursor: pointer;
     overflow: hidden;
     flex-shrink: 0;
@@ -276,7 +276,7 @@
 
 .sidebar-radio__compact-art:hover {
     border-color: rgba(255, 255, 255, 0.14);
-    background: linear-gradient(145deg, rgba(79, 70, 229, 0.18), rgba(255, 255, 255, 0.05));
+    background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 18%, transparent), rgba(255, 255, 255, 0.05));
 }
 
 .sidebar-radio__compact-art-img {
@@ -311,8 +311,8 @@
 }
 
 .sidebar-radio__action[aria-expanded="true"] {
-    background: rgba(79, 70, 229, 0.14);
-    border-color: rgba(79, 70, 229, 0.35);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border-color));
     color: #c7d2fe;
 }
 
@@ -529,7 +529,7 @@
 
 .radio-popover__tab.is-active {
     color: #c7d2fe;
-    border-bottom-color: rgba(79, 70, 229, 0.65);
+    border-bottom-color: color-mix(in srgb, var(--accent) 65%, transparent);
 }
 
 .radio-popover__resize-se {
@@ -616,14 +616,14 @@
     height: 44px;
     border: 1px solid var(--border-color);
     border-radius: 6px;
-    background: linear-gradient(145deg, rgba(79, 70, 229, 0.12), rgba(255, 255, 255, 0.03));
+    background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 12%, transparent), rgba(255, 255, 255, 0.03));
     overflow: hidden;
 }
 
 .radio-tile--station:hover .radio-tile__art,
 .radio-tile--station:focus-visible .radio-tile__art {
     border-color: rgba(255, 255, 255, 0.14);
-    background: linear-gradient(145deg, rgba(79, 70, 229, 0.18), rgba(255, 255, 255, 0.05));
+    background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 18%, transparent), rgba(255, 255, 255, 0.05));
 }
 
 .radio-tile--station .radio-tile__label {
@@ -642,8 +642,8 @@
 }
 
 .radio-tile.is-on-desktop {
-    background: rgba(79, 70, 229, 0.12);
-    border-color: rgba(79, 70, 229, 0.4);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 40%, var(--border-color));
 }
 
 .radio-tile--offline {

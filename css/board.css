@@ -641,8 +641,7 @@
     display: none;
 }
 
-.mini-card[data-desktop="1"].spatial-at-small .ff-chrome,
-.mini-card[data-desktop="1"].spatial-at-small .ff-resize-layer {
+.mini-card[data-desktop="1"].spatial-at-small .ff-chrome {
     display: none !important;
 }
 
@@ -993,6 +992,72 @@ html[data-tile-small-footprint="card"] #app-canvas.view-grid .mini-card[data-des
     box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
     transform: none !important;
     transition: none !important;
+}
+
+/* Tool panels — shared ff-resize chrome (desktopFloatChrome.js) */
+#tools-desktop .tool-panel {
+    position: absolute;
+}
+
+#tools-desktop .tool-panel .ff-resize-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+    overflow: visible;
+}
+
+#tools-desktop .tool-panel .ff-resize-layer .ff-resize {
+    pointer-events: auto;
+}
+
+#tools-desktop .tool-panel .ff-resize {
+    position: absolute;
+    pointer-events: auto;
+    z-index: 6;
+}
+
+#tools-desktop .tool-panel .ff-resize-n,
+#tools-desktop .tool-panel .ff-resize-s {
+    left: 8px;
+    right: 8px;
+    height: 8px;
+}
+
+#tools-desktop .tool-panel .ff-resize-e,
+#tools-desktop .tool-panel .ff-resize-w {
+    top: 8px;
+    bottom: 8px;
+    width: 8px;
+}
+
+#tools-desktop .tool-panel .ff-resize-nw,
+#tools-desktop .tool-panel .ff-resize-ne,
+#tools-desktop .tool-panel .ff-resize-sw,
+#tools-desktop .tool-panel .ff-resize-se {
+    width: 14px;
+    height: 14px;
+}
+
+#tools-desktop .tool-panel .ff-resize-n { top: 0; cursor: n-resize; }
+#tools-desktop .tool-panel .ff-resize-s { bottom: 0; cursor: s-resize; }
+#tools-desktop .tool-panel .ff-resize-e { right: 0; cursor: e-resize; }
+#tools-desktop .tool-panel .ff-resize-w { left: 0; cursor: w-resize; }
+#tools-desktop .tool-panel .ff-resize-nw { top: 0; left: 0; cursor: nw-resize; }
+#tools-desktop .tool-panel .ff-resize-ne { top: 0; right: 0; cursor: ne-resize; }
+#tools-desktop .tool-panel .ff-resize-sw { bottom: 0; left: 0; cursor: sw-resize; }
+#tools-desktop .tool-panel .ff-resize-se { bottom: 0; right: 0; cursor: se-resize; }
+
+#tools-desktop .tool-panel.is-freeform-dragging,
+#tools-desktop .tool-panel.is-freeform-resizing,
+#tools-desktop .tool-panel.is-desktop-front {
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
+    transform: none !important;
+    transition: none !important;
+}
+
+#tools-desktop .tool-panel.is-freeform-dragging {
+    opacity: var(--desktop-drag-opacity, 0.92);
 }
 
 #editor-overlay {

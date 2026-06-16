@@ -1,3 +1,4 @@
+import { mountFloatChrome } from './desktopFloatChrome.js';
 import {
     categoryKey,
     isUncategorizedCategory,
@@ -1258,55 +1259,11 @@ export const UI = {
 
     setupFreeformChrome(card) {
         const shell = card.querySelector('.editor-note-shell');
-
-        let chrome = card.querySelector('.ff-chrome');
-        if (!chrome) {
-            chrome = document.createElement('div');
-            chrome.className = 'ff-chrome';
-        }
-
-        let resizeLayer = card.querySelector('.ff-resize-layer');
-        if (!resizeLayer) {
-            resizeLayer = document.createElement('div');
-            resizeLayer.className = 'ff-resize-layer';
-            resizeLayer.setAttribute('aria-hidden', 'true');
-        }
-
-        if (shell) {
-            card.insertBefore(chrome, shell);
-            card.insertBefore(resizeLayer, shell);
-        } else {
-            if (!chrome.parentNode) card.appendChild(chrome);
-            if (!resizeLayer.parentNode) card.appendChild(resizeLayer);
-        }
-
-        chrome.querySelectorAll('.ff-resize').forEach((handle) => {
-            resizeLayer.appendChild(handle);
+        mountFloatChrome(card, {
+            resizable: true,
+            mode: 'note',
+            insertBefore: shell
         });
-        if (!chrome.querySelector('.ff-drag-gutter--edge')) {
-            const gutter = document.createElement('span');
-            gutter.className = 'ff-drag-gutter ff-drag-gutter--edge';
-            gutter.title = 'Drag to move';
-            chrome.insertBefore(gutter, chrome.firstChild);
-        }
-        if (!chrome.querySelector('.ff-drag-gutter--top')) {
-            const topGutter = document.createElement('span');
-            topGutter.className = 'ff-drag-gutter ff-drag-gutter--top';
-            topGutter.title = 'Drag to move';
-            chrome.appendChild(topGutter);
-        }
-        if (!resizeLayer.querySelector('.ff-resize-se')) {
-            resizeLayer.insertAdjacentHTML('beforeend', `
-                <span class="ff-resize ff-resize-n" data-axis="n" aria-hidden="true"></span>
-                <span class="ff-resize ff-resize-s" data-axis="s" aria-hidden="true"></span>
-                <span class="ff-resize ff-resize-e" data-axis="e" aria-hidden="true"></span>
-                <span class="ff-resize ff-resize-w" data-axis="w" aria-hidden="true"></span>
-                <span class="ff-resize ff-resize-nw" data-axis="nw" aria-hidden="true"></span>
-                <span class="ff-resize ff-resize-ne" data-axis="ne" aria-hidden="true"></span>
-                <span class="ff-resize ff-resize-sw" data-axis="sw" aria-hidden="true"></span>
-                <span class="ff-resize ff-resize-se" data-axis="se" aria-hidden="true"></span>
-            `);
-        }
     },
 
     syncSpatialChromeForEditing(card) {

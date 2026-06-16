@@ -1,4 +1,5 @@
 // js/toolPanelChrome.js — floating desktop tool panels (drag, resize, collapse chip)
+import { bindFloatResize, mountFloatChrome } from './desktopFloatChrome.js';
 import { raiseDesktopElement } from './desktopStack.js';
 import { CARD_ICONS } from './icons.js';
 
@@ -177,11 +178,6 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
             </div>
         </div>
         <div class="tool-panel__body"></div>
-        ${meta?.resizable ? `
-            <div class="tool-panel__resize-e" data-resize-axis="e" aria-hidden="true"></div>
-            <div class="tool-panel__resize-s" data-resize-axis="s" aria-hidden="true"></div>
-            <div class="tool-panel__resize-se" data-resize-axis="se" aria-hidden="true"></div>
-        ` : ''}
     `;
 
     const titleEl = panel.querySelector('.tool-panel__title');
@@ -331,12 +327,16 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
 
     bindPanelDrag(panel, persist);
     if (meta?.resizable) {
-        bindPanelResize(
-            panel,
+        mountFloatChrome(panel, { resizable: true, mode: 'tool' });
+        bindFloatResize(panel, {
             mins,
-            () => persist({ manuallySized: true }),
-            () => callbacks.onResize?.(bodyEl)
-        );
+            getBounds: getDesktopBounds,
+            pointerDelta,
+            clampPosition,
+            onBringToFront: bringToFront,
+            onEnd: () => persist({ manuallySized: true }),
+            onResize: () => callbacks.onResize?.(bodyEl)
+        });
     }
 
     panel.addEventListener('pointerdown', () => bringToFront(panel));
@@ -400,7 +400,7 @@ function bindPanelDrag(panel, onEnd) {
         originLeft = panel.offsetLeft;
         originTop = panel.offsetTop;
         header.setPointerCapture(e.pointerId);
-        panel.classList.add('is-dragging');
+        panel.classList.add('is-freeform-dragging');
         bringToFront(panel);
     });
 
@@ -415,7 +415,7 @@ function bindPanelDrag(panel, onEnd) {
     const endDrag = (e) => {
         if (!dragging) return;
         dragging = false;
-        panel.classList.remove('is-dragging');
+        panel.classList.remove('is-freeform-dragging');
         try {
             header.releasePointerCapture(e.pointerId);
         } catch { /* ignore */ }
@@ -469,78 +469,6 @@ function bindChipDrag(dragHandle, chipEl, onEnd) {
 
     dragHandle.addEventListener('pointerup', endDrag);
     dragHandle.addEventListener('pointercancel', endDrag);
-}
-
-function bindPanelResize(panel, mins, onEnd, onResize) {
-    const handles = panel.querySelectorAll('[data-resize-axis]');
-    if (!handles.length) return;
-
-    let resizing = false;
-    let activeHandle = null;
-    let axis = 'se';
-    let startX = 0;
-    let startY = 0;
-    let startW = 0;
-    let startH = 0;
-
-    const lockPanelDimensions = () => {
-        panel.classList.remove('tool-panel--auto-height');
-        panel.style.width = `${panel.offsetWidth}px`;
-        panel.style.height = `${panel.offsetHeight}px`;
-    };
-
-    const applyResize = (dx, dy) => {
-        const desktop = getDesktopBounds();
-        const maxW = desktop.right - panel.offsetLeft - 8;
-        const maxH = desktop.bottom - panel.offsetTop - 8;
-        if (axis === 'e' || axis === 'se') {
-            panel.style.width = `${clamp(startW + dx, mins.w, maxW)}px`;
-        }
-        if (axis === 's' || axis === 'se') {
-            panel.style.height = `${clamp(startH + dy, mins.h, maxH)}px`;
-        }
-        onResize?.();
-    };
-
-    const endResize = (e) => {
-        if (!resizing) return;
-        resizing = false;
-        panel.classList.remove('is-resizing');
-        try {
-            activeHandle?.releasePointerCapture(e.pointerId);
-        } catch { /* ignore */ }
-        activeHandle = null;
-        onEnd?.();
-        onResize?.();
-    };
-
-    handles.forEach((handle) => {
-        handle.addEventListener('pointerdown', (e) => {
-            if (e.button !== 0) return;
-            e.preventDefault();
-            e.stopPropagation();
-            lockPanelDimensions();
-            resizing = true;
-            axis = handle.dataset.resizeAxis || 'se';
-            activeHandle = handle;
-            startX = e.clientX;
-            startY = e.clientY;
-            startW = panel.offsetWidth;
-            startH = panel.offsetHeight;
-            handle.setPointerCapture(e.pointerId);
-            panel.classList.add('is-resizing');
-            bringToFront(panel);
-        });
-
-        handle.addEventListener('pointermove', (e) => {
-            if (!resizing || activeHandle !== handle) return;
-            const { dx, dy } = pointerDelta(e.clientX, e.clientY, startX, startY);
-            applyResize(dx, dy);
-        });
-
-        handle.addEventListener('pointerup', endResize);
-        handle.addEventListener('pointercancel', endResize);
-    });
 }
 
 export function getPersistedOpenToolIds() {

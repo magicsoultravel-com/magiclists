@@ -20,9 +20,9 @@
     min-height: 120px;
     background-color: var(--bg-card);
     border: 1px solid var(--border-color);
-    border-radius: 5px;
+    border-radius: 6px;
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.045);
-    border-left: 3px solid var(--accent);
+    border-left: 4px solid var(--accent);
     overflow: hidden;
 }
 
@@ -30,16 +30,7 @@
     display: none !important;
 }
 
-.tool-panel.is-dragging,
-.tool-panel.is-desktop-front {
-    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4);
-}
-
-.tool-panel.is-dragging {
-    opacity: var(--desktop-drag-opacity);
-}
-
-.tool-panel.is-dragging .tool-panel__header {
+.tool-panel.is-freeform-dragging .tool-panel__header {
     cursor: grabbing;
 }
 
@@ -85,8 +76,8 @@
 
 .tool-panel:hover .tool-panel__actions,
 .tool-panel:focus-within .tool-panel__actions,
-.tool-panel.is-dragging .tool-panel__actions,
-.tool-panel.is-resizing .tool-panel__actions {
+.tool-panel.is-freeform-dragging .tool-panel__actions,
+.tool-panel.is-freeform-resizing .tool-panel__actions {
     opacity: 1;
     pointer-events: auto;
 }
@@ -101,59 +92,36 @@
     min-height: 0;
     overflow: auto;
     padding: 0.35rem 0.4rem 0.4rem;
+    font-size: 0.62rem;
+    line-height: 1.25;
 }
 
-.tool-panel__resize-e,
-.tool-panel__resize-s,
-.tool-panel__resize-se {
-    position: absolute;
-    pointer-events: auto;
-    opacity: 0.18;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 2px;
-    z-index: 6;
+.tool-panel__body .form-group {
+    gap: 0.2rem;
 }
 
-.tool-panel:hover .tool-panel__resize-e,
-.tool-panel:hover .tool-panel__resize-s,
-.tool-panel:hover .tool-panel__resize-se,
-.tool-panel.is-resizing .tool-panel__resize-e,
-.tool-panel.is-resizing .tool-panel__resize-s,
-.tool-panel.is-resizing .tool-panel__resize-se {
-    opacity: 0.62;
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.22);
-    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+.tool-panel__body .form-group label {
+    font-size: 0.62rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-muted);
 }
 
-.tool-panel__resize-e,
-.tool-panel__resize-w {
-    top: 50%;
-    transform: translateY(-50%);
-    width: 8px;
-    height: 28px;
+.tool-panel__body .form-input,
+.tool-panel__body select.form-input {
+    min-height: 1.5rem;
+    padding: 0.12rem 0.35rem;
+    font-size: 0.62rem;
+    border-radius: 3px;
+    background: var(--tool-surface, var(--bg-primary));
+    border-color: var(--border-color);
 }
 
-.tool-panel__resize-s,
-.tool-panel__resize-n {
-    left: 50%;
-    transform: translateX(-50%);
-    width: 28px;
-    height: 8px;
+.tool-panel__body .tool-readout,
+.tool-panel__body .conv-output,
+.tool-panel__body .conv-input {
+    font-size: 0.62rem;
 }
-
-.tool-panel__resize-se,
-.tool-panel__resize-sw,
-.tool-panel__resize-ne,
-.tool-panel__resize-nw {
-    width: 14px;
-    height: 14px;
-}
-
-.tool-panel__resize-e { right: 0; cursor: e-resize; }
-.tool-panel__resize-s { bottom: 0; cursor: s-resize; }
-.tool-panel__resize-se { right: 0; bottom: 0; cursor: se-resize; }
 
 .tool-chip {
     position: absolute;
@@ -440,11 +408,10 @@
     background: var(--tool-surface, var(--bg-primary));
     border: 1px solid var(--border-color);
     color: var(--accent);
-    padding: 0.32rem 0.35rem;
+    padding: 0.2rem 0.35rem;
     font-family: monospace;
-    font-size: 0.78rem;
-    border-radius: 4px;
-    min-height: 30px;
+    border-radius: 3px;
+    min-height: 1.5rem;
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -453,7 +420,6 @@
 
 .conv-input {
     font-family: monospace;
-    font-size: 0.78rem;
 }
 
 .tool-mount--timezone {
@@ -530,16 +496,16 @@
     overflow: visible;
 }
 
-.tool-panel--tz-collapsed .tool-panel__title {
+.tool-panel--compact .tool-panel__title {
     display: none;
 }
 
-.tool-panel--tz-collapsed .tool-panel__body {
-    padding: 0.1rem 0.2rem 0.12rem;
+.tool-panel--compact .tool-panel__body {
+    padding: 0.12rem 0.22rem 0.14rem;
 }
 
-.tool-panel--tz-collapsed .tool-panel__header {
-    padding-bottom: 0.18rem;
+.tool-panel--compact .tool-panel__header {
+    padding-bottom: 0.16rem;
 }
 
 .tz-tool__compact {
@@ -578,13 +544,14 @@
     grid-column: 2;
 }
 
+.media-compact-row,
 .tz-compact-row {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: baseline;
-    column-gap: 0.22rem;
-    font-size: 0.42rem;
-    line-height: 1.05;
+    column-gap: 0.35rem;
+    font-size: 0.62rem;
+    line-height: 1.2;
 }
 
 .tz-compact-city {
@@ -594,7 +561,7 @@
 
 .tz-compact-time {
     font-family: monospace;
-    font-size: 0.4rem;
+    font-size: 0.62rem;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: var(--text-main);
@@ -723,9 +690,20 @@
 
 .tz-col-city {
     min-width: 0;
-    max-width: 7rem;
+    max-width: 6.5rem;
     font-weight: 400;
     color: var(--text-main);
+}
+
+.tz-col-offset {
+    font-family: monospace;
+    font-size: 0.48rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    white-space: nowrap;
+    text-align: center;
+    min-width: 2.6rem;
+    font-variant-numeric: tabular-nums;
 }
 
 .tz-col-abbr {
@@ -755,7 +733,9 @@
 }
 
 .tz-row--utc .tz-col-city,
-.tz-row--local .tz-col-city {
+.tz-row--local .tz-col-city,
+.tz-row--utc .tz-col-offset,
+.tz-row--local .tz-col-offset {
     color: var(--accent);
     font-weight: 500;
 }
@@ -1084,6 +1064,53 @@
 .alphabet-kana-row__cells .alphabet-cell {
     min-width: 2.6rem;
     flex: 0 0 auto;
+}
+
+.alphabet-japanese {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.alphabet-japanese__header {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    padding-left: 1.95rem;
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.alphabet-japanese-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+}
+
+.alphabet-japanese-row__cols {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.alphabet-sections {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.alphabet-section__title {
+    margin: 0 0 0.35rem;
+    font-size: 0.62rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
 }
 
 .alphabet-cell--case .alphabet-cell__case-pair {

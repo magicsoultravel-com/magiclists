@@ -1,4 +1,4 @@
-/** @tool {"label":"Alphabets","order":7,"resizable":true,"resizeMode":"fill","mountClass":"tool-mount--alphabets","defaultSize":{"w":380,"h":480},"minSize":{"w":300,"h":360}} */
+/** @tool {"label":"Alphabets","order":7,"resizable":true,"resizeMode":"fill","mountClass":"tool-mount--alphabets","defaultSize":{"w":420,"h":480},"minSize":{"w":340,"h":360}} */
 /** @tool-icon <path d="M2.5 3.2h2.1c.9 0 1.5.5 1.5 1.2 0 .5-.3.9-.8 1.1.6.2 1 .7 1 1.3V9H4.8V6.9c0-.4-.2-.6-.6-.6H3.8V9H2.5V3.2zm5.2 0h1.3V9H7.7V3.2zm3.1 0c1.1 0 1.9.8 1.9 2.5V9h-1.3V5.9c0-.8-.4-1.2-1-1.2-.6 0-1 .4-1 1.2V9H8.1V3.2h1.3v.5z" fill="currentColor"/> */
 import { ALPHABETS } from './alphabets-data.js';
 
@@ -13,8 +13,14 @@ export const Alphabets = {
 
     init(mountElement) {
         this.container = mountElement;
-        const saved = parseInt(localStorage.getItem(STORAGE_KEY), 10);
+        let saved = parseInt(localStorage.getItem(STORAGE_KEY), 10);
         if (!Number.isNaN(saved) && saved >= 0) {
+            const LEGACY_KANA = { 1: 1, 2: 1 };
+            if (LEGACY_KANA[saved] !== undefined) {
+                saved = LEGACY_KANA[saved];
+            } else if (saved > 2) {
+                saved -= 1;
+            }
             this.index = Math.min(saved, ALPHABETS.length - 1);
         }
         this.renderShell();
@@ -55,6 +61,9 @@ export const Alphabets = {
         }
         if (page.layout === 'kana') {
             return page.rows[0].chars[0].char;
+        }
+        if (page.layout === 'japanese') {
+            return 'あア';
         }
         if (page.layout === 'sections') {
             return page.sections[0].chars[0].char;
@@ -196,7 +205,9 @@ export const Alphabets = {
         subtitleEl.textContent = page.subtitle || '';
         contentEl.style.fontFamily = page.fontFamily || 'inherit';
 
-        if (page.layout === 'kana') {
+        if (page.layout === 'japanese') {
+            contentEl.innerHTML = this.renderJapanese(page);
+        } else if (page.layout === 'kana') {
             contentEl.innerHTML = this.renderKana(page);
         } else if (page.layout === 'sections') {
             contentEl.innerHTML = this.renderSections(page);
@@ -320,6 +331,34 @@ export const Alphabets = {
             `;
         }).join('');
         return `<div class="alphabet-sections">${blocks}</div>`;
+    },
+
+    renderJapanese(page) {
+        const scriptFont = page.fontFamily || 'inherit';
+        const kataRows = page.rowsKatakana || [];
+        const rows = (page.rows || []).map((row, i) => {
+            const hiraCells = row.chars.map((entry) => this.renderCell(entry, scriptFont)).join('');
+            const kataRow = kataRows[i];
+            const kataCells = (kataRow?.chars || []).map((entry) => this.renderCell(entry, scriptFont)).join('');
+            return `
+                <div class="alphabet-japanese-row">
+                    <span class="alphabet-kana-row__label">${row.label}</span>
+                    <div class="alphabet-japanese-row__cols">
+                        <div class="alphabet-kana-row__cells">${hiraCells}</div>
+                        <div class="alphabet-kana-row__cells">${kataCells}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        return `
+            <div class="alphabet-japanese">
+                <div class="alphabet-japanese__header">
+                    <span>Hiragana</span>
+                    <span>Katakana</span>
+                </div>
+                ${rows}
+            </div>
+        `;
     },
 
     renderKana(page) {

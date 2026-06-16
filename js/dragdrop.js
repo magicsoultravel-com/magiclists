@@ -153,7 +153,7 @@ function isInsideDragControl(target) {
         '.card-inline-edit, .rich-text--edit, .step-nest-controls, .step-row-actions, ' +
         '.grab-handle--step, .expanded-checklist-add-btn, .checklist-expand-collapse-all-btn, .editor-body-convert-bar, ' +
         '.ff-resize, .card-act--pin, ' +
-        '.tool-panel, .tool-chip, .tool-chip__drag, .tool-chip__actions, .tool-chip__expand, .tool-panel__resize-e, .tool-panel__resize-s, .tool-panel__resize-se, .tool-panel__header, ' +
+        '.tool-panel, .tool-chip, .tool-chip__drag, .tool-chip__actions, .tool-chip__expand, .tool-panel__header, ' +
         'a, button, input, textarea, select'
     );
 }

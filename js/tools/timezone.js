@@ -94,6 +94,17 @@ function getZoneAbbr(date, timeZone, fallbackAbbr = '') {
     return fallbackAbbr || ABBR_BY_ZONE[timeZone] || '';
 }
 
+function formatUtcOffset(offsetMinutes) {
+    if (!Number.isFinite(offsetMinutes)) return '—';
+    if (offsetMinutes === 0) return 'UTC';
+    const sign = offsetMinutes > 0 ? '+' : '-';
+    const abs = Math.abs(offsetMinutes);
+    const hours = Math.floor(abs / 60);
+    const mins = abs % 60;
+    if (mins === 0) return `UTC${sign}${hours}`;
+    return `UTC${sign}${hours}:${String(mins).padStart(2, '0')}`;
+}
+
 function formatZoneTime(date, timeZone) {
     return {
         time: date.toLocaleTimeString('en-US', {
@@ -203,6 +214,7 @@ export const Timezone = {
                                 <tr>
                                     <th class="tz-col-check"><span class="is-hidden">Select</span></th>
                                     <th class="tz-col-city">City</th>
+                                    <th class="tz-col-offset">UTC</th>
                                     <th class="tz-col-abbr">TZ</th>
                                     <th class="tz-col-time">Time</th>
                                     <th class="tz-col-date">Date</th>
@@ -244,13 +256,14 @@ export const Timezone = {
                         <input type="checkbox" class="tz-row-check"${checked} aria-label="Show ${zone.city}">
                     </td>
                     <td class="tz-col-city u-truncate">${zone.city}</td>
+                    <td class="tz-col-offset"></td>
                     <td class="tz-col-abbr"></td>
                     <td class="tz-col-time"></td>
                     <td class="tz-col-date"></td>
                 </tr>
             `);
             compactRows.push(`
-                <div class="tz-compact-row${compactClass}" data-offset="${zone.offsetMinutes}">
+                <div class="media-compact-row tz-compact-row${compactClass}" data-offset="${zone.offsetMinutes}">
                     <span class="tz-compact-city u-truncate">${zone.city}</span>
                     <span class="tz-compact-time"></span>
                 </div>
@@ -362,6 +375,7 @@ export const Timezone = {
         toggle?.classList.toggle('collapsed', this.sectionCollapsed);
         toggle?.setAttribute('aria-expanded', this.sectionCollapsed ? 'false' : 'true');
         toggle?.setAttribute('aria-label', this.sectionCollapsed ? 'Expand timezones' : 'Collapse timezones');
+        panel?.classList.toggle('tool-panel--compact', this.sectionCollapsed);
         panel?.classList.toggle('tool-panel--tz-collapsed', this.sectionCollapsed);
         this.container?.querySelector('.tz-filter-hint')?.classList.toggle('is-hidden', !this.filterSelectedOnly || this.sectionCollapsed);
 
@@ -474,12 +488,17 @@ export const Timezone = {
             row.classList.toggle('tz-row--local', isLocal);
 
             const abbrEl = row.querySelector('.tz-col-abbr');
+            const offsetEl = row.querySelector('.tz-col-offset');
             const timeEl = row.querySelector('.tz-col-time');
             const dateEl = row.querySelector('.tz-col-date');
             const compactRow = this.compactRowForOffset(row.dataset.offset);
             const compactTimeEl = compactRow?.querySelector('.tz-compact-time');
 
             if (abbrEl) abbrEl.textContent = getZoneAbbr(baseDate, zoneId, fallbackAbbr);
+            if (offsetEl) {
+                const displayOffset = liveOffset ?? offsetMinutes;
+                offsetEl.textContent = formatUtcOffset(displayOffset);
+            }
 
             try {
                 const formatted = formatZoneTime(baseDate, zoneId);
@@ -504,7 +523,7 @@ export const Timezone = {
         this.closeAdjustPopover();
         const panel = this.container?.closest('.tool-panel');
         if (panel) {
-            panel.classList.remove('tool-panel--tz-fit', 'tool-panel--tz-collapsed', 'tool-panel--auto-height');
+            panel.classList.remove('tool-panel--tz-fit', 'tool-panel--tz-collapsed', 'tool-panel--compact', 'tool-panel--auto-height');
             if (this.savedPanelWidth) {
                 panel.style.width = this.savedPanelWidth;
             }
