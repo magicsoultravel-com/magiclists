@@ -46,6 +46,7 @@ import { SidebarTools } from './sidebarTools.js';
 import { CloudBackup } from './cloudBackup.js';
 import { BootProgress } from './bootProgress.js';
 import { TemplatePicker } from './templatePicker.js';
+import { purgeSudokuStorageIfNeeded } from './purgeSudokuStorage.js';
 import {
     migrateItemsToFileCabinet,
     pruneFileCabinetOrderByLayout,
@@ -99,6 +100,7 @@ class Application {
             migrateCompactDefaultsIfNeeded();
             migrateCardMinimumFootprintIfNeeded();
             migrateGridSpanCardWidthIfNeeded();
+            purgeSudokuStorageIfNeeded();
             DisplayOptions.init({
                 getLoggedIn: () => AppState.user.isLoggedIn
             });

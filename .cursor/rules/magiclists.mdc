@@ -25,7 +25,7 @@ Vanilla JS ES modules + plain CSS. Client-only; data via `js/api.js` → localSt
 | `css/board.css` | grid/freeform board, clock, drag/resize | `dragdrop.js`, `clockStyle.js`, `desktopZoom.js` |
 | `css/themes.css` | `html[data-app-theme]` overrides | `appTheme.js`, `themePicker.js` |
 | `css/drawing.css` | magicCanvas toolbar | `drawingBoard.js`, `drawingToolbarMenu.js` |
-| `css/tools.css` + per-tool files | tool panels, calendar, sudoku, cosmos, radio, tv | `js/tools/*.js`, `sidebarRadio.js`, `sidebarTv.js` |
+| `css/tools.css` + per-tool files | tool panels, calendar, cosmos, radio, tv | `js/tools/*.js`, `sidebarRadio.js`, `sidebarTv.js` |
 
 Grep sibling CSS files before adding cross-cutting selectors.
 

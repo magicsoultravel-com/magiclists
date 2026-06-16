@@ -93,18 +93,6 @@ export const TOOLS_REGISTRY = [
         "minSize": { "w": 300, "h": 360 }
     },
     {
-        "id": "sudoku",
-        "label": "Sudoku",
-        "order": 8,
-        "icon": "<rect x=\"2.2\" y=\"2.2\" width=\"7.6\" height=\"7.6\" rx=\"0.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.9\"/><path d=\"M2.2 5.1h7.6M2.2 7.9h7.6M5.1 2.2v7.6M7.9 2.2v7.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.75\"/>",
-        "wide": true,
-        "mountClass": "tool-mount--sudoku",
-        "resizable": true,
-        "resizeMode": "scale",
-        "defaultSize": { "w": 420, "h": 640 },
-        "minSize": { "w": 340, "h": 480 }
-    },
-    {
         "id": "cosmos",
         "label": "Cosmos",
         "order": 9,
