@@ -634,8 +634,8 @@
 
 #app-canvas.view-grid .mini-card[data-desktop="1"]:not(.expanded):not(.is-editing-inline) .editor-note-body,
 #app-canvas.view-freeform .mini-card[data-desktop="1"]:not(.expanded):not(.is-editing-inline) .editor-note-body {
-    margin-right: 10px;
-    width: calc(100% - 10px);
+    margin-right: var(--note-scroll-resize-gutter);
+    width: calc(100% - var(--note-scroll-resize-gutter));
 }
 
 .mini-card[data-desktop="1"].spatial-at-small .editor-note-body,

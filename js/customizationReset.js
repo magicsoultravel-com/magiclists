@@ -25,6 +25,7 @@ const CUSTOMIZATION_KEYS = [
 ];
 
 const DISPLAY_DEFAULTS = {
+    showCategoryBand: true,
     showCategoryName: true,
     showCreatedDate: true,
     showNoteSize: true,

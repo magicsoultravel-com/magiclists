@@ -22,6 +22,7 @@ import {
 const STORAGE_KEY = 'matrix_display_options';
 
 const DEFAULTS = {
+    showCategoryBand: true,
     showCategoryName: true,
     showCreatedDate: true,
     showNoteSize: true,
@@ -40,6 +41,7 @@ export function readDisplayOptions() {
             ? raw.noteFontId
             : readNoteFont();
         return {
+            showCategoryBand: raw.showCategoryBand !== false,
             showCategoryName: raw.showCategoryName !== false,
             showCreatedDate: raw.showCreatedDate !== false,
             showNoteSize: raw.showNoteSize !== false,
@@ -63,6 +65,7 @@ export function writeDisplayOptions(options) {
 
 export function applyDisplayOptions(options = readDisplayOptions()) {
     const root = document.documentElement;
+    root.dataset.showCategoryBand = options.showCategoryBand ? '1' : '0';
     root.dataset.showNoteCategory = options.showCategoryName ? '1' : '0';
     root.dataset.showNoteCreated = options.showCreatedDate ? '1' : '0';
     root.dataset.showNoteSize = options.showNoteSize ? '1' : '0';
@@ -75,7 +78,8 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
 }
 
 function isCustomized(options) {
-    return !options.showCategoryName
+    return !options.showCategoryBand
+        || !options.showCategoryName
         || !options.showCreatedDate
         || !options.showNoteSize
         || options.showLineCount
@@ -332,6 +336,7 @@ export const DisplayOptions = {
                         <section class="display-options-section display-options-section--notes">
                             <h3 class="display-options-heading">Notes on desktop</h3>
                             <div class="display-options-check-grid">
+                                ${this.optionRow('display-opt-category-band', 'Category color band', opts.showCategoryBand)}
                                 ${this.optionRow('display-opt-category', 'Category name', opts.showCategoryName)}
                                 ${this.optionRow('display-opt-created', 'Created date', opts.showCreatedDate)}
                                 ${this.optionRow('display-opt-note-size', 'Note size', opts.showNoteSize)}
@@ -361,6 +366,7 @@ export const DisplayOptions = {
             });
         };
 
+        bindToggle('display-opt-category-band', 'showCategoryBand');
         bindToggle('display-opt-category', 'showCategoryName');
         bindToggle('display-opt-created', 'showCreatedDate');
         bindToggle('display-opt-note-size', 'showNoteSize');

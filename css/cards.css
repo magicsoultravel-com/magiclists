@@ -30,6 +30,11 @@
     margin: 0 !important;
 }
 
+html[data-show-category-band="0"] .mini-card {
+    border-left-width: 1px;
+    border-left-color: var(--border-color) !important;
+}
+
 /* Expanded card takes full width (both columns) */
 .mini-card.expanded {
     grid-column: span 2 !important;
@@ -202,33 +207,15 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
     display: flex;
     flex-direction: column;
     gap: 0.3rem;
-    --scrollbar-size: 12px;
 }
 
+.mini-card.expanded .card-body,
+.mini-card.expanded .editor-note-body,
 #editor-overlay .editor-note-body {
     --scrollbar-size: 12px;
-}
-
-.mini-card.expanded .card-body::-webkit-scrollbar,
-.mini-card.expanded .editor-note-body::-webkit-scrollbar,
-#editor-overlay .editor-note-body::-webkit-scrollbar {
-    width: var(--scrollbar-size);
-    height: var(--scrollbar-size);
-}
-
-.mini-card.expanded .card-body::-webkit-scrollbar-thumb,
-.mini-card.expanded .editor-note-body::-webkit-scrollbar-thumb,
-#editor-overlay .editor-note-body::-webkit-scrollbar-thumb {
-    border: none;
-    background-clip: border-box;
-    border-radius: 6px;
-}
-
-.mini-card.expanded .card-body::-webkit-scrollbar-thumb:hover,
-.mini-card.expanded .editor-note-body::-webkit-scrollbar-thumb:hover,
-#editor-overlay .editor-note-body::-webkit-scrollbar-thumb:hover {
-    border: none;
-    background-clip: border-box;
+    --scrollbar-thumb-border: none;
+    --scrollbar-thumb-clip: border-box;
+    --scrollbar-thumb-radius: 6px;
 }
 
 .mini-card.expanded .card-content-preview,
