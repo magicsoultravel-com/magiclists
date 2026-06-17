@@ -10,7 +10,7 @@ export const SHEET_MIN_COLS = 1;
 export const SHEET_DEFAULT_COL_WIDTH_PX = 45;
 export const SHEET_MIN_COL_WIDTH_PX = 30;
 export const SHEET_MAX_COL_WIDTH_PX = 400;
-export const SHEET_ROW_HEAD_WIDTH_PX = 35;
+export const SHEET_ROW_HEAD_WIDTH_PX = 18;
 export const SHEET_STRUCT_COL_WIDTH_PX = 34;
 
 function clampColWidth(px) {

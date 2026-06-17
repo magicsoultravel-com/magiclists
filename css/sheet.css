@@ -38,9 +38,9 @@
 .sheet-grid__struct {
     position: sticky;
     z-index: 1;
-    padding: 0.1rem 0.22rem;
+    padding: 0.05rem 0.11rem;
     font-weight: 500;
-    font-size: calc(0.39rem * var(--note-font-scale, 1));
+    font-size: calc(0.2rem * var(--note-font-scale, 1));
     color: var(--sheet-head-fg, var(--text-muted));
     background: var(--sheet-head-bg, transparent);
     border: 1px solid var(--sheet-head-border, color-mix(in srgb, var(--border-color) 28%, transparent));
@@ -78,9 +78,9 @@
 }
 
 .sheet-col-head__input {
-    width: 2.4rem;
+    width: 1.8rem;
     min-width: 0;
-    padding: 0.05rem 0.15rem;
+    padding: 0.03rem 0.08rem;
     font-size: inherit;
     line-height: 1.2;
     text-align: center;
@@ -95,7 +95,7 @@
 
 .sheet-grid__row-head {
     left: 0;
-    min-width: 0.85rem;
+    min-width: 0.42rem;
 }
 
 .sheet-grid__struct {
