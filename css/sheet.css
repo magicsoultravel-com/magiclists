@@ -210,12 +210,42 @@
     line-height: 1.25;
 }
 
+.note-body-section {
+    margin-top: 0.45rem;
+    min-width: 0;
+}
+
+.note-body-section:first-child {
+    margin-top: 0;
+}
+
+.note-body-section .note-section-header {
+    margin: 0;
+    padding: 0.12rem 0.05rem;
+    font-size: calc(0.68rem * var(--note-font-scale, 1));
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.note-body-section .note-section-body {
+    margin-top: 0.12rem;
+}
+
+.note-body-section .note-section-body.collapsed {
+    margin-top: 0;
+}
+
+.has-custom-bg .note-body-section .note-section-header {
+    color: var(--card-muted);
+}
+
+/* Legacy label — sentence case, no uppercase */
 .note-section-label {
     margin: 0.65rem 0 0.25rem;
     font-size: calc(0.68rem * var(--note-font-scale, 1));
     font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    letter-spacing: normal;
+    text-transform: none;
     color: var(--text-muted);
 }
 

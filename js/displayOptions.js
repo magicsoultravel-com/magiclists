@@ -29,7 +29,6 @@ const DEFAULTS = {
     showLineCount: false,
     desktopGradient: false,
     desktopGridLines: false,
-    cardAnimations: true,
     noteFontId: 'default',
     brandIconId: 'clipboard'
 };
@@ -48,7 +47,6 @@ export function readDisplayOptions() {
             showLineCount: raw.showLineCount === true,
             desktopGradient: raw.desktopGradient === true,
             desktopGridLines: raw.desktopGridLines === true,
-            cardAnimations: raw.cardAnimations !== false,
             noteFontId,
             brandIconId: resolveBrandIconId(raw.brandIconId)
         };
@@ -72,7 +70,6 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     root.dataset.showNoteLines = options.showLineCount ? '1' : '0';
     root.dataset.desktopGradient = options.desktopGradient ? '1' : '0';
     root.dataset.desktopGridLines = options.desktopGridLines ? '1' : '0';
-    root.dataset.cardAnimations = options.cardAnimations ? '1' : '0';
     applyNoteFont(options.noteFontId);
     applyBrandIcon(options.brandIconId);
 }
@@ -85,7 +82,6 @@ function isCustomized(options) {
         || options.showLineCount
         || options.desktopGradient
         || options.desktopGridLines
-        || !options.cardAnimations
         || isNoteFontCustomized(options.noteFontId)
         || isAppThemeCustomized()
         || NoteFontScale.isCustomized()
@@ -346,7 +342,6 @@ export const DisplayOptions = {
                             <div class="display-options-check-grid display-options-check-grid--inline">
                                 ${this.optionRow('display-opt-gradient', 'Gradient background', opts.desktopGradient)}
                                 ${this.optionRow('display-opt-grid-lines', 'Show grid lines', opts.desktopGridLines)}
-                                ${this.optionRow('display-opt-animations', 'Card animations', opts.cardAnimations)}
                             </div>
                         </section>
                     </div>
@@ -373,7 +368,6 @@ export const DisplayOptions = {
         bindToggle('display-opt-note-lines', 'showLineCount');
         bindToggle('display-opt-gradient', 'desktopGradient');
         bindToggle('display-opt-grid-lines', 'desktopGridLines');
-        bindToggle('display-opt-animations', 'cardAnimations');
 
         root.querySelectorAll('.app-theme-option').forEach((btn) => {
             btn.addEventListener('click', (e) => {

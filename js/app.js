@@ -63,7 +63,6 @@ const AppState = {
     items: [],
     categories: [...DEFAULT_CATEGORIES],
     hiddenCategories: JSON.parse(localStorage.getItem('matrix_hidden_categories') || '[]'),
-    expandedCards: {},
     workspaceMode: (() => {
         const mode = localStorage.getItem('matrix_workspace_mode');
         return mode === 'drawing' ? 'drawing' : 'notes';
@@ -108,7 +107,6 @@ class Application {
             readViewSessions();
             localStorage.setItem('matrix_desktop_layout', AppState.viewSettings.sortBy);
             restoreViewSession(AppState.viewSettings.sortBy);
-            AppState.expandedCards = UI.readExpandedCardsForMode(AppState.viewSettings.sortBy);
             BootProgress.set(20, 'Preferences…');
             this.checkAuthSession();
             Editor.init();
@@ -599,7 +597,6 @@ class Application {
         localStorage.setItem('matrix_desktop_layout', mode);
         localStorage.setItem('matrix_preferred_view', mode);
         UI.restoreViewSessionForMode(mode);
-        AppState.expandedCards = UI.readExpandedCardsForMode(mode);
 
         UI.applyDesktopLayoutModeSwitch(canvas, mode);
 
@@ -660,7 +657,6 @@ class Application {
             UI.resetBoardLayout(AppState.viewSettings.sortBy, AppState.items, {
                 fileCabinetActive: AppState.viewSettings.fileCabinet
             });
-            AppState.expandedCards = UI.readExpandedCardsForMode(AppState.viewSettings.sortBy);
         });
     }
 

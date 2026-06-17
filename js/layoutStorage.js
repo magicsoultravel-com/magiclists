@@ -675,11 +675,8 @@ function sanitizeViewSessions(store, liveIds, stats) {
             changed = true;
         }
         if (bucket.expandedCards) {
-            const cleaned = sanitizeExpandedMap(bucket.expandedCards, liveIds, stats, `view_sessions.${mode}.expanded`);
-            if (cleaned !== bucket.expandedCards) {
-                bucket.expandedCards = cleaned;
-                changed = true;
-            }
+            delete bucket.expandedCards;
+            changed = true;
         }
         next[mode] = bucket;
     });
@@ -715,9 +712,8 @@ function purgeItemFromSnapshot(snap, itemId) {
         VIEW_MODES.forEach((mode) => {
             if (!sessions[mode]) return;
             const bucket = { ...sessions[mode] };
-            if (bucket.expandedCards?.[itemId]) {
-                bucket.expandedCards = { ...bucket.expandedCards };
-                delete bucket.expandedCards[itemId];
+            if (bucket.expandedCards) {
+                delete bucket.expandedCards;
             }
             if (mode === 'grid' && bucket.gridExpandedId === itemId) {
                 bucket.gridExpandedId = null;
@@ -764,25 +760,6 @@ export function sanitizeLayoutSnapshot(snapshot, context) {
         next.expandedCards = sanitizeExpandedMap(next.expandedCards, ctx.liveIds, stats, 'snapshot.expandedCards');
     }
     return next;
-}
-
-export function migrateColumnLayoutKey(oldName, newName) {
-    if (!oldName || !newName || categoryKey(oldName) === categoryKey(newName)) return false;
-    let changed = false;
-    ['matrix_column_positions', 'matrix_column_sizes'].forEach((key) => {
-        const map = readJson(key, {});
-        if (!map[oldName]) return;
-        if (!map[newName]) map[newName] = map[oldName];
-        delete map[oldName];
-        changed = writeJsonIfChanged(key, map) || changed;
-    });
-    const layout = readJson('matrix_column_note_layout', {});
-    if (layout[oldName]) {
-        if (!layout[newName]) layout[newName] = layout[oldName];
-        delete layout[oldName];
-        changed = writeJsonIfChanged('matrix_column_note_layout', layout) || changed;
-    }
-    return changed;
 }
 
 export function purgeLayoutForItem(itemId) {
@@ -862,12 +839,11 @@ export function purgeLayoutForItem(itemId) {
 
     const sessions = readViewSessions();
     let sessionChanged = false;
-    const nextSessions = { version: 1 };
+    const nextSessions = { version: 2 };
     VIEW_MODES.forEach((mode) => {
         const bucket = { ...(sessions[mode] || {}) };
-        if (bucket.expandedCards?.[itemId]) {
-            bucket.expandedCards = { ...bucket.expandedCards };
-            delete bucket.expandedCards[itemId];
+        if (bucket.expandedCards) {
+            delete bucket.expandedCards;
             sessionChanged = true;
         }
         if (mode === 'grid' && bucket.gridExpandedId === itemId) {

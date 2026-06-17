@@ -2,12 +2,9 @@ export const VIEW_MODES = ['grid', 'freeform'];
 export const DEFAULT_VIEW_MODE = 'grid';
 
 const SESSIONS_KEY = 'matrix_view_sessions';
-const LEGACY_EXPANDED_KEY = 'matrix_expanded_cards';
 
 function emptyBucket() {
-    return {
-        expandedCards: {}
-    };
+    return {};
 }
 
 function stripScrollFromBucket(bucket) {
@@ -16,7 +13,7 @@ function stripScrollFromBucket(bucket) {
     delete next.scroll;
     delete next.gridExpandedId;
     delete next.collapsedCategories;
-    if (!next.expandedCards) next.expandedCards = {};
+    delete next.expandedCards;
     return next;
 }
 
@@ -34,9 +31,7 @@ export function readViewSessions() {
                 const store = { version: 2 };
                 VIEW_MODES.forEach((mode) => {
                     const legacy = parsed[mode] || parsed[mode === 'grid' ? 'columns' : mode] || {};
-                    store[mode] = stripScrollFromBucket({
-                        expandedCards: { ...(legacy.expandedCards || {}) }
-                    });
+                    store[mode] = stripScrollFromBucket(legacy);
                 });
                 return store;
             }
@@ -45,16 +40,9 @@ export function readViewSessions() {
         /* ignore */
     }
 
-    let legacyExpanded = {};
-    try {
-        legacyExpanded = JSON.parse(localStorage.getItem(LEGACY_EXPANDED_KEY) || '{}');
-    } catch {
-        legacyExpanded = {};
-    }
-
     const store = { version: 2 };
     VIEW_MODES.forEach((mode) => {
-        store[mode] = { ...emptyBucket(), expandedCards: { ...legacyExpanded } };
+        store[mode] = emptyBucket();
     });
 
     writeViewSessions(store);
@@ -67,41 +55,6 @@ export function writeViewSessions(store) {
     } catch {
         /* ignore */
     }
-}
-
-export function getExpandedCards(mode) {
-    const m = normalizeViewMode(mode);
-    return { ...readViewSessions()[m]?.expandedCards };
-}
-
-export function setExpandedCard(mode, itemId, expanded) {
-    if (!itemId) return;
-    const m = normalizeViewMode(mode);
-    const store = readViewSessions();
-    const bucket = store[m] || emptyBucket();
-    if (expanded) bucket.expandedCards[itemId] = true;
-    else delete bucket.expandedCards[itemId];
-    store[m] = bucket;
-    writeViewSessions(store);
-}
-
-export function setExpandedCardsMap(mode, map) {
-    const m = normalizeViewMode(mode);
-    const store = readViewSessions();
-    const bucket = store[m] || emptyBucket();
-    bucket.expandedCards = { ...(map || {}) };
-    store[m] = bucket;
-    writeViewSessions(store);
-}
-
-export function clearExpandedCards(mode) {
-    setExpandedCardsMap(mode, {});
-}
-
-export function isCardExpanded(mode, itemId) {
-    if (!itemId) return false;
-    const m = normalizeViewMode(mode);
-    return readViewSessions()[m]?.expandedCards?.[itemId] === true;
 }
 
 export function persistViewSession(mode, { canvas, flushLayout } = {}) {
@@ -118,7 +71,7 @@ export function persistViewSession(mode, { canvas, flushLayout } = {}) {
 }
 
 export function restoreViewSession(_mode) {
-    /* view sessions are authoritative; render reads getExpandedCards(mode) directly */
+    /* layout persistence handled via layoutStorage flush on persistViewSession */
 }
 
 export function getViewSessionsForSnapshot() {
@@ -140,17 +93,11 @@ export function applyViewSessionsFromSnapshot(viewSessions) {
     } else if (viewSessions.version === 1) {
         VIEW_MODES.forEach((mode) => {
             const legacy = viewSessions[mode] || viewSessions[mode === 'grid' ? 'columns' : mode] || {};
-            store[mode] = stripScrollFromBucket({
-                expandedCards: { ...(legacy.expandedCards || {}) }
-            });
+            store[mode] = stripScrollFromBucket(legacy);
         });
     } else {
         return false;
     }
     writeViewSessions(store);
     return true;
-}
-
-export function clearViewSessionExpanded(mode) {
-    clearExpandedCards(mode);
 }

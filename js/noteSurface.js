@@ -611,32 +611,58 @@ export const NoteSurface = {
         return html;
     },
 
+    buildNoteBodySection(title, innerHtml) {
+        return `
+            <div class="note-body-section">
+                <div class="note-section-header collapsable-header">
+                    <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>${this.escapeHTML(title)}</span>
+                </div>
+                <div class="note-section-body collapsable-section">
+                    ${innerHtml}
+                </div>
+            </div>`;
+    },
+
+    bindNoteBodySections(root) {
+        if (!root || root.dataset.noteSectionsBound === '1') return;
+        root.dataset.noteSectionsBound = '1';
+        root.querySelectorAll('.note-body-section .note-section-header').forEach((header) => {
+            header.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const body = header.nextElementSibling;
+                const toggle = header.querySelector('.collapsable-toggle');
+                body?.classList.toggle('collapsed');
+                toggle?.classList.toggle('collapsed');
+            });
+        });
+    },
+
     buildMeetingBodyHtml(item, { canEdit = false, inModalEditor = false, richEdit = false } = {}) {
         ensureItemSheet(item, defaultSheetDimsForTemplate('meeting'));
         let html = '';
-        html += '<h3 class="note-section-label">Attendees</h3>';
-        html += renderSheetHtml(item.sheet, { canEdit, inModalEditor });
-        html += '<h3 class="note-section-label">Agenda</h3>';
+        html += this.buildNoteBodySection('Attendees', renderSheetHtml(item.sheet, { canEdit, inModalEditor }));
 
         const content = item.content || '';
         const rich = hasRichMarkup(content) || content.includes('\u2028');
+        let agendaHtml = '';
         if (canEdit && (richEdit || this.canInlineEditText(content, { richEdit }))) {
             const inner = richEdit ? this.prepareContentForEdit(content) : this.escapeHTML(content.replace(/\u2028/g, '\n'));
             const ce = richEdit ? 'true' : 'plaintext-only';
             const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
-            html += `<div class="card-content-preview card-inline-edit${richClasses}" contenteditable="${ce}" spellcheck="false" data-field="content" data-placeholder="Add agenda…">${inner}</div>`;
+            agendaHtml += `<div class="card-content-preview card-inline-edit${richClasses}" contenteditable="${ce}" spellcheck="false" data-field="content" data-placeholder="Add agenda…">${inner}</div>`;
         } else {
             const richClass = rich ? ' rich-text' : '';
-            html += `<div class="card-content-preview${richClass}">${this.renderRichHtml(content)}</div>`;
+            agendaHtml += `<div class="card-content-preview${richClass}">${this.renderRichHtml(content)}</div>`;
         }
+        html += this.buildNoteBodySection('Agenda', agendaHtml);
 
-        html += '<h3 class="note-section-label">Action Items</h3>';
         if (!item.steps) item.steps = [];
-        html += this.buildExpandedChecklistHtml(item, canEdit, { richEdit });
+        let actionHtml = this.buildExpandedChecklistHtml(item, canEdit, { richEdit });
         const meetingWhen = formatMeetingDateTimeBadge(item.startDateTime);
         if (meetingWhen) {
-            html += `<p class="meeting-datetime meeting-datetime--body">${escapeHTML(meetingWhen)}</p>`;
+            actionHtml += `<p class="meeting-datetime meeting-datetime--body">${escapeHTML(meetingWhen)}</p>`;
         }
+        html += this.buildNoteBodySection('Action items', actionHtml);
         return html;
     },
 
@@ -1030,6 +1056,7 @@ export const NoteSurface = {
         if (header) this.attachNoteBodyInteractions(header, item, interactionOptions);
         if (body) {
             this.attachNoteBodyInteractions(body, item, interactionOptions);
+            this.bindNoteBodySections(body);
             attachSheetInteractions(body, item, this.buildSheetInteractionOptions(shell, item, {
                 localOnly,
                 onChange,
@@ -1047,7 +1074,8 @@ export const NoteSurface = {
                     + '.card-act, .grab-handle--step, .expanded-checklist-add-btn, '
                     + '.checklist-done-toggle, .step-collapse-btn, .step-delete-btn, '
                     + '.step-indent-btn, .step-outdent-btn, .checklist-expand-collapse-all-btn, '
-                    + '.sheet-cell-input, .sheet-struct-actions, .sheet-struct-actions .card-act'
+                    + '.sheet-cell-input, .sheet-struct-actions, .sheet-struct-actions .card-act, '
+                    + '.note-section-header, .note-section-header .collapsable-toggle'
                 )) return;
                 e.stopPropagation();
             });

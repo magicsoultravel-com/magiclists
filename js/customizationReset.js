@@ -32,7 +32,6 @@ const DISPLAY_DEFAULTS = {
     showLineCount: false,
     desktopGradient: false,
     desktopGridLines: false,
-    cardAnimations: true,
     noteFontId: 'default',
     brandIconId: 'clipboard'
 };

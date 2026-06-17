@@ -258,7 +258,7 @@ export function renderSheetHtml(sheet, { canEdit = false, inModalEditor = false 
     const rows = sheet?.rows || SHEET_DEFAULT_ROWS;
     const cols = sheet?.cols || SHEET_DEFAULT_COLS;
     ensureColWidths(sheet);
-    const showStruct = canEdit && inModalEditor;
+    const showStruct = canEdit;
     const canRemoveRow = rows > SHEET_MIN_ROWS;
     const canRemoveCol = cols > SHEET_MIN_COLS;
 
@@ -350,7 +350,7 @@ export function attachSheetInteractions(root, item, {
 
     ensureItemSheet(item, defaultSheetDimsForTemplate(resolveNoteTemplate(item)));
     growSheetCells(block);
-    const includeStructCol = inModalEditor && !!block.querySelector('.sheet-grid__struct-col');
+    const includeStructCol = !!block.querySelector('.sheet-grid__struct-col');
 
     if (block.dataset.sheetBound === 'true') return;
     block.dataset.sheetBound = 'true';
@@ -392,6 +392,28 @@ export function attachSheetInteractions(root, item, {
                 e.preventDefault();
                 const next = e.shiftKey ? inputs[idx - 1] : inputs[idx + 1];
                 if (next) next.focus();
+                return;
+            }
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                const row = Number(input.dataset.row);
+                const col = Number(input.dataset.col);
+                const rows = item.sheet?.rows || 0;
+                const cols = item.sheet?.cols || 0;
+                if (!Number.isFinite(row) || !Number.isFinite(col) || rows < 1 || cols < 1) return;
+                let nextRow = row;
+                let nextCol = col;
+                if (e.key === 'ArrowUp') nextRow = Math.max(0, row - 1);
+                else if (e.key === 'ArrowDown') nextRow = Math.min(rows - 1, row + 1);
+                else if (e.key === 'ArrowLeft') nextCol = Math.max(0, col - 1);
+                else if (e.key === 'ArrowRight') nextCol = Math.min(cols - 1, col + 1);
+                if (nextRow === row && nextCol === col) return;
+                const next = block.querySelector(
+                    `[data-sheet-cell][data-row="${nextRow}"][data-col="${nextCol}"]`
+                );
+                if (!next) return;
+                e.preventDefault();
+                e.stopPropagation();
+                next.focus();
                 return;
             }
             if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
@@ -515,8 +537,6 @@ export function attachSheetInteractions(root, item, {
         });
         input.addEventListener('blur', () => finish(true));
     });
-
-    if (!inModalEditor) return;
 
     block.querySelectorAll('.sheet-add-row-btn').forEach((btn) => {
         btn.addEventListener('click', (e) => {

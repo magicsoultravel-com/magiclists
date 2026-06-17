@@ -12,13 +12,8 @@ import {
 } from './noteBodyConversion.js';
 import { stripRichText } from './richText.js';
 import {
-    clearExpandedCards,
-    clearViewSessionExpanded,
-    getExpandedCards,
     persistViewSession,
     restoreViewSession,
-    setExpandedCard,
-    setExpandedCardsMap,
     normalizeViewMode
 } from './viewSession.js';
 import {
@@ -308,18 +303,6 @@ export const UI = {
         restoreViewSession(mode);
     },
 
-    readExpandedCardsForMode(mode = activeBoardViewMode) {
-        return getExpandedCards(mode);
-    },
-
-
-    isCardExpanded(card, item) {
-        if (isDesktopCard(card)) {
-            return !this.isSpatiallyCollapsed(card);
-        }
-        return getExpandedCards(activeBoardViewMode)[item?.id] === true;
-    },
-
     resolveBoardItem(itemId) {
         if (!itemId) return null;
         return boardItemsById.get(itemId) || null;
@@ -456,7 +439,7 @@ export const UI = {
     },
 
     applyCollapsedTileClasses(card, tileSize) {
-        card.classList.remove('tile-label', 'tile-compact', 'tile-note', 'tile-small', 'tile-large');
+        card.classList.remove('tile-small', 'tile-large');
         const size = normalizeTileSize(tileSize);
         card.classList.add(size === 'small' ? 'tile-small' : 'tile-large');
     },
@@ -613,7 +596,6 @@ export const UI = {
     },
 
     collapseSnapPanelCard(card, item) {
-        card.classList.remove('card-state-changing', 'card-animating');
         this.finalizeDesktopCard(card);
     },
 
@@ -1390,7 +1372,7 @@ export const UI = {
         return { targetCatName, categoryColor };
     },
 
-    updateDesktopCard(card, item, { expanded, dimensions = null } = {}) {
+    updateDesktopCard(card, item, { dimensions = null } = {}) {
         if (!isDesktopCard(card)) return;
 
         const snapLayout = isSnapLayoutMode(activeBoardViewMode);
@@ -1511,8 +1493,6 @@ export const UI = {
 
     markNoteCollapsed(itemId) {
         if (!itemId) return;
-        setExpandedCard('grid', itemId, false);
-        setExpandedCard('freeform', itemId, false);
         const small = getSmallRect(readTileSmallFootprint());
         const item = this.resolveBoardItem(itemId);
         const tileSize = resolveTileSize(item);
@@ -2361,8 +2341,6 @@ export const UI = {
     resetBoardLayout(sortBy, items, { fileCabinetActive } = {}) {
         const visibleItems = this.getVisibleItems(items || []);
         const mode = normalizeViewMode(sortBy);
-        clearViewSessionExpanded('grid');
-        clearViewSessionExpanded('freeform');
 
         const boardItems = visibleItems;
 
