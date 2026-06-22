@@ -1143,7 +1143,7 @@ export const NoteSurface = {
                     ? '<span class="grab-handle grab-handle--step grab-handle--spacer" aria-hidden="true">⋮⋮</span>'
                     : '<span class="grab-handle grab-handle--step" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>';
             const nestControls = canEdit ? `
-                    <button type="button" class="card-act step-outdent-btn" title="Outdent" aria-label="Outdent"${getStepLevel(step) === 0 ? ' disabled' : ''}>‹</button>
+                    <button type="button" class="card-act step-outdent-btn" title="Outdent" aria-label="Outdent"${level === 0 ? ' disabled' : ''}>‹</button>
                     <button type="button" class="card-act step-indent-btn" title="Indent" aria-label="Indent"${!canIndentStep(active, activeIdx) ? ' disabled' : ''}>›</button>` : '';
             const copyBtn = canEdit
                 ? `<button type="button" class="card-act step-copy-btn" title="Copy item" aria-label="Copy item">${CARD_ICONS.copy}</button>`
@@ -1761,60 +1761,7 @@ export const NoteSurface = {
             root.dataset.checklistInteractionsBound = '1';
             if (!item.steps) item.steps = [];
 
-            const bindStepRowAction = (btn, handler) => {
-                if (!btn) return;
-                let handledByMouse = false;
-                btn.addEventListener('mousedown', (e) => {
-                    if (e.button !== 0 || btn.disabled) return;
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handledByMouse = true;
-                    handler(e);
-                });
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    if (btn.disabled) return;
-                    if (handledByMouse) {
-                        handledByMouse = false;
-                        return;
-                    }
-                    handler(e);
-                });
-            };
-
-            const handleChecklistNest = (btn, delta) => {
-                const row = btn.closest('.step-row--display');
-                const stepId = row?.dataset.stepId;
-                if (!stepId || btn.disabled) return;
-                this.ensureChecklistStepFromRow(row, item);
-                const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
-                const levelBefore = getStepLevel(item.steps?.find((s) => s.id === stepId));
-                applyMutate((it) => {
-                    const activeSteps = it.steps.filter((step) => !step.completed);
-                    const idx = activeSteps.findIndex((s) => s.id === stepId);
-                    if (idx < 0) return;
-                    if (delta > 0) {
-                        if (!canIndentStep(activeSteps, idx)) return;
-                    } else if (getStepLevel(activeSteps[idx]) <= 0) {
-                        return;
-                    }
-                    applySubtreeLevelDelta(activeSteps, idx, delta);
-                    normalizeChecklistLevels(activeSteps);
-                    const doneSteps = it.steps.filter((step) => step.completed);
-                    it.steps = [...activeSteps, ...doneSteps];
-                }, { persist: false });
-                const stepAfter = item.steps?.find((s) => s.id === stepId);
-                if (!stepAfter || getStepLevel(stepAfter) === levelBefore) return;
-                this.expandChecklistAncestorsForStep(item, stepId);
-                const host = root.closest('.mini-card') || root;
-                this.scheduleChecklistStepFocus(root, stepId, { edge: 'start' });
-                refresh();
-                this.focusPendingChecklistStep(host);
-                this.commitInlineChecklistOp(item, beforeItem, { localOnly });
-            };
-
-            const addBtn = root.querySelector('.expanded-checklist-add-btn');
-            bindStepRowAction(addBtn, (e) => {
+            root.querySelector('.expanded-checklist-add-btn')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.insertChecklistStep(root, item, refresh, applyMutate);
             });
@@ -1841,11 +1788,57 @@ export const NoteSurface = {
             });
 
             root.querySelectorAll('.step-indent-btn').forEach((btn) => {
-                bindStepRowAction(btn, () => handleChecklistNest(btn, +1));
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const row = btn.closest('.step-row--display');
+                    const stepId = row?.dataset.stepId;
+                    if (!stepId) return;
+                    this.ensureChecklistStepFromRow(row, item);
+                    const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
+                    applyMutate((it) => {
+                        const activeSteps = it.steps.filter((step) => !step.completed);
+                        const idx = activeSteps.findIndex((s) => s.id === stepId);
+                        if (idx < 0) return;
+                        if (!canIndentStep(activeSteps, idx)) return;
+                        applySubtreeLevelDelta(activeSteps, idx, +1);
+                        normalizeChecklistLevels(activeSteps);
+                        const doneSteps = it.steps.filter((step) => step.completed);
+                        it.steps = [...activeSteps, ...doneSteps];
+                    }, { persist: false });
+                    this.expandChecklistAncestorsForStep(item, stepId);
+                    const host = root.closest('.mini-card') || root;
+                    this.scheduleChecklistStepFocus(root, stepId, { edge: 'start' });
+                    refresh();
+                    this.focusPendingChecklistStep(host);
+                    this.commitInlineChecklistOp(item, beforeItem, { localOnly });
+                });
             });
 
             root.querySelectorAll('.step-outdent-btn').forEach((btn) => {
-                bindStepRowAction(btn, () => handleChecklistNest(btn, -1));
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const row = btn.closest('.step-row--display');
+                    const stepId = row?.dataset.stepId;
+                    if (!stepId) return;
+                    this.ensureChecklistStepFromRow(row, item);
+                    const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
+                    applyMutate((it) => {
+                        const activeSteps = it.steps.filter((step) => !step.completed);
+                        const idx = activeSteps.findIndex((s) => s.id === stepId);
+                        if (idx < 0) return;
+                        if (getStepLevel(activeSteps[idx]) <= 0) return;
+                        applySubtreeLevelDelta(activeSteps, idx, -1);
+                        normalizeChecklistLevels(activeSteps);
+                        const doneSteps = it.steps.filter((step) => step.completed);
+                        it.steps = [...activeSteps, ...doneSteps];
+                    }, { persist: false });
+                    this.expandChecklistAncestorsForStep(item, stepId);
+                    const host = root.closest('.mini-card') || root;
+                    this.scheduleChecklistStepFocus(root, stepId, { edge: 'start' });
+                    refresh();
+                    this.focusPendingChecklistStep(host);
+                    this.commitInlineChecklistOp(item, beforeItem, { localOnly });
+                });
             });
 
             root.querySelectorAll('.step-collapse-btn').forEach((btn) => {
@@ -1876,11 +1869,13 @@ export const NoteSurface = {
             });
 
             root.querySelectorAll('.step-delete-btn').forEach((btn) => {
-                bindStepRowAction(btn, () => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
                     const beforeItem = this.prepareInlineOpSnapshot(root, item, localOnly);
                     const row = btn.closest('.step-row--display');
                     const stepId = row?.dataset.stepId;
-                    if (!stepId || !item.steps?.some((s) => s.id === stepId)) return;
+                    if (!stepId || !item.steps) return;
+                    if (!item.steps.some((s) => s.id === stepId)) return;
                     applyMutate((it) => {
                         it.steps = it.steps.filter((s) => s.id !== stepId);
                         if (!it.steps.length) it.type = 'note';
@@ -1891,7 +1886,8 @@ export const NoteSurface = {
             });
 
             root.querySelectorAll('.step-copy-btn').forEach((btn) => {
-                bindStepRowAction(btn, async () => {
+                btn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
                     const shell = root.closest('.editor-note-shell') || root;
                     this.syncItemBodyFromDom(shell, item);
                     const row = btn.closest('.step-row--display');
