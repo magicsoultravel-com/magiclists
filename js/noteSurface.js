@@ -40,7 +40,8 @@ import {
     stepHasDescendants,
     checklistHasIndentations,
     buildVisibleChecklistSteps,
-    annotateChecklistTreeGuides
+    annotateChecklistTreeGuides,
+    canIndentStep
 } from './checklistSteps.js';
 import { UndoManager } from './undo.js';
 import { escapeHTML, escapeAttr, escapeQuotes } from './domEscape.js';
@@ -1132,6 +1133,7 @@ export const NoteSurface = {
 
         const renderRowHtml = (step, { hasKids = false, isCollapsed = false, collapseKey = '', isDoneSection = false, treeGuides = [] } = {}) => {
             const level = getStepLevel(step);
+            const activeIdx = isDoneSection ? -1 : active.findIndex((s) => s.id === step.id);
             const collapseControl = !isDoneSection && hasKids
                 ? `<button type="button" class="step-collapse-btn" data-collapse-key="${this.escapeAttr(collapseKey)}" title="${isCollapsed ? 'Expand group' : 'Collapse group'}" aria-label="${isCollapsed ? 'Expand group' : 'Collapse group'}">${isCollapsed ? CARD_ICONS.chevronRight : CARD_ICONS.chevronDown}</button>`
                 : '<span class="step-collapse-spacer" aria-hidden="true"></span>';
@@ -1142,7 +1144,7 @@ export const NoteSurface = {
                     : '<span class="grab-handle grab-handle--step" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>';
             const nestControls = canEdit ? `
                     <button type="button" class="card-act step-outdent-btn" title="Outdent" aria-label="Outdent"${level === 0 ? ' disabled' : ''}>‹</button>
-                    <button type="button" class="card-act step-indent-btn" title="Indent" aria-label="Indent"${level >= 4 ? ' disabled' : ''}>›</button>` : '';
+                    <button type="button" class="card-act step-indent-btn" title="Indent" aria-label="Indent"${!canIndentStep(active, activeIdx) ? ' disabled' : ''}>›</button>` : '';
             const copyBtn = canEdit
                 ? `<button type="button" class="card-act step-copy-btn" title="Copy item" aria-label="Copy item">${CARD_ICONS.copy}</button>`
                 : '';
@@ -1797,7 +1799,7 @@ export const NoteSurface = {
                         const activeSteps = it.steps.filter((step) => !step.completed);
                         const idx = activeSteps.findIndex((s) => s.id === stepId);
                         if (idx < 0) return;
-                        if (getStepLevel(activeSteps[idx]) >= 4) return;
+                        if (!canIndentStep(activeSteps, idx)) return;
                         applySubtreeLevelDelta(activeSteps, idx, +1);
                         normalizeChecklistLevels(activeSteps);
                         const doneSteps = it.steps.filter((step) => step.completed);

@@ -78,6 +78,14 @@ export function normalizeChecklistLevels(steps) {
     }
 }
 
+export function canIndentStep(steps, idx) {
+    if (!steps?.[idx]) return false;
+    const level = getStepLevel(steps[idx]);
+    if (level >= 4) return false;
+    const maxFromPrev = idx === 0 ? 0 : getStepLevel(steps[idx - 1]) + 1;
+    return level + 1 <= maxFromPrev;
+}
+
 export function previewDropTargetLevel(rows, insertIndex, dropMode, getLevel = getStepRowLevel) {
     if (insertIndex <= 0) return 0;
     if (dropMode === 'child') {

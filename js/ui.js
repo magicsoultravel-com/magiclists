@@ -1092,6 +1092,7 @@ export const UI = {
         const toolbar = card.querySelector('.note-editor-toolbar');
         toolbar?.addEventListener('mousedown', (e) => {
             if (e.button !== 0) return;
+            if (e.target.closest('.card-act')) return;
             NoteSurface.commitFocusedInlineField(card, item);
         }, true);
 

@@ -580,10 +580,6 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
     background: var(--card-border-subtle);
 }
 
-.expanded-checklist .step-row--done .step-row-actions {
-    align-self: center;
-}
-
 .checklist-done-toggle {
     display: flex;
     align-items: center;
