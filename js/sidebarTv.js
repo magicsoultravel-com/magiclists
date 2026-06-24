@@ -1,3 +1,4 @@
+/** @module {"owns":"sidebar TV player and channel browser", "related":["tvPlayer.js","tvProviders/registry.js","tvPopover.js"], "events":["tv:state_changed"]} */
 import { TvProviderRegistry } from './tvProviders/registry.js';
 import { channelKey, parseChannelKey } from './tvProviders/channelShape.js';
 import { TvPlayer } from './tvPlayer.js';

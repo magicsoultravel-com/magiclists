@@ -1,16 +1,15 @@
+/** @module {"owns":"board render, tile layout, category visibility, desktop canvas", "related":["noteSurface.js","noteQuickActions.js","dragdrop.js","layoutStorage.js","board/gridEngine.js"], "events":["board:visibility_changed","item:selected_for_edit","calendar:items_changed"]} */
 import { mountFloatChrome } from './desktopFloatChrome.js';
 import {
     categoryKey,
+    getCardRenderContext,
     isUncategorizedCategory,
     readStoredCategories,
-    UNCATEGORIZED_CATEGORY
+    UNCATEGORIZED_CATEGORY,
+    UNCATEGORIZED_COLOR
 } from './categories.js';
 import { applyCardTheme } from './cardTheme.js';
-import { ColorPicker, PALETTE_NOTE, resolveNoteColor, THEME_DEFAULT_COLOR } from './colorPicker.js';
-import {
-    itemToPlainCopyText
-} from './noteBodyConversion.js';
-import { stripRichText } from './richText.js';
+import { resolveNoteColor } from './colorPicker.js';
 import {
     persistViewSession,
     restoreViewSession,
@@ -96,9 +95,9 @@ import {
     resolveSpatialFallbackRect as geoResolveSpatialFallbackRect
 } from './tileGeometry.js';
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
-import { copyPlainTextToClipboard } from './clipboard.js';
 
 import { NoteSurface } from './noteSurface.js';
+import { bindNoteQuickActions } from './noteQuickActions.js';
 
 export { CARD_ICONS, FORMAT_ICONS, ACTION_ICONS, DRAWING_ICONS } from './icons.js';
 export {
@@ -136,10 +135,6 @@ import {
     findFirstCanvasSlotVertical as findFirstCanvasSlotVerticalCore,
     findNearestGridSlot as findNearestGridSlotCore,
     gridColumnStride as gridColumnStrideCore,
-    gridRowStride as gridRowStrideCore,
-    snapPackCoord as snapPackCoordCore,
-    snapGridCoord as snapGridCoordCore,
-    snapCanvasCoord as snapCanvasCoordCore,
     rectsOverlap as rectsOverlapCore
 } from './board/noteGeometry.js';
 import {
@@ -149,7 +144,12 @@ import {
     clearSnapPanelPreview
 } from './board/gridEngine.js';
 
-const UNCATEGORIZED_COLOR = '#64748b';
+function ensureSmallTile(item) {
+    if (!NoteSurface.canEditInline() || resolveTileSize(item) === 'small') return;
+    NoteSurface.mutateItem(item, (it) => { it.tileSize = 'small'; }, { preserveView: true, skipRerender: true });
+    item.tileSize = 'small';
+    boardItemsById.set(item.id, item);
+}
 
 let boardItemsById = new Map();
 let activeBoardViewMode = 'grid';
@@ -674,7 +674,7 @@ export const UI = {
             const rect = this.resolveBoardExpandPlacement(card, item);
             this.applySpatialToggleRect(card, item, rect, { ...ctx, actorRect: rect });
             if (isSnapLayoutMode(activeBoardViewMode)) {
-                this.raiseGridBoardCard(card);
+                this.raiseDesktopCard(card);
                 requestAnimationFrame(() => {
                     card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 });
@@ -731,11 +731,7 @@ export const UI = {
             if (!wasSmall) return;
             const next = { x: rect.x, y: rect.y, w: smallRect.w, h: smallRect.h };
             this.applyNoteRect(card, next, { settling: false });
-            if (NoteSurface.canEditInline() && resolveTileSize(item) !== 'small') {
-                NoteSurface.mutateItem(item, (it) => { it.tileSize = 'small'; }, { preserveView: true, skipRerender: true });
-                item.tileSize = 'small';
-                boardItemsById.set(item.id, item);
-            }
+            ensureSmallTile(item);
             this.saveTileLayoutFromCard(card, item, next, 'small');
             this.finalizeDesktopCard(card);
         });
@@ -846,7 +842,7 @@ export const UI = {
 
         let activeCategories = readStoredCategories()
             .filter((cat) => !hiddenCategories.includes(cat.name));
-        const { targetCatName, categoryColor } = this.getCardRenderContext(item, activeCategories);
+        const { targetCatName, categoryColor } = getCardRenderContext(item, activeCategories);
 
         this.renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
         this.applyItemCardTheme(card, item);
@@ -946,7 +942,7 @@ export const UI = {
                             w = tileDefaults.w;
                             h = tileDefaults.h;
                         }
-                        rect = this.findFirstCanvasSlot(w, h, placed, packW + origin * 2, { origin, edgePad });
+                        rect = findFirstCanvasSlotCore(w, h, placed, packW + origin * 2, { origin, edgePad });
                     }
 
                     this.applyNoteRect(card, rect, { settling: false });
@@ -1009,26 +1005,6 @@ export const UI = {
         btn.classList.toggle('is-on', !hidden);
     },
 
-    attachCardActionButton(btn, handler) {
-        if (!btn) return;
-        let handledByMouse = false;
-        btn.addEventListener('mousedown', (e) => {
-            if (e.button !== 0) return;
-            e.stopPropagation();
-            handledByMouse = true;
-            handler(e);
-        });
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (handledByMouse) {
-                handledByMouse = false;
-                return;
-            }
-            handler(e);
-        });
-    },
-
-
     getCardActionsOptions(card) {
         const hasSession = !!localStorage.getItem('admin_token');
         const spatial = isDesktopCard(card);
@@ -1055,205 +1031,6 @@ export const UI = {
     syncBoardPinClass(card) {
         if (!card?.dataset?.id) return;
         card.classList.toggle('is-board-pinned', this.isBoardPinned(card.dataset.id));
-    },
-
-    attachCardActions(card, item, ctx) {
-        const actions = card.querySelector('.card-actions');
-        if (!actions) return;
-
-        const copyBtn = actions.querySelector('.card-act--copy');
-        const pinBtn = actions.querySelector('.card-act--pin');
-        const dragBtn = actions.querySelector('.card-act--drag');
-        const toggleBtn = actions.querySelector('.card-act--toggle');
-        const colorBtn = actions.querySelector('.card-act--color');
-        const iconBtn = actions.querySelector('.card-act--emoji');
-        const hideBtn = actions.querySelector('.card-act--hide');
-        const editBtn = actions.querySelector('.card-act--edit');
-        const calBtn = actions.querySelector('.card-act--cal');
-        const iconRoot = card.querySelector('.editor-note-shell') || card;
-
-        const consumeSkipExpand = () => {
-            if (card.dataset.skipExpand) {
-                delete card.dataset.skipExpand;
-                return true;
-            }
-            return false;
-        };
-
-        this.attachCardActionButton(copyBtn, async () => {
-            NoteSurface.commitFocusedInlineField(card, item);
-            const shell = card.querySelector('.editor-note-shell');
-            if (shell) NoteSurface.syncItemBodyFromDom(shell, item);
-            const ok = await copyPlainTextToClipboard(itemToPlainCopyText(item));
-            if (ok) NoteSurface.flashCopyFeedback(copyBtn);
-            else NoteSurface.flashCopyFeedback(copyBtn, 'Copy failed', { failed: true });
-        });
-
-        const toolbar = card.querySelector('.note-editor-toolbar');
-        toolbar?.addEventListener('mousedown', (e) => {
-            if (e.button !== 0) return;
-            if (e.target.closest('.card-act')) return;
-            NoteSurface.commitFocusedInlineField(card, item);
-        }, true);
-
-        this.attachCardActionButton(pinBtn, () => {
-            const pinned = this.toggleBoardPin(item.id);
-            this.syncBoardPinClass(card);
-            pinBtn.classList.toggle('is-active', pinned);
-            pinBtn.setAttribute('aria-pressed', pinned ? 'true' : 'false');
-            const pinTitle = pinned ? 'Unpin (unlock drag)' : 'Pin position (locks drag)';
-            pinBtn.setAttribute('title', pinTitle);
-            pinBtn.setAttribute('aria-label', pinTitle);
-            pinBtn.innerHTML = pinned ? CARD_ICONS.unpin : CARD_ICONS.pin;
-            if (dragBtn) dragBtn.classList.toggle('is-hidden', pinned);
-        });
-
-        if (toggleBtn) {
-            toggleBtn.addEventListener('mousedown', (e) => {
-                if (e.button !== 0) return;
-                e.stopPropagation();
-            });
-            toggleBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                delete card.dataset.skipExpand;
-                if (ctx) this.toggleCardExpanded(card, item, { ...ctx, fromToolbar: true });
-            });
-        }
-
-        this.attachCardActionButton(colorBtn, () => {
-            NoteSurface.commitFocusedInlineField(card, item);
-            if (isDesktopCard(card)) this.raiseDesktopCard(card);
-            if (!localStorage.getItem('admin_token')) return;
-            ColorPicker.open({
-                anchor: colorBtn,
-                presets: PALETTE_NOTE,
-                value: resolveNoteColor(item.backgroundColor),
-                align: 'end',
-                onSelect: (color) => {
-                    NoteSurface.mutateItem(item, (it) => {
-                        it.backgroundColor = color || THEME_DEFAULT_COLOR;
-                    }, { preserveView: true, skipRerender: true });
-                    this.applyItemCardTheme(card, item);
-                }
-            });
-        });
-
-        this.attachCardActionButton(iconBtn, () => {
-            NoteSurface.commitFocusedInlineField(card, item);
-            if (isDesktopCard(card)) this.raiseDesktopCard(card);
-            if (!localStorage.getItem('admin_token')) return;
-            NoteSurface.openEmojiPickerForNote(iconRoot, iconBtn, item);
-        });
-
-        this.attachCardActionButton(hideBtn, () => {
-            NoteSurface.commitFocusedInlineField(card, item);
-            this.hideFromBoard(item);
-        });
-
-        this.attachCardActionButton(editBtn, () => {
-            NoteSurface.commitFocusedInlineField(card, item);
-            if (isDesktopCard(card)) this.raiseDesktopCard(card);
-            if (consumeSkipExpand()) return;
-            if (!localStorage.getItem('admin_token')) return;
-            window.dispatchEvent(new CustomEvent('item:selected_for_edit', {
-                detail: { item }
-            }));
-        });
-
-        if (calBtn) {
-            this.syncCalendarButtonUI(item, calBtn);
-            this.attachCardActionButton(calBtn, () => {
-                NoteSurface.commitFocusedInlineField(card, item);
-                this.toggleCardCalendar(item, calBtn);
-            });
-        }
-    },
-
-    attachModalQuickActions(toolbarMount, item, editor) {
-        if (!toolbarMount || !item || !editor) return;
-
-        const archiveBtn = toolbarMount.querySelector('.card-act--archive');
-        const actions = toolbarMount.querySelector('.card-actions');
-        if (!actions) return;
-
-        const copyBtn = actions.querySelector('.card-act--copy');
-        const pinBtn = actions.querySelector('.card-act--pin');
-        const colorBtn = actions.querySelector('.card-act--color');
-        const iconBtn = actions.querySelector('.card-act--emoji');
-        const hideBtn = actions.querySelector('.card-act--hide');
-        const editBtn = actions.querySelector('.card-act--edit');
-        const calBtn = actions.querySelector('.card-act--cal');
-        const closeBtn = actions.querySelector('.card-act--close');
-        const iconRoot = editor.mountZone?.querySelector('.editor-note-shell') || editor.mountZone;
-
-        editor.archiveBtn = archiveBtn;
-        editor.colorBtn = colorBtn;
-        editor.iconBtn = iconBtn;
-        editor.calendarToggleBtn = calBtn;
-
-        if (archiveBtn) {
-            this.attachCardActionButton(archiveBtn, () => editor.emitArchiveAction());
-        }
-
-        const commitAndClose = () => editor.commitAndClose();
-
-        if (closeBtn) {
-            closeBtn.addEventListener('mousedown', (e) => {
-                if (e.button !== 0) return;
-                e.stopPropagation();
-            });
-            closeBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                commitAndClose();
-            });
-        }
-
-        this.attachCardActionButton(copyBtn, async () => {
-            editor.syncActiveItemFromDom();
-            const data = editor.collectFormData();
-            const ok = await copyPlainTextToClipboard(itemToPlainCopyText(data));
-            if (ok) NoteSurface.flashCopyFeedback(copyBtn);
-            else NoteSurface.flashCopyFeedback(copyBtn, 'Copy failed', { failed: true });
-        });
-
-        this.attachCardActionButton(pinBtn, () => {
-            const pinned = this.toggleBoardPin(item.id);
-            pinBtn.classList.toggle('is-active', pinned);
-            pinBtn.setAttribute('aria-pressed', pinned ? 'true' : 'false');
-            const pinTitle = pinned ? 'Unpin (unlock drag)' : 'Pin position (locks drag)';
-            pinBtn.setAttribute('title', pinTitle);
-            pinBtn.setAttribute('aria-label', pinTitle);
-            pinBtn.innerHTML = pinned ? CARD_ICONS.unpin : CARD_ICONS.pin;
-            const dragBtn = actions.querySelector('.card-act--drag');
-            if (dragBtn) dragBtn.classList.toggle('is-hidden', pinned);
-        });
-
-        this.attachCardActionButton(colorBtn, () => editor.openColorPicker());
-
-        this.attachCardActionButton(iconBtn, () => editor.openEmojiPicker());
-
-        this.attachCardActionButton(hideBtn, () => {
-            editor.syncActiveItemFromDom();
-            const data = editor.collectFormData();
-            Object.assign(item, data);
-            this.hideFromBoard(item);
-        });
-
-        this.attachCardActionButton(editBtn, () => {
-            const titleEl = editor.mountZone?.querySelector('[data-field="title"]');
-            if (titleEl) NoteSurface.focusInlineEdit(titleEl, 'end');
-        });
-
-        if (calBtn) {
-            this.syncCalendarButtonUI(item, calBtn);
-            this.attachCardActionButton(calBtn, () => {
-                editor.syncActiveItemFromDom();
-                this.toggleCardCalendar(item, calBtn);
-                editor.activeItem.hideFromCalendar = item.hideFromCalendar;
-                editor.markInteracted();
-                editor.triggerAutoSave();
-            });
-        }
     },
 
     applyItemCardTheme(card, item) {
@@ -1366,13 +1143,6 @@ export const UI = {
         this.syncSpatialToggleButton(card, atSmall);
     },
 
-    getCardRenderContext(item, activeCategories) {
-        const targetCatName = (item.categories && item.categories.length > 0) ? item.categories[0] : '';
-        const matchedCat = activeCategories.find(c => c.name?.toLowerCase() === targetCatName.toLowerCase());
-        const categoryColor = matchedCat ? matchedCat.color : '#64748b';
-        return { targetCatName, categoryColor };
-    },
-
     updateDesktopCard(card, item, { dimensions = null } = {}) {
         if (!isDesktopCard(card)) return;
 
@@ -1396,19 +1166,13 @@ export const UI = {
         }
     },
 
-    toggleCardExpanded(card, item, ctx) {
-        this.applyTileZoneToggle(card, item, ctx);
-    },
-
     createCardComponent(item, activeCategories) {
         const card = document.createElement('div');
         card.classList.add('mini-card');
         card.dataset.id = item.id;
         card.dataset.desktop = '1';
 
-        const targetCatName = (item.categories && item.categories.length > 0) ? item.categories[0] : '';
-        const matchedCat = activeCategories.find(c => c.name?.toLowerCase() === targetCatName.toLowerCase());
-        const categoryColor = matchedCat ? matchedCat.color : '#64748b';
+        const { targetCatName, categoryColor } = getCardRenderContext(item, activeCategories);
 
         this.applyItemCardTheme(card, item);
         card.style.borderLeftColor = categoryColor;
@@ -1435,10 +1199,15 @@ export const UI = {
             categoryColor: dotColor
         });
 
-        this.attachCardActions(card, item, {
-            activeCategories,
-            targetCatName,
-            categoryColor
+        bindNoteQuickActions(card, item, {
+            surface: 'board',
+            ui: this,
+            card,
+            ctx: {
+                activeCategories,
+                targetCatName,
+                categoryColor
+            }
         });
         NoteSurface.bindNoteEditorShell(card, item, {
             richEdit: canEdit,
@@ -1453,18 +1222,20 @@ export const UI = {
     },
 
     refreshBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor) {
+        const body = card.querySelector('.editor-note-body');
+        const focusState = body ? NoteSurface.captureNoteBodyFocusState(body) : null;
         const shell = card.querySelector('.editor-note-shell');
         if (shell && !card.dataset.pendingFocusStepId) {
             NoteSurface.syncItemBodyFromDom(shell, item);
         }
-        const body = card.querySelector('.editor-note-body');
-        const scrollTop = body?.scrollTop ?? 0;
         const pendingFocusStepId = card.dataset.pendingFocusStepId;
         const pendingFocusEdge = card.dataset.pendingFocusEdge;
         const pendingFocusPlainOffset = card.dataset.pendingFocusPlainOffset;
         this.renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
         const newBody = card.querySelector('.editor-note-body');
-        if (newBody) newBody.scrollTop = scrollTop;
+        if (newBody && focusState) {
+            NoteSurface.restoreNoteBodyFocusState(newBody, card, focusState);
+        }
         if (pendingFocusStepId) {
             card.dataset.pendingFocusStepId = pendingFocusStepId;
             if (pendingFocusEdge) card.dataset.pendingFocusEdge = pendingFocusEdge;
@@ -1740,7 +1511,7 @@ export const UI = {
                         y = freeformPositions[item.id].y;
                     } else {
                         const slot = this.snapNoteRect(
-                            this.findFirstCanvasSlot(w, h, placed, packW + origin * 2, { origin }),
+                            findFirstCanvasSlotCore(w, h, placed, packW + origin * 2, { origin }),
                             { maxW: packW, maxH }
                         );
                         this.saveGridLayout(item.id, slot);
@@ -1756,7 +1527,7 @@ export const UI = {
                         y = freeformPositions[item.id].y;
                     } else {
                         const slot = this.snapNoteRect(
-                            this.findFirstCanvasSlot(w, h, placed, packW + origin * 2, { origin }),
+                            findFirstCanvasSlotCore(w, h, placed, packW + origin * 2, { origin }),
                             { maxW: packW, maxH }
                         );
                         this.saveGridLayout(item.id, slot);
@@ -1768,7 +1539,7 @@ export const UI = {
                     w = tileDefaults.w;
                     h = tileDefaults.h;
                     const slot = this.snapNoteRect(
-                        this.findFirstCanvasSlot(w, h, placed, packW + origin * 2, { origin }),
+                        findFirstCanvasSlotCore(w, h, placed, packW + origin * 2, { origin }),
                         { maxW: packW, maxH }
                     );
                     this.saveGridLayout(item.id, slot);
@@ -1850,7 +1621,7 @@ export const UI = {
         const minY = yStart;
 
         if (direction === 'vertical') {
-            const colStride = this.gridColumnStride(small.w, small.h, metrics);
+            const colStride = gridColumnStrideCore(small.w, small.h, metrics);
             const right = collapsedRects.length
                 ? collapsedRects.reduce((max, rect) => Math.max(max, rect.x + rect.w), minX)
                 : minX;
@@ -1931,7 +1702,7 @@ export const UI = {
         unpinned.forEach((item, index) => {
             const raw = rects[index];
             if (!raw) return;
-            const slot = this.clampManualNoteRect(raw, { maxW: canvasW, maxH: viewportBottom });
+            const slot = clampManualNoteRectCore(raw, { maxW: canvasW, maxH: viewportBottom });
             this.saveFreeformPosition(item.id, slot.x, slot.y);
             this.saveFreeformSize(item.id, slot.w, slot.h, { updateRemembered: true });
             const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
@@ -1974,8 +1745,8 @@ export const UI = {
                 const { w, h } = this.resolveSortItemSize(item, 'grid', isExp);
                 const slotOpts = { origin, edgePad, yMin, xMin, maxH };
                 let slot = direction === 'vertical'
-                    ? this.findFirstCanvasSlotVertical(w, h, placed, canvasW, slotOpts)
-                    : this.findFirstCanvasSlot(w, h, placed, canvasW, slotOpts);
+                    ? findFirstCanvasSlotVerticalCore(w, h, placed, canvasW, slotOpts)
+                    : findFirstCanvasSlotCore(w, h, placed, canvasW, slotOpts);
                 slot = this.snapNoteRect(slot, snapBounds);
                 layout.set(item.id, slot);
                 placed.push({ ...slot });
@@ -1998,7 +1769,7 @@ export const UI = {
         );
 
         if (unpinnedExpanded.length) {
-            const viewport = this.getGridViewportBounds(canvas);
+            const viewport = getGridViewportBounds(canvas);
             this.packExpandedAlignGrid(canvas, expandedItems, pinnedIds, {
                 placed,
                 layout,
@@ -2069,7 +1840,7 @@ export const UI = {
         anchors = anchors.map((anchor, stackIndex) => {
             const fp = footprints[stackIndex];
             const candidate = { x: anchor.x, y: anchor.y, w: fp.w, h: fp.h };
-            if (!placed.some((p) => this.rectsOverlap(candidate, p, metrics.gap))) {
+            if (!placed.some((p) => rectsOverlapCore(candidate, p, metrics.gap))) {
                 return anchor;
             }
             const near = this.findFreeformSortSlot(fp.w, fp.h, placed, canvasW, {
@@ -2137,7 +1908,7 @@ export const UI = {
         };
 
         let stackBounds = computeStackBounds(rects);
-        if (stackBounds.w > 0 && placed.some((p) => this.rectsOverlap(stackBounds, p, metrics.gap))) {
+        if (stackBounds.w > 0 && placed.some((p) => rectsOverlapCore(stackBounds, p, metrics.gap))) {
             const near = this.findFreeformSortSlot(stackBounds.w, stackBounds.h, placed, canvasW, {
                 startX: stackBounds.x,
                 startY: stackBounds.y,
@@ -2227,7 +1998,7 @@ export const UI = {
                 hasExpandedGap ? collapsedRects : [],
                 { origin, edgePad, packW, yStart: minCoord, metrics }
             );
-            const viewport = this.getGridViewportBounds(canvas);
+            const viewport = getGridViewportBounds(canvas);
 
             this.packExpandedCascadeFreeform(canvas, expandedItems, pinnedIds, {
                 placed,
@@ -2286,7 +2057,7 @@ export const UI = {
         );
 
         if (unpinnedExpanded.length) {
-            const viewport = this.getGridViewportBounds(canvas);
+            const viewport = getGridViewportBounds(canvas);
             this.packExpandedAlignFreeform(canvas, expandedItems, pinnedIds, {
                 placed,
                 anchor: expandedAnchor,
@@ -2575,22 +2346,6 @@ export const UI = {
         };
     },
 
-    gridColumnStride(w, h, metrics) {
-        return gridColumnStrideCore(w, h, metrics);
-    },
-
-    gridRowStride(w, h, metrics) {
-        return gridRowStrideCore(w, h, metrics);
-    },
-
-    snapPackCoord(value, origin, pad, packStride) {
-        return snapPackCoordCore(value, origin, pad, packStride);
-    },
-
-    findNearestGridSlot(preferred, w, h, placed, opts) {
-        return findNearestGridSlotCore(preferred, w, h, placed, opts);
-    },
-
     computeGridBoardLayout(canvas, actorId, actorRect = null) {
         return computeGridBoardLayoutCore(createGridDeps(this), canvas, actorId, actorRect);
     },
@@ -2607,10 +2362,6 @@ export const UI = {
         clearSnapPanelPreview(canvas);
     },
 
-    getGridViewportBounds(canvas) {
-        return getGridViewportBounds(canvas);
-    },
-
     findDesktopCenterSlot(w, h, canvas, viewMode, { excludeId = null } = {}) {
         const host = canvas || document.getElementById('app-canvas');
         if (!host) return { x: 8, y: 8, w, h };
@@ -2618,7 +2369,7 @@ export const UI = {
 
         if (isSnapLayoutMode(mode)) {
             const { origin, packW, maxH, edgePad } = this.getGridBoardBounds(host);
-            const { viewportH, scrollY } = this.getGridViewportBounds(host);
+            const { viewportH, scrollY } = getGridViewportBounds(host);
             let rect = {
                 x: origin + Math.max(0, (packW - w) / 2),
                 y: origin + scrollY + Math.max(0, (viewportH - h) / 2),
@@ -2629,8 +2380,8 @@ export const UI = {
             const placed = [...host.querySelectorAll('.mini-card[data-desktop="1"]')]
                 .filter((c) => c.dataset.id !== excludeId && !c.closest('#file-cabinet'))
                 .map((c) => this.readNoteRect(c));
-            if (placed.some((p) => this.rectsOverlap(rect, p))) {
-                rect = this.findNearestGridSlot(rect, w, h, placed, { packW, origin, maxH, edgePad });
+            if (placed.some((p) => rectsOverlapCore(rect, p))) {
+                rect = findNearestGridSlotCore(rect, w, h, placed, { packW, origin, maxH, edgePad });
             }
             return rect;
         }
@@ -2678,12 +2429,8 @@ export const UI = {
 
         sorted.forEach((item) => {
             if (!item?.id) return;
-            if (NoteSurface.canEditInline() && resolveTileSize(item) !== 'small') {
-                NoteSurface.mutateItem(item, (it) => { it.tileSize = 'small'; }, { preserveView: true, skipRerender: true });
-                item.tileSize = 'small';
-                boardItemsById.set(item.id, item);
-            }
-            let slot = this.findFirstCanvasSlot(small.w, small.h, placed, packW + origin * 2, { origin, edgePad });
+            ensureSmallTile(item);
+            let slot = findFirstCanvasSlotCore(small.w, small.h, placed, packW + origin * 2, { origin, edgePad });
             slot = this.snapNoteRect(
                 { ...slot, w: small.w, h: small.h },
                 { maxW: packW, maxH, origin, edgePad }
@@ -2710,30 +2457,6 @@ export const UI = {
         });
     },
 
-    raiseGridBoardCard(card) {
-        this.raiseDesktopCard(card);
-    },
-
-    snapCanvasCoord(value, origin = CANVAS_LAYOUT_ORIGIN, stride) {
-        return snapCanvasCoordCore(value, origin, stride);
-    },
-
-    findFirstCanvasSlot(w, h, placed, canvasW, opts) {
-        return findFirstCanvasSlotCore(w, h, placed, canvasW, opts);
-    },
-
-    findFirstCanvasSlotVertical(w, h, placed, canvasW, opts) {
-        return findFirstCanvasSlotVerticalCore(w, h, placed, canvasW, opts);
-    },
-
-    snapGridCoord(value, stride) {
-        return snapGridCoordCore(value, stride);
-    },
-
-    clampManualNoteRect(rect, opts) {
-        return clampManualNoteRectCore(rect, opts);
-    },
-
     snapNotePosition(rect, opts) {
         return snapNotePositionCore(rect, opts);
     },
@@ -2751,10 +2474,6 @@ export const UI = {
             settling,
             applyDimensions: (c, w, h) => this.applyFreeformDimensions(c, w, h)
         });
-    },
-
-    rectsOverlap(a, b, gap) {
-        return rectsOverlapCore(a, b, gap);
     },
 
     getCollapsedCategories() {

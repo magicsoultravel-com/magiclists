@@ -7,6 +7,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { buildToolsRegistry } from './lib/parse-tool-meta.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -52,75 +53,6 @@ const TARGETS = [
     },
 ];
 
-function humanizeToolId(id) {
-    return id.replace(/[-_]/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
-}
-
-function parseToolFile(filePath) {
-    const id = path.basename(filePath, '.js');
-    if (!id || id[0] === '_') return null;
-
-    const head = fs.readFileSync(filePath, 'utf8').slice(0, 4096);
-    if (!/@tool\b/.test(head)) return null;
-
-    let label = humanizeToolId(id);
-    let order = 100;
-    let wide = false;
-    let mountClass = '';
-    let resizable = false;
-    let resizeMode = '';
-    let defaultSize = null;
-    let minSize = null;
-    let icon = '';
-
-    const toolMatch = head.match(/@tool\s+(\{.*?\})/s);
-    if (toolMatch) {
-        try {
-            const meta = JSON.parse(toolMatch[1]);
-            if (meta?.label) label = meta.label;
-            if (meta?.order != null) order = Number(meta.order);
-            if (meta?.wide) wide = true;
-            if (meta?.mountClass) mountClass = String(meta.mountClass);
-            if (meta?.resizable) resizable = true;
-            if (meta?.resizeMode) resizeMode = String(meta.resizeMode);
-            if (meta?.defaultSize) defaultSize = meta.defaultSize;
-            if (meta?.minSize) minSize = meta.minSize;
-            if (meta?.icon) icon = String(meta.icon);
-        } catch {
-            console.warn(`[build-tools-list] Invalid @tool JSON in ${filePath}`);
-        }
-    }
-
-    const iconMatch = head.match(/@tool-icon\s+(.+?)\s*\*\//s);
-    if (iconMatch) {
-        icon = iconMatch[1].trim();
-    }
-
-    const entry = { id, label, order, icon, wide, mountClass };
-    if (resizable) entry.resizable = true;
-    if (resizeMode) entry.resizeMode = resizeMode;
-    if (defaultSize) entry.defaultSize = defaultSize;
-    if (minSize) entry.minSize = minSize;
-    return entry;
-}
-
-function buildRegistry(toolsDir) {
-    if (!fs.existsSync(toolsDir)) return null;
-
-    const tools = fs
-        .readdirSync(toolsDir)
-        .filter((name) => name.endsWith('.js') && name !== 'registry.js')
-        .map((name) => parseToolFile(path.join(toolsDir, name)))
-        .filter(Boolean);
-
-    tools.sort((a, b) => {
-        if (a.order !== b.order) return a.order - b.order;
-        return a.label.localeCompare(b.label, undefined, { sensitivity: 'base' });
-    });
-
-    return tools;
-}
-
 function writeOutputs(tools, { outJson, outJs }) {
     fs.mkdirSync(path.dirname(outJson), { recursive: true });
     fs.mkdirSync(path.dirname(outJs), { recursive: true });
@@ -140,7 +72,7 @@ function writeOutputs(tools, { outJson, outJs }) {
 }
 
 for (const target of TARGETS) {
-    const tools = buildRegistry(target.toolsDir);
+    const tools = buildToolsRegistry(target.toolsDir);
     if (!tools) continue;
 
     writeOutputs(tools, target);

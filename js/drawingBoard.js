@@ -1,3 +1,4 @@
+/** @module {"owns":"magicCanvas drawing board, workspace drawing mode", "related":["canvasDocument.js","drawingToolbarMenu.js","layoutStorage.js"]} */
 import { ACTION_ICONS, DRAWING_ICONS } from './icons.js';
 import { ColorPicker, PALETTE_UNIFIED } from './colorPicker.js';
 import { DrawingToolbarMenu, CHEVRON } from './drawingToolbarMenu.js';

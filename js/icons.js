@@ -1,3 +1,4 @@
+/** @module {"owns":"CARD_ICONS, ACTION_ICONS, FORMAT_ICONS, DRAWING_ICONS SVG constants", "related":["ui.js"]} */
 // Chrome icon trope: stroke-first, currentColor, fill="none" on paths/shapes (see ACTION_ICONS).
 // CARD_ICONS 11x12; ACTION_ICONS 12x12.
 function paletteIconSvg(size) {

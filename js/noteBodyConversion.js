@@ -1,3 +1,4 @@
+/** @module {"owns":"checklist/content conversion, plain copy text", "related":["noteSurface.js","checklistSteps.js","richText.js"]} */
 import { sanitizeRichHtml, stripRichText } from './richText.js';
 import { sheetIsActive, sheetToTsv } from './sheet.js';
 

@@ -1,6 +1,8 @@
-﻿import { API } from './api.js';
+﻿/** @module {"owns":"application orchestration, event bus listeners, workspace init", "related":["api.js","ui.js","layoutStorage.js"], "events":["item:mutation_requested","item:selected_for_edit","board:visibility_changed","calendar:add_note"]} */
+import { API } from './api.js';
 import { ACTION_ICONS } from './icons.js';
 import { createNoteId } from './noteModel.js';
+import { NoteSurface } from './noteSurface.js';
 import { UI } from './ui.js';
 import { Editor } from './editor.js';
 import { DragDropEngine } from './dragdrop.js';
@@ -14,6 +16,7 @@ import {
     isUncategorizedCategory,
     normalizeCategories,
     readStoredCategories,
+    UNCATEGORIZED_COLOR,
     writeStoredCategories
 } from './categories.js';
 import { UndoManager, historyLabelForItem } from './undo.js';
@@ -33,7 +36,7 @@ import {
 import { AppTheme } from './appTheme.js';
 import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
-import { readViewSessions, restoreViewSession } from './viewSession.js';
+import { readViewSessions, restoreViewSession, normalizeViewMode } from './viewSession.js';
 import { DrawingBoard } from './drawingBoard.js';
 import { SearchBar } from './searchBar.js';
 import { Fullscreen } from './fullscreen.js';
@@ -46,7 +49,6 @@ import { SidebarTools } from './sidebarTools.js';
 import { CloudBackup } from './cloudBackup.js';
 import { BootProgress } from './bootProgress.js';
 import { TemplatePicker } from './templatePicker.js';
-import { purgeSudokuStorageIfNeeded } from './purgeSudokuStorage.js';
 import {
     migrateItemsToFileCabinet,
     pruneFileCabinetOrderByLayout,
@@ -68,14 +70,11 @@ const AppState = {
         return mode === 'drawing' ? 'drawing' : 'notes';
     })(),
     viewSettings: {
-        sortBy: (() => {
-            const legacy = localStorage.getItem('matrix_desktop_layout')
-                || localStorage.getItem('matrix_preferred_view');
-            const preferred = legacy || 'grid';
-            if (preferred === 'list' || preferred === 'columns') return 'grid';
-            if (preferred === 'freeform' || preferred === 'grid') return preferred;
-            return 'grid';
-        })(),
+        sortBy: normalizeViewMode(
+            localStorage.getItem('matrix_desktop_layout')
+                || localStorage.getItem('matrix_preferred_view')
+                || 'grid'
+        ),
         fileCabinet: localStorage.getItem('matrix_file_cabinet') === 'true',
         currentView: 'active'
     }
@@ -99,7 +98,6 @@ class Application {
             migrateCompactDefaultsIfNeeded();
             migrateCardMinimumFootprintIfNeeded();
             migrateGridSpanCardWidthIfNeeded();
-            purgeSudokuStorageIfNeeded();
             DisplayOptions.init({
                 getLoggedIn: () => AppState.user.isLoggedIn
             });
@@ -184,7 +182,7 @@ class Application {
         else AppState.items.push(item);
 
         if (Editor.activeItem?.id === item.id && !Editor.overlay?.classList.contains('is-hidden')) {
-            Editor.activeItem = JSON.parse(JSON.stringify(item));
+            Editor.activeItem = NoteSurface.snapshotItem(item);
             Editor.renderForm();
             Editor.updateEditorSizeLabel();
         }
@@ -518,10 +516,10 @@ class Application {
         ColorPicker.open({
             anchor: addBtn,
             presets: PALETTE_NOTE,
-            value: '#64748b',
+            value: UNCATEGORIZED_COLOR,
             align: 'end',
             onSelect: (color) => {
-                const cleanColor = color && color.trim() ? color.trim() : '#64748b';
+                const cleanColor = color && color.trim() ? color.trim() : UNCATEGORIZED_COLOR;
                 AppState.categories = writeStoredCategories([
                     ...AppState.categories,
                     { name: cleanName, color: cleanColor }

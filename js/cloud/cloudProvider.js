@@ -1,3 +1,4 @@
+/** @module {"owns":"cloud provider registry and factory dispatch", "related":["cloudBackup.js","cloud/megaProvider.js","cloud/localFolderProvider.js"]} */
 const providers = new Map();
 
 export function registerCloudProvider(id, factory) {

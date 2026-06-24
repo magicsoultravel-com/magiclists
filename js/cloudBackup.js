@@ -1,3 +1,4 @@
+/** @module {"owns":"cloud backup UI, MEGA and local-folder sync", "related":["backup.js","cloud/cloudProvider.js","cloud/megaProvider.js","cloud/localFolderProvider.js"]} */
 import {
     applyBackupToStorage,
     backupFilename,

@@ -5,33 +5,25 @@ alwaysApply: true
 
 # magiclists
 
-Vanilla JS ES modules + plain CSS. Client-only; data via `js/api.js` → localStorage. Entry: `index.html` → `js/app.js`. No React/TS/bundler unless asked.
+Vanilla JS ES modules + plain CSS. Client-only; primary data via `js/api.js` → `localStorage` (`matrix_database`). Cloud backup and drawing data use additional keys. Entry: `index.html` → `js/app.js`. UI brand: **magicNotes**; repo id: **magiclists**. No React/TS/bundler unless asked.
 
-**Architecture:** `app.js` orchestrates; modules use `window` CustomEvents (`namespace:action`); item CRUD through `API` only. Tools: `js/tools/*.js` with `@tool` header + `init(mount)`; run `node scripts/build-tools-list.mjs` after tool changes. Board views: grid + freeform only (columns view removed).
+**Architecture:** `app.js` orchestrates; modules use `window` CustomEvents (`namespace:action`). Item CRUD through `API` only; UI mutations emit `item:mutation_requested` (handled in `app.js`). Tools: `js/tools/*.js` with `@tool` header + `init(mount)`; `stop` hook auto-runs `build-tools-list.ps1` when tools change. Board views: grid + freeform only (columns view removed). Workspace modes: `notes` | `drawing` (magicCanvas).
 
-**Before editing:** grep/read existing patterns in the area you touch and its callers. Minimal diff; no dead code or half-migrations. Reuse `CARD_ICONS` / `ACTION_ICONS` from `ui.js`.
+**Before editing:** grep/read existing patterns in the area you touch and its callers. Minimal diff; no dead code or half-migrations. Reuse `CARD_ICONS` / `ACTION_ICONS` from `js/icons.js` (`ui.js` re-exports). Note cards/checklists/sheets: start in `noteSurface.js`.
 
 **Design:** Minimal, lightweight, smooth, modern, compact. Dark default; use CSS variables and existing theme pickers. Reuse classes (`.btn`, `.card-act`, `.collapsable-*`, `.overlay`) — ask before inventing new ones. Modular files; same tropes across tiles, editor, sidebar, tools. Match existing interaction patterns (hover, overlay, persistent). UX first.
 
-**CSS map** (load order in `index.html`; edit the smallest owning file):
+**Architecture map (generated):** See `.cursor/rules/magiclists-architecture.mdc` — auto-refreshed by Cursor `stop` hook (PowerShell, no Node). Source of truth: `@css` / `@module` / `@tool` headers + `index.html` CSS links. Grep sibling CSS files before adding cross-cutting selectors.
 
-| File | Owns | Primary JS |
-|------|------|------------|
-| `css/base.css` | `:root` tokens, tile/grid vars, `.is-hidden` | `gridDensity.js`, `tileFootprint.js`, `appTheme.js` |
-| `css/shell.css` | workspace shell, file cabinet, FAB, `.btn`, display options, note footer/editor typography | `hamburger.js`, `displayOptions.js`, `ui.js` |
-| `css/sidebar.css` | side panel, search, notes list, control bar | `hamburger.js`, `searchBar.js` |
-| `css/cards.css` | `#app-canvas`, `.mini-card*`, color picker, custom backgrounds | `ui.js`, `colorPicker.js`, `cardTheme.js` |
-| `css/overlays.css` | `.overlay`, `.modal`, `.collapsable-*` | `editor.js`, `editorModalChrome.js` |
-| `css/board.css` | grid/freeform board, clock, drag/resize | `dragdrop.js`, `clockStyle.js`, `desktopZoom.js` |
-| `css/themes.css` | `html[data-app-theme]` overrides | `appTheme.js`, `themePicker.js` |
-| `css/drawing.css` | magicCanvas toolbar | `drawingBoard.js`, `drawingToolbarMenu.js` |
-| `css/tools.css` + per-tool files | tool panels, calendar, cosmos, radio, tv | `js/tools/*.js`, `sidebarRadio.js`, `sidebarTv.js` |
+**On create (same turn, mandatory):** new `css/*.css` → `@css` header + `index.html` link; new domain JS → `@module` header; new tool → `@tool` header. Do not assume the user will run scripts — hooks rebuild the map when the turn ends.
 
-Grep sibling CSS files before adding cross-cutting selectors.
+**CSS lifecycle:** New domain → new file + `@css` + `index.html` link. Extend smallest owning file (check generated map). Shared tokens → `css/base.css` only. Merge: union `@css` metadata, remove link, delete file.
+
+**JS lifecycle:** Add `@module` when a file becomes a primary domain owner (not every helper). Extract from `ui.js`/`editor.js`: tag new file, list in old file's `related`.
 
 **Note footer:** `.editor-meta-wrap` → `.editor-meta-row--footer.editor-meta-row--inline`. One CSS block in `shell.css`; single-line `0.48rem` × `--note-font-scale`. Do not add per-view font-size overrides unless user explicitly asks.
 
-**Deliver:** concise, no preamble; audit shared styles/components for regressions across board, editor, sidebar, calendar, tools.
+**Deliver:** concise, no preamble; audit shared styles/components for regressions across board, editor, sidebar, calendar, tools, weather, radio, TV, cloud, file cabinet, drawing, sheet templates.
 
 ## Git / GitHub (required — magiclists workspace only)
 
@@ -49,8 +41,9 @@ Skip the prompt only when the turn was read-only (no file edits) or the user alr
 
 When the user agrees to commit:
 1. `git status` + `git diff` to verify scope
-2. Stage only relevant files (never `.env`, credentials, or accidental junk)
-3. Commit with a concise message (why, not a file list) matching recent repo style
-4. Push only if they also want push (or ask again after commit)
+2. Include `.cursor/rules/magiclists-architecture.mdc` (and `js/tools/registry.js` if tools changed) if hooks refreshed them this turn
+3. Stage only relevant files (never `.env`, credentials, or accidental junk)
+4. Commit with a concise message (why, not a file list) matching recent repo style
+5. Push only if they also want push (or ask again after commit)
 
 If push fails (auth, hook, conflict), report the error and fix or ask before continuing. Do not force-push to `main`.

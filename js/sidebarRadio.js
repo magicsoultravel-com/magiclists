@@ -1,3 +1,4 @@
+/** @module {"owns":"sidebar radio player and station browser", "related":["radioPlayer.js","radioProviders/registry.js","radioPopover.js"]} */
 import { RadioProviderRegistry } from './radioProviders/registry.js';
 import { stationKey, parseStationKey } from './radioProviders/stationShape.js';
 import { RadioPlayer } from './radioPlayer.js';

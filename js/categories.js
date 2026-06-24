@@ -61,3 +61,21 @@ export function readStoredCategories({ keepEmpty = false } = {}) {
 export function categoryKey(name) {
     return String(name || '').trim().toLowerCase();
 }
+
+export function resolveCategoryColor(name, categories, { fallback = UNCATEGORIZED_COLOR } = {}) {
+    const key = categoryKey(name);
+    if (!key) return fallback;
+    const matched = (categories || []).find((cat) => {
+        const catName = typeof cat === 'string' ? cat : cat?.name;
+        return catName && categoryKey(catName) === key;
+    });
+    if (!matched) return fallback;
+    if (typeof matched === 'string') return fallback;
+    return matched.color || fallback;
+}
+
+export function getCardRenderContext(item, activeCategories) {
+    const targetCatName = item?.categories?.[0] || '';
+    const categoryColor = resolveCategoryColor(targetCatName, activeCategories);
+    return { targetCatName, categoryColor };
+}

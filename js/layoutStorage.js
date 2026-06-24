@@ -1,3 +1,4 @@
+/** @module {"owns":"board layout persistence, grid/freeform positions, storage migrations", "related":["dragdrop.js","ui.js","fileCabinet.js","board/gridEngine.js"]} */
 import {
     categoryKey,
     isUncategorizedCategory,
@@ -233,6 +234,7 @@ export function clearPresentationLayoutKeys() {
     });
 }
 
+/** One-time cleanup: columns view removed; safe to run on every boot until keys are gone. */
 export function migrateLegacyColumnsFloatStorage(writeState = null) {
     let changed = false;
     DEAD_LAYOUT_KEYS.forEach((key) => {

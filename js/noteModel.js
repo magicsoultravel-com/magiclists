@@ -1,3 +1,4 @@
+/** @module {"owns":"note item schema, normalizeItemForSave, createNoteId", "related":["richText.js","sheet.js"]} */
 import { stripRichText } from './richText.js';
 import { normalizeTileSize } from './tileGeometry.js';
 import { resolveNoteTemplate, sheetFirstCellText, sheetHasContent, sheetIsActive } from './sheet.js';
@@ -50,6 +51,33 @@ export function formatLocalDateTimeParts(date = new Date()) {
 export function defaultStartDateTimeNow() {
     const { date, time } = formatLocalDateTimeParts();
     return `${date}T${time}`;
+}
+
+export function formatLocalDate(date = new Date()) {
+    return formatLocalDateTimeParts(date).date;
+}
+
+export function formatLocalTime(date = new Date()) {
+    return formatLocalDateTimeParts(date).time;
+}
+
+export function parseStoredDateTime(value) {
+    if (!value) return { date: '', time: '' };
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return { date: value, time: '' };
+    if (value.includes('T')) {
+        const [date, timePart] = value.split('T');
+        return { date: date || '', time: timePart ? timePart.slice(0, 5) : '' };
+    }
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+        return formatLocalDateTimeParts(parsed);
+    }
+    return { date: '', time: '' };
+}
+
+export function combineDateTime(date, time) {
+    if (!date) return '';
+    return time ? `${date}T${time}` : date;
 }
 
 export function normalizeItemForSave(item, { preserveEmptySteps = false } = {}) {

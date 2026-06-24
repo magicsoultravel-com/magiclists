@@ -1,5 +1,5 @@
 import { Holidays } from './holidays.js';
-import { readStoredCategories } from './categories.js';
+import { readStoredCategories, resolveCategoryColor, UNCATEGORIZED_COLOR } from './categories.js';
 import { CARD_ICONS } from './icons.js';
 import { resolveNoteColor } from './colorPicker.js';
 import { stripRichText } from './richText.js';
@@ -216,16 +216,7 @@ export const Calendar = {
     getNoteColor(item) {
         if (item.backgroundColor) return item.backgroundColor;
         const categoryName = item.categories?.[0] || '';
-        const storedCats = localStorage.getItem('matrix_custom_categories');
-        if (storedCats) {
-            try {
-                const cats = JSON.parse(storedCats);
-                const matched = cats.find(c => c.name === categoryName);
-                if (matched) return matched.color;
-            } catch(e) {}
-        }
-        const matched = readStoredCategories().find(c => c.name === categoryName);
-        return matched ? matched.color : "#64748b";
+        return resolveCategoryColor(categoryName, readStoredCategories());
     },
     
     render() {

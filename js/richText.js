@@ -1,3 +1,4 @@
+/** @module {"owns":"rich text sanitize, linkify, strip markup", "related":["noteSurface.js","noteModel.js"]} */
 const ALLOWED_TAGS = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'S', 'STRIKE', 'DEL', 'BR']);
 const MARKUP_RE = /<(?:\/?)(?:a|b|strong|i|em|s|strike|del|br)\b/i;
 const URL_RE = /(?:https?:\/\/|www\.)[^\s<>"']+/gi;

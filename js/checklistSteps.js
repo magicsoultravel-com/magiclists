@@ -1,3 +1,4 @@
+/** @module {"owns":"checklist tree logic, step reorder, indent/outdent", "related":["noteSurface.js","noteBodyConversion.js"]} */
 import { unwrapLineStrike, wrapLineAsStruck } from './noteBodyConversion.js';
 
 export function getStepLevel(step) {

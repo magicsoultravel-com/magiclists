@@ -1,4 +1,5 @@
-﻿import { API } from './api.js';
+﻿/** @module {"owns":"board drag-drop, resize, grid snap", "related":["layoutStorage.js","ui.js","fileCabinet.js"], "events":["board:visibility_changed"]} */
+import { API } from './api.js';
 import {
     categoryKey,
     isUncategorizedCategory,
@@ -6,7 +7,7 @@ import {
     UNCATEGORIZED_CATEGORY
 } from './categories.js';
 import { UI, isDesktopCard } from './ui.js';
-import { canEditInline, mutateItem } from './noteSurface.js';
+import { NoteSurface } from './noteSurface.js';
 import { itemHasCategory } from './focusFilter.js';
 import {
     FREEFORM_MIN_W,
@@ -73,8 +74,8 @@ function cardIsPinned(card) {
 
 function promoteExpandedResizeToLargeTier(card, item) {
     if (!item || !isDesktopCard(card) || UI.isSpatiallyCollapsed(card)) return resolveTileSize(item);
-    if (resolveTileSize(item) !== 'small' || !canEditInline()) return resolveTileSize(item);
-    mutateItem(item, (it) => {
+    if (resolveTileSize(item) !== 'small' || !NoteSurface.canEditInline()) return resolveTileSize(item);
+    NoteSurface.mutateItem(item, (it) => {
         it.tileSize = 'large';
     }, { preserveView: true, skipRerender: true });
     item.tileSize = 'large';

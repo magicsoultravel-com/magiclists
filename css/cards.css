@@ -1,3 +1,4 @@
+/** @css {"owns":"#app-canvas, .mini-card*, color picker, custom backgrounds, checklist chrome", "js":["ui.js","colorPicker.js","cardTheme.js","noteSurface.js"], "notes":"desktop spatial overrides also in board.css"} */
 /* ==========================================================================
    3. THE FLUID WORKING CANVAS (MULTI-DIMENSIONAL ENGINE)
    ========================================================================== */

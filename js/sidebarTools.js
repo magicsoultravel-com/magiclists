@@ -1,3 +1,4 @@
+/** @module {"owns":"sidebar tools dock and tool launcher chips", "related":["toolsManager.js","toolPanelChrome.js","sidebarPrefs.js"]} */
 import { clampPanelToViewport } from './popoverPosition.js';
 import { CARD_ICONS } from './icons.js';
 import { readToolsDock, writeToolsDock, writeSidebarSection } from './sidebarPrefs.js';

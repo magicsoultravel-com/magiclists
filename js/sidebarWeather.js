@@ -1,3 +1,4 @@
+/** @module {"owns":"sidebar weather glance and forecast panel", "related":["weatherApi.js","weatherProviders/registry.js"]} */
 import { WeatherApi } from './weatherApi.js';
 import { applySectionCollapse } from './hamburger.js';
 import { escapeHtml } from './radioUtils.js';

@@ -1,14 +1,21 @@
-﻿import { applyCardTheme } from './cardTheme.js';
+﻿/** @module {"owns":"modal note editor overlay, save flow", "related":["noteSurface.js","noteQuickActions.js","editorModalChrome.js","sheet.js"], "events":["item:selected_for_edit","editor:reveal_on_board"]} */
+import { applyCardTheme } from './cardTheme.js';
 import { ColorPicker, PALETTE_NOTE, randomNoteColor, resolveNoteColor } from './colorPicker.js';
 import { EditorModalChrome } from './editorModalChrome.js';
 import { stripRichText } from './richText.js';
 import { CARD_ICONS } from './icons.js';
 import {
+    combineDateTime,
     createNoteId,
     defaultStartDateTimeNow,
+    formatLocalDate,
+    formatLocalTime,
     noteHasSavableContent,
-    normalizeItemForSave
+    normalizeItemForSave,
+    parseStoredDateTime
 } from './noteModel.js';
+import { getCardRenderContext } from './categories.js';
+import { bindNoteQuickActions } from './noteQuickActions.js';
 import { NoteSurface } from './noteSurface.js';
 import { UI } from './ui.js';
 import {
@@ -76,7 +83,7 @@ export const Editor = {
         this.hasUserInteracted = false;
 
         const isNew = !item;
-        this.activeItem = item ? JSON.parse(JSON.stringify(item)) : {
+        this.activeItem = item ? NoteSurface.snapshotItem(item) : {
             id: createNoteId(),
             owner_id: "admin",
             visibility: "private",
@@ -171,9 +178,7 @@ export const Editor = {
 
         this.isNewUnsavedNote = false;
         Object.assign(this.activeItem, currentData);
-        window.dispatchEvent(new CustomEvent('item:mutation_requested', {
-            detail: { item: { ...this.activeItem }, preserveView: true }
-        }));
+        NoteSurface.emitItemMutation(this.activeItem, { preserveView: true });
         return true;
     },
 
@@ -222,11 +227,11 @@ export const Editor = {
                 return cat ? [cat] : [];
             })(),
             backgroundColor: finalBgColor,
-            startDateTime: this.combineDateTime(
+            startDateTime: combineDateTime(
                 document.getElementById('edit-start-date')?.value || '',
                 document.getElementById('edit-start-time')?.value || ''
             ),
-            endDateTime: this.combineDateTime(
+            endDateTime: combineDateTime(
                 document.getElementById('edit-end-date')?.value || '',
                 document.getElementById('edit-end-time')?.value || ''
             ),
@@ -302,46 +307,17 @@ export const Editor = {
         this.animateEditorClose(() => this.resetEditorState());
     },
     
-    formatLocalDate(date = new Date()) {
-        const pad = (n) => String(n).padStart(2, '0');
-        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
-    },
-
-    formatLocalTime(date = new Date()) {
-        const pad = (n) => String(n).padStart(2, '0');
-        return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
-    },
-
-    parseStoredDateTime(value) {
-        if (!value) return { date: '', time: '' };
-        if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return { date: value, time: '' };
-        if (value.includes('T')) {
-            const [date, timePart] = value.split('T');
-            return { date: date || '', time: timePart ? timePart.slice(0, 5) : '' };
-        }
-        const parsed = new Date(value);
-        if (!Number.isNaN(parsed.getTime())) {
-            return { date: this.formatLocalDate(parsed), time: this.formatLocalTime(parsed) };
-        }
-        return { date: '', time: '' };
-    },
-
-    combineDateTime(date, time) {
-        if (!date) return '';
-        return time ? `${date}T${time}` : date;
-    },
-
     bindDateInputDefaults(dateId, timeId, { defaultTimeOnFocus = true } = {}) {
         const dateEl = document.getElementById(dateId);
         const timeEl = document.getElementById(timeId);
         if (!dateEl) return;
 
         dateEl.addEventListener('focus', () => {
-            if (!dateEl.value) dateEl.value = this.formatLocalDate();
+            if (!dateEl.value) dateEl.value = formatLocalDate();
         });
         if (!timeEl || !defaultTimeOnFocus) return;
         timeEl.addEventListener('focus', () => {
-            if (!timeEl.value && dateEl.value) timeEl.value = this.formatLocalTime();
+            if (!timeEl.value && dateEl.value) timeEl.value = formatLocalTime();
         });
     },
 
@@ -351,72 +327,32 @@ export const Editor = {
         if (!body.dataset.pendingFocusStepId) {
             this.syncActiveItemFromDom();
         }
-        const scrollTop = body.scrollTop;
-        const active = document.activeElement;
-        const focusField = active?.dataset?.field;
-        const focusStepId = active?.dataset?.stepId;
-
-        const pendingFocusStepId = body.dataset.pendingFocusStepId;
-        const pendingFocusEdge = body.dataset.pendingFocusEdge;
-        const pendingFocusPlainOffset = body.dataset.pendingFocusPlainOffset;
-        body.innerHTML = NoteSurface.buildNoteBodyHtml(this.activeItem, {
-            canEdit: true,
-            inModalEditor: true,
-            richEdit: true
-        });
         const shell = this.mountZone?.querySelector('.editor-note-shell');
-        if (shell) NoteSurface.updateConvertButtons(shell, this.activeItem);
-        if (pendingFocusStepId) {
-            body.dataset.pendingFocusStepId = pendingFocusStepId;
-            if (pendingFocusEdge) body.dataset.pendingFocusEdge = pendingFocusEdge;
-            if (pendingFocusPlainOffset != null) {
-                body.dataset.pendingFocusPlainOffset = pendingFocusPlainOffset;
-            }
-        }
-        delete body.dataset.noteInteractionsBound;
-        delete body.dataset.checklistInteractionsBound;
         const onEditorChange = () => {
             this.markInteracted();
             this.scheduleEditorSizeLabelUpdate();
             this.triggerAutoSave();
         };
-        NoteSurface.attachNoteBodyInteractions(body, this.activeItem, {
-            refresh: () => this.refreshEditorNoteBody(),
+        NoteSurface.refreshNoteBody(body, this.activeItem, {
+            mountZone: this.mountZone,
+            shell,
             localOnly: true,
             richEdit: true,
-            onChange: onEditorChange
+            onChange: onEditorChange,
+            refresh: () => this.refreshEditorNoteBody(),
+            sheetInteractionOpts: shell
+                ? NoteSurface.buildSheetInteractionOptions(shell, this.activeItem, {
+                    localOnly: true,
+                    onChange: onEditorChange,
+                    refresh: () => this.refreshEditorNoteBody()
+                })
+                : null
         });
-        if (shell) {
-            attachSheetInteractions(body, this.activeItem, NoteSurface.buildSheetInteractionOptions(shell, this.activeItem, {
-                localOnly: true,
-                onChange: onEditorChange,
-                refresh: () => this.refreshEditorNoteBody()
-            }));
-        }
-        body.scrollTop = scrollTop;
-
-        if (body.dataset.pendingFocusStepId) {
-            NoteSurface.focusPendingChecklistStep(body);
-            return;
-        }
-
-        if (!focusField) return;
-        const focusEl = focusStepId
-            ? body.querySelector(`[data-field="step-text"][data-step-id="${focusStepId}"]`)
-            : this.mountZone.querySelector(`[data-field="${focusField}"]`);
-        if (focusEl) NoteSurface.focusInlineEdit(focusEl, 'end');
     },
 
     renderForm() {
         const item = this.activeItem;
-        const activeCategory = item.categories?.[0] || '';
-        const matchedCat = this.availableCategories.find((cat) => {
-            const name = typeof cat === 'string' ? cat : cat?.name;
-            return name && name.toLowerCase() === activeCategory.toLowerCase();
-        });
-        const categoryColor = matchedCat && typeof matchedCat !== 'string' && matchedCat.color
-            ? matchedCat.color
-            : '#64748b';
+        const { targetCatName: activeCategory, categoryColor } = getCardRenderContext(item, this.availableCategories);
         const categoryOptionsHtml = `<option value="" ${!activeCategory ? 'selected' : ''}>—</option>` +
             this.availableCategories.map(cat => {
                 const catName = typeof cat === 'string' ? cat : cat.name;
@@ -431,13 +367,17 @@ export const Editor = {
                 showDrag: true,
                 showArchive: isExistingItem
             });
-            UI.attachModalQuickActions(this.toolbarMount, item, this);
+            bindNoteQuickActions(this.toolbarMount, item, {
+                surface: 'modal',
+                ui: UI,
+                editor: this
+            });
         }
         this.updateDoneButtonUI();
         this.updateArchiveToggleUI();
         this.updateCalendarToggleUI();
-        const startParts = this.parseStoredDateTime(item.startDateTime || '');
-        const endParts = this.parseStoredDateTime(item.endDateTime || '');
+        const startParts = parseStoredDateTime(item.startDateTime || '');
+        const endParts = parseStoredDateTime(item.endDateTime || '');
 
         this.mountZone.innerHTML = NoteSurface.buildNoteEditorShell(item, {
             canEdit: true,
@@ -580,10 +520,6 @@ export const Editor = {
         });
     },
 
-    collectAndSave() {
-        this.closeAndSave({ scrollToBoard: true });
-    },
-    
     updateArchiveToggleUI() {
         if (!this.archiveBtn || !this.activeItem) return;
         const isArchived = this.activeItem.status === 'archived';
@@ -601,13 +537,11 @@ export const Editor = {
         if (!confirm(`${verb} "${label}"? You can undo afterwards.`)) return;
 
         this.markInteracted();
-        const beforeItem = JSON.parse(JSON.stringify(this.activeItem));
+        const beforeItem = NoteSurface.snapshotItem(this.activeItem);
         const data = this.collectFormData({ normalize: true });
         data.status = isArchived ? 'active' : 'archived';
-
-        window.dispatchEvent(new CustomEvent('item:mutation_requested', {
-            detail: { item: data, beforeItem, preserveView: false }
-        }));
+        Object.assign(this.activeItem, data);
+        NoteSurface.emitItemMutation(this.activeItem, { preserveView: false, beforeItem });
         this.close();
     },
     

@@ -1,5 +1,7 @@
+/** @module {"owns":"file cabinet mode, drag-to-file, filed chip rail", "related":["noteSurface.js","dragdrop.js","layoutStorage.js"], "events":["filecabinet:layout_changed"]} */
+import { UNCATEGORIZED_CATEGORY, UNCATEGORIZED_COLOR, resolveCategoryColor } from './categories.js';
 import { getItemCategoryName } from './focusFilter.js';
-import { emitItemMutation, snapshotItem } from './noteSurface.js';
+import { NoteSurface } from './noteSurface.js';
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import { sortBoardItems } from './boardSort.js';
 import { readBoardSort } from './sidebarPrefs.js';
@@ -166,12 +168,12 @@ export function moveItemBetweenCategories({ itemId, fromCategory, toCategory, to
     saveFileCabinetOrder(order);
 
     if (fromCat !== toCat && item && UI) {
-        const beforeItem = snapshotItem(item);
+        const beforeItem = NoteSurface.snapshotItem(item);
         const updated = {
             ...item,
             categories: toCat === 'Uncategorized' ? [] : [toCat]
         };
-        emitItemMutation(updated, { preserveView: true, beforeItem, skipRerender: true });
+        NoteSurface.emitItemMutation(updated, { preserveView: true, beforeItem, skipRerender: true });
         return true;
     }
     return fromCat !== toCat;
@@ -680,8 +682,7 @@ function buildFileCabinetCategoryColumn({
     showFoldButton = true
 }) {
     const label = getLabelRect();
-    const matched = activeCategories.find((c) => c.name?.toLowerCase() === catName.toLowerCase());
-    const color = matched?.color || '#64748b';
+    const color = resolveCategoryColor(catName, activeCategories);
 
     const col = document.createElement('div');
     col.className = 'file-cabinet-category';
@@ -718,8 +719,7 @@ function buildFileCabinetCategoryColumn({
 
 function buildFileCabinetRolloutStack({ catName, items, activeCategories, UI }) {
     const label = getLabelRect();
-    const matched = activeCategories.find((c) => c.name?.toLowerCase() === catName.toLowerCase());
-    const color = matched?.color || '#64748b';
+    const color = resolveCategoryColor(catName, activeCategories);
 
     const stack = document.createElement('div');
     stack.className = 'file-cabinet-tab-stack';
@@ -919,8 +919,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
             .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
             .forEach((catName) => {
                 const items = byCategory.get(catName) || [];
-                const matched = activeCategories.find((c) => c.name?.toLowerCase() === catName.toLowerCase());
-                const color = matched?.color || '#64748b';
+                const color = resolveCategoryColor(catName, activeCategories);
 
                 const slot = document.createElement('div');
                 slot.className = 'file-cabinet-filed-slot';

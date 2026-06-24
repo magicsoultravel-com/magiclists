@@ -1,3 +1,4 @@
+/** @module {"owns":"grid board layout engine, push resolution", "related":["board/noteGeometry.js","layoutStorage.js","gridDensity.js"]} */
 import { getGridMetrics } from '../gridDensity.js';
 import { resolveGridPushLayout } from './noteGeometry.js';
 import { getGridBoardBounds } from './boardExtents.js';

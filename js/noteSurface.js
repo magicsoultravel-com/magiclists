@@ -1,3 +1,4 @@
+/** @module {"owns":"note card DOM, inline edit, checklist interactions, item mutations", "related":["checklistSteps.js","richText.js","sheet.js","noteBodyConversion.js","noteQuickActions.js"], "events":["item:mutation_requested"]} */
 import { isFileCabinetActive, getFileCabinetToggleLabels } from './fileCabinet.js';
 import { isCollapsedSpatialSize, LEGACY_TILE_SIZE } from './tileGeometry.js';
 import { copyPlainTextToClipboard } from './clipboard.js';
@@ -6,7 +7,6 @@ import {
     convertChecklistToContent,
     convertContentToChecklist,
     deriveEditorBodyLayout,
-    itemToPlainCopyText,
     SOFT_BREAK,
     stepToPlainCopyLine,
     unwrapLineStrike,
@@ -45,6 +45,7 @@ import {
 } from './checklistSteps.js';
 import { UndoManager } from './undo.js';
 import { escapeHTML, escapeAttr, escapeQuotes } from './domEscape.js';
+import { UNCATEGORIZED_COLOR } from './categories.js';
 import {
     attachSheetInteractions,
     defaultSheetDimsForTemplate,
@@ -59,7 +60,6 @@ import {
     syncSheetFromDom
 } from './sheet.js';
 
-const UNCATEGORIZED_COLOR = '#64748b';
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
 const EDITOR_ZOOM_MAX = 1.25;
@@ -2160,15 +2160,78 @@ export const NoteSurface = {
         </div>`;
     },
 
+    captureNoteBodyFocusState(body) {
+        if (!body) return null;
+        const active = document.activeElement;
+        return {
+            scrollTop: body.scrollTop,
+            focusField: active?.dataset?.field,
+            focusStepId: active?.dataset?.stepId,
+            pendingFocusStepId: body.dataset.pendingFocusStepId,
+            pendingFocusEdge: body.dataset.pendingFocusEdge,
+            pendingFocusPlainOffset: body.dataset.pendingFocusPlainOffset
+        };
+    },
+
+    restoreNoteBodyFocusState(body, mountZone, state) {
+        if (!body || !state) return;
+        body.scrollTop = state.scrollTop;
+        if (state.pendingFocusStepId) {
+            body.dataset.pendingFocusStepId = state.pendingFocusStepId;
+            if (state.pendingFocusEdge) body.dataset.pendingFocusEdge = state.pendingFocusEdge;
+            if (state.pendingFocusPlainOffset != null) {
+                body.dataset.pendingFocusPlainOffset = state.pendingFocusPlainOffset;
+            }
+            this.focusPendingChecklistStep(body);
+            return;
+        }
+        if (!state.focusField) return;
+        const focusEl = state.focusStepId
+            ? body.querySelector(`[data-field="step-text"][data-step-id="${state.focusStepId}"]`)
+            : mountZone?.querySelector(`[data-field="${state.focusField}"]`);
+        if (focusEl) this.focusInlineEdit(focusEl, 'end');
+    },
+
+    refreshNoteBody(body, item, {
+        mountZone,
+        shell,
+        localOnly = true,
+        richEdit = true,
+        onChange = () => {},
+        refresh = () => {},
+        sheetInteractionOpts = null
+    } = {}) {
+        if (!body || !item) return;
+        const state = this.captureNoteBodyFocusState(body);
+        body.innerHTML = this.buildNoteBodyHtml(item, {
+            canEdit: true,
+            inModalEditor: true,
+            richEdit
+        });
+        if (shell) this.updateConvertButtons(shell, item);
+        if (state?.pendingFocusStepId) {
+            body.dataset.pendingFocusStepId = state.pendingFocusStepId;
+            if (state.pendingFocusEdge) body.dataset.pendingFocusEdge = state.pendingFocusEdge;
+            if (state.pendingFocusPlainOffset != null) {
+                body.dataset.pendingFocusPlainOffset = state.pendingFocusPlainOffset;
+            }
+        }
+        delete body.dataset.noteInteractionsBound;
+        delete body.dataset.checklistInteractionsBound;
+        this.attachNoteBodyInteractions(body, item, {
+            refresh,
+            localOnly,
+            richEdit,
+            onChange
+        });
+        if (shell && sheetInteractionOpts) {
+            attachSheetInteractions(body, item, sheetInteractionOpts);
+        }
+        this.restoreNoteBodyFocusState(body, mountZone, state);
+    },
+
     escapeHTML,
     escapeAttr
 };
 
 export { escapeHTML, escapeAttr } from './domEscape.js';
-
-export const snapshotItem = NoteSurface.snapshotItem.bind(NoteSurface);
-export const emitItemMutation = NoteSurface.emitItemMutation.bind(NoteSurface);
-export const mutateItem = NoteSurface.mutateItem.bind(NoteSurface);
-export const canEditInline = NoteSurface.canEditInline.bind(NoteSurface);
-export const renderRichHtml = NoteSurface.renderRichHtml.bind(NoteSurface);
-export const formatNoteListDate = NoteSurface.formatNoteListDate.bind(NoteSurface);

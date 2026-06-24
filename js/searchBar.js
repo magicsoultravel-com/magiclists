@@ -1,3 +1,5 @@
+/** @module {"owns":"sidebar search bar and results panel", "related":["searchFilter.js","hamburger.js"]} */
+import { UNCATEGORIZED_COLOR } from './categories.js';
 import { isSearchActive, querySearch } from './searchFilter.js';
 import { CARD_ICONS } from './icons.js';
 import { SidePanel } from './hamburger.js';
@@ -144,7 +146,7 @@ export const SearchBar = {
             <button type="button" class="search-results-item search-results-item--title${archivedClass}"
                 data-action="open-item" data-item-id="${escapeAttr(hit.item.id)}"
                 title="${this.itemRowTitle(hit)}"
-                style="--note-accent:${escapeAttr(hit.item.backgroundColor || '#64748b')}">
+                style="--note-accent:${escapeAttr(hit.item.backgroundColor || UNCATEGORIZED_COLOR)}">
                 <span class="search-results-item-primary">${escapeHTML(hit.title)}</span>
                 ${this.renderArchivedBadge(hit.item)}
                 <span class="search-results-item-secondary">

@@ -1,3 +1,4 @@
+/** @module {"owns":"local backup export/import, encrypted packages", "related":["cloudBackup.js","api.js"]} */
 import {
     ensureUncategorizedCategory,
     normalizeCategories,

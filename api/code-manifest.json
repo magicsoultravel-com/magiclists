@@ -52,7 +52,7 @@
     "js/noteFont.js",
     "js/noteFontScale.js",
     "js/popoverPosition.js",
-    "js/purgeSudokuStorage.js",
+    "js/noteQuickActions.js",
     "js/radioBrowserApi.js",
     "js/radioPlayer.js",
     "js/radioPopover.js",

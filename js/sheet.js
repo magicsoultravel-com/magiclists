@@ -1,3 +1,4 @@
+/** @module {"owns":"sheet-grid note template model and table interactions", "related":["noteSurface.js","editor.js"]} */
 import { escapeHTML } from './domEscape.js';
 import { ACTION_ICONS } from './icons.js';
 

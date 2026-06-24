@@ -1,7 +1,8 @@
+/** @module {"owns":"side panel shell, notes list, category drawer, sort", "related":["searchBar.js","ui.js"], "events":["category:show_requested","category:order_changed"]} */
 import { UI } from './ui.js';
-import { formatNoteListDate, renderRichHtml } from './noteSurface.js';
+import { NoteSurface } from './noteSurface.js';
 import { escapeAttr, escapeHTML } from './domEscape.js';
-import { UNCATEGORIZED_CATEGORY } from './categories.js';
+import { UNCATEGORIZED_CATEGORY, UNCATEGORIZED_COLOR } from './categories.js';
 import { itemHasCategory } from './focusFilter.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { formatStorageSize, getLocalStorageByteEstimate, getLocalStorageUsageBreakdown, getStorageBreakdown } from './layoutStorage.js';
@@ -249,7 +250,7 @@ export const SidePanel = {
         const plainTitle = stripRichText(item.title || '') || 'Untitled';
         const titleRich = hasRichMarkup(item.title);
         const titleHtml = titleRich
-            ? renderRichHtml(item.title || '')
+            ? NoteSurface.renderRichHtml(item.title || '')
             : escapeHTML(plainTitle);
         return {
             titleAttr: escapeAttr(plainTitle),
@@ -403,7 +404,7 @@ export const SidePanel = {
         zone.innerHTML = sorted.map((item) => {
             const accent = resolveNoteColor(item.backgroundColor);
             const accentStyle = ` style="--note-accent:${escapeAttr(accent)}"`;
-            const dateLabel = formatNoteListDate(item);
+            const dateLabel = NoteSurface.formatNoteListDate(item);
             const { titleAttr, titleHtml, richClass } = this.buildSidebarNoteTitle(item);
 
             if (variant === 'hidden') {
@@ -480,8 +481,8 @@ export const SidePanel = {
         zone.innerHTML = sorted.map((catName) => {
             const cat = categories.find((entry) => entry.name === catName);
             const color = catName === UNCATEGORIZED_CATEGORY
-                ? '#64748b'
-                : (cat?.color || '#64748b');
+                ? UNCATEGORIZED_COLOR
+                : (cat?.color || UNCATEGORIZED_COLOR);
             const accentStyle = ` style="--note-accent:${escapeAttr(color)}"`;
             const title = catName === UNCATEGORIZED_CATEGORY && uncatCount > 0
                 ? escapeHTML(`${UNCATEGORIZED_CATEGORY} (${uncatCount})`)

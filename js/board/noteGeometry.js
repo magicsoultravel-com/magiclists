@@ -1,3 +1,4 @@
+/** @module {"owns":"grid note geometry, push layout, tile bounds", "related":["board/gridEngine.js","tileGeometry.js"]} */
 import { getGridMetrics } from '../gridDensity.js';
 import { readTileSmallFootprint } from '../tileFootprint.js';
 import {

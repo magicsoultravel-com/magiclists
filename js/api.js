@@ -1,3 +1,4 @@
+/** @module {"owns":"item CRUD and matrix_database localStorage persistence", "related":["noteModel.js","layoutStorage.js"]} */
 import { DEFAULT_CATEGORIES } from './categories.js';
 import { purgeLayoutForItem } from './layoutStorage.js';
 import { normalizeTileSize } from './tileGeometry.js';
