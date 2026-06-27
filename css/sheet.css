@@ -17,13 +17,14 @@
     border-radius: 4px;
     background: rgba(0, 0, 0, 0.08);
     --sheet-head-fg: var(--text-muted);
-    --sheet-head-bg: transparent;
+    --sheet-head-bg: color-mix(in srgb, var(--border-color) 14%, transparent);
     --sheet-head-border: color-mix(in srgb, var(--border-color) 28%, transparent);
     --sheet-grid-border: color-mix(in srgb, var(--border-color) 45%, transparent);
 }
 
 .has-custom-bg .sheet-grid-wrap {
     --sheet-head-fg: var(--card-muted);
+    --sheet-head-bg: color-mix(in srgb, var(--card-border-subtle) 35%, transparent);
     --sheet-head-border: var(--card-border-subtle);
     --sheet-grid-border: var(--card-border-subtle);
 }
@@ -159,7 +160,7 @@
     width: 100%;
     max-width: 100%;
     min-width: 0;
-    min-height: 0;
+    min-height: calc(1.25em + 0.15rem);
     border: none;
     border-radius: 0;
     padding: 0.075rem 0.22rem;
@@ -179,7 +180,7 @@
 /* Override global .form-input / textarea.form-input sizing in overlays.css + board.css */
 .sheet-grid textarea.sheet-cell-input.form-input,
 #editor-overlay .sheet-grid textarea.sheet-cell-input.form-input {
-    min-height: 0;
+    min-height: calc(1.25em + 0.15rem);
     max-height: none;
     padding: 0.075rem 0.22rem;
     font-size: inherit;

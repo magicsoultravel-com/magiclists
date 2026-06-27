@@ -1,9 +1,16 @@
 import { positionPanelBelowElement, clampPanelToViewport } from './popoverPosition.js';
+import { raiseDesktopElement } from './desktopStack.js';
 import { TvPlayer } from './tvPlayer.js';
 import { CARD_ICONS } from './icons.js';
 
 const MIN_BROWSER_W = 320;
 const MIN_BROWSER_H = 280;
+
+function raiseUndockedAttachStack(attachEl, panel) {
+    if (!attachEl?.classList.toString().includes('--undocked')) return;
+    raiseDesktopElement(attachEl);
+    raiseDesktopElement(panel);
+}
 
 export const TvPopover = {
     panel: null,
@@ -54,6 +61,9 @@ export const TvPopover = {
         this.bindResize(panel);
         this.bindHeaderDrag(panel);
         this.bindTabs(panel);
+        panel.addEventListener('pointerdown', () => {
+            raiseUndockedAttachStack(this.attachEl, panel);
+        });
         this.panel = panel;
         return panel;
     },
@@ -225,6 +235,7 @@ export const TvPopover = {
         }
 
         iconAnchor?.setAttribute('aria-expanded', 'true');
+        raiseUndockedAttachStack(attachEl, panel);
         this.syncVideoMount();
         this.onOpen?.();
 

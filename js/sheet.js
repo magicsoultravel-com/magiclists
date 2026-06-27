@@ -243,7 +243,7 @@ export function growSheetRowCells(rowEl) {
     let maxH = 0;
     const cells = [...rowEl.querySelectorAll('[data-sheet-cell]')];
     cells.forEach((el) => {
-        el.style.height = '0';
+        el.style.height = 'auto';
         maxH = Math.max(maxH, el.scrollHeight);
     });
     cells.forEach((el) => {
@@ -351,6 +351,7 @@ export function attachSheetInteractions(root, item, {
 
     ensureItemSheet(item, defaultSheetDimsForTemplate(resolveNoteTemplate(item)));
     growSheetCells(block);
+    requestAnimationFrame(() => requestAnimationFrame(() => growSheetCells(block)));
     const includeStructCol = !!block.querySelector('.sheet-grid__struct-col');
 
     if (block.dataset.sheetBound === 'true') return;
@@ -360,6 +361,7 @@ export function attachSheetInteractions(root, item, {
 
     block.querySelectorAll('[data-sheet-cell]').forEach((input) => {
         input.addEventListener('focus', () => {
+            growSheetRowCells(input.closest('tr'));
             if (!editBefore && prepareSnapshot) {
                 editBefore = prepareSnapshot();
             }

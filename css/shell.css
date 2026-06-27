@@ -1529,7 +1529,6 @@ body.is-shell-resizing--h * {
 .sidebar-radio--undocked,
 .sidebar-tv--undocked {
     position: fixed;
-    z-index: 341;
     box-sizing: border-box;
     padding: 0 0.5rem 0.45rem;
     margin-bottom: 0;
@@ -1550,10 +1549,6 @@ body.is-shell-resizing--h * {
 .sidebar-radio--undocked,
 .sidebar-tv--undocked {
     width: 220px;
-}
-
-.sidebar-tv--undocked {
-    z-index: 343;
 }
 
 .sidebar-quick-actions--undocked .collapsable-header,

@@ -55,6 +55,7 @@ import {
     setFileCabinetActive
 } from './fileCabinet.js';
 import { initShellResize } from './shellResize.js';
+import { initUndockedSidebarStacking } from './desktopStack.js';
 
 function countHiddenFromBoard(items) {
     return items.filter(item => UI.isHiddenFromBoard(item)).length;
@@ -124,6 +125,7 @@ class Application {
             this.setupCoreListeners();
             SidePanel.init(AppState);
             initShellResize();
+            initUndockedSidebarStacking();
             SidebarQuickActions.init();
             BoardSort.init({
                 getItems: () => AppState.items,

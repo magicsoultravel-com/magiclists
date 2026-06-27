@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: scripts/build-architecture-map.ps1 - built 2026-06-27T11:21:31.167Z
+> Regenerate: scripts/build-architecture-map.ps1 - built 2026-06-27T12:11:35.310Z
 
 ## CSS load order
 
@@ -53,9 +53,10 @@ alwaysApply: true
 | js/richText.js | rich text sanitize, linkify, strip markup | noteSurface.js, noteModel.js | - | - |
 | js/searchBar.js | sidebar search bar and results panel | searchFilter.js, hamburger.js | - | - |
 | js/sheet.js | sheet-grid note template model and table interactions | noteSurface.js, editor.js | - | - |
-| js/sidebarRadio.js | sidebar radio player and station browser | radioPlayer.js, radioProviders/registry.js, radioPopover.js | - | - |
-| js/sidebarTools.js | sidebar tools dock and tool launcher chips | toolsManager.js, toolPanelChrome.js, sidebarPrefs.js | - | - |
-| js/sidebarTv.js | sidebar TV player and channel browser | tvPlayer.js, tvProviders/registry.js, tvPopover.js | tv:state_changed | - |
+| js/sidebarRadio.js | sidebar radio player and station browser | radioPlayer.js, radioProviders/registry.js, radioPopover.js, sidebarUndock.js | - | - |
+| js/sidebarTools.js | sidebar tools dock and tool launcher chips | toolsManager.js, toolPanelChrome.js, sidebarPrefs.js, sidebarUndock.js | - | - |
+| js/sidebarTv.js | sidebar TV player and channel browser | tvPlayer.js, tvProviders/registry.js, tvPopover.js, sidebarUndock.js | tv:state_changed | - |
+| js/sidebarUndock.js | shared undock/drag/clamp for sidebar panels | desktopStack.js, popoverPosition.js, sidebarPrefs.js | - | - |
 | js/sidebarWeather.js | sidebar weather glance and forecast panel | weatherApi.js, weatherProviders/registry.js | - | - |
 | js/ui.js | board render, tile layout, category visibility, desktop canvas | noteSurface.js, noteQuickActions.js, dragdrop.js, layoutStorage.js, board/gridEngine.js | board:visibility_changed, item:selected_for_edit, calendar:items_changed | - |
 

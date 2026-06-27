@@ -1,13 +1,13 @@
-/** @module {"owns":"sidebar TV player and channel browser", "related":["tvPlayer.js","tvProviders/registry.js","tvPopover.js"], "events":["tv:state_changed"]} */
+/** @module {"owns":"sidebar TV player and channel browser", "related":["tvPlayer.js","tvProviders/registry.js","tvPopover.js","sidebarUndock.js"], "events":["tv:state_changed"]} */
 import { TvProviderRegistry } from './tvProviders/registry.js';
 import { channelKey, parseChannelKey } from './tvProviders/channelShape.js';
 import { TvPlayer } from './tvPlayer.js';
 import { TvPopover } from './tvPopover.js';
-import { clampPanelToViewport } from './popoverPosition.js';
 import { escapeHtml, countryFlagEmoji, debounce, syncMarquee, bindFaviconImage } from './tvUtils.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { applySectionCollapse } from './hamburger.js';
 import { showAppToast } from './toast.js';
+import { initSidebarUndock } from './sidebarUndock.js';
 
 const BROWSE_PAGE_SIZE = 60;
 const BROWSE_SORT_OPTIONS = [{ value: 'name', label: 'Name' }];
@@ -63,54 +63,33 @@ export const SidebarTv = {
             return TvPlayer.resumeIfWasPlaying();
         }).catch(() => {});
         this.prefetchCountries().then(() => this.updateTransport());
-        this.bindDockButton();
-        this.bindMiniPlayerDrag();
+        Object.assign(this, initSidebarUndock({
+            getRoot: () => this.root,
+            undockedClass: 'sidebar-tv--undocked',
+            draggingClass: 'sidebar-tv--dragging',
+            dockSelector: '[data-tv-dock]',
+            getHeader: () => document.getElementById('tv-section-header'),
+            readDock: () => {
+                const s = TvPlayer.getMiniPlayerState();
+                return {
+                    docked: s.miniPlayerDocked !== false,
+                    x: s.miniPlayerX,
+                    y: s.miniPlayerY
+                };
+            },
+            writeDock: (patch) => {
+                const out = {};
+                if (patch.docked !== undefined) out.miniPlayerDocked = patch.docked;
+                if (patch.x !== undefined) out.miniPlayerX = patch.x;
+                if (patch.y !== undefined) out.miniPlayerY = patch.y;
+                TvPlayer.saveMiniPlayerState(out);
+            },
+            restoreToSidebar: () => this.restoreToSidebar(),
+            onPositionChange: () => TvPopover.reposition(),
+            dragBlockSelector: '.sidebar-tv__compact'
+        }));
+        this.toggleMiniPlayerDock = this.toggleDock;
         this.applyInitialDockState();
-        this.bindViewportClamp();
-    },
-
-    isUndocked() {
-        return this.root?.classList.contains('sidebar-tv--undocked');
-    },
-
-    bindViewportClamp() {
-        window.addEventListener('resize', () => {
-            if (!this.isUndocked()) return;
-            const x = parseFloat(this.root.style.left) || 0;
-            const y = parseFloat(this.root.style.top) || 0;
-            const clamped = clampPanelToViewport(this.root, x, y);
-            this.root.style.left = `${clamped.x}px`;
-            this.root.style.top = `${clamped.y}px`;
-            TvPopover.reposition();
-        });
-    },
-
-    applyInitialDockState() {
-        const { miniPlayerDocked, miniPlayerX, miniPlayerY } = TvPlayer.getMiniPlayerState();
-        if (miniPlayerDocked !== false) {
-            this.updateDockButton();
-            return;
-        }
-        this.ensureUndockedInBody();
-        this.root.classList.add('sidebar-tv--undocked');
-        if (miniPlayerX != null && miniPlayerY != null) {
-            this.root.style.left = `${miniPlayerX}px`;
-            this.root.style.top = `${miniPlayerY}px`;
-            requestAnimationFrame(() => {
-                const clamped = clampPanelToViewport(this.root, miniPlayerX, miniPlayerY);
-                this.root.style.left = `${clamped.x}px`;
-                this.root.style.top = `${clamped.y}px`;
-            });
-        } else {
-            this.applyUndockedState(false);
-        }
-        this.updateDockButton();
-    },
-
-    ensureUndockedInBody() {
-        if (this.root.parentElement !== document.body) {
-            document.body.appendChild(this.root);
-        }
     },
 
     restoreToSidebar() {
@@ -130,107 +109,6 @@ export const SidebarTv = {
         const first = scroll.firstElementChild;
         if (first) first.insertAdjacentElement('afterend', this.root);
         else scroll.appendChild(this.root);
-    },
-
-    updateDockButton() {
-        const btn = this.root?.querySelector('[data-tv-dock]');
-        if (!btn) return;
-        const undocked = this.isUndocked();
-        btn.innerHTML = undocked ? CARD_ICONS.pin : CARD_ICONS.unpin;
-        const label = undocked ? 'Dock in sidebar' : 'Undock to canvas';
-        btn.setAttribute('title', label);
-        btn.setAttribute('aria-label', label);
-    },
-
-    bindDockButton() {
-        this.root.querySelector('[data-tv-dock]')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.toggleMiniPlayerDock();
-        });
-    },
-
-    toggleMiniPlayerDock() {
-        if (this.isUndocked()) this.applyDockedState();
-        else this.applyUndockedState();
-        this.updateDockButton();
-        TvPopover.reposition();
-    },
-
-    applyDockedState() {
-        this.root.classList.remove('sidebar-tv--undocked', 'sidebar-tv--dragging');
-        this.root.style.left = '';
-        this.root.style.top = '';
-        this.restoreToSidebar();
-        TvPlayer.saveMiniPlayerState({ miniPlayerDocked: true, miniPlayerX: null, miniPlayerY: null });
-    },
-
-    applyUndockedState(persist = true) {
-        const rect = this.root.getBoundingClientRect();
-        const saved = TvPlayer.getMiniPlayerState();
-        let x = saved.miniPlayerX ?? rect.left;
-        let y = saved.miniPlayerY ?? rect.top;
-        this.ensureUndockedInBody();
-        this.root.classList.add('sidebar-tv--undocked');
-        this.root.style.left = `${x}px`;
-        this.root.style.top = `${y}px`;
-        const clamped = clampPanelToViewport(this.root, x, y);
-        this.root.style.left = `${clamped.x}px`;
-        this.root.style.top = `${clamped.y}px`;
-        if (persist) {
-            TvPlayer.saveMiniPlayerState({
-                miniPlayerDocked: false,
-                miniPlayerX: clamped.x,
-                miniPlayerY: clamped.y
-            });
-        }
-    },
-
-    bindMiniPlayerDrag() {
-        const header = document.getElementById('tv-section-header');
-        if (!header) return;
-        header.addEventListener('pointerdown', (e) => {
-            if (!this.isUndocked()) return;
-            if (e.target.closest('[data-tv-dock]') || e.target.closest('.collapsable-toggle')) return;
-            if (e.target.closest('.sidebar-tv__compact')) return;
-            if (e.button !== 0) return;
-            e.preventDefault();
-            let dragging = true;
-            let didDrag = false;
-            const startX = e.clientX;
-            const startY = e.clientY;
-            const startLeft = parseFloat(this.root.style.left) || 0;
-            const startTop = parseFloat(this.root.style.top) || 0;
-            this.root.classList.add('sidebar-tv--dragging');
-            header.setPointerCapture(e.pointerId);
-            const onMove = (ev) => {
-                if (!dragging) return;
-                if (Math.abs(ev.clientX - startX) > 4 || Math.abs(ev.clientY - startY) > 4) didDrag = true;
-                const clamped = clampPanelToViewport(this.root, startLeft + (ev.clientX - startX), startTop + (ev.clientY - startY));
-                this.root.style.left = `${clamped.x}px`;
-                this.root.style.top = `${clamped.y}px`;
-                TvPopover.reposition();
-            };
-            const onUp = (ev) => {
-                if (!dragging) return;
-                dragging = false;
-                this.root.classList.remove('sidebar-tv--dragging');
-                header.releasePointerCapture(ev.pointerId);
-                if (didDrag) {
-                    header.dataset.suppressClick = 'true';
-                    requestAnimationFrame(() => { delete header.dataset.suppressClick; });
-                }
-                TvPlayer.saveMiniPlayerState({
-                    miniPlayerX: parseFloat(this.root.style.left) || 0,
-                    miniPlayerY: parseFloat(this.root.style.top) || 0
-                });
-                document.removeEventListener('pointermove', onMove);
-                document.removeEventListener('pointerup', onUp);
-                document.removeEventListener('pointercancel', onUp);
-            };
-            document.addEventListener('pointermove', onMove);
-            document.addEventListener('pointerup', onUp);
-            document.addEventListener('pointercancel', onUp);
-        });
     },
 
     async restoreLastChannelMeta() {

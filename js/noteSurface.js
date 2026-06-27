@@ -50,6 +50,7 @@ import {
     attachSheetInteractions,
     defaultSheetDimsForTemplate,
     ensureItemSheet,
+    growSheetCells,
     formatMeetingDateTimeBadge,
     isMeetingTemplateActive,
     isSheetTemplateActive,
@@ -632,8 +633,11 @@ export const NoteSurface = {
                 e.stopPropagation();
                 const body = header.nextElementSibling;
                 const toggle = header.querySelector('.collapsable-toggle');
-                body?.classList.toggle('collapsed');
+                const collapsed = body?.classList.toggle('collapsed');
                 toggle?.classList.toggle('collapsed');
+                if (!collapsed) {
+                    body?.querySelectorAll('[data-sheet-block]').forEach((block) => growSheetCells(block));
+                }
             });
         });
     },

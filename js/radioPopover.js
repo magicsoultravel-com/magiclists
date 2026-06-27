@@ -1,9 +1,16 @@
 import { positionPanelBelowElement, clampPanelToViewport } from './popoverPosition.js';
+import { raiseDesktopElement } from './desktopStack.js';
 import { RadioPlayer } from './radioPlayer.js';
 import { CARD_ICONS } from './icons.js';
 
 const MIN_BROWSER_W = 240;
 const MIN_BROWSER_H = 200;
+
+function raiseUndockedAttachStack(attachEl, panel) {
+    if (!attachEl?.classList.toString().includes('--undocked')) return;
+    raiseDesktopElement(attachEl);
+    raiseDesktopElement(panel);
+}
 
 export const RadioPopover = {
     panel: null,
@@ -51,6 +58,9 @@ export const RadioPopover = {
         this.bindResize(panel);
         this.bindHeaderDrag(panel);
         this.bindTabs(panel);
+        panel.addEventListener('pointerdown', () => {
+            raiseUndockedAttachStack(this.attachEl, panel);
+        });
         this.panel = panel;
         return panel;
     },
@@ -204,6 +214,7 @@ export const RadioPopover = {
         }
 
         iconAnchor?.setAttribute('aria-expanded', 'true');
+        raiseUndockedAttachStack(attachEl, panel);
 
         requestAnimationFrame(() => {
             this.reposition();

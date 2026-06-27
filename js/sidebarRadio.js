@@ -1,12 +1,12 @@
-/** @module {"owns":"sidebar radio player and station browser", "related":["radioPlayer.js","radioProviders/registry.js","radioPopover.js"]} */
+/** @module {"owns":"sidebar radio player and station browser", "related":["radioPlayer.js","radioProviders/registry.js","radioPopover.js","sidebarUndock.js"]} */
 import { RadioProviderRegistry } from './radioProviders/registry.js';
 import { stationKey, parseStationKey } from './radioProviders/stationShape.js';
 import { RadioPlayer } from './radioPlayer.js';
 import { RadioPopover } from './radioPopover.js';
-import { clampPanelToViewport } from './popoverPosition.js';
 import { escapeHtml, countryFlagEmoji, debounce, syncMarquee, bindFaviconImage } from './radioUtils.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { applySectionCollapse } from './hamburger.js';
+import { initSidebarUndock } from './sidebarUndock.js';
 
 const BROWSE_PAGE_SIZE = 60;
 const BROWSE_SORT_OPTIONS = [
@@ -65,55 +65,33 @@ export const SidebarRadio = {
             return RadioPlayer.resumeIfWasPlaying();
         }).catch(() => {});
         this.prefetchCountries().then(() => this.updateTransport());
-        this.bindDockButton();
-        this.bindMiniPlayerDrag();
+        Object.assign(this, initSidebarUndock({
+            getRoot: () => this.root,
+            undockedClass: 'sidebar-radio--undocked',
+            draggingClass: 'sidebar-radio--dragging',
+            dockSelector: '[data-radio-dock]',
+            getHeader: () => document.getElementById('radio-section-header'),
+            readDock: () => {
+                const s = RadioPlayer.getMiniPlayerState();
+                return {
+                    docked: s.miniPlayerDocked !== false,
+                    x: s.miniPlayerX,
+                    y: s.miniPlayerY
+                };
+            },
+            writeDock: (patch) => {
+                const out = {};
+                if (patch.docked !== undefined) out.miniPlayerDocked = patch.docked;
+                if (patch.x !== undefined) out.miniPlayerX = patch.x;
+                if (patch.y !== undefined) out.miniPlayerY = patch.y;
+                RadioPlayer.saveMiniPlayerState(out);
+            },
+            restoreToSidebar: () => this.restoreToSidebar(),
+            onPositionChange: () => RadioPopover.reposition(),
+            dragBlockSelector: '.sidebar-radio__compact'
+        }));
+        this.toggleMiniPlayerDock = this.toggleDock;
         this.applyInitialDockState();
-        this.bindViewportClamp();
-    },
-
-    isUndocked() {
-        return this.root?.classList.contains('sidebar-radio--undocked');
-    },
-
-    bindViewportClamp() {
-        window.addEventListener('resize', () => {
-            if (!this.isUndocked()) return;
-            const x = parseFloat(this.root.style.left) || 0;
-            const y = parseFloat(this.root.style.top) || 0;
-            const clamped = clampPanelToViewport(this.root, x, y);
-            this.root.style.left = `${clamped.x}px`;
-            this.root.style.top = `${clamped.y}px`;
-            RadioPopover.reposition();
-        });
-    },
-
-    applyInitialDockState() {
-        const { miniPlayerDocked, miniPlayerX, miniPlayerY } = RadioPlayer.getMiniPlayerState();
-        if (miniPlayerDocked !== false) {
-            this.updateDockButton();
-            return;
-        }
-
-        this.ensureUndockedInBody();
-        this.root.classList.add('sidebar-radio--undocked');
-        if (miniPlayerX != null && miniPlayerY != null) {
-            this.root.style.left = `${miniPlayerX}px`;
-            this.root.style.top = `${miniPlayerY}px`;
-            requestAnimationFrame(() => {
-                const clamped = clampPanelToViewport(this.root, miniPlayerX, miniPlayerY);
-                this.root.style.left = `${clamped.x}px`;
-                this.root.style.top = `${clamped.y}px`;
-            });
-        } else {
-            this.applyUndockedState(false);
-        }
-        this.updateDockButton();
-    },
-
-    ensureUndockedInBody() {
-        if (this.root.parentElement !== document.body) {
-            document.body.appendChild(this.root);
-        }
     },
 
     restoreToSidebar() {
@@ -128,124 +106,6 @@ export const SidebarRadio = {
         const first = scroll.firstElementChild;
         if (first) first.insertAdjacentElement('afterend', this.root);
         else scroll.appendChild(this.root);
-    },
-
-    updateDockButton() {
-        const btn = this.root?.querySelector('[data-radio-dock]');
-        if (!btn) return;
-        const undocked = this.isUndocked();
-        btn.innerHTML = undocked ? CARD_ICONS.pin : CARD_ICONS.unpin;
-        const label = undocked ? 'Dock in sidebar' : 'Undock to canvas';
-        btn.setAttribute('title', label);
-        btn.setAttribute('aria-label', label);
-    },
-
-    bindDockButton() {
-        this.root.querySelector('[data-radio-dock]')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.toggleMiniPlayerDock();
-        });
-    },
-
-    toggleMiniPlayerDock() {
-        if (this.isUndocked()) {
-            this.applyDockedState();
-        } else {
-            this.applyUndockedState();
-        }
-        this.updateDockButton();
-        RadioPopover.reposition();
-    },
-
-    applyDockedState() {
-        this.root.classList.remove('sidebar-radio--undocked', 'sidebar-radio--dragging');
-        this.root.style.left = '';
-        this.root.style.top = '';
-        this.restoreToSidebar();
-        RadioPlayer.saveMiniPlayerState({ miniPlayerDocked: true, miniPlayerX: null, miniPlayerY: null });
-    },
-
-    applyUndockedState(persist = true) {
-        const rect = this.root.getBoundingClientRect();
-        const saved = RadioPlayer.getMiniPlayerState();
-        let x = saved.miniPlayerX ?? rect.left;
-        let y = saved.miniPlayerY ?? rect.top;
-
-        this.ensureUndockedInBody();
-        this.root.classList.add('sidebar-radio--undocked');
-        this.root.style.left = `${x}px`;
-        this.root.style.top = `${y}px`;
-        const clamped = clampPanelToViewport(this.root, x, y);
-        this.root.style.left = `${clamped.x}px`;
-        this.root.style.top = `${clamped.y}px`;
-
-        if (persist) {
-            RadioPlayer.saveMiniPlayerState({
-                miniPlayerDocked: false,
-                miniPlayerX: clamped.x,
-                miniPlayerY: clamped.y
-            });
-        }
-    },
-
-    bindMiniPlayerDrag() {
-        const header = document.getElementById('radio-section-header');
-        if (!header) return;
-
-        header.addEventListener('pointerdown', (e) => {
-            if (!this.isUndocked()) return;
-            if (e.target.closest('[data-radio-dock]') || e.target.closest('.collapsable-toggle')) return;
-            if (e.target.closest('.sidebar-radio__compact')) return;
-            if (e.button !== 0) return;
-
-            e.preventDefault();
-            let dragging = true;
-            let didDrag = false;
-            const startX = e.clientX;
-            const startY = e.clientY;
-            const startLeft = parseFloat(this.root.style.left) || 0;
-            const startTop = parseFloat(this.root.style.top) || 0;
-
-            this.root.classList.add('sidebar-radio--dragging');
-            header.setPointerCapture(e.pointerId);
-
-            const onMove = (ev) => {
-                if (!dragging) return;
-                if (Math.abs(ev.clientX - startX) > 4 || Math.abs(ev.clientY - startY) > 4) {
-                    didDrag = true;
-                }
-                const nx = startLeft + (ev.clientX - startX);
-                const ny = startTop + (ev.clientY - startY);
-                const clamped = clampPanelToViewport(this.root, nx, ny);
-                this.root.style.left = `${clamped.x}px`;
-                this.root.style.top = `${clamped.y}px`;
-                RadioPopover.reposition();
-            };
-
-            const onUp = (ev) => {
-                if (!dragging) return;
-                dragging = false;
-                this.root.classList.remove('sidebar-radio--dragging');
-                header.releasePointerCapture(ev.pointerId);
-                if (didDrag) {
-                    header.dataset.suppressClick = 'true';
-                    requestAnimationFrame(() => {
-                        delete header.dataset.suppressClick;
-                    });
-                }
-                RadioPlayer.saveMiniPlayerState({
-                    miniPlayerX: parseFloat(this.root.style.left) || 0,
-                    miniPlayerY: parseFloat(this.root.style.top) || 0
-                });
-                document.removeEventListener('pointermove', onMove);
-                document.removeEventListener('pointerup', onUp);
-                document.removeEventListener('pointercancel', onUp);
-            };
-
-            document.addEventListener('pointermove', onMove);
-            document.addEventListener('pointerup', onUp);
-            document.addEventListener('pointercancel', onUp);
-        });
     },
 
     async restoreLastStationMeta() {
