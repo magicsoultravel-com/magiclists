@@ -23,6 +23,11 @@ const SPEECH_MODE = {
     hieroglyphs: 'romanEn',
     ipa: 'romanEn',
     morse: 'morse',
+    klingon: 'romanEn',
+    tengwar: 'romanEn',
+    cirth: 'romanEn',
+    'elder-futhark': 'romanEn',
+    'anglo-saxon': 'romanEn',
 };
 
 const NATIVE_LANG = {

@@ -92,6 +92,133 @@ export const NATO_WORDS = [
     { char: 'Y', roman: 'Yankee' }, { char: 'Z', roman: 'Zulu' },
 ];
 
+const cp = (code) => String.fromCodePoint(code);
+
+export const ELDER_FUTHARK = [
+    { char: 'ᚠ', roman: 'fehu', gloss: 'f' }, { char: 'ᚢ', roman: 'uruz', gloss: 'u' },
+    { char: 'ᚦ', roman: 'thurisaz', gloss: 'th' }, { char: 'ᚨ', roman: 'ansuz', gloss: 'a' },
+    { char: 'ᚱ', roman: 'raidho', gloss: 'r' }, { char: 'ᚲ', roman: 'kaunan', gloss: 'k' },
+    { char: 'ᚷ', roman: 'gyfu', gloss: 'g' }, { char: 'ᚹ', roman: 'wunjo', gloss: 'w' },
+    { char: 'ᚺ', roman: 'hagalaz', gloss: 'h' }, { char: 'ᚾ', roman: 'naudiz', gloss: 'n' },
+    { char: 'ᛁ', roman: 'isa', gloss: 'i' }, { char: 'ᛃ', roman: 'jera', gloss: 'j' },
+    { char: 'ᛇ', roman: 'eihwaz', gloss: 'ei' }, { char: 'ᛈ', roman: 'pertho', gloss: 'p' },
+    { char: 'ᛉ', roman: 'algiz', gloss: 'z' }, { char: 'ᛊ', roman: 'sowilo', gloss: 's' },
+    { char: 'ᛏ', roman: 'tiwaz', gloss: 't' }, { char: 'ᛒ', roman: 'berkanan', gloss: 'b' },
+    { char: 'ᛖ', roman: 'ehwaz', gloss: 'e' }, { char: 'ᛗ', roman: 'mannaz', gloss: 'm' },
+    { char: 'ᛚ', roman: 'laguz', gloss: 'l' }, { char: 'ᛜ', roman: 'ingwaz', gloss: 'ng' },
+    { char: 'ᛞ', roman: 'dagaz', gloss: 'd' }, { char: 'ᛟ', roman: 'othala', gloss: 'o' },
+];
+
+export const ANGLO_SAXON_FUTHORC = [
+    { char: 'ᚠ', roman: 'feoh', gloss: 'f' }, { char: 'ᚢ', roman: 'ur', gloss: 'u' },
+    { char: 'ᚦ', roman: 'thorn', gloss: 'th' }, { char: 'ᚩ', roman: 'os', gloss: 'o' },
+    { char: 'ᚱ', roman: 'rad', gloss: 'r' }, { char: 'ᚳ', roman: 'cen', gloss: 'c' },
+    { char: 'ᚷ', roman: 'gyfu', gloss: 'g' }, { char: 'ᚹ', roman: 'wynn', gloss: 'w' },
+    { char: 'ᚻ', roman: 'haegl', gloss: 'h' }, { char: 'ᚾ', roman: 'nyd', gloss: 'n' },
+    { char: 'ᛁ', roman: 'is', gloss: 'i' }, { char: 'ᛄ', roman: 'ger', gloss: 'j' },
+    { char: 'ᛇ', roman: 'eoh', gloss: 'eo' }, { char: 'ᛈ', roman: 'peorth', gloss: 'p' },
+    { char: 'ᛉ', roman: 'eolh', gloss: 'x' }, { char: 'ᛋ', roman: 'sigel', gloss: 's' },
+    { char: 'ᛏ', roman: 'tir', gloss: 't' }, { char: 'ᛒ', roman: 'beorc', gloss: 'b' },
+    { char: 'ᛖ', roman: 'eh', gloss: 'e' }, { char: 'ᛗ', roman: 'man', gloss: 'm' },
+    { char: 'ᛚ', roman: 'lagu', gloss: 'l' }, { char: 'ᛝ', roman: 'ing', gloss: 'ng' },
+    { char: 'ᛟ', roman: 'ethel', gloss: 'oe' }, { char: 'ᛞ', roman: 'daeg', gloss: 'd' },
+    { char: 'ᚪ', roman: 'ac', gloss: 'a' }, { char: 'ᚫ', roman: 'aesc', gloss: 'ae' },
+    { char: 'ᚣ', roman: 'yr', gloss: 'y' }, { char: 'ᛡ', roman: 'ior', gloss: 'ia' },
+    { char: 'ᛠ', roman: 'ear', gloss: 'ea' }, { char: 'ᚬ', roman: 'ae', gloss: 'æ' },
+    { char: 'ᚭ', roman: 'io', gloss: 'io' }, { char: 'ᚯ', roman: 'k', gloss: 'k' },
+    { char: 'ᚰ', roman: 'calc', gloss: 'q' },
+];
+
+const KLINGON_LETTERS = 'abcdefghijklmnopqrstuvwxyz'.split('');
+export const KLINGON_PIQAD = KLINGON_LETTERS.map((letter, i) => ({
+    char: cp(0xF8D0 + i),
+    roman: letter,
+}));
+
+const TENGWAR_CONSONANTS = [
+    [0x16D00, 'tinco', 't'], [0x16D01, 'parma', 'p'], [0x16D02, 'calma', 'ch'], [0x16D03, 'quesse', 'k'],
+    [0x16D04, 'ando', 'd'], [0x16D05, 'ungwe', 'ng'], [0x16D06, 'thule', 'th'], [0x16D07, 'formen', 'f'],
+    [0x16D08, 'harma', 'sh'], [0x16D09, 'hwesta', 'hw'], [0x16D0A, 'anto', 'nt'], [0x16D0B, 'ampa', 'mp'],
+    [0x16D0C, 'anca', 'nk'], [0x16D0D, 'anqua', 'nqu'], [0x16D0E, 'unque', 'ngw'], [0x16D0F, 'umbe', 'mb'],
+    [0x16D10, 'malta', 'm'], [0x16D11, 'ngoldo', 'ng'], [0x16D12, 'noldo', 'nd'], [0x16D13, 'nwalme', 'nw'],
+    [0x16D14, 'ngwalme', 'ngw'], [0x16D15, 'oore', 'oo'], [0x16D16, 'vala', 'v'], [0x16D17, 'anna', 'n'],
+    [0x16D18, 'vilya', 'w'], [0x16D19, 'romen', 'r'], [0x16D1A, 'arda', 'rd'], [0x16D1B, 'lambe', 'l'],
+    [0x16D1C, 'alda', 'ld'], [0x16D1D, 'silme', 's'], [0x16D1F, 'esse', 'ss'], [0x16D21, 'hya', 'hy'],
+];
+
+const TENGWAR_TEHTAR = [
+    [0x16D38, 'a-tehta', 'a'], [0x16D39, 'e-tehta', 'e'], [0x16D3A, 'i-tehta', 'i'],
+    [0x16D3B, 'o-tehta', 'o'], [0x16D3C, 'u-tehta', 'u'], [0x16D3D, 'y-tehta', 'y'],
+];
+
+function tengwarEntries(consonants, tehtar) {
+    const cons = consonants.map(([code, name, gloss]) => ({
+        char: cp(code),
+        roman: name,
+        gloss,
+    }));
+    const vows = tehtar.map(([code, name, gloss]) => ({
+        char: cp(code),
+        roman: name,
+        gloss,
+    }));
+    return [...cons, ...vows];
+}
+
+export const TENGWAR_QUENYA = tengwarEntries(TENGWAR_CONSONANTS, TENGWAR_TEHTAR);
+
+export const TENGWAR_SINDARIN = TENGWAR_CONSONANTS.map(([code, , gloss]) => ({
+    char: cp(code),
+    roman: gloss,
+    gloss: 'Sindarin',
+})).concat(TENGWAR_TEHTAR.map(([code, , gloss]) => ({
+    char: cp(code),
+    roman: gloss,
+    gloss: 'vowel',
+})));
+
+export const TENGWAR_BLACK_SPEECH = [
+    { char: cp(0x16D08), roman: 'ash', gloss: 'Ring · sh' },
+    { char: cp(0x16D17), roman: 'nazg', gloss: 'Ring · n' },
+    { char: cp(0x16D38), roman: 'a', gloss: 'vowel tehta' },
+    { char: cp(0x16D1D), roman: 'z', gloss: 'Ring · z' },
+    { char: cp(0x16D05), roman: 'g', gloss: 'Ring · g' },
+    { char: cp(0x16D04), roman: 'durbatuluk', gloss: 'Ring · d' },
+    { char: cp(0x16D3C), roman: 'u', gloss: 'vowel tehta' },
+    { char: cp(0x16D19), roman: 'r', gloss: 'Ring · r' },
+    { char: cp(0x16D02), roman: 'b', gloss: 'Ring · b' },
+    { char: cp(0x16D00), roman: 't', gloss: 'Ring · t' },
+    { char: cp(0x16D1B), roman: 'l', gloss: 'Ring · l' },
+    { char: cp(0x16D03), roman: 'k', gloss: 'Ring · k' },
+    { char: cp(0x16D06), roman: 'th', gloss: 'Black Speech' },
+    { char: cp(0x16D07), roman: 'f', gloss: 'Black Speech' },
+    { char: cp(0x16D10), roman: 'm', gloss: 'Black Speech' },
+    { char: cp(0x16D3B), roman: 'o', gloss: 'vowel tehta' },
+];
+
+export const CIRTH_ANGERTHAS = [
+    { char: cp(0x16D80), roman: 'p', gloss: 'p' }, { char: cp(0x16D81), roman: 'b', gloss: 'b' },
+    { char: cp(0x16D82), roman: 'f', gloss: 'f' }, { char: cp(0x16D83), roman: 'v', gloss: 'v' },
+    { char: cp(0x16D84), roman: 'th', gloss: 'th' }, { char: cp(0x16D85), roman: 'dh', gloss: 'dh' },
+    { char: cp(0x16D86), roman: 'ch', gloss: 'ch' }, { char: cp(0x16D87), roman: 'j', gloss: 'j' },
+    { char: cp(0x16D88), roman: 'sh', gloss: 'sh' }, { char: cp(0x16D89), roman: 'zh', gloss: 'zh' },
+    { char: cp(0x16D8A), roman: 'ng', gloss: 'ng' }, { char: cp(0x16D8B), roman: 'k', gloss: 'k' },
+    { char: cp(0x16D8C), roman: 'g', gloss: 'g' }, { char: cp(0x16D8D), roman: 'kh', gloss: 'kh' },
+    { char: cp(0x16D8E), roman: 'gh', gloss: 'gh' }, { char: cp(0x16D8F), roman: 'n', gloss: 'n' },
+    { char: cp(0x16D90), roman: 't', gloss: 't' }, { char: cp(0x16D91), roman: 'd', gloss: 'd' },
+    { char: cp(0x16D92), roman: 'r', gloss: 'r' }, { char: cp(0x16D93), roman: 'l', gloss: 'l' },
+    { char: cp(0x16D94), roman: 's', gloss: 's' }, { char: cp(0x16D95), roman: 'z', gloss: 'z' },
+    { char: cp(0x16D96), roman: 'h', gloss: 'h' }, { char: cp(0x16D97), roman: 'hw', gloss: 'hw' },
+    { char: cp(0x16D98), roman: 'm', gloss: 'm' }, { char: cp(0x16D99), roman: 'y', gloss: 'y' },
+    { char: cp(0x16D9A), roman: 'w', gloss: 'w' }, { char: cp(0x16D9B), roman: 'a', gloss: 'a' },
+    { char: cp(0x16D9C), roman: 'e', gloss: 'e' }, { char: cp(0x16D9D), roman: 'i', gloss: 'i' },
+    { char: cp(0x16D9E), roman: 'o', gloss: 'o' }, { char: cp(0x16D9F), roman: 'u', gloss: 'u' },
+    { char: cp(0x16DA0), roman: 'ae', gloss: 'ae' }, { char: cp(0x16DA1), roman: 'oe', gloss: 'oe' },
+    { char: cp(0x16DA2), roman: 'ai', gloss: 'ai' }, { char: cp(0x16DA3), roman: 'ei', gloss: 'ei' },
+    { char: cp(0x16DA4), roman: 'ui', gloss: 'ui' }, { char: cp(0x16DA5), roman: 'au', gloss: 'au' },
+    { char: cp(0x16DA6), roman: 'iu', gloss: 'iu' }, { char: cp(0x16DA7), roman: 'oe', gloss: 'long oe' },
+];
+
 export const BRAILLE_CHARS = [
     { char: '⠁', roman: 'a' }, { char: '⠃', roman: 'b' }, { char: '⠉', roman: 'c' },
     { char: '⠙', roman: 'd' }, { char: '⠑', roman: 'e' }, { char: '⠋', roman: 'f' },
@@ -283,5 +410,49 @@ export const ALPHABETS_EXT = [
         fontFamily: "inherit",
         layout: 'grid',
         chars: NATO_WORDS,
+    },
+    {
+        id: 'elder-futhark',
+        title: 'Elder Futhark',
+        subtitle: '24 runes · early Germanic & Nordic',
+        fontFamily: "'Segoe UI Historic', 'Noto Sans Runic', sans-serif",
+        layout: 'grid',
+        chars: ELDER_FUTHARK,
+    },
+    {
+        id: 'anglo-saxon',
+        title: 'Anglo-Saxon',
+        subtitle: '33 runes · Anglo-Frisian futhorc',
+        fontFamily: "'Segoe UI Historic', 'Noto Sans Runic', sans-serif",
+        layout: 'grid',
+        chars: ANGLO_SAXON_FUTHORC,
+    },
+    {
+        id: 'klingon',
+        title: 'Klingon',
+        subtitle: 'pIqaD · 26 letters',
+        fontFamily: "'Klingon pIqaD', 'Code2001', sans-serif",
+        layout: 'grid',
+        chars: KLINGON_PIQAD,
+    },
+    {
+        id: 'tengwar',
+        title: 'Tengwar',
+        subtitle: 'Elvish script · Quenya, Sindarin & Black Speech',
+        fontFamily: "'Tengwar Telcontar', 'Code2001', serif",
+        layout: 'sections',
+        sections: [
+            { title: 'Quenya', chars: TENGWAR_QUENYA },
+            { title: 'Sindarin', chars: TENGWAR_SINDARIN },
+            { title: 'Black Speech', chars: TENGWAR_BLACK_SPEECH },
+        ],
+    },
+    {
+        id: 'cirth',
+        title: 'Cirth',
+        subtitle: 'Angerthas · Dwarvish runes',
+        fontFamily: "'Cirth Erebor', 'Code2001', serif",
+        layout: 'grid',
+        chars: CIRTH_ANGERTHAS,
     },
 ];
