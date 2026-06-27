@@ -5,7 +5,7 @@ import { RadioPlayer } from './radioPlayer.js';
 import { RadioPopover } from './radioPopover.js';
 import { escapeHtml, countryFlagEmoji, debounce, syncMarquee, bindFaviconImage } from './radioUtils.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
-import { applySectionCollapse } from './hamburger.js';
+import { renderSidebarModuleHeaderHtml } from './sidebarModules.js';
 
 const BROWSE_PAGE_SIZE = 60;
 const BROWSE_SORT_OPTIONS = [
@@ -98,54 +98,51 @@ export const SidebarRadio = {
     },
 
     renderShell() {
-        this.root.innerHTML = `
-            <div class="collapsable-header list-row--header" id="radio-section-header">
-                <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Radio</span>
+        const compactHtml = `
                 <div class="sidebar-radio__compact">
-                    <button type="button" class="sidebar-radio__compact-art" data-radio-station-context title="Show station in browser" aria-label="Show station in browser">
-                        <img class="sidebar-radio__compact-art-img is-hidden" data-radio-compact-art alt="">
-                        <span class="sidebar-radio__compact-art-fallback" data-radio-compact-art-fallback aria-hidden="true">♪</span>
+                    <button type="button" class="sidebar-media__compact-art" data-radio-station-context title="Show station in browser" aria-label="Show station in browser">
+                        <img class="sidebar-media__compact-art-img is-hidden" data-radio-compact-art alt="">
+                        <span class="sidebar-media__compact-art-fallback" data-radio-compact-art-fallback aria-hidden="true">♪</span>
                     </button>
-                    <button type="button" class="btn btn--compact btn-icon sidebar-radio__action" data-radio-play aria-label="Play or pause">
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-radio-play aria-label="Play or pause">
                         <span data-radio-play-icon></span>
                     </button>
-                    <input type="range" class="sidebar-radio__volume-compact" data-radio-volume-compact min="0" max="100" value="85" aria-label="Volume">
-                </div>
-                <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
-            </div>
+                    <input type="range" class="sidebar-media__volume-compact" data-radio-volume-compact min="0" max="100" value="85" aria-label="Volume">
+                </div>`;
+        this.root.innerHTML = `
+            ${renderSidebarModuleHeaderHtml({ headerId: 'radio-section-header', title: 'Radio', extrasHtml: compactHtml })}
             <div class="collapsable-section" id="radio-section">
-                <div class="sidebar-radio__now-playing" data-radio-transport>
-                    <button type="button" class="sidebar-radio__art" data-radio-station-context title="Show station in browser" aria-label="Show station in browser">
-                        <img class="sidebar-radio__art-img is-hidden" data-radio-art alt="">
-                        <span class="sidebar-radio__art-fallback" data-radio-art-fallback aria-hidden="true">♪</span>
+                <div class="sidebar-media__now-playing" data-radio-transport>
+                    <button type="button" class="sidebar-media__art" data-radio-station-context title="Show station in browser" aria-label="Show station in browser">
+                        <img class="sidebar-media__art-img is-hidden" data-radio-art alt="">
+                        <span class="sidebar-media__art-fallback" data-radio-art-fallback aria-hidden="true">♪</span>
                     </button>
-                    <div class="sidebar-radio__meta">
-                        <div class="sidebar-radio__title-row">
-                            <div class="sidebar-radio__marquee" data-radio-marquee>Radio</div>
+                    <div class="sidebar-media__meta">
+                        <div class="sidebar-media__title-row">
+                            <div class="sidebar-media__marquee" data-radio-marquee>Radio</div>
                         </div>
-                        <div class="sidebar-radio__locale-row">
-                            <button type="button" class="sidebar-radio__locale is-hidden" data-radio-station-context title="Show station in browser" aria-label="Show station in browser">
+                        <div class="sidebar-media__locale-row">
+                            <button type="button" class="sidebar-media__locale is-hidden" data-radio-station-context title="Show station in browser" aria-label="Show station in browser">
                                 <span data-radio-flag aria-hidden="true"></span>
-                                <span class="sidebar-radio__country-name" data-radio-country-name></span>
+                                <span class="sidebar-media__country-name" data-radio-country-name></span>
                             </button>
-                            <span class="sidebar-radio__load-status is-hidden" data-radio-load-status></span>
+                            <span class="sidebar-media__load-status is-hidden" data-radio-load-status></span>
                         </div>
-                        <div class="sidebar-radio__volume-row">
-                            <input type="range" class="sidebar-radio__volume" data-radio-volume min="0" max="100" value="85" aria-label="Volume">
+                        <div class="sidebar-media__volume-row">
+                            <input type="range" class="sidebar-media__volume" data-radio-volume min="0" max="100" value="85" aria-label="Volume">
                         </div>
                     </div>
                 </div>
-                <div class="sidebar-radio__actions">
-                    <button type="button" class="btn btn--compact btn-icon sidebar-radio__action" data-radio-play aria-label="Play or pause">
+                <div class="sidebar-media__actions">
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-radio-play aria-label="Play or pause">
                         <span data-radio-play-icon></span>
                     </button>
-                    <button type="button" class="btn btn--compact btn-icon sidebar-radio__action" data-radio-open="browse" title="Browse stations" aria-label="Browse stations" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioBrowse}</button>
-                    <button type="button" class="btn btn--compact btn-icon sidebar-radio__action sidebar-radio__action--heart is-hidden" data-radio-favorite title="Add favorite" aria-label="Add favorite" aria-pressed="false">${CARD_ICONS.heart}</button>
-                    <button type="button" class="btn btn--compact btn-icon sidebar-radio__action" data-radio-open="special" title="Radio settings" aria-label="Radio settings" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioSpecial}</button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-radio-open="browse" title="Browse stations" aria-label="Browse stations" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioBrowse}</button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-radio__action--heart is-hidden" data-radio-favorite title="Add favorite" aria-label="Add favorite" aria-pressed="false">${CARD_ICONS.heart}</button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-radio-open="special" title="Radio settings" aria-label="Radio settings" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioSpecial}</button>
                 </div>
             </div>
         `;
-        applySectionCollapse('radio-section', 'radio-section-header', true);
     },
 
     bindShellListeners() {
@@ -465,7 +462,7 @@ export const SidebarRadio = {
         }
 
         body.innerHTML = `
-            <div class="radio-tile-grid" data-radio-country-grid>
+            <div class="sidebar-media-tile-grid" data-radio-country-grid>
                 ${filtered.map((c) => this.renderCountryTile(c)).join('')}
             </div>
         `;
@@ -486,17 +483,17 @@ export const SidebarRadio = {
         const flag = countryFlagEmoji(code);
         const count = c.stationcount ? `${c.stationcount}` : '';
         return `
-            <button type="button" class="radio-tile radio-tile--country" data-radio-country="${escapeHtml(code)}" data-radio-country-name="${escapeHtml(c.name || code)}" title="${escapeHtml(c.name || code)}">
-                <span class="radio-tile__flag" aria-hidden="true">${flag}</span>
-                <span class="radio-tile__label u-truncate">${escapeHtml(c.name || code)}</span>
-                ${count ? `<span class="radio-tile__meta">${escapeHtml(count)}</span>` : ''}
+            <button type="button" class="sidebar-media-tile sidebar-media-tile--country" data-radio-country="${escapeHtml(code)}" data-radio-country-name="${escapeHtml(c.name || code)}" title="${escapeHtml(c.name || code)}">
+                <span class="sidebar-media-tile__flag" aria-hidden="true">${flag}</span>
+                <span class="sidebar-media-tile__label u-truncate">${escapeHtml(c.name || code)}</span>
+                ${count ? `<span class="sidebar-media-tile__meta">${escapeHtml(count)}</span>` : ''}
             </button>
         `;
     },
 
     renderSortSelect(options, current, attrName, label) {
         return `
-            <select class="form-input sidebar-radio__sort" ${attrName} aria-label="${escapeHtml(label)}">
+            <select class="form-input sidebar-media__sort" ${attrName} aria-label="${escapeHtml(label)}">
                 ${options.map((o) => `<option value="${escapeHtml(o.value)}"${o.value === current ? ' selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
             </select>
         `;
@@ -504,8 +501,8 @@ export const SidebarRadio = {
 
     renderBrowseCountriesToolbar() {
         return `
-            <div class="radio-popover__toolbar-row">
-                <input type="search" class="form-input sidebar-radio__search" data-radio-country-search placeholder="Filter countries…" aria-label="Filter countries" autocomplete="off" spellcheck="false" value="${escapeHtml(this.countryFilter)}">
+            <div class="sidebar-media-popover__toolbar-row">
+                <input type="search" class="form-input sidebar-media__search" data-radio-country-search placeholder="Filter countries…" aria-label="Filter countries" autocomplete="off" spellcheck="false" value="${escapeHtml(this.countryFilter)}">
                 ${this.renderSortSelect(COUNTRY_SORT_OPTIONS, RadioPlayer.getCountrySort(), 'data-radio-country-sort', 'Sort countries')}
             </div>
         `;
@@ -524,7 +521,7 @@ export const SidebarRadio = {
 
     renderBrowseSortToolbar() {
         return `
-            <div class="radio-popover__toolbar-row radio-popover__toolbar-row--end">
+            <div class="sidebar-media-popover__toolbar-row sidebar-media-popover__toolbar-row--end">
                 ${this.renderSortSelect(BROWSE_SORT_OPTIONS, RadioPlayer.getBrowseSort(), 'data-radio-sort', 'Sort stations')}
             </div>
         `;
@@ -532,8 +529,8 @@ export const SidebarRadio = {
 
     renderRecentsToolbar() {
         return `
-            <div class="radio-popover__toolbar-row radio-popover__toolbar-row--end">
-                <button type="button" class="btn btn--compact btn-icon card-act sidebar-radio__clear-recents" data-radio-clear-recents title="Clear recents" aria-label="Clear recents">${CARD_ICONS.delete}</button>
+            <div class="sidebar-media-popover__toolbar-row sidebar-media-popover__toolbar-row--end">
+                <button type="button" class="btn btn--compact btn-icon card-act sidebar-media__clear-recents" data-radio-clear-recents title="Clear recents" aria-label="Clear recents">${CARD_ICONS.delete}</button>
             </div>
         `;
     },
@@ -623,7 +620,7 @@ export const SidebarRadio = {
                 if (this.browseHasMore) {
                     const btn = document.createElement('button');
                     btn.type = 'button';
-                    btn.className = 'btn btn--compact sidebar-radio__load-more';
+                    btn.className = 'btn btn--compact sidebar-media__load-more';
                     btn.setAttribute('data-radio-load-more', '');
                     btn.textContent = 'Load more';
                     body.appendChild(btn);
@@ -631,10 +628,10 @@ export const SidebarRadio = {
                 }
             } else {
                 body.innerHTML = `
-                    <div class="radio-tile-grid radio-tile-grid--stations" data-radio-station-grid>
+                    <div class="sidebar-media-tile-grid sidebar-media-tile-grid--items" data-radio-station-grid>
                         ${this.browseStations.map((s) => this.renderStationTile(s)).join('')}
                     </div>
-                    ${this.browseHasMore ? '<button type="button" class="btn btn--compact sidebar-radio__load-more" data-radio-load-more>Load more</button>' : ''}
+                    ${this.browseHasMore ? '<button type="button" class="btn btn--compact sidebar-media__load-more" data-radio-load-more>Load more</button>' : ''}
                 `;
                 this.bindStationTileActions(body);
                 this.bindBrowseCountryControls(body);
@@ -731,7 +728,7 @@ export const SidebarRadio = {
             if (!this.listStations.length) {
                 body.innerHTML = '<p class="tool-msg tool-msg--error">Stations unavailable.</p>';
             } else {
-                body.innerHTML = `<div class="radio-tile-grid radio-tile-grid--stations">${this.listStations.map((s) => this.renderStationTile(s)).join('')}</div>`;
+                body.innerHTML = `<div class="sidebar-media-tile-grid sidebar-media-tile-grid--items">${this.listStations.map((s) => this.renderStationTile(s)).join('')}</div>`;
                 this.bindStationTileActions(body);
             }
         } catch {
@@ -740,7 +737,7 @@ export const SidebarRadio = {
             if (!this.listStations.length) {
                 body.innerHTML = '<p class="tool-msg tool-msg--error">Could not load list.</p>';
             } else {
-                body.innerHTML = `<div class="radio-tile-grid radio-tile-grid--stations">${this.listStations.map((s) => this.renderStationTile(s)).join('')}</div>`;
+                body.innerHTML = `<div class="sidebar-media-tile-grid sidebar-media-tile-grid--items">${this.listStations.map((s) => this.renderStationTile(s)).join('')}</div>`;
                 this.bindStationTileActions(body);
             }
         }
@@ -758,17 +755,17 @@ export const SidebarRadio = {
             ? `<img class="radio-tile__favicon is-hidden" src="${escapeHtml(station.favicon)}" alt="" width="32" height="32" loading="lazy" decoding="async">`
             : '<span class="radio-tile__favicon radio-tile__favicon--fallback" aria-hidden="true">♪</span>';
         const flag = station.countrycode
-            ? `<span class="radio-tile__badge" aria-hidden="true">${countryFlagEmoji(station.countrycode)}</span>`
+            ? `<span class="sidebar-media-tile__badge" aria-hidden="true">${countryFlagEmoji(station.countrycode)}</span>`
             : '';
-        const offlineBadge = offline ? '<span class="radio-tile__offline">offline</span>' : '';
+        const offlineBadge = offline ? '<span class="sidebar-media-tile__offline">offline</span>' : '';
 
         return `
-            <div class="radio-tile radio-tile--station${playing ? ' is-on-desktop' : ''}${offline ? ' radio-tile--offline' : ''}${compact ? ' radio-tile--compact' : ''}" data-radio-station="${escapeHtml(uuid)}" role="button" tabindex="0" title="${escapeHtml(station.name || '')}">
-                <span class="radio-tile__art">${favicon}</span>
-                <span class="radio-tile__label u-truncate">${escapeHtml(station.name || 'Unknown')}</span>
+            <div class="sidebar-media-tile radio-tile--station${playing ? ' is-on-desktop' : ''}${offline ? ' sidebar-media-tile--offline' : ''}${compact ? ' sidebar-media-tile--compact' : ''}" data-radio-station="${escapeHtml(uuid)}" role="button" tabindex="0" title="${escapeHtml(station.name || '')}">
+                <span class="sidebar-media-tile__art">${favicon}</span>
+                <span class="sidebar-media-tile__label u-truncate">${escapeHtml(station.name || 'Unknown')}</span>
                 ${flag}
                 ${offlineBadge}
-                <button type="button" class="card-act radio-tile__star${fav ? ' is-active' : ''}" data-radio-star="${escapeHtml(uuid)}" title="${fav ? 'Remove favorite' : 'Add favorite'}" aria-label="${fav ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${fav ? 'true' : 'false'}">${starIcon}</button>
+                <button type="button" class="card-act sidebar-media-tile__star${fav ? ' is-active' : ''}" data-radio-star="${escapeHtml(uuid)}" title="${fav ? 'Remove favorite' : 'Add favorite'}" aria-label="${fav ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${fav ? 'true' : 'false'}">${starIcon}</button>
             </div>
         `;
     },
@@ -860,12 +857,12 @@ export const SidebarRadio = {
         const compactArtFallback = this.root?.querySelector('[data-radio-compact-art-fallback]');
         const flagEl = this.root?.querySelector('[data-radio-flag]');
         const countryNameEl = this.root?.querySelector('[data-radio-country-name]');
-        const localeBtn = this.root?.querySelector('.sidebar-radio__locale');
+        const localeBtn = this.root?.querySelector('.sidebar-media__locale');
         const loadStatusEl = this.root?.querySelector('[data-radio-load-status]');
         const volumeEls = this.root?.querySelectorAll('[data-radio-volume], [data-radio-volume-compact]');
         const favBtn = this.root?.querySelector('[data-radio-favorite]');
         const transport = this.root?.querySelector('[data-radio-transport]');
-        const artBtn = this.root?.querySelector('.sidebar-radio__art');
+        const artBtn = this.root?.querySelector('.sidebar-media__art');
 
         let titleText = 'Radio';
         let isError = false;
@@ -922,8 +919,8 @@ export const SidebarRadio = {
         updateArt(compactArtImg, compactArtFallback);
 
         const isLoading = state.loading || state.loadPhase === 'connecting' || state.loadPhase === 'buffering';
-        artBtn?.classList.toggle('sidebar-radio__art--loading', isLoading);
-        this.root?.querySelector('.sidebar-radio__compact-art')?.classList.toggle('sidebar-radio__art--loading', isLoading);
+        artBtn?.classList.toggle('sidebar-media__art--loading', isLoading);
+        this.root?.querySelector('.sidebar-media__compact-art')?.classList.toggle('sidebar-media__art--loading', isLoading);
 
         const playIconHtml = this.getPlayIconHtml(state);
         this.root?.querySelectorAll('[data-radio-play-icon]').forEach((el) => {
@@ -951,6 +948,6 @@ export const SidebarRadio = {
             }
         }
 
-        transport?.classList.toggle('sidebar-radio__now-playing--active', !!(state.station || state.playing || state.loading));
+        transport?.classList.toggle('sidebar-media__now-playing--active', !!(state.station || state.playing || state.loading));
     }
 };

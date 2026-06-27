@@ -1,4 +1,4 @@
-/** @module {"owns":"sidebar module registry, undock wiring, re-dock slots", "related":["sidebarUndock.js","sidebarPrefs.js","desktopStack.js"]} */
+/** @module {"owns":"sidebar module registry, undock wiring, re-dock slots", "related":["sidebarUndock.js","sidebarPrefs.js","desktopStack.js","hamburger.js"]} */
 import {
     initSidebarUndock,
     SIDEBAR_MODULE_UNDOCKED,
@@ -6,22 +6,27 @@ import {
     SIDEBAR_MODULE_DOCK_SEL
 } from './sidebarUndock.js';
 import { readModuleDock, writeModuleDock, writeSidebarSection } from './sidebarPrefs.js';
+import { bindToggleCollapsable } from './hamburger.js';
 import { RadioPopover } from './radioPopover.js';
 import { TvPopover } from './tvPopover.js';
+import { ACTION_ICONS } from './icons.js';
 
 export { SIDEBAR_MODULE_UNDOCKED, SIDEBAR_MODULE_DRAGGING, SIDEBAR_MODULE_DOCK_SEL };
 
-/** @type {ReadonlyArray<{ id: string, rootId: string, width: number, headerId?: string, sectionId?: string, expandOnUndock?: boolean, dragBlockSelector?: string, onPositionChange?: () => void }>} */
+/** Radio expanded layout defines minimum sidebar module column width. */
+export const SIDEBAR_MODULE_WIDTH = 220;
+
+/** @type {ReadonlyArray<{ id: string, rootId: string, headerId: string, sectionId: string, startCollapsed?: boolean, expandOnUndock?: boolean, collapseIgnoreExtra?: string, dragBlockSelector?: string, onPositionChange?: () => void }>} */
 export const SIDEBAR_MODULES = [
-    { id: 'quick-actions', rootId: 'sidebar-quick-actions', width: 200, headerId: 'quick-actions-header', sectionId: 'quick-actions-section', expandOnUndock: true },
-    { id: 'radio', rootId: 'sidebar-radio', width: 220, headerId: 'radio-section-header', dragBlockSelector: '.sidebar-radio__compact', onPositionChange: () => RadioPopover.reposition() },
-    { id: 'tv', rootId: 'sidebar-tv', width: 220, headerId: 'tv-section-header', dragBlockSelector: '.sidebar-tv__compact', onPositionChange: () => TvPopover.reposition() },
-    { id: 'weather', rootId: 'sidebar-weather', width: 220, headerId: 'weather-section-header', sectionId: 'weather-section', expandOnUndock: true, dragBlockSelector: '.sidebar-weather__compact, .sidebar-weather__refresh' },
-    { id: 'categories', rootId: 'sidebar-categories', width: 240, headerId: 'categories-section-header', sectionId: 'categories-section', expandOnUndock: true },
-    { id: 'tools', rootId: 'sidebar-tools', width: 200, headerId: 'tools-section-header', sectionId: 'tools-section', expandOnUndock: true },
-    { id: 'notes-list', rootId: 'sidebar-notes-list', width: 240, headerId: 'notes-list-section-header', sectionId: 'notes-list-section', expandOnUndock: true, dragBlockSelector: '.sidebar-notes-list-sort' },
-    { id: 'history', rootId: 'sidebar-history-section', width: 220, headerId: 'history-section-header', sectionId: 'history-section', expandOnUndock: true },
-    { id: 'stats', rootId: 'sidebar-stats-section', width: 220, headerId: 'stats-section-header', sectionId: 'stats-section', expandOnUndock: true }
+    { id: 'quick-actions', rootId: 'sidebar-quick-actions', headerId: 'quick-actions-header', sectionId: 'quick-actions-section', startCollapsed: true, expandOnUndock: true },
+    { id: 'radio', rootId: 'sidebar-radio', headerId: 'radio-section-header', sectionId: 'radio-section', startCollapsed: true, dragBlockSelector: '.sidebar-radio__compact', onPositionChange: () => RadioPopover.reposition() },
+    { id: 'tv', rootId: 'sidebar-tv', headerId: 'tv-section-header', sectionId: 'tv-section', startCollapsed: true, dragBlockSelector: '.sidebar-tv__compact', onPositionChange: () => TvPopover.reposition() },
+    { id: 'weather', rootId: 'sidebar-weather', headerId: 'weather-section-header', sectionId: 'weather-section', startCollapsed: true, expandOnUndock: true, collapseIgnoreExtra: '.sidebar-weather__refresh', dragBlockSelector: '.sidebar-weather__compact, .sidebar-weather__refresh' },
+    { id: 'categories', rootId: 'sidebar-categories', headerId: 'categories-section-header', sectionId: 'categories-section', startCollapsed: true, expandOnUndock: true },
+    { id: 'tools', rootId: 'sidebar-tools', headerId: 'tools-section-header', sectionId: 'tools-section', startCollapsed: true, expandOnUndock: true },
+    { id: 'notes-list', rootId: 'sidebar-notes-list', headerId: 'notes-list-section-header', sectionId: 'notes-list-section', startCollapsed: false, expandOnUndock: true, collapseIgnoreExtra: '.sidebar-notes-list-sort', dragBlockSelector: '.sidebar-notes-list-sort' },
+    { id: 'history', rootId: 'sidebar-history-section', headerId: 'history-section-header', sectionId: 'history-section', startCollapsed: true, expandOnUndock: true },
+    { id: 'stats', rootId: 'sidebar-stats-section', headerId: 'stats-section-header', sectionId: 'stats-section', startCollapsed: true, expandOnUndock: true }
 ];
 
 export const SIDEBAR_MODULE_ORDER = SIDEBAR_MODULES.map((m) => m.id);
@@ -39,6 +44,15 @@ export function getModuleRoot(id) {
 
 export function getModuleMount() {
     return document.querySelector('.side-panel-modules');
+}
+
+export function renderSidebarModuleHeaderHtml({ headerId, title, extrasHtml = '' }) {
+    return `
+            <div class="collapsable-header" id="${headerId}">
+                <span class="collapsable-heading"><span class="collapsable-toggle">${ACTION_ICONS.chevronDown}</span>${title}</span>
+                ${extrasHtml}
+                <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
+            </div>`;
 }
 
 export function expandModuleSection(id) {
@@ -77,12 +91,61 @@ function applyModuleWidth(root, width) {
     root.style.setProperty('--sidebar-module-width', `${width}px`);
 }
 
+export function getSidebarModuleWidth() {
+    const panel = document.querySelector('.side-panel');
+    const raw = panel ? parseFloat(getComputedStyle(panel).getPropertyValue('--sidebar-width')) : NaN;
+    return Number.isFinite(raw) && raw >= SIDEBAR_MODULE_WIDTH ? raw : SIDEBAR_MODULE_WIDTH;
+}
+
+export function applyAllModuleWidths() {
+    const width = getSidebarModuleWidth();
+    SIDEBAR_MODULES.forEach((config) => {
+        applyModuleWidth(document.getElementById(config.rootId), width);
+    });
+}
+
+function normalizeModuleHeadings() {
+    SIDEBAR_MODULES.forEach((config) => {
+        const header = document.getElementById(config.headerId);
+        if (!header) return;
+        const toggle = header.querySelector('.collapsable-toggle');
+        if (!toggle || toggle.dataset.normalized === 'true') return;
+        if (toggle.textContent.trim() === '▼') {
+            toggle.innerHTML = ACTION_ICONS.chevronDown;
+        }
+        toggle.dataset.normalized = 'true';
+    });
+}
+
+function moduleCollapseIgnoreSelector(config) {
+    return config.collapseIgnoreExtra
+        ? `${SIDEBAR_MODULE_DOCK_SEL}, ${config.collapseIgnoreExtra}`
+        : SIDEBAR_MODULE_DOCK_SEL;
+}
+
+export function bindModuleCollapsable(config) {
+    bindToggleCollapsable({
+        headerId: config.headerId,
+        sectionId: config.sectionId,
+        startCollapsed: config.startCollapsed ?? false,
+        ignoreSelector: moduleCollapseIgnoreSelector(config),
+        toggleOnly: true
+    });
+}
+
+export function bindAllModuleCollapseHandlers() {
+    SIDEBAR_MODULES.forEach((config) => bindModuleCollapsable(config));
+}
+
 export function initAllSidebarModules() {
+    normalizeModuleHeadings();
+    bindAllModuleCollapseHandlers();
+    applyAllModuleWidths();
+    window.addEventListener('sidebar:width_changed', applyAllModuleWidths);
+
     SIDEBAR_MODULES.forEach((config) => {
         const root = document.getElementById(config.rootId);
         if (!root) return;
-
-        applyModuleWidth(root, config.width);
 
         const undock = initSidebarUndock({
             getRoot: () => document.getElementById(config.rootId),

@@ -1,8 +1,8 @@
 /** @module {"owns":"sidebar weather glance and forecast panel", "related":["weatherApi.js","weatherProviders/registry.js","sidebarModules.js"]} */
 import { WeatherApi } from './weatherApi.js';
-import { applySectionCollapse } from './hamburger.js';
 import { escapeHtml } from './radioUtils.js';
 import { ACTION_ICONS } from './icons.js';
+import { renderSidebarModuleHeaderHtml } from './sidebarModules.js';
 import { conditionLabel, weatherIconSvg, weatherIconSvgFromCode } from './weatherProviders/weatherIcons.js';
 
 const REFRESH_ICON = ACTION_ICONS.resetCustomization;
@@ -34,21 +34,18 @@ export const SidebarWeather = {
     },
 
     renderShell() {
-        this.root.innerHTML = `
-            <div class="collapsable-header list-row--header" id="weather-section-header">
-                <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Weather</span>
+        const extrasHtml = `
                 <div class="sidebar-weather__compact" data-weather-compact>
                     <span class="sidebar-weather__compact-icon" data-weather-compact-icon></span>
                     <span class="sidebar-weather__compact-temp" data-weather-compact-temp>—</span>
                 </div>
-                <button type="button" class="btn btn--compact btn-icon sidebar-weather__refresh" data-weather-refresh title="Refresh weather" aria-label="Refresh weather">${REFRESH_ICON}</button>
-                <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
-            </div>
+                <button type="button" class="btn btn--compact btn-icon sidebar-weather__refresh" data-weather-refresh title="Refresh weather" aria-label="Refresh weather">${REFRESH_ICON}</button>`;
+        this.root.innerHTML = `
+            ${renderSidebarModuleHeaderHtml({ headerId: 'weather-section-header', title: 'Weather', extrasHtml })}
             <div class="collapsable-section" id="weather-section">
                 <div class="sidebar-weather__body" data-weather-body></div>
             </div>
         `;
-        applySectionCollapse('weather-section', 'weather-section-header', true);
     },
 
     bindShellListeners() {

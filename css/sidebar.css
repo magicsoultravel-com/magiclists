@@ -342,9 +342,6 @@ html[data-note-font="kalam"] .mini-card .step-text {
 }
 
 /* Sidebar notes list */
-.sidebar-notes-list-header .collapsable-heading {
-    min-width: 0;
-}
 
 .sidebar-notes-list-sort {
     display: inline-flex;
@@ -414,13 +411,9 @@ html[data-note-font="kalam"] .mini-card .step-text {
     letter-spacing: 0.01em;
 }
 
-.sidebar-notes-subheader .status-badge {
-    font-size: 0.52rem;
-    min-width: 1rem;
-    padding: 0 0.2rem;
-}
-
-.sidebar-notes-list {
+.sidebar-module-list,
+.sidebar-notes-list,
+.sidebar-history-list {
     display: flex;
     flex-direction: column;
     gap: 0.08rem;
@@ -501,6 +494,7 @@ html[data-note-font="kalam"] .mini-card .step-text {
     color: #6ee7b7;
 }
 
+.sidebar-module-empty,
 .sidebar-notes-list-empty {
     padding: 0.2rem 0.35rem 0.3rem;
     font-size: 0.6rem;
@@ -530,20 +524,21 @@ html[data-note-font="kalam"] .mini-card .step-text {
 /* Sidebar history and storage stats */
 .sidebar-history-section {
     text-align: left;
+}
+
+.side-panel-modules .sidebar-history-section {
     width: 100%;
 }
 
-.sidebar-history-header .status-badge {
-    font-size: 0.52rem;
-    min-width: 1rem;
-    padding: 0 0.2rem;
+.sidebar-module--undocked.sidebar-history-section {
+    width: var(--sidebar-module-width, 220px);
+    max-width: calc(100vw - 16px);
 }
 
-.sidebar-history-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.08rem;
-    padding: 0.15rem 0.2rem 0.25rem;
+.sidebar-module--undocked .sidebar-history-list,
+.sidebar-module--undocked .collapsable-section {
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .sidebar-history-list--redo {

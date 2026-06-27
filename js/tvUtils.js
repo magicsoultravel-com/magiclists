@@ -37,17 +37,17 @@ export function syncMarquee(wrapEl, text, { error = false } = {}) {
     if (!wrapEl) return;
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    wrapEl.classList.toggle('sidebar-tv__title--error', !!error);
+    wrapEl.classList.toggle('sidebar-media__title--error', !!error);
 
     if (error || reducedMotion) {
         wrapEl.classList.remove('is-marquee');
-        wrapEl.innerHTML = `<span class="sidebar-tv__marquee-inner" data-tv-title>${escapeHtml(text || '')}</span>`;
+        wrapEl.innerHTML = `<span class="sidebar-media__marquee-inner" data-tv-title>${escapeHtml(text || '')}</span>`;
         return;
     }
 
-    wrapEl.innerHTML = `<span class="sidebar-tv__marquee-track"><span class="sidebar-tv__marquee-inner" data-tv-title>${escapeHtml(text || '')}</span></span>`;
-    const inner = wrapEl.querySelector('.sidebar-tv__marquee-inner');
-    const track = wrapEl.querySelector('.sidebar-tv__marquee-track');
+    wrapEl.innerHTML = `<span class="sidebar-media__marquee-track"><span class="sidebar-media__marquee-inner" data-tv-title>${escapeHtml(text || '')}</span></span>`;
+    const inner = wrapEl.querySelector('.sidebar-media__marquee-inner');
+    const track = wrapEl.querySelector('.sidebar-media__marquee-track');
     if (!inner || !track) return;
 
     requestAnimationFrame(() => {

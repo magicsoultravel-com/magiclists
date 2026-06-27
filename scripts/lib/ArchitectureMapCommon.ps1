@@ -20,14 +20,29 @@ function Read-FileHead {
 function Parse-MetaTag {
     param([string]$Head, [string]$Tag)
     if ([string]::IsNullOrEmpty($Head)) { return $null }
-    $pattern = "@$Tag\s+(\{.*?\})"
-    $m = [regex]::Match($Head, $pattern, [System.Text.RegularExpressions.RegexOptions]::Singleline)
-    if (-not $m.Success) { return $null }
-    try {
-        return ($m.Groups[1].Value | ConvertFrom-Json)
-    } catch {
-        return $null
+    $tagMatch = [regex]::Match($Head, "@$Tag\s+")
+    if (-not $tagMatch.Success) { return $null }
+
+    $jsonStart = $Head.IndexOf('{', $tagMatch.Index)
+    if ($jsonStart -lt 0) { return $null }
+
+    $depth = 0
+    for ($i = $jsonStart; $i -lt $Head.Length; $i++) {
+        $char = $Head[$i]
+        if ($char -eq '{') { $depth++ }
+        elseif ($char -eq '}') {
+            $depth--
+            if ($depth -eq 0) {
+                $json = $Head.Substring($jsonStart, $i - $jsonStart + 1)
+                try {
+                    return ($json | ConvertFrom-Json)
+                } catch {
+                    return $null
+                }
+            }
+        }
     }
+    return $null
 }
 
 function Get-BannerTitle {

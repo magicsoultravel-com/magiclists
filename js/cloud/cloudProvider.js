@@ -15,8 +15,20 @@ export function listCloudProviders() {
     return [...providers.keys()];
 }
 
+const MAC_INTEGRITY_MESSAGE = 'Checkpoint download failed integrity check. The file may be corrupted on MEGA (often from an older export with special characters). Re-export from the source device after updating, or download the file via mega.nz to verify.';
+
+function mapMacVerificationMessage(message) {
+    if (typeof message === 'string' && message.includes('MAC verification failed')) {
+        return MAC_INTEGRITY_MESSAGE;
+    }
+    return null;
+}
+
 export function formatCloudError(err) {
     if (!err) return 'Unknown cloud error';
-    if (typeof err === 'string') return err;
-    return err.message || String(err);
+    if (typeof err === 'string') {
+        return mapMacVerificationMessage(err) || err;
+    }
+    const message = err.message || String(err);
+    return mapMacVerificationMessage(message) || message;
 }

@@ -168,8 +168,9 @@ export function initSidebarUndock(config) {
             if (!root) return;
 
             e.preventDefault();
+            e.stopPropagation();
             let dragging = true;
-            let didDrag = false;
+            let dragSession = true;
             const startX = e.clientX;
             const startY = e.clientY;
             const startLeft = parseFloat(root.style.left) || 0;
@@ -180,9 +181,6 @@ export function initSidebarUndock(config) {
 
             const onMove = (ev) => {
                 if (!dragging) return;
-                if (Math.abs(ev.clientX - startX) > 4 || Math.abs(ev.clientY - startY) > 4) {
-                    didDrag = true;
-                }
                 applyPosition(
                     root,
                     startLeft + (ev.clientX - startX),
@@ -196,7 +194,7 @@ export function initSidebarUndock(config) {
                 dragging = false;
                 root.classList.remove(draggingClass);
                 header.releasePointerCapture(ev.pointerId);
-                if (didDrag) {
+                if (dragSession) {
                     header.dataset.suppressClick = 'true';
                     requestAnimationFrame(() => {
                         delete header.dataset.suppressClick;

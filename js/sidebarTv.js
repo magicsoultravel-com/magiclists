@@ -5,7 +5,7 @@ import { TvPlayer } from './tvPlayer.js';
 import { TvPopover } from './tvPopover.js';
 import { escapeHtml, countryFlagEmoji, debounce, syncMarquee, bindFaviconImage } from './tvUtils.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
-import { applySectionCollapse } from './hamburger.js';
+import { renderSidebarModuleHeaderHtml } from './sidebarModules.js';
 import { showAppToast } from './toast.js';
 
 const BROWSE_PAGE_SIZE = 60;
@@ -92,54 +92,51 @@ export const SidebarTv = {
     },
 
     renderShell() {
-        this.root.innerHTML = `
-            <div class="collapsable-header list-row--header" id="tv-section-header">
-                <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>TV</span>
+        const compactHtml = `
                 <div class="sidebar-tv__compact">
-                    <button type="button" class="sidebar-tv__compact-art" data-tv-channel-context title="Show channel in browser" aria-label="Show channel in browser">
-                        <img class="sidebar-tv__compact-art-img is-hidden" data-tv-compact-art alt="">
-                        <span class="sidebar-tv__compact-art-fallback" data-tv-compact-art-fallback aria-hidden="true">📺</span>
+                    <button type="button" class="sidebar-media__compact-art" data-tv-channel-context title="Show channel in browser" aria-label="Show channel in browser">
+                        <img class="sidebar-media__compact-art-img is-hidden" data-tv-compact-art alt="">
+                        <span class="sidebar-media__compact-art-fallback" data-tv-compact-art-fallback aria-hidden="true">📺</span>
                     </button>
-                    <button type="button" class="btn btn--compact btn-icon sidebar-tv__action" data-tv-play aria-label="Play or pause">
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-tv-play aria-label="Play or pause">
                         <span data-tv-play-icon></span>
                     </button>
-                    <input type="range" class="sidebar-tv__volume-compact" data-tv-volume-compact min="0" max="100" value="85" aria-label="Volume">
-                </div>
-                <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
-            </div>
+                    <input type="range" class="sidebar-media__volume-compact" data-tv-volume-compact min="0" max="100" value="85" aria-label="Volume">
+                </div>`;
+        this.root.innerHTML = `
+            ${renderSidebarModuleHeaderHtml({ headerId: 'tv-section-header', title: 'TV', extrasHtml: compactHtml })}
             <div class="collapsable-section" id="tv-section">
-                <div class="sidebar-tv__now-playing" data-tv-transport>
-                    <button type="button" class="sidebar-tv__art" data-tv-channel-context title="Show channel in browser" aria-label="Show channel in browser">
-                        <img class="sidebar-tv__art-img is-hidden" data-tv-art alt="">
-                        <span class="sidebar-tv__art-fallback" data-tv-art-fallback aria-hidden="true">📺</span>
+                <div class="sidebar-media__now-playing" data-tv-transport>
+                    <button type="button" class="sidebar-media__art" data-tv-channel-context title="Show channel in browser" aria-label="Show channel in browser">
+                        <img class="sidebar-media__art-img is-hidden" data-tv-art alt="">
+                        <span class="sidebar-media__art-fallback" data-tv-art-fallback aria-hidden="true">📺</span>
                     </button>
-                    <div class="sidebar-tv__meta">
-                        <div class="sidebar-tv__title-row">
-                            <div class="sidebar-tv__marquee" data-tv-marquee>TV</div>
+                    <div class="sidebar-media__meta">
+                        <div class="sidebar-media__title-row">
+                            <div class="sidebar-media__marquee" data-tv-marquee>TV</div>
                         </div>
-                        <div class="sidebar-tv__locale-row">
-                            <button type="button" class="sidebar-tv__locale is-hidden" data-tv-channel-context title="Show channel in browser" aria-label="Show channel in browser">
+                        <div class="sidebar-media__locale-row">
+                            <button type="button" class="sidebar-media__locale is-hidden" data-tv-channel-context title="Show channel in browser" aria-label="Show channel in browser">
                                 <span data-tv-flag aria-hidden="true"></span>
-                                <span class="sidebar-tv__country-name" data-tv-country-name></span>
+                                <span class="sidebar-media__country-name" data-tv-country-name></span>
                             </button>
-                            <span class="sidebar-tv__load-status is-hidden" data-tv-load-status></span>
+                            <span class="sidebar-media__load-status is-hidden" data-tv-load-status></span>
                         </div>
-                        <div class="sidebar-tv__volume-row">
-                            <input type="range" class="sidebar-tv__volume" data-tv-volume min="0" max="100" value="85" aria-label="Volume">
+                        <div class="sidebar-media__volume-row">
+                            <input type="range" class="sidebar-media__volume" data-tv-volume min="0" max="100" value="85" aria-label="Volume">
                         </div>
                     </div>
                 </div>
-                <div class="sidebar-tv__actions">
-                    <button type="button" class="btn btn--compact btn-icon sidebar-tv__action" data-tv-play aria-label="Play or pause">
+                <div class="sidebar-media__actions">
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-tv-play aria-label="Play or pause">
                         <span data-tv-play-icon></span>
                     </button>
-                    <button type="button" class="btn btn--compact btn-icon sidebar-tv__action" data-tv-open="browse" title="Browse channels" aria-label="Browse channels" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.tvBrowse}</button>
-                    <button type="button" class="btn btn--compact btn-icon sidebar-tv__action sidebar-tv__action--heart is-hidden" data-tv-favorite title="Add favorite" aria-label="Add favorite" aria-pressed="false">${CARD_ICONS.heart}</button>
-                    <button type="button" class="btn btn--compact btn-icon sidebar-tv__action" data-tv-open="special" title="TV settings" aria-label="TV settings" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioSpecial}</button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-tv-open="browse" title="Browse channels" aria-label="Browse channels" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.tvBrowse}</button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-tv__action--heart is-hidden" data-tv-favorite title="Add favorite" aria-label="Add favorite" aria-pressed="false">${CARD_ICONS.heart}</button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-tv-open="special" title="TV settings" aria-label="TV settings" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioSpecial}</button>
                 </div>
             </div>
         `;
-        applySectionCollapse('tv-section', 'tv-section-header', true);
     },
 
     bindShellListeners() {
@@ -356,14 +353,14 @@ export const SidebarTv = {
     },
 
     renderSortSelect(options, current, attrName, label) {
-        return `<select class="form-input sidebar-tv__sort" ${attrName} aria-label="${escapeHtml(label)}">
+        return `<select class="form-input sidebar-media__sort" ${attrName} aria-label="${escapeHtml(label)}">
             ${options.map((o) => `<option value="${escapeHtml(o.value)}"${o.value === current ? ' selected' : ''}>${escapeHtml(o.label)}</option>`).join('')}
         </select>`;
     },
 
     renderBrowseCountriesToolbar() {
-        return `<div class="tv-popover__toolbar-row">
-            <input type="search" class="form-input sidebar-tv__search" data-tv-country-search placeholder="Filter countries…" aria-label="Filter countries" autocomplete="off" spellcheck="false" value="${escapeHtml(this.countryFilter)}">
+        return `<div class="sidebar-media-popover__toolbar-row">
+            <input type="search" class="form-input sidebar-media__search" data-tv-country-search placeholder="Filter countries…" aria-label="Filter countries" autocomplete="off" spellcheck="false" value="${escapeHtml(this.countryFilter)}">
             ${this.renderSortSelect(COUNTRY_SORT_OPTIONS, TvPlayer.getCountrySort(), 'data-tv-country-sort', 'Sort countries')}
         </div>`;
     },
@@ -379,10 +376,10 @@ export const SidebarTv = {
     renderCountryTile(c) {
         const code = c.iso_3166_1 || '';
         const count = c.stationcount ? `${c.stationcount}` : '';
-        return `<button type="button" class="tv-tile tv-tile--country" data-tv-country="${escapeHtml(code)}" data-tv-country-name="${escapeHtml(c.name || code)}" title="${escapeHtml(c.name || code)}">
-            <span class="tv-tile__flag" aria-hidden="true">${countryFlagEmoji(code)}</span>
-            <span class="tv-tile__label u-truncate">${escapeHtml(c.name || code)}</span>
-            ${count ? `<span class="tv-tile__meta">${escapeHtml(count)}</span>` : ''}
+        return `<button type="button" class="sidebar-media-tile sidebar-media-tile--country" data-tv-country="${escapeHtml(code)}" data-tv-country-name="${escapeHtml(c.name || code)}" title="${escapeHtml(c.name || code)}">
+            <span class="sidebar-media-tile__flag" aria-hidden="true">${countryFlagEmoji(code)}</span>
+            <span class="sidebar-media-tile__label u-truncate">${escapeHtml(c.name || code)}</span>
+            ${count ? `<span class="sidebar-media-tile__meta">${escapeHtml(count)}</span>` : ''}
         </button>`;
     },
 
@@ -413,7 +410,7 @@ export const SidebarTv = {
             body.innerHTML = '<p class="tool-msg">No countries match.</p>';
             return;
         }
-        body.innerHTML = `<div class="tv-tile-grid" data-tv-country-grid>${filtered.map((c) => this.renderCountryTile(c)).join('')}</div>`;
+        body.innerHTML = `<div class="sidebar-media-tile-grid" data-tv-country-grid>${filtered.map((c) => this.renderCountryTile(c)).join('')}</div>`;
         body.querySelectorAll('[data-tv-country]').forEach((tile) => {
             tile.addEventListener('click', () => {
                 this.openBrowseCountry(tile.getAttribute('data-tv-country'), tile.getAttribute('data-tv-country-name') || tile.getAttribute('data-tv-country'));
@@ -430,14 +427,14 @@ export const SidebarTv = {
     },
 
     renderBrowseSortToolbar() {
-        return `<div class="tv-popover__toolbar-row tv-popover__toolbar-row--end">
+        return `<div class="sidebar-media-popover__toolbar-row sidebar-media-popover__toolbar-row--end">
             ${this.renderSortSelect(BROWSE_SORT_OPTIONS, TvPlayer.getBrowseSort(), 'data-tv-sort', 'Sort channels')}
         </div>`;
     },
 
     renderRecentsToolbar() {
-        return `<div class="tv-popover__toolbar-row tv-popover__toolbar-row--end">
-            <button type="button" class="btn btn--compact btn-icon card-act sidebar-tv__clear-recents" data-tv-clear-recents title="Clear recents" aria-label="Clear recents">${CARD_ICONS.delete}</button>
+        return `<div class="sidebar-media-popover__toolbar-row sidebar-media-popover__toolbar-row--end">
+            <button type="button" class="btn btn--compact btn-icon card-act sidebar-media__clear-recents" data-tv-clear-recents title="Clear recents" aria-label="Clear recents">${CARD_ICONS.delete}</button>
         </div>`;
     },
 
@@ -484,16 +481,16 @@ export const SidebarTv = {
                 if (this.browseHasMore) {
                     const btn = document.createElement('button');
                     btn.type = 'button';
-                    btn.className = 'btn btn--compact sidebar-tv__load-more';
+                    btn.className = 'btn btn--compact sidebar-media__load-more';
                     btn.setAttribute('data-tv-load-more', '');
                     btn.textContent = 'Load more';
                     body.appendChild(btn);
                     this.bindBrowseCountryControls(body);
                 }
             } else {
-                body.innerHTML = `<div class="tv-tile-grid tv-tile-grid--channels" data-tv-channel-grid>
+                body.innerHTML = `<div class="sidebar-media-tile-grid sidebar-media-tile-grid--items" data-tv-channel-grid>
                     ${this.browseChannels.map((ch) => this.renderChannelTile(ch)).join('')}
-                </div>${this.browseHasMore ? '<button type="button" class="btn btn--compact sidebar-tv__load-more" data-tv-load-more>Load more</button>' : ''}`;
+                </div>${this.browseHasMore ? '<button type="button" class="btn btn--compact sidebar-media__load-more" data-tv-load-more>Load more</button>' : ''}`;
                 this.bindChannelTileActions(body);
                 this.bindBrowseCountryControls(body);
                 this.scrollToHighlightedChannel(body);
@@ -571,14 +568,14 @@ export const SidebarTv = {
             this.listChannels = metaList.map((meta) => byKey.get(meta.key) || this.channelFromMeta(meta)).filter(Boolean);
             if (!this.listChannels.length) body.innerHTML = '<p class="tool-msg tool-msg--error">Channels unavailable.</p>';
             else {
-                body.innerHTML = `<div class="tv-tile-grid tv-tile-grid--channels">${this.listChannels.map((ch) => this.renderChannelTile(ch)).join('')}</div>`;
+                body.innerHTML = `<div class="sidebar-media-tile-grid sidebar-media-tile-grid--items">${this.listChannels.map((ch) => this.renderChannelTile(ch)).join('')}</div>`;
                 this.bindChannelTileActions(body);
             }
         } catch {
             if (seq !== this.loadSeq) return;
             this.listChannels = fallback;
             body.innerHTML = this.listChannels.length
-                ? `<div class="tv-tile-grid tv-tile-grid--channels">${this.listChannels.map((ch) => this.renderChannelTile(ch)).join('')}</div>`
+                ? `<div class="sidebar-media-tile-grid sidebar-media-tile-grid--items">${this.listChannels.map((ch) => this.renderChannelTile(ch)).join('')}</div>`
                 : '<p class="tool-msg tool-msg--error">Could not load list.</p>';
             if (this.listChannels.length) this.bindChannelTileActions(body);
         }
@@ -593,14 +590,14 @@ export const SidebarTv = {
         const logoHtml = channel.logo
             ? `<img class="tv-tile__logo is-hidden" src="${escapeHtml(channel.logo)}" alt="" width="32" height="32" loading="lazy" decoding="async">`
             : '<span class="tv-tile__logo tv-tile__logo--fallback" aria-hidden="true">📺</span>';
-        const flag = channel.countrycode ? `<span class="tv-tile__badge" aria-hidden="true">${countryFlagEmoji(channel.countrycode)}</span>` : '';
+        const flag = channel.countrycode ? `<span class="sidebar-media-tile__badge" aria-hidden="true">${countryFlagEmoji(channel.countrycode)}</span>` : '';
         const starIcon = fav ? CARD_ICONS.starFilled : CARD_ICONS.star;
-        return `<div class="tv-tile tv-tile--channel${playing ? ' is-on-desktop' : ''}${offline ? ' tv-tile--offline' : ''}" data-tv-channel="${escapeHtml(uuid)}" role="button" tabindex="0" title="${escapeHtml(channel.name || '')}">
-            <span class="tv-tile__art">${logoHtml}</span>
-            <span class="tv-tile__label u-truncate">${escapeHtml(channel.name || 'Unknown')}</span>
+        return `<div class="sidebar-media-tile tv-tile--channel${playing ? ' is-on-desktop' : ''}${offline ? ' sidebar-media-tile--offline' : ''}" data-tv-channel="${escapeHtml(uuid)}" role="button" tabindex="0" title="${escapeHtml(channel.name || '')}">
+            <span class="sidebar-media-tile__art">${logoHtml}</span>
+            <span class="sidebar-media-tile__label u-truncate">${escapeHtml(channel.name || 'Unknown')}</span>
             ${flag}
-            ${offline ? '<span class="tv-tile__offline">offline</span>' : ''}
-            <button type="button" class="card-act tv-tile__star${fav ? ' is-active' : ''}" data-tv-star="${escapeHtml(uuid)}" title="${fav ? 'Remove favorite' : 'Add favorite'}" aria-label="${fav ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${fav ? 'true' : 'false'}">${starIcon}</button>
+            ${offline ? '<span class="sidebar-media-tile__offline">offline</span>' : ''}
+            <button type="button" class="card-act sidebar-media-tile__star${fav ? ' is-active' : ''}" data-tv-star="${escapeHtml(uuid)}" title="${fav ? 'Remove favorite' : 'Add favorite'}" aria-label="${fav ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${fav ? 'true' : 'false'}">${starIcon}</button>
         </div>`;
     },
 
@@ -676,7 +673,7 @@ export const SidebarTv = {
 
     getPlayIconHtml(state) {
         if (state.loading || state.loadPhase === 'connecting' || state.loadPhase === 'buffering') {
-            return ACTION_ICONS.radioLoading.replace('sidebar-radio__spin-icon', 'sidebar-tv__spin-icon');
+            return ACTION_ICONS.radioLoading;
         }
         if (state.playing) return ACTION_ICONS.radioPause;
         return ACTION_ICONS.radioPlay;
@@ -699,12 +696,12 @@ export const SidebarTv = {
         const compactArtFallback = this.root?.querySelector('[data-tv-compact-art-fallback]');
         const flagEl = this.root?.querySelector('[data-tv-flag]');
         const countryNameEl = this.root?.querySelector('[data-tv-country-name]');
-        const localeBtn = this.root?.querySelector('.sidebar-tv__locale');
+        const localeBtn = this.root?.querySelector('.sidebar-media__locale');
         const loadStatusEl = this.root?.querySelector('[data-tv-load-status]');
         const volumeEls = this.root?.querySelectorAll('[data-tv-volume], [data-tv-volume-compact]');
         const favBtn = this.root?.querySelector('[data-tv-favorite]');
         const transport = this.root?.querySelector('[data-tv-transport]');
-        const artBtn = this.root?.querySelector('.sidebar-tv__art');
+        const artBtn = this.root?.querySelector('.sidebar-media__art');
 
         let titleText = 'TV';
         let isError = false;
@@ -754,8 +751,8 @@ export const SidebarTv = {
         updateArt(compactArtImg, compactArtFallback);
 
         const isLoading = state.loading || state.loadPhase === 'connecting' || state.loadPhase === 'buffering';
-        artBtn?.classList.toggle('sidebar-tv__art--loading', isLoading);
-        this.root?.querySelector('.sidebar-tv__compact-art')?.classList.toggle('sidebar-tv__art--loading', isLoading);
+        artBtn?.classList.toggle('sidebar-media__art--loading', isLoading);
+        this.root?.querySelector('.sidebar-media__compact-art')?.classList.toggle('sidebar-media__art--loading', isLoading);
 
         const playIconHtml = this.getPlayIconHtml(state);
         this.root?.querySelectorAll('[data-tv-play-icon]').forEach((el) => { el.innerHTML = playIconHtml; });
@@ -780,6 +777,6 @@ export const SidebarTv = {
             }
         }
 
-        transport?.classList.toggle('sidebar-tv__now-playing--active', !!(state.channel || state.playing || state.loading));
+        transport?.classList.toggle('sidebar-media__now-playing--active', !!(state.channel || state.playing || state.loading));
     }
 };

@@ -96,11 +96,16 @@ function clearSidebarAppliedWidth() {
     sidebarPanel?.style.removeProperty('width');
 }
 
+function notifySidebarWidthChanged() {
+    window.dispatchEvent(new CustomEvent('sidebar:width_changed'));
+}
+
 function applySidebarWidth(width) {
     if (!sidebarPanel || isSidebarCollapsed()) return;
     const clamped = clampSidebarWidth(width);
     sidebarPanel.style.setProperty('--sidebar-width', `${clamped}px`);
     applySidebarUiScale(clamped);
+    notifySidebarWidthChanged();
     return clamped;
 }
 
@@ -269,6 +274,7 @@ function bindSplitterDrag(handle, axis) {
             const next = clampSidebarWidth(startSize + (e.clientX - startX));
             sidebarPanel.style.setProperty('--sidebar-width', `${next}px`);
             applySidebarUiScale(next);
+            notifySidebarWidthChanged();
         } else {
             const mount = document.getElementById('file-cabinet');
             if (!mount) return;

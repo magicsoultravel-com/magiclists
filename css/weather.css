@@ -3,50 +3,6 @@
    SIDEBAR WEATHER — IMGW forecast glance + expanded details
    ========================================================================== */
 
-.sidebar-weather {
-    flex-shrink: 0;
-    padding-bottom: 0.2rem;
-    font-size: 0.66rem;
-}
-
-.sidebar-weather .btn,
-.sidebar-weather .btn--compact {
-    padding: 0.22rem 0.4rem;
-    font-size: 0.66rem;
-    border-radius: 3px;
-    line-height: 1.25;
-}
-
-.sidebar-weather .btn-icon {
-    padding: 0.2rem 0.35rem;
-    font-size: 0.85rem;
-    line-height: 1;
-}
-
-.sidebar-weather .collapsable-header {
-    display: flex;
-    align-items: center;
-    gap: 0.2rem;
-    padding-right: 0.15rem;
-}
-
-.sidebar-weather .collapsable-heading {
-    flex: 1 1 auto;
-    min-width: 0;
-}
-
-.sidebar-weather__compact {
-    display: none;
-    align-items: center;
-    gap: 0.2rem;
-    min-width: 0;
-    flex: 0 1 auto;
-}
-
-.sidebar-weather:has(#weather-section.collapsed) .sidebar-weather__compact {
-    display: flex;
-}
-
 .sidebar-weather__compact-icon {
     display: flex;
     color: var(--accent-color, #7eb8ff);

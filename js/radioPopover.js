@@ -26,20 +26,20 @@ export const RadioPopover = {
         panel.className = 'radio-popover clock-style-popover is-hidden';
         panel.setAttribute('role', 'dialog');
         panel.innerHTML = `
-            <div class="radio-popover__header" data-radio-pop-drag>
-                <button type="button" class="btn btn--compact btn-icon radio-popover__back is-hidden" data-radio-pop-back aria-label="Back">◀</button>
-                <span class="radio-popover__title" data-radio-pop-title>Radio</span>
-                <span class="radio-popover__spacer"></span>
-                <button type="button" class="card-act radio-popover__close" data-radio-pop-close title="Close" aria-label="Close">${CARD_ICONS.close}</button>
+            <div class="sidebar-media-popover__header" data-radio-pop-drag>
+                <button type="button" class="btn btn--compact btn-icon sidebar-media-popover__back is-hidden" data-radio-pop-back aria-label="Back">◀</button>
+                <span class="sidebar-media-popover__title" data-radio-pop-title>Radio</span>
+                <span class="sidebar-media-popover__spacer"></span>
+                <button type="button" class="card-act sidebar-media-popover__close" data-radio-pop-close title="Close" aria-label="Close">${CARD_ICONS.close}</button>
             </div>
-            <div class="radio-popover__toolbar is-hidden" data-radio-pop-toolbar></div>
-            <div class="radio-popover__body" data-radio-pop-body></div>
-            <div class="radio-popover__tabs" data-radio-pop-tabs>
-                <button type="button" class="radio-popover__tab is-active" data-radio-tab="browse">Browse</button>
-                <button type="button" class="radio-popover__tab" data-radio-tab="recents">Recents</button>
-                <button type="button" class="radio-popover__tab" data-radio-tab="favorites">Favorites</button>
+            <div class="sidebar-media-popover__toolbar is-hidden" data-radio-pop-toolbar></div>
+            <div class="sidebar-media-popover__body" data-radio-pop-body></div>
+            <div class="sidebar-media-popover__tabs" data-radio-pop-tabs>
+                <button type="button" class="sidebar-media-popover__tab is-active" data-radio-tab="browse">Browse</button>
+                <button type="button" class="sidebar-media-popover__tab" data-radio-tab="recents">Recents</button>
+                <button type="button" class="sidebar-media-popover__tab" data-radio-tab="favorites">Favorites</button>
             </div>
-            <div class="radio-popover__resize-se ff-resize ff-resize-se" data-radio-pop-resize aria-hidden="true"></div>
+            <div class="sidebar-media-popover__resize-se ff-resize ff-resize-se" data-radio-pop-resize aria-hidden="true"></div>
         `;
         document.body.appendChild(panel);
 

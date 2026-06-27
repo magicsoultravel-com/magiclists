@@ -1,4 +1,4 @@
-/** @css {"owns":"floating tool panels, chips, globe/map/alphabets/calculator/converter/timezone tool bodies", "js":["toolsManager.js","toolPanelChrome.js","sidebarModules.js"]} */
+/** @css {"owns":"floating tool panels, chips, globe/map/alphabets/calculator/converter/timezone/timer tool bodies", "js":["toolsManager.js","toolPanelChrome.js","sidebarModules.js"]} */
 /* ==========================================================================
    TOOLS DESKTOP — floating panels + chips
    ========================================================================== */
@@ -1331,4 +1331,142 @@
     height: 100%;
     width: 100%;
     font-family: inherit;
+}
+
+/* ==========================================================================
+   TIMER TOOL
+   ========================================================================== */
+.tool-mount--timer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.timer-tool-stack {
+    gap: 0.35rem;
+}
+
+.timer-mode-bar .timer-mode-btn {
+    flex: 1 1 0;
+    justify-content: center;
+}
+
+.timer-readout {
+    text-align: center;
+    font-size: 1.05rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+    padding: 0.45rem 0.35rem;
+    min-height: 2rem;
+}
+
+.timer-readout--done {
+    animation: timer-readout-pulse 0.8s ease-in-out 3;
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+@keyframes timer-readout-pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 35%, transparent);
+    }
+    50% {
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent);
+    }
+}
+
+.timer-controls .btn--icon {
+    padding: 0.24rem 0.38rem;
+}
+
+.timer-lap-btn.is-hidden,
+.timer-countdown-setup.is-hidden,
+.timer-laps-block.is-hidden {
+    display: none;
+}
+
+.timer-presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.timer-duration-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.25rem;
+    align-items: end;
+}
+
+.timer-duration-grid .form-group {
+    margin: 0;
+}
+
+.timer-duration-grid label {
+    display: block;
+    font-size: 0.58rem;
+    color: var(--text-muted);
+    margin-bottom: 0.12rem;
+}
+
+.timer-duration-input {
+    width: 100%;
+    text-align: center;
+    padding: 0.28rem 0.2rem;
+    font-size: 0.72rem;
+}
+
+.timer-laps-block {
+    margin-top: 0.1rem;
+}
+
+.timer-laps-block .collapsable-header {
+    background: var(--bg-card);
+}
+
+.timer-laps-section:not(.collapsed) .timer-laps {
+    max-height: 110px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: color-mix(in srgb, var(--text-main) 2%, transparent);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 0.25rem;
+}
+
+.timer-laps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.12rem;
+}
+
+.timer-laps-empty {
+    margin: 0;
+    text-align: center;
+}
+
+.timer-lap-row {
+    display: grid;
+    grid-template-columns: 1.6rem 1fr 1fr;
+    gap: 0.25rem;
+    align-items: center;
+    padding: 0.18rem 0.22rem;
+    border-radius: 3px;
+    font-size: 0.62rem;
+    font-family: monospace;
+    color: var(--text-muted);
+}
+
+.timer-lap-index {
+    color: var(--text-main);
+    opacity: 0.75;
+}
+
+.timer-lap-split,
+.timer-lap-total {
+    text-align: right;
+}
+
+.timer-lap-total {
+    color: var(--text-main);
 }

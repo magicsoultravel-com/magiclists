@@ -16,7 +16,6 @@ import {
     writeSidebarSection
 } from './sidebarPrefs.js';
 import { onSidebarCollapseChanged } from './shellResize.js';
-import { SIDEBAR_MODULE_DOCK_SEL } from './sidebarUndock.js';
 
 export function applySectionCollapse(sectionId, headerId, startCollapsed = false) {
     const header = document.getElementById(headerId);
@@ -33,7 +32,41 @@ export function applySectionCollapse(sectionId, headerId, startCollapsed = false
     toggle?.classList.toggle('collapsed', collapsed);
 }
 
-const DOCK_IGNORE = SIDEBAR_MODULE_DOCK_SEL;
+/**
+ * @param {{ headerId: string, sectionId: string, startCollapsed?: boolean, ignoreSelector?: string | null, toggleOnly?: boolean }} opts
+ */
+export function bindToggleCollapsable({
+    headerId,
+    sectionId,
+    startCollapsed = false,
+    ignoreSelector = null,
+    toggleOnly = true
+}) {
+    const header = document.getElementById(headerId);
+    const section = document.getElementById(sectionId);
+    if (!header || !section) return;
+
+    applySectionCollapse(sectionId, headerId, startCollapsed);
+
+    if (header.dataset.collapsableBound === 'true') return;
+    header.dataset.collapsableBound = 'true';
+
+    const clickTarget = toggleOnly
+        ? header.querySelector('.collapsable-toggle')
+        : header;
+    if (!clickTarget) return;
+
+    clickTarget.addEventListener('click', (e) => {
+        if (header.dataset.suppressClick === 'true') return;
+        if (ignoreSelector && e.target.closest(ignoreSelector)) return;
+        if (toggleOnly && !e.target.closest('.collapsable-toggle')) return;
+        const toggle = header.querySelector('.collapsable-toggle');
+        const nowCollapsed = !section.classList.contains('collapsed');
+        section.classList.toggle('collapsed', nowCollapsed);
+        toggle?.classList.toggle('collapsed', nowCollapsed);
+        writeSidebarSection(sectionId, nowCollapsed);
+    });
+}
 
 export const SidePanel = {
     panel: null,
@@ -74,46 +107,21 @@ export const SidePanel = {
     },
 
     setupStatusClickHandlers() {
-        this.bindCollapsable('radio-section-header', 'radio-section', true, DOCK_IGNORE, '.collapsable-toggle');
-        this.bindCollapsable('tv-section-header', 'tv-section', true, DOCK_IGNORE, '.collapsable-toggle');
-        this.bindCollapsable('weather-section-header', 'weather-section', true, `${DOCK_IGNORE}, .sidebar-weather__refresh`, '.collapsable-toggle');
-        this.bindCollapsable('quick-actions-header', 'quick-actions-section', true, DOCK_IGNORE, '.collapsable-toggle');
-        this.bindCollapsable('categories-section-header', 'categories-section', true, DOCK_IGNORE, '.collapsable-toggle');
         this.bindCollapsable('categories-list-active-header', 'categories-list-active-section', true);
         this.bindCollapsable('categories-list-hidden-header', 'categories-list-hidden-section', true);
-        this.bindCollapsable('tools-section-header', 'tools-section', true, DOCK_IGNORE, '.collapsable-toggle');
-        this.bindCollapsable('notes-list-section-header', 'notes-list-section', false, `${DOCK_IGNORE}, .sidebar-notes-list-sort`);
         this.bindCollapsable('notes-list-active-header', 'notes-list-active-section');
         this.bindCollapsable('notes-list-hidden-header', 'notes-list-hidden-section', true);
         this.bindCollapsable('notes-list-archived-header', 'notes-list-archived-section', true);
-        this.bindCollapsable('history-section-header', 'history-section', true, DOCK_IGNORE, '.collapsable-toggle');
-        this.bindCollapsable('stats-section-header', 'stats-section', true, DOCK_IGNORE, '.collapsable-toggle');
         this.setupNotesListSortControls();
     },
 
     bindCollapsable(headerId, sectionId, startCollapsed = false, ignoreSelector = null, toggleSelector = null) {
-        const header = document.getElementById(headerId);
-        const section = document.getElementById(sectionId);
-        if (!header || !section) return;
-
-        applySectionCollapse(sectionId, headerId, startCollapsed);
-
-        if (header.dataset.collapsableBound === 'true') return;
-        header.dataset.collapsableBound = 'true';
-
-        const clickTarget = toggleSelector
-            ? header.querySelector(toggleSelector)
-            : header;
-        if (!clickTarget) return;
-
-        clickTarget.addEventListener('click', (e) => {
-            if (ignoreSelector && e.target.closest(ignoreSelector)) return;
-            if (toggleSelector && !e.target.closest(toggleSelector)) return;
-            const toggle = header.querySelector('.collapsable-toggle');
-            const nowCollapsed = !section.classList.contains('collapsed');
-            section.classList.toggle('collapsed', nowCollapsed);
-            toggle?.classList.toggle('collapsed', nowCollapsed);
-            writeSidebarSection(sectionId, nowCollapsed);
+        bindToggleCollapsable({
+            headerId,
+            sectionId,
+            startCollapsed,
+            ignoreSelector,
+            toggleOnly: toggleSelector !== null ? !!toggleSelector : false
         });
     },
 

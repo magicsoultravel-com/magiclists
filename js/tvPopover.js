@@ -26,23 +26,23 @@ export const TvPopover = {
         panel.className = 'tv-popover clock-style-popover is-hidden';
         panel.setAttribute('role', 'dialog');
         panel.innerHTML = `
-            <div class="tv-popover__header" data-tv-pop-drag>
-                <button type="button" class="btn btn--compact btn-icon tv-popover__back is-hidden" data-tv-pop-back aria-label="Back">◀</button>
-                <span class="tv-popover__title" data-tv-pop-title>TV</span>
-                <span class="tv-popover__spacer"></span>
-                <button type="button" class="card-act tv-popover__close" data-tv-pop-close title="Close" aria-label="Close">${CARD_ICONS.close}</button>
+            <div class="sidebar-media-popover__header" data-tv-pop-drag>
+                <button type="button" class="btn btn--compact btn-icon sidebar-media-popover__back is-hidden" data-tv-pop-back aria-label="Back">◀</button>
+                <span class="sidebar-media-popover__title" data-tv-pop-title>TV</span>
+                <span class="sidebar-media-popover__spacer"></span>
+                <button type="button" class="card-act sidebar-media-popover__close" data-tv-pop-close title="Close" aria-label="Close">${CARD_ICONS.close}</button>
             </div>
             <div class="tv-popover__video-wrap is-hidden" data-tv-video-wrap>
                 <div class="tv-popover__video-slot" data-tv-video-slot aria-label="Live video"></div>
             </div>
-            <div class="tv-popover__toolbar is-hidden" data-tv-pop-toolbar></div>
-            <div class="tv-popover__body" data-tv-pop-body></div>
-            <div class="tv-popover__tabs" data-tv-pop-tabs>
-                <button type="button" class="tv-popover__tab is-active" data-tv-tab="browse">Browse</button>
-                <button type="button" class="tv-popover__tab" data-tv-tab="recents">Recents</button>
-                <button type="button" class="tv-popover__tab" data-tv-tab="favorites">Favorites</button>
+            <div class="sidebar-media-popover__toolbar is-hidden" data-tv-pop-toolbar></div>
+            <div class="sidebar-media-popover__body" data-tv-pop-body></div>
+            <div class="sidebar-media-popover__tabs" data-tv-pop-tabs>
+                <button type="button" class="sidebar-media-popover__tab is-active" data-tv-tab="browse">Browse</button>
+                <button type="button" class="sidebar-media-popover__tab" data-tv-tab="recents">Recents</button>
+                <button type="button" class="sidebar-media-popover__tab" data-tv-tab="favorites">Favorites</button>
             </div>
-            <div class="tv-popover__resize-se ff-resize ff-resize-se" data-tv-pop-resize aria-hidden="true"></div>
+            <div class="sidebar-media-popover__resize-se ff-resize ff-resize-se" data-tv-pop-resize aria-hidden="true"></div>
         `;
         document.body.appendChild(panel);
 

@@ -9,6 +9,8 @@ import {
 
 const SESSION_KEY = 'matrix_cloud_mega_session';
 const DEFAULT_FOLDER_PATH = ['magicnotes', 'backups'];
+const DOWNLOAD_OPTIONS = { maxConnections: 1 };
+const UTF8_DECODER = new TextDecoder('utf-8');
 
 let megajsModule = null;
 let storage = null;
@@ -147,6 +149,15 @@ function backupEntries(folder) {
         .sort((a, b) => b.timestamp - a.timestamp);
 }
 
+function isMacVerificationError(err) {
+    const raw = typeof err === 'string' ? err : (err?.message || String(err ?? ''));
+    return raw.includes('MAC verification failed');
+}
+
+export function mapMegaDownloadError(err) {
+    return formatCloudError(err);
+}
+
 export function mapMegaLoginError(err) {
     const raw = formatCloudError(err);
     const upper = raw.toUpperCase();
@@ -164,6 +175,29 @@ export function mapMegaLoginError(err) {
         return { message: 'Could not reach MEGA. Check your connection and try again.', mfaRequired: false };
     }
     return { message: raw, mfaRequired: false };
+}
+
+function utf8UploadBytes(jsonString) {
+    return new TextEncoder().encode(String(jsonString ?? ''));
+}
+
+async function resolveBackupFile(id) {
+    const file = storage?.files?.[id];
+    if (!file || file.directory) {
+        throw new Error('Checkpoint not found — reconnect cloud and try again.');
+    }
+    if (typeof file.loadAttributes === 'function') {
+        try {
+            await file.loadAttributes();
+        } catch {
+            /* use cached metadata if refresh fails */
+        }
+    }
+    return file;
+}
+
+async function downloadFileBuffer(file) {
+    return file.downloadBuffer(DOWNLOAD_OPTIONS);
 }
 
 export const MegaProvider = {
@@ -290,7 +324,8 @@ export const MegaProvider = {
 
     async uploadBackup(jsonString, filename) {
         if (!backupFolder) throw new Error('Backup folder not configured');
-        const upload = backupFolder.upload({ name: filename, allowUploadBuffering: true }, jsonString);
+        const bytes = utf8UploadBytes(jsonString);
+        const upload = backupFolder.upload({ name: filename, size: bytes.length }, bytes);
         await upload.complete;
         const created = backupFolder.children?.find((entry) => !entry.directory && entry.name === filename);
         return {
@@ -300,10 +335,18 @@ export const MegaProvider = {
     },
 
     async downloadBackup(id) {
-        const file = storage?.files?.[id];
-        if (!file || file.directory) throw new Error('Checkpoint not found');
-        const buffer = await file.downloadBuffer();
-        return buffer.toString('utf8');
+        const file = await resolveBackupFile(id);
+        let lastErr = null;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            try {
+                const buffer = await downloadFileBuffer(file);
+                return UTF8_DECODER.decode(buffer);
+            } catch (err) {
+                lastErr = err;
+                if (!isMacVerificationError(err) || attempt > 0) break;
+            }
+        }
+        throw new Error(mapMegaDownloadError(lastErr));
     },
 
     async deleteBackup(id) {

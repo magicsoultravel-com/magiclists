@@ -39,17 +39,17 @@ export function syncMarquee(wrapEl, text, { error = false } = {}) {
     if (!wrapEl) return;
 
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    wrapEl.classList.toggle('sidebar-radio__title--error', !!error);
+    wrapEl.classList.toggle('sidebar-media__title--error', !!error);
 
     if (error || reducedMotion) {
         wrapEl.classList.remove('is-marquee');
-        wrapEl.innerHTML = `<span class="sidebar-radio__marquee-inner" data-radio-title>${escapeHtml(text || '')}</span>`;
+        wrapEl.innerHTML = `<span class="sidebar-media__marquee-inner" data-radio-title>${escapeHtml(text || '')}</span>`;
         return;
     }
 
-    wrapEl.innerHTML = `<span class="sidebar-radio__marquee-track"><span class="sidebar-radio__marquee-inner" data-radio-title>${escapeHtml(text || '')}</span></span>`;
-    const inner = wrapEl.querySelector('.sidebar-radio__marquee-inner');
-    const track = wrapEl.querySelector('.sidebar-radio__marquee-track');
+    wrapEl.innerHTML = `<span class="sidebar-media__marquee-track"><span class="sidebar-media__marquee-inner" data-radio-title>${escapeHtml(text || '')}</span></span>`;
+    const inner = wrapEl.querySelector('.sidebar-media__marquee-inner');
+    const track = wrapEl.querySelector('.sidebar-media__marquee-track');
     if (!inner || !track) return;
 
     requestAnimationFrame(() => {

@@ -1344,6 +1344,7 @@ html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
     gap: 0.15rem;
     overflow-x: hidden;
     overflow-y: auto;
+    --sidebar-module-width: var(--sidebar-width, 220px);
 }
 
 .side-panel-modules > .sidebar-module + .sidebar-module {
@@ -1356,6 +1357,106 @@ html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
     display: flex;
     flex-direction: column;
     gap: 0.15rem;
+    font-size: 0.66rem;
+}
+
+.sidebar-module.sidebar-radio,
+.sidebar-module.sidebar-tv,
+.sidebar-module.sidebar-weather {
+    flex-shrink: 0;
+    padding-bottom: 0.2rem;
+}
+
+/* Top-level module headers only — not nested subheaders */
+.sidebar-module > .collapsable-header {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.28rem 0.35rem;
+    padding-right: 0.15rem;
+    min-height: 1.5rem;
+}
+
+.sidebar-module > .collapsable-header > .collapsable-heading {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: 0.66rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    line-height: 1.2;
+}
+
+.sidebar-module > .collapsable-header .collapsable-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    font-size: 0.55rem;
+    line-height: 1;
+    color: var(--text-muted);
+    transition: transform 0.2s ease, color 0.15s ease;
+}
+
+.sidebar-module > .collapsable-header .collapsable-toggle svg {
+    display: block;
+}
+
+.sidebar-module > .collapsable-header:hover .collapsable-toggle {
+    color: var(--accent);
+}
+
+.sidebar-module > .collapsable-header:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.sidebar-module > .collapsable-header .collapsable-toggle.collapsed {
+    transform: rotate(-90deg);
+}
+
+.sidebar-module > .collapsable-header > .sidebar-module__dock {
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.sidebar-module .collapsable-header > .status-badge {
+    font-size: 0.52rem;
+    min-width: 1rem;
+    padding: 0 0.2rem;
+}
+
+.sidebar-module .sidebar-notes-list-sort {
+    margin-left: 0;
+}
+
+.sidebar-radio__compact,
+.sidebar-tv__compact,
+.sidebar-weather__compact {
+    display: none;
+    align-items: center;
+    min-width: 0;
+}
+
+.sidebar-radio__compact,
+.sidebar-tv__compact {
+    gap: 0.15rem;
+    flex: 1 1 auto;
+    padding: 0 0.1rem;
+}
+
+.sidebar-weather__compact {
+    gap: 0.2rem;
+    flex: 0 1 auto;
+}
+
+.sidebar-radio:has(#radio-section.collapsed) .sidebar-radio__compact,
+.sidebar-tv:has(#tv-section.collapsed) .sidebar-tv__compact,
+.sidebar-weather:has(#weather-section.collapsed) .sidebar-weather__compact {
+    display: flex;
 }
 
 .sidebar-module--undocked {
@@ -1374,10 +1475,22 @@ html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
 }
 
 .sidebar-module--undocked .collapsable-header {
-    padding: 0.28rem 0.35rem;
-    padding-right: 0.15rem;
     cursor: grab;
     user-select: none;
+}
+
+.sidebar-module--undocked .btn,
+.sidebar-module--undocked .btn--compact {
+    padding: 0.22rem 0.4rem;
+    font-size: 0.66rem;
+    border-radius: 3px;
+    line-height: 1.25;
+}
+
+.sidebar-module--undocked .btn-icon {
+    padding: 0.2rem 0.35rem;
+    font-size: 0.85rem;
+    line-height: 1;
 }
 
 .sidebar-module--undocked .collapsable-section {

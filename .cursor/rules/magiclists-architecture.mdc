@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: scripts/build-architecture-map.ps1 - built 2026-06-27T18:03:54.534Z
+> Regenerate: scripts/build-architecture-map.ps1 - built 2026-06-27T20:04:29.415Z
 
 ## CSS load order
 
@@ -19,13 +19,14 @@ alwaysApply: true
 | css/board.css | grid/freeform board, clock, drag/resize, desktop inline card spatial overrides | dragdrop.js, clockStyle.js, desktopZoom.js, boardSort.js | note footer spatial overrides cross-cut shell.css | 6 |
 | css/themes.css | html[data-app-theme] overrides, theme picker swatches | appTheme.js, themePicker.js | - | 7 |
 | css/drawing.css | magicCanvas toolbar and drawing board surface | drawingBoard.js, drawingToolbarMenu.js, drawingToolbarChrome.js | - | 8 |
-| css/tools.css | floating tool panels, chips, globe/map/alphabets/calculator/converter/timezone tool bodies | toolsManager.js, toolPanelChrome.js, sidebarModules.js | - | 9 |
+| css/tools.css | floating tool panels, chips, globe/map/alphabets/calculator/converter/timezone/timer tool bodies | toolsManager.js, toolPanelChrome.js, sidebarModules.js | - | 9 |
 | css/calendar.css | calendar tool panel month grid and hour notes | js/tools/calendar.js, calendar.js | - | 10 |
 | css/cosmos.css | cosmos tool viewport and star map chrome | js/tools/cosmos.js | - | 11 |
-| css/radio.css | sidebar radio player, now playing, popover browser | sidebarRadio.js, radioPlayer.js, radioPopover.js | undocked chrome in shell.css | 12 |
-| css/tv.css | sidebar TV player, now playing, popover browser | sidebarTv.js, tvPlayer.js, tvPopover.js | undocked chrome in shell.css | 13 |
-| css/weather.css | sidebar weather glance + expanded forecast panel | sidebarWeather.js, weatherApi.js | - | 14 |
-| css/sheet.css | sheet-grid note template body and table chrome | sheet.js, noteSurface.js, editor.js | - | 15 |
+| css/sidebar-media.css | shared sidebar radio/tv player and popover chrome | sidebarRadio.js, sidebarTv.js, radioPopover.js, tvPopover.js | domain-specific rules stay in radio.css and tv.css | 12 |
+| css/radio.css | sidebar radio player, now playing, popover browser | sidebarRadio.js, radioPlayer.js, radioPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell.css | 13 |
+| css/tv.css | sidebar TV player, now playing, popover browser | sidebarTv.js, tvPlayer.js, tvPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell.css | 14 |
+| css/weather.css | sidebar weather glance + expanded forecast panel | sidebarWeather.js, weatherApi.js | - | 15 |
+| css/sheet.css | sheet-grid note template body and table chrome | sheet.js, noteSurface.js, editor.js | - | 16 |
 
 ## JS domains (@module)
 
@@ -54,7 +55,7 @@ alwaysApply: true
 | js/searchBar.js | sidebar search bar and results panel | searchFilter.js, hamburger.js | - | - |
 | js/sheet.js | sheet-grid note template model and table interactions | noteSurface.js, editor.js | - | - |
 | js/sidebarHistory.js | sidebar undo history module | undo.js, popoverPosition.js, sidebarModules.js | - | - |
-| js/sidebarModules.js | sidebar module registry, undock wiring, re-dock slots | sidebarUndock.js, sidebarPrefs.js, desktopStack.js | - | - |
+| js/sidebarModules.js | sidebar module registry, undock wiring, re-dock slots | sidebarUndock.js, sidebarPrefs.js, desktopStack.js, hamburger.js | - | - |
 | js/sidebarRadio.js | sidebar radio player and station browser | radioPlayer.js, radioProviders/registry.js, radioPopover.js, sidebarModules.js | - | - |
 | js/sidebarStats.js | sidebar workspace stats module | layoutStorage.js, backup.js, sidebarModules.js | - | - |
 | js/sidebarTv.js | sidebar TV player and channel browser | tvPlayer.js, tvProviders/registry.js, tvPopover.js, sidebarModules.js | tv:state_changed | - |
@@ -66,12 +67,13 @@ alwaysApply: true
 
 | id | label | mountClass | order |
 | --- | --- | --- | --- |
-| alphabets | Alphabets | - | 100 |
-| calculator | Calculator | - | 100 |
-| calendar | Calendar | - | 100 |
-| converter | Converter | - | 100 |
-| cosmos | Cosmos | - | 100 |
-| globe | Globe | - | 100 |
-| globe-tz | Globe Tz | - | 100 |
-| map | Map | - | 100 |
-| timezone | Timezone | - | 100 |
+| calendar | Calendar | tool-mount--calendar | 0 |
+| calculator | Calculator | tool-mount--calculator | 1 |
+| converter | Unit Converter | tool-mount--converter | 2 |
+| timezone | Timezone | tool-mount--timezone | 3 |
+| globe-tz | Global TZ | tool-mount--globe-tz | 4 |
+| timer | Timer | tool-mount--timer | 4 |
+| globe | Globe | tool-mount--globe | 5 |
+| map | Map | tool-mount--map | 6 |
+| alphabets | Alphabets | tool-mount--alphabets | 7 |
+| cosmos | Cosmos | tool-mount--cosmos | 9 |
