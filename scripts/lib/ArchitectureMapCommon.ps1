@@ -91,6 +91,7 @@ function Parse-ToolFile {
     $resizeMode = ''
     $defaultSize = $null
     $minSize = $null
+    $icon = ''
 
     $meta = Parse-MetaTag -Head $head -Tag 'tool'
     if ($meta) {
@@ -102,12 +103,19 @@ function Parse-ToolFile {
         if ($meta.resizeMode) { $resizeMode = [string]$meta.resizeMode }
         if ($meta.defaultSize) { $defaultSize = $meta.defaultSize }
         if ($meta.minSize) { $minSize = $meta.minSize }
+        if ($meta.icon) { $icon = [string]$meta.icon }
+    }
+
+    $iconMatch = [regex]::Match($head, '@tool-icon\s+(.+?)\s*\*/', [System.Text.RegularExpressions.RegexOptions]::Singleline)
+    if ($iconMatch.Success) {
+        $icon = $iconMatch.Groups[1].Value.Trim()
     }
 
     $entry = [ordered]@{
         id         = $id
         label      = $label
         order      = $order
+        icon       = $icon
         wide       = $wide
         mountClass = $mountClass
     }

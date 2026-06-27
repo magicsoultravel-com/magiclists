@@ -7,6 +7,7 @@ export const TOOLS_REGISTRY = [
         "id":  "alphabets",
         "label":  "Alphabets",
         "order":  100,
+        "icon":  "\u003cpath d=\"M2.5 3.2h2.1c.9 0 1.5.5 1.5 1.2 0 .5-.3.9-.8 1.1.6.2 1 .7 1 1.3V9H4.8V6.9c0-.4-.2-.6-.6-.6H3.8V9H2.5V3.2zm5.2 0h1.3V9H7.7V3.2zm3.1 0c1.1 0 1.9.8 1.9 2.5V9h-1.3V5.9c0-.8-.4-1.2-1-1.2-.6 0-1 .4-1 1.2V9H8.1V3.2h1.3v.5z\" fill=\"currentColor\"/\u003e",
         "wide":  false,
         "mountClass":  ""
     },
@@ -14,6 +15,7 @@ export const TOOLS_REGISTRY = [
         "id":  "calculator",
         "label":  "Calculator",
         "order":  100,
+        "icon":  "\u003crect x=\"2\" y=\"1.8\" width=\"8\" height=\"8.4\" rx=\"0.8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.95\"/\u003e\u003cpath d=\"M4 4.2h4M4 6h1.6M6.4 6H8M4 7.8h4\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.85\" stroke-linecap=\"round\"/\u003e",
         "wide":  false,
         "mountClass":  ""
     },
@@ -21,6 +23,7 @@ export const TOOLS_REGISTRY = [
         "id":  "calendar",
         "label":  "Calendar",
         "order":  100,
+        "icon":  "\u003crect x=\"1.5\" y=\"2.5\" width=\"9\" height=\"8\" rx=\"0.8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.95\"/\u003e\u003cpath d=\"M1.5 5.2h9M4 1.5v1.6M8 1.5v1.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.95\" stroke-linecap=\"round\"/\u003e",
         "wide":  false,
         "mountClass":  ""
     },
@@ -28,6 +31,7 @@ export const TOOLS_REGISTRY = [
         "id":  "converter",
         "label":  "Converter",
         "order":  100,
+        "icon":  "\u003cpath d=\"M3.2 4.2h5.2M7.6 3.4 8.8 4.2 7.6 5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/\u003e\u003cpath d=\"M8.8 7.8H3.6M4.4 7 3.2 7.8 4.4 8.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/\u003e",
         "wide":  false,
         "mountClass":  ""
     },
@@ -35,6 +39,7 @@ export const TOOLS_REGISTRY = [
         "id":  "cosmos",
         "label":  "Cosmos",
         "order":  100,
+        "icon":  "\u003ccircle cx=\"6\" cy=\"6\" r=\"1.1\" fill=\"currentColor\" opacity=\"0.9\"/\u003e\u003ccircle cx=\"9.2\" cy=\"4.2\" r=\"0.55\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.75\"/\u003e\u003cpath d=\"M2.5 8.5c1.2-1.8 2.8-2.7 4.8-2.7M9.8 3.2l.4 1.1 1.1.2-.9.7.3 1.1-1-.7-1 .7.3-1.1-.9-.7 1.1-.2z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/\u003e",
         "wide":  false,
         "mountClass":  ""
     },
@@ -42,6 +47,7 @@ export const TOOLS_REGISTRY = [
         "id":  "globe",
         "label":  "Globe",
         "order":  100,
+        "icon":  "\u003ccircle cx=\"6\" cy=\"6\" r=\"4.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.95\"/\u003e\u003cpath d=\"M1.8 6h8.4M6 1.8c1.2 1.4 1.8 3 1.8 4.2S7.2 8.8 6 10.2M6 1.8C4.8 3.2 4.2 4.8 4.2 6s.6 2.8 1.8 4.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.85\"/\u003e",
         "wide":  false,
         "mountClass":  ""
     },
@@ -49,6 +55,7 @@ export const TOOLS_REGISTRY = [
         "id":  "globe-tz",
         "label":  "Globe Tz",
         "order":  100,
+        "icon":  "\u003ccircle cx=\"6\" cy=\"6\" r=\"4.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.95\"/\u003e\u003cpath d=\"M1.8 6h8.4M3.5 4h5M3.5 8h5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.85\"/\u003e",
         "wide":  false,
         "mountClass":  ""
     },
@@ -56,6 +63,7 @@ export const TOOLS_REGISTRY = [
         "id":  "map",
         "label":  "Map",
         "order":  100,
+        "icon":  "\u003cpath d=\"M2.2 3.2 6 1.8l3.8 1.4v5.6L6 10.2 2.2 8.8V3.2z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.9\" stroke-linejoin=\"round\"/\u003e\u003cpath d=\"M6 1.8v8.4M9.8 3.2v5.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.85\"/\u003e",
         "wide":  false,
         "mountClass":  ""
     },
@@ -63,6 +71,7 @@ export const TOOLS_REGISTRY = [
         "id":  "timezone",
         "label":  "Timezone",
         "order":  100,
+        "icon":  "\u003ccircle cx=\"6\" cy=\"6\" r=\"4.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.95\"/\u003e\u003cpath d=\"M6 3.6V6l2 1.2\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.9\" stroke-linecap=\"round\"/\u003e",
         "wide":  false,
         "mountClass":  ""
     }
