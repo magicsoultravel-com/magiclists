@@ -4,7 +4,28 @@ import { ALPHABETS } from './alphabets-data.js';
 
 const STORAGE_KEY = 'alphabets_index';
 
-const SPEECH_LANG = {
+const SPEECH_MODE = {
+    greek: 'native',
+    japanese: 'native',
+    korean: 'native',
+    chinese: 'native',
+    hindi: 'native',
+    arabic: 'native',
+    hebrew: 'native',
+    polish: 'native',
+    cyrillic: 'native',
+    thai: 'native',
+    tamil: 'native',
+    latin: 'letter',
+    nato: 'roman',
+    braille: 'romanEn',
+    phoenician: 'romanEn',
+    hieroglyphs: 'romanEn',
+    ipa: 'romanEn',
+    morse: 'morse',
+};
+
+const NATIVE_LANG = {
     greek: 'el-GR',
     japanese: 'ja-JP',
     korean: 'ko-KR',
@@ -13,15 +34,9 @@ const SPEECH_LANG = {
     arabic: 'ar',
     hebrew: 'he-IL',
     polish: 'pl-PL',
-    latin: 'en-US',
     cyrillic: 'ru-RU',
     thai: 'th-TH',
     tamil: 'ta-IN',
-    phoenician: 'en-US',
-    hieroglyphs: 'en-US',
-    ipa: 'en-US',
-    braille: 'en-US',
-    nato: 'en-US',
 };
 
 function escapeAttr(value) {
@@ -30,9 +45,46 @@ function escapeAttr(value) {
         .replace(/"/g, '&quot;');
 }
 
-function speakButtonAttrs(text, { morse = false } = {}) {
-    const morseAttr = morse ? ' data-alph-morse="1"' : '';
-    return `data-alph-speak="${escapeAttr(text)}" role="button" tabindex="0"${morseAttr}`;
+function getSpeakPayload(entry, page, { arabicIsolated = null } = {}) {
+    const mode = SPEECH_MODE[page.id] || 'native';
+    if (mode === 'morse') {
+        return { text: entry.char, morse: true };
+    }
+    switch (mode) {
+        case 'native':
+            return {
+                text: arabicIsolated || entry.charLower || entry.char,
+                lang: NATIVE_LANG[page.id] || 'en-US',
+            };
+        case 'letter':
+            return { text: entry.char, lang: 'en-US' };
+        case 'roman':
+        case 'romanEn':
+            return { text: entry.roman, lang: 'en-US' };
+        default:
+            return { text: entry.char, lang: 'en-US' };
+    }
+}
+
+function speakAttrs(payload) {
+    const morseAttr = payload.morse ? ' data-alph-morse="1"' : '';
+    const langAttr = payload.morse ? '' : ` data-alph-lang="${escapeAttr(payload.lang || 'en-US')}"`;
+    return `data-alph-speak="${escapeAttr(payload.text)}" role="button" tabindex="0"${langAttr}${morseAttr}`;
+}
+
+function scheduleMorseTone(ctx, startTime, duration, freq = 660) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.0001, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.2, startTime + 0.005);
+    gain.gain.setValueAtTime(0.2, startTime + duration - 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(startTime);
+    osc.stop(startTime + duration + 0.01);
 }
 
 export const Alphabets = {
@@ -42,6 +94,7 @@ export const Alphabets = {
     onContentClick: null,
     onDocumentPointerDown: null,
     menuOpen: false,
+    _page: null,
     _morseCtx: null,
     _morseGen: 0,
 
@@ -57,9 +110,16 @@ export const Alphabets = {
             }
             this.index = Math.min(saved, ALPHABETS.length - 1);
         }
+        this.warmVoices();
         this.renderShell();
         this.bindShellListeners();
         this.renderContent();
+    },
+
+    warmVoices() {
+        if (!window.speechSynthesis) return;
+        window.speechSynthesis.getVoices();
+        window.speechSynthesis.addEventListener('voiceschanged', () => {}, { once: true });
     },
 
     renderShell() {
@@ -197,16 +257,25 @@ export const Alphabets = {
             this.playMorse(text);
             return;
         }
-        const page = ALPHABETS[this.index];
-        this.speakRoman(text, page?.id);
+        this.speakText(text, cell.getAttribute('data-alph-lang') || 'en-US');
     },
 
-    speakRoman(text, pageId) {
+    pickVoice(lang) {
+        const voices = window.speechSynthesis?.getVoices() || [];
+        const prefix = lang.split('-')[0];
+        return voices.find((v) => v.lang === lang)
+            || voices.find((v) => v.lang.startsWith(prefix))
+            || null;
+    },
+
+    speakText(text, lang) {
         if (!text || !window.speechSynthesis) return;
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = SPEECH_LANG[pageId] || 'en-US';
-        utterance.rate = 0.9;
+        utterance.lang = lang;
+        utterance.rate = 0.85;
+        const voice = this.pickVoice(lang);
+        if (voice) utterance.voice = voice;
         window.speechSynthesis.speak(utterance);
     },
 
@@ -222,7 +291,6 @@ export const Alphabets = {
         const dot = 0.08;
         const dash = 0.24;
         const gap = 0.08;
-        const freq = 660;
         let t = ctx.currentTime + 0.02;
 
         for (const sym of pattern) {
@@ -232,28 +300,13 @@ export const Alphabets = {
             if (!isDot && !isDash) continue;
 
             const dur = isDot ? dot : dash;
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = 'sine';
-            osc.frequency.value = freq;
-            gain.gain.setValueAtTime(0.0001, t);
-            gain.gain.exponentialRampToValueAtTime(0.2, t + 0.005);
-            gain.gain.setValueAtTime(0.2, t + dur - 0.01);
-            gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.start(t);
-            osc.stop(t + dur + 0.01);
+            scheduleMorseTone(ctx, t, dur);
             t += dur + gap;
         }
     },
 
     toggleMenu() {
-        if (this.menuOpen) {
-            this.closeMenu();
-        } else {
-            this.openMenu();
-        }
+        this.menuOpen ? this.closeMenu() : this.openMenu();
     },
 
     openMenu() {
@@ -305,6 +358,7 @@ export const Alphabets = {
 
         if (!page || !titleEl || !counterEl || !subtitleEl || !contentEl) return;
 
+        this._page = page;
         titleEl.textContent = page.title;
         counterEl.textContent = `${this.index + 1} / ${ALPHABETS.length}`;
         subtitleEl.textContent = page.subtitle || '';
@@ -329,13 +383,12 @@ export const Alphabets = {
         this.updateMenuActiveState();
     },
 
-    renderCell(entry, scriptFont, { morse = false } = {}) {
-        const speakText = morse ? entry.char : entry.roman;
+    renderCell(entry, scriptFont) {
         const glossHtml = entry.gloss
             ? `<span class="alphabet-cell__gloss">${entry.gloss}</span>`
             : '';
         return `
-            <div class="alphabet-cell" ${speakButtonAttrs(speakText, { morse })}>
+            <div class="alphabet-cell" ${speakAttrs(getSpeakPayload(entry, this._page))}>
                 <span class="alphabet-cell__char" style="font-family:${scriptFont}">${entry.char}</span>
                 <span class="alphabet-cell__roman">${entry.roman}</span>
                 ${glossHtml}
@@ -345,7 +398,7 @@ export const Alphabets = {
 
     renderCaseCell(entry, scriptFont) {
         return `
-            <div class="alphabet-cell alphabet-cell--case" ${speakButtonAttrs(entry.roman)}>
+            <div class="alphabet-cell alphabet-cell--case" ${speakAttrs(getSpeakPayload(entry, this._page))}>
                 <span class="alphabet-cell__case-pair" style="font-family:${scriptFont}">
                     <span class="alphabet-cell__char">${entry.charUpper}</span>
                     <span class="alphabet-cell__char alphabet-cell__char--lower">${entry.charLower}</span>
@@ -371,7 +424,7 @@ export const Alphabets = {
                <span class="alphabet-cell__gloss">final</span>`
             : `<span class="alphabet-cell__char" style="font-family:${scriptFont}">${entry.char}</span>`;
         return `
-            <div class="alphabet-cell alphabet-cell--hebrew" ${speakButtonAttrs(entry.roman)}>
+            <div class="alphabet-cell alphabet-cell--hebrew" ${speakAttrs(getSpeakPayload(entry, this._page))}>
                 ${formsHtml}
                 <span class="alphabet-cell__roman">${entry.roman}</span>
             </div>
@@ -384,11 +437,12 @@ export const Alphabets = {
         return `<div class="alphabet-grid alphabet-grid--hebrew">${cells}</div>`;
     },
 
-    renderArabicForm(form, scriptFont) {
+    renderArabicForm(form, scriptFont, isolated) {
         if (!form) {
             return '<span class="alphabet-arabic__form alphabet-arabic__form--empty">—</span>';
         }
-        return `<span class="alphabet-arabic__form alphabet-arabic__form--speak" ${speakButtonAttrs(form)} style="font-family:${scriptFont}">${form}</span>`;
+        const payload = getSpeakPayload({ char: isolated }, this._page, { arabicIsolated: isolated });
+        return `<span class="alphabet-arabic__form alphabet-arabic__form--speak" ${speakAttrs(payload)} style="font-family:${scriptFont}">${form}</span>`;
     },
 
     renderArabic(page) {
@@ -396,10 +450,10 @@ export const Alphabets = {
         const rows = (page.letters || []).map((letter) => `
             <div class="alphabet-arabic__row">
                 <span class="alphabet-arabic__roman">${letter.roman}</span>
-                ${this.renderArabicForm(letter.isolated, scriptFont)}
-                ${this.renderArabicForm(letter.initial, scriptFont)}
-                ${this.renderArabicForm(letter.medial, scriptFont)}
-                ${this.renderArabicForm(letter.final, scriptFont)}
+                ${this.renderArabicForm(letter.isolated, scriptFont, letter.isolated)}
+                ${this.renderArabicForm(letter.initial, scriptFont, letter.isolated)}
+                ${this.renderArabicForm(letter.medial, scriptFont, letter.isolated)}
+                ${this.renderArabicForm(letter.final, scriptFont, letter.isolated)}
             </div>
         `).join('');
         return `
@@ -423,8 +477,7 @@ export const Alphabets = {
 
     renderGrid(page) {
         const scriptFont = page.fontFamily || 'inherit';
-        const isMorse = page.id === 'morse';
-        const cells = (page.chars || []).map((entry) => this.renderCell(entry, scriptFont, { morse: isMorse })).join('');
+        const cells = (page.chars || []).map((entry) => this.renderCell(entry, scriptFont)).join('');
         return `<div class="${this.getGridClass(page)}">${cells}</div>`;
     },
 
@@ -497,6 +550,7 @@ export const Alphabets = {
         this.onKeyDown = null;
         this.onContentClick = null;
         this.onDocumentPointerDown = null;
+        this._page = null;
         this.container = null;
     },
 };
