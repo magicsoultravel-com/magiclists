@@ -9,6 +9,7 @@ import { readModuleDock, writeModuleDock, writeSidebarSection } from './sidebarP
 import { bindToggleCollapsable } from './hamburger.js';
 import { RadioPopover } from './radioPopover.js';
 import { TvPopover } from './tvPopover.js';
+import { ToolsManager } from './toolsManager.js';
 import { CARD_ICONS } from './icons.js';
 
 export { SIDEBAR_MODULE_UNDOCKED, SIDEBAR_MODULE_DRAGGING, SIDEBAR_MODULE_DOCK_SEL };
@@ -32,6 +33,12 @@ export const SIDEBAR_MODULES = [
 export const SIDEBAR_MODULE_ORDER = SIDEBAR_MODULES.map((m) => m.id);
 
 const moduleById = new Map(SIDEBAR_MODULES.map((m) => [m.id, m]));
+/** @type {Map<string, ReturnType<typeof initSidebarUndock>>} */
+const moduleUndockById = new Map();
+
+function notifyFloatingChromeChanged() {
+    window.dispatchEvent(new CustomEvent('floating:chrome_changed'));
+}
 
 export function getModuleConfig(id) {
     return moduleById.get(id) || null;
@@ -138,6 +145,45 @@ export function bindAllModuleCollapseHandlers() {
     SIDEBAR_MODULES.forEach((config) => bindModuleCollapsable(config));
 }
 
+export function reattachAllSidebarModules() {
+    SIDEBAR_MODULE_ORDER.forEach((id) => {
+        const undock = moduleUndockById.get(id);
+        if (!undock?.isUndocked()) return;
+        undock.applyDockedState();
+        undock.updateDockButton();
+        getModuleConfig(id)?.onPositionChange?.();
+    });
+}
+
+export function reattachAllFloatingChrome() {
+    reattachAllSidebarModules();
+    ToolsManager.closeAll();
+    updateReattachAllButton();
+}
+
+export function updateReattachAllButton() {
+    const btn = document.getElementById('sidebar-reattach-all');
+    if (!btn) return;
+    const undocked = document.querySelectorAll(`.sidebar-module.${SIDEBAR_MODULE_UNDOCKED}`).length;
+    const toolsOpen = ToolsManager.openPanels?.size ?? 0;
+    const active = undocked > 0 || toolsOpen > 0;
+    btn.classList.toggle('is-hidden', !active);
+    btn.disabled = !active;
+}
+
+export function bindSidebarReattachAll() {
+    const btn = document.getElementById('sidebar-reattach-all');
+    if (!btn || btn.dataset.bound === 'true') return;
+    btn.dataset.bound = 'true';
+    btn.innerHTML = CARD_ICONS.pin;
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        reattachAllFloatingChrome();
+    });
+    window.addEventListener('floating:chrome_changed', updateReattachAllButton);
+    updateReattachAllButton();
+}
+
 export function initAllSidebarModules() {
     normalizeModuleHeadings();
     bindAllModuleCollapseHandlers();
@@ -159,9 +205,13 @@ export function initAllSidebarModules() {
             restoreToSidebar: () => restoreModuleToSidebar(config.id),
             onBeforeUndock: config.expandOnUndock ? () => expandModuleSection(config.id) : undefined,
             onPositionChange: config.onPositionChange,
+            onStateChange: notifyFloatingChromeChanged,
             dragBlockSelector: config.dragBlockSelector
         });
 
+        moduleUndockById.set(config.id, undock);
         undock.applyInitialDockState();
     });
+
+    bindSidebarReattachAll();
 }

@@ -7,6 +7,10 @@ function escapeHtml(str) {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function notifyFloatingChromeChanged() {
+    window.dispatchEvent(new CustomEvent('floating:chrome_changed'));
+}
+
 export { renderToolIcon };
 
 export const ToolsManager = {
@@ -148,6 +152,7 @@ export const ToolsManager = {
         const entry = { chrome, instance: null, meta };
         this.openPanels.set(toolName, entry);
         this.renderDropdownMenu();
+        notifyFloatingChromeChanged();
 
         try {
             const toolsPath = this.getToolsBasePath();
@@ -188,6 +193,7 @@ export const ToolsManager = {
         entry.chrome.destroy();
         this.openPanels.delete(toolId);
         this.renderDropdownMenu();
+        notifyFloatingChromeChanged();
     },
 
      close() {

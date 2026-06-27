@@ -1234,6 +1234,30 @@ html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
     padding: 0 0.05rem;
 }
 
+.sidebar-reattach-all {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.12rem;
+    border: none;
+    background: transparent;
+    border-radius: 3px;
+    line-height: 0;
+    color: inherit;
+    opacity: 0.75;
+    cursor: pointer;
+}
+
+.sidebar-reattach-all:hover:not(:disabled) {
+    opacity: 1;
+    background: var(--bg-hover, rgba(0, 0, 0, 0.06));
+}
+
+.sidebar-reattach-all:disabled {
+    cursor: default;
+}
+
 .side-panel-chrome {
     flex-shrink: 0;
     padding: 0 0.05rem;

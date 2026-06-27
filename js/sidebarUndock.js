@@ -32,6 +32,7 @@ function applyPosition(root, x, y) {
  *   restoreToSidebar: () => void,
  *   onBeforeUndock?: () => void,
  *   onPositionChange?: () => void,
+ *   onStateChange?: () => void,
  *   dragBlockSelector?: string,
  * }} config
  */
@@ -47,6 +48,7 @@ export function initSidebarUndock(config) {
         restoreToSidebar,
         onBeforeUndock,
         onPositionChange,
+        onStateChange,
         dragBlockSelector
     } = config;
 
@@ -107,6 +109,7 @@ export function initSidebarUndock(config) {
         const { docked, x, y } = readDock();
         if (docked !== false) {
             updateDockButton();
+            onStateChange?.();
             return;
         }
 
@@ -124,6 +127,7 @@ export function initSidebarUndock(config) {
             applyUndockedState(false);
         }
         updateDockButton();
+        onStateChange?.();
     }
 
     function toggleDock() {
@@ -131,6 +135,7 @@ export function initSidebarUndock(config) {
         else applyUndockedState();
         updateDockButton();
         onPositionChange?.();
+        onStateChange?.();
     }
 
     function bindDockButton() {
