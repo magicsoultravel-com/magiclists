@@ -43,9 +43,6 @@ function migrateRecentsMeta(raw) {
 function loadState() {
     try {
         const raw = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
-        const miniPlayerDocked = raw.miniPlayerDocked !== undefined
-            ? raw.miniPlayerDocked !== false
-            : raw.panelDocked !== false;
 
         const favorites = Array.isArray(raw.favorites)
             ? raw.favorites.map(migrateFavoriteRef)
@@ -67,11 +64,6 @@ function loadState() {
             catalogProvider: raw.catalogProvider || 'radio-browser',
             radioBrowserMirror: raw.radioBrowserMirror || null,
             hideOfflineStations: raw.hideOfflineStations !== false,
-            miniPlayerDocked,
-            miniPlayerX: Number.isFinite(raw.miniPlayerX) ? raw.miniPlayerX
-                : (Number.isFinite(raw.panelX) ? raw.panelX : null),
-            miniPlayerY: Number.isFinite(raw.miniPlayerY) ? raw.miniPlayerY
-                : (Number.isFinite(raw.panelY) ? raw.panelY : null),
             browserW: Number.isFinite(raw.browserW) ? raw.browserW : DEFAULT_BROWSER_W,
             browserH: Number.isFinite(raw.browserH) ? raw.browserH : DEFAULT_BROWSER_H,
             browserX: Number.isFinite(raw.browserX) ? raw.browserX : null,
@@ -92,9 +84,6 @@ function loadState() {
             catalogProvider: 'radio-browser',
             radioBrowserMirror: null,
             hideOfflineStations: true,
-            miniPlayerDocked: true,
-            miniPlayerX: null,
-            miniPlayerY: null,
             browserW: DEFAULT_BROWSER_W,
             browserH: DEFAULT_BROWSER_H,
             browserX: null,
@@ -112,6 +101,12 @@ function saveState(patch) {
     if (next.recentsMeta) {
         next.recents = next.recentsMeta.map((e) => e.key);
     }
+    delete next.miniPlayerDocked;
+    delete next.miniPlayerX;
+    delete next.miniPlayerY;
+    delete next.panelDocked;
+    delete next.panelX;
+    delete next.panelY;
     localStorage.setItem(STATE_KEY, JSON.stringify(next));
     return next;
 }
@@ -254,15 +249,6 @@ export const RadioPlayer = {
         this.emitState();
     },
 
-    getMiniPlayerState() {
-        const s = loadState();
-        return {
-            miniPlayerDocked: s.miniPlayerDocked,
-            miniPlayerX: s.miniPlayerX,
-            miniPlayerY: s.miniPlayerY
-        };
-    },
-
     getBrowserSize() {
         const s = loadState();
         return { w: s.browserW, h: s.browserH };
@@ -275,10 +261,6 @@ export const RadioPlayer = {
             browserY: s.browserY,
             browserFloating: s.browserFloating
         };
-    },
-
-    saveMiniPlayerState(patch) {
-        saveState(patch);
     },
 
     saveBrowserSize(w, h) {

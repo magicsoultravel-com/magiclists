@@ -257,17 +257,6 @@ html[data-note-font="kalam"] .mini-card .step-text {
     line-height: 1.4;
 }
 
-.nav-drawer-section {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.nav-drawer-section--compact {
-    gap: 0.15rem;
-}
-
-.side-panel .btn,
 .btn--compact {
     padding: 0.22rem 0.4rem;
     font-size: 0.66rem;
@@ -609,10 +598,6 @@ html[data-note-font="kalam"] .mini-card .step-text {
 
 .sidebar-history-item--redo {
     color: var(--text-muted);
-}
-
-.sidebar-stats-section {
-    width: 100%;
 }
 
 .sidebar-storage-stats {

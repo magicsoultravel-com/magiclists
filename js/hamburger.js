@@ -1,20 +1,12 @@
-/** @module {"owns":"side panel shell, notes list, category drawer, sort", "related":["searchBar.js","ui.js"], "events":["category:show_requested","category:order_changed"]} */
+/** @module {"owns":"side panel shell, notes list, category drawer, sort", "related":["searchBar.js","ui.js","sidebarHistory.js","sidebarStats.js"], "events":["category:show_requested","category:order_changed"]} */
 import { UI } from './ui.js';
 import { NoteSurface } from './noteSurface.js';
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import { UNCATEGORIZED_CATEGORY, UNCATEGORIZED_COLOR } from './categories.js';
 import { itemHasCategory } from './focusFilter.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
-import { formatStorageSize, getLocalStorageByteEstimate, getLocalStorageUsageBreakdown, getStorageBreakdown } from './layoutStorage.js';
 import { resolveNoteColor } from './colorPicker.js';
 import { hasRichMarkup, stripRichText } from './richText.js';
-import { describeHistoryEntry, UndoManager } from './undo.js';
-import { positionPanelBelowElement } from './popoverPosition.js';
-import {
-    formatExportTimestamp,
-    readLastCloudExportAt,
-    readLastLocalExportAt
-} from './backup.js';
 import {
     readNotesListSort as loadNotesListSort,
     readPanelCollapsed,
@@ -24,6 +16,7 @@ import {
     writeSidebarSection
 } from './sidebarPrefs.js';
 import { onSidebarCollapseChanged } from './shellResize.js';
+import { SIDEBAR_MODULE_DOCK_SEL } from './sidebarUndock.js';
 
 export function applySectionCollapse(sectionId, headerId, startCollapsed = false) {
     const header = document.getElementById(headerId);
@@ -40,6 +33,8 @@ export function applySectionCollapse(sectionId, headerId, startCollapsed = false
     toggle?.classList.toggle('collapsed', collapsed);
 }
 
+const DOCK_IGNORE = SIDEBAR_MODULE_DOCK_SEL;
+
 export const SidePanel = {
     panel: null,
     toggleBtn: null,
@@ -47,9 +42,6 @@ export const SidePanel = {
     appState: null,
     notesListSort: null,
     notesListSortBound: false,
-    historyTipEl: null,
-    historyTipHideTimer: null,
-    historyTipBound: false,
 
     init(appState) {
         this.appState = appState;
@@ -59,45 +51,9 @@ export const SidePanel = {
         this.notesListSort = loadNotesListSort();
 
         this.setCollapsed(readPanelCollapsed(), { persist: false });
-        this.updateStorageFooter();
 
         this.toggleBtn?.addEventListener('click', () => this.toggle());
         this.toggleFab?.addEventListener('click', () => this.toggle());
-    },
-
-    updateStorageFooter() {
-        const container = document.getElementById('sidebar-storage-stats');
-        if (!container) return;
-
-        const total = getLocalStorageByteEstimate();
-        const mb = (total / (1024 * 1024)).toFixed(2);
-        const pct = Math.min(100, Math.round((total / 5_000_000) * 100));
-        const { notes, matrix, app } = getStorageBreakdown();
-        const keyBreakdown = getLocalStorageUsageBreakdown(6);
-        const totalLine = `Total: ${mb} MB (~${pct}%)`;
-        const detail = keyBreakdown
-            .map((row) => `${row.key}: ${(row.bytes / 1024).toFixed(1)} KB`)
-            .join('\n');
-        const fallbackDetail = 'Notes: note content · Matrix: categories, layouts, view state · App: theme, tools, session';
-
-        const hintLine = keyBreakdown.length
-            ? '<span class="sidebar-storage-stat sidebar-storage-stat--hint">Hover for largest items</span>'
-            : '';
-        const localExportAt = formatExportTimestamp(readLastLocalExportAt());
-        const cloudExportAt = formatExportTimestamp(readLastCloudExportAt());
-
-        container.innerHTML = `
-            <span class="sidebar-storage-stat">Notes: ${formatStorageSize(notes)}</span>
-            <span class="sidebar-storage-stat">Matrix: ${formatStorageSize(matrix)}</span>
-            <span class="sidebar-storage-stat">App: ${formatStorageSize(app)}</span>
-            <span class="sidebar-storage-stat">${totalLine}</span>
-            <span class="sidebar-storage-stat">Local export: ${localExportAt}</span>
-            <span class="sidebar-storage-stat">Cloud export: ${cloudExportAt}</span>
-            ${hintLine}
-        `;
-        container.title = detail
-            ? `${totalLine}\n${detail}`
-            : `${totalLine}\n${fallbackDetail}`;
     },
 
     setCollapsed(collapsed, { persist = true } = {}) {
@@ -118,22 +74,21 @@ export const SidePanel = {
     },
 
     setupStatusClickHandlers() {
-        this.bindCollapsable('radio-section-header', 'radio-section', true, '.sidebar-radio__dock', '.collapsable-toggle');
-        this.bindCollapsable('tv-section-header', 'tv-section', true, '.sidebar-tv__dock', '.collapsable-toggle');
-        this.bindCollapsable('weather-section-header', 'weather-section', true, '.sidebar-weather__refresh', '.collapsable-toggle');
-        this.bindCollapsable('quick-actions-header', 'quick-actions-section', true, '.sidebar-quick-actions__dock', '.collapsable-toggle');
-        this.bindCollapsable('categories-section-header', 'categories-section', true);
+        this.bindCollapsable('radio-section-header', 'radio-section', true, DOCK_IGNORE, '.collapsable-toggle');
+        this.bindCollapsable('tv-section-header', 'tv-section', true, DOCK_IGNORE, '.collapsable-toggle');
+        this.bindCollapsable('weather-section-header', 'weather-section', true, `${DOCK_IGNORE}, .sidebar-weather__refresh`, '.collapsable-toggle');
+        this.bindCollapsable('quick-actions-header', 'quick-actions-section', true, DOCK_IGNORE, '.collapsable-toggle');
+        this.bindCollapsable('categories-section-header', 'categories-section', true, DOCK_IGNORE, '.collapsable-toggle');
         this.bindCollapsable('categories-list-active-header', 'categories-list-active-section', true);
         this.bindCollapsable('categories-list-hidden-header', 'categories-list-hidden-section', true);
-        this.bindCollapsable('tools-section-header', 'tools-section', true, '.sidebar-tools__dock', '.collapsable-toggle');
-        this.bindCollapsable('notes-list-section-header', 'notes-list-section', false, '.sidebar-notes-list-sort');
+        this.bindCollapsable('tools-section-header', 'tools-section', true, DOCK_IGNORE, '.collapsable-toggle');
+        this.bindCollapsable('notes-list-section-header', 'notes-list-section', false, `${DOCK_IGNORE}, .sidebar-notes-list-sort`);
         this.bindCollapsable('notes-list-active-header', 'notes-list-active-section');
         this.bindCollapsable('notes-list-hidden-header', 'notes-list-hidden-section', true);
         this.bindCollapsable('notes-list-archived-header', 'notes-list-archived-section', true);
-        this.bindCollapsable('history-section-header', 'history-section', true);
-        this.bindCollapsable('stats-section-header', 'stats-section', true);
+        this.bindCollapsable('history-section-header', 'history-section', true, DOCK_IGNORE, '.collapsable-toggle');
+        this.bindCollapsable('stats-section-header', 'stats-section', true, DOCK_IGNORE, '.collapsable-toggle');
         this.setupNotesListSortControls();
-        this.bindHistoryTipHandlers();
     },
 
     bindCollapsable(headerId, sectionId, startCollapsed = false, ignoreSelector = null, toggleSelector = null) {
@@ -257,132 +212,6 @@ export const SidePanel = {
             titleHtml,
             richClass: titleRich ? ' rich-text' : ''
         };
-    },
-
-    renderHistoryItem(entry, { redo = false, index = 0 } = {}) {
-        const label = entry?.label || 'Edit';
-        const safe = escapeHTML(label);
-        const aria = escapeAttr(label);
-        const redoClass = redo ? ' sidebar-history-item--redo' : '';
-        const stack = redo ? 'redo' : 'undo';
-        return `<div class="sidebar-history-item${redoClass}" data-history-stack="${stack}" data-history-index="${index}" aria-label="${aria}">${safe}</div>`;
-    },
-
-    getHistoryEntryFromRow(row) {
-        if (!row?.dataset) return null;
-        const stack = row.dataset.historyStack;
-        const index = Number(row.dataset.historyIndex);
-        if (!stack || Number.isNaN(index)) return null;
-        const entries = stack === 'redo'
-            ? [...UndoManager.redoStack].reverse()
-            : [...UndoManager.undoStack].reverse();
-        return entries[index] || null;
-    },
-
-    ensureHistoryTip() {
-        if (this.historyTipEl) return this.historyTipEl;
-        const tip = document.createElement('div');
-        tip.className = 'sidebar-history-tip clock-style-popover is-hidden';
-        tip.setAttribute('role', 'tooltip');
-        tip.setAttribute('aria-hidden', 'true');
-        document.body.appendChild(tip);
-        this.historyTipEl = tip;
-        return tip;
-    },
-
-    hideHistoryTip() {
-        if (this.historyTipHideTimer) {
-            clearTimeout(this.historyTipHideTimer);
-            this.historyTipHideTimer = null;
-        }
-        if (!this.historyTipEl) return;
-        this.historyTipEl.classList.add('is-hidden');
-        this.historyTipEl.setAttribute('aria-hidden', 'true');
-    },
-
-    showHistoryTip(entry, anchorEl) {
-        if (!entry || !anchorEl) return;
-        const tip = this.ensureHistoryTip();
-        const detail = describeHistoryEntry(entry);
-        const titleHtml = escapeHTML(detail.title);
-        const linesHtml = detail.lines
-            .map((line) => `<div class="sidebar-history-tip__line">${escapeHTML(line)}</div>`)
-            .join('');
-        tip.innerHTML = `<div class="sidebar-history-tip__title">${titleHtml}</div>${linesHtml}`;
-        tip.classList.remove('is-hidden');
-        tip.setAttribute('aria-hidden', 'false');
-        positionPanelBelowElement(tip, anchorEl, { gap: 6, margin: 8 });
-    },
-
-    bindHistoryTipHandlers() {
-        if (this.historyTipBound) return;
-        const undoList = document.getElementById('sidebar-history-undo-list');
-        const redoList = document.getElementById('sidebar-history-redo-list');
-        if (!undoList && !redoList) return;
-        this.historyTipBound = true;
-
-        [undoList, redoList].forEach((list) => {
-            if (!list) return;
-
-            list.addEventListener('mouseover', (e) => {
-                const row = e.target.closest('.sidebar-history-item');
-                if (!row || !list.contains(row)) return;
-                if (this.historyTipHideTimer) {
-                    clearTimeout(this.historyTipHideTimer);
-                    this.historyTipHideTimer = null;
-                }
-                const entry = this.getHistoryEntryFromRow(row);
-                if (entry) this.showHistoryTip(entry, row);
-            });
-
-            list.addEventListener('mouseleave', () => {
-                this.historyTipHideTimer = setTimeout(() => this.hideHistoryTip(), 80);
-            });
-        });
-
-        document.addEventListener('scroll', () => this.hideHistoryTip(), true);
-        window.addEventListener('resize', () => this.hideHistoryTip());
-    },
-
-    renderHistoryPanel() {
-        const section = document.getElementById('sidebar-history-section');
-        const undoList = document.getElementById('sidebar-history-undo-list');
-        const redoList = document.getElementById('sidebar-history-redo-list');
-        const badge = document.getElementById('history-count-badge');
-        if (!section || !undoList || !redoList) return;
-
-        const enabled = !!this.appState?.user?.isLoggedIn;
-        section.classList.toggle('is-hidden', !enabled);
-        if (!enabled) {
-            this.hideHistoryTip();
-            return;
-        }
-
-        const undoEntries = [...UndoManager.undoStack].reverse();
-        const redoEntries = [...UndoManager.redoStack].reverse();
-
-        if (badge) badge.textContent = String(undoEntries.length);
-
-        if (!undoEntries.length && !redoEntries.length) {
-            undoList.innerHTML = '<div class="sidebar-notes-list-empty">No history yet</div>';
-            redoList.innerHTML = '';
-            redoList.classList.add('is-hidden');
-            this.hideHistoryTip();
-            return;
-        }
-
-        undoList.innerHTML = undoEntries.length
-            ? undoEntries.map((entry, index) => this.renderHistoryItem(entry, { index })).join('')
-            : '<div class="sidebar-notes-list-empty">Nothing to undo</div>';
-
-        if (redoEntries.length) {
-            redoList.classList.remove('is-hidden');
-            redoList.innerHTML = `<div class="sidebar-history-subheader">Redo</div>${redoEntries.map((entry, index) => this.renderHistoryItem(entry, { redo: true, index })).join('')}`;
-        } else {
-            redoList.innerHTML = '';
-            redoList.classList.add('is-hidden');
-        }
-        this.hideHistoryTip();
     },
 
     renderNotesListZone(zoneId, listItems, allItems, { variant = 'active' } = {}) {

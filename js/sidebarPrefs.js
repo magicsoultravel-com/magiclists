@@ -2,9 +2,13 @@ export const PANEL_COLLAPSED_KEY = 'matrix_panel_collapsed';
 export const SIDEBAR_SECTIONS_KEY = 'matrix_sidebar_sections';
 export const NOTES_LIST_SORT_KEY = 'matrix_notes_list_sort';
 export const BOARD_SORT_KEY = 'matrix_board_sort';
-export const QUICK_ACTIONS_DOCK_KEY = 'matrix_quick_actions_dock';
-export const TOOLS_DOCK_KEY = 'matrix_tools_dock';
+export const MODULE_DOCKS_KEY = 'matrix_sidebar_module_docks';
 export const SIDEBAR_WIDTH_KEY = 'matrix_sidebar_width';
+
+/** @deprecated migration read only */
+const LEGACY_QUICK_ACTIONS_DOCK_KEY = 'matrix_quick_actions_dock';
+/** @deprecated migration read only */
+const LEGACY_TOOLS_DOCK_KEY = 'matrix_tools_dock';
 
 export const SIDEBAR_DEFAULT_WIDTH = 220;
 /** 33% below prior 160px floor — narrower drag allowed */
@@ -15,13 +19,100 @@ export const SIDEBAR_BACKUP_KEYS = [
     SIDEBAR_SECTIONS_KEY,
     NOTES_LIST_SORT_KEY,
     BOARD_SORT_KEY,
-    QUICK_ACTIONS_DOCK_KEY,
-    TOOLS_DOCK_KEY,
+    MODULE_DOCKS_KEY,
     SIDEBAR_WIDTH_KEY
 ];
 
 const DEFAULT_NOTES_LIST_SORT = { field: 'date', dir: 'desc' };
 const DEFAULT_BOARD_SORT = { direction: 'horizontal', field: 'date', dir: 'desc', cascade: false };
+
+const DEFAULT_DOCK = { docked: true, x: null, y: null };
+
+const LEGACY_MODULE_DOCK_KEYS = {
+    'quick-actions': LEGACY_QUICK_ACTIONS_DOCK_KEY,
+    tools: LEGACY_TOOLS_DOCK_KEY
+};
+
+const LEGACY_PLAYER_STATE_KEYS = {
+    radio: 'matrix_radio_state',
+    tv: 'matrix_tv_state'
+};
+
+function normalizeDock(raw) {
+    if (!raw || typeof raw !== 'object') return { ...DEFAULT_DOCK };
+    return {
+        docked: raw.docked !== false,
+        x: Number.isFinite(raw.x) ? raw.x : null,
+        y: Number.isFinite(raw.y) ? raw.y : null
+    };
+}
+
+function readAllModuleDocks() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(MODULE_DOCKS_KEY) || '{}');
+        return raw && typeof raw === 'object' ? raw : {};
+    } catch {
+        return {};
+    }
+}
+
+function writeAllModuleDocks(map) {
+    localStorage.setItem(MODULE_DOCKS_KEY, JSON.stringify(map));
+}
+
+function readLegacyModuleDock(moduleId) {
+    const legacyKey = LEGACY_MODULE_DOCK_KEYS[moduleId];
+    if (!legacyKey) return null;
+    try {
+        const raw = JSON.parse(localStorage.getItem(legacyKey) || 'null');
+        if (!raw || typeof raw !== 'object') return null;
+        return normalizeDock(raw);
+    } catch {
+        return null;
+    }
+}
+
+function readLegacyPlayerModuleDock(moduleId) {
+    const stateKey = LEGACY_PLAYER_STATE_KEYS[moduleId];
+    if (!stateKey) return null;
+    try {
+        const raw = JSON.parse(localStorage.getItem(stateKey) || '{}');
+        if (!raw || typeof raw !== 'object') return null;
+        const docked = raw.miniPlayerDocked !== undefined
+            ? raw.miniPlayerDocked !== false
+            : raw.panelDocked !== false;
+        const x = Number.isFinite(raw.miniPlayerX) ? raw.miniPlayerX
+            : (Number.isFinite(raw.panelX) ? raw.panelX : null);
+        const y = Number.isFinite(raw.miniPlayerY) ? raw.miniPlayerY
+            : (Number.isFinite(raw.panelY) ? raw.panelY : null);
+        return { docked, x, y };
+    } catch {
+        return null;
+    }
+}
+
+export function readModuleDock(moduleId) {
+    const map = readAllModuleDocks();
+    if (Object.prototype.hasOwnProperty.call(map, moduleId)) {
+        return normalizeDock(map[moduleId]);
+    }
+
+    const legacy = readLegacyModuleDock(moduleId)
+        || readLegacyPlayerModuleDock(moduleId);
+    if (legacy) {
+        writeModuleDock(moduleId, legacy);
+        return legacy;
+    }
+
+    return { ...DEFAULT_DOCK };
+}
+
+export function writeModuleDock(moduleId, patch) {
+    const map = readAllModuleDocks();
+    const next = { ...normalizeDock(map[moduleId]), ...patch };
+    map[moduleId] = next;
+    writeAllModuleDocks(map);
+}
 
 export function readPanelCollapsed() {
     const stored = localStorage.getItem(PANEL_COLLAPSED_KEY);
@@ -93,48 +184,6 @@ export function isBoardSortCustomized(sort = readBoardSort()) {
         || sort.cascade === true;
 }
 
-export function readQuickActionsDock() {
-    try {
-        const raw = JSON.parse(localStorage.getItem(QUICK_ACTIONS_DOCK_KEY) || 'null');
-        if (!raw || typeof raw !== 'object') {
-            return { docked: true, x: null, y: null };
-        }
-        return {
-            docked: raw.docked !== false,
-            x: Number.isFinite(raw.x) ? raw.x : null,
-            y: Number.isFinite(raw.y) ? raw.y : null
-        };
-    } catch {
-        return { docked: true, x: null, y: null };
-    }
-}
-
-export function writeQuickActionsDock(patch) {
-    const next = { ...readQuickActionsDock(), ...patch };
-    localStorage.setItem(QUICK_ACTIONS_DOCK_KEY, JSON.stringify(next));
-}
-
-export function readToolsDock() {
-    try {
-        const raw = JSON.parse(localStorage.getItem(TOOLS_DOCK_KEY) || 'null');
-        if (!raw || typeof raw !== 'object') {
-            return { docked: true, x: null, y: null };
-        }
-        return {
-            docked: raw.docked !== false,
-            x: Number.isFinite(raw.x) ? raw.x : null,
-            y: Number.isFinite(raw.y) ? raw.y : null
-        };
-    } catch {
-        return { docked: true, x: null, y: null };
-    }
-}
-
-export function writeToolsDock(patch) {
-    const next = { ...readToolsDock(), ...patch };
-    localStorage.setItem(TOOLS_DOCK_KEY, JSON.stringify(next));
-}
-
 export function readSidebarWidth() {
     const raw = parseFloat(localStorage.getItem(SIDEBAR_WIDTH_KEY));
     return Number.isFinite(raw) && raw > 0 ? raw : null;
@@ -154,8 +203,7 @@ export function readSidebarPrefs() {
         sections: readSidebarSections(),
         notesListSort: readNotesListSort(),
         boardSort: readBoardSort(),
-        quickActionsDock: readQuickActionsDock(),
-        toolsDock: readToolsDock(),
+        moduleDocks: readAllModuleDocks(),
         sidebarWidth: readSidebarWidth()
     };
 }

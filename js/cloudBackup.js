@@ -13,7 +13,7 @@ import {
 import { formatCloudError, getCloudProvider } from './cloud/cloudProvider.js';
 import './cloud/localFolderProvider.js';
 import './cloud/megaProvider.js';
-import { SidePanel } from './hamburger.js';
+import { SidebarStats } from './sidebarStats.js';
 import { clampPanelToViewport, positionPopoverBelowAnchor } from './popoverPosition.js';
 import { showAppToast } from './toast.js';
 import { CARD_ICONS } from './icons.js';
@@ -1076,7 +1076,7 @@ export const CloudBackup = {
             writeConfig(config);
 
             this.updateButtons();
-            SidePanel.updateStorageFooter();
+            SidebarStats.update();
             if (!silent) showAppToast('Checkpoint saved');
         } catch (err) {
             if (!silent) showAppToast(formatCloudError(err));

@@ -1,4 +1,4 @@
-/** @css {"owns":"workspace shell, file cabinet, FAB, .btn, display options, boot splash, note footer/editor typography", "js":["hamburger.js","displayOptions.js","ui.js","bootProgress.js","fileCabinet.js","shellResize.js"], "notes":"sidebar radio/TV undocked chrome cross-cuts here"} */
+/** @css {"owns":"workspace shell, file cabinet, FAB, .btn, display options, boot splash, note footer/editor typography, sidebar module undock chrome", "js":["hamburger.js","displayOptions.js","ui.js","bootProgress.js","fileCabinet.js","shellResize.js","sidebarModules.js"]} */
 /* ==========================================================================
    SHARED UTILITIES (cross-module)
    ========================================================================== */
@@ -1336,7 +1336,7 @@ html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
     display: none !important;
 }
 
-.side-panel-scroll {
+.side-panel-modules {
     flex: 1 1 auto;
     min-height: 0;
     display: flex;
@@ -1346,40 +1346,57 @@ html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
     overflow-y: auto;
 }
 
-.side-panel-scroll > .nav-drawer-section + .nav-drawer-section,
-.side-panel-scroll > .nav-drawer-section + .sidebar-radio,
-.side-panel-scroll > .sidebar-radio + .nav-drawer-section,
-.side-panel-scroll > .sidebar-radio + .sidebar-tv,
-.side-panel-scroll > .sidebar-tv + .sidebar-weather,
-.side-panel-scroll > .sidebar-weather + .nav-drawer-section,
-.side-panel-scroll > .sidebar-tv + .nav-drawer-section {
+.side-panel-modules > .sidebar-module + .sidebar-module {
     margin-top: 0.12rem;
     padding-top: 0.12rem;
     border-top: 1px solid var(--border-color);
 }
 
-.side-panel-bottom {
-    flex-shrink: 0;
-    margin-top: 0.12rem;
-    padding: 0.12rem 0 0.05rem;
-    border-top: 1px solid var(--border-color);
+.sidebar-module {
     display: flex;
     flex-direction: column;
-    gap: 0.12rem;
-    text-align: left;
+    gap: 0.15rem;
 }
 
-.side-panel-bottom > :not(.is-hidden) + * {
-    margin-top: 0.12rem;
-    padding-top: 0.12rem;
-    border-top: 1px solid var(--border-color);
+.sidebar-module--undocked {
+    position: fixed;
+    box-sizing: border-box;
+    width: var(--sidebar-module-width, 220px);
+    padding: 0 0.5rem 0.45rem;
+    margin-bottom: 0;
+    border-bottom: none;
+    background: var(--chrome-bg, var(--bg-surface));
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+    pointer-events: auto;
 }
 
-.side-panel-list {
-    flex: 0 1 auto;
-    min-height: 0;
-    overflow-x: hidden;
+.sidebar-module--undocked .collapsable-header {
+    padding: 0.28rem 0.35rem;
+    padding-right: 0.15rem;
+    cursor: grab;
+    user-select: none;
+}
+
+.sidebar-module--undocked .collapsable-section {
+    max-height: min(60vh, 480px);
     overflow-y: auto;
+}
+
+.sidebar-module--dragging .collapsable-header {
+    cursor: grabbing;
+    opacity: var(--desktop-drag-opacity, 0.85);
+}
+
+.sidebar-module__dock {
+    flex-shrink: 0;
+    opacity: 0.8;
+}
+
+.sidebar-module__dock:hover {
+    opacity: 1;
 }
 
 #notes-list-section:not(.collapsed),
@@ -1515,68 +1532,6 @@ body.is-shell-resizing--h * {
     border-color: color-mix(in srgb, var(--accent) 35%, var(--border-color));
 }
 
-.sidebar-quick-actions__dock {
-    flex-shrink: 0;
-    opacity: 0.8;
-}
-
-.sidebar-quick-actions__dock:hover {
-    opacity: 1;
-}
-
-.sidebar-quick-actions--undocked,
-.sidebar-tools--undocked,
-.sidebar-radio--undocked,
-.sidebar-tv--undocked {
-    position: fixed;
-    box-sizing: border-box;
-    padding: 0 0.5rem 0.45rem;
-    margin-bottom: 0;
-    border-bottom: none;
-    background: var(--chrome-bg, var(--bg-surface));
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-    overflow: hidden;
-    pointer-events: auto;
-}
-
-.sidebar-quick-actions--undocked,
-.sidebar-tools--undocked {
-    width: 200px;
-}
-
-.sidebar-radio--undocked,
-.sidebar-tv--undocked {
-    width: 220px;
-}
-
-.sidebar-quick-actions--undocked .collapsable-header,
-.sidebar-tools--undocked .collapsable-header,
-.sidebar-radio--undocked .collapsable-header,
-.sidebar-tv--undocked .collapsable-header {
-    padding: 0.28rem 0.35rem;
-    padding-right: 0.15rem;
-    cursor: grab;
-    user-select: none;
-}
-
-.sidebar-quick-actions--dragging .collapsable-header,
-.sidebar-tools--dragging .collapsable-header,
-.sidebar-radio--dragging .collapsable-header,
-.sidebar-tv--dragging .collapsable-header {
-    cursor: grabbing;
-    opacity: var(--desktop-drag-opacity, 0.85);
-}
-
-.sidebar-tools__dock {
-    flex-shrink: 0;
-    opacity: 0.8;
-}
-
-.sidebar-tools__dock:hover {
-    opacity: 1;
-}
 
 .btn--icon {
     display: inline-flex;

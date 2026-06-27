@@ -1,4 +1,6 @@
 /** Position a fixed popover below its anchor, right-aligned, flipping above if needed. */
+import { raiseDesktopElement } from './desktopStack.js';
+
 export function positionPopoverBelowAnchor(popover, anchor, { gap = 8, margin = 8 } = {}) {
     if (!popover || !anchor) return;
 
@@ -75,4 +77,10 @@ export function clampPanelToViewport(panel, x, y, { margin = 8 } = {}) {
         x: Math.max(margin, Math.min(x, window.innerWidth - w - margin)),
         y: Math.max(margin, Math.min(y, window.innerHeight - h - margin))
     };
+}
+
+export function raiseUndockedAttachStack(attachEl, panel) {
+    if (!attachEl?.classList.contains('sidebar-module--undocked')) return;
+    raiseDesktopElement(attachEl);
+    raiseDesktopElement(panel);
 }

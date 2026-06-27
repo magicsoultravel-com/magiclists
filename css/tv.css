@@ -39,15 +39,6 @@
     min-width: 0;
 }
 
-.sidebar-tv__dock {
-    flex-shrink: 0;
-    opacity: 0.8;
-}
-
-.sidebar-tv__dock:hover {
-    opacity: 1;
-}
-
 /* Now playing block */
 .sidebar-tv__now-playing {
     display: grid;

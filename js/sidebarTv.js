@@ -1,4 +1,4 @@
-/** @module {"owns":"sidebar TV player and channel browser", "related":["tvPlayer.js","tvProviders/registry.js","tvPopover.js","sidebarUndock.js"], "events":["tv:state_changed"]} */
+/** @module {"owns":"sidebar TV player and channel browser", "related":["tvPlayer.js","tvProviders/registry.js","tvPopover.js","sidebarModules.js"], "events":["tv:state_changed"]} */
 import { TvProviderRegistry } from './tvProviders/registry.js';
 import { channelKey, parseChannelKey } from './tvProviders/channelShape.js';
 import { TvPlayer } from './tvPlayer.js';
@@ -7,7 +7,6 @@ import { escapeHtml, countryFlagEmoji, debounce, syncMarquee, bindFaviconImage }
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { applySectionCollapse } from './hamburger.js';
 import { showAppToast } from './toast.js';
-import { initSidebarUndock } from './sidebarUndock.js';
 
 const BROWSE_PAGE_SIZE = 60;
 const BROWSE_SORT_OPTIONS = [{ value: 'name', label: 'Name' }];
@@ -63,52 +62,6 @@ export const SidebarTv = {
             return TvPlayer.resumeIfWasPlaying();
         }).catch(() => {});
         this.prefetchCountries().then(() => this.updateTransport());
-        Object.assign(this, initSidebarUndock({
-            getRoot: () => this.root,
-            undockedClass: 'sidebar-tv--undocked',
-            draggingClass: 'sidebar-tv--dragging',
-            dockSelector: '[data-tv-dock]',
-            getHeader: () => document.getElementById('tv-section-header'),
-            readDock: () => {
-                const s = TvPlayer.getMiniPlayerState();
-                return {
-                    docked: s.miniPlayerDocked !== false,
-                    x: s.miniPlayerX,
-                    y: s.miniPlayerY
-                };
-            },
-            writeDock: (patch) => {
-                const out = {};
-                if (patch.docked !== undefined) out.miniPlayerDocked = patch.docked;
-                if (patch.x !== undefined) out.miniPlayerX = patch.x;
-                if (patch.y !== undefined) out.miniPlayerY = patch.y;
-                TvPlayer.saveMiniPlayerState(out);
-            },
-            restoreToSidebar: () => this.restoreToSidebar(),
-            onPositionChange: () => TvPopover.reposition(),
-            dragBlockSelector: '.sidebar-tv__compact'
-        }));
-        this.toggleMiniPlayerDock = this.toggleDock;
-        this.applyInitialDockState();
-    },
-
-    restoreToSidebar() {
-        if (this.root.parentElement !== document.body) return;
-        const scroll = document.querySelector('.side-panel-scroll');
-        if (!scroll) return;
-        const radio = document.getElementById('sidebar-radio');
-        if (radio && radio.parentElement === scroll) {
-            radio.insertAdjacentElement('afterend', this.root);
-            return;
-        }
-        const quickActions = document.getElementById('sidebar-quick-actions');
-        if (quickActions && quickActions.parentElement === scroll) {
-            quickActions.insertAdjacentElement('afterend', this.root);
-            return;
-        }
-        const first = scroll.firstElementChild;
-        if (first) first.insertAdjacentElement('afterend', this.root);
-        else scroll.appendChild(this.root);
     },
 
     async restoreLastChannelMeta() {
@@ -152,7 +105,7 @@ export const SidebarTv = {
                     </button>
                     <input type="range" class="sidebar-tv__volume-compact" data-tv-volume-compact min="0" max="100" value="85" aria-label="Volume">
                 </div>
-                <button type="button" class="card-act sidebar-tv__dock" data-tv-dock title="Undock to canvas" aria-label="Undock to canvas">${CARD_ICONS.unpin}</button>
+                <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
             </div>
             <div class="collapsable-section" id="tv-section">
                 <div class="sidebar-tv__now-playing" data-tv-transport>

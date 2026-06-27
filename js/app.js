@@ -43,9 +43,10 @@ import { Fullscreen } from './fullscreen.js';
 import { SidebarRadio } from './sidebarRadio.js';
 import { SidebarTv } from './sidebarTv.js';
 import { SidebarWeather } from './sidebarWeather.js';
-import { SidebarQuickActions } from './sidebarQuickActions.js';
+import { initAllSidebarModules } from './sidebarModules.js';
+import { SidebarHistory } from './sidebarHistory.js';
+import { SidebarStats } from './sidebarStats.js';
 import { BoardSort } from './boardSort.js';
-import { SidebarTools } from './sidebarTools.js';
 import { CloudBackup } from './cloudBackup.js';
 import { BootProgress } from './bootProgress.js';
 import { TemplatePicker } from './templatePicker.js';
@@ -126,7 +127,6 @@ class Application {
             SidePanel.init(AppState);
             initShellResize();
             initUndockedSidebarStacking();
-            SidebarQuickActions.init();
             BoardSort.init({
                 getItems: () => AppState.items,
                 getViewMode: () => AppState.viewSettings.sortBy,
@@ -140,8 +140,11 @@ class Application {
             SidebarRadio.init();
             SidebarTv.init();
             SidebarWeather.init();
-            SidebarTools.init();
             SidePanel.setupStatusClickHandlers(); /* after radio/tv/weather shells exist */
+            SidebarHistory.init(AppState);
+            SidebarStats.init();
+            initAllSidebarModules();
+            SidebarHistory.renderPanel();
             ClockStyle.init();
             DesktopZoom.init();
             this.setupSearchBar();
@@ -168,7 +171,7 @@ class Application {
             isEnabled: () => AppState.user.isLoggedIn,
             onRestore: (item, { preserveView = false } = {}) => this.restoreItem(item, preserveView),
             onRemove: (itemId) => this.removeItemFromWorkspace(itemId),
-            onStackChange: () => SidePanel.renderHistoryPanel()
+            onStackChange: () => SidebarHistory.renderPanel()
         });
     }
 
@@ -275,7 +278,7 @@ class Application {
     updateWorkspaceCounter() {
         SidePanel.updateCategories(AppState.categories, AppState.hiddenCategories, AppState.items);
         SidePanel.updateNotesList(AppState.items);
-        SidePanel.updateStorageFooter();
+        SidebarStats.update();
     }
 
     renderControlBar() {
@@ -470,7 +473,7 @@ class Application {
         virtualLink.click();
         URL.revokeObjectURL(virtualLink.href);
         writeLastLocalExportAt(backupPackage.timestamp);
-        SidePanel.updateStorageFooter();
+        SidebarStats.update();
     }
 
     setupBackupInterface() {
@@ -538,6 +541,7 @@ class Application {
             this.checkAuthSession();
             UndoManager.loadStacks();
             this.renderControlBar();
+            SidebarHistory.renderPanel();
             this.syncDataStore();
         }
     }
@@ -548,6 +552,7 @@ class Application {
         AppState.user.token = null;
         UndoManager.clear();
         this.renderControlBar();
+        SidebarHistory.renderPanel();
         this.updateLayoutResetVisibility();
         this.syncDataStore();
     }

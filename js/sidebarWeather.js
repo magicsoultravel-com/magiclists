@@ -1,4 +1,4 @@
-/** @module {"owns":"sidebar weather glance and forecast panel", "related":["weatherApi.js","weatherProviders/registry.js"]} */
+/** @module {"owns":"sidebar weather glance and forecast panel", "related":["weatherApi.js","weatherProviders/registry.js","sidebarModules.js"]} */
 import { WeatherApi } from './weatherApi.js';
 import { applySectionCollapse } from './hamburger.js';
 import { escapeHtml } from './radioUtils.js';
@@ -42,6 +42,7 @@ export const SidebarWeather = {
                     <span class="sidebar-weather__compact-temp" data-weather-compact-temp>—</span>
                 </div>
                 <button type="button" class="btn btn--compact btn-icon sidebar-weather__refresh" data-weather-refresh title="Refresh weather" aria-label="Refresh weather">${REFRESH_ICON}</button>
+                <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
             </div>
             <div class="collapsable-section" id="weather-section">
                 <div class="sidebar-weather__body" data-weather-body></div>

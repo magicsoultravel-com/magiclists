@@ -39,15 +39,6 @@
     min-width: 0;
 }
 
-.sidebar-radio__dock {
-    flex-shrink: 0;
-    opacity: 0.8;
-}
-
-.sidebar-radio__dock:hover {
-    opacity: 1;
-}
-
 /* Now playing block */
 .sidebar-radio__now-playing {
     display: grid;

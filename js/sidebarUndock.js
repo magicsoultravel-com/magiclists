@@ -3,6 +3,10 @@ import { clampPanelToViewport } from './popoverPosition.js';
 import { raiseDesktopElement } from './desktopStack.js';
 import { CARD_ICONS } from './icons.js';
 
+export const SIDEBAR_MODULE_UNDOCKED = 'sidebar-module--undocked';
+export const SIDEBAR_MODULE_DRAGGING = 'sidebar-module--dragging';
+export const SIDEBAR_MODULE_DOCK_SEL = '[data-sidebar-dock]';
+
 function ensureUndockedInBody(root) {
     if (root.parentElement !== document.body) {
         document.body.appendChild(root);

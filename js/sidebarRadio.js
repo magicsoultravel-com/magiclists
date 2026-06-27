@@ -1,4 +1,4 @@
-/** @module {"owns":"sidebar radio player and station browser", "related":["radioPlayer.js","radioProviders/registry.js","radioPopover.js","sidebarUndock.js"]} */
+/** @module {"owns":"sidebar radio player and station browser", "related":["radioPlayer.js","radioProviders/registry.js","radioPopover.js","sidebarModules.js"]} */
 import { RadioProviderRegistry } from './radioProviders/registry.js';
 import { stationKey, parseStationKey } from './radioProviders/stationShape.js';
 import { RadioPlayer } from './radioPlayer.js';
@@ -6,7 +6,6 @@ import { RadioPopover } from './radioPopover.js';
 import { escapeHtml, countryFlagEmoji, debounce, syncMarquee, bindFaviconImage } from './radioUtils.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { applySectionCollapse } from './hamburger.js';
-import { initSidebarUndock } from './sidebarUndock.js';
 
 const BROWSE_PAGE_SIZE = 60;
 const BROWSE_SORT_OPTIONS = [
@@ -65,47 +64,6 @@ export const SidebarRadio = {
             return RadioPlayer.resumeIfWasPlaying();
         }).catch(() => {});
         this.prefetchCountries().then(() => this.updateTransport());
-        Object.assign(this, initSidebarUndock({
-            getRoot: () => this.root,
-            undockedClass: 'sidebar-radio--undocked',
-            draggingClass: 'sidebar-radio--dragging',
-            dockSelector: '[data-radio-dock]',
-            getHeader: () => document.getElementById('radio-section-header'),
-            readDock: () => {
-                const s = RadioPlayer.getMiniPlayerState();
-                return {
-                    docked: s.miniPlayerDocked !== false,
-                    x: s.miniPlayerX,
-                    y: s.miniPlayerY
-                };
-            },
-            writeDock: (patch) => {
-                const out = {};
-                if (patch.docked !== undefined) out.miniPlayerDocked = patch.docked;
-                if (patch.x !== undefined) out.miniPlayerX = patch.x;
-                if (patch.y !== undefined) out.miniPlayerY = patch.y;
-                RadioPlayer.saveMiniPlayerState(out);
-            },
-            restoreToSidebar: () => this.restoreToSidebar(),
-            onPositionChange: () => RadioPopover.reposition(),
-            dragBlockSelector: '.sidebar-radio__compact'
-        }));
-        this.toggleMiniPlayerDock = this.toggleDock;
-        this.applyInitialDockState();
-    },
-
-    restoreToSidebar() {
-        if (this.root.parentElement !== document.body) return;
-        const scroll = document.querySelector('.side-panel-scroll');
-        if (!scroll) return;
-        const quickActions = document.getElementById('sidebar-quick-actions');
-        if (quickActions && quickActions.parentElement === scroll) {
-            quickActions.insertAdjacentElement('afterend', this.root);
-            return;
-        }
-        const first = scroll.firstElementChild;
-        if (first) first.insertAdjacentElement('afterend', this.root);
-        else scroll.appendChild(this.root);
     },
 
     async restoreLastStationMeta() {
@@ -153,7 +111,7 @@ export const SidebarRadio = {
                     </button>
                     <input type="range" class="sidebar-radio__volume-compact" data-radio-volume-compact min="0" max="100" value="85" aria-label="Volume">
                 </div>
-                <button type="button" class="card-act sidebar-radio__dock" data-radio-dock title="Undock to canvas" aria-label="Undock to canvas">${CARD_ICONS.unpin}</button>
+                <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
             </div>
             <div class="collapsable-section" id="radio-section">
                 <div class="sidebar-radio__now-playing" data-radio-transport>
