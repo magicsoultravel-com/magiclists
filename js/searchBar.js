@@ -17,7 +17,7 @@ export const SearchBar = {
     keyHandler: null,
     globalKeyHandler: null,
     highlightedIndex: -1,
-    resultRows: [],
+    searchToggle: null,
 
     getItems: null,
     onOpenItem: null,
@@ -30,8 +30,24 @@ export const SearchBar = {
         this.input = document.getElementById('workspace-search-input');
         this.clearBtn = document.getElementById('workspace-search-clear');
         this.panel = document.getElementById('workspace-search-panel');
+        this.searchToggle = document.getElementById('side-panel-search-toggle');
 
         if (!this.root || !this.input || !this.panel) return;
+
+        this.searchToggle?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleCompactSearch(true);
+        });
+
+        this.input.addEventListener('blur', () => {
+            if (!SidePanel.panel?.classList.contains('side-panel--minimal')) return;
+            if (this.input.value.trim()) return;
+            window.setTimeout(() => {
+                if (!this.root?.contains(document.activeElement)) {
+                    this.toggleCompactSearch(false);
+                }
+            }, 120);
+        });
 
         this.input.addEventListener('input', () => this.onInput());
         this.input.addEventListener('keydown', (e) => this.onInputKeydown(e));
@@ -50,6 +66,9 @@ export const SearchBar = {
             e.preventDefault();
             if (SidePanel.panel?.classList.contains('is-collapsed')) {
                 SidePanel.setCollapsed(false, { persist: false });
+            }
+            if (SidePanel.panel?.classList.contains('side-panel--minimal')) {
+                this.toggleCompactSearch(true);
             }
             this.input.focus();
             this.input.select();
@@ -253,6 +272,18 @@ export const SearchBar = {
             }
         };
         document.addEventListener('keydown', this.keyHandler);
+    },
+
+    toggleCompactSearch(open) {
+        if (!this.root) return;
+        const expand = open ?? !this.root.classList.contains('side-panel-search--expanded');
+        this.root.classList.toggle('side-panel-search--expanded', expand);
+        this.searchToggle?.setAttribute('aria-expanded', expand ? 'true' : 'false');
+        if (expand) {
+            requestAnimationFrame(() => this.input?.focus());
+        } else {
+            this.closePanel(false);
+        }
     },
 
     positionPanel() {

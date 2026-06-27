@@ -65,39 +65,13 @@
                         <span class="app-brand__text">magicNotes</span>
                     </div>
                     <button type="button" id="sidebar-reattach-all" class="card-act sidebar-reattach-all is-hidden" title="Reattach all" aria-label="Reattach all"></button>
-                </div>
-            </div>
-
-            <div class="side-panel-chrome side-panel-clock">
-                <div id="digital-clock" class="logo-zone logo-zone--clock logo-zone--sidebar">
-                    <button type="button" id="clock-display" class="clock-display clock-display-trigger" title="Change clock style" aria-label="Clock and date — change style" aria-expanded="false" aria-haspopup="menu">
-                        <span id="clock-date" class="clock-chip clock-chip--date">—</span>
-                        <span id="clock-time" class="clock-chip clock-chip--time">—</span>
-                        <div id="clock-analog" class="clock-analog">
-                            <div class="clock-departure">
-                                <div class="clock-departure-face"></div>
-                                <span id="clock-analog-date" class="clock-departure-date"></span>
-                            </div>
-                        </div>
-                        <div id="clock-segment" class="clock-segment">
-                            <div class="clock-segment-board">
-                                <div id="clock-segment-time" class="clock-segment-time" role="timer" aria-live="off"></div>
-                            </div>
-                        </div>
-                        <div id="clock-mantel" class="clock-mantel">
-                            <div class="clock-mantel-frame">
-                                <div class="clock-mantel-face">
-                                    <span id="clock-mantel-date" class="clock-mantel-date"></span>
-                                    <span id="clock-mantel-time" class="clock-mantel-time"></span>
-                                </div>
-                            </div>
-                        </div>
-                    </button>
+                    <button type="button" class="card-act sidebar-shell__dock" data-sidebar-shell-dock title="Undock sidebar" aria-label="Undock sidebar"></button>
                 </div>
             </div>
 
             <div class="side-panel-chrome side-panel-search">
                 <div id="side-panel-search" class="side-panel-search-wrap">
+                    <button type="button" id="side-panel-search-toggle" class="btn btn--compact btn-icon side-panel-search-toggle is-hidden" title="Search notes" aria-label="Search notes" aria-expanded="false" aria-controls="workspace-search-input">⌕</button>
                     <div class="side-panel-search-field">
                         <input type="search" id="workspace-search-input" class="side-panel-search-input form-input" placeholder="Search…" aria-label="Search notes" autocomplete="off" spellcheck="false" aria-expanded="false" aria-controls="workspace-search-panel">
                         <button type="button" id="workspace-search-clear" class="side-panel-search-clear" title="Clear search" aria-label="Clear search">×</button>
@@ -107,6 +81,40 @@
             </div>
 
             <div class="side-panel-modules">
+            <div id="sidebar-clock" class="sidebar-module sidebar-clock side-panel-clock">
+                <div class="collapsable-header" id="clock-section-header">
+                    <span class="collapsable-heading"><span class="collapsable-toggle"><svg viewBox="0 0 12 12" width="9" height="9" focusable="false"><path d="M3.2 4.8 6 7.6 8.8 4.8" fill="none" stroke="currentColor" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Clock</span>
+                    <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
+                </div>
+                <div class="collapsable-section" id="clock-section">
+                    <div id="digital-clock" class="logo-zone logo-zone--clock logo-zone--sidebar">
+                        <button type="button" id="clock-display" class="clock-display clock-display-trigger" title="Change clock style" aria-label="Clock and date — change style" aria-expanded="false" aria-haspopup="menu">
+                            <span id="clock-date" class="clock-chip clock-chip--date">—</span>
+                            <span id="clock-time" class="clock-chip clock-chip--time">—</span>
+                            <div id="clock-analog" class="clock-analog">
+                                <div class="clock-departure">
+                                    <div class="clock-departure-face"></div>
+                                    <span id="clock-analog-date" class="clock-departure-date"></span>
+                                </div>
+                            </div>
+                            <div id="clock-segment" class="clock-segment">
+                                <div class="clock-segment-board">
+                                    <div id="clock-segment-time" class="clock-segment-time" role="timer" aria-live="off"></div>
+                                </div>
+                            </div>
+                            <div id="clock-mantel" class="clock-mantel">
+                                <div class="clock-mantel-frame">
+                                    <div class="clock-mantel-face">
+                                        <span id="clock-mantel-date" class="clock-mantel-date"></span>
+                                        <span id="clock-mantel-time" class="clock-mantel-time"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div id="sidebar-quick-actions" class="sidebar-module sidebar-quick-actions">
                 <div class="collapsable-header" id="quick-actions-header">
                     <span class="collapsable-heading"><span class="collapsable-toggle collapsed"><svg viewBox="0 0 12 12" width="9" height="9" focusable="false"><path d="M3.2 4.8 6 7.6 8.8 4.8" fill="none" stroke="currentColor" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Quick actions</span>
@@ -163,16 +171,16 @@
             <div id="sidebar-notes-list" class="sidebar-module sidebar-notes-list">
                 <div class="collapsable-header sidebar-notes-list-header" id="notes-list-section-header">
                     <span class="collapsable-heading"><span class="collapsable-toggle"><svg viewBox="0 0 12 12" width="9" height="9" focusable="false"><path d="M3.2 4.8 6 7.6 8.8 4.8" fill="none" stroke="currentColor" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"/></svg></span>List</span>
-                    <span class="sidebar-notes-list-sort" id="notes-list-sort-tools">
-                        <button type="button" class="sidebar-sort-btn" id="notes-sort-title" title="Sort by title" aria-label="Sort by title"></button>
-                        <button type="button" class="sidebar-sort-btn" id="notes-sort-date" title="Sort by date" aria-label="Sort by date"></button>
-                    </span>
                     <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
                 </div>
                 <div class="collapsable-section" id="notes-list-section">
                     <div class="sidebar-notes-group">
                         <div class="collapsable-header list-row--header sidebar-notes-subheader" id="notes-list-active-header">
                             <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Active</span>
+                            <span class="sidebar-notes-list-sort" id="notes-list-sort-tools">
+                                <button type="button" class="sidebar-sort-btn" id="notes-sort-title" title="Sort by title" aria-label="Sort by title"></button>
+                                <button type="button" class="sidebar-sort-btn" id="notes-sort-date" title="Sort by date" aria-label="Sort by date"></button>
+                            </span>
                             <span id="notes-active-count" class="status-badge">0</span>
                         </div>
                         <div class="collapsable-section" id="notes-list-active-section">

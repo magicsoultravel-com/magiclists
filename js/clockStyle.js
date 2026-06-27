@@ -203,7 +203,7 @@ export const ClockStyle = {
         }
 
         this.triggerBtn = document.getElementById('clock-display');
-        this.clockChromeEl = this.zone.closest('.side-panel-clock');
+        this.clockChromeEl = this.zone?.closest('.sidebar-clock') ?? this.zone?.closest('.side-panel-clock');
 
         this.showBtn = document.getElementById('btn-show-clock');
         this.isHidden = this.readHidden();
@@ -253,6 +253,12 @@ export const ClockStyle = {
 
     getPopoverAnchor() {
         return this.triggerBtn;
+    },
+
+    repositionPopover() {
+        if (!this.popover || this.popover.classList.contains('is-hidden')) return;
+        const anchor = this.getPopoverAnchor();
+        if (anchor) positionPopoverBelowAnchor(this.popover, anchor);
     },
 
     syncShowBtn() {

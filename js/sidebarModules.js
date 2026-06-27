@@ -10,7 +10,9 @@ import { bindToggleCollapsable } from './hamburger.js';
 import { RadioPopover } from './radioPopover.js';
 import { TvPopover } from './tvPopover.js';
 import { ToolsManager } from './toolsManager.js';
+import { ClockStyle } from './clockStyle.js';
 import { CARD_ICONS } from './icons.js';
+import { reattachSidebarShell, isShellUndocked } from './sidebarShell.js';
 
 export { SIDEBAR_MODULE_UNDOCKED, SIDEBAR_MODULE_DRAGGING, SIDEBAR_MODULE_DOCK_SEL };
 
@@ -19,13 +21,14 @@ export const SIDEBAR_MODULE_WIDTH = 220;
 
 /** @type {ReadonlyArray<{ id: string, rootId: string, headerId: string, sectionId: string, startCollapsed?: boolean, expandOnUndock?: boolean, collapseIgnoreExtra?: string, dragBlockSelector?: string, onPositionChange?: () => void }>} */
 export const SIDEBAR_MODULES = [
+    { id: 'clock', rootId: 'sidebar-clock', headerId: 'clock-section-header', sectionId: 'clock-section', startCollapsed: false, onPositionChange: () => ClockStyle.repositionPopover?.() },
     { id: 'quick-actions', rootId: 'sidebar-quick-actions', headerId: 'quick-actions-header', sectionId: 'quick-actions-section', startCollapsed: true, expandOnUndock: true },
     { id: 'radio', rootId: 'sidebar-radio', headerId: 'radio-section-header', sectionId: 'radio-section', startCollapsed: true, dragBlockSelector: '.sidebar-radio__compact', onPositionChange: () => RadioPopover.reposition() },
     { id: 'tv', rootId: 'sidebar-tv', headerId: 'tv-section-header', sectionId: 'tv-section', startCollapsed: true, dragBlockSelector: '.sidebar-tv__compact', onPositionChange: () => TvPopover.reposition() },
     { id: 'weather', rootId: 'sidebar-weather', headerId: 'weather-section-header', sectionId: 'weather-section', startCollapsed: true, expandOnUndock: true, collapseIgnoreExtra: '.sidebar-weather__refresh', dragBlockSelector: '.sidebar-weather__compact, .sidebar-weather__refresh' },
     { id: 'categories', rootId: 'sidebar-categories', headerId: 'categories-section-header', sectionId: 'categories-section', startCollapsed: true, expandOnUndock: true },
     { id: 'tools', rootId: 'sidebar-tools', headerId: 'tools-section-header', sectionId: 'tools-section', startCollapsed: true, expandOnUndock: true },
-    { id: 'notes-list', rootId: 'sidebar-notes-list', headerId: 'notes-list-section-header', sectionId: 'notes-list-section', startCollapsed: false, expandOnUndock: true, collapseIgnoreExtra: '.sidebar-notes-list-sort', dragBlockSelector: '.sidebar-notes-list-sort' },
+    { id: 'notes-list', rootId: 'sidebar-notes-list', headerId: 'notes-list-section-header', sectionId: 'notes-list-section', startCollapsed: false, expandOnUndock: true },
     { id: 'history', rootId: 'sidebar-history-section', headerId: 'history-section-header', sectionId: 'history-section', startCollapsed: true, expandOnUndock: true },
     { id: 'stats', rootId: 'sidebar-stats-section', headerId: 'stats-section-header', sectionId: 'stats-section', startCollapsed: true, expandOnUndock: true }
 ];
@@ -38,6 +41,12 @@ const moduleUndockById = new Map();
 
 function notifyFloatingChromeChanged() {
     window.dispatchEvent(new CustomEvent('floating:chrome_changed'));
+}
+
+export function countModulesInPanel() {
+    const mount = getModuleMount();
+    if (!mount) return 0;
+    return mount.querySelectorAll('.sidebar-module').length;
 }
 
 export function getModuleConfig(id) {
@@ -157,6 +166,7 @@ export function reattachAllSidebarModules() {
 
 export function reattachAllFloatingChrome() {
     reattachAllSidebarModules();
+    reattachSidebarShell();
     ToolsManager.closeAll();
     updateReattachAllButton();
 }
@@ -166,7 +176,7 @@ export function updateReattachAllButton() {
     if (!btn) return;
     const undocked = document.querySelectorAll(`.sidebar-module.${SIDEBAR_MODULE_UNDOCKED}`).length;
     const toolsOpen = ToolsManager.openPanels?.size ?? 0;
-    const active = undocked > 0 || toolsOpen > 0;
+    const active = undocked > 0 || toolsOpen > 0 || isShellUndocked();
     btn.classList.toggle('is-hidden', !active);
     btn.disabled = !active;
 }

@@ -3,6 +3,7 @@ export const SIDEBAR_SECTIONS_KEY = 'matrix_sidebar_sections';
 export const NOTES_LIST_SORT_KEY = 'matrix_notes_list_sort';
 export const BOARD_SORT_KEY = 'matrix_board_sort';
 export const MODULE_DOCKS_KEY = 'matrix_sidebar_module_docks';
+export const SHELL_DOCK_KEY = 'matrix_sidebar_shell_dock';
 export const SIDEBAR_WIDTH_KEY = 'matrix_sidebar_width';
 
 /** @deprecated migration read only */
@@ -20,6 +21,7 @@ export const SIDEBAR_BACKUP_KEYS = [
     NOTES_LIST_SORT_KEY,
     BOARD_SORT_KEY,
     MODULE_DOCKS_KEY,
+    SHELL_DOCK_KEY,
     SIDEBAR_WIDTH_KEY
 ];
 
@@ -112,6 +114,20 @@ export function writeModuleDock(moduleId, patch) {
     const next = { ...normalizeDock(map[moduleId]), ...patch };
     map[moduleId] = next;
     writeAllModuleDocks(map);
+}
+
+export function readShellDock() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(SHELL_DOCK_KEY) || 'null');
+        return normalizeDock(raw);
+    } catch {
+        return { ...DEFAULT_DOCK };
+    }
+}
+
+export function writeShellDock(patch) {
+    const next = { ...readShellDock(), ...patch };
+    localStorage.setItem(SHELL_DOCK_KEY, JSON.stringify(next));
 }
 
 export function readPanelCollapsed() {

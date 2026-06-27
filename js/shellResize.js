@@ -33,6 +33,14 @@ function isSidebarCollapsed() {
     return sidebarPanel?.classList.contains('is-collapsed') ?? true;
 }
 
+function isShellUndocked() {
+    return sidebarPanel?.classList.contains('side-panel--undocked') ?? false;
+}
+
+function isSidebarInFlow() {
+    return !isSidebarCollapsed() && !isShellUndocked();
+}
+
 function getSidebarWidthBounds() {
     const viewport = window.innerWidth;
     const maxByRatio = viewport * 0.5;
@@ -79,7 +87,7 @@ function cabinetScaleForHeight(height, mount) {
 }
 
 function applySidebarUiScale(width) {
-    if (!sidebarPanel || isSidebarCollapsed()) return;
+    if (!sidebarPanel || !isSidebarInFlow()) return;
     const scale = sidebarScaleForWidth(width);
     sidebarPanel.style.setProperty('--sidebar-ui-scale', String(scale));
 }
@@ -101,7 +109,7 @@ function notifySidebarWidthChanged() {
 }
 
 function applySidebarWidth(width) {
-    if (!sidebarPanel || isSidebarCollapsed()) return;
+    if (!sidebarPanel || !isSidebarInFlow()) return;
     const clamped = clampSidebarWidth(width);
     sidebarPanel.style.setProperty('--sidebar-width', `${clamped}px`);
     applySidebarUiScale(clamped);
@@ -203,7 +211,7 @@ function removeHorizontalSplitter() {
 
 function updateVerticalSplitterVisibility() {
     if (!verticalSplitter) return;
-    const hidden = isSidebarCollapsed();
+    const hidden = isSidebarCollapsed() || isShellUndocked();
     verticalSplitter.classList.toggle('is-hidden', hidden);
     verticalSplitter.setAttribute('aria-hidden', hidden ? 'true' : 'false');
 }
@@ -252,7 +260,7 @@ function bindSplitterDrag(handle, axis) {
         e.stopPropagation();
 
         if (axis === 'v') {
-            if (isSidebarCollapsed()) return;
+            if (!isSidebarInFlow()) return;
             startSize = sidebarPanel.offsetWidth;
         } else {
             const mount = document.getElementById('file-cabinet');
@@ -295,7 +303,7 @@ function applyStoredSidebarWidth() {
 }
 
 function reclampAll() {
-    if (!isSidebarCollapsed()) {
+    if (isSidebarInFlow()) {
         applyStoredSidebarWidth();
     } else {
         clearSidebarAppliedWidth();
@@ -328,12 +336,23 @@ export function syncCabinetSplitter() {
     }
 }
 
+export function onShellDockChanged() {
+    updateVerticalSplitterVisibility();
+    if (isSidebarInFlow()) {
+        applyStoredSidebarWidth();
+    } else {
+        clearSidebarAppliedWidth();
+    }
+    reclampAll();
+    dispatchDesktopBoundsChanged();
+}
+
 export function onSidebarCollapseChanged() {
     updateVerticalSplitterVisibility();
-    if (isSidebarCollapsed()) {
-        clearSidebarAppliedWidth();
-    } else {
+    if (isSidebarInFlow()) {
         applyStoredSidebarWidth();
+    } else {
+        clearSidebarAppliedWidth();
     }
     reclampAll();
     dispatchDesktopBoundsChanged();
@@ -354,7 +373,7 @@ export function initShellResize() {
 
     bound = true;
     clearSidebarAppliedWidth();
-    if (!isSidebarCollapsed()) applyStoredSidebarWidth();
+    if (isSidebarInFlow()) applyStoredSidebarWidth();
     ensureVerticalSplitter();
     updateVerticalSplitterVisibility();
     syncCabinetSplitter();

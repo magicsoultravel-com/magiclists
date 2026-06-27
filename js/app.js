@@ -46,6 +46,7 @@ import { SidebarRadio } from './sidebarRadio.js';
 import { SidebarTv } from './sidebarTv.js';
 import { SidebarWeather } from './sidebarWeather.js';
 import { initAllSidebarModules } from './sidebarModules.js';
+import { initSidebarShell } from './sidebarShell.js';
 import { SidebarHistory } from './sidebarHistory.js';
 import { SidebarStats } from './sidebarStats.js';
 import { BoardSort } from './boardSort.js';
@@ -149,6 +150,7 @@ class Application {
             SidebarHistory.init(AppState);
             SidebarStats.init();
             initAllSidebarModules();
+            initSidebarShell();
             SidebarHistory.renderPanel();
             ClockStyle.init();
             DesktopZoom.init();

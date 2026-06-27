@@ -90,6 +90,9 @@ export const SidePanel = {
     },
 
     setCollapsed(collapsed, { persist = true } = {}) {
+        if (collapsed && this.panel?.classList.contains('side-panel--undocked')) {
+            window.dispatchEvent(new CustomEvent('sidebar:shell_dock_requested'));
+        }
         this.panel?.classList.toggle('is-collapsed', collapsed);
         this.toggleBtn?.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         this.toggleBtn?.setAttribute('title', collapsed ? 'Show panel' : 'Hide panel');
@@ -109,7 +112,7 @@ export const SidePanel = {
     setupStatusClickHandlers() {
         this.bindCollapsable('categories-list-active-header', 'categories-list-active-section', true);
         this.bindCollapsable('categories-list-hidden-header', 'categories-list-hidden-section', true);
-        this.bindCollapsable('notes-list-active-header', 'notes-list-active-section');
+        this.bindCollapsable('notes-list-active-header', 'notes-list-active-section', false, '.sidebar-notes-list-sort');
         this.bindCollapsable('notes-list-hidden-header', 'notes-list-hidden-section', true);
         this.bindCollapsable('notes-list-archived-header', 'notes-list-archived-section', true);
         this.setupNotesListSortControls();
