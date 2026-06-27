@@ -177,6 +177,18 @@ function noteRectHooks(ui, card) {
     };
 }
 
+function sortItemsSpatially(items, getRect) {
+    return [...items].sort((a, b) => {
+        const ra = getRect(a) || { x: 0, y: 0 };
+        const rb = getRect(b) || { x: 0, y: 0 };
+        const ay = Number.isFinite(ra.y) ? ra.y : 0;
+        const ax = Number.isFinite(ra.x) ? ra.x : 0;
+        const by = Number.isFinite(rb.y) ? rb.y : 0;
+        const bx = Number.isFinite(rb.x) ? rb.x : 0;
+        return ay - by || ax - bx;
+    });
+}
+
 export function isSnapLayoutMode(mode) {
     return normalizeViewMode(mode) === 'grid';
 }
@@ -912,6 +924,15 @@ export const UI = {
 
         [...boardItems]
             .sort((a, b) => {
+                if (snapLayout) {
+                    const sa = layout[a.id];
+                    const sb = layout[b.id];
+                    const ay = sa?.y ?? Number.POSITIVE_INFINITY;
+                    const ax = sa?.x ?? Number.POSITIVE_INFINITY;
+                    const by = sb?.y ?? Number.POSITIVE_INFINITY;
+                    const bx = sb?.x ?? Number.POSITIVE_INFINITY;
+                    return ay - by || ax - bx;
+                }
                 const aTime = Number(a.created_at || a.updated_at || 0);
                 const bTime = Number(b.created_at || b.updated_at || 0);
                 return aTime - bTime;
@@ -1375,7 +1396,6 @@ export const UI = {
     convertDesktopLayoutForModeChange(canvas, fromMode, toMode, items) {
         if (!canvas || fromMode === toMode) return;
         const visible = this.getVisibleItems(Array.isArray(items) ? items : []);
-        const ids = new Set(visible.map((item) => item.id));
 
         if (toMode === 'freeform') {
             const footprint = readTileSmallFootprint();
@@ -1460,117 +1480,41 @@ export const UI = {
         }
 
         if (toMode === 'grid') {
-            const footprint = readTileSmallFootprint();
-            const small = getSmallRect(footprint);
-            const gridLayout = this.getGridLayout();
-            const freeformPositions = this.getFreeformPositions();
-            const placed = [];
-            const { origin, packW, maxH } = this.getGridBoardBounds(canvas);
+            const pinnedIds = new Set(this.getBoardPins());
+            const itemsById = new Map(visible.map((item) => [item.id, item]));
+            const getSourceRect = (item) => this.resolveFreeformSourceRect(item, canvas);
+            const { collapsed, expanded } = this.partitionCanvasItemsByExpansion(visible, 'freeform');
 
-            visible.forEach((item) => {
-                const freeSaved = this.getFreeformSizes()[item.id];
-                const freePos = freeformPositions[item.id];
-                if (
-                    fromMode === 'freeform'
-                    && freeSaved
-                    && Number.isFinite(freeSaved.w)
-                    && freePos
-                    && Number.isFinite(freePos.x)
-                    && Number.isFinite(freePos.y)
-                    && isCollapsedSpatialSize(freeSaved.w, freeSaved.h, resolveTileSize(item))
-                ) {
-                    const slot = this.snapNoteRect(
-                        { x: freePos.x, y: freePos.y, w: small.w, h: small.h },
-                        { maxW: packW, maxH, origin }
-                    );
-                    this.saveCompactBoardLayout(item.id, slot, toMode);
-                    placed.push(slot);
-                    return;
-                }
-
-                const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
-                const saved = gridLayout[item.id];
-                const tileSize = resolveTileSize(item);
-                let w;
-                let h;
-                let x;
-                let y;
-
-                if (card) {
-                    const pos = this.readNoteRect(card);
-                    const size = this.readFreeformCardSize(card);
-                    x = pos.x;
-                    y = pos.y;
-                    w = size.w;
-                    h = size.h;
-                } else if (freeSaved && Number.isFinite(freeSaved.w) && Number.isFinite(freeSaved.h)) {
-                    w = freeSaved.w;
-                    h = freeSaved.h;
-                    if (freeformPositions[item.id]) {
-                        x = freeformPositions[item.id].x;
-                        y = freeformPositions[item.id].y;
-                    } else {
-                        const slot = this.snapNoteRect(
-                            findFirstCanvasSlotCore(w, h, placed, packW + origin * 2, { origin }),
-                            { maxW: packW, maxH }
-                        );
-                        this.saveGridLayout(item.id, slot);
-                        placed.push(slot);
-                        return;
-                    }
-                } else if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
-                    const clamped = geoClampSpatialSize(saved.w, saved.h, tileSize);
-                    w = clamped.w;
-                    h = clamped.h;
-                    if (freeformPositions[item.id]) {
-                        x = freeformPositions[item.id].x;
-                        y = freeformPositions[item.id].y;
-                    } else {
-                        const slot = this.snapNoteRect(
-                            findFirstCanvasSlotCore(w, h, placed, packW + origin * 2, { origin }),
-                            { maxW: packW, maxH }
-                        );
-                        this.saveGridLayout(item.id, slot);
-                        placed.push(slot);
-                        return;
-                    }
-                } else {
-                    const tileDefaults = geoGetTileDefaultRect(tileSize);
-                    w = tileDefaults.w;
-                    h = tileDefaults.h;
-                    const slot = this.snapNoteRect(
-                        findFirstCanvasSlotCore(w, h, placed, packW + origin * 2, { origin }),
-                        { maxW: packW, maxH }
-                    );
-                    this.saveGridLayout(item.id, slot);
-                    placed.push(slot);
-                    return;
-                }
-
-                let rect = this.snapNoteRect({ x, y, w, h }, { maxW: packW, maxH });
-                rect = this.snapNotePosition(rect, { maxW: packW, maxH, origin });
-                const gridPrev = gridLayout[item.id] || (freeSaved ? { ...freeSaved } : {});
-                const layoutStore = this.getGridLayout();
-                layoutStore[item.id] = this.mergeSpatialLayoutEntry(
-                    gridPrev,
-                    rect,
-                    resolveTileSize(item),
-                    {
-                        updateRemembered: !isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(item)),
-                        rememberedW: freeSaved?.rememberedW ?? gridPrev.rememberedW,
-                        rememberedH: freeSaved?.rememberedH ?? gridPrev.rememberedH
-                    }
-                );
-                localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layoutStore));
-                placed.push(rect);
-            });
-
-            const layout = this.computeGridBoardLayout(canvas, null);
-            layout.forEach((rect, id) => {
-                if (!ids.has(id)) return;
-                this.saveGridLayout(id, rect);
+            this.packGridBoard(canvas, sortItemsSpatially(collapsed, getSourceRect), sortItemsSpatially(expanded, getSourceRect), {
+                pinnedIds,
+                layoutMode: 'freeform',
+                direction: 'horizontal',
+                persistOnly: true,
+                animate: false,
+                save: true,
+                itemsById
             });
         }
+    },
+
+    resolveFreeformSourceRect(item, canvas) {
+        const freePos = this.getFreeformPositions()[item?.id];
+        const freeSaved = this.getFreeformSizes()[item?.id];
+        const card = canvas?.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
+        if (card) {
+            const pos = this.readNoteRect(card);
+            const size = this.readFreeformCardSize(card);
+            return { x: pos.x, y: pos.y, w: size.w, h: size.h };
+        }
+        if (freePos && freeSaved && Number.isFinite(freePos.x) && Number.isFinite(freeSaved.w)) {
+            return { x: freePos.x, y: freePos.y, w: freeSaved.w, h: freeSaved.h };
+        }
+        const gridSaved = this.getGridLayout()[item.id];
+        if (gridSaved && Number.isFinite(gridSaved.x)) {
+            return { ...gridSaved };
+        }
+        const metrics = getGridMetrics();
+        return { x: metrics.origin + metrics.edgePad, y: metrics.origin + metrics.edgePad, w: 0, h: 0 };
     },
 
     isItemLayoutExpanded(item, mode) {
@@ -1711,40 +1655,50 @@ export const UI = {
         });
     },
 
-    packSortGridBoard(canvas, collapsedItems, expandedItems, sortPrefs, pinnedIds) {
+    packGridBoard(canvas, collapsedItems, expandedItems, {
+        pinnedIds = new Set(),
+        layoutMode = 'grid',
+        direction = 'horizontal',
+        persistOnly = false,
+        animate = true,
+        save = true,
+        itemsById = null
+    } = {}) {
         const { origin, packW, maxH, edgePad } = this.getGridBoardBounds(canvas);
         const metrics = getGridMetrics();
-        const direction = sortPrefs.direction === 'vertical' ? 'vertical' : 'horizontal';
+        const dir = direction === 'vertical' ? 'vertical' : 'horizontal';
         const placed = [];
         const layout = new Map();
         const snapBounds = { maxW: packW, maxH, origin, edgePad };
         const canvasW = packW + origin * 2;
+        const resolveItem = (id) => (itemsById?.get(id) ?? this.resolveBoardItem(id));
 
         pinnedIds.forEach((id) => {
             const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(id)}"]`);
             const saved = this.getGridLayout()[id];
             if (!saved || !Number.isFinite(saved.x)) return;
-            const item = this.resolveBoardItem(id);
-            const isExp = this.isItemLayoutExpanded(item, 'grid');
+            const item = resolveItem(id);
+            const isExp = this.isItemLayoutExpanded(item, layoutMode);
             const rect = this.snapNoteRect(
                 card
                     ? this.gridBoardRectForCard(card, saved, isExp)
-                    : { ...saved, ...this.resolveSortItemSize(item, 'grid', isExp) },
+                    : { ...saved, ...this.resolveSortItemSize(item, layoutMode, isExp) },
                 snapBounds
             );
             layout.set(id, rect);
             placed.push({ ...rect });
         });
 
+        const yStart = origin + edgePad;
         const packGroup = (items, { startX, startY } = {}) => {
             const yMin = startY ?? yStart;
-            const xMin = direction === 'vertical' ? (startX ?? origin + edgePad) : undefined;
+            const xMin = dir === 'vertical' ? (startX ?? origin + edgePad) : undefined;
             items.forEach((item) => {
                 if (!item?.id || pinnedIds.has(item.id)) return;
-                const isExp = this.isItemLayoutExpanded(item, 'grid');
-                const { w, h } = this.resolveSortItemSize(item, 'grid', isExp);
+                const isExp = this.isItemLayoutExpanded(item, layoutMode);
+                const { w, h } = this.resolveSortItemSize(item, layoutMode, isExp);
                 const slotOpts = { origin, edgePad, yMin, xMin, maxH };
-                let slot = direction === 'vertical'
+                let slot = dir === 'vertical'
                     ? findFirstCanvasSlotVerticalCore(w, h, placed, canvasW, slotOpts)
                     : findFirstCanvasSlotCore(w, h, placed, canvasW, slotOpts);
                 slot = this.snapNoteRect(slot, snapBounds);
@@ -1753,7 +1707,6 @@ export const UI = {
             });
         };
 
-        const yStart = origin + edgePad;
         const unpinnedCollapsed = collapsedItems.filter((item) => !pinnedIds.has(item.id));
         const unpinnedExpanded = expandedItems.filter((item) => !pinnedIds.has(item.id));
         packGroup(collapsedItems, { startY: yStart });
@@ -1763,7 +1716,7 @@ export const UI = {
             .filter((rect) => rect && Number.isFinite(rect.x));
         const hasExpandedGap = unpinnedCollapsed.length && unpinnedExpanded.length;
         const expandedAnchor = this.computeExpandedAlignAnchor(
-            direction,
+            dir,
             hasExpandedGap ? collapsedRects : [],
             { origin, edgePad, packW, yStart, metrics }
         );
@@ -1781,10 +1734,34 @@ export const UI = {
                     edgePad
                 },
                 metrics,
-                direction
+                direction: dir
             });
         }
-        this.applyGridBoardLayout(canvas, layout, { animate: true, save: true });
+
+        if (persistOnly) {
+            if (!save) return layout;
+            const layoutStore = this.getGridLayout();
+            layout.forEach((rect, id) => {
+                const item = resolveItem(id);
+                const isExp = item && this.isItemLayoutExpanded(item, layoutMode);
+                const freeSaved = layoutMode === 'freeform' ? this.getFreeformSizes()[id] : null;
+                const gridPrev = layoutStore[id] || {};
+                layoutStore[id] = this.mergeSpatialLayoutEntry(
+                    gridPrev,
+                    rect,
+                    resolveTileSize(item),
+                    {
+                        updateRemembered: isExp,
+                        rememberedW: freeSaved?.rememberedW ?? gridPrev.rememberedW,
+                        rememberedH: freeSaved?.rememberedH ?? gridPrev.rememberedH
+                    }
+                );
+            });
+            localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layoutStore));
+            return layout;
+        }
+
+        this.applyGridBoardLayout(canvas, layout, { animate, save });
         if (unpinnedExpanded.length) {
             unpinnedExpanded.forEach((item) => {
                 const rect = layout.get(item.id);
@@ -1792,6 +1769,19 @@ export const UI = {
             });
         }
         this.updateGridScrollPolicy(canvas, { forcing: false });
+        return layout;
+    },
+
+    packSortGridBoard(canvas, collapsedItems, expandedItems, sortPrefs, pinnedIds) {
+        const direction = sortPrefs.direction === 'vertical' ? 'vertical' : 'horizontal';
+        this.packGridBoard(canvas, collapsedItems, expandedItems, {
+            pinnedIds,
+            layoutMode: 'grid',
+            direction,
+            persistOnly: false,
+            animate: true,
+            save: true
+        });
     },
 
     getCascadeZIndexBase(canvas, pinnedIds) {

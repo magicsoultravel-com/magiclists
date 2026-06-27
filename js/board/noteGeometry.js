@@ -279,12 +279,16 @@ export function findNearestGridSlot(preferred, w, h, placed, { packW, origin = C
     const maxRight = origin + pad + packW;
     const maxBottom = maxH - pad;
 
+    const atSmall = isCollapsedSpatialSize(w, h);
+    const xStep = atSmall ? gridColumnStride(w, h, metrics) : metrics.strideX;
+    const yStep = atSmall ? getPackStrideYForRect(w, h) : metrics.strideY;
+
     for (let ring = 0; ring <= 32; ring++) {
         for (let dy = -ring; dy <= ring; dy++) {
             for (let dx = -ring; dx <= ring; dx++) {
                 if (ring > 0 && Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
-                const x = prefX + dx * metrics.strideX;
-                const y = prefY + dy * metrics.strideY;
+                const x = prefX + dx * xStep;
+                const y = prefY + dy * yStep;
                 const c = snapNoteRect({ x, y, w, h }, { ...bounds, origin, edgePad: pad });
                 if (c.x < minX - 1) continue;
                 if (c.x + c.w > maxRight + 1) continue;
@@ -331,6 +335,15 @@ export function pushGridCardRect(rect, placed, { packW, origin, maxH, edgePad })
         });
         if (!placed.some((p) => rectsOverlap(candidate, p))) return candidate;
     }
+    const canvasW = packW + (origin ?? CANVAS_LAYOUT_ORIGIN) * 2;
+    const nearSlot = findFirstCanvasSlot(
+        rect.w,
+        rect.h,
+        placed,
+        canvasW,
+        { origin, edgePad: pad, yMin: Math.max(origin + pad, rect.y) }
+    );
+    if (!placed.some((p) => rectsOverlap(nearSlot, p))) return nearSlot;
     return findNearestGridSlot(rect, rect.w, rect.h, placed, { packW, origin, maxH, edgePad: pad });
 }
 

@@ -600,7 +600,12 @@ class Application {
 
         UI.applyDesktopLayoutModeSwitch(canvas, mode);
 
-        window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
+        window.dispatchEvent(new CustomEvent('board:visibility_changed', {
+            detail: {
+                flushLayout: false,
+                skipGridReflow: mode === 'grid' && prevMode === 'freeform'
+            }
+        }));
         window.dispatchEvent(new CustomEvent('view:mode_changed', { detail: mode }));
         this.updateViewToggleState();
         this.updateLayoutResetVisibility();
