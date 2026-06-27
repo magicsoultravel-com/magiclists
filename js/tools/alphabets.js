@@ -4,12 +4,46 @@ import { ALPHABETS } from './alphabets-data.js';
 
 const STORAGE_KEY = 'alphabets_index';
 
+const SPEECH_LANG = {
+    greek: 'el-GR',
+    japanese: 'ja-JP',
+    korean: 'ko-KR',
+    chinese: 'zh-CN',
+    hindi: 'hi-IN',
+    arabic: 'ar',
+    hebrew: 'he-IL',
+    polish: 'pl-PL',
+    latin: 'en-US',
+    cyrillic: 'ru-RU',
+    thai: 'th-TH',
+    tamil: 'ta-IN',
+    phoenician: 'en-US',
+    hieroglyphs: 'en-US',
+    ipa: 'en-US',
+    braille: 'en-US',
+    nato: 'en-US',
+};
+
+function escapeAttr(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;');
+}
+
+function speakButtonAttrs(text, { morse = false } = {}) {
+    const morseAttr = morse ? ' data-alph-morse="1"' : '';
+    return `data-alph-speak="${escapeAttr(text)}" role="button" tabindex="0"${morseAttr}`;
+}
+
 export const Alphabets = {
     container: null,
     index: 0,
     onKeyDown: null,
+    onContentClick: null,
     onDocumentPointerDown: null,
     menuOpen: false,
+    _morseCtx: null,
+    _morseGen: 0,
 
     init(mountElement) {
         this.container = mountElement;
@@ -126,7 +160,20 @@ export const Alphabets = {
         };
         document.addEventListener('pointerdown', this.onDocumentPointerDown);
 
+        this.onContentClick = (e) => {
+            const cell = e.target.closest('[data-alph-speak]');
+            if (!cell) return;
+            this.playCellSound(cell);
+        };
+        content?.addEventListener('click', this.onContentClick);
+
         this.onKeyDown = (e) => {
+            const cell = e.target.closest('[data-alph-speak]');
+            if (cell && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                this.playCellSound(cell);
+                return;
+            }
             if (e.key === 'Escape' && this.menuOpen) {
                 e.preventDefault();
                 this.closeMenu();
@@ -141,6 +188,64 @@ export const Alphabets = {
             }
         };
         content?.addEventListener('keydown', this.onKeyDown);
+    },
+
+    playCellSound(cell) {
+        const text = cell.getAttribute('data-alph-speak');
+        if (!text) return;
+        if (cell.hasAttribute('data-alph-morse')) {
+            this.playMorse(text);
+            return;
+        }
+        const page = ALPHABETS[this.index];
+        this.speakRoman(text, page?.id);
+    },
+
+    speakRoman(text, pageId) {
+        if (!text || !window.speechSynthesis) return;
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = SPEECH_LANG[pageId] || 'en-US';
+        utterance.rate = 0.9;
+        window.speechSynthesis.speak(utterance);
+    },
+
+    playMorse(pattern) {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        if (!this._morseCtx) this._morseCtx = new AudioCtx();
+        const ctx = this._morseCtx;
+        if (ctx.state === 'suspended') ctx.resume();
+
+        this._morseGen += 1;
+        const gen = this._morseGen;
+        const dot = 0.08;
+        const dash = 0.24;
+        const gap = 0.08;
+        const freq = 660;
+        let t = ctx.currentTime + 0.02;
+
+        for (const sym of pattern) {
+            if (gen !== this._morseGen) return;
+            const isDot = sym === '·' || sym === '.';
+            const isDash = sym === '−' || sym === '-';
+            if (!isDot && !isDash) continue;
+
+            const dur = isDot ? dot : dash;
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.value = freq;
+            gain.gain.setValueAtTime(0.0001, t);
+            gain.gain.exponentialRampToValueAtTime(0.2, t + 0.005);
+            gain.gain.setValueAtTime(0.2, t + dur - 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.start(t);
+            osc.stop(t + dur + 0.01);
+            t += dur + gap;
+        }
     },
 
     toggleMenu() {
@@ -224,12 +329,13 @@ export const Alphabets = {
         this.updateMenuActiveState();
     },
 
-    renderCell(entry, scriptFont) {
+    renderCell(entry, scriptFont, { morse = false } = {}) {
+        const speakText = morse ? entry.char : entry.roman;
         const glossHtml = entry.gloss
             ? `<span class="alphabet-cell__gloss">${entry.gloss}</span>`
             : '';
         return `
-            <div class="alphabet-cell">
+            <div class="alphabet-cell" ${speakButtonAttrs(speakText, { morse })}>
                 <span class="alphabet-cell__char" style="font-family:${scriptFont}">${entry.char}</span>
                 <span class="alphabet-cell__roman">${entry.roman}</span>
                 ${glossHtml}
@@ -239,7 +345,7 @@ export const Alphabets = {
 
     renderCaseCell(entry, scriptFont) {
         return `
-            <div class="alphabet-cell alphabet-cell--case">
+            <div class="alphabet-cell alphabet-cell--case" ${speakButtonAttrs(entry.roman)}>
                 <span class="alphabet-cell__case-pair" style="font-family:${scriptFont}">
                     <span class="alphabet-cell__char">${entry.charUpper}</span>
                     <span class="alphabet-cell__char alphabet-cell__char--lower">${entry.charLower}</span>
@@ -265,7 +371,7 @@ export const Alphabets = {
                <span class="alphabet-cell__gloss">final</span>`
             : `<span class="alphabet-cell__char" style="font-family:${scriptFont}">${entry.char}</span>`;
         return `
-            <div class="alphabet-cell alphabet-cell--hebrew">
+            <div class="alphabet-cell alphabet-cell--hebrew" ${speakButtonAttrs(entry.roman)}>
                 ${formsHtml}
                 <span class="alphabet-cell__roman">${entry.roman}</span>
             </div>
@@ -282,7 +388,7 @@ export const Alphabets = {
         if (!form) {
             return '<span class="alphabet-arabic__form alphabet-arabic__form--empty">—</span>';
         }
-        return `<span class="alphabet-arabic__form" style="font-family:${scriptFont}">${form}</span>`;
+        return `<span class="alphabet-arabic__form alphabet-arabic__form--speak" ${speakButtonAttrs(form)} style="font-family:${scriptFont}">${form}</span>`;
     },
 
     renderArabic(page) {
@@ -317,7 +423,8 @@ export const Alphabets = {
 
     renderGrid(page) {
         const scriptFont = page.fontFamily || 'inherit';
-        const cells = (page.chars || []).map((entry) => this.renderCell(entry, scriptFont)).join('');
+        const isMorse = page.id === 'morse';
+        const cells = (page.chars || []).map((entry) => this.renderCell(entry, scriptFont, { morse: isMorse })).join('');
         return `<div class="${this.getGridClass(page)}">${cells}</div>`;
     },
 
@@ -377,14 +484,18 @@ export const Alphabets = {
 
     destroy() {
         this.closeMenu();
+        window.speechSynthesis?.cancel();
+        this._morseGen += 1;
         const content = this.container?.querySelector('[data-alph-content]');
-        if (content && this.onKeyDown) {
-            content.removeEventListener('keydown', this.onKeyDown);
+        if (content) {
+            if (this.onKeyDown) content.removeEventListener('keydown', this.onKeyDown);
+            if (this.onContentClick) content.removeEventListener('click', this.onContentClick);
         }
         if (this.onDocumentPointerDown) {
             document.removeEventListener('pointerdown', this.onDocumentPointerDown);
         }
         this.onKeyDown = null;
+        this.onContentClick = null;
         this.onDocumentPointerDown = null;
         this.container = null;
     },

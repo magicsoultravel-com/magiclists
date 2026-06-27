@@ -255,6 +255,38 @@ export function growSheetCells(block) {
     block?.querySelectorAll('.sheet-grid tbody tr:not(.sheet-grid__struct-row)').forEach((row) => growSheetRowCells(row));
 }
 
+function paintSheetSelection(block, ar, ac, fr, fc) {
+    block.querySelectorAll('.sheet-grid__cell.is-selected').forEach((td) => td.classList.remove('is-selected'));
+    if (ar == null || ac == null || fr == null || fc == null) return;
+    const r0 = Math.min(ar, fr);
+    const r1 = Math.max(ar, fr);
+    const c0 = Math.min(ac, fc);
+    const c1 = Math.max(ac, fc);
+    for (let r = r0; r <= r1; r++) {
+        for (let c = c0; c <= c1; c++) {
+            const input = block.querySelector(`[data-sheet-cell][data-row="${r}"][data-col="${c}"]`);
+            input?.closest('.sheet-grid__cell')?.classList.add('is-selected');
+        }
+    }
+}
+
+function sheetRangeToTsv(sheet, r0, c0, r1, c1) {
+    const lines = [];
+    for (let r = r0; r <= r1; r++) {
+        const cols = [];
+        for (let c = c0; c <= c1; c++) cols.push(getCellValue(sheet, r, c));
+        lines.push(cols.join('\t'));
+    }
+    return lines.join('\n');
+}
+
+function parseSheetTsv(text) {
+    let t = String(text ?? '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    if (t.endsWith('\n')) t = t.slice(0, -1);
+    if (!t) return [['']];
+    return t.split('\n').map((row) => row.split('\t'));
+}
+
 export function renderSheetHtml(sheet, { canEdit = false, inModalEditor = false } = {}) {
     const rows = sheet?.rows || SHEET_DEFAULT_ROWS;
     const cols = sheet?.cols || SHEET_DEFAULT_COLS;
@@ -358,10 +390,99 @@ export function attachSheetInteractions(root, item, {
     block.dataset.sheetBound = 'true';
 
     let editBefore = null;
+    let anchorRow = null;
+    let anchorCol = null;
+    let focusRow = null;
+    let focusCol = null;
+    let skipFocusSelection = false;
+
+    const setSelection = (ar, ac, fr, fc) => {
+        anchorRow = ar;
+        anchorCol = ac;
+        focusRow = fr;
+        focusCol = fc;
+        paintSheetSelection(block, ar, ac, fr, fc);
+    };
+
+    const isMultiCellRange = () =>
+        anchorRow != null && focusRow != null
+        && (anchorRow !== focusRow || anchorCol !== focusCol);
+
+    block.addEventListener('mousedown', (e) => {
+        const input = e.target.closest('[data-sheet-cell]');
+        if (!input || !block.contains(input)) return;
+        const row = Number(input.dataset.row);
+        const col = Number(input.dataset.col);
+        if (!Number.isFinite(row) || !Number.isFinite(col)) return;
+        if (e.shiftKey && anchorRow != null && anchorCol != null) {
+            skipFocusSelection = true;
+            focusRow = row;
+            focusCol = col;
+            paintSheetSelection(block, anchorRow, anchorCol, focusRow, focusCol);
+        } else {
+            setSelection(row, col, row, col);
+        }
+    });
+
+    block.addEventListener('copy', (e) => {
+        const active = document.activeElement;
+        if (!active?.matches?.('[data-sheet-cell]') || !block.contains(active)) return;
+        const partial = active.selectionStart !== active.selectionEnd;
+        if (partial && !isMultiCellRange()) return;
+        syncSheetFromDom(block, item);
+        const ar = anchorRow ?? Number(active.dataset.row);
+        const ac = anchorCol ?? Number(active.dataset.col);
+        const fr = focusRow ?? ar;
+        const fc = focusCol ?? ac;
+        if (!Number.isFinite(ar) || !Number.isFinite(ac)) return;
+        const tsv = sheetRangeToTsv(
+            item.sheet,
+            Math.min(ar, fr), Math.min(ac, fc),
+            Math.max(ar, fr), Math.max(ac, fc)
+        );
+        e.preventDefault();
+        e.clipboardData.setData('text/plain', tsv);
+    });
+
+    block.addEventListener('paste', (e) => {
+        const active = document.activeElement;
+        if (!active?.matches?.('[data-sheet-cell]') || !block.contains(active)) return;
+        const text = e.clipboardData?.getData('text/plain') ?? '';
+        if (!text.includes('\t') && !text.includes('\n')) return;
+        e.preventDefault();
+        syncSheetFromDom(block, item);
+        const before = prepareSnapshot?.() ?? null;
+        const startRow = Number(active.dataset.row);
+        const startCol = Number(active.dataset.col);
+        const rows = item.sheet?.rows || 0;
+        const cols = item.sheet?.cols || 0;
+        parseSheetTsv(text).forEach((rowVals, dr) => {
+            rowVals.forEach((val, dc) => {
+                const r = startRow + dr;
+                const c = startCol + dc;
+                if (r >= rows || c >= cols) return;
+                setCellValue(item.sheet, r, c, val);
+                const input = block.querySelector(`[data-sheet-cell][data-row="${r}"][data-col="${c}"]`);
+                if (input) input.value = val;
+            });
+        });
+        growSheetCells(block);
+        editBefore = null;
+        if (before && commitCellEdit) commitCellEdit(before);
+        onChange();
+    });
 
     block.querySelectorAll('[data-sheet-cell]').forEach((input) => {
         input.addEventListener('focus', () => {
             growSheetRowCells(input.closest('tr'));
+            if (!skipFocusSelection) {
+                const row = Number(input.dataset.row);
+                const col = Number(input.dataset.col);
+                if (Number.isFinite(row) && Number.isFinite(col)) {
+                    setSelection(row, col, row, col);
+                }
+            }
+            skipFocusSelection = false;
             if (!editBefore && prepareSnapshot) {
                 editBefore = prepareSnapshot();
             }
@@ -397,6 +518,23 @@ export function attachSheetInteractions(root, item, {
                 if (next) next.focus();
                 return;
             }
+            if (e.key === 'Enter' && !e.shiftKey) {
+                const row = Number(input.dataset.row);
+                const col = Number(input.dataset.col);
+                const rows = item.sheet?.rows || 0;
+                if (!Number.isFinite(row) || !Number.isFinite(col) || rows < 1) return;
+                const nextRow = Math.min(rows - 1, row + 1);
+                if (nextRow === row) return;
+                const next = block.querySelector(
+                    `[data-sheet-cell][data-row="${nextRow}"][data-col="${col}"]`
+                );
+                if (!next) return;
+                e.preventDefault();
+                skipFocusSelection = true;
+                setSelection(nextRow, col, nextRow, col);
+                next.focus();
+                return;
+            }
             if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
                 const row = Number(input.dataset.row);
                 const col = Number(input.dataset.col);
@@ -414,8 +552,21 @@ export function attachSheetInteractions(root, item, {
                     `[data-sheet-cell][data-row="${nextRow}"][data-col="${nextCol}"]`
                 );
                 if (!next) return;
+                if (e.shiftKey && input.selectionStart === input.selectionEnd) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (anchorRow == null || anchorCol == null) setSelection(row, col, row, col);
+                    focusRow = nextRow;
+                    focusCol = nextCol;
+                    paintSheetSelection(block, anchorRow, anchorCol, focusRow, focusCol);
+                    skipFocusSelection = true;
+                    next.focus();
+                    return;
+                }
                 e.preventDefault();
                 e.stopPropagation();
+                skipFocusSelection = true;
+                setSelection(nextRow, nextCol, nextRow, nextCol);
                 next.focus();
                 return;
             }

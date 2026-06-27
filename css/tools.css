@@ -1007,6 +1007,28 @@
     background: rgba(255, 255, 255, 0.02);
     text-align: center;
     min-height: 3.2rem;
+    cursor: pointer;
+}
+
+.alphabet-cell:hover,
+.alphabet-arabic__form--speak:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.alphabet-cell:focus-visible,
+.alphabet-arabic__form--speak:focus-visible {
+    outline: 2px solid var(--accent-color, #6ea8fe);
+    outline-offset: 1px;
+}
+
+.alphabet-cell:active,
+.alphabet-arabic__form--speak:active {
+    opacity: 0.85;
+}
+
+.alphabet-arabic__form--speak {
+    cursor: pointer;
+    border-radius: 4px;
 }
 
 .alphabet-cell__char {

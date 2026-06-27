@@ -199,6 +199,10 @@
     border: none;
 }
 
+.sheet-grid__cell.is-selected .sheet-cell-input {
+    background: color-mix(in srgb, var(--accent-color, #6366f1) 12%, transparent);
+}
+
 .sheet-grid textarea.sheet-cell-input.form-input:focus,
 #editor-overlay .sheet-grid textarea.sheet-cell-input.form-input:focus {
     border: none;
