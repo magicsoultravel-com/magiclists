@@ -109,8 +109,8 @@ export function snapNotePosition(rect, { maxW = Infinity, maxH = Infinity, origi
         x = snapPackCoord(rect.x, origin, pad, xPack);
         y = snapPackCoord(rect.y, origin, pad, yPack);
     } else {
-        x = snapGridCoord(rect.x, metrics.strideX);
-        y = snapGridCoord(rect.y, metrics.strideY);
+        x = snapGridCoord(rect.x, metrics.placementStrideX);
+        y = snapGridCoord(rect.y, metrics.placementStrideY);
     }
     const minX = origin + pad;
     const minY = origin + pad;
@@ -161,8 +161,8 @@ export function snapNoteRect(rect, { maxW = Infinity, maxH = Infinity, origin = 
         h = geoCellsToSpanH(Math.min(hCells, maxCells));
     }
     const snapped = {
-        x: snapGridCoord(rect.x, metrics.strideX),
-        y: snapGridCoord(rect.y, metrics.strideY),
+        x: snapGridCoord(rect.x, metrics.placementStrideX),
+        y: snapGridCoord(rect.y, metrics.placementStrideY),
         w: Math.max(FREEFORM_MIN_W, w),
         h: Math.max(FREEFORM_MIN_H, h)
     };
@@ -280,8 +280,8 @@ export function findNearestGridSlot(preferred, w, h, placed, { packW, origin = C
     const maxBottom = maxH - pad;
 
     const atSmall = isCollapsedSpatialSize(w, h);
-    const xStep = atSmall ? gridColumnStride(w, h, metrics) : metrics.strideX;
-    const yStep = atSmall ? getPackStrideYForRect(w, h) : metrics.strideY;
+    const xStep = atSmall ? gridColumnStride(w, h, metrics) : metrics.placementStrideX;
+    const yStep = atSmall ? getPackStrideYForRect(w, h) : metrics.placementStrideY;
 
     for (let ring = 0; ring <= 32; ring++) {
         for (let dy = -ring; dy <= ring; dy++) {

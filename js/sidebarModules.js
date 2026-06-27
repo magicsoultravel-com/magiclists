@@ -9,7 +9,7 @@ import { readModuleDock, writeModuleDock, writeSidebarSection } from './sidebarP
 import { bindToggleCollapsable } from './hamburger.js';
 import { RadioPopover } from './radioPopover.js';
 import { TvPopover } from './tvPopover.js';
-import { ACTION_ICONS } from './icons.js';
+import { CARD_ICONS } from './icons.js';
 
 export { SIDEBAR_MODULE_UNDOCKED, SIDEBAR_MODULE_DRAGGING, SIDEBAR_MODULE_DOCK_SEL };
 
@@ -49,7 +49,7 @@ export function getModuleMount() {
 export function renderSidebarModuleHeaderHtml({ headerId, title, extrasHtml = '' }) {
     return `
             <div class="collapsable-header" id="${headerId}">
-                <span class="collapsable-heading"><span class="collapsable-toggle">${ACTION_ICONS.chevronDown}</span>${title}</span>
+                <span class="collapsable-heading"><span class="collapsable-toggle">${CARD_ICONS.chevronDown}</span>${title}</span>
                 ${extrasHtml}
                 <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
             </div>`;
@@ -109,9 +109,10 @@ function normalizeModuleHeadings() {
         const header = document.getElementById(config.headerId);
         if (!header) return;
         const toggle = header.querySelector('.collapsable-toggle');
-        if (!toggle || toggle.dataset.normalized === 'true') return;
-        if (toggle.textContent.trim() === '▼') {
-            toggle.innerHTML = ACTION_ICONS.chevronDown;
+        if (!toggle) return;
+        const label = toggle.textContent.trim();
+        if (label === '▼' || label === 'undefined' || !toggle.querySelector('svg')) {
+            toggle.innerHTML = CARD_ICONS.chevronDown;
         }
         toggle.dataset.normalized = 'true';
     });

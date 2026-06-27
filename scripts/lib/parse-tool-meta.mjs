@@ -5,6 +5,32 @@ export function humanizeToolId(id) {
     return id.replace(/[-_]/g, ' ').replace(/\b\w/g, (ch) => ch.toUpperCase());
 }
 
+/** Brace-balanced JSON after @tag (nested objects in @tool headers). */
+export function extractMetaJson(head, tag) {
+    const tagMatch = head.match(new RegExp(`@${tag}\\s+`));
+    if (!tagMatch) return null;
+
+    const jsonStart = head.indexOf('{', tagMatch.index);
+    if (jsonStart < 0) return null;
+
+    let depth = 0;
+    for (let i = jsonStart; i < head.length; i++) {
+        const char = head[i];
+        if (char === '{') depth++;
+        else if (char === '}') {
+            depth--;
+            if (depth === 0) {
+                try {
+                    return JSON.parse(head.slice(jsonStart, i + 1));
+                } catch {
+                    return null;
+                }
+            }
+        }
+    }
+    return null;
+}
+
 export function parseToolFile(filePath) {
     const id = path.basename(filePath, '.js');
     if (!id || id[0] === '_' || id === 'registry') return null;
@@ -22,22 +48,17 @@ export function parseToolFile(filePath) {
     let minSize = null;
     let icon = '';
 
-    const toolMatch = head.match(/@tool\s+(\{.*?\})/s);
-    if (toolMatch) {
-        try {
-            const meta = JSON.parse(toolMatch[1]);
-            if (meta?.label) label = meta.label;
-            if (meta?.order != null) order = Number(meta.order);
-            if (meta?.wide) wide = true;
-            if (meta?.mountClass) mountClass = String(meta.mountClass);
-            if (meta?.resizable) resizable = true;
-            if (meta?.resizeMode) resizeMode = String(meta.resizeMode);
-            if (meta?.defaultSize) defaultSize = meta.defaultSize;
-            if (meta?.minSize) minSize = meta.minSize;
-            if (meta?.icon) icon = String(meta.icon);
-        } catch {
-            console.warn(`[parse-tool-meta] Invalid @tool JSON in ${filePath}`);
-        }
+    const meta = extractMetaJson(head, 'tool');
+    if (meta) {
+        if (meta?.label) label = meta.label;
+        if (meta?.order != null) order = Number(meta.order);
+        if (meta?.wide) wide = true;
+        if (meta?.mountClass) mountClass = String(meta.mountClass);
+        if (meta?.resizable) resizable = true;
+        if (meta?.resizeMode) resizeMode = String(meta.resizeMode);
+        if (meta?.defaultSize) defaultSize = meta.defaultSize;
+        if (meta?.minSize) minSize = meta.minSize;
+        if (meta?.icon) icon = String(meta.icon);
     }
 
     const iconMatch = head.match(/@tool-icon\s+(.+?)\s*\*\//s);

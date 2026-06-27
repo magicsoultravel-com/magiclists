@@ -6,7 +6,8 @@ import { ClockStyle } from './clockStyle.js';
 import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
 import { applyTileSmallFootprint } from './tileFootprint.js';
-import { initGridMetrics } from './gridDensity.js';
+import { initGridMetrics, DEFAULT_PLACEMENT_STEP } from './gridDensity.js';
+import { BoardPlacement } from './boardPlacement.js';
 
 const CUSTOMIZATION_KEYS = [
     'matrix_app_theme',
@@ -21,7 +22,8 @@ const CUSTOMIZATION_KEYS = [
     'matrix_tile_small_footprint',
     'matrix_grid_fineness',
     'matrix_grid_fineness_migrated',
-    'matrix_board_padding'
+    'matrix_board_padding',
+    'matrix_placement_stride'
 ];
 
 const DISPLAY_DEFAULTS = {
@@ -62,6 +64,7 @@ export function resetCustomizationToDefaults() {
 
     DesktopZoom.setScale(1);
     NoteFontScale.setScale(1);
+    BoardPlacement.setStep(DEFAULT_PLACEMENT_STEP);
     initGridMetrics();
     applyTileSmallFootprint();
 

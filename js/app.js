@@ -36,6 +36,8 @@ import {
 import { AppTheme } from './appTheme.js';
 import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
+import { BoardPlacement } from './boardPlacement.js';
+import { BoardOverlay } from './boardOverlay.js';
 import { readViewSessions, restoreViewSession, normalizeViewMode } from './viewSession.js';
 import { DrawingBoard } from './drawingBoard.js';
 import { SearchBar } from './searchBar.js';
@@ -94,6 +96,8 @@ class Application {
             DesktopBackground.init();
             ChromeBackground.init();
             NoteFontScale.init();
+            BoardPlacement.init();
+            BoardOverlay.init();
             migrateLegacyGridLayoutIfNeeded();
             initGridMetrics();
             applyTileSmallFootprint();
@@ -115,11 +119,11 @@ class Application {
             Calendar.init();
             this.renderControlBar();
             this.loadCategoriesStore();
-            BootProgress.set(40, 'Categories…');
             await reconcileLayoutStorage({
                 items: API._getLocalDB().items,
                 categories: AppState.categories
             });
+            this.migrateBoardOverlayFromFreeform();
             BootProgress.set(60, 'Layout…');
             await this.syncDataStore();
             BootProgress.set(85, 'Workspace…');
@@ -130,6 +134,7 @@ class Application {
             BoardSort.init({
                 getItems: () => AppState.items,
                 getViewMode: () => AppState.viewSettings.sortBy,
+                isOverlayEnabled: () => BoardOverlay.isEnabled(),
                 getFileCabinet: () => AppState.viewSettings.fileCabinet,
                 onSort: (prefs) => {
                     UI.sortBoardLayout(AppState.viewSettings.sortBy, AppState.items, prefs, {
@@ -195,7 +200,7 @@ class Application {
         if (preserveView) {
             const canvas = document.getElementById('app-canvas');
             UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
-            if (['freeform', 'grid'].includes(AppState.viewSettings.sortBy)) {
+            if (AppState.viewSettings.sortBy === 'grid') {
                 DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
             }
             this.updateWorkspaceCounter();
@@ -295,15 +300,15 @@ class Application {
         const mode = AppState.viewSettings.sortBy;
         const drawingActive = AppState.workspaceMode === 'drawing';
         const fileCabinetActive = !drawingActive && AppState.viewSettings.fileCabinet;
-        const freeformActive = !drawingActive && mode === 'freeform';
+        const overlayActive = !drawingActive && BoardOverlay.isEnabled();
         const fileCabinetTitle = fileCabinetActive ? 'Hide File Cabinet' : 'File Cabinet';
         const viewTitle = fileCabinetActive
-            ? (freeformActive ? 'Snap bottom to grid' : 'Freeform bottom workspace')
-            : (freeformActive ? 'Snap to bento grid' : 'Freeform layout');
-        const viewIcon = freeformActive ? ACTION_ICONS.viewFree : ACTION_ICONS.viewGrid;
+            ? (overlayActive ? 'Snap bottom to bento' : 'Allow overlap on bottom')
+            : (overlayActive ? 'Snap to bento grid' : 'Allow overlap');
+        const viewIcon = overlayActive ? ACTION_ICONS.viewGrid : ACTION_ICONS.viewFree;
 
         const workspaceGroup = `
-            <button class="btn btn--compact btn--icon ${freeformActive ? 'active' : ''}" id="btn-freeform-toggle" title="${viewTitle}" aria-label="${viewTitle}" aria-pressed="${freeformActive ? 'true' : 'false'}">${viewIcon}</button>
+            <button class="btn btn--compact btn--icon ${overlayActive ? 'active' : ''}" id="btn-freeform-toggle" title="${viewTitle}" aria-label="${viewTitle}" aria-pressed="${overlayActive ? 'true' : 'false'}">${viewIcon}</button>
             <button class="btn btn--compact btn--icon ${fileCabinetActive ? 'active' : ''}" id="btn-file-cabinet-toggle" title="${fileCabinetTitle}" aria-label="${fileCabinetTitle}" aria-pressed="${fileCabinetActive ? 'true' : 'false'}">${ACTION_ICONS.viewFileCabinet}</button>
             <button class="btn btn--compact btn--icon ${drawingActive ? 'active' : ''}" id="btn-drawing-mode" title="magicCanvas" aria-label="magicCanvas">${ACTION_ICONS.drawingPencil}</button>
         `;
@@ -365,7 +370,7 @@ class Application {
         BoardSort.rebindTrigger();
         Fullscreen.rebindMainButton();
 
-        document.getElementById('btn-freeform-toggle')?.addEventListener('click', () => this.toggleFreeformLayout());
+        document.getElementById('btn-freeform-toggle')?.addEventListener('click', () => this.toggleBoardOverlay());
         document.getElementById('btn-file-cabinet-toggle')?.addEventListener('click', () => this.toggleFileCabinet());
         document.getElementById('btn-drawing-mode')?.addEventListener('click', () => {
             if (AppState.workspaceMode === 'drawing') this.switchWorkspaceMode('notes');
@@ -557,9 +562,38 @@ class Application {
         this.syncDataStore();
     }
 
-    async toggleFreeformLayout() {
-        const nextMode = AppState.viewSettings.sortBy === 'freeform' ? 'grid' : 'freeform';
-        await this.setDesktopLayoutMode(nextMode);
+    migrateBoardOverlayFromFreeform() {
+        if (BoardOverlay.isMigrationComplete()) {
+            AppState.viewSettings.sortBy = 'grid';
+            return;
+        }
+        const wasFreeform = AppState.viewSettings.sortBy === 'freeform'
+            || localStorage.getItem('matrix_desktop_layout') === 'freeform'
+            || Object.keys(UI.getFreeformPositions()).length > 0;
+        if (wasFreeform) {
+            BoardOverlay.setEnabled(true);
+            UI.migrateFreeformLayoutToGrid(AppState.items);
+        }
+        AppState.viewSettings.sortBy = 'grid';
+        localStorage.setItem('matrix_desktop_layout', 'grid');
+        localStorage.setItem('matrix_preferred_view', 'grid');
+        BoardOverlay.markMigrationComplete();
+    }
+
+    async toggleBoardOverlay() {
+        const canvas = document.getElementById('app-canvas');
+        const wasEnabled = BoardOverlay.isEnabled();
+        UI.flushAllInlineEditsFromCanvas(canvas, AppState.items);
+        if (canvas) {
+            UI.flushLayoutFromCanvas(canvas, 'grid');
+        }
+        const next = BoardOverlay.toggle();
+        if (wasEnabled && !next && canvas) {
+            UI.reflowGridBoard(canvas, null, { animate: true });
+        }
+        DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+        this.updateViewToggleState();
+        BoardSort.refreshMenu();
     }
 
     async toggleFileCabinet() {
@@ -583,56 +617,20 @@ class Application {
         await this.syncDataStore();
     }
 
-    async setDesktopLayoutMode(mode) {
-        if (mode !== 'grid' && mode !== 'freeform') return;
-        if (AppState.workspaceMode === 'drawing') {
-            this.switchWorkspaceMode('notes');
-            if (AppState.viewSettings.sortBy === mode) return;
-        }
-        const prevMode = AppState.viewSettings.sortBy;
-        if (prevMode === mode) return;
-
-        const canvas = document.getElementById('app-canvas');
-        UI.flushAllInlineEditsFromCanvas(canvas, AppState.items);
-        UI.flushLayoutFromCanvas(canvas, prevMode);
-        UI.persistViewSessionForMode(prevMode, canvas);
-        UI.convertDesktopLayoutForModeChange(canvas, prevMode, mode, AppState.items);
-
-        AppState.viewSettings.sortBy = mode;
-        localStorage.setItem('matrix_desktop_layout', mode);
-        localStorage.setItem('matrix_preferred_view', mode);
-        UI.restoreViewSessionForMode(mode);
-
-        UI.applyDesktopLayoutModeSwitch(canvas, mode);
-
-        window.dispatchEvent(new CustomEvent('board:visibility_changed', {
-            detail: {
-                flushLayout: false,
-                skipGridReflow: mode === 'grid' && prevMode === 'freeform'
-            }
-        }));
-        window.dispatchEvent(new CustomEvent('view:mode_changed', { detail: mode }));
-        this.updateViewToggleState();
-        this.updateLayoutResetVisibility();
-        this.updateWorkspaceCounter();
-        BoardSort.refreshMenu();
-    }
-
     updateViewToggleState() {
-        const mode = AppState.viewSettings.sortBy;
         const drawing = AppState.workspaceMode === 'drawing';
         const fileCabinetActive = !drawing && AppState.viewSettings.fileCabinet;
-        const freeformActive = !drawing && mode === 'freeform';
+        const overlayActive = !drawing && BoardOverlay.isEnabled();
         const ffBtn = document.getElementById('btn-freeform-toggle');
-        ffBtn?.classList.toggle('active', freeformActive);
+        ffBtn?.classList.toggle('active', overlayActive);
         if (ffBtn) {
             const title = fileCabinetActive
-                ? (freeformActive ? 'Snap bottom to grid' : 'Freeform bottom workspace')
-                : (freeformActive ? 'Snap to bento grid' : 'Freeform layout');
-            ffBtn.innerHTML = freeformActive ? ACTION_ICONS.viewFree : ACTION_ICONS.viewGrid;
+                ? (overlayActive ? 'Snap bottom to bento' : 'Allow overlap on bottom')
+                : (overlayActive ? 'Snap to bento grid' : 'Allow overlap');
+            ffBtn.innerHTML = overlayActive ? ACTION_ICONS.viewGrid : ACTION_ICONS.viewFree;
             ffBtn.title = title;
             ffBtn.setAttribute('aria-label', title);
-            ffBtn.setAttribute('aria-pressed', freeformActive ? 'true' : 'false');
+            ffBtn.setAttribute('aria-pressed', overlayActive ? 'true' : 'false');
         }
         const fcBtn = document.getElementById('btn-file-cabinet-toggle');
         fcBtn?.classList.toggle('active', fileCabinetActive);
@@ -779,7 +777,7 @@ class Application {
                 if (!detail?.skipRerender) {
                     const canvas = document.getElementById('app-canvas');
                     UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
-                    if (['freeform', 'grid'].includes(AppState.viewSettings.sortBy)) {
+                    if (AppState.viewSettings.sortBy === 'grid') {
                         DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
                     }
                 }

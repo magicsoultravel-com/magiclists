@@ -181,13 +181,6 @@ export function moveItemBetweenCategories({ itemId, fromCategory, toCategory, to
 
 export function getStoredItemSize(itemId, sortBy, UI) {
     if (!itemId || !UI) return null;
-    if (sortBy === 'freeform') {
-        const sizes = UI.getFreeformSizes()[itemId];
-        if (sizes && Number.isFinite(sizes.w) && Number.isFinite(sizes.h)) {
-            return { w: sizes.w, h: sizes.h };
-        }
-        return null;
-    }
     const layout = UI.getGridLayout()[itemId];
     if (layout && Number.isFinite(layout.w) && Number.isFinite(layout.h)) {
         return { w: layout.w, h: layout.h };

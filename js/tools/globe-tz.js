@@ -1,4 +1,4 @@
-/** @tool {"label":"Global TZ","order":4,"mountClass":"tool-mount--globe-tz","defaultSize":{"w":400,"h":480},"minSize":{"w":320,"h":360}} */
+/** @tool {"label":"Global TZ","order":4,"resizable":true,"mountClass":"tool-mount--globe-tz","defaultSize":{"w":400,"h":480},"minSize":{"w":320,"h":360}} */
 /** @tool-icon <circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M1.8 6h8.4M3.5 4h5M3.5 8h5" fill="none" stroke="currentColor" stroke-width="0.85"/> */
 export default {
     container: null,

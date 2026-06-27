@@ -38,8 +38,7 @@ export function sortBoardItems(items, sortPrefs) {
     return [...(items || [])].sort((a, b) => compareBoardItems(a, b, sortPrefs));
 }
 
-function buildMenuItems(prefs, viewMode = 'grid') {
-    const isFreeform = viewMode === 'freeform';
+function buildMenuItems(prefs, overlayEnabled = false) {
     return [
         { heading: 'Direction' },
         { id: 'dir:horizontal', label: 'Horizontally', selected: prefs.direction === 'horizontal' },
@@ -61,9 +60,9 @@ function buildMenuItems(prefs, viewMode = 'grid') {
             id: 'cascade',
             inputId: 'board-sort-cascade',
             label: 'Cascade',
-            hint: 'Freeform: fill row/column in 4s (overlapping stacks); expanded in one stack',
+            hint: 'Overlay: fill row/column in stacks; expanded in one stack',
             checked: prefs.cascade === true,
-            disabled: !isFreeform
+            disabled: !overlayEnabled
         }
     ];
 }
@@ -84,15 +83,14 @@ export const BoardSort = {
         this.ctx = ctx;
     },
 
-    getViewMode() {
-        const mode = this.ctx?.getViewMode?.();
-        return mode === 'freeform' ? 'freeform' : 'grid';
+    isOverlayEnabled() {
+        return this.ctx?.isOverlayEnabled?.() === true;
     },
 
     refreshMenu() {
         if (!DrawingToolbarMenu.isOpen()) return;
         const prefs = readBoardSort();
-        DrawingToolbarMenu.setItems(buildMenuItems(prefs, this.getViewMode()));
+        DrawingToolbarMenu.setItems(buildMenuItems(prefs, this.isOverlayEnabled()));
     },
 
     applyPref(id) {
@@ -106,19 +104,19 @@ export const BoardSort = {
         this.ctx?.onSort?.(prefs);
         this.syncButtonState();
         if (DrawingToolbarMenu.isOpen()) {
-            DrawingToolbarMenu.setItems(buildMenuItems(prefs, this.getViewMode()));
+            DrawingToolbarMenu.setItems(buildMenuItems(prefs, this.isOverlayEnabled()));
         }
     },
 
     toggleCascade(checked) {
-        if (this.getViewMode() !== 'freeform') return;
+        if (!this.isOverlayEnabled()) return;
         const prefs = readBoardSort();
         prefs.cascade = !!checked;
         writeBoardSort(prefs);
         this.ctx?.onSort?.(prefs);
         this.syncButtonState();
         if (DrawingToolbarMenu.isOpen()) {
-            DrawingToolbarMenu.setItems(buildMenuItems(prefs, this.getViewMode()));
+            DrawingToolbarMenu.setItems(buildMenuItems(prefs, this.isOverlayEnabled()));
         }
     },
 
@@ -147,7 +145,7 @@ export const BoardSort = {
             DrawingToolbarMenu.toggle({
                 anchor: btn,
                 ariaLabel: 'Sort board',
-                items: buildMenuItems(prefs, this.getViewMode()),
+                items: buildMenuItems(prefs, this.isOverlayEnabled()),
                 closeOnSelect: false,
                 onSelect: (id) => this.applyPref(id),
                 onToggle: (id, checked) => {

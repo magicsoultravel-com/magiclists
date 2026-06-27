@@ -943,6 +943,35 @@ html[data-tile-small-footprint="card"] #app-canvas.view-grid .mini-card[data-des
 #tools-desktop .tool-panel .ff-resize-se {
     width: 14px;
     height: 14px;
+    opacity: 0.18;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+}
+
+#tools-desktop .tool-panel:hover .ff-resize-nw,
+#tools-desktop .tool-panel:hover .ff-resize-ne,
+#tools-desktop .tool-panel:hover .ff-resize-sw,
+#tools-desktop .tool-panel:hover .ff-resize-se,
+#tools-desktop .tool-panel.is-freeform-resizing .ff-resize-nw,
+#tools-desktop .tool-panel.is-freeform-resizing .ff-resize-ne,
+#tools-desktop .tool-panel.is-freeform-resizing .ff-resize-sw,
+#tools-desktop .tool-panel.is-freeform-resizing .ff-resize-se {
+    opacity: 0.62;
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.22);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
+#tools-desktop .tool-panel:hover .ff-resize-n,
+#tools-desktop .tool-panel:hover .ff-resize-s,
+#tools-desktop .tool-panel:hover .ff-resize-e,
+#tools-desktop .tool-panel:hover .ff-resize-w,
+#tools-desktop .tool-panel.is-freeform-resizing .ff-resize-n,
+#tools-desktop .tool-panel.is-freeform-resizing .ff-resize-s,
+#tools-desktop .tool-panel.is-freeform-resizing .ff-resize-e,
+#tools-desktop .tool-panel.is-freeform-resizing .ff-resize-w {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 #tools-desktop .tool-panel .ff-resize-n { top: 0; cursor: n-resize; }
@@ -1664,12 +1693,11 @@ html[data-tile-small-footprint="card"] #app-canvas.view-grid .mini-card[data-des
     cursor: not-allowed;
 }
 
-html[data-desktop-grid-lines="1"] #app-canvas.view-grid,
-html[data-desktop-grid-lines="1"] #app-canvas.view-freeform {
+html[data-desktop-grid-lines="1"] #app-canvas.view-grid {
     background-image:
         linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
         linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-    background-size: var(--grid-stride-x) var(--grid-stride-y);
+    background-size: var(--placement-stride-x, var(--grid-stride-x)) var(--placement-stride-y, var(--grid-stride-y));
     background-position: var(--grid-origin) var(--grid-origin);
 }
 

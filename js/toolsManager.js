@@ -161,7 +161,9 @@ export const ToolsManager = {
 
             if (instance) {
                 chrome.bodyEl.innerHTML = '';
-                await instance.init(chrome.bodyEl);
+                await instance.init(chrome.bodyEl, {
+                    updateChipReadout: (text) => chrome.updateChipReadout?.(text)
+                });
                 chrome.persist();
             } else {
                 chrome.bodyEl.innerHTML = '<p class="tool-msg tool-msg--error">Tool module does not export an init function.</p>';

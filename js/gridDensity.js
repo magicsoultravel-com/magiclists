@@ -1,5 +1,10 @@
 export const FINENESS_STEPS = [32, 40, 48, 56, 64, 72, 80];
 export const FIXED_FINENESS_STEP = 1;
+
+/** User-adjustable snap ruler (px); note footprints stay on FIXED_FINENESS_STEP. */
+export const PLACEMENT_STRIDE_STEPS = [8, 12, 16, 20, 24, 28, 32, 40, 48, 56, 64];
+export const DEFAULT_PLACEMENT_STEP = 7;
+export const PLACEMENT_STRIDE_STORAGE_KEY = 'matrix_placement_stride';
 /** Target for migrateLegacyGridLayoutIfNeeded (old rect→square migration). */
 export const LEGACY_MIGRATION_TARGET_STEP = 4;
 /** Previous user-facing defaults before compact lock-in. */
@@ -54,6 +59,25 @@ function clampPaddingStep(step, fallback = FIXED_PADDING_STEP) {
     return Math.max(1, Math.min(PADDING_STEPS_PX.length, Math.round(n)));
 }
 
+function clampPlacementStep(step, fallback = DEFAULT_PLACEMENT_STEP) {
+    const n = Number(step);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(1, Math.min(PLACEMENT_STRIDE_STEPS.length, Math.round(n)));
+}
+
+export function readPlacementStrideStep() {
+    try {
+        const raw = parseInt(localStorage.getItem(PLACEMENT_STRIDE_STORAGE_KEY), 10);
+        return clampPlacementStep(raw);
+    } catch {
+        return DEFAULT_PLACEMENT_STEP;
+    }
+}
+
+export function getPlacementStridePx(step = readPlacementStrideStep()) {
+    return PLACEMENT_STRIDE_STEPS[clampPlacementStep(step) - 1];
+}
+
 export function getBoardPaddingScale(paddingStep = FIXED_PADDING_STEP) {
     const index = clampPaddingStep(paddingStep) - 1;
     return PADDING_STEPS_PX[index] / INSET_BASE_PX;
@@ -84,6 +108,8 @@ export function getGridMetrics(
     const origin = Math.max(2, Math.round(CANVAS_LAYOUT_ORIGIN * scale));
     const columnMinInnerW = COLUMN_MIN_COLS * cellS + (COLUMN_MIN_COLS - 1) * gap;
     const canvasGridW = columnMinInnerW + COLUMN_INNER_PAD * 2;
+    const placementStep = readPlacementStrideStep();
+    const placementStride = getPlacementStridePx(placementStep);
     return {
         step: index + 1,
         cellS,
@@ -92,6 +118,9 @@ export function getGridMetrics(
         gap,
         strideX: stride,
         strideY: stride,
+        placementStep,
+        placementStrideX: placementStride,
+        placementStrideY: placementStride,
         edgePad,
         origin,
         columnMinInnerW,
@@ -468,6 +497,9 @@ export function applyGridFineness() {
     style.setProperty('--grid-gap', `${metrics.gap}px`);
     style.setProperty('--grid-stride-x', `${metrics.strideX}px`);
     style.setProperty('--grid-stride-y', `${metrics.strideY}px`);
+    style.setProperty('--placement-stride-x', `${metrics.placementStrideX}px`);
+    style.setProperty('--placement-stride-y', `${metrics.placementStrideY}px`);
+    root.dataset.placementStride = String(metrics.placementStep);
     style.setProperty('--grid-origin', `${metrics.origin}px`);
     style.setProperty('--grid-edge-pad', `${metrics.edgePad}px`);
 

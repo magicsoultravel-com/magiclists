@@ -174,6 +174,38 @@
     height: 20px;
 }
 
+.tool-chip--readout {
+    width: auto;
+    min-width: 3.4rem;
+    max-width: 5.2rem;
+    padding: 0 0.35rem;
+}
+
+.tool-chip--readout .tool-chip__drag {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    min-height: 40px;
+}
+
+.tool-chip--readout .tool-chip__icon.is-hidden {
+    display: none;
+}
+
+.tool-chip__readout {
+    pointer-events: none;
+    font-family: monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.58rem;
+    line-height: 1;
+    color: var(--text-main);
+    white-space: nowrap;
+}
+
+.tool-chip__readout.is-hidden {
+    display: none;
+}
+
 .tool-chip__actions {
     position: absolute;
     top: 2px;
@@ -1346,9 +1378,9 @@
     gap: 0.35rem;
 }
 
-.timer-mode-bar .timer-mode-btn {
-    flex: 1 1 0;
-    justify-content: center;
+.timer-mode-bar {
+    justify-content: flex-start;
+    gap: 0.2rem;
 }
 
 .timer-readout {
@@ -1385,35 +1417,25 @@
     display: none;
 }
 
-.timer-presets {
+.timer-duration-row {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem;
+    align-items: center;
+    gap: 0.2rem;
+    flex-wrap: nowrap;
 }
 
-.timer-duration-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.25rem;
-    align-items: end;
-}
-
-.timer-duration-grid .form-group {
-    margin: 0;
-}
-
-.timer-duration-grid label {
-    display: block;
+.timer-duration-row label {
     font-size: 0.58rem;
     color: var(--text-muted);
-    margin-bottom: 0.12rem;
+    flex-shrink: 0;
 }
 
 .timer-duration-input {
-    width: 100%;
+    width: 2.2rem;
+    min-width: 0;
     text-align: center;
-    padding: 0.28rem 0.2rem;
-    font-size: 0.72rem;
+    padding: 0.22rem 0.12rem;
+    font-size: 0.68rem;
 }
 
 .timer-laps-block {

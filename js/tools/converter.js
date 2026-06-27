@@ -1,4 +1,4 @@
-/** @tool {"label":"Unit Converter","order":2,"mountClass":"tool-mount--converter","defaultSize":{"w":340,"h":320}} */
+/** @tool {"label":"Unit Converter","order":2,"resizable":true,"mountClass":"tool-mount--converter","defaultSize":{"w":340,"h":320}} */
 /** @tool-icon <path d="M3.2 4.2h5.2M7.6 3.4 8.8 4.2 7.6 5" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M8.8 7.8H3.6M4.4 7 3.2 7.8 4.4 8.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/> */
 export const Converter = {
     container: null,

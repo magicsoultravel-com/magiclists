@@ -1,4 +1,4 @@
-export const VIEW_MODES = ['grid', 'freeform'];
+export const VIEW_MODES = ['grid'];
 export const DEFAULT_VIEW_MODE = 'grid';
 
 const SESSIONS_KEY = 'matrix_view_sessions';
@@ -18,7 +18,7 @@ function stripScrollFromBucket(bucket) {
 }
 
 export function normalizeViewMode(mode) {
-    if (mode === 'columns' || mode === 'list') return 'grid';
+    if (mode === 'columns' || mode === 'list' || mode === 'freeform') return 'grid';
     return VIEW_MODES.includes(mode) ? mode : DEFAULT_VIEW_MODE;
 }
 
@@ -27,12 +27,14 @@ export function readViewSessions() {
         const raw = localStorage.getItem(SESSIONS_KEY);
         if (raw) {
             const parsed = JSON.parse(raw);
-            if (parsed?.version === 1 || parsed?.version === 2) {
-                const store = { version: 2 };
-                VIEW_MODES.forEach((mode) => {
-                    const legacy = parsed[mode] || parsed[mode === 'grid' ? 'columns' : mode] || {};
-                    store[mode] = stripScrollFromBucket(legacy);
-                });
+            if (parsed?.version === 1 || parsed?.version === 2 || parsed?.version === 3) {
+                const legacyGrid = parsed.grid || parsed.columns || {};
+                const legacyFreeform = parsed.freeform || {};
+                const store = {
+                    version: 3,
+                    grid: stripScrollFromBucket({ ...legacyFreeform, ...legacyGrid })
+                };
+                writeViewSessions(store);
                 return store;
             }
         }
@@ -40,18 +42,14 @@ export function readViewSessions() {
         /* ignore */
     }
 
-    const store = { version: 2 };
-    VIEW_MODES.forEach((mode) => {
-        store[mode] = emptyBucket();
-    });
-
+    const store = { version: 3, grid: emptyBucket() };
     writeViewSessions(store);
     return store;
 }
 
 export function writeViewSessions(store) {
     try {
-        localStorage.setItem(SESSIONS_KEY, JSON.stringify({ ...store, version: 2 }));
+        localStorage.setItem(SESSIONS_KEY, JSON.stringify({ ...store, version: 3 }));
     } catch {
         /* ignore */
     }
@@ -77,24 +75,20 @@ export function restoreViewSession(_mode) {
 export function getViewSessionsForSnapshot() {
     const store = readViewSessions();
     return {
-        version: 2,
-        grid: stripScrollFromBucket(store.grid),
-        freeform: stripScrollFromBucket(store.freeform)
+        version: 3,
+        grid: stripScrollFromBucket(store.grid)
     };
 }
 
 export function applyViewSessionsFromSnapshot(viewSessions) {
     if (!viewSessions) return false;
-    const store = { version: 2 };
-    if (viewSessions.version === 2) {
-        VIEW_MODES.forEach((mode) => {
-            store[mode] = stripScrollFromBucket(viewSessions[mode]);
-        });
-    } else if (viewSessions.version === 1) {
-        VIEW_MODES.forEach((mode) => {
-            const legacy = viewSessions[mode] || viewSessions[mode === 'grid' ? 'columns' : mode] || {};
-            store[mode] = stripScrollFromBucket(legacy);
-        });
+    const store = { version: 3 };
+    if (viewSessions.version === 3) {
+        store.grid = stripScrollFromBucket(viewSessions.grid);
+    } else if (viewSessions.version === 2 || viewSessions.version === 1) {
+        const legacyGrid = viewSessions.grid || viewSessions.columns || {};
+        const legacyFreeform = viewSessions.freeform || {};
+        store.grid = stripScrollFromBucket({ ...legacyFreeform, ...legacyGrid });
     } else {
         return false;
     }

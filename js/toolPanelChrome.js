@@ -193,6 +193,7 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
 
     let chip = null;
     let collapsed = !!saved.collapsed;
+    let chipReadoutText = '';
 
     const persist = (extra = {}) => {
         savePanelState(toolId, {
@@ -240,6 +241,7 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
         chip.innerHTML = `
             <div class="tool-chip__drag" title="Drag ${meta?.label || toolId}">
                 <span class="tool-chip__icon menu-tool-icon">${chipIconMarkup}</span>
+                <span class="tool-chip__readout is-hidden" aria-hidden="true"></span>
             </div>
             <div class="tool-chip__actions">
                 <button type="button" class="card-act card-act--expand tool-chip__expand" title="Expand" aria-label="Expand"></button>
@@ -269,6 +271,8 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
         bindChipDrag(chip.querySelector('.tool-chip__drag'), chip, () => {
             savePanelState(toolId, { chipX: chip.offsetLeft, chipY: chip.offsetTop });
         });
+
+        applyChipReadout(chipReadoutText);
     };
 
     const collapse = () => {
@@ -315,6 +319,43 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
         removePanelState(toolId);
     };
 
+    const defaultChipTitle = meta?.label || toolId;
+
+    const applyChipReadout = (label) => {
+        if (!chip) return;
+        const icon = chip.querySelector('.tool-chip__icon');
+        const readout = chip.querySelector('.tool-chip__readout');
+        const drag = chip.querySelector('.tool-chip__drag');
+
+        if (!label) {
+            icon?.classList.remove('is-hidden');
+            readout?.classList.add('is-hidden');
+            if (readout) readout.textContent = '';
+            chip.classList.remove('tool-chip--readout');
+            chip.title = defaultChipTitle;
+            if (drag) drag.title = `Drag ${defaultChipTitle}`;
+            return;
+        }
+
+        icon?.classList.add('is-hidden');
+        readout?.classList.remove('is-hidden');
+        if (readout) {
+            readout.textContent = label;
+            readout.setAttribute('aria-hidden', 'false');
+        }
+        chip.classList.add('tool-chip--readout');
+        chip.title = `${defaultChipTitle}: ${label}`;
+        if (drag) drag.title = `${defaultChipTitle}: ${label}`;
+        if (!chip.classList.contains('is-hidden')) {
+            positionChip(false);
+        }
+    };
+
+    const updateChipReadout = (text) => {
+        chipReadoutText = String(text || '').trim();
+        applyChipReadout(chipReadoutText);
+    };
+
     collapseBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         collapse();
@@ -326,7 +367,7 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     });
 
     bindPanelDrag(panel, persist);
-    if (meta?.resizable) {
+    if (meta?.resizable || meta?.defaultSize) {
         mountFloatChrome(panel, { resizable: true, mode: 'tool' });
         bindFloatResize(panel, {
             mins,
@@ -372,6 +413,7 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
         destroy: destroyWithCleanup,
         persist,
         isCollapsed: () => collapsed,
+        updateChipReadout,
         focus: () => {
             if (collapsed) expand();
             else bringToFront(panel);

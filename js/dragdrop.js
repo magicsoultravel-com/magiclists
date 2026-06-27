@@ -7,6 +7,7 @@ import {
     UNCATEGORIZED_CATEGORY
 } from './categories.js';
 import { UI, isDesktopCard } from './ui.js';
+import { isBoardOverlayEnabled } from './boardOverlay.js';
 import { NoteSurface } from './noteSurface.js';
 import { itemHasCategory } from './focusFilter.js';
 import {
@@ -84,7 +85,7 @@ function promoteExpandedResizeToLargeTier(card, item) {
 
 function maybeRepartitionFileCabinetAfterResize(canvas, card, currentItems) {
     if (!isFileCabinetActive() || !canvas || !card?.dataset?.id) return;
-    const sortBy = canvas.classList.contains('view-grid') ? 'grid' : 'freeform';
+    const sortBy = 'grid';
     const item = currentItems.find((i) => i.id === card.dataset.id);
     if (!item) return;
     const rect = UI.readNoteRect(card);
@@ -236,9 +237,10 @@ export const DragDropEngine = {
         canvas._dragDropAbort = ac;
         const { signal } = ac;
 
-        if (canvas.classList.contains('view-freeform') || canvas.classList.contains('view-grid')) {
-            const snapEnabled = canvas.classList.contains('view-grid');
-            this.initDesktopInteractions(canvas, currentItems, signal, { snapEnabled });
+        if (canvas.classList.contains('view-grid')) {
+            const snapEnabled = true;
+            const overlayMode = isBoardOverlayEnabled();
+            this.initDesktopInteractions(canvas, currentItems, signal, { snapEnabled, overlayMode });
         }
 
         if (isFileCabinetActive()) {
@@ -249,7 +251,7 @@ export const DragDropEngine = {
         }
     },
 
-    initDesktopInteractions(canvas, currentItems = [], signal, { snapEnabled = false } = {}) {
+    initDesktopInteractions(canvas, currentItems = [], signal, { snapEnabled = false, overlayMode = false } = {}) {
         const cards = canvas.querySelectorAll('.mini-card[data-desktop="1"]');
         let dragActive = null;
         let resizeActive = null;
@@ -283,7 +285,7 @@ export const DragDropEngine = {
         };
 
         const runLayoutPreview = (actorCard) => {
-            if (!snapEnabled || !actorCard?.dataset?.id) return;
+            if (!snapEnabled || overlayMode || !actorCard?.dataset?.id) return;
             if (previewFrame) return;
             previewFrame = requestAnimationFrame(() => {
                 previewFrame = null;
@@ -334,9 +336,11 @@ export const DragDropEngine = {
                 saveLayout: (c, rect, { updateRemembered }) => {
                     UI.saveGridLayout(c.dataset.id, rect, { updateRemembered });
                 },
-                reflow: (c, { animate }) => {
-                    UI.reflowGridBoard(canvas, c.dataset.id, { animate });
-                },
+                reflow: overlayMode
+                    ? () => {}
+                    : (c, { animate }) => {
+                        UI.reflowGridBoard(canvas, c.dataset.id, { animate });
+                    },
                 onExpandFromResize: () => {},
                 onCollapseFromResize: (c, item, rect, { animate, bounds }) => {
                     UI.collapseSnapPanelCard(c, item);
