@@ -2,9 +2,7 @@
 import { unwrapLineStrike, wrapLineAsStruck } from './noteBodyConversion.js';
 
 export function getStepLevel(step) {
-    const n = Number(step?.level);
-    if (!Number.isFinite(n) || n <= 0) return 0;
-    return Math.min(4, Math.floor(n));
+    return Math.min(4, Math.max(0, Number(step?.level) || 0));
 }
 
 export function partitionChecklistSteps(steps) {
