@@ -1796,6 +1796,7 @@ export const NoteSurface = {
 
             root.querySelectorAll('.step-indent-btn').forEach((btn) => {
                 btn.addEventListener('click', (e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     const row = btn.closest('.step-row--display');
                     const stepId = row?.dataset.stepId;
@@ -1812,7 +1813,6 @@ export const NoteSurface = {
                         const doneSteps = it.steps.filter((step) => step.completed);
                         it.steps = [...activeSteps, ...doneSteps];
                     }, { persist: false });
-                    this.expandChecklistAncestorsForStep(item, stepId);
                     const host = root.closest('.mini-card') || root;
                     this.scheduleChecklistStepFocus(root, stepId, { edge: 'start' });
                     refresh();
@@ -1840,7 +1840,6 @@ export const NoteSurface = {
                         const doneSteps = it.steps.filter((step) => step.completed);
                         it.steps = [...activeSteps, ...doneSteps];
                     }, { persist: false });
-                    this.expandChecklistAncestorsForStep(item, stepId);
                     const host = root.closest('.mini-card') || root;
                     this.scheduleChecklistStepFocus(root, stepId, { edge: 'start' });
                     refresh();
