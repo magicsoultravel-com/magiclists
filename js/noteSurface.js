@@ -1814,9 +1814,14 @@ export const NoteSurface = {
                         it.steps = [...activeSteps, ...doneSteps];
                     }, { persist: false });
                     const host = root.closest('.mini-card') || root;
-                    this.scheduleChecklistStepFocus(root, stepId, { edge: 'start' });
+                    // Only focus if the caret is not already in a step within this checklist
+                    const activeElement = document.activeElement;
+                    const isInSameChecklist = activeElement && (activeElement.closest('.mini-card') === host || activeElement.closest('.step-input') === host);
+                    if (!isInSameChecklist) {
+                        this.scheduleChecklistStepFocus(root, stepId, { edge: 'start' });
+                        this.focusPendingChecklistStep(host);
+                    }
                     refresh();
-                    this.focusPendingChecklistStep(host);
                     this.commitInlineChecklistOp(item, beforeItem, { localOnly });
                 });
             });
@@ -1841,9 +1846,14 @@ export const NoteSurface = {
                         it.steps = [...activeSteps, ...doneSteps];
                     }, { persist: false });
                     const host = root.closest('.mini-card') || root;
-                    this.scheduleChecklistStepFocus(root, stepId, { edge: 'start' });
+                    // Only focus if the caret is not already in a step within this checklist
+                    const activeElement = document.activeElement;
+                    const isInSameChecklist = activeElement && (activeElement.closest('.mini-card') === host || activeElement.closest('.step-input') === host);
+                    if (!isInSameChecklist) {
+                        this.scheduleChecklistStepFocus(root, stepId, { edge: 'start' });
+                        this.focusPendingChecklistStep(host);
+                    }
                     refresh();
-                    this.focusPendingChecklistStep(host);
                     this.commitInlineChecklistOp(item, beforeItem, { localOnly });
                 });
             });
