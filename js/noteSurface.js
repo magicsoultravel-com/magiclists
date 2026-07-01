@@ -994,12 +994,15 @@ export const NoteSurface = {
         this.setEditorZoom(shell, this.getEditorZoom());
 
         shell.querySelectorAll('[data-format-cmd]').forEach((btn) => {
-            btn.addEventListener('mousedown', (e) => e.preventDefault());
-            btn.addEventListener('click', (e) => {
+            const handler = (e) => {
                 e.preventDefault();
-                e.stopPropagation();
-                if (this.applyFormatCommand(btn.dataset.formatCmd)) onChange();
-            });
+                if (e.type === 'click') {
+                    e.stopPropagation();
+                    if (this.applyFormatCommand(btn.dataset.formatCmd)) onChange();
+                }
+            };
+            btn.addEventListener('mousedown', handler);
+            btn.addEventListener('click', handler);
         });
 
         shell.querySelectorAll('[data-zoom]').forEach((btn) => {
