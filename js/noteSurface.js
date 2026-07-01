@@ -1344,7 +1344,7 @@ export const NoteSurface = {
 
     focusInlineEdit(el, edge = 'end') {
         if (!el) return;
-        el.focus();
+        el.focus({ preventScroll: true });
         const range = document.createRange();
         range.selectNodeContents(el);
         range.collapse(edge === 'start');
