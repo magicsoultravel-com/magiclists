@@ -1823,6 +1823,7 @@ export const NoteSurface = {
 
             root.querySelectorAll('.step-outdent-btn').forEach((btn) => {
                 btn.addEventListener('click', (e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     const row = btn.closest('.step-row--display');
                     const stepId = row?.dataset.stepId;
