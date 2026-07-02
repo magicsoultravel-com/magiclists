@@ -508,8 +508,10 @@ export const UI = {
         card.dataset.boardEditorFocusBound = '1';
         card.addEventListener('focusin', (e) => {
             if (e.target.closest('.editor-note-shell .card-inline-edit')) {
-                card.classList.add('is-editing-inline');
-                this.syncSpatialChromeForEditing(card);
+                requestAnimationFrame(() => {
+                    card.classList.add('is-editing-inline');
+                    this.syncSpatialChromeForEditing(card);
+                });
             }
         });
         card.addEventListener('focusout', () => {
