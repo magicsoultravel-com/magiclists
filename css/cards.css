@@ -390,16 +390,12 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
     color: var(--card-muted);
     opacity: 0.82;
     text-decoration: line-through;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    /* Removed nowrap and ellipsis to allow text wrapping */
 }
 
-/* Keep completed items editable - maintain nowrap on focus to prevent layout shift */
+/* Keep completed items editable - allow text wrapping */
 .has-custom-bg .step-text.completed.card-inline-edit:focus {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    /* Removed nowrap and ellipsis to allow text wrapping */
 }
 
 .has-custom-bg .card-inline-edit:empty::before {

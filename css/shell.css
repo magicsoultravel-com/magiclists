@@ -633,15 +633,12 @@
 }
 
 .step-row-actions {
-    position: absolute;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
     display: flex;
     align-items: center;
     gap: 2px;
     z-index: 2;
-    margin-left: 0;
+    margin-left: auto;
+    /* Replaced absolute positioning with flexbox for better flow */
 }
 
 .step-collapse-btn,
@@ -749,16 +746,12 @@
     color: var(--text-muted) !important;
     text-decoration: line-through;
     opacity: 0.82;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    /* Removed nowrap and ellipsis to allow text wrapping */
 }
 
-/* Keep completed items editable - maintain nowrap on focus to prevent layout shift */
+/* Keep completed items editable - allow text wrapping */
 .step-row--display .step-text.completed.card-inline-edit:focus {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    /* Removed nowrap and ellipsis to allow text wrapping */
 }
 
 .step-row--edit .step-text {
