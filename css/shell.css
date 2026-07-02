@@ -737,7 +737,7 @@
 }
 
 .step-row--display .step-text {
-    flex: 1 1 0%;
+    flex: 1 1 auto;
     min-width: 0;
     padding-right: 3.1rem;
     word-wrap: break-word;
@@ -749,6 +749,13 @@
     color: var(--text-muted) !important;
     text-decoration: line-through;
     opacity: 0.82;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Keep completed items editable - maintain nowrap on focus to prevent layout shift */
+.step-row--display .step-text.completed.card-inline-edit:focus {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1845,18 +1852,7 @@ body.is-shell-resizing--h * {
 
 .card-inline-edit:focus {
     background: rgba(79, 70, 229, 0.08);
-    box-shadow: inset 0 0 0 1px rgba(79, 70, 229, 0.35);
-    /* Strict layout locking to kill clicking micro-pops without forcing a single line line */
-    box-sizing: border-box !important;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
-    margin-top: 0 !important;
-    margin-bottom: 0 !important;
-    white-space: pre-wrap !important;
-    overflow-wrap: break-word !important;
-    word-break: break-word !important;
-    overflow: visible !important;
-    text-overflow: clip !important;
+    box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.35);
 }
 
 .card-inline-edit:empty::before {
@@ -2097,7 +2093,7 @@ body.is-shell-resizing--h * {
 #editor-overlay .editor-note-shell .mini-card-title,
 #editor-overlay .editor-note-shell .card-content-preview,
 #editor-overlay .editor-note-shell .step-text,
-#editor-note-body,
+#editor-overlay .editor-note-body,
 .calendar-note-item,
 .calendar-hour-note {
     font-family: var(--note-font-family, inherit);
@@ -2116,7 +2112,7 @@ body.is-shell-resizing--h * {
 }
 
 .note-surface .expanded-checklist {
-    font-size: calc(0.6* var(--note-font-scale, 1));
+    font-size: calc(0.6rem * var(--note-font-scale, 1));
 }
 
 .expanded-checklist-add-btn:hover {
@@ -2131,3 +2127,4 @@ body.is-shell-resizing--h * {
     from { opacity: 0.45; transform: translateY(-2px); }
     to { opacity: 1; transform: translateY(0); }
 }
+

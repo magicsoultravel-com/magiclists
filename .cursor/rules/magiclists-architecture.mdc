@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-02T18:58:23.244Z
+> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-02T19:04:43.533Z
 
 ## CSS load order
 
