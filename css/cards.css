@@ -42,6 +42,13 @@ html[data-show-category-band="0"] .mini-card {
     border-color: var(--text-muted);
 }
 
+/* Prevent hover transform when card is focused (editing) to avoid layout shift */
+.mini-card:focus-within {
+    transform: none;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.07), 0 4px 12px rgba(0, 0, 0, 0.3);
+    border-color: var(--text-muted);
+}
+
 .mini-card:active {
     cursor: grabbing;
 }
@@ -129,12 +136,10 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
     pointer-events: auto;
 }
 
+/* Only apply z-index on hover, not on focus-within to prevent layout shift */
 .mini-card.tile-small:hover,
-.mini-card.tile-small:focus-within,
 .mini-card[data-desktop="1"].spatial-at-small:hover,
-.mini-card[data-desktop="1"].spatial-at-small:focus-within,
-.mini-card.tile-large:hover,
-.mini-card.tile-large:focus-within {
+.mini-card.tile-large:hover {
     z-index: 25;
 }
 
