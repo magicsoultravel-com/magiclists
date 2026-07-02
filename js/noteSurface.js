@@ -1165,6 +1165,7 @@ export const NoteSurface = {
                 const inner = richEdit ? sanitizeRichHtml(stepText) : this.escapeHTML(stepText);
                 const ce = richEdit ? 'true' : 'plaintext-only';
                 const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
+                // Removed 'white-space: nowrap' on focus to allow text wrapping
                 textHtml = `<span class="step-text card-inline-edit${richClasses} ${step.completed ? 'completed' : ''}" contenteditable="${ce}" spellcheck="false" data-field="step-text" data-step-id="${step.id}">${inner}</span>`;
             } else {
                 const richClass = stepRich ? ' rich-text' : '';
