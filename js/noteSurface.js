@@ -1655,7 +1655,9 @@ export const NoteSurface = {
                 });
                 el.addEventListener('focus', () => {
                     const card = root.closest('.mini-card');
-                    if (card?.dataset?.desktop === '1' && onRaiseCard) onRaiseCard(card);
+                    if (card?.dataset?.desktop === '1' && onRaiseCard) {
+                        requestAnimationFrame(() => onRaiseCard(card));
+                    }
                 });
                 if (el.classList.contains('rich-text--edit')) {
                     el.addEventListener('paste', (e) => {
