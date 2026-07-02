@@ -775,8 +775,6 @@ html[data-tile-small-footprint="card"] .file-cabinet .mini-card[data-desktop="1"
 #app-canvas.view-freeform .mini-card.is-editing-inline .step-text.card-inline-edit {
     cursor: text;
     pointer-events: auto;
-    position: relative;
-    z-index: 1;
 }
 
 #app-canvas.view-grid .mini-card.is-editing-inline .editor-note-body,
