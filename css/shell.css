@@ -1865,7 +1865,7 @@ body.is-shell-resizing--h * {
     flex-shrink: 0;
     width: 14px !important;
     height: 14px !important;
-    opacity: 0;
+    opacity: 0.85;
     transition: opacity 0.15s ease;
 }
 
@@ -1873,17 +1873,20 @@ body.is-shell-resizing--h * {
     display: flex;
     flex-shrink: 0;
     gap: 1px;
-    opacity: 0;
+    opacity: 0.85;
     transition: opacity 0.15s ease;
 }
 
 .step-row--display:hover .step-nest-controls,
-.step-row--display:focus-within .step-nest-controls,
 .step-row--display:hover .step-delete-btn,
 .step-row--display:hover .step-copy-btn,
-.step-row--display:focus-within .step-delete-btn,
-.step-row--display:focus-within .step-copy-btn,
 .step-row--display.is-copy-row-flashed .step-copy-btn {
+    opacity: 1;
+}
+
+.step-row--display:focus-within .step-nest-controls,
+.step-row--display:focus-within .step-delete-btn,
+.step-row--display:focus-within .step-copy-btn {
     opacity: 0.85;
 }
 
@@ -2071,15 +2074,13 @@ body.is-shell-resizing--h * {
     margin: 0.15rem 0 0 auto;
     font-size: 0.72rem;
     line-height: 1;
-    opacity: 0;
-    pointer-events: none;
+    opacity: 1;
+    pointer-events: auto;
     transition: opacity 0.15s ease, color 0.12s ease, background 0.12s ease;
 }
 
-.note-surface:hover .expanded-checklist-add-btn,
-.note-surface:focus-within .expanded-checklist-add-btn {
+.note-surface:hover .expanded-checklist-add-btn {
     opacity: 1;
-    pointer-events: auto;
 }
 
 /* Shared inline + modal note editing surface */
