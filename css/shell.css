@@ -754,10 +754,11 @@
     text-overflow: ellipsis;
 }
 
+/* Keep completed items editable - maintain nowrap on focus to prevent layout shift */
 .step-row--display .step-text.completed.card-inline-edit:focus {
-    white-space: pre-wrap;
-    overflow: visible;
-    text-overflow: clip;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .step-row--edit .step-text {

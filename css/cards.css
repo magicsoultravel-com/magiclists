@@ -119,8 +119,8 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
     transition: opacity 0.12s ease;
 }
 
-.mini-card:hover .editor-note-topline .note-editor-toolbar,
-.mini-card:focus-within .editor-note-topline .note-editor-toolbar {
+/* Show toolbar on hover only, not on focus-within to prevent layout shift */
+.mini-card:hover .editor-note-topline .note-editor-toolbar {
     opacity: 1;
     pointer-events: none;
 }
@@ -192,8 +192,14 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
     width: max-content;
     max-width: none;
     box-sizing: border-box;
-    opacity: 1;
+    opacity: 0;
     pointer-events: none;
+}
+
+/* Show card actions in toolbar on hover only */
+.mini-card:hover .note-editor-toolbar .card-actions {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 /* Backdrop hugs the visible icon count (flex shrink-wrap + max-content) */
@@ -242,22 +248,19 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
     background: color-mix(in srgb, var(--card-action-bg) 82%, #fff 18%);
 }
 
+/* Show card actions on hover only, not on focus-within to prevent layout shift */
 .mini-card.tile-small:hover .note-editor-toolbar .card-act,
-.mini-card.tile-small:focus-within .note-editor-toolbar .card-act,
-.mini-card[data-desktop="1"].spatial-at-small:hover .note-editor-toolbar .card-act,
-.mini-card[data-desktop="1"].spatial-at-small:focus-within .note-editor-toolbar .card-act {
+.mini-card[data-desktop="1"].spatial-at-small:hover .note-editor-toolbar .card-act {
     color: var(--text-main);
 }
 
 .mini-card.tile-small.has-custom-bg:hover .note-editor-toolbar .card-act,
-.mini-card.tile-small.has-custom-bg:focus-within .note-editor-toolbar .card-act,
-.mini-card[data-desktop="1"].spatial-at-small.has-custom-bg:hover .note-editor-toolbar .card-act,
-.mini-card[data-desktop="1"].spatial-at-small.has-custom-bg:focus-within .note-editor-toolbar .card-act {
+.mini-card[data-desktop="1"].spatial-at-small.has-custom-bg:hover .note-editor-toolbar .card-act {
     color: var(--card-action-fg);
 }
 
-.mini-card:hover .card-actions,
-.mini-card:focus-within .card-actions {
+/* Show card actions on hover only, not on focus-within to prevent layout shift */
+.mini-card:hover .card-actions {
     opacity: 1;
     pointer-events: auto;
 }
@@ -392,10 +395,11 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
     text-overflow: ellipsis;
 }
 
+/* Keep completed items editable - maintain nowrap on focus to prevent layout shift */
 .has-custom-bg .step-text.completed.card-inline-edit:focus {
-    white-space: pre-wrap;
-    overflow: visible;
-    text-overflow: clip;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .has-custom-bg .card-inline-edit:empty::before {

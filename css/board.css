@@ -767,9 +767,10 @@ html[data-tile-small-footprint="card"] .file-cabinet .mini-card[data-desktop="1"
     isolation: isolate;
 }
 
-#app-canvas.view-grid .mini-card.is-editing-inline .editor-note-header .card-inline-edit,
+/* Prevent text wrapping in editing mode to avoid layout shift */
+#app-canvas.view-grid .mini-card.is-editing-inline .card-inline-edit,
 #app-canvas.view-grid .mini-card.is-editing-inline .editor-note-body .card-inline-edit,
-#app-canvas.view-freeform .mini-card.is-editing-inline .editor-note-header .card-inline-edit,
+#app-canvas.view-freeform .mini-card.is-editing-inline .card-inline-edit,
 #app-canvas.view-freeform .mini-card.is-editing-inline .editor-note-body .card-inline-edit,
 #app-canvas.view-grid .mini-card.is-editing-inline .step-text.card-inline-edit,
 #app-canvas.view-freeform .mini-card.is-editing-inline .step-text.card-inline-edit {
@@ -779,31 +780,11 @@ html[data-tile-small-footprint="card"] .file-cabinet .mini-card[data-desktop="1"
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    white-space: pre-wrap;
+    white-space: nowrap;
 }
 #app-canvas.view-grid .mini-card.is-editing-inline .step-text.card-inline-edit,
 #app-canvas.view-freeform .mini-card.is-editing-inline .step-text.card-inline-edit {
     padding-right: 3.1rem;
-}
-
-#app-canvas.view-grid .mini-card.is-editing-inline .editor-note-body,
-#app-canvas.view-freeform .mini-card.is-editing-inline .editor-note-body {
-    cursor: default;
-}
-
-#app-canvas.view-grid .mini-card.is-editing-inline .editor-note-body .card-inline-edit,
-#app-canvas.view-freeform .mini-card.is-editing-inline .editor-note-body .card-inline-edit {
-    cursor: text;
-}
-
-#app-canvas.view-freeform .mini-card.is-editing-inline .ff-chrome,
-#app-canvas.view-grid .mini-card.is-editing-inline .ff-chrome {
-    pointer-events: none !important;
-}
-
-#app-canvas.view-freeform .mini-card.is-editing-inline .ff-drag-gutter,
-#app-canvas.view-grid .mini-card.is-editing-inline .ff-drag-gutter {
-    pointer-events: none !important;
 }
 
 #app-canvas.view-freeform .mini-card.is-editing-inline .ff-resize-layer,
