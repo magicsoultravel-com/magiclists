@@ -5,7 +5,7 @@ import { getStepLevel, partitionChecklistSteps, checklistHasIndentations } from 
 import { reorderActiveStepsFromDomOrder, computeVisibleInsertBounds, resolveDropTarget, normalizeChecklistLevels } from './checklistSteps.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyConversion.js';
 import { stripRichText, sanitizeRichHtml, escapeHTML as escapeHtml } from './richText.js';
-import { canInlineEditText, renderRichHtml } from './noteSurfaceEditing.js';
+
 
 const DRAG_THRESHOLD = 4;
 
