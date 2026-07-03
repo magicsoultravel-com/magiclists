@@ -29,9 +29,6 @@ import {
 
 // Import from new modules
 import {
-    computeNoteSizeKb,
-    computeNoteLineCount,
-    formatNoteLineCount,
     buildNoteQuickActionsHtml,
     buildNoteBodyConvertButtonsHtml,
     updateConvertButtons,
