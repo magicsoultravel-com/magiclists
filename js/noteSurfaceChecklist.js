@@ -5,7 +5,7 @@ import { getStepLevel, partitionChecklistSteps, checklistHasIndentations } from 
 import { reorderActiveStepsFromDomOrder, computeVisibleInsertBounds, resolveDropTarget, normalizeChecklistLevels } from './checklistSteps.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyConversion.js';
 import { stripRichText, sanitizeRichHtml } from './richText.js';
-import { mutateItem } from './noteSurface.js';
+import { mutateItem, syncItemBodyFromDom } from './noteSurfaceMutations.js';
 import { focusInlineEdit, canInlineEditText, renderRichHtml } from './noteSurfaceEditing.js';
 
 
@@ -16,6 +16,15 @@ export function attachChecklistDrag(root, item, {
     localOnly = false,
     onChange = () => {}
 } = {}) {
+    // Local helper for applying mutations during drag operations
+    const applyMutate = (mutator, { persist = !localOnly } = {}) => {
+        if (persist) {
+            mutateItem(item, mutator, { preserveView: true, skipRerender: true, localOnly });
+        } else {
+            mutator(item);
+        }
+    };
+    
     let activeDrag = null;
     const { active: activeSteps } = partitionChecklistSteps(item.steps || []);
 
