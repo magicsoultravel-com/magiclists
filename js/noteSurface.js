@@ -206,13 +206,7 @@ function emitItemMutation(item, { preserveView = false, beforeItem = null, skipR
     }));
 }
 
-function mutateItem(item, mutator, { preserveView = false, skipRerender = false, localOnly = false } = {}) {
-    const beforeItem = JSON.parse(JSON.stringify(item));
-    mutator(item);
-    if (!localOnly) {
-        emitItemMutation(item, { preserveView, beforeItem, skipRerender });
-    }
-}
+// Mutation functions moved to noteSurfaceMutations.js
 
 function commitInlineTextOp(item, beforeItem, { localOnly = false, mergeKey = null, mergeWindow = true } = {}) {
     if (localOnly || !beforeItem) return;
@@ -369,7 +363,7 @@ export const NoteSurface = {
     ensureChecklistStepFromRow,
     commitInlineTextOp,
     commitInlineChecklistOp,
-    mutateItem,
+    // mutateItem moved to noteSurfaceMutations.js
     buildSheetInteractionOptions,
     syncItemBodyFromDom,
     createBlankChecklistStep,
