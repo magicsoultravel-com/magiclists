@@ -43,8 +43,7 @@ import {
     buildNoteConfigPanelHtml,
     buildNoteEditorShell,
     bindCollapsable,
-    flashCopyFeedback,
-    buildExpandedChecklistHtml
+    flashCopyFeedback
 } from './noteSurfaceHtml.js';
 
 // Import from checklistSteps.js
