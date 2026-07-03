@@ -607,6 +607,5 @@ export {
     handleChecklistEnter,
     expandChecklistAncestorsForStep,
     prepareInlineOpSnapshot,
-    commitInlineChecklistOp,
     createStepId
 };
