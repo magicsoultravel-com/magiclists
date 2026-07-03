@@ -754,6 +754,11 @@
     /* Removed nowrap and ellipsis to allow text wrapping */
 }
 
+/* Ensure step-text maintains padding when in edit mode to prevent action icons shift */
+.step-row--display .step-text.card-inline-edit {
+    padding-right: 3.1rem;
+}
+
 .step-row--edit .step-text {
     min-height: 36px;
     line-height: 1.35;
