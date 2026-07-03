@@ -175,12 +175,6 @@ function formatCreatedDate(timestamp) {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function isCollapsedSpatialSize(w, h, tileSize) {
-    if (!tileSize) return false;
-    const small = getSmallRect(readTileSmallFootprint());
-    return w <= small.w && h <= small.h;
-}
-
 function getSmallRect(footprint) {
     if (!footprint) return { w: 120, h: 60 };
     return { w: footprint.w || 120, h: footprint.h || 60 };
