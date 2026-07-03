@@ -604,6 +604,5 @@ export {
     removeChecklistStepAndFocus,
     handleChecklistBackspace,
     handleChecklistDelete,
-    handleChecklistEnter,
-    expandChecklistAncestorsForStep
+    handleChecklistEnter
 };
