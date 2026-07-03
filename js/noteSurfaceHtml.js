@@ -4,10 +4,11 @@ import { UNCATEGORIZED_COLOR } from './categories.js';
 import { stripRichText, hasRichMarkup, sanitizeRichHtml, escapeHTML } from './richText.js';
 import { isSheetTemplateActive, renderSheetHtml, defaultSheetDimsForTemplate, ensureItemSheet } from './sheet.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyConversion.js';
-import { getStepLevel, partitionChecklistSteps, checklistHasIndentations } from './checklistSteps.js';
+import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, buildVisibleChecklistSteps, annotateChecklistTreeGuides, canIndentStep } from './checklistSteps.js';
 import { escapeAttr } from './domEscape.js';
 import { isFileCabinetActive, getFileCabinetToggleLabels } from './fileCabinet.js';
 import { LEGACY_TILE_SIZE } from './tileGeometry.js';
+import { getChecklistCollapsedKeys, getChecklistDoneCollapsed, isChecklistDoneSectionCollapsed, toggleChecklistDoneSection, getChecklistCollapsibleKeys, checklistGroupsAnyExpanded, collapseAllChecklistGroups, expandAllChecklistGroups, toggleChecklistExpandCollapseAll, buildChecklistExpandCollapseAllHtml } from './noteSurfaceChecklist.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -91,7 +92,7 @@ export function buildNoteQuickActionsHtml(item, {
     }
     const lastClass = isModal ? 'card-act--close' : 'card-act--toggle';
     const lastId = isModal ? ' id="modal-close-btn"' : '';
-    const pinTitle = pinned ? 'Unpin (unlock drag)' : 'Pin position (locks drag)';
+    const pinTitle = pinned ? 'Unpin position (locks drag)' : 'Pin position (locks drag)';
     const pinBtn = `<button type="button" class="card-act card-act--pin${pinned ? ' is-active' : ''}" title="${pinTitle}" aria-label="${pinTitle}" aria-pressed="${pinned ? 'true' : 'false'}">${pinned ? CARD_ICONS.unpin : CARD_ICONS.pin}</button>`;
     const calTitle = calHidden
         ? 'Hidden from calendar — click to show'
@@ -116,7 +117,7 @@ export function buildNoteQuickActionsHtml(item, {
             <button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>
             <button type="button" class="card-act card-act--edit" title="Edit note" aria-label="Edit note">${CARD_ICONS.edit}</button>
             ${dragBtn}
-            <button type="button" class="card-act ${lastClass}"${lastId} title="${expandTitle}" aria-label="${expandTitle}">${lastIcon}</button>
+            <button type="button" class="card-act ${lastClass}"${lastId} title="${escapeHTML(expandTitle).replace(/"/g, "")}" aria-label="${escapeHTML(expandTitle).replace(/"/g, "")}">${lastIcon}</button>
         </div>`;
     return isModal ? `${archiveBtn}${actionsHtml}` : actionsHtml;
 }
@@ -646,80 +647,6 @@ export function buildExpandedChecklistHtml(item, canEdit, { richEdit = false } =
     return html;
 }
 
-function getChecklistCollapsedKeys() {
-    try {
-        return JSON.parse(localStorage.getItem('matrix_checklist_collapsed') || '{}');
-    } catch {
-        return {};
-    }
-}
-
-function isChecklistDoneSectionCollapsed(itemId) {
-    try {
-        return !!JSON.parse(localStorage.getItem('matrix_checklist_done_collapsed') || '{}')[itemId];
-    } catch {
-        return {};
-    }
-}
-
-function buildChecklistExpandCollapseAllHtml(item) {
-    if (!item?.id || !checklistHasIndentations(item.steps)) return '';
-    if (getChecklistCollapsedKeys().length === 0) return '';
-    const anyExpanded = getChecklistCollapsibleKeys(item).some((key) => !getChecklistCollapsedKeys()[key]);
-    const label = anyExpanded ? 'Collapse all checklist groups' : 'Expand all checklist groups';
-    const icon = anyExpanded ? ACTION_ICONS.collapseAll : ACTION_ICONS.expandAll;
-    return `<div class="checklist-toolbar">
-            <button type="button" class="card-act checklist-expand-collapse-all-btn" title="${escapeAttr(label)}" aria-label="${escapeAttr(label)}">${icon}</button>
-        </div>`;
-}
-
-function getChecklistCollapsibleKeys(item) {
-    if (!item?.id) return [];
-    const { active } = partitionChecklistSteps(item.steps || []);
-    const keys = [];
-    active.forEach((step, index) => {
-        if (!stepHasDescendants(active, index)) return;
-        keys.push(`${item.id}:${step.id}`);
-    });
-    return keys;
-}
-
-function stepHasDescendants(steps, index) {
-    if (!steps || !steps[index]) return false;
-    const level = getStepLevel(steps[index]);
-    for (let i = index + 1; i < steps.length; i++) {
-        if (getStepLevel(steps[i]) <= level) return false;
-    }
-    return true;
-}
-
-function buildVisibleChecklistSteps(steps, itemId, collapsedKeys = {}) {
-    if (!steps || !steps.length) return [];
-    const result = [];
-    for (const step of steps) {
-        const key = `${itemId}:${step.id}`;
-        if (collapsedKeys[key]) continue;
-        result.push({ step, level: getStepLevel(step) });
-    }
-    return result;
-}
-
-function annotateChecklistTreeGuides(rows) {
-    return rows.map(row => {
-        const level = row.level;
-        const treeGuides = [];
-        for (let i = 0; i < level; i++) {
-            treeGuides.push({ role: i < level - 1 ? 'parent' : 'child' });
-        }
-        return { ...row, treeGuides };
-    });
-}
-
-function canIndentStep(active, idx) {
-    if (idx < 0 || !active[idx]) return false;
-    return getStepLevel(active[idx]) > 0;
-}
-
 export {
     computeNoteSizeKb,
     computeNoteLineCount,
@@ -732,7 +659,6 @@ export {
     buildMeetingBodyHtml,
     buildNoteTitleHtml,
     buildNoteFormatPanelHtml,
-    buildNoteMetaFooterHtml,
     buildNoteConfigPanelHtml,
     buildNoteEditorShell,
     bindCollapsable,
