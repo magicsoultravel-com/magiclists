@@ -440,4 +440,9 @@ export const NoteSurface = {
     escapeAttr,
 };
 
-export { escapeHTML, escapeAttr } from './domEscape.js';
+export {
+    buildSheetInteractionOptions,
+    syncInlineFieldToItem,
+    escapeHTML,
+    escapeAttr
+};

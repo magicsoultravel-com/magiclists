@@ -7,6 +7,13 @@ import { CARD_ICONS } from './icons.js';
 import { copyPlainTextToClipboard } from './clipboard.js';
 import { stepToPlainCopyLine } from './noteBodyConversion.js';
 import { UndoManager } from './undo.js';
+import { bindNoteBodySections, updateConvertButtons, bindCollapsable } from './noteSurfaceHtml.js';
+import { syncItemBodyFromDom, mutateItem, attachNoteBodyInteractions, updateNoteMetaStats } from './noteSurfaceMutations.js';
+import { buildSheetInteractionOptions } from './noteSurface.js';
+import { normalizeItemForSave } from './noteModel.js';
+import { createBlankChecklistStep } from './noteSurface.js';
+import { contentHasConvertibleText, stepsHaveConvertibleText, convertContentToChecklist, convertChecklistToContent } from './noteBodyConversion.js';
+import { attachSheetInteractions } from './sheet.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -591,17 +598,6 @@ export function bindNoteEditorShell(root, item, {
     }
     bindCollapsable('config-section-header', 'config-section', true);
 }
-
-// Import these from other modules
-import { bindNoteBodySections } from './noteSurfaceHtml.js';
-import { buildSheetInteractionOptions, attachSheetInteractions } from './sheet.js';
-import { normalizeItemForSave, createBlankChecklistStep } from './noteModel.js';
-import { contentHasConvertibleText, stepsHaveConvertibleText, convertContentToChecklist, convertChecklistToContent } from './noteBodyConversion.js';
-import { updateConvertButtons, bindCollapsable } from './noteSurfaceHtml.js';
-import { updateNoteMetaStats } from './noteSurfaceHtml.js';
-import { syncItemBodyFromDom } from './noteSurface.js';
-import { mutateItem } from './noteSurface.js';
-import { attachNoteBodyInteractions } from './noteSurface.js';
 
 export {
     insertTextAtCaret,
