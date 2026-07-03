@@ -4,7 +4,7 @@ import { escapeHTML } from './domEscape.js';
 import { getStepLevel, partitionChecklistSteps, checklistHasIndentations } from './checklistSteps.js';
 import { reorderActiveStepsFromDomOrder, computeVisibleInsertBounds, resolveDropTarget, normalizeChecklistLevels } from './checklistSteps.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyConversion.js';
-import { stripRichText, sanitizeRichHtml, escapeHTML as escapeHtml } from './richText.js';
+import { stripRichText, sanitizeRichHtml } from './richText.js';
 import { mutateItem } from './noteSurface.js';
 import { focusInlineEdit, canInlineEditText, renderRichHtml } from './noteSurfaceEditing.js';
 
