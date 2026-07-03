@@ -737,14 +737,5 @@ export {
     buildNoteEditorShell,
     bindCollapsable,
     flashCopyFeedback,
-    buildExpandedChecklistHtml,
-    getChecklistCollapsedKeys,
-    isChecklistDoneSectionCollapsed,
-    buildChecklistExpandCollapseAllHtml,
-    getChecklistCollapsibleKeys,
-    buildVisibleChecklistSteps,
-    annotateChecklistTreeGuides,
-    canIndentStep,
-    escapeHTML,
-    escapeAttr
+    buildExpandedChecklistHtml
 };

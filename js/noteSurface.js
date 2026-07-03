@@ -27,7 +27,7 @@ import {
     syncSheetFromDom
 } from './sheet.js';
 
-// Import from new modules
+// Import from noteSurfaceHtml.js
 import {
     buildNoteQuickActionsHtml,
     buildNoteBodyConvertButtonsHtml,
@@ -44,7 +44,21 @@ import {
     buildNoteEditorShell,
     bindCollapsable,
     flashCopyFeedback,
-    buildExpandedChecklistHtml,
+    buildExpandedChecklistHtml
+} from './noteSurfaceHtml.js';
+
+// Import from checklistSteps.js
+import {
+    getStepLevel,
+    partitionChecklistSteps,
+    stepHasDescendants,
+    buildVisibleChecklistSteps,
+    annotateChecklistTreeGuides,
+    canIndentStep
+} from './checklistSteps.js';
+
+// Import from noteSurfaceChecklist.js
+import {
     getChecklistCollapsedKeys,
     getChecklistDoneCollapsed,
     isChecklistDoneSectionCollapsed,
@@ -54,11 +68,17 @@ import {
     collapseAllChecklistGroups,
     expandAllChecklistGroups,
     toggleChecklistExpandCollapseAll,
-    stepHasDescendants,
-    buildVisibleChecklistSteps,
-    annotateChecklistTreeGuides,
-    canIndentStep
-} from './noteSurfaceHtml.js';
+    attachChecklistDrag,
+    getActiveRows,
+    insertChecklistStep,
+    removeChecklistStepAndFocus,
+    handleChecklistBackspace,
+    handleChecklistDelete,
+    handleChecklistEnter,
+    expandChecklistAncestorsForStep,
+    prepareInlineOpSnapshot,
+    createStepId
+} from './noteSurfaceChecklist.js';
 
 import {
     insertTextAtCaret,
@@ -89,19 +109,6 @@ import {
     bindFormatPanel,
     bindBodyConvertBar
 } from './noteSurfaceEditing.js';
-
-import {
-    attachChecklistDrag,
-    getActiveRows,
-    insertChecklistStep,
-    removeChecklistStepAndFocus,
-    handleChecklistBackspace,
-    handleChecklistDelete,
-    handleChecklistEnter,
-    expandChecklistAncestorsForStep,
-    prepareInlineOpSnapshot,
-    createStepId
-} from './noteSurfaceChecklist.js';
 
 import { EmojiPicker } from './iconPicker.js';
 
