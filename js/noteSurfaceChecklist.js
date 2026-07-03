@@ -5,6 +5,8 @@ import { getStepLevel, partitionChecklistSteps, checklistHasIndentations } from 
 import { reorderActiveStepsFromDomOrder, computeVisibleInsertBounds, resolveDropTarget, normalizeChecklistLevels } from './checklistSteps.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyConversion.js';
 import { stripRichText, sanitizeRichHtml, escapeHTML as escapeHtml } from './richText.js';
+import { mutateItem } from './noteSurface.js';
+import { focusInlineEdit, canInlineEditText, renderRichHtml } from './noteSurfaceEditing.js';
 
 
 const DRAG_THRESHOLD = 4;
@@ -575,34 +577,6 @@ function syncStepTextToItem(el, item) {
     }
 }
 
-function createStepId() {
+export function createStepId() {
     return `step_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
-
-// Import from other modules
-import { mutateItem } from './noteSurface.js';
-import { focusInlineEdit, canInlineEditText, renderRichHtml } from './noteSurfaceEditing.js';
-
-
-export {
-    attachChecklistDrag,
-    getActiveRows,
-    getChecklistCollapsedKeys,
-    getChecklistDoneCollapsed,
-    isChecklistDoneSectionCollapsed,
-    toggleChecklistDoneSection,
-    getChecklistCollapsibleKeys,
-    checklistGroupsAnyExpanded,
-    collapseAllChecklistGroups,
-    expandAllChecklistGroups,
-    toggleChecklistExpandCollapseAll,
-    stepHasDescendants,
-    buildVisibleChecklistSteps,
-    annotateChecklistTreeGuides,
-    canIndentStep,
-    insertChecklistStep,
-    removeChecklistStepAndFocus,
-    handleChecklistBackspace,
-    handleChecklistDelete,
-    handleChecklistEnter
-};
