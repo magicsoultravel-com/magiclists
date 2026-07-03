@@ -100,7 +100,6 @@ import {
     handleChecklistEnter,
     expandChecklistAncestorsForStep,
     prepareInlineOpSnapshot,
-    commitInlineChecklistOp,
     createStepId
 } from './noteSurfaceChecklist.js';
 
@@ -428,18 +427,6 @@ export const NoteSurface = {
     setCaretAtPlainOffset,
     getInlineEditSequence,
     handleInlineEditArrowNav,
-
-    // Checklist methods - delegate to noteSurfaceChecklist module
-    attachChecklistDrag,
-    getActiveRows,
-    insertChecklistStep,
-    removeChecklistStepAndFocus,
-    handleChecklistBackspace,
-    handleChecklistDelete,
-    handleChecklistEnter,
-    expandChecklistAncestorsForStep,
-    commitInlineChecklistOp,
-    createStepId,
 
     // Utility methods
     escapeHTML,
