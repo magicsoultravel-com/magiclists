@@ -395,7 +395,6 @@ export const NoteSurface = {
     collapseAllChecklistGroups,
     expandAllChecklistGroups,
     toggleChecklistExpandCollapseAll,
-    buildExpandedChecklistHtml,
 
     // HTML building methods - delegate to noteSurfaceHtml module
     buildNoteQuickActionsHtml,
