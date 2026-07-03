@@ -598,35 +598,3 @@ export function bindNoteEditorShell(root, item, {
     }
     bindCollapsable('config-section-header', 'config-section', true);
 }
-
-export {
-    insertTextAtCaret,
-    resolveEmojiInsertTarget,
-    saveEmojiInsertContext,
-    restoreEmojiInsertRange,
-    insertEmojiAtCaret,
-    openEmojiPickerForNote,
-    syncInlineFieldToItem,
-    tryOpenRichEditLink,
-    renderRichHtml,
-    prepareContentForEdit,
-    canInlineEditText,
-    commitFocusedInlineField,
-    splitInlineEditAtCaret,
-    caretAtEdge,
-    caretAtPlainEdge,
-    focusInlineEdit,
-    setCaretAtPlainOffset,
-    getInlineEditSequence,
-    handleInlineEditArrowNav,
-    applyFormatCommand,
-    getEditorZoom,
-    zoomToDisplay,
-    displayToZoom,
-    syncZoomInput,
-    setEditorZoom,
-    applyZoomFromInput,
-    bindFormatPanel,
-    bindBodyConvertBar,
-    bindNoteEditorShell
-};
