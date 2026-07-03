@@ -1,6 +1,6 @@
 /** @module {"owns":"checklist operations, drag/drop, state management", "related":["noteSurface.js","checklistSteps.js","noteBodyConversion.js","richText.js"], "events":[]} */
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
-import { escapeAttr, escapeHTML } from './domEscape.js';
+import { escapeHTML } from './domEscape.js';
 import { getStepLevel, partitionChecklistSteps, checklistHasIndentations } from './checklistSteps.js';
 import { reorderActiveStepsFromDomOrder, computeVisibleInsertBounds, resolveDropTarget, normalizeChecklistLevels } from './checklistSteps.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyConversion.js';
@@ -279,7 +279,7 @@ export function buildChecklistExpandCollapseAllHtml(item) {
     const label = anyExpanded ? 'Collapse all checklist groups' : 'Expand all checklist groups';
     const icon = anyExpanded ? ACTION_ICONS.collapseAll : ACTION_ICONS.expandAll;
     return `<div class="checklist-toolbar">
-            <button type="button" class="card-act checklist-expand-collapse-all-btn" title="${escapeAttr(label)}" aria-label="${escapeAttr(label)}">${icon}</button>
+            <button type="button" class="card-act checklist-expand-collapse-all-btn" title="${escapeHTML(label).replace(/"/g, """)}" aria-label="${escapeHTML(label).replace(/"/g, """)}">${icon}</button>
         </div>`;
 }
 
@@ -582,7 +582,7 @@ function createStepId() {
 // Import from other modules
 import { mutateItem } from './noteSurface.js';
 import { focusInlineEdit, canInlineEditText, renderRichHtml } from './noteSurfaceEditing.js';
-import { escapeAttr } from './domEscape.js';
+
 import { ACTION_ICONS } from './icons.js';
 
 export {
