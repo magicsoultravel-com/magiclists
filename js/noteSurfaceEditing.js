@@ -1,6 +1,6 @@
 /** @module {"owns":"note inline editing, emoji, text operations, zoom controls", "related":["noteSurface.js","noteSurfaceHtml.js","richText.js","emojiPicker.js","domEscape.js"], "events":[]} */
-import { sanitizeRichHtml, linkifyPlainUrls, stripRichText, escapeHTML } from './richText.js';
-import { escapeAttr } from './domEscape.js';
+import { sanitizeRichHtml, linkifyPlainUrls, stripRichText } from './richText.js';
+import { escapeHTML, escapeAttr } from './domEscape.js';
 import { EmojiPicker } from './iconPicker.js';
 import { isAllowedEmoji } from './noteEmojis.js';
 import { CARD_ICONS } from './icons.js';

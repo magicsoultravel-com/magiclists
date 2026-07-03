@@ -1,11 +1,11 @@
 /** @module {"owns":"note HTML building and rendering", "related":["noteSurface.js","noteModel.js","sheet.js","checklistSteps.js"], "events":[]} */
 import { CARD_ICONS, FORMAT_ICONS, ACTION_ICONS } from './icons.js';
 import { UNCATEGORIZED_COLOR } from './categories.js';
-import { stripRichText, hasRichMarkup, sanitizeRichHtml, escapeHTML } from './richText.js';
+import { stripRichText, hasRichMarkup, sanitizeRichHtml } from './richText.js';
 import { isSheetTemplateActive, renderSheetHtml, defaultSheetDimsForTemplate, ensureItemSheet } from './sheet.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyConversion.js';
 import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, buildVisibleChecklistSteps, annotateChecklistTreeGuides, canIndentStep } from './checklistSteps.js';
-import { escapeAttr } from './domEscape.js';
+import { escapeHTML, escapeAttr } from './domEscape.js';
 import { isFileCabinetActive, getFileCabinetToggleLabels } from './fileCabinet.js';
 import { LEGACY_TILE_SIZE } from './tileGeometry.js';
 import { getChecklistCollapsedKeys, getChecklistDoneCollapsed, isChecklistDoneSectionCollapsed, toggleChecklistDoneSection, getChecklistCollapsibleKeys, checklistGroupsAnyExpanded, collapseAllChecklistGroups, expandAllChecklistGroups, toggleChecklistExpandCollapseAll, buildChecklistExpandCollapseAllHtml } from './noteSurfaceChecklist.js';
