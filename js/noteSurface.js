@@ -442,5 +442,6 @@ export {
     buildSheetInteractionOptions,
     syncInlineFieldToItem,
     escapeHTML,
-    escapeAttr
+    escapeAttr,
+    createBlankChecklistStep
 };
