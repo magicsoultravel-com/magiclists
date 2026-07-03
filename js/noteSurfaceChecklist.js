@@ -583,7 +583,6 @@ function createStepId() {
 import { mutateItem } from './noteSurface.js';
 import { focusInlineEdit, canInlineEditText, renderRichHtml } from './noteSurfaceEditing.js';
 
-import { ACTION_ICONS } from './icons.js';
 
 export {
     attachChecklistDrag,
