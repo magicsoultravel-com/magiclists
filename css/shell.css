@@ -638,7 +638,18 @@
     gap: 2px;
     z-index: 2;
     margin-left: auto;
-    /* Replaced absolute positioning with flexbox for better flow */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+.step-row--display:hover .step-row-actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.step-row--display:hover .step-row-actions .card-act {
+    pointer-events: auto;
 }
 
 .step-collapse-btn,
