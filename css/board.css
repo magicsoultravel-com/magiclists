@@ -778,9 +778,9 @@ html[data-tile-small-footprint="card"] .file-cabinet .mini-card[data-desktop="1"
     pointer-events: auto;
     flex: 1 1 0;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 #app-canvas.view-grid .mini-card.is-editing-inline .step-text.card-inline-edit,
 #app-canvas.view-freeform .mini-card.is-editing-inline .step-text.card-inline-edit {
