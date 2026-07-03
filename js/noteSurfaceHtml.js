@@ -552,7 +552,7 @@ function flashCopyFeedback(btn, message = 'Copied!', { failed = false } = {}) {
     }, 1400));
 }
 
-function buildExpandedChecklistHtml(item, canEdit, { richEdit = false } = {}) {
+export function buildExpandedChecklistHtml(item, canEdit, { richEdit = false } = {}) {
     const collapsedKeys = getChecklistCollapsedKeys();
     const { active, done } = partitionChecklistSteps(item.steps);
     let html = '<div class="expanded-checklist">';
@@ -737,5 +737,4 @@ export {
     buildNoteEditorShell,
     bindCollapsable,
     flashCopyFeedback,
-    buildExpandedChecklistHtml
 };
