@@ -1,4 +1,4 @@
-﻿/** @css {"owns":"sidebar TV player, now playing, popover browser", "js":["sidebarTv.js","tvPlayer.js","tvPopover.js"], "notes":"shared chrome in sidebar-media.css; undocked module chrome in shell.css"} */
+﻿/** @css {"owns":"sidebar TV player, now playing, popover browser", "js":["sidebarTv.js","tvPlayer.js","tvPopover.js"], "notes":"shared chrome in sidebar-media.css; undocked module chrome in shell-sidebar.css"} */
 .tv-special-form {
     display: flex;
     flex-direction: column;

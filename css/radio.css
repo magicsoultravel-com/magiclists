@@ -1,4 +1,4 @@
-﻿/** @css {"owns":"sidebar radio player, now playing, popover browser", "js":["sidebarRadio.js","radioPlayer.js","radioPopover.js"], "notes":"shared chrome in sidebar-media.css; undocked module chrome in shell.css"} */
+﻿/** @css {"owns":"sidebar radio player, now playing, popover browser", "js":["sidebarRadio.js","radioPlayer.js","radioPopover.js"], "notes":"shared chrome in sidebar-media.css; undocked module chrome in shell-sidebar.css"} */
 .radio-special-form {
     display: flex;
     flex-direction: column;

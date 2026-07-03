@@ -1,0 +1,661 @@
+/** @css {"owns":"note-editor typography, note footer, quick actions, checklist chrome", "js":["ui.js","noteSurface.js","displayOptions.js","hamburger.js"]} */
+/* ==========================================================================
+   SHELL EDITOR - Note-editor typography, note footer, quick actions, checklist chrome
+   ========================================================================== */
+
+/* Note-editor typography */
+.mini-card .mini-card-title,
+.mini-card .card-content-preview,
+.mini-card .step-text,
+#editor-overlay .editor-note-shell .mini-card-title,
+#editor-overlay .editor-note-shell .card-content-preview,
+#editor-overlay .editor-note-shell .step-text,
+.calendar-note-item,
+.calendar-hour-note {
+    font-family: var(--note-font-family, inherit);
+}
+
+.note-surface {
+    --note-text-inset: 0.18rem;
+}
+
+.note-surface .card-content-preview {
+    font-size: calc(0.66rem * var(--note-font-scale, 1));
+    line-height: 1.35;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+
+.note-surface .expanded-checklist {
+    font-size: calc(0.6rem * var(--note-font-scale, 1));
+}
+
+/* Expanded checklist add button */
+.expanded-checklist-add-btn {
+    align-self: flex-end;
+    width: 14px;
+    min-width: 14px;
+    height: 14px;
+    margin: 0.15rem 0 0 auto;
+    font-size: 0.72rem;
+    line-height: 1;
+    opacity: 1;
+    pointer-events: auto;
+    transition: opacity 0.15s ease, color 0.12s ease, background 0.12s ease;
+}
+
+.note-surface:hover .expanded-checklist-add-btn {
+    opacity: 1;
+}
+
+/* Checklist step styles */
+.step-row {
+    display: flex;
+    gap: 0.4rem;
+}
+
+.step-row--display {
+    position: relative;
+    align-items: center;
+    margin-bottom: 0.2rem;
+    gap: 0.28rem;
+    font-size: calc(0.65rem * var(--note-font-scale, 1));
+    min-width: 0;
+}
+
+.step-row-leading {
+    display: flex;
+    align-items: center;
+    gap: 0.14rem;
+    flex-shrink: 0;
+}
+
+.step-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    z-index: 2;
+    margin-left: auto;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+.step-row--display:hover .step-row-actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.step-row--display:hover .step-row-actions .card-act {
+    pointer-events: auto;
+}
+
+.step-collapse-btn,
+.step-collapse-spacer {
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-main);
+    line-height: 1;
+}
+
+.step-collapse-btn {
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.step-collapse-spacer {
+    cursor: default;
+    pointer-events: none;
+}
+
+.step-collapse-btn svg {
+    display: block;
+}
+
+.step-collapse-btn:hover {
+    color: var(--text-main);
+}
+
+.step-row--edit {
+    align-items: flex-start;
+    margin-bottom: 0;
+    padding: 0.5rem;
+    background: var(--bg-surface);
+    border-radius: 6px;
+    min-width: 0;
+}
+
+.step-row--edit .step-row-leading {
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.step-row .step-check {
+    appearance: none;
+    -webkit-appearance: none;
+    flex-shrink: 0;
+    box-sizing: border-box;
+    border: none;
+    border-radius: 2.5px;
+    background-color: color-mix(in srgb, var(--bg-surface, #1a1a1e) 18%, transparent);
+    transition: background-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.step-row .step-check:checked {
+    background-color: color-mix(in srgb, var(--accent) 88%, transparent);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3E%3Cpath d='M1.4 4.2 3.2 6 6.6 2' fill='none' stroke='white' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-size: 7px 7px;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.step-row .step-check:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.step-row--display .step-check {
+    cursor: pointer;
+    width: 11px;
+    height: 11px;
+    margin-left: 0;
+}
+
+.step-row--edit .step-check {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+}
+
+.step-row--edit .step-check:checked {
+    background-size: 10px 10px;
+}
+
+.step-row .step-text {
+    flex: 1;
+    min-width: 0;
+}
+
+.step-row--display .step-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-right: 3.1rem;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    white-space: pre-wrap;
+}
+
+.step-row--display .step-text.completed {
+    color: var(--text-muted) !important;
+    text-decoration: line-through;
+    opacity: 0.82;
+}
+
+/* Keep completed items editable - allow text wrapping */
+.step-row--display .step-text.completed.card-inline-edit:focus {
+}
+
+/* Ensure step-text maintains padding when in edit mode to prevent action icons shift */
+.step-row--display .step-text.card-inline-edit {
+    padding-right: 3.1rem;
+}
+
+/* Quick actions grid */
+.quick-actions-grid {
+    --launcher-icon-size: 15px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(28px, 1fr));
+    gap: 0.25rem;
+}
+
+.quick-actions-grid .btn--icon {
+    padding: 0.25rem;
+}
+
+.quick-actions-grid .btn--icon svg {
+    width: var(--launcher-icon-size);
+    height: var(--launcher-icon-size);
+}
+
+.quick-actions-grid .btn--icon.active {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border-color));
+}
+
+/* Card actions */
+.card-act {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: none;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: color 0.12s ease, background 0.12s ease;
+}
+
+.card-act svg {
+    display: block;
+}
+
+.card-act--pin.is-active {
+    color: #fbbf24;
+    opacity: 1;
+}
+
+.card-act:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.card-act--drag {
+    cursor: grab;
+}
+
+.card-act--drag:active {
+    cursor: grabbing;
+}
+
+.mini-card.is-board-pinned .card-act--drag {
+    display: none;
+}
+
+.card-act--cal.is-on {
+    color: #6ee7b7;
+}
+
+.card-act--cal.is-off {
+    color: var(--text-muted);
+    opacity: 0.45;
+}
+
+.card-act--edit:hover {
+    color: #a5b4fc;
+}
+
+.card-act--danger:hover,
+.card-act--delete:hover {
+    color: #fca5a5;
+}
+
+/* Card inline edit */
+.card-inline-edit {
+    outline: none;
+    border-radius: 3px;
+    cursor: text;
+    user-select: text;
+    -webkit-user-select: text;
+    pointer-events: auto;
+}
+
+.card-inline-edit:focus {
+    background: rgba(79, 70, 229, 0.08);
+    box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.35);
+}
+
+.card-inline-edit:empty::before {
+    content: attr(data-placeholder);
+    color: var(--text-muted);
+    pointer-events: none;
+}
+
+/* Step delete/copy buttons */
+.step-delete-btn,
+.step-copy-btn {
+    flex-shrink: 0;
+    width: 14px !important;
+    height: 14px !important;
+    opacity: 0.85;
+    transition: opacity 0.15s ease;
+}
+
+.step-nest-controls {
+    display: flex;
+    flex-shrink: 0;
+    gap: 1px;
+    opacity: 0.85;
+    transition: opacity 0.15s ease;
+}
+
+.step-row--display:hover .step-nest-controls,
+.step-row--display:hover .step-delete-btn,
+.step-row--display:hover .step-copy-btn,
+.step-row--display.is-copy-row-flashed .step-copy-btn {
+    opacity: 1;
+}
+
+.step-row--display:focus-within .step-nest-controls,
+.step-row--display:focus-within .step-delete-btn,
+.step-row--display:focus-within .step-copy-btn {
+    opacity: 0.85;
+}
+
+.step-copy-btn.is-copy-flashed,
+.card-act--copy.is-copy-flashed {
+    opacity: 1 !important;
+    color: #86efac;
+    background: rgba(74, 222, 128, 0.18);
+    border-radius: 4px;
+    box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.35);
+    transition: color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.step-copy-btn.is-copy-flash-failed,
+.card-act--copy.is-copy-flash-failed {
+    opacity: 1 !important;
+    color: #fca5a5;
+    background: rgba(248, 113, 113, 0.14);
+    border-radius: 4px;
+    box-shadow: 0 0 0 1px rgba(248, 113, 113, 0.3);
+}
+
+.step-nest-controls .card-act {
+    min-width: 14px;
+    width: 14px;
+    height: 14px;
+    padding: 0;
+    font-size: 0.62rem;
+    line-height: 1;
+}
+
+.step-nest-controls .card-act:disabled {
+    opacity: 0.25;
+    pointer-events: none;
+}
+
+/* Zone hint */
+.zone-hint {
+    font-size: 0.56rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+/* Note footer */
+.editor-meta-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin: -0.15rem 0 0.35rem;
+    font-size: 0.62rem;
+    color: var(--text-muted);
+}
+
+/* Note footer - single source of truth (inline board + modal) */
+.editor-meta-wrap {
+    flex: 0 0 auto;
+    min-width: 0;
+}
+
+.editor-meta-row--footer {
+    margin: 0.35rem 0 0;
+    padding-top: 0.25rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.editor-meta-row--footer.editor-meta-row--inline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    min-height: 1.15em;
+    max-height: 1.15em;
+    margin: 0;
+    font-size: calc(0.48rem * var(--note-font-scale, 1));
+    color: var(--text-muted);
+}
+
+.editor-meta-badges,
+.editor-meta-stats {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 0.2rem;
+    min-width: 0;
+    white-space: nowrap;
+}
+
+.editor-meta-badges {
+    flex: 0 0 auto;
+    overflow: visible;
+}
+
+.editor-meta-stats {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    justify-content: flex-end;
+}
+
+.editor-meta-row--footer .category-name,
+.editor-meta-row--footer .editor-created-date,
+.editor-meta-row--footer .editor-note-size,
+.editor-meta-row--footer .editor-note-lines {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: inherit;
+    color: inherit;
+}
+
+.editor-meta-row--footer .category-name {
+    max-width: 64px;
+    display: inline-block;
+    min-width: 0;
+}
+
+.editor-created-date,
+.editor-note-size,
+.editor-note-lines {
+    font-size: inherit;
+    color: inherit;
+}
+
+/* Expanded checklist add button */
+.expanded-checklist-add-btn {
+    align-self: flex-end;
+    width: 14px;
+    min-width: 14px;
+    height: 14px;
+    margin: 0.15rem 0 0 auto;
+    font-size: 0.72rem;
+    line-height: 1;
+    opacity: 1;
+    pointer-events: auto;
+    transition: opacity 0.15s ease, color 0.12s ease, background 0.12s ease;
+}
+
+.note-surface:hover .expanded-checklist-add-btn {
+    opacity: 1;
+}
+
+.expanded-checklist-add-btn:hover {
+    color: #a5b4fc;
+}
+
+/* Title / body separator - shared inline board + modal */
+.editor-note-topline {
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+    padding-bottom: 0.2rem;
+    margin-bottom: 0.05rem;
+}
+
+/* Title-only surfaces - no divider */
+.mini-card.spatial-at-small .editor-note-topline,
+.mini-card[data-desktop="1"].tile-small .editor-note-topline {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: 0;
+}
+
+/* Note footer inline styling */
+.editor-meta-row--footer.editor-meta-row--inline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.25rem;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    min-height: 1.15em;
+    max-height: 1.15em;
+    margin: 0;
+    font-size: calc(0.48rem * var(--note-font-scale, 1));
+    color: var(--text-muted);
+}
+
+/* Checklist done toggle */
+.checklist-done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.28rem;
+    width: 100%;
+    padding: 0.14rem 0.22rem;
+    margin: 0.12rem 0 0.04rem;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: calc(0.6rem * var(--note-font-scale, 1));
+    cursor: pointer;
+    text-align: left;
+}
+
+.checklist-done-toggle:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-main);
+}
+
+.checklist-done-toggle-icon {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 9px;
+    height: 9px;
+    color: var(--text-muted);
+}
+
+.checklist-done-toggle-icon svg {
+    display: block;
+}
+
+.checklist-done-section.is-hidden {
+    display: none;
+}
+
+.checklist-done-divider {
+    flex: 0 0 auto;
+    width: 100%;
+    height: 1px;
+    margin: 0.28rem 0 0.18rem;
+    background: var(--border-color);
+    border: none;
+}
+
+/* Checklist toolbar */
+.checklist-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    flex: 0 0 auto;
+    margin: 0 0 0.15rem;
+    min-height: 0;
+}
+
+.checklist-toolbar .checklist-expand-collapse-all-btn {
+    width: 13px;
+    height: 13px;
+    color: var(--text-main);
+}
+
+.checklist-toolbar .checklist-expand-collapse-all-btn svg {
+    width: 10px;
+    height: 10px;
+}
+
+.expanded-checklist .step-collapse-btn {
+    width: 12px;
+    color: var(--text-main);
+}
+
+.expanded-checklist .step-collapse-spacer {
+    width: 12px;
+}
+
+/* Step tree gutter */
+.step-tree-gutter {
+    display: flex;
+    flex-shrink: 0;
+    align-self: stretch;
+    margin-right: 0.08rem;
+}
+
+.step-tree-cell,
+.step-tree-guide {
+    flex-shrink: 0;
+    align-self: stretch;
+    width: 0.36rem;
+    position: relative;
+}
+
+.step-tree-guide::before {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: var(--border-color);
+    opacity: 0.42;
+}
+
+.step-tree-guide--solo::before,
+.step-tree-guide--start::before {
+    top: 0.08rem;
+}
+
+.step-tree-guide--solo::before,
+.step-tree-guide--end::before {
+    bottom: 55%;
+}
+
+.step-tree-guide--start::before,
+.step-tree-guide--mid::before,
+.step-tree-guide--through::before {
+    bottom: -0.2rem;
+}
+
+/* Checklist done section divider */
+.checklist-done-divider {
+    flex: 0 0 auto;
+    width: 100%;
+    height: 1px;
+    margin: 0.28rem 0 0.18rem;
+    background: var(--border-color);
+    border: none;
+}
+
+/* Animation for step check fade */
+.step-row--display.step-row--animating {
+    animation: stepCheckFade 0.28s ease;
+}
+
+@keyframes stepCheckFade {
+    from { opacity: 0.45; transform: translateY(-2px); }
+    to { opacity: 1; transform: translateY(0); }
+}

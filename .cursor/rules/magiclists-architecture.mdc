@@ -5,28 +5,32 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-03T19:09:29.763Z
+> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-03T19:22:25.832Z
 
 ## CSS load order
 
 | file | owns | js | notes | load |
 | --- | --- | --- | --- | --- |
 | css/base.css | :root tokens, tile/grid vars, .is-hidden | gridDensity.js, tileFootprint.js, appTheme.js | - | 1 |
-| css/shell.css | workspace shell, file cabinet, FAB, .btn, display options, boot splash, note-editor typography, sidebar module undock chrome | hamburger.js, displayOptions.js, ui.js, bootProgress.js, fileCabinet.js, shellResize.js, sidebarModules.js, sidebarShell.js | - | 2 |
-| css/sidebar.css | side panel, search, notes list, control bar | hamburger.js, searchBar.js, sidebarPrefs.js | - | 3 |
-| css/cards.css | #app-canvas, .mini-card*, color picker, custom backgrounds, checklist chrome | ui.js, colorPicker.js, cardTheme.js, noteSurface.js | desktop spatial overrides also in board.css | 4 |
-| css/overlays.css | .overlay, .modal, .collapsable-*, cloud backup popover, template picker | editor.js, editorModalChrome.js, cloudBackup.js, templatePicker.js | - | 5 |
-| css/board.css | grid/freeform board, clock, drag/resize, desktop inline card spatial overrides | dragdrop.js, clockStyle.js, desktopZoom.js, boardSort.js | note footer spatial overrides cross-cut shell.css | 6 |
-| css/themes.css | html[data-app-theme] overrides, theme picker swatches | appTheme.js, themePicker.js | - | 7 |
-| css/drawing.css | magicCanvas toolbar and drawing board surface | drawingBoard.js, drawingToolbarMenu.js, drawingToolbarChrome.js | - | 8 |
-| css/tools.css | floating tool panels, chips, globe/map/alphabets/calculator/converter/timezone/timer tool bodies | toolsManager.js, toolPanelChrome.js, sidebarModules.js | - | 9 |
-| css/calendar.css | calendar tool panel month grid and hour notes | js/tools/calendar.js, calendar.js | - | 10 |
-| css/cosmos.css | cosmos tool viewport and star map chrome | js/tools/cosmos.js | - | 11 |
-| css/sidebar-media.css | shared sidebar radio/tv player and popover chrome | sidebarRadio.js, sidebarTv.js, radioPopover.js, tvPopover.js | domain-specific rules stay in radio.css and tv.css | 12 |
-| css/radio.css | sidebar radio player, now playing, popover browser | sidebarRadio.js, radioPlayer.js, radioPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell.css | 13 |
-| css/tv.css | sidebar TV player, now playing, popover browser | sidebarTv.js, tvPlayer.js, tvPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell.css | 14 |
-| css/weather.css | sidebar weather glance + expanded forecast panel | sidebarWeather.js, weatherApi.js | - | 15 |
-| css/sheet.css | sheet-grid note template body and table chrome | sheet.js, noteSurface.js, editor.js | - | 16 |
+| css/shell-core.css | workspace shell, FAB, .btn, boot splash, shared utilities | hamburger.js, displayOptions.js, ui.js, bootProgress.js, fileCabinet.js, shellResize.js, sidebarModules.js, sidebarShell.js | - | 2 |
+| css/shell-filecabinet.css | file cabinet, filed chip rail | fileCabinet.js, shellResize.js | - | 3 |
+| css/shell-sidebar.css | side panel, sidebar module undock chrome | hamburger.js, sidebarModules.js, sidebarPrefs.js, sidebarShell.js, shellResize.js | - | 4 |
+| css/shell-display-options.css | display options modal | displayOptions.js, hamburger.js | - | 5 |
+| css/shell-editor.css | note-editor typography, note footer, quick actions, checklist chrome | ui.js, noteSurface.js, displayOptions.js, hamburger.js | - | 6 |
+| css/sidebar.css | side panel, search, notes list, control bar | hamburger.js, searchBar.js, sidebarPrefs.js | - | 7 |
+| css/cards.css | #app-canvas, .mini-card*, color picker, custom backgrounds, checklist chrome | ui.js, colorPicker.js, cardTheme.js, noteSurface.js | desktop spatial overrides also in board.css | 8 |
+| css/overlays.css | .overlay, .modal, .collapsable-*, cloud backup popover, template picker | editor.js, editorModalChrome.js, cloudBackup.js, templatePicker.js | - | 9 |
+| css/board.css | grid/freeform board, clock, drag/resize, desktop inline card spatial overrides | dragdrop.js, clockStyle.js, desktopZoom.js, boardSort.js | note footer spatial overrides cross-cut shell-editor.css | 10 |
+| css/themes.css | html[data-app-theme] overrides, theme picker swatches | appTheme.js, themePicker.js | - | 11 |
+| css/drawing.css | magicCanvas toolbar and drawing board surface | drawingBoard.js, drawingToolbarMenu.js, drawingToolbarChrome.js | - | 12 |
+| css/tools.css | floating tool panels, chips, globe/map/alphabets/calculator/converter/timezone/timer tool bodies | toolsManager.js, toolPanelChrome.js, sidebarModules.js | - | 13 |
+| css/calendar.css | calendar tool panel month grid and hour notes | js/tools/calendar.js, calendar.js | - | 14 |
+| css/cosmos.css | cosmos tool viewport and star map chrome | js/tools/cosmos.js | - | 15 |
+| css/sidebar-media.css | shared sidebar radio/tv player and popover chrome | sidebarRadio.js, sidebarTv.js, radioPopover.js, tvPopover.js | domain-specific rules stay in radio.css and tv.css | 16 |
+| css/radio.css | sidebar radio player, now playing, popover browser | sidebarRadio.js, radioPlayer.js, radioPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell-sidebar.css | 17 |
+| css/tv.css | sidebar TV player, now playing, popover browser | sidebarTv.js, tvPlayer.js, tvPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell-sidebar.css | 18 |
+| css/weather.css | sidebar weather glance + expanded forecast panel | sidebarWeather.js, weatherApi.js | - | 19 |
+| css/sheet.css | sheet-grid note template body and table chrome | sheet.js, noteSurface.js, editor.js | - | 20 |
 
 ## JS domains (@module)
 
