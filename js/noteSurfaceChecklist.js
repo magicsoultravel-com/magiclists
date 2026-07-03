@@ -279,7 +279,7 @@ export function buildChecklistExpandCollapseAllHtml(item) {
     const label = anyExpanded ? 'Collapse all checklist groups' : 'Expand all checklist groups';
     const icon = anyExpanded ? ACTION_ICONS.collapseAll : ACTION_ICONS.expandAll;
     return `<div class="checklist-toolbar">
-            <button type="button" class="card-act checklist-expand-collapse-all-btn" title="${escapeHTML(label).replace(/"/g, """)}" aria-label="${escapeHTML(label).replace(/"/g, """)}">${icon}</button>
+            <button type="button" class="card-act checklist-expand-collapse-all-btn" title="${escapeHTML(label).replace(/"/g, "")}" aria-label="${escapeHTML(label).replace(/"/g, "")}">${icon}</button>
         </div>`;
 }
 
