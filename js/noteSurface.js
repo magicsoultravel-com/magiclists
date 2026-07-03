@@ -209,13 +209,6 @@ function mutateItem(item, mutator, { preserveView = false, skipRerender = false,
     }
 }
 
-function prepareInlineOpSnapshot(root, item, localOnly = false) {
-    const shell = root.closest('.editor-note-shell') || root;
-    syncItemBodyFromDom(shell, item);
-    if (localOnly) return null;
-    return JSON.parse(JSON.stringify(item));
-}
-
 function commitInlineTextOp(item, beforeItem, { localOnly = false, mergeKey = null, mergeWindow = true } = {}) {
     if (localOnly || !beforeItem) return;
     const preserveEmptySteps = true;
@@ -263,28 +256,6 @@ function createBlankChecklistStep() {
         startDateTime: '',
         endDateTime: ''
     };
-}
-
-function syncInlineFieldToItem(el, item) {
-    const field = el.dataset.field;
-    if (el.classList.contains('rich-text--edit')) {
-        const val = sanitizeRichHtml(linkifyPlainUrls(el.innerHTML));
-        if (field === 'title') item.title = val;
-        else if (field === 'content') item.content = val;
-        else if (field === 'step-text') {
-            const step = item.steps?.find(s => s.id === el.dataset.stepId);
-            if (step) step.text = val;
-        }
-        return;
-    }
-    if (field === 'title') {
-        item.title = el.textContent.trim();
-    } else if (field === 'content') {
-        item.content = el.textContent;
-    } else if (field === 'step-text') {
-        const step = item.steps?.find(s => s.id === el.dataset.stepId);
-        if (step) step.text = el.textContent;
-    }
 }
 
 function syncItemBodyFromDom(root, item) {
@@ -467,7 +438,6 @@ export const NoteSurface = {
     handleChecklistDelete,
     handleChecklistEnter,
     expandChecklistAncestorsForStep,
-    prepareInlineOpSnapshot,
     commitInlineChecklistOp,
     createStepId,
 
