@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-03T19:22:25.832Z
+> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-03T20:32:43.436Z
 
 ## CSS load order
 
@@ -54,7 +54,11 @@ alwaysApply: true
 | js/noteBodyConversion.js | checklist/content conversion, plain copy text | noteSurface.js, checklistSteps.js, richText.js | - | - |
 | js/noteModel.js | note item schema, normalizeItemForSave, createNoteId | richText.js, sheet.js | - | - |
 | js/noteQuickActions.js | board + modal note quick-action DOM binding | noteSurface.js, ui.js, editor.js | - | - |
-| js/noteSurface.js | note card DOM, inline edit, checklist interactions, item mutations | checklistSteps.js, richText.js, sheet.js, noteBodyConversion.js, noteQuickActions.js | item:mutation_requested | - |
+| js/noteSurface.js | note card DOM, inline edit, checklist interactions, item mutations | checklistSteps.js, richText.js, sheet.js, noteBodyConversion.js, noteQuickActions.js, noteSurfaceHtml.js, noteSurfaceEditing.js, noteSurfaceChecklist.js | item:mutation_requested | - |
+| js/noteSurfaceChecklist.js | checklist operations, drag/drop, state management | noteSurface.js, checklistSteps.js, noteBodyConversion.js, richText.js | - | - |
+| js/noteSurfaceEditing.js | note inline editing, emoji, text operations, zoom controls | noteSurface.js, noteSurfaceHtml.js, richText.js, emojiPicker.js, domEscape.js | - | - |
+| js/noteSurfaceHtml.js | note HTML building and rendering | noteSurface.js, noteModel.js, sheet.js, checklistSteps.js | - | - |
+| js/noteSurfaceMutations.js | note item mutation functions | noteSurface.js, noteSurfaceEditing.js, noteSurfaceChecklist.js, noteModel.js, sheet.js, undo.js | item:mutation_requested | - |
 | js/richText.js | rich text sanitize, linkify, strip markup | noteSurface.js, noteModel.js | - | - |
 | js/searchBar.js | sidebar search bar and results panel | searchFilter.js, hamburger.js | - | - |
 | js/sheet.js | sheet-grid note template model and table interactions | noteSurface.js, editor.js | - | - |
