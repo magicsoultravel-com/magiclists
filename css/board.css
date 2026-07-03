@@ -776,7 +776,7 @@ html[data-tile-small-footprint="card"] .file-cabinet .mini-card[data-desktop="1"
 #app-canvas.view-freeform .mini-card.is-editing-inline .step-text.card-inline-edit {
     cursor: text;
     pointer-events: auto;
-    flex: 1 1 0;
+    flex: 1 1 auto;
     min-width: 0;
     white-space: pre-wrap;
     word-wrap: break-word;
