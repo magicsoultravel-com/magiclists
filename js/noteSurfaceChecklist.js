@@ -605,7 +605,5 @@ export {
     handleChecklistBackspace,
     handleChecklistDelete,
     handleChecklistEnter,
-    expandChecklistAncestorsForStep,
-    prepareInlineOpSnapshot,
-    createStepId
+    expandChecklistAncestorsForStep
 };
