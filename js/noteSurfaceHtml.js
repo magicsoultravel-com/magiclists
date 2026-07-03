@@ -246,7 +246,7 @@ function buildNoteBodySection(title, innerHtml) {
             </div>`;
 }
 
-export function bindNoteBodySections(root) {
+function bindNoteBodySections(root) {
     if (!root || root.dataset.noteSectionsBound === '1') return;
     root.dataset.noteSectionsBound = '1';
     root.querySelectorAll('.note-body-section .note-section-header').forEach((header) => {
@@ -318,7 +318,7 @@ function resolveNoteTemplate(item) {
     return 'default';
 }
 
-export function buildNoteTitleHtml(item, canEdit, { richEdit = false } = {}) {
+function buildNoteTitleHtml(item, canEdit, { richEdit = false } = {}) {
     const fullTitle = item.title || '';
     const titleAttr = stripRichText(fullTitle);
 
@@ -333,7 +333,7 @@ export function buildNoteTitleHtml(item, canEdit, { richEdit = false } = {}) {
     return `<div class="mini-card-title${richClass}" title="${escapeAttr(titleAttr)}">${renderRichHtml(fullTitle)}</div>`;
 }
 
-export function buildNoteFormatPanelHtml(item = null) {
+function buildNoteFormatPanelHtml(item = null) {
     return `
             <div class="editor-panel editor-panel--format">
                 <div class="collapsable-header" id="format-section-header">
@@ -356,7 +356,7 @@ export function buildNoteFormatPanelHtml(item = null) {
         `;
 }
 
-export function buildNoteMetaFooterHtml(item, { targetCatName = '', categoryColor = UNCATEGORIZED_COLOR } = {}) {
+function buildNoteMetaFooterHtml(item, { targetCatName = '', categoryColor = UNCATEGORIZED_COLOR } = {}) {
     const createdLabel = formatCreatedDate(item.created_at);
     const sizeLabel = computeNoteSizeKb(item);
     const lineLabel = formatNoteLineCount(computeNoteLineCount(item));
@@ -387,7 +387,7 @@ function formatCreatedDate(timestamp) {
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-export function buildNoteConfigPanelHtml(item, { categoryOptionsHtml = '', startParts = {}, endParts = {} } = {}) {
+function buildNoteConfigPanelHtml(item, { categoryOptionsHtml = '', startParts = {}, endParts = {} } = {}) {
     const template = resolveNoteTemplate(item);
     const templateDefault = template === 'default' ? 'selected' : '';
     const templateSheet = template === 'sheet' ? 'selected' : '';
@@ -446,7 +446,7 @@ export function buildNoteConfigPanelHtml(item, { categoryOptionsHtml = '', start
         `;
 }
 
-export function buildNoteEditorShell(item, {
+function buildNoteEditorShell(item, {
     canEdit = false,
     inModalEditor = false,
     showConfig = false,
@@ -501,7 +501,7 @@ export function buildNoteEditorShell(item, {
         `;
 }
 
-export function bindCollapsable(headerId, sectionId, startCollapsed = false) {
+function bindCollapsable(headerId, sectionId, startCollapsed = false) {
     const header = document.getElementById(headerId);
     const section = document.getElementById(sectionId);
     if (!header || !section) return;
@@ -518,7 +518,7 @@ export function bindCollapsable(headerId, sectionId, startCollapsed = false) {
     });
 }
 
-export function flashCopyFeedback(btn, message = 'Copied!', { failed = false } = {}) {
+function flashCopyFeedback(btn, message = 'Copied!', { failed = false } = {}) {
     if (!btn) return;
     if (btn.dataset.copyFlashTimer) {
         clearTimeout(Number(btn.dataset.copyFlashTimer));
@@ -552,7 +552,7 @@ export function flashCopyFeedback(btn, message = 'Copied!', { failed = false } =
     }, 1400));
 }
 
-export function buildExpandedChecklistHtml(item, canEdit, { richEdit = false } = {}) {
+function buildExpandedChecklistHtml(item, canEdit, { richEdit = false } = {}) {
     const collapsedKeys = getChecklistCollapsedKeys();
     const { active, done } = partitionChecklistSteps(item.steps);
     let html = '<div class="expanded-checklist">';
