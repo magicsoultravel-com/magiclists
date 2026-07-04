@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-04T09:01:30.015Z
+> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-04T10:24:47.649Z
 
 ## CSS load order
 
@@ -41,9 +41,11 @@ alwaysApply: true
 | js/backup.js | local backup export/import, encrypted packages | cloudBackup.js, api.js | - | - |
 | js/board/gridEngine.js | grid board layout engine, push resolution | board/noteGeometry.js, layoutStorage.js, gridDensity.js | - | - |
 | js/board/noteGeometry.js | grid note geometry, push layout, tile bounds | board/gridEngine.js, tileGeometry.js | - | - |
+| js/boardOperations.js | item visibility, archiving, calendar integration, card actions | noteSurface.js, noteQuickActions.js | - | - |
 | js/checklistSteps.js | checklist tree logic, step reorder, indent/outdent | noteSurface.js, noteBodyConversion.js | - | - |
 | js/cloud/cloudProvider.js | cloud provider registry and factory dispatch | cloudBackup.js, cloud/megaProvider.js, cloud/localFolderProvider.js | - | - |
 | js/cloudBackup.js | cloud backup UI, MEGA and local-folder sync | backup.js, cloud/cloudProvider.js, cloud/megaProvider.js, cloud/localFolderProvider.js | - | - |
+| js/desktopCardManager.js | desktop card creation, updating, finalization, freeform dimensions | noteSurface.js, noteQuickActions.js | - | - |
 | js/dragdrop.js | board drag-drop, resize, grid snap | layoutStorage.js, ui.js, fileCabinet.js | board:visibility_changed | - |
 | js/drawingBoard.js | magicCanvas drawing board, workspace drawing mode | canvasDocument.js, drawingToolbarMenu.js, layoutStorage.js | - | - |
 | js/editor.js | modal note editor overlay, save flow | noteSurface.js, noteQuickActions.js, editorModalChrome.js, sheet.js | item:selected_for_edit, editor:reveal_on_board | - |
@@ -70,6 +72,7 @@ alwaysApply: true
 | js/sidebarTv.js | sidebar TV player and channel browser | tvPlayer.js, tvProviders/registry.js, tvPopover.js, sidebarModules.js | tv:state_changed | - |
 | js/sidebarUndock.js | shared undock/drag/clamp for sidebar panels | desktopStack.js, popoverPosition.js, sidebarPrefs.js | - | - |
 | js/sidebarWeather.js | sidebar weather glance and forecast panel | weatherApi.js, weatherProviders/registry.js, sidebarModules.js | - | - |
+| js/tileManager.js | tile size resolution, spatial collapse state, tile classification | tileGeometry.js, noteSurface.js | - | - |
 | js/ui.js | board render, tile layout, category visibility, desktop canvas | noteSurface.js, noteQuickActions.js, dragdrop.js, layoutStorage.js, board/gridEngine.js | board:visibility_changed, item:selected_for_edit, calendar:items_changed | - |
 
 ## Tools (@tool)
