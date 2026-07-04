@@ -59,6 +59,7 @@ import {
 
 // Import from noteSurfaceChecklist.js
 import {
+    bindChecklistInteractions,
     getChecklistCollapsedKeys,
     getChecklistDoneCollapsed,
     isChecklistDoneSectionCollapsed,
@@ -379,6 +380,7 @@ export const NoteSurface = {
     bindBodyConvertBar,
     bindFormatPanel,
     bindNoteEditorShell,
+    bindChecklistInteractions,
     attachChecklistDrag,
     getActiveRows,
     getChecklistCollapsedKeys,
@@ -407,6 +409,7 @@ export const NoteSurface = {
     buildNoteEditorShell,
     bindCollapsable,
     flashCopyFeedback,
+    refreshNoteBody,
 
     // Editing methods - delegate to noteSurfaceEditing module
     insertTextAtCaret,

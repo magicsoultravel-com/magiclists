@@ -8,7 +8,7 @@ import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHa
 import { escapeHTML, escapeAttr } from './domEscape.js';
 import { isFileCabinetActive, getFileCabinetToggleLabels } from './fileCabinet.js';
 import { LEGACY_TILE_SIZE } from './tileGeometry.js';
-import { getChecklistCollapsedKeys, getChecklistDoneCollapsed, isChecklistDoneSectionCollapsed, toggleChecklistDoneSection, getChecklistCollapsibleKeys, checklistGroupsAnyExpanded, collapseAllChecklistGroups, expandAllChecklistGroups, toggleChecklistExpandCollapseAll, buildChecklistExpandCollapseAllHtml } from './noteSurfaceChecklist.js';
+import { bindChecklistInteractions, getChecklistCollapsedKeys, getChecklistDoneCollapsed, isChecklistDoneSectionCollapsed, toggleChecklistDoneSection, getChecklistCollapsibleKeys, checklistGroupsAnyExpanded, collapseAllChecklistGroups, expandAllChecklistGroups, toggleChecklistExpandCollapseAll, buildChecklistExpandCollapseAllHtml } from './noteSurfaceChecklist.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -650,6 +650,198 @@ export function buildExpandedChecklistHtml(item, canEdit, { richEdit = false } =
     return html;
 }
 
+/**
+ * Refresh the checklist portion of a note body (re-render checklist HTML
+ * and re-bind interactions). Used by the modal editor after checklist
+ * mutations (add/delete/reorder/indent/etc.).
+ *
+ * @param {HTMLElement} body - the .editor-note-body element
+ * @param {object} item - the note item
+ * @param {object} opts
+ * @param {HTMLElement} [opts.mountZone] - the modal form mount (parent of shell)
+ * @param {HTMLElement} [opts.shell] - the .editor-note-shell element
+ * @param {boolean} [opts.localOnly]
+ * @param {boolean} [opts.richEdit]
+ * @param {Function} [opts.onChange]
+ * @param {Function} [opts.refresh]
+ * @param {object} [opts.sheetInteractionOpts]
+ */
+export function refreshNoteBody(body, item, {
+    mountZone,
+    shell,
+    localOnly = false,
+    richEdit = false,
+    onChange = () => {},
+    refresh = () => {},
+    sheetInteractionOpts = null
+} = {}) {
+    if (!body || !item) return;
+    const { showChecklist } = resolveNoteBodyVisibility(item, {
+        canEdit: true,
+        inModalEditor: !!mountZone?.closest('#editor-overlay')
+    });
+    if (!showChecklist) return;
+
+    // Re-render only the checklist section
+    const expandedChecklist = body.querySelector('.expanded-checklist');
+    if (!expandedChecklist) return;
+
+    // Rebuild checklist HTML
+    const newChecklistHtml = (() => {
+        const collapsedKeys = getChecklistCollapsedKeys();
+        const { active, done } = partitionChecklistSteps(item.steps);
+        let html = '<div class="expanded-checklist">';
+        html += buildChecklistExpandCollapseAllHtml(item);
+
+        annotateChecklistTreeGuides(buildVisibleChecklistSteps(active, item.id, collapsedKeys))
+            .forEach((row) => {
+                const level = row.level;
+                const hasKids = row.hasKids;
+                const collapseKey = `${item.id}:${row.step.id}`;
+                const isCollapsed = !!collapsedKeys[collapseKey];
+                const treeGuides = row.treeGuides || [];
+                html += buildChecklistRowHtml(row.step, {
+                    level,
+                    hasKids,
+                    isCollapsed,
+                    collapseKey,
+                    isDoneSection: false,
+                    treeGuides,
+                    canEdit: true,
+                    richEdit,
+                    active
+                });
+            });
+
+        html += `<button type="button" class="card-act expanded-checklist-add-btn" title="Add checklist item" aria-label="Add checklist item">+</button>`;
+
+        if (done.length > 0) {
+            const doneCollapsed = isChecklistDoneSectionCollapsed(item.id);
+            const toggleTitle = doneCollapsed
+                ? `Show ${done.length} completed item${done.length === 1 ? '' : 's'}`
+                : 'Collapse completed items';
+            const toggleIcon = doneCollapsed ? CARD_ICONS.chevronRight : CARD_ICONS.chevronDown;
+            const toggleLabel = doneCollapsed ? `Hidden items (${done.length})` : 'Completed';
+            html += `<button type="button" class="checklist-done-toggle" title="${escapeAttr(toggleTitle)}" aria-expanded="${doneCollapsed ? 'false' : 'true'}" aria-label="${escapeAttr(toggleTitle)}">
+                <span class="checklist-done-toggle-icon" aria-hidden="true">${toggleIcon}</span>
+                <span class="checklist-done-toggle-label">${escapeHTML(toggleLabel)}</span>
+            </button>`;
+            if (!doneCollapsed && active.length > 0) {
+                html += '<div class="checklist-done-divider" role="separator" aria-hidden="true"></div>';
+            }
+            html += `<div class="checklist-done-section${doneCollapsed ? ' is-hidden' : ''}">`;
+            done.forEach((step) => {
+                html += buildChecklistRowHtml(step, {
+                    level: 0,
+                    hasKids: false,
+                    isCollapsed: false,
+                    collapseKey: '',
+                    isDoneSection: true,
+                    treeGuides: [],
+                    canEdit: true,
+                    richEdit,
+                    active
+                });
+            });
+            html += '</div>';
+        }
+
+        html += '</div>';
+        return html;
+    })();
+
+    // Replace old checklist HTML
+    expandedChecklist.outerHTML = newChecklistHtml;
+
+    // Re-bind interactions
+    if (mountZone) {
+        const newShell = mountZone.querySelector('.editor-note-shell');
+        if (newShell) {
+            const newBody = newShell.querySelector('.editor-note-body');
+            if (newBody && !newBody.dataset.checklistInteractionsBound) {
+                bindChecklistInteractions(newBody, item, {
+                    localOnly,
+                    onChange,
+                    refresh: () => {
+                        // Re-invoke refreshNoteBody via the outer refresh
+                        refresh();
+                    }
+                });
+            }
+        }
+    }
+
+    // Re-attach input listeners
+    body.querySelectorAll('.card-inline-edit').forEach((el) => {
+        el.addEventListener('input', () => {
+            if (onChange) onChange();
+        });
+    });
+}
+
+function buildChecklistRowHtml(step, {
+    level = 0,
+    hasKids = false,
+    isCollapsed = false,
+    collapseKey = '',
+    isDoneSection = false,
+    treeGuides = [],
+    canEdit = true,
+    richEdit = false,
+    active = []
+} = {}) {
+    const activeIdx = isDoneSection ? -1 : active.findIndex((s) => s.id === step.id);
+    const collapseControl = !isDoneSection && hasKids
+        ? `<button type="button" class="step-collapse-btn" data-collapse-key="${escapeAttr(collapseKey)}" title="${isCollapsed ? 'Expand group' : 'Collapse group'}" aria-label="${isCollapsed ? 'Expand group' : 'Collapse group'}">${isCollapsed ? CARD_ICONS.chevronRight : CARD_ICONS.chevronDown}</button>`
+        : '<span class="step-collapse-spacer" aria-hidden="true"></span>';
+    const dragHandle = !canEdit
+        ? ''
+        : isDoneSection
+            ? '<span class="grab-handle grab-handle--step grab-handle--spacer" aria-hidden="true">⋮⋮</span>'
+            : '<span class="grab-handle grab-handle--step" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>';
+    const nestControls = canEdit ? `
+        <button type="button" class="card-act step-outdent-btn" title="Outdent" aria-label="Outdent"${level === 0 ? ' disabled' : ''}>‹</button>
+        <button type="button" class="card-act step-indent-btn" title="Indent" aria-label="Indent"${!canIndentStep(active, activeIdx) ? ' disabled' : ''}>›</button>` : '';
+    const copyBtn = canEdit
+        ? `<button type="button" class="card-act step-copy-btn" title="Copy item" aria-label="Copy item">${CARD_ICONS.copy}</button>`
+        : '';
+    const deleteBtn = canEdit
+        ? `<button type="button" class="card-act card-act--danger step-delete-btn" title="Remove item" aria-label="Remove item">${CARD_ICONS.close}</button>`
+        : '';
+    const stepText = step.text || '';
+    let textHtml;
+    if (canEdit && (richEdit || canInlineEditText(stepText, { richEdit }))) {
+        const inner = richEdit ? sanitizeRichHtml(stepText) : escapeHTML(stepText);
+        const ce = richEdit ? 'true' : 'plaintext-only';
+        const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
+        textHtml = `<span class="step-text card-inline-edit${richClasses} ${step.completed ? 'completed' : ''}" contenteditable="${ce}" spellcheck="false" data-field="step-text" data-step-id="${step.id}">${inner}</span>`;
+    } else {
+        const richClass = hasRichMarkup(stepText) ? ' rich-text' : '';
+        textHtml = `<span class="step-text${richClass} ${step.completed ? 'completed' : ''}">${sanitizeRichHtml(stepText)}</span>`;
+    }
+    const treeGutterHtml = !isDoneSection && treeGuides.length > 0
+        ? `<span class="step-tree-gutter" aria-hidden="true">${treeGuides.map(({ role }) => {
+            return `<span class="step-tree-guide step-tree-guide--${role}" aria-hidden="true"></span>`;
+        }).join('')}</span>`
+        : '';
+    return `
+        <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}" data-step-id="${step.id}" data-level="${level}">
+            <div class="step-row-leading">
+                ${dragHandle}
+                ${collapseControl}
+                ${treeGutterHtml}
+                <input type="checkbox" class="step-check" ${step.completed ? 'checked' : ''}>
+            </div>
+            ${textHtml}
+            <div class="step-row-actions">
+                ${copyBtn}
+                ${canEdit ? `<span class="step-nest-controls">${nestControls}</span>` : ''}
+                ${deleteBtn}
+            </div>
+        </div>
+    `;
+}
+
 export {
     computeNoteSizeKb,
     computeNoteLineCount,
@@ -666,4 +858,5 @@ export {
     buildNoteEditorShell,
     bindCollapsable,
     flashCopyFeedback,
+    refreshNoteBody,
 };

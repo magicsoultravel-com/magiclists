@@ -7,9 +7,175 @@ import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyC
 import { stripRichText, sanitizeRichHtml } from './richText.js';
 import { mutateItem, syncItemBodyFromDom } from './noteSurfaceMutations.js';
 import { focusInlineEdit, canInlineEditText, renderRichHtml } from './noteSurfaceEditing.js';
+import { copyPlainTextToClipboard } from './clipboard.js';
 
 
 const DRAG_THRESHOLD = 4;
+
+/**
+ * Bind all checklist action buttons (copy, delete, indent, outdent,
+ * collapse/expand, checkbox toggle, add-step, done-section toggle,
+ * expand/collapse-all). Call this after the checklist HTML is rendered.
+ */
+export function bindChecklistInteractions(root, item, {
+    refresh = () => {},
+    localOnly = false,
+    onChange = () => {}
+} = {}) {
+    if (!root || !item) return;
+    if (root.dataset.checklistInteractionsBound === item.id) return;
+    root.dataset.checklistInteractionsBound = item.id;
+
+    // --- step checkbox (toggle completion) ---
+    root.addEventListener('change', (e) => {
+        const cb = e.target.closest('.step-check');
+        if (!cb || !root.contains(cb)) return;
+        const row = cb.closest('.step-row--display');
+        const stepId = row?.dataset?.stepId;
+        if (!stepId) return;
+        const step = (item.steps || []).find(s => s.id === stepId);
+        if (!step) return;
+        const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
+        step.completed = cb.checked;
+        syncItemBodyFromDom(root, item);
+        if (localOnly) {
+            onChange();
+        } else {
+            mutateItem(item, () => {}, { preserveView: true, skipRerender: true, localOnly });
+            commitInlineChecklistOp(item, beforeItem, { localOnly });
+        }
+        refresh();
+    });
+
+    // --- generic click delegation for all other step buttons ---
+    root.addEventListener('click', (e) => {
+        // --- step delete ---
+        const delBtn = e.target.closest('.step-delete-btn');
+        if (delBtn && root.contains(delBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const row = delBtn.closest('.step-row--display');
+            const stepId = row?.dataset?.stepId;
+            if (!stepId) return;
+            removeChecklistStepAndFocus(item, stepId, { localOnly, onChange });
+            refresh();
+            return;
+        }
+
+        // --- step copy ---
+        const copyBtn = e.target.closest('.step-copy-btn');
+        if (copyBtn && root.contains(copyBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const row = copyBtn.closest('.step-row--display');
+            const stepId = row?.dataset?.stepId;
+            if (!stepId) return;
+            const step = (item.steps || []).find(s => s.id === stepId);
+            if (!step) return;
+            const text = stripRichText(step.text || '');
+            copyPlainTextToClipboard(text);
+            // Simple flash feedback without triggering circular import
+            const prevTitle = copyBtn.getAttribute('title');
+            const prevHtml = copyBtn.innerHTML;
+            copyBtn.innerHTML = CARD_ICONS.save;
+            copyBtn.setAttribute('title', 'Copied!');
+            copyBtn.setAttribute('aria-label', 'Copied!');
+            setTimeout(() => {
+                copyBtn.innerHTML = prevHtml;
+                if (prevTitle != null) copyBtn.setAttribute('title', prevTitle);
+                else copyBtn.removeAttribute('title');
+                copyBtn.setAttribute('aria-label', 'Copy step');
+            }, 1400);
+            return;
+        }
+
+        // --- step indent ---
+        const indentBtn = e.target.closest('.step-indent-btn');
+        if (indentBtn && root.contains(indentBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const row = indentBtn.closest('.step-row--display');
+            const stepId = row?.dataset?.stepId;
+            if (!stepId) return;
+            const step = (item.steps || []).find(s => s.id === stepId);
+            if (!step) return;
+            const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
+            step.indent = (step.indent || 0) + 1;
+            normalizeChecklistLevels(item.steps);
+            if (localOnly) onChange();
+            else commitInlineChecklistOp(item, beforeItem, { localOnly });
+            refresh();
+            return;
+        }
+
+        // --- step outdent ---
+        const outdentBtn = e.target.closest('.step-outdent-btn');
+        if (outdentBtn && root.contains(outdentBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const row = outdentBtn.closest('.step-row--display');
+            const stepId = row?.dataset?.stepId;
+            if (!stepId) return;
+            const step = (item.steps || []).find(s => s.id === stepId);
+            if (!step || (step.indent || 0) <= 0) return;
+            const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
+            step.indent = Math.max(0, (step.indent || 0) - 1);
+            normalizeChecklistLevels(item.steps);
+            if (localOnly) onChange();
+            else commitInlineChecklistOp(item, beforeItem, { localOnly });
+            refresh();
+            return;
+        }
+
+        // --- step collapse/expand ---
+        const collapseBtn = e.target.closest('.step-collapse-btn');
+        if (collapseBtn && root.contains(collapseBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const key = collapseBtn.dataset.collapseKey;
+            if (!key) return;
+            const collapsed = getChecklistCollapsedKeys();
+            if (collapsed[key]) {
+                delete collapsed[key];
+            } else {
+                collapsed[key] = true;
+            }
+            localStorage.setItem('matrix_checklist_collapsed', JSON.stringify(collapsed));
+            refresh();
+            return;
+        }
+
+        // --- expand/collapse all ---
+        const expandAllBtn = e.target.closest('.checklist-expand-collapse-all-btn');
+        if (expandAllBtn && root.contains(expandAllBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleChecklistExpandCollapseAll(item);
+            refresh();
+            return;
+        }
+
+        // --- done section toggle ---
+        const doneToggle = e.target.closest('.checklist-done-toggle');
+        if (doneToggle && root.contains(doneToggle)) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleChecklistDoneSection(item.id);
+            refresh();
+            return;
+        }
+
+        // --- add step ---
+        const addBtn = e.target.closest('.expanded-checklist-add-btn');
+        if (addBtn && root.contains(addBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            insertChecklistStep(item, { localOnly, onChange });
+            refresh();
+            return;
+        }
+    });
+}
 
 export function attachChecklistDrag(root, item, {
     refresh = () => {},

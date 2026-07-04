@@ -14,6 +14,7 @@ import { normalizeItemForSave } from './noteModel.js';
 import { createBlankChecklistStep } from './noteSurface.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText, convertContentToChecklist, convertChecklistToContent } from './noteBodyConversion.js';
 import { attachSheetInteractions } from './sheet.js';
+import { bindChecklistInteractions } from './noteSurfaceChecklist.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -541,6 +542,11 @@ export function bindNoteEditorShell(root, item, {
             onChange,
             refresh
         }));
+        bindChecklistInteractions(body, item, {
+            refresh,
+            localOnly,
+            onChange
+        });
     }
 
     if (stopMousedownPropagation && !shell.dataset.shellBubbleBound) {
