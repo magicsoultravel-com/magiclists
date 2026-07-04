@@ -357,7 +357,7 @@ function buildNoteFormatPanelHtml(item = null) {
         `;
 }
 
-function buildNoteMetaFooterHtml(item, { targetCatName = '', categoryColor = UNCATEGORIZED_COLOR } = {}) {
+export function buildNoteMetaFooterHtml(item, { targetCatName = '', categoryColor = UNCATEGORIZED_COLOR } = {}) {
     const createdLabel = formatCreatedDate(item.created_at);
     const sizeLabel = computeNoteSizeKb(item);
     const lineLabel = formatNoteLineCount(computeNoteLineCount(item));
@@ -659,7 +659,6 @@ export {
     buildMeetingBodyHtml,
     buildNoteTitleHtml,
     buildNoteFormatPanelHtml,
-    buildNoteMetaFooterHtml,
     buildNoteConfigPanelHtml,
     buildNoteEditorShell,
     bindCollapsable,
