@@ -659,6 +659,7 @@ export {
     buildMeetingBodyHtml,
     buildNoteTitleHtml,
     buildNoteFormatPanelHtml,
+    buildNoteMetaFooterHtml,
     buildNoteConfigPanelHtml,
     buildNoteEditorShell,
     bindCollapsable,
