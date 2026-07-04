@@ -11,6 +11,17 @@ import {
     getTileDefaultRect,
     resolveTileSize
 } from './tileGeometry.js';
+import { getSmallRect, readTileSmallFootprint } from './tileGeometry.js';
+import { normalizeViewMode } from './viewSession.js';
+
+/**
+ * Checks if the given mode is a snap layout mode (grid-based)
+ * @param {string} mode - The layout mode
+ * @returns {boolean} - Always returns true for now (grid mode)
+ */
+function isSnapLayoutMode(mode) {
+    return true;
+}
 
 export const FILE_CABINET_KEY = 'matrix_file_cabinet';
 export const FILE_CABINET_ORDER_KEY = 'matrix_file_cabinet_order';
@@ -265,7 +276,7 @@ export function fileItemToCabinet(item, sortBy, UI, { x = 8, y = 8, rememberW, r
     }
 
     const label = getLabelRect();
-    UI.saveFiledCabinetLayout(item.id, { x, y, w: label.w, h: label.h }, sortBy);
+    saveFiledCabinetLayout(item.id, { x, y, w: label.w, h: label.h }, sortBy);
     addToFileCabinetOrder(getItemCategoryName(item), item.id);
 }
 
@@ -998,7 +1009,6 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
 
     const itemsById = () => new Map((currentItems || []).map((item) => [item.id, item]));
     let dragState = null;
-    let previewFrame = null;
 
     const restorePreviewFromState = (state) => {
         restoreStackPreview(state.sourceStack, state.sourceBaseline);
@@ -1121,6 +1131,8 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
         });
     };
 
+    let previewFrame = null;
+
     mount.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
         if (e.target.closest('.card-act:not(.card-act--drag), button:not(.card-act--drag), input, textarea, a')) return;
@@ -1213,4 +1225,106 @@ export function getFileCabinetToggleLabels(inFileCabinetStrip, atLabel) {
         return { title: 'Open below', iconKey: 'expand' };
     }
     return { title: 'File away', iconKey: 'collapse' };
+}
+
+/**
+ * Applies file cabinet zone toggle - moves item to/from file cabinet
+ * @param {HTMLElement} card - The card element
+ * @param {Object} item - The item
+ * @param {Object} ctx - Context options
+ * @param {Object} UI - The UI object with helper methods
+ */
+export function applyFileCabinetZoneToggle(card, item, ctx = {}, UI) {
+    if (!UI) return;
+    const inFileCabinet = !!card.closest('#file-cabinet');
+
+    if (inFileCabinet) {
+        removeFromFileCabinetOrder(item.id);
+        let rect = UI.resolveBoardExpandRect(card, item);
+        const savedGrid = UI.getGridLayout()[item.id];
+        const savedPos = UI.getFreeformPositions()[item.id];
+        const x = savedGrid?.x ?? savedPos?.x ?? 8;
+        const y = savedGrid?.y ?? savedPos?.y ?? 8;
+        rect = { x, y, w: rect.w, h: rect.h };
+        UI.saveGridLayout(item.id, rect, { updateRemembered: true });
+    } else {
+        const pos = UI.readNoteRect(card);
+        fileItemToCabinet(item, UI.activeBoardViewMode, UI, {
+            x: pos.x ?? 8,
+            y: pos.y ?? 8,
+            rememberW: pos.w,
+            rememberH: pos.h
+        });
+    }
+
+    window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
+}
+
+/**
+ * Saves layout for a filed cabinet item
+ * @param {string} itemId - The item ID
+ * @param {Object} rect - The rectangle with x, y, w, h
+ * @param {string} sortBy - The sort mode
+ */
+export function saveFiledCabinetLayout(itemId, rect, sortBy) {
+    if (!itemId || !rect) return;
+    const mode = normalizeViewMode(sortBy);
+    const entry = {
+        w: Math.round(rect.w),
+        h: Math.round(rect.h)
+    };
+    if (Number.isFinite(rect.x)) entry.x = Math.round(rect.x);
+    if (Number.isFinite(rect.y)) entry.y = Math.round(rect.y);
+
+    if (isSnapLayoutMode(mode)) {
+        const layout = JSON.parse(localStorage.getItem('matrix_grid_layout') || '{}');
+        const prev = layout[itemId] || {};
+        layout[itemId] = { ...prev, ...entry };
+        delete layout[itemId].rememberedW;
+        delete layout[itemId].rememberedH;
+        localStorage.setItem('matrix_grid_layout', JSON.stringify(layout));
+    }
+}
+
+/**
+ * Sorts items for file cabinet display
+ * @param {Array} filedItems - Items to sort
+ * @param {Object} sortPrefs - Sorting preferences
+ */
+export function sortFileCabinetItems(filedItems, sortPrefs) {
+    if (!filedItems?.length) return;
+    const byCategory = new Map();
+    filedItems.forEach((item) => {
+        const cat = getItemCategoryName(item);
+        if (!byCategory.has(cat)) byCategory.set(cat, []);
+        byCategory.get(cat).push(item);
+    });
+    const order = getFileCabinetOrder();
+    byCategory.forEach((items, cat) => {
+        order[cat] = sortBoardItems(items, sortPrefs).map((item) => item.id);
+    });
+    saveFileCabinetOrder(order);
+}
+
+/**
+ * Resets file cabinet layout for items
+ * @param {string} sortBy - The sort mode
+ * @param {Array} items - Items to reset
+ * @param {Object} UI - The UI object
+ */
+export function resetFileCabinetLayout(sortBy, items, UI) {
+    const visibleItems = UI.getVisibleItems(items || []);
+    const mode = normalizeViewMode(sortBy);
+
+    const boardItems = visibleItems;
+    const { expanded } = partitionItemsForFileCabinet(boardItems, mode, UI);
+    expanded.forEach((item) => {
+        const savedGrid = UI.getGridLayout()[item.id];
+        const savedPos = UI.getFreeformPositions()[item.id];
+        fileItemToCabinet(item, mode, UI, {
+            x: savedGrid?.x ?? savedPos?.x ?? 8,
+            y: savedGrid?.y ?? savedPos?.y ?? 8
+        });
+    });
+    window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
 }

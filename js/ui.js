@@ -32,7 +32,11 @@ import {
     getStoredItemSize,
     FILE_CABINET_ORDER_KEY,
     FILE_CABINET_FILED_CATEGORIES_KEY,
-    getFileCabinetFiledCategories
+    getFileCabinetFiledCategories,
+    applyFileCabinetZoneToggle,
+    saveFiledCabinetLayout,
+    sortFileCabinetItems,
+    resetFileCabinetLayout
 } from './fileCabinet.js';
 import { sortBoardItems } from './boardSort.js';
 import {
@@ -699,28 +703,7 @@ export const UI = {
     },
 
     applyFileCabinetZoneToggle(card, item, ctx = {}) {
-        const inFileCabinet = !!card.closest('#file-cabinet');
-
-        if (inFileCabinet) {
-            removeFromFileCabinetOrder(item.id);
-            let rect = this.resolveBoardExpandRect(card, item);
-            const savedGrid = this.getGridLayout()[item.id];
-            const savedPos = this.getFreeformPositions()[item.id];
-            const x = savedGrid?.x ?? savedPos?.x ?? 8;
-            const y = savedGrid?.y ?? savedPos?.y ?? 8;
-            rect = { x, y, w: rect.w, h: rect.h };
-            this.saveGridLayout(item.id, rect, { updateRemembered: true });
-        } else {
-            const pos = this.readNoteRect(card);
-            fileItemToCabinet(item, activeBoardViewMode, this, {
-                x: pos.x ?? 8,
-                y: pos.y ?? 8,
-                rememberW: pos.w,
-                rememberH: pos.h
-            });
-        }
-
-        window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
+        applyFileCabinetZoneToggle(card, item, ctx, this);
     },
 
     reapplySmallFootprintOnBoard() {
@@ -1979,7 +1962,7 @@ export const UI = {
 
         if (fcActive) {
             const { filed, expanded } = partitionItemsForFileCabinet(visibleItems, mode, this);
-            applySortToFileCabinetOrder(filed, sortPrefs);
+            sortFileCabinetItems(filed, sortPrefs);
             canvasItems = expanded;
         }
 
@@ -2015,16 +1998,7 @@ export const UI = {
         const fcActive = fileCabinetActive ?? isFileCabinetActive();
 
         if (fcActive) {
-            const { expanded } = partitionItemsForFileCabinet(boardItems, mode, this);
-            expanded.forEach((item) => {
-                const savedGrid = this.getGridLayout()[item.id];
-                const savedPos = this.getFreeformPositions()[item.id];
-                fileItemToCabinet(item, mode, this, {
-                    x: savedGrid?.x ?? savedPos?.x ?? 8,
-                    y: savedGrid?.y ?? savedPos?.y ?? 8
-                });
-            });
-            window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
+            resetFileCabinetLayout(sortBy, items, this);
             return;
         }
 
@@ -2061,23 +2035,7 @@ export const UI = {
     },
 
     saveFiledCabinetLayout(itemId, rect, sortBy) {
-        if (!itemId || !rect) return;
-        const mode = normalizeViewMode(sortBy);
-        const entry = {
-            w: Math.round(rect.w),
-            h: Math.round(rect.h)
-        };
-        if (Number.isFinite(rect.x)) entry.x = Math.round(rect.x);
-        if (Number.isFinite(rect.y)) entry.y = Math.round(rect.y);
-
-        if (isSnapLayoutMode(mode)) {
-            const layout = this.getGridLayout();
-            const prev = layout[itemId] || {};
-            layout[itemId] = { ...prev, ...entry };
-            delete layout[itemId].rememberedW;
-            delete layout[itemId].rememberedH;
-            localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layout));
-        }
+        saveFiledCabinetLayout(itemId, rect, sortBy);
     },
 
     saveCompactBoardLayout(itemId, slot, _sortBy) {
