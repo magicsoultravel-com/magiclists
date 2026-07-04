@@ -11,7 +11,8 @@ import {
     getTileDefaultRect,
     resolveTileSize
 } from './tileGeometry.js';
-import { getSmallRect, readTileSmallFootprint } from './tileGeometry.js';
+import { getSmallRect } from './tileGeometry.js';
+import { readTileSmallFootprint } from './tileFootprint.js';
 import { normalizeViewMode } from './viewSession.js';
 
 /**
