@@ -27,6 +27,42 @@ import {
     syncSheetFromDom
 } from './sheet.js';
 
+// ---------------------------------------------------------------------------
+// NOTE: The original code referenced a function `bindNoteEditorShell` but the
+// implementation was missing, leading to a runtime ReferenceError.  The
+// editor shell is responsible for wiring up the modal note editor UI (e.g.
+// handling save, cancel, and format actions).  For the purpose of restoring
+// functionality we provide a minimal no‑op implementation that attaches a
+// basic "close" handler.  This mirrors the behaviour of other bind* helpers
+// in the codebase (e.g. `bindNoteBodySections`).  If more sophisticated
+// behaviour is required it can be expanded later without breaking the
+// existing API.
+// ---------------------------------------------------------------------------
+function bindNoteEditorShell(shell, item) {
+    if (!shell || !item) return;
+    // Close button – removes the editor shell from the DOM.
+    const closeBtn = shell.querySelector('[data-action="close-editor"]');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            shell.remove();
+        });
+    }
+    // Save button – triggers a mutation to persist changes.
+    const saveBtn = shell.querySelector('[data-action="save-editor"]');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            // The actual save logic is handled elsewhere (e.g. via
+            // `mutateItem`).  Here we simply dispatch a custom event that the
+            // existing mutation pipeline can listen for.
+            const ev = new CustomEvent('item:mutation_requested', {
+                detail: { item },
+                bubbles: true,
+            });
+            shell.dispatchEvent(ev);
+        });
+    }
+}
+
 // Import from noteSurfaceHtml.js
 import {
     buildNoteQuickActionsHtml,
