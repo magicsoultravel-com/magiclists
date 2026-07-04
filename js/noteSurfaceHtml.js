@@ -55,7 +55,10 @@ function computeNoteLineCount(item) {
 
 function sheetCellTexts(sheet) {
     if (!sheet?.rows) return [];
-    return sheet.rows.flatMap(row => row.cells?.map(c => c?.text || '') || []);
+    return sheet.rows.reduce((acc, row) => {
+        const cells = row.cells || [];
+        return acc.concat(cells.map(c => c?.text || ''));
+    }, []);
 }
 
 export function buildNoteQuickActionsHtml(item, {
