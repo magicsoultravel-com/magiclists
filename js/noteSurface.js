@@ -429,10 +429,16 @@ export const NoteSurface = {
     getInlineEditSequence,
     handleInlineEditArrowNav,
 
-    // Utility methods
-    escapeHTML,
-    escapeAttr,
-};
+     // Utility methods
+     escapeHTML,
+     escapeAttr,
+     canEditInline: function() {
+         return !isFileCabinetActive();
+     },
+     formatNoteListDate: function(item) {
+         return formatCreatedDate(item.timestamp);
+     }
+   };
 
 export {
     buildSheetInteractionOptions,
