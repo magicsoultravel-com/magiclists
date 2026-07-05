@@ -558,5 +558,6 @@ export {
     escapeAttr,
     escapeQuotes,
     createBlankChecklistStep,
-    mutateItem
+    mutateItem,
+    bindChecklistInteractions
 };
