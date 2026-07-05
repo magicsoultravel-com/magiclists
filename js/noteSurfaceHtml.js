@@ -859,4 +859,5 @@ export {
     buildNoteEditorShell,
     bindCollapsable,
     flashCopyFeedback,
+    refreshNoteBody,
 };
