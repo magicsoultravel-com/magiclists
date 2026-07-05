@@ -115,6 +115,34 @@
     pointer-events: none;
 }
 
+/* Grab handle for checklist drag */
+.grab-handle--step {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    margin-right: 2px;
+    color: var(--text-muted);
+    cursor: grab;
+    flex-shrink: 0;
+    transition: color 0.12s ease, background 0.12s ease;
+}
+
+.grab-handle--step:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.grab-handle--step:active {
+    cursor: grabbing;
+}
+
+.grab-handle--step.spacer {
+    pointer-events: none;
+}
+
 .step-collapse-btn svg {
     display: block;
 }

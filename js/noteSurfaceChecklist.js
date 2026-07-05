@@ -462,15 +462,6 @@ export function buildChecklistExpandCollapseAllHtml(item) {
         </div>`;
 }
 
-export function stepHasDescendants(steps, index) {
-    if (!steps || !steps[index]) return false;
-    const level = getStepLevel(steps[index]);
-    for (let i = index + 1; i < steps.length; i++) {
-        if (getStepLevel(steps[i]) <= level) return false;
-    }
-    return true;
-}
-
 export function buildVisibleChecklistSteps(steps, itemId, collapsedKeys = {}) {
     if (!steps || !steps.length) return [];
     const result = [];

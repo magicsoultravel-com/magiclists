@@ -8,7 +8,7 @@ import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHa
 import { escapeHTML, escapeAttr } from './domEscape.js';
 import { isFileCabinetActive, getFileCabinetToggleLabels } from './fileCabinet.js';
 import { LEGACY_TILE_SIZE } from './tileGeometry.js';
-import { bindChecklistInteractions, getChecklistCollapsedKeys, getChecklistDoneCollapsed, isChecklistDoneSectionCollapsed, toggleChecklistDoneSection, getChecklistCollapsibleKeys, checklistGroupsAnyExpanded, collapseAllChecklistGroups, expandAllChecklistGroups, toggleChecklistExpandCollapseAll, buildChecklistExpandCollapseAllHtml } from './noteSurfaceChecklist.js';
+import { bindChecklistInteractions, attachChecklistDrag, getChecklistCollapsedKeys, getChecklistDoneCollapsed, isChecklistDoneSectionCollapsed, toggleChecklistDoneSection, getChecklistCollapsibleKeys, checklistGroupsAnyExpanded, collapseAllChecklistGroups, expandAllChecklistGroups, toggleChecklistExpandCollapseAll, buildChecklistExpandCollapseAllHtml } from './noteSurfaceChecklist.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -750,7 +750,7 @@ export function refreshNoteBody(body, item, {
         return html;
     })();
 
-    // Replace old checklist HTML
+// Replace old checklist HTML
     expandedChecklist.outerHTML = newChecklistHtml;
 
     // Re-bind interactions
@@ -766,6 +766,11 @@ export function refreshNoteBody(body, item, {
                         // Re-invoke refreshNoteBody via the outer refresh
                         refresh();
                     }
+                });
+                attachChecklistDrag(newBody, item, {
+                    localOnly,
+                    onChange,
+                    refresh
                 });
             }
         }

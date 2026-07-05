@@ -13,7 +13,7 @@ import { normalizeItemForSave } from './noteModel.js';
 import { createBlankChecklistStep } from './noteSurfaceMutations.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText, convertContentToChecklist, convertChecklistToContent } from './noteBodyConversion.js';
 import { attachSheetInteractions } from './sheet.js';
-import { bindChecklistInteractions } from './noteSurfaceChecklist.js';
+import { bindChecklistInteractions, attachChecklistDrag } from './noteSurfaceChecklist.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -520,6 +520,11 @@ export function bindNoteEditorShell(root, item, {
             refresh
         }));
         bindChecklistInteractions(body, item, {
+            refresh,
+            localOnly,
+            onChange
+        });
+        attachChecklistDrag(body, item, {
             refresh,
             localOnly,
             onChange
