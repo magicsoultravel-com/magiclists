@@ -186,7 +186,6 @@
 .step-row--display .step-text {
     flex: 1 1 auto;
     min-width: 0;
-    padding-right: 3.1rem;
     word-wrap: break-word;
     overflow-wrap: break-word;
     white-space: pre-wrap;
@@ -204,7 +203,6 @@
 
 /* Ensure step-text maintains padding when in edit mode to prevent action icons shift */
 .step-row--display .step-text.card-inline-edit {
-    padding-right: 3.1rem;
 }
 
 /* Quick actions grid */
