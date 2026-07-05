@@ -192,7 +192,9 @@ export function bindChecklistInteractions(root, item, {
             }
             // Focus the new step after DOM update
             // The new step is always inserted right after the current step
-            const focusNewStep = () => {
+            refresh();
+            // Use requestAnimationFrame to ensure DOM is updated after refresh
+            requestAnimationFrame(() => {
                 const currentRow = root.querySelector(`[data-step-id="${stepId}"]`)?.closest('.step-row--display');
                 if (!currentRow) return;
                 const newRow = currentRow.nextElementSibling;
@@ -202,10 +204,7 @@ export function bindChecklistInteractions(root, item, {
                         focusInlineEdit(newTextEl, 'start');
                     }
                 }
-            };
-            refresh();
-            // Use setTimeout to ensure DOM is updated after refresh
-            setTimeout(focusNewStep, 0);
+            });
         }
     });
 }
