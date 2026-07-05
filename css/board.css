@@ -1227,7 +1227,6 @@ html[data-tile-small-footprint="card"] #app-canvas.view-grid .mini-card[data-des
 #editor-overlay .editor-note-body {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
     padding: 0;
     min-height: 0;
 }
