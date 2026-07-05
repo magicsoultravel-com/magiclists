@@ -333,6 +333,7 @@ export const Editor = {
         const onEditorChange = () => {
             this.markInteracted();
             this.scheduleEditorSizeLabelUpdate();
+            this.syncActiveItemFromDom();
             const shell = this.mountZone?.querySelector('.editor-note-shell');
             if (shell && this.activeItem) NoteSurface.updateConvertButtons(shell, this.activeItem);
             this.triggerAutoSave();
@@ -400,6 +401,7 @@ export const Editor = {
         const onEditorChange = () => {
             this.markInteracted();
             this.scheduleEditorSizeLabelUpdate();
+            this.syncActiveItemFromDom();
             const shell = this.mountZone?.querySelector('.editor-note-shell');
             if (shell && this.activeItem) NoteSurface.updateConvertButtons(shell, this.activeItem);
             this.triggerAutoSave();
@@ -519,6 +521,7 @@ export const Editor = {
             localOnly: true,
             onChange: () => {
                 this.markInteracted();
+                this.syncActiveItemFromDom();
                 this.triggerAutoSave();
             }
         });
