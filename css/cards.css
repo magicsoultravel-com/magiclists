@@ -1055,4 +1055,9 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
 .card-act--emoji:hover {
     color: #c4b5fd;
 }
-
+/* Fix the layout shift when entering inline editor mode */
+#app-canvas.view-grid .mini-card.is-editing-inline .editor-note-body,
+#app-canvas.view-freeform .mini-card.is-editing-inline .editor-note-body {
+    margin-right: var(--note-scroll-resize-gutter) !important;
+    width: calc(100% - var(--note-scroll-resize-gutter)) !important;
+}
