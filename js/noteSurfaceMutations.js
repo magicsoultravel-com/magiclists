@@ -162,11 +162,22 @@ function attachNoteBodyInteractions(root, item, {
         });
     }
 
-    if (localOnly && onChange) {
-        root.querySelectorAll('.card-inline-edit').forEach((el) => {
-            el.addEventListener('input', onChange);
-        });
-    }
+    // Always add onChange for inline edits to trigger auto-save
+    // For modal editor (localOnly=true), onChange syncs DOM and triggers auto-save
+    // For board surface (localOnly=false), we need to sync DOM and emit mutation
+    const handleInlineEditInput = () => {
+        if (localOnly) {
+            onChange();
+        } else {
+            // For board surface: sync DOM changes and emit mutation
+            syncItemBodyFromDom(root, item);
+            mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+        }
+    };
+    
+    root.querySelectorAll('.card-inline-edit').forEach((el) => {
+        el.addEventListener('input', handleInlineEditInput);
+    });
 
     if (stopMousedownPropagation && !root.dataset.shellBubbleBound) {
         root.dataset.shellBubbleBound = '1';

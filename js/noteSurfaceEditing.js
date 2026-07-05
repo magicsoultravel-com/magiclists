@@ -8,10 +8,9 @@ import { copyPlainTextToClipboard } from './clipboard.js';
 import { stepToPlainCopyLine } from './noteBodyConversion.js';
 import { UndoManager } from './undo.js';
 import { bindNoteBodySections, updateConvertButtons, bindCollapsable } from './noteSurfaceHtml.js';
-import { syncItemBodyFromDom, mutateItem, attachNoteBodyInteractions, updateNoteMetaStats, syncInlineFieldToItem } from './noteSurfaceMutations.js';
-import { buildSheetInteractionOptions } from './noteSurface.js';
+import { syncItemBodyFromDom, mutateItem, attachNoteBodyInteractions, updateNoteMetaStats, syncInlineFieldToItem, buildSheetInteractionOptions } from './noteSurfaceMutations.js';
 import { normalizeItemForSave } from './noteModel.js';
-import { createBlankChecklistStep } from './noteSurface.js';
+import { createBlankChecklistStep } from './noteSurfaceMutations.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText, convertContentToChecklist, convertChecklistToContent } from './noteBodyConversion.js';
 import { attachSheetInteractions } from './sheet.js';
 import { bindChecklistInteractions } from './noteSurfaceChecklist.js';
@@ -541,20 +540,6 @@ export function bindNoteEditorShell(root, item, {
                 + '.note-section-header, .note-section-header .collapsable-toggle'
             )) return;
             e.stopPropagation();
-        });
-    }
-
-    shell.querySelectorAll('.card-inline-edit').forEach((el) => {
-        el.addEventListener('input', () => updateNoteMetaStats(shell, item));
-    });
-
-    shell.querySelectorAll('[data-sheet-cell]').forEach((el) => {
-        el.addEventListener('input', () => updateNoteMetaStats(shell, item));
-    });
-
-    if (localOnly && onChange) {
-        shell.querySelectorAll('.card-inline-edit').forEach((el) => {
-            el.addEventListener('input', onChange);
         });
     }
 
