@@ -502,7 +502,6 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
 .editor-note-body:has(.expanded-checklist):not(:has(.card-content-preview)) .checklist-toolbar {
     position: relative;
     z-index: 5;
-    
 }
 
 .checklist-toolbar .checklist-expand-collapse-all-btn {
