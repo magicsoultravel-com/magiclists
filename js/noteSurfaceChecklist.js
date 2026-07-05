@@ -100,7 +100,7 @@ export function bindChecklistInteractions(root, item, {
             const step = (item.steps || []).find(s => s.id === stepId);
             if (!step) return;
             const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
-            step.indent = (step.indent || 0) + 1;
+            step.level = (step.level || 0) + 1;
             normalizeChecklistLevels(item.steps);
             if (localOnly) onChange();
             else commitInlineChecklistOp(item, beforeItem, { localOnly });
@@ -117,9 +117,9 @@ export function bindChecklistInteractions(root, item, {
             const stepId = row?.dataset?.stepId;
             if (!stepId) return;
             const step = (item.steps || []).find(s => s.id === stepId);
-            if (!step || (step.indent || 0) <= 0) return;
+            if (!step || (step.level || 0) <= 0) return;
             const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
-            step.indent = Math.max(0, (step.indent || 0) - 1);
+            step.level = Math.max(0, (step.level || 0) - 1);
             normalizeChecklistLevels(item.steps);
             if (localOnly) onChange();
             else commitInlineChecklistOp(item, beforeItem, { localOnly });
@@ -491,11 +491,6 @@ export function annotateChecklistTreeGuides(rows) {
     });
 }
 
-export function canIndentStep(active, idx) {
-    if (idx < 0 || !active[idx]) return false;
-    return getStepLevel(active[idx]) > 0;
-}
-
 export function insertChecklistStep(item, {
     afterStepId = null,
     text = '',
@@ -509,7 +504,7 @@ export function insertChecklistStep(item, {
         id: createStepId(),
         text,
         completed,
-        indent: 0
+        level: 0
     };
 
     if (afterStepId) {
@@ -660,7 +655,7 @@ export function handleChecklistEnter(e, item, { localOnly = false, onChange = ()
         id: createStepId(),
         text: '',
         completed: false,
-        indent: getStepLevel(step) + 1
+        level: getStepLevel(step) + 1
     };
     item.steps.splice(stepIdx + 1, 0, newStep);
 
