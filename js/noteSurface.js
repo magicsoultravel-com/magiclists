@@ -17,7 +17,7 @@ import { hasRichMarkup, linkifyPlainUrls, sanitizeRichHtml, stripRichText } from
 import { normalizeItemForSave } from './noteModel.js';
 import { CARD_ICONS, FORMAT_ICONS, ACTION_ICONS } from './icons.js';
 import { UndoManager } from './undo.js';
-import { escapeHTML, escapeAttr } from './domEscape.js';
+import { escapeHTML, escapeAttr, escapeQuotes } from './domEscape.js';
 import { UNCATEGORIZED_COLOR } from './categories.js';
 import {
     attachSheetInteractions,
@@ -354,6 +354,102 @@ function isSheetTemplateActive(item) {
     return item?.noteTemplate === 'sheet';
 }
 
+/**
+ * Capture the current focus state of a note body element.
+ * Returns an object with focus state information, or null if no focus state to capture.
+ * @param {HTMLElement} body - The .editor-note-body element
+ * @returns {object|null} Focus state object or null
+ */
+function captureNoteBodyFocusState(body) {
+    if (!body) return null;
+    
+    const active = document.activeElement;
+    if (!active || !body.contains(active)) return null;
+    
+    const field = active.dataset.field;
+    if (!field) return null;
+    
+    // For checklist steps, capture additional state
+    if (field === 'step-text') {
+        const stepId = active.dataset.stepId;
+        const sel = window.getSelection();
+        const range = sel?.rangeCount > 0 ? sel.getRangeAt(0) : null;
+        
+        // Determine if caret is at start or end
+        let edge = 'end';
+        let plainOffset = 0;
+        
+        if (range && active.contains(range.startContainer)) {
+            const probe = range.cloneRange();
+            probe.selectNodeContents(active);
+            probe.setEnd(range.startContainer, range.startOffset);
+            const plainText = stripRichText(active.textContent || '');
+            plainOffset = probe.toString().length;
+            edge = plainOffset <= 0 ? 'start' : 'end';
+        }
+        
+        return {
+            field,
+            stepId,
+            edge,
+            plainOffset
+        };
+    }
+    
+    // For title and content fields
+    return { field };
+}
+
+/**
+ * Restore focus state to a note body element after re-rendering.
+ * @param {HTMLElement} newBody - The new .editor-note-body element
+ * @param {HTMLElement} card - The card element (for finding step elements)
+ * @param {object} focusState - The focus state object from captureNoteBodyFocusState
+ */
+function restoreNoteBodyFocusState(newBody, card, focusState) {
+    if (!newBody || !focusState) return;
+    
+    const { field, stepId, edge, plainOffset } = focusState;
+    
+    if (field === 'step-text' && stepId) {
+        // Find the step text element in the new body
+        const stepEl = newBody.querySelector(`[data-step-id="${stepId}"].card-inline-edit[data-field="step-text"]`);
+        if (stepEl) {
+            focusInlineEdit(stepEl, edge || 'end');
+            if (plainOffset != null && edge === 'start') {
+                setCaretAtPlainOffset(stepEl, plainOffset);
+            }
+            return;
+        }
+    }
+    
+    // For title and content fields
+    const el = newBody.querySelector(`.card-inline-edit[data-field="${field}"]`);
+    if (el) {
+        focusInlineEdit(el, edge || 'end');
+    }
+}
+
+/**
+ * Focus a pending checklist step on a card.
+ * @param {HTMLElement} card - The card element
+ */
+function focusPendingChecklistStep(card) {
+    if (!card?.dataset?.pendingFocusStepId) return;
+    
+    const stepId = card.dataset.pendingFocusStepId;
+    const edge = card.dataset.pendingFocusEdge || 'end';
+    const plainOffset = card.dataset.pendingFocusPlainOffset;
+    
+    const stepEl = card.querySelector(`[data-step-id="${stepId}"].card-inline-edit[data-field="step-text"]`);
+    if (stepEl) {
+        focusInlineEdit(stepEl, edge);
+        if (plainOffset != null) {
+            setCaretAtPlainOffset(stepEl, Number(plainOffset));
+        }
+    }
+}
+
 // Main NoteSurface object
 // Note: escapeHTML, escapeAttr, hasRichMarkup, stripRichText, linkifyPlainUrls, sanitizeRichHtml
 // are imported from domEscape.js and richText.js respectively
@@ -433,9 +529,15 @@ export const NoteSurface = {
     getInlineEditSequence,
     handleInlineEditArrowNav,
 
+    // Focus state management
+    captureNoteBodyFocusState,
+    restoreNoteBodyFocusState,
+    focusPendingChecklistStep,
+
      // Utility methods
      escapeHTML,
      escapeAttr,
+     escapeQuotes,
      canEditInline: function() {
          return !isFileCabinetActive();
      },
@@ -449,5 +551,6 @@ export {
     syncInlineFieldToItem,
     escapeHTML,
     escapeAttr,
+    escapeQuotes,
     createBlankChecklistStep
 };
