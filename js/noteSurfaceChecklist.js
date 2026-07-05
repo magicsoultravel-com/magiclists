@@ -317,50 +317,7 @@ export function attachChecklistDrag(root, item, {
     const onUp = () => finishDrag();
 
     // Attach mousedown handler for grab-handle to initiate drag
-    root.addEventListener('mousedown', (e) => {
-        if (e.button !== 0) return;
-        const handle = e.target.closest('.grab-handle--step');
-        if (!handle || !root.contains(handle)) return;
-        const row = handle.closest('.step-row--display:not(.step-row--done)');
-        if (!row) return;
-        e.preventDefault();
-        e.stopPropagation();
-
-        const stepId = row.dataset.stepId;
-        const activeSteps = (item.steps || []).filter((step) => !step.completed);
-        const stepIndex = activeSteps.findIndex((step) => step.id === stepId);
-        if (stepIndex < 0) return;
-
-        const visibleIds = getActiveRows().map((r) => r.dataset.stepId);
-        const { subtreeIds, minAmongOthers, maxAmongOthers } = computeVisibleInsertBounds(
-            activeSteps,
-            stepIndex,
-            visibleIds
-        );
-        const isSingleLeaf = subtreeIds.length === 1
-            || !stepHasDescendants(activeSteps, stepIndex);
-        const rows = getActiveRows();
-        const block = buildDomBlockFromIds(rows, subtreeIds);
-        const othersCount = visibleIds.filter((id) => !subtreeIds.includes(id)).length;
-
-        activeDrag = {
-            row,
-            block,
-            blockStepIds: subtreeIds,
-            isSingleLeaf,
-            bounds: isSingleLeaf
-                ? { minAmongOthers: 0, maxAmongOthers: othersCount }
-                : { minAmongOthers, maxAmongOthers },
-            dropMode: 'sibling',
-            insertIndex: 0,
-            targetLevel: 0,
-            startX: e.clientX,
-            startY: e.clientY,
-            moved: false
-        };
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
-    }, true);
+    // The original mousedown handler was removed to avoid duplication.
 }
 
 export function getActiveRows() {
