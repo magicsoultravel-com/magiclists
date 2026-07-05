@@ -18,6 +18,7 @@ import { getCardRenderContext } from './categories.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
 import { NoteSurface } from './noteSurface.js';
 import { UI } from './ui.js';
+import { escapeQuotes } from './domEscape.js';
 import {
     attachSheetInteractions,
     defaultSheetDimsForTemplate,
@@ -331,6 +332,8 @@ export const Editor = {
         const onEditorChange = () => {
             this.markInteracted();
             this.scheduleEditorSizeLabelUpdate();
+            const shell = this.mountZone?.querySelector('.editor-note-shell');
+            if (shell && this.activeItem) NoteSurface.updateConvertButtons(shell, this.activeItem);
             this.triggerAutoSave();
         };
         NoteSurface.refreshNoteBody(body, this.activeItem, {
@@ -357,7 +360,7 @@ export const Editor = {
             this.availableCategories.map(cat => {
                 const catName = typeof cat === 'string' ? cat : cat.name;
                 const selected = activeCategory && catName.toLowerCase() === activeCategory.toLowerCase();
-                return `<option value="${NoteSurface.escapeQuotes(catName)}" ${selected ? 'selected' : ''}>${catName}</option>`;
+                return `<option value="${escapeQuotes(catName)}" ${selected ? 'selected' : ''}>${catName}</option>`;
             }).join('');
         const isExistingItem = item.created_at !== undefined;
         if (this.toolbarMount) {
