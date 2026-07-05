@@ -185,11 +185,27 @@ export function bindChecklistInteractions(root, item, {
         if (!active?.classList?.contains('step-text')) return;
         e.preventDefault();
         const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
+        const stepId = active.dataset.stepId;
         if (handleChecklistEnter(e, item, { localOnly, onChange })) {
             if (!localOnly) {
                 commitInlineChecklistOp(item, beforeItem, { localOnly });
             }
+            // Focus the new step after DOM update
+            // The new step is always inserted right after the current step
+            const focusNewStep = () => {
+                const currentRow = root.querySelector(`[data-step-id="${stepId}"]`)?.closest('.step-row--display');
+                if (!currentRow) return;
+                const newRow = currentRow.nextElementSibling;
+                if (newRow) {
+                    const newTextEl = newRow.querySelector('.step-text');
+                    if (newTextEl) {
+                        focusInlineEdit(newTextEl, 'start');
+                    }
+                }
+            };
             refresh();
+            // Use setTimeout to ensure DOM is updated after refresh
+            setTimeout(focusNewStep, 0);
         }
     });
 }
@@ -536,15 +552,6 @@ export function insertChecklistStep(item, {
         mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
     }
     onChange();
-
-    // Focus the new step's text element
-    const root = document.querySelector('.editor-note-body') || document.querySelector('.editor-note-shell');
-    if (root) {
-        const newTextEl = root.querySelector(`[data-step-id="${newStep.id}"] .step-text`);
-        if (newTextEl) {
-            focusInlineEdit(newTextEl, 'start');
-        }
-    }
     return true;
 }
 
@@ -677,14 +684,6 @@ export function handleChecklistEnter(e, item, { localOnly = false, onChange = ()
             mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
         }
         onChange();
-
-        const root = document.querySelector('.editor-note-body');
-        if (root) {
-            const newTextEl = root.querySelector(`[data-step-id="${newStep.id}"] .step-text`);
-            if (newTextEl) {
-                focusInlineEdit(newTextEl, 'start');
-            }
-        }
         return true;
     }
 
