@@ -167,14 +167,29 @@ export function bindChecklistInteractions(root, item, {
             return;
         }
 
-        // --- add step ---
-        const addBtn = e.target.closest('.expanded-checklist-add-btn');
-        if (addBtn && root.contains(addBtn)) {
-            e.preventDefault();
-            e.stopPropagation();
-            insertChecklistStep(item, { localOnly, onChange });
+    // --- add step ---
+    const addBtn = e.target.closest('.expanded-checklist-add-btn');
+    if (addBtn && root.contains(addBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+        insertChecklistStep(item, { localOnly, onChange });
+        refresh();
+        return;
+    }
+    });
+
+    // --- step-text keydown: Enter creates sibling, Shift+Enter creates nested step ---
+    root.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        const active = e.target;
+        if (!active?.classList?.contains('step-text')) return;
+        e.preventDefault();
+        const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
+        if (handleChecklistEnter(e, item, { localOnly, onChange })) {
+            if (!localOnly) {
+                commitInlineChecklistOp(item, beforeItem, { localOnly });
+            }
             refresh();
-            return;
         }
     });
 }
@@ -521,6 +536,15 @@ export function insertChecklistStep(item, {
         mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
     }
     onChange();
+
+    // Focus the new step's text element
+    const root = document.querySelector('.editor-note-body') || document.querySelector('.editor-note-shell');
+    if (root) {
+        const newTextEl = root.querySelector(`[data-step-id="${newStep.id}"] .step-text`);
+        if (newTextEl) {
+            focusInlineEdit(newTextEl, 'start');
+        }
+    }
     return true;
 }
 
@@ -640,35 +664,37 @@ export function handleChecklistEnter(e, item, { localOnly = false, onChange = ()
     const text = active.textContent || '';
 
     if (e.shiftKey) {
-        insertChecklistStep(item, {
-            afterStepId: stepId,
+        // Shift+Enter: create a nested step (level + 1)
+        const newStep = {
+            id: createStepId(),
             text: '',
-            localOnly,
-            onChange
-        });
+            completed: false,
+            level: getStepLevel(step) + 1
+        };
+        item.steps.splice(stepIdx + 1, 0, newStep);
+
+        if (!localOnly) {
+            mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+        }
+        onChange();
+
+        const root = document.querySelector('.editor-note-body');
+        if (root) {
+            const newTextEl = root.querySelector(`[data-step-id="${newStep.id}"] .step-text`);
+            if (newTextEl) {
+                focusInlineEdit(newTextEl, 'start');
+            }
+        }
         return true;
     }
 
-    const newStep = {
-        id: createStepId(),
+    // Enter: create a sibling step (same level)
+    insertChecklistStep(item, {
+        afterStepId: stepId,
         text: '',
-        completed: false,
-        level: getStepLevel(step) + 1
-    };
-    item.steps.splice(stepIdx + 1, 0, newStep);
-
-    if (!localOnly) {
-        mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
-    }
-    onChange();
-
-    const root = document.querySelector('.editor-note-body');
-    if (root) {
-        const newTextEl = root.querySelector(`[data-step-id="${newStep.id}"] .step-text`);
-        if (newTextEl) {
-            focusInlineEdit(newTextEl, 'start');
-        }
-    }
+        localOnly,
+        onChange
+    });
     return true;
 }
 
