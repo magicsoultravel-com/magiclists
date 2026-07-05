@@ -403,13 +403,6 @@ class Application {
     setupFab() {
         const fab = document.getElementById('fab-create');
         if (!fab) return;
-        fab.addEventListener('click', () => {
-            if (!AppState.user.isLoggedIn) {
-                this.executeLoginPrompt();
-                return;
-            }
-            TemplatePicker.open(AppState.categories);
-        });
     }
 
     updateFabVisibility() {
