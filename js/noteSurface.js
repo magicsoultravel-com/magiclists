@@ -113,6 +113,8 @@ import {
     bindNoteEditorShell
 } from './noteSurfaceEditing.js';
 
+import { mutateItem } from './noteSurfaceMutations.js';
+
 import { EmojiPicker } from './iconPicker.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
@@ -534,6 +536,9 @@ export const NoteSurface = {
     restoreNoteBodyFocusState,
     focusPendingChecklistStep,
 
+    // Mutation functions
+    mutateItem,
+
      // Utility methods
      escapeHTML,
      escapeAttr,
@@ -552,5 +557,6 @@ export {
     escapeHTML,
     escapeAttr,
     escapeQuotes,
-    createBlankChecklistStep
+    createBlankChecklistStep,
+    mutateItem
 };
