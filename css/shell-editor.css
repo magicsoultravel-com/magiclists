@@ -23,7 +23,7 @@
     font-size: calc(0.65rem * var(--note-font-scale, 1));
     line-height: 1.35;
     white-space: pre-wrap;
-    overflow-wrap: anywhere;
+    overflow-wrap: break-word;
     word-break: break-word;
 }
 
