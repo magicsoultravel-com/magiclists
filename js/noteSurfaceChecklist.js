@@ -316,6 +316,7 @@ export function attachChecklistDrag(root, item, {
 
     const onUp = () => finishDrag();
 
+    // Attach mousedown handler for grab-handle to initiate drag
     root.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
         const handle = e.target.closest('.grab-handle--step');
