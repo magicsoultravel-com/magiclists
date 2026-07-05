@@ -8,7 +8,7 @@ import { copyPlainTextToClipboard } from './clipboard.js';
 import { stepToPlainCopyLine } from './noteBodyConversion.js';
 import { UndoManager } from './undo.js';
 import { bindNoteBodySections, updateConvertButtons, bindCollapsable } from './noteSurfaceHtml.js';
-import { syncItemBodyFromDom, mutateItem, attachNoteBodyInteractions, updateNoteMetaStats } from './noteSurfaceMutations.js';
+import { syncItemBodyFromDom, mutateItem, attachNoteBodyInteractions, updateNoteMetaStats, syncInlineFieldToItem } from './noteSurfaceMutations.js';
 import { buildSheetInteractionOptions } from './noteSurface.js';
 import { normalizeItemForSave } from './noteModel.js';
 import { createBlankChecklistStep } from './noteSurface.js';
@@ -117,28 +117,6 @@ export function openEmojiPickerForNote(root, anchor, item, { localOnly = false, 
             insertEmojiAtCaret(ctx.target, emoji, { item, localOnly, onChange });
         }
     });
-}
-
-export function syncInlineFieldToItem(el, item) {
-    const field = el.dataset.field;
-    if (el.classList.contains('rich-text--edit')) {
-        const val = sanitizeRichHtml(linkifyPlainUrls(el.innerHTML));
-        if (field === 'title') item.title = val;
-        else if (field === 'content') item.content = val;
-        else if (field === 'step-text') {
-            const step = item.steps?.find(s => s.id === el.dataset.stepId);
-            if (step) step.text = val;
-        }
-        return;
-    }
-    if (field === 'title') {
-        item.title = el.textContent.trim();
-    } else if (field === 'content') {
-        item.content = el.textContent;
-    } else if (field === 'step-text') {
-        const step = item.steps?.find(s => s.id === el.dataset.stepId);
-        if (step) step.text = el.textContent;
-    }
 }
 
 export function tryOpenRichEditLink(e, host) {

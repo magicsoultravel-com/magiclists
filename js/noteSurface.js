@@ -113,7 +113,19 @@ import {
     bindNoteEditorShell
 } from './noteSurfaceEditing.js';
 
-import { mutateItem } from './noteSurfaceMutations.js';
+// Import mutation functions from noteSurfaceMutations.js
+import {
+    mutateItem,
+    syncInlineFieldToItem,
+    emitItemMutation,
+    commitInlineTextOp,
+    commitInlineChecklistOp,
+    createBlankChecklistStep,
+    syncItemBodyFromDom,
+    buildSheetInteractionOptions,
+    attachNoteBodyInteractions,
+    updateNoteMetaStats
+} from './noteSurfaceMutations.js';
 
 import { EmojiPicker } from './iconPicker.js';
 
@@ -121,28 +133,6 @@ const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
 const EDITOR_ZOOM_MAX = 1.25;
 const EDITOR_ZOOM_STEP = 0.05;
-
-function syncInlineFieldToItem(el, item) {
-    const field = el.dataset.field;
-    if (el.classList.contains('rich-text--edit')) {
-        const val = sanitizeRichHtml(linkifyPlainUrls(el.innerHTML));
-        if (field === 'title') item.title = val;
-        else if (field === 'content') item.content = val;
-        else if (field === 'step-text') {
-            const step = item.steps?.find(s => s.id === el.dataset.stepId);
-            if (step) step.text = val;
-        }
-        return;
-    }
-    if (field === 'title') {
-        item.title = el.textContent.trim();
-    } else if (field === 'content') {
-        item.content = el.textContent;
-    } else if (field === 'step-text') {
-        const step = item.steps?.find(s => s.id === el.dataset.stepId);
-        if (step) step.text = el.textContent;
-    }
-}
 
 function computeNoteSizeKb(item) {
     if (!item) return '0';
@@ -197,102 +187,6 @@ function readTileSmallFootprint() {
     } catch {
         return { w: 120, h: 60 };
     }
-}
-
-// Core mutation functions - these must remain in noteSurface.js as they are the foundation
-function emitItemMutation(item, { preserveView = false, beforeItem = null, skipRerender = false } = {}) {
-    const preserveEmptySteps = preserveView && skipRerender;
-    const normalized = normalizeItemForSave(item, { preserveEmptySteps });
-    Object.assign(item, normalized);
-    const normalizedBefore = beforeItem
-        ? normalizeItemForSave(beforeItem, { preserveEmptySteps })
-        : null;
-    window.dispatchEvent(new CustomEvent('item:mutation_requested', {
-        detail: { item: normalized, preserveView, beforeItem: normalizedBefore, skipRerender }
-    }));
-}
-
-// Mutation functions moved to noteSurfaceMutations.js
-
-function commitInlineTextOp(item, beforeItem, { localOnly = false, mergeKey = null, mergeWindow = true } = {}) {
-    if (localOnly || !beforeItem) return;
-    const preserveEmptySteps = true;
-    const afterNorm = normalizeItemForSave(item, { preserveEmptySteps });
-    const beforeNorm = normalizeItemForSave(beforeItem, { preserveEmptySteps });
-    if (JSON.stringify(beforeNorm) === JSON.stringify(afterNorm)) return;
-    Object.assign(item, afterNorm);
-    window.dispatchEvent(new CustomEvent('item:mutation_requested', {
-        detail: {
-            item: afterNorm,
-            preserveView: true,
-            beforeItem: beforeNorm,
-            skipRerender: true,
-            mergeKey: mergeKey || `${afterNorm.id}:text`,
-            mergeWindow
-        }
-    }));
-}
-
-function commitInlineChecklistOp(item, beforeItem, { localOnly = false } = {}) {
-    if (localOnly || !beforeItem) return;
-    const preserveEmptySteps = true;
-    const afterNorm = normalizeItemForSave(item, { preserveEmptySteps });
-    const beforeNorm = normalizeItemForSave(beforeItem, { preserveEmptySteps });
-    if (JSON.stringify(beforeNorm) === JSON.stringify(afterNorm)) return;
-    Object.assign(item, afterNorm);
-    window.dispatchEvent(new CustomEvent('item:mutation_requested', {
-        detail: {
-            item: afterNorm,
-            preserveView: true,
-            beforeItem: beforeNorm,
-            skipRerender: true,
-            mergeKey: `${afterNorm.id}:struct`,
-            mergeWindow: false
-        }
-    }));
-}
-
-function createBlankChecklistStep() {
-    return {
-        id: `step_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        text: '',
-        completed: false,
-        level: 0,
-        startDateTime: '',
-        endDateTime: ''
-    };
-}
-
-function syncItemBodyFromDom(root, item) {
-    root?.querySelectorAll('.card-inline-edit').forEach((el) => {
-        const field = el.dataset.field;
-        if (field === 'title' || field === 'content' || field === 'step-text') {
-            syncInlineFieldToItem(el, item);
-        }
-    });
-    syncSheetFromDom(root, item);
-}
-
-function buildSheetInteractionOptions(shell, item, { localOnly = false, onChange = () => {}, refresh = () => {} } = {}) {
-    return {
-        localOnly,
-        onChange,
-        refresh,
-        inModalEditor: !!shell?.closest('#editor-overlay'),
-        prepareSnapshot: () => prepareInlineOpSnapshot(shell, item, localOnly),
-        commitCellEdit: (beforeItem) => {
-            commitInlineTextOp(item, beforeItem, {
-                localOnly,
-                mergeKey: `${item.id}:sheet`,
-                mergeWindow: true
-            });
-        },
-        commitStructure: (beforeItem) => {
-            commitInlineChecklistOp(item, beforeItem, { localOnly });
-        },
-        onUndo: () => UndoManager.undo(),
-        onRedo: () => UndoManager.redo()
-    };
 }
 
 function ensureChecklistStepFromRow(row, item) {
@@ -465,7 +359,7 @@ export const NoteSurface = {
     ensureChecklistStepFromRow,
     commitInlineTextOp,
     commitInlineChecklistOp,
-    // mutateItem moved to noteSurfaceMutations.js
+    mutateItem,
     buildSheetInteractionOptions,
     syncItemBodyFromDom,
     createBlankChecklistStep,
@@ -537,7 +431,8 @@ export const NoteSurface = {
     focusPendingChecklistStep,
 
     // Mutation functions
-    mutateItem,
+    attachNoteBodyInteractions,
+    updateNoteMetaStats,
 
      // Utility methods
      escapeHTML,

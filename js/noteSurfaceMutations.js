@@ -2,12 +2,34 @@
 import { normalizeItemForSave } from './noteModel.js';
 import { syncSheetFromDom } from './sheet.js';
 import { UndoManager } from './undo.js';
-import { syncInlineFieldToItem } from './noteSurfaceEditing.js';
+import { sanitizeRichHtml, linkifyPlainUrls } from './richText.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
 const EDITOR_ZOOM_MAX = 1.25;
 const EDITOR_ZOOM_STEP = 0.05;
+
+function syncInlineFieldToItem(el, item) {
+    const field = el.dataset.field;
+    if (el.classList.contains('rich-text--edit')) {
+        const val = sanitizeRichHtml(linkifyPlainUrls(el.innerHTML));
+        if (field === 'title') item.title = val;
+        else if (field === 'content') item.content = val;
+        else if (field === 'step-text') {
+            const step = item.steps?.find(s => s.id === el.dataset.stepId);
+            if (step) step.text = val;
+        }
+        return;
+    }
+    if (field === 'title') {
+        item.title = el.textContent.trim();
+    } else if (field === 'content') {
+        item.content = el.textContent;
+    } else if (field === 'step-text') {
+        const step = item.steps?.find(s => s.id === el.dataset.stepId);
+        if (step) step.text = el.textContent;
+    }
+}
 
 function emitItemMutation(item, { preserveView = false, beforeItem = null, skipRerender = false } = {}) {
     const preserveEmptySteps = preserveView && skipRerender;
@@ -37,6 +59,81 @@ function syncItemBodyFromDom(root, item) {
         }
     });
     syncSheetFromDom(root, item);
+}
+
+function commitInlineTextOp(item, beforeItem, { localOnly = false, mergeKey = null, mergeWindow = true } = {}) {
+    if (localOnly || !beforeItem) return;
+    const preserveEmptySteps = true;
+    const afterNorm = normalizeItemForSave(item, { preserveEmptySteps });
+    const beforeNorm = normalizeItemForSave(beforeItem, { preserveEmptySteps });
+    if (JSON.stringify(beforeNorm) === JSON.stringify(afterNorm)) return;
+    Object.assign(item, afterNorm);
+    window.dispatchEvent(new CustomEvent('item:mutation_requested', {
+        detail: {
+            item: afterNorm,
+            preserveView: true,
+            beforeItem: beforeNorm,
+            skipRerender: true,
+            mergeKey: mergeKey || `${afterNorm.id}:text`,
+            mergeWindow
+        }
+    }));
+}
+
+function commitInlineChecklistOp(item, beforeItem, { localOnly = false } = {}) {
+    if (localOnly || !beforeItem) return;
+    const preserveEmptySteps = true;
+    const afterNorm = normalizeItemForSave(item, { preserveEmptySteps });
+    const beforeNorm = normalizeItemForSave(beforeItem, { preserveEmptySteps });
+    if (JSON.stringify(beforeNorm) === JSON.stringify(afterNorm)) return;
+    Object.assign(item, afterNorm);
+    window.dispatchEvent(new CustomEvent('item:mutation_requested', {
+        detail: {
+            item: afterNorm,
+            preserveView: true,
+            beforeItem: beforeNorm,
+            skipRerender: true,
+            mergeKey: `${afterNorm.id}:struct`,
+            mergeWindow: false
+        }
+    }));
+}
+
+function createBlankChecklistStep() {
+    return {
+        id: `step_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        text: '',
+        completed: false,
+        level: 0,
+        startDateTime: '',
+        endDateTime: ''
+    };
+}
+
+function buildSheetInteractionOptions(shell, item, { localOnly = false, onChange = () => {}, refresh = () => {} } = {}) {
+    return {
+        localOnly,
+        onChange,
+        refresh,
+        inModalEditor: !!shell?.closest('#editor-overlay'),
+        prepareSnapshot: () => {
+            const root = shell?.querySelector?.('.editor-note-body') || shell;
+            const beforeItem = JSON.parse(JSON.stringify(item));
+            return beforeItem;
+        },
+        commitCellEdit: (beforeItem) => {
+            commitInlineTextOp(item, beforeItem, {
+                localOnly,
+                mergeKey: `${item.id}:sheet`,
+                mergeWindow: true
+            });
+        },
+        commitStructure: (beforeItem) => {
+            commitInlineChecklistOp(item, beforeItem, { localOnly });
+        },
+        onUndo: () => UndoManager.undo(),
+        onRedo: () => UndoManager.redo()
+    };
 }
 
 function attachNoteBodyInteractions(root, item, {
@@ -90,8 +187,6 @@ function attachNoteBodyInteractions(root, item, {
 }
 
 function updateNoteMetaStats(shell, item) {
-    // This function will be imported from noteSurfaceHtml.js
-    // For now, we'll just update the stats
     const statsEl = shell?.querySelector('.editor-meta-stats');
     if (statsEl && item) {
         // Update stats display
@@ -101,7 +196,12 @@ function updateNoteMetaStats(shell, item) {
 export {
     emitItemMutation,
     mutateItem,
+    syncInlineFieldToItem,
     syncItemBodyFromDom,
+    commitInlineTextOp,
+    commitInlineChecklistOp,
+    createBlankChecklistStep,
+    buildSheetInteractionOptions,
     attachNoteBodyInteractions,
     updateNoteMetaStats
 };
