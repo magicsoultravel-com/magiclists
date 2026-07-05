@@ -99,6 +99,7 @@ export function bindChecklistInteractions(root, item, {
             if (!stepId) return;
             const step = (item.steps || []).find(s => s.id === stepId);
             if (!step) return;
+            syncItemBodyFromDom(root, item);
             const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
             step.level = (step.level || 0) + 1;
             normalizeChecklistLevels(item.steps);
@@ -118,6 +119,7 @@ export function bindChecklistInteractions(root, item, {
             if (!stepId) return;
             const step = (item.steps || []).find(s => s.id === stepId);
             if (!step || (step.level || 0) <= 0) return;
+            syncItemBodyFromDom(root, item);
             const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
             step.level = Math.max(0, (step.level || 0) - 1);
             normalizeChecklistLevels(item.steps);
