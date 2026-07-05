@@ -184,6 +184,10 @@ export function attachChecklistDrag(root, item, {
     localOnly = false,
     onChange = () => {}
 } = {}) {
+    if (!root || !item) return;
+    if (root.dataset.checklistDragBound === item.id) return;
+    root.dataset.checklistDragBound = item.id;
+    
     // Local helper for applying mutations during drag operations
     const applyMutate = (mutator, { persist = !localOnly } = {}) => {
         if (persist) {
