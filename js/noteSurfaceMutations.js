@@ -149,9 +149,33 @@ function scheduleDesktopAutoSave(root, item) {
     if (desktopAutoSaveTimer) clearTimeout(desktopAutoSaveTimer);
     desktopAutoSaveTimer = setTimeout(() => {
         desktopAutoSaveTimer = null;
+        // Take snapshot BEFORE syncing DOM to item
+        const beforeItem = JSON.parse(JSON.stringify(item));
+        // Sync DOM changes to item
         syncItemBodyFromDom(root, item);
-        mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+        // Emit mutation with correct beforeItem
+        emitItemMutation(item, { preserveView: true, beforeItem, skipRerender: true });
     }, 1000);
+}
+
+/**
+ * Flush any pending desktop autosave immediately.
+ * Always syncs DOM and emits mutation, regardless of pending timer.
+ * @param {HTMLElement} root - The editor shell/root element
+ * @param {object} item - The note item being edited
+ */
+function flushDesktopAutoSave(root, item) {
+    // Clear any pending timer
+    if (desktopAutoSaveTimer) {
+        clearTimeout(desktopAutoSaveTimer);
+        desktopAutoSaveTimer = null;
+    }
+    // Take snapshot BEFORE syncing DOM to item
+    const beforeItem = JSON.parse(JSON.stringify(item));
+    // Sync DOM changes to item
+    syncItemBodyFromDom(root, item);
+    // Emit mutation with correct beforeItem
+    emitItemMutation(item, { preserveView: true, beforeItem, skipRerender: true });
 }
 
 function attachNoteBodyInteractions(root, item, {
@@ -194,6 +218,12 @@ function attachNoteBodyInteractions(root, item, {
     
     root.querySelectorAll('.card-inline-edit').forEach((el) => {
         el.addEventListener('input', handleInlineEditInput);
+        // Also flush on blur to save when user navigates away
+        el.addEventListener('blur', () => {
+            if (!localOnly) {
+                flushDesktopAutoSave(root, item);
+            }
+        });
     });
 
     if (stopMousedownPropagation && !root.dataset.shellBubbleBound) {
@@ -231,5 +261,6 @@ export {
     createBlankChecklistStep,
     buildSheetInteractionOptions,
     attachNoteBodyInteractions,
-    updateNoteMetaStats
+    updateNoteMetaStats,
+    flushDesktopAutoSave
 };
