@@ -400,7 +400,6 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
 
 /* Ensure step-text maintains padding when in edit mode to prevent action icons shift */
 .has-custom-bg .step-text.card-inline-edit {
-    padding-right: 3.1rem;
 }
 
 .has-custom-bg .card-inline-edit:empty::before {
