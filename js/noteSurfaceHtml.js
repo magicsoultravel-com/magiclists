@@ -750,7 +750,7 @@ export function refreshNoteBody(body, item, {
         return html;
     })();
 
-// Replace old checklist HTML
+    // Replace old checklist HTML
     expandedChecklist.outerHTML = newChecklistHtml;
 
     // Re-bind interactions
