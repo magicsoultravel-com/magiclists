@@ -9,6 +9,9 @@ const EDITOR_ZOOM_MIN = 0.85;
 const EDITOR_ZOOM_MAX = 1.25;
 const EDITOR_ZOOM_STEP = 0.05;
 
+// Desktop autosave debounce timer (shared across all inline editors)
+let desktopAutoSaveTimer = null;
+
 function syncInlineFieldToItem(el, item) {
     const field = el.dataset.field;
     if (el.classList.contains('rich-text--edit')) {
@@ -136,6 +139,21 @@ function buildSheetInteractionOptions(shell, item, { localOnly = false, onChange
     };
 }
 
+/**
+ * Schedule a debounced autosave for desktop inline editing.
+ * Uses a 1-second debounce to avoid emitting mutations on every keystroke.
+ * @param {HTMLElement} root - The editor shell/root element
+ * @param {object} item - The note item being edited
+ */
+function scheduleDesktopAutoSave(root, item) {
+    if (desktopAutoSaveTimer) clearTimeout(desktopAutoSaveTimer);
+    desktopAutoSaveTimer = setTimeout(() => {
+        desktopAutoSaveTimer = null;
+        syncItemBodyFromDom(root, item);
+        mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+    }, 1000);
+}
+
 function attachNoteBodyInteractions(root, item, {
     refresh = () => {},
     localOnly = false,
@@ -164,14 +182,13 @@ function attachNoteBodyInteractions(root, item, {
 
     // Always add onChange for inline edits to trigger auto-save
     // For modal editor (localOnly=true), onChange syncs DOM and triggers auto-save
-    // For board surface (localOnly=false), we need to sync DOM and emit mutation
+    // For board surface (localOnly=false), we use debounced autosave
     const handleInlineEditInput = () => {
         if (localOnly) {
             onChange();
         } else {
-            // For board surface: sync DOM changes and emit mutation
-            syncItemBodyFromDom(root, item);
-            mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+            // For board surface: use debounced autosave to avoid race conditions
+            scheduleDesktopAutoSave(root, item);
         }
     };
     
