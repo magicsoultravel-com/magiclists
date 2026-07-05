@@ -854,7 +854,7 @@ export {
     buildMeetingBodyHtml,
     buildNoteTitleHtml,
     buildNoteFormatPanelHtml,
-    buildNoteMetaFooterHtml,
+    // removed
     buildNoteConfigPanelHtml,
     buildNoteEditorShell,
     bindCollapsable,
