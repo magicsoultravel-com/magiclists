@@ -139,7 +139,7 @@
     cursor: grabbing;
 }
 
-.grab-handle--step.spacer {
+.grab-handle--step.grab-handle--spacer {
     pointer-events: none;
 }
 
