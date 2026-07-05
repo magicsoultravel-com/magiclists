@@ -94,6 +94,10 @@ export function sheetIsActive(item) {
     return t === 'sheet' || t === 'meeting';
 }
 
+export function resolveEditorBodyLayoutUnchecked(item) {
+    return item?.editorBodyLayout || 'both';
+}
+
 export function createDefaultSheet({ rows = SHEET_DEFAULT_ROWS, cols = SHEET_DEFAULT_COLS } = {}) {
     const sheet = { rows, cols, cells: {} };
     ensureColWidths(sheet);

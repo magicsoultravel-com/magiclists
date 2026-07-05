@@ -24,7 +24,8 @@ import {
     defaultSheetDimsForTemplate,
     ensureItemSheet,
     isSheetTemplateActive,
-    resolveNoteTemplate
+    resolveNoteTemplate,
+    resolveEditorBodyLayoutUnchecked
 } from './sheet.js';
 
 export const Editor = {
@@ -239,7 +240,7 @@ export const Editor = {
             isRecurring: this.activeItem.isRecurring === true,
             hideFromCalendar: this.activeItem.hideFromCalendar === true,
             hiddenFromBoard: this.activeItem.hiddenFromBoard === true,
-            editorBodyLayout: NoteSurface.resolveEditorBodyLayoutUnchecked(this.activeItem),
+            editorBodyLayout: resolveEditorBodyLayoutUnchecked(this.activeItem),
             noteTemplate: this.activeItem.noteTemplate,
             sheet: this.activeItem.sheet
         };
