@@ -1466,7 +1466,7 @@ html[data-tile-small-footprint="card"] #app-canvas.view-grid .mini-card[data-des
 }
 
 #editor-overlay .editor-note-shell .card-content-preview {
-    font-size: calc(0.66rem * var(--note-font-scale, 1) * var(--editor-zoom, 1));
+    font-size: calc(0.65rem * var(--note-font-scale, 1) * var(--editor-zoom, 1));
 }
 
 #editor-overlay .editor-note-shell .step-text,
