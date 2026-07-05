@@ -193,18 +193,26 @@ export function bindChecklistInteractions(root, item, {
             // Focus the new step after DOM update
             // The new step is always inserted right after the current step
             refresh();
-            // Use requestAnimationFrame to ensure DOM is updated after refresh
-            requestAnimationFrame(() => {
-                const currentRow = root.querySelector(`[data-step-id="${stepId}"]`)?.closest('.step-row--display');
-                if (!currentRow) return;
-                const newRow = currentRow.nextElementSibling;
-                if (newRow) {
-                    const newTextEl = newRow.querySelector('.step-text');
-                    if (newTextEl) {
-                        focusInlineEdit(newTextEl, 'start');
+            // Use setTimeout to ensure DOM is updated after refresh
+            // The root element might be replaced, so we need to query from the document
+            setTimeout(() => {
+                // Find the step row that was just before the new step
+                const allRows = document.querySelectorAll('.step-row--display');
+                for (const row of allRows) {
+                    const rowStepId = row.dataset.stepId;
+                    if (rowStepId === stepId) {
+                        // Found the current row, get the next sibling
+                        const newRow = row.nextElementSibling;
+                        if (newRow) {
+                            const newTextEl = newRow.querySelector('.step-text');
+                            if (newTextEl) {
+                                focusInlineEdit(newTextEl, 'start');
+                            }
+                        }
+                        break;
                     }
                 }
-            });
+            }, 0);
         }
     });
 }
