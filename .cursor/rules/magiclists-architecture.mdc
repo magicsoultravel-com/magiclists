@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-06T15:11:10.568Z
+> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-06T16:32:52.228Z
 
 ## CSS load order
 
@@ -13,14 +13,14 @@ alwaysApply: true
 | --- | --- | --- | --- | --- |
 | css/base.css | :root tokens, tile/grid vars, .is-hidden | gridDensity.js, tileFootprint.js, appTheme.js | - | 1 |
 | css/shell-core.css | workspace shell, FAB, .btn, boot splash, shared utilities | hamburger.js, displayOptions.js, ui.js, bootProgress.js, fileCabinet.js, shellResize.js, sidebarModules.js, sidebarShell.js | - | 2 |
-| css/shell-filecabinet.css | file cabinet, filed chip rail | fileCabinet.js, shellResize.js | - | 3 |
+| css/shell-filecabinet.css | file cabinet drawer-specific styles, filed chip rail | fileCabinet.js, shellResize.js | unique drawer/rollout styles; base file-cabinet styles moved to board.css | 3 |
 | css/shell-sidebar.css | side panel, sidebar module undock chrome | hamburger.js, sidebarModules.js, sidebarPrefs.js, sidebarShell.js, shellResize.js | - | 4 |
 | css/shell-display-options.css | display options modal | displayOptions.js, hamburger.js | - | 5 |
 | css/shell-editor.css | note-editor typography, note footer, quick actions, checklist chrome | ui.js, noteSurface.js, displayOptions.js, hamburger.js | - | 6 |
 | css/sidebar.css | side panel, search, notes list, control bar | hamburger.js, searchBar.js, sidebarPrefs.js | - | 7 |
 | css/cards.css | #app-canvas, .mini-card*, color picker, custom backgrounds, checklist chrome | ui.js, colorPicker.js, cardTheme.js, noteSurface.js | desktop spatial overrides also in board.css | 8 |
 | css/overlays.css | .overlay, .modal, .collapsable-*, cloud backup popover, template picker | editor.js, editorModalChrome.js, cloudBackup.js, templatePicker.js | - | 9 |
-| css/board.css | grid/freeform board, clock, drag/resize, desktop inline card spatial overrides | dragdrop.js, clockStyle.js, desktopZoom.js, boardSort.js | note footer spatial overrides cross-cut shell-editor.css | 10 |
+| css/board.css | grid/freeform board, clock, drag/resize, desktop inline card spatial overrides, file cabinet mode | dragdrop.js, clockStyle.js, desktopZoom.js, boardSort.js, fileCabinet.js | note footer spatial overrides cross-cut shell-editor.css; file cabinet drawer mode integration | 10 |
 | css/themes.css | html[data-app-theme] overrides, theme picker swatches | appTheme.js, themePicker.js | - | 11 |
 | css/drawing.css | magicCanvas toolbar and drawing board surface | drawingBoard.js, drawingToolbarMenu.js, drawingToolbarChrome.js | - | 12 |
 | css/tools.css | floating tool panels, chips, globe/map/alphabets/calculator/converter/timezone/timer tool bodies | toolsManager.js, toolPanelChrome.js, sidebarModules.js | - | 13 |

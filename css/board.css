@@ -1,7 +1,99 @@
-/** @css {"owns":"grid/freeform board, clock, drag/resize, desktop inline card spatial overrides", "js":["dragdrop.js","clockStyle.js","desktopZoom.js","boardSort.js"], "notes":"note footer spatial overrides cross-cut shell-editor.css"} */
+/** @css {"owns":"grid/freeform board, clock, drag/resize, desktop inline card spatial overrides, file cabinet mode", "js":["dragdrop.js","clockStyle.js","desktopZoom.js","boardSort.js","fileCabinet.js"], "notes":"note footer spatial overrides cross-cut shell-editor.css; file cabinet drawer mode integration"} */
 /* ==========================================================================
    8. PRESENTATION REFRESH
    ========================================================================== */
+
+/* File cabinet mode - desktop surface layout */
+.desktop-surface--file-cabinet {
+    flex-direction: column;
+}
+
+/* File cabinet container - base styles for board integration */
+.file-cabinet {
+    position: relative;
+    z-index: 30;
+    flex: 0 0 auto;
+    min-height: 72px;
+    overflow: hidden;
+    padding: var(--board-area-inset-base);
+    border-bottom: 2px solid color-mix(in srgb, var(--text-muted) 35%, var(--border-color));
+    background: color-mix(in srgb, var(--bg-surface) 88%, var(--bg-primary));
+    --file-cabinet-ui-scale: 1;
+}
+
+.file-cabinet[data-fixed-height="true"] {
+    max-height: none;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.file-cabinet.is-rollout-active {
+    overflow: visible;
+}
+
+.file-cabinet-empty {
+    font-size: calc(0.62rem * var(--note-font-scale, 1));
+    color: var(--text-muted);
+    padding: 0.35rem 0.15rem;
+    white-space: nowrap;
+}
+
+.file-cabinet-inner {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 0.55rem;
+    min-width: 0;
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior: contain;
+    zoom: var(--file-cabinet-ui-scale, 1);
+}
+
+.file-cabinet[data-fixed-height="true"] .file-cabinet-inner {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 100%;
+}
+
+#app-canvas.file-cabinet-bottom {
+    position: relative;
+    z-index: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-freeform,
+html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
+    background-color: var(--desktop-bg, var(--bg-primary));
+    background-image:
+        radial-gradient(ellipse 120% 75% at 8% -15%, rgba(99, 102, 241, 0.16), transparent 58%),
+        radial-gradient(ellipse 90% 65% at 100% 108%, rgba(139, 92, 246, 0.11), transparent 52%),
+        radial-gradient(ellipse 55% 45% at 48% 42%, rgba(255, 255, 255, 0.035), transparent 72%),
+        linear-gradient(168deg, rgba(255, 255, 255, 0.03) 0%, transparent 38%, rgba(0, 0, 0, 0.14) 100%);
+}
+
+/* File cabinet layout states */
+.file-cabinet.is-layout-active {
+    user-select: none;
+}
+
+.file-cabinet .layout-settling {
+    transition: left 0.12s ease, top 0.12s ease;
+}
+
+.file-cabinet .layout-preview {
+    opacity: 0.9;
+}
+
+/* File cabinet drag state */
+body.is-file-cabinet-drag-active {
+    user-select: none;
+}
+
 #digital-clock.logo-zone {
     display: inline-flex;
     align-items: center;

@@ -1,62 +1,7 @@
-/** @css {"owns":"file cabinet, filed chip rail", "js":["fileCabinet.js","shellResize.js"]} */
+/** @css {"owns":"file cabinet drawer-specific styles, filed chip rail", "js":["fileCabinet.js","shellResize.js"], "notes":"unique drawer/rollout styles; base file-cabinet styles moved to board.css"} */
 /* ==========================================================================
-   FILE CABINET - File cabinet mode, drag-to-file, filed chip rail
+   FILE CABINET - Drawer-specific styles (filed chip rail, rollout, tabs)
    ========================================================================== */
-
-/* Desktop surface in file cabinet mode */
-.desktop-surface--file-cabinet {
-    flex-direction: column;
-}
-
-/* File cabinet container */
-.file-cabinet {
-    position: relative;
-    z-index: 30;
-    flex: 0 0 auto;
-    min-height: 72px;
-    overflow: hidden;
-    padding: var(--board-area-inset-base);
-    border-bottom: 2px solid color-mix(in srgb, var(--text-muted) 35%, var(--border-color));
-    background: color-mix(in srgb, var(--bg-surface) 88%, var(--bg-primary));
-    --file-cabinet-ui-scale: 1;
-}
-
-.file-cabinet[data-fixed-height="true"] {
-    max-height: none;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-.file-cabinet.is-rollout-active {
-    overflow: visible;
-}
-
-.file-cabinet-empty {
-    font-size: calc(0.62rem * var(--note-font-scale, 1));
-    color: var(--text-muted);
-    padding: 0.35rem 0.15rem;
-    white-space: nowrap;
-}
-
-.file-cabinet-inner {
-    display: flex;
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 0.55rem;
-    min-width: 0;
-    max-width: 100%;
-    overflow-x: auto;
-    overflow-y: hidden;
-    overscroll-behavior: contain;
-    zoom: var(--file-cabinet-ui-scale, 1);
-}
-
-.file-cabinet[data-fixed-height="true"] .file-cabinet-inner {
-    flex: 1 1 auto;
-    min-height: 0;
-    max-height: 100%;
-}
 
 /* Filed chip rail */
 .file-cabinet-filed-rail {
@@ -206,18 +151,6 @@
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--file-cabinet-category-color, var(--accent-color)) 30%, transparent);
 }
 
-.file-cabinet.is-layout-active {
-    user-select: none;
-}
-
-.file-cabinet .layout-settling {
-    transition: left 0.12s ease, top 0.12s ease;
-}
-
-.file-cabinet .layout-preview {
-    opacity: 0.9;
-}
-
 .file-cabinet-category-dot {
     flex: 0 0 6px;
     width: 6px;
@@ -262,26 +195,4 @@
 .file-cabinet-tab.is-file-cabinet-dragging .editor-meta-wrap,
 .file-cabinet-tab.is-file-cabinet-dragging .note-editor-toolbar {
     display: none !important;
-}
-
-body.is-file-cabinet-drag-active {
-    user-select: none;
-}
-
-#app-canvas.file-cabinet-bottom {
-    position: relative;
-    z-index: 1;
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-}
-
-html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-freeform,
-html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
-    background-color: var(--desktop-bg, var(--bg-primary));
-    background-image:
-        radial-gradient(ellipse 120% 75% at 8% -15%, rgba(99, 102, 241, 0.16), transparent 58%),
-        radial-gradient(ellipse 90% 65% at 100% 108%, rgba(139, 92, 246, 0.11), transparent 52%),
-        radial-gradient(ellipse 55% 45% at 48% 42%, rgba(255, 255, 255, 0.035), transparent 72%),
-        linear-gradient(168deg, rgba(255, 255, 255, 0.03) 0%, transparent 38%, rgba(0, 0, 0, 0.14) 100%);
 }
