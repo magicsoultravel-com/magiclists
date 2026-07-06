@@ -171,7 +171,7 @@
     opacity: 0.75;
 }
 
-/* File cabinet tabs */
+/* File cabinet tabs - use same styling as spatial-at-small for consistency */
 .file-cabinet-tab-stack {
     position: relative;
     min-width: 160px;
@@ -181,6 +181,29 @@
     position: absolute;
     left: 0;
     cursor: grab;
+    /* Apply spatial-at-small styles for size consistency with collapsed desktop notes */
+    padding: calc(0.38rem * var(--board-padding-scale, 1)) calc(0.45rem * var(--board-padding-scale, 1)) !important;
+    overflow: hidden !important;
+    box-sizing: border-box;
+}
+
+/* Apply spatial-at-small title styling to file cabinet tabs */
+.file-cabinet .file-cabinet-tab .editor-note-topline .mini-card-title {
+    font-size: calc(0.62rem * var(--note-font-scale, 1));
+    width: auto;
+    max-width: 100%;
+    display: block;
+    line-height: 1.2;
+}
+
+/* Limit quick actions to 3 icons in file cabinet (same as collapsed desktop) */
+.file-cabinet .file-cabinet-tab .card-actions {
+    max-width: 48px;
+    overflow: hidden;
+}
+
+.file-cabinet .file-cabinet-tab .card-actions .card-act:nth-child(n + 4) {
+    display: none;
 }
 
 .file-cabinet-tab.is-file-cabinet-dragging {

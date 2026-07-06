@@ -706,9 +706,9 @@ function buildFileCabinetCategoryColumn({
     stack.className = 'file-cabinet-tab-stack';
     stack.dataset.category = catName;
 
-    items.forEach((item, index) => {
+items.forEach((item, index) => {
         const card = UI.createCardComponent(item, activeCategories);
-        card.classList.add('file-cabinet-tab');
+        card.classList.add('file-cabinet-tab', 'spatial-at-small');
         card.dataset.fileCabinetCategory = catName;
         card.dataset.fileCabinetStackIndex = String(index);
         UI.applyNoteRect(card, { x: 0, y: 0, w: label.w, h: label.h }, { settling: false });
@@ -731,9 +731,9 @@ function buildFileCabinetRolloutStack({ catName, items, activeCategories, UI }) 
     stack.dataset.category = catName;
     stack.style.setProperty('--file-cabinet-category-color', color);
 
-    items.forEach((item, index) => {
+items.forEach((item, index) => {
         const card = UI.createCardComponent(item, activeCategories);
-        card.classList.add('file-cabinet-tab');
+        card.classList.add('file-cabinet-tab', 'spatial-at-small');
         card.dataset.fileCabinetCategory = catName;
         card.dataset.fileCabinetStackIndex = String(index);
         UI.applyNoteRect(card, { x: 0, y: 0, w: label.w, h: label.h }, { settling: false });
