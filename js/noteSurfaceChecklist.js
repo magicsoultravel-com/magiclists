@@ -1,16 +1,17 @@
 /** @module {"owns":"checklist operations, drag/drop, state management", "related":["noteSurface.js","checklistSteps.js","noteBodyConversion.js","richText.js"], "events":[]} */
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { escapeHTML } from './domEscape.js';
-import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants } from './checklistSteps.js';
+import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, collectStepSubtree } from './checklistSteps.js';
 import { reorderActiveStepsFromDomOrder, computeVisibleInsertBounds, resolveDropTarget, normalizeChecklistLevels } from './checklistSteps.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyConversion.js';
 import { stripRichText, sanitizeRichHtml } from './richText.js';
-import { mutateItem, syncItemBodyFromDom } from './noteSurfaceMutations.js';
-import { focusInlineEdit, canInlineEditText, renderRichHtml } from './noteSurfaceEditing.js';
+import { mutateItem, syncItemBodyFromDom, syncInlineFieldToItem } from './noteSurfaceMutations.js';
+import { focusInlineEdit, canInlineEditText, renderRichHtml, splitInlineEditAtCaret, insertTextAtCaret } from './noteSurfaceEditing.js';
 import { copyPlainTextToClipboard } from './clipboard.js';
 
 
 const DRAG_THRESHOLD = 4;
+const SOFT_BREAK = '\u2028';
 
 /**
  * Bind all checklist action buttons (copy, delete, indent, outdent,
@@ -672,33 +673,62 @@ export function handleChecklistEnter(e, item, { localOnly = false, onChange = ()
     if (stepIdx < 0) return false;
 
     const step = item.steps[stepIdx];
-    const text = active.textContent || '';
+    const { before, after } = splitInlineEditAtCaret(active);
 
     if (e.shiftKey) {
-        // Shift+Enter: create a nested step (level + 1)
-        const newStep = {
-            id: createStepId(),
-            text: '',
-            completed: false,
-            level: getStepLevel(step) + 1
-        };
-        item.steps.splice(stepIdx + 1, 0, newStep);
-
-        if (!localOnly) {
-            mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+        // Shift+Enter: insert a soft line break within the same step text
+        if (after.length > 0) {
+            // If there's text after caret, we need to insert the break and let the user continue editing
+            insertTextAtCaret(active, SOFT_BREAK);
+            syncInlineFieldToItem(active, item);
+            if (!localOnly) {
+                mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+            }
+            onChange();
         }
-        onChange();
+        // If no text after caret, just do nothing (let the user continue editing)
         return true;
     }
 
-    // Enter: create a sibling step (same level)
-    insertChecklistStep(item, {
-        afterStepId: stepId,
-        text: '',
-        localOnly,
-        onChange
-    });
+    // Enter: split text at caret position and create a new step with the "after" text
+    // Determine the insertion index: if the step has children and the group is collapsed,
+    // insert after the entire subtree; otherwise insert right after this step
+    const subtree = collectStepSubtree(item.steps, stepIdx);
+    const isCollapsed = isChecklistGroupCollapsed(item.id, stepId);
+    const hasChildren = subtree.length > 1;
+    const insertIdx = hasChildren && isCollapsed
+        ? stepIdx + subtree.length
+        : stepIdx + 1;
+
+    // Update current step's text to the "before" portion
+    // For rich text, before is already sanitized HTML; for plain text, it's plain text
+    const rich = active.classList.contains('rich-text--edit');
+    if (rich) {
+        active.innerHTML = before;
+    } else {
+        active.textContent = before;
+    }
+    syncInlineFieldToItem(active, item);
+
+    // Create new step with the "after" text
+    const newStep = {
+        id: createStepId(),
+        text: after,
+        completed: false,
+        level: getStepLevel(step)
+    };
+    item.steps.splice(insertIdx, 0, newStep);
+
+    if (!localOnly) {
+        mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+    }
+    onChange();
     return true;
+}
+
+function isChecklistGroupCollapsed(itemId, stepId) {
+    const collapsed = getChecklistCollapsedKeys();
+    return !!collapsed[`${itemId}:${stepId}`];
 }
 
 export function expandChecklistAncestorsForStep(item, stepId) {
