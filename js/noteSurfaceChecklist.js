@@ -184,17 +184,14 @@ export function bindChecklistInteractions(root, item, {
         const active = e.target;
         if (!active?.classList?.contains('step-text')) return;
         e.preventDefault();
-        const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
         const stepId = active.dataset.stepId;
         if (handleChecklistEnter(e, item, { localOnly, onChange })) {
-            if (!localOnly) {
-                commitInlineChecklistOp(item, beforeItem, { localOnly });
-            }
             // Focus the new step after DOM update
             // The new step is always inserted right after the current step
             refresh();
-            // Use setTimeout to ensure DOM is updated after refresh
+            // Use setTimeout to ensure DOM is updated after refresh and re-binding
             // The root element might be replaced, so we need to query from the document
+            // Use a small delay to ensure the mutation event has been processed
             setTimeout(() => {
                 // Find the step row that was just before the new step
                 const allRows = document.querySelectorAll('.step-row--display');
@@ -205,14 +202,14 @@ export function bindChecklistInteractions(root, item, {
                         const newRow = row.nextElementSibling;
                         if (newRow) {
                             const newTextEl = newRow.querySelector('.step-text');
-                            if (newTextEl) {
+                            if (newTextEl && document.activeElement !== newTextEl) {
                                 focusInlineEdit(newTextEl, 'start');
                             }
                         }
                         break;
                     }
                 }
-            }, 0);
+            }, 50);
         }
     });
 }
