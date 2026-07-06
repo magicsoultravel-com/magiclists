@@ -45,7 +45,8 @@ import {
     buildNoteEditorShell,
     bindCollapsable,
     flashCopyFeedback,
-    refreshNoteBody
+    refreshNoteBody,
+    buildChecklistRowHtml
 } from './noteSurfaceHtml.js';
 
 // Import from checklistSteps.js

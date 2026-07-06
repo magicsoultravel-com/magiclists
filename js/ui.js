@@ -1158,7 +1158,7 @@ export const UI = {
 
         card.innerHTML = NoteSurface.buildNoteEditorShell(item, {
             canEdit,
-            richEdit: canEdit,
+            richEdit: true,
             toolbarHtml: this.buildCardActionsHtml(item, false, this.getCardActionsOptions(card)),
             toplineDragZone: dragZone,
             footerDragZone: dragZone,
@@ -1177,7 +1177,7 @@ export const UI = {
             }
         });
         NoteSurface.bindNoteEditorShell(card, item, {
-            richEdit: canEdit,
+            richEdit: true,
             refresh: () => this.refreshBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor),
             stopMousedownPropagation: true,
             onRaiseCard: (c) => this.raiseDesktopCard(c)

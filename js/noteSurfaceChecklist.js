@@ -1,10 +1,9 @@
 /** @module {"owns":"checklist operations, drag/drop, state management", "related":["noteSurface.js","checklistSteps.js","noteBodyConversion.js","richText.js"], "events":[]} */
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
-import { escapeHTML } from './domEscape.js';
-import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, collectStepSubtree } from './checklistSteps.js';
-import { reorderActiveStepsFromDomOrder, computeVisibleInsertBounds, resolveDropTarget, normalizeChecklistLevels } from './checklistSteps.js';
+import { escapeHTML, escapeAttr } from './domEscape.js';
+import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, collectStepSubtree, canIndentStep } from './checklistSteps.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyConversion.js';
-import { stripRichText, sanitizeRichHtml } from './richText.js';
+import { stripRichText, sanitizeRichHtml, hasRichMarkup } from './richText.js';
 import { mutateItem, syncItemBodyFromDom, syncInlineFieldToItem } from './noteSurfaceMutations.js';
 import { focusInlineEdit, canInlineEditText, renderRichHtml, splitInlineEditAtCaret, insertTextAtCaret } from './noteSurfaceEditing.js';
 import { copyPlainTextToClipboard } from './clipboard.js';
@@ -818,6 +817,73 @@ function syncStepTextToItem(el, item) {
     if (step) {
         step.text = el.textContent || '';
     }
+}
+
+/**
+ * Build HTML for a single checklist step row.
+ * This function is used by both modal and inline editors.
+ */
+export function buildChecklistRowHtml(step, {
+    level = 0,
+    hasKids = false,
+    isCollapsed = false,
+    collapseKey = '',
+    isDoneSection = false,
+    treeGuides = [],
+    canEdit = true,
+    richEdit = false,
+    active = []
+} = {}) {
+    const activeIdx = isDoneSection ? -1 : active.findIndex((s) => s.id === step.id);
+    const collapseControl = !isDoneSection && hasKids
+        ? `<button type="button" class="step-collapse-btn" data-collapse-key="${escapeAttr(collapseKey)}" title="${isCollapsed ? 'Expand group' : 'Collapse group'}" aria-label="${isCollapsed ? 'Expand group' : 'Collapse group'}">${isCollapsed ? CARD_ICONS.chevronRight : CARD_ICONS.chevronDown}</button>`
+        : '<span class="step-collapse-spacer" aria-hidden="true"></span>';
+    const dragHandle = !canEdit
+        ? ''
+        : isDoneSection
+            ? '<span class="grab-handle grab-handle--step grab-handle--spacer" aria-hidden="true">⋮⋮</span>'
+            : '<span class="grab-handle grab-handle--step" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>';
+    const nestControls = canEdit ? `
+        <button type="button" class="card-act step-outdent-btn" title="Outdent" aria-label="Outdent"${level === 0 ? ' disabled' : ''}>‹</button>
+        <button type="button" class="card-act step-indent-btn" title="Indent" aria-label="Indent"${!canIndentStep(active, activeIdx) ? ' disabled' : ''}>›</button>` : '';
+    const copyBtn = canEdit
+        ? `<button type="button" class="card-act step-copy-btn" title="Copy item" aria-label="Copy item">${CARD_ICONS.copy}</button>`
+        : '';
+    const deleteBtn = canEdit
+        ? `<button type="button" class="card-act card-act--danger step-delete-btn" title="Remove item" aria-label="Remove item">${CARD_ICONS.close}</button>`
+        : '';
+    const stepText = step.text || '';
+    let textHtml;
+    if (canEdit && (richEdit || canInlineEditText(stepText, { richEdit }))) {
+        const inner = richEdit ? sanitizeRichHtml(stepText) : escapeHTML(stepText);
+        const ce = richEdit ? 'true' : 'plaintext-only';
+        const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
+        textHtml = `<span class="step-text card-inline-edit${richClasses} ${step.completed ? 'completed' : ''}" contenteditable="${ce}" spellcheck="false" data-field="step-text" data-step-id="${step.id}">${inner}</span>`;
+    } else {
+        const richClass = hasRichMarkup(stepText) ? ' rich-text' : '';
+        textHtml = `<span class="step-text${richClass} ${step.completed ? 'completed' : ''}">${sanitizeRichHtml(stepText)}</span>`;
+    }
+    const treeGutterHtml = !isDoneSection && treeGuides.length > 0
+        ? `<span class="step-tree-gutter" aria-hidden="true">${treeGuides.map(({ role }) => {
+            return `<span class="step-tree-guide step-tree-guide--${role}" aria-hidden="true"></span>`;
+        }).join('')}</span>`
+        : '';
+    return `
+        <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}" data-step-id="${step.id}" data-level="${level}">
+            <div class="step-row-leading">
+                ${dragHandle}
+                ${collapseControl}
+                ${treeGutterHtml}
+                <input type="checkbox" class="step-check" ${step.completed ? 'checked' : ''}>
+            </div>
+            ${textHtml}
+            <div class="step-row-actions">
+                ${copyBtn}
+                ${canEdit ? `<span class="step-nest-controls">${nestControls}</span>` : ''}
+                ${deleteBtn}
+            </div>
+        </div>
+    `;
 }
 
 export function createStepId() {
