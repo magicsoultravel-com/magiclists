@@ -750,8 +750,18 @@ export function refreshNoteBody(body, item, {
         return html;
     })();
 
+    // Preserve scroll position before replacing checklist HTML
+    // Find the scroll container (modal-body or its parent with overflow-y: auto)
+    const scrollContainer = body.closest('.modal-body') || body.parentElement;
+    const scrollTop = scrollContainer?.scrollTop ?? 0;
+
     // Replace old checklist HTML
     expandedChecklist.outerHTML = newChecklistHtml;
+
+    // Restore scroll position after DOM update
+    if (scrollContainer) {
+        scrollContainer.scrollTop = scrollTop;
+    }
 
     // Re-bind interactions
     if (mountZone) {

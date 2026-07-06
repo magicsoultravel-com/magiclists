@@ -106,7 +106,15 @@ export function bindChecklistInteractions(root, item, {
             normalizeChecklistLevels(item.steps);
             if (localOnly) onChange();
             else commitInlineChecklistOp(item, beforeItem, { localOnly });
+            // Restore focus to the step after DOM update
+            const focusStepId = stepId;
             refresh();
+            setTimeout(() => {
+                const stepTextEl = document.querySelector(`[data-step-id="${focusStepId}"].step-text.card-inline-edit`);
+                if (stepTextEl && document.activeElement !== stepTextEl) {
+                    focusInlineEdit(stepTextEl, 'end');
+                }
+            }, 0);
             return;
         }
 
@@ -126,7 +134,15 @@ export function bindChecklistInteractions(root, item, {
             normalizeChecklistLevels(item.steps);
             if (localOnly) onChange();
             else commitInlineChecklistOp(item, beforeItem, { localOnly });
+            // Restore focus to the step after DOM update
+            const focusStepId = stepId;
             refresh();
+            setTimeout(() => {
+                const stepTextEl = document.querySelector(`[data-step-id="${focusStepId}"].step-text.card-inline-edit`);
+                if (stepTextEl && document.activeElement !== stepTextEl) {
+                    focusInlineEdit(stepTextEl, 'end');
+                }
+            }, 0);
             return;
         }
 
