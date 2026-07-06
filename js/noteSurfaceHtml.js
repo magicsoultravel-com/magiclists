@@ -81,14 +81,8 @@ export function buildNoteQuickActionsHtml(item, {
         lastIcon = CARD_ICONS.collapse;
     } else if (spatialTile) {
         const atSmall = isCollapsedSpatialSize(tileW, tileH, tileSize);
-        if (isFileCabinetActive()) {
-            const labels = getFileCabinetToggleLabels(atSmall, atSmall);
-            expandTitle = labels.title;
-            lastIcon = labels.iconKey === 'expand' ? CARD_ICONS.expand : CARD_ICONS.collapse;
-        } else {
-            expandTitle = atSmall ? 'Expand' : 'Collapse to small';
-            lastIcon = atSmall ? CARD_ICONS.expand : CARD_ICONS.collapse;
-        }
+        expandTitle = atSmall ? 'Expand' : 'Collapse to small';
+        lastIcon = atSmall ? CARD_ICONS.expand : CARD_ICONS.collapse;
     } else {
         expandTitle = isExpanded ? 'Collapse note' : 'Expand note';
         lastIcon = isExpanded ? CARD_ICONS.collapse : CARD_ICONS.expand;

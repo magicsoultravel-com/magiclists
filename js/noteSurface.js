@@ -435,16 +435,16 @@ export const NoteSurface = {
     attachNoteBodyInteractions,
     updateNoteMetaStats,
 
-     // Utility methods
-     escapeHTML,
-     escapeAttr,
-     escapeQuotes,
-     canEditInline: function() {
-         return !isFileCabinetActive();
-     },
-     formatNoteListDate: function(item) {
-         return formatCreatedDate(item.timestamp);
-     }
+      // Utility methods
+      escapeHTML,
+      escapeAttr,
+      escapeQuotes,
+      canEditInline: function() {
+          return true;
+      },
+      formatNoteListDate: function(item) {
+          return formatCreatedDate(item.timestamp);
+      }
    };
 
 export {
