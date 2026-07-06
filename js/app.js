@@ -163,7 +163,7 @@ class Application {
             this.setupUndo();
             this.setupDrawingMode();
             Fullscreen.init();
-            DrawingBoard.init();
+            DrawingBoard.init(this);
             if (AppState.workspaceMode === 'drawing') {
                 requestAnimationFrame(() => this.applyWorkspaceMode('drawing', { skipPersist: true }));
             }

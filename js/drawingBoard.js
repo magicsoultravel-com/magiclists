@@ -185,7 +185,8 @@ export const DrawingBoard = {
     brandNotesText: 'magicNotes',
     colorRolloutOpen: false,
 
-    init() {
+    init(app) {
+        this.app = app;
         this.boardEl = document.getElementById('drawing-board');
         this.canvas = document.getElementById('drawing-canvas');
         this.bgCanvas = document.getElementById('drawing-bg-canvas');
@@ -855,6 +856,7 @@ export const DrawingBoard = {
             <button type="button" class="btn btn--compact btn--icon" id="draw-redo" title="Redo" aria-label="Redo" ${this.history.canRedo ? '' : 'disabled'}>${ACTION_ICONS.redo}</button>
             <button type="button" class="btn btn--compact btn--icon" id="draw-clear" title="Clear" aria-label="Clear">${ACTION_ICONS.layoutReset}</button>
             <button type="button" class="btn btn--compact btn--icon" id="draw-toolbar-hide" title="Hide toolbar" aria-label="Hide toolbar">${ACTION_ICONS.collapseAll}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="draw-exit-drawing" title="Exit drawing mode" aria-label="Exit drawing mode">${ACTION_ICONS.viewFree}</button>
         `;
         this.bindToolbar();
         if (wasColorOpen) {
@@ -868,6 +870,7 @@ export const DrawingBoard = {
         const q = (sel) => this.toolbarEl.querySelector(sel);
 
         q('#draw-toolbar-hide')?.addEventListener('click', () => { ColorPicker.close(); this.colorRolloutOpen = false; this.hideToolbar(); });
+        q('#draw-exit-drawing')?.addEventListener('click', () => { this.app.switchWorkspaceMode('notes'); });
         q('#draw-undo')?.addEventListener('click', () => this.undo());
         q('#draw-redo')?.addEventListener('click', () => this.redo());
         q('#draw-clear')?.addEventListener('click', () => this.clearAll());
