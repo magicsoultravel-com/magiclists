@@ -196,14 +196,52 @@
     line-height: 1.2;
 }
 
-/* Limit quick actions to 3 icons in file cabinet (same as collapsed desktop) */
+/* Card actions are clipped by the tab's overflow: hidden (same as desktop) */
 .file-cabinet .file-cabinet-tab .card-actions {
-    max-width: 48px;
-    overflow: hidden;
+    max-width: none;
+    overflow: visible;
+    right: 1px;
 }
 
-.file-cabinet .file-cabinet-tab .card-actions .card-act:nth-child(n + 4) {
-    display: none;
+/* Show card actions on hover (same as desktop) */
+.file-cabinet .file-cabinet-tab:hover .card-actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Ensure card-actions backdrop is visible in file cabinet */
+.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-actions::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    bottom: -1px;
+    left: -1px;
+    width: auto;
+    z-index: -1;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--bg-card) 96%, #0a0a0c);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-color) 80%, transparent);
+    pointer-events: none;
+}
+
+.file-cabinet .file-cabinet-tab.has-custom-bg .note-editor-toolbar .card-actions::before {
+    background: var(--card-action-bg);
+    box-shadow: 0 0 0 1px var(--card-border-subtle);
+}
+
+/* Card action button styling in file cabinet (same as spatial-at-small) */
+.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-act {
+    background: transparent;
+    box-shadow: none;
+}
+
+.file-cabinet .file-cabinet-tab .note-editor-toolbar .card-act:hover {
+    background: color-mix(in srgb, var(--bg-surface) 88%, #fff 12%);
+}
+
+.file-cabinet .file-cabinet-tab.has-custom-bg .note-editor-toolbar .card-act:hover {
+    background: color-mix(in srgb, var(--card-action-bg) 82%, #fff 18%);
 }
 
 .file-cabinet-tab.is-file-cabinet-dragging {
