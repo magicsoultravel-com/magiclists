@@ -869,8 +869,8 @@ export const UI = {
 
         const { layout, placed, boardPane } = this.layoutBoard(canvas, boardItems, activeCategories);
         this.renderCards(boardItems, activeCategories, layout, placed, boardPane);
-        this.finalizeRender(canvas, boardPane, renderOptions);
-    }
+         this.finalizeRender(canvas, boardPane, renderOptions);
+     },
 
     prepareCanvas(canvas) {
         canvas.innerHTML = '';
