@@ -327,10 +327,7 @@ export const UI = {
     getSavedLayoutRect(card, item) {
         const id = item?.id || card?.dataset?.id;
         if (!id) return null;
-        if (isSnapLayoutMode(activeBoardViewMode)) {
-            return this.getGridLayout()[id] || null;
-        }
-        return this.getFreeformSizes()[id] || null;
+        return this.getGridLayout()[id] || null;
     },
 
     resolveRememberedSpatialSize(saved, item) {
@@ -352,7 +349,6 @@ export const UI = {
 
     resolveBoardExpandPlacement(card, item) {
         const sizeRect = this.resolveBoardExpandRect(card, item);
-        if (!isSnapLayoutMode(activeBoardViewMode)) return sizeRect;
         const canvas = card.closest('#app-canvas');
         return this.findDesktopCenterSlot(sizeRect.w, sizeRect.h, canvas, 'grid', {
             excludeId: item.id
@@ -399,25 +395,14 @@ export const UI = {
         if (!itemId || !Number.isFinite(w) || !Number.isFinite(h)) return;
         if (isCollapsedSpatialSize(w, h, tileSize)) return;
         const clamped = geoClampSpatialSize(w, h, tileSize);
-        if (isSnapLayoutMode(activeBoardViewMode)) {
-            const layout = this.getGridLayout();
-            const prev = layout[itemId] || {};
-            layout[itemId] = {
-                ...prev,
-                rememberedW: Math.round(clamped.w),
-                rememberedH: Math.round(clamped.h)
-            };
-            localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layout));
-        } else {
-            const sizes = this.getFreeformSizes();
-            const prev = sizes[itemId] || {};
-            sizes[itemId] = {
-                ...prev,
-                rememberedW: Math.round(clamped.w),
-                rememberedH: Math.round(clamped.h)
-            };
-            localStorage.setItem(FREEFORM_SIZES_KEY, JSON.stringify(sizes));
-        }
+        const layout = this.getGridLayout();
+        const prev = layout[itemId] || {};
+        layout[itemId] = {
+            ...prev,
+            rememberedW: Math.round(clamped.w),
+            rememberedH: Math.round(clamped.h)
+        };
+        localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layout));
     },
 
     resolveCardRect(card, item, { mode } = {}) {
@@ -761,11 +746,7 @@ export const UI = {
             if (!item) return;
             let rect = migrateRect(this.readNoteRect(card));
             const { packW, maxH, origin, edgePad } = this.getGridBoardBounds(canvas);
-            if (isSnapLayoutMode(activeBoardViewMode)) {
-                rect = this.snapNoteRect(rect, { maxW: packW, maxH, origin, edgePad });
-            } else {
-                rect = this.clampNoteToBoardEdges(rect, { packW, maxH, origin, edgePad });
-            }
+            rect = this.snapNoteRect(rect, { maxW: packW, maxH, origin, edgePad });
             this.applyNoteRect(card, rect, { settling: false });
             this.saveTileLayoutFromCard(card, item, rect, this.getCardTileSize(card, item));
             this.finalizeDesktopCard(card);
@@ -1118,33 +1099,6 @@ export const UI = {
             || card.classList.contains('is-grid-resizing');
     },
 
-    applyFreeformSize(card) {
-        if (!isDesktopCard(card) || isSnapLayoutMode(activeBoardViewMode)) return;
-        if (card.dataset.tierResizePreview === '1') return;
-        const saved = this.getFreeformSizes()[card.dataset.id];
-        const item = this.resolveBoardItem(card.dataset.id);
-        const tileSize = this.getCardTileSize(card, item);
-        let w;
-        let h;
-        if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
-            const footprint = readTileSmallFootprint();
-            if (isCollapsedSpatialSize(saved.w, saved.h, tileSize)) {
-                const small = getSmallRect(footprint);
-                w = small.w;
-                h = small.h;
-            } else {
-                const clamped = geoClampSpatialSize(saved.w, saved.h, tileSize);
-                w = clamped.w;
-                h = clamped.h;
-            }
-        } else {
-            const defaults = geoGetTileDefaultRect(tileSize);
-            w = defaults.w;
-            h = defaults.h;
-        }
-        this.applyFreeformDimensions(card, w, h);
-    },
-
     /** Canonical desktop card finalizer — syncs collapse classes, chrome, saved size, toggle label. */
     finalizeDesktopCard(card, { skipSizeReapply = false } = {}) {
         if (!isDesktopCard(card)) return;
@@ -1162,20 +1116,17 @@ export const UI = {
     updateDesktopCard(card, item, { dimensions = null } = {}) {
         if (!isDesktopCard(card)) return;
 
-        const snapLayout = isSnapLayoutMode(activeBoardViewMode);
         const canvas = card.closest('#app-canvas');
 
         if (dimensions) {
             this.applyFreeformDimensions(card, dimensions.w, dimensions.h);
-        } else if (snapLayout) {
-            this.applyDesktopSize(card);
         } else {
-            this.applyFreeformSize(card);
+            this.applyDesktopSize(card);
         }
 
         this.finalizeDesktopCard(card);
 
-        if (snapLayout && canvas) {
+        if (canvas) {
             requestAnimationFrame(() => {
                 this.reflowGridBoard(canvas, item.id, { animate: true });
             });
@@ -2250,37 +2201,22 @@ export const UI = {
         if (!host) return { x: 8, y: 8, w, h };
         const mode = viewMode || activeBoardViewMode;
 
-        if (isSnapLayoutMode(mode)) {
-            const { origin, packW, maxH, edgePad } = this.getGridBoardBounds(host);
-            const { viewportH, scrollY } = getGridViewportBounds(host);
-            let rect = {
-                x: origin + Math.max(0, (packW - w) / 2),
-                y: origin + scrollY + Math.max(0, (viewportH - h) / 2),
-                w,
-                h
-            };
-            rect = this.snapNoteRect(rect, { maxW: packW, maxH, origin, edgePad });
-            const placed = [...host.querySelectorAll('.mini-card[data-desktop="1"]')]
-                .filter((c) => c.dataset.id !== excludeId && !c.closest('#file-cabinet'))
-                .map((c) => this.readNoteRect(c));
-            if (placed.some((p) => rectsOverlapCore(rect, p))) {
-                rect = findNearestGridSlotCore(rect, w, h, placed, { packW, origin, maxH, edgePad });
-            }
-            return rect;
-        }
-
-        const zoom = parseFloat(host.dataset?.desktopZoom) || 1;
-        const pad = 8;
-        const cw = (host.clientWidth || window.innerWidth) / zoom;
-        const ch = (host.clientHeight || window.innerHeight) / zoom;
-        const scrollLeft = (host.scrollLeft || 0) / zoom;
-        const scrollTop = (host.scrollTop || 0) / zoom;
-        return {
-            x: scrollLeft + Math.max(pad, (cw - w) / 2),
-            y: scrollTop + Math.max(pad, (ch - h) / 2),
+        const { origin, packW, maxH, edgePad } = this.getGridBoardBounds(host);
+        const { viewportH, scrollY } = getGridViewportBounds(host);
+        let rect = {
+            x: origin + Math.max(0, (packW - w) / 2),
+            y: origin + scrollY + Math.max(0, (viewportH - h) / 2),
             w,
             h
         };
+        rect = this.snapNoteRect(rect, { maxW: packW, maxH, origin, edgePad });
+        const placed = [...host.querySelectorAll('.mini-card[data-desktop="1"]')]
+            .filter((c) => c.dataset.id !== excludeId && !c.closest('#file-cabinet'))
+            .map((c) => this.readNoteRect(c));
+        if (placed.some((p) => rectsOverlapCore(rect, p))) {
+            rect = findNearestGridSlotCore(rect, w, h, placed, { packW, origin, maxH, edgePad });
+        }
+        return rect;
     },
 
     updateGridScrollPolicy(canvas, { forcing = false } = {}) {

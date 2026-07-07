@@ -15,15 +15,6 @@ import { getSmallRect } from './tileGeometry.js';
 import { readTileSmallFootprint } from './tileFootprint.js';
 import { normalizeViewMode } from './viewSession.js';
 
-/**
- * Checks if the given mode is a snap layout mode (grid-based)
- * @param {string} mode - The layout mode
- * @returns {boolean} - Always returns true for now (grid mode)
- */
-function isSnapLayoutMode(mode) {
-    return true;
-}
-
 export const FILE_CABINET_KEY = 'matrix_file_cabinet';
 export const FILE_CABINET_ORDER_KEY = 'matrix_file_cabinet_order';
 export const FILE_CABINET_FILED_CATEGORIES_KEY = 'matrix_file_cabinet_filed_categories';
@@ -1277,14 +1268,12 @@ export function saveFiledCabinetLayout(itemId, rect, sortBy) {
     if (Number.isFinite(rect.x)) entry.x = Math.round(rect.x);
     if (Number.isFinite(rect.y)) entry.y = Math.round(rect.y);
 
-    if (isSnapLayoutMode(mode)) {
-        const layout = JSON.parse(localStorage.getItem('matrix_grid_layout') || '{}');
-        const prev = layout[itemId] || {};
-        layout[itemId] = { ...prev, ...entry };
-        delete layout[itemId].rememberedW;
-        delete layout[itemId].rememberedH;
-        localStorage.setItem('matrix_grid_layout', JSON.stringify(layout));
-    }
+    const layout = JSON.parse(localStorage.getItem('matrix_grid_layout') || '{}');
+    const prev = layout[itemId] || {};
+    layout[itemId] = { ...prev, ...entry };
+    delete layout[itemId].rememberedW;
+    delete layout[itemId].rememberedH;
+    localStorage.setItem('matrix_grid_layout', JSON.stringify(layout));
 }
 
 /**

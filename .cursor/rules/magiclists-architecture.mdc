@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-07T16:39:56.482Z
+> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-07T19:53:54.665Z
 
 ## CSS load order
 
@@ -73,7 +73,6 @@ alwaysApply: true
 | js/sidebarUndock.js | shared undock/drag/clamp for sidebar panels | desktopStack.js, popoverPosition.js, sidebarPrefs.js | - | - |
 | js/sidebarWeather.js | sidebar weather glance and forecast panel | weatherApi.js, weatherProviders/registry.js, sidebarModules.js | - | - |
 | js/tileManager.js | tile size resolution, spatial collapse state, tile classification | tileGeometry.js, noteSurface.js | - | - |
-| js/ui.js | board render, tile layout, category visibility, desktop canvas | noteSurface.js, noteQuickActions.js, dragdrop.js, layoutStorage.js, board/gridEngine.js | board:visibility_changed, item:selected_for_edit, calendar:items_changed | - |
 
 ## Tools (@tool)
 
