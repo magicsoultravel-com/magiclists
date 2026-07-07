@@ -1,7 +1,7 @@
 /** @module {"owns":"checklist operations, drag/drop, state management", "related":["noteSurface.js","checklistSteps.js","noteBodyConversion.js","richText.js"], "events":[]} */
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { escapeHTML, escapeAttr } from './domEscape.js';
-import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, collectStepSubtree, canIndentStep, normalizeChecklistLevels, computeVisibleInsertBounds, getStepRowLevel } from './checklistSteps.js';
+import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, collectStepSubtree, canIndentStep, normalizeChecklistLevels, computeVisibleInsertBounds, getStepRowLevel, reorderActiveStepsFromDomOrder } from './checklistSteps.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyConversion.js';
 import { stripRichText, sanitizeRichHtml, hasRichMarkup } from './richText.js';
 import { mutateItem, syncItemBodyFromDom, syncInlineFieldToItem } from './noteSurfaceMutations.js';
