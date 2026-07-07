@@ -193,10 +193,6 @@ function sortItemsSpatially(items, getRect) {
     });
 }
 
-export function isSnapLayoutMode(_mode) {
-    return true;
-}
-
 export function isDesktopCard(card) {
     return card?.dataset?.desktop === '1';
 }
@@ -606,9 +602,7 @@ export const UI = {
         const id = item?.id || card.dataset.id;
         if (!id || !isDesktopCard(card)) return;
         const updateRemembered = !isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(item));
-        if (isSnapLayoutMode(activeBoardViewMode)) {
-            this.saveGridLayout(id, rect, { updateRemembered });
-        }
+        this.saveGridLayout(id, rect, { updateRemembered });
     },
 
     saveSpatialLayoutFromResize(card, item, tileSize) {
@@ -673,12 +667,10 @@ export const UI = {
             removeFromFileCabinetOrder(item.id);
             const rect = this.resolveBoardExpandPlacement(card, item);
             this.applySpatialToggleRect(card, item, rect, { ...ctx, actorRect: rect });
-            if (isSnapLayoutMode(activeBoardViewMode)) {
-                this.raiseDesktopCard(card);
-                requestAnimationFrame(() => {
-                    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                });
-            }
+            this.raiseDesktopCard(card);
+            requestAnimationFrame(() => {
+                card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            });
         } else {
             this.collapseSpatialAtCurrentPos(card, item, ctx);
         }
@@ -710,9 +702,7 @@ export const UI = {
             this.finalizeDesktopCard(card);
         });
         this.scheduleBoardCanvasExtents(canvas);
-        if (isSnapLayoutMode(activeBoardViewMode)) {
-            requestAnimationFrame(() => this.reflowGridBoard(canvas, null, { animate: true }));
-        }
+        requestAnimationFrame(() => this.reflowGridBoard(canvas, null, { animate: true }));
         if (isFileCabinetActive()) {
             window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
         }
@@ -753,9 +743,7 @@ export const UI = {
         });
 
         this.scheduleBoardCanvasExtents(canvas);
-        if (isSnapLayoutMode(activeBoardViewMode)) {
-            requestAnimationFrame(() => this.reflowGridBoard(canvas, null, { animate: true }));
-        }
+        requestAnimationFrame(() => this.reflowGridBoard(canvas, null, { animate: true }));
         if (isFileCabinetActive()) {
             window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
         }
@@ -802,7 +790,7 @@ export const UI = {
     },
 
     isGridBoardCard(card) {
-        return isDesktopCard(card) && isSnapLayoutMode(activeBoardViewMode);
+        return isDesktopCard(card);
     },
 
     updateSingleCard(canvas, item, hiddenCategories = []) {
