@@ -690,20 +690,16 @@ export function handleChecklistEnter(e, item, { localOnly = false, onChange = ()
     const step = item.steps[stepIdx];
     const { before, after } = splitInlineEditAtCaret(active);
 
-    if (e.shiftKey) {
-        // Shift+Enter: insert a soft line break within the same step text
-        if (after.length > 0) {
-            // If there's text after caret, we need to insert the break and let the user continue editing
-            insertTextAtCaret(active, SOFT_BREAK);
-            syncInlineFieldToItem(active, item);
-            if (!localOnly) {
-                mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
-            }
-            onChange();
-        }
-        // If no text after caret, just do nothing (let the user continue editing)
-        return true;
-    }
+     if (e.shiftKey) {
+         // Shift+Enter: insert a soft line break within the same step text
+         insertTextAtCaret(active, SOFT_BREAK);
+         syncInlineFieldToItem(active, item);
+         if (!localOnly) {
+             mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+         }
+         onChange();
+         return true;
+     }
 
     // Enter: split text at caret position and create a new step with the "after" text
     // Determine the insertion index: if the step has children and the group is collapsed,
