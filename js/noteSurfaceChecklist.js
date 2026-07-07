@@ -5,7 +5,7 @@ import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHa
 import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyConversion.js';
 import { stripRichText, sanitizeRichHtml, hasRichMarkup } from './richText.js';
 import { mutateItem, syncItemBodyFromDom, syncInlineFieldToItem } from './noteSurfaceMutations.js';
-import { focusInlineEdit, canInlineEditText, renderRichHtml, splitInlineEditAtCaret, insertTextAtCaret } from './noteSurfaceEditing.js';
+import { focusInlineEdit, canInlineEditText, renderRichHtml, splitInlineEditAtCaret, insertTextAtCaret, handleInlineEditArrowNav } from './noteSurfaceEditing.js';
 import { copyPlainTextToClipboard } from './clipboard.js';
 
 
@@ -202,6 +202,16 @@ export function bindChecklistInteractions(root, item, {
         if (result === 'stay') return;
         if (result) setPendingChecklistFocus(root, result, 'start');
         refresh();
+    });
+
+    // --- step-text arrow key navigation: navigate between steps on visual edge ---
+    root.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+        const active = e.target;
+        if (!active?.classList?.contains('step-text')) return;
+        if (!handleInlineEditArrowNav(e, root, active)) return;
+        e.preventDefault();
+        e.stopPropagation();
     });
 }
 
@@ -631,7 +641,7 @@ export function handleChecklistDelete(e, item, { localOnly = false, onChange = (
 
 export function handleChecklistEnter(e, item, { localOnly = false, onChange = () => {} } = {}) {
     if (!item || !item.steps) return false;
-    const active = document.activeElement;
+    const active = e.target;
     if (!active?.classList?.contains('step-text')) return false;
 
     const stepId = active.dataset.stepId;

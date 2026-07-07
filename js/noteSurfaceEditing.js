@@ -1,5 +1,5 @@
 /** @module {"owns":"note inline editing, emoji, text operations, zoom controls", "related":["noteSurface.js","noteSurfaceHtml.js","richText.js","emojiPicker.js","domEscape.js"], "events":[]} */
-import { sanitizeRichHtml, linkifyPlainUrls, stripRichText } from './richText.js';
+import { sanitizeRichHtml, linkifyPlainUrls, stripRichText, hasRichMarkup } from './richText.js';
 import { escapeHTML, escapeAttr } from './domEscape.js';
 import { EmojiPicker } from './iconPicker.js';
 import { isAllowedEmoji } from './noteEmojis.js';
@@ -238,6 +238,35 @@ export function caretAtEdge(el, edge) {
     return probe.toString().length === 0;
 }
 
+/**
+ * Check if the caret is at the visual top or bottom of a multi-line element.
+ * This is used for arrow navigation between checklist items when word wrapping is enabled.
+ * @param {HTMLElement} el - The element to check
+ * @param {string} edge - 'top' or 'bottom'
+ * @returns {boolean} - True if caret is at the visual edge
+ */
+export function caretAtVisualEdge(el, edge) {
+    const sel = window.getSelection();
+    if (!sel?.rangeCount) return edge === 'bottom';
+    const range = sel.getRangeAt(0);
+    if (!el.contains(range.startContainer)) return false;
+    
+    // Get the caret position
+    const caretRect = range.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    
+    // Use a small threshold for visual edge detection
+    const threshold = 2;
+    
+    if (edge === 'top') {
+        return caretRect.top <= elRect.top + threshold;
+    }
+    if (edge === 'bottom') {
+        return caretRect.bottom >= elRect.bottom - threshold;
+    }
+    return false;
+}
+
 export function caretAtPlainEdge(el, edge) {
     const sel = window.getSelection();
     if (!sel?.rangeCount) return true;
@@ -306,6 +335,14 @@ export function getInlineEditSequence(root) {
     return fields;
 }
 
+/**
+ * Enhanced arrow navigation for inline edit fields.
+ * Navigates between fields when at text edge OR visual edge (for multi-line items).
+ * @param {KeyboardEvent} e - The keyboard event
+ * @param {HTMLElement} root - The root element
+ * @param {HTMLElement} fieldEl - The current focused field element
+ * @returns {boolean} - True if navigation occurred
+ */
 export function handleInlineEditArrowNav(e, root, fieldEl) {
     if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return false;
     const sequenceRoot = fieldEl.closest('.editor-note-shell') || root;
@@ -313,15 +350,33 @@ export function handleInlineEditArrowNav(e, root, fieldEl) {
     const idx = fields.indexOf(fieldEl);
     if (idx < 0) return false;
 
-    if (e.key === 'ArrowDown' && caretAtEdge(fieldEl, 'end') && idx < fields.length - 1) {
-        e.preventDefault();
-        focusInlineEdit(fields[idx + 1], 'start');
-        return true;
+    // Check if this is a step-text element (for multi-line navigation)
+    const isStepText = fieldEl.classList?.contains('step-text') && fieldEl.classList?.contains('card-inline-edit');
+
+    if (e.key === 'ArrowDown') {
+        // Navigate to next field if at end of current field
+        // For multi-line step-text, also check visual bottom edge
+        const atTextEnd = caretAtEdge(fieldEl, 'end');
+        const atVisualBottom = isStepText && caretAtVisualEdge(fieldEl, 'bottom');
+        
+        if ((atTextEnd || atVisualBottom) && idx < fields.length - 1) {
+            e.preventDefault();
+            focusInlineEdit(fields[idx + 1], 'start');
+            return true;
+        }
     }
-    if (e.key === 'ArrowUp' && caretAtEdge(fieldEl, 'start') && idx > 0) {
-        e.preventDefault();
-        focusInlineEdit(fields[idx - 1], 'end');
-        return true;
+    
+    if (e.key === 'ArrowUp') {
+        // Navigate to previous field if at start of current field
+        // For multi-line step-text, also check visual top edge
+        const atTextStart = caretAtEdge(fieldEl, 'start');
+        const atVisualTop = isStepText && caretAtVisualEdge(fieldEl, 'top');
+        
+        if ((atTextStart || atVisualTop) && idx > 0) {
+            e.preventDefault();
+            focusInlineEdit(fields[idx - 1], 'end');
+            return true;
+        }
     }
     return false;
 }
