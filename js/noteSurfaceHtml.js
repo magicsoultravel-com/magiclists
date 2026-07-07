@@ -651,14 +651,31 @@ export function refreshNoteBody(body, item, {
     // Preserve scroll position before replacing checklist HTML
     const scrollContainer = body.closest('.modal-body') || body.parentElement;
     const scrollTop = scrollContainer?.scrollTop ?? 0;
+    
+    // Also preserve the position of the currently focused step (if any)
+    const activeStep = document.activeElement?.closest('.step-row--display');
+    const activeStepId = activeStep?.dataset?.stepId;
 
     // Replace old checklist HTML with fresh build
     expandedChecklist.outerHTML = buildExpandedChecklistHtml(item, true, { richEdit });
 
-    // Restore scroll position after DOM update
-    if (scrollContainer) {
-        scrollContainer.scrollTop = scrollTop;
-    }
+    // Restore scroll position after DOM update using requestAnimationFrame
+    requestAnimationFrame(() => {
+        if (scrollContainer) {
+            scrollContainer.scrollTop = scrollTop;
+        }
+        
+        // Restore focus to the previously focused step
+        if (activeStepId) {
+            const newStepEl = document.querySelector(`[data-step-id="${activeStepId}"]`);
+            if (newStepEl) {
+                const stepTextEl = newStepEl.querySelector('.step-text');
+                if (stepTextEl && document.activeElement !== stepTextEl) {
+                    focusInlineEdit(stepTextEl, 'end');
+                }
+            }
+        }
+    });
 
     // Re-bind interactions
     if (mountZone) {

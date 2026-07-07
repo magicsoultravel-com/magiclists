@@ -311,6 +311,59 @@ export function attachChecklistDrag(root, item, {
         updateDropIndicator(activeSteps, ref, { mode: dropMode, targetLevel });
     };
 
+    /**
+     * Resolve the drop mode based on mouse position
+     */
+    function resolveDropMode(clientY, rows, activeSteps, bounds, isSingleLeaf) {
+        const others = [...rows];
+        for (let i = 0; i < others.length; i++) {
+            const box = others[i].getBoundingClientRect();
+            const midY = box.top + box.height / 2;
+
+            if (clientY < box.top) {
+                if (i > 0 && getStepRowLevel(others[i - 1]) < getStepRowLevel(others[i])) {
+                    return 'child';
+                }
+                return 'sibling';
+            }
+            if (clientY <= midY) {
+                return 'sibling';
+            }
+            if (clientY <= box.bottom) {
+                return 'child';
+            }
+        }
+        return 'sibling';
+    }
+
+    /**
+     * Resolve the target level based on drop mode and position
+     */
+    function resolveDropTargetLevel(clientY, rows, dropMode) {
+        const others = [...rows];
+        for (let i = 0; i < others.length; i++) {
+            const box = others[i].getBoundingClientRect();
+            const midY = box.top + box.height / 2;
+
+            if (clientY < box.top) {
+                if (dropMode === 'child' && i > 0) {
+                    return Math.min(4, getStepRowLevel(others[i - 1]) + 1);
+                }
+                return getStepRowLevel(others[i]);
+            }
+            if (clientY <= midY) {
+                return getStepRowLevel(others[i]);
+            }
+            if (clientY <= box.bottom) {
+                if (dropMode === 'child') {
+                    return Math.min(4, getStepRowLevel(others[i]) + 1);
+                }
+                return getStepRowLevel(others[i]);
+            }
+        }
+        return 0;
+    }
+
     const finishDrag = () => {
         if (!activeDrag) return;
         const { block, moved, blockStepIds, dropMode } = activeDrag;
@@ -362,6 +415,14 @@ export function attachChecklistDrag(root, item, {
         }
         e.preventDefault();
         syncDomBlock();
+        
+        // Update dropMode and targetLevel dynamically based on mouse position
+        const rows = root.querySelectorAll('.step-row--display');
+        const dropMode = resolveDropMode(e.clientY, rows, activeSteps, activeDrag.bounds, activeDrag.isSingleLeaf);
+        const targetLevel = resolveDropTargetLevel(e.clientY, rows, dropMode);
+        activeDrag.dropMode = dropMode;
+        activeDrag.targetLevel = targetLevel;
+        
         reorderAt(e.clientY);
     };
 
@@ -516,28 +577,6 @@ export function buildChecklistExpandCollapseAllHtml(item) {
     return `<div class="checklist-toolbar">
             <button type="button" class="card-act checklist-expand-collapse-all-btn" title="${escapeHTML(label).replace(/"/g, "")}" aria-label="${escapeHTML(label).replace(/"/g, "")}">${icon}</button>
         </div>`;
-}
-
-export function buildVisibleChecklistSteps(steps, itemId, collapsedKeys = {}) {
-    if (!steps || !steps.length) return [];
-    const result = [];
-    for (const step of steps) {
-        const key = `${itemId}:${step.id}`;
-        if (collapsedKeys[key]) continue;
-        result.push({ step, level: getStepLevel(step) });
-    }
-    return result;
-}
-
-export function annotateChecklistTreeGuides(rows) {
-    return rows.map(row => {
-        const level = row.level;
-        const treeGuides = [];
-        for (let i = 0; i < level; i++) {
-            treeGuides.push({ role: i < level - 1 ? 'parent' : 'child' });
-        }
-        return { ...row, treeGuides };
-    });
 }
 
 export function insertChecklistStep(item, {
