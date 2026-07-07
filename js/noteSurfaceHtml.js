@@ -9,6 +9,7 @@ import { escapeHTML, escapeAttr } from './domEscape.js';
 import { isFileCabinetActive, getFileCabinetToggleLabels } from './fileCabinet.js';
 import { LEGACY_TILE_SIZE } from './tileGeometry.js';
 import { bindChecklistInteractions, attachChecklistDrag, getChecklistCollapsedKeys, getChecklistDoneCollapsed, isChecklistDoneSectionCollapsed, toggleChecklistDoneSection, getChecklistCollapsibleKeys, checklistGroupsAnyExpanded, collapseAllChecklistGroups, expandAllChecklistGroups, toggleChecklistExpandCollapseAll, buildChecklistExpandCollapseAllHtml, buildChecklistRowHtml } from './noteSurfaceChecklist.js';
+import { focusInlineEdit } from './noteSurfaceEditing.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -559,7 +560,6 @@ export function buildExpandedChecklistHtml(item, canEdit, { richEdit = false } =
     annotateChecklistTreeGuides(buildVisibleChecklistSteps(active, item.id, collapsedKeys))
         .forEach((row) => {
             html += buildChecklistRowHtml(row.step, {
-                level: row.level,
                 hasKids: row.hasKids,
                 isCollapsed: !!collapsedKeys[row.collapseKey],
                 collapseKey: row.collapseKey,
@@ -594,7 +594,6 @@ export function buildExpandedChecklistHtml(item, canEdit, { richEdit = false } =
         html += `<div class="checklist-done-section${doneCollapsed ? ' is-hidden' : ''}">`;
         done.forEach((step) => {
             html += buildChecklistRowHtml(step, {
-                level: 0,
                 hasKids: false,
                 isCollapsed: false,
                 collapseKey: '',
@@ -610,6 +609,14 @@ export function buildExpandedChecklistHtml(item, canEdit, { richEdit = false } =
 
     html += '</div>';
     return html;
+}
+
+function findChecklistScrollContainer(body) {
+    if (!body) return null;
+    if (body.scrollHeight > body.clientHeight) return body;
+    const modal = body.closest('.modal-body');
+    if (modal && modal.scrollHeight > modal.clientHeight) return modal;
+    return body.parentElement;
 }
 
 /**
@@ -648,33 +655,35 @@ export function refreshNoteBody(body, item, {
     const expandedChecklist = body.querySelector('.expanded-checklist');
     if (!expandedChecklist) return;
 
-    // Preserve scroll position before replacing checklist HTML
-    const scrollContainer = body.closest('.modal-body') || body.parentElement;
+    const scrollContainer = findChecklistScrollContainer(body);
     const scrollTop = scrollContainer?.scrollTop ?? 0;
-    
-    // Also preserve the position of the currently focused step (if any)
-    const activeStep = document.activeElement?.closest('.step-row--display');
-    const activeStepId = activeStep?.dataset?.stepId;
 
-    // Replace old checklist HTML with fresh build
+    const activeStep = body.contains(document.activeElement)
+        ? document.activeElement.closest('.step-row--display')
+        : null;
+    const activeStepId = activeStep?.dataset?.stepId;
+    const pendingFocusStepId = body.dataset.pendingFocusStepId || '';
+    const pendingFocusEdge = body.dataset.pendingFocusEdge || 'end';
+    delete body.dataset.pendingFocusStepId;
+    delete body.dataset.pendingFocusEdge;
+    delete body.dataset.pendingFocusPlainOffset;
+
     expandedChecklist.outerHTML = buildExpandedChecklistHtml(item, true, { richEdit });
 
-    // Restore scroll position after DOM update using requestAnimationFrame
+    const restoreView = () => {
+        if (scrollContainer) scrollContainer.scrollTop = scrollTop;
+        const focusStepId = pendingFocusStepId || activeStepId;
+        if (!focusStepId) return;
+        const stepTextEl = body.querySelector(
+            `[data-step-id="${focusStepId}"] .step-text.card-inline-edit`
+        );
+        if (stepTextEl && document.activeElement !== stepTextEl) {
+            focusInlineEdit(stepTextEl, pendingFocusStepId ? pendingFocusEdge : 'end');
+        }
+    };
     requestAnimationFrame(() => {
-        if (scrollContainer) {
-            scrollContainer.scrollTop = scrollTop;
-        }
-        
-        // Restore focus to the previously focused step
-        if (activeStepId) {
-            const newStepEl = document.querySelector(`[data-step-id="${activeStepId}"]`);
-            if (newStepEl) {
-                const stepTextEl = newStepEl.querySelector('.step-text');
-                if (stepTextEl && document.activeElement !== stepTextEl) {
-                    focusInlineEdit(stepTextEl, 'end');
-                }
-            }
-        }
+        restoreView();
+        requestAnimationFrame(restoreView);
     });
 
     // Re-bind interactions

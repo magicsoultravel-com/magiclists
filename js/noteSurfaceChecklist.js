@@ -1,7 +1,7 @@
 /** @module {"owns":"checklist operations, drag/drop, state management", "related":["noteSurface.js","checklistSteps.js","noteBodyConversion.js","richText.js"], "events":[]} */
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { escapeHTML, escapeAttr } from './domEscape.js';
-import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, collectStepSubtree, canIndentStep, normalizeChecklistLevels, computeVisibleInsertBounds, getStepRowLevel, reorderActiveStepsFromDomOrder } from './checklistSteps.js';
+import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, collectStepSubtree, canIndentStep, normalizeChecklistLevels, computeVisibleInsertBounds, reorderActiveStepsFromDomOrder, applySubtreeLevelDelta, resolvePointerDropTarget, resolveDropTarget } from './checklistSteps.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyConversion.js';
 import { stripRichText, sanitizeRichHtml, hasRichMarkup } from './richText.js';
 import { mutateItem, syncItemBodyFromDom, syncInlineFieldToItem } from './noteSurfaceMutations.js';
@@ -10,7 +10,12 @@ import { copyPlainTextToClipboard } from './clipboard.js';
 
 
 const DRAG_THRESHOLD = 4;
-const SOFT_BREAK = '\u2028';
+
+function setPendingChecklistFocus(root, stepId, edge = 'start') {
+    if (!root || !stepId) return;
+    root.dataset.pendingFocusStepId = stepId;
+    root.dataset.pendingFocusEdge = edge;
+}
 
 /**
  * Bind all checklist action buttons (copy, delete, indent, outdent,
@@ -57,7 +62,8 @@ export function bindChecklistInteractions(root, item, {
             const row = delBtn.closest('.step-row--display');
             const stepId = row?.dataset?.stepId;
             if (!stepId) return;
-            removeChecklistStepAndFocus(item, stepId, { localOnly, onChange });
+            const focusStepId = removeChecklistStepAndFocus(item, stepId, { localOnly, onChange });
+            if (focusStepId) setPendingChecklistFocus(root, focusStepId, 'end');
             refresh();
             return;
         }
@@ -94,26 +100,20 @@ export function bindChecklistInteractions(root, item, {
         if (indentBtn && root.contains(indentBtn)) {
             e.preventDefault();
             e.stopPropagation();
+            if (indentBtn.disabled) return;
             const row = indentBtn.closest('.step-row--display');
             const stepId = row?.dataset?.stepId;
             if (!stepId) return;
-            const step = (item.steps || []).find(s => s.id === stepId);
-            if (!step) return;
             syncItemBodyFromDom(root, item);
             const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
-            step.level = (step.level || 0) + 1;
+            const stepIdx = item.steps.findIndex((s) => s.id === stepId);
+            if (stepIdx < 0) return;
+            applySubtreeLevelDelta(item.steps, stepIdx, 1);
             normalizeChecklistLevels(item.steps);
             if (localOnly) onChange();
             else commitInlineChecklistOp(item, beforeItem, { localOnly });
-            // Restore focus to the step after DOM update
-            const focusStepId = stepId;
+            setPendingChecklistFocus(root, stepId, 'end');
             refresh();
-            setTimeout(() => {
-                const stepTextEl = document.querySelector(`[data-step-id="${focusStepId}"].step-text.card-inline-edit`);
-                if (stepTextEl && document.activeElement !== stepTextEl) {
-                    focusInlineEdit(stepTextEl, 'end');
-                }
-            }, 0);
             return;
         }
 
@@ -122,26 +122,22 @@ export function bindChecklistInteractions(root, item, {
         if (outdentBtn && root.contains(outdentBtn)) {
             e.preventDefault();
             e.stopPropagation();
+            if (outdentBtn.disabled) return;
             const row = outdentBtn.closest('.step-row--display');
             const stepId = row?.dataset?.stepId;
             if (!stepId) return;
             const step = (item.steps || []).find(s => s.id === stepId);
-            if (!step || (step.level || 0) <= 0) return;
+            if (!step || getStepLevel(step) <= 0) return;
             syncItemBodyFromDom(root, item);
             const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
-            step.level = Math.max(0, (step.level || 0) - 1);
+            const stepIdx = item.steps.findIndex((s) => s.id === stepId);
+            if (stepIdx < 0) return;
+            applySubtreeLevelDelta(item.steps, stepIdx, -1);
             normalizeChecklistLevels(item.steps);
             if (localOnly) onChange();
             else commitInlineChecklistOp(item, beforeItem, { localOnly });
-            // Restore focus to the step after DOM update
-            const focusStepId = stepId;
+            setPendingChecklistFocus(root, stepId, 'end');
             refresh();
-            setTimeout(() => {
-                const stepTextEl = document.querySelector(`[data-step-id="${focusStepId}"].step-text.card-inline-edit`);
-                if (stepTextEl && document.activeElement !== stepTextEl) {
-                    focusInlineEdit(stepTextEl, 'end');
-                }
-            }, 0);
             return;
         }
 
@@ -188,45 +184,24 @@ export function bindChecklistInteractions(root, item, {
     if (addBtn && root.contains(addBtn)) {
         e.preventDefault();
         e.stopPropagation();
-        insertChecklistStep(item, { localOnly, onChange });
+        const newStepId = insertChecklistStep(item, { localOnly, onChange });
+        if (newStepId) setPendingChecklistFocus(root, newStepId, 'start');
         refresh();
         return;
     }
     });
 
-    // --- step-text keydown: Enter creates sibling, Shift+Enter creates nested step ---
+    // --- step-text keydown: Enter creates sibling, Shift+Enter inserts line break ---
     root.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter') return;
         const active = e.target;
         if (!active?.classList?.contains('step-text')) return;
         e.preventDefault();
-        const stepId = active.dataset.stepId;
-        if (handleChecklistEnter(e, item, { localOnly, onChange })) {
-            // Focus the new step after DOM update
-            // The new step is always inserted right after the current step
-            refresh();
-            // Use setTimeout to ensure DOM is updated after refresh and re-binding
-            // The root element might be replaced, so we need to query from the document
-            // Use a small delay to ensure the mutation event has been processed
-            setTimeout(() => {
-                // Find the step row that was just before the new step
-                const allRows = document.querySelectorAll('.step-row--display');
-                for (const row of allRows) {
-                    const rowStepId = row.dataset.stepId;
-                    if (rowStepId === stepId) {
-                        // Found the current row, get the next sibling
-                        const newRow = row.nextElementSibling;
-                        if (newRow) {
-                            const newTextEl = newRow.querySelector('.step-text');
-                            if (newTextEl && document.activeElement !== newTextEl) {
-                                focusInlineEdit(newTextEl, 'start');
-                            }
-                        }
-                        break;
-                    }
-                }
-            }, 50);
-        }
+        const result = handleChecklistEnter(e, item, { localOnly, onChange });
+        if (result === false) return;
+        if (result === 'stay') return;
+        if (result) setPendingChecklistFocus(root, result, 'start');
+        refresh();
     });
 }
 
@@ -249,31 +224,26 @@ export function attachChecklistDrag(root, item, {
     };
     
     let activeDrag = null;
-    const { active: activeSteps } = partitionChecklistSteps(item.steps || []);
 
     const hideDropIndicator = () => {
         root.querySelectorAll('.checklist-drop-indicator').forEach((el) => el.remove());
     };
 
-    const updateDropIndicator = (activeList, ref, { mode = 'sibling', targetLevel = 0 } = {}) => {
+    const getChecklistInsertAnchor = () => {
+        return root.querySelector('.expanded-checklist-add-btn, .checklist-done-toggle');
+    };
+
+    const updateDropIndicator = (ref, position = 'before') => {
         hideDropIndicator();
-        if (!activeList || !ref) return;
+        if (!ref) return;
         const indicator = document.createElement('div');
-        indicator.className = 'checklist-drop-indicator';
-        indicator.dataset.dropMode = mode;
-        indicator.dataset.targetLevel = targetLevel;
-        indicator.style.position = 'absolute';
-        indicator.style.left = '0';
-        indicator.style.top = `${ref.offsetTop - 2}px`;
-        indicator.style.height = `${ref.offsetHeight}px`;
-        indicator.style.width = '100%';
-        indicator.style.background = 'var(--color-accent-7)';
-        indicator.style.height = '2px';
-        indicator.style.transform = `scaleY(0.5)`;
-        indicator.style.opacity = '0.8';
-        indicator.style.transformOrigin = 'top';
-        indicator.style.zIndex = '10';
-        root.appendChild(indicator);
+        indicator.className = 'checklist-drop-indicator is-visible';
+        indicator.setAttribute('aria-hidden', 'true');
+        if (position === 'after') {
+            ref.insertAdjacentElement('afterend', indicator);
+        } else {
+            ref.insertAdjacentElement('beforebegin', indicator);
+        }
     };
 
     const buildDomBlockFromIds = (rows, subtreeIds) => {
@@ -286,83 +256,24 @@ export function attachChecklistDrag(root, item, {
         return block;
     };
 
+    const moveBlockInDom = (block, insertIndex, others) => {
+        const parent = block[0]?.parentNode;
+        if (!parent) return;
+        const anchor = getChecklistInsertAnchor();
+        const ref = insertIndex < others.length ? others[insertIndex] : null;
+        block.forEach((row) => {
+            if (ref) parent.insertBefore(row, ref);
+            else if (anchor) parent.insertBefore(row, anchor);
+            else parent.appendChild(row);
+        });
+    };
+
     const syncDomBlock = () => {
         if (!activeDrag) return;
-        const { block, blockStepIds } = activeDrag;
-        const rows = root.querySelectorAll('.step-row--display');
-        rows.forEach((r) => r.classList.remove('is-dragging'));
+        const { block } = activeDrag;
+        root.querySelectorAll('.step-row--display').forEach((r) => r.classList.remove('is-dragging'));
         block.forEach((r) => r.classList.add('is-dragging'));
     };
-
-    const reorderAt = (clientY) => {
-        if (!activeDrag) return;
-        const rows = root.querySelectorAll('.step-row--display');
-        const ref = [...rows].find((r) => r.offsetTop > clientY);
-        if (!ref) return;
-        const insertIndex = [...rows].indexOf(ref);
-        const { minAmongOthers, maxAmongOthers } = computeVisibleInsertBounds(
-            activeSteps,
-            insertIndex,
-            getActiveRows().map((r) => r.dataset.stepId)
-        );
-        const isSingleLeaf = activeDrag.isSingleLeaf;
-        const dropMode = activeDrag.dropMode;
-        const targetLevel = activeDrag.targetLevel;
-        updateDropIndicator(activeSteps, ref, { mode: dropMode, targetLevel });
-    };
-
-    /**
-     * Resolve the drop mode based on mouse position
-     */
-    function resolveDropMode(clientY, rows, activeSteps, bounds, isSingleLeaf) {
-        const others = [...rows];
-        for (let i = 0; i < others.length; i++) {
-            const box = others[i].getBoundingClientRect();
-            const midY = box.top + box.height / 2;
-
-            if (clientY < box.top) {
-                if (i > 0 && getStepRowLevel(others[i - 1]) < getStepRowLevel(others[i])) {
-                    return 'child';
-                }
-                return 'sibling';
-            }
-            if (clientY <= midY) {
-                return 'sibling';
-            }
-            if (clientY <= box.bottom) {
-                return 'child';
-            }
-        }
-        return 'sibling';
-    }
-
-    /**
-     * Resolve the target level based on drop mode and position
-     */
-    function resolveDropTargetLevel(clientY, rows, dropMode) {
-        const others = [...rows];
-        for (let i = 0; i < others.length; i++) {
-            const box = others[i].getBoundingClientRect();
-            const midY = box.top + box.height / 2;
-
-            if (clientY < box.top) {
-                if (dropMode === 'child' && i > 0) {
-                    return Math.min(4, getStepRowLevel(others[i - 1]) + 1);
-                }
-                return getStepRowLevel(others[i]);
-            }
-            if (clientY <= midY) {
-                return getStepRowLevel(others[i]);
-            }
-            if (clientY <= box.bottom) {
-                if (dropMode === 'child') {
-                    return Math.min(4, getStepRowLevel(others[i]) + 1);
-                }
-                return getStepRowLevel(others[i]);
-            }
-        }
-        return 0;
-    }
 
     const finishDrag = () => {
         if (!activeDrag) return;
@@ -397,6 +308,7 @@ export function attachChecklistDrag(root, item, {
             if (parentIdToExpand) {
                 expandChecklistAncestorsForStep(item, parentIdToExpand);
             }
+            setPendingChecklistFocus(root, blockRootId, 'end');
             refresh();
             commitInlineChecklistOp(item, beforeItem, { localOnly });
         }
@@ -410,20 +322,31 @@ export function attachChecklistDrag(root, item, {
             const dy = Math.abs(e.clientY - activeDrag.startY);
             if (dx < DRAG_THRESHOLD && dy < DRAG_THRESHOLD) return;
             activeDrag.moved = true;
-            syncDomBlock();
-            activeDrag.block.forEach((r) => r.classList.add('is-dragging'));
         }
         e.preventDefault();
         syncDomBlock();
-        
-        // Update dropMode and targetLevel dynamically based on mouse position
-        const rows = root.querySelectorAll('.step-row--display');
-        const dropMode = resolveDropMode(e.clientY, rows, activeSteps, activeDrag.bounds, activeDrag.isSingleLeaf);
-        const targetLevel = resolveDropTargetLevel(e.clientY, rows, dropMode);
+
+        const rows = getActiveRows();
+        const { block, bounds, isSingleLeaf } = activeDrag;
+        const { insertIndex, dropMode, others } = resolvePointerDropTarget(
+            e.clientY,
+            rows,
+            block,
+            { bounds, isSingleLeaf }
+        );
+
         activeDrag.dropMode = dropMode;
-        activeDrag.targetLevel = targetLevel;
-        
-        reorderAt(e.clientY);
+        if (activeDrag.lastInsertIndex !== insertIndex) {
+            activeDrag.lastInsertIndex = insertIndex;
+            moveBlockInDom(block, insertIndex, others);
+        }
+
+        const indicatorRef = insertIndex < others.length
+            ? others[insertIndex]
+            : others[others.length - 1];
+        if (indicatorRef) {
+            updateDropIndicator(indicatorRef, insertIndex < others.length ? 'before' : 'after');
+        }
     };
 
     const onUp = () => finishDrag();
@@ -464,8 +387,7 @@ export function attachChecklistDrag(root, item, {
                 ? { minAmongOthers: 0, maxAmongOthers: othersCount }
                 : { minAmongOthers, maxAmongOthers },
             dropMode: 'sibling',
-            insertIndex: 0,
-            targetLevel: 0,
+            lastInsertIndex: -1,
             startX: e.clientX,
             startY: e.clientY,
             moved: false
@@ -586,7 +508,7 @@ export function insertChecklistStep(item, {
     localOnly = false,
     onChange = () => {}
 } = {}) {
-    if (!item) return false;
+    if (!item) return null;
     const steps = item.steps || [];
     const newStep = {
         id: createStepId(),
@@ -611,13 +533,13 @@ export function insertChecklistStep(item, {
         mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
     }
     onChange();
-    return true;
+    return newStep.id;
 }
 
 export function removeChecklistStepAndFocus(item, stepId, { localOnly = false, onChange = () => {} } = {}) {
-    if (!item || !item.steps) return false;
+    if (!item || !item.steps) return null;
     const idx = item.steps.findIndex((s) => s.id === stepId);
-    if (idx < 0) return false;
+    if (idx < 0) return null;
 
     const prevStep = item.steps[idx - 1];
     const nextStep = item.steps[idx + 1];
@@ -628,17 +550,7 @@ export function removeChecklistStepAndFocus(item, stepId, { localOnly = false, o
     }
     onChange();
 
-    const root = document.querySelector('.editor-note-body') || document.querySelector('.editor-note-shell');
-    if (root) {
-        const targetId = prevStep?.id || nextStep?.id;
-        if (targetId) {
-            const target = root.querySelector(`[data-step-id="${targetId}"] .step-text`);
-            if (target) {
-                focusInlineEdit(target, 'end');
-            }
-        }
-    }
-    return true;
+    return prevStep?.id || nextStep?.id || null;
 }
 
 export function handleChecklistBackspace(e, item, { localOnly = false, onChange = () => {} } = {}) {
@@ -730,14 +642,18 @@ export function handleChecklistEnter(e, item, { localOnly = false, onChange = ()
      const { before, after } = splitInlineEditAtCaret(active);
 
      if (e.shiftKey) {
-         // Shift+Enter: insert a soft line break within the same step text
-         insertTextAtCaret(active, SOFT_BREAK);
+         const rich = active.classList.contains('rich-text--edit');
+         if (rich) {
+             document.execCommand('insertLineBreak');
+         } else {
+             insertTextAtCaret(active, '\n');
+         }
          syncInlineFieldToItem(active, item);
          if (!localOnly) {
              mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
          }
          onChange();
-         return false;
+         return 'stay';
      }
 
     // Enter: split text at caret position and create a new step with the "after" text
@@ -773,7 +689,7 @@ export function handleChecklistEnter(e, item, { localOnly = false, onChange = ()
         mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
     }
     onChange();
-    return true;
+    return newStep.id;
 }
 
 function isChecklistGroupCollapsed(itemId, stepId) {
@@ -859,7 +775,6 @@ function syncStepTextToItem(el, item) {
  * This function is used by both modal and inline editors.
  */
 export function buildChecklistRowHtml(step, {
-    level = 0,
     hasKids = false,
     isCollapsed = false,
     collapseKey = '',
@@ -869,6 +784,7 @@ export function buildChecklistRowHtml(step, {
     richEdit = false,
     active = []
 } = {}) {
+    const stepLevel = getStepLevel(step);
     const activeIdx = isDoneSection ? -1 : active.findIndex((s) => s.id === step.id);
     const collapseControl = !isDoneSection && hasKids
         ? `<button type="button" class="step-collapse-btn" data-collapse-key="${escapeAttr(collapseKey)}" title="${isCollapsed ? 'Expand group' : 'Collapse group'}" aria-label="${isCollapsed ? 'Expand group' : 'Collapse group'}">${isCollapsed ? CARD_ICONS.chevronRight : CARD_ICONS.chevronDown}</button>`
@@ -879,7 +795,7 @@ export function buildChecklistRowHtml(step, {
             ? '<span class="grab-handle grab-handle--step grab-handle--spacer" aria-hidden="true">⋮⋮</span>'
             : '<span class="grab-handle grab-handle--step" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>';
     const nestControls = canEdit ? `
-        <button type="button" class="card-act step-outdent-btn" title="Outdent" aria-label="Outdent"${level === 0 ? ' disabled' : ''}>‹</button>
+        <button type="button" class="card-act step-outdent-btn" title="Outdent" aria-label="Outdent"${stepLevel === 0 ? ' disabled' : ''}>‹</button>
         <button type="button" class="card-act step-indent-btn" title="Indent" aria-label="Indent"${!canIndentStep(active, activeIdx) ? ' disabled' : ''}>›</button>` : '';
     const copyBtn = canEdit
         ? `<button type="button" class="card-act step-copy-btn" title="Copy item" aria-label="Copy item">${CARD_ICONS.copy}</button>`
@@ -904,7 +820,7 @@ export function buildChecklistRowHtml(step, {
         }).join('')}</span>`
         : '';
     return `
-        <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}" data-step-id="${step.id}" data-level="${level}">
+        <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}" data-step-id="${step.id}" data-level="${stepLevel}">
             <div class="step-row-leading">
                 ${dragHandle}
                 ${collapseControl}

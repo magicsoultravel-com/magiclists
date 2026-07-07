@@ -1164,7 +1164,14 @@ export const UI = {
         });
         NoteSurface.bindNoteEditorShell(card, item, {
             richEdit: true,
-            refresh: () => this.refreshBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor),
+            refresh: () => {
+                const body = card.querySelector('.editor-note-body');
+                if (body?.querySelector('.expanded-checklist')) {
+                    this.refreshBoardChecklistBody(card, item, activeCategories, targetCatName, categoryColor);
+                    return;
+                }
+                this.refreshBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
+            },
             stopMousedownPropagation: true,
             onRaiseCard: (c) => this.raiseDesktopCard(c)
         });
@@ -1174,8 +1181,21 @@ export const UI = {
         this.focusPendingBoardField(card);
     },
 
+    refreshBoardChecklistBody(card, item, activeCategories, targetCatName, categoryColor) {
+        const body = card.querySelector('.editor-note-body');
+        const shell = card.querySelector('.editor-note-shell');
+        if (!body || !item) return;
+        if (shell) NoteSurface.syncItemBodyFromDom(shell, item);
+        NoteSurface.refreshNoteBody(body, item, {
+            shell,
+            richEdit: true,
+            refresh: () => this.refreshBoardChecklistBody(card, item, activeCategories, targetCatName, categoryColor)
+        });
+    },
+
     refreshBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor) {
         const body = card.querySelector('.editor-note-body');
+        const scrollTop = body?.scrollTop ?? 0;
         const focusState = body ? NoteSurface.captureNoteBodyFocusState(body) : null;
         const shell = card.querySelector('.editor-note-shell');
         if (shell && !card.dataset.pendingFocusStepId) {
@@ -1186,6 +1206,7 @@ export const UI = {
         const pendingFocusPlainOffset = card.dataset.pendingFocusPlainOffset;
         this.renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
         const newBody = card.querySelector('.editor-note-body');
+        if (newBody) newBody.scrollTop = scrollTop;
         if (newBody && focusState) {
             NoteSurface.restoreNoteBodyFocusState(newBody, card, focusState);
         }
