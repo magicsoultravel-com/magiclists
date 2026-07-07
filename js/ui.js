@@ -1,4 +1,3 @@
-/** @module {"owns":"board render, tile layout, category visibility, desktop canvas", "related":["noteSurface.js","noteQuickActions.js","dragdrop.js","layoutStorage.js","board/gridEngine.js"], "events":["board:visibility_changed","item:selected_for_edit","calendar:items_changed"]} */
 import { mountFloatChrome } from './desktopFloatChrome.js';
 import {
     categoryKey,
@@ -852,7 +851,7 @@ export const UI = {
 
         const activeCategories = this.getActiveCategories(hiddenCategories);
          
-        const { resolvedMode, snapLayout, fileCabinetActive, activeBoardViewMode } = this.getViewState();
+        const { resolvedMode, fileCabinetActive } = this.getViewState();
         this.applyCanvasClasses(canvas, fileCabinetActive);
          
         if (this.shouldRenderEmptyState(canvas, fileCabinetActive, visibleItems, safeItems)) {
@@ -860,24 +859,25 @@ export const UI = {
             return;
         }
 
-        const { boardItems, fileCabinetMount } = this.prepareBoardItems(visibleItems, fileCabinetActive, resolvedMode, activeCategories);
+        const { boardItems } = this.prepareBoardItems(visibleItems, fileCabinetActive, resolvedMode, activeCategories);
          
         if (boardItems.length === 0) {
             this.renderEmptyState(canvas, fileCabinetActive, visibleItems, safeItems);
             return;
         }
 
-         this.finalizeRender(canvas, boardPane, renderOptions);
-     },
+        const { boardPane } = this.layoutBoard(canvas, boardItems, activeCategories);
+        this.finalizeRender(canvas, boardPane, renderOptions);
+    },
 
-      prepareCanvas(canvas) {
-          canvas.innerHTML = '';
-      },
+    prepareCanvas(canvas) {
+        canvas.innerHTML = '';
+    },
 
     getActiveCategories(hiddenCategories) {
         let activeCategories = readStoredCategories();
         return activeCategories.filter(cat => !hiddenCategories.includes(cat.name));
-    }
+    },
 
     getViewState() {
         const resolvedMode = 'grid';
@@ -885,17 +885,17 @@ export const UI = {
         const fileCabinetActive = isFileCabinetActive();
         const activeBoardViewMode = 'grid';
         return { resolvedMode, snapLayout, fileCabinetActive, activeBoardViewMode };
-    }
+    },
 
     applyCanvasClasses(canvas, fileCabinetActive) {
         canvas.className = 'view-grid';
         if (fileCabinetActive) canvas.classList.add('file-cabinet-bottom');
         delete canvas.dataset.focusActive;
-    }
+    },
 
     shouldRenderEmptyState(canvas, fileCabinetActive, visibleItems, safeItems) {
-        return false; // Will be handled in renderEmptyState
-    }
+        return visibleItems.length === 0;
+    },
 
     prepareBoardItems(visibleItems, fileCabinetActive, resolvedMode, activeCategories) {
         let boardItems = visibleItems;
@@ -914,7 +914,7 @@ export const UI = {
         }
          
         return { boardItems, fileCabinetMount };
-    }
+    },
 
     renderEmptyState(canvas, fileCabinetActive, visibleItems, safeItems) {
         if (fileCabinetActive && visibleItems.length > 0) {
@@ -926,7 +926,7 @@ export const UI = {
         } else {
             canvas.innerHTML = `<div class="system-status-msg">Workspace clean. Click "+ New" to commit an entity.</div>`;
         }
-    }
+    },
 
     layoutBoard(canvas, boardItems, activeCategories) {
         const layout = this.getGridLayout();
@@ -988,11 +988,11 @@ export const UI = {
             });
 
         return { layout, placed, boardPane };
-    }
+    },
 
     renderCards(boardItems, activeCategories, layout, placed, boardPane) {
         // This is handled in layoutBoard now
-    }
+    },
 
     finalizeRender(canvas, boardPane, renderOptions) {
         this.updateBoardCanvasExtents(canvas);
@@ -1001,8 +1001,7 @@ export const UI = {
                 this.reflowGridBoard(canvas, null, { animate: false });
             });
         }
-    }
-
+    },
 
     buildCardActionsHtml(item, isExpanded = false, options = {}) {
         return NoteSurface.buildNoteQuickActionsHtml(item, {
@@ -1198,8 +1197,6 @@ export const UI = {
         this.syncBoardPinClass(card);
         return card;
     },
-
-
 
     renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor) {
         const canEdit = NoteSurface.canEditInline();
@@ -2003,7 +2000,6 @@ export const UI = {
         if (!visibleItems.length) return;
 
         const mode = 'grid';
-        const snapLayout = true;
         const canvas = document.getElementById('app-canvas');
         if (!canvas) return;
 
