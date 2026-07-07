@@ -23,6 +23,7 @@
     --tile-small-w: 65px;
     --tile-small-h: 32px;
     --tile-large-w: 98px;
+    --tile-large-w: 98px;
     --tile-large-h: 131px;
     --tile-label-h: 32px;
     --tile-note-w: 98px;
@@ -44,7 +45,7 @@
     --scrollbar-thumb-radius: 4px;
     --scrollbar-track: transparent;
     --note-scroll-resize-gutter: 10px;
-
+    
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background-color: var(--desktop-bg, var(--bg-primary));
     color: var(--text-main);
@@ -90,3 +91,28 @@ html[data-tile-small-footprint="card"] {
     border-radius: var(--scrollbar-thumb-radius);
 }
 
+/* ==========================================================================
+   2. LOADING STATES & FEEDBACK
+   ========================================================================== */
+.loading-indicator {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--color-primary, #4f46e5);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+.is-loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.is-loading * {
+    cursor: wait !important;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}

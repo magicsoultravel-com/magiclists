@@ -9,6 +9,7 @@ import { DragDropEngine } from './dragdrop.js';
 import { ToolsManager } from './toolsManager.js';
 import { Calendar } from './calendar.js';
 import { SidePanel } from './hamburger.js';
+import { LoadingManager } from './loadingUtils.js';
 import { applyBackupToStorage, buildBackupPackage, parseBackupPackage, serializeBackupPackage, writeLastLocalExportAt } from './backup.js';
 import { reconcileLayoutStorage } from './layoutStorage.js';
 import {
@@ -245,8 +246,19 @@ class Application {
     }
 
     async syncDataStore() {
+        // Show loading indicator on app-canvas during sync
+        const canvas = document.getElementById('app-canvas');
+        if (canvas) {
+            LoadingManager.show(canvas, 'Syncing data...');
+        }
+        
         const task = this._syncQueue.then(() => this._syncDataStoreInner());
         this._syncQueue = task.catch(() => {});
+        task.finally(() => {
+            if (canvas) {
+                LoadingManager.hide(canvas);
+            }
+        });
         return task;
     }
 
@@ -465,15 +477,29 @@ class Application {
     }
 
     executeDataBackupExport() {
-        const backupPackage = buildBackupPackage();
-        const blob = new Blob([serializeBackupPackage(backupPackage)], { type: 'application/json' });
-        const virtualLink = document.createElement('a');
-        virtualLink.href = URL.createObjectURL(blob);
-        virtualLink.download = `matrix_workspace_backup_${backupPackage.timestamp}.json`;
-        virtualLink.click();
-        URL.revokeObjectURL(virtualLink.href);
-        writeLastLocalExportAt(backupPackage.timestamp);
-        SidebarStats.update();
+        // Show loading indicator on the export button
+        const exportBtn = document.getElementById('btn-export-db');
+        if (exportBtn) {
+            LoadingManager.show(exportBtn, 'Exporting backup...');
+        }
+        
+        try {
+            const backupPackage = buildBackupPackage();
+            const blob = new Blob([serializeBackupPackage(backupPackage)], { type: 'application/json' });
+            const virtualLink = document.createElement('a');
+            virtualLink.href = URL.createObjectURL(blob);
+            virtualLink.download = `matrix_workspace_backup_${backupPackage.timestamp}.json`;
+            virtualLink.click();
+            URL.revokeObjectURL(virtualLink.href);
+            writeLastLocalExportAt(backupPackage.timestamp);
+            SidebarStats.update();
+        } finally {
+            // Hide loading indicator
+            const exportBtn = document.getElementById('btn-export-db');
+            if (exportBtn) {
+                LoadingManager.hide(exportBtn);
+            }
+        }
     }
 
     setupBackupInterface() {
@@ -482,6 +508,10 @@ class Application {
         filePicker.addEventListener('change', (e) => {
             const file = e.target.files[0];
             if (!file) return;
+            
+            // Show loading indicator on file picker
+            LoadingManager.show(filePicker, 'Importing backup...');
+            
             const reader = new FileReader();
             reader.onload = async (event) => {
                 try {
@@ -497,6 +527,9 @@ class Application {
                 } catch (err) {
                     console.error('[Import]', err);
                     alert('Import Aborted: Invalid or unsupported backup file.');
+                } finally {
+                    // Hide loading indicator
+                    LoadingManager.hide(filePicker);
                 }
             };
             reader.readAsText(file);
@@ -535,26 +568,54 @@ class Application {
     }
 
     executeLoginPrompt() {
-        const secretInput = prompt("Enter Admin Security Token Code:");
-        if (secretInput) {
-            localStorage.setItem('admin_token', secretInput.trim());
-            this.checkAuthSession();
-            UndoManager.loadStacks();
-            this.renderControlBar();
-            SidebarHistory.renderPanel();
-            this.syncDataStore();
+        // Show loading indicator on the login button
+        const loginBtn = document.getElementById('btn-auth-login');
+        if (loginBtn) {
+            LoadingManager.show(loginBtn, 'Logging in...');
+        }
+        
+        try {
+            const secretInput = prompt("Enter Admin Security Token Code:");
+            if (secretInput) {
+                localStorage.setItem('admin_token', secretInput.trim());
+                this.checkAuthSession();
+                UndoManager.loadStacks();
+                this.renderControlBar();
+                SidebarHistory.renderPanel();
+                this.syncDataStore();
+            }
+        } finally {
+            // Hide loading indicator
+            const loginBtn = document.getElementById('btn-auth-login');
+            if (loginBtn) {
+                LoadingManager.hide(loginBtn);
+            }
         }
     }
 
     executeLogout() {
-        localStorage.removeItem('admin_token');
-        AppState.user.isLoggedIn = false;
-        AppState.user.token = null;
-        UndoManager.clear();
-        this.renderControlBar();
-        SidebarHistory.renderPanel();
-        this.updateLayoutResetVisibility();
-        this.syncDataStore();
+        // Show loading indicator on the logout button
+        const logoutBtn = document.getElementById('btn-auth-logout');
+        if (logoutBtn) {
+            LoadingManager.show(logoutBtn, 'Logging out...');
+        }
+        
+        try {
+            localStorage.removeItem('admin_token');
+            AppState.user.isLoggedIn = false;
+            AppState.user.token = null;
+            UndoManager.clear();
+            this.renderControlBar();
+            SidebarHistory.renderPanel();
+            this.updateLayoutResetVisibility();
+            this.syncDataStore();
+        } finally {
+            // Hide loading indicator
+            const logoutBtn = document.getElementById('btn-auth-logout');
+            if (logoutBtn) {
+                LoadingManager.hide(logoutBtn);
+            }
+        }
     }
 
     migrateBoardOverlayFromFreeform() {
@@ -576,40 +637,68 @@ class Application {
     }
 
     async toggleBoardOverlay() {
-        const canvas = document.getElementById('app-canvas');
-        const wasEnabled = BoardOverlay.isEnabled();
-        UI.flushAllInlineEditsFromCanvas(canvas, AppState.items);
-        if (canvas) {
-            UI.flushLayoutFromCanvas(canvas, 'grid');
+        // Show loading indicator on the board overlay toggle button
+        const toggleBtn = document.getElementById('btn-freeform-toggle');
+        if (toggleBtn) {
+            LoadingManager.show(toggleBtn, 'Toggling board overlay...');
         }
-        const next = BoardOverlay.toggle();
-        if (wasEnabled && !next && canvas) {
-            UI.reflowGridBoard(canvas, null, { animate: true });
+        
+        try {
+            const canvas = document.getElementById('app-canvas');
+            const wasEnabled = BoardOverlay.isEnabled();
+            UI.flushAllInlineEditsFromCanvas(canvas, AppState.items);
+            if (canvas) {
+                UI.flushLayoutFromCanvas(canvas, 'grid');
+            }
+            const next = BoardOverlay.toggle();
+            if (wasEnabled && !next && canvas) {
+                UI.reflowGridBoard(canvas, null, { animate: true });
+            }
+            DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+            this.updateViewToggleState();
+            BoardSort.refreshMenu();
+        } finally {
+            // Hide loading indicator
+            const toggleBtn = document.getElementById('btn-freeform-toggle');
+            if (toggleBtn) {
+                LoadingManager.hide(toggleBtn);
+            }
         }
-        DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
-        this.updateViewToggleState();
-        BoardSort.refreshMenu();
     }
 
     async toggleFileCabinet() {
-        if (AppState.workspaceMode === 'drawing') {
-            this.switchWorkspaceMode('notes');
+        // Show loading indicator on the file cabinet toggle button
+        const toggleBtn = document.getElementById('btn-file-cabinet-toggle');
+        if (toggleBtn) {
+            LoadingManager.show(toggleBtn, 'Toggling file cabinet...');
         }
-        const next = !AppState.viewSettings.fileCabinet;
-        const canvas = document.getElementById('app-canvas');
-        UI.flushAllInlineEditsFromCanvas(canvas, AppState.items);
-        AppState.viewSettings.fileCabinet = next;
-        setFileCabinetActive(next);
-        if (next) {
-            UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
-            pruneFileCabinetOrderByLayout(AppState.items, AppState.viewSettings.sortBy, UI);
-            migrateItemsToFileCabinet(AppState.items, AppState.viewSettings.sortBy, UI);
-        } else {
-            pruneFileCabinetOrderByLayout(AppState.items, AppState.viewSettings.sortBy, UI);
+        
+        try {
+            if (AppState.workspaceMode === 'drawing') {
+                this.switchWorkspaceMode('notes');
+            }
+            const next = !AppState.viewSettings.fileCabinet;
+            const canvas = document.getElementById('app-canvas');
+            UI.flushAllInlineEditsFromCanvas(canvas, AppState.items);
+            AppState.viewSettings.fileCabinet = next;
+            setFileCabinetActive(next);
+            if (next) {
+                UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
+                pruneFileCabinetOrderByLayout(AppState.items, AppState.viewSettings.sortBy, UI);
+                migrateItemsToFileCabinet(AppState.items, AppState.viewSettings.sortBy, UI);
+            } else {
+                pruneFileCabinetOrderByLayout(AppState.items, AppState.viewSettings.sortBy, UI);
+            }
+            this.updateViewToggleState();
+            this.updateLayoutResetVisibility();
+            await this.syncDataStore();
+        } finally {
+            // Hide loading indicator
+            const toggleBtn = document.getElementById('btn-file-cabinet-toggle');
+            if (toggleBtn) {
+                LoadingManager.hide(toggleBtn);
+            }
         }
-        this.updateViewToggleState();
-        this.updateLayoutResetVisibility();
-        await this.syncDataStore();
     }
 
     updateViewToggleState() {
@@ -696,7 +785,9 @@ class Application {
         });
         window.addEventListener('desktop:zoom_changed', () => {
             const canvas = document.getElementById('app-canvas');
-            UI.updateBoardCanvasExtents(canvas);
+            if (canvas) {
+                UI.updateBoardCanvasExtents(canvas);
+            }
         });
 
         window.addEventListener('item:selected_for_edit', (e) => {

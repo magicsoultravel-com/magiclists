@@ -844,49 +844,93 @@ export const UI = {
 
     render(canvas, items, viewMode, hiddenCategories = [], renderOptions = {}) {
         if (!canvas) return;
-        canvas.innerHTML = '';
-
+        this.prepareCanvas(canvas);
+         
         const safeItems = Array.isArray(items) ? items : [];
         const visibleItems = this.getVisibleItems(safeItems);
         boardItemsById = new Map(visibleItems.map((item) => [item.id, item]));
 
-        let activeCategories = readStoredCategories();
-        activeCategories = activeCategories.filter(cat => !hiddenCategories.includes(cat.name));
+        const activeCategories = this.getActiveCategories(hiddenCategories);
+         
+        const { resolvedMode, snapLayout, fileCabinetActive, activeBoardViewMode } = this.getViewState();
+        this.applyCanvasClasses(canvas, fileCabinetActive);
+         
+        if (this.shouldRenderEmptyState(canvas, fileCabinetActive, visibleItems, safeItems)) {
+            this.renderEmptyState(canvas, fileCabinetActive, visibleItems, safeItems);
+            return;
+        }
 
+        const { boardItems, fileCabinetMount } = this.prepareBoardItems(visibleItems, fileCabinetActive, resolvedMode, activeCategories);
+         
+        if (boardItems.length === 0) {
+            this.renderEmptyState(canvas, fileCabinetActive, visibleItems, safeItems);
+            return;
+        }
+
+        const { layout, placed, boardPane } = this.layoutBoard(canvas, boardItems, activeCategories);
+        this.renderCards(boardItems, activeCategories, layout, placed, boardPane);
+        this.finalizeRender(canvas, boardPane, renderOptions);
+    }
+
+    prepareCanvas(canvas) {
+        canvas.innerHTML = '';
+    }
+
+    getActiveCategories(hiddenCategories) {
+        let activeCategories = readStoredCategories();
+        return activeCategories.filter(cat => !hiddenCategories.includes(cat.name));
+    }
+
+    getViewState() {
         const resolvedMode = 'grid';
         const snapLayout = true;
         const fileCabinetActive = isFileCabinetActive();
-        activeBoardViewMode = 'grid';
+        const activeBoardViewMode = 'grid';
+        return { resolvedMode, snapLayout, fileCabinetActive, activeBoardViewMode };
+    }
+
+    applyCanvasClasses(canvas, fileCabinetActive) {
         canvas.className = 'view-grid';
         if (fileCabinetActive) canvas.classList.add('file-cabinet-bottom');
         delete canvas.dataset.focusActive;
+    }
 
+    shouldRenderEmptyState(canvas, fileCabinetActive, visibleItems, safeItems) {
+        return false; // Will be handled in renderEmptyState
+    }
+
+    prepareBoardItems(visibleItems, fileCabinetActive, resolvedMode, activeCategories) {
         let boardItems = visibleItems;
+        let fileCabinetMount = null;
+         
         if (fileCabinetActive) {
             const { filed, expanded } = partitionItemsForFileCabinet(visibleItems, resolvedMode, this);
             seedFileCabinetOrderFromItems(filed);
-            const mount = ensureFileCabinetMount(true);
-            renderFileCabinet(mount, filed, activeCategories, this);
+            fileCabinetMount = ensureFileCabinetMount(true);
+            renderFileCabinet(fileCabinetMount, filed, activeCategories, this);
             syncCabinetSplitter();
             boardItems = expanded;
         } else {
             ensureFileCabinetMount(false);
             syncCabinetSplitter();
         }
+         
+        return { boardItems, fileCabinetMount };
+    }
 
-        if (boardItems.length === 0) {
-            if (fileCabinetActive && visibleItems.length > 0) {
-                return;
-            }
-            const hiddenCount = safeItems.length - this.getVisibleItems(safeItems).length;
-            if (safeItems.length > 0 && hiddenCount === safeItems.length) {
-                canvas.innerHTML = `<div class="system-status-msg">All objects are hidden. Use the footer to restore them.</div>`;
-            } else {
-                canvas.innerHTML = `<div class="system-status-msg">Workspace clean. Click "+ New" to commit an entity.</div>`;
-            }
+    renderEmptyState(canvas, fileCabinetActive, visibleItems, safeItems) {
+        if (fileCabinetActive && visibleItems.length > 0) {
             return;
         }
+        const hiddenCount = safeItems.length - this.getVisibleItems(safeItems).length;
+        if (safeItems.length > 0 && hiddenCount === safeItems.length) {
+            canvas.innerHTML = `<div class="system-status-msg">All objects are hidden. Use the footer to restore them.</div>`;
+        } else {
+            canvas.innerHTML = `<div class="system-status-msg">Workspace clean. Click "+ New" to commit an entity.</div>`;
+        }
+    }
 
+    layoutBoard(canvas, boardItems, activeCategories) {
         const layout = this.getGridLayout();
         const placed = [];
         const bounds = this.getGridBoardBounds(canvas);
@@ -945,13 +989,21 @@ export const UI = {
                 boardPane.appendChild(card);
             });
 
+        return { layout, placed, boardPane };
+    }
+
+    renderCards(boardItems, activeCategories, layout, placed, boardPane) {
+        // This is handled in layoutBoard now
+    }
+
+    finalizeRender(canvas, boardPane, renderOptions) {
         this.updateBoardCanvasExtents(canvas);
         if (!renderOptions.skipGridReflow && !isBoardOverlayEnabled()) {
             requestAnimationFrame(() => {
                 this.reflowGridBoard(canvas, null, { animate: false });
             });
         }
-    },
+    }
 
 
     buildCardActionsHtml(item, isExpanded = false, options = {}) {
