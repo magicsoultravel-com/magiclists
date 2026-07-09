@@ -101,47 +101,49 @@ export function ensureDesktopBoardPane(canvas) {
     return pane;
 }
 
+// DISABLED: These functions were overriding CSS layout with inline styles
 export function updateDesktopScrollPolicy(canvas) {
-    if (!canvas?.classList.contains('view-grid') && !canvas?.classList.contains('view-freeform')) return;
-    canvas.style.overflow = 'auto';
-    canvas.style.overflowY = '';
-    canvas.style.overflowX = '';
+    // if (!canvas?.classList.contains('view-grid') && !canvas?.classList.contains('view-freeform')) return;
+    // canvas.style.overflow = 'auto';
+    // canvas.style.overflowY = '';
+    // canvas.style.overflowX = '';
 }
 
+// DISABLED: This function was overriding CSS layout with inline styles
 export function updateBoardCanvasExtents(canvas, { readCardRect = readNoteRect, getOrigin = null } = {}) {
-    if (!canvas) return;
-    const isSpatial = canvas.classList.contains('view-grid') || canvas.classList.contains('view-freeform');
-    if (!isSpatial) return;
+    // if (!canvas) return;
+    // const isSpatial = canvas.classList.contains('view-grid') || canvas.classList.contains('view-freeform');
+    // if (!isSpatial) return;
 
-    canvas.style.minHeight = '';
-    canvas.style.minWidth = '';
+    // canvas.style.minHeight = '';
+    // canvas.style.minWidth = '';
 
-    const cards = canvas.querySelectorAll('.mini-card[data-desktop="1"]');
-    const pane = getDesktopBoardPane(canvas);
-    if (!cards.length) {
-        if (pane) {
-            pane.style.minHeight = '';
-            pane.style.minWidth = '';
-        }
-        return;
-    }
+    // const cards = canvas.querySelectorAll('.mini-card[data-desktop="1"]');
+    // const pane = getDesktopBoardPane(canvas);
+    // if (!cards.length) {
+    //     if (pane) {
+    //         pane.style.minHeight = '';
+    //         pane.style.minWidth = '';
+    //     }
+    //     return;
+    // }
 
-    const boardPane = pane || ensureDesktopBoardPane(canvas);
-    if (!boardPane) return;
+    // const boardPane = pane || ensureDesktopBoardPane(canvas);
+    // if (!boardPane) return;
 
-    const zoom = parseFloat(canvas?.dataset?.desktopZoom) || 1;
-    const origin = getOrigin
-        ? getOrigin(canvas)
-        : (canvas.classList.contains('view-grid')
-            ? getGridBoardBounds(canvas).origin
-            : CANVAS_LAYOUT_ORIGIN);
-    const placed = [...cards].map((c) => readCardRect(c));
-    const bottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
-    const right = placed.reduce((m, r) => Math.max(m, r.x + r.w), 0);
-    boardPane.style.minHeight = `${bottom + origin + getCanvasColGap()}px`;
-    const viewportW = (canvas.clientWidth || 320) / zoom;
-    boardPane.style.minWidth = `${Math.max(viewportW, right + origin + getCanvasColGap())}px`;
-    updateDesktopScrollPolicy(canvas);
+    // const zoom = parseFloat(canvas?.dataset?.desktopZoom) || 1;
+    // const origin = getOrigin
+    //     ? getOrigin(canvas)
+    //     : (canvas.classList.contains('view-grid')
+    //         ? getGridBoardBounds(canvas).origin
+    //         : CANVAS_LAYOUT_ORIGIN);
+    // const placed = [...cards].map((c) => readCardRect(c));
+    // const bottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
+    // const right = placed.reduce((m, r) => Math.max(m, r.x + r.w), 0);
+    // boardPane.style.minHeight = `${bottom + origin + getCanvasColGap()}px`;
+    // const viewportW = (canvas.clientWidth || 320) / zoom;
+    // boardPane.style.minWidth = `${Math.max(viewportW, right + origin + getCanvasColGap())}px`;
+    // updateDesktopScrollPolicy(canvas);
 }
 
 export function scheduleBoardCanvasExtents(canvas, updateFn) {
