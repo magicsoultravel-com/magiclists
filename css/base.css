@@ -54,6 +54,15 @@
     box-sizing: border-box;
 }
 
+/* BASE FLEX LAYOUT WITH SAFETY NETS */
+html, body {
+    height: 100%;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0; /* SAFETY NET: Allows flex items to shrink below intrinsic size */
+}
+
 html[data-tile-small-footprint="card"] {
     --tile-small-w: var(--tile-small-w-card);
     --tile-small-h: var(--tile-small-h-card);

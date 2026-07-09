@@ -264,12 +264,14 @@
     }
 }
 
-/* Workspace shell */
+/* Workspace shell - with flex safety nets */
 .workspace-shell {
     flex: 1;
     display: flex;
     min-height: 0;
     overflow: hidden;
+    min-width: 0; /* SAFETY NET: Allows flex items to shrink below intrinsic size */
+    min-height: 0; /* SAFETY NET: Allows flex items to shrink below intrinsic size */
 }
 
 .workspace-main {
@@ -280,6 +282,8 @@
     min-height: 0;
     border: 2px solid color-mix(in srgb, var(--text-muted) 42%, var(--border-color));
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-muted) 28%, var(--border-color));
+    min-width: 0; /* SAFETY NET: Allows flex items to shrink below intrinsic size */
+    min-height: 0; /* SAFETY NET: Allows flex items to shrink below intrinsic size */
 }
 
 /* FAB - Floating action button */
