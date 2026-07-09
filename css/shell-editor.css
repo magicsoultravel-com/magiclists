@@ -523,6 +523,21 @@
     margin-bottom: 0.05rem;
 }
 
+/* Modal editor - topline with rigid flex layout for toolbar */
+#editor-overlay .editor-note-shell .editor-note-topline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+}
+
+/* Modal editor - toolbar positioned statically within flex flow */
+#editor-overlay .editor-note-shell .editor-note-topline .note-editor-toolbar {
+    position: static;
+    opacity: 1;
+    pointer-events: auto;
+}
+
 /* Title-only surfaces - no divider */
 .mini-card.spatial-at-small .editor-note-topline,
 .mini-card[data-desktop="1"].tile-small .editor-note-topline {
@@ -544,6 +559,36 @@
     margin: 0;
     font-size: calc(0.48rem * var(--note-font-scale, 1));
     color: var(--text-muted);
+}
+
+/* Modal editor - proper flex column layout to prevent footer stacking */
+#editor-overlay .editor-note-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* Modal editor - body grows and scrolls properly */
+#editor-overlay .editor-note-shell .card-body.editor-note-body,
+#editor-overlay .editor-note-shell .editor-note-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 0;
+}
+
+/* Ensure modal editor toolbar items don't shrink */
+#editor-overlay .editor-note-shell .note-editor-toolbar .card-act {
+    flex-shrink: 0;
+}
+
+/* Modal editor - footer wrapper stays on single row */
+#editor-overlay .editor-note-shell .editor-meta-wrap {
+    flex-shrink: 0;
+}
+
+/* Modal editor - footer row stays on single line */
+#editor-overlay .editor-note-shell .editor-meta-row--footer {
+    flex-shrink: 0;
 }
 
 /* Checklist done toggle */
