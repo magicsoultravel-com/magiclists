@@ -420,7 +420,7 @@ body.is-file-cabinet-drag-active {
 .clock-style-popover {
     position: fixed;
     z-index: 320;
-    width: min(280px, calc(100vw - 16px));
+    width: min(280px, calc(100% - 16px));
     padding: 0.45rem;
     background: rgba(20, 20, 24, 0.97);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -700,7 +700,7 @@ body.is-file-cabinet-drag-active {
 
 /* OPTIMIZATION: CONTAIN LAYOUT FOR NOTE CARDS */
 .mini-card {
-    contain: layout; /* PREVENTS LAYOUT THRASHING DURING SIDEBAR RESIZES */
+    contain: paint; /* PREVENTS LAYOUT THRASHING DURING SIDEBAR RESIZES */
 }
 
 /* SIDEBAR OPTIMIZATION - TRANSITIONS ONLY ON WIDTH PROPERTIES */

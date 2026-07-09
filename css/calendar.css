@@ -298,10 +298,10 @@
 }
 
 @media (max-width: 720px) {
-    .tool-panel--calendar {
-        width: min(100vw - 16px, 100%) !important;
-        max-height: calc(100vh - 16px);
-    }
+     .tool-panel--calendar {
+         width: min(100% - 16px, 100%) !important;
+         max-height: calc(100vh - 16px);
+     }
 
     .calendar-title {
         order: -1;

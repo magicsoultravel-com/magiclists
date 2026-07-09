@@ -431,6 +431,7 @@
     margin: 0.35rem 0 0;
     padding-top: 0.25rem;
     border-top: 1px solid var(--border-color);
+    flex-shrink: 0;
 }
 
 .editor-meta-row--footer.editor-meta-row--inline {

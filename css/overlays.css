@@ -300,7 +300,7 @@ textarea.form-input {
 .cloud-popover {
     position: fixed;
     z-index: 343;
-    width: min(300px, calc(100vw - 16px));
+    width: min(300px, calc(100% - 16px));
     padding: 0;
     overflow: hidden;
     font-size: 0.66rem;
