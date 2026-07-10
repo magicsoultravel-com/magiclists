@@ -49,6 +49,8 @@ html[data-show-category-band="0"] .mini-card {
 /* Spatial tile tiers — small / large, unified editor shell */
 #app-canvas.view-grid .mini-card[data-desktop="1"],
 #app-canvas.view-freeform .mini-card[data-desktop="1"] {
+    display: flex;
+    flex-direction: column;
     padding: calc(0.38rem * var(--board-padding-scale, 1)) calc(0.45rem * var(--board-padding-scale, 1)) !important;
     overflow: hidden !important;
     box-sizing: border-box;
@@ -1055,6 +1057,23 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
 .card-act--emoji:hover {
     color: #c4b5fd;
 }
+/* Desktop inline notes - flex column layout for .editor-note-shell */
+#app-canvas.view-grid .mini-card .editor-note-shell,
+#app-canvas.view-freeform .mini-card .editor-note-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
+
+/* Desktop inline notes - scrollable body when content overflows */
+#app-canvas.view-grid .mini-card .editor-note-body,
+#app-canvas.view-freeform .mini-card .editor-note-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 0;
+}
+
 /* Fix the layout shift when entering inline editor mode */
 #app-canvas.view-grid .mini-card.is-editing-inline .editor-note-body,
 #app-canvas.view-freeform .mini-card.is-editing-inline .editor-note-body {
