@@ -37,6 +37,7 @@ export const Editor = {
     metaLabelTimer: null,
     hasUserInteracted: false,
     isNewUnsavedNote: false,
+    lastPersistedItem: null,
 
     isColorPickerOpen() {
         if (ColorPicker.eyedropperCleanup) return true;
@@ -175,11 +176,18 @@ export const Editor = {
         const currentData = this.collectFormData({ normalize });
         if (!force && !noteHasSavableContent(currentData) && this.isNewUnsavedNote) return false;
 
-        const unchanged = JSON.stringify(currentData) === JSON.stringify(this.activeItem);
+        // Initialize lastPersistedItem if not set
+        if (!this.lastPersistedItem) {
+            this.lastPersistedItem = JSON.parse(JSON.stringify(this.activeItem));
+        }
+
+        const unchanged = JSON.stringify(currentData) === JSON.stringify(this.lastPersistedItem);
         if (!force && unchanged) return true;
 
         this.isNewUnsavedNote = false;
         Object.assign(this.activeItem, currentData);
+        // Update lastPersistedItem after successful persist
+        this.lastPersistedItem = JSON.parse(JSON.stringify(this.activeItem));
         NoteSurface.emitItemMutation(this.activeItem, { preserveView: true });
         return true;
     },
@@ -256,6 +264,7 @@ export const Editor = {
         this.activeItem = null;
         this.hasUserInteracted = false;
         this.isNewUnsavedNote = false;
+        this.lastPersistedItem = null;
         const modal = this.overlay?.querySelector('.modal');
         if (modal) EditorModalChrome.teardown(modal);
         if (this.autoSaveTimer) clearTimeout(this.autoSaveTimer);
