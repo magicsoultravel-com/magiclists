@@ -538,6 +538,16 @@
     pointer-events: auto;
 }
 
+/* Modal editor - quick action icons visible in top toolbar */
+#editor-overlay .modal-card-actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+#editor-overlay .modal-card-actions .card-act {
+    pointer-events: auto;
+}
+
 /* Title-only surfaces - no divider */
 .mini-card.spatial-at-small .editor-note-topline,
 .mini-card[data-desktop="1"].tile-small .editor-note-topline {
