@@ -62,7 +62,7 @@ export function bindChecklistInteractions(root, item, {
             const row = delBtn.closest('.step-row--display');
             const stepId = row?.dataset?.stepId;
             if (!stepId) return;
-            const focusStepId = removeChecklistStepAndFocus(item, stepId, { localOnly, onChange });
+            const focusStepId = removeChecklistStepAndFocus(root, item, stepId, { localOnly, onChange });
             if (focusStepId) setPendingChecklistFocus(root, focusStepId, 'end');
             refresh();
             return;
@@ -184,7 +184,7 @@ export function bindChecklistInteractions(root, item, {
     if (addBtn && root.contains(addBtn)) {
         e.preventDefault();
         e.stopPropagation();
-        const newStepId = insertChecklistStep(item, { localOnly, onChange });
+        const newStepId = insertChecklistStep(root, item, { localOnly, onChange });
         if (newStepId) setPendingChecklistFocus(root, newStepId, 'start');
         refresh();
         return;
@@ -197,7 +197,7 @@ export function bindChecklistInteractions(root, item, {
         const active = e.target;
         if (!active?.classList?.contains('step-text')) return;
         e.preventDefault();
-        const result = handleChecklistEnter(e, item, { localOnly, onChange });
+        const result = handleChecklistEnter(root, item, e, { localOnly, onChange });
         if (result === false) return;
         if (result === 'stay') return;
         if (result) setPendingChecklistFocus(root, result, 'start');
@@ -511,7 +511,7 @@ export function buildChecklistExpandCollapseAllHtml(item) {
         </div>`;
 }
 
-export function insertChecklistStep(item, {
+export function insertChecklistStep(root, item, {
     afterStepId = null,
     text = '',
     completed = false,
@@ -519,6 +519,7 @@ export function insertChecklistStep(item, {
     onChange = () => {}
 } = {}) {
     if (!item) return null;
+    const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
     const steps = item.steps || [];
     const newStep = {
         id: createStepId(),
@@ -540,14 +541,16 @@ export function insertChecklistStep(item, {
 
     item.steps = steps;
     if (!localOnly) {
-        mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+        mutateItem(item, () => {}, { preserveView: true, skipRerender: true, localOnly });
+        commitInlineChecklistOp(item, beforeItem, { localOnly });
     }
     onChange();
     return newStep.id;
 }
 
-export function removeChecklistStepAndFocus(item, stepId, { localOnly = false, onChange = () => {} } = {}) {
+export function removeChecklistStepAndFocus(root, item, stepId, { localOnly = false, onChange = () => {} } = {}) {
     if (!item || !item.steps) return null;
+    const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
     const idx = item.steps.findIndex((s) => s.id === stepId);
     if (idx < 0) return null;
 
@@ -556,7 +559,8 @@ export function removeChecklistStepAndFocus(item, stepId, { localOnly = false, o
     item.steps.splice(idx, 1);
 
     if (!localOnly) {
-        mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+        mutateItem(item, () => {}, { preserveView: true, skipRerender: true, localOnly });
+        commitInlineChecklistOp(item, beforeItem, { localOnly });
     }
     onChange();
 
@@ -587,13 +591,14 @@ export function handleChecklistBackspace(e, item, { localOnly = false, onChange 
 
     if (stepIdx === 0) return false;
 
+    const root = active.closest('.step-row--display');
+    const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
     const prevStep = item.steps[stepIdx - 1];
     const prevText = prevStep.text || '';
     const newText = prevText + '\n' + text;
     prevStep.text = newText;
     item.steps.splice(stepIdx, 1);
 
-    const root = active.closest('.step-row--display');
     if (root) {
         const prevRow = root.previousElementSibling;
         const prevTextEl = prevRow?.querySelector('.step-text');
@@ -603,7 +608,8 @@ export function handleChecklistBackspace(e, item, { localOnly = false, onChange 
     }
 
     if (!localOnly) {
-        mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+        mutateItem(item, () => {}, { preserveView: true, skipRerender: true, localOnly });
+        commitInlineChecklistOp(item, beforeItem, { localOnly });
     }
     onChange();
     return true;
@@ -631,15 +637,18 @@ export function handleChecklistDelete(e, item, { localOnly = false, onChange = (
         return true;
     }
 
+    const root = active.closest('.step-row--display');
+    const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
     item.steps.splice(stepIdx, 1);
     if (!localOnly) {
-        mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+        mutateItem(item, () => {}, { preserveView: true, skipRerender: true, localOnly });
+        commitInlineChecklistOp(item, beforeItem, { localOnly });
     }
     onChange();
     return true;
 }
 
-export function handleChecklistEnter(e, item, { localOnly = false, onChange = () => {} } = {}) {
+export function handleChecklistEnter(root, item, e, { localOnly = false, onChange = () => {} } = {}) {
     if (!item || !item.steps) return false;
     const active = e.target;
     if (!active?.classList?.contains('step-text')) return false;
@@ -669,6 +678,7 @@ export function handleChecklistEnter(e, item, { localOnly = false, onChange = ()
     // Enter: split text at caret position and create a new step with the "after" text
     // Determine the insertion index: if the step has children and the group is collapsed,
     // insert after the entire subtree; otherwise insert right after this step
+    const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
     const subtree = collectStepSubtree(item.steps, stepIdx);
     const isCollapsed = isChecklistGroupCollapsed(item.id, stepId);
     const hasChildren = subtree.length > 1;
@@ -696,7 +706,8 @@ export function handleChecklistEnter(e, item, { localOnly = false, onChange = ()
     item.steps.splice(insertIdx, 0, newStep);
 
     if (!localOnly) {
-        mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+        mutateItem(item, () => {}, { preserveView: true, skipRerender: true, localOnly });
+        commitInlineChecklistOp(item, beforeItem, { localOnly });
     }
     onChange();
     return newStep.id;
