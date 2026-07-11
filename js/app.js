@@ -442,6 +442,7 @@ class Application {
         // Update file cabinet button
         const fcHeaderBtn = document.getElementById('qa-header-file-cabinet-toggle');
         if (fcHeaderBtn) {
+            fcHeaderBtn.innerHTML = ACTION_ICONS.viewFileCabinet;
             fcHeaderBtn.classList.toggle('active', fileCabinetActive);
             fcHeaderBtn.setAttribute('aria-pressed', fileCabinetActive ? 'true' : 'false');
         }
@@ -450,9 +451,11 @@ class Application {
         const undoHeaderBtn = document.getElementById('qa-header-undo');
         const redoHeaderBtn = document.getElementById('qa-header-redo');
         if (undoHeaderBtn) {
+            undoHeaderBtn.innerHTML = ACTION_ICONS.undo;
             undoHeaderBtn.disabled = !AppState.user.isLoggedIn || UndoManager.undoStack.length === 0;
         }
         if (redoHeaderBtn) {
+            redoHeaderBtn.innerHTML = ACTION_ICONS.redo;
             redoHeaderBtn.disabled = !AppState.user.isLoggedIn || UndoManager.redoStack.length === 0;
         }
     }
