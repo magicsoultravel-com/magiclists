@@ -256,6 +256,59 @@
     opacity: 1;
 }
 
+/* Side panel undocked state (whole sidebar undocked) */
+.side-panel--undocked {
+    position: fixed;
+    box-sizing: border-box;
+    width: var(--sidebar-width, 220px);
+    max-height: 100vh;
+    padding: 0.55rem 0.5rem 0.45rem;
+    margin-bottom: 0;
+    background: var(--chrome-bg, var(--bg-surface));
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+    pointer-events: auto;
+}
+
+.side-panel--undocked .side-panel-brand-host,
+.side-panel--undocked .side-panel-search {
+    flex-shrink: 0;
+}
+
+.side-panel--undocked .side-panel-modules {
+    max-height: calc(100vh - 8rem);
+    overflow-y: auto;
+}
+
+.side-panel--undocked .collapsable-header {
+    cursor: grab;
+    user-select: none;
+}
+
+.side-panel--undocked .side-panel-brand-host {
+    cursor: grab;
+}
+
+.side-panel--dragging,
+.side-panel--undocked.side-panel--dragging {
+    cursor: grabbing;
+    opacity: var(--desktop-drag-opacity, 0.85);
+}
+
+.side-panel--undocked .side-panel-scale-inner {
+    width: 100%;
+    zoom: 1;
+}
+
+@supports not (zoom: 1) {
+    .side-panel--undocked .side-panel-scale-inner {
+        zoom: unset;
+        transform: none;
+    }
+}
+
 /* Side panel collapsed state */
 .side-panel.is-collapsed {
     width: 0;

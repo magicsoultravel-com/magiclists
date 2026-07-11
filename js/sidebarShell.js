@@ -6,6 +6,7 @@ import { onShellDockChanged } from './shellResize.js';
 import { ClockStyle } from './clockStyle.js';
 import { RadioPopover } from './radioPopover.js';
 import { TvPopover } from './tvPopover.js';
+import { CARD_ICONS } from './icons.js';
 
 export const SIDEBAR_SHELL_UNDOCKED = 'side-panel--undocked';
 export const SIDEBAR_SHELL_MINIMAL = 'side-panel--minimal';
@@ -87,6 +88,12 @@ export function initSidebarShell() {
     const panel = getPanel();
     if (!panel || panel.dataset.shellUndockInit === 'true') return;
     panel.dataset.shellUndockInit = 'true';
+
+    // Initialize undock button icon on load
+    const dockBtn = panel.querySelector(SIDEBAR_SHELL_DOCK_SEL);
+    if (dockBtn && !dockBtn.innerHTML.trim()) {
+        dockBtn.innerHTML = CARD_ICONS.unpin;
+    }
 
     captureDockAnchor();
 
