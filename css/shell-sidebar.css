@@ -260,7 +260,7 @@
 .side-panel--undocked {
     position: fixed;
     box-sizing: border-box;
-    width: var(--sidebar-width, 220px);
+    width: 220px;
     max-height: 100vh;
     padding: 0.55rem 0.5rem 0.45rem;
     margin-bottom: 0;
