@@ -121,7 +121,13 @@
 
             <div id="sidebar-quick-actions" class="sidebar-module sidebar-quick-actions">
                 <div class="collapsable-header" id="quick-actions-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed"><svg viewBox="0 0 12 12" width="9" height="9" focusable="false"><path d="M3.2 4.8 6 7.6 8.8 4.8" fill="none" stroke="currentColor" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Quick actions</span>
+                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed"><svg viewBox="0 0 12 12" width="9" height="9" focusable="false"><path d="M3.2 4.8 6 7.6 8.8 4.8" fill="none" stroke="currentColor" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Actions</span>
+                    <span class="quick-actions-header-icons is-hidden">
+                        <button type="button" class="btn btn--compact btn--icon quick-act-header-btn" id="qa-header-freeform-toggle" title="Toggle view mode" aria-label="Toggle view mode" aria-pressed="false"></button>
+                        <button type="button" class="btn btn--compact btn--icon quick-act-header-btn" id="qa-header-file-cabinet-toggle" title="File Cabinet" aria-label="File Cabinet" aria-pressed="false"></button>
+                        <button type="button" class="btn btn--compact btn--icon quick-act-header-btn" id="qa-header-undo" disabled title="Undo (Ctrl+Z)" aria-label="Undo"></button>
+                        <button type="button" class="btn btn--compact btn--icon quick-act-header-btn" id="qa-header-redo" disabled title="Redo (Ctrl+Y)" aria-label="Redo"></button>
+                    </span>
                     <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
                 </div>
                 <div class="collapsable-section collapsed" id="quick-actions-section">

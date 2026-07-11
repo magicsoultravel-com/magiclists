@@ -148,6 +148,7 @@ class Application {
             SidebarTv.init();
             SidebarWeather.init();
             SidePanel.setupStatusClickHandlers(); /* after radio/tv/weather shells exist */
+            this.updateQuickActionsHeaderVisibility();
             SidebarHistory.init(AppState);
             SidebarStats.init();
             initAllSidebarModules();
@@ -179,7 +180,10 @@ class Application {
             isEnabled: () => AppState.user.isLoggedIn,
             onRestore: (item, { preserveView = false } = {}) => this.restoreItem(item, preserveView),
             onRemove: (itemId) => this.removeItemFromWorkspace(itemId),
-            onStackChange: () => SidebarHistory.renderPanel()
+            onStackChange: () => {
+                SidebarHistory.renderPanel();
+                this.renderQuickActionsHeaderIcons();
+            }
         });
     }
 
@@ -406,10 +410,60 @@ class Application {
         document.getElementById('btn-auth-logout')?.addEventListener('click', () => this.executeLogout());
         document.getElementById('btn-auth-login')?.addEventListener('click', () => this.executeLoginPrompt());
 
+        // Header icon click handlers
+        document.getElementById('qa-header-freeform-toggle')?.addEventListener('click', () => this.toggleBoardOverlay());
+        document.getElementById('qa-header-file-cabinet-toggle')?.addEventListener('click', () => this.toggleFileCabinet());
+        document.getElementById('qa-header-undo')?.addEventListener('click', () => UndoManager.undo());
+        document.getElementById('qa-header-redo')?.addEventListener('click', () => UndoManager.redo());
+
         this.updateLayoutResetVisibility();
         this.updateViewToggleState();
+        this.renderQuickActionsHeaderIcons();
         UndoManager.updateToolbar();
         CloudBackup.updateButtons();
+    }
+
+    renderQuickActionsHeaderIcons() {
+        const headerIcons = document.querySelector('.quick-actions-header-icons');
+        if (!headerIcons) return;
+
+        const drawingActive = AppState.workspaceMode === 'drawing';
+        const fileCabinetActive = !drawingActive && AppState.viewSettings.fileCabinet;
+        const overlayActive = !drawingActive && BoardOverlay.isEnabled();
+
+        // Update bento toggle button
+        const ffHeaderBtn = document.getElementById('qa-header-freeform-toggle');
+        if (ffHeaderBtn) {
+            ffHeaderBtn.innerHTML = overlayActive ? ACTION_ICONS.viewGrid : ACTION_ICONS.viewFree;
+            ffHeaderBtn.classList.toggle('active', overlayActive);
+            ffHeaderBtn.setAttribute('aria-pressed', overlayActive ? 'true' : 'false');
+        }
+
+        // Update file cabinet button
+        const fcHeaderBtn = document.getElementById('qa-header-file-cabinet-toggle');
+        if (fcHeaderBtn) {
+            fcHeaderBtn.classList.toggle('active', fileCabinetActive);
+            fcHeaderBtn.setAttribute('aria-pressed', fileCabinetActive ? 'true' : 'false');
+        }
+
+        // Update undo/redo buttons
+        const undoHeaderBtn = document.getElementById('qa-header-undo');
+        const redoHeaderBtn = document.getElementById('qa-header-redo');
+        if (undoHeaderBtn) {
+            undoHeaderBtn.disabled = !AppState.user.isLoggedIn || UndoManager.undoStack.length === 0;
+        }
+        if (redoHeaderBtn) {
+            redoHeaderBtn.disabled = !AppState.user.isLoggedIn || UndoManager.redoStack.length === 0;
+        }
+    }
+
+    updateQuickActionsHeaderVisibility() {
+        const section = document.getElementById('quick-actions-section');
+        const headerIcons = document.querySelector('.quick-actions-header-icons');
+        if (!section || !headerIcons) return;
+
+        const isCollapsed = section.classList.contains('collapsed');
+        headerIcons.classList.toggle('is-visible', isCollapsed);
     }
 
     setupFab() {
@@ -727,6 +781,7 @@ class Application {
         }
         document.getElementById('btn-drawing-mode')?.classList.toggle('active', drawing);
         this.updateDesktopZoomVisibility();
+        this.renderQuickActionsHeaderIcons();
         BoardSort.refreshMenu();
     }
 
@@ -950,6 +1005,10 @@ class Application {
         window.addEventListener('category:order_changed', (e) => {
             AppState.categories = writeStoredCategories(e.detail || AppState.categories, { keepEmpty: true });
             this.syncDataStore();
+        });
+
+        window.addEventListener('quick-actions:section_toggled', (e) => {
+            this.updateQuickActionsHeaderVisibility();
         });
     }
 }

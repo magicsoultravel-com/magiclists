@@ -474,6 +474,37 @@ body.is-shell-resizing--h * {
     cursor: row-resize !important;
 }
 
+/* Quick actions header icons (visibility controlled by JS when section collapsed/expanded) */
+.quick-actions-header-icons {
+    display: none;
+    align-items: center;
+    gap: 0.15rem;
+    margin-left: auto;
+}
+
+.quick-actions-header-icons.is-visible {
+    display: flex;
+}
+
+.quick-act-header-btn {
+    min-width: 22px;
+    min-height: 22px;
+    padding: 0.12rem;
+    font-size: 0.75rem;
+    line-height: 1;
+}
+
+.quick-act-header-btn svg {
+    width: 12px;
+    height: 12px;
+}
+
+.quick-act-header-btn.active {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border-color));
+}
+
 /* Quick actions grid */
 .quick-actions-grid {
     --launcher-icon-size: 15px;

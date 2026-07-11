@@ -65,6 +65,9 @@ export function bindToggleCollapsable({
         section.classList.toggle('collapsed', nowCollapsed);
         toggle?.classList.toggle('collapsed', nowCollapsed);
         writeSidebarSection(sectionId, nowCollapsed);
+        if (sectionId === 'quick-actions-section') {
+            window.dispatchEvent(new CustomEvent('quick-actions:section_toggled', { detail: { collapsed: nowCollapsed } }));
+        }
     });
 }
 
@@ -115,6 +118,7 @@ export const SidePanel = {
         this.bindCollapsable('notes-list-active-header', 'notes-list-active-section', false, '.sidebar-notes-list-sort');
         this.bindCollapsable('notes-list-hidden-header', 'notes-list-hidden-section', true);
         this.bindCollapsable('notes-list-archived-header', 'notes-list-archived-section', true);
+        this.bindCollapsable('quick-actions-header', 'quick-actions-section', true);
         this.setupNotesListSortControls();
     },
 
