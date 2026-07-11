@@ -409,8 +409,13 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
 }
 
 .has-custom-bg .card-inline-edit:focus {
-    background: var(--card-focus-bg);
-    box-shadow: 0 0 0 1px var(--card-focus-ring);
+    outline: none !important;
+    border-color: transparent !important;
+    box-shadow: inset 0 0 0 1px var(--card-focus-ring) !important;
+    background: var(--card-focus-bg) !important;
+    /* Stabilize font rendering to prevent text weights from shifting on background change */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .has-custom-bg .card-act {
