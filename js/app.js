@@ -149,6 +149,7 @@ class Application {
             SidebarWeather.init();
             SidePanel.setupStatusClickHandlers(); /* after radio/tv/weather shells exist */
             this.updateQuickActionsHeaderVisibility();
+            this.renderQuickActionsHeaderIcons();
             SidebarHistory.init(AppState);
             SidebarStats.init();
             initAllSidebarModules();
