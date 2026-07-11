@@ -712,7 +712,7 @@ export function refreshNoteBody(body, item, {
         const newShell = mountZone.querySelector('.editor-note-shell');
         if (newShell) {
             const newBody = newShell.querySelector('.editor-note-body');
-            if (newBody && !newBody.dataset.checklistInteractionsBound) {
+            if (newBody && newBody.dataset.checklistInteractionsBound !== item.id) {
                 bindChecklistInteractions(newBody, item, {
                     localOnly,
                     onChange,

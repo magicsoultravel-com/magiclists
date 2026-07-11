@@ -1187,6 +1187,7 @@ export const UI = {
         if (!body || !item) return;
         if (shell) NoteSurface.syncItemBodyFromDom(shell, item);
         NoteSurface.refreshNoteBody(body, item, {
+            mountZone: card,
             shell,
             richEdit: true,
             refresh: () => this.refreshBoardChecklistBody(card, item, activeCategories, targetCatName, categoryColor)
