@@ -9,7 +9,7 @@ import { escapeHTML, escapeAttr } from './domEscape.js';
 import { isFileCabinetActive, getFileCabinetToggleLabels } from './fileCabinet.js';
 import { LEGACY_TILE_SIZE } from './tileGeometry.js';
 import { bindChecklistInteractions, attachChecklistDrag, getChecklistCollapsedKeys, getChecklistDoneCollapsed, isChecklistDoneSectionCollapsed, toggleChecklistDoneSection, getChecklistCollapsibleKeys, checklistGroupsAnyExpanded, collapseAllChecklistGroups, expandAllChecklistGroups, toggleChecklistExpandCollapseAll, buildChecklistExpandCollapseAllHtml, buildChecklistRowHtml } from './noteSurfaceChecklist.js';
-import { focusInlineEdit } from './noteSurfaceEditing.js';
+import { focusInlineEdit, setCaretAtPlainOffset } from './noteSurfaceEditing.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -668,6 +668,7 @@ export function refreshNoteBody(body, item, {
     const activeStepId = activeStep?.dataset?.stepId;
     const pendingFocusStepId = body.dataset.pendingFocusStepId || '';
     const pendingFocusEdge = body.dataset.pendingFocusEdge || 'end';
+    const pendingFocusPlainOffset = body.dataset.pendingFocusPlainOffset;
     delete body.dataset.pendingFocusStepId;
     delete body.dataset.pendingFocusEdge;
     delete body.dataset.pendingFocusPlainOffset;
@@ -692,6 +693,7 @@ export function refreshNoteBody(body, item, {
     // Restore scroll position synchronously to prevent scroll jump
     if (scrollContainer) scrollContainer.scrollTop = scrollTop;
 
+    // Focus restoration - use preventScroll to avoid jumping
     const restoreView = () => {
         const focusStepId = pendingFocusStepId || activeStepId;
         if (!focusStepId) return;
@@ -699,12 +701,17 @@ export function refreshNoteBody(body, item, {
             `[data-step-id="${focusStepId}"] .step-text.card-inline-edit`
         );
         if (stepTextEl && document.activeElement !== stepTextEl) {
-            focusInlineEdit(stepTextEl, pendingFocusStepId ? pendingFocusEdge : 'end');
+            // Prevent scroll jump by using preventScroll option
+            stepTextEl.focus({ preventScroll: true });
+            // Set caret position after focus
+            if (pendingFocusPlainOffset != null) {
+                setCaretAtPlainOffset(stepTextEl, Number(pendingFocusPlainOffset));
+            }
         }
     };
-    requestAnimationFrame(() => {
+    // Use microtask to ensure DOM is ready but before browser paint
+    queueMicrotask(() => {
         restoreView();
-        requestAnimationFrame(restoreView);
     });
 
     // Re-bind interactions

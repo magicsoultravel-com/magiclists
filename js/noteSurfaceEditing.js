@@ -300,7 +300,7 @@ export function focusInlineEdit(el, edge = 'end') {
 
 export function setCaretAtPlainOffset(el, offset) {
     if (!el) return;
-    el.focus();
+    // Note: Caller is responsible for focusing the element with preventScroll: true
     const target = Math.max(0, Number(offset) || 0);
     const range = document.createRange();
     const sel = window.getSelection();

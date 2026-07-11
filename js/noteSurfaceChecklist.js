@@ -15,6 +15,20 @@ function setPendingChecklistFocus(root, stepId, edge = 'start') {
     if (!root || !stepId) return;
     root.dataset.pendingFocusStepId = stepId;
     root.dataset.pendingFocusEdge = edge;
+    // Capture plain offset for caret position restoration
+    const active = document.activeElement;
+    const stepTextEl = active?.classList?.contains('step-text') ? active : null;
+    if (stepTextEl && stepTextEl.dataset.stepId === stepId) {
+        const sel = window.getSelection();
+        if (sel?.rangeCount) {
+            const range = sel.getRangeAt(0);
+            const probe = range.cloneRange();
+            probe.selectNodeContents(stepTextEl);
+            probe.setEnd(range.startContainer, range.startOffset);
+            const plainOffset = probe.toString().length;
+            root.dataset.pendingFocusPlainOffset = String(plainOffset);
+        }
+    }
 }
 
 /**

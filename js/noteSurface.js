@@ -312,9 +312,18 @@ function restoreNoteBodyFocusState(newBody, card, focusState) {
         // Find the step text element in the new body
         const stepEl = newBody.querySelector(`[data-step-id="${stepId}"].card-inline-edit[data-field="step-text"]`);
         if (stepEl) {
-            focusInlineEdit(stepEl, edge || 'end');
-            if (plainOffset != null && edge === 'start') {
+            // Use preventScroll to avoid jumping
+            stepEl.focus({ preventScroll: true });
+            if (plainOffset != null) {
                 setCaretAtPlainOffset(stepEl, plainOffset);
+            } else {
+                // Set caret at edge if no plain offset
+                const range = document.createRange();
+                range.selectNodeContents(stepEl);
+                range.collapse(edge === 'start');
+                const sel = window.getSelection();
+                sel?.removeAllRanges();
+                sel?.addRange(range);
             }
             return;
         }
@@ -340,9 +349,18 @@ function focusPendingChecklistStep(card) {
     
     const stepEl = card.querySelector(`[data-step-id="${stepId}"].card-inline-edit[data-field="step-text"]`);
     if (stepEl) {
-        focusInlineEdit(stepEl, edge);
+        // Use preventScroll to avoid jumping
+        stepEl.focus({ preventScroll: true });
         if (plainOffset != null) {
             setCaretAtPlainOffset(stepEl, Number(plainOffset));
+        } else {
+            // Set caret at edge if no plain offset
+            const range = document.createRange();
+            range.selectNodeContents(stepEl);
+            range.collapse(edge === 'start');
+            const sel = window.getSelection();
+            sel?.removeAllRanges();
+            sel?.addRange(range);
         }
     }
 }

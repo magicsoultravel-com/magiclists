@@ -1189,6 +1189,7 @@ export const UI = {
         NoteSurface.refreshNoteBody(body, item, {
             mountZone: card,
             shell,
+            localOnly: true,
             richEdit: true,
             refresh: () => this.refreshBoardChecklistBody(card, item, activeCategories, targetCatName, categoryColor)
         });
