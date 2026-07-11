@@ -613,10 +613,14 @@ export function buildExpandedChecklistHtml(item, canEdit, { richEdit = false } =
 
 function findChecklistScrollContainer(body) {
     if (!body) return null;
+    // For desktop cards, .editor-note-body is the scroll container
+    // Check CSS overflow-y property to identify the correct scroll container
+    const computedStyle = window.getComputedStyle(body);
+    if (computedStyle.overflowY === 'auto' || computedStyle.overflowY === 'scroll') return body;
     if (body.scrollHeight > body.clientHeight) return body;
     const modal = body.closest('.modal-body');
     if (modal && modal.scrollHeight > modal.clientHeight) return modal;
-    return body.parentElement;
+    return body;
 }
 
 /**
@@ -668,10 +672,27 @@ export function refreshNoteBody(body, item, {
     delete body.dataset.pendingFocusEdge;
     delete body.dataset.pendingFocusPlainOffset;
 
-    expandedChecklist.outerHTML = buildExpandedChecklistHtml(item, true, { richEdit });
+    // Preserve the wrapper element instance to avoid visual flash from outerHTML replacement
+    // Extract inner content from the generated HTML (skip the wrapper div)
+    const newHtml = buildExpandedChecklistHtml(item, true, { richEdit });
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = newHtml;
+    const newWrapper = tempDiv.firstChild;
+    
+    // Clear and repopulate the existing wrapper to preserve element instance
+    while (expandedChecklist.firstChild) {
+        expandedChecklist.removeChild(expandedChecklist.firstChild);
+    }
+    if (newWrapper) {
+        while (newWrapper.firstChild) {
+            expandedChecklist.appendChild(newWrapper.firstChild);
+        }
+    }
+
+    // Restore scroll position synchronously to prevent scroll jump
+    if (scrollContainer) scrollContainer.scrollTop = scrollTop;
 
     const restoreView = () => {
-        if (scrollContainer) scrollContainer.scrollTop = scrollTop;
         const focusStepId = pendingFocusStepId || activeStepId;
         if (!focusStepId) return;
         const stepTextEl = body.querySelector(
@@ -725,4 +746,5 @@ export {
     bindCollapsable,
     flashCopyFeedback,
     buildChecklistRowHtml,
+    findChecklistScrollContainer,
 };
