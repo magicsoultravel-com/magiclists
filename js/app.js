@@ -859,18 +859,18 @@ class Application {
             if (idx !== -1) AppState.items[idx] = item;
             else AppState.items.push(item);
 
-            if (preserveView) {
-                if (!detail?.skipRerender) {
-                    const canvas = document.getElementById('app-canvas');
-                    UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
-                    if (AppState.viewSettings.sortBy === 'grid') {
-                        DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
-                    }
-                }
-                this.updateWorkspaceCounter();
-                return;
-            }
-            await this.syncDataStore();
+             if (detail?.skipRerender || detail?.preserveView) {
+                 if (!detail?.skipRerender) {
+                     const canvas = document.getElementById('app-canvas');
+                     UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
+                     if (AppState.viewSettings.sortBy === 'grid') {
+                         DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+                     }
+                 }
+                 this.updateWorkspaceCounter();
+                 return;
+             }
+             await this.syncDataStore();
         });
 
         window.addEventListener('board:visibility_changed', async (e) => {
