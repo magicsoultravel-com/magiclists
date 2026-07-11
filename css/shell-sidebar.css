@@ -390,7 +390,7 @@
 .shell-splitter {
     flex-shrink: 0;
     position: relative;
-    z-index: 4;
+    z-index: 5;
     touch-action: none;
     background: transparent;
     transition: background 0.15s ease;
@@ -482,7 +482,8 @@ body.is-shell-resizing--h * {
     margin-left: auto;
 }
 
-.quick-actions-header-icons.is-visible {
+.quick-actions-header-icons.is-visible,
+.quick-actions-section.collapsed .quick-actions-header-icons {
     display: flex;
 }
 
