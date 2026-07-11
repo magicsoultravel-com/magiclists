@@ -261,7 +261,7 @@
     position: fixed;
     box-sizing: border-box;
     width: 220px;
-    max-height: 100vh;
+    height: fit-content;
     padding: 0.55rem 0.5rem 0.45rem;
     margin-bottom: 0;
     background: var(--chrome-bg, var(--bg-surface));
@@ -278,7 +278,13 @@
 }
 
 .side-panel--undocked .side-panel-modules {
-    max-height: calc(100vh - 8rem);
+    flex: 0 0 auto;
+    max-height: none;
+    overflow-y: visible;
+}
+
+.side-panel--undocked .sidebar-module .collapsable-section {
+    max-height: min(60vh, 480px);
     overflow-y: auto;
 }
 

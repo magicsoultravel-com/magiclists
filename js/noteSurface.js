@@ -310,17 +310,23 @@ function restoreNoteBodyFocusState(newBody, card, focusState) {
     
     if (field === 'step-text' && stepId) {
         // Find the step text element in the new body
-        const stepEl = newBody.querySelector(`[data-step-id="${stepId}"].card-inline-edit[data-field="step-text"]`);
+        const stepEl = newBody.querySelector(`.step-text.card-inline-edit[data-step-id="${stepId}"]`);
         if (stepEl) {
             // Use preventScroll to avoid jumping
             stepEl.focus({ preventScroll: true });
             if (plainOffset != null) {
                 setCaretAtPlainOffset(stepEl, plainOffset);
             } else {
-                // Set caret at edge if no plain offset
+                // Set caret at edge if no plain offset - use robust positioning
                 const range = document.createRange();
-                range.selectNodeContents(stepEl);
-                range.collapse(edge === 'start');
+                if (edge === 'end') {
+                    // Move selection strictly to the end of the text/child strings
+                    range.setStart(stepEl, stepEl.childNodes.length);
+                    range.setEnd(stepEl, stepEl.childNodes.length);
+                } else {
+                    range.selectNodeContents(stepEl);
+                    range.collapse(true); // 'start'
+                }
                 const sel = window.getSelection();
                 sel?.removeAllRanges();
                 sel?.addRange(range);
@@ -347,17 +353,23 @@ function focusPendingChecklistStep(card) {
     const edge = card.dataset.pendingFocusEdge || 'end';
     const plainOffset = card.dataset.pendingFocusPlainOffset;
     
-    const stepEl = card.querySelector(`[data-step-id="${stepId}"].card-inline-edit[data-field="step-text"]`);
+    const stepEl = card.querySelector(`.step-text.card-inline-edit[data-step-id="${stepId}"]`);
     if (stepEl) {
         // Use preventScroll to avoid jumping
         stepEl.focus({ preventScroll: true });
         if (plainOffset != null) {
             setCaretAtPlainOffset(stepEl, Number(plainOffset));
         } else {
-            // Set caret at edge if no plain offset
+            // Set caret at edge if no plain offset - use robust positioning
             const range = document.createRange();
-            range.selectNodeContents(stepEl);
-            range.collapse(edge === 'start');
+            if (edge === 'end') {
+                // Move selection strictly to the end of the text/child strings
+                range.setStart(stepEl, stepEl.childNodes.length);
+                range.setEnd(stepEl, stepEl.childNodes.length);
+            } else {
+                range.selectNodeContents(stepEl);
+                range.collapse(true); // 'start'
+            }
             const sel = window.getSelection();
             sel?.removeAllRanges();
             sel?.addRange(range);

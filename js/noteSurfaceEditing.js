@@ -319,10 +319,13 @@ export function setCaretAtPlainOffset(el, offset) {
         remaining -= len;
         node = walker.nextNode();
     }
-    range.selectNodeContents(el);
-    range.collapse(false);
+    // No text nodes or offset beyond content - place caret at end using robust childNodes approach
+    // This handles empty elements and elements with <br> tags correctly
+    const fullRange = document.createRange();
+    fullRange.setStart(el, el.childNodes.length);
+    fullRange.setEnd(el, el.childNodes.length);
     sel?.removeAllRanges();
-    sel?.addRange(range);
+    sel?.addRange(fullRange);
 }
 
 export function getInlineEditSequence(root) {

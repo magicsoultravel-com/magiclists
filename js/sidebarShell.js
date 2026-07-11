@@ -116,7 +116,7 @@ export function initSidebarShell() {
             updateShellPresentation();
             window.dispatchEvent(new CustomEvent('floating:chrome_changed'));
         },
-        dragBlockSelector: '.side-panel-toggle-btn, .sidebar-reattach-all, .sidebar-shell__dock, .app-brand, .app-brand__text'
+        dragBlockSelector: '.side-panel-toggle-btn, .sidebar-reattach-all, .sidebar-shell__dock'
     });
 
     shellUndock.applyInitialDockState();

@@ -697,15 +697,30 @@ export function refreshNoteBody(body, item, {
     const restoreView = () => {
         const focusStepId = pendingFocusStepId || activeStepId;
         if (!focusStepId) return;
+        // Fixed selector: data-step-id is on the .step-text element itself, not on a parent
         const stepTextEl = body.querySelector(
-            `[data-step-id="${focusStepId}"] .step-text.card-inline-edit`
+            `.step-text.card-inline-edit[data-step-id="${focusStepId}"]`
         );
         if (stepTextEl && document.activeElement !== stepTextEl) {
             // Prevent scroll jump by using preventScroll option
             stepTextEl.focus({ preventScroll: true });
             // Set caret position after focus
+            const edge = pendingFocusPlainOffset != null ? null : pendingFocusEdge;
             if (pendingFocusPlainOffset != null) {
                 setCaretAtPlainOffset(stepTextEl, Number(pendingFocusPlainOffset));
+            } else if (edge) {
+                const range = document.createRange();
+                range.selectNodeContents(stepTextEl);
+                if (edge === 'end') {
+                    // Move selection strictly to the end of the text/child strings
+                    range.setStart(stepTextEl, stepTextEl.childNodes.length);
+                    range.setEnd(stepTextEl, stepTextEl.childNodes.length);
+                } else {
+                    range.collapse(true); // 'start'
+                }
+                const sel = window.getSelection();
+                sel?.removeAllRanges();
+                sel?.addRange(range);
             }
         }
     };
