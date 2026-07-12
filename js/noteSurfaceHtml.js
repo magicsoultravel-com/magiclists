@@ -9,7 +9,7 @@ import { escapeHTML, escapeAttr } from './domEscape.js';
 import { isFileCabinetActive, getFileCabinetToggleLabels } from './fileCabinet.js';
 import { LEGACY_TILE_SIZE } from './tileGeometry.js';
 import { bindChecklistInteractions, attachChecklistDrag, getChecklistCollapsedKeys, getChecklistDoneCollapsed, isChecklistDoneSectionCollapsed, toggleChecklistDoneSection, getChecklistCollapsibleKeys, checklistGroupsAnyExpanded, collapseAllChecklistGroups, expandAllChecklistGroups, toggleChecklistExpandCollapseAll, buildChecklistExpandCollapseAllHtml, buildChecklistRowHtml } from './noteSurfaceChecklist.js';
-import { focusInlineEdit, setCaretAtPlainOffset } from './noteSurfaceEditing.js';
+import { focusInlineEdit, setCaretAtPlainOffset, caretAtPlainEdge } from './noteSurfaceEditing.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -624,9 +624,126 @@ function findChecklistScrollContainer(body) {
 }
 
 /**
- * Refresh the checklist portion of a note body (re-render checklist HTML
- * and re-bind interactions). Used by the modal editor after checklist
- * mutations (add/delete/reorder/indent/etc.).
+ * Capture the current focus state of a note body element.
+ * Returns an object with focus state information, or null if no focus state to capture.
+ * @param {HTMLElement} body - The .editor-note-body element
+ * @returns {object|null} Focus state object or null
+ */
+function captureNoteBodyFocusState(body) {
+    if (!body) return null;
+    
+    const active = document.activeElement;
+    if (!active || !body.contains(active)) return null;
+    
+    const field = active.dataset.field;
+    if (!field) return null;
+    
+    // For checklist steps, capture additional state
+    if (field === 'step-text') {
+        const stepId = active.dataset.stepId;
+        const sel = window.getSelection();
+        const range = sel?.rangeCount > 0 ? sel.getRangeAt(0) : null;
+        
+        // Determine if caret is at start or end
+        let edge = 'end';
+        let plainOffset = 0;
+        
+        if (range && active.contains(range.startContainer)) {
+            const probe = range.cloneRange();
+            probe.selectNodeContents(active);
+            probe.setEnd(range.startContainer, range.startOffset);
+            const plainText = stripRichText(active.textContent || '');
+            plainOffset = probe.toString().length;
+            edge = plainOffset <= 0 ? 'start' : 'end';
+        }
+        
+        return {
+            field,
+            stepId,
+            edge,
+            plainOffset
+        };
+    }
+    
+    // For title and content fields - also capture caret position
+    const sel = window.getSelection();
+    const range = sel?.rangeCount > 0 ? sel.getRangeAt(0) : null;
+    
+    let edge = 'end';
+    let plainOffset = 0;
+    
+    if (range && active.contains(range.startContainer)) {
+        const probe = range.cloneRange();
+        probe.selectNodeContents(active);
+        probe.setEnd(range.startContainer, range.startOffset);
+        const plainText = stripRichText(active.textContent || '');
+        plainOffset = probe.toString().length;
+        edge = plainOffset <= 0 ? 'start' : 'end';
+    }
+    
+    return {
+        field,
+        edge,
+        plainOffset
+    };
+}
+
+/**
+ * Restore focus state to a note body element after re-rendering.
+ * @param {HTMLElement} newBody - The new .editor-note-body element
+ * @param {HTMLElement} card - The card element (for finding step elements)
+ * @param {object} focusState - The focus state object from captureNoteBodyFocusState
+ */
+function restoreNoteBodyFocusState(newBody, card, focusState) {
+    if (!newBody || !focusState) return;
+    
+    const { field, stepId, edge, plainOffset } = focusState;
+    
+    if (field === 'step-text' && stepId) {
+        // Find the step text element in the new body
+        const stepEl = newBody.querySelector(`.step-text.card-inline-edit[data-step-id="${stepId}"]`);
+        if (stepEl) {
+            // Use preventScroll to avoid jumping
+            stepEl.focus({ preventScroll: true });
+            if (plainOffset != null) {
+                setCaretAtPlainOffset(stepEl, plainOffset);
+            } else {
+                // Set caret at edge if no plain offset - use robust positioning
+                const range = document.createRange();
+                if (edge === 'end') {
+                    // Move selection strictly to the end of the text/child strings
+                    range.setStart(stepEl, stepEl.childNodes.length);
+                    range.setEnd(stepEl, stepEl.childNodes.length);
+                } else {
+                    range.selectNodeContents(stepEl);
+                    range.collapse(true); // 'start'
+                }
+                const sel = window.getSelection();
+                sel?.removeAllRanges();
+                sel?.addRange(range);
+            }
+            return;
+        }
+    }
+    
+    // For title and content fields
+    const el = newBody.querySelector(`.card-inline-edit[data-field="${field}"]`);
+    if (el) {
+        // Use preventScroll to avoid jumping
+        el.focus({ preventScroll: true });
+        if (plainOffset != null) {
+            setCaretAtPlainOffset(el, plainOffset);
+        } else if (edge) {
+            focusInlineEdit(el, edge);
+        }
+    }
+}
+
+/**
+ * Refresh the entire note body (re-render HTML and re-bind interactions).
+ * Used by both modal and inline editors after content or checklist mutations.
+ * Provides seamless, unified layout adjustments for combinations of standard
+ * content and checklists across both inline board and modal surfaces.
  *
  * @param {HTMLElement} body - the .editor-note-body element
  * @param {object} item - the note item
@@ -649,92 +766,61 @@ export function refreshNoteBody(body, item, {
     sheetInteractionOpts = null
 } = {}) {
     if (!body || !item) return;
-    const { showChecklist } = resolveNoteBodyVisibility(item, {
-        canEdit: true,
-        inModalEditor: !!mountZone?.closest('#editor-overlay')
-    });
-    if (!showChecklist) return;
 
-    // Re-render only the checklist section
-    const expandedChecklist = body.querySelector('.expanded-checklist');
-    if (!expandedChecklist) return;
-
+    // Capture scroll positions BEFORE any DOM changes
+    // Track both internal container scrolling and global window coordinates
     const scrollContainer = findChecklistScrollContainer(body);
     const scrollTop = scrollContainer?.scrollTop ?? 0;
+    const windowScrollX = window.scrollX ?? 0;
+    const windowScrollY = window.scrollY ?? 0;
 
-    const activeStep = body.contains(document.activeElement)
-        ? document.activeElement.closest('.step-row--display')
-        : null;
-    const activeStepId = activeStep?.dataset?.stepId;
-    const pendingFocusStepId = body.dataset.pendingFocusStepId || '';
-    const pendingFocusEdge = body.dataset.pendingFocusEdge || 'end';
-    const pendingFocusPlainOffset = body.dataset.pendingFocusPlainOffset;
-    delete body.dataset.pendingFocusStepId;
-    delete body.dataset.pendingFocusEdge;
-    delete body.dataset.pendingFocusPlainOffset;
+    // Capture focus state for ALL field types (content, title, step-text)
+    const focusState = captureNoteBodyFocusState(body);
 
-    // Preserve the wrapper element instance to avoid visual flash from outerHTML replacement
-    // Extract inner content from the generated HTML (skip the wrapper div)
-    const newHtml = buildExpandedChecklistHtml(item, true, { richEdit });
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = newHtml;
-    const newWrapper = tempDiv.firstChild;
-    
-    // Clear and repopulate the existing wrapper to preserve element instance
-    while (expandedChecklist.firstChild) {
-        expandedChecklist.removeChild(expandedChecklist.firstChild);
-    }
-    if (newWrapper) {
-        while (newWrapper.firstChild) {
-            expandedChecklist.appendChild(newWrapper.firstChild);
-        }
+    // Clear interaction markers to ensure full operational continuity
+    if (body) {
+        delete body.dataset.checklistInteractionsBound;
+        delete body.dataset.checklistDragBound;
     }
 
-    // Restore scroll position synchronously to prevent scroll jump
-    if (scrollContainer) scrollContainer.scrollTop = scrollTop;
-
-    // Focus restoration - use preventScroll to avoid jumping
-    const restoreView = () => {
-        const focusStepId = pendingFocusStepId || activeStepId;
-        if (!focusStepId) return;
-        // Fixed selector: data-step-id is on the .step-text element itself, not on a parent
-        const stepTextEl = body.querySelector(
-            `.step-text.card-inline-edit[data-step-id="${focusStepId}"]`
-        );
-        if (stepTextEl && document.activeElement !== stepTextEl) {
-            // Prevent scroll jump by using preventScroll option
-            stepTextEl.focus({ preventScroll: true });
-            // Set caret position after focus
-            const edge = pendingFocusPlainOffset != null ? null : pendingFocusEdge;
-            if (pendingFocusPlainOffset != null) {
-                setCaretAtPlainOffset(stepTextEl, Number(pendingFocusPlainOffset));
-            } else if (edge) {
-                const range = document.createRange();
-                range.selectNodeContents(stepTextEl);
-                if (edge === 'end') {
-                    // Move selection strictly to the end of the text/child strings
-                    range.setStart(stepTextEl, stepTextEl.childNodes.length);
-                    range.setEnd(stepTextEl, stepTextEl.childNodes.length);
-                } else {
-                    range.collapse(true); // 'start'
-                }
-                const sel = window.getSelection();
-                sel?.removeAllRanges();
-                sel?.addRange(range);
-            }
-        }
-    };
-    // Use microtask to ensure DOM is ready but before browser paint
-    queueMicrotask(() => {
-        restoreView();
+    // Re-render the entire body using buildNoteBodyHtml for unified layout
+    const newBodyHtml = buildNoteBodyHtml(item, {
+        canEdit: true,
+        inModalEditor: !!mountZone?.closest('#editor-overlay'),
+        richEdit
     });
+
+    // Preserve the body element instance to avoid visual flash
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = newBodyHtml;
+
+    // Clear and repopulate the existing body to preserve element instance
+    while (body.firstChild) {
+        body.removeChild(body.firstChild);
+    }
+    while (tempDiv.firstChild) {
+        body.appendChild(tempDiv.firstChild);
+    }
+
+    // Restore scroll positions SYNCHRONOUSLY immediately after innerHTML
+    // This locks visual stability prior to the next browser paint frame
+    if (scrollContainer) scrollContainer.scrollTop = scrollTop;
+    window.scrollTo(windowScrollX, windowScrollY);
+
+    // Focus restoration - use strict preventScroll flags during all .focus() executions
+    if (focusState) {
+        // Use microtask to ensure DOM is ready but before browser paint
+        queueMicrotask(() => {
+            restoreNoteBodyFocusState(body, null, focusState);
+        });
+    }
 
     // Re-bind interactions
     if (mountZone) {
         const newShell = mountZone.querySelector('.editor-note-shell');
         if (newShell) {
             const newBody = newShell.querySelector('.editor-note-body');
-            if (newBody && newBody.dataset.checklistInteractionsBound !== item.id) {
+            if (newBody) {
                 bindChecklistInteractions(newBody, item, {
                     localOnly,
                     onChange,

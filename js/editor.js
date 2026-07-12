@@ -27,6 +27,7 @@ import {
     resolveNoteTemplate,
     resolveEditorBodyLayoutUnchecked
 } from './sheet.js';
+import { deriveEditorBodyLayout } from './noteBodyConversion.js';
 
 export const Editor = {
     overlay: null,
@@ -248,7 +249,7 @@ export const Editor = {
             isRecurring: this.activeItem.isRecurring === true,
             hideFromCalendar: this.activeItem.hideFromCalendar === true,
             hiddenFromBoard: this.activeItem.hiddenFromBoard === true,
-            editorBodyLayout: resolveEditorBodyLayoutUnchecked(this.activeItem),
+            editorBodyLayout: deriveEditorBodyLayout(this.activeItem),
             noteTemplate: this.activeItem.noteTemplate,
             sheet: this.activeItem.sheet
         };
