@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-12T00:22:36.377Z
+> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-12T01:43:08.093Z
 
 ## CSS load order
 
@@ -52,6 +52,7 @@ alwaysApply: true
 | js/fileCabinet.js | file cabinet mode, drag-to-file, filed chip rail | noteSurface.js, dragdrop.js, layoutStorage.js | filecabinet:layout_changed | - |
 | js/hamburger.js | side panel shell, notes list, category drawer, sort | searchBar.js, ui.js, sidebarHistory.js, sidebarStats.js | category:show_requested, category:order_changed | - |
 | js/icons.js | CARD_ICONS, ACTION_ICONS, FORMAT_ICONS, DRAWING_ICONS SVG constants | ui.js | - | - |
+| js/lassoGeometry.js | lasso geometry utilities - ray casting, bounding boxes | drawingBoard.js | - | - |
 | js/layoutStorage.js | board layout persistence, grid/freeform positions, storage migrations | dragdrop.js, ui.js, fileCabinet.js, board/gridEngine.js | - | - |
 | js/noteBodyConversion.js | checklist/content conversion, plain copy text | noteSurface.js, checklistSteps.js, richText.js | - | - |
 | js/noteModel.js | note item schema, normalizeItemForSave, createNoteId | richText.js, sheet.js | - | - |

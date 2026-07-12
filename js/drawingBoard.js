@@ -15,6 +15,14 @@ import { renderBackground } from './canvasBackgrounds.js';
 import { CanvasViewport } from './canvasViewport.js';
 import { exportCanvasPng, exportCanvasPdf } from './canvasExport.js';
 import { DrawingToolbarChrome } from './drawingToolbarChrome.js';
+import {
+    isPointInPolygon,
+    strokeHasPointInPolygon,
+    getStrokesBounds,
+    clampStrokesToBounds,
+    translateStrokes,
+    getPageBounds
+} from './lassoGeometry.js';
 
 const PREFS_KEY = 'matrix_drawing_prefs';
 const WIDTH_MIN = 1;
@@ -185,6 +193,13 @@ export const DrawingBoard = {
     brandEl: null,
     brandNotesText: 'magicNotes',
     colorRolloutOpen: false,
+
+    // Lasso tool state
+    isLassoActive: false,
+    lassoPoints: [],
+    selectedStrokes: new Set(),
+    isDraggingLasso: false,
+    lassoDragStart: null,
 
     init(app) {
         this.app = app;
@@ -452,6 +467,24 @@ export const DrawingBoard = {
 
         this.canvas.setPointerCapture(e.pointerId);
 
+        // Lasso tool - check if clicking on center point of selection
+        if (this.selectedStrokes.size > 0 && !this.isLassoActive) {
+            const bounds = getStrokesBounds(this.getSelectedStrokesArray());
+            const centerX = bounds.minX + bounds.width / 2;
+            const centerY = bounds.minY + bounds.height / 2;
+            const handleRadius = 10;
+            if (Math.hypot(x - centerX, y - centerY) <= handleRadius) {
+                this.startLassoDrag(x, y);
+                return;
+            }
+        }
+
+        // Lasso tool handling
+        if (this.isLassoActive) {
+            this.beginLassoPath(x, y);
+            return;
+        }
+
         if (this.activeTool === 'text') {
             this.placeTextBox(x, y);
             return;
@@ -497,6 +530,24 @@ export const DrawingBoard = {
         if (e.pointerType === 'touch' && this.penPointerActive) return;
         const events = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [e];
 
+        // Lasso tool - dragging selected strokes
+        if (this.isDraggingLasso && this.lassoDragStart) {
+            const pt = this.clientToCanvas(e.clientX, e.clientY);
+            const dx = pt.x - this.lassoDragStart.x;
+            const dy = pt.y - this.lassoDragStart.y;
+            this.dragLassoSelection(dx, dy);
+            this.lassoDragStart = { x: pt.x, y: pt.y };
+            return;
+        }
+
+        // Lasso tool handling
+        if (this.isLassoActive && this.lassoPoints.length > 0) {
+            const pt = this.clientToCanvas(e.clientX, e.clientY);
+            this.extendLassoPath(pt.x, pt.y);
+            this.requestRedraw();
+            return;
+        }
+
         if (this.draftStroke) {
             events.forEach((ev) => {
                 const pt = this.clientToCanvas(ev.clientX, ev.clientY);
@@ -524,6 +575,25 @@ export const DrawingBoard = {
     onPointerUp(e) {
         if (e.pointerType === 'pen') this.penPointerActive = false;
         try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+
+        // Lasso tool - finish dragging
+        if (this.isDraggingLasso) {
+            this.finishLassoDrag();
+            this.redraw();
+            return;
+        }
+
+        // Lasso tool handling
+        if (this.isLassoActive && this.lassoPoints.length > 0) {
+            if (this.closeLassoPath()) {
+                this.selectStrokesInLasso();
+                if (this.selectedStrokes.size > 0) {
+                    this.pushLayerHistory();
+                }
+            }
+            this.redraw();
+            return;
+        }
 
         if (this.draftStroke) {
             if (this.draftStroke.points.length >= 1) {
@@ -627,6 +697,11 @@ export const DrawingBoard = {
         getActiveTexts(this.doc).forEach((t) => drawTextObject(this.ctx, t));
         if (this.draftStroke) drawBrushStroke(this.ctx, this.draftStroke);
         if (this.shapePreview) drawShapeStroke(this.ctx, this.shapePreview);
+        
+        // Render lasso overlay (path and selection box)
+        if (this.isLassoActive || this.selectedStrokes.size > 0) {
+            this.renderLassoOverlay();
+        }
     },
 
     undo() {
@@ -839,6 +914,7 @@ export const DrawingBoard = {
                 <span class="drawing-dropdown-icon">${this.shapeTriggerIcon()}</span>
                 <span class="drawing-dropdown-chevron">${CHEVRON}</span>
             </button>
+            <button type="button" class="btn btn--compact btn--icon" id="draw-lasso" title="Lasso Select (L)" aria-label="Lasso Select" ${this.isLassoActive ? 'aria-pressed="true"' : ''}>${DRAWING_ICONS.lasso}</button>
             <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-canvas" aria-haspopup="menu" aria-expanded="false" title="Canvas settings" aria-label="Canvas settings">
                 <span class="drawing-dropdown-label">Canvas</span>
                 <span class="drawing-dropdown-chevron">${CHEVRON}</span>
@@ -931,6 +1007,12 @@ export const DrawingBoard = {
                 }
             });
         });
+
+        // Lasso button click handler
+        q('#draw-lasso')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.toggleLassoMode();
+        });
     },
 
     updateToolbarState() {
@@ -946,7 +1028,170 @@ export const DrawingBoard = {
             if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); this.undo(); return true; }
             if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); this.redo(); return true; }
         }
+        
+        // Lasso tool keyboard shortcut
+        if (e.key === 'l' || e.key === 'L') {
+            e.preventDefault();
+            this.toggleLassoMode();
+            return true;
+        }
+        
+        // Escape to clear lasso selection or exit lasso mode
+        if (e.key === 'Escape') {
+            if (this.isDraggingLasso) {
+                this.finishLassoDrag();
+                this.redraw();
+                return true;
+            }
+            if (this.isLassoActive || this.selectedStrokes.size > 0) {
+                this.clearLassoSelection();
+                return true;
+            }
+        }
+        
         return false;
+    },
+
+    // Lasso tool methods
+    toggleLassoMode() {
+        if (this.isLassoActive) {
+            this.clearLassoSelection();
+        } else {
+            this.startLassoMode();
+        }
+    },
+
+    startLassoMode() {
+        this.isLassoActive = true;
+        this.lassoPoints = [];
+        this.selectedStrokes.clear();
+        this.isDraggingLasso = false;
+        this.renderToolbar();
+    },
+
+    clearLassoSelection() {
+        this.isLassoActive = false;
+        this.lassoPoints = [];
+        this.selectedStrokes.clear();
+        this.isDraggingLasso = false;
+        this.lassoDragStart = null;
+        this.textLayer.innerHTML = '';
+        this.renderToolbar();
+    },
+
+    beginLassoPath(x, y) {
+        this.lassoPoints = [{ x, y }];
+    },
+
+    extendLassoPath(x, y) {
+        if (this.lassoPoints.length === 0) return;
+        // Only add if far enough from last point to avoid too many points
+        const last = this.lassoPoints[this.lassoPoints.length - 1];
+        const dist = Math.hypot(x - last.x, y - last.y);
+        if (dist > 2) {
+            this.lassoPoints.push({ x, y });
+        }
+    },
+
+    closeLassoPath() {
+        if (this.lassoPoints.length < 3) return false;
+        // Connect last point to first
+        this.lassoPoints.push(this.lassoPoints[0]);
+        return true;
+    },
+
+    selectStrokesInLasso() {
+        if (this.lassoPoints.length < 3) return;
+        
+        const strokes = this.strokes();
+        this.selectedStrokes.clear();
+        
+        for (const stroke of strokes) {
+            if (strokeHasPointInPolygon(stroke, this.lassoPoints)) {
+                this.selectedStrokes.add(stroke);
+            }
+        }
+    },
+
+    getSelectedStrokesArray() {
+        return Array.from(this.selectedStrokes);
+    },
+
+    startLassoDrag(x, y) {
+        if (this.selectedStrokes.size === 0) return;
+        
+        this.isDraggingLasso = true;
+        this.lassoDragStart = { x, y };
+        this.pushLayerHistory();
+    },
+
+    dragLassoSelection(dx, dy) {
+        if (!this.isDraggingLasso || this.selectedStrokes.size === 0) return;
+        
+        translateStrokes(this.getSelectedStrokesArray(), dx, dy);
+        
+        // Clamp to page bounds for fixed page modes
+        const dims = getPageDimensions(this.doc);
+        const pageBounds = getPageBounds(this.doc, dims);
+        clampStrokesToBounds(this.getSelectedStrokesArray(), pageBounds);
+        
+        this.redraw();
+    },
+
+    finishLassoDrag() {
+        if (!this.isDraggingLasso) return;
+        
+        this.isDraggingLasso = false;
+        this.lassoDragStart = null;
+        this.scheduleSave();
+    },
+
+    renderLassoOverlay() {
+        if (!this.ctx || !this.canvas) return;
+        
+        // Render dashed blue lasso path
+        if (this.lassoPoints.length > 0) {
+            this.ctx.save();
+            this.ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)'; // Blue with opacity
+            this.ctx.fillStyle = 'rgba(59, 130, 246, 0.15)'; // Light blue fill
+            this.ctx.lineWidth = 2;
+            this.ctx.setLineDash([6, 4]);
+            this.ctx.beginPath();
+            this.ctx.moveTo(this.lassoPoints[0].x, this.lassoPoints[0].y);
+            for (let i = 1; i < this.lassoPoints.length; i++) {
+                this.ctx.lineTo(this.lassoPoints[i].x, this.lassoPoints[i].y);
+            }
+            this.ctx.stroke();
+            this.ctx.fill();
+            this.ctx.setLineDash([]);
+            this.ctx.restore();
+        }
+        
+        // Render selection bounding box
+        if (this.selectedStrokes.size > 0) {
+            const bounds = getStrokesBounds(this.getSelectedStrokesArray());
+            this.ctx.save();
+            this.ctx.strokeStyle = '#3b82f6'; // Blue border
+            this.ctx.fillStyle = 'rgba(59, 130, 246, 0.1)'; // Semi-transparent fill
+            this.ctx.lineWidth = 1.5;
+            this.ctx.setLineDash([4, 2]);
+            this.ctx.strokeRect(bounds.minX, bounds.minY, bounds.width, bounds.height);
+            this.ctx.restore();
+            
+            // Render drag handles (simple center point)
+            const centerX = bounds.minX + bounds.width / 2;
+            const centerY = bounds.minY + bounds.height / 2;
+            this.ctx.save();
+            this.ctx.fillStyle = '#3b82f6';
+            this.ctx.beginPath();
+            this.ctx.arc(centerX, centerY, 6, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.restore();
+        }
+    },
+
+    isLassoButtonActive() {
+        return this.isLassoActive;
     }
 };
 
