@@ -153,8 +153,3 @@ export const BoardOperations = {
         });
     }
 };
-</task_progress>
-- [x] Fixed syntax errors in unhideFromBoard method
-- [x] Corrected the malformed object literal in NoteSurface.emitItemMutation call
-</task_progress>
-</write_to_file>
