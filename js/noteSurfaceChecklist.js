@@ -59,11 +59,10 @@ export function bindChecklistInteractions(root, item, {
         syncItemBodyFromDom(root, item);
         if (localOnly) {
             onChange();
+            refresh();
         } else {
-            mutateItem(item, () => {}, { preserveView: true, skipRerender: true, localOnly });
             commitInlineChecklistOp(item, beforeItem, { localOnly });
         }
-        refresh();
     });
 
     // --- generic click delegation for all other step buttons ---
@@ -78,7 +77,7 @@ export function bindChecklistInteractions(root, item, {
             if (!stepId) return;
             const focusStepId = removeChecklistStepAndFocus(root, item, stepId, { localOnly, onChange });
             if (focusStepId) setPendingChecklistFocus(root, focusStepId, 'end');
-            refresh();
+            if (localOnly) refresh();
             return;
         }
 
@@ -124,10 +123,14 @@ export function bindChecklistInteractions(root, item, {
             if (stepIdx < 0) return;
             applySubtreeLevelDelta(item.steps, stepIdx, 1);
             normalizeChecklistLevels(item.steps);
-            if (localOnly) onChange();
-            else commitInlineChecklistOp(item, beforeItem, { localOnly });
+            if (localOnly) {
+                onChange();
+                refresh();
+            } else {
+                commitInlineChecklistOp(item, beforeItem, { localOnly });
+                refresh();
+            }
             setPendingChecklistFocus(root, stepId, 'end');
-            refresh();
             return;
         }
 
@@ -148,10 +151,13 @@ export function bindChecklistInteractions(root, item, {
             if (stepIdx < 0) return;
             applySubtreeLevelDelta(item.steps, stepIdx, -1);
             normalizeChecklistLevels(item.steps);
-            if (localOnly) onChange();
-            else commitInlineChecklistOp(item, beforeItem, { localOnly });
+            if (localOnly) {
+                onChange();
+                refresh();
+            } else {
+                commitInlineChecklistOp(item, beforeItem, { localOnly });
+            }
             setPendingChecklistFocus(root, stepId, 'end');
-            refresh();
             return;
         }
 
@@ -200,7 +206,7 @@ export function bindChecklistInteractions(root, item, {
         e.stopPropagation();
         const newStepId = insertChecklistStep(root, item, { localOnly, onChange });
         if (newStepId) setPendingChecklistFocus(root, newStepId, 'start');
-        refresh();
+        if (localOnly) refresh();
         return;
     }
     });
@@ -215,7 +221,7 @@ export function bindChecklistInteractions(root, item, {
         if (result === false) return;
         if (result === 'stay') return;
         if (result) setPendingChecklistFocus(root, result, 'start');
-        refresh();
+        if (localOnly) refresh();
     });
 
     // --- step-text arrow key navigation: navigate between steps on visual edge ---
@@ -333,8 +339,11 @@ export function attachChecklistDrag(root, item, {
                 expandChecklistAncestorsForStep(item, parentIdToExpand);
             }
             setPendingChecklistFocus(root, blockRootId, 'end');
-            refresh();
-            commitInlineChecklistOp(item, beforeItem, { localOnly });
+            if (localOnly) {
+                refresh();
+            } else {
+                commitInlineChecklistOp(item, beforeItem, { localOnly });
+            }
         }
         activeDrag = null;
     };
@@ -555,7 +564,6 @@ export function insertChecklistStep(root, item, {
 
     item.steps = steps;
     if (!localOnly) {
-        mutateItem(item, () => {}, { preserveView: true, skipRerender: true, localOnly });
         commitInlineChecklistOp(item, beforeItem, { localOnly });
     }
     onChange();
@@ -573,7 +581,6 @@ export function removeChecklistStepAndFocus(root, item, stepId, { localOnly = fa
     item.steps.splice(idx, 1);
 
     if (!localOnly) {
-        mutateItem(item, () => {}, { preserveView: true, skipRerender: true, localOnly });
         commitInlineChecklistOp(item, beforeItem, { localOnly });
     }
     onChange();
@@ -622,7 +629,6 @@ export function handleChecklistBackspace(e, item, { localOnly = false, onChange 
     }
 
     if (!localOnly) {
-        mutateItem(item, () => {}, { preserveView: true, skipRerender: true, localOnly });
         commitInlineChecklistOp(item, beforeItem, { localOnly });
     }
     onChange();
@@ -655,7 +661,6 @@ export function handleChecklistDelete(e, item, { localOnly = false, onChange = (
     const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
     item.steps.splice(stepIdx, 1);
     if (!localOnly) {
-        mutateItem(item, () => {}, { preserveView: true, skipRerender: true, localOnly });
         commitInlineChecklistOp(item, beforeItem, { localOnly });
     }
     onChange();
@@ -720,7 +725,6 @@ export function handleChecklistEnter(root, item, e, { localOnly = false, onChang
     item.steps.splice(insertIdx, 0, newStep);
 
     if (!localOnly) {
-        mutateItem(item, () => {}, { preserveView: true, skipRerender: true, localOnly });
         commitInlineChecklistOp(item, beforeItem, { localOnly });
     }
     onChange();
@@ -768,7 +772,8 @@ export function commitInlineChecklistOp(item, beforeItem, { localOnly = false } 
         item,
         beforeItem,
         action,
-        changes
+        changes,
+        preserveView: true
     };
 
     window.dispatchEvent(new CustomEvent('item:mutation_requested', { detail: eventDetail }));

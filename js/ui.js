@@ -1200,12 +1200,13 @@ export const UI = {
         const canvasScrollLeft = canvas?.scrollLeft ?? 0;
         
         if (shell) NoteSurface.syncItemBodyFromDom(shell, item);
+        // Note: refreshNoteBody already handles re-binding interactions internally
+        // and we don't pass refresh callback to avoid double refresh
         NoteSurface.refreshNoteBody(body, item, {
             mountZone: card,
             shell,
             localOnly: true,
-            richEdit: true,
-            refresh: () => this.refreshBoardChecklistBody(card, item, activeCategories, targetCatName, categoryColor)
+            richEdit: true
         });
         
         // Restore canvas scroll position immediately after update

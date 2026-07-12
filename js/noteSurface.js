@@ -388,66 +388,6 @@ window.addEventListener('item:mutation_requested', (e) => {
     
     // Check if we should skip the heavy DOM re-render
     if (skipRerender || preserveView) {
-        // Perform targeted DOM updates for inline editing on the board
-        // Find the card on the board that corresponds to this item
-        const canvas = document.getElementById('app-canvas');
-        if (canvas) {
-            const card = canvas.querySelector(`.mini-card[data-id="${item.id}"]`);
-            if (card) {
-                // For board cards, we need to update the card body with the new content
-                // while preserving the card's position and size
-                const body = card.querySelector('.editor-note-body');
-                if (body) {
-                    // Capture canvas scroll position before any updates to prevent view jump
-                    const canvasScrollTop = canvas.scrollTop || 0;
-                    const canvasScrollLeft = canvas.scrollLeft || 0;
-                    
-                    // Re-render only the checklist section to avoid layout thrashing
-                    // The UI.updateSingleCard handles this, but we can do targeted updates
-                    // for better performance
-                    const expandedChecklist = body.querySelector('.expanded-checklist');
-                    if (expandedChecklist) {
-                        // Use the refreshNoteBody function for targeted updates
-                        // This will update the checklist while preserving scroll
-                        const shell = card.querySelector('.editor-note-shell');
-                        if (shell) {
-                            // Sync the item body from DOM first
-                            syncItemBodyFromDom(shell, item);
-                        }
-                        // Refresh the note body with targeted updates
-                        refreshNoteBody(body, item, {
-                            mountZone: card,
-                            shell,
-                            localOnly: true,
-                            richEdit: true,
-                            refresh: () => {
-                                // Re-bind interactions after refresh
-                                const newShell = card.querySelector('.editor-note-shell');
-                                if (newShell) {
-                                    const newBody = newShell.querySelector('.editor-note-body');
-                                    if (newBody) {
-                                        bindChecklistInteractions(newBody, item, {
-                                            localOnly: true,
-                                            onChange: () => {},
-                                            refresh: () => {}
-                                        });
-                                        attachChecklistDrag(newBody, item, {
-                                            localOnly: true,
-                                            onChange: () => {},
-                                            refresh: () => {}
-                                        });
-                                    }
-                                }
-                            }
-                        });
-                        // Restore canvas scroll position after targeted update
-                        // This prevents the view from jumping to top when cards have overflow: hidden
-                        canvas.scrollTop = canvasScrollTop;
-                        canvas.scrollLeft = canvasScrollLeft;
-                    }
-                }
-            }
-        }
         return;
     }
     

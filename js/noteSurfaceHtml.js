@@ -679,47 +679,8 @@ export function refreshNoteBody(body, item, {
     delete body.dataset.pendingFocusEdge;
     delete body.dataset.pendingFocusPlainOffset;
 
-    // Preserve the wrapper element instance to avoid visual flash from outerHTML replacement
-    // Extract inner content from the generated HTML (skip the wrapper div)
-    const newHtml = buildExpandedChecklistHtml(item, true, { richEdit });
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = newHtml;
-    const newWrapper = tempDiv.firstChild;
-    
-    // Set minHeight constraint before clearing to prevent scroll jump
-    // This preserves the element's height during the DOM update
-    const currentHeight = expandedChecklist.offsetHeight;
-    if (currentHeight > 0) {
-        expandedChecklist.style.minHeight = `${currentHeight}px`;
-    }
-    
-    // Use DocumentFragment for efficient node appending
-    // This prevents multiple reflows during the update
-    const fragment = document.createDocumentFragment();
-    
-    // Clear the existing content
-    while (expandedChecklist.firstChild) {
-        expandedChecklist.removeChild(expandedChecklist.firstChild);
-    }
-    
-    // Append all new content to the fragment first
-    if (newWrapper) {
-        while (newWrapper.firstChild) {
-            fragment.appendChild(newWrapper.firstChild);
-        }
-    }
-    
-    // Append the fragment to the checklist in a single operation
-    expandedChecklist.appendChild(fragment);
-    
-    // Remove the minHeight constraint after content is appended
-    // to allow natural height adjustment
-    if (currentHeight > 0) {
-        // Use a microtask to remove minHeight after layout is stable
-        queueMicrotask(() => {
-            expandedChecklist.style.minHeight = '';
-        });
-    }
+    // Re-render only the checklist section
+    expandedChecklist.outerHTML = buildExpandedChecklistHtml(item, true, { richEdit });
 
     // Restore scroll position synchronously to prevent scroll jump
     if (scrollContainer) scrollContainer.scrollTop = scrollTop;
@@ -769,12 +730,12 @@ export function refreshNoteBody(body, item, {
                 bindChecklistInteractions(newBody, item, {
                     localOnly,
                     onChange,
-                    refresh: () => refresh()
+                    refresh: localOnly ? () => refresh() : () => {}
                 });
                 attachChecklistDrag(newBody, item, {
                     localOnly,
                     onChange,
-                    refresh
+                    refresh: localOnly ? () => refresh() : () => {}
                 });
             }
         }
