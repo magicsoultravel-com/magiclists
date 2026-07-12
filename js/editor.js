@@ -46,7 +46,7 @@ export const Editor = {
     },
 
     commitAndClose() {
-        this.closeAndSave({ scrollToBoard: true });
+        this.closeAndSave({ scrollToBoard: false });
     },
 
     scheduleEditorSizeLabelUpdate() {
@@ -336,7 +336,8 @@ export const Editor = {
     refreshEditorNoteBody() {
         const body = document.getElementById('editor-note-body');
         if (!body || !this.activeItem) return;
-        if (!body.dataset.pendingFocusStepId) {
+        // Guard against mid-keystroke text syncing to prevent line duplication
+        if (!body.dataset.pendingFocusStepId && !body.querySelector('.card-inline-edit:focus')) {
             this.syncActiveItemFromDom();
         }
         const shell = this.mountZone?.querySelector('.editor-note-shell');
