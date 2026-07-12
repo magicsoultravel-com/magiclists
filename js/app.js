@@ -48,11 +48,12 @@ import { SidebarTv } from './sidebarTv.js';
 import { SidebarWeather } from './sidebarWeather.js';
 import { initAllSidebarModules } from './sidebarModules.js';
 import { initSidebarShell } from './sidebarShell.js';
-import { SidebarHistory } from './sidebarHistory.js';
 import { SidebarStats } from './sidebarStats.js';
-import { BoardSort } from './boardSort.js';
+import { SidebarHistory } from './sidebarHistory.js';
 import { CloudBackup } from './cloudBackup.js';
+import { BoardSort } from './boardSort.js';
 import { BootProgress } from './bootProgress.js';
+import { renderQuickActions } from './noteQuickActions.js';
 import { TemplatePicker } from './templatePicker.js';
 import {
     migrateItemsToFileCabinet,
@@ -313,64 +314,41 @@ class Application {
     }
 
     renderQuickActions() {
-        const zone = document.getElementById('quick-actions-zone');
-        if (!zone) return;
-
-        const mode = AppState.viewSettings.sortBy;
-        const drawingActive = AppState.workspaceMode === 'drawing';
-        const fileCabinetActive = !drawingActive && AppState.viewSettings.fileCabinet;
-        const overlayActive = !drawingActive && BoardOverlay.isEnabled();
-        const fileCabinetTitle = fileCabinetActive ? 'Hide File Cabinet' : 'File Cabinet';
-        const viewTitle = fileCabinetActive
-            ? (overlayActive ? 'Snap bottom to bento' : 'Allow overlap on bottom')
-            : (overlayActive ? 'Snap to bento grid' : 'Allow overlap');
-        const viewIcon = overlayActive ? ACTION_ICONS.viewGrid : ACTION_ICONS.viewFree;
-
-        const workspaceGroup = `
-            <button class="btn btn--compact btn--icon ${overlayActive ? 'active' : ''}" id="btn-freeform-toggle" title="${viewTitle}" aria-label="${viewTitle}" aria-pressed="${overlayActive ? 'true' : 'false'}">${viewIcon}</button>
-            <button class="btn btn--compact btn--icon ${fileCabinetActive ? 'active' : ''}" id="btn-file-cabinet-toggle" title="${fileCabinetTitle}" aria-label="${fileCabinetTitle}" aria-pressed="${fileCabinetActive ? 'true' : 'false'}">${ACTION_ICONS.viewFileCabinet}</button>
-            <button class="btn btn--compact btn--icon ${drawingActive ? 'active' : ''}" id="btn-drawing-mode" title="magicCanvas" aria-label="magicCanvas">${ACTION_ICONS.drawingPencil}</button>
-        `;
-
-        const historyGroup = `
-            <button type="button" id="btn-undo" class="btn btn--compact btn--icon is-hidden" disabled title="Undo (Ctrl+Z)" aria-label="Undo"></button>
-            <button type="button" id="btn-redo" class="btn btn--compact btn--icon is-hidden" disabled title="Redo (Ctrl+Y)" aria-label="Redo"></button>
-        `;
-
-        const displayGroup = `
-            <button type="button" id="btn-display-options" class="btn btn--compact btn--icon" title="Display options" aria-label="Display options" aria-expanded="false" aria-haspopup="menu"></button>
-        `;
-
-        const layoutGroup = `
-            <button type="button" id="btn-board-sort" class="btn btn--compact btn--icon is-hidden" title="Sort board" aria-label="Sort board" aria-expanded="false" aria-haspopup="menu"></button>
-            <button type="button" id="btn-layout-reset" class="btn btn--compact btn--icon is-hidden" title="Reset" aria-label="Reset"></button>
-        `;
-
-        const shellGroup = `
-            <button type="button" id="btn-fullscreen" class="btn btn--compact btn--icon" title="Full screen" aria-label="Full screen" aria-pressed="false"></button>
-            <button type="button" id="btn-show-clock" class="btn btn--compact btn--icon is-hidden" title="Show clock" aria-label="Show clock"></button>
-        `;
-
-        if (!AppState.user.isLoggedIn) {
-            zone.innerHTML = `${workspaceGroup}${historyGroup}${displayGroup}${layoutGroup}${shellGroup}
-                <button type="button" class="btn btn--compact btn--block" id="btn-auth-login">Login</button>`;
-        } else {
-            const accountGroup = `
-                <button type="button" class="btn btn--compact btn--icon" id="btn-add-category" title="Add category" aria-label="Add category">${ACTION_ICONS.category}</button>
-                <button type="button" class="btn btn--compact btn--icon" id="btn-cloud" title="Cloud backup" aria-label="Cloud backup">${ACTION_ICONS.cloud}</button>
-                <button type="button" class="btn btn--compact btn--icon" id="btn-cloud-export" data-enabled-title="Export to cloud" title="Connect cloud first (Cloud icon)" aria-label="Export to cloud" disabled>${ACTION_ICONS.cloudExport}</button>
-                <button type="button" class="btn btn--compact btn--icon" id="btn-cloud-import" data-enabled-title="Import from cloud" title="Connect cloud first (Cloud icon)" aria-label="Import from cloud" disabled>${ACTION_ICONS.cloudImport}</button>
-                <button type="button" class="btn btn--compact btn--icon" id="btn-export-db" title="Export backup" aria-label="Export backup">${ACTION_ICONS.export}</button>
-                <button type="button" class="btn btn--compact btn--icon" id="btn-import-db" title="Import backup" aria-label="Import backup">${ACTION_ICONS.import}</button>
-                <button type="button" class="btn btn--compact btn--icon btn--icon-danger" id="btn-auth-logout" title="Logout" aria-label="Logout">${ACTION_ICONS.logout}</button>
-            `;
-            zone.innerHTML = `${workspaceGroup}${historyGroup}${displayGroup}${layoutGroup}${shellGroup}${accountGroup}`;
-        }
-
-        this.bindQuickActionHandlers();
+        renderQuickActions({
+            sortBy: AppState.viewSettings.sortBy,
+            workspaceMode: AppState.workspaceMode,
+            fileCabinet: AppState.viewSettings.fileCabinet,
+            isLoggedIn: AppState.user.isLoggedIn,
+            handlers: {
+                onToggleOverlay: () => this.toggleBoardOverlay(),
+                onToggleFileCabinet: () => this.toggleFileCabinet(),
+                onToggleDrawing: () => {
+                    if (AppState.workspaceMode === 'drawing') this.switchWorkspaceMode('notes');
+                    else this.switchWorkspaceMode('drawing');
+                },
+                onAddCategory: () => this.executeAddCategoryPrompt(),
+                onCloudClick: (e) => CloudBackup.handleCloudClick(e.currentTarget),
+                onCloudExport: (e) => CloudBackup.exportCheckpoint(e.currentTarget),
+                onCloudImport: (e) => CloudBackup.handleImportClick(e.currentTarget),
+                onExportDb: () => this.executeDataBackupExport(),
+                onImportDb: () => document.getElementById('system-import-file-picker').click(),
+                onLogout: () => this.executeLogout(),
+                onLogin: () => this.executeLoginPrompt(),
+                onLayoutReset: () => {
+                    if (AppState.workspaceMode === 'drawing') {
+                        this.switchWorkspaceMode('notes');
+                    }
+                    UI.resetBoardLayout(AppState.viewSettings.sortBy, AppState.items, {
+                        fileCabinetActive: AppState.viewSettings.fileCabinet
+                    });
+                }
+            }
+        });
     }
 
     bindQuickActionHandlers() {
+        // This method is now handled by renderQuickActions in noteQuickActions.js
+        // Keep only the header icon click handlers and additional updates
         const undoBtn = document.getElementById('btn-undo');
         const redoBtn = document.getElementById('btn-redo');
         if (undoBtn) undoBtn.innerHTML = ACTION_ICONS.undo;
@@ -388,28 +366,6 @@ class Application {
         if (sortBtn) sortBtn.innerHTML = ACTION_ICONS.sortAlpha;
         BoardSort.rebindTrigger();
         Fullscreen.rebindMainButton();
-
-        document.getElementById('btn-freeform-toggle')?.addEventListener('click', () => this.toggleBoardOverlay());
-        document.getElementById('btn-file-cabinet-toggle')?.addEventListener('click', () => this.toggleFileCabinet());
-        document.getElementById('btn-drawing-mode')?.addEventListener('click', () => {
-            if (AppState.workspaceMode === 'drawing') this.switchWorkspaceMode('notes');
-            else this.switchWorkspaceMode('drawing');
-        });
-
-        document.getElementById('btn-add-category')?.addEventListener('click', () => this.executeAddCategoryPrompt());
-        document.getElementById('btn-cloud')?.addEventListener('click', (e) => {
-            CloudBackup.handleCloudClick(e.currentTarget);
-        });
-        document.getElementById('btn-cloud-export')?.addEventListener('click', (e) => {
-            CloudBackup.exportCheckpoint(e.currentTarget);
-        });
-        document.getElementById('btn-cloud-import')?.addEventListener('click', (e) => {
-            CloudBackup.handleImportClick(e.currentTarget);
-        });
-        document.getElementById('btn-export-db')?.addEventListener('click', () => this.executeDataBackupExport());
-        document.getElementById('btn-import-db')?.addEventListener('click', () => document.getElementById('system-import-file-picker').click());
-        document.getElementById('btn-auth-logout')?.addEventListener('click', () => this.executeLogout());
-        document.getElementById('btn-auth-login')?.addEventListener('click', () => this.executeLoginPrompt());
 
         // Header icon click handlers
         document.getElementById('qa-header-freeform-toggle')?.addEventListener('click', () => this.toggleBoardOverlay());

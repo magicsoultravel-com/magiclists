@@ -20,6 +20,7 @@ import {
 } from './tileGeometry.js';
 import { CANVAS_COL_GAP, CANVAS_LAYOUT_ORIGIN, getGridMetrics } from './gridDensity.js';
 import { initFileCabinetDrag, isFileCabinetActive, fileItemToCabinet, shouldFileItem } from './fileCabinet.js';
+import { GridEngine } from './board/gridEngine.js';
 
 const DRAG_THRESHOLD = 4;
 const GRID_SCROLL_EDGE = 40;
@@ -125,7 +126,7 @@ function finishSnapPanelGesture(card, {
     const item = currentItems.find((i) => i.id === card.dataset.id);
     let tileSize = item ? UI.getCardTileSize(card, item) : 'large';
     if (item && tierResizeState && UI.isSpatiallyCollapsed(card)) {
-        tileSize = UI.commitTierResize(card, item, tierResizeState);
+        tileSize = DragDropEngine.commitTierResize(card, item, tierResizeState);
     } else if (item) {
         tileSize = promoteExpandedResizeToLargeTier(card, item);
     }
@@ -465,7 +466,7 @@ export const DragDropEngine = {
                 nextY = Math.max(minCoord, nextY);
                 const bounds = boardBounds;
                 const maxW = bounds ? bounds.packW + origin : undefined;
-                UI.processCollapsedTierResizeMove(card, item, tierResizeState, {
+                DragDropEngine.processCollapsedTierResizeMove(card, item, tierResizeState, {
                     x: nextX,
                     y: nextY,
                     w: nextW,
@@ -512,7 +513,7 @@ export const DragDropEngine = {
             card.classList.remove('is-grid-resizing', 'is-freeform-resizing');
 
             if (!moved && tierResizeState && item) {
-                UI.revertTierResizePreview(card, item, tierResizeState);
+                DragDropEngine.revertTierResizePreview(card, item, tierResizeState);
                 if (snapEnabled) {
                     clearLayoutPreview(true);
                     UI.updateGridScrollPolicy(canvas, { forcing: false });
@@ -539,7 +540,7 @@ export const DragDropEngine = {
                         parseFloat(card.style.top) || 0
                     );
                     if (item && tierResizeState && UI.isSpatiallyCollapsed(card)) {
-                        const tileSize = UI.commitTierResize(card, item, tierResizeState);
+                        const tileSize = DragDropEngine.commitTierResize(card, item, tierResizeState);
                         const { w, h } = UI.readFreeformCardSize(card);
                         UI.saveFreeformSize(card.dataset.id, w, h, {
                             updateRemembered: !isCollapsedSpatialSize(w, h, tileSize)
@@ -582,7 +583,7 @@ export const DragDropEngine = {
                     const { w: startW, h: startH } = UI.readFreeformCardSize(card);
                     const itemMatch = currentItems.find((i) => i.id === card.dataset.id);
                     const tierResizeState = itemMatch && UI.isSpatiallyCollapsed(card)
-                        ? UI.createTierResizeSession(card, itemMatch)
+                        ? DragDropEngine.createTierResizeSession(card, itemMatch)
                         : null;
                     resizeActive = {
                         card,
@@ -628,5 +629,90 @@ export const DragDropEngine = {
         });
     },
 
+    createTierResizeSession(card, item) {
+        const rect = UI.readNoteRect(card);
+        const startTier = UI.getCardTileSize(card, item);
+        return {
+            startTier,
+            previewTier: startTier,
+            startRect: { x: rect.x, y: rect.y, w: rect.w, h: rect.h }
+        };
+    },
 
+    applyTierResizeBox(card, rect) {
+        card.style.left = `${rect.x}px`;
+        card.style.top = `${rect.y}px`;
+        UI.applyFreeformDimensions(card, rect.w, rect.h);
+    },
+
+    applyTierResizePreview(card, item, rect, tier, resizeState) {
+        if (!card || !item || !resizeState) return;
+        const normalized = normalizeTileSize(tier);
+        card.classList.add('is-tier-resizing');
+        card.dataset.tierResizePreview = '1';
+
+        if (resizeState.previewTier !== normalized) {
+            UI.applyCollapsedTileClasses(card, normalized);
+            resizeState.previewTier = normalized;
+            card.dataset.tierResizePreview = '1';
+            card.classList.add('is-tier-resizing');
+        }
+
+        this.applyTierResizeBox(card, rect);
+        UI.syncSpatialCollapseState(card, item, rect.w, rect.h);
+    },
+
+    revertTierResizePreview(card, item, resizeState) {
+        if (!card || !item || !resizeState) return;
+        delete card.dataset.tierResizePreview;
+        card.classList.remove('is-tier-resizing');
+
+        UI.applyCollapsedTileClasses(card, resizeState.startTier);
+        this.applyTierResizeBox(card, resizeState.startRect);
+        UI.finalizeDesktopCard(card);
+    },
+
+    commitTierResize(card, item, resizeState) {
+        if (!card || !item || !resizeState) return resizeState?.previewTier || resolveTileSize(item);
+        delete card.dataset.tierResizePreview;
+        card.classList.remove('is-tier-resizing');
+
+        const finalTier = normalizeTileSize(resizeState.previewTier);
+        if (finalTier !== resolveTileSize(item) && NoteSurface.canEditInline()) {
+            NoteSurface.mutateItem(item, (it) => {
+                it.tileSize = finalTier;
+            }, { preserveView: true, skipRerender: true });
+            item.tileSize = finalTier;
+            // boardItemsById is internal to UI, so we rely on UI to update it or use a shared store
+            UI.updateBoardItemsMap(item);
+        }
+        return finalTier;
+    },
+
+    processCollapsedTierResizeMove(card, item, resizeState, rect, { maxW = Infinity, axis = 'se' } = {}) {
+        const resolved = geoResolveCollapsedTierRect(rect.w, rect.h, resizeState.previewTier);
+        let finalW = resolved.w;
+        let finalH = resolved.h;
+        let finalX = rect.x;
+        let finalY = rect.y;
+
+        if (axis.includes('w') && rect.w !== finalW) {
+            finalX = rect.x + (rect.w - finalW);
+        }
+        if (axis.includes('n') && rect.h !== finalH) {
+            finalY = rect.y + (rect.h - finalH);
+        }
+
+        if (Number.isFinite(maxW) && finalX + finalW > maxW) {
+            if (rect.w > resolved.w) {
+                finalX = Math.max(0, maxW - finalW);
+            } else {
+                finalW = Math.max(getGridMetrics().cellW, maxW - finalX);
+            }
+        }
+
+        const finalRect = { x: finalX, y: finalY, w: finalW, h: finalH };
+        this.applyTierResizePreview(card, item, finalRect, resolved.tier, resizeState);
+        return { ...finalRect, tier: resolved.tier };
+    }
 };

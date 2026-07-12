@@ -10,6 +10,11 @@ import { isFileCabinetActive, getFileCabinetToggleLabels } from './fileCabinet.j
 import { LEGACY_TILE_SIZE } from './tileGeometry.js';
 import { bindChecklistInteractions, attachChecklistDrag, getChecklistCollapsedKeys, getChecklistDoneCollapsed, isChecklistDoneSectionCollapsed, toggleChecklistDoneSection, getChecklistCollapsibleKeys, checklistGroupsAnyExpanded, collapseAllChecklistGroups, expandAllChecklistGroups, toggleChecklistExpandCollapseAll, buildChecklistExpandCollapseAllHtml, buildChecklistRowHtml } from './noteSurfaceChecklist.js';
 import { focusInlineEdit, setCaretAtPlainOffset } from './noteSurfaceEditing.js';
+import { applyCardTheme } from './cardTheme.js';
+import { resolveNoteColor } from './colorPicker.js';
+import { NoteSurface } from './noteSurface.js';
+import { bindNoteQuickActions } from './noteQuickActions.js';
+import { getCardRenderContext } from './categories.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -739,6 +744,175 @@ export function refreshNoteBody(body, item, {
                 });
             }
         }
+    }
+}
+
+/**
+ * Applies card background/theme styling
+ * @param {HTMLElement} card - The card element
+ * @param {Object} item - The note item
+ */
+export function applyItemCardTheme(card, item) {
+    const color = resolveNoteColor(item.backgroundColor);
+    card.style.backgroundColor = color;
+    card.style.borderColor = 'rgba(255,255,255,0.15)';
+    applyCardTheme(card, color);
+}
+
+/**
+ * Creates a card DOM element for a note item
+ * @param {Object} uiInstance - The UI object with helper methods
+ * @param {Object} item - The note item
+ * @param {Array} activeCategories - Active categories array
+ * @returns {HTMLElement} The created card element
+ */
+export function createCardComponent(uiInstance, item, activeCategories) {
+    const card = document.createElement('div');
+    card.classList.add('mini-card');
+    card.dataset.id = item.id;
+    card.dataset.desktop = '1';
+
+    const { targetCatName, categoryColor } = getCardRenderContext(item, activeCategories);
+
+    applyItemCardTheme(card, item);
+    card.style.borderLeftColor = categoryColor;
+    renderBoardEditorCard(uiInstance, card, item, activeCategories, targetCatName, categoryColor);
+    card.addEventListener('mousedown', () => uiInstance.raiseDesktopCard(card), true);
+    uiInstance.syncBoardPinClass(card);
+    return card;
+}
+
+/**
+ * Renders the inner HTML of a board editor card
+ * @param {Object} uiInstance - The UI object with helper methods
+ * @param {HTMLElement} card - The card element
+ * @param {Object} item - The note item
+ * @param {Array} activeCategories - Active categories array
+ * @param {string} targetCatName - Target category name
+ * @param {string} categoryColor - Category color
+ */
+export function renderBoardEditorCard(uiInstance, card, item, activeCategories, targetCatName, categoryColor) {
+    const canEdit = NoteSurface.canEditInline();
+    const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
+    const dragZone = ' card-drag-zone';
+
+    card.innerHTML = NoteSurface.buildNoteEditorShell(item, {
+        canEdit,
+        richEdit: true,
+        toolbarHtml: uiInstance.buildCardActionsHtml(item, false, uiInstance.getCardActionsOptions(card)),
+        toplineDragZone: dragZone,
+        footerDragZone: dragZone,
+        targetCatName,
+        categoryColor: dotColor
+    });
+
+    bindNoteQuickActions(card, item, {
+        surface: 'board',
+        ui: uiInstance,
+        card,
+        ctx: {
+            activeCategories,
+            targetCatName,
+            categoryColor
+        }
+    });
+    NoteSurface.bindNoteEditorShell(card, item, {
+        richEdit: true,
+        refresh: () => {
+            const body = card.querySelector('.editor-note-body');
+            if (body?.querySelector('.expanded-checklist')) {
+                refreshBoardChecklistBody(uiInstance, card, item, activeCategories, targetCatName, categoryColor);
+                return;
+            }
+            refreshBoardEditorCard(uiInstance, card, item, activeCategories, targetCatName, categoryColor);
+        },
+        stopMousedownPropagation: true,
+        onRaiseCard: (c) => uiInstance.raiseDesktopCard(c)
+    });
+    uiInstance.bindBoardEditorFocusChrome(card);
+    uiInstance.finalizeDesktopCard(card);
+    uiInstance.syncBoardPinClass(card);
+    uiInstance.focusPendingBoardField(card);
+}
+
+/**
+ * Refreshes the checklist body of a board card
+ * @param {Object} uiInstance - The UI object with helper methods
+ * @param {HTMLElement} card - The card element
+ * @param {Object} item - The note item
+ * @param {Array} activeCategories - Active categories array
+ * @param {string} targetCatName - Target category name
+ * @param {string} categoryColor - Category color
+ */
+export function refreshBoardChecklistBody(uiInstance, card, item, activeCategories, targetCatName, categoryColor) {
+    const body = card.querySelector('.editor-note-body');
+    const shell = card.querySelector('.editor-note-shell');
+    if (!body || !item) return;
+    
+    // Capture canvas scroll position before any updates to prevent view jump
+    const canvas = document.getElementById('app-canvas');
+    const canvasScrollTop = canvas?.scrollTop ?? 0;
+    const canvasScrollLeft = canvas?.scrollLeft ?? 0;
+    
+    if (shell) NoteSurface.syncItemBodyFromDom(shell, item);
+    // Note: refreshNoteBody already handles re-binding interactions internally
+    // and we don't pass refresh callback to avoid double refresh
+    NoteSurface.refreshNoteBody(body, item, {
+        mountZone: card,
+        shell,
+        localOnly: true,
+        richEdit: true
+    });
+    
+    // Restore canvas scroll position immediately after update
+    if (canvas) {
+        canvas.scrollTop = canvasScrollTop;
+        canvas.scrollLeft = canvasScrollLeft;
+    }
+}
+
+/**
+ * Refreshes a board editor card (full re-render)
+ * @param {Object} uiInstance - The UI object with helper methods
+ * @param {HTMLElement} card - The card element
+ * @param {Object} item - The note item
+ * @param {Array} activeCategories - Active categories array
+ * @param {string} targetCatName - Target category name
+ * @param {string} categoryColor - Category color
+ */
+export function refreshBoardEditorCard(uiInstance, card, item, activeCategories, targetCatName, categoryColor) {
+    const body = card.querySelector('.editor-note-body');
+    const focusState = body ? NoteSurface.captureNoteBodyFocusState(body) : null;
+    const shell = card.querySelector('.editor-note-shell');
+    
+    // Capture canvas scroll position before full re-render to prevent view jump
+    const canvas = document.getElementById('app-canvas');
+    const canvasScrollTop = canvas?.scrollTop ?? 0;
+    const canvasScrollLeft = canvas?.scrollLeft ?? 0;
+    
+    if (shell && !card.dataset.pendingFocusStepId) {
+        NoteSurface.syncItemBodyFromDom(shell, item);
+    }
+    const pendingFocusStepId = card.dataset.pendingFocusStepId;
+    const pendingFocusEdge = card.dataset.pendingFocusEdge;
+    const pendingFocusPlainOffset = card.dataset.pendingFocusPlainOffset;
+    renderBoardEditorCard(uiInstance, card, item, activeCategories, targetCatName, categoryColor);
+    const newBody = card.querySelector('.editor-note-body');
+    if (newBody && focusState) {
+        NoteSurface.restoreNoteBodyFocusState(newBody, card, focusState);
+    }
+    if (pendingFocusStepId) {
+        card.dataset.pendingFocusStepId = pendingFocusStepId;
+        if (pendingFocusEdge) card.dataset.pendingFocusEdge = pendingFocusEdge;
+        if (pendingFocusPlainOffset != null) {
+            card.dataset.pendingFocusPlainOffset = pendingFocusPlainOffset;
+        }
+        NoteSurface.focusPendingChecklistStep(card);
+    }
+    // Restore canvas scroll position after full re-render
+    if (canvas) {
+        canvas.scrollTop = canvasScrollTop;
+        canvas.scrollLeft = canvasScrollLeft;
     }
 }
 

@@ -35,7 +35,8 @@ import {
     applyFileCabinetZoneToggle,
     saveFiledCabinetLayout,
     sortFileCabinetItems,
-    resetFileCabinetLayout
+    resetFileCabinetLayout,
+    prepareBoardItems
 } from './fileCabinet.js';
 import { sortBoardItems } from './boardSort.js';
 import {
@@ -101,7 +102,15 @@ import {
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 
 import { NoteSurface } from './noteSurface.js';
+import { BoardOperations } from './boardOperations.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
+import {
+    applyItemCardTheme,
+    createCardComponent,
+    renderBoardEditorCard,
+    refreshBoardChecklistBody,
+    refreshBoardEditorCard
+} from './noteSurfaceHtml.js';
 
 export { CARD_ICONS, FORMAT_ICONS, ACTION_ICONS, DRAWING_ICONS } from './icons.js';
 export {
@@ -158,6 +167,12 @@ function ensureSmallTile(item) {
 let boardItemsById = new Map();
 let activeBoardViewMode = 'grid';
 
+function updateBoardItemsMap(item) {
+    if (item?.id) {
+        boardItemsById.set(item.id, item);
+    }
+}
+
 function createGridDeps(ui) {
     return {
         getGridBoardBounds,
@@ -199,87 +214,39 @@ export function isDesktopCard(card) {
 
 export const UI = {
     getLocalHiddenIds() {
-        try {
-            return JSON.parse(localStorage.getItem('matrix_hidden_board_ids') || '[]');
-        } catch {
-            return [];
-        }
+        return BoardOperations.getLocalHiddenIds();
     },
 
     isHiddenFromBoard(item) {
-        if (item.hiddenFromBoard) return true;
-        return this.getLocalHiddenIds().includes(item.id);
+        return BoardOperations.isHiddenFromBoard(item);
     },
 
     isArchived(item) {
-        return item?.status === 'archived';
+        return BoardOperations.isArchived(item);
     },
 
     hideFromBoard(item) {
-        if (localStorage.getItem('admin_token')) {
-            NoteSurface.emitItemMutation(
-                { ...item, hiddenFromBoard: true },
-                { beforeItem: NoteSurface.snapshotItem(item) }
-            );
-            return;
-        }
-        const ids = this.getLocalHiddenIds();
-        if (!ids.includes(item.id)) ids.push(item.id);
-        localStorage.setItem('matrix_hidden_board_ids', JSON.stringify(ids));
-        window.dispatchEvent(new CustomEvent('board:visibility_changed'));
+        BoardOperations.hideFromBoard(item);
     },
 
     unhideFromBoard(item) {
-        const ids = this.getLocalHiddenIds().filter(id => id !== item.id);
-        localStorage.setItem('matrix_hidden_board_ids', JSON.stringify(ids));
-        if (localStorage.getItem('admin_token')) {
-            NoteSurface.emitItemMutation(
-                { ...item, hiddenFromBoard: false },
-                { beforeItem: NoteSurface.snapshotItem(item) }
-            );
-            return;
-        }
-        window.dispatchEvent(new CustomEvent('board:visibility_changed'));
+        BoardOperations.unhideFromBoard(item);
     },
 
     getLocalCalendarHiddenIds() {
-        try {
-            return JSON.parse(localStorage.getItem('matrix_calendar_hidden_ids') || '[]');
-        } catch {
-            return [];
-        }
+        return BoardOperations.getLocalCalendarHiddenIds();
     },
 
     isHiddenFromCalendar(item) {
-        if (item.hideFromCalendar) return true;
-        return this.getLocalCalendarHiddenIds().includes(item.id);
+        return BoardOperations.isHiddenFromCalendar(item);
     },
 
     toggleCardCalendar(item, btn) {
-        const beforeItem = NoteSurface.snapshotItem(item);
-        const willHide = !this.isHiddenFromCalendar(item);
-        const updated = { ...item, hideFromCalendar: willHide };
-        item.hideFromCalendar = willHide;
-
-        const ids = this.getLocalCalendarHiddenIds().filter(id => id !== item.id);
-        if (willHide && !localStorage.getItem('admin_token')) ids.push(item.id);
-        localStorage.setItem('matrix_calendar_hidden_ids', JSON.stringify(ids));
-
-        if (localStorage.getItem('admin_token')) {
-            NoteSurface.emitItemMutation(updated, { beforeItem });
-        }
-
-        window.dispatchEvent(new CustomEvent('calendar:items_changed', { detail: updated }));
-
-        if (btn) {
-            btn.title = willHide ? 'Hidden from calendar — click to show' : 'Shown on calendar — click to hide';
-            btn.classList.toggle('is-off', willHide);
-            btn.classList.toggle('is-on', !willHide);
-        }
+        BoardOperations.toggleCardCalendar(item, btn);
     },
 
     getVisibleItems(items) {
-        return items.filter((item) => !this.isHiddenFromBoard(item) && !this.isArchived(item));
+        return BoardOperations.getVisibleItems(items);
     },
 
     flushAllInlineEditsFromCanvas(canvas, items) {
@@ -508,96 +475,6 @@ export const UI = {
         });
     },
 
-    createTierResizeSession(card, item) {
-        const rect = this.readNoteRect(card);
-        const startTier = this.getCardTileSize(card, item);
-        return {
-            startTier,
-            previewTier: startTier,
-            startRect: { x: rect.x, y: rect.y, w: rect.w, h: rect.h }
-        };
-    },
-
-    applyTierResizeBox(card, rect) {
-        card.style.left = `${rect.x}px`;
-        card.style.top = `${rect.y}px`;
-        this.applyFreeformDimensions(card, rect.w, rect.h);
-    },
-
-    applyTierResizePreview(card, item, rect, tier, resizeState) {
-        if (!card || !item || !resizeState) return;
-        const normalized = normalizeTileSize(tier);
-        card.classList.add('is-tier-resizing');
-        card.dataset.tierResizePreview = '1';
-
-        if (resizeState.previewTier !== normalized) {
-            this.applyCollapsedTileClasses(card, normalized);
-            resizeState.previewTier = normalized;
-            card.dataset.tierResizePreview = '1';
-            card.classList.add('is-tier-resizing');
-        }
-
-        this.applyTierResizeBox(card, rect);
-        this.syncSpatialCollapseState(card, item, rect.w, rect.h);
-    },
-
-    revertTierResizePreview(card, item, resizeState) {
-        if (!card || !item || !resizeState) return;
-        delete card.dataset.tierResizePreview;
-        card.classList.remove('is-tier-resizing');
-
-        this.applyCollapsedTileClasses(card, resizeState.startTier);
-        this.applyTierResizeBox(card, resizeState.startRect);
-        this.finalizeDesktopCard(card);
-    },
-
-    commitTierResize(card, item, resizeState) {
-        if (!card || !item || !resizeState) return resizeState?.previewTier || resolveTileSize(item);
-        delete card.dataset.tierResizePreview;
-        card.classList.remove('is-tier-resizing');
-
-        const finalTier = normalizeTileSize(resizeState.previewTier);
-        if (finalTier !== resolveTileSize(item) && NoteSurface.canEditInline()) {
-            NoteSurface.mutateItem(item, (it) => {
-                it.tileSize = finalTier;
-            }, { preserveView: true, skipRerender: true });
-            item.tileSize = finalTier;
-            boardItemsById.set(item.id, item);
-        }
-        return finalTier;
-    },
-
-    processCollapsedTierResizeMove(card, item, resizeState, rect, { maxW = Infinity, axis = 'se' } = {}) {
-        const resolved = geoResolveCollapsedTierRect(rect.w, rect.h, resizeState.previewTier);
-        let finalW = resolved.w;
-        let finalH = resolved.h;
-        let finalX = rect.x;
-        let finalY = rect.y;
-
-        if (axis.includes('w') && rect.w !== finalW) {
-            finalX = rect.x + (rect.w - finalW);
-        }
-        if (axis.includes('n') && rect.h !== finalH) {
-            finalY = rect.y + (rect.h - finalH);
-        }
-
-        if (Number.isFinite(maxW) && finalX + finalW > maxW) {
-            if (rect.w > resolved.w) {
-                finalX = Math.max(0, maxW - finalW);
-            } else {
-                finalW = Math.max(getGridMetrics().cellW, maxW - finalX);
-            }
-        }
-
-        const finalRect = { x: finalX, y: finalY, w: finalW, h: finalH };
-        this.applyTierResizePreview(card, item, finalRect, resolved.tier, resizeState);
-        return { ...finalRect, tier: resolved.tier };
-    },
-
-    collapseSnapPanelCard(card, item) {
-        this.finalizeDesktopCard(card);
-    },
-
     saveTileLayoutFromCard(card, item, rect, tileSize) {
         const id = item?.id || card.dataset.id;
         if (!id || !isDesktopCard(card)) return;
@@ -609,6 +486,10 @@ export const UI = {
         if (!card || !item) return;
         const rect = this.readNoteRect(card);
         this.saveTileLayoutFromCard(card, item, rect, tileSize || resolveTileSize(item));
+    },
+
+    collapseSnapPanelCard(card, item) {
+        this.finalizeDesktopCard(card);
     },
 
     commitSpatialRect(card, item, rect, ctx = {}) {
@@ -1031,10 +912,7 @@ export const UI = {
     },
 
     applyItemCardTheme(card, item) {
-        const color = resolveNoteColor(item.backgroundColor);
-        card.style.backgroundColor = color;
-        card.style.borderColor = 'rgba(255,255,255,0.15)';
-        applyCardTheme(card, color);
+        applyItemCardTheme(card, item);
     },
 
     setupFreeformChrome(card) {
@@ -1130,126 +1008,19 @@ export const UI = {
     },
 
     createCardComponent(item, activeCategories) {
-        const card = document.createElement('div');
-        card.classList.add('mini-card');
-        card.dataset.id = item.id;
-        card.dataset.desktop = '1';
-
-        const { targetCatName, categoryColor } = getCardRenderContext(item, activeCategories);
-
-        this.applyItemCardTheme(card, item);
-        card.style.borderLeftColor = categoryColor;
-        this.renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
-        card.addEventListener('mousedown', () => this.raiseDesktopCard(card), true);
-        this.syncBoardPinClass(card);
-        return card;
+        return createCardComponent(this, item, activeCategories);
     },
 
     renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor) {
-        const canEdit = NoteSurface.canEditInline();
-        const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
-        const dragZone = ' card-drag-zone';
-
-        card.innerHTML = NoteSurface.buildNoteEditorShell(item, {
-            canEdit,
-            richEdit: true,
-            toolbarHtml: this.buildCardActionsHtml(item, false, this.getCardActionsOptions(card)),
-            toplineDragZone: dragZone,
-            footerDragZone: dragZone,
-            targetCatName,
-            categoryColor: dotColor
-        });
-
-        bindNoteQuickActions(card, item, {
-            surface: 'board',
-            ui: this,
-            card,
-            ctx: {
-                activeCategories,
-                targetCatName,
-                categoryColor
-            }
-        });
-        NoteSurface.bindNoteEditorShell(card, item, {
-            richEdit: true,
-            refresh: () => {
-                const body = card.querySelector('.editor-note-body');
-                if (body?.querySelector('.expanded-checklist')) {
-                    this.refreshBoardChecklistBody(card, item, activeCategories, targetCatName, categoryColor);
-                    return;
-                }
-                this.refreshBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
-            },
-            stopMousedownPropagation: true,
-            onRaiseCard: (c) => this.raiseDesktopCard(c)
-        });
-        this.bindBoardEditorFocusChrome(card);
-        this.finalizeDesktopCard(card);
-        this.syncBoardPinClass(card);
-        this.focusPendingBoardField(card);
+        renderBoardEditorCard(this, card, item, activeCategories, targetCatName, categoryColor);
     },
 
     refreshBoardChecklistBody(card, item, activeCategories, targetCatName, categoryColor) {
-        const body = card.querySelector('.editor-note-body');
-        const shell = card.querySelector('.editor-note-shell');
-        if (!body || !item) return;
-        
-        // Capture canvas scroll position before any updates to prevent view jump
-        const canvas = document.getElementById('app-canvas');
-        const canvasScrollTop = canvas?.scrollTop ?? 0;
-        const canvasScrollLeft = canvas?.scrollLeft ?? 0;
-        
-        if (shell) NoteSurface.syncItemBodyFromDom(shell, item);
-        // Note: refreshNoteBody already handles re-binding interactions internally
-        // and we don't pass refresh callback to avoid double refresh
-        NoteSurface.refreshNoteBody(body, item, {
-            mountZone: card,
-            shell,
-            localOnly: true,
-            richEdit: true
-        });
-        
-        // Restore canvas scroll position immediately after update
-        if (canvas) {
-            canvas.scrollTop = canvasScrollTop;
-            canvas.scrollLeft = canvasScrollLeft;
-        }
+        refreshBoardChecklistBody(this, card, item, activeCategories, targetCatName, categoryColor);
     },
 
     refreshBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor) {
-        const body = card.querySelector('.editor-note-body');
-        const focusState = body ? NoteSurface.captureNoteBodyFocusState(body) : null;
-        const shell = card.querySelector('.editor-note-shell');
-        
-        // Capture canvas scroll position before full re-render to prevent view jump
-        const canvas = document.getElementById('app-canvas');
-        const canvasScrollTop = canvas?.scrollTop ?? 0;
-        const canvasScrollLeft = canvas?.scrollLeft ?? 0;
-        
-        if (shell && !card.dataset.pendingFocusStepId) {
-            NoteSurface.syncItemBodyFromDom(shell, item);
-        }
-        const pendingFocusStepId = card.dataset.pendingFocusStepId;
-        const pendingFocusEdge = card.dataset.pendingFocusEdge;
-        const pendingFocusPlainOffset = card.dataset.pendingFocusPlainOffset;
-        this.renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
-        const newBody = card.querySelector('.editor-note-body');
-        if (newBody && focusState) {
-            NoteSurface.restoreNoteBodyFocusState(newBody, card, focusState);
-        }
-        if (pendingFocusStepId) {
-            card.dataset.pendingFocusStepId = pendingFocusStepId;
-            if (pendingFocusEdge) card.dataset.pendingFocusEdge = pendingFocusEdge;
-            if (pendingFocusPlainOffset != null) {
-                card.dataset.pendingFocusPlainOffset = pendingFocusPlainOffset;
-            }
-            NoteSurface.focusPendingChecklistStep(card);
-        }
-        // Restore canvas scroll position after full re-render
-        if (canvas) {
-            canvas.scrollTop = canvasScrollTop;
-            canvas.scrollLeft = canvasScrollLeft;
-        }
+        refreshBoardEditorCard(this, card, item, activeCategories, targetCatName, categoryColor);
     },
 
     focusPendingBoardField(card) {

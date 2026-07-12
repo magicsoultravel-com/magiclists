@@ -14,6 +14,8 @@ import {
 import { getSmallRect } from './tileGeometry.js';
 import { readTileSmallFootprint } from './tileFootprint.js';
 import { normalizeViewMode } from './viewSession.js';
+import { syncCabinetSplitter } from './shellResize.js';
+
 
 export const FILE_CABINET_KEY = 'matrix_file_cabinet';
 export const FILE_CABINET_ORDER_KEY = 'matrix_file_cabinet_order';
@@ -1317,4 +1319,31 @@ export function resetFileCabinetLayout(sortBy, items, UI) {
         });
     });
     window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
+}
+/**
+ * Prepares board items for rendering, handling file cabinet partitioning
+ * @param {Array} visibleItems - Items to prepare
+ * @param {boolean} fileCabinetActive - Whether file cabinet is active
+ * @param {string} resolvedMode - The current view mode
+ * @param {Array} activeCategories - Active categories
+ * @param {Object} UI - The UI object (for passing to partitionItemsForFileCabinet)
+ * @returns {Object} Object with boardItems and fileCabinetMount
+ */
+export function prepareBoardItems(visibleItems, fileCabinetActive, resolvedMode, activeCategories, UI) {
+    let boardItems = visibleItems;
+    let fileCabinetMount = null;
+    
+    if (fileCabinetActive) {
+        const { filed, expanded } = partitionItemsForFileCabinet(visibleItems, resolvedMode, UI);
+        seedFileCabinetOrderFromItems(filed);
+        fileCabinetMount = ensureFileCabinetMount(true);
+        renderFileCabinet(fileCabinetMount, filed, activeCategories, UI);
+        syncCabinetSplitter();
+        boardItems = expanded;
+    } else {
+        ensureFileCabinetMount(false);
+        syncCabinetSplitter();
+    }
+    
+    return { boardItems, fileCabinetMount };
 }

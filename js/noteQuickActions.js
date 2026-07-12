@@ -2,9 +2,15 @@
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor, THEME_DEFAULT_COLOR } from './colorPicker.js';
 import { copyPlainTextToClipboard } from './clipboard.js';
 import { itemToPlainCopyText } from './noteBodyConversion.js';
-import { CARD_ICONS } from './icons.js';
+import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { NoteSurface } from './noteSurface.js';
 import { isDesktopCard } from './ui.js';
+import { DisplayOptions } from './displayOptions.js';
+import { ClockStyle } from './clockStyle.js';
+import { BoardSort } from './boardSort.js';
+import { Fullscreen } from './fullscreen.js';
+import { UndoManager } from './undo.js';
+import { BoardOverlay } from './boardOverlay.js';
 
 function attachCardActionButton(btn, handler) {
     if (!btn) return;
@@ -225,4 +231,134 @@ function bindModalQuickActions(toolbarMount, item, ui, editor) {
         const titleEl = editor.mountZone?.querySelector('[data-field="title"]');
         if (titleEl) NoteSurface.focusInlineEdit(titleEl, 'end');
     });
+}
+
+/**
+ * Renders the quick actions zone HTML.
+ * @param {object} config - Configuration object
+ * @param {string} config.sortBy - Current sort mode ('grid' or 'freeform')
+ * @param {string} config.workspaceMode - Current workspace mode ('notes' or 'drawing')
+ * @param {boolean} config.fileCabinet - Whether file cabinet is active
+ * @param {boolean} config.isLoggedIn - Whether user is logged in
+ * @param {object} handlers - Event handlers object
+ * @param {function} handlers.onToggleOverlay - Toggle overlay click handler
+ * @param {function} handlers.onToggleFileCabinet - Toggle file cabinet click handler
+ * @param {function} handlers.onToggleDrawing - Toggle drawing mode click handler
+ * @param {function} handlers.onAddCategory - Add category click handler
+ * @param {function} handlers.onCloudClick - Cloud button click handler
+ * @param {function} handlers.onCloudExport - Cloud export click handler
+ * @param {function} handlers.onCloudImport - Cloud import click handler
+ * @param {function} handlers.onExportDb - Export DB click handler
+ * @param {function} handlers.onImportDb - Import DB click handler
+ * @param {function} handlers.onLogout - Logout click handler
+ * @param {function} handlers.onLogin - Login click handler
+ */
+export function renderQuickActions({
+    sortBy,
+    workspaceMode,
+    fileCabinet,
+    isLoggedIn,
+    handlers = {}
+} = {}) {
+    const zone = document.getElementById('quick-actions-zone');
+    if (!zone) return;
+
+    const drawingActive = workspaceMode === 'drawing';
+    const fileCabinetActive = !drawingActive && fileCabinet;
+    const overlayActive = !drawingActive && BoardOverlay.isEnabled();
+    const fileCabinetTitle = fileCabinetActive ? 'Hide File Cabinet' : 'File Cabinet';
+    const viewTitle = fileCabinetActive
+        ? (overlayActive ? 'Snap bottom to bento' : 'Allow overlap on bottom')
+        : (overlayActive ? 'Snap to bento grid' : 'Allow overlap');
+    const viewIcon = overlayActive ? ACTION_ICONS.viewGrid : ACTION_ICONS.viewFree;
+
+    const workspaceGroup = `
+        <button class="btn btn--compact btn--icon ${overlayActive ? 'active' : ''}" id="btn-freeform-toggle" title="${viewTitle}" aria-label="${viewTitle}" aria-pressed="${overlayActive ? 'true' : 'false'}">${viewIcon}</button>
+        <button class="btn btn--compact btn--icon ${fileCabinetActive ? 'active' : ''}" id="btn-file-cabinet-toggle" title="${fileCabinetTitle}" aria-label="${fileCabinetTitle}" aria-pressed="${fileCabinetActive ? 'true' : 'false'}">${ACTION_ICONS.viewFileCabinet}</button>
+        <button class="btn btn--compact btn--icon ${drawingActive ? 'active' : ''}" id="btn-drawing-mode" title="magicCanvas" aria-label="magicCanvas">${ACTION_ICONS.drawingPencil}</button>
+    `;
+
+    const historyGroup = `
+        <button type="button" id="btn-undo" class="btn btn--compact btn--icon is-hidden" disabled title="Undo (Ctrl+Z)" aria-label="Undo"></button>
+        <button type="button" id="btn-redo" class="btn btn--compact btn--icon is-hidden" disabled title="Redo (Ctrl+Y)" aria-label="Redo"></button>
+    `;
+
+    const displayGroup = `
+        <button type="button" id="btn-display-options" class="btn btn--compact btn--icon" title="Display options" aria-label="Display options" aria-expanded="false" aria-haspopup="menu"></button>
+    `;
+
+    const layoutGroup = `
+        <button type="button" id="btn-board-sort" class="btn btn--compact btn--icon is-hidden" title="Sort board" aria-label="Sort board" aria-expanded="false" aria-haspopup="menu"></button>
+        <button type="button" id="btn-layout-reset" class="btn btn--compact btn--icon is-hidden" title="Reset" aria-label="Reset"></button>
+    `;
+
+    const shellGroup = `
+        <button type="button" id="btn-fullscreen" class="btn btn--compact btn--icon" title="Full screen" aria-label="Full screen" aria-pressed="false"></button>
+        <button type="button" id="btn-show-clock" class="btn btn--compact btn--icon is-hidden" title="Show clock" aria-label="Show clock"></button>
+    `;
+
+    if (!isLoggedIn) {
+        zone.innerHTML = `${workspaceGroup}${historyGroup}${displayGroup}${layoutGroup}${shellGroup}
+            <button type="button" class="btn btn--compact btn--block" id="btn-auth-login">Login</button>`;
+    } else {
+        const accountGroup = `
+            <button type="button" class="btn btn--compact btn--icon" id="btn-add-category" title="Add category" aria-label="Add category">${ACTION_ICONS.category}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="btn-cloud" title="Cloud backup" aria-label="Cloud backup">${ACTION_ICONS.cloud}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="btn-cloud-export" data-enabled-title="Export to cloud" title="Connect cloud first (Cloud icon)" aria-label="Export to cloud" disabled>${ACTION_ICONS.cloudExport}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="btn-cloud-import" data-enabled-title="Import from cloud" title="Connect cloud first (Cloud icon)" aria-label="Import from cloud" disabled>${ACTION_ICONS.cloudImport}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="btn-export-db" title="Export backup" aria-label="Export backup">${ACTION_ICONS.export}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="btn-import-db" title="Import backup" aria-label="Import backup">${ACTION_ICONS.import}</button>
+            <button type="button" class="btn btn--compact btn--icon btn--icon-danger" id="btn-auth-logout" title="Logout" aria-label="Logout">${ACTION_ICONS.logout}</button>
+        `;
+        zone.innerHTML = `${workspaceGroup}${historyGroup}${displayGroup}${layoutGroup}${shellGroup}${accountGroup}`;
+    }
+
+    bindQuickActionHandlers(handlers);
+}
+
+function bindQuickActionHandlers(handlers = {}) {
+    const {
+        onToggleOverlay,
+        onToggleFileCabinet,
+        onToggleDrawing,
+        onAddCategory,
+        onCloudClick,
+        onCloudExport,
+        onCloudImport,
+        onExportDb,
+        onImportDb,
+        onLogout,
+        onLogin,
+        onLayoutReset
+    } = handlers;
+
+    const undoBtn = document.getElementById('btn-undo');
+    const redoBtn = document.getElementById('btn-redo');
+    if (undoBtn) undoBtn.innerHTML = ACTION_ICONS.undo;
+    if (redoBtn) redoBtn.innerHTML = ACTION_ICONS.redo;
+
+    UndoManager.rebindToolbar();
+
+    const displayBtn = document.getElementById('btn-display-options');
+    if (displayBtn) displayBtn.innerHTML = ACTION_ICONS.displayOptions;
+    DisplayOptions.rebindTrigger();
+    ClockStyle.rebindTrigger();
+
+    const sortBtn = document.getElementById('btn-board-sort');
+    if (sortBtn) sortBtn.innerHTML = ACTION_ICONS.sortAlpha;
+    BoardSort.rebindTrigger();
+    Fullscreen.rebindMainButton();
+
+    document.getElementById('btn-freeform-toggle')?.addEventListener('click', onToggleOverlay);
+    document.getElementById('btn-file-cabinet-toggle')?.addEventListener('click', onToggleFileCabinet);
+    document.getElementById('btn-drawing-mode')?.addEventListener('click', onToggleDrawing);
+    document.getElementById('btn-add-category')?.addEventListener('click', onAddCategory);
+    document.getElementById('btn-cloud')?.addEventListener('click', onCloudClick);
+    document.getElementById('btn-cloud-export')?.addEventListener('click', onCloudExport);
+    document.getElementById('btn-cloud-import')?.addEventListener('click', onCloudImport);
+    document.getElementById('btn-export-db')?.addEventListener('click', onExportDb);
+    document.getElementById('btn-import-db')?.addEventListener('click', onImportDb);
+    document.getElementById('btn-auth-logout')?.addEventListener('click', onLogout);
+    document.getElementById('btn-auth-login')?.addEventListener('click', onLogin);
+    document.getElementById('btn-layout-reset')?.addEventListener('click', onLayoutReset);
 }

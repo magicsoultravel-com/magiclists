@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-12T19:35:49.959Z
+> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-12T23:43:49.681Z
 
 ## CSS load order
 
@@ -38,8 +38,6 @@ alwaysApply: true
 | --- | --- | --- | --- | --- |
 | js/api.js | item CRUD and matrix_database localStorage persistence | noteModel.js, layoutStorage.js | - | - |
 | js/app.js | application orchestration, event bus listeners, workspace init | api.js, ui.js, layoutStorage.js | item:mutation_requested, item:selected_for_edit, board:visibility_changed, calendar:add_note | - |
-| js/backup.js | local backup export/import, encrypted packages | cloudBackup.js, api.js | - | - |
-| js/board/gridEngine.js | grid board layout engine, push resolution | board/noteGeometry.js, layoutStorage.js, gridDensity.js | - | - |
 | js/board/noteGeometry.js | grid note geometry, push layout, tile bounds | board/gridEngine.js, tileGeometry.js | - | - |
 | js/boardOperations.js | item visibility, archiving, calendar integration, card actions | noteSurface.js, noteQuickActions.js | - | - |
 | js/checklistSteps.js | checklist tree logic, step reorder, indent/outdent | noteSurface.js, noteBodyConversion.js | - | - |
