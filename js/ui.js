@@ -798,6 +798,10 @@ export const UI = {
         const card = canvas.querySelector(`.mini-card[data-id="${item.id}"]`);
         if (!card) return false;
 
+        // Capture canvas scroll position before full re-render to prevent view jump
+        const canvasScrollTop = canvas.scrollTop || 0;
+        const canvasScrollLeft = canvas.scrollLeft || 0;
+
         let activeCategories = readStoredCategories()
             .filter((cat) => !hiddenCategories.includes(cat.name));
         const { targetCatName, categoryColor } = getCardRenderContext(item, activeCategories);
@@ -806,6 +810,10 @@ export const UI = {
         this.applyItemCardTheme(card, item);
         card.style.borderLeftColor = categoryColor;
         this.finalizeDesktopCard(card);
+
+        // Restore canvas scroll position after full re-render
+        canvas.scrollTop = canvasScrollTop;
+        canvas.scrollLeft = canvasScrollLeft;
 
         return true;
     },
@@ -1185,6 +1193,12 @@ export const UI = {
         const body = card.querySelector('.editor-note-body');
         const shell = card.querySelector('.editor-note-shell');
         if (!body || !item) return;
+        
+        // Capture canvas scroll position before any updates to prevent view jump
+        const canvas = document.getElementById('app-canvas');
+        const canvasScrollTop = canvas?.scrollTop ?? 0;
+        const canvasScrollLeft = canvas?.scrollLeft ?? 0;
+        
         if (shell) NoteSurface.syncItemBodyFromDom(shell, item);
         NoteSurface.refreshNoteBody(body, item, {
             mountZone: card,
@@ -1193,13 +1207,24 @@ export const UI = {
             richEdit: true,
             refresh: () => this.refreshBoardChecklistBody(card, item, activeCategories, targetCatName, categoryColor)
         });
+        
+        // Restore canvas scroll position immediately after update
+        if (canvas) {
+            canvas.scrollTop = canvasScrollTop;
+            canvas.scrollLeft = canvasScrollLeft;
+        }
     },
 
     refreshBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor) {
         const body = card.querySelector('.editor-note-body');
-        const scrollTop = body?.scrollTop ?? 0;
         const focusState = body ? NoteSurface.captureNoteBodyFocusState(body) : null;
         const shell = card.querySelector('.editor-note-shell');
+        
+        // Capture canvas scroll position before full re-render to prevent view jump
+        const canvas = document.getElementById('app-canvas');
+        const canvasScrollTop = canvas?.scrollTop ?? 0;
+        const canvasScrollLeft = canvas?.scrollLeft ?? 0;
+        
         if (shell && !card.dataset.pendingFocusStepId) {
             NoteSurface.syncItemBodyFromDom(shell, item);
         }
@@ -1208,7 +1233,6 @@ export const UI = {
         const pendingFocusPlainOffset = card.dataset.pendingFocusPlainOffset;
         this.renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
         const newBody = card.querySelector('.editor-note-body');
-        if (newBody) newBody.scrollTop = scrollTop;
         if (newBody && focusState) {
             NoteSurface.restoreNoteBodyFocusState(newBody, card, focusState);
         }
@@ -1219,6 +1243,11 @@ export const UI = {
                 card.dataset.pendingFocusPlainOffset = pendingFocusPlainOffset;
             }
             NoteSurface.focusPendingChecklistStep(card);
+        }
+        // Restore canvas scroll position after full re-render
+        if (canvas) {
+            canvas.scrollTop = canvasScrollTop;
+            canvas.scrollLeft = canvasScrollLeft;
         }
     },
 

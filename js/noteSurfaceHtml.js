@@ -613,8 +613,14 @@ export function buildExpandedChecklistHtml(item, canEdit, { richEdit = false } =
 
 function findChecklistScrollContainer(body) {
     if (!body) return null;
-    // For desktop cards, .editor-note-body is the scroll container
-    // Check CSS overflow-y property to identify the correct scroll container
+    // For desktop cards on the board canvas, return the canvas itself as scroll container
+    // since cards have overflow: hidden and the canvas is what scrolls
+    const card = body.closest('.mini-card[data-desktop="1"]');
+    if (card) {
+        const canvas = document.getElementById('app-canvas');
+        if (canvas) return canvas;
+    }
+    // For modal editor, check CSS overflow-y property to identify the correct scroll container
     const computedStyle = window.getComputedStyle(body);
     if (computedStyle.overflowY === 'auto' || computedStyle.overflowY === 'scroll') return body;
     if (body.scrollHeight > body.clientHeight) return body;
@@ -680,14 +686,39 @@ export function refreshNoteBody(body, item, {
     tempDiv.innerHTML = newHtml;
     const newWrapper = tempDiv.firstChild;
     
-    // Clear and repopulate the existing wrapper to preserve element instance
+    // Set minHeight constraint before clearing to prevent scroll jump
+    // This preserves the element's height during the DOM update
+    const currentHeight = expandedChecklist.offsetHeight;
+    if (currentHeight > 0) {
+        expandedChecklist.style.minHeight = `${currentHeight}px`;
+    }
+    
+    // Use DocumentFragment for efficient node appending
+    // This prevents multiple reflows during the update
+    const fragment = document.createDocumentFragment();
+    
+    // Clear the existing content
     while (expandedChecklist.firstChild) {
         expandedChecklist.removeChild(expandedChecklist.firstChild);
     }
+    
+    // Append all new content to the fragment first
     if (newWrapper) {
         while (newWrapper.firstChild) {
-            expandedChecklist.appendChild(newWrapper.firstChild);
+            fragment.appendChild(newWrapper.firstChild);
         }
+    }
+    
+    // Append the fragment to the checklist in a single operation
+    expandedChecklist.appendChild(fragment);
+    
+    // Remove the minHeight constraint after content is appended
+    // to allow natural height adjustment
+    if (currentHeight > 0) {
+        // Use a microtask to remove minHeight after layout is stable
+        queueMicrotask(() => {
+            expandedChecklist.style.minHeight = '';
+        });
     }
 
     // Restore scroll position synchronously to prevent scroll jump
