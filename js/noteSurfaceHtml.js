@@ -729,30 +729,6 @@ export function refreshNoteBody(body, item, {
         restoreView();
     });
 
-<<<<<<< HEAD
-    // Re-bind interactions - context-agnostic resolution
-    const activeShell = shell || mountZone?.querySelector('.editor-note-shell') || body.closest('.editor-note-shell');
-    const targetBody = activeShell ? activeShell.querySelector('.editor-note-body') : body;
-    
-    // Strip interaction markers from the target body
-    if (targetBody) {
-        delete targetBody.dataset.checklistInteractionsBound;
-        delete targetBody.dataset.checklistDragBound;
-    }
-    
-    // Bind interactions on the target body
-    if (targetBody) {
-        bindChecklistInteractions(targetBody, item, {
-            localOnly,
-            onChange,
-            refresh: () => refresh()
-        });
-        attachChecklistDrag(targetBody, item, {
-            localOnly,
-            onChange,
-            refresh
-        });
-=======
     // Re-bind interactions
     if (mountZone) {
         const newShell = mountZone.querySelector('.editor-note-shell');
@@ -771,7 +747,6 @@ export function refreshNoteBody(body, item, {
                 });
             }
         }
->>>>>>> parent of 3ae25c9 (Preserve caret and scroll when refreshing note body)
     }
 }
 
