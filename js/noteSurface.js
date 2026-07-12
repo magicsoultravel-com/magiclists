@@ -293,27 +293,8 @@ function captureNoteBodyFocusState(body) {
         };
     }
     
-    // For title and content fields - also capture caret position
-    const sel = window.getSelection();
-    const range = sel?.rangeCount > 0 ? sel.getRangeAt(0) : null;
-    
-    let edge = 'end';
-    let plainOffset = 0;
-    
-    if (range && active.contains(range.startContainer)) {
-        const probe = range.cloneRange();
-        probe.selectNodeContents(active);
-        probe.setEnd(range.startContainer, range.startOffset);
-        const plainText = stripRichText(active.textContent || '');
-        plainOffset = probe.toString().length;
-        edge = plainOffset <= 0 ? 'start' : 'end';
-    }
-    
-    return {
-        field,
-        edge,
-        plainOffset
-    };
+    // For title and content fields
+    return { field };
 }
 
 /**
@@ -357,13 +338,7 @@ function restoreNoteBodyFocusState(newBody, card, focusState) {
     // For title and content fields
     const el = newBody.querySelector(`.card-inline-edit[data-field="${field}"]`);
     if (el) {
-        // Use preventScroll to avoid jumping
-        el.focus({ preventScroll: true });
-        if (plainOffset != null) {
-            setCaretAtPlainOffset(el, plainOffset);
-        } else if (edge) {
-            focusInlineEdit(el, edge);
-        }
+        focusInlineEdit(el, edge || 'end');
     }
 }
 
@@ -535,7 +510,5 @@ export {
     escapeQuotes,
     createBlankChecklistStep,
     mutateItem,
-    bindChecklistInteractions,
-    captureNoteBodyFocusState,
-    restoreNoteBodyFocusState
+    bindChecklistInteractions
 };
