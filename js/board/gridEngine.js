@@ -88,4 +88,3 @@ export const GridEngine = {
         return !isCollapsedSpatialSize(saved.w, saved.h, resolveTileSize(item), footprint);
     }
 };
-</write_to_file>
