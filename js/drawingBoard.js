@@ -71,7 +71,8 @@ const GRID_BACKGROUNDS = [
 const WRITING_BACKGROUNDS = [
     { id: 'ruled', label: 'Ruled' },
     { id: 'notebook', label: 'Notebook' },
-    { id: 'staff', label: 'Staff' }
+    { id: 'staff', label: 'Staff' },
+    { id: 'football', label: 'Football' }
 ];
 
 function isDragShape(tool) {

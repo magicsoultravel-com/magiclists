@@ -131,6 +131,119 @@ function drawStaffBlock(ctx, width, top, lineGap, lineStartX) {
     }
 }
 
+function drawFootballField(ctx, width, height, margin = 40) {
+    const fieldLeft = margin;
+    const fieldRight = width - margin;
+    const fieldTop = margin;
+    const fieldBottom = height - margin;
+    
+    const fieldWidth = fieldRight - fieldLeft;
+    const fieldHeight = fieldBottom - fieldTop;
+    
+    // Center line
+    const centerX = (fieldLeft + fieldRight) / 2;
+    
+    // Center circle
+    const centerCircleRadius = fieldWidth * 0.10;
+    
+    // Penalty areas
+    const penaltyAreaLength = fieldHeight * 0.15;
+    const penaltyAreaWidth = fieldWidth * 0.40;
+    
+    // Penalty spots
+    const penaltySpotX = fieldLeft + penaltyAreaLength;
+    const penaltySpotXR = fieldRight - penaltyAreaLength;
+    const penaltySpotY = fieldTop + fieldHeight / 2;
+    
+    // Goal boxes
+    const goalBoxLength = fieldHeight * 0.06;
+    const goalBoxWidth = fieldWidth * 0.20;
+    
+    ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = 1.5;
+    
+    // Outer boundary
+    ctx.strokeRect(fieldLeft, fieldTop, fieldWidth, fieldHeight);
+    
+    // Center line
+    ctx.beginPath();
+    ctx.moveTo(centerX, fieldTop);
+    ctx.lineTo(centerX, fieldBottom);
+    ctx.stroke();
+    
+    // Center circle
+    ctx.beginPath();
+    ctx.arc(centerX, penaltySpotY, centerCircleRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Left penalty area
+    const leftPenaltyTop = fieldTop + (fieldHeight - penaltyAreaWidth) / 2;
+    const leftPenaltyBottom = fieldTop + (fieldHeight + penaltyAreaWidth) / 2;
+    
+    // Left penalty box
+    ctx.strokeRect(fieldLeft, leftPenaltyTop, penaltyAreaLength, penaltyAreaWidth);
+    
+    // Left penalty spot
+    ctx.beginPath();
+    ctx.arc(penaltySpotX, penaltySpotY, 4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Left penalty arc
+    ctx.beginPath();
+    ctx.arc(penaltySpotX, penaltySpotY, 8, Math.PI, 1.5 * Math.PI);
+    ctx.stroke();
+    
+    // Right penalty area
+    const rightPenaltyTop = leftPenaltyTop;
+    const rightPenaltyBottom = leftPenaltyBottom;
+    
+    // Right penalty box
+    ctx.strokeRect(fieldRight - penaltyAreaLength, rightPenaltyTop, penaltyAreaLength, penaltyAreaWidth);
+    
+    // Right penalty spot
+    ctx.beginPath();
+    ctx.arc(penaltySpotXR, penaltySpotY, 4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Right penalty arc
+    ctx.beginPath();
+    ctx.arc(penaltySpotXR, penaltySpotY, 8, 1.5 * Math.PI, 2 * Math.PI);
+    ctx.stroke();
+    
+    // Goal boxes (smaller areas at each end)
+    const goalBoxTop = fieldTop + (fieldHeight - goalBoxWidth) / 2;
+    const goalBoxBottom = fieldTop + (fieldHeight + goalBoxWidth) / 2;
+    
+    // Left goal box
+    ctx.strokeRect(fieldLeft, goalBoxTop, goalBoxLength, goalBoxWidth);
+    
+    // Right goal box
+    ctx.strokeRect(fieldRight - goalBoxLength, goalBoxTop, goalBoxLength, goalBoxWidth);
+    
+    // Corner arc ticks (small arcs at corners)
+    const cornerRadius = 12;
+    
+    // Top-left corner tick
+    ctx.beginPath();
+    ctx.arc(fieldLeft + cornerRadius, fieldTop + cornerRadius, cornerRadius, Math.PI, 1.5 * Math.PI);
+    ctx.stroke();
+    
+    // Top-right corner tick
+    ctx.beginPath();
+    ctx.arc(fieldRight - cornerRadius, fieldTop + cornerRadius, cornerRadius, 1.5 * Math.PI, 2 * Math.PI);
+    ctx.stroke();
+    
+    // Bottom-left corner tick
+    ctx.beginPath();
+    ctx.arc(fieldLeft + cornerRadius, fieldBottom - cornerRadius, cornerRadius, 0.5 * Math.PI, Math.PI);
+    ctx.stroke();
+    
+    // Bottom-right corner tick
+    ctx.beginPath();
+    ctx.arc(fieldRight - cornerRadius, fieldBottom - cornerRadius, cornerRadius, 0, 0.5 * Math.PI);
+    ctx.stroke();
+}
+
 export function renderBackground(ctx, type, width, height, { spacing = 24, fillColor = '' } = {}) {
     ctx.clearRect(0, 0, width, height);
     const fallback = getComputedStyle(document.documentElement).getPropertyValue('--desktop-bg').trim()
@@ -174,6 +287,8 @@ export function renderBackground(ctx, type, width, height, { spacing = 24, fillC
         for (let top = 40; top < height; top += staffGap) {
             drawStaffBlock(ctx, width, top, lineGap, 48);
         }
+    } else if (type === 'football') {
+        drawFootballField(ctx, width, height);
     }
     ctx.restore();
 }
