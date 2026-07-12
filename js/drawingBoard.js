@@ -21,7 +21,8 @@ import {
     getStrokesBounds,
     clampStrokesToBounds,
     translateStrokes,
-    getPageBounds
+    getPageBounds,
+    rectToPolygon
 } from './lassoGeometry.js';
 
 const PREFS_KEY = 'matrix_drawing_prefs';
@@ -125,13 +126,13 @@ function readPrefs() {
         });
         return {
             activeStyle: BRUSH_STYLES.includes(raw?.activeStyle) ? raw.activeStyle : 'pen',
-            activeTool: ['brush', 'eraser', 'text', ...DRAG_SHAPE_TOOLS].includes(raw?.activeTool) ? raw.activeTool : 'brush',
+            activeTool: ['pointer', 'brush', 'eraser', 'text', ...DRAG_SHAPE_TOOLS].includes(raw?.activeTool) ? raw.activeTool : 'pointer',
             styles
         };
     } catch {
         const styles = {};
         BRUSH_STYLES.forEach((s) => { styles[s] = { width: defaultWidthForStyle(s), color: '#f8fafc' }; });
-        return { activeStyle: 'pen', activeTool: 'brush', styles };
+        return { activeStyle: 'pen', activeTool: 'pointer', styles };
     }
 }
 
@@ -200,6 +201,11 @@ export const DrawingBoard = {
     selectedStrokes: new Set(),
     isDraggingLasso: false,
     lassoDragStart: null,
+    
+    // Pointer (Select) tool state
+    isBoxSelecting: false,
+    boxSelectStart: null,
+    boxSelectCurrent: null,
 
     init(app) {
         this.app = app;
@@ -467,6 +473,18 @@ export const DrawingBoard = {
 
         this.canvas.setPointerCapture(e.pointerId);
 
+        // Pointer (Select) tool - check if clicking on center point of selection
+        if (this.activeTool === 'pointer' && this.selectedStrokes.size > 0) {
+            const bounds = getStrokesBounds(this.getSelectedStrokesArray());
+            const centerX = bounds.minX + bounds.width / 2;
+            const centerY = bounds.minY + bounds.height / 2;
+            const handleRadius = 10;
+            if (Math.hypot(x - centerX, y - centerY) <= handleRadius) {
+                this.startLassoDrag(x, y);
+                return;
+            }
+        }
+
         // Lasso tool - check if clicking on center point of selection
         if (this.selectedStrokes.size > 0 && !this.isLassoActive) {
             const bounds = getStrokesBounds(this.getSelectedStrokesArray());
@@ -482,6 +500,12 @@ export const DrawingBoard = {
         // Lasso tool handling
         if (this.isLassoActive) {
             this.beginLassoPath(x, y);
+            return;
+        }
+
+        // Pointer (Select) tool - start box selection
+        if (this.activeTool === 'pointer') {
+            this.beginBoxSelect(x, y);
             return;
         }
 
@@ -540,10 +564,28 @@ export const DrawingBoard = {
             return;
         }
 
+        // Pointer (Select) tool - dragging selected strokes
+        if (this.isDraggingLasso && this.lassoDragStart) {
+            const pt = this.clientToCanvas(e.clientX, e.clientY);
+            const dx = pt.x - this.lassoDragStart.x;
+            const dy = pt.y - this.lassoDragStart.y;
+            this.dragLassoSelection(dx, dy);
+            this.lassoDragStart = { x: pt.x, y: pt.y };
+            return;
+        }
+
         // Lasso tool handling
         if (this.isLassoActive && this.lassoPoints.length > 0) {
             const pt = this.clientToCanvas(e.clientX, e.clientY);
             this.extendLassoPath(pt.x, pt.y);
+            this.requestRedraw();
+            return;
+        }
+
+        // Pointer (Select) tool - update box selection
+        if (this.isBoxSelecting && this.boxSelectStart) {
+            const pt = this.clientToCanvas(e.clientX, e.clientY);
+            this.updateBoxSelect(pt.x, pt.y);
             this.requestRedraw();
             return;
         }
@@ -575,6 +617,13 @@ export const DrawingBoard = {
     onPointerUp(e) {
         if (e.pointerType === 'pen') this.penPointerActive = false;
         try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+
+        // Pointer (Select) tool - finish box selection
+        if (this.isBoxSelecting) {
+            this.endBoxSelect();
+            this.redraw();
+            return;
+        }
 
         // Lasso tool - finish dragging
         if (this.isDraggingLasso) {
@@ -617,6 +666,64 @@ export const DrawingBoard = {
             }
             this.shapePreview = null;
             this.redraw();
+        }
+    },
+
+    // Pointer (Select) tool - box selection methods
+    beginBoxSelect(x, y) {
+        this.isBoxSelecting = true;
+        this.boxSelectStart = { x, y };
+        this.boxSelectCurrent = { x, y };
+    },
+
+    updateBoxSelect(x, y) {
+        this.boxSelectCurrent = { x, y };
+    },
+
+    endBoxSelect() {
+        if (!this.boxSelectStart || !this.boxSelectCurrent) {
+            this.isBoxSelecting = false;
+            this.boxSelectStart = null;
+            this.boxSelectCurrent = null;
+            return;
+        }
+
+        const { x: x0, y: y0 } = this.boxSelectStart;
+        const { x: x1, y: y1 } = this.boxSelectCurrent;
+        
+        // Calculate box dimensions
+        const width = Math.abs(x1 - x0);
+        const height = Math.abs(y1 - y0);
+        
+        // If it's a small box (single click), use 6x6 pixel area
+        if (width < 6 && height < 6) {
+            const polygon = rectToPolygon(x0 - 3, y0 - 3, x0 + 3, y0 + 3);
+            this.selectStrokesInPolygon(polygon);
+        } else {
+            // Normal box selection
+            const polygon = rectToPolygon(x0, y0, x1, y1);
+            this.selectStrokesInPolygon(polygon);
+        }
+        
+        this.isBoxSelecting = false;
+        this.boxSelectStart = null;
+        this.boxSelectCurrent = null;
+    },
+
+    selectStrokesInPolygon(polygon) {
+        if (polygon.length < 3) return;
+        
+        const strokes = this.strokes();
+        this.selectedStrokes.clear();
+        
+        for (const stroke of strokes) {
+            if (strokeHasPointInPolygon(stroke, polygon)) {
+                this.selectedStrokes.add(stroke);
+            }
+        }
+        
+        if (this.selectedStrokes.size > 0) {
+            this.pushLayerHistory();
         }
     },
 
@@ -698,8 +805,8 @@ export const DrawingBoard = {
         if (this.draftStroke) drawBrushStroke(this.ctx, this.draftStroke);
         if (this.shapePreview) drawShapeStroke(this.ctx, this.shapePreview);
         
-        // Render lasso overlay (path and selection box)
-        if (this.isLassoActive || this.selectedStrokes.size > 0) {
+        // Render lasso overlay (path, box selection, and selection box)
+        if (this.isLassoActive || this.selectedStrokes.size > 0 || this.isBoxSelecting) {
             this.renderLassoOverlay();
         }
     },
@@ -895,9 +1002,10 @@ export const DrawingBoard = {
         const wasColorOpen = this.colorRolloutOpen;
         DrawingToolbarMenu.close();
         const brush = this.currentBrush();
+        const isPointerActive = this.activeTool === 'pointer';
 
         this.toolbarEl.innerHTML = `
-            <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-pointer" aria-haspopup="menu" aria-expanded="false" title="Pointer tools" aria-label="Pointer tools">
+            <button type="button" class="btn btn--compact drawing-toolbar-dropdown ${isPointerActive ? 'active' : ''}" id="draw-menu-pointer" aria-haspopup="menu" aria-expanded="false" title="Pointer tools (V)" aria-label="Pointer tools">
                 <span class="drawing-dropdown-icon">${this.pointerTriggerIcon()}</span>
                 <span class="drawing-dropdown-width" id="draw-pointer-width">${brush.width}px</span>
                 <span class="drawing-dropdown-chevron">${CHEVRON}</span>
@@ -1029,6 +1137,13 @@ export const DrawingBoard = {
             if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); this.redo(); return true; }
         }
         
+        // Pointer tool keyboard shortcut
+        if (e.key === 'v' || e.key === 'V') {
+            e.preventDefault();
+            this.setTool('pointer');
+            return true;
+        }
+        
         // Lasso tool keyboard shortcut
         if (e.key === 'l' || e.key === 'L') {
             e.preventDefault();
@@ -1148,6 +1263,24 @@ export const DrawingBoard = {
 
     renderLassoOverlay() {
         if (!this.ctx || !this.canvas) return;
+        
+        // Render dashed blue box selection marquee
+        if (this.isBoxSelecting && this.boxSelectStart && this.boxSelectCurrent) {
+            const x0 = Math.min(this.boxSelectStart.x, this.boxSelectCurrent.x);
+            const y0 = Math.min(this.boxSelectStart.y, this.boxSelectCurrent.y);
+            const x1 = Math.max(this.boxSelectStart.x, this.boxSelectCurrent.x);
+            const y1 = Math.max(this.boxSelectStart.y, this.boxSelectCurrent.y);
+            const width = x1 - x0;
+            const height = y1 - y0;
+            
+            this.ctx.save();
+            this.ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)'; // Blue with opacity
+            this.ctx.fillStyle = 'rgba(59, 130, 246, 0.15)'; // Light blue fill
+            this.ctx.lineWidth = 1.5;
+            this.ctx.setLineDash([4, 2]);
+            this.ctx.strokeRect(x0, y0, width, height);
+            this.ctx.restore();
+        }
         
         // Render dashed blue lasso path
         if (this.lassoPoints.length > 0) {

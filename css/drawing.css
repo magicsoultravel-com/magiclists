@@ -563,6 +563,13 @@
    LASSO TOOL STYLES
    ========================================================================== */
 
+/* Pointer/Select button active state */
+#draw-menu-pointer.active,
+#draw-menu-pointer[aria-pressed="true"] {
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+    color: var(--text-main);
+}
+
 /* Lasso button active state */
 #draw-lasso.is-active,
 #draw-lasso[aria-pressed="true"] {

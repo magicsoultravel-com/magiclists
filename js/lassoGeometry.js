@@ -238,6 +238,24 @@ export function translateStrokes(strokes, dx, dy) {
 }
 
 /**
+ * Convert a rectangle to a 4-point polygon.
+ * 
+ * @param {number} x0 - Start X
+ * @param {number} y0 - Start Y
+ * @param {number} x1 - End X
+ * @param {number} y1 - End Y
+ * @returns {Array} Array of 4 {x, y} points forming a rectangle
+ */
+export function rectToPolygon(x0, y0, x1, y1) {
+    return [
+        { x: Math.min(x0, x1), y: Math.min(y0, y1) },
+        { x: Math.max(x0, x1), y: Math.min(y0, y1) },
+        { x: Math.max(x0, x1), y: Math.max(y0, y1) },
+        { x: Math.min(x0, x1), y: Math.max(y0, y1) }
+    ];
+}
+
+/**
  * Get page boundaries for clamping.
  * For infinite canvas, returns a large bounding area.
  * For fixed page modes (A4/A5), returns the page dimensions.
