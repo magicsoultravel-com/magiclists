@@ -14,9 +14,6 @@ import { isCollapsedSpatialSize } from './tileGeometry.js';
 import { geoReadRememberedSize as geoReadRememberedSizeCore, geoResolveExpandedDefaultRect } from './tileGeometry.js';
 import { geoResolveCollapsedTierRect, geoInferTileTier } from './tileGeometry.js';
 import { applyNoteRect as applyNoteRectCore } from './board/noteGeometry.js';
-import { finalizeDesktopCard as finalizeDesktopCardCore } from './ui.js';
-import { syncBoardPinClass as syncBoardPinClassCore } from './ui.js';
-import { scheduleBoardCanvasExtents as scheduleBoardCanvasExtentsCore } from './ui.js';
 
 /**
  * Desktop card manager module handling desktop card creation, updating, finalization, and freeform dimensions.
