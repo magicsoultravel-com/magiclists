@@ -672,6 +672,7 @@ export function refreshNoteBody(body, item, {
 
     const scrollContainer = findChecklistScrollContainer(body);
     const scrollTop = scrollContainer?.scrollTop ?? 0;
+    const scrollLeft = scrollContainer?.scrollLeft ?? 0;
 
     const activeStep = body.contains(document.activeElement)
         ? document.activeElement.closest('.step-row--display')
@@ -684,11 +685,26 @@ export function refreshNoteBody(body, item, {
     delete body.dataset.pendingFocusEdge;
     delete body.dataset.pendingFocusPlainOffset;
 
-    // Re-render only the checklist section
-    expandedChecklist.outerHTML = buildExpandedChecklistHtml(item, true, { richEdit });
+    // Re-render only the checklist section with explicit multi-layered scroll lock
+    if (scrollContainer) {
+        const restoreScroll = () => {
+            scrollContainer.scrollTop = scrollTop;
+            scrollContainer.scrollLeft = scrollLeft;
+        };
 
-    // Restore scroll position synchronously to prevent scroll jump
-    if (scrollContainer) scrollContainer.scrollTop = scrollTop;
+        expandedChecklist.outerHTML = buildExpandedChecklistHtml(item, true, { richEdit });
+
+        // 1. Synchronous immediate restoration right after DOM tree mutation
+        restoreScroll();
+
+        // 2. Microtask execution to counteract browser layout/focus engine adjustments
+        queueMicrotask(restoreScroll);
+
+        // 3. Animation frame safety net right before layout paint
+        requestAnimationFrame(restoreScroll);
+    } else {
+        expandedChecklist.outerHTML = buildExpandedChecklistHtml(item, true, { richEdit });
+    }
 
     // Focus restoration - use preventScroll to avoid jumping
     const restoreView = () => {
