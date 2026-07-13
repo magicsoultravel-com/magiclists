@@ -154,6 +154,7 @@ class Application {
             SidebarHistory.init(AppState);
             SidebarStats.init();
             initAllSidebarModules();
+            this.setupLayoutResetButton();
             initSidebarShell();
             SidebarHistory.renderPanel();
             ClockStyle.init();
@@ -344,40 +345,35 @@ class Application {
                 }
             }
         });
+
+        // Bind header icons once during the initialization pipeline
+        this.setupQuickActionsHeaderListeners();
+        this.updateViewToggleState();
     }
 
-    bindQuickActionHandlers() {
-        // This method is now handled by renderQuickActions in noteQuickActions.js
-        // Keep only the header icon click handlers and additional updates
-        const undoBtn = document.getElementById('btn-undo');
-        const redoBtn = document.getElementById('btn-redo');
-        if (undoBtn) undoBtn.innerHTML = ACTION_ICONS.undo;
-        if (redoBtn) redoBtn.innerHTML = ACTION_ICONS.redo;
+    setupQuickActionsHeaderListeners() {
+        const headerFreeform = document.getElementById('qa-header-freeform-toggle');
+        const headerCabinet = document.getElementById('qa-header-file-cabinet-toggle');
+        const headerUndo = document.getElementById('qa-header-undo');
+        const headerRedo = document.getElementById('qa-header-redo');
 
-        UndoManager.rebindToolbar();
-
-        const displayBtn = document.getElementById('btn-display-options');
-        if (displayBtn) displayBtn.innerHTML = ACTION_ICONS.displayOptions;
-        DisplayOptions.rebindTrigger();
-        ClockStyle.rebindTrigger();
-
-        this.setupLayoutResetButton();
-        const sortBtn = document.getElementById('btn-board-sort');
-        if (sortBtn) sortBtn.innerHTML = ACTION_ICONS.sortAlpha;
-        BoardSort.rebindTrigger();
-        Fullscreen.rebindMainButton();
-
-        // Header icon click handlers
-        document.getElementById('qa-header-freeform-toggle')?.addEventListener('click', () => this.toggleBoardOverlay());
-        document.getElementById('qa-header-file-cabinet-toggle')?.addEventListener('click', () => this.toggleFileCabinet());
-        document.getElementById('qa-header-undo')?.addEventListener('click', () => UndoManager.undo());
-        document.getElementById('qa-header-redo')?.addEventListener('click', () => UndoManager.redo());
-
-        this.updateLayoutResetVisibility();
-        this.updateViewToggleState();
-        this.renderQuickActionsHeaderIcons();
-        UndoManager.updateToolbar();
-        CloudBackup.updateButtons();
+        // Bind once natively using dataset checks to prevent listener pileups
+        if (headerFreeform && !headerFreeform.dataset.listenerBound) {
+            headerFreeform.addEventListener('click', () => this.toggleBoardOverlay());
+            headerFreeform.dataset.listenerBound = 'true';
+        }
+        if (headerCabinet && !headerCabinet.dataset.listenerBound) {
+            headerCabinet.addEventListener('click', () => this.toggleFileCabinet());
+            headerCabinet.dataset.listenerBound = 'true';
+        }
+        if (headerUndo && !headerUndo.dataset.listenerBound) {
+            headerUndo.addEventListener('click', () => UndoManager.undo());
+            headerUndo.dataset.listenerBound = 'true';
+        }
+        if (headerRedo && !headerRedo.dataset.listenerBound) {
+            headerRedo.addEventListener('click', () => UndoManager.redo());
+            headerRedo.dataset.listenerBound = 'true';
+        }
     }
 
     renderQuickActionsHeaderIcons() {

@@ -242,6 +242,11 @@
     overflow-y: auto;
 }
 
+/* Quick actions header icons visible when undocked */
+.sidebar-module--undocked .quick-actions-header-icons {
+    display: flex;
+}
+
 .sidebar-module--dragging .collapsable-header {
     cursor: grabbing;
     opacity: var(--desktop-drag-opacity, 0.85);
