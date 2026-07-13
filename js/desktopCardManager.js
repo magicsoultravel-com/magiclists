@@ -17,7 +17,6 @@ import { applyNoteRect as applyNoteRectCore } from './board/noteGeometry.js';
 import { finalizeDesktopCard as finalizeDesktopCardCore } from './ui.js';
 import { syncBoardPinClass as syncBoardPinClassCore } from './ui.js';
 import { scheduleBoardCanvasExtents as scheduleBoardCanvasExtentsCore } from './ui.js';
-import { reflowGridBoard as reflowGridBoardCore } from './board/gridEngine.js';
 
 /**
  * Desktop card manager module handling desktop card creation, updating, finalization, and freeform dimensions.
@@ -649,10 +648,3 @@ export const DesktopCardManager = {
         // }
     }
 };
-</task_progress>
-- [x] Fixed the file by removing extraneous text that was accidentally appended
-- [x] Fixed import statements (changed '=' to 'from' for all imports)
-- [x] Maintained all functionality and placeholder implementations
-- [x] Kept the file structure and JSDoc comments intact
-</task_progress>
-</write_to_file>

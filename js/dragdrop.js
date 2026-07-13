@@ -20,7 +20,6 @@ import {
 } from './tileGeometry.js';
 import { CANVAS_COL_GAP, CANVAS_LAYOUT_ORIGIN, getGridMetrics } from './gridDensity.js';
 import { initFileCabinetDrag, isFileCabinetActive, fileItemToCabinet, shouldFileItem } from './fileCabinet.js';
-import { GridEngine } from './board/gridEngine.js';
 
 const DRAG_THRESHOLD = 4;
 const GRID_SCROLL_EDGE = 40;

@@ -1,90 +1,117 @@
+/** @module {"owns":"grid board layout engine, push resolution", "related":["board/noteGeometry.js","layoutStorage.js","gridDensity.js"]} */
+import { getGridMetrics } from '../gridDensity.js';
+import { resolveGridPushLayout } from './noteGeometry.js';
+import { getGridBoardBounds } from './boardExtents.js';
+
 /**
- * Grid Board Engine
- * Handles spatial layout calculations, packing algorithms, and size resolution.
+ * @typedef {object} GridEngineDeps
+ * @property {function(HTMLElement): object} getGridBoardBounds
+ * @property {function(): object} getGridLayout
+ * @property {function(string, object): void} saveGridLayout
+ * @property {function(): string[]} getBoardPins
+ * @property {function(HTMLElement, object, boolean): object} gridBoardRectForCard
+ * @property {function(string): boolean} isSavedLayoutExpanded
+ * @property {function(HTMLElement): object} readNoteRect
+ * @property {function(HTMLElement, object, object=): void} applyNoteRect
+ * @property {function(HTMLElement, object=): void} finalizeDesktopCard
+ * @property {function(HTMLElement): void} scheduleBoardCanvasExtents
  */
 
-export const GridEngine = {
-    /**
-     * Merges a spatial layout entry, clamping dimensions and handling remembered sizes.
-     */
-    mergeSpatialLayoutEntry(prev, rect, tileSize = LEGACY_TILE_SIZE, {
-        updateRemembered = false,
-        rememberedW = null,
-        rememberedH = null
-    } = {}) {
-        const clamped = geoClampSpatialSize(rect.w, rect.h, tileSize);
-        const entry = {
-            w: Math.round(clamped.w),
-            h: Math.round(clamped.h)
-        };
-        if (Number.isFinite(rect.x)) entry.x = Math.round(rect.x);
-        if (Number.isFinite(rect.y)) entry.y = Math.round(rect.y);
+export function clearSnapPanelPreview(panelEl) {
+    panelEl?.querySelectorAll('.mini-card.layout-preview').forEach((c) => {
+        c.classList.remove('layout-preview');
+    });
+}
 
-        let rw = rememberedW;
-        let rh = rememberedH;
-        if (updateRemembered && !isCollapsedSpatialSize(entry.w, entry.h, tileSize)) {
-            rw = entry.w;
-            rh = entry.h;
-        }
-        if (!Number.isFinite(rw) || !Number.isFinite(rh)) {
-            rw = prev?.rememberedW;
-            rh = prev?.rememberedH;
-        }
-        if (Number.isFinite(rw) && Number.isFinite(rh) && !isCollapsedSpatialSize(rw, rh, tileSize)) {
-            const mem = geoClampSpatialSize(rw, rh, tileSize);
-            entry.rememberedW = Math.round(mem.w);
-            entry.rememberedH = Math.round(mem.h);
-        }
-        if (isCollapsedSpatialSize(entry.w, entry.h, tileSize)) {
-            const small = getSmallRect(readTileSmallFootprint());
-            entry.w = small.w;
-            entry.h = small.h;
-        }
-        return entry;
-    },
+export function computeSnapPanelLayout(deps, {
+    panelEl,
+    cardSelector,
+    getSavedRect,
+    rectForCard,
+    isCardExpanded,
+    actorId,
+    actorRect,
+    bounds
+}) {
+    const origin = bounds.origin ?? 0;
+    const packW = bounds.packW;
+    const limitH = bounds.maxH ?? Infinity;
+    const edgePad = bounds.edgePad ?? getGridMetrics().edgePad;
+    const cards = [...panelEl.querySelectorAll(cardSelector)];
+    const pinnedIds = new Set(deps.getBoardPins());
 
-    /**
-     * Resolves the correct rectangle for a card based on the resolution mode.
-     */
-    resolveCardRect(card, item, { mode } = {}) {
-        const pos = card ? this.readNoteRect(card) : { x: 0, y: 0, w: 0, h: 0 };
-        const saved = this.getSavedLayoutRect(card, item);
-        if (mode === 'small' || mode === 'label') {
-            const small = getSmallRect(readTileSmallFootprint());
-            return { x: pos.x, y: pos.y, w: small.w, h: small.h };
-        }
-        if (mode === 'editor' && saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
-            return { x: pos.x, y: pos.y, w: saved.w, h: saved.h };
-        }
-        if (mode === 'remembered' || mode === 'toggleTarget' || mode === 'saved') {
-            const size = mode === 'saved' && saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)
-                ? geoClampSpatialSize(saved.w, saved.h, resolveTileSize(item))
-                : this.resolveRememberedSpatialSize(saved, item);
-            return { x: pos.x, y: pos.y, w: size.w, h: size.h };
-        }
-        if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
-            const size = geoClampSpatialSize(saved.w, saved.h, resolveTileSize(item));
-            return { x: pos.x, y: pos.y, w: size.w, h: size.h };
-        }
-        const fallback = geoResolveSpatialFallbackRect(resolveTileSize(item));
-        return { x: pos.x, y: pos.y, w: fallback.w, h: fallback.h };
-    },
+    const cardEntries = cards.map((card) => {
+        const id = card.dataset.id;
+        const isExpanded = isCardExpanded(id, card);
+        const saved = getSavedRect(id);
+        const source = id === actorId && actorRect ? actorRect : (saved || deps.readNoteRect(card));
+        const rect = rectForCard(card, source, isExpanded);
+        return { id, card, rect };
+    });
 
-    /**
-     * Checks if a size exceeds a single grid cell.
-     */
-    isGridMultiCellSize(w, h) {
-        const { cellW } = getGridMetrics();
-        return w > cellW + 2 || h > cellW + 2;
-    },
+    return resolveGridPushLayout({
+        cardEntries,
+        actorId,
+        actorRect,
+        pinnedIds,
+        packW,
+        origin,
+        maxH: limitH,
+        edgePad
+    });
+}
 
-    /**
-     * Checks if a saved layout is expanded.
-     */
-    isSavedLayoutExpanded(itemId, footprint = readTileSmallFootprint()) {
-        const saved = this.getGridLayout()[itemId];
-        if (!saved || !Number.isFinite(saved.w) || !Number.isFinite(saved.h)) return false;
-        const item = this.resolveBoardItem(itemId);
-        return !isCollapsedSpatialSize(saved.w, saved.h, resolveTileSize(item), footprint);
+export function computeGridBoardLayout(deps, canvas, actorId, actorRect = null) {
+    if (!canvas?.classList.contains('view-grid')) return new Map();
+    const { origin, packW, edgePad } = deps.getGridBoardBounds(canvas);
+    return computeSnapPanelLayout(deps, {
+        panelEl: canvas,
+        cardSelector: '.mini-card[data-desktop="1"]',
+        getSavedRect: (id) => deps.getGridLayout()[id],
+        rectForCard: (card, saved, isExpanded) => deps.gridBoardRectForCard(card, saved, isExpanded),
+        isCardExpanded: (id) => deps.isSavedLayoutExpanded(id),
+        actorId,
+        actorRect,
+        bounds: { origin, packW, maxH: Infinity, edgePad }
+    });
+}
+
+export function applyGridBoardLayout(deps, canvas, layout, { animate = true, save = true, preview = false } = {}) {
+    if (!canvas || !layout?.size) return [];
+    const placed = [];
+    layout.forEach((rect, id) => {
+        const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(id)}"]`);
+        if (!card) return;
+        deps.applyNoteRect(card, rect, { settling: animate });
+        card.classList.toggle('layout-preview', preview);
+        if (save) {
+            deps.saveGridLayout(id, rect);
+        }
+        deps.finalizeDesktopCard(card);
+        placed.push(rect);
+    });
+    deps.scheduleBoardCanvasExtents(canvas);
+    if (animate && !preview) {
+        window.setTimeout(() => {
+            canvas.querySelectorAll('.mini-card.layout-settling').forEach((c) => {
+                c.classList.remove('layout-settling');
+            });
+        }, 160);
     }
-};
+    return placed;
+}
+
+export function reflowGridBoard(deps, canvas, actorId, { animate = true, actorRect: explicitActorRect = null } = {}) {
+    if (!canvas?.classList.contains('view-grid')) return;
+    let actorRect = explicitActorRect;
+    if (!actorRect && actorId) {
+        const actorCard = canvas.querySelector(
+            `.mini-card[data-desktop="1"][data-id="${CSS.escape(actorId)}"]`
+        );
+        if (actorCard) actorRect = deps.readNoteRect(actorCard);
+    }
+    const layout = computeGridBoardLayout(deps, canvas, actorId, actorRect);
+    applyGridBoardLayout(deps, canvas, layout, { animate, save: true });
+}
+
+export { getGridBoardBounds };
