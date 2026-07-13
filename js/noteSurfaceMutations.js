@@ -140,21 +140,29 @@ function buildSheetInteractionOptions(shell, item, { localOnly = false, onChange
 
 /**
  * Schedule a debounced autosave for desktop inline editing.
- * Uses a 1-second debounce to avoid emitting mutations on every keystroke.
+ * Uses a 100ms debounce to provide responsive saving while avoiding excessive writes.
+ * Immediately syncs the active field to the item to ensure data is never lost.
  * @param {HTMLElement} root - The editor shell/root element
  * @param {object} item - The note item being edited
+ * @param {HTMLElement} [activeEl] - The currently focused editable element (optional)
  */
-function scheduleDesktopAutoSave(root, item) {
+function scheduleDesktopAutoSave(root, item, activeEl) {
+    // Immediately sync the active field to ensure data is never lost
+    // This runs synchronously and does NOT trigger a re-render
+    if (activeEl && activeEl.classList.contains('card-inline-edit')) {
+        syncInlineFieldToItem(activeEl, item);
+    }
+    
     if (desktopAutoSaveTimer) clearTimeout(desktopAutoSaveTimer);
     desktopAutoSaveTimer = setTimeout(() => {
         desktopAutoSaveTimer = null;
         // Take snapshot BEFORE syncing DOM to item
         const beforeItem = JSON.parse(JSON.stringify(item));
-        // Sync DOM changes to item
+        // Sync any remaining DOM changes to item
         syncItemBodyFromDom(root, item);
         // Emit mutation with correct beforeItem
         emitItemMutation(item, { preserveView: true, beforeItem, skipRerender: true });
-    }, 1000);
+    }, 100);
 }
 
 /**
@@ -175,6 +183,18 @@ function flushDesktopAutoSave(root, item) {
     syncItemBodyFromDom(root, item);
     // Emit mutation with correct beforeItem
     emitItemMutation(item, { preserveView: true, beforeItem, skipRerender: true });
+}
+
+/**
+ * Clear any pending desktop autosave timer without saving.
+ * Use this when a card is unmounted, closed, or deleted to prevent
+ * stale saves from firing after the card is gone.
+ */
+function clearDesktopAutoSaveTimer() {
+    if (desktopAutoSaveTimer) {
+        clearTimeout(desktopAutoSaveTimer);
+        desktopAutoSaveTimer = null;
+    }
 }
 
 function attachNoteBodyInteractions(root, item, {
@@ -206,17 +226,18 @@ function attachNoteBodyInteractions(root, item, {
     // Always add onChange for inline edits to trigger auto-save
     // For modal editor (localOnly=true), onChange syncs DOM and triggers auto-save
     // For board surface (localOnly=false), we use debounced autosave
-    const handleInlineEditInput = () => {
+    const handleInlineEditInput = (el) => {
         if (localOnly) {
             onChange();
         } else {
-            // For board surface: use debounced autosave to avoid race conditions
-            scheduleDesktopAutoSave(root, item);
+            // For board surface: immediately sync the active field to ensure data is never lost,
+            // then use debounced autosave to persist to storage
+            scheduleDesktopAutoSave(root, item, el);
         }
     };
     
     root.querySelectorAll('.card-inline-edit').forEach((el) => {
-        el.addEventListener('input', handleInlineEditInput);
+        el.addEventListener('input', () => handleInlineEditInput(el));
         // Also flush on blur to save when user navigates away
         el.addEventListener('blur', () => {
             if (!localOnly) {
@@ -261,5 +282,6 @@ export {
     buildSheetInteractionOptions,
     attachNoteBodyInteractions,
     updateNoteMetaStats,
-    flushDesktopAutoSave
+    flushDesktopAutoSave,
+    clearDesktopAutoSaveTimer
 };

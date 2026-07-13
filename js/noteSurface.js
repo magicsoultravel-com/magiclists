@@ -125,7 +125,9 @@ import {
     syncItemBodyFromDom,
     buildSheetInteractionOptions,
     attachNoteBodyInteractions,
-    updateNoteMetaStats
+    updateNoteMetaStats,
+    flushDesktopAutoSave,
+    clearDesktopAutoSaveTimer
 } from './noteSurfaceMutations.js';
 
 import { EmojiPicker } from './iconPicker.js';
@@ -483,6 +485,8 @@ export const NoteSurface = {
     // Mutation functions
     attachNoteBodyInteractions,
     updateNoteMetaStats,
+    flushDesktopAutoSave,
+    clearDesktopAutoSaveTimer,
 
     // Spatial Layout and Geometry
     mergeSpatialLayoutEntry(prev, rect, tileSize = LEGACY_TILE_SIZE, {
@@ -641,5 +645,7 @@ export {
     escapeQuotes,
     createBlankChecklistStep,
     mutateItem,
-    bindChecklistInteractions
+    bindChecklistInteractions,
+    flushDesktopAutoSave,
+    clearDesktopAutoSaveTimer
 };

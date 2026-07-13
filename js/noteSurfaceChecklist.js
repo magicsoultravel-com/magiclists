@@ -4,7 +4,7 @@ import { escapeHTML, escapeAttr } from './domEscape.js';
 import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, collectStepSubtree, canIndentStep, normalizeChecklistLevels, computeVisibleInsertBounds, reorderActiveStepsFromDomOrder, applySubtreeLevelDelta, resolvePointerDropTarget, resolveDropTarget } from './checklistSteps.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyConversion.js';
 import { stripRichText, sanitizeRichHtml, hasRichMarkup } from './richText.js';
-import { mutateItem, syncItemBodyFromDom, syncInlineFieldToItem } from './noteSurfaceMutations.js';
+import { mutateItem, syncItemBodyFromDom, syncInlineFieldToItem, commitInlineChecklistOp } from './noteSurfaceMutations.js';
 import { focusInlineEdit, canInlineEditText, renderRichHtml, splitInlineEditAtCaret, insertTextAtCaret, handleInlineEditArrowNav } from './noteSurfaceEditing.js';
 import { copyPlainTextToClipboard } from './clipboard.js';
 
@@ -667,32 +667,40 @@ export function handleChecklistDelete(e, item, { localOnly = false, onChange = (
     return true;
 }
 
+/**
+ * Handle Enter key in checklist step-text.
+ * CRITICAL: Does NOT sync before split - instead, directly updates the item steps
+ * with the split text chunks, then commits atomically.
+ */
 export function handleChecklistEnter(root, item, e, { localOnly = false, onChange = () => {} } = {}) {
     if (!item || !item.steps) return false;
     const active = e.target;
     if (!active?.classList?.contains('step-text')) return false;
 
     const stepId = active.dataset.stepId;
-     const stepIdx = item.steps.findIndex((s) => s.id === stepId);
-     if (stepIdx < 0) return false;
+    const stepIdx = item.steps.findIndex((s) => s.id === stepId);
+    if (stepIdx < 0) return false;
 
-     const step = item.steps[stepIdx];
-     const { before, after } = splitInlineEditAtCaret(active);
+    // Do NOT sync before split - that would save the full unbroken string
+    // Instead, let splitInlineEditAtCaret run on the live DOM to calculate chunks
 
-     if (e.shiftKey) {
-         const rich = active.classList.contains('rich-text--edit');
-         if (rich) {
-             document.execCommand('insertLineBreak');
-         } else {
-             insertTextAtCaret(active, '\n');
-         }
-         syncInlineFieldToItem(active, item);
-         if (!localOnly) {
-             mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
-         }
-         onChange();
-         return 'stay';
-     }
+    const step = item.steps[stepIdx];
+    const { before, after } = splitInlineEditAtCaret(active);
+
+    if (e.shiftKey) {
+        const rich = active.classList.contains('rich-text--edit');
+        if (rich) {
+            document.execCommand('insertLineBreak');
+        } else {
+            insertTextAtCaret(active, '\n');
+        }
+        syncInlineFieldToItem(active, item);
+        if (!localOnly) {
+            mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
+        }
+        onChange();
+        return 'stay';
+    }
 
     // Enter: split text at caret position and create a new step with the "after" text
     // Determine the insertion index: if the step has children and the group is collapsed,
@@ -705,7 +713,8 @@ export function handleChecklistEnter(root, item, e, { localOnly = false, onChang
         ? stepIdx + subtree.length
         : stepIdx + 1;
 
-    // Update current step's text to the "before" portion
+    // CRITICAL: Directly update the item's step text with the "before" portion
+    // This avoids the race condition where the pre-split full text overwrites the split lines
     // For rich text, before is already sanitized HTML; for plain text, it's plain text
     const rich = active.classList.contains('rich-text--edit');
     if (rich) {
@@ -713,9 +722,10 @@ export function handleChecklistEnter(root, item, e, { localOnly = false, onChang
     } else {
         active.textContent = before;
     }
-    syncInlineFieldToItem(active, item);
+    // Update the current step's text in the item directly
+    step.text = before;
 
-    // Create new step with the "after" text
+    // Create new step with the "after" text - directly assign to item steps array
     const newStep = {
         id: createStepId(),
         text: after,
@@ -724,6 +734,8 @@ export function handleChecklistEnter(root, item, e, { localOnly = false, onChang
     };
     item.steps.splice(insertIdx, 0, newStep);
 
+    // CRITICAL: Commit as atomic batch operation - both the modified step and the new step
+    // are saved together in a single mutation to prevent race conditions
     if (!localOnly) {
         commitInlineChecklistOp(item, beforeItem, { localOnly });
     }

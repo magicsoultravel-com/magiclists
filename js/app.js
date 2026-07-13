@@ -801,6 +801,16 @@ class Application {
             }
         });
 
+        // Beforeunload handler: flush all pending autosaves before page refresh
+        // This ensures data is saved when user refreshes the browser
+        window.addEventListener('beforeunload', () => {
+            const canvas = document.getElementById('app-canvas');
+            if (canvas) {
+                // Flush all inline edits from canvas to ensure data is saved
+                UI.flushAllInlineEditsFromCanvas(canvas, AppState.items);
+            }
+        });
+
         window.addEventListener('item:selected_for_edit', (e) => {
             if (!AppState.user.isLoggedIn) {
                 alert("Authorization Blocked: Admin privileges required to edit workspace resources.");
@@ -971,4 +981,3 @@ class Application {
 
 const CoreApp = new Application();
 document.addEventListener('DOMContentLoaded', () => CoreApp.init());
-
