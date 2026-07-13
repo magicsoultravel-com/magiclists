@@ -1243,7 +1243,7 @@ export function applyFileCabinetZoneToggle(card, item, ctx = {}, UI) {
         UI.saveGridLayout(item.id, rect, { updateRemembered: true });
     } else {
         const pos = UI.readNoteRect(card);
-        fileItemToCabinet(item, UI.activeBoardViewMode, UI, {
+        fileItemToCabinet(item, 'grid', UI, {
             x: pos.x ?? 8,
             y: pos.y ?? 8,
             rememberW: pos.w,

@@ -103,7 +103,6 @@ import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 
 import { NoteSurface } from './noteSurface.js';
 import { BoardOperations } from './boardOperations.js';
-import { bindNoteQuickActions } from './noteQuickActions.js';
 import {
     applyItemCardTheme,
     createCardComponent,
@@ -157,21 +156,7 @@ import {
     clearSnapPanelPreview
 } from './board/gridEngine.js';
 
-function ensureSmallTile(item) {
-    if (!NoteSurface.canEditInline() || resolveTileSize(item) === 'small') return;
-    NoteSurface.mutateItem(item, (it) => { it.tileSize = 'small'; }, { preserveView: true, skipRerender: true });
-    item.tileSize = 'small';
-    boardItemsById.set(item.id, item);
-}
-
-let boardItemsById = new Map();
 let activeBoardViewMode = 'grid';
-
-function updateBoardItemsMap(item) {
-    if (item?.id) {
-        boardItemsById.set(item.id, item);
-    }
-}
 
 function createGridDeps(ui) {
     return {
@@ -196,59 +181,11 @@ function noteRectHooks(ui, card) {
     };
 }
 
-function sortItemsSpatially(items, getRect) {
-    return [...items].sort((a, b) => {
-        const ra = getRect(a) || { x: 0, y: 0 };
-        const rb = getRect(b) || { x: 0, y: 0 };
-        const ay = Number.isFinite(ra.y) ? ra.y : 0;
-        const ax = Number.isFinite(ra.x) ? ra.x : 0;
-        const by = Number.isFinite(rb.y) ? rb.y : 0;
-        const bx = Number.isFinite(rb.x) ? rb.x : 0;
-        return ay - by || ax - bx;
-    });
-}
-
 export function isDesktopCard(card) {
     return card?.dataset?.desktop === '1';
 }
 
 export const UI = {
-    getLocalHiddenIds() {
-        return BoardOperations.getLocalHiddenIds();
-    },
-
-    isHiddenFromBoard(item) {
-        return BoardOperations.isHiddenFromBoard(item);
-    },
-
-    isArchived(item) {
-        return BoardOperations.isArchived(item);
-    },
-
-    hideFromBoard(item) {
-        BoardOperations.hideFromBoard(item);
-    },
-
-    unhideFromBoard(item) {
-        BoardOperations.unhideFromBoard(item);
-    },
-
-    getLocalCalendarHiddenIds() {
-        return BoardOperations.getLocalCalendarHiddenIds();
-    },
-
-    isHiddenFromCalendar(item) {
-        return BoardOperations.isHiddenFromCalendar(item);
-    },
-
-    toggleCardCalendar(item, btn) {
-        BoardOperations.toggleCardCalendar(item, btn);
-    },
-
-    getVisibleItems(items) {
-        return BoardOperations.getVisibleItems(items);
-    },
-
     flushAllInlineEditsFromCanvas(canvas, items) {
         if (!canvas || !Array.isArray(items)) return;
         const byId = new Map(items.map((item) => [item.id, item]));
@@ -284,7 +221,7 @@ export const UI = {
 
     resolveBoardItem(itemId) {
         if (!itemId) return null;
-        return boardItemsById.get(itemId) || null;
+        return null;
     },
 
     getSavedLayoutRect(card, item) {
@@ -501,7 +438,6 @@ export const UI = {
                 it.tileSize = normalizedTier;
             }, { preserveView: true, skipRerender: true });
             item.tileSize = normalizedTier;
-            boardItemsById.set(item.id, item);
         }
 
         this.applyNoteRect(card, rect, { settling: false });
@@ -578,7 +514,6 @@ export const UI = {
             if (!wasSmall) return;
             const next = { x: rect.x, y: rect.y, w: smallRect.w, h: smallRect.h };
             this.applyNoteRect(card, next, { settling: false });
-            ensureSmallTile(item);
             this.saveTileLayoutFromCard(card, item, next, 'small');
             this.finalizeDesktopCard(card);
         });
@@ -704,8 +639,7 @@ export const UI = {
         this.prepareCanvas(canvas);
          
         const safeItems = Array.isArray(items) ? items : [];
-        const visibleItems = this.getVisibleItems(safeItems);
-        boardItemsById = new Map(visibleItems.map((item) => [item.id, item]));
+        const visibleItems = BoardOperations.getVisibleItems(safeItems);
 
         const activeCategories = this.getActiveCategories(hiddenCategories);
          
@@ -778,7 +712,7 @@ export const UI = {
         if (fileCabinetActive && visibleItems.length > 0) {
             return;
         }
-        const hiddenCount = safeItems.length - this.getVisibleItems(safeItems).length;
+        const hiddenCount = safeItems.length - BoardOperations.getVisibleItems(safeItems).length;
         if (safeItems.length > 0 && hiddenCount === safeItems.length) {
             canvas.innerHTML = `<div class="system-status-msg">All objects are hidden. Use the footer to restore them.</div>`;
         } else {
@@ -865,14 +799,14 @@ export const UI = {
         return NoteSurface.buildNoteQuickActionsHtml(item, {
             surface: 'board',
             isExpanded,
-            calHidden: this.isHiddenFromCalendar(item),
+            calHidden: BoardOperations.isHiddenFromCalendar(item),
             ...options
         });
     },
 
     syncCalendarButtonUI(item, btn) {
         if (!btn || !item) return;
-        const hidden = this.isHiddenFromCalendar(item);
+        const hidden = BoardOperations.isHiddenFromCalendar(item);
         btn.innerHTML = CARD_ICONS.calendar;
         const title = hidden
             ? 'Hidden from calendar — click to show'
@@ -1126,7 +1060,7 @@ export const UI = {
         const hasFreeformData = Object.keys(positions).length > 0 || Object.keys(sizes).length > 0;
         if (!hasFreeformData) return false;
 
-        const visible = this.getVisibleItems(Array.isArray(items) ? items : []);
+        const visible = BoardOperations.getVisibleItems(Array.isArray(items) ? items : []);
         const pinnedIds = new Set(this.getBoardPins());
         const itemsById = new Map(visible.map((item) => [item.id, item]));
         const getSourceRect = (item) => {
@@ -1144,7 +1078,15 @@ export const UI = {
         };
         const { collapsed, expanded } = this.partitionCanvasItemsByExpansion(visible, 'grid');
         const canvas = document.getElementById('app-canvas');
-        this.packGridBoard(canvas, sortItemsSpatially(collapsed, getSourceRect), sortItemsSpatially(expanded, getSourceRect), {
+        this.packGridBoard(canvas, [...collapsed].sort((a, b) => {
+            const ra = getSourceRect(a) || { x: 0, y: 0 };
+            const rb = getSourceRect(b) || { x: 0, y: 0 };
+            return (ra.y - rb.y) || (ra.x - rb.x);
+        }), [...expanded].sort((a, b) => {
+            const ra = getSourceRect(a) || { x: 0, y: 0 };
+            const rb = getSourceRect(b) || { x: 0, y: 0 };
+            return (ra.y - rb.y) || (ra.x - rb.x);
+        }), {
             pinnedIds,
             layoutMode: 'freeform',
             direction: 'horizontal',
@@ -1759,7 +1701,7 @@ export const UI = {
     },
 
     sortBoardLayout(viewMode, items, sortPrefs, { fileCabinetActive } = {}) {
-        const visibleItems = this.getVisibleItems(items || []);
+        const visibleItems = BoardOperations.getVisibleItems(items || []);
         if (!visibleItems.length) return;
 
         const mode = 'grid';
@@ -1799,7 +1741,7 @@ export const UI = {
     },
 
     resetBoardLayout(sortBy, items, { fileCabinetActive } = {}) {
-        const visibleItems = this.getVisibleItems(items || []);
+        const visibleItems = BoardOperations.getVisibleItems(items || []);
         const mode = normalizeViewMode(sortBy);
 
         const boardItems = visibleItems;
@@ -2060,7 +2002,6 @@ export const UI = {
 
         sorted.forEach((item) => {
             if (!item?.id) return;
-            ensureSmallTile(item);
             let slot = findFirstCanvasSlotCore(small.w, small.h, placed, packW + origin * 2, { origin, edgePad });
             slot = this.snapNoteRect(
                 { ...slot, w: small.w, h: small.h },

@@ -682,8 +682,6 @@ export const DragDropEngine = {
                 it.tileSize = finalTier;
             }, { preserveView: true, skipRerender: true });
             item.tileSize = finalTier;
-            // boardItemsById is internal to UI, so we rely on UI to update it or use a shared store
-            UI.updateBoardItemsMap(item);
         }
         return finalTier;
     },
