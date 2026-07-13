@@ -769,51 +769,6 @@ export function prepareInlineOpSnapshot(root, item, localOnly) {
     return snapshot;
 }
 
-export function commitInlineChecklistOp(item, beforeItem, { localOnly = false } = {}) {
-    if (!item || !beforeItem) return;
-    if (localOnly) return;
-
-    const changes = diffChecklistSteps(beforeItem.steps || [], item.steps || []);
-    if (changes.length === 0) return;
-
-    const action = changes.length === 1 && changes[0].type === 'remove'
-        ? 'delete'
-        : 'update';
-
-    const eventDetail = {
-        item,
-        beforeItem,
-        action,
-        changes,
-        preserveView: true
-    };
-
-    window.dispatchEvent(new CustomEvent('item:mutation_requested', { detail: eventDetail }));
-}
-
-function diffChecklistSteps(oldSteps, newSteps) {
-    const changes = [];
-    const oldMap = new Map(oldSteps.map((s, i) => [s.id, { step: s, index: i }]));
-    const newMap = new Map(newSteps.map((s, i) => [s.id, { step: s, index: i }]));
-
-    for (const [id, oldInfo] of oldMap) {
-        if (!newMap.has(id)) {
-            changes.push({ type: 'remove', id, index: oldInfo.index });
-        }
-    }
-
-    for (const [id, newInfo] of newMap) {
-        const oldInfo = oldMap.get(id);
-        if (!oldInfo) {
-            changes.push({ type: 'add', id, index: newInfo.index });
-        } else if (JSON.stringify(oldInfo.step) !== JSON.stringify(newInfo.step)) {
-            changes.push({ type: 'update', id, index: newInfo.index });
-        }
-    }
-
-    return changes;
-}
-
 function syncStepTextToItem(el, item) {
     const stepId = el.dataset.stepId;
     const step = item.steps?.find((s) => s.id === stepId);
