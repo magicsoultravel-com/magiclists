@@ -1,6 +1,5 @@
 /** @module {"owns":"note card DOM, inline edit, checklist interactions, item mutations", "related":["checklistSteps.js","richText.js","sheet.js","noteBodyConversion.js","noteQuickActions.js","noteSurfaceHtml.js","noteSurfaceEditing.js","noteSurfaceChecklist.js"], "events":["item:mutation_requested"]} */
 import { isFileCabinetActive, getFileCabinetToggleLabels } from './fileCabinet.js';
-import { isCollapsedSpatialSize, LEGACY_TILE_SIZE } from './tileGeometry.js';
 import { copyPlainTextToClipboard } from './clipboard.js';
 import {
     contentHasConvertibleText,
@@ -132,6 +131,12 @@ import {
 
 import { EmojiPicker } from './iconPicker.js';
 
+// Local helper to avoid circular import with ui.js
+function isDesktopCard(card) {
+    if (!card) return false;
+    return card.dataset.desktop === '1';
+}
+
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
 const EDITOR_ZOOM_MAX = 1.25;
@@ -177,19 +182,6 @@ function formatCreatedDate(timestamp) {
     const d = new Date(Number(timestamp) * 1000);
     if (Number.isNaN(d.getTime())) return '';
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function getSmallRect(footprint) {
-    if (!footprint) return { w: 120, h: 60 };
-    return { w: footprint.w || 120, h: footprint.h || 60 };
-}
-
-function readTileSmallFootprint() {
-    try {
-        return JSON.parse(localStorage.getItem('matrix_tile_footprint') || '{"w":120,"h":60}');
-    } catch {
-        return { w: 120, h: 60 };
-    }
 }
 
 function ensureChecklistStepFromRow(row, item) {
@@ -485,145 +477,6 @@ export const NoteSurface = {
     // Mutation functions
     attachNoteBodyInteractions,
     updateNoteMetaStats,
-    flushDesktopAutoSave,
-    clearDesktopAutoSaveTimer,
-
-    // Spatial Layout and Geometry
-    mergeSpatialLayoutEntry(prev, rect, tileSize = LEGACY_TILE_SIZE, {
-        updateRemembered = false,
-        rememberedW = null,
-        rememberedH = null
-    } = {}) {
-        const clamped = geoClampSpatialSize(rect.w, rect.h, tileSize);
-        const entry = {
-            w: Math.round(clamped.w),
-            h: Math.round(clamped.h)
-        };
-        if (Number.isFinite(rect.x)) entry.x = Math.round(rect.x);
-        if (Number.isFinite(rect.y)) entry.y = Math.round(rect.y);
-
-        let rw = rememberedW;
-        let rh = rememberedH;
-        if (updateRemembered && !isCollapsedSpatialSize(entry.w, entry.h, tileSize)) {
-            rw = entry.w;
-            rh = entry.h;
-        }
-        if (!Number.isFinite(rw) || !Number.isFinite(rh)) {
-            rw = prev?.rememberedW;
-            rh = prev?.rememberedH;
-        }
-        if (Number.isFinite(rw) && Number.isFinite(rh) && !isCollapsedSpatialSize(rw, rh, tileSize)) {
-            const mem = geoClampSpatialSize(rw, rh, tileSize);
-            entry.rememberedW = Math.round(mem.w);
-            entry.rememberedH = Math.round(mem.h);
-        }
-        if (isCollapsedSpatialSize(entry.w, entry.h, tileSize)) {
-            const small = getSmallRect(readTileSmallFootprint());
-            entry.w = small.w;
-            entry.h = small.h;
-        }
-        return entry;
-    },
-
-    persistRememberedSpatialSize(itemId, w, h, tileSize = LEGACY_TILE_SIZE) {
-        if (!itemId || !Number.isFinite(w) || !Number.isFinite(h)) return;
-        if (isCollapsedSpatialSize(w, h, tileSize)) return;
-        const clamped = geoClampSpatialSize(w, h, tileSize);
-        const layout = this.getGridLayout();
-        const prev = layout[itemId] || {};
-        layout[itemId] = {
-            ...prev,
-            rememberedW: Math.round(clamped.w),
-            rememberedH: Math.round(clamped.h)
-        };
-        localStorage.setItem(GRID_LAYOUT_KEY, JSON.stringify(layout));
-    },
-
-    resolveCardRect(card, item, { mode } = {}) {
-        const pos = card ? this.readNoteRect(card) : { x: 0, y: 0, w: 0, h: 0 };
-        const saved = this.getSavedLayoutRect(card, item);
-        if (mode === 'small' || mode === 'label') {
-            const small = getSmallRect(readTileSmallFootprint());
-            return { x: pos.x, y: pos.y, w: small.w, h: small.h };
-        }
-        if (mode === 'editor' && saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
-            return { x: pos.x, y: pos.y, w: saved.w, h: saved.h };
-        }
-        if (mode === 'remembered' || mode === 'toggleTarget' || mode === 'saved') {
-            const size = mode === 'saved' && saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)
-                ? geoClampSpatialSize(saved.w, saved.h, resolveTileSize(item))
-                : this.resolveRememberedSpatialSize(saved, item);
-            return { x: pos.x, y: pos.y, w: size.w, h: size.h };
-        }
-        if (saved && Number.isFinite(saved.w) && Number.isFinite(saved.h)) {
-            const size = geoClampSpatialSize(saved.w, saved.h, resolveTileSize(item));
-            return { x: pos.x, y: pos.y, w: size.w, h: size.h };
-        }
-        const fallback = geoResolveSpatialFallbackRect(resolveTileSize(item));
-        return { x: pos.x, y: pos.y, w: fallback.w, h: fallback.h };
-    },
-
-    isGridMultiCellSize(w, h) {
-        const { cellW } = getGridMetrics();
-        return w > cellW + 2 || h > cellW + 2;
-    },
-
-    getCardTileSize(card, item = null) {
-        const resolved = item || this.resolveBoardItem(card?.dataset?.id);
-        return resolveTileSize(resolved);
-    },
-
-    applyCollapsedTileClasses(card, tileSize) {
-        card.classList.remove('tile-small', 'tile-large');
-        const size = normalizeTileSize(tileSize);
-        card.classList.add(size === 'small' ? 'tile-small' : 'tile-large');
-    },
-
-    isSpatiallyCollapsed(card) {
-        if (!card) return true;
-        const { w, h } = this.readNoteRect(card);
-        const item = this.resolveBoardItem(card?.dataset?.id);
-        return isCollapsedSpatialSize(w, h, resolveTileSize(item));
-    },
-
-    isSavedLayoutExpanded(itemId, footprint = readTileSmallFootprint()) {
-        const saved = this.getGridLayout()[itemId];
-        if (!saved || !Number.isFinite(saved.w) || !Number.isFinite(saved.h)) return false;
-        const item = this.resolveBoardItem(itemId);
-        return !isCollapsedSpatialSize(saved.w, saved.h, resolveTileSize(item), footprint);
-    },
-
-    syncSpatialCollapseState(card, item, w, h) {
-        if (!isDesktopCard(card)) return false;
-        card.classList.add('note-surface');
-        const atSmall = this.isSpatiallyCollapsed(card);
-        card.classList.toggle('spatial-at-small', atSmall);
-        const resolvedItem = item || this.resolveBoardItem(card?.dataset?.id);
-        const tier = geoInferTileTier(w, h, resolveTileSize(resolvedItem));
-        this.applyCollapsedTileClasses(card, tier);
-        return atSmall;
-    },
-
-    syncSpatialToggleButton(card, atSmall) {
-        if (!isDesktopCard(card)) return;
-        const toggleBtn = card.querySelector('.card-act--toggle');
-        if (!toggleBtn) return;
-        if (atSmall === undefined) atSmall = this.isSpatiallyCollapsed(card);
-        const inFileCabinet = !!card.closest('#file-cabinet');
-        let expandTitle;
-        let lastIcon;
-        if (isFileCabinetActive()) {
-            const labels = getFileCabinetToggleLabels(inFileCabinet, atSmall);
-            expandTitle = labels.title;
-            lastIcon = labels.iconKey === 'expand' ? CARD_ICONS.expand : CARD_ICONS.collapse;
-        } else {
-            expandTitle = atSmall ? 'Expand' : 'Collapse to small';
-            lastIcon = atSmall ? CARD_ICONS.expand : CARD_ICONS.collapse;
-        }
-        toggleBtn.innerHTML = lastIcon;
-        toggleBtn.setAttribute('title', expandTitle);
-        toggleBtn.setAttribute('aria-label', expandTitle);
-    },
 
     // Utility methods
     escapeHTML,

@@ -7,7 +7,7 @@ import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyC
 import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, buildVisibleChecklistSteps, annotateChecklistTreeGuides, canIndentStep } from './checklistSteps.js';
 import { escapeHTML, escapeAttr } from './domEscape.js';
 import { isFileCabinetActive, getFileCabinetToggleLabels } from './fileCabinet.js';
-import { LEGACY_TILE_SIZE } from './tileGeometry.js';
+import { LEGACY_TILE_SIZE, isCollapsedSpatialSize } from './tileGeometry.js';
 import { bindChecklistInteractions, attachChecklistDrag, getChecklistCollapsedKeys, getChecklistDoneCollapsed, isChecklistDoneSectionCollapsed, toggleChecklistDoneSection, getChecklistCollapsibleKeys, checklistGroupsAnyExpanded, collapseAllChecklistGroups, expandAllChecklistGroups, toggleChecklistExpandCollapseAll, buildChecklistExpandCollapseAllHtml, buildChecklistRowHtml } from './noteSurfaceChecklist.js';
 import { focusInlineEdit, setCaretAtPlainOffset } from './noteSurfaceEditing.js';
 import { applyCardTheme } from './cardTheme.js';
@@ -123,25 +123,6 @@ export function buildNoteQuickActionsHtml(item, {
             <button type="button" class="card-act ${lastClass}"${lastId} title="${escapeHTML(expandTitle).replace(/"/g, "")}" aria-label="${escapeHTML(expandTitle).replace(/"/g, "")}">${lastIcon}</button>
         </div>`;
     return isModal ? `${archiveBtn}${actionsHtml}` : actionsHtml;
-}
-
-function isCollapsedSpatialSize(w, h, tileSize) {
-    if (!tileSize) return false;
-    const small = getSmallRect(readTileSmallFootprint());
-    return w <= small.w && h <= small.h;
-}
-
-function getSmallRect(footprint) {
-    if (!footprint) return { w: 120, h: 60 };
-    return { w: footprint.w || 120, h: footprint.h || 60 };
-}
-
-function readTileSmallFootprint() {
-    try {
-        return JSON.parse(localStorage.getItem('matrix_tile_footprint') || '{"w":120,"h":60}');
-    } catch {
-        return { w: 120, h: 60 };
-    }
 }
 
 export function buildNoteBodyConvertButtonsHtml(item) {

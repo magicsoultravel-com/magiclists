@@ -101,6 +101,22 @@ import {
 } from './tileGeometry.js';
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 
+// Global state for board items lookup
+let boardItemsById = new Map();
+
+function ensureSmallTile(item) {
+    if (!NoteSurface.canEditInline() || resolveTileSize(item) === 'small') return;
+    NoteSurface.mutateItem(item, (it) => { it.tileSize = 'small'; }, { preserveView: true, skipRerender: true });
+    item.tileSize = 'small';
+    boardItemsById.set(item.id, item);
+}
+
+function updateBoardItemsMap(item) {
+    if (item?.id) {
+        boardItemsById.set(item.id, item);
+    }
+}
+
 import { NoteSurface } from './noteSurface.js';
 import { BoardOperations } from './boardOperations.js';
 import {
@@ -221,7 +237,7 @@ export const UI = {
 
     resolveBoardItem(itemId) {
         if (!itemId) return null;
-        return null;
+        return boardItemsById.get(itemId) || null;
     },
 
     getSavedLayoutRect(card, item) {
@@ -640,6 +656,7 @@ export const UI = {
          
         const safeItems = Array.isArray(items) ? items : [];
         const visibleItems = BoardOperations.getVisibleItems(safeItems);
+        boardItemsById = new Map(visibleItems.map((item) => [item.id, item]));
 
         const activeCategories = this.getActiveCategories(hiddenCategories);
          
