@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-13T11:05:01.576Z
+> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-13T14:16:31.086Z
 
 ## CSS load order
 
@@ -89,3 +89,7 @@ alwaysApply: true
 | map | Map | tool-mount--map | 6 |
 | alphabets | Alphabets | tool-mount--alphabets | 7 |
 | cosmos | Cosmos | tool-mount--cosmos | 9 |
+
+## Validation
+
+- **WARN:** css/cards_backup.css: on disk but not linked in index.html (orphan)

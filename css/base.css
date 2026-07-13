@@ -44,7 +44,6 @@
     --scrollbar-thumb-clip: padding-box;
     --scrollbar-thumb-radius: 4px;
     --scrollbar-track: transparent;
-    --note-scroll-resize-gutter: 10px;
     
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background-color: var(--desktop-bg, var(--bg-primary));
