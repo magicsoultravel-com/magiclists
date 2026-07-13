@@ -1596,7 +1596,7 @@ export const UI = {
             }
         });
 
-        stackBounds = computeStackBounds(rects);
+stackBounds = computeStackBounds(rects);
         if (stackBounds.w > 0) {
             placed.push({
                 x: stackBounds.x,
@@ -1605,7 +1605,8 @@ export const UI = {
                 h: stackBounds.h
             });
         }
-    },
+    } // Closes the internal loop/conditional block (e.g., a `for` loop or `if` block)
+}, // Closes the method definition
 
     packSortFreeformBoard(canvas, collapsedItems, expandedItems, sortPrefs, pinnedIds) {
         const metrics = getGridMetrics();
