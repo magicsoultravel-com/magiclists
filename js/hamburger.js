@@ -1,5 +1,6 @@
 /** @module {"owns":"side panel shell, notes list, category drawer, sort", "related":["searchBar.js","ui.js","sidebarHistory.js","sidebarStats.js"], "events":["category:show_requested","category:order_changed"]} */
 import { UI } from './ui.js';
+import { BoardOperations } from './boardOperations.js';
 import { NoteSurface } from './noteSurface.js';
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import { UNCATEGORIZED_CATEGORY, UNCATEGORIZED_COLOR } from './categories.js';
@@ -289,15 +290,15 @@ export const SidePanel = {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 const item = allItems.find((entry) => entry.id === btn.dataset.id);
-                if (item) UI.unhideFromBoard(item);
+                if (item) BoardOperations.unhideFromBoard(item);
             });
         });
     },
 
     updateNotesList(items) {
         const allItems = items || [];
-        const activeItems = allItems.filter((item) => item.status !== 'archived' && !UI.isHiddenFromBoard(item));
-        const hiddenItems = allItems.filter((item) => item.status !== 'archived' && UI.isHiddenFromBoard(item));
+        const activeItems = allItems.filter((item) => item.status !== 'archived' && !BoardOperations.isHiddenFromBoard(item));
+        const hiddenItems = allItems.filter((item) => item.status !== 'archived' && BoardOperations.isHiddenFromBoard(item));
         const archivedItems = allItems.filter((item) => item.status === 'archived');
 
         const activeCountEl = document.getElementById('notes-active-count');
@@ -361,7 +362,7 @@ export const SidePanel = {
             .map((cat) => cat.name)
             .filter((name) => name && !hiddenSet.includes(name));
         const uncatCount = (items || []).filter(
-            (item) => item.status !== 'archived' && !UI.isHiddenFromBoard(item) && !itemHasCategory(item)
+            (item) => item.status !== 'archived' && !BoardOperations.isHiddenFromBoard(item) && !itemHasCategory(item)
         ).length;
         if (uncatCount > 0 && !activeNames.includes(UNCATEGORIZED_CATEGORY)) {
             activeNames.push(UNCATEGORIZED_CATEGORY);

@@ -15,6 +15,7 @@ import { getSmallRect } from './tileGeometry.js';
 import { readTileSmallFootprint } from './tileFootprint.js';
 import { normalizeViewMode } from './viewSession.js';
 import { syncCabinetSplitter } from './shellResize.js';
+import { BoardOperations } from './boardOperations.js';
 
 
 export const FILE_CABINET_KEY = 'matrix_file_cabinet';
@@ -1305,7 +1306,7 @@ export function sortFileCabinetItems(filedItems, sortPrefs) {
  * @param {Object} UI - The UI object
  */
 export function resetFileCabinetLayout(sortBy, items, UI) {
-    const visibleItems = UI.getVisibleItems(items || []);
+    const visibleItems = BoardOperations.getVisibleItems(items || []);
     const mode = normalizeViewMode(sortBy);
 
     const boardItems = visibleItems;

@@ -4,6 +4,7 @@ import { ACTION_ICONS } from './icons.js';
 import { createNoteId } from './noteModel.js';
 import { NoteSurface } from './noteSurface.js';
 import { UI } from './ui.js';
+import { BoardOperations } from './boardOperations.js';
 import { Editor } from './editor.js';
 import { DragDropEngine } from './dragdrop.js';
 import { ToolsManager } from './toolsManager.js';
@@ -64,7 +65,7 @@ import { initShellResize } from './shellResize.js';
 import { initUndockedSidebarStacking } from './desktopStack.js';
 
 function countHiddenFromBoard(items) {
-    return items.filter(item => UI.isHiddenFromBoard(item)).length;
+    return items.filter(item => BoardOperations.isHiddenFromBoard(item)).length;
 }
 
 const AppState = {
