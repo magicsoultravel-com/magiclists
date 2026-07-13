@@ -105,7 +105,13 @@ import {
     applyFormatCommand,
     bindFormatPanel,
     bindBodyConvertBar,
-    bindNoteEditorShell
+    bindNoteEditorShell,
+    getEditorZoom,
+    setEditorZoom,
+    syncZoomInput,
+    zoomToDisplay,
+    displayToZoom,
+    applyZoomFromInput
 } from './noteSurfaceEditing.js';
 
 // Import mutation functions from noteSurfaceMutations.js
