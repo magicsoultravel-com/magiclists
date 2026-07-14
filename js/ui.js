@@ -1,4 +1,5 @@
 import { mountFloatChrome } from './desktopFloatChrome.js';
+import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import {
     categoryKey,
     getCardRenderContext,
