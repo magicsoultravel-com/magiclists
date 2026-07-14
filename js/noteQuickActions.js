@@ -7,7 +7,6 @@ import { NoteSurface } from './noteSurface.js';
 import { isDesktopCard } from './ui.js';
 import { DisplayOptions } from './displayOptions.js';
 import { ClockStyle } from './clockStyle.js';
-import { BoardOperations } from './boardOperations.js';
 import { BoardSort } from './boardSort.js';
 import { Fullscreen } from './fullscreen.js';
 import { UndoManager } from './undo.js';
@@ -125,23 +124,23 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
     attachCardActionButton(hideBtn, () => {
         if (surface === 'board') {
             NoteSurface.commitFocusedInlineField(card, item);
-            BoardOperations.hideFromBoard(item);
+            ui.hideFromBoard(item);
         } else {
             editor.syncActiveItemFromDom();
             Object.assign(item, editor.collectFormData());
-            BoardOperations.hideFromBoard(item);
+            ui.hideFromBoard(item);
         }
     });
 
     if (calBtn) {
-        BoardOperations.syncCalendarButtonUI(item, calBtn);
+        ui.syncCalendarButtonUI(item, calBtn);
         attachCardActionButton(calBtn, () => {
             if (surface === 'board') {
                 NoteSurface.commitFocusedInlineField(card, item);
-                BoardOperations.toggleCardCalendar(item, calBtn);
+                ui.toggleCardCalendar(item, calBtn);
             } else {
                 editor.syncActiveItemFromDom();
-                BoardOperations.toggleCardCalendar(item, calBtn);
+                ui.toggleCardCalendar(item, calBtn);
                 editor.activeItem.hideFromCalendar = item.hideFromCalendar;
                 editor.markInteracted();
                 editor.triggerAutoSave();
