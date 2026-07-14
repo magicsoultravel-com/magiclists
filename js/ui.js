@@ -99,24 +99,6 @@ import {
     readRememberedSize as geoReadRememberedSize,
     resolveSpatialFallbackRect as geoResolveSpatialFallbackRect
 } from './tileGeometry.js';
-import { CARD_ICONS, ACTION_ICONS } from './icons.js';
-
-// Global state for board items lookup
-let boardItemsById = new Map();
-
-function ensureSmallTile(item) {
-    if (!NoteSurface.canEditInline() || resolveTileSize(item) === 'small') return;
-    NoteSurface.mutateItem(item, (it) => { it.tileSize = 'small'; }, { preserveView: true, skipRerender: true });
-    item.tileSize = 'small';
-    boardItemsById.set(item.id, item);
-}
-
-function updateBoardItemsMap(item) {
-    if (item?.id) {
-        boardItemsById.set(item.id, item);
-    }
-}
-
 import { NoteSurface } from './noteSurface.js';
 import { BoardOperations } from './boardOperations.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
@@ -127,7 +109,6 @@ import {
     refreshBoardChecklistBody,
     refreshBoardEditorCard
 } from './noteSurfaceHtml.js';
-
 export { CARD_ICONS, FORMAT_ICONS, ACTION_ICONS, DRAWING_ICONS } from './icons.js';
 export {
     deriveNoteTitle,
@@ -173,15 +154,16 @@ import {
     clearSnapPanelPreview
 } from './board/gridEngine.js';
 
+// Global state for board items lookup
+let boardItemsById = new Map();
+let activeBoardViewMode = 'grid';
+
 function ensureSmallTile(item) {
     if (!NoteSurface.canEditInline() || resolveTileSize(item) === 'small') return;
     NoteSurface.mutateItem(item, (it) => { it.tileSize = 'small'; }, { preserveView: true, skipRerender: true });
     item.tileSize = 'small';
     boardItemsById.set(item.id, item);
 }
-
-let boardItemsById = new Map();
-let activeBoardViewMode = 'grid';
 
 function updateBoardItemsMap(item) {
     if (item?.id) {
@@ -720,11 +702,7 @@ export const UI = {
         this.prepareCanvas(canvas);
          
         const safeItems = Array.isArray(items) ? items : [];
-<<<<<<< HEAD
-        const visibleItems = BoardOperations.getVisibleItems(safeItems);
-=======
         const visibleItems = this.getVisibleItems(safeItems);
->>>>>>> parent of 3d3d04c (Move board visibility logic to BoardOperations)
         boardItemsById = new Map(visibleItems.map((item) => [item.id, item]));
 
         const activeCategories = this.getActiveCategories(hiddenCategories);
