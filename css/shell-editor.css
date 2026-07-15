@@ -128,6 +128,7 @@
     cursor: grab;
     flex-shrink: 0;
     transition: color 0.12s ease, background 0.12s ease;
+    touch-action: none;
 }
 
 .grab-handle--step:hover {
@@ -137,6 +138,13 @@
 
 .grab-handle--step:active {
     cursor: grabbing;
+}
+
+/* Body state during active checklist drag - maintains grabbing cursor and prevents text selection */
+body.is-checklist-dragging {
+    cursor: grabbing !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
 }
 
 .grab-handle--step.grab-handle--spacer {

@@ -346,8 +346,10 @@ export function attachChecklistDrag(root, item, {
         // Remove old stored references if any
         const oldData = root._checklistDragData;
         if (oldData) {
-            document.removeEventListener('mousemove', oldData.onMove);
-            document.removeEventListener('mouseup', oldData.onUp);
+            document.removeEventListener('pointermove', oldData.onMove);
+            document.removeEventListener('pointerup', oldData.onUp);
+            document.removeEventListener('pointercancel', oldData.onUp);
+            document.body.classList.remove('is-checklist-dragging');
             delete root._checklistDragData;
         }
     }
@@ -459,8 +461,10 @@ export function attachChecklistDrag(root, item, {
         const blockRootId = blockStepIds[0];
         block.forEach((r) => r.classList.remove('is-dragging'));
         hideDropIndicator();
-        document.removeEventListener('mousemove', onMove);
-        document.removeEventListener('mouseup', onUp);
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        document.removeEventListener('pointercancel', onUp);
+        document.body.classList.remove('is-checklist-dragging');
         if (moved) {
             const shell = root.closest('.editor-note-shell') || root;
             syncItemBodyFromDom(shell, item);
@@ -587,8 +591,13 @@ export function attachChecklistDrag(root, item, {
         // Store references for cleanup on re-render
         root._checklistDragData = { onMove, onUp };
         
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
+        // Add body class for consistent cursor during drag
+        document.body.classList.add('is-checklist-dragging');
+        
+        // Use pointer events for proper touch/mouse interoperability
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+        document.addEventListener('pointercancel', onUp);
     }, true);
 }
 
