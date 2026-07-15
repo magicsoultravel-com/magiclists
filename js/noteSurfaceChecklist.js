@@ -471,7 +471,7 @@ export function attachChecklistDrag(root, item, {
             applyMutate((it) => {
                 const activeSteps = it.steps.filter((step) => !step.completed);
                 const doneSteps = it.steps.filter((step) => step.completed);
-                const visibleOrderIds = getActiveRows().map((r) => r.dataset.stepId);
+            const visibleOrderIds = getActiveRows(root).map((r) => r.dataset.stepId);
                 const reordered = reorderActiveStepsFromDomOrder(
                     activeSteps,
                     visibleOrderIds,
@@ -511,7 +511,7 @@ export function attachChecklistDrag(root, item, {
         syncDomBlock();
 
         // Use cached values during drag for performance
-        const rows = getActiveRows();
+        const rows = getActiveRows(root);
         const { block, bounds, isSingleLeaf } = activeDrag;
         const { insertIndex, dropMode, others } = resolvePointerDropTarget(
             e.clientY,
@@ -557,7 +557,7 @@ export function attachChecklistDrag(root, item, {
         getCachedChecklistCollapsedKeys();
         getCachedChecklistDoneCollapsed();
 
-        const visibleIds = getActiveRows().map((r) => r.dataset.stepId);
+        const visibleIds = getActiveRows(root).map((r) => r.dataset.stepId);
         const { subtreeIds, minAmongOthers, maxAmongOthers } = computeVisibleInsertBounds(
             activeSteps,
             stepIndex,
@@ -565,7 +565,7 @@ export function attachChecklistDrag(root, item, {
         );
         const isSingleLeaf = subtreeIds.length === 1
             || !stepHasDescendants(activeSteps, stepIndex);
-        const rows = getActiveRows();
+        const rows = getActiveRows(root);
         const block = buildDomBlockFromIds(rows, subtreeIds);
         const othersCount = visibleIds.filter((id) => !subtreeIds.includes(id)).length;
 
@@ -592,11 +592,12 @@ export function attachChecklistDrag(root, item, {
     }, true);
 }
 
-export function getActiveRows() {
+export function getActiveRows(root = document) {
+    if (!root) return [];
     const collapsed = getChecklistCollapsedKeys();
     const doneCollapsed = getChecklistDoneCollapsed();
     const rows = [];
-    const allRows = document.querySelectorAll('.step-row--display');
+    const allRows = root.querySelectorAll('.step-row--display');
     allRows.forEach((row) => {
         const stepId = row.dataset.stepId;
         if (!stepId) return;
