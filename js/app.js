@@ -164,7 +164,6 @@ class Application {
             this.setupBackupInterface();
             CloudBackup.init({ getLoggedIn: () => AppState.user.isLoggedIn });
             CloudBackup.ensureConnected().finally(() => CloudBackup.updateButtons());
-            this.setupFab();
             TemplatePicker.init();
             this.setupUndo();
             this.setupDrawingMode();
@@ -423,11 +422,6 @@ class Application {
         headerIcons.classList.toggle('is-visible', isCollapsed);
     }
 
-    setupFab() {
-        const fab = document.getElementById('fab-create');
-        if (!fab) return;
-    }
-
     updateFabVisibility() {
         const fab = document.getElementById('fab-create');
         if (!fab) return;
@@ -659,7 +653,7 @@ class Application {
             const wasEnabled = BoardOverlay.isEnabled();
             UI.flushAllInlineEditsFromCanvas(canvas, AppState.items);
             if (canvas) {
-                UI.flushLayoutFromCanvas(canvas, 'grid');
+                UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
             }
             const next = BoardOverlay.toggle();
             if (wasEnabled && !next && canvas) {

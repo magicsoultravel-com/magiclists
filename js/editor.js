@@ -38,6 +38,7 @@ export const Editor = {
     hasUserInteracted: false,
     isNewUnsavedNote: false,
     lastPersistedItem: null,
+    fabClickListenerBound: false,
 
     isColorPickerOpen() {
         if (ColorPicker.eyedropperCleanup) return true;
@@ -79,6 +80,49 @@ export const Editor = {
             e.stopPropagation();
             this.commitAndClose();
         }, true);
+
+        // Bind FAB click handler for creating new notes
+        if (!this.fabClickListenerBound) {
+            const fab = document.getElementById('fab-create');
+            if (fab) {
+                fab.addEventListener('click', () => this.handleCreateNote());
+                this.fabClickListenerBound = true;
+            }
+        }
+    },
+
+    handleCreateNote() {
+        // Check for admin session token
+        const adminToken = localStorage.getItem('admin_token');
+        if (!adminToken) {
+            alert('Login required to create notes. Use Quick actions → Login.');
+            return;
+        }
+
+        // Create a blank note with default schema
+        const blankNote = {
+            id: createNoteId(),
+            owner_id: "admin",
+            visibility: "private",
+            type: "note",
+            title: "",
+            content: "",
+            status: "active",
+            categories: [],
+            backgroundColor: randomNoteColor(),
+            startDateTime: defaultStartDateTimeNow(),
+            endDateTime: "",
+            isRecurring: false,
+            hideFromCalendar: false,
+            hiddenFromBoard: false,
+            attachments: [],
+            steps: [],
+            editorBodyLayout: 'both',
+            tileSize: 'large'
+        };
+
+        // Open the editor with the blank note
+        this.open(blankNote);
     },
     
     open(item = null, categoriesList = []) {
