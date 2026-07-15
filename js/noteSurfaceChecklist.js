@@ -11,6 +11,21 @@ import { copyPlainTextToClipboard } from './clipboard.js';
 
 const DRAG_THRESHOLD = 4;
 
+/**
+ * Check if a target element is a checklist interaction element.
+ * Used by dragdrop.js to determine if pointer events should yield to checklist interactions.
+ * @param {Element} target - The target element to check
+ * @returns {boolean} - True if the target is a checklist interaction element
+ */
+export function isChecklistInteraction(target) {
+    if (!target) return false;
+    return !!target.closest(
+        '.step-check, .step-delete-btn, .step-collapse-btn, .grab-handle--step, ' +
+        '.step-nest-controls, .step-row-actions, .expanded-checklist-add-btn, ' +
+        '.checklist-expand-collapse-all-btn, .step-text, .checklist-done-toggle'
+    );
+}
+
 function setPendingChecklistFocus(root, stepId, edge = 'start') {
     if (!root || !stepId) return;
     root.dataset.pendingFocusStepId = stepId;
@@ -382,14 +397,52 @@ export function attachChecklistDrag(root, item, {
     };
 
     const moveBlockInDom = (block, insertIndex, others) => {
-        const parent = block[0]?.parentNode;
-        if (!parent) return;
+        if (!block || block.length === 0) return;
+        
         const anchor = getChecklistInsertAnchor();
         const ref = insertIndex < others.length ? others[insertIndex] : null;
+        
         block.forEach((row) => {
-            if (ref) parent.insertBefore(row, ref);
-            else if (anchor) parent.insertBefore(row, anchor);
-            else parent.appendChild(row);
+            // Skip if row is no longer in DOM
+            if (!row.parentNode) return;
+            
+            // Determine the correct parent container dynamically
+            // to guarantee parent-child alignment for insertBefore
+            let targetParent = null;
+            let targetRef = null;
+            
+            if (ref && ref.parentNode) {
+                // Use ref's parent as the target container - this ensures
+                // the reference node is a child of the target parent
+                targetParent = ref.parentNode;
+                targetRef = ref;
+            } else if (anchor && anchor.parentNode) {
+                // Fall back to anchor's parent
+                targetParent = anchor.parentNode;
+                targetRef = anchor;
+            } else {
+                // Last resort: use the block's first row's parent
+                targetParent = block[0].parentNode;
+            }
+            
+            // Final fallback: append to expanded-checklist container
+            if (!targetParent) {
+                const expandedChecklist = root.querySelector('.expanded-checklist');
+                if (expandedChecklist) {
+                    targetParent = expandedChecklist;
+                } else {
+                    return; // No valid target, skip this row
+                }
+            }
+            
+            // Perform the move with validation
+            // Check that targetRef is still a child of targetParent
+            if (targetRef && targetRef.parentNode === targetParent) {
+                targetParent.insertBefore(row, targetRef);
+            } else {
+                // If reference is invalid, just append
+                targetParent.appendChild(row);
+            }
         });
     };
 

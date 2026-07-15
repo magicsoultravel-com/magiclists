@@ -22,6 +22,7 @@ import {
 } from './tileGeometry.js';
 import { CANVAS_COL_GAP, CANVAS_LAYOUT_ORIGIN, getGridMetrics } from './gridDensity.js';
 import { initFileCabinetDrag, isFileCabinetActive, fileItemToCabinet, shouldFileItem } from './fileCabinet.js';
+import { isChecklistInteraction } from './noteSurfaceChecklist.js';
 
 const DRAG_THRESHOLD = 4;
 const GRID_SCROLL_EDGE = 40;
@@ -152,12 +153,15 @@ function isScrollbarGrip(el, clientX) {
 
 function isInsideDragControl(target) {
     if (target?.closest('.card-act--drag')) return false;
+    
+    // Delegate checklist-specific target checks to the checklist module
+    if (isChecklistInteraction(target)) return true;
+
     return !!target.closest(
-        '.card-actions, .card-act, .step-check, .step-delete-btn, .step-collapse-btn, ' +
-        '.card-inline-edit, .rich-text--edit, .step-nest-controls, .step-row-actions, ' +
-        '.grab-handle--step, .expanded-checklist-add-btn, .checklist-expand-collapse-all-btn, .editor-body-convert-bar, ' +
-        '.ff-resize, .card-act--pin, ' +
-        '.tool-panel, .tool-chip, .tool-chip__drag, .tool-chip__actions, .tool-chip__expand, .tool-panel__header, ' +
+        '.card-actions, .card-act, .card-inline-edit, .rich-text--edit, ' +
+        '.editor-body-convert-bar, .ff-resize, .card-act--pin, ' +
+        '.tool-panel, .tool-chip, .tool-chip__drag, .tool-chip__actions, ' +
+        '.tool-chip__expand, .tool-panel__header, ' +
         'a, button, input, textarea, select'
     );
 }
