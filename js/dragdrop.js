@@ -16,7 +16,9 @@ import {
     isCollapsedSpatialSize,
     resolveTileSize,
     isAtOrBelowCompactZone,
-    inferTileTier
+    inferTileTier,
+    normalizeTileSize,
+    resolveCollapsedTierRect
 } from './tileGeometry.js';
 import { CANVAS_COL_GAP, CANVAS_LAYOUT_ORIGIN, getGridMetrics } from './gridDensity.js';
 import { initFileCabinetDrag, isFileCabinetActive, fileItemToCabinet, shouldFileItem } from './fileCabinet.js';
@@ -689,7 +691,7 @@ export const DragDropEngine = {
     },
 
     processCollapsedTierResizeMove(card, item, resizeState, rect, { maxW = Infinity, axis = 'se' } = {}) {
-        const resolved = geoResolveCollapsedTierRect(rect.w, rect.h, resizeState.previewTier);
+        const resolved = resolveCollapsedTierRect(rect.w, rect.h, resizeState.previewTier);
         let finalW = resolved.w;
         let finalH = resolved.h;
         let finalX = rect.x;

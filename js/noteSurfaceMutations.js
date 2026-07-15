@@ -3,6 +3,7 @@ import { normalizeItemForSave } from './noteModel.js';
 import { syncSheetFromDom } from './sheet.js';
 import { UndoManager } from './undo.js';
 import { sanitizeRichHtml, linkifyPlainUrls } from './richText.js';
+import { insertTextAtCaret } from './noteSurfaceEditing.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -242,6 +243,30 @@ function attachNoteBodyInteractions(root, item, {
         el.addEventListener('blur', () => {
             if (!localOnly) {
                 flushDesktopAutoSave(root, item);
+            }
+        });
+        
+        // Handle Enter key in content fields to insert <br> instead of browser default block containers
+        el.addEventListener('keydown', (e) => {
+            // Only intercept Enter key (without Shift) in content fields
+            if (e.key === 'Enter' && !e.shiftKey && el.dataset.field === 'content') {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Try execCommand first for native <br> insertion
+                const success = document.execCommand('insertLineBreak');
+                
+                // Fall back to range-based insertion if execCommand fails
+                if (!success) {
+                    insertTextAtCaret(el, '\n');
+                }
+                
+                // Immediately persist the change
+                if (localOnly) {
+                    onChange();
+                } else {
+                    scheduleDesktopAutoSave(root, item, el);
+                }
             }
         });
     });
