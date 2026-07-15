@@ -728,17 +728,23 @@ export function refreshNoteBody(body, item, {
         const newShell = mountZone.querySelector('.editor-note-shell');
         if (newShell) {
             const newBody = newShell.querySelector('.editor-note-body');
-            if (newBody && newBody.dataset.checklistInteractionsBound !== item.id) {
-                bindChecklistInteractions(newBody, item, {
-                    localOnly,
-                    onChange,
-                    refresh: localOnly ? () => refresh() : () => {}
-                });
-                attachChecklistDrag(newBody, item, {
-                    localOnly,
-                    onChange,
-                    refresh: localOnly ? () => refresh() : () => {}
-                });
+            if (newBody) {
+                // Bind interactions if not already bound to this item
+                if (newBody.dataset.checklistInteractionsBound !== item.id) {
+                    bindChecklistInteractions(newBody, item, {
+                        localOnly,
+                        onChange,
+                        refresh: localOnly ? () => refresh() : () => {}
+                    });
+                }
+                // Always ensure drag is bound (uses separate attribute checklistDragBound)
+                if (newBody.dataset.checklistDragBound !== item.id) {
+                    attachChecklistDrag(newBody, item, {
+                        localOnly,
+                        onChange,
+                        refresh: localOnly ? () => refresh() : () => {}
+                    });
+                }
             }
         }
     }

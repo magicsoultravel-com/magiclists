@@ -344,14 +344,30 @@ export function buildVisibleChecklistSteps(steps, itemId, collapsedKeys = {}) {
 }
 
 export function annotateChecklistTreeGuides(visibleRows) {
-    return (visibleRows || []).map((row, i) => {
-        const level = getStepLevel(row.step);
+    const rows = visibleRows || [];
+    if (rows.length === 0) return rows;
+    
+    // Pre-compute levels array for O(1) access
+    const levels = rows.map((row) => getStepLevel(row.step));
+    
+    // O(N) backward pass: compute max level below each row
+    // This replaces the O(N²) nested loop with a single backward traversal
+    const maxLevelBelow = new Array(rows.length).fill(0);
+    let runningMax = 0;
+    
+    for (let i = rows.length - 1; i >= 0; i--) {
+        maxLevelBelow[i] = runningMax;
+        runningMax = Math.max(runningMax, levels[i]);
+    }
+    
+    // Forward pass: build tree guides using pre-computed max levels
+    return rows.map((row, i) => {
+        const level = levels[i];
         const treeGuides = [];
+        
         if (level > 0) {
-            const prevLevel = i > 0 ? getStepLevel(visibleRows[i - 1].step) : -1;
-            const nextLevel = i < visibleRows.length - 1
-                ? getStepLevel(visibleRows[i + 1].step)
-                : -1;
+            const prevLevel = i > 0 ? levels[i - 1] : -1;
+            const nextLevel = i < rows.length - 1 ? levels[i + 1] : -1;
             const isFirst = prevLevel < level;
             const isLast = nextLevel < level;
             let branchRole;
@@ -362,13 +378,9 @@ export function annotateChecklistTreeGuides(visibleRows) {
 
             for (let d = 0; d < level; d++) {
                 if (d < level - 1) {
-                    let show = false;
-                    for (let j = i + 1; j < visibleRows.length; j++) {
-                        if (getStepLevel(visibleRows[j].step) > d) {
-                            show = true;
-                            break;
-                        }
-                    }
+                    // Check if any row below has a level greater than d
+                    // maxLevelBelow[i] tells us the maximum level in rows below
+                    const show = maxLevelBelow[i] > d;
                     treeGuides.push({ role: show ? 'through' : null });
                 } else {
                     treeGuides.push({ role: branchRole });

@@ -46,21 +46,63 @@ export function bindChecklistInteractions(root, item, {
     root.dataset.checklistInteractionsBound = item.id;
 
     // --- step checkbox (toggle completion) ---
+    // Optimized: Use class toggles for non-structural updates instead of full refresh
     root.addEventListener('change', (e) => {
         const cb = e.target.closest('.step-check');
         if (!cb || !root.contains(cb)) return;
         const row = cb.closest('.step-row--display');
-        const stepId = row?.dataset?.stepId;
+        if (!row) return;
+        const stepId = row.dataset.stepId;
         if (!stepId) return;
         const step = (item.steps || []).find(s => s.id === stepId);
         if (!step) return;
-        const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
-        step.completed = cb.checked;
-        syncItemBodyFromDom(root, item);
+        
+        const newCompleted = cb.checked;
+        const wasCompleted = step.completed;
+        
+        // For non-structural updates (checkbox toggle), update DOM directly
+        // This avoids layout thrashing from full template rebuilds
+        if (wasCompleted !== newCompleted) {
+            step.completed = newCompleted;
+            
+            // Update row class
+            row.classList.toggle('step-row--done', newCompleted);
+            
+            // Update step text class
+            const stepTextEl = row.querySelector('.step-text');
+            if (stepTextEl) {
+                stepTextEl.classList.toggle('completed', newCompleted);
+            }
+            
+            // Move row to done section or back to active section
+            const doneSection = root.querySelector('.checklist-done-section');
+            const addBtn = root.querySelector('.expanded-checklist-add-btn');
+            const doneToggle = root.querySelector('.checklist-done-toggle');
+            
+            if (newCompleted && doneSection) {
+                // Move to done section
+                doneSection.appendChild(row);
+            } else if (!newCompleted && doneSection && addBtn) {
+                // Move back to active section (before add button)
+                addBtn.parentNode.insertBefore(row, addBtn);
+            }
+            
+            // Update done toggle visibility
+            if (doneSection) {
+                const doneRows = doneSection.querySelectorAll('.step-row--display');
+                doneSection.classList.toggle('is-hidden', doneRows.length === 0);
+                if (doneToggle) {
+                    doneToggle.setAttribute('aria-expanded', doneRows.length > 0 ? 'true' : 'false');
+                }
+            }
+        }
+        
+        // Sync to item and persist
         if (localOnly) {
             onChange();
-            refresh();
         } else {
+            const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
+            syncItemBodyFromDom(root, item);
             commitInlineChecklistOp(item, beforeItem, { localOnly });
         }
     });
@@ -235,6 +277,47 @@ export function bindChecklistInteractions(root, item, {
     });
 }
 
+// Module-level cache for localStorage reads during active drag/render cycles
+let _cachedCollapsedKeys = null;
+let _cachedDoneCollapsed = null;
+let _cacheTimestamp = 0;
+const CACHE_TTL = 1000; // 1 second cache for hot paths
+
+function getCachedChecklistCollapsedKeys() {
+    const now = Date.now();
+    if (_cachedCollapsedKeys && (now - _cacheTimestamp) < CACHE_TTL) {
+        return _cachedCollapsedKeys;
+    }
+    _cachedCollapsedKeys = getChecklistCollapsedKeys();
+    _cacheTimestamp = now;
+    return _cachedCollapsedKeys;
+}
+
+function getCachedChecklistDoneCollapsed() {
+    const now = Date.now();
+    if (_cachedDoneCollapsed && (now - _cacheTimestamp) < CACHE_TTL) {
+        return _cachedDoneCollapsed;
+    }
+    _cachedDoneCollapsed = getChecklistDoneCollapsed();
+    _cacheTimestamp = now;
+    return _cachedDoneCollapsed;
+}
+
+function invalidateChecklistCache() {
+    _cachedCollapsedKeys = null;
+    _cachedDoneCollapsed = null;
+    _cacheTimestamp = 0;
+}
+
+// Unified state synchronizer for checklist step text updates
+function syncChecklistStepToItem(el, item) {
+    const stepId = el.dataset.stepId;
+    const step = item.steps?.find((s) => s.id === stepId);
+    if (step) {
+        step.text = el.textContent || '';
+    }
+}
+
 export function attachChecklistDrag(root, item, {
     refresh = () => {},
     localOnly = false,
@@ -242,6 +325,18 @@ export function attachChecklistDrag(root, item, {
 } = {}) {
     if (!root || !item) return;
     if (root.dataset.checklistDragBound === item.id) return;
+    
+    // Clean up any existing drag listeners from previous bindings
+    if (root.dataset.checklistDragBound) {
+        // Remove old stored references if any
+        const oldData = root._checklistDragData;
+        if (oldData) {
+            document.removeEventListener('mousemove', oldData.onMove);
+            document.removeEventListener('mouseup', oldData.onUp);
+            delete root._checklistDragData;
+        }
+    }
+    
     root.dataset.checklistDragBound = item.id;
     
     // Local helper for applying mutations during drag operations
@@ -316,7 +411,8 @@ export function attachChecklistDrag(root, item, {
         if (moved) {
             const shell = root.closest('.editor-note-shell') || root;
             syncItemBodyFromDom(shell, item);
-            const collapsedKeys = getChecklistCollapsedKeys();
+            // Use cached values during drag operations
+            const collapsedKeys = getCachedChecklistCollapsedKeys();
             const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
             let parentIdToExpand = null;
             applyMutate((it) => {
@@ -346,6 +442,8 @@ export function attachChecklistDrag(root, item, {
             }
         }
         activeDrag = null;
+        // Invalidate cache after drag completes
+        invalidateChecklistCache();
     };
 
     const onMove = (e) => {
@@ -359,6 +457,7 @@ export function attachChecklistDrag(root, item, {
         e.preventDefault();
         syncDomBlock();
 
+        // Use cached values during drag for performance
         const rows = getActiveRows();
         const { block, bounds, isSingleLeaf } = activeDrag;
         const { insertIndex, dropMode, others } = resolvePointerDropTarget(
@@ -384,8 +483,10 @@ export function attachChecklistDrag(root, item, {
 
     const onUp = () => finishDrag();
 
-    // Attach mousedown handler for grab-handle to initiate drag
-    root.addEventListener('mousedown', (e) => {
+    // Attach pointerdown handler for grab-handle to initiate drag
+    // Using pointerdown instead of mousedown to avoid conflicts with touch/hybrid hardware
+    // and to prevent being swallowed by mousedown propagation filters
+    root.addEventListener('pointerdown', (e) => {
         if (e.button !== 0) return;
         const handle = e.target.closest('.grab-handle--step');
         if (!handle || !root.contains(handle)) return;
@@ -398,6 +499,10 @@ export function attachChecklistDrag(root, item, {
         const activeSteps = (item.steps || []).filter((step) => !step.completed);
         const stepIndex = activeSteps.findIndex((step) => step.id === stepId);
         if (stepIndex < 0) return;
+
+        // Cache localStorage reads at drag start for performance
+        getCachedChecklistCollapsedKeys();
+        getCachedChecklistDoneCollapsed();
 
         const visibleIds = getActiveRows().map((r) => r.dataset.stepId);
         const { subtreeIds, minAmongOthers, maxAmongOthers } = computeVisibleInsertBounds(
@@ -425,6 +530,10 @@ export function attachChecklistDrag(root, item, {
             startY: e.clientY,
             moved: false
         };
+        
+        // Store references for cleanup on re-render
+        root._checklistDragData = { onMove, onUp };
+        
         document.addEventListener('mousemove', onMove);
         document.addEventListener('mouseup', onUp);
     }, true);
@@ -525,8 +634,10 @@ export function toggleChecklistExpandCollapseAll(item) {
 
 export function buildChecklistExpandCollapseAllHtml(item) {
     if (!item?.id || !checklistHasIndentations(item.steps)) return '';
-    if (getChecklistCollapsedKeys().length === 0) return '';
-    const anyExpanded = getChecklistCollapsibleKeys(item).some((key) => !getChecklistCollapsedKeys()[key]);
+    const collapsibleKeys = getChecklistCollapsibleKeys(item);
+    if (collapsibleKeys.length === 0) return '';
+    const collapsed = getChecklistCollapsedKeys();
+    const anyExpanded = collapsibleKeys.some((key) => !collapsed[key]);
     const label = anyExpanded ? 'Collapse all checklist groups' : 'Expand all checklist groups';
     const icon = anyExpanded ? ACTION_ICONS.collapseAll : ACTION_ICONS.expandAll;
     return `<div class="checklist-toolbar">
@@ -602,7 +713,7 @@ export function handleChecklistBackspace(e, item, { localOnly = false, onChange 
 
     if (text.length > 0) {
         active.textContent = text.slice(0, -1);
-        syncStepTextToItem(active, item);
+        syncChecklistStepToItem(active, item);
         if (!localOnly) {
             mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
         }
@@ -649,7 +760,7 @@ export function handleChecklistDelete(e, item, { localOnly = false, onChange = (
 
     if (text.length > 0) {
         active.textContent = text.slice(0, -1);
-        syncStepTextToItem(active, item);
+        syncChecklistStepToItem(active, item);
         if (!localOnly) {
             mutateItem(item, () => {}, { preserveView: true, skipRerender: true });
         }
@@ -767,14 +878,6 @@ export function prepareInlineOpSnapshot(root, item, localOnly) {
     const snapshot = JSON.parse(JSON.stringify(item));
     snapshot._localOnly = localOnly;
     return snapshot;
-}
-
-function syncStepTextToItem(el, item) {
-    const stepId = el.dataset.stepId;
-    const step = item.steps?.find((s) => s.id === stepId);
-    if (step) {
-        step.text = el.textContent || '';
-    }
 }
 
 /**
