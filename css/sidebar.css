@@ -541,8 +541,8 @@ html[data-note-font="kalam"] .mini-card .step-text {
 }
 
 .sidebar-module--undocked.sidebar-history-section {
-    width: 100%;
-    max-width: 100%;
+    width: var(--sidebar-module-width, 220px);
+    max-width: calc(100% - 16px);
 }
 
 .sidebar-module--undocked .sidebar-history-list,

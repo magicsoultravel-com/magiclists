@@ -102,6 +102,24 @@ export function restoreModuleToSidebar(id) {
     mount.appendChild(root);
 }
 
+function applyModuleWidth(root, width) {
+    if (!root || !width) return;
+    root.style.setProperty('--sidebar-module-width', `${width}px`);
+}
+
+export function getSidebarModuleWidth() {
+    const panel = document.querySelector('.side-panel');
+    const raw = panel ? parseFloat(getComputedStyle(panel).getPropertyValue('--sidebar-width')) : NaN;
+    return Number.isFinite(raw) && raw >= SIDEBAR_MODULE_WIDTH ? raw : SIDEBAR_MODULE_WIDTH;
+}
+
+export function applyAllModuleWidths() {
+    const width = getSidebarModuleWidth();
+    SIDEBAR_MODULES.forEach((config) => {
+        applyModuleWidth(document.getElementById(config.rootId), width);
+    });
+}
+
 function normalizeModuleHeadings() {
     SIDEBAR_MODULES.forEach((config) => {
         const header = document.getElementById(config.headerId);
@@ -179,6 +197,8 @@ export function bindSidebarReattachAll() {
 export function initAllSidebarModules() {
     normalizeModuleHeadings();
     bindAllModuleCollapseHandlers();
+    applyAllModuleWidths();
+    window.addEventListener('sidebar:width_changed', applyAllModuleWidths);
 
     SIDEBAR_MODULES.forEach((config) => {
         const root = document.getElementById(config.rootId);

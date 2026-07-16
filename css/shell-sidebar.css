@@ -203,20 +203,11 @@
     padding: 0 0.2rem;
 }
 
-/* Sidebar module base - ensure width inheritance */
-.sidebar-module {
-    width: 100%;
-    max-width: 100%;
-    box-sizing: border-box;
-    min-width: 0;
-}
-
 /* Sidebar module undocked state */
 .sidebar-module--undocked {
     position: fixed;
     box-sizing: border-box;
-    width: 100%;
-    max-width: 100%;
+    width: var(--sidebar-module-width, 220px);
     padding: 0 0.5rem 0.45rem;
     margin-bottom: 0;
     border-bottom: none;
@@ -275,7 +266,7 @@
 .side-panel--undocked {
     position: fixed;
     box-sizing: border-box;
-    width: var(--sidebar-width, 220px);
+    width: 220px;
     height: fit-content;
     padding: 0.55rem 0.5rem 0.45rem;
     margin-bottom: 0;
@@ -399,24 +390,6 @@
     border-bottom: none;
     margin-bottom: 0;
     padding-bottom: 0.15rem;
-}
-
-/* Minimal state - hide body content, center icons */
-.side-panel--minimal .collapsable-section {
-    display: none !important;
-}
-
-.side-panel--minimal .sidebar-module > .collapsable-header {
-    justify-content: center;
-}
-
-.side-panel--minimal .collapsable-heading {
-    gap: 0;
-    font-size: 0;
-}
-
-.side-panel--minimal .collapsable-toggle {
-    font-size: 0.55rem;
 }
 
 /* Shell splitters */
