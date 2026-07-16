@@ -54,42 +54,42 @@
         </div>
     </div>
 
-    <div id="workspace-shell" class="workspace-shell">
-        <button type="button" id="nav-panel-toggle-fab" class="side-panel-toggle-fab is-hidden" title="Show panel" aria-label="Show side panel">
+<div id="workspace-shell" class="workspace-shell">
+        <button type="button" id="nav-panel-toggle-fab" class="side-panel-toggle-fab is-hidden" title="Show panel" aria-label="Show side panel" style="margin-left: 0.5rem;">
             <img class="app-brand__icon" src="./assets/brand/icon-clipboard.svg" alt="" width="16" height="16" decoding="async">
         </button>
 
         <aside id="side-panel" class="side-panel" aria-label="Side panel">
             <div id="side-panel-brand-host" class="side-panel-brand-host is-visible">
                 <div class="control-bar-brand is-in-sidebar">
-                    <button type="button" id="nav-panel-toggle" class="side-panel-toggle-btn" title="Hide panel" aria-label="Hide side panel" aria-expanded="true">
+                    <button type="button" id="nav-panel-toggle" class="side-panel-toggle-btn" title="Hide panel" aria-label="Hide side panel" aria-expanded="true" style="margin-right: 0.25rem;">
                         <img class="app-brand__icon" src="./assets/brand/icon-clipboard.svg" alt="" width="16" height="16" decoding="async">
                     </button>
                     <div id="app-brand" class="app-brand">
                         <span class="app-brand__text">magicNotes</span>
                     </div>
+                    <button type="button" id="sidebar-reattach-all" class="card-act sidebar-reattach-all is-hidden" title="Reattach all" aria-label="Reattach all"></button>
                 </div>
-            </div>
 
-            <div class="side-panel-chrome side-panel-search">
-                <div id="side-panel-search" class="side-panel-search-wrap">
-                    <button type="button" id="side-panel-search-toggle" class="btn btn--compact btn-icon side-panel-search-toggle is-hidden" title="Search notes" aria-label="Search notes" aria-expanded="false" aria-controls="workspace-search-input">⌕</button>
-                    <div class="side-panel-search-field">
-                        <input type="search" id="workspace-search-input" class="side-panel-search-input form-input" placeholder="Search…" aria-label="Search notes" autocomplete="off" spellcheck="false" aria-expanded="false" aria-controls="workspace-search-panel">
-                        <button type="button" id="workspace-search-clear" class="side-panel-search-clear" title="Clear search" aria-label="Clear search">×</button>
+                <div class="side-panel-chrome side-panel-search">
+                    <div id="side-panel-search" class="side-panel-search-wrap">
+                        <button type="button" id="side-panel-search-toggle" class="btn btn--compact btn-icon side-panel-search-toggle is-hidden" title="Search notes" aria-label="Search notes" aria-expanded="false" aria-controls="workspace-search-input">⌕</button>
+                        <div class="side-panel-search-field">
+                            <input type="search" id="workspace-search-input" class="side-panel-search-input form-input" placeholder="Search…" aria-label="Search notes" autocomplete="off" spellcheck="false" aria-expanded="false" aria-controls="workspace-search-panel">
+                            <button type="button" id="workspace-search-clear" class="side-panel-search-clear" title="Clear search" aria-label="Clear search">×</button>
+                        </div>
+                        <div id="workspace-search-panel" class="search-results-panel is-hidden" role="listbox" aria-label="Search results"></div>
                     </div>
-                    <div id="workspace-search-panel" class="search-results-panel is-hidden" role="listbox" aria-label="Search results"></div>
                 </div>
-            </div>
 
-            <div class="side-panel-modules">
-            <div id="sidebar-clock" class="sidebar-module sidebar-clock side-panel-clock">
-                <div class="collapsable-header" id="clock-section-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle"><svg viewBox="0 0 12 12" width="9" height="9" focusable="false"><path d="M3.2 4.8 6 7.6 8.8 4.8" fill="none" stroke="currentColor" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Clock</span>
-                    <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
-                </div>
-                <div class="collapsable-section" id="clock-section">
-                    <div id="digital-clock" class="logo-zone logo-zone--clock logo-zone--sidebar">
+                <div class="side-panel-modules">
+                    <div id="sidebar-clock" class="sidebar-module sidebar-clock side-panel-clock">
+                        <div class="collapsable-header" id="clock-section-header">
+                            <span class="collapsable-heading"><span class="collapsable-toggle"><svg viewBox="0 0 12 12" width="9" height="9" focusable="false"><path d="M3.2 4.8 6 7.6 8.8 4.8" fill="none" stroke="currentColor" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Clock</span>
+                            <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
+                        </div>
+                        <div class="collapsable-section" id="clock-section">
+                            <div id="digital-clock" class="logo-zone logo-zone--clock logo-zone--sidebar">
                         <button type="button" id="clock-display" class="clock-display clock-display-trigger" title="Change clock style" aria-label="Clock and date — change style" aria-expanded="false" aria-haspopup="menu">
                             <span id="clock-date" class="clock-chip clock-chip--date">—</span>
                             <span id="clock-time" class="clock-chip clock-chip--time">—</span>
@@ -235,7 +235,6 @@
                 <div class="collapsable-section collapsed" id="stats-section">
                     <div id="sidebar-storage-stats" class="sidebar-storage-stats" aria-label="Workspace stats"></div>
                 </div>
-            </div>
             </div>
 
             <input type="file" id="system-import-file-picker" accept=".json" class="is-hidden">
