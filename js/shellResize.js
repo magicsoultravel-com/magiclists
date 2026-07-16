@@ -87,7 +87,7 @@ function cabinetScaleForHeight(height, mount) {
 }
 
 function applySidebarUiScale(width) {
-    if (!sidebarPanel || !isSidebarInFlow()) return;
+    if (!sidebarPanel || isSidebarCollapsed()) return;
     const scale = sidebarScaleForWidth(width);
     sidebarPanel.style.setProperty('--sidebar-ui-scale', String(scale));
 }
@@ -109,7 +109,7 @@ function notifySidebarWidthChanged() {
 }
 
 function applySidebarWidth(width) {
-    if (!sidebarPanel || !isSidebarInFlow()) return;
+    if (!sidebarPanel || isSidebarCollapsed()) return;
     const clamped = clampSidebarWidth(width);
     sidebarPanel.style.setProperty('--sidebar-width', `${clamped}px`);
     applySidebarUiScale(clamped);
@@ -254,13 +254,13 @@ function bindSplitterDrag(handle, axis) {
         }
     };
 
-    handle.addEventListener('pointerdown', (e) => {
+handle.addEventListener('pointerdown', (e) => {
         if (e.button !== 0) return;
         e.preventDefault();
         e.stopPropagation();
 
         if (axis === 'v') {
-            if (!isSidebarInFlow()) return;
+            if (isSidebarCollapsed()) return;
             startSize = sidebarPanel.offsetWidth;
         } else {
             const mount = document.getElementById('file-cabinet');
@@ -303,7 +303,7 @@ function applyStoredSidebarWidth() {
 }
 
 function reclampAll() {
-    if (isSidebarInFlow()) {
+    if (!isSidebarCollapsed()) {
         applyStoredSidebarWidth();
     } else {
         clearSidebarAppliedWidth();
@@ -338,7 +338,7 @@ export function syncCabinetSplitter() {
 
 export function onShellDockChanged() {
     updateVerticalSplitterVisibility();
-    if (isSidebarInFlow()) {
+    if (!isSidebarCollapsed()) {
         applyStoredSidebarWidth();
     } else {
         clearSidebarAppliedWidth();
@@ -349,7 +349,7 @@ export function onShellDockChanged() {
 
 export function onSidebarCollapseChanged() {
     updateVerticalSplitterVisibility();
-    if (isSidebarInFlow()) {
+    if (!isSidebarCollapsed()) {
         applyStoredSidebarWidth();
     } else {
         clearSidebarAppliedWidth();
@@ -373,7 +373,7 @@ export function initShellResize() {
 
     bound = true;
     clearSidebarAppliedWidth();
-    if (isSidebarInFlow()) applyStoredSidebarWidth();
+    if (!isSidebarCollapsed()) applyStoredSidebarWidth();
     ensureVerticalSplitter();
     updateVerticalSplitterVisibility();
     syncCabinetSplitter();

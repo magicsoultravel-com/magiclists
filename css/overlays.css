@@ -218,6 +218,10 @@ textarea.form-input {
 }
 
 .collapsable-section {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
     max-height: 1000px;
     overflow: hidden;
     transition: max-height 0.25s ease, opacity 0.25s ease;

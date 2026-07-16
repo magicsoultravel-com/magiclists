@@ -22,6 +22,10 @@
     z-index: 340;
     display: flex;
     flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
     padding: 0;
     overflow: hidden;
     font-size: 0.66rem;
@@ -32,6 +36,10 @@
     z-index: 342;
     display: flex;
     flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    min-width: 0;
     padding: 0;
     overflow: hidden;
     font-size: 0.66rem;
