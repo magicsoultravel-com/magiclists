@@ -109,6 +109,7 @@
 .control-bar-brand.is-in-sidebar {
     display: flex;
     align-items: center;
+    flex-wrap: nowrap;
     gap: 0.15rem;
     min-width: 0;
 }
