@@ -166,11 +166,10 @@ export function computeVisibleInsertBounds(activeSteps, startIndex, visibleIds, 
     return { minAmongOthers, maxAmongOthers, subtreeIds: subtreeIds || [...blockIdSet], others };
 }
 
-export function resolvePointerDropTarget(clientY, visibleRows, blockRows, { bounds = null, isSingleLeaf = false } = {}) {
+export function resolvePointerDropTarget(clientY, visibleRows, blockRows, { bounds = null } = {}) {
     const blockSet = new Set(blockRows);
     const others = visibleRows.filter((row) => !blockSet.has(row));
     let insertIndex = others.length;
-    let dropMode = 'sibling';
 
     for (let i = 0; i < others.length; i++) {
         const box = others[i].getBoundingClientRect();
@@ -178,33 +177,25 @@ export function resolvePointerDropTarget(clientY, visibleRows, blockRows, { boun
 
         if (clientY < box.top) {
             insertIndex = i;
-            if (i > 0 && getStepRowLevel(others[i - 1]) < getStepRowLevel(others[i])) {
-                dropMode = 'child';
-            } else {
-                dropMode = 'sibling';
-            }
             break;
         }
         if (clientY <= midY) {
             insertIndex = i;
-            dropMode = 'sibling';
             break;
         }
         if (clientY <= box.bottom) {
             insertIndex = i + 1;
-            dropMode = 'child';
             break;
         }
     }
 
-    if (bounds && !isSingleLeaf) {
+    // Clamp insert index within valid bounds to prevent dropping into indented groups
+    if (bounds) {
         insertIndex = Math.max(bounds.minAmongOthers, Math.min(bounds.maxAmongOthers, insertIndex));
-        if (dropMode === 'child' && insertIndex > 0 && insertIndex <= others.length) {
-            const parentRow = others[insertIndex - 1];
-            if (!parentRow) dropMode = 'sibling';
-        }
     }
 
+    // Always use sibling mode - steps are reordered at the same level
+    const dropMode = 'sibling';
     const targetLevel = previewDropTargetLevel(others, insertIndex, dropMode);
     return { insertIndex, dropMode, others, targetLevel };
 }

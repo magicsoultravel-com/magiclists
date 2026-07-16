@@ -457,7 +457,7 @@ export function attachChecklistDrag(root, item, {
 
     const finishDrag = () => {
         if (!activeDrag) return;
-        const { block, moved, blockStepIds, dropMode } = activeDrag;
+        const { block, moved, blockStepIds } = activeDrag;
         const blockRootId = blockStepIds[0];
         block.forEach((r) => r.classList.remove('is-dragging'));
         hideDropIndicator();
@@ -482,7 +482,7 @@ export function attachChecklistDrag(root, item, {
                     item.id,
                     collapsedKeys
                 );
-                const dropResult = resolveDropTarget(reordered, blockRootId, { mode: dropMode || 'sibling' });
+                const dropResult = resolveDropTarget(reordered, blockRootId, { mode: 'sibling' });
                 parentIdToExpand = dropResult?.parentId || null;
                 normalizeChecklistLevels(reordered);
                 it.steps = [...reordered, ...doneSteps];
@@ -514,17 +514,15 @@ export function attachChecklistDrag(root, item, {
         e.preventDefault();
         syncDomBlock();
 
-        // Use cached values during drag for performance
-        const rows = getActiveRows(root);
-        const { block, bounds, isSingleLeaf } = activeDrag;
-        const { insertIndex, dropMode, others } = resolvePointerDropTarget(
+        // Use cached rows to avoid repeated DOM queries during pointermove
+        const { block, bounds, cachedRows } = activeDrag;
+        const { insertIndex, others } = resolvePointerDropTarget(
             e.clientY,
-            rows,
+            cachedRows,
             block,
-            { bounds, isSingleLeaf }
+            { bounds }
         );
 
-        activeDrag.dropMode = dropMode;
         if (activeDrag.lastInsertIndex !== insertIndex) {
             activeDrag.lastInsertIndex = insertIndex;
             moveBlockInDom(block, insertIndex, others);
@@ -561,27 +559,22 @@ export function attachChecklistDrag(root, item, {
         getCachedChecklistCollapsedKeys();
         getCachedChecklistDoneCollapsed();
 
-        const visibleIds = getActiveRows(root).map((r) => r.dataset.stepId);
+        // Cache active rows at drag start to avoid repeated DOM queries during pointermove
+        const cachedRows = getActiveRows(root);
+        const visibleIds = cachedRows.map((r) => r.dataset.stepId);
         const { subtreeIds, minAmongOthers, maxAmongOthers } = computeVisibleInsertBounds(
             activeSteps,
             stepIndex,
             visibleIds
         );
-        const isSingleLeaf = subtreeIds.length === 1
-            || !stepHasDescendants(activeSteps, stepIndex);
-        const rows = getActiveRows(root);
-        const block = buildDomBlockFromIds(rows, subtreeIds);
-        const othersCount = visibleIds.filter((id) => !subtreeIds.includes(id)).length;
+        const block = buildDomBlockFromIds(cachedRows, subtreeIds);
 
         activeDrag = {
             row,
             block,
             blockStepIds: subtreeIds,
-            isSingleLeaf,
-            bounds: isSingleLeaf
-                ? { minAmongOthers: 0, maxAmongOthers: othersCount }
-                : { minAmongOthers, maxAmongOthers },
-            dropMode: 'sibling',
+            bounds: { minAmongOthers, maxAmongOthers },
+            cachedRows,
             lastInsertIndex: -1,
             startX: e.clientX,
             startY: e.clientY,
