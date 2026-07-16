@@ -1,4 +1,4 @@
-/** @css {"owns":"side panel, sidebar module undock chrome", "js":["hamburger.js","sidebarModules.js","sidebarPrefs.js","sidebarShell.js","shellResize.js"]} */
+/** @css {"owns":"side panel, sidebar module undock chrome", "js":["hamburger.js","sidebarModules.js","sidebarPrefs.js"]} */
 /* ==========================================================================
    SHELL SIDEBAR - Side panel, sidebar module undock chrome
    ========================================================================== */
@@ -80,32 +80,6 @@
     cursor: default;
 }
 
-.sidebar-shell__dock {
-    flex-shrink: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    margin-left: auto;
-    padding: 0.12rem;
-    border: none;
-    background: transparent;
-    border-radius: 3px;
-    line-height: 0;
-    color: var(--text-muted);
-    opacity: 0.8;
-    cursor: pointer;
-}
-
-.sidebar-reattach-all:not(.is-hidden) + .sidebar-shell__dock,
-.control-bar-brand:has(.sidebar-reattach-all:not(.is-hidden)) .sidebar-shell__dock {
-    margin-left: 0.15rem;
-}
-
-.sidebar-shell__dock:hover {
-    opacity: 1;
-    background: var(--bg-hover, rgba(0, 0, 0, 0.06));
-}
-
 .control-bar-brand.is-in-sidebar {
     display: flex;
     align-items: center;
@@ -115,14 +89,6 @@
 }
 
 .control-bar-brand.is-in-sidebar .sidebar-reattach-all {
-    margin-left: auto;
-}
-
-.control-bar-brand.is-in-sidebar .sidebar-shell__dock {
-    margin-left: 0;
-}
-
-.control-bar-brand.is-in-sidebar:has(.sidebar-reattach-all.is-hidden) .sidebar-shell__dock {
     margin-left: auto;
 }
 
@@ -262,64 +228,6 @@
     opacity: 1;
 }
 
-/* Side panel undocked state (whole sidebar undocked) */
-.side-panel--undocked {
-    position: fixed;
-    box-sizing: border-box;
-    width: 220px;
-    height: fit-content;
-    padding: 0.55rem 0.5rem 0.45rem;
-    margin-bottom: 0;
-    background: var(--chrome-bg, var(--bg-surface));
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-    overflow: hidden;
-    pointer-events: auto;
-}
-
-.side-panel--undocked .side-panel-brand-host,
-.side-panel--undocked .side-panel-search {
-    flex-shrink: 0;
-}
-
-.side-panel--undocked .side-panel-modules {
-    flex: 0 0 auto;
-    max-height: none;
-    overflow-y: visible;
-}
-
-.side-panel--undocked .sidebar-module .collapsable-section {
-    max-height: min(60vh, 480px);
-    overflow-y: auto;
-}
-
-.side-panel--undocked .collapsable-header {
-    cursor: grab;
-    user-select: none;
-}
-
-.side-panel--undocked .side-panel-brand-host {
-    cursor: grab;
-}
-
-.side-panel--dragging,
-.side-panel--undocked.side-panel--dragging {
-    cursor: grabbing;
-    opacity: var(--desktop-drag-opacity, 0.85);
-}
-
-.side-panel--undocked .side-panel-scale-inner {
-    width: 100%;
-    zoom: 1;
-}
-
-@supports not (zoom: 1) {
-    .side-panel--undocked .side-panel-scale-inner {
-        zoom: unset;
-        transform: none;
-    }
-}
 
 /* Side panel collapsed state */
 .side-panel.is-collapsed {
@@ -335,62 +243,6 @@
     display: none;
 }
 
-/* Side panel minimal state */
-.side-panel--minimal {
-    --sidebar-width: 68px;
-    width: var(--sidebar-width);
-    padding-left: 0.35rem;
-    padding-right: 0.35rem;
-}
-
-.side-panel--minimal .app-brand__text {
-    display: none;
-}
-
-.side-panel--minimal .control-bar-brand.is-in-sidebar {
-    justify-content: center;
-    flex-wrap: wrap;
-    gap: 0.2rem;
-}
-
-.side-panel--minimal .sidebar-shell__dock,
-.side-panel--minimal .sidebar-reattach-all {
-    margin-left: 0;
-}
-
-.side-panel--minimal .side-panel-search-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.side-panel--minimal .side-panel-search-field {
-    display: none;
-}
-
-.side-panel--minimal .side-panel-search-wrap.side-panel-search--expanded {
-    position: relative;
-}
-
-.side-panel--minimal .side-panel-search-wrap.side-panel-search--expanded .side-panel-search-field {
-    display: flex;
-    position: absolute;
-    z-index: 8;
-    top: 0;
-    left: calc(100% + 0.35rem);
-    width: min(220px, calc(100% - 5rem));
-    background: var(--chrome-bg, var(--bg-surface));
-    border: 1px solid var(--border-color);
-    border-radius: 6px;
-    padding: 0.2rem;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-}
-
-.side-panel--minimal .side-panel-chrome.side-panel-search {
-    border-bottom: none;
-    margin-bottom: 0;
-    padding-bottom: 0.15rem;
-}
 
 /* Shell splitters */
 .shell-splitter {

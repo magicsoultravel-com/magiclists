@@ -1,7 +1,7 @@
 // js/desktopStack.js — shared z-order for freeform notes, grid notes, tool panels, and undocked sidebar panels
 let seq = 1;
 
-const UNDOCKED_SEL = '.sidebar-module--undocked, .side-panel--undocked';
+const UNDOCKED_SEL = '.sidebar-module--undocked';
 
 export function syncDesktopStackSeq(z) {
     if (Number.isFinite(z) && z >= seq) seq = z + 1;

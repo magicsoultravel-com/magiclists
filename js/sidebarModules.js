@@ -12,7 +12,6 @@ import { TvPopover } from './tvPopover.js';
 import { ToolsManager } from './toolsManager.js';
 import { ClockStyle } from './clockStyle.js';
 import { CARD_ICONS } from './icons.js';
-import { reattachSidebarShell, isShellUndocked } from './sidebarShell.js';
 
 export { SIDEBAR_MODULE_UNDOCKED, SIDEBAR_MODULE_DRAGGING, SIDEBAR_MODULE_DOCK_SEL };
 
@@ -166,7 +165,6 @@ export function reattachAllSidebarModules() {
 
 export function reattachAllFloatingChrome() {
     reattachAllSidebarModules();
-    reattachSidebarShell();
     ToolsManager.closeAll();
     updateReattachAllButton();
 }
@@ -176,7 +174,7 @@ export function updateReattachAllButton() {
     if (!btn) return;
     const undocked = document.querySelectorAll(`.sidebar-module.${SIDEBAR_MODULE_UNDOCKED}`).length;
     const toolsOpen = ToolsManager.openPanels?.size ?? 0;
-    const active = undocked > 0 || toolsOpen > 0 || isShellUndocked();
+    const active = undocked > 0 || toolsOpen > 0;
     btn.classList.toggle('is-hidden', !active);
     btn.disabled = !active;
 }

@@ -93,10 +93,7 @@ export const SidePanel = {
         this.toggleFab?.addEventListener('click', () => this.toggle());
     },
 
-    setCollapsed(collapsed, { persist = true } = {}) {
-        if (collapsed && this.panel?.classList.contains('side-panel--undocked')) {
-            window.dispatchEvent(new CustomEvent('sidebar:shell_dock_requested'));
-        }
+setCollapsed(collapsed, { persist = true } = {}) {
         this.panel?.classList.toggle('is-collapsed', collapsed);
         this.toggleBtn?.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
         this.toggleBtn?.setAttribute('title', collapsed ? 'Show panel' : 'Hide panel');

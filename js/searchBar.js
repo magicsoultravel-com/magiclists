@@ -39,15 +39,14 @@ export const SearchBar = {
             this.toggleCompactSearch(true);
         });
 
-        this.input.addEventListener('blur', () => {
-            if (!SidePanel.panel?.classList.contains('side-panel--minimal')) return;
-            if (this.input.value.trim()) return;
-            window.setTimeout(() => {
-                if (!this.root?.contains(document.activeElement)) {
-                    this.toggleCompactSearch(false);
-                }
-            }, 120);
-        });
+this.input.addEventListener('blur', () => {
+        if (this.input.value.trim()) return;
+        window.setTimeout(() => {
+            if (!this.root?.contains(document.activeElement)) {
+                this.toggleCompactSearch(false);
+            }
+        }, 120);
+    });
 
         this.input.addEventListener('input', () => this.onInput());
         this.input.addEventListener('keydown', (e) => this.onInputKeydown(e));
@@ -60,15 +59,12 @@ export const SearchBar = {
             this.clear();
         });
 
-        this.globalKeyHandler = (e) => {
+this.globalKeyHandler = (e) => {
             if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'k') return;
             if (this.isEditableTarget(e.target)) return;
             e.preventDefault();
             if (SidePanel.panel?.classList.contains('is-collapsed')) {
                 SidePanel.setCollapsed(false, { persist: false });
-            }
-            if (SidePanel.panel?.classList.contains('side-panel--minimal')) {
-                this.toggleCompactSearch(true);
             }
             this.input.focus();
             this.input.select();

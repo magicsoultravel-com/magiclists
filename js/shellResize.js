@@ -33,12 +33,8 @@ function isSidebarCollapsed() {
     return sidebarPanel?.classList.contains('is-collapsed') ?? true;
 }
 
-function isShellUndocked() {
-    return sidebarPanel?.classList.contains('side-panel--undocked') ?? false;
-}
-
 function isSidebarInFlow() {
-    return !isSidebarCollapsed() && !isShellUndocked();
+    return !isSidebarCollapsed();
 }
 
 function getSidebarWidthBounds() {
@@ -211,7 +207,7 @@ function removeHorizontalSplitter() {
 
 function updateVerticalSplitterVisibility() {
     if (!verticalSplitter) return;
-    const hidden = isSidebarCollapsed() || isShellUndocked();
+    const hidden = isSidebarCollapsed();
     verticalSplitter.classList.toggle('is-hidden', hidden);
     verticalSplitter.setAttribute('aria-hidden', hidden ? 'true' : 'false');
 }

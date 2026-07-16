@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-16T14:48:55.634Z
+> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-16T21:21:48.633Z
 
 ## CSS load order
 
@@ -14,7 +14,7 @@ alwaysApply: true
 | css/base.css | :root tokens, tile/grid vars, .is-hidden | gridDensity.js, tileFootprint.js, appTheme.js | - | 1 |
 | css/shell-core.css | workspace shell, FAB, .btn, boot splash, shared utilities | hamburger.js, displayOptions.js, ui.js, bootProgress.js, fileCabinet.js, shellResize.js, sidebarModules.js, sidebarShell.js | - | 2 |
 | css/shell-filecabinet.css | file cabinet drawer-specific styles, filed chip rail | fileCabinet.js, shellResize.js | unique drawer/rollout styles; base file-cabinet styles moved to board.css | 3 |
-| css/shell-sidebar.css | side panel, sidebar module undock chrome | hamburger.js, sidebarModules.js, sidebarPrefs.js, sidebarShell.js, shellResize.js | - | 4 |
+| css/shell-sidebar.css | side panel, sidebar module undock chrome | hamburger.js, sidebarModules.js, sidebarPrefs.js | - | 4 |
 | css/shell-display-options.css | display options modal | displayOptions.js, hamburger.js | - | 5 |
 | css/shell-editor.css | note-editor typography, note footer, quick actions, checklist chrome | ui.js, noteSurface.js, displayOptions.js, hamburger.js | - | 6 |
 | css/sidebar.css | side panel, search, notes list, control bar | hamburger.js, searchBar.js, sidebarPrefs.js | - | 7 |
@@ -68,7 +68,6 @@ alwaysApply: true
 | js/sidebarHistory.js | sidebar undo history module | undo.js, popoverPosition.js, sidebarModules.js | - | - |
 | js/sidebarModules.js | sidebar module registry, undock wiring, re-dock slots | sidebarUndock.js, sidebarPrefs.js, desktopStack.js, hamburger.js | - | - |
 | js/sidebarRadio.js | sidebar radio player and station browser | radioPlayer.js, radioProviders/registry.js, radioPopover.js, sidebarModules.js | - | - |
-| js/sidebarShell.js | sidebar shell undock, minimal rail presentation | sidebarUndock.js, sidebarModules.js, sidebarPrefs.js, shellResize.js, hamburger.js | - | - |
 | js/sidebarStats.js | sidebar workspace stats module | layoutStorage.js, backup.js, sidebarModules.js | - | - |
 | js/sidebarTv.js | sidebar TV player and channel browser | tvPlayer.js, tvProviders/registry.js, tvPopover.js, sidebarModules.js | tv:state_changed | - |
 | js/sidebarUndock.js | shared undock/drag/clamp for sidebar panels | desktopStack.js, popoverPosition.js, sidebarPrefs.js | - | - |
