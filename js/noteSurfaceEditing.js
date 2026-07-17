@@ -238,7 +238,8 @@ export function isAtAbsoluteStart(element) {
     preCaretRange.selectNodeContents(element);
     preCaretRange.setEnd(range.startContainer, range.startOffset);
     // Returns true only if there is zero text or elements preceding the cursor
-    return preCaretRange.toString().trim() === "" && preCaretRange.cloneContents().querySelectorAll('img, table, iframe').length === 0;
+    // Use toString() without trim to handle all content including whitespace
+    return preCaretRange.toString() === "" && preCaretRange.cloneContents().querySelectorAll('img, table, iframe, br').length === 0;
 }
 
 /**
@@ -256,7 +257,8 @@ export function isAtAbsoluteEnd(element) {
     postCaretRange.selectNodeContents(element);
     postCaretRange.setStart(range.endContainer, range.endOffset);
     // Returns true only if there is zero text or elements following the cursor
-    return postCaretRange.toString().trim() === "" && postCaretRange.cloneContents().querySelectorAll('img, table, iframe').length === 0;
+    // Use toString() without trim to handle all content including whitespace
+    return postCaretRange.toString() === "" && postCaretRange.cloneContents().querySelectorAll('img, table, iframe, br').length === 0;
 }
 
 export function focusInlineEdit(el, edge = 'end') {

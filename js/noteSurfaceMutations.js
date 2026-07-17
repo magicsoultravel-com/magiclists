@@ -3,7 +3,7 @@ import { normalizeItemForSave } from './noteModel.js';
 import { syncSheetFromDom } from './sheet.js';
 import { UndoManager } from './undo.js';
 import { sanitizeRichHtml, linkifyPlainUrls } from './richText.js';
-import { insertTextAtCaret } from './noteSurfaceEditing.js';
+import { insertTextAtCaret, handleInlineEditArrowNav } from './noteSurfaceEditing.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -246,9 +246,9 @@ function attachNoteBodyInteractions(root, item, {
             }
         });
         
-        // Handle Enter key in content fields to insert <br> instead of browser default block containers
+        // Handle Enter and Arrow keys in inline edit fields
         el.addEventListener('keydown', (e) => {
-            // Only intercept Enter key (without Shift) in content fields
+            // Handle Enter key in content fields to insert <br> instead of browser default block containers
             if (e.key === 'Enter' && !e.shiftKey && el.dataset.field === 'content') {
                 e.preventDefault();
                 e.stopPropagation();
@@ -266,6 +266,15 @@ function attachNoteBodyInteractions(root, item, {
                     onChange();
                 } else {
                     scheduleDesktopAutoSave(root, item, el);
+                }
+                return;
+            }
+            
+            // Handle Arrow key navigation between fields
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+                if (handleInlineEditArrowNav(e, root, el)) {
+                    e.preventDefault();
+                    e.stopPropagation();
                 }
             }
         });
