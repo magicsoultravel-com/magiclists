@@ -223,68 +223,40 @@ export function splitInlineEditAtCaret(el) {
     };
 }
 
-export function caretAtEdge(el, edge) {
-    const sel = window.getSelection();
-    if (!sel?.rangeCount) return true;
-    const range = sel.getRangeAt(0);
-    if (!el.contains(range.startContainer)) return false;
-    const probe = range.cloneRange();
-    probe.selectNodeContents(el);
-    if (edge === 'start') {
-        probe.setEnd(range.startContainer, range.startOffset);
-        return probe.toString().length === 0;
-    }
-    probe.setStart(range.endContainer, range.endOffset);
-    return probe.toString().length === 0;
+/**
+ * Check if the caret is at the absolute start of an element.
+ * Uses cloned range to detect if there is zero text/elements preceding the cursor.
+ * This handles multi-line content with soft breaks correctly.
+ * @param {HTMLElement} element - The element to check
+ * @returns {boolean} - True if caret is at the absolute start
+ */
+export function isAtAbsoluteStart(element) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return false;
+    const range = selection.getRangeAt(0);
+    const preCaretRange = range.cloneRange();
+    preCaretRange.selectNodeContents(element);
+    preCaretRange.setEnd(range.startContainer, range.startOffset);
+    // Returns true only if there is zero text or elements preceding the cursor
+    return preCaretRange.toString().trim() === "" && preCaretRange.cloneContents().querySelectorAll('img, table, iframe').length === 0;
 }
 
 /**
- * Check if the caret is at the visual top or bottom of a multi-line element.
- * This is used for arrow navigation between checklist items when word wrapping is enabled.
- * @param {HTMLElement} el - The element to check
- * @param {string} edge - 'top' or 'bottom'
- * @returns {boolean} - True if caret is at the visual edge
+ * Check if the caret is at the absolute end of an element.
+ * Uses cloned range to detect if there is zero text/elements following the cursor.
+ * This handles multi-line content with soft breaks correctly.
+ * @param {HTMLElement} element - The element to check
+ * @returns {boolean} - True if caret is at the absolute end
  */
-export function caretAtVisualEdge(el, edge) {
-    const sel = window.getSelection();
-    if (!sel?.rangeCount) return edge === 'bottom';
-    const range = sel.getRangeAt(0);
-    if (!el.contains(range.startContainer)) return false;
-    
-    // Get the caret position
-    const caretRect = range.getBoundingClientRect();
-    const elRect = el.getBoundingClientRect();
-    
-    // Use a small threshold for visual edge detection
-    const threshold = 2;
-    
-    if (edge === 'top') {
-        return caretRect.top <= elRect.top + threshold;
-    }
-    if (edge === 'bottom') {
-        return caretRect.bottom >= elRect.bottom - threshold;
-    }
-    return false;
-}
-
-export function caretAtPlainEdge(el, edge) {
-    const sel = window.getSelection();
-    if (!sel?.rangeCount) return true;
-    const range = sel.getRangeAt(0);
-    if (!el.contains(range.startContainer)) return false;
-
-    const measureRange = range.cloneRange();
-    measureRange.selectNodeContents(el);
-    measureRange.setEnd(range.startContainer, range.startOffset);
-    const plainOffset = measureRange.toString().length;
-
-    const rich = el.classList.contains('rich-text--edit');
-    const fullPlain = rich
-        ? stripRichText(sanitizeRichHtml(linkifyPlainUrls(el.innerHTML)))
-        : (el.textContent || '');
-
-    if (edge === 'start') return plainOffset <= 0;
-    return plainOffset >= fullPlain.length;
+export function isAtAbsoluteEnd(element) {
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return false;
+    const range = selection.getRangeAt(0);
+    const postCaretRange = range.cloneRange();
+    postCaretRange.selectNodeContents(element);
+    postCaretRange.setStart(range.endContainer, range.endOffset);
+    // Returns true only if there is zero text or elements following the cursor
+    return postCaretRange.toString().trim() === "" && postCaretRange.cloneContents().querySelectorAll('img, table, iframe').length === 0;
 }
 
 export function focusInlineEdit(el, edge = 'end') {
@@ -339,8 +311,9 @@ export function getInlineEditSequence(root) {
 }
 
 /**
- * Enhanced arrow navigation for inline edit fields.
- * Navigates between fields when at text edge OR visual edge (for multi-line items).
+ * Arrow navigation for inline edit fields.
+ * Navigates between fields when at absolute start/end of element.
+ * Uses robust range-based checks that handle multi-line content with soft breaks.
  * @param {KeyboardEvent} e - The keyboard event
  * @param {HTMLElement} root - The root element
  * @param {HTMLElement} fieldEl - The current focused field element
@@ -353,16 +326,9 @@ export function handleInlineEditArrowNav(e, root, fieldEl) {
     const idx = fields.indexOf(fieldEl);
     if (idx < 0) return false;
 
-    // Check if this is a step-text element (for multi-line navigation)
-    const isStepText = fieldEl.classList?.contains('step-text') && fieldEl.classList?.contains('card-inline-edit');
-
     if (e.key === 'ArrowDown') {
-        // Navigate to next field if at end of current field
-        // For multi-line step-text, also check visual bottom edge
-        const atTextEnd = caretAtEdge(fieldEl, 'end');
-        const atVisualBottom = isStepText && caretAtVisualEdge(fieldEl, 'bottom');
-        
-        if ((atTextEnd || atVisualBottom) && idx < fields.length - 1) {
+        // Navigate to next field if at absolute end of current field
+        if (isAtAbsoluteEnd(fieldEl) && idx < fields.length - 1) {
             e.preventDefault();
             focusInlineEdit(fields[idx + 1], 'start');
             return true;
@@ -370,12 +336,8 @@ export function handleInlineEditArrowNav(e, root, fieldEl) {
     }
     
     if (e.key === 'ArrowUp') {
-        // Navigate to previous field if at start of current field
-        // For multi-line step-text, also check visual top edge
-        const atTextStart = caretAtEdge(fieldEl, 'start');
-        const atVisualTop = isStepText && caretAtVisualEdge(fieldEl, 'top');
-        
-        if ((atTextStart || atVisualTop) && idx > 0) {
+        // Navigate to previous field if at absolute start of current field
+        if (isAtAbsoluteStart(fieldEl) && idx > 0) {
             e.preventDefault();
             focusInlineEdit(fields[idx - 1], 'end');
             return true;
