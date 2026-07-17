@@ -666,65 +666,64 @@ export function refreshNoteBody(body, item, {
     delete body.dataset.pendingFocusEdge;
     delete body.dataset.pendingFocusPlainOffset;
 
-    // Re-render only the checklist section with explicit multi-layered scroll lock
-    if (scrollContainer) {
-        const restoreScroll = () => {
-            scrollContainer.scrollTop = scrollTop;
-            scrollContainer.scrollLeft = scrollLeft;
-        };
+     // Re-render only the checklist section with explicit multi-layered scroll lock
+     if (scrollContainer) {
+         expandedChecklist.outerHTML = buildExpandedChecklistHtml(item, true, { richEdit });
 
-        expandedChecklist.outerHTML = buildExpandedChecklistHtml(item, true, { richEdit });
+         // 1. Synchronous immediate restoration right after DOM tree mutation
+         scrollContainer.scrollTop = scrollTop;
+         scrollContainer.scrollLeft = scrollLeft;
+     } else {
+         expandedChecklist.outerHTML = buildExpandedChecklistHtml(item, true, { richEdit });
+     }
 
-        // 1. Synchronous immediate restoration right after DOM tree mutation
-        restoreScroll();
+     // Focus restoration - use preventScroll to avoid jumping
+     // CRITICAL: Restore scroll AFTER focus to prevent browser from scrolling to focused element
+     // Both focus and scroll restoration happen in the same microtask for consistent behavior
+     queueMicrotask(() => {
+         const focusStepId = pendingFocusStepId || activeStepId;
+         if (!focusStepId) {
+             // No focus to restore, but still restore scroll position
+             if (scrollContainer) {
+                 scrollContainer.scrollTop = scrollTop;
+                 scrollContainer.scrollLeft = scrollLeft;
+             }
+             return;
+         }
+         // Fixed selector: data-step-id is on the .step-text element itself, not on a parent
+         const stepTextEl = body.querySelector(
+             `.step-text.card-inline-edit[data-step-id="${focusStepId}"]`
+         );
+         if (stepTextEl && document.activeElement !== stepTextEl) {
+             // Prevent scroll jump by using preventScroll option
+             stepTextEl.focus({ preventScroll: true });
+             // Set caret position after focus
+             if (pendingFocusPlainOffset != null) {
+                 setCaretAtPlainOffset(stepTextEl, Number(pendingFocusPlainOffset));
+             } else {
+                 const range = document.createRange();
+                 range.selectNodeContents(stepTextEl);
+                 if (pendingFocusEdge === 'end') {
+                     // Move selection strictly to the end of the text/child strings
+                     range.setStart(stepTextEl, stepTextEl.childNodes.length);
+                     range.setEnd(stepTextEl, stepTextEl.childNodes.length);
+                 } else {
+                     range.collapse(true); // 'start'
+                 }
+                 const sel = window.getSelection();
+                 sel?.removeAllRanges();
+                 sel?.addRange(range);
+             }
+         }
+         // Restore scroll AFTER focus to counteract any browser scrolling
+         if (scrollContainer) {
+             scrollContainer.scrollTop = scrollTop;
+             scrollContainer.scrollLeft = scrollLeft;
+         }
+     });
 
-        // 2. Microtask execution to counteract browser layout/focus engine adjustments
-        queueMicrotask(restoreScroll);
-
-        // 3. Animation frame safety net right before layout paint
-        requestAnimationFrame(restoreScroll);
-    } else {
-        expandedChecklist.outerHTML = buildExpandedChecklistHtml(item, true, { richEdit });
-    }
-
-    // Focus restoration - use preventScroll to avoid jumping
-    const restoreView = () => {
-        const focusStepId = pendingFocusStepId || activeStepId;
-        if (!focusStepId) return;
-        // Fixed selector: data-step-id is on the .step-text element itself, not on a parent
-        const stepTextEl = body.querySelector(
-            `.step-text.card-inline-edit[data-step-id="${focusStepId}"]`
-        );
-        if (stepTextEl && document.activeElement !== stepTextEl) {
-            // Prevent scroll jump by using preventScroll option
-            stepTextEl.focus({ preventScroll: true });
-            // Set caret position after focus
-            const edge = pendingFocusPlainOffset != null ? null : pendingFocusEdge;
-            if (pendingFocusPlainOffset != null) {
-                setCaretAtPlainOffset(stepTextEl, Number(pendingFocusPlainOffset));
-            } else if (edge) {
-                const range = document.createRange();
-                range.selectNodeContents(stepTextEl);
-                if (edge === 'end') {
-                    // Move selection strictly to the end of the text/child strings
-                    range.setStart(stepTextEl, stepTextEl.childNodes.length);
-                    range.setEnd(stepTextEl, stepTextEl.childNodes.length);
-                } else {
-                    range.collapse(true); // 'start'
-                }
-                const sel = window.getSelection();
-                sel?.removeAllRanges();
-                sel?.addRange(range);
-            }
-        }
-    };
-    // Use microtask to ensure DOM is ready but before browser paint
-    queueMicrotask(() => {
-        restoreView();
-    });
-
-    // Re-bind interactions
-    if (mountZone) {
+     // Re-bind interactions
+     if (mountZone) {
         const newShell = mountZone.querySelector('.editor-note-shell');
         if (newShell) {
             const newBody = newShell.querySelector('.editor-note-body');
