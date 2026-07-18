@@ -313,7 +313,14 @@ function invalidateChecklistCache() {
 // Shared helper: focus step text element and set caret at edge
 function focusStepTextAtEdge(el, edge = 'start') {
     if (!el) return;
+    // Cache scroll position before focus to prevent browser scroll-snap
+    const scrollContainer = el.closest('.editor-note-body') || document.documentElement;
+    const cachedScrollTop = scrollContainer.scrollTop;
     el.focus({ preventScroll: true });
+    // Restore scroll if browser changed it
+    if (scrollContainer.scrollTop !== cachedScrollTop) {
+        scrollContainer.scrollTop = cachedScrollTop;
+    }
     const range = document.createRange();
     range.selectNodeContents(el);
     range.collapse(edge === 'start');

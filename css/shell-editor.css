@@ -62,6 +62,11 @@
     gap: 0.28rem;
     font-size: calc(0.65rem * var(--note-font-scale, 1));
     min-width: 0;
+    min-height: 20px !important;
+}
+
+.step-row--display .step-text {
+    min-height: 1.2em !important;
 }
 
 .step-row-leading {
@@ -79,7 +84,6 @@
     margin-left: auto;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.12s ease;
 }
 
 .step-row--display:hover .step-row-actions {
@@ -365,7 +369,6 @@ body.is-checklist-dragging {
     flex-shrink: 0;
     gap: 1px;
     opacity: 0.85;
-    transition: opacity 0.15s ease;
 }
 
 .step-row--display:hover .step-nest-controls,
@@ -596,6 +599,12 @@ body.is-checklist-dragging {
     flex: 1 1 auto;
     overflow-y: auto;
     min-height: 0;
+    overflow-anchor: auto !important;
+}
+
+/* Desktop card body - prevent scroll jumps during DOM updates */
+.mini-card .editor-note-body {
+    overflow-anchor: auto !important;
 }
 
 /* Ensure modal editor toolbar items don't shrink */
