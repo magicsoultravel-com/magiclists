@@ -166,37 +166,47 @@ export function bindChecklistInteractions(root, item, {
              if (stepIdx < 0) return;
              applySubtreeLevelDelta(item.steps, stepIdx, 1);
              normalizeChecklistLevels(item.steps);
- // Surgical DOM update: update level attribute and tree guides in-place
-             updateRowLevelInDom(row, item.steps[stepIdx], root, item);
-             focusStepTextAtEdge(row.querySelector('.step-text.card-inline-edit'), 'end');
-             if (localOnly) {
-                 onChange();
-             } else {
-                 commitInlineChecklistOp(item, beforeItem, { localOnly });
-             }
-             return;
-         }
+              // Surgical DOM update: update level attribute and tree guides in-place
+              updateRowLevelInDom(row, item.steps[stepIdx], root, item);
+              const indentTargetEl = row.querySelector('.step-text.card-inline-edit');
+              requestAnimationFrame(() => {
+                  if (indentTargetEl) {
+                      focusStepTextAtEdge(indentTargetEl, 'end');
+                  }
+              });
+              if (localOnly) {
+                  onChange();
+              } else {
+                  commitInlineChecklistOp(item, beforeItem, { localOnly });
+              }
+              return;
+          }
 
-        // --- step outdent ---
-        const outdentBtn = e.target.closest('.step-outdent-btn');
-        if (outdentBtn && root.contains(outdentBtn)) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (outdentBtn.disabled) return;
-            const row = outdentBtn.closest('.step-row--display');
-            const stepId = row?.dataset?.stepId;
-            if (!stepId) return;
-            const step = (item.steps || []).find(s => s.id === stepId);
-            if (!step || getStepLevel(step) <= 0) return;
-            syncItemBodyFromDom(root, item);
-            const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
-            const stepIdx = item.steps.findIndex((s) => s.id === stepId);
-            if (stepIdx < 0) return;
-            applySubtreeLevelDelta(item.steps, stepIdx, -1);
-            normalizeChecklistLevels(item.steps);
-            // Surgical DOM update: update level attribute and tree guides in-place
-            updateRowLevelInDom(row, item.steps[stepIdx], root, item);
-            focusStepTextAtEdge(row.querySelector('.step-text.card-inline-edit'), 'end');
+         // --- step outdent ---
+         const outdentBtn = e.target.closest('.step-outdent-btn');
+         if (outdentBtn && root.contains(outdentBtn)) {
+             e.preventDefault();
+             e.stopPropagation();
+             if (outdentBtn.disabled) return;
+             const row = outdentBtn.closest('.step-row--display');
+             const stepId = row?.dataset?.stepId;
+             if (!stepId) return;
+             const step = (item.steps || []).find(s => s.id === stepId);
+             if (!step || getStepLevel(step) <= 0) return;
+             syncItemBodyFromDom(root, item);
+             const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
+             const stepIdx = item.steps.findIndex((s) => s.id === stepId);
+             if (stepIdx < 0) return;
+             applySubtreeLevelDelta(item.steps, stepIdx, -1);
+             normalizeChecklistLevels(item.steps);
+             // Surgical DOM update: update level attribute and tree guides in-place
+             updateRowLevelInDom(row, item.steps[stepIdx], root, item);
+             const outdentTargetEl = row.querySelector('.step-text.card-inline-edit');
+             requestAnimationFrame(() => {
+                 if (outdentTargetEl) {
+                     focusStepTextAtEdge(outdentTargetEl, 'end');
+                 }
+             });
             if (localOnly) {
                 onChange();
             } else {
