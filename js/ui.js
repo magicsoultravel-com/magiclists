@@ -248,14 +248,16 @@ export const UI = {
         return BoardOperations.getVisibleItems(items);
     },
 
-    flushAllInlineEditsFromCanvas(canvas, items) {
+    flushAllInlineEditsFromCanvas(canvas, items, { forceFlush = false } = {}) {
         if (!canvas || !Array.isArray(items)) return;
         const byId = new Map(items.map((item) => [item.id, item]));
         canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
             const item = byId.get(card.dataset.id);
             if (!item) return;
             NoteSurface.commitFocusedInlineField(card, item);
-            if (card.dataset.pendingFocusStepId) return;
+            // During view reset, force flush to ensure all pending changes are saved
+            // even if there's a pending focus state that would otherwise skip
+            if (!forceFlush && card.dataset.pendingFocusStepId) return;
             const shell = card.querySelector('.editor-note-shell');
             if (!shell) return;
             const beforeItem = NoteSurface.snapshotItem(item);
@@ -700,6 +702,8 @@ export const UI = {
 
     render(canvas, items, viewMode, hiddenCategories = [], renderOptions = {}) {
         if (!canvas) return;
+        // Clear stale map references before destroying DOM elements
+        boardItemsById.clear();
         this.prepareCanvas(canvas);
          
         const safeItems = Array.isArray(items) ? items : [];
@@ -728,6 +732,20 @@ export const UI = {
     },
 
     prepareCanvas(canvas) {
+        // Clean up document-level event listeners from checklist drag operations
+        // before wiping the DOM to prevent memory leaks and orphaned handlers
+        canvas.querySelectorAll('[data-checklistdrag-bound]').forEach((root) => {
+            if (root._checklistDragData) {
+                const { onMove, onUp } = root._checklistDragData;
+                if (onMove) document.removeEventListener('pointermove', onMove);
+                if (onUp) {
+                    document.removeEventListener('pointerup', onUp);
+                    document.removeEventListener('pointercancel', onUp);
+                }
+                document.body.classList.remove('is-checklist-dragging');
+                delete root._checklistDragData;
+            }
+        });
         canvas.innerHTML = '';
     },
 

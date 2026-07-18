@@ -109,41 +109,58 @@ export function updateDesktopScrollPolicy(canvas) {
     // canvas.style.overflowX = '';
 }
 
-// DISABLED: This function was overriding CSS layout with inline styles
+// Re-enabled with protective boundary check to prevent layout thrashing
 export function updateBoardCanvasExtents(canvas, { readCardRect = readNoteRect, getOrigin = null } = {}) {
-    // if (!canvas) return;
-    // const isSpatial = canvas.classList.contains('view-grid') || canvas.classList.contains('view-freeform');
-    // if (!isSpatial) return;
+    if (!canvas) return;
+    const isSpatial = canvas.classList.contains('view-grid') || canvas.classList.contains('view-freeform');
+    if (!isSpatial) return;
 
-    // canvas.style.minHeight = '';
-    // canvas.style.minWidth = '';
+    // Prevent recursive calls during requestAnimationFrame(reflowGridBoard())
+    if (canvas.dataset._extentsUpdating === 'true') return;
+    canvas.dataset._extentsUpdating = 'true';
 
-    // const cards = canvas.querySelectorAll('.mini-card[data-desktop="1"]');
-    // const pane = getDesktopBoardPane(canvas);
-    // if (!cards.length) {
-    //     if (pane) {
-    //         pane.style.minHeight = '';
-    //         pane.style.minWidth = '';
-    //     }
-    //     return;
-    // }
+    // Use requestAnimationFrame to ensure we don't cause layout thrashing
+    requestAnimationFrame(() => {
+        // Double-check canvas still exists and has content
+        if (!canvas || !canvas.isConnected) {
+            delete canvas.dataset._extentsUpdating;
+            return;
+        }
 
-    // const boardPane = pane || ensureDesktopBoardPane(canvas);
-    // if (!boardPane) return;
+        const cards = canvas.querySelectorAll('.mini-card[data-desktop="1"]');
+        const pane = getDesktopBoardPane(canvas);
+        if (!cards.length) {
+            if (pane) {
+                pane.style.minHeight = '';
+                pane.style.minWidth = '';
+            }
+            delete canvas.dataset._extentsUpdating;
+            return;
+        }
 
-    // const zoom = parseFloat(canvas?.dataset?.desktopZoom) || 1;
-    // const origin = getOrigin
-    //     ? getOrigin(canvas)
-    //     : (canvas.classList.contains('view-grid')
-    //         ? getGridBoardBounds(canvas).origin
-    //         : CANVAS_LAYOUT_ORIGIN);
-    // const placed = [...cards].map((c) => readCardRect(c));
-    // const bottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
-    // const right = placed.reduce((m, r) => Math.max(m, r.x + r.w), 0);
-    // boardPane.style.minHeight = `${bottom + origin + getCanvasColGap()}px`;
-    // const viewportW = (canvas.clientWidth || 320) / zoom;
-    // boardPane.style.minWidth = `${Math.max(viewportW, right + origin + getCanvasColGap())}px`;
-    // updateDesktopScrollPolicy(canvas);
+        const boardPane = pane || ensureDesktopBoardPane(canvas);
+        if (!boardPane) {
+            delete canvas.dataset._extentsUpdating;
+            return;
+        }
+
+        const zoom = parseFloat(canvas?.dataset?.desktopZoom) || 1;
+        const origin = getOrigin
+            ? getOrigin(canvas)
+            : (canvas.classList.contains('view-grid')
+                ? getGridBoardBounds(canvas).origin
+                : CANVAS_LAYOUT_ORIGIN);
+        const placed = [...cards].map((c) => readCardRect(c));
+        const bottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
+        const right = placed.reduce((m, r) => Math.max(m, r.x + r.w), 0);
+        boardPane.style.minHeight = `${bottom + origin + getCanvasColGap()}px`;
+        const viewportW = (canvas.clientWidth || 320) / zoom;
+        boardPane.style.minWidth = `${Math.max(viewportW, right + origin + getCanvasColGap())}px`;
+        updateDesktopScrollPolicy(canvas);
+
+        // Clear the flag after update
+        delete canvas.dataset._extentsUpdating;
+    });
 }
 
 export function scheduleBoardCanvasExtents(canvas, updateFn) {
