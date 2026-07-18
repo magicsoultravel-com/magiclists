@@ -9,7 +9,7 @@ import { escapeHTML, escapeAttr } from './domEscape.js';
 import { isFileCabinetActive, getFileCabinetToggleLabels } from './fileCabinet.js';
 import { LEGACY_TILE_SIZE, isCollapsedSpatialSize } from './tileGeometry.js';
 import { bindChecklistInteractions, attachChecklistDrag, getChecklistCollapsedKeys, getChecklistDoneCollapsed, isChecklistDoneSectionCollapsed, toggleChecklistDoneSection, getChecklistCollapsibleKeys, checklistGroupsAnyExpanded, collapseAllChecklistGroups, expandAllChecklistGroups, toggleChecklistExpandCollapseAll, buildChecklistExpandCollapseAllHtml, buildChecklistRowHtml } from './noteSurfaceChecklist.js';
-import { focusInlineEdit, setCaretAtPlainOffset } from './noteSurfaceEditing.js';
+import { focusInlineEdit } from './noteSurfaceEditing.js';
 import { applyCardTheme } from './cardTheme.js';
 import { resolveNoteColor } from './colorPicker.js';
 import { NoteSurface } from './noteSurface.js';
@@ -597,24 +597,6 @@ export function buildExpandedChecklistHtml(item, canEdit, { richEdit = false } =
     return html;
 }
 
-function findChecklistScrollContainer(body) {
-    if (!body) return null;
-    // For desktop cards on the board canvas, return the canvas itself as scroll container
-    // since cards have overflow: hidden and the canvas is what scrolls
-    const card = body.closest('.mini-card[data-desktop="1"]');
-    if (card) {
-        const canvas = document.getElementById('app-canvas');
-        if (canvas) return canvas;
-    }
-    // For modal editor, check CSS overflow-y property to identify the correct scroll container
-    const computedStyle = window.getComputedStyle(body);
-    if (computedStyle.overflowY === 'auto' || computedStyle.overflowY === 'scroll') return body;
-    if (body.scrollHeight > body.clientHeight) return body;
-    const modal = body.closest('.modal-body');
-    if (modal && modal.scrollHeight > modal.clientHeight) return modal;
-    return body;
-}
-
 /**
  * Refresh the checklist portion of a note body (re-render checklist HTML
  * and re-bind interactions). Used by the modal editor after checklist
@@ -651,84 +633,41 @@ export function refreshNoteBody(body, item, {
     const expandedChecklist = body.querySelector('.expanded-checklist');
     if (!expandedChecklist) return;
 
-    const scrollContainer = findChecklistScrollContainer(body);
-    const scrollTop = scrollContainer?.scrollTop ?? 0;
-    const scrollLeft = scrollContainer?.scrollLeft ?? 0;
-
-    const activeStep = body.contains(document.activeElement)
-        ? document.activeElement.closest('.step-row--display')
-        : null;
-    const activeStepId = activeStep?.dataset?.stepId;
+    // Get focus state before re-render
     const pendingFocusStepId = body.dataset.pendingFocusStepId || '';
     const pendingFocusEdge = body.dataset.pendingFocusEdge || 'end';
-    const pendingFocusPlainOffset = body.dataset.pendingFocusPlainOffset;
     delete body.dataset.pendingFocusStepId;
     delete body.dataset.pendingFocusEdge;
-    delete body.dataset.pendingFocusPlainOffset;
 
-     // Re-render only the checklist section with explicit multi-layered scroll lock
-     if (scrollContainer) {
-         expandedChecklist.outerHTML = buildExpandedChecklistHtml(item, true, { richEdit });
+    // Re-render the checklist section
+    expandedChecklist.outerHTML = buildExpandedChecklistHtml(item, true, { richEdit });
 
-         // 1. Synchronous immediate restoration right after DOM tree mutation
-         scrollContainer.scrollTop = scrollTop;
-         scrollContainer.scrollLeft = scrollLeft;
-     } else {
-         expandedChecklist.outerHTML = buildExpandedChecklistHtml(item, true, { richEdit });
-     }
+    // Focus and scroll restoration in a single frame
+    const focusStepId = pendingFocusStepId;
+    if (focusStepId) {
+        const stepTextEl = body.querySelector(`.step-text.card-inline-edit[data-step-id="${focusStepId}"]`);
+        if (stepTextEl) {
+            stepTextEl.focus({ preventScroll: true });
+            const range = document.createRange();
+            range.selectNodeContents(stepTextEl);
+            if (pendingFocusEdge === 'end') {
+                range.setStart(stepTextEl, stepTextEl.childNodes.length);
+                range.setEnd(stepTextEl, stepTextEl.childNodes.length);
+            } else {
+                range.collapse(true);
+            }
+            const sel = window.getSelection();
+            sel?.removeAllRanges();
+            sel?.addRange(range);
+        }
+    }
 
-     // Focus restoration - use preventScroll to avoid jumping
-     // CRITICAL: Restore scroll AFTER focus to prevent browser from scrolling to focused element
-     // Both focus and scroll restoration happen in the same microtask for consistent behavior
-     queueMicrotask(() => {
-         const focusStepId = pendingFocusStepId || activeStepId;
-         if (!focusStepId) {
-             // No focus to restore, but still restore scroll position
-             if (scrollContainer) {
-                 scrollContainer.scrollTop = scrollTop;
-                 scrollContainer.scrollLeft = scrollLeft;
-             }
-             return;
-         }
-         // Fixed selector: data-step-id is on the .step-text element itself, not on a parent
-         const stepTextEl = body.querySelector(
-             `.step-text.card-inline-edit[data-step-id="${focusStepId}"]`
-         );
-         if (stepTextEl && document.activeElement !== stepTextEl) {
-             // Prevent scroll jump by using preventScroll option
-             stepTextEl.focus({ preventScroll: true });
-             // Set caret position after focus
-             if (pendingFocusPlainOffset != null) {
-                 setCaretAtPlainOffset(stepTextEl, Number(pendingFocusPlainOffset));
-             } else {
-                 const range = document.createRange();
-                 range.selectNodeContents(stepTextEl);
-                 if (pendingFocusEdge === 'end') {
-                     // Move selection strictly to the end of the text/child strings
-                     range.setStart(stepTextEl, stepTextEl.childNodes.length);
-                     range.setEnd(stepTextEl, stepTextEl.childNodes.length);
-                 } else {
-                     range.collapse(true); // 'start'
-                 }
-                 const sel = window.getSelection();
-                 sel?.removeAllRanges();
-                 sel?.addRange(range);
-             }
-         }
-         // Restore scroll AFTER focus to counteract any browser scrolling
-         if (scrollContainer) {
-             scrollContainer.scrollTop = scrollTop;
-             scrollContainer.scrollLeft = scrollLeft;
-         }
-     });
-
-     // Re-bind interactions
-     if (mountZone) {
+    // Re-bind interactions
+    if (mountZone) {
         const newShell = mountZone.querySelector('.editor-note-shell');
         if (newShell) {
             const newBody = newShell.querySelector('.editor-note-body');
             if (newBody) {
-                // Bind interactions if not already bound to this item
                 if (newBody.dataset.checklistInteractionsBound !== item.id) {
                     bindChecklistInteractions(newBody, item, {
                         localOnly,
@@ -736,7 +675,6 @@ export function refreshNoteBody(body, item, {
                         refresh: localOnly ? () => refresh() : () => {}
                     });
                 }
-                // Always ensure drag is bound (uses separate attribute checklistDragBound)
                 if (newBody.dataset.checklistDragBound !== item.id) {
                     attachChecklistDrag(newBody, item, {
                         localOnly,
@@ -896,8 +834,6 @@ export function refreshBoardEditorCard(uiInstance, card, item, activeCategories,
         NoteSurface.syncItemBodyFromDom(shell, item);
     }
     const pendingFocusStepId = card.dataset.pendingFocusStepId;
-    const pendingFocusEdge = card.dataset.pendingFocusEdge;
-    const pendingFocusPlainOffset = card.dataset.pendingFocusPlainOffset;
     renderBoardEditorCard(uiInstance, card, item, activeCategories, targetCatName, categoryColor);
     const newBody = card.querySelector('.editor-note-body');
     if (newBody && focusState) {
@@ -905,10 +841,6 @@ export function refreshBoardEditorCard(uiInstance, card, item, activeCategories,
     }
     if (pendingFocusStepId) {
         card.dataset.pendingFocusStepId = pendingFocusStepId;
-        if (pendingFocusEdge) card.dataset.pendingFocusEdge = pendingFocusEdge;
-        if (pendingFocusPlainOffset != null) {
-            card.dataset.pendingFocusPlainOffset = pendingFocusPlainOffset;
-        }
         NoteSurface.focusPendingChecklistStep(card);
     }
     // Restore canvas scroll position after full re-render
@@ -930,11 +862,9 @@ export {
     buildMeetingBodyHtml,
     buildNoteTitleHtml,
     buildNoteFormatPanelHtml,
-    // removed
     buildNoteConfigPanelHtml,
     buildNoteEditorShell,
     bindCollapsable,
     flashCopyFeedback,
     buildChecklistRowHtml,
-    findChecklistScrollContainer,
 };

@@ -260,31 +260,10 @@ function captureNoteBodyFocusState(body) {
     const field = active.dataset.field;
     if (!field) return null;
     
-    // For checklist steps, capture additional state
+    // For checklist steps, capture stepId
     if (field === 'step-text') {
         const stepId = active.dataset.stepId;
-        const sel = window.getSelection();
-        const range = sel?.rangeCount > 0 ? sel.getRangeAt(0) : null;
-        
-        // Determine if caret is at start or end
-        let edge = 'end';
-        let plainOffset = 0;
-        
-        if (range && active.contains(range.startContainer)) {
-            const probe = range.cloneRange();
-            probe.selectNodeContents(active);
-            probe.setEnd(range.startContainer, range.startOffset);
-            const plainText = stripRichText(active.textContent || '');
-            plainOffset = probe.toString().length;
-            edge = plainOffset <= 0 ? 'start' : 'end';
-        }
-        
-        return {
-            field,
-            stepId,
-            edge,
-            plainOffset
-        };
+        return { field, stepId };
     }
     
     // For title and content fields
@@ -300,31 +279,13 @@ function captureNoteBodyFocusState(body) {
 function restoreNoteBodyFocusState(newBody, card, focusState) {
     if (!newBody || !focusState) return;
     
-    const { field, stepId, edge, plainOffset } = focusState;
+    const { field, stepId } = focusState;
     
     if (field === 'step-text' && stepId) {
         // Find the step text element in the new body
         const stepEl = newBody.querySelector(`.step-text.card-inline-edit[data-step-id="${stepId}"]`);
         if (stepEl) {
-            // Use preventScroll to avoid jumping
             stepEl.focus({ preventScroll: true });
-            if (plainOffset != null) {
-                setCaretAtPlainOffset(stepEl, plainOffset);
-            } else {
-                // Set caret at edge if no plain offset - use robust positioning
-                const range = document.createRange();
-                if (edge === 'end') {
-                    // Move selection strictly to the end of the text/child strings
-                    range.setStart(stepEl, stepEl.childNodes.length);
-                    range.setEnd(stepEl, stepEl.childNodes.length);
-                } else {
-                    range.selectNodeContents(stepEl);
-                    range.collapse(true); // 'start'
-                }
-                const sel = window.getSelection();
-                sel?.removeAllRanges();
-                sel?.addRange(range);
-            }
             return;
         }
     }
@@ -332,7 +293,7 @@ function restoreNoteBodyFocusState(newBody, card, focusState) {
     // For title and content fields
     const el = newBody.querySelector(`.card-inline-edit[data-field="${field}"]`);
     if (el) {
-        focusInlineEdit(el, edge || 'end');
+        focusInlineEdit(el, 'end');
     }
 }
 
@@ -344,30 +305,9 @@ function focusPendingChecklistStep(card) {
     if (!card?.dataset?.pendingFocusStepId) return;
     
     const stepId = card.dataset.pendingFocusStepId;
-    const edge = card.dataset.pendingFocusEdge || 'end';
-    const plainOffset = card.dataset.pendingFocusPlainOffset;
-    
     const stepEl = card.querySelector(`.step-text.card-inline-edit[data-step-id="${stepId}"]`);
     if (stepEl) {
-        // Use preventScroll to avoid jumping
         stepEl.focus({ preventScroll: true });
-        if (plainOffset != null) {
-            setCaretAtPlainOffset(stepEl, Number(plainOffset));
-        } else {
-            // Set caret at edge if no plain offset - use robust positioning
-            const range = document.createRange();
-            if (edge === 'end') {
-                // Move selection strictly to the end of the text/child strings
-                range.setStart(stepEl, stepEl.childNodes.length);
-                range.setEnd(stepEl, stepEl.childNodes.length);
-            } else {
-                range.selectNodeContents(stepEl);
-                range.collapse(true); // 'start'
-            }
-            const sel = window.getSelection();
-            sel?.removeAllRanges();
-            sel?.addRange(range);
-        }
     }
 }
 

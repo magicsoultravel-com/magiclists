@@ -1,7 +1,7 @@
 /** @module {"owns":"checklist operations, drag/drop, state management", "related":["noteSurface.js","checklistSteps.js","noteBodyConversion.js","richText.js"], "events":[]} */
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { escapeHTML, escapeAttr } from './domEscape.js';
-import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, collectStepSubtree, canIndentStep, normalizeChecklistLevels, computeVisibleInsertBounds, reorderActiveStepsFromDomOrder, applySubtreeLevelDelta, resolvePointerDropTarget, resolveDropTarget } from './checklistSteps.js';
+import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, collectStepSubtree, canIndentStep, normalizeChecklistLevels, computeVisibleInsertBounds, reorderActiveStepsFromDomOrder, applySubtreeLevelDelta, resolvePointerDropTarget, resolveDropTarget, buildVisibleChecklistSteps } from './checklistSteps.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyConversion.js';
 import { stripRichText, sanitizeRichHtml, hasRichMarkup } from './richText.js';
 import { mutateItem, syncItemBodyFromDom, syncInlineFieldToItem, commitInlineChecklistOp } from './noteSurfaceMutations.js';
@@ -30,20 +30,6 @@ function setPendingChecklistFocus(root, stepId, edge = 'start') {
     if (!root || !stepId) return;
     root.dataset.pendingFocusStepId = stepId;
     root.dataset.pendingFocusEdge = edge;
-    // Capture plain offset for caret position restoration
-    const active = document.activeElement;
-    const stepTextEl = active?.classList?.contains('step-text') ? active : null;
-    if (stepTextEl && stepTextEl.dataset.stepId === stepId) {
-        const sel = window.getSelection();
-        if (sel?.rangeCount) {
-            const range = sel.getRangeAt(0);
-            const probe = range.cloneRange();
-            probe.selectNodeContents(stepTextEl);
-            probe.setEnd(range.startContainer, range.startOffset);
-            const plainOffset = probe.toString().length;
-            root.dataset.pendingFocusPlainOffset = String(plainOffset);
-        }
-    }
 }
 
 /**
@@ -165,31 +151,31 @@ export function bindChecklistInteractions(root, item, {
             return;
         }
 
-        // --- step indent ---
-        const indentBtn = e.target.closest('.step-indent-btn');
-        if (indentBtn && root.contains(indentBtn)) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (indentBtn.disabled) return;
-            const row = indentBtn.closest('.step-row--display');
-            const stepId = row?.dataset?.stepId;
-            if (!stepId) return;
-            syncItemBodyFromDom(root, item);
-            const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
-            const stepIdx = item.steps.findIndex((s) => s.id === stepId);
-            if (stepIdx < 0) return;
-            applySubtreeLevelDelta(item.steps, stepIdx, 1);
-            normalizeChecklistLevels(item.steps);
-            if (localOnly) {
-                onChange();
-                refresh();
-            } else {
-                commitInlineChecklistOp(item, beforeItem, { localOnly });
-                refresh();
-            }
-            setPendingChecklistFocus(root, stepId, 'end');
-            return;
-        }
+ // --- step indent ---
+         const indentBtn = e.target.closest('.step-indent-btn');
+         if (indentBtn && root.contains(indentBtn)) {
+             e.preventDefault();
+             e.stopPropagation();
+             if (indentBtn.disabled) return;
+             const row = indentBtn.closest('.step-row--display');
+             const stepId = row?.dataset?.stepId;
+             if (!stepId) return;
+             syncItemBodyFromDom(root, item);
+             const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
+             const stepIdx = item.steps.findIndex((s) => s.id === stepId);
+             if (stepIdx < 0) return;
+             applySubtreeLevelDelta(item.steps, stepIdx, 1);
+             normalizeChecklistLevels(item.steps);
+ // Surgical DOM update: update level attribute and tree guides in-place
+             updateRowLevelInDom(row, item.steps[stepIdx], root, item);
+             focusStepTextAtEdge(row.querySelector('.step-text.card-inline-edit'), 'end');
+             if (localOnly) {
+                 onChange();
+             } else {
+                 commitInlineChecklistOp(item, beforeItem, { localOnly });
+             }
+             return;
+         }
 
         // --- step outdent ---
         const outdentBtn = e.target.closest('.step-outdent-btn');
@@ -208,13 +194,14 @@ export function bindChecklistInteractions(root, item, {
             if (stepIdx < 0) return;
             applySubtreeLevelDelta(item.steps, stepIdx, -1);
             normalizeChecklistLevels(item.steps);
+            // Surgical DOM update: update level attribute and tree guides in-place
+            updateRowLevelInDom(row, item.steps[stepIdx], root, item);
+            focusStepTextAtEdge(row.querySelector('.step-text.card-inline-edit'), 'end');
             if (localOnly) {
                 onChange();
-                refresh();
             } else {
                 commitInlineChecklistOp(item, beforeItem, { localOnly });
             }
-            setPendingChecklistFocus(root, stepId, 'end');
             return;
         }
 
@@ -277,8 +264,7 @@ export function bindChecklistInteractions(root, item, {
         const result = handleChecklistEnter(root, item, e, { localOnly, onChange });
         if (result === false) return;
         if (result === 'stay') return;
-        if (result) setPendingChecklistFocus(root, result, 'start');
-        if (localOnly) refresh();
+        // No refresh() - handleChecklistEnter does surgical DOM insertion
     });
 
     // --- step-text arrow key navigation: navigate between steps on visual edge ---
@@ -322,6 +308,81 @@ function invalidateChecklistCache() {
     _cachedCollapsedKeys = null;
     _cachedDoneCollapsed = null;
     _cacheTimestamp = 0;
+}
+
+// Shared helper: focus step text element and set caret at edge
+function focusStepTextAtEdge(el, edge = 'start') {
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(edge === 'start');
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+}
+
+// Surgical DOM update: update a row's level attribute and tree guides in-place
+function updateRowLevelInDom(row, step, root, item) {
+    if (!row || !step) return;
+    const { active } = partitionChecklistSteps(item.steps || []);
+    const stepIdx = active.findIndex((s) => s.id === step.id);
+    const newLevel = getStepLevel(step);
+    
+    row.dataset.level = String(newLevel);
+    
+    const treeGutter = row.querySelector('.step-tree-gutter');
+    if (treeGutter && stepIdx >= 0) {
+        const treeGuides = buildVisibleChecklistSteps(active, item.id, getChecklistCollapsedKeys())
+            .find((s) => s.step.id === step.id)?.treeGuides || [];
+        treeGutter.innerHTML = treeGuides.map(({ role }) => 
+            `<span class="step-tree-guide step-tree-guide--${role}" aria-hidden="true"></span>`
+        ).join('');
+    }
+    
+    const outdentBtn = row.querySelector('.step-outdent-btn');
+    if (outdentBtn) outdentBtn.disabled = newLevel <= 0;
+    
+    const indentBtn = row.querySelector('.step-indent-btn');
+    if (indentBtn) indentBtn.disabled = !canIndentStep(active, stepIdx);
+}
+
+// Surgical DOM update: insert a new step row into the DOM
+function insertStepRowInDom(root, newStep, item, { afterStepId = null, richEdit = false } = {}) {
+    if (!root || !newStep || !item) return null;
+    
+    const { active } = partitionChecklistSteps(item.steps || []);
+    const rowHtml = buildChecklistRowHtml(newStep, {
+        hasKids: stepHasDescendants(active, active.findIndex((s) => s.id === newStep.id)),
+        isCollapsed: false,
+        collapseKey: '',
+        isDoneSection: false,
+        treeGuides: [],
+        canEdit: true,
+        richEdit,
+        active
+    });
+    
+    const temp = document.createElement('div');
+    temp.innerHTML = rowHtml.trim();
+    const newRow = temp.firstElementChild;
+    
+    // Find insertion point: after specified step or at end
+    const afterRow = afterStepId ? root.querySelector(`.step-row--display[data-step-id="${afterStepId}"]`) : null;
+    const addBtn = root.querySelector('.expanded-checklist-add-btn');
+    const doneToggle = root.querySelector('.checklist-done-toggle');
+    
+    if (afterRow) {
+        afterRow.insertAdjacentElement('afterend', newRow);
+    } else if (addBtn) {
+        addBtn.parentNode.insertBefore(newRow, addBtn);
+    } else if (doneToggle) {
+        doneToggle.insertAdjacentElement('beforebegin', newRow);
+    } else {
+        root.querySelector('.expanded-checklist')?.appendChild(newRow);
+    }
+    
+    return newRow;
 }
 
 // Unified state synchronizer for checklist step text updates
@@ -492,9 +553,8 @@ export function attachChecklistDrag(root, item, {
                 expandChecklistAncestorsForStep(item, parentIdToExpand);
             }
             setPendingChecklistFocus(root, blockRootId, 'end');
-            if (localOnly) {
-                refresh();
-            } else {
+            // No refresh() - drag already moved DOM elements in-place
+            if (!localOnly) {
                 commitInlineChecklistOp(item, beforeItem, { localOnly });
             }
         }
@@ -730,6 +790,26 @@ export function insertChecklistStep(root, item, {
     }
 
     item.steps = steps;
+    
+    // Surgical DOM insertion - insert the new row without full refresh
+    const richEdit = root.querySelector('.step-text')?.classList?.contains('rich-text--edit') || false;
+    const newRow = insertStepRowInDom(root, newStep, item, { afterStepId, richEdit });
+    
+    // Focus the new step's text element directly
+    if (newRow) {
+        const stepTextEl = newRow.querySelector('.step-text.card-inline-edit');
+        if (stepTextEl) {
+            stepTextEl.focus({ preventScroll: true });
+            // Set caret at start
+            const range = document.createRange();
+            range.selectNodeContents(stepTextEl);
+            range.collapse(true);
+            const sel = window.getSelection();
+            sel?.removeAllRanges();
+            sel?.addRange(range);
+        }
+    }
+    
     if (!localOnly) {
         commitInlineChecklistOp(item, beforeItem, { localOnly });
     }
@@ -900,6 +980,25 @@ export function handleChecklistEnter(root, item, e, { localOnly = false, onChang
         level: getStepLevel(step)
     };
     item.steps.splice(insertIdx, 0, newStep);
+
+    // Surgical DOM insertion - insert the new row without full refresh
+    const richEdit = active.classList.contains('rich-text--edit');
+    const newRow = insertStepRowInDom(root, newStep, item, { afterStepId: stepId, richEdit });
+    
+    // Focus the new step's text element directly
+    if (newRow) {
+        const stepTextEl = newRow.querySelector('.step-text.card-inline-edit');
+        if (stepTextEl) {
+            stepTextEl.focus({ preventScroll: true });
+            // Set caret at start
+            const range = document.createRange();
+            range.selectNodeContents(stepTextEl);
+            range.collapse(true);
+            const sel = window.getSelection();
+            sel?.removeAllRanges();
+            sel?.addRange(range);
+        }
+    }
 
     // CRITICAL: Commit as atomic batch operation - both the modified step and the new step
     // are saved together in a single mutation to prevent race conditions
