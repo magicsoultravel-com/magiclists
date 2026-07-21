@@ -58,7 +58,7 @@ import {
     canIndentStep
 } from './checklistSteps.js';
 
-// Import from ChecklistController.js
+// Import from noteSurfaceChecklist.js
 import {
     bindChecklistInteractions,
     getChecklistCollapsedKeys,
@@ -80,7 +80,7 @@ import {
     expandChecklistAncestorsForStep,
     prepareInlineOpSnapshot,
     createStepId
-} from './ChecklistController.js';
+} from './noteSurfaceChecklist.js';
 
 import {
     insertTextAtCaret,
