@@ -21,12 +21,12 @@ export const SIDEBAR_MODULE_WIDTH = 220;
 /** @type {ReadonlyArray<{ id: string, rootId: string, headerId: string, sectionId: string, startCollapsed?: boolean, expandOnUndock?: boolean, collapseIgnoreExtra?: string, dragBlockSelector?: string, onPositionChange?: () => void }>} */
 export const SIDEBAR_MODULES = [
     { id: 'clock', rootId: 'sidebar-clock', headerId: 'clock-section-header', sectionId: 'clock-section', startCollapsed: false, onPositionChange: () => ClockStyle.repositionPopover?.() },
-    { id: 'quick-actions', rootId: 'sidebar-quick-actions', headerId: 'quick-actions-header', sectionId: 'quick-actions-section', startCollapsed: true, expandOnUndock: true },
+    { id: 'quick-actions', rootId: 'sidebar-quick-actions', headerId: 'quick-actions-header', sectionId: 'quick-actions-section', startCollapsed: true, expandOnUndock: true, collapseIgnoreExtra: '.quick-actions-grid' },
     { id: 'radio', rootId: 'sidebar-radio', headerId: 'radio-section-header', sectionId: 'radio-section', startCollapsed: true, dragBlockSelector: '.sidebar-radio__compact', onPositionChange: () => RadioPopover.reposition() },
     { id: 'tv', rootId: 'sidebar-tv', headerId: 'tv-section-header', sectionId: 'tv-section', startCollapsed: true, dragBlockSelector: '.sidebar-tv__compact', onPositionChange: () => TvPopover.reposition() },
     { id: 'weather', rootId: 'sidebar-weather', headerId: 'weather-section-header', sectionId: 'weather-section', startCollapsed: true, expandOnUndock: true, collapseIgnoreExtra: '.sidebar-weather__refresh', dragBlockSelector: '.sidebar-weather__compact, .sidebar-weather__refresh' },
     { id: 'categories', rootId: 'sidebar-categories', headerId: 'categories-section-header', sectionId: 'categories-section', startCollapsed: true, expandOnUndock: true },
-    { id: 'tools', rootId: 'sidebar-tools', headerId: 'tools-section-header', sectionId: 'tools-section', startCollapsed: true, expandOnUndock: true },
+    { id: 'tools', rootId: 'sidebar-tools', headerId: 'tools-section-header', sectionId: 'tools-section', startCollapsed: true, expandOnUndock: true, collapseIgnoreExtra: '.quick-actions-grid' },
     { id: 'notes-list', rootId: 'sidebar-notes-list', headerId: 'notes-list-section-header', sectionId: 'notes-list-section', startCollapsed: false, expandOnUndock: true },
     { id: 'history', rootId: 'sidebar-history-section', headerId: 'history-section-header', sectionId: 'history-section', startCollapsed: true, expandOnUndock: true },
     { id: 'stats', rootId: 'sidebar-stats-section', headerId: 'stats-section-header', sectionId: 'stats-section', startCollapsed: true, expandOnUndock: true }
