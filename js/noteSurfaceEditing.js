@@ -13,7 +13,7 @@ import { normalizeItemForSave } from './noteModel.js';
 import { createBlankChecklistStep } from './noteSurfaceMutations.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText, convertContentToChecklist, convertChecklistToContent } from './noteBodyConversion.js';
 import { attachSheetInteractions } from './sheet.js';
-import { bindChecklistInteractions, attachChecklistDrag } from './noteSurfaceChecklist.js';
+import { ChecklistController } from './ChecklistController.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -541,15 +541,13 @@ export function bindNoteEditorShell(root, item, {
             onChange,
             refresh
         }));
-        bindChecklistInteractions(body, item, {
+        // Use ChecklistController for unified checklist handling
+        // Both click and drag are handled by the controller
+        new ChecklistController(body, item, {
             refresh,
             localOnly,
-            onChange
-        });
-        attachChecklistDrag(body, item, {
-            refresh,
-            localOnly,
-            onChange
+            onChange,
+            onFocusChange: () => {} // No special focus handling needed here
         });
     }
 

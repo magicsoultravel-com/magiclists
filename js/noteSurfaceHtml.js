@@ -8,7 +8,9 @@ import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHa
 import { escapeHTML, escapeAttr } from './domEscape.js';
 import { isFileCabinetActive, getFileCabinetToggleLabels } from './fileCabinet.js';
 import { LEGACY_TILE_SIZE, isCollapsedSpatialSize } from './tileGeometry.js';
-import { bindChecklistInteractions, attachChecklistDrag, getChecklistCollapsedKeys, getChecklistDoneCollapsed, isChecklistDoneSectionCollapsed, toggleChecklistDoneSection, getChecklistCollapsibleKeys, checklistGroupsAnyExpanded, collapseAllChecklistGroups, expandAllChecklistGroups, toggleChecklistExpandCollapseAll, buildChecklistExpandCollapseAllHtml, buildChecklistRowHtml } from './noteSurfaceChecklist.js';
+import { getChecklistCollapsedKeys, getChecklistDoneCollapsed, isChecklistDoneSectionCollapsed, toggleChecklistDoneSection, getChecklistCollapsibleKeys, checklistGroupsAnyExpanded, collapseAllChecklistGroups, expandAllChecklistGroups, toggleChecklistExpandCollapseAll } from './ChecklistController.js';
+import { buildChecklistRowHtml, buildChecklistExpandCollapseAllHtml } from './checklistHtml.js';
+import { ChecklistController } from './ChecklistController.js';
 import { focusInlineEdit } from './noteSurfaceEditing.js';
 import { applyCardTheme } from './cardTheme.js';
 import { resolveNoteColor } from './colorPicker.js';
@@ -662,26 +664,20 @@ export function refreshNoteBody(body, item, {
         }
     }
 
-    // Re-bind interactions
+    // Re-bind interactions using ChecklistController
     if (mountZone) {
         const newShell = mountZone.querySelector('.editor-note-shell');
         if (newShell) {
             const newBody = newShell.querySelector('.editor-note-body');
             if (newBody) {
-                if (newBody.dataset.checklistInteractionsBound !== item.id) {
-                    bindChecklistInteractions(newBody, item, {
-                        localOnly,
-                        onChange,
-                        refresh: localOnly ? () => refresh() : () => {}
-                    });
-                }
-                if (newBody.dataset.checklistDragBound !== item.id) {
-                    attachChecklistDrag(newBody, item, {
-                        localOnly,
-                        onChange,
-                        refresh: localOnly ? () => refresh() : () => {}
-                    });
-                }
+                // Use ChecklistController for unified checklist handling
+                // The controller handles both click and drag binding
+                new ChecklistController(newBody, item, {
+                    localOnly,
+                    onChange,
+                    refresh: localOnly ? () => refresh() : () => {},
+                    onFocusChange: () => {}
+                });
             }
         }
     }
