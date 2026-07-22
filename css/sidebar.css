@@ -144,6 +144,54 @@ mark.search-hit {
     border-radius: 2px;
 }
 
+/* Search field wrapper and clear button */
+.side-panel-search-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+}
+
+.side-panel-search-field .side-panel-search-input {
+    width: 100%;
+    padding-right: 2rem;
+}
+
+.side-panel-search-clear {
+    position: absolute;
+    right: 0.5rem;
+    top: 50%;
+    transform: translateY(-50%);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 1rem;
+    height: 1rem;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-muted, #64748b);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0.6;
+}
+
+.side-panel-search-clear.is-visible {
+    display: flex;
+}
+
+.side-panel-search-clear:hover {
+    opacity: 1;
+    color: var(--text-main);
+}
+
+/* Hide native browser search clear buttons */
+.side-panel .side-panel-search-input::-webkit-search-cancel-button,
+.side-panel .side-panel-search-input::-webkit-search-decoration {
+    -webkit-appearance: none;
+}
+
 .logo-zone--clock {
     flex: 0 0 auto;
     flex-shrink: 0;
