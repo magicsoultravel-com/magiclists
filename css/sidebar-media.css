@@ -263,10 +263,9 @@
     padding: 2px;
 }
 
-/* Compact header containers for radio and TV modules */
+/* Compact header containers for radio and TV modules (visibility controlled by shell-sidebar.css) */
 .sidebar-radio__compact,
 .sidebar-tv__compact {
-    display: flex;
     align-items: center;
     gap: 0.25rem;
     flex-wrap: nowrap;

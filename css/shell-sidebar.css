@@ -221,12 +221,10 @@
     display: none;
 }
 
-.sidebar-radio__compact.is-visible,
-.sidebar-tv__compact.is-visible,
-.sidebar-weather__compact.is-visible,
-.radio-section.collapsed .sidebar-radio__compact,
-.tv-section.collapsed .sidebar-tv__compact,
-.weather-section.collapsed .sidebar-weather__compact {
+/* Show compact icons when the toggle is collapsed (module is collapsed) */
+.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-radio__compact,
+.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-tv__compact,
+.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-weather__compact {
     display: flex;
 }
 
@@ -356,8 +354,8 @@ body.is-shell-resizing--h * {
     margin-left: auto;
 }
 
-.quick-actions-header-icons.is-visible,
-.quick-actions-section.collapsed .quick-actions-header-icons {
+/* Show quick actions header icons when the toggle is collapsed (module is collapsed) */
+.collapsable-header:has(.collapsable-toggle.collapsed) .quick-actions-header-icons {
     display: flex;
 }
 

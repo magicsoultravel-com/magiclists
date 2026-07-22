@@ -3,8 +3,8 @@
    SIDEBAR WEATHER — IMGW forecast glance + expanded details
    ========================================================================== */
 
+/* Compact header container (visibility controlled by shell-sidebar.css) */
 .sidebar-weather__compact {
-    display: flex;
     align-items: center;
     gap: 0.25rem;
     flex-wrap: nowrap;

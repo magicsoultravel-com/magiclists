@@ -148,8 +148,7 @@ class Application {
             SidebarRadio.init();
             SidebarTv.init();
             SidebarWeather.init();
-            SidePanel.setupStatusClickHandlers(); /* after radio/tv/weather shells exist */
-            this.updateQuickActionsHeaderVisibility();
+SidePanel.setupStatusClickHandlers(); /* after radio/tv/weather shells exist */
             this.renderQuickActionsHeaderIcons();
             SidebarHistory.init(AppState);
             SidebarStats.init();
@@ -421,15 +420,6 @@ class Application {
             redoHeaderBtn.innerHTML = ACTION_ICONS.redo;
             redoHeaderBtn.disabled = !AppState.user.isLoggedIn || UndoManager.redoStack.length === 0;
         }
-    }
-
-    updateQuickActionsHeaderVisibility() {
-        const section = document.getElementById('quick-actions-section');
-        const headerIcons = document.querySelector('.quick-actions-header-icons');
-        if (!section || !headerIcons) return;
-
-        const isCollapsed = section.classList.contains('collapsed');
-        headerIcons.classList.toggle('is-visible', isCollapsed);
     }
 
     updateFabVisibility() {
@@ -976,10 +966,6 @@ class Application {
         window.addEventListener('category:order_changed', (e) => {
             AppState.categories = writeStoredCategories(e.detail || AppState.categories, { keepEmpty: true });
             this.syncDataStore();
-        });
-
-        window.addEventListener('quick-actions:section_toggled', (e) => {
-            this.updateQuickActionsHeaderVisibility();
         });
     }
 }
