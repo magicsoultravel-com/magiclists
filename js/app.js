@@ -357,19 +357,31 @@ class Application {
 
         // Bind once natively using dataset checks to prevent listener pileups
         if (headerFreeform && !headerFreeform.dataset.listenerBound) {
-            headerFreeform.addEventListener('click', () => this.toggleBoardOverlay());
+            headerFreeform.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleBoardOverlay();
+            });
             headerFreeform.dataset.listenerBound = 'true';
         }
         if (headerCabinet && !headerCabinet.dataset.listenerBound) {
-            headerCabinet.addEventListener('click', () => this.toggleFileCabinet());
+            headerCabinet.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleFileCabinet();
+            });
             headerCabinet.dataset.listenerBound = 'true';
         }
         if (headerUndo && !headerUndo.dataset.listenerBound) {
-            headerUndo.addEventListener('click', () => UndoManager.undo());
+            headerUndo.addEventListener('click', (e) => {
+                e.stopPropagation();
+                UndoManager.undo();
+            });
             headerUndo.dataset.listenerBound = 'true';
         }
         if (headerRedo && !headerRedo.dataset.listenerBound) {
-            headerRedo.addEventListener('click', () => UndoManager.redo());
+            headerRedo.addEventListener('click', (e) => {
+                e.stopPropagation();
+                UndoManager.redo();
+            });
             headerRedo.dataset.listenerBound = 'true';
         }
     }

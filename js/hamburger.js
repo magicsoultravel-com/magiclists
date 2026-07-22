@@ -116,7 +116,6 @@ setCollapsed(collapsed, { persist = true } = {}) {
         this.bindCollapsable('notes-list-active-header', 'notes-list-active-section', false, '.sidebar-notes-list-sort');
         this.bindCollapsable('notes-list-hidden-header', 'notes-list-hidden-section', true);
         this.bindCollapsable('notes-list-archived-header', 'notes-list-archived-section', true);
-        this.bindCollapsable('quick-actions-header', 'quick-actions-section', true);
         this.setupNotesListSortControls();
     },
 
