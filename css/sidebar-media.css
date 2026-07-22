@@ -263,6 +263,15 @@
     padding: 2px;
 }
 
+/* Compact header containers for radio and TV modules */
+.sidebar-radio__compact,
+.sidebar-tv__compact {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-wrap: nowrap;
+}
+
 .sidebar-media__compact-art-fallback {
     font-size: 0.62rem;
     color: var(--text-muted);

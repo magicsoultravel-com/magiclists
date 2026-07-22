@@ -3,6 +3,13 @@
    SIDEBAR WEATHER — IMGW forecast glance + expanded details
    ========================================================================== */
 
+.sidebar-weather__compact {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-wrap: nowrap;
+}
+
 .sidebar-weather__compact-icon {
     display: flex;
     color: var(--accent-color, #7eb8ff);
