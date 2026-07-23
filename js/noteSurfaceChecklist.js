@@ -1105,8 +1105,8 @@ export function buildChecklistRowHtml(step, {
         <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}" data-step-id="${step.id}" data-level="${stepLevel}">
             <div class="step-row-leading">
                 ${dragHandle}
-                ${collapseControl}
                 ${treeGutterHtml}
+                ${collapseControl}
                 <input type="checkbox" class="step-check" ${step.completed ? 'checked' : ''}>
             </div>
             ${textHtml}
