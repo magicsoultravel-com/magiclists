@@ -534,6 +534,15 @@
     margin: 0 0.1rem;
 }
 
+.color-picker-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted, #8e8e93);
+    margin: 0 0.1rem 0 0.05rem;
+}
+
 .color-picker-grid--inline-user {
     display: flex;
     gap: 0.2rem;

@@ -665,6 +665,15 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
     background: rgba(255, 255, 255, 0.1);
 }
 
+.color-picker-label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted, #8e8e93);
+    margin: 4px 0 6px 2px;
+}
+
 .color-picker-tile {
     width: 32px;
     height: 32px;

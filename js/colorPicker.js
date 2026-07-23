@@ -6,23 +6,23 @@ const USER_PALETTE_KEY = 'matrix_user_palette';
 /** Shared default for desktop, chrome, and note reset. */
 export const THEME_DEFAULT_COLOR = '#121214';
 
-/** Rainbow / neon presets — one palette everywhere (notes, chrome, desktop, drawing). */
+/** Modern, sensible presets — one palette everywhere (notes, chrome, desktop, drawing). */
 export const PALETTE_UNIFIED = [
     { value: '#000000', label: 'Black' },
     { value: THEME_DEFAULT_COLOR, label: 'Default' },
-    { value: '#ff3366', label: 'Hot pink' },
-    { value: '#ff5722', label: 'Orange' },
-    { value: '#ffab00', label: 'Amber' },
-    { value: '#ffee00', label: 'Yellow' },
-    { value: '#76ff03', label: 'Lime' },
-    { value: '#00e676', label: 'Green' },
-    { value: '#00e5ff', label: 'Cyan' },
-    { value: '#2979ff', label: 'Blue' },
-    { value: '#651fff', label: 'Indigo' },
-    { value: '#d500f9', label: 'Purple' },
-    { value: '#f50057', label: 'Magenta' },
-    { value: '#ff4081', label: 'Pink' },
-    { value: '#18ffff', label: 'Neon aqua' },
+    { value: '#2d3748', label: 'Slate' },
+    { value: '#718096', label: 'Cool Gray' },
+    { value: '#e53e3e', label: 'Muted Red' },
+    { value: '#dd6b20', label: 'Warm Orange' },
+    { value: '#d69e2e', label: 'Soft Amber' },
+    { value: '#38a169', label: 'Sage Green' },
+    { value: '#319795', label: 'Teal' },
+    { value: '#3182ce', label: 'Soft Blue' },
+    { value: '#805ad5', label: 'Muted Purple' },
+    { value: '#b7791f', label: 'Sand' },
+    { value: '#f7fafc', label: 'Off-White' },
+    { value: '#edf2f7', label: 'Light Gray' },
+    { value: '#feebc8', label: 'Soft Peach' },
     { value: '#ffffff', label: 'White' }
 ];
 
@@ -382,7 +382,7 @@ export const ColorPicker = {
         this.onSelect = onSelect;
         this.align = align;
         this.mode = 'popover';
-        this.closeOnSelect = true;
+        this.closeOnSelect = false;
         this.presets = presets.slice(0, GRID_SLOTS);
         while (this.presets.length < GRID_SLOTS) {
             this.presets.push({ value: '#26262b', label: 'Color' });
@@ -425,9 +425,11 @@ export const ColorPicker = {
         const mainInner = inline
             ? `<div class="${gridClass}">${presetHtml}</div>
                <div class="color-picker-divider color-picker-divider--inline" aria-hidden="true"></div>
+               <div class="color-picker-label">Custom</div>
                <div class="color-picker-grid color-picker-grid--user color-picker-grid--inline-user">${userHtml}</div>`
             : `<div class="color-picker-grid color-picker-grid--presets">${presetHtml}</div>
                <div class="color-picker-divider" aria-hidden="true"></div>
+               <div class="color-picker-label">Custom</div>
                <div class="color-picker-grid color-picker-grid--user">${userHtml}</div>
                <button type="button" class="color-picker-eyedropper-btn card-act" aria-label="Pick color from page" title="Pick color from page">
                    <svg viewBox="0 0 16 16" width="12" height="12" focusable="false" aria-hidden="true"><path d="M10.2 1.8a1.6 1.6 0 0 1 2.3 2.3l-1 1-2.3-2.3 1-1ZM3.4 8.6l4-4 2.3 2.3-4 4-2.5.2.2-2.5Z" fill="currentColor"/><path d="M2.5 11.8 4.2 10l2 2-1.7 1.7a.8.8 0 0 1-1.1 0l-.9-.9a.8.8 0 0 1 0-1.1Z" fill="currentColor"/></svg>
@@ -468,7 +470,6 @@ export const ColorPicker = {
             e.stopPropagation();
             this.closeSubPicker({ persist: true });
             this.selectColor(btn.dataset.color || '', onSelect);
-            if (this.closeOnSelect) this.close();
         });
 
         popover.querySelectorAll('.color-picker-tile--user').forEach((btn) => {
@@ -484,7 +485,6 @@ export const ColorPicker = {
                 return;
             }
             this.selectColor(hex, onSelect);
-            if (this.closeOnSelect) this.close();
         };
 
         popover.querySelectorAll('.color-picker-eyedropper-btn').forEach((btn) => {
