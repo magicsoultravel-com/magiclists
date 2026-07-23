@@ -570,6 +570,17 @@ export function bindNoteEditorShell(root, item, {
         });
     }
 
+    // Handle link clicks in edit mode - use tryOpenRichEditLink for rich-text--edit elements
+    if (body && !shell.dataset.editLinkClickBound) {
+        shell.dataset.editLinkClickBound = '1';
+        body.addEventListener('click', (e) => {
+            const richHost = e.target.closest('.rich-text--edit');
+            if (richHost) {
+                tryOpenRichEditLink(e, richHost);
+            }
+        });
+    }
+
     if (showFormat) {
         bindFormatPanel(shell, { onChange });
         bindBodyConvertBar(shell, item, { refresh, localOnly, onChange });

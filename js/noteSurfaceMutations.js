@@ -296,6 +296,20 @@ function attachNoteBodyInteractions(root, item, {
             e.stopPropagation();
         });
     }
+
+    // Handle link clicks in non-edit mode - allow browser to open target="_blank" links
+    if (body && !root.dataset.linkClickBound) {
+        root.dataset.linkClickBound = '1';
+        body.addEventListener('click', (e) => {
+            const anchor = e.target.closest('a[href]');
+            if (!anchor || !root.contains(anchor)) return;
+            // In edit mode, let tryOpenRichEditLink handle it
+            if (anchor.closest('.rich-text--edit')) return;
+            // In non-edit mode, stop propagation to prevent card actions
+            // but allow the browser's native target="_blank" to work
+            e.stopPropagation();
+        });
+    }
 }
 
 function updateNoteMetaStats(shell, item) {

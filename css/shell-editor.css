@@ -27,6 +27,23 @@
     word-break: break-word;
 }
 
+/* Links in note content - cursor and hover styling */
+.card-content-preview a,
+.step-text a,
+.mini-card-title a {
+    color: var(--card-link, var(--accent));
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.card-content-preview a:hover,
+.step-text a:hover,
+.mini-card-title a:hover {
+    color: var(--card-link, var(--accent));
+    opacity: 0.85;
+}
+
 .note-surface .expanded-checklist {
     font-size: calc(0.6rem * var(--note-font-scale, 1));
 }
