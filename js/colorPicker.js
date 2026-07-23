@@ -6,6 +6,8 @@ const USER_PALETTE_KEY = 'matrix_user_palette';
 /** Shared default for desktop, chrome, and note reset. */
 export const THEME_DEFAULT_COLOR = '#121214';
 
+let cachedPalette = null;
+
 /** Modern, sensible presets — one palette everywhere (notes, chrome, desktop, drawing). */
 export const PALETTE_UNIFIED = [
     { value: '#000000', label: 'Black' },
@@ -50,23 +52,27 @@ function normalizeHex(value) {
 }
 
 function readUserPalette() {
+    if (cachedPalette) return cachedPalette;
     try {
         const raw = localStorage.getItem(USER_PALETTE_KEY);
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
             const slots = parsed.slice(0, USER_SLOTS).map((c) => normalizeHex(c) || '');
             while (slots.length < USER_SLOTS) slots.push('');
+            cachedPalette = slots;
             return slots;
         }
     } catch {
         /* ignore */
     }
-    return Array(USER_SLOTS).fill('');
+    cachedPalette = Array(USER_SLOTS).fill('');
+    return cachedPalette;
 }
 
 function saveUserPalette(slots) {
     try {
         localStorage.setItem(USER_PALETTE_KEY, JSON.stringify(slots.slice(0, USER_SLOTS)));
+        cachedPalette = slots.slice(0, USER_SLOTS);
     } catch {
         /* ignore */
     }
@@ -150,6 +156,7 @@ export const ColorPicker = {
     subPicker: null,
     subDragCleanup: null,
     eyedropperCleanup: null,
+    eyedropperClickHandler: null,
     align: 'end',
     selectedColor: '',
     mode: 'popover',
@@ -332,6 +339,10 @@ export const ColorPicker = {
                 document.removeEventListener('keydown', this.keyHandler);
                 this.keyHandler = null;
             }
+            if (this.eyedropperClickHandler) {
+                this._bodyPopover?.removeEventListener('click', this.eyedropperClickHandler);
+                this.eyedropperClickHandler = null;
+            }
             done?.();
             return;
         }
@@ -347,6 +358,10 @@ export const ColorPicker = {
         if (this.keyHandler) {
             document.removeEventListener('keydown', this.keyHandler);
             this.keyHandler = null;
+        }
+        if (this.eyedropperClickHandler) {
+            this.popover.removeEventListener('click', this.eyedropperClickHandler);
+            this.eyedropperClickHandler = null;
         }
     },
 
@@ -460,20 +475,25 @@ export const ColorPicker = {
         const body = popover.querySelector('.color-picker-body');
         const editor = popover.querySelector('.color-picker-editor');
 
-        const presetGrid = popover.querySelector(inline ? '.color-picker-grid--inline' : '.color-picker-grid--presets');
-        presetGrid?.addEventListener('mousedown', (e) => {
-            if (e.target.closest('.color-picker-tile[data-color]')) e.stopPropagation();
-        });
-        presetGrid?.addEventListener('click', (e) => {
+        // Store handler references for cleanup
+        const onPresetClick = (e) => {
             const btn = e.target.closest('.color-picker-tile[data-color]');
             if (!btn) return;
             e.stopPropagation();
             this.closeSubPicker({ persist: true });
             this.selectColor(btn.dataset.color || '', onSelect);
-        });
+        };
+        const onPresetMousedown = (e) => {
+            if (e.target.closest('.color-picker-tile[data-color]')) e.stopPropagation();
+        };
+        const onUserMousedown = (e) => e.stopPropagation();
+
+        const presetGrid = popover.querySelector(inline ? '.color-picker-grid--inline' : '.color-picker-grid--presets');
+        presetGrid?.addEventListener('mousedown', onPresetMousedown);
+        presetGrid?.addEventListener('click', onPresetClick);
 
         popover.querySelectorAll('.color-picker-tile--user').forEach((btn) => {
-            btn.addEventListener('mousedown', (e) => e.stopPropagation());
+            btn.addEventListener('mousedown', onUserMousedown);
             this.attachUserSlotHandlers(btn, body, editor, onSelect);
         });
 
@@ -487,13 +507,14 @@ export const ColorPicker = {
             this.selectColor(hex, onSelect);
         };
 
-        popover.querySelectorAll('.color-picker-eyedropper-btn').forEach((btn) => {
-            btn.addEventListener('mousedown', (e) => e.stopPropagation());
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.startEyedropper({ onPick: handleEyedropperPick });
-            });
-        });
+        // Single delegated handler for all eyedropper buttons
+        this.eyedropperClickHandler = (e) => {
+            const btn = e.target.closest('.color-picker-eyedropper-btn');
+            if (!btn) return;
+            e.stopPropagation();
+            this.startEyedropper({ onPick: handleEyedropperPick });
+        };
+        popover.addEventListener('click', this.eyedropperClickHandler);
     },
 
     _attachDismissHandlers(anchor, popover) {
@@ -560,9 +581,7 @@ export const ColorPicker = {
             el.classList.remove('is-selected');
         });
         if (!normalized) return;
-        const presetMatch = [...this.popover.querySelectorAll('.color-picker-tile[data-color]:not([data-user-slot])')].find(
-            (el) => (el.dataset.color || '').toLowerCase() === normalized
-        );
+        const presetMatch = this.popover.querySelector(`.color-picker-tile[data-color="${normalized}"]:not([data-user-slot])`);
         if (presetMatch) {
             presetMatch.classList.add('is-selected');
             return;
