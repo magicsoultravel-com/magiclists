@@ -4,12 +4,36 @@ import { escapeHTML, escapeAttr } from './domEscape.js';
 import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, collectStepSubtree, canIndentStep, normalizeChecklistLevels, computeVisibleInsertBounds, reorderActiveStepsFromDomOrder, applySubtreeLevelDelta, resolvePointerDropTarget, resolveDropTarget, buildVisibleChecklistSteps } from './checklistSteps.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyConversion.js';
 import { stripRichText, sanitizeRichHtml, hasRichMarkup } from './richText.js';
-import { mutateItem, syncItemBodyFromDom, syncInlineFieldToItem, commitInlineChecklistOp } from './noteSurfaceMutations.js';
+import { mutateItem, syncItemBodyFromDom, syncInlineFieldToItem, commitInlineChecklistOp, flushDesktopAutoSave } from './noteSurfaceMutations.js';
 import { focusInlineEdit, canInlineEditText, renderRichHtml, splitInlineEditAtCaret, insertTextAtCaret, handleInlineEditArrowNav } from './noteSurfaceEditing.js';
 import { copyPlainTextToClipboard } from './clipboard.js';
 
 
 const DRAG_THRESHOLD = 4;
+
+/**
+ * Capture the canvas scroll position for preservation during DOM operations.
+ * @returns {{scrollTop: number, scrollLeft: number}} The scroll position
+ */
+function captureCanvasScroll() {
+    const canvas = document.getElementById('app-canvas');
+    return {
+        scrollTop: canvas?.scrollTop ?? 0,
+        scrollLeft: canvas?.scrollLeft ?? 0
+    };
+}
+
+/**
+ * Restore the canvas scroll position after DOM operations.
+ * @param {{scrollTop: number, scrollLeft: number}} scrollPos - The scroll position to restore
+ */
+function restoreCanvasScroll(scrollPos) {
+    const canvas = document.getElementById('app-canvas');
+    if (canvas) {
+        canvas.scrollTop = scrollPos.scrollTop;
+        canvas.scrollLeft = scrollPos.scrollLeft;
+    }
+}
 
 /**
  * Check if a target element is a checklist interaction element.
@@ -152,34 +176,36 @@ export function bindChecklistInteractions(root, item, {
         }
 
  // --- step indent ---
-         const indentBtn = e.target.closest('.step-indent-btn');
-         if (indentBtn && root.contains(indentBtn)) {
-             e.preventDefault();
-             e.stopPropagation();
-             if (indentBtn.disabled) return;
-             const row = indentBtn.closest('.step-row--display');
-             const stepId = row?.dataset?.stepId;
-             if (!stepId) return;
-             syncItemBodyFromDom(root, item);
-             const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
-             const stepIdx = item.steps.findIndex((s) => s.id === stepId);
-             if (stepIdx < 0) return;
-             applySubtreeLevelDelta(item.steps, stepIdx, 1);
-             normalizeChecklistLevels(item.steps);
-              // Surgical DOM update: update level attribute and tree guides in-place
-              updateRowLevelInDom(row, item.steps[stepIdx], root, item);
-              const indentTargetEl = row.querySelector('.step-text.card-inline-edit');
-              requestAnimationFrame(() => {
-                  if (indentTargetEl) {
-                      focusStepTextAtEdge(indentTargetEl, 'end');
-                  }
-              });
-              if (localOnly) {
-                  onChange();
-              } else {
-                  commitInlineChecklistOp(item, beforeItem, { localOnly });
-              }
-              return;
+          const indentBtn = e.target.closest('.step-indent-btn');
+          if (indentBtn && root.contains(indentBtn)) {
+              e.preventDefault();
+              e.stopPropagation();
+              if (indentBtn.disabled) return;
+              const row = indentBtn.closest('.step-row--display');
+              const stepId = row?.dataset?.stepId;
+              if (!stepId) return;
+              // Flush any pending autosave before DOM operations
+              flushDesktopAutoSave(root, item);
+              syncItemBodyFromDom(root, item);
+              const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
+              const stepIdx = item.steps.findIndex((s) => s.id === stepId);
+              if (stepIdx < 0) return;
+              applySubtreeLevelDelta(item.steps, stepIdx, 1);
+              normalizeChecklistLevels(item.steps);
+               // Surgical DOM update: update level attribute and tree guides in-place
+               updateRowLevelInDom(row, item.steps[stepIdx], root, item);
+               const indentTargetEl = row.querySelector('.step-text.card-inline-edit');
+               requestAnimationFrame(() => {
+                   if (indentTargetEl) {
+                       focusStepTextAtEdge(indentTargetEl, 'end');
+                   }
+               });
+               if (localOnly) {
+                   onChange();
+               } else {
+                   commitInlineChecklistOp(item, beforeItem, { localOnly });
+               }
+               return;
           }
 
          // --- step outdent ---
@@ -193,6 +219,8 @@ export function bindChecklistInteractions(root, item, {
              if (!stepId) return;
              const step = (item.steps || []).find(s => s.id === stepId);
              if (!step || getStepLevel(step) <= 0) return;
+             // Flush any pending autosave before DOM operations
+             flushDesktopAutoSave(root, item);
              syncItemBodyFromDom(root, item);
              const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
              const stepIdx = item.steps.findIndex((s) => s.id === stepId);
@@ -326,11 +354,15 @@ function focusStepTextAtEdge(el, edge = 'start') {
     // Cache scroll position before focus to prevent browser scroll-snap
     const scrollContainer = el.closest('.editor-note-body') || document.documentElement;
     const cachedScrollTop = scrollContainer.scrollTop;
+    // Also capture canvas scroll for board surface operations
+    const canvasScrollPos = captureCanvasScroll();
     el.focus({ preventScroll: true });
     // Restore scroll if browser changed it
     if (scrollContainer.scrollTop !== cachedScrollTop) {
         scrollContainer.scrollTop = cachedScrollTop;
     }
+    // Restore canvas scroll after focus
+    restoreCanvasScroll(canvasScrollPos);
     const range = document.createRange();
     range.selectNodeContents(el);
     range.collapse(edge === 'start');
@@ -808,6 +840,9 @@ export function insertChecklistStep(root, item, {
 
     item.steps = steps;
     
+    // Capture canvas scroll position before DOM insertion to prevent view jump
+    const scrollPos = captureCanvasScroll();
+    
     // Surgical DOM insertion - insert the new row without full refresh
     const richEdit = root.querySelector('.step-text')?.classList?.contains('rich-text--edit') || false;
     const newRow = insertStepRowInDom(root, newStep, item, { afterStepId, richEdit });
@@ -826,6 +861,9 @@ export function insertChecklistStep(root, item, {
             sel?.addRange(range);
         }
     }
+    
+    // Restore canvas scroll position after DOM insertion
+    restoreCanvasScroll(scrollPos);
     
     if (!localOnly) {
         commitInlineChecklistOp(item, beforeItem, { localOnly });
@@ -998,6 +1036,9 @@ export function handleChecklistEnter(root, item, e, { localOnly = false, onChang
     };
     item.steps.splice(insertIdx, 0, newStep);
 
+    // Capture canvas scroll position before DOM insertion to prevent view jump
+    const scrollPos = captureCanvasScroll();
+
     // Surgical DOM insertion - insert the new row without full refresh
     const richEdit = active.classList.contains('rich-text--edit');
     const newRow = insertStepRowInDom(root, newStep, item, { afterStepId: stepId, richEdit });
@@ -1016,6 +1057,9 @@ export function handleChecklistEnter(root, item, e, { localOnly = false, onChang
             sel?.addRange(range);
         }
     }
+
+    // Restore canvas scroll position after DOM insertion
+    restoreCanvasScroll(scrollPos);
 
     // CRITICAL: Commit as atomic batch operation - both the modified step and the new step
     // are saved together in a single mutation to prevent race conditions

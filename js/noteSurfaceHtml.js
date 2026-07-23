@@ -639,8 +639,22 @@ export function refreshNoteBody(body, item, {
     delete body.dataset.pendingFocusStepId;
     delete body.dataset.pendingFocusEdge;
 
+    // Capture scroll position before re-render to prevent view jump
+    // For modal editor, use the body element itself; for board, the canvas scroll is handled separately
+    const scrollContainer = body;
+    const cachedScrollTop = scrollContainer.scrollTop;
+    const cachedScrollLeft = scrollContainer.scrollLeft;
+
     // Re-render the checklist section
     expandedChecklist.outerHTML = buildExpandedChecklistHtml(item, true, { richEdit });
+
+    // Restore scroll position after re-render
+    if (scrollContainer.scrollTop !== cachedScrollTop) {
+        scrollContainer.scrollTop = cachedScrollTop;
+    }
+    if (scrollContainer.scrollLeft !== cachedScrollLeft) {
+        scrollContainer.scrollLeft = cachedScrollLeft;
+    }
 
     // Focus and scroll restoration in a single frame
     const focusStepId = pendingFocusStepId;
