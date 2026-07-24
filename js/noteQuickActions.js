@@ -1,7 +1,7 @@
 /** @module {"owns":"board + modal note quick-action DOM binding", "related":["noteSurface.js","ui.js","editor.js"]} */
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor, THEME_DEFAULT_COLOR } from './colorPicker.js';
 import { copyPlainTextToClipboard } from './clipboard.js';
-import { itemToPlainCopyText } from './noteBodyConversion.js';
+import { itemToPlainCopyText, itemToTxtExportText, sortItemsForTxtExport } from './noteBodyConversion.js';
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { NoteSurface } from './noteSurface.js';
 import { isDesktopCard } from './ui.js';
@@ -249,6 +249,7 @@ function bindModalQuickActions(toolbarMount, item, ui, editor) {
  * @param {function} handlers.onCloudExport - Cloud export click handler
  * @param {function} handlers.onCloudImport - Cloud import click handler
  * @param {function} handlers.onExportDb - Export DB click handler
+ * @param {function} handlers.onExportAllTxt - Export all as TXT click handler
  * @param {function} handlers.onImportDb - Import DB click handler
  * @param {function} handlers.onLogout - Logout click handler
  * @param {function} handlers.onLogin - Login click handler
@@ -307,6 +308,7 @@ export function renderQuickActions({
             <button type="button" class="btn btn--compact btn--icon" id="btn-cloud-export" data-enabled-title="Export to cloud" title="Connect cloud first (Cloud icon)" aria-label="Export to cloud" disabled>${ACTION_ICONS.cloudExport}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-cloud-import" data-enabled-title="Import from cloud" title="Connect cloud first (Cloud icon)" aria-label="Import from cloud" disabled>${ACTION_ICONS.cloudImport}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-export-db" title="Export backup" aria-label="Export backup">${ACTION_ICONS.export}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="btn-export-txt" title="Export all as TXT" aria-label="Export all as TXT">${ACTION_ICONS.exportTxt}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-import-db" title="Import backup" aria-label="Import backup">${ACTION_ICONS.import}</button>
             <button type="button" class="btn btn--compact btn--icon btn--icon-danger" id="btn-auth-logout" title="Logout" aria-label="Logout">${ACTION_ICONS.logout}</button>
         `;
@@ -326,6 +328,7 @@ function bindQuickActionHandlers(handlers = {}) {
         onCloudExport,
         onCloudImport,
         onExportDb,
+        onExportAllTxt,
         onImportDb,
         onLogout,
         onLogin,
@@ -357,6 +360,7 @@ function bindQuickActionHandlers(handlers = {}) {
     document.getElementById('btn-cloud-export')?.addEventListener('click', onCloudExport);
     document.getElementById('btn-cloud-import')?.addEventListener('click', onCloudImport);
     document.getElementById('btn-export-db')?.addEventListener('click', onExportDb);
+    document.getElementById('btn-export-txt')?.addEventListener('click', onExportAllTxt);
     document.getElementById('btn-import-db')?.addEventListener('click', onImportDb);
     document.getElementById('btn-auth-logout')?.addEventListener('click', onLogout);
     document.getElementById('btn-auth-login')?.addEventListener('click', onLogin);

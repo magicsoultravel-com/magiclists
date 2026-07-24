@@ -55,6 +55,7 @@ import { BoardSort } from './boardSort.js';
 import { BootProgress } from './bootProgress.js';
 import { renderQuickActions } from './noteQuickActions.js';
 import { TemplatePicker } from './templatePicker.js';
+import { itemToTxtExportText, sortItemsForTxtExport } from './noteBodyConversion.js';
 import {
     migrateItemsToFileCabinet,
     pruneFileCabinetOrderByLayout,
@@ -311,7 +312,7 @@ SidePanel.setupStatusClickHandlers(); /* after radio/tv/weather shells exist */
         UndoManager.updateToolbar();
     }
 
-    renderQuickActions() {
+renderQuickActions() {
         renderQuickActions({
             sortBy: AppState.viewSettings.sortBy,
             workspaceMode: AppState.workspaceMode,
@@ -329,6 +330,7 @@ SidePanel.setupStatusClickHandlers(); /* after radio/tv/weather shells exist */
                 onCloudExport: (e) => CloudBackup.exportCheckpoint(e.currentTarget),
                 onCloudImport: (e) => CloudBackup.handleImportClick(e.currentTarget),
                 onExportDb: () => this.executeDataBackupExport(),
+                onExportAllTxt: () => this.executeExportAllTxt(),
                 onImportDb: () => document.getElementById('system-import-file-picker').click(),
                 onLogout: () => this.executeLogout(),
                 onLogin: () => this.executeLoginPrompt(),
@@ -481,7 +483,7 @@ SidePanel.setupStatusClickHandlers(); /* after radio/tv/weather shells exist */
         this.updateViewToggleState();
     }
 
-    executeDataBackupExport() {
+executeDataBackupExport() {
         // Show loading indicator on the export button
         const exportBtn = document.getElementById('btn-export-db');
         if (exportBtn) {
@@ -501,6 +503,58 @@ SidePanel.setupStatusClickHandlers(); /* after radio/tv/weather shells exist */
         } finally {
             // Hide loading indicator
             const exportBtn = document.getElementById('btn-export-db');
+            if (exportBtn) {
+                LoadingManager.hide(exportBtn);
+            }
+        }
+    }
+
+    executeExportAllTxt() {
+        // Show loading indicator on the export button
+        const exportBtn = document.getElementById('btn-export-txt');
+        if (exportBtn) {
+            LoadingManager.show(exportBtn, 'Exporting TXT...');
+        }
+
+        try {
+            // Get all items (active, archived, hidden)
+            const allItems = [...AppState.items];
+            
+            // Sort items by category (primary) and date (secondary, newest first)
+            const sortedItems = sortItemsForTxtExport(allItems);
+            
+            // Build export content with section dividers
+            const sections = [];
+            let currentCategory = null;
+            
+            sortedItems.forEach((item) => {
+                const categories = Array.isArray(item?.categories) ? item.categories.filter(Boolean) : [];
+                const itemCategory = categories.length > 0 ? categories[0] : 'Uncategorized';
+                
+                // Add section divider when category changes
+                if (itemCategory !== currentCategory) {
+                    if (currentCategory !== null) {
+                        sections.push('\n\n---\n\n');
+                    }
+                    currentCategory = itemCategory;
+                }
+                
+                const itemText = itemToTxtExportText(item);
+                if (itemText) {
+                    sections.push(itemText);
+                }
+            });
+            
+            const content = sections.join('\n\n');
+            const blob = new Blob([content], { type: 'text/plain' });
+            const virtualLink = document.createElement('a');
+            virtualLink.href = URL.createObjectURL(blob);
+            virtualLink.download = `matrix_all_notes_${new Date().toISOString().split('T')[0]}.txt`;
+            virtualLink.click();
+            URL.revokeObjectURL(virtualLink.href);
+        } finally {
+            // Hide loading indicator
+            const exportBtn = document.getElementById('btn-export-txt');
             if (exportBtn) {
                 LoadingManager.hide(exportBtn);
             }

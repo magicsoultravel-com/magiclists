@@ -1,6 +1,6 @@
 /** @module {"owns":"checklist/content conversion, plain copy text", "related":["noteSurface.js","checklistSteps.js","richText.js"]} */
 import { sanitizeRichHtml, stripRichText } from './richText.js';
-import { sheetIsActive, sheetToTsv } from './sheet.js';
+import { sheetIsActive, sheetToTsv, getCellValue } from './sheet.js';
 
 export const SOFT_BREAK = '\u2028';
 
@@ -226,4 +226,194 @@ export function itemToPlainCopyText(item) {
         .filter((l) => l.trim());
     if (lines.length) blocks.push(lines.join('\n'));
     return blocks.join('\n\n');
+}
+
+/**
+ * Converts a checklist step to Markdown format.
+ * @param {object} step - The step object with text, completed, and level properties
+ * @returns {string} Markdown formatted line like "  - [ ] text" or "  - [x] text"
+ */
+export function stepToMarkdownLine(step) {
+    const level = Math.min(4, Math.max(0, Number(step?.level) || 0));
+    const indent = '  '.repeat(level);
+    const checkbox = step?.completed ? '[x]' : '[ ]';
+    const text = stripRichText(step?.text || '').replace(/\u2028/g, '\n').trim();
+    return text ? `${indent}- ${checkbox} ${text}` : '';
+}
+
+/**
+ * Converts a sheet (table) to Markdown pipe table format.
+ * @param {object} sheet - The sheet object with rows, cols, and cells
+ * @returns {string} Markdown pipe table string
+ */
+export function sheetToMarkdown(sheet) {
+    if (!sheet) return '';
+    const rows = sheet.rows || 0;
+    const cols = sheet.cols || 0;
+    if (rows === 0 || cols === 0) return '';
+
+    const lines = [];
+    // Build header row
+    const headerCells = [];
+    for (let c = 0; c < cols; c++) {
+        headerCells.push(String(getCellValue(sheet, 0, c) || '').trim());
+    }
+    lines.push('| ' + headerCells.join(' | ') + ' |');
+
+    // Build separator row
+    const separatorCells = [];
+    for (let c = 0; c < cols; c++) {
+        separatorCells.push('---');
+    }
+    lines.push('| ' + separatorCells.join(' | ') + ' |');
+
+    // Build data rows
+    for (let r = 1; r < rows; r++) {
+        const rowCells = [];
+        for (let c = 0; c < cols; c++) {
+            rowCells.push(String(getCellValue(sheet, r, c) || '').trim());
+        }
+        lines.push('| ' + rowCells.join(' | ') + ' |');
+    }
+
+    return lines.join('\n');
+}
+
+/**
+ * Converts an item to text export format with metadata.
+ * @param {object} item - The note item
+ * @returns {string} Formatted text with metadata and content
+ */
+export function itemToTxtExportText(item) {
+    const lines = [];
+
+    // Title
+    const title = stripRichText(item?.title || '').trim();
+    if (title) {
+        lines.push(`Title: ${title}`);
+    }
+
+    // Category
+    const categories = Array.isArray(item?.categories) ? item.categories.filter(Boolean) : [];
+    const category = categories.length > 0 ? categories.join(', ') : 'Uncategorized';
+    lines.push(`Category: ${category}`);
+
+    // Status
+    const status = item?.status || 'active';
+    lines.push(`Status: ${status}`);
+
+    // Created Date
+    const createdDate = formatDateForExport(item?.id);
+    lines.push(`Created: ${createdDate}`);
+
+    // Modified Date
+    const modifiedDate = formatDateForExport(item?.updatedAt || item?.startDateTime);
+    lines.push(`Modified: ${modifiedDate}`);
+
+    lines.push(''); // Empty line after metadata
+
+    // Content
+    const template = item?.noteTemplate;
+    if (template === 'meeting') {
+        // Meeting template: sheet as attendees, content as agenda, steps as action items
+        if (sheetIsActive(item) && item.sheet) {
+            const mdTable = sheetToMarkdown(item.sheet);
+            if (mdTable) {
+                lines.push('Attendees:');
+                lines.push(mdTable);
+                lines.push('');
+            }
+        }
+        const content = stripRichText(item?.content || '').replace(/\u2028/g, '\n').trim();
+        if (content) {
+            lines.push('Agenda:');
+            lines.push(content);
+            lines.push('');
+        }
+        const stepLines = orderStepsActiveThenDone(item?.steps || [])
+            .map(stepToMarkdownLine)
+            .filter((l) => l.trim());
+        if (stepLines.length) {
+            lines.push('Action Items:');
+            lines.push(stepLines.join('\n'));
+        }
+    } else if (template === 'sheet' && item?.sheet) {
+        // Sheet template: convert to Markdown table
+        const mdTable = sheetToMarkdown(item.sheet);
+        if (mdTable) {
+            lines.push(mdTable);
+        }
+    } else {
+        // Default: content and checklist
+        const content = stripRichText(item?.content || '').replace(/\u2028/g, '\n').trim();
+        if (content) {
+            lines.push(content);
+            lines.push('');
+        }
+        const stepLines = orderStepsActiveThenDone(item?.steps || [])
+            .map(stepToMarkdownLine)
+            .filter((l) => l.trim());
+        if (stepLines.length) {
+            lines.push(stepLines.join('\n'));
+        }
+    }
+
+    return lines.join('\n');
+}
+
+/**
+ * Formats a date for export display.
+ * @param {string|number} dateInput - Date string or timestamp
+ * @returns {string} Formatted date string
+ */
+function formatDateForExport(dateInput) {
+    if (!dateInput) return '';
+    const date = new Date(dateInput);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+    });
+}
+
+/**
+ * Sorts items by category (primary) and date (secondary, newest first).
+ * Uncategorized items are placed at the end.
+ * @param {Array} items - Array of note items
+ * @returns {Array} Sorted array of items
+ */
+export function sortItemsForTxtExport(items) {
+    const uncategorized = [];
+    const categorized = [];
+
+    items.forEach((item) => {
+        const categories = Array.isArray(item?.categories) ? item.categories.filter(Boolean) : [];
+        if (categories.length === 0) {
+            uncategorized.push(item);
+        } else {
+            categorized.push(item);
+        }
+    });
+
+    // Sort categorized items by first category, then by date (newest first)
+    categorized.sort((a, b) => {
+        const catA = a.categories[0] || '';
+        const catB = b.categories[0] || '';
+        if (catA < catB) return -1;
+        if (catA > catB) return 1;
+        // Same category - sort by date (newest first)
+        const dateA = new Date(a.startDateTime || a.id || 0);
+        const dateB = new Date(b.startDateTime || b.id || 0);
+        return dateB - dateA;
+    });
+
+    // Sort uncategorized items by date (newest first)
+    uncategorized.sort((a, b) => {
+        const dateA = new Date(a.startDateTime || a.id || 0);
+        const dateB = new Date(b.startDateTime || b.id || 0);
+        return dateB - dateA;
+    });
+
+    return [...categorized, ...uncategorized];
 }
