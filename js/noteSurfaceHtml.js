@@ -742,7 +742,7 @@ export function createCardComponent(uiInstance, item, activeCategories) {
 
     const { targetCatName, categoryColor } = getCardRenderContext(item, activeCategories);
 
-    card.style.borderLeftColor = categoryColor;
+    card.style.setProperty('--card-category-color', categoryColor);
     renderBoardEditorCard(uiInstance, card, item, activeCategories, targetCatName, categoryColor);
     applyItemCardTheme(card, item);
     card.addEventListener('mousedown', () => uiInstance.raiseDesktopCard(card), true);
