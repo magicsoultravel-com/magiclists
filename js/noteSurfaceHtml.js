@@ -719,9 +719,12 @@ export function refreshNoteBody(body, item, {
  */
 export function applyItemCardTheme(card, item) {
     const color = resolveNoteColor(item.backgroundColor);
-    card.style.backgroundColor = color;
     card.style.borderColor = 'rgba(255,255,255,0.15)';
-    applyCardTheme(card, color);
+    // Apply custom background to the editor-note-shell for consistent styling
+    const shell = card.querySelector('.editor-note-shell');
+    if (shell) {
+        applyCardTheme(shell, color, { paintBackground: true });
+    }
 }
 
 /**
@@ -739,9 +742,9 @@ export function createCardComponent(uiInstance, item, activeCategories) {
 
     const { targetCatName, categoryColor } = getCardRenderContext(item, activeCategories);
 
-    applyItemCardTheme(card, item);
     card.style.borderLeftColor = categoryColor;
     renderBoardEditorCard(uiInstance, card, item, activeCategories, targetCatName, categoryColor);
+    applyItemCardTheme(card, item);
     card.addEventListener('mousedown', () => uiInstance.raiseDesktopCard(card), true);
     uiInstance.syncBoardPinClass(card);
     return card;

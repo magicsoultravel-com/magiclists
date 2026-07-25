@@ -467,8 +467,10 @@ export const Editor = {
     },
 
     syncEditorTheme(backgroundColor) {
-        const modal = this.overlay?.querySelector('.modal');
-        applyCardTheme(modal, backgroundColor || '', { paintBackground: true });
+        const shell = this.mountZone?.querySelector('.editor-note-shell');
+        if (shell) {
+            applyCardTheme(shell, backgroundColor || '', { paintBackground: true });
+        }
     },
 
     updateDoneButtonUI() {
