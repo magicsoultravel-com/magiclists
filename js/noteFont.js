@@ -1,31 +1,10 @@
 const STORAGE_KEY = 'matrix_note_font';
 
+// 3-way typography toggle: Theme Default, System UI, Handwriting
 export const NOTE_FONTS = [
-    { id: 'default', label: 'Default', desc: 'Follows app theme', family: null },
-    { id: 'system-sans', label: 'System Sans', desc: 'Clean & neutral', family: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" },
-    { id: 'system-serif', label: 'Serif', desc: 'Classic book', family: "ui-serif, Georgia, 'Times New Roman', serif" },
-    { id: 'system-mono', label: 'Monospace', desc: 'Code style', family: "ui-monospace, 'Cascadia Code', Consolas, monospace" },
-    { id: 'arial', label: 'Arial', desc: 'Classic Windows sans', family: "Arial, Helvetica, sans-serif" },
-    { id: 'times', label: 'Times New Roman', desc: 'Classic serif', family: "'Times New Roman', Times, serif" },
-    { id: 'inter', label: 'Inter', desc: 'Modern sans', family: "'Inter', system-ui, sans-serif" },
-    { id: 'merriweather', label: 'Merriweather', desc: 'Readable serif', family: "'Merriweather', Georgia, serif" },
-    { id: 'libre-baskerville', label: 'Libre Baskerville', desc: 'Old book serif', family: "'Libre Baskerville', Georgia, serif" },
-    { id: 'jetbrains', label: 'JetBrains Mono', desc: 'Developer mono', family: "'JetBrains Mono', monospace" },
-    { id: 'special-elite', label: 'Special Elite', desc: 'Typewriter', family: "'Special Elite', 'Courier New', monospace" },
-    { id: 'courier-prime', label: 'Courier Prime', desc: 'Clean typewriter', family: "'Courier Prime', 'Courier New', monospace" },
-    { id: 'caveat', label: 'Caveat', desc: 'Loose handwriting', family: "'Caveat', cursive" },
-    { id: 'patrick-hand', label: 'Patrick Hand', desc: 'Neat handwriting', family: "'Patrick Hand', cursive" },
-    { id: 'indie-flower', label: 'Indie Flower', desc: 'Light script', family: "'Indie Flower', cursive" },
-    { id: 'kalam', label: 'Kalam', desc: 'Marker pen', family: "'Kalam', cursive" },
-    { id: 'shadows-into-light', label: 'Shadows Into Light', desc: 'Sketchy notes', family: "'Shadows Into Light', cursive" },
-    { id: 'sacramento', label: 'Sacramento', desc: 'Elegant script', family: "'Sacramento', cursive" },
-    { id: 'comic-neue', label: 'Comic Neue', desc: 'Casual comic', family: "'Comic Neue', cursive" },
-    { id: 'permanent-marker', label: 'Permanent Marker', desc: 'Bold marker', family: "'Permanent Marker', cursive" },
-    { id: 'press-start', label: 'Press Start 2P', desc: 'Retro pixel', family: "'Press Start 2P', cursive", compact: true },
-    { id: 'orbitron', label: 'Orbitron', desc: 'Sci-fi display', family: "'Orbitron', sans-serif" },
-    { id: 'vt323', label: 'VT323', desc: 'Retro CRT terminal', family: "'VT323', monospace" },
-    { id: 'share-tech-mono', label: 'Share Tech Mono', desc: 'Tech terminal', family: "'Share Tech Mono', monospace" },
-    { id: 'fredericka', label: 'Fredericka', desc: 'Ornate display', family: "'Fredericka the Great', cursive" }
+    { id: 'default', label: 'Theme default', desc: 'Use theme\'s font', family: null },
+    { id: 'system-ui', label: 'System UI', desc: 'Clean standard sans', family: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" },
+    { id: 'handwriting', label: 'Handwriting', desc: 'Neat script style', family: "'Patrick Hand', cursive" }
 ];
 
 export function getNoteFontById(fontId) {

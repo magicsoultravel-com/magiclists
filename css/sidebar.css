@@ -268,43 +268,6 @@ html[data-desktop-gradient="1"] #app-canvas.view-grid {
         linear-gradient(168deg, rgba(255, 255, 255, 0.03) 0%, transparent 38%, rgba(0, 0, 0, 0.14) 100%);
 }
 
-html[data-note-font="press-start"] .mini-card .mini-card-title,
-html[data-note-font="press-start"] .mini-card .card-content-preview,
-html[data-note-font="press-start"] .mini-card .step-text {
-    font-size: calc(0.52rem * var(--note-font-scale, 1));
-    line-height: 1.65;
-    letter-spacing: 0.02em;
-}
-
-html[data-note-font="press-start"] #editor-overlay .editor-note-shell .card-content-preview,
-html[data-note-font="press-start"] #editor-overlay .editor-note-shell .step-text {
-    font-size: calc(0.52rem * var(--note-font-scale, 1) * var(--editor-zoom, 1));
-    line-height: 1.65;
-    letter-spacing: 0.02em;
-}
-
-html[data-note-font="fredericka"] .mini-card .mini-card-title,
-html[data-note-font="fredericka"] .mini-card .card-content-preview,
-html[data-note-font="fredericka"] .mini-card .step-text {
-    line-height: 1.45;
-}
-
-html[data-note-font="caveat"] .mini-card .mini-card-title,
-html[data-note-font="caveat"] .mini-card .card-content-preview,
-html[data-note-font="caveat"] .mini-card .step-text,
-html[data-note-font="patrick-hand"] .mini-card .mini-card-title,
-html[data-note-font="patrick-hand"] .mini-card .card-content-preview,
-html[data-note-font="patrick-hand"] .mini-card .step-text,
-html[data-note-font="indie-flower"] .mini-card .mini-card-title,
-html[data-note-font="indie-flower"] .mini-card .card-content-preview,
-html[data-note-font="indie-flower"] .mini-card .step-text,
-html[data-note-font="kalam"] .mini-card .mini-card-title,
-html[data-note-font="kalam"] .mini-card .card-content-preview,
-html[data-note-font="kalam"] .mini-card .step-text {
-    font-size: calc(0.78rem * var(--note-font-scale, 1));
-    line-height: 1.4;
-}
-
 .btn--compact {
     padding: 0.22rem 0.4rem;
     font-size: 0.66rem;

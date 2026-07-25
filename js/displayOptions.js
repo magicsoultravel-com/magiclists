@@ -236,11 +236,10 @@ export const DisplayOptions = {
     noteFontOptionsHtml(selectedId) {
         return NOTE_FONTS.map((font) => {
             const selected = font.id === selectedId;
-            const family = font.family || "system-ui, sans-serif";
-            const compactClass = font.compact ? ' note-font-option-label--compact' : '';
-            const styleAttr = font.id === 'default' ? '' : ` style="font-family:${family}"`;
-            return `<button type="button" class="note-font-option${selected ? ' is-selected' : ''}" data-font="${font.id}" role="menuitemradio" aria-checked="${selected}" title="${escapeHtml(font.desc)}">
-                <span class="note-font-option-label${compactClass}"${styleAttr}>${escapeHtml(font.label)}</span>
+            const family = font.family || null;
+            const styleAttr = font.family ? ` style="font-family:${font.family}"` : '';
+            return `<button type="button" class="note-font-segment${selected ? ' is-selected' : ''}" data-font="${font.id}" role="menuitemradio" aria-checked="${selected}">
+                <span class="note-font-segment-label"${styleAttr}>${escapeHtml(font.label)}</span>
                 ${selected ? '<span class="clock-style-check" aria-hidden="true">✓</span>' : ''}
             </button>`;
         }).join('');
@@ -268,7 +267,7 @@ export const DisplayOptions = {
         if (!root) return;
 
         this.setRadioGroupSelection(root, '.app-theme-option', readAppTheme(), 'theme');
-        this.setRadioGroupSelection(root, '.note-font-option', this.options.noteFontId, 'font');
+        this.setRadioGroupSelection(root, '.note-font-segment', this.options.noteFontId, 'font');
         this.setRadioGroupSelection(root, '.brand-icon-option', this.options.brandIconId, 'brandIcon');
 
         NoteFontScale.updateLabels();
@@ -320,7 +319,7 @@ export const DisplayOptions = {
                         </section>
                         <section class="display-options-section display-options-section--typography">
                             <h3 class="display-options-heading">Typography</h3>
-                            <div class="display-options-font-grid">${this.noteFontOptionsHtml(opts.noteFontId)}</div>
+                            <div class="note-font-segment-group">${this.noteFontOptionsHtml(opts.noteFontId)}</div>
                             <div class="display-options-scale-row">
                                 ${this.stepperRow({
                                     idPrefix: 'display-opt-note-scale',
@@ -392,7 +391,7 @@ export const DisplayOptions = {
             });
         });
 
-        root.querySelectorAll('.note-font-option').forEach((btn) => {
+        root.querySelectorAll('.note-font-segment').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.setNoteFont(btn.dataset.font);
@@ -551,5 +550,5 @@ export const DisplayOptions = {
 
 function escapeHtml(str) {
     if (!str) return '';
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return str.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
 }
