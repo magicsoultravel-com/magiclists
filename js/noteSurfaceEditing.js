@@ -553,6 +553,26 @@ export function bindNoteEditorShell(root, item, {
         });
     }
 
+    // For modal editor (localOnly=true), add blur handler to flush immediately
+    // This prevents data loss when user navigates away or closes the editor
+    if (localOnly && body) {
+        body.querySelectorAll('.card-inline-edit').forEach((el) => {
+            el.addEventListener('blur', () => {
+                // Skip if this blur was triggered by a save operation
+                if (el.dataset.skipBlurSave === '1') {
+                    delete el.dataset.skipBlurSave;
+                    return;
+                }
+                // Sync and immediately persist the change
+                syncItemBodyFromDom(shell, item);
+                if (item) {
+                    // The onChange callback will handle the mutation
+                    onChange();
+                }
+            });
+        });
+    }
+
     if (stopMousedownPropagation && !shell.dataset.shellBubbleBound) {
         shell.dataset.shellBubbleBound = '1';
         shell.addEventListener('mousedown', (e) => {

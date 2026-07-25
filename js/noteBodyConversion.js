@@ -1,6 +1,7 @@
 /** @module {"owns":"checklist/content conversion, plain copy text", "related":["noteSurface.js","checklistSteps.js","richText.js"]} */
 import { sanitizeRichHtml, stripRichText } from './richText.js';
 import { sheetIsActive, sheetToTsv, getCellValue } from './sheet.js';
+import { getCreatedTimestamp, getUpdatedTimestamp } from './noteModel.js';
 
 export const SOFT_BREAK = '\u2028';
 
@@ -302,12 +303,12 @@ export function itemToTxtExportText(item) {
     const status = item?.status || 'active';
     lines.push(`Status: ${status}`);
 
-    // Created Date
-    const createdDate = formatDateForExport(item?.id);
+    // Created Date - use centralized helper
+    const createdDate = formatDateForExport(getCreatedTimestamp(item));
     lines.push(`Created: ${createdDate}`);
 
-    // Modified Date
-    const modifiedDate = formatDateForExport(item?.updatedAt || item?.startDateTime);
+    // Modified Date - use centralized helper
+    const modifiedDate = formatDateForExport(getUpdatedTimestamp(item));
     lines.push(`Modified: ${modifiedDate}`);
 
     lines.push(''); // Empty line after metadata
@@ -403,15 +404,16 @@ export function sortItemsForTxtExport(items) {
         if (catA < catB) return -1;
         if (catA > catB) return 1;
         // Same category - sort by date (newest first)
-        const dateA = new Date(a.startDateTime || a.id || 0);
-        const dateB = new Date(b.startDateTime || b.id || 0);
+        // Use startDateTime for calendar-based notes, fall back to created_at
+        const dateA = a.startDateTime ? new Date(a.startDateTime) : new Date(getCreatedTimestamp(a) * 1000);
+        const dateB = b.startDateTime ? new Date(b.startDateTime) : new Date(getCreatedTimestamp(b) * 1000);
         return dateB - dateA;
     });
 
     // Sort uncategorized items by date (newest first)
     uncategorized.sort((a, b) => {
-        const dateA = new Date(a.startDateTime || a.id || 0);
-        const dateB = new Date(b.startDateTime || b.id || 0);
+        const dateA = a.startDateTime ? new Date(a.startDateTime) : new Date(getCreatedTimestamp(a) * 1000);
+        const dateB = b.startDateTime ? new Date(b.startDateTime) : new Date(getCreatedTimestamp(b) * 1000);
         return dateB - dateA;
     });
 

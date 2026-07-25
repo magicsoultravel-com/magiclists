@@ -1,7 +1,7 @@
 ﻿/** @module {"owns":"application orchestration, event bus listeners, workspace init", "related":["api.js","ui.js","layoutStorage.js"], "events":["item:mutation_requested","item:selected_for_edit","board:visibility_changed","calendar:add_note"]} */
 import { API } from './api.js';
 import { ACTION_ICONS } from './icons.js';
-import { createNoteId } from './noteModel.js';
+import { createDefaultNote } from './noteModel.js';
 import { NoteSurface } from './noteSurface.js';
 import { UI } from './ui.js';
 import { BoardOperations } from './boardOperations.js';
@@ -853,10 +853,29 @@ executeDataBackupExport() {
         // Beforeunload handler: flush all pending autosaves before page refresh
         // This ensures data is saved when user refreshes the browser
         window.addEventListener('beforeunload', () => {
+            // Flush modal editor if open
+            if (Editor.activeItem && Editor.overlay?.classList.contains('is-open')) {
+                Editor.persistNote({ force: true, normalize: true });
+            }
             const canvas = document.getElementById('app-canvas');
             if (canvas) {
                 // Flush all inline edits from canvas to ensure data is saved
                 UI.flushAllInlineEditsFromCanvas(canvas, AppState.items);
+            }
+        });
+
+        // Visibilitychange handler: flush pending autosaves when tab becomes hidden
+        // This prevents data loss when user switches tabs or minimizes window
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Flush modal editor if open
+                if (Editor.activeItem && Editor.overlay?.classList.contains('is-open')) {
+                    Editor.persistNote({ force: true, normalize: true });
+                }
+                const canvas = document.getElementById('app-canvas');
+                if (canvas) {
+                    UI.flushAllInlineEditsFromCanvas(canvas, AppState.items);
+                }
             }
         });
 
@@ -985,25 +1004,11 @@ executeDataBackupExport() {
 
         window.addEventListener('calendar:add_note', (e) => {
             const defaultDate = e.detail;
-            const newItem = {
-                id: createNoteId(),
-                owner_id: "admin",
-                visibility: "private",
-                type: "note",
-                title: "",
-                content: "",
-                status: "active",
-                categories: [],
-                backgroundColor: randomNoteColor(),
+            const newItem = createDefaultNote({
                 startDateTime: defaultDate.toISOString(),
-                endDateTime: "",
-                isRecurring: false,
-                hideFromCalendar: false,
-                hiddenFromBoard: false,
-                steps: [],
                 editorBodyLayout: 'content',
-                tileSize: 'large'
-            };
+                backgroundColor: randomNoteColor()
+            });
             Editor.open(newItem, AppState.categories);
         });
 

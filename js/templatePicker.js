@@ -1,29 +1,10 @@
 import { randomNoteColor } from './colorPicker.js';
-import { createNoteId, defaultStartDateTimeNow } from './noteModel.js';
+import { createDefaultNote } from './noteModel.js';
 import { buildMeetingDraftItem, buildSheetDraftItem } from './sheet.js';
 import { Editor } from './editor.js';
 
 function baseDraftFields() {
-    return {
-        id: createNoteId(),
-        owner_id: 'admin',
-        visibility: 'private',
-        type: 'note',
-        title: '',
-        content: '',
-        status: 'active',
-        categories: [],
-        backgroundColor: randomNoteColor(),
-        startDateTime: defaultStartDateTimeNow(),
-        endDateTime: '',
-        isRecurring: false,
-        hideFromCalendar: false,
-        hiddenFromBoard: false,
-        attachments: [],
-        steps: [],
-        editorBodyLayout: 'both',
-        tileSize: 'large'
-    };
+    return createDefaultNote({ backgroundColor: randomNoteColor() });
 }
 
 export const TemplatePicker = {

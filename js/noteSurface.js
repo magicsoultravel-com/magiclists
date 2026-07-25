@@ -25,6 +25,7 @@ import {
     renderSheetHtml,
     syncSheetFromDom
 } from './sheet.js';
+import { getCreatedTimestamp } from './noteModel.js';
 
 
 // Import from noteSurfaceHtml.js
@@ -426,7 +427,7 @@ export const NoteSurface = {
         return true;
     },
     formatNoteListDate: function(item) {
-        return formatCreatedDate(item.timestamp);
+        return formatCreatedDate(getCreatedTimestamp(item));
     }
 };
 

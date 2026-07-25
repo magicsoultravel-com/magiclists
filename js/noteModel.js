@@ -33,6 +33,54 @@ export function createNoteId() {
     return `item_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+export function nowInSeconds() {
+    return Math.floor(Date.now() / 1000);
+}
+
+export function getCreatedTimestamp(item) {
+    if (item?.created_at !== undefined) return item.created_at;
+    if (item?.updated_at !== undefined) return item.updated_at;
+    if (item?.id && typeof item.id === 'string') {
+        const idMatch = item.id.match(/_(\d+)_/);
+        if (idMatch) {
+            const idTimestamp = Number(idMatch[1]);
+            if (!Number.isNaN(idTimestamp)) return Math.floor(idTimestamp / 1000);
+        }
+    }
+    return nowInSeconds();
+}
+
+export function getUpdatedTimestamp(item) {
+    return item?.updated_at !== undefined ? item.updated_at : getCreatedTimestamp(item);
+}
+
+export function createDefaultNote({ startDateTime, ...overrides } = {}) {
+    const timestamp = nowInSeconds();
+    return {
+        id: createNoteId(),
+        owner_id: 'admin',
+        visibility: 'private',
+        type: 'note',
+        title: '',
+        content: '',
+        status: 'active',
+        categories: [],
+        backgroundColor: '',
+        startDateTime: startDateTime || defaultStartDateTimeNow(),
+        endDateTime: '',
+        isRecurring: false,
+        hideFromCalendar: false,
+        hiddenFromBoard: false,
+        attachments: [],
+        steps: [],
+        editorBodyLayout: 'both',
+        tileSize: 'large',
+        created_at: timestamp,
+        updated_at: timestamp,
+        ...overrides
+    };
+}
+
 export function noteHasSavableContent({ title = '', content = '', steps = [], sheet = null, noteTemplate = '' } = {}) {
     if (stripRichText(title).trim()) return true;
     if (stripRichText(content).trim()) return true;

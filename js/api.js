@@ -2,6 +2,7 @@
 import { DEFAULT_CATEGORIES } from './categories.js';
 import { purgeLayoutForItem } from './layoutStorage.js';
 import { normalizeTileSize } from './tileGeometry.js';
+import { getCreatedTimestamp, getUpdatedTimestamp } from './noteModel.js';
 
 function normalizeItemTileSize(tileSize) {
     return normalizeTileSize(tileSize);
@@ -50,8 +51,15 @@ function repairDatabase(db) {
     repaired.items = repaired.items.map((item) => {
         if (!item || typeof item !== 'object') return item;
         const tileSize = item.tileSize ? normalizeItemTileSize(item.tileSize) : 'large';
-        if (item.tileSize === tileSize) return item;
-        return { ...item, tileSize };
+        
+        // Backfill missing created_at/updated_at using centralized helpers
+        const createdAt = getCreatedTimestamp(item);
+        const updatedAt = getUpdatedTimestamp(item);
+        
+        if (item.tileSize === tileSize && item.created_at === createdAt && item.updated_at === updatedAt) {
+            return item;
+        }
+        return { ...item, tileSize, created_at: createdAt, updated_at: updatedAt };
     });
 
     return repaired;

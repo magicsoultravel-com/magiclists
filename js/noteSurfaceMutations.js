@@ -140,13 +140,13 @@ function buildSheetInteractionOptions(shell, item, { localOnly = false, onChange
 }
 
 /**
- * Schedule a debounced autosave for desktop inline editing.
- * Uses a 100ms debounce to provide responsive saving while avoiding excessive writes.
- * Immediately syncs the active field to the item to ensure data is never lost.
- * @param {HTMLElement} root - The editor shell/root element
- * @param {object} item - The note item being edited
- * @param {HTMLElement} [activeEl] - The currently focused editable element (optional)
- */
+  * Schedule a debounced autosave for desktop inline editing.
+  * Uses a 1000ms debounce to provide responsive saving while avoiding excessive writes.
+  * Immediately syncs the active field to the item to ensure data is never lost.
+  * @param {HTMLElement} root - The editor shell/root element
+  * @param {object} item - The note item being edited
+  * @param {HTMLElement} [activeEl] - The currently focused editable element (optional)
+  */
 function scheduleDesktopAutoSave(root, item, activeEl) {
     // Immediately sync the active field to ensure data is never lost
     // This runs synchronously and does NOT trigger a re-render
@@ -163,7 +163,7 @@ function scheduleDesktopAutoSave(root, item, activeEl) {
         syncItemBodyFromDom(root, item);
         // Emit mutation with correct beforeItem
         emitItemMutation(item, { preserveView: true, beforeItem, skipRerender: true });
-    }, 100);
+    }, 1000);
 }
 
 /**

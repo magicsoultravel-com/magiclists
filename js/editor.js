@@ -6,6 +6,7 @@ import { stripRichText } from './richText.js';
 import { CARD_ICONS } from './icons.js';
 import {
     combineDateTime,
+    createDefaultNote,
     createNoteId,
     defaultStartDateTimeNow,
     formatLocalDate,
@@ -99,27 +100,8 @@ export const Editor = {
             return;
         }
 
-        // Create a blank note with default schema
-        const blankNote = {
-            id: createNoteId(),
-            owner_id: "admin",
-            visibility: "private",
-            type: "note",
-            title: "",
-            content: "",
-            status: "active",
-            categories: [],
-            backgroundColor: randomNoteColor(),
-            startDateTime: defaultStartDateTimeNow(),
-            endDateTime: "",
-            isRecurring: false,
-            hideFromCalendar: false,
-            hiddenFromBoard: false,
-            attachments: [],
-            steps: [],
-            editorBodyLayout: 'both',
-            tileSize: 'large'
-        };
+     // Create a blank note with default schema
+     const blankNote = createDefaultNote({ backgroundColor: randomNoteColor() });
 
         // Open the editor with the blank note
         this.open(blankNote);
@@ -130,26 +112,7 @@ export const Editor = {
         this.hasUserInteracted = false;
 
         const isNew = !item;
-        this.activeItem = item ? NoteSurface.snapshotItem(item) : {
-            id: createNoteId(),
-            owner_id: "admin",
-            visibility: "private",
-            type: "note",
-            title: "",
-            content: "",
-            status: "active",
-            categories: [],
-            backgroundColor: randomNoteColor(),
-            startDateTime: defaultStartDateTimeNow(),
-            endDateTime: "",
-            isRecurring: false,
-            hideFromCalendar: false,
-            hiddenFromBoard: false,
-            attachments: [],
-            steps: [],
-            editorBodyLayout: 'both',
-            tileSize: 'large'
-        };
+        this.activeItem = item ? NoteSurface.snapshotItem(item) : createDefaultNote({ backgroundColor: randomNoteColor() });
         if (!this.activeItem.editorBodyLayout) {
             this.activeItem.editorBodyLayout = 'both';
         }

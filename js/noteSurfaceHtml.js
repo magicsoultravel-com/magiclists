@@ -343,14 +343,18 @@ function buildNoteFormatPanelHtml(item = null) {
 
 export function buildNoteMetaFooterHtml(item, { targetCatName = '', categoryColor = UNCATEGORIZED_COLOR } = {}) {
     const createdLabel = formatCreatedDate(item.created_at);
+    const modifiedLabel = formatModifiedDate(item.updated_at);
     const sizeLabel = computeNoteSizeKb(item);
     const lineLabel = formatNoteLineCount(computeNoteLineCount(item));
     const createdHtml = createdLabel
-        ? `<span class="editor-created-date" title="Created">Created ${createdLabel}</span>`
+        ? `<span class="editor-created-date" title="Created">${createdLabel}</span>`
+        : '';
+    const modifiedHtml = modifiedLabel
+        ? `<span class="editor-modified-date" title="Last modified">${modifiedLabel}</span>`
         : '';
     const sizeHtml = `<span class="editor-note-size" title="Note content size">${sizeLabel} KB</span>`;
     const lineHtml = `<span class="editor-note-lines" title="Number of lines">${lineLabel}</span>`;
-    const statsHtml = `${sizeHtml}${lineHtml}${createdHtml}`;
+    const statsHtml = `${sizeHtml}${lineHtml}${createdHtml}${modifiedHtml}`;
 
     return `
             <div class="editor-meta-row editor-meta-row--footer editor-meta-row--inline">
@@ -366,6 +370,13 @@ export function buildNoteMetaFooterHtml(item, { targetCatName = '', categoryColo
 }
 
 function formatCreatedDate(timestamp) {
+    if (!timestamp) return '';
+    const d = new Date(Number(timestamp) * 1000);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatModifiedDate(timestamp) {
     if (!timestamp) return '';
     const d = new Date(Number(timestamp) * 1000);
     if (Number.isNaN(d.getTime())) return '';

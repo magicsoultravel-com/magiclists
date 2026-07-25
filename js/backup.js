@@ -6,6 +6,7 @@ import {
     writeStoredCategories
 } from './categories.js';
 import { applyLayoutBackupKeys, getLayoutBackupKeys, repairSpatialLayoutStorage } from './layoutStorage.js';
+import { getCreatedTimestamp, getUpdatedTimestamp } from './noteModel.js';
 
 export const BACKUP_FILE_PREFIX = 'matrix_workspace_backup_';
 export const ENCRYPTED_BACKUP_MARKER = 'matrix_encrypted_backup';
@@ -207,17 +208,22 @@ function migrateImportedStep(step) {
 
 export function migrateImportedItem(item) {
     if (!item || typeof item !== 'object') return item;
+    
+    // Backfill created_at/updated_at using centralized helpers
+    const createdAt = getCreatedTimestamp(item);
+    const updatedAt = getUpdatedTimestamp(item);
+    
     const migrated = {
-        hiddenFromBoard: false,
-        hideFromCalendar: false,
-        startDateTime: '',
-        endDateTime: '',
-        backgroundColor: '',
-        isRecurring: false,
-        attachments: [],
         ...item,
         hiddenFromBoard: item.hiddenFromBoard === true,
-        hideFromCalendar: item.hideFromCalendar === true
+        hideFromCalendar: item.hideFromCalendar === true,
+        startDateTime: item.startDateTime || '',
+        endDateTime: item.endDateTime || '',
+        backgroundColor: item.backgroundColor || '',
+        isRecurring: item.isRecurring === true,
+        attachments: item.attachments || [],
+        created_at: createdAt,
+        updated_at: updatedAt
     };
     if (Array.isArray(item.steps)) {
         migrated.steps = item.steps.map(migrateImportedStep);
