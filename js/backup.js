@@ -63,10 +63,23 @@ export function buildBackupPackage() {
     }
 
     const layoutKeys = getLayoutBackupKeys();
+    
+    // Include desktop configuration in backup
+    const desktopConfig = localStorage.getItem('magicnotes_desktops_config');
+    let desktopsConfig = null;
+    if (desktopConfig) {
+        try {
+            desktopsConfig = JSON.parse(desktopConfig);
+        } catch {
+            // Ignore parse errors
+        }
+    }
+    
     return {
         timestamp: Math.floor(Date.now() / 1000),
         matrix_database,
         matrix_custom_categories: categories,
+        desktopsConfig,
         ...Object.fromEntries(
             Object.entries(layoutKeys).map(([key, raw]) => {
                 try {
@@ -223,7 +236,9 @@ export function migrateImportedItem(item) {
         isRecurring: item.isRecurring === true,
         attachments: item.attachments || [],
         created_at: createdAt,
-        updated_at: updatedAt
+        updated_at: updatedAt,
+        // Ensure desktopId defaults to 1 for backward compatibility
+        desktopId: item.desktopId || 1
     };
     if (Array.isArray(item.steps)) {
         migrated.steps = item.steps.map(migrateImportedStep);
@@ -279,6 +294,15 @@ export function applyBackupToStorage(parsedBackup) {
         }
         if (!categories.length && Array.isArray(db.settings?.categories) && db.settings.categories.length) {
             writeStoredCategories(normalizeCategories(db.settings.categories, { keepEmpty: true }), { keepEmpty: true });
+        }
+    }
+
+    // Restore desktop configuration if present in backup
+    if (parsedBackup.desktopsConfig) {
+        try {
+            localStorage.setItem('magicnotes_desktops_config', JSON.stringify(parsedBackup.desktopsConfig));
+        } catch {
+            // Ignore errors
         }
     }
 

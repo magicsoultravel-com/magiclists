@@ -54,6 +54,8 @@ import { CloudBackup } from './cloudBackup.js';
 import { BoardSort } from './boardSort.js';
 import { BootProgress } from './bootProgress.js';
 import { renderQuickActions } from './noteQuickActions.js';
+import { DesktopDock } from './desktopDockComponent.js';
+import { DesktopManager } from './desktopManager.js';
 import { TemplatePicker } from './templatePicker.js';
 import { itemToTxtExportText, sortItemsForTxtExport } from './noteBodyConversion.js';
 import {
@@ -166,10 +168,13 @@ SidePanel.setupStatusClickHandlers(); /* after radio/tv/weather shells exist */
             this.setupUndo();
             this.setupDrawingMode();
             Fullscreen.init();
-            DrawingBoard.init(this);
+DrawingBoard.init(this);
             if (AppState.workspaceMode === 'drawing') {
                 requestAnimationFrame(() => this.applyWorkspaceMode('drawing', { skipPersist: true }));
             }
+            
+            // Initialize Desktop Dock after workspace is ready
+            DesktopDock.init();
         } finally {
             await BootProgress.complete();
         }
@@ -948,18 +953,18 @@ executeDataBackupExport() {
             if (idx !== -1) AppState.items[idx] = item;
             else AppState.items.push(item);
 
-             if (detail?.skipRerender || detail?.preserveView) {
-                 if (!detail?.skipRerender) {
-                     const canvas = document.getElementById('app-canvas');
-                     UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
-                     if (AppState.viewSettings.sortBy === 'grid') {
-                         DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
-                     }
-                 }
-                 this.updateWorkspaceCounter();
-                 return;
-             }
-             await this.syncDataStore();
+            if (detail?.skipRerender || detail?.preserveView) {
+                if (!detail?.skipRerender) {
+                    const canvas = document.getElementById('app-canvas');
+                    UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
+                    if (AppState.viewSettings.sortBy === 'grid') {
+                        DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+                    }
+                }
+                this.updateWorkspaceCounter();
+                return;
+            }
+            await this.syncDataStore();
         });
 
         window.addEventListener('board:visibility_changed', async (e) => {
@@ -1022,12 +1027,99 @@ executeDataBackupExport() {
             }
         });
 
-        window.addEventListener('category:order_changed', (e) => {
+window.addEventListener('category:order_changed', (e) => {
             AppState.categories = writeStoredCategories(e.detail || AppState.categories, { keepEmpty: true });
             this.syncDataStore();
         });
+
+        // Handle desktop switching - refresh workspace to show notes for active desktop
+        window.addEventListener('desktop:changed', async (e) => {
+            const canvas = document.getElementById('app-canvas');
+            if (canvas && AppState.workspaceMode !== 'drawing') {
+                UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
+                UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories);
+                DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+            }
+            this.updateWorkspaceCounter();
+        });
     }
 }
+
+// Cross-desktop undo/redo support (Option A)
+// When undoing/redoing a change that affects a different desktop, switch to that desktop
+function getDesktopForItem(item) {
+    return item?.desktopId || 1;
+}
+
+// Patch UndoManager to handle cross-desktop switching
+const originalUndo = UndoManager.undo;
+const originalRedo = UndoManager.redo;
+
+UndoManager.undo = async function() {
+    const entry = this.undoStack[this.undoStack.length - 1];
+    if (entry?.kind === 'change' && entry.before) {
+        const beforeDesktop = getDesktopForItem(entry.before);
+        const currentDesktop = DesktopManager.getActiveDesktop();
+        if (beforeDesktop !== currentDesktop) {
+            // Will switch to the desktop where the change was made
+            this._targetDesktop = beforeDesktop;
+        }
+    }
+    return originalUndo.call(this);
+};
+
+UndoManager.redo = async function() {
+    const entry = this.redoStack[this.redoStack.length - 1];
+    if (entry?.kind === 'change' && entry.after) {
+        const afterDesktop = getDesktopForItem(entry.after);
+        const currentDesktop = DesktopManager.getActiveDesktop();
+        if (afterDesktop !== currentDesktop) {
+            // Will switch to the desktop where the change was made
+            this._targetDesktop = afterDesktop;
+        }
+    }
+    return originalRedo.call(this);
+};
+
+// Override onRestore to handle desktop switching after undo/redo
+const originalOnRestore = UndoManager.onRestore;
+Object.defineProperty(UndoManager, 'onRestore', {
+    set: function(handler) {
+        // Wrap the handler to switch desktops if needed
+        const wrappedHandler = async function(item, opts) {
+            if (this._targetDesktop && this._targetDesktop !== DesktopManager.getActiveDesktop()) {
+                DesktopManager.setActiveDesktop(this._targetDesktop);
+                this._targetDesktop = null;
+            }
+            return handler.call(this, item, opts);
+        };
+        // Store original for reference
+        this._originalOnRestore = handler;
+    }
+});
+
+// We need to modify the setupUndo to use our wrapped handler
+const originalSetupUndo = Application.prototype.setupUndo;
+Application.prototype.setupUndo = function() {
+    const app = this; // Capture 'this' reference for the closure
+    UndoManager.init({
+        getToken: () => AppState.user.token,
+        isEnabled: () => AppState.user.isLoggedIn,
+        onRestore: (item, { preserveView = false } = {}) => {
+            // Check if we need to switch desktops
+            if (UndoManager._targetDesktop && UndoManager._targetDesktop !== DesktopManager.getActiveDesktop()) {
+                DesktopManager.setActiveDesktop(UndoManager._targetDesktop);
+                UndoManager._targetDesktop = null;
+            }
+            return app.restoreItem(item, preserveView);
+        },
+        onRemove: (itemId) => app.removeItemFromWorkspace(itemId),
+        onStackChange: () => {
+            SidebarHistory.renderPanel();
+            app.renderQuickActionsHeaderIcons();
+        }
+    });
+};
 
 const CoreApp = new Application();
 document.addEventListener('DOMContentLoaded', () => CoreApp.init());

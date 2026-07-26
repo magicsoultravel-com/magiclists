@@ -1,6 +1,7 @@
-/** @module {"owns":"item visibility, archiving, calendar integration, card actions", "related":["noteSurface.js","noteQuickActions.js"]} */
+/** @module {"owns":"item visibility, archiving, calendar integration, card actions", "related":["noteSurface.js","noteQuickActions.js","desktopManager.js"]} */
 import { NoteSurface } from './noteSurface.js';
 import { CARD_ICONS } from './icons.js';
+import { DesktopManager } from './desktopManager.js';
 
 /**
  * Board operations module handling item visibility, archiving, calendar integration, and card actions.
@@ -51,7 +52,24 @@ export const BoardOperations = {
         window.dispatchEvent(new CustomEvent('board:visibility_changed'));
     },
 
+    // Check if item is on active desktop (with backward compatibility fallback to desktop 1)
+    isOnActiveDesktop(item) {
+        if (!item) return false;
+        const itemDesktopId = item.desktopId || 1;
+        return itemDesktopId === DesktopManager.getActiveDesktop();
+    },
+
     getVisibleItems(items) {
+        const activeDesktop = DesktopManager.getActiveDesktop();
+        return items.filter((item) => {
+            // Backward compatibility: treat undefined desktopId as 1
+            const itemDesktopId = item.desktopId || 1;
+            return !this.isHiddenFromBoard(item) && !this.isArchived(item) && itemDesktopId === activeDesktop;
+        });
+    },
+
+    // Get all visible items across all desktops (for stats/counter)
+    getAllVisibleItems(items) {
         return items.filter((item) => !this.isHiddenFromBoard(item) && !this.isArchived(item));
     },
 

@@ -110,6 +110,7 @@ import {
     refreshBoardChecklistBody,
     refreshBoardEditorCard
 } from './noteSurfaceHtml.js';
+import { DesktopManager } from './desktopManager.js';
 export { CARD_ICONS, FORMAT_ICONS, ACTION_ICONS, DRAWING_ICONS } from './icons.js';
 export {
     deriveNoteTitle,
@@ -208,7 +209,11 @@ function sortItemsSpatially(items, getRect) {
 }
 
 export function isDesktopCard(card) {
-    return card?.dataset?.desktop === '1';
+    // A card is a "desktop card" if it's on the active desktop
+    // This allows spatial behavior (drag, resize, etc.) to work on any active desktop
+    const cardDesktop = card?.dataset?.desktop;
+    const activeDesktop = DesktopManager.getActiveDesktop();
+    return cardDesktop === String(activeDesktop);
 }
 
 export const UI = {
@@ -248,10 +253,11 @@ export const UI = {
         return BoardOperations.getVisibleItems(items);
     },
 
-    flushAllInlineEditsFromCanvas(canvas, items, { forceFlush = false } = {}) {
+flushAllInlineEditsFromCanvas(canvas, items, { forceFlush = false } = {}) {
         if (!canvas || !Array.isArray(items)) return;
         const byId = new Map(items.map((item) => [item.id, item]));
-        canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
+        const activeDesktop = DesktopManager.getActiveDesktop();
+        canvas.querySelectorAll(`.mini-card[data-desktop="${activeDesktop}"]`).forEach((card) => {
             const item = byId.get(card.dataset.id);
             if (!item) return;
             NoteSurface.commitFocusedInlineField(card, item);
@@ -564,12 +570,13 @@ export const UI = {
         applyFileCabinetZoneToggle(card, item, ctx, this);
     },
 
-    reapplySmallFootprintOnBoard() {
+reapplySmallFootprintOnBoard() {
         const canvas = document.getElementById('app-canvas');
         if (!canvas) return;
         const footprint = readTileSmallFootprint();
         const smallRect = getSmallRect(footprint);
-        canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
+        const activeDesktop = DesktopManager.getActiveDesktop();
+        canvas.querySelectorAll(`.mini-card[data-desktop="${activeDesktop}"]`).forEach((card) => {
             if (card.closest('#file-cabinet')) return;
             const item = this.resolveBoardItem(card.dataset.id);
             if (!item) return;
@@ -1128,9 +1135,10 @@ export const UI = {
         });
     },
 
-    flushLayoutFromCanvas(canvas, _viewMode) {
+flushLayoutFromCanvas(canvas, _viewMode) {
         if (!canvas) return;
-        canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
+        const activeDesktop = DesktopManager.getActiveDesktop();
+        canvas.querySelectorAll(`.mini-card[data-desktop="${activeDesktop}"]`).forEach((card) => {
             const id = card.dataset.id;
             if (!id) return;
             this.saveGridLayout(id, this.readNoteRect(card));
@@ -1180,9 +1188,10 @@ export const UI = {
         return true;
     },
 
-    resnapBoardPositions(canvas, { reflow = false } = {}) {
+resnapBoardPositions(canvas, { reflow = false } = {}) {
         if (!canvas) return;
-        const cards = canvas.querySelectorAll('.mini-card[data-desktop="1"]');
+        const activeDesktop = DesktopManager.getActiveDesktop();
+        const cards = canvas.querySelectorAll(`.mini-card[data-desktop="${activeDesktop}"]`);
         const bounds = this.getGridBoardBounds(canvas);
         const { packW, maxH, origin, edgePad } = bounds;
         cards.forEach((card) => {
@@ -2025,13 +2034,14 @@ export const UI = {
         clearSnapPanelPreview(canvas);
     },
 
-    findDesktopCenterSlot(w, h, canvas, viewMode, { excludeId = null } = {}) {
+findDesktopCenterSlot(w, h, canvas, viewMode, { excludeId = null } = {}) {
         const host = canvas || document.getElementById('app-canvas');
         if (!host) return { x: 8, y: 8, w, h };
         const mode = viewMode || activeBoardViewMode;
 
         const { origin, packW, maxH, edgePad } = this.getGridBoardBounds(host);
         const { viewportH, scrollY } = getGridViewportBounds(host);
+        const activeDesktop = DesktopManager.getActiveDesktop();
         let rect = {
             x: origin + Math.max(0, (packW - w) / 2),
             y: origin + scrollY + Math.max(0, (viewportH - h) / 2),
@@ -2039,7 +2049,7 @@ export const UI = {
             h
         };
         rect = this.snapNoteRect(rect, { maxW: packW, maxH, origin, edgePad });
-        const placed = [...host.querySelectorAll('.mini-card[data-desktop="1"]')]
+        const placed = [...host.querySelectorAll(`.mini-card[data-desktop="${activeDesktop}"]`)]
             .filter((c) => c.dataset.id !== excludeId && !c.closest('#file-cabinet'))
             .map((c) => this.readNoteRect(c));
         if (placed.some((p) => rectsOverlapCore(rect, p))) {

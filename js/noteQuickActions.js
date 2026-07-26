@@ -11,6 +11,7 @@ import { BoardSort } from './boardSort.js';
 import { Fullscreen } from './fullscreen.js';
 import { UndoManager } from './undo.js';
 import { BoardOverlay } from './boardOverlay.js';
+import { DesktopManager } from './desktopManager.js';
 
 function attachCardActionButton(btn, handler) {
     if (!btn) return;
@@ -55,7 +56,8 @@ function queryActionButtons(root) {
         hideBtn: actions.querySelector('.card-act--hide'),
         editBtn: actions.querySelector('.card-act--edit'),
         calBtn: actions.querySelector('.card-act--cal'),
-        closeBtn: actions.querySelector('.card-act--close')
+        closeBtn: actions.querySelector('.card-act--close'),
+        desktopBtns: Array.from(actions.querySelectorAll('.card-act--desktop'))
     };
 }
 
@@ -184,6 +186,33 @@ export function bindNoteQuickActions(mount, item, { surface, ui, card, ctx, edit
             e.stopPropagation();
             delete card.dataset.skipExpand;
             if (ctx) ui.applyTileZoneToggle(card, item, { ...ctx, fromToolbar: true });
+        });
+    }
+
+    // Wire desktop assignment buttons
+    if (buttons.desktopBtns?.length) {
+        buttons.desktopBtns.forEach(btn => {
+            const targetDesktop = Number(btn.dataset.desktopId);
+            attachCardActionButton(btn, () => {
+                if (!localStorage.getItem('admin_token')) return;
+                const currentDesktop = item.desktopId || 1;
+                if (currentDesktop === targetDesktop) return; // Already on this desktop
+                
+                const beforeItem = NoteSurface.snapshotItem(item);
+                item.desktopId = targetDesktop;
+                
+                // Update the card's dataset attribute
+                card.dataset.desktop = String(targetDesktop);
+                
+                // Emit mutation to save and update
+                NoteSurface.emitItemMutation(item, { beforeItem, preserveView: true });
+                
+                // Update button states
+                buttons.desktopBtns.forEach(b => {
+                    const id = Number(b.dataset.desktopId);
+                    b.classList.toggle('is-active', id === targetDesktop);
+                });
+            });
         });
     }
 
