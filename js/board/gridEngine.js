@@ -2,6 +2,7 @@
 import { getGridMetrics } from '../gridDensity.js';
 import { resolveGridPushLayout } from './noteGeometry.js';
 import { getGridBoardBounds } from './boardExtents.js';
+import { DesktopManager } from '../desktopManager.js';
 
 /**
  * @typedef {object} GridEngineDeps
@@ -64,9 +65,10 @@ export function computeSnapPanelLayout(deps, {
 export function computeGridBoardLayout(deps, canvas, actorId, actorRect = null) {
     if (!canvas?.classList.contains('view-grid')) return new Map();
     const { origin, packW, edgePad } = deps.getGridBoardBounds(canvas);
+    const activeDesktop = DesktopManager.getActiveDesktop();
     return computeSnapPanelLayout(deps, {
         panelEl: canvas,
-        cardSelector: '.mini-card[data-desktop="1"]',
+        cardSelector: `.mini-card[data-desktop="${activeDesktop}"]`,
         getSavedRect: (id) => deps.getGridLayout()[id],
         rectForCard: (card, saved, isExpanded) => deps.gridBoardRectForCard(card, saved, isExpanded),
         isCardExpanded: (id) => deps.isSavedLayoutExpanded(id),
@@ -79,8 +81,9 @@ export function computeGridBoardLayout(deps, canvas, actorId, actorRect = null) 
 export function applyGridBoardLayout(deps, canvas, layout, { animate = true, save = true, preview = false } = {}) {
     if (!canvas || !layout?.size) return [];
     const placed = [];
+    const activeDesktop = DesktopManager.getActiveDesktop();
     layout.forEach((rect, id) => {
-        const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(id)}"]`);
+        const card = canvas.querySelector(`.mini-card[data-desktop="${activeDesktop}"][data-id="${CSS.escape(id)}"]`);
         if (!card) return;
         deps.applyNoteRect(card, rect, { settling: animate });
         card.classList.toggle('layout-preview', preview);
@@ -105,8 +108,9 @@ export function reflowGridBoard(deps, canvas, actorId, { animate = true, actorRe
     if (!canvas?.classList.contains('view-grid')) return;
     let actorRect = explicitActorRect;
     if (!actorRect && actorId) {
+        const activeDesktop = DesktopManager.getActiveDesktop();
         const actorCard = canvas.querySelector(
-            `.mini-card[data-desktop="1"][data-id="${CSS.escape(actorId)}"]`
+            `.mini-card[data-desktop="${activeDesktop}"][data-id="${CSS.escape(actorId)}"]`
         );
         if (actorCard) actorRect = deps.readNoteRect(actorCard);
     }

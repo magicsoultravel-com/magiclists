@@ -76,7 +76,8 @@ export const BoardOperations = {
     flushAllInlineEditsFromCanvas(canvas, items) {
         if (!canvas || !Array.isArray(items)) return;
         const byId = new Map(items.map((item) => [item.id, item]));
-        canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
+        const activeDesktop = DesktopManager.getActiveDesktop();
+        canvas.querySelectorAll(`.mini-card[data-desktop="${activeDesktop}"]`).forEach((card) => {
             const item = byId.get(card.dataset.id);
             if (!item) return;
             NoteSurface.commitFocusedInlineField(card, item);

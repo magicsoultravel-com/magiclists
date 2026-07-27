@@ -6,6 +6,7 @@ import {
     FREEFORM_SIZES_KEY
 } from './layoutKeys.js';
 import { readNoteRect } from './noteGeometry.js';
+import { DesktopManager } from '../desktopManager.js';
 
 export const DESKTOP_BOARD_PANE_CLASS = 'desktop-board-pane';
 
@@ -45,7 +46,8 @@ function readStorageLayoutExtent() {
 }
 
 export function getBoardContentExtent(canvas) {
-    const cards = canvas?.querySelectorAll('.mini-card[data-desktop="1"]');
+    const activeDesktop = DesktopManager.getActiveDesktop();
+    const cards = canvas?.querySelectorAll(`.mini-card[data-desktop="${activeDesktop}"]`);
     if (cards?.length) {
         let maxBottom = 0;
         let maxRight = 0;
@@ -95,7 +97,8 @@ export function ensureDesktopBoardPane(canvas) {
     if (pane) return pane;
     pane = document.createElement('div');
     pane.className = DESKTOP_BOARD_PANE_CLASS;
-    const cards = [...canvas.querySelectorAll(':scope > .mini-card[data-desktop="1"]')];
+    const activeDesktop = DesktopManager.getActiveDesktop();
+    const cards = [...canvas.querySelectorAll(`:scope > .mini-card[data-desktop="${activeDesktop}"]`)];
     canvas.appendChild(pane);
     cards.forEach((card) => pane.appendChild(card));
     return pane;
@@ -127,7 +130,8 @@ export function updateBoardCanvasExtents(canvas, { readCardRect = readNoteRect, 
             return;
         }
 
-        const cards = canvas.querySelectorAll('.mini-card[data-desktop="1"]');
+        const activeDesktop = DesktopManager.getActiveDesktop();
+        const cards = canvas.querySelectorAll(`.mini-card[data-desktop="${activeDesktop}"]`);
         const pane = getDesktopBoardPane(canvas);
         if (!cards.length) {
             if (pane) {
