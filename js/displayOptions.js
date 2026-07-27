@@ -21,6 +21,7 @@ import {
     isBrandIconCustomized,
     resolveBrandIconId
 } from './brandIcon.js';
+import { DesktopManager, MAX_DESKTOP_COUNT } from './desktopManager.js';
 
 const STORAGE_KEY = 'matrix_display_options';
 
@@ -105,10 +106,12 @@ export const DisplayOptions = {
     options: { ...DEFAULTS },
     onChange: null,
     getLoggedIn: null,
+    getItems: null,
 
-    init({ onChange, getLoggedIn } = {}) {
+    init({ onChange, getLoggedIn, getItems } = {}) {
         this.onChange = onChange;
         this.getLoggedIn = getLoggedIn;
+        this.getItems = getItems;
         this.options = readDisplayOptions();
         applyDisplayOptions(this.options);
 
@@ -274,6 +277,12 @@ export const DisplayOptions = {
         DesktopZoom.updateButtons();
         BoardPlacement.updateLabels();
 
+        // Update desktop count stepper label
+        const desktopCountLabel = root.querySelector('#display-opt-desktop-count-label');
+        if (desktopCountLabel) {
+            desktopCountLabel.textContent = String(DesktopManager.getDesktopCount());
+        }
+
         this.syncButtonState();
     },
 
@@ -357,6 +366,14 @@ export const DisplayOptions = {
                                 })}
                             </div>
                             <p class="display-options-row-hint">Snap ruler for moving notes (8–64px). Card size unchanged.</p>
+                            <p class="display-options-subheading">Desktop count</p>
+                            <div class="display-options-scale-row">
+                                ${this.stepperRow({
+                                    idPrefix: 'display-opt-desktop-count',
+                                    label: 'Number of desktops',
+                                    valuePercent: `${DesktopManager.getDesktopCount()}`
+                                })}
+                            </div>
                         </section>
                     </div>
                 </div>
@@ -436,6 +453,16 @@ export const DisplayOptions = {
             disabled: !this.isDesktopZoomEnabled(),
             onOut: () => DesktopZoom.step(-DesktopZoom.ZOOM_STEP),
             onIn: () => DesktopZoom.step(DesktopZoom.ZOOM_STEP)
+        });
+
+        this.bindStepper(root, {
+            idPrefix: 'display-opt-desktop-count',
+            onOut: () => {
+                DesktopManager.setDesktopCount(DesktopManager.getDesktopCount() - 1, this.getItems?.() || []);
+            },
+            onIn: () => {
+                DesktopManager.setDesktopCount(DesktopManager.getDesktopCount() + 1, this.getItems?.() || []);
+            }
         });
 
         root.querySelector('#display-opt-chrome-bg')?.addEventListener('click', (e) => {

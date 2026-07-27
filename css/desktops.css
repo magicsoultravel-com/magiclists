@@ -127,6 +127,20 @@
     color: var(--text-main);
 }
 
+/* Drag-over state for desktop dock buttons */
+.desktop-dock-btn.drag-over {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    transform: scale(1.1);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.desktop-dock-drawer.drag-over {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
 /* Reduce motion support */
 @media (prefers-reduced-motion: reduce) {
     .desktop-dock-drawer,
@@ -138,4 +152,11 @@
     .desktop-dock-btn:hover {
         transform: none;
     }
+    
+    .desktop-dock-btn.drag-over {
+        transform: none;
+    }
 }
+
+
+

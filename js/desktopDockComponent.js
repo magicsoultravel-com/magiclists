@@ -9,6 +9,7 @@ const PILL_WIDTH_PX = 48;
 let _drawerEl = null;
 let _toggleEl = null;
 let _isDrawerOpen = false;
+let _isDragActive = false;
 let _signal = null;
 
 function createTogglePill() {
@@ -59,7 +60,18 @@ function renderDesktopButtons(drawer) {
                 detail: { desktopId: i }
             }));
         });
-        
+
+        // Drag-over support for desktop dock drop detection
+        btn.addEventListener('pointerenter', () => {
+            _isDragActive = true;
+            btn.classList.add('drag-over');
+        });
+
+        btn.addEventListener('pointerleave', () => {
+            _isDragActive = false;
+            btn.classList.remove('drag-over');
+        });
+
         drawer.appendChild(btn);
     }
 }
@@ -161,6 +173,10 @@ export const DesktopDock = {
 
     isOpen() {
         return _isDrawerOpen;
+    },
+
+    isDragActive() {
+        return _isDragActive;
     },
 
     open() {

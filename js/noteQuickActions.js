@@ -11,10 +11,10 @@ import { BoardSort } from './boardSort.js';
 import { Fullscreen } from './fullscreen.js';
 import { UndoManager } from './undo.js';
 import { BoardOverlay } from './boardOverlay.js';
-import { DesktopManager } from './desktopManager.js';
 
 function attachCardActionButton(btn, handler) {
     if (!btn) return;
+
     let handledByMouse = false;
     btn.addEventListener('mousedown', (e) => {
         if (e.button !== 0) return;
@@ -56,10 +56,10 @@ function queryActionButtons(root) {
         hideBtn: actions.querySelector('.card-act--hide'),
         editBtn: actions.querySelector('.card-act--edit'),
         calBtn: actions.querySelector('.card-act--cal'),
-        closeBtn: actions.querySelector('.card-act--close'),
-        desktopBtns: Array.from(actions.querySelectorAll('.card-act--desktop'))
+        closeBtn: actions.querySelector('.card-act--close')
     };
 }
+
 
 function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
     const { copyBtn, pinBtn, dragBtn, colorBtn, iconBtn, hideBtn, calBtn } = buttons;
@@ -189,34 +189,8 @@ export function bindNoteQuickActions(mount, item, { surface, ui, card, ctx, edit
         });
     }
 
-    // Wire desktop assignment buttons
-    if (buttons.desktopBtns?.length) {
-        buttons.desktopBtns.forEach(btn => {
-            const targetDesktop = Number(btn.dataset.desktopId);
-            attachCardActionButton(btn, () => {
-                if (!localStorage.getItem('admin_token')) return;
-                const currentDesktop = item.desktopId || 1;
-                if (currentDesktop === targetDesktop) return; // Already on this desktop
-                
-                const beforeItem = NoteSurface.snapshotItem(item);
-                item.desktopId = targetDesktop;
-                
-                // Update the card's dataset attribute
-                card.dataset.desktop = String(targetDesktop);
-                
-                // Emit mutation to save and update
-                NoteSurface.emitItemMutation(item, { beforeItem, preserveView: true });
-                
-                // Update button states
-                buttons.desktopBtns.forEach(b => {
-                    const id = Number(b.dataset.desktopId);
-                    b.classList.toggle('is-active', id === targetDesktop);
-                });
-            });
-        });
-    }
-
     attachCardActionButton(buttons.editBtn, () => {
+
         NoteSurface.commitFocusedInlineField(card, item);
         if (isDesktopCard(card)) ui.raiseDesktopCard(card);
         if (card.dataset.skipExpand) {

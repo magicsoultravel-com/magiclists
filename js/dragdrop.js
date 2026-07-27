@@ -23,6 +23,8 @@ import {
 import { CANVAS_COL_GAP, CANVAS_LAYOUT_ORIGIN, getGridMetrics } from './gridDensity.js';
 import { initFileCabinetDrag, isFileCabinetActive, fileItemToCabinet, shouldFileItem } from './fileCabinet.js';
 import { isChecklistInteraction } from './noteSurfaceChecklist.js';
+import { DesktopManager } from './desktopManager.js';
+import { DesktopDock } from './desktopDockComponent.js';
 
 const DRAG_THRESHOLD = 4;
 const GRID_SCROLL_EDGE = 40;
@@ -401,14 +403,38 @@ export const DragDropEngine = {
                 runExtentsUpdate();
                 autoScrollDesktopCanvas(canvas, e.clientX, e.clientY);
             }
+
+            // Desktop dock drop detection - use elementsFromPoint (plural) to find dock buttons
+            const dockButtons = document.elementsFromPoint(e.clientX, e.clientY)
+                .filter(el => el instanceof Element && el.classList.contains('desktop-dock-btn'));
+            dockButtons.forEach(btn => btn.classList.add('drag-over'));
         };
 
         const onDragUp = () => {
             if (!dragActive) return;
             const { card, moved } = dragActive;
             card.classList.remove('is-grid-dragging', 'is-freeform-dragging');
+
+            // Clear drag-over classes from dock buttons
+            document.querySelectorAll('.desktop-dock-btn.drag-over').forEach(btn => {
+                btn.classList.remove('drag-over');
+            });
+
             if (moved) {
                 card.dataset.skipExpand = '1';
+
+                // Desktop dock drop detection - use elementsFromPoint (plural) to find dock button
+                const dockButtons = document.elementsFromPoint(dragActive.startX, dragActive.startY)
+                    .filter(el => el instanceof Element && el.classList.contains('desktop-dock-btn'));
+                if (dockButtons.length > 0) {
+                    const targetBtn = dockButtons[0];
+                    const targetDesktopId = Number(targetBtn.dataset.desktopId);
+                    const item = currentItems.find(i => i.id === card.dataset.id);
+                    if (item) {
+                        DesktopManager.assignNoteToDesktop(item, targetDesktopId);
+                    }
+                }
+
                 if (snapEnabled) {
                     finishSnapDrop(card);
                 } else {

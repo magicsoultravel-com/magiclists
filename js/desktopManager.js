@@ -135,27 +135,35 @@ export const DesktopManager = {
 
     // Assign a note to a specific desktop, emitting mutation event
     // Returns true if successful, false otherwise
-    async assignNoteToDesktop(noteId, desktopId) {
+    // No Undo/Redo tracking — desktop moves are saved immediately
+    async assignNoteToDesktop(item, desktopId) {
         const numDesktopId = Number(desktopId);
         if (!Number.isInteger(numDesktopId) || numDesktopId < 1 || numDesktopId > _desktopCount) {
             console.warn(`[DesktopManager] Invalid assignment desktop ID: ${desktopId}`);
             return false;
         }
+        if (!item || !item.id) return false;
 
-        // Emit mutation event for undo/redo integration
+        const currentDesktop = item.desktopId || 1;
+        if (currentDesktop === numDesktopId) return true; // Already on this desktop
+
+        item.desktopId = numDesktopId;
+
+        // Emit mutation event with skipUndo flag — desktop moves saved immediately
         window.dispatchEvent(new CustomEvent('item:mutation_requested', {
             detail: {
-                itemId: noteId,
+                item,
                 desktopId: numDesktopId,
                 preserveView: true,
-                mergeKey: `desktop_assign_${noteId}`
+                skipUndo: true
             }
         }));
-        
+
         return true;
     },
 
     // Sanitize note object - ensure desktopId defaults to 1 if undefined
+
     // Safe for use with undo/redo snapshots
     sanitizeNoteDesktop(item) {
         if (!item) return item;

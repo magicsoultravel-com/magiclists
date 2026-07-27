@@ -106,21 +106,12 @@ export function buildNoteQuickActionsHtml(item, {
     const dragBtn = showDragIcon
         ? `<button type="button" class="card-act card-act--drag${isModal ? ' card-act--decorative' : ''}" title="Drag to move" aria-label="Drag to move"${isModal ? ' tabindex="-1" aria-hidden="true"' : ''}>${CARD_ICONS.drag}</button>`
         : '';
-    
-    // Build desktop shortcut buttons
-    const currentDesktop = item?.desktopId || 1;
-    const desktopCount = DesktopManager.getDesktopCount();
-    const desktopButtons = [];
-    for (let i = 1; i <= desktopCount; i++) {
-        const isActive = i === currentDesktop;
-        desktopButtons.push(`<button type="button" class="card-act card-act--desktop${isActive ? ' is-active' : ''}" data-desktop-id="${i}" title="Move to Desktop ${i}" aria-label="Move to Desktop ${i}">[${i}]</button>`);
-    }
-    
     let actionCount = 8;
     if (showDragIcon) actionCount += 1;
     if (showArchive) actionCount += 1;
-    actionCount += desktopButtons.length;
+
     const archiveBtn = showArchive
+
         ? `<button type="button" id="modal-archive-btn" class="card-act card-act--archive" title="Archive note" aria-label="Archive note">${CARD_ICONS.delete}</button>`
         : '';
     const actionsHtml = `<div class="card-actions${isModal ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
@@ -130,9 +121,9 @@ export function buildNoteQuickActionsHtml(item, {
             ${pinBtn}
             <button type="button" class="card-act card-act--color" title="Note color" aria-label="Note color" aria-haspopup="dialog">${CARD_ICONS.color}</button>
             <button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>
-            ${desktopButtons.join('')}
             <button type="button" class="card-act card-act--edit" title="Edit note" aria-label="Edit note">${CARD_ICONS.edit}</button>
             ${dragBtn}
+
             <button type="button" class="card-act ${lastClass}"${lastId} title="${escapeHTML(expandTitle).replace(/"/g, "")}" aria-label="${escapeHTML(expandTitle).replace(/"/g, "")}">${lastIcon}</button>
         </div>`;
     return isModal ? `${archiveBtn}${actionsHtml}` : actionsHtml;
