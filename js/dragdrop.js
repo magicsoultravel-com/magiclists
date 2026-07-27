@@ -274,7 +274,9 @@ export const DragDropEngine = {
     },
 
     initDesktopInteractions(canvas, currentItems = [], signal, { snapEnabled = false, overlayMode = false } = {}) {
-        const cards = canvas.querySelectorAll('.mini-card[data-desktop="1"]');
+        const getActiveDesktop = () => DesktopManager.getActiveDesktop();
+        const getCardSelector = () => `.mini-card[data-desktop="${getActiveDesktop()}"]`;
+        const cards = canvas.querySelectorAll(getCardSelector());
         let dragActive = null;
         let resizeActive = null;
         let previewFrame = null;
@@ -291,7 +293,7 @@ export const DragDropEngine = {
 
         const snapshotPreviewBaseline = () => {
             previewBaseline = new Map();
-            canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((c) => {
+            canvas.querySelectorAll(getCardSelector()).forEach((c) => {
                 const id = c.dataset.id;
                 if (id) previewBaseline.set(id, UI.readNoteRect(c));
             });
@@ -299,8 +301,9 @@ export const DragDropEngine = {
 
         const restorePreviewBaseline = () => {
             if (!previewBaseline) return;
+            const desktopSelector = getCardSelector();
             previewBaseline.forEach((rect, id) => {
-                const c = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(id)}"]`);
+                const c = canvas.querySelector(`${desktopSelector}[data-id="${CSS.escape(id)}"]`);
                 if (c) UI.applyNoteRect(c, rect, { settling: false });
             });
             previewBaseline = null;
@@ -317,9 +320,10 @@ export const DragDropEngine = {
                     actorCard.dataset.id,
                     actorRect
                 );
+                const desktopSelector = getCardSelector();
                 previewBaseline?.forEach((base, id) => {
                     if (id === actorCard.dataset.id) return;
-                    const other = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(id)}"]`);
+                    const other = canvas.querySelector(`${desktopSelector}[data-id="${CSS.escape(id)}"]`);
                     if (!other) return;
                     const rect = layout.get(id) ?? base;
                     const pushed = base.x !== rect.x
@@ -449,6 +453,10 @@ export const DragDropEngine = {
                     const item = currentItems.find(i => i.id === card.dataset.id);
                     if (item) {
                         DesktopManager.assignNoteToDesktop(item, targetDesktopId);
+                        // Refresh workspace to show notes from the new desktop
+                        window.dispatchEvent(new CustomEvent('desktop:changed', {
+                            detail: { desktopId: targetDesktopId }
+                        }));
                     }
                 }
 
