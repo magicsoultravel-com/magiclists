@@ -233,6 +233,20 @@ function bindPointerSession({ onKeyDown, onCancel }) {
     return cleanup;
 }
 
+/**
+ * Helper function to find dock buttons at a given coordinate.
+ * Uses elementsFromPoint (plural) to find all elements at the point,
+ * then filters for desktop-dock-btn elements.
+ * @param {number} x - X coordinate
+ * @param {number} y - Y coordinate
+ * @returns {Element[]} Array of dock button elements at the point
+ */
+function getDockButtonAt(x, y) {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return [];
+    return document.elementsFromPoint(x, y)
+        .filter(el => el instanceof Element && el.classList.contains('desktop-dock-btn'));
+}
+
 export const DragDropEngine = {
     init(userState, currentItems, onMutationComplete) {
         if (!userState || !userState.isLoggedIn) return;
@@ -405,12 +419,14 @@ export const DragDropEngine = {
             }
 
             // Desktop dock drop detection - use elementsFromPoint (plural) to find dock buttons
-            const dockButtons = document.elementsFromPoint(e.clientX, e.clientY)
-                .filter(el => el instanceof Element && el.classList.contains('desktop-dock-btn'));
-            dockButtons.forEach(btn => btn.classList.add('drag-over'));
+            const hoveredButtons = getDockButtonAt(e.clientX, e.clientY);
+            const allDockButtons = document.querySelectorAll('.desktop-dock-btn');
+            allDockButtons.forEach(btn => {
+                btn.classList.toggle('drag-over', hoveredButtons.includes(btn));
+            });
         };
 
-        const onDragUp = () => {
+        const onDragUp = (e) => {
             if (!dragActive) return;
             const { card, moved } = dragActive;
             card.classList.remove('is-grid-dragging', 'is-freeform-dragging');
@@ -423,9 +439,10 @@ export const DragDropEngine = {
             if (moved) {
                 card.dataset.skipExpand = '1';
 
-                // Desktop dock drop detection - use elementsFromPoint (plural) to find dock button
-                const dockButtons = document.elementsFromPoint(dragActive.startX, dragActive.startY)
-                    .filter(el => el instanceof Element && el.classList.contains('desktop-dock-btn'));
+                // Desktop dock drop detection - use release coordinates from event
+                const dropX = e?.clientX ?? dragActive.startX;
+                const dropY = e?.clientY ?? dragActive.startY;
+                const dockButtons = getDockButtonAt(dropX, dropY);
                 if (dockButtons.length > 0) {
                     const targetBtn = dockButtons[0];
                     const targetDesktopId = Number(targetBtn.dataset.desktopId);
