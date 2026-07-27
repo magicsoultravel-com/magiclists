@@ -58,6 +58,7 @@ import { DesktopDock } from './desktopDockComponent.js';
 import { DesktopManager } from './desktopManager.js';
 import { TemplatePicker } from './templatePicker.js';
 import { itemToTxtExportText, sortItemsForTxtExport } from './noteBodyConversion.js';
+import { showAppToast } from './toast.js';
 import {
     migrateItemsToFileCabinet,
     pruneFileCabinetOrderByLayout,
@@ -111,7 +112,8 @@ class Application {
             migrateCardMinimumFootprintIfNeeded();
             migrateGridSpanCardWidthIfNeeded();
             DisplayOptions.init({
-                getLoggedIn: () => AppState.user.isLoggedIn
+                getLoggedIn: () => AppState.user.isLoggedIn,
+                getItems: () => AppState.items
             });
             AppTheme.init();
             readViewSessions();
@@ -281,6 +283,7 @@ DrawingBoard.init(this);
 
             const data = await API.fetchItems(AppState.user.token);
             AppState.items = Array.isArray(data?.items) ? data.items : [];
+            DesktopManager.sanitizeNotesDesktops(AppState.items);
 
             if (AppState.workspaceMode === 'drawing') {
                 /* board hidden — skip note canvas rebuild */
@@ -941,7 +944,8 @@ executeDataBackupExport() {
                 return;
             }
 
-            if (beforeSnapshot) {
+            const skipUndo = detail?.skipUndo === true;
+            if (!skipUndo && beforeSnapshot) {
                 UndoManager.recordItemChange(beforeSnapshot, item, {
                     preserveView,
                     label: historyLabelForItem(item),
@@ -1041,6 +1045,12 @@ window.addEventListener('category:order_changed', (e) => {
                 DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
             }
             this.updateWorkspaceCounter();
+        });
+        window.addEventListener("desktop:notes_migrated", (e) => {
+            const { migratedCount } = e.detail || {};
+            if (migratedCount > 0) {
+                showAppToast(`${migratedCount} notes migrated to Desktop 1`);
+            }
         });
     }
 }
