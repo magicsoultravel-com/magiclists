@@ -10,6 +10,7 @@ let _drawerEl = null;
 let _toggleEl = null;
 let _containerEl = null;
 let _isDrawerOpen = false;
+let _isExpanded = false;
 let _isDragActive = false;
 let _signal = null;
 
@@ -115,23 +116,38 @@ function updateActiveButton() {
 function bindEvents() {
     _toggleEl.addEventListener('click', (e) => {
         e.stopPropagation();
-        toggleDrawer();
+        // Toggle expanded state on explicit click
+        _isExpanded = !_isExpanded;
+        if (_isExpanded) {
+            openDrawer();
+        } else {
+            closeDrawer();
+        }
     });
 
     // Container-level hover handling for smooth drag-and-drop
-    // Open drawer when hovering over the dock container (toggle or drawer)
+    // Add is-hovered class on pointerenter
     _containerEl.addEventListener('pointerenter', () => {
-        openDrawer();
+        _containerEl.classList.add('is-hovered');
+        // Open drawer only if not explicitly expanded
+        if (!_isExpanded) {
+            openDrawer();
+        }
     });
 
-    // Close drawer when pointer leaves the entire dock container
+    // Remove is-hovered class and close drawer only if not expanded
     _containerEl.addEventListener('pointerleave', () => {
-        closeDrawer();
+        _containerEl.classList.remove('is-hovered');
+        // Close drawer only if not explicitly expanded by click
+        if (!_isExpanded) {
+            closeDrawer();
+        }
     });
 
     // Close drawer when clicking outside
     document.addEventListener('click', (e) => {
         if (_isDrawerOpen && !_containerEl.contains(e.target)) {
+            _isExpanded = false;
             closeDrawer();
         }
     });
@@ -139,6 +155,7 @@ function bindEvents() {
     // Close drawer on escape
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && _isDrawerOpen) {
+            _isExpanded = false;
             closeDrawer();
         }
     });

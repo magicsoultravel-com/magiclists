@@ -452,18 +452,21 @@ export const DragDropEngine = {
                     const targetDesktopId = Number(targetBtn.dataset.desktopId);
                     const item = currentItems.find(i => i.id === card.dataset.id);
                     if (item) {
-                        // Preserve position from card - read current visual position
+                        // 1. Read current note rect from DOM card
                         const rect = UI.readNoteRect(card);
+                        // 2. Write x, y, width, height to item object
                         item.x = rect.x;
                         item.y = rect.y;
                         item.width = rect.w;
                         item.height = rect.h;
-                        
+                        // 3. Mutate desktopId
                         DesktopManager.assignNoteToDesktop(item, targetDesktopId);
-                        // Refresh current workspace so the moved note unmounts cleanly
+                        // 4. Refresh CURRENT desktop (not target) so note unmounts cleanly
                         window.dispatchEvent(new CustomEvent('desktop:changed', {
-                            detail: { desktopId: targetDesktopId }
+                            detail: { desktopId: DesktopManager.getActiveDesktop() }
                         }));
+                        // 5. Early return to prevent subsequent layout calls from overriding coordinates
+                        return;
                     }
                 }
 
