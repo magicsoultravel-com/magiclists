@@ -8,6 +8,7 @@ const PILL_WIDTH_PX = 48;
 
 let _drawerEl = null;
 let _toggleEl = null;
+let _containerEl = null;
 let _isDrawerOpen = false;
 let _isDragActive = false;
 let _signal = null;
@@ -117,24 +118,20 @@ function bindEvents() {
         toggleDrawer();
     });
 
-    // Open drawer on hover
-    _toggleEl.addEventListener('pointerenter', () => {
+    // Container-level hover handling for smooth drag-and-drop
+    // Open drawer when hovering over the dock container (toggle or drawer)
+    _containerEl.addEventListener('pointerenter', () => {
         openDrawer();
     });
 
-    // Close drawer when pointer leaves toggle area
-    _toggleEl.addEventListener('pointerleave', () => {
-        // Use a small delay to allow smooth hover UX
-        setTimeout(() => {
-            if (!_drawerEl?.contains(document.activeElement)) {
-                closeDrawer();
-            }
-        }, 100);
+    // Close drawer when pointer leaves the entire dock container
+    _containerEl.addEventListener('pointerleave', () => {
+        closeDrawer();
     });
 
     // Close drawer when clicking outside
     document.addEventListener('click', (e) => {
-        if (_isDrawerOpen && !_toggleEl.contains(e.target) && !_drawerEl.contains(e.target)) {
+        if (_isDrawerOpen && !_containerEl.contains(e.target)) {
             closeDrawer();
         }
     });
@@ -172,6 +169,9 @@ export const DesktopDock = {
         container.className = 'desktop-dock';
         container.appendChild(_toggleEl);
         container.appendChild(_drawerEl);
+        
+        // Store container reference for hover handling
+        _containerEl = container;
         
         // Find workspace shell for mounting
         const workspaceShell = document.getElementById('workspace-shell');
