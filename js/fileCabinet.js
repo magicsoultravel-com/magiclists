@@ -16,6 +16,7 @@ import { readTileSmallFootprint } from './tileFootprint.js';
 import { normalizeViewMode } from './viewSession.js';
 import { syncCabinetSplitter } from './shellResize.js';
 import { BoardOperations } from './boardOperations.js';
+import { createCardComponent } from './noteSurfaceHtml.js';
 
 
 export const FILE_CABINET_KEY = 'matrix_file_cabinet';
@@ -701,7 +702,7 @@ function buildFileCabinetCategoryColumn({
     stack.dataset.category = catName;
 
 items.forEach((item, index) => {
-        const card = UI.createCardComponent(item, activeCategories);
+const card = createCardComponent(UI, item, activeCategories);
         card.classList.add('file-cabinet-tab', 'spatial-at-small');
         card.dataset.fileCabinetCategory = catName;
         card.dataset.fileCabinetStackIndex = String(index);
@@ -726,7 +727,7 @@ function buildFileCabinetRolloutStack({ catName, items, activeCategories, UI }) 
     stack.style.setProperty('--file-cabinet-category-color', color);
 
 items.forEach((item, index) => {
-        const card = UI.createCardComponent(item, activeCategories);
+        const card = createCardComponent(UI, item, activeCategories);
         card.classList.add('file-cabinet-tab', 'spatial-at-small');
         card.dataset.fileCabinetCategory = catName;
         card.dataset.fileCabinetStackIndex = String(index);

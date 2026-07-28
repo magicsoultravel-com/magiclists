@@ -659,8 +659,8 @@ reapplySmallFootprintOnBoard() {
             .filter((cat) => !hiddenCategories.includes(cat.name));
         const { targetCatName, categoryColor } = getCardRenderContext(item, activeCategories);
 
-        this.renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
-        this.applyItemCardTheme(card, item);
+        renderBoardEditorCard(this, card, item, activeCategories, targetCatName, categoryColor);
+        applyItemCardTheme(card, item);
         card.style.borderLeftColor = categoryColor;
         this.finalizeDesktopCard(card);
 
@@ -793,7 +793,7 @@ reapplySmallFootprintOnBoard() {
                 return ay - by || ax - bx;
             })
             .forEach((item, index) => {
-                const card = this.createCardComponent(item, activeCategories);
+                const card = createCardComponent(this, item, activeCategories);
                 const isLayoutExpanded = this.isSavedLayoutExpanded(item.id);
 
                 const { origin, packW, maxH, edgePad } = bounds;
@@ -899,10 +899,6 @@ reapplySmallFootprintOnBoard() {
         card.classList.toggle('is-board-pinned', this.isBoardPinned(card.dataset.id));
     },
 
-    applyItemCardTheme(card, item) {
-        applyItemCardTheme(card, item);
-    },
-
     setupFreeformChrome(card) {
         const shell = card.querySelector('.editor-note-shell');
         mountFloatChrome(card, {
@@ -995,22 +991,6 @@ reapplySmallFootprintOnBoard() {
         }
     },
 
-    createCardComponent(item, activeCategories) {
-        return createCardComponent(this, item, activeCategories);
-    },
-
-    renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor) {
-        renderBoardEditorCard(this, card, item, activeCategories, targetCatName, categoryColor);
-    },
-
-    refreshBoardChecklistBody(card, item, activeCategories, targetCatName, categoryColor) {
-        refreshBoardChecklistBody(this, card, item, activeCategories, targetCatName, categoryColor);
-    },
-
-    refreshBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor) {
-        refreshBoardEditorCard(this, card, item, activeCategories, targetCatName, categoryColor);
-    },
-
     focusPendingBoardField(card) {
         const field = card?.dataset?.pendingFocusField;
         if (!field) return;
@@ -1099,7 +1079,7 @@ reapplySmallFootprintOnBoard() {
         });
     },
 
-flushLayoutFromCanvas(canvas, _viewMode) {
+    flushLayoutFromCanvas(canvas, _viewMode) {
         if (!canvas) return;
         const activeDesktop = DesktopManager.getActiveDesktop();
         canvas.querySelectorAll(`.mini-card[data-desktop="${activeDesktop}"]`).forEach((card) => {
