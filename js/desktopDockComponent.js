@@ -117,6 +117,21 @@ function bindEvents() {
         toggleDrawer();
     });
 
+    // Open drawer on hover
+    _toggleEl.addEventListener('pointerenter', () => {
+        openDrawer();
+    });
+
+    // Close drawer when pointer leaves toggle area
+    _toggleEl.addEventListener('pointerleave', () => {
+        // Use a small delay to allow smooth hover UX
+        setTimeout(() => {
+            if (!_drawerEl?.contains(document.activeElement)) {
+                closeDrawer();
+            }
+        }, 100);
+    });
+
     // Close drawer when clicking outside
     document.addEventListener('click', (e) => {
         if (_isDrawerOpen && !_toggleEl.contains(e.target) && !_drawerEl.contains(e.target)) {

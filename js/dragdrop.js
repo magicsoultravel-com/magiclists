@@ -460,9 +460,7 @@ export const DragDropEngine = {
                         item.height = rect.h;
                         
                         DesktopManager.assignNoteToDesktop(item, targetDesktopId);
-                        // Switch to target desktop
-                        DesktopManager.setActiveDesktop(targetDesktopId);
-                        // Refresh workspace to show notes from the new desktop
+                        // Refresh current workspace so the moved note unmounts cleanly
                         window.dispatchEvent(new CustomEvent('desktop:changed', {
                             detail: { desktopId: targetDesktopId }
                         }));
