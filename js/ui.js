@@ -804,7 +804,7 @@ reapplySmallFootprintOnBoard() {
         }
         const hiddenCount = safeItems.length - this.getVisibleItems(safeItems).length;
         if (safeItems.length > 0 && hiddenCount === safeItems.length) {
-            canvas.innerHTML = `<div class="system-status-msg">All objects are hidden. Use the footer to restore them.</div>`;
+            canvas.innerHTML = `<div class="system-status-msg">Add new note</div>`;
         } else {
             canvas.innerHTML = `<div class="system-status-msg">Workspace clean. Click "+ New" to commit an entity.</div>`;
         }
