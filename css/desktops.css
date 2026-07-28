@@ -142,13 +142,16 @@
 }
 
 /* Desktop dock button colored icons */
+.desktop-dock-btn {
+    position: relative;
+}
+
 .desktop-dock-icon {
     width: 16px;
     height: 16px;
     border-radius: 3px;
     display: inline-block;
-    margin-right: 4px;
-    vertical-align: middle;
+    position: relative;
 }
 
 .desktop-dock-btn--r .desktop-dock-icon {
@@ -179,17 +182,20 @@
     background: #4dffff;
 }
 
-/* Desktop dock count badge */
+/* Desktop dock count badge - positioned in top-right corner of icon */
 .desktop-dock-count {
-    font-size: 0.7rem;
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    font-size: 0.6rem;
     font-weight: 600;
-    color: var(--text-muted);
-    position: relative;
-}
-
-.desktop-dock-btn.active .desktop-dock-count,
-.desktop-dock-btn[aria-current="true"] .desktop-dock-count {
     color: #fff;
+    background: rgba(0, 0, 0, 0.7);
+    border-radius: 2px;
+    padding: 0 2px;
+    line-height: 1;
+    min-width: 12px;
+    text-align: center;
 }
 
 /* Reduce motion support */

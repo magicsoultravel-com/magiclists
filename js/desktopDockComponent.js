@@ -52,12 +52,12 @@ function renderDesktopButtons(drawer, items = []) {
         btn.title = `Desktop ${i}`;
         btn.setAttribute('aria-label', `Desktop ${i}`);
         
-        // Count notes on this desktop
+// Count notes on this desktop
         const notesForDesktop = DesktopManager.getAllNotesForDesktop(i, items);
         const noteCount = notesForDesktop.length;
         
-        // Colored square with note count
-        btn.innerHTML = `<span class="desktop-dock-icon"></span><span class="desktop-dock-count">${noteCount}</span>`;
+        // Colored square with note count inside
+        btn.innerHTML = `<span class="desktop-dock-icon"><span class="desktop-dock-count">${noteCount}</span></span>`;
         
         if (i === DesktopManager.getActiveDesktop()) {
             btn.classList.add('active');
