@@ -153,7 +153,8 @@ import {
     computeGridBoardLayout as computeGridBoardLayoutCore,
     applyGridBoardLayout as applyGridBoardLayoutCore,
     reflowGridBoard as reflowGridBoardCore,
-    clearSnapPanelPreview
+    clearSnapPanelPreview,
+    computeBoardLayout
 } from './board/gridEngine.js';
 
 // Global state for board items lookup
@@ -775,63 +776,42 @@ reapplySmallFootprintOnBoard() {
     },
 
     layoutBoard(canvas, boardItems, activeCategories) {
-        const layout = this.getGridLayout();
-        const placed = [];
         const bounds = this.getGridBoardBounds(canvas);
         const boardPane = document.createElement('div');
         boardPane.className = DESKTOP_BOARD_PANE_CLASS;
         canvas.appendChild(boardPane);
 
-        [...boardItems]
-            .sort((a, b) => {
-                const sa = layout[a.id];
-                const sb = layout[b.id];
-                const ay = sa?.y ?? Number.POSITIVE_INFINITY;
-                const ax = sa?.x ?? Number.POSITIVE_INFINITY;
-                const by = sb?.y ?? Number.POSITIVE_INFINITY;
-                const bx = sb?.x ?? Number.POSITIVE_INFINITY;
-                return ay - by || ax - bx;
-            })
-            .forEach((item, index) => {
-                const card = createCardComponent(this, item, activeCategories);
-                const isLayoutExpanded = this.isSavedLayoutExpanded(item.id);
+        // Compute layout using pure function
+        const { layout, placed } = computeBoardLayout(this, boardItems, bounds, {
+            getLayout: () => this.getGridLayout(),
+            isExpanded: (id) => this.isSavedLayoutExpanded(id),
+            resolveSpatialSize: (card, item) => this.resolveRememberedSpatialSize(card, item),
+            getTileDefaultRect: geoGetTileDefaultRect,
+            resolveTileSize,
+            findSlot: findFirstCanvasSlotCore,
+            snapRect: (rect, opts) => this.snapNoteRect(
+                this.gridBoardRectForCard(null, rect, this.isSavedLayoutExpanded(opts.itemId)),
+                opts
+            )
+        });
 
-                const { origin, packW, maxH, edgePad } = bounds;
-                const saved = layout[item.id];
-                let rect;
+        // Apply layout to DOM
+        boardItems.forEach((item, index) => {
+            const card = createCardComponent(this, item, activeCategories);
+            const rect = placed[index];
+            const saved = layout[item.id];
 
-                if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.w)) {
-                    rect = this.snapNoteRect(
-                        this.gridBoardRectForCard(card, saved, isLayoutExpanded),
-                        { maxW: packW, maxH, origin, edgePad }
-                    );
-                } else {
-                    const tileDefaults = geoGetTileDefaultRect(resolveTileSize(item));
-                    let w;
-                    let h;
-                    if (isLayoutExpanded) {
-                        const target = this.resolveRememberedSpatialSize(null, item);
-                        w = target.w;
-                        h = target.h;
-                    } else {
-                        w = tileDefaults.w;
-                        h = tileDefaults.h;
-                    }
-                    rect = findFirstCanvasSlotCore(w, h, placed, packW + origin * 2, { origin, edgePad });
-                }
+            this.applyNoteRect(card, rect, { settling: false });
+            if (!saved) {
+                this.saveGridLayout(item.id, rect);
+            }
 
-                this.applyNoteRect(card, rect, { settling: false });
-                if (!saved) {
-                    this.saveGridLayout(item.id, rect);
-                }
-                placed.push(rect);
-
-                card.removeAttribute('draggable');
-                this.finalizeDesktopCard(card);
-                this.initDesktopCardStack(card, index);
-                this.syncBoardPinClass(card);
-                boardPane.appendChild(card);
-            });
+            card.removeAttribute('draggable');
+            this.finalizeDesktopCard(card);
+            this.initDesktopCardStack(card, index);
+            this.syncBoardPinClass(card);
+            boardPane.appendChild(card);
+        });
 
         return { layout, placed, boardPane };
     },

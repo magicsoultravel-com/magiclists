@@ -118,4 +118,71 @@ export function reflowGridBoard(deps, canvas, actorId, { animate = true, actorRe
     applyGridBoardLayout(deps, canvas, layout, { animate, save: true });
 }
 
+/**
+ * Pure layout calculation for board items - computes rects without DOM manipulation.
+ * @param {object} deps - Dependency object with layout functions
+ * @param {Array} items - Items to layout
+ * @param {object} bounds - Grid bounds { origin, packW, maxH, edgePad }
+ * @param {function} getLayout - Function to get current layout
+ * @param {function} isExpanded - Function to check if item is expanded
+ * @param {function} resolveSpatialSize - Function to resolve remembered spatial size
+ * @param {function} getTileDefaultRect - Function to get tile default rect
+ * @param {function} resolveTileSize - Function to resolve tile size
+ * @param {function} findSlot - Function to find first canvas slot
+ * @param {function} snapRect - Function to snap rect to grid
+ * @returns {object} { layout: Map<itemId, rect>, placed: rect[] }
+ */
+export function computeBoardLayout(deps, items, bounds, {
+    getLayout,
+    isExpanded,
+    resolveSpatialSize,
+    getTileDefaultRect,
+    resolveTileSize,
+    findSlot,
+    snapRect
+}) {
+    const { origin, packW, maxH, edgePad } = bounds;
+    const layout = getLayout();
+    const placed = [];
+
+    const sortedItems = [...items].sort((a, b) => {
+        const sa = layout[a.id];
+        const sb = layout[b.id];
+        const ay = sa?.y ?? Number.POSITIVE_INFINITY;
+        const ax = sa?.x ?? Number.POSITIVE_INFINITY;
+        const by = sb?.y ?? Number.POSITIVE_INFINITY;
+        const bx = sb?.x ?? Number.POSITIVE_INFINITY;
+        return ay - by || ax - bx;
+    });
+
+    sortedItems.forEach((item) => {
+        const isLayoutExpanded = isExpanded(item.id);
+        const saved = layout[item.id];
+        let rect;
+
+        if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.w)) {
+            // Use saved layout position
+            const cardRect = { x: saved.x, y: saved.y, w: saved.w, h: saved.h };
+            rect = snapRect(cardRect, { maxW: packW, maxH, origin, edgePad, itemId: item.id });
+        } else {
+            // Calculate new position
+            const tileDefaults = getTileDefaultRect(resolveTileSize(item));
+            let w = tileDefaults.w;
+            let h = tileDefaults.h;
+
+            if (isLayoutExpanded) {
+                const target = resolveSpatialSize(null, item);
+                w = target.w;
+                h = target.h;
+            }
+
+            rect = findSlot(w, h, placed, packW + origin * 2, { origin, edgePad });
+        }
+
+        placed.push(rect);
+    });
+
+    return { layout, placed };
+}
+
 export { getGridBoardBounds };
