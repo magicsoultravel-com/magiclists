@@ -141,6 +141,57 @@
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
+/* Desktop dock button colored icons */
+.desktop-dock-icon {
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    display: inline-block;
+    margin-right: 4px;
+    vertical-align: middle;
+}
+
+.desktop-dock-btn--r .desktop-dock-icon {
+    background: #ff4d4d;
+}
+
+.desktop-dock-btn--g .desktop-dock-icon {
+    background: #4dff4d;
+}
+
+.desktop-dock-btn--b .desktop-dock-icon {
+    background: #4d4dff;
+}
+
+.desktop-dock-btn--y .desktop-dock-icon {
+    background: #ffff4d;
+}
+
+.desktop-dock-btn--p .desktop-dock-icon {
+    background: #ff4dff;
+}
+
+.desktop-dock-btn--o .desktop-dock-icon {
+    background: #ff804d;
+}
+
+.desktop-dock-btn--c .desktop-dock-icon {
+    background: #4dffff;
+}
+
+/* Desktop dock count badge */
+.desktop-dock-count {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    position: relative;
+}
+
+.desktop-dock-btn.active .desktop-dock-count,
+.desktop-dock-btn[aria-current="true"] .desktop-dock-count {
+    color: #fff;
+}
+
 /* Reduce motion support */
 @media (prefers-reduced-motion: reduce) {
     .desktop-dock-drawer,

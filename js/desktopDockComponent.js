@@ -16,6 +16,7 @@ let _isDrawerOpen = false;
 let _isExpanded = false;
 let _isDragActive = false;
 let _signal = null;
+let _items = [];
 
 function createTogglePill() {
     const pill = document.createElement('button');
@@ -175,11 +176,10 @@ function bindEvents() {
         updateActiveButton();
     });
     
-    // Listen for desktop count changes to refresh button list
+// Listen for desktop count changes to refresh button list
     window.addEventListener('desktop:count_changed', () => {
         if (_drawerEl) {
-            // Items will be passed via refreshButtons()
-            renderDesktopButtons(_drawerEl, []);
+            renderDesktopButtons(_drawerEl, _items);
             updateActiveButton();
         }
     });
@@ -187,8 +187,7 @@ function bindEvents() {
     // Listen for item mutations to update note counts
     window.addEventListener('item:mutation_requested', () => {
         if (_drawerEl) {
-            // Items will be passed via refreshButtons()
-            renderDesktopButtons(_drawerEl, []);
+            renderDesktopButtons(_drawerEl, _items);
             updateActiveButton();
         }
     });
@@ -239,7 +238,8 @@ export const DesktopDock = {
         closeDrawer();
     },
 
-    refreshButtons(items = []) {
+refreshButtons(items = []) {
+        _items = items;
         if (_drawerEl) {
             renderDesktopButtons(_drawerEl, items);
         }
