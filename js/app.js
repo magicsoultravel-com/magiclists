@@ -134,9 +134,11 @@ class Application {
             this.migrateBoardOverlayFromFreeform();
             BootProgress.set(60, 'Layout…');
             await this.syncDataStore();
-            BootProgress.set(85, 'Workspace…');
+BootProgress.set(85, 'Workspace…');
             this.setupCoreListeners();
             SidePanel.init(AppState);
+            // Refresh desktop dock with note counts
+            DesktopDock.refreshButtons(AppState.items);
             initShellResize();
             initUndockedSidebarStacking();
             BoardSort.init({

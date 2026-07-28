@@ -24,7 +24,6 @@ import { CANVAS_COL_GAP, CANVAS_LAYOUT_ORIGIN, getGridMetrics } from './gridDens
 import { initFileCabinetDrag, isFileCabinetActive, fileItemToCabinet, shouldFileItem } from './fileCabinet.js';
 import { isChecklistInteraction } from './noteSurfaceChecklist.js';
 import { DesktopManager } from './desktopManager.js';
-import { DesktopDock } from './desktopDockComponent.js';
 
 const DRAG_THRESHOLD = 4;
 const GRID_SCROLL_EDGE = 40;

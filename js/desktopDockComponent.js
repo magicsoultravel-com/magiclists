@@ -6,6 +6,9 @@ const TOGGLE_ICON = '🖥️';
 const DRAWER_HEIGHT = 48;
 const PILL_WIDTH_PX = 48;
 
+// Color palette for desktop icons (R, G, B, Y, P, O, C)
+const DESKTOP_COLORS = ['r', 'g', 'b', 'y', 'p', 'o', 'c'];
+
 let _drawerEl = null;
 let _toggleEl = null;
 let _containerEl = null;
@@ -34,19 +37,26 @@ function createDrawer() {
     return drawer;
 }
 
-function renderDesktopButtons(drawer) {
+function renderDesktopButtons(drawer, items = []) {
     const count = DesktopManager.getDesktopCount();
     drawer.innerHTML = '';
     
     for (let i = 1; i <= count; i++) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'desktop-dock-btn';
+        const color = DESKTOP_COLORS[(i - 1) % DESKTOP_COLORS.length];
+        btn.className = `desktop-dock-btn desktop-dock-btn--${color}`;
         btn.id = `desktop-dock-btn-${i}`;
         btn.dataset.desktopId = String(i);
         btn.title = `Desktop ${i}`;
         btn.setAttribute('aria-label', `Desktop ${i}`);
-        btn.textContent = `[${i}]`;
+        
+        // Count notes on this desktop
+        const notesForDesktop = DesktopManager.getAllNotesForDesktop(i, items);
+        const noteCount = notesForDesktop.length;
+        
+        // Colored square with note count
+        btn.innerHTML = `<span class="desktop-dock-icon"></span><span class="desktop-dock-count">${noteCount}</span>`;
         
         if (i === DesktopManager.getActiveDesktop()) {
             btn.classList.add('active');
@@ -168,7 +178,17 @@ function bindEvents() {
     // Listen for desktop count changes to refresh button list
     window.addEventListener('desktop:count_changed', () => {
         if (_drawerEl) {
-            renderDesktopButtons(_drawerEl);
+            // Items will be passed via refreshButtons()
+            renderDesktopButtons(_drawerEl, []);
+            updateActiveButton();
+        }
+    });
+    
+    // Listen for item mutations to update note counts
+    window.addEventListener('item:mutation_requested', () => {
+        if (_drawerEl) {
+            // Items will be passed via refreshButtons()
+            renderDesktopButtons(_drawerEl, []);
             updateActiveButton();
         }
     });
@@ -196,8 +216,8 @@ export const DesktopDock = {
             workspaceShell.appendChild(container);
         }
         
-        // Render initial buttons
-        renderDesktopButtons(_drawerEl);
+        // Render initial buttons (no items yet)
+        renderDesktopButtons(_drawerEl, []);
         
         // Bind events
         bindEvents();
@@ -219,9 +239,9 @@ export const DesktopDock = {
         closeDrawer();
     },
 
-    refreshButtons() {
+    refreshButtons(items = []) {
         if (_drawerEl) {
-            renderDesktopButtons(_drawerEl);
+            renderDesktopButtons(_drawerEl, items);
         }
     }
 };
