@@ -452,7 +452,16 @@ export const DragDropEngine = {
                     const targetDesktopId = Number(targetBtn.dataset.desktopId);
                     const item = currentItems.find(i => i.id === card.dataset.id);
                     if (item) {
+                        // Preserve position from card - read current visual position
+                        const rect = UI.readNoteRect(card);
+                        item.x = rect.x;
+                        item.y = rect.y;
+                        item.width = rect.w;
+                        item.height = rect.h;
+                        
                         DesktopManager.assignNoteToDesktop(item, targetDesktopId);
+                        // Switch to target desktop
+                        DesktopManager.setActiveDesktop(targetDesktopId);
                         // Refresh workspace to show notes from the new desktop
                         window.dispatchEvent(new CustomEvent('desktop:changed', {
                             detail: { desktopId: targetDesktopId }
