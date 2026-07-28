@@ -68,6 +68,7 @@
 }
 
 .desktop-dock-btn {
+    position: relative;
     min-width: 32px;
     height: 32px;
     padding: 0 0.5rem;
@@ -89,12 +90,7 @@
     color: var(--text-main);
 }
 
-.desktop-dock-btn.active {
-    background: var(--accent);
-    border-color: var(--accent);
-    color: #fff;
-}
-
+.desktop-dock-btn.active,
 .desktop-dock-btn[aria-current="true"] {
     background: var(--accent);
     border-color: var(--accent);
@@ -142,10 +138,6 @@
 }
 
 /* Desktop dock button colored icons */
-.desktop-dock-btn {
-    position: relative;
-}
-
 .desktop-dock-icon {
     width: 16px;
     height: 16px;
@@ -214,6 +206,3 @@
         transform: none;
     }
 }
-
-
-

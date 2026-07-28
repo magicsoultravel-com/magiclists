@@ -1,6 +1,7 @@
 /** @module {"owns":"desktop switcher dock UI, floating pill with collapsible drawer"} */
 
 import { DesktopManager } from './desktopManager.js';
+import { BoardOperations } from './boardOperations.js';
 
 const TOGGLE_ICON = '🖥️';
 const DRAWER_HEIGHT = 48;
@@ -14,8 +15,6 @@ let _toggleEl = null;
 let _containerEl = null;
 let _isDrawerOpen = false;
 let _isExpanded = false;
-let _isDragActive = false;
-let _signal = null;
 let _items = [];
 
 function createTogglePill() {
@@ -52,9 +51,12 @@ function renderDesktopButtons(drawer, items = []) {
         btn.title = `Desktop ${i}`;
         btn.setAttribute('aria-label', `Desktop ${i}`);
         
-// Count notes on this desktop
+        // Count visible notes on this desktop (excluding hidden and archived)
         const notesForDesktop = DesktopManager.getAllNotesForDesktop(i, items);
-        const noteCount = notesForDesktop.length;
+        const visibleNotes = notesForDesktop.filter(item => 
+            !BoardOperations.isHiddenFromBoard(item) && !BoardOperations.isArchived(item)
+        );
+        const noteCount = visibleNotes.length;
         
         // Colored square with note count inside
         btn.innerHTML = `<span class="desktop-dock-icon"><span class="desktop-dock-count">${noteCount}</span></span>`;
@@ -67,7 +69,7 @@ function renderDesktopButtons(drawer, items = []) {
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             DesktopManager.setActiveDesktop(i);
-            closeDrawer();
+            // Don't close drawer - allows easy switching between desktops
             // Dispatch event for workspace refresh (Phase 2 will handle)
             window.dispatchEvent(new CustomEvent('desktop:changed', {
                 detail: { desktopId: i }
@@ -75,13 +77,14 @@ function renderDesktopButtons(drawer, items = []) {
         });
 
         // Drag-over support for desktop dock drop detection
+        // Track drag state per-button using dataset
         btn.addEventListener('pointerenter', () => {
-            _isDragActive = true;
+            btn.dataset.dragOver = 'true';
             btn.classList.add('drag-over');
         });
 
         btn.addEventListener('pointerleave', () => {
-            _isDragActive = false;
+            btn.dataset.dragOver = 'false';
             btn.classList.remove('drag-over');
         });
 
@@ -215,8 +218,8 @@ export const DesktopDock = {
             workspaceShell.appendChild(container);
         }
         
-        // Render initial buttons (no items yet)
-        renderDesktopButtons(_drawerEl, []);
+        // Render initial buttons with stored items
+        renderDesktopButtons(_drawerEl, _items);
         
         // Bind events
         bindEvents();
@@ -227,7 +230,9 @@ export const DesktopDock = {
     },
 
     isDragActive() {
-        return _isDragActive;
+        // Check if any button has drag-over state
+        if (!_drawerEl) return false;
+        return _drawerEl.querySelector('.desktop-dock-btn[drag-over="true"]') !== null;
     },
 
     open() {
@@ -238,11 +243,10 @@ export const DesktopDock = {
         closeDrawer();
     },
 
-refreshButtons(items = []) {
+    refreshButtons(items = []) {
         _items = items;
         if (_drawerEl) {
             renderDesktopButtons(_drawerEl, items);
         }
     }
 };
-
