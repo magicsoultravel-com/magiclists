@@ -607,12 +607,17 @@ reapplySmallFootprintOnBoard() {
         return clampNoteToBoardEdgesCore(rect, opts);
     },
 
-    gridBoardRectForCard(card, savedRect, isExpanded) {
+    gridBoardRectForCard(card, savedRect, isExpanded, itemId = null) {
+        // 1. Safely resolve the ID whether a card exists or the ID is passed directly
+        const id = itemId || card?.dataset?.id;
+        
+        // 2. Safely resolve the base rect
         const base = savedRect && Number.isFinite(savedRect.x) && Number.isFinite(savedRect.w)
             ? { x: savedRect.x, y: savedRect.y, w: savedRect.w, h: savedRect.h }
-            : this.readNoteRect(card);
+            : (card ? this.readNoteRect(card) : { x: 0, y: 0, w: 0, h: 0 });
+
         if (isExpanded) {
-            const item = this.resolveBoardItem(card.dataset.id);
+            const item = this.resolveBoardItem(id);
             const tileSize = this.getCardTileSize(card, item);
             const expandedMin = geoResolveExpandedDefaultRect(tileSize, savedRect);
             if (base.w >= expandedMin.w && base.h >= expandedMin.h) return base;
@@ -622,7 +627,8 @@ reapplySmallFootprintOnBoard() {
                 h: expandedMin.h
             };
         }
-        const item = this.resolveBoardItem(card.dataset.id);
+        
+        const item = this.resolveBoardItem(id);
         return this.gridTileRect(this.getCardTileSize(card, item), base, savedRect);
     },
 
@@ -790,7 +796,7 @@ reapplySmallFootprintOnBoard() {
             resolveTileSize,
             findSlot: findFirstCanvasSlotCore,
             snapRect: (rect, opts) => this.snapNoteRect(
-                this.gridBoardRectForCard(null, rect, this.isSavedLayoutExpanded(opts.itemId)),
+                this.gridBoardRectForCard(null, rect, this.isSavedLayoutExpanded(opts.itemId), opts.itemId),
                 opts
             )
         });
