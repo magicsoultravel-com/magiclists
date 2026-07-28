@@ -1349,3 +1349,22 @@ export function prepareBoardItems(visibleItems, fileCabinetActive, resolvedMode,
     
     return { boardItems, fileCabinetMount };
 }
+/**
+ * Orchestrates file cabinet sorting for board layout.
+ * Partitions items into filed/expanded, sorts filed items, and returns expanded items for board.
+ * @param {Array} visibleItems - Items to sort
+ * @param {string} mode - Layout mode ('grid' or 'freeform')
+ * @param {Object} sortPrefs - Sorting preferences
+ * @param {Object} UI - UI context (this)
+ * @returns {Array} Expanded items for the board
+ */
+export function sortBoardLayoutWithFileCabinet(visibleItems, mode, sortPrefs, UI) {
+    if (!visibleItems?.length) return [];
+    
+    const fcActive = isFileCabinetActive();
+    if (!fcActive) return visibleItems;
+    
+    const { filed, expanded } = partitionItemsForFileCabinet(visibleItems, mode, UI);
+    sortFileCabinetItems(filed, sortPrefs);
+    return expanded;
+}

@@ -35,9 +35,9 @@ import {
     getFileCabinetFiledCategories,
     applyFileCabinetZoneToggle,
     saveFiledCabinetLayout,
-    sortFileCabinetItems,
     resetFileCabinetLayout,
-    prepareBoardItems
+    prepareBoardItems,
+    sortBoardLayoutWithFileCabinet
 } from './fileCabinet.js';
 import { sortBoardItems } from './boardSort.js';
 import {
@@ -1722,14 +1722,7 @@ resnapBoardPositions(canvas, { reflow = false } = {}) {
         const canvas = document.getElementById('app-canvas');
         if (!canvas) return;
 
-        const fcActive = fileCabinetActive ?? isFileCabinetActive();
-        let canvasItems = visibleItems;
-
-        if (fcActive) {
-            const { filed, expanded } = partitionItemsForFileCabinet(visibleItems, mode, this);
-            sortFileCabinetItems(filed, sortPrefs);
-            canvasItems = expanded;
-        }
+        const canvasItems = sortBoardLayoutWithFileCabinet(visibleItems, mode, sortPrefs, this);
 
         if (!canvasItems.length) {
             window.dispatchEvent(new CustomEvent('board:visibility_changed', {
