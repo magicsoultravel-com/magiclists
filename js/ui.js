@@ -217,43 +217,7 @@ export function isDesktopCard(card) {
 }
 
 export const UI = {
-    getLocalHiddenIds() {
-        return BoardOperations.getLocalHiddenIds();
-    },
-
-    isHiddenFromBoard(item) {
-        return BoardOperations.isHiddenFromBoard(item);
-    },
-
-    isArchived(item) {
-        return BoardOperations.isArchived(item);
-    },
-
-    hideFromBoard(item) {
-        BoardOperations.hideFromBoard(item);
-    },
-
-    unhideFromBoard(item) {
-        BoardOperations.unhideFromBoard(item);
-    },
-
-    getLocalCalendarHiddenIds() {
-        return BoardOperations.getLocalCalendarHiddenIds();
-    },
-
-    isHiddenFromCalendar(item) {
-        return BoardOperations.isHiddenFromCalendar(item);
-    },
-
-    toggleCardCalendar(item, btn) {
-        BoardOperations.toggleCardCalendar(item, btn);
-    },
-
-    getVisibleItems(items) {
-        return BoardOperations.getVisibleItems(items);
-    },
-
-flushAllInlineEditsFromCanvas(canvas, items, { forceFlush = false } = {}) {
+    flushAllInlineEditsFromCanvas(canvas, items, { forceFlush = false } = {}) {
         if (!canvas || !Array.isArray(items)) return;
         const byId = new Map(items.map((item) => [item.id, item]));
         const activeDesktop = DesktopManager.getActiveDesktop();
@@ -714,7 +678,7 @@ reapplySmallFootprintOnBoard() {
         this.prepareCanvas(canvas);
          
         const safeItems = Array.isArray(items) ? items : [];
-        const visibleItems = this.getVisibleItems(safeItems);
+        const visibleItems = BoardOperations.getVisibleItems(safeItems);
         boardItemsById = new Map(visibleItems.map((item) => [item.id, item]));
 
         const activeCategories = this.getActiveCategories(hiddenCategories);
@@ -802,7 +766,7 @@ reapplySmallFootprintOnBoard() {
         if (fileCabinetActive && visibleItems.length > 0) {
             return;
         }
-        const hiddenCount = safeItems.length - this.getVisibleItems(safeItems).length;
+        const hiddenCount = safeItems.length - BoardOperations.getVisibleItems(safeItems).length;
         if (safeItems.length > 0 && hiddenCount === safeItems.length) {
             canvas.innerHTML = `<div class="system-status-msg">Add new note</div>`;
         } else {
@@ -889,14 +853,14 @@ reapplySmallFootprintOnBoard() {
         return NoteSurface.buildNoteQuickActionsHtml(item, {
             surface: 'board',
             isExpanded,
-            calHidden: this.isHiddenFromCalendar(item),
+            calHidden: BoardOperations.isHiddenFromCalendar(item),
             ...options
         });
     },
 
     syncCalendarButtonUI(item, btn) {
         if (!btn || !item) return;
-        const hidden = this.isHiddenFromCalendar(item);
+        const hidden = BoardOperations.isHiddenFromCalendar(item);
         btn.innerHTML = CARD_ICONS.calendar;
         const title = hidden
             ? 'Hidden from calendar — click to show'
@@ -1151,7 +1115,7 @@ flushLayoutFromCanvas(canvas, _viewMode) {
         const hasFreeformData = Object.keys(positions).length > 0 || Object.keys(sizes).length > 0;
         if (!hasFreeformData) return false;
 
-        const visible = this.getVisibleItems(Array.isArray(items) ? items : []);
+        const visible = BoardOperations.getVisibleItems(Array.isArray(items) ? items : []);
         const pinnedIds = new Set(this.getBoardPins());
         const itemsById = new Map(visible.map((item) => [item.id, item]));
         const getSourceRect = (item) => {
@@ -1785,7 +1749,7 @@ resnapBoardPositions(canvas, { reflow = false } = {}) {
     },
 
     sortBoardLayout(viewMode, items, sortPrefs, { fileCabinetActive } = {}) {
-        const visibleItems = this.getVisibleItems(items || []);
+        const visibleItems = BoardOperations.getVisibleItems(items || []);
         if (!visibleItems.length) return;
 
         const mode = 'grid';
@@ -1825,7 +1789,7 @@ resnapBoardPositions(canvas, { reflow = false } = {}) {
     },
 
     resetBoardLayout(sortBy, items, { fileCabinetActive } = {}) {
-        const visibleItems = this.getVisibleItems(items || []);
+        const visibleItems = BoardOperations.getVisibleItems(items || []);
         const mode = normalizeViewMode(sortBy);
 
         const boardItems = visibleItems;
