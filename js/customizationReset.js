@@ -1,4 +1,4 @@
-import { applyAppTheme, AppTheme } from './appTheme.js';
+import { applyAppTheme, AppTheme, CUSTOM_THEME_TOKENS_KEY } from './appTheme.js';
 import { DisplayOptions } from './displayOptions.js';
 import { DesktopBackground } from './desktopBackground.js';
 import { ChromeBackground } from './chromeBackground.js';
@@ -25,7 +25,7 @@ const CUSTOMIZATION_KEYS = [
     'matrix_board_padding',
     'matrix_placement_stride',
     /* Consolidated theme tokens key */
-    'matrix_custom_theme_tokens'
+    CUSTOM_THEME_TOKENS_KEY
 ];
 
 const DISPLAY_DEFAULTS = {

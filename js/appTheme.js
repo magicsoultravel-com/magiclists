@@ -4,7 +4,11 @@ import { syncClockStyleForTheme } from './clockStyle.js';
 
 const STORAGE_KEY = 'matrix_app_theme';
 
-const TOKEN_KEYS = [
+/* Consolidated storage key for custom theme tokens */
+export const CUSTOM_THEME_TOKENS_KEY = 'matrix_custom_theme_tokens';
+
+/* CSS variable names for theme tokens */
+export const TOKEN_KEYS = [
     '--bg-primary',
     '--bg-surface',
     '--bg-card',
@@ -15,6 +19,169 @@ const TOKEN_KEYS = [
     '--desktop-bg',
     '--chrome-bg'
 ];
+
+/* localStorage key names for custom theme tokens */
+export const THEME_TOKEN_KEYS = [
+    'themeToken_bg_primary',
+    'themeToken_bg_surface',
+    'themeToken_bg_card',
+    'themeToken_text_main',
+    'themeToken_text_muted',
+    'themeToken_accent',
+    'themeToken_border_color',
+    'themeToken_desktop_bg',
+    'themeToken_chrome_bg'
+];
+
+/* Default values for custom theme tokens (matches dark theme) */
+export const THEME_TOKEN_DEFAULTS = {
+    themeToken_bg_primary: '#121214',
+    themeToken_bg_surface: '#121214',
+    themeToken_bg_card: '#26262b',
+    themeToken_text_main: '#e2e2e9',
+    themeToken_text_muted: '#8b8b93',
+    themeToken_accent: '#4f46e5',
+    themeToken_border_color: '#323238',
+    themeToken_desktop_bg: '#121214',
+    themeToken_chrome_bg: '#151519'
+};
+
+/* Human-readable labels for theme token UI */
+export const THEME_TOKEN_LABELS = {
+    themeToken_bg_primary: 'Main background',
+    themeToken_bg_surface: 'Surface background',
+    themeToken_bg_card: 'Card background',
+    themeToken_text_main: 'Primary text',
+    themeToken_text_muted: 'Muted text',
+    themeToken_accent: 'Accent color',
+    themeToken_border_color: 'Border color',
+    themeToken_desktop_bg: 'Desktop',
+    themeToken_chrome_bg: 'Panel & header'
+};
+
+/* Mapping from theme token storage keys to CSS variable names */
+export const THEME_TOKEN_TO_CSS_VAR = {
+    themeToken_bg_primary: '--bg-primary',
+    themeToken_bg_surface: '--bg-surface',
+    themeToken_bg_card: '--bg-card',
+    themeToken_text_main: '--text-main',
+    themeToken_text_muted: '--text-muted',
+    themeToken_accent: '--accent',
+    themeToken_border_color: '--border-color',
+    themeToken_desktop_bg: '--desktop-bg',
+    themeToken_chrome_bg: '--chrome-bg'
+};
+
+/* Read consolidated theme tokens from localStorage */
+function readCustomThemeTokens() {
+    try {
+        const stored = localStorage.getItem(CUSTOM_THEME_TOKENS_KEY);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (typeof parsed === 'object' && parsed !== null) {
+                return parsed;
+            }
+        }
+    } catch {
+        /* ignore */
+    }
+    return {};
+}
+
+/* Write consolidated theme tokens to localStorage */
+function writeCustomThemeTokens(tokens) {
+    try {
+        localStorage.setItem(CUSTOM_THEME_TOKENS_KEY, JSON.stringify(tokens));
+    } catch {
+        /* ignore */
+    }
+}
+
+/* Migrate old individual themeToken_* keys to consolidated format */
+export function migrateThemeTokens() {
+    const consolidated = readCustomThemeTokens();
+    let migrated = false;
+
+    THEME_TOKEN_KEYS.forEach((key) => {
+        if (!(key in consolidated)) {
+            try {
+                const stored = localStorage.getItem(key);
+                if (stored && /^#[0-9a-fA-F]{6}$/.test(stored)) {
+                    consolidated[key] = stored;
+                    localStorage.removeItem(key);
+                    migrated = true;
+                }
+            } catch {
+                /* ignore */
+            }
+        }
+    });
+
+    if (migrated) {
+        writeCustomThemeTokens(consolidated);
+    }
+}
+
+/* Read a custom theme token from localStorage (supports both consolidated and individual keys) */
+export function readThemeToken(key) {
+    // First check consolidated storage
+    const consolidated = readCustomThemeTokens();
+    if (key in consolidated) {
+        const value = consolidated[key];
+        if (typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)) {
+            return value;
+        }
+    }
+    // Fall back to individual key for backward compatibility
+    try {
+        const stored = localStorage.getItem(key);
+        if (stored && /^#[0-9a-fA-F]{6}$/.test(stored)) return stored;
+    } catch {
+        /* ignore */
+    }
+    return THEME_TOKEN_DEFAULTS[key];
+}
+
+/* Write a custom theme token to localStorage */
+export function writeThemeToken(key, value) {
+    const consolidated = readCustomThemeTokens();
+    consolidated[key] = value;
+    writeCustomThemeTokens(consolidated);
+}
+
+/* Check if a theme token has been customized from default */
+export function isThemeTokenCustomized(key) {
+    return readThemeToken(key).toLowerCase() !== THEME_TOKEN_DEFAULTS[key].toLowerCase();
+}
+
+/* Apply a theme token value to a CSS variable */
+export function applyThemeToken(key, value) {
+    const root = document.documentElement;
+    const cssVar = key.replace('themeToken_', '--');
+    root.style.setProperty(cssVar, value);
+}
+
+/* Apply all custom theme token overrides from localStorage */
+export function applyCustomTokenOverrides() {
+    const root = document.documentElement;
+    THEME_TOKEN_KEYS.forEach((key) => {
+        const value = readThemeToken(key);
+        const cssVar = key.replace('themeToken_', '--');
+        root.style.setProperty(cssVar, value);
+    });
+}
+
+/* Reset all custom theme tokens to defaults */
+export function resetThemeTokens() {
+    THEME_TOKEN_KEYS.forEach((key) => {
+        writeThemeToken(key, THEME_TOKEN_DEFAULTS[key]);
+    });
+}
+
+/* Check if any theme token has been customized */
+export function isAnyThemeTokenCustomized() {
+    return THEME_TOKEN_KEYS.some(isThemeTokenCustomized);
+}
 
 export const APP_THEMES = [
     {
@@ -449,6 +616,10 @@ export function applyAppTheme(themeId, { silent = false } = {}) {
     const theme = getThemeById(themeId);
     const root = document.documentElement;
 
+    // First, apply custom token overrides if any exist
+    applyCustomTokenOverrides();
+
+    // Then apply preset theme tokens (these will override custom tokens for non-customized values)
     TOKEN_KEYS.forEach((key) => {
         const value = theme.tokens[key];
         if (value) root.style.setProperty(key, value);

@@ -14,7 +14,23 @@ import { ChromeBackground } from './chromeBackground.js';
 import { DesktopBackground } from './desktopBackground.js';
 import { resetCustomizationToDefaults } from './customizationReset.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
-import { AppTheme, buildThemeOptionsHtml, isAppThemeCustomized, readAppTheme, getThemeById } from './appTheme.js';
+import {
+    AppTheme,
+    buildThemeOptionsHtml,
+    isAppThemeCustomized,
+    readAppTheme,
+    getThemeById,
+    THEME_TOKEN_KEYS,
+    THEME_TOKEN_DEFAULTS,
+    THEME_TOKEN_LABELS,
+    THEME_TOKEN_TO_CSS_VAR,
+    CUSTOM_THEME_TOKENS_KEY,
+    migrateThemeTokens,
+    readThemeToken,
+    writeThemeToken,
+    isThemeTokenCustomized,
+    applyThemeToken
+} from './appTheme.js';
 import {
     applyBrandIcon,
     buildBrandIconOptionsHtml,
@@ -25,9 +41,6 @@ import { DesktopManager, MAX_DESKTOP_COUNT } from './desktopManager.js';
 import { createThemePicker } from './themePicker.js';
 
 const STORAGE_KEY = 'matrix_display_options';
-
-/* Consolidated theme tokens storage key */
-const CUSTOM_THEME_TOKENS_KEY = 'matrix_custom_theme_tokens';
 
 const DEFAULTS = {
     showCategoryBand: true,
@@ -40,133 +53,6 @@ const DEFAULTS = {
     noteFontId: 'default',
     brandIconId: 'clipboard'
 };
-
-/* Theme token storage keys and defaults */
-const THEME_TOKEN_KEYS = [
-    'themeToken_bg_primary',
-    'themeToken_bg_surface',
-    'themeToken_bg_card',
-    'themeToken_text_main',
-    'themeToken_text_muted',
-    'themeToken_accent',
-    'themeToken_border_color',
-    'themeToken_desktop_bg',
-    'themeToken_chrome_bg'
-];
-
-const THEME_TOKEN_DEFAULTS = {
-    themeToken_bg_primary: '#121214',
-    themeToken_bg_surface: '#121214',
-    themeToken_bg_card: '#26262b',
-    themeToken_text_main: '#e2e2e9',
-    themeToken_text_muted: '#8b8b93',
-    themeToken_accent: '#4f46e5',
-    themeToken_border_color: '#323238',
-    themeToken_desktop_bg: '#121214',
-    themeToken_chrome_bg: '#151519'
-};
-
-const THEME_TOKEN_LABELS = {
-    themeToken_bg_primary: 'Main background',
-    themeToken_bg_surface: 'Surface background',
-    themeToken_bg_card: 'Card background',
-    themeToken_text_main: 'Primary text',
-    themeToken_text_muted: 'Muted text',
-    themeToken_accent: 'Accent color',
-    themeToken_border_color: 'Border color',
-    themeToken_desktop_bg: 'Desktop',
-    themeToken_chrome_bg: 'Panel & header'
-};
-
-/* Mapping from theme token keys to CSS variable names */
-const THEME_TOKEN_TO_CSS_VAR = {
-    themeToken_bg_primary: '--bg-primary',
-    themeToken_bg_surface: '--bg-surface',
-    themeToken_bg_card: '--bg-card',
-    themeToken_text_main: '--text-main',
-    themeToken_text_muted: '--text-muted',
-    themeToken_accent: '--accent',
-    themeToken_border_color: '--border-color',
-    themeToken_desktop_bg: '--desktop-bg',
-    themeToken_chrome_bg: '--chrome-bg'
-};
-
-/* Read consolidated theme tokens from localStorage */
-function readCustomThemeTokens() {
-    try {
-        const stored = localStorage.getItem(CUSTOM_THEME_TOKENS_KEY);
-        if (stored) {
-            const parsed = JSON.parse(stored);
-            if (typeof parsed === 'object' && parsed !== null) {
-                return parsed;
-            }
-        }
-    } catch {
-        /* ignore */
-    }
-    return {};
-}
-
-/* Write consolidated theme tokens to localStorage */
-function writeCustomThemeTokens(tokens) {
-    try {
-        localStorage.setItem(CUSTOM_THEME_TOKENS_KEY, JSON.stringify(tokens));
-    } catch {
-        /* ignore */
-    }
-}
-
-/* Migrate old individual themeToken_* keys to consolidated format */
-function migrateThemeTokens() {
-    const consolidated = readCustomThemeTokens();
-    let migrated = false;
-
-    THEME_TOKEN_KEYS.forEach((key) => {
-        if (!(key in consolidated)) {
-            try {
-                const stored = localStorage.getItem(key);
-                if (stored && /^#[0-9a-fA-F]{6}$/.test(stored)) {
-                    consolidated[key] = stored;
-                    localStorage.removeItem(key);
-                    migrated = true;
-                }
-            } catch {
-                /* ignore */
-            }
-        }
-    });
-
-    if (migrated) {
-        writeCustomThemeTokens(consolidated);
-    }
-}
-
-function readThemeToken(key) {
-    const consolidated = readCustomThemeTokens();
-    if (key in consolidated) {
-        const value = consolidated[key];
-        if (typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)) {
-            return value;
-        }
-    }
-    return THEME_TOKEN_DEFAULTS[key];
-}
-
-function writeThemeToken(key, value) {
-    const consolidated = readCustomThemeTokens();
-    consolidated[key] = value;
-    writeCustomThemeTokens(consolidated);
-}
-
-function isThemeTokenCustomized(key) {
-    return readThemeToken(key).toLowerCase() !== THEME_TOKEN_DEFAULTS[key].toLowerCase();
-}
-
-function applyThemeToken(key, value) {
-    const root = document.documentElement;
-    const cssVar = key.replace('themeToken_', '--');
-    root.style.setProperty(cssVar, value);
-}
 
 export function readDisplayOptions() {
     try {
