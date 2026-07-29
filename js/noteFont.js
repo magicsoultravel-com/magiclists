@@ -23,13 +23,7 @@ export const NOTE_FONTS = [
     { id: 'shadows-into-light', label: 'Shadows Into Light', desc: 'Light handwriting', family: "'Shadows Into Light', cursive" },
     { id: 'share-tech-mono', label: 'Share Tech Mono', desc: 'Tech monospace', family: "'Share Tech Mono', monospace" },
     { id: 'special-elite', label: 'Special Elite', desc: 'Typewriter', family: "'Special Elite', monospace" },
-    { id: 'vt323', label: 'VT323', desc: 'Terminal font', family: "'VT323', monospace" },
-    { id: 'noto-sans-sc', label: 'Noto Sans SC', desc: 'Chinese Simplified', family: "'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', sans-serif" },
-    { id: 'noto-serif-sc', label: 'Noto Serif SC', desc: 'Chinese serif', family: "'Noto Serif SC', 'PingFang SC', 'Hiragino Sans GB', serif" },
-    { id: 'noto-sans-jp', label: 'Noto Sans JP', desc: 'Japanese sans', family: "'Noto Sans JP', 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif" },
-    { id: 'noto-serif-jp', label: 'Noto Serif JP', desc: 'Japanese serif', family: "'Noto Serif JP', 'Hiragino Kaku Gothic Pro', 'Meiryo', serif" },
-    { id: 'noto-sans-ar', label: 'Noto Sans Arabic', desc: 'Arabic sans', family: "'Noto Sans Arabic', 'Tahoma', sans-serif" },
-    { id: 'noto-serif-ar', label: 'Noto Serif Arabic', desc: 'Arabic serif', family: "'Noto Serif Arabic', 'Tahoma', serif" }
+    { id: 'vt323', label: 'VT323', desc: 'Terminal font', family: "'VT323', monospace" }
 ];
 
 export function getNoteFontById(fontId) {
