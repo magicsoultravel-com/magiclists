@@ -1,10 +1,35 @@
 const STORAGE_KEY = 'matrix_note_font';
 
-// 3-way typography toggle: Theme Default, System UI, Handwriting
 export const NOTE_FONTS = [
     { id: 'default', label: 'Theme default', desc: 'Use theme\'s font', family: null },
     { id: 'system-ui', label: 'System UI', desc: 'Clean standard sans', family: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" },
-    { id: 'handwriting', label: 'Handwriting', desc: 'Neat script style', family: "'Patrick Hand', cursive" }
+    { id: 'handwriting', label: 'Handwriting', desc: 'Neat script style', family: "'Patrick Hand', cursive" },
+    { id: 'caveat', label: 'Caveat', desc: 'Casual handwritten', family: "'Caveat', cursive" },
+    { id: 'comic-neue', label: 'Comic Neue', desc: 'Comic-style sans', family: "'Comic Neue', cursive" },
+    { id: 'courier-prime', label: 'Courier Prime', desc: 'Monospaced typewriter', family: "'Courier Prime', monospace" },
+    { id: 'fredericka', label: 'Fredericka the Great', desc: 'Elegant serif', family: "'Fredericka the Great', cursive" },
+    { id: 'ibm-plex-mono', label: 'IBM Plex Mono', desc: 'Technical monospace', family: "'IBM Plex Mono', monospace" },
+    { id: 'indie-flower', label: 'Indie Flower', desc: 'Playful handwritten', family: "'Indie Flower', cursive" },
+    { id: 'inter', label: 'Inter', desc: 'Modern sans-serif', family: "'Inter', system-ui, sans-serif" },
+    { id: 'jetbrains-mono', label: 'JetBrains Mono', desc: 'Coding monospace', family: "'JetBrains Mono', monospace" },
+    { id: 'kalam', label: 'Kalam', desc: 'Friendly handwriting', family: "'Kalam', cursive" },
+    { id: 'libre-baskerville', label: 'Libre Baskerville', desc: 'Classic serif', family: "'Libre Baskerville', serif" },
+    { id: 'merriweather', label: 'Merriweather', desc: 'Readable serif', family: "'Merriweather', serif" },
+    { id: 'orbitron', label: 'Orbitron', desc: 'Digital display', family: "'Orbitron', sans-serif" },
+    { id: 'overpass-mono', label: 'Overpass Mono', desc: 'Clean monospace', family: "'Overpass Mono', monospace" },
+    { id: 'permanent-marker', label: 'Permanent Marker', desc: 'Marker brush', family: "'Permanent Marker', cursive" },
+    { id: 'press-start', label: 'Press Start 2P', desc: 'Retro pixel', family: "'Press Start 2P', monospace" },
+    { id: 'sacramento', label: 'Sacramento', desc: 'Elegant script', family: "'Sacramento', cursive" },
+    { id: 'shadows-into-light', label: 'Shadows Into Light', desc: 'Light handwriting', family: "'Shadows Into Light', cursive" },
+    { id: 'share-tech-mono', label: 'Share Tech Mono', desc: 'Tech monospace', family: "'Share Tech Mono', monospace" },
+    { id: 'special-elite', label: 'Special Elite', desc: 'Typewriter', family: "'Special Elite', monospace" },
+    { id: 'vt323', label: 'VT323', desc: 'Terminal font', family: "'VT323', monospace" },
+    { id: 'noto-sans-sc', label: 'Noto Sans SC', desc: 'Chinese Simplified', family: "'Noto Sans SC', 'PingFang SC', 'Hiragino Sans GB', sans-serif" },
+    { id: 'noto-serif-sc', label: 'Noto Serif SC', desc: 'Chinese serif', family: "'Noto Serif SC', 'PingFang SC', 'Hiragino Sans GB', serif" },
+    { id: 'noto-sans-jp', label: 'Noto Sans JP', desc: 'Japanese sans', family: "'Noto Sans JP', 'Hiragino Kaku Gothic Pro', 'Meiryo', sans-serif" },
+    { id: 'noto-serif-jp', label: 'Noto Serif JP', desc: 'Japanese serif', family: "'Noto Serif JP', 'Hiragino Kaku Gothic Pro', 'Meiryo', serif" },
+    { id: 'noto-sans-ar', label: 'Noto Sans Arabic', desc: 'Arabic sans', family: "'Noto Sans Arabic', 'Tahoma', sans-serif" },
+    { id: 'noto-serif-ar', label: 'Noto Serif Arabic', desc: 'Arabic serif', family: "'Noto Serif Arabic', 'Tahoma', serif" }
 ];
 
 export function getNoteFontById(fontId) {

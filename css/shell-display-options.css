@@ -158,45 +158,38 @@
     accent-color: var(--accent);
 }
 
-/* Note font segment control - 3-way toggle */
-.note-font-segment-group {
-    display: flex;
-    gap: 0.25rem;
+/* Note font select dropdown */
+.note-font-select-wrapper {
+    margin-bottom: 0.25rem;
 }
 
-.note-font-segment {
-    flex: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.15rem;
-    padding: 0.25rem 0.35rem;
+.note-font-select {
+    width: 100%;
+    max-width: 280px;
+    padding: 0.35rem 0.5rem;
+    font-size: 0.72rem;
+    line-height: 1.4;
     border: 1px solid var(--border-color);
     border-radius: 5px;
     background: var(--bg-card);
     color: var(--text-main);
-    font: inherit;
-    font-size: 0.68rem;
+    font-family: inherit;
     cursor: pointer;
-    transition: border-color 0.12s ease, background 0.12s ease;
-    min-height: 1.6rem;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='10' height='10'%3E%3Cpath fill='%2364748b' d='M2 3.5 5.5 7.5 9 3.5'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    background-size: 10px 10px;
 }
 
-.note-font-segment:hover {
-    background: rgba(255, 255, 255, 0.04);
-}
-
-.note-font-segment.is-selected {
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
+.note-font-select:hover {
     border-color: color-mix(in srgb, var(--accent) 35%, var(--border-color));
+    background: color-mix(in srgb, var(--accent) 6%, var(--bg-card));
 }
 
-.note-font-segment-label {
-    font-weight: 500;
-    line-height: 1.2;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+.note-font-select option {
+    font-family: inherit;
 }
 
 /* Theme picker in modal */
