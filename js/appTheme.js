@@ -468,7 +468,7 @@ export function applyAppTheme(themeId, { silent = false } = {}) {
 
 function escapeHtml(str) {
     if (!str) return '';
-    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return str.replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>');
 }
 
 function swatchHtml(swatch) {
@@ -476,28 +476,49 @@ function swatchHtml(swatch) {
     return `<span class="app-theme-swatch" aria-hidden="true">${colors.map((c) => `<span class="app-theme-swatch-chip" style="background:${c}"></span>`).join('')}</span>`;
 }
 
-export function isAppThemeCustomized() {
-    return readAppTheme() !== 'dark';
+function buildThemeButton(theme, selectedId, compact) {
+    const selected = theme.id === selectedId;
+    if (compact) {
+        return `<button type="button" class="app-theme-option app-theme-option--compact${selected ? ' is-selected' : ''}" data-theme="${theme.id}" role="menuitemradio" aria-checked="${selected}" title="${escapeHtml(theme.label)}" aria-label="${escapeHtml(theme.label)}">
+            ${swatchHtml(theme.swatch)}
+            ${selected ? '<span class="clock-style-check" aria-hidden="true">✓</span>' : ''}
+        </button>`;
+    }
+    return `<button type="button" class="clock-style-option app-theme-option${selected ? ' is-selected' : ''}" data-theme="${theme.id}" role="menuitemradio" aria-checked="${selected}">
+        ${swatchHtml(theme.swatch)}
+        <span class="clock-style-meta">
+            <span class="clock-style-label">${escapeHtml(theme.label)}</span>
+            <span class="clock-style-desc">${escapeHtml(theme.desc)}</span>
+        </span>
+        ${selected ? '<span class="clock-style-check" aria-hidden="true">✓</span>' : ''}
+    </button>`;
+}
+
+function buildThemeSection(themes, selectedId, compact, heading) {
+    if (themes.length === 0) return '';
+    return `
+        <div class="app-theme-section">
+            <h4 class="app-theme-section-heading">${escapeHtml(heading)}</h4>
+            ${themes.map((theme) => buildThemeButton(theme, selectedId, compact)).join('')}
+        </div>
+    `;
 }
 
 export function buildThemeOptionsHtml(selectedId, { compact = false } = {}) {
-    return APP_THEMES.map((theme) => {
-        const selected = theme.id === selectedId;
-        if (compact) {
-            return `<button type="button" class="app-theme-option app-theme-option--compact${selected ? ' is-selected' : ''}" data-theme="${theme.id}" role="menuitemradio" aria-checked="${selected}" title="${escapeHtml(theme.label)}" aria-label="${escapeHtml(theme.label)}">
-                ${swatchHtml(theme.swatch)}
-                ${selected ? '<span class="clock-style-check" aria-hidden="true">✓</span>' : ''}
-            </button>`;
-        }
-        return `<button type="button" class="clock-style-option app-theme-option${selected ? ' is-selected' : ''}" data-theme="${theme.id}" role="menuitemradio" aria-checked="${selected}">
-            ${swatchHtml(theme.swatch)}
-            <span class="clock-style-meta">
-                <span class="clock-style-label">${escapeHtml(theme.label)}</span>
-                <span class="clock-style-desc">${escapeHtml(theme.desc)}</span>
-            </span>
-            ${selected ? '<span class="clock-style-check" aria-hidden="true">✓</span>' : ''}
-        </button>`;
-    }).join('');
+    const regularThemes = APP_THEMES.filter((t) => !t.special);
+    const fancyThemes = APP_THEMES.filter((t) => t.special);
+
+    const sections = [];
+
+    if (regularThemes.length > 0) {
+        sections.push(buildThemeSection(regularThemes, selectedId, compact, 'Regular Themes'));
+    }
+
+    if (fancyThemes.length > 0) {
+        sections.push(buildThemeSection(fancyThemes, selectedId, compact, 'Fancy Themes'));
+    }
+
+    return sections.join('');
 }
 
 export const AppTheme = {

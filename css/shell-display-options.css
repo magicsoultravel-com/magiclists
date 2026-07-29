@@ -237,6 +237,31 @@
     color: var(--accent);
 }
 
+/* Theme grid container in display options modal */
+.display-options-modal .display-options-theme-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+/* Theme section container */
+.app-theme-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+/* Theme section headings in display options modal */
+.app-theme-section-heading {
+    margin: 0;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
 /* Side panel specific overrides */
 .side-panel .btn--block-gap {
     margin-bottom: 0.35rem;
