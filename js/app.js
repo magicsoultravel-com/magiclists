@@ -223,7 +223,38 @@ DrawingBoard.init(this);
             this.updateWorkspaceCounter();
             return;
         }
+        
+        // Handle desktop switching for undo/redo
+        const itemDesktop = item?.desktopId || 1;
+        const currentDesktop = DesktopManager.getActiveDesktop();
+        const needsDesktopSwitch = itemDesktop !== currentDesktop;
+        
+        if (needsDesktopSwitch) {
+            DesktopManager.setActiveDesktop(itemDesktop);
+        }
+        
         await this.syncDataStore();
+        
+        // After sync, highlight and scroll to the card
+        requestAnimationFrame(() => {
+            const canvas = document.getElementById('app-canvas');
+            if (!canvas) return;
+            
+            // Find the card - it may be on a different desktop now
+            const card = canvas.querySelector(`.mini-card[data-id="${CSS.escape(item.id)}"]`);
+            if (!card) return;
+            
+            // Add highlight class
+            card.classList.add('card-highlighted');
+            
+            // Scroll to the card
+            card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            
+            // Remove highlight class after animation completes
+            card.addEventListener('animationend', () => {
+                card.classList.remove('card-highlighted');
+            }, { once: true });
+        });
     }
 
     checkAuthSession() {
@@ -1056,82 +1087,6 @@ window.addEventListener('category:order_changed', (e) => {
         });
     }
 }
-
-// Cross-desktop undo/redo support (Option A)
-// When undoing/redoing a change that affects a different desktop, switch to that desktop
-function getDesktopForItem(item) {
-    return item?.desktopId || 1;
-}
-
-// Patch UndoManager to handle cross-desktop switching
-const originalUndo = UndoManager.undo;
-const originalRedo = UndoManager.redo;
-
-UndoManager.undo = async function() {
-    const entry = this.undoStack[this.undoStack.length - 1];
-    if (entry?.kind === 'change' && entry.before) {
-        const beforeDesktop = getDesktopForItem(entry.before);
-        const currentDesktop = DesktopManager.getActiveDesktop();
-        if (beforeDesktop !== currentDesktop) {
-            // Will switch to the desktop where the change was made
-            this._targetDesktop = beforeDesktop;
-        }
-    }
-    return originalUndo.call(this);
-};
-
-UndoManager.redo = async function() {
-    const entry = this.redoStack[this.redoStack.length - 1];
-    if (entry?.kind === 'change' && entry.after) {
-        const afterDesktop = getDesktopForItem(entry.after);
-        const currentDesktop = DesktopManager.getActiveDesktop();
-        if (afterDesktop !== currentDesktop) {
-            // Will switch to the desktop where the change was made
-            this._targetDesktop = afterDesktop;
-        }
-    }
-    return originalRedo.call(this);
-};
-
-// Override onRestore to handle desktop switching after undo/redo
-const originalOnRestore = UndoManager.onRestore;
-Object.defineProperty(UndoManager, 'onRestore', {
-    set: function(handler) {
-        // Wrap the handler to switch desktops if needed
-        const wrappedHandler = async function(item, opts) {
-            if (this._targetDesktop && this._targetDesktop !== DesktopManager.getActiveDesktop()) {
-                DesktopManager.setActiveDesktop(this._targetDesktop);
-                this._targetDesktop = null;
-            }
-            return handler.call(this, item, opts);
-        };
-        // Store original for reference
-        this._originalOnRestore = handler;
-    }
-});
-
-// We need to modify the setupUndo to use our wrapped handler
-const originalSetupUndo = Application.prototype.setupUndo;
-Application.prototype.setupUndo = function() {
-    const app = this; // Capture 'this' reference for the closure
-    UndoManager.init({
-        getToken: () => AppState.user.token,
-        isEnabled: () => AppState.user.isLoggedIn,
-        onRestore: (item, { preserveView = false } = {}) => {
-            // Check if we need to switch desktops
-            if (UndoManager._targetDesktop && UndoManager._targetDesktop !== DesktopManager.getActiveDesktop()) {
-                DesktopManager.setActiveDesktop(UndoManager._targetDesktop);
-                UndoManager._targetDesktop = null;
-            }
-            return app.restoreItem(item, preserveView);
-        },
-        onRemove: (itemId) => app.removeItemFromWorkspace(itemId),
-        onStackChange: () => {
-            SidebarHistory.renderPanel();
-            app.renderQuickActionsHeaderIcons();
-        }
-    });
-};
 
 const CoreApp = new Application();
 document.addEventListener('DOMContentLoaded', () => CoreApp.init());
