@@ -35,7 +35,7 @@ function syncInlineFieldToItem(el, item) {
     }
 }
 
-function emitItemMutation(item, { preserveView = false, beforeItem = null, skipRerender = false } = {}) {
+function emitItemMutation(item, { preserveView = false, beforeItem = null, skipRerender = false, mergeKey = null, mergeWindow = true } = {}) {
     const preserveEmptySteps = preserveView && skipRerender;
     const normalized = normalizeItemForSave(item, { preserveEmptySteps });
     Object.assign(item, normalized);
@@ -43,7 +43,7 @@ function emitItemMutation(item, { preserveView = false, beforeItem = null, skipR
         ? normalizeItemForSave(beforeItem, { preserveEmptySteps })
         : null;
     window.dispatchEvent(new CustomEvent('item:mutation_requested', {
-        detail: { item: normalized, preserveView, beforeItem: normalizedBefore, skipRerender }
+        detail: { item: normalized, preserveView, beforeItem: normalizedBefore, skipRerender, mergeKey, mergeWindow }
     }));
 }
 
@@ -169,10 +169,14 @@ function scheduleDesktopAutoSave(root, item, activeEl) {
 /**
  * Flush any pending desktop autosave immediately.
  * Always syncs DOM and emits mutation, regardless of pending timer.
+ * For format commands, mergeWindow is set to false to prevent merging with typing actions.
  * @param {HTMLElement} root - The editor shell/root element
  * @param {object} item - The note item being edited
+ * @param {object} [opts] - Options
+ * @param {boolean} [opts.mergeWindow=true] - Whether to allow merging with adjacent changes
  */
-function flushDesktopAutoSave(root, item) {
+function flushDesktopAutoSave(root, item, opts = {}) {
+    const { mergeWindow = true } = opts;
     // Clear any pending timer
     if (desktopAutoSaveTimer) {
         clearTimeout(desktopAutoSaveTimer);
@@ -183,7 +187,9 @@ function flushDesktopAutoSave(root, item) {
     // Sync DOM changes to item
     syncItemBodyFromDom(root, item);
     // Emit mutation with correct beforeItem
-    emitItemMutation(item, { preserveView: true, beforeItem, skipRerender: true });
+    // Use unique mergeKey for format commands to prevent merging with typing
+    const mergeKey = mergeWindow ? null : `${item.id}:format:${Date.now()}`;
+    emitItemMutation(item, { preserveView: true, beforeItem, skipRerender: true, mergeKey, mergeWindow });
 }
 
 /**

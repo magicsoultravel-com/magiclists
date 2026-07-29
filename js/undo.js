@@ -67,27 +67,17 @@ const DETAIL_MAX_LINE_CHARS = 320;
 const DETAIL_TEXT_PREVIEW = 280;
 const DETAIL_MAX_STEP_CHANGES = 5;
 
+// Only track content-related fields for undo/redo
+// These are the fields that represent note content (title, content, checklist steps, sheet data)
+const CONTENT_FIELDS = new Set(['title', 'content', 'steps', 'sheet']);
+
 const DETAIL_SKIP_KEYS = new Set(['id', 'owner_id', 'created_at', 'updated_at']);
 
 const DETAIL_FIELD_LABELS = {
     title: 'Title',
     content: 'Content',
     steps: 'Checklist',
-    status: 'Status',
-    visibility: 'Visibility',
-    type: 'Type',
-    categories: 'Categories',
-    backgroundColor: 'Color',
-    tileSize: 'Tile size',
-    editorBodyLayout: 'Editor layout',
-    startDateTime: 'Start',
-    endDateTime: 'End',
-    hiddenFromBoard: 'Hidden from board',
-    hideFromCalendar: 'Hidden from calendar',
-    isRecurring: 'Recurring',
-    attachments: 'Attachments',
-    sheet: 'Sheet',
-    noteTemplate: 'Template'
+    sheet: 'Sheet'
 };
 
 function truncateDetailText(text, max = DETAIL_MAX_LINE_CHARS) {
@@ -186,6 +176,27 @@ function describeStepsChange(beforeSteps, afterSteps) {
     return shown.map((line) => `Checklist: ${line}`);
 }
 
+function describeSheetChange(beforeSheet, afterSheet) {
+    if (!beforeSheet && !afterSheet) return null;
+    const beforeRows = beforeSheet?.rows || 0;
+    const afterRows = afterSheet?.rows || 0;
+    const beforeCols = beforeSheet?.cols || 0;
+    const afterCols = afterSheet?.cols || 0;
+    
+    const changes = [];
+    if (beforeRows !== afterRows) {
+        changes.push(`Rows: ${beforeRows} → ${afterRows}`);
+    }
+    if (beforeCols !== afterCols) {
+        changes.push(`Columns: ${beforeCols} → ${afterCols}`);
+    }
+    
+    if (changes.length === 0) {
+        return 'Sheet updated';
+    }
+    return changes.join(', ');
+}
+
 function describeChangeEntry(entry) {
     const before = entry.before;
     const delta = entry.forwardDelta || {};
@@ -198,17 +209,10 @@ function describeChangeEntry(entry) {
         lines.push(truncateDetailText(line));
     };
 
-    const orderedKeys = [
-        'title', 'content', 'steps', 'status', 'visibility', 'type', 'categories',
-        'backgroundColor', 'tileSize', 'editorBodyLayout', 'startDateTime', 'endDateTime',
-        'hiddenFromBoard', 'hideFromCalendar', 'isRecurring', 'attachments'
-    ];
-    const keys = [
-        ...orderedKeys.filter((key) => changedKeys.includes(key)),
-        ...changedKeys.filter((key) => !orderedKeys.includes(key))
-    ];
-
-    keys.forEach((key) => {
+    // Only process content-related fields
+    const contentKeys = changedKeys.filter((key) => CONTENT_FIELDS.has(key));
+    
+    contentKeys.forEach((key) => {
         if (lines.length >= DETAIL_MAX_LINES) return;
         const label = DETAIL_FIELD_LABELS[key] || key;
         const beforeVal = before?.[key];
@@ -225,16 +229,9 @@ function describeChangeEntry(entry) {
             describeStepsChange(beforeVal, afterVal)?.forEach(pushLine);
             return;
         }
-        if (key === 'categories') {
-            pushLine(formatCategoriesChange(beforeVal, afterVal));
-            return;
-        }
-        if (key === 'hiddenFromBoard' || key === 'hideFromCalendar' || key === 'isRecurring') {
-            pushLine(formatBoolChange(label, beforeVal, afterVal));
-            return;
-        }
-        if (key === 'attachments') {
-            pushLine('Attachments changed');
+        if (key === 'sheet') {
+            const line = describeSheetChange(beforeVal, afterVal);
+            if (line) pushLine(line);
             return;
         }
         pushLine(formatScalarChange(label, beforeVal, afterVal));
@@ -488,13 +485,22 @@ export const UndoManager = {
         mergeWindow = true
     } = {}) {
         if (this.isApplying || !handlers.isEnabled() || !beforeItem || !afterItem) return;
-        if (itemsEqual(beforeItem, afterItem)) return;
+        
+        // Filter to only content-related fields
+        const filteredBefore = {};
+        const filteredAfter = {};
+        for (const key of CONTENT_FIELDS) {
+            if (beforeItem?.[key] !== undefined) filteredBefore[key] = beforeItem[key];
+            if (afterItem?.[key] !== undefined) filteredAfter[key] = afterItem[key];
+        }
+        
+        if (itemsEqual(filteredBefore, filteredAfter)) return;
 
-        const after = cloneItem(afterItem);
+        const after = cloneItem(filteredAfter);
         const entryLabel = label || historyLabelForItem(after);
         const now = Date.now();
         const top = this.undoStack[this.undoStack.length - 1];
-        const key = mergeKey || after.id;
+        const key = mergeKey || `${after.id}:content`;
 
         if (mergeWindow && top?.kind === 'change' && top.mergeKey === key && now - (top.mergedAt || 0) < MERGE_MS) {
             top.forwardDelta = itemForwardDelta(top.before, after);
@@ -509,7 +515,7 @@ export const UndoManager = {
         }
 
         this.push(this.createChangeEntry({
-            before: beforeItem,
+            before: filteredBefore,
             after,
             preserveView,
             label: entryLabel,

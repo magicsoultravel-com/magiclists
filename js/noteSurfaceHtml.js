@@ -16,6 +16,7 @@ import { NoteSurface } from './noteSurface.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
 import { getCardRenderContext } from './categories.js';
 import { DesktopManager } from './desktopManager.js';
+import { flushDesktopAutoSave } from './noteSurfaceMutations.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -787,8 +788,20 @@ export function renderBoardEditorCard(uiInstance, card, item, activeCategories, 
             categoryColor
         }
     });
+    
+    // Create onChange callback for format commands on board surface
+    // This ensures undo/redo tracking works for format commands
+    const onChange = () => {
+        const shell = card.querySelector('.editor-note-shell');
+        if (shell && item) {
+            flushDesktopAutoSave(shell, item, { mergeWindow: false });
+
+        }
+    };
+    
     NoteSurface.bindNoteEditorShell(card, item, {
         richEdit: true,
+        onChange,
         refresh: () => {
             const body = card.querySelector('.editor-note-body');
             if (body?.querySelector('.expanded-checklist')) {
