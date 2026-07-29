@@ -14,7 +14,7 @@ import { ChromeBackground } from './chromeBackground.js';
 import { DesktopBackground } from './desktopBackground.js';
 import { resetCustomizationToDefaults } from './customizationReset.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
-import { AppTheme, buildThemeOptionsHtml, isAppThemeCustomized, readAppTheme } from './appTheme.js';
+import { AppTheme, buildThemeOptionsHtml, isAppThemeCustomized, readAppTheme, getThemeById } from './appTheme.js';
 import {
     applyBrandIcon,
     buildBrandIconOptionsHtml,
@@ -73,6 +73,19 @@ const THEME_TOKEN_LABELS = {
     themeToken_border_color: 'Border color',
     themeToken_desktop_bg: 'Desktop',
     themeToken_chrome_bg: 'Panel & header'
+};
+
+/* Mapping from theme token keys to CSS variable names */
+const THEME_TOKEN_TO_CSS_VAR = {
+    themeToken_bg_primary: '--bg-primary',
+    themeToken_bg_surface: '--bg-surface',
+    themeToken_bg_card: '--bg-card',
+    themeToken_text_main: '--text-main',
+    themeToken_text_muted: '--text-muted',
+    themeToken_accent: '--accent',
+    themeToken_border_color: '--border-color',
+    themeToken_desktop_bg: '--desktop-bg',
+    themeToken_chrome_bg: '--chrome-bg'
 };
 
 function readThemeToken(key) {
@@ -502,7 +515,20 @@ export const DisplayOptions = {
         root.querySelectorAll('.app-theme-option').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                AppTheme.setTheme(btn.dataset.theme);
+                const newThemeId = btn.dataset.theme;
+                const newTheme = getThemeById(newThemeId);
+                
+                /* Reset theme tokens to the new theme's defaults */
+                if (newTheme && newTheme.tokens) {
+                    THEME_TOKEN_KEYS.forEach((key) => {
+                        const cssVar = THEME_TOKEN_TO_CSS_VAR[key];
+                        if (cssVar && newTheme.tokens[cssVar]) {
+                            writeThemeToken(key, newTheme.tokens[cssVar]);
+                        }
+                    });
+                }
+                
+                AppTheme.setTheme(newThemeId);
                 this.syncModalUi(root);
             });
         });

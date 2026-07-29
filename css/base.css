@@ -45,6 +45,11 @@
     --scrollbar-thumb-radius: 4px;
     --scrollbar-track: transparent;
     
+    /* Theme option color utilities */
+    --theme-accent-overlay-12: color-mix(in srgb, var(--accent) 12%, transparent);
+    --theme-accent-border-35: color-mix(in srgb, var(--accent) 35%, var(--border-color));
+    --theme-accent-bg-6: color-mix(in srgb, var(--accent) 6%, var(--bg-card));
+    
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background-color: var(--desktop-bg, var(--bg-primary));
     color: var(--text-main);

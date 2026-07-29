@@ -647,6 +647,11 @@ body.is-file-cabinet-drag-active {
     opacity: 0.9;
 }
 
+/* Clock style preview in theme picker (display options modal) */
+.app-theme-option .clock-style-preview {
+    min-width: 2.6rem;
+}
+
 /* DESKTOP SURFACE FLEX LAYOUT - KEY CHANGES */
 .desktop-surface {
     flex: 1;
