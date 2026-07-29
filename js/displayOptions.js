@@ -26,6 +26,9 @@ import { createThemePicker } from './themePicker.js';
 
 const STORAGE_KEY = 'matrix_display_options';
 
+/* Consolidated theme tokens storage key */
+const CUSTOM_THEME_TOKENS_KEY = 'matrix_custom_theme_tokens';
+
 const DEFAULTS = {
     showCategoryBand: true,
     showCategoryName: true,
@@ -88,22 +91,71 @@ const THEME_TOKEN_TO_CSS_VAR = {
     themeToken_chrome_bg: '--chrome-bg'
 };
 
-function readThemeToken(key) {
+/* Read consolidated theme tokens from localStorage */
+function readCustomThemeTokens() {
     try {
-        const stored = localStorage.getItem(key);
-        if (stored && /^#[0-9a-fA-F]{6}$/.test(stored)) return stored;
+        const stored = localStorage.getItem(CUSTOM_THEME_TOKENS_KEY);
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (typeof parsed === 'object' && parsed !== null) {
+                return parsed;
+            }
+        }
     } catch {
         /* ignore */
+    }
+    return {};
+}
+
+/* Write consolidated theme tokens to localStorage */
+function writeCustomThemeTokens(tokens) {
+    try {
+        localStorage.setItem(CUSTOM_THEME_TOKENS_KEY, JSON.stringify(tokens));
+    } catch {
+        /* ignore */
+    }
+}
+
+/* Migrate old individual themeToken_* keys to consolidated format */
+function migrateThemeTokens() {
+    const consolidated = readCustomThemeTokens();
+    let migrated = false;
+
+    THEME_TOKEN_KEYS.forEach((key) => {
+        if (!(key in consolidated)) {
+            try {
+                const stored = localStorage.getItem(key);
+                if (stored && /^#[0-9a-fA-F]{6}$/.test(stored)) {
+                    consolidated[key] = stored;
+                    localStorage.removeItem(key);
+                    migrated = true;
+                }
+            } catch {
+                /* ignore */
+            }
+        }
+    });
+
+    if (migrated) {
+        writeCustomThemeTokens(consolidated);
+    }
+}
+
+function readThemeToken(key) {
+    const consolidated = readCustomThemeTokens();
+    if (key in consolidated) {
+        const value = consolidated[key];
+        if (typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)) {
+            return value;
+        }
     }
     return THEME_TOKEN_DEFAULTS[key];
 }
 
 function writeThemeToken(key, value) {
-    try {
-        localStorage.setItem(key, value);
-    } catch {
-        /* ignore */
-    }
+    const consolidated = readCustomThemeTokens();
+    consolidated[key] = value;
+    writeCustomThemeTokens(consolidated);
 }
 
 function isThemeTokenCustomized(key) {
@@ -198,6 +250,10 @@ export const DisplayOptions = {
         this.getLoggedIn = getLoggedIn;
         this.getItems = getItems;
         this.options = readDisplayOptions();
+        
+        /* Migrate old theme token keys to consolidated format */
+        migrateThemeTokens();
+        
         applyDisplayOptions(this.options);
 
         this.triggerBtn = document.getElementById('btn-display-options');
@@ -554,7 +610,8 @@ export const DisplayOptions = {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const picker = createThemePicker({
-                        storageKey: key,
+                        storageKey: CUSTOM_THEME_TOKENS_KEY,
+                        tokenKey: key,
                         defaultColor: THEME_TOKEN_DEFAULTS[key],
                         presets: [
                             { value: '#000000', label: 'Black' },
