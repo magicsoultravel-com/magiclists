@@ -22,6 +22,7 @@ import {
     resolveBrandIconId
 } from './brandIcon.js';
 import { DesktopManager, MAX_DESKTOP_COUNT } from './desktopManager.js';
+import { createThemePicker } from './themePicker.js';
 
 const STORAGE_KEY = 'matrix_display_options';
 
@@ -36,6 +37,71 @@ const DEFAULTS = {
     noteFontId: 'default',
     brandIconId: 'clipboard'
 };
+
+/* Theme token storage keys and defaults */
+const THEME_TOKEN_KEYS = [
+    'themeToken_bg_primary',
+    'themeToken_bg_surface',
+    'themeToken_bg_card',
+    'themeToken_text_main',
+    'themeToken_text_muted',
+    'themeToken_accent',
+    'themeToken_border_color',
+    'themeToken_desktop_bg',
+    'themeToken_chrome_bg'
+];
+
+const THEME_TOKEN_DEFAULTS = {
+    themeToken_bg_primary: '#121214',
+    themeToken_bg_surface: '#121214',
+    themeToken_bg_card: '#26262b',
+    themeToken_text_main: '#e2e2e9',
+    themeToken_text_muted: '#8b8b93',
+    themeToken_accent: '#4f46e5',
+    themeToken_border_color: '#323238',
+    themeToken_desktop_bg: '#121214',
+    themeToken_chrome_bg: '#151519'
+};
+
+const THEME_TOKEN_LABELS = {
+    themeToken_bg_primary: 'Main background',
+    themeToken_bg_surface: 'Surface background',
+    themeToken_bg_card: 'Card background',
+    themeToken_text_main: 'Primary text',
+    themeToken_text_muted: 'Muted text',
+    themeToken_accent: 'Accent color',
+    themeToken_border_color: 'Border color',
+    themeToken_desktop_bg: 'Desktop',
+    themeToken_chrome_bg: 'Panel & header'
+};
+
+function readThemeToken(key) {
+    try {
+        const stored = localStorage.getItem(key);
+        if (stored && /^#[0-9a-fA-F]{6}$/.test(stored)) return stored;
+    } catch {
+        /* ignore */
+    }
+    return THEME_TOKEN_DEFAULTS[key];
+}
+
+function writeThemeToken(key, value) {
+    try {
+        localStorage.setItem(key, value);
+    } catch {
+        /* ignore */
+    }
+}
+
+function isThemeTokenCustomized(key) {
+    return readThemeToken(key).toLowerCase() !== THEME_TOKEN_DEFAULTS[key].toLowerCase();
+}
+
+function applyThemeToken(key, value) {
+    const root = document.documentElement;
+    const cssVar = key.replace('themeToken_', '--');
+    root.style.setProperty(cssVar, value);
+}
 
 export function readDisplayOptions() {
     try {
@@ -76,6 +142,11 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     root.dataset.desktopGridLines = options.desktopGridLines ? '1' : '0';
     applyNoteFont(options.noteFontId);
     applyBrandIcon(options.brandIconId);
+
+    /* Apply theme tokens */
+    THEME_TOKEN_KEYS.forEach((key) => {
+        applyThemeToken(key, readThemeToken(key));
+    });
 }
 
 function isCustomized(options) {
@@ -93,7 +164,8 @@ function isCustomized(options) {
         || BoardPlacement.isCustomized()
         || ChromeBackground.isCustomized()
         || DesktopBackground.isCustomized()
-        || isBrandIconCustomized(options.brandIconId);
+        || isBrandIconCustomized(options.brandIconId)
+        || THEME_TOKEN_KEYS.some(isThemeTokenCustomized);
 }
 
 export const DisplayOptions = {
@@ -236,7 +308,14 @@ export const DisplayOptions = {
         </button>`;
     },
 
-noteFontSelectHtml(selectedId) {
+    themeTokenRow(id, key, label) {
+        const value = readThemeToken(key);
+        return `<button type="button" class="theme-token-btn" id="${id}" title="${escapeHtml(label)}: ${value}" aria-label="${escapeHtml(label)}">
+            <span class="display-options-swatch" style="background: ${value}" aria-hidden="true"></span>
+        </button>`;
+    },
+
+    noteFontSelectHtml(selectedId) {
         return `<select id="display-opt-note-font" class="note-font-select" aria-label="Note font">
             ${NOTE_FONTS.map((font) => {
                 const selected = font.id === selectedId;
@@ -278,6 +357,16 @@ noteFontSelectHtml(selectedId) {
         this.setSelectSelection(root, '#display-opt-note-font', this.options.noteFontId);
         this.setRadioGroupSelection(root, '.brand-icon-option', this.options.brandIconId, 'brandIcon');
 
+        /* Sync theme token pickers */
+        THEME_TOKEN_KEYS.forEach((key, index) => {
+            const btn = root.querySelector(`#theme-token-${index}`);
+            if (btn) {
+                const value = readThemeToken(key);
+                btn.querySelector('.display-options-swatch').style.background = value;
+                btn.title = `${THEME_TOKEN_LABELS[key]}: ${value}`;
+            }
+        });
+
         NoteFontScale.updateLabels();
         DesktopZoom.updateButtons();
         BoardPlacement.updateLabels();
@@ -312,6 +401,11 @@ noteFontSelectHtml(selectedId) {
         const placementStridePx = `${BoardPlacement.getStridePx()}px`;
         const desktopZoomEnabled = this.isDesktopZoomEnabled();
 
+        /* Build theme token rows */
+        const themeTokenRows = THEME_TOKEN_KEYS.map((key, index) => {
+            return this.themeTokenRow(`theme-token-${index}`, key, THEME_TOKEN_LABELS[key]);
+        }).join('');
+
         return `
             <div class="modal modal--wide display-options-modal">
                 <div class="display-options-header">
@@ -323,10 +417,9 @@ noteFontSelectHtml(selectedId) {
                         <section class="display-options-section display-options-section--theme">
                             <h3 class="display-options-heading">Theme</h3>
                             <div class="display-options-theme-grid app-theme-list">${buildThemeOptionsHtml(readAppTheme(), { compact: true })}</div>
-                            <p class="display-options-subheading">Backgrounds</p>
+                            <p class="display-options-subheading">Colors</p>
                             <div class="display-options-bg-row-group">
-                                ${this.bgRow('display-opt-chrome-bg', 'Panel & header', '--chrome-bg')}
-                                ${this.bgRow('display-opt-desktop-bg', 'Desktop', '--desktop-bg')}
+                                ${themeTokenRows}
                             </div>
                             <p class="display-options-subheading">Site icon</p>
                             <div class="brand-icon-list">${buildBrandIconOptionsHtml(opts.brandIconId)}</div>
@@ -383,6 +476,7 @@ noteFontSelectHtml(selectedId) {
                     </div>
                 </div>
                 <div class="display-options-footer">
+                    <button type="button" class="btn btn--compact btn--icon display-options-reset-theme" id="display-opt-reset-theme" title="Reset theme" aria-label="Reset theme">${ACTION_ICONS.appTheme}</button>
                     <button type="button" class="btn btn--compact btn--icon display-options-reset" id="display-opt-reset" title="Reset to defaults" aria-label="Reset to defaults">${ACTION_ICONS.resetCustomization}</button>
                 </div>
             </div>
@@ -425,6 +519,56 @@ noteFontSelectHtml(selectedId) {
                 this.setOptions({ brandIconId: btn.dataset.brandIcon });
                 this.syncModalUi(root);
             });
+        });
+
+        /* Theme token color pickers */
+        THEME_TOKEN_KEYS.forEach((key, index) => {
+            const btn = root.querySelector(`#theme-token-${index}`);
+            if (btn) {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const picker = createThemePicker({
+                        storageKey: key,
+                        defaultColor: THEME_TOKEN_DEFAULTS[key],
+                        presets: [
+                            { value: '#000000', label: 'Black' },
+                            { value: '#121214', label: 'Default' },
+                            { value: '#2d3748', label: 'Slate' },
+                            { value: '#718096', label: 'Cool Gray' },
+                            { value: '#e53e3e', label: 'Muted Red' },
+                            { value: '#dd6b20', label: 'Warm Orange' },
+                            { value: '#d69e2e', label: 'Soft Amber' },
+                            { value: '#38a169', label: 'Sage Green' },
+                            { value: '#319795', label: 'Teal' },
+                            { value: '#3182ce', label: 'Soft Blue' },
+                            { value: '#805ad5', label: 'Muted Purple' },
+                            { value: '#b7791f', label: 'Sand' },
+                            { value: '#f7fafc', label: 'Off-White' },
+                            { value: '#edf2f7', label: 'Light Gray' },
+                            { value: '#feebc8', label: 'Soft Peach' },
+                            { value: '#ffffff', label: 'White' }
+                        ],
+                        cssVar: key.replace('themeToken_', '--'),
+                        ariaLabel: THEME_TOKEN_LABELS[key],
+                        onApply: (value) => {
+                            applyThemeToken(key, value);
+                            this.syncButtonState();
+                        }
+                    });
+                    picker.openPicker(btn);
+                });
+            }
+        });
+
+        /* Reset theme button - resets to default theme */
+        root.querySelector('#display-opt-reset-theme')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            AppTheme.setTheme('dark');
+            /* Reset theme tokens to default theme values */
+            THEME_TOKEN_KEYS.forEach((key) => {
+                writeThemeToken(key, THEME_TOKEN_DEFAULTS[key]);
+            });
+            this.rebuildModal();
         });
 
         this.bindStepper(root, {

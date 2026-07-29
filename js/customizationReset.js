@@ -23,7 +23,17 @@ const CUSTOMIZATION_KEYS = [
     'matrix_grid_fineness',
     'matrix_grid_fineness_migrated',
     'matrix_board_padding',
-    'matrix_placement_stride'
+    'matrix_placement_stride',
+    /* Theme token keys */
+    'themeToken_bg_primary',
+    'themeToken_bg_surface',
+    'themeToken_bg_card',
+    'themeToken_text_main',
+    'themeToken_text_muted',
+    'themeToken_accent',
+    'themeToken_border_color',
+    'themeToken_desktop_bg',
+    'themeToken_chrome_bg'
 ];
 
 const DISPLAY_DEFAULTS = {
