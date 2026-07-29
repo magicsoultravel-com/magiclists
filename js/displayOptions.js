@@ -18,18 +18,15 @@ import {
     AppTheme,
     buildThemeOptionsHtml,
     isAppThemeCustomized,
-    readAppTheme,
     getThemeById,
-    THEME_TOKEN_KEYS,
-    THEME_TOKEN_DEFAULTS,
+    TOKEN_KEYS,
+    DEFAULT_TOKENS,
     THEME_TOKEN_LABELS,
-    THEME_TOKEN_TO_CSS_VAR,
-    CUSTOM_THEME_TOKENS_KEY,
-    migrateThemeTokens,
-    readThemeToken,
-    writeThemeToken,
-    isThemeTokenCustomized,
-    applyThemeToken
+    readUserTheme,
+    writeUserTheme,
+    isTokenCustomized,
+    applyUserTheme,
+    findMatchingThemeId
 } from './appTheme.js';
 import {
     applyBrandIcon,
@@ -94,10 +91,9 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     applyNoteFont(options.noteFontId);
     applyBrandIcon(options.brandIconId);
 
-    /* Apply theme tokens */
-    THEME_TOKEN_KEYS.forEach((key) => {
-        applyThemeToken(key, readThemeToken(key));
-    });
+    /* Apply user theme tokens */
+    const userTheme = readUserTheme();
+    applyUserTheme(userTheme);
 }
 
 function isCustomized(options) {
@@ -116,7 +112,7 @@ function isCustomized(options) {
         || ChromeBackground.isCustomized()
         || DesktopBackground.isCustomized()
         || isBrandIconCustomized(options.brandIconId)
-        || THEME_TOKEN_KEYS.some(isThemeTokenCustomized);
+        || TOKEN_KEYS.some(isTokenCustomized);
 }
 
 export const DisplayOptions = {
@@ -136,9 +132,6 @@ export const DisplayOptions = {
         this.getLoggedIn = getLoggedIn;
         this.getItems = getItems;
         this.options = readDisplayOptions();
-        
-        /* Migrate old theme token keys to consolidated format */
-        migrateThemeTokens();
         
         applyDisplayOptions(this.options);
 
@@ -264,7 +257,7 @@ export const DisplayOptions = {
     },
 
     themeTokenRow(id, key, label) {
-        const value = readThemeToken(key);
+        const value = readUserTheme()[key] || DEFAULT_TOKENS[key];
         return `<button type="button" class="theme-token-btn" id="${id}" title="${escapeHtml(label)}: ${value}" aria-label="${escapeHtml(label)}">
             <span class="display-options-swatch" style="background: ${value}" aria-hidden="true"></span>
         </button>`;
@@ -308,15 +301,16 @@ export const DisplayOptions = {
     syncModalUi(root = this.overlay) {
         if (!root) return;
 
-        this.setRadioGroupSelection(root, '.app-theme-option', readAppTheme(), 'theme');
+        const matchingThemeId = findMatchingThemeId();
+        this.setRadioGroupSelection(root, '.app-theme-option', matchingThemeId || 'dark', 'theme');
         this.setSelectSelection(root, '#display-opt-note-font', this.options.noteFontId);
         this.setRadioGroupSelection(root, '.brand-icon-option', this.options.brandIconId, 'brandIcon');
 
         /* Sync theme token pickers */
-        THEME_TOKEN_KEYS.forEach((key, index) => {
+        TOKEN_KEYS.forEach((key, index) => {
             const btn = root.querySelector(`#theme-token-${index}`);
             if (btn) {
-                const value = readThemeToken(key);
+                const value = readUserTheme()[key] || DEFAULT_TOKENS[key];
                 btn.querySelector('.display-options-swatch').style.background = value;
                 btn.title = `${THEME_TOKEN_LABELS[key]}: ${value}`;
             }
@@ -357,9 +351,12 @@ export const DisplayOptions = {
         const desktopZoomEnabled = this.isDesktopZoomEnabled();
 
         /* Build theme token rows */
-        const themeTokenRows = THEME_TOKEN_KEYS.map((key, index) => {
+        const themeTokenRows = TOKEN_KEYS.map((key, index) => {
             return this.themeTokenRow(`theme-token-${index}`, key, THEME_TOKEN_LABELS[key]);
         }).join('');
+
+        const matchingThemeId = findMatchingThemeId();
+        const selectedThemeId = matchingThemeId || 'dark';
 
         return `
             <div class="modal modal--wide display-options-modal">
@@ -371,7 +368,7 @@ export const DisplayOptions = {
                     <div class="display-options-grid">
                         <section class="display-options-section display-options-section--theme">
                             <h3 class="display-options-heading">Theme</h3>
-                            <div class="display-options-theme-grid app-theme-list">${buildThemeOptionsHtml(readAppTheme(), { compact: true })}</div>
+                            <div class="display-options-theme-grid app-theme-list">${buildThemeOptionsHtml(selectedThemeId, { compact: true })}</div>
                             <p class="display-options-subheading">Colors</p>
                             <div class="display-options-bg-row-group">
                                 ${themeTokenRows}
@@ -460,14 +457,9 @@ export const DisplayOptions = {
                 const newThemeId = btn.dataset.theme;
                 const newTheme = getThemeById(newThemeId);
                 
-                /* Reset theme tokens to the new theme's defaults */
+                /* Overwrite user theme with preset tokens */
                 if (newTheme && newTheme.tokens) {
-                    THEME_TOKEN_KEYS.forEach((key) => {
-                        const cssVar = THEME_TOKEN_TO_CSS_VAR[key];
-                        if (cssVar && newTheme.tokens[cssVar]) {
-                            writeThemeToken(key, newTheme.tokens[cssVar]);
-                        }
-                    });
+                    writeUserTheme(newTheme.tokens);
                 }
                 
                 AppTheme.setTheme(newThemeId);
@@ -490,15 +482,15 @@ export const DisplayOptions = {
         });
 
         /* Theme token color pickers */
-        THEME_TOKEN_KEYS.forEach((key, index) => {
+        TOKEN_KEYS.forEach((key, index) => {
             const btn = root.querySelector(`#theme-token-${index}`);
             if (btn) {
                 btn.addEventListener('click', (e) => {
                     e.stopPropagation();
                     const picker = createThemePicker({
-                        storageKey: CUSTOM_THEME_TOKENS_KEY,
+                        storageKey: 'matrix_custom_theme_tokens',
                         tokenKey: key,
-                        defaultColor: THEME_TOKEN_DEFAULTS[key],
+                        defaultColor: DEFAULT_TOKENS[key],
                         presets: [
                             { value: '#000000', label: 'Black' },
                             { value: '#121214', label: 'Default' },
@@ -517,10 +509,13 @@ export const DisplayOptions = {
                             { value: '#feebc8', label: 'Soft Peach' },
                             { value: '#ffffff', label: 'White' }
                         ],
-                        cssVar: key.replace('themeToken_', '--'),
+                        cssVar: key,
                         ariaLabel: THEME_TOKEN_LABELS[key],
                         onApply: (value) => {
-                            applyThemeToken(key, value);
+                            const userTheme = readUserTheme();
+                            userTheme[key] = value;
+                            writeUserTheme(userTheme);
+                            applyUserTheme({ [key]: value });
                             this.syncButtonState();
                         }
                     });
@@ -533,10 +528,6 @@ export const DisplayOptions = {
         root.querySelector('#display-opt-reset-theme')?.addEventListener('click', (e) => {
             e.stopPropagation();
             AppTheme.setTheme('dark');
-            /* Reset theme tokens to default theme values */
-            THEME_TOKEN_KEYS.forEach((key) => {
-                writeThemeToken(key, THEME_TOKEN_DEFAULTS[key]);
-            });
             this.rebuildModal();
         });
 

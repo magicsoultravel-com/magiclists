@@ -2,9 +2,7 @@ import { DesktopBackground } from './desktopBackground.js';
 import { ChromeBackground } from './chromeBackground.js';
 import { syncClockStyleForTheme } from './clockStyle.js';
 
-const STORAGE_KEY = 'matrix_app_theme';
-
-/* Consolidated storage key for custom theme tokens */
+/* Single source of truth: consolidated theme tokens key */
 export const CUSTOM_THEME_TOKENS_KEY = 'matrix_custom_theme_tokens';
 
 /* CSS variable names for theme tokens */
@@ -20,60 +18,34 @@ export const TOKEN_KEYS = [
     '--chrome-bg'
 ];
 
-/* localStorage key names for custom theme tokens */
-export const THEME_TOKEN_KEYS = [
-    'themeToken_bg_primary',
-    'themeToken_bg_surface',
-    'themeToken_bg_card',
-    'themeToken_text_main',
-    'themeToken_text_muted',
-    'themeToken_accent',
-    'themeToken_border_color',
-    'themeToken_desktop_bg',
-    'themeToken_chrome_bg'
-];
-
-/* Default values for custom theme tokens (matches dark theme) */
-export const THEME_TOKEN_DEFAULTS = {
-    themeToken_bg_primary: '#121214',
-    themeToken_bg_surface: '#121214',
-    themeToken_bg_card: '#26262b',
-    themeToken_text_main: '#e2e2e9',
-    themeToken_text_muted: '#8b8b93',
-    themeToken_accent: '#4f46e5',
-    themeToken_border_color: '#323238',
-    themeToken_desktop_bg: '#121214',
-    themeToken_chrome_bg: '#151519'
+/* Default tokens (dark theme) - serves as the baseline */
+export const DEFAULT_TOKENS = {
+    '--bg-primary': '#121214',
+    '--bg-surface': '#121214',
+    '--bg-card': '#26262b',
+    '--text-main': '#e2e2e9',
+    '--text-muted': '#8b8b93',
+    '--accent': '#4f46e5',
+    '--border-color': '#323238',
+    '--desktop-bg': '#121214',
+    '--chrome-bg': '#151519'
 };
 
 /* Human-readable labels for theme token UI */
 export const THEME_TOKEN_LABELS = {
-    themeToken_bg_primary: 'Main background',
-    themeToken_bg_surface: 'Surface background',
-    themeToken_bg_card: 'Card background',
-    themeToken_text_main: 'Primary text',
-    themeToken_text_muted: 'Muted text',
-    themeToken_accent: 'Accent color',
-    themeToken_border_color: 'Border color',
-    themeToken_desktop_bg: 'Desktop',
-    themeToken_chrome_bg: 'Panel & header'
+    '--bg-primary': 'Main background',
+    '--bg-surface': 'Surface background',
+    '--bg-card': 'Card background',
+    '--text-main': 'Primary text',
+    '--text-muted': 'Muted text',
+    '--accent': 'Accent color',
+    '--border-color': 'Border color',
+    '--desktop-bg': 'Desktop',
+    '--chrome-bg': 'Panel & header'
 };
 
-/* Mapping from theme token storage keys to CSS variable names */
-export const THEME_TOKEN_TO_CSS_VAR = {
-    themeToken_bg_primary: '--bg-primary',
-    themeToken_bg_surface: '--bg-surface',
-    themeToken_bg_card: '--bg-card',
-    themeToken_text_main: '--text-main',
-    themeToken_text_muted: '--text-muted',
-    themeToken_accent: '--accent',
-    themeToken_border_color: '--border-color',
-    themeToken_desktop_bg: '--desktop-bg',
-    themeToken_chrome_bg: '--chrome-bg'
-};
-
-/* Read consolidated theme tokens from localStorage */
-function readCustomThemeTokens() {
+/* Read user theme from localStorage (single source of truth) */
+export function readUserTheme() {
     try {
         const stored = localStorage.getItem(CUSTOM_THEME_TOKENS_KEY);
         if (stored) {
@@ -85,11 +57,11 @@ function readCustomThemeTokens() {
     } catch {
         /* ignore */
     }
-    return {};
+    return { ...DEFAULT_TOKENS };
 }
 
-/* Write consolidated theme tokens to localStorage */
-function writeCustomThemeTokens(tokens) {
+/* Write user theme to localStorage */
+export function writeUserTheme(tokens) {
     try {
         localStorage.setItem(CUSTOM_THEME_TOKENS_KEY, JSON.stringify(tokens));
     } catch {
@@ -97,109 +69,46 @@ function writeCustomThemeTokens(tokens) {
     }
 }
 
-/* Migrate old individual themeToken_* keys to consolidated format */
-export function migrateThemeTokens() {
-    const consolidated = readCustomThemeTokens();
-    let migrated = false;
-
-    THEME_TOKEN_KEYS.forEach((key) => {
-        if (!(key in consolidated)) {
-            try {
-                const stored = localStorage.getItem(key);
-                if (stored && /^#[0-9a-fA-F]{6}$/.test(stored)) {
-                    consolidated[key] = stored;
-                    localStorage.removeItem(key);
-                    migrated = true;
-                }
-            } catch {
-                /* ignore */
-            }
-        }
-    });
-
-    if (migrated) {
-        writeCustomThemeTokens(consolidated);
-    }
-}
-
-/* Read a custom theme token from localStorage (supports both consolidated and individual keys) */
-export function readThemeToken(key) {
-    // First check consolidated storage
-    const consolidated = readCustomThemeTokens();
-    if (key in consolidated) {
-        const value = consolidated[key];
-        if (typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)) {
-            return value;
-        }
-    }
-    // Fall back to individual key for backward compatibility
-    try {
-        const stored = localStorage.getItem(key);
-        if (stored && /^#[0-9a-fA-F]{6}$/.test(stored)) return stored;
-    } catch {
-        /* ignore */
-    }
-    return THEME_TOKEN_DEFAULTS[key];
-}
-
-/* Write a custom theme token to localStorage */
-export function writeThemeToken(key, value) {
-    const consolidated = readCustomThemeTokens();
-    consolidated[key] = value;
-    writeCustomThemeTokens(consolidated);
-}
-
-/* Check if a theme token has been customized from default */
-export function isThemeTokenCustomized(key) {
-    return readThemeToken(key).toLowerCase() !== THEME_TOKEN_DEFAULTS[key].toLowerCase();
-}
-
-/* Apply a theme token value to a CSS variable */
-export function applyThemeToken(key, value) {
+/* Apply user theme tokens to CSS variables */
+export function applyUserTheme(tokens) {
     const root = document.documentElement;
-    const cssVar = key.replace('themeToken_', '--');
-    root.style.setProperty(cssVar, value);
-}
-
-/* Apply all custom theme token overrides from localStorage */
-export function applyCustomTokenOverrides() {
-    const root = document.documentElement;
-    THEME_TOKEN_KEYS.forEach((key) => {
-        const value = readThemeToken(key);
-        const cssVar = key.replace('themeToken_', '--');
-        root.style.setProperty(cssVar, value);
+    Object.entries(tokens).forEach(([key, value]) => {
+        root.style.setProperty(key, value);
     });
 }
 
-/* Reset all custom theme tokens to defaults */
-export function resetThemeTokens() {
-    THEME_TOKEN_KEYS.forEach((key) => {
-        writeThemeToken(key, THEME_TOKEN_DEFAULTS[key]);
+/* Check if a token has been customized from default */
+export function isTokenCustomized(key) {
+    const current = readUserTheme();
+    const currentVal = current[key];
+    const defaultVal = DEFAULT_TOKENS[key];
+    return currentVal && currentVal.toLowerCase() !== (defaultVal || '').toLowerCase();
+}
+
+/* Check if any token has been customized */
+export function isAnyTokenCustomized() {
+    return TOKEN_KEYS.some(isTokenCustomized);
+}
+
+/* Find the matching preset theme ID for the current user theme */
+export function findMatchingThemeId() {
+    const userTheme = readUserTheme();
+    const matchingTheme = APP_THEMES.find(t => {
+        return TOKEN_KEYS.every(key => 
+            (t.tokens[key] || '').toLowerCase() === (userTheme[key] || '').toLowerCase()
+        );
     });
+    return matchingTheme?.id || null;
 }
 
-/* Check if any theme token has been customized */
-export function isAnyThemeTokenCustomized() {
-    return THEME_TOKEN_KEYS.some(isThemeTokenCustomized);
-}
-
+/* Preset themes - serve as templates for the user theme */
 export const APP_THEMES = [
     {
         id: 'dark',
         label: 'Dark',
         desc: 'Default workspace',
         swatch: ['#121214', '#26262b', '#4f46e5'],
-        tokens: {
-            '--bg-primary': '#121214',
-            '--bg-surface': '#121214',
-            '--bg-card': '#26262b',
-            '--text-main': '#e2e2e9',
-            '--text-muted': '#8b8b93',
-            '--accent': '#4f46e5',
-            '--border-color': '#323238',
-            '--desktop-bg': '#121214',
-            '--chrome-bg': '#151519'
-        }
+        tokens: { ...DEFAULT_TOKENS }
     },
     {
         id: 'light',
@@ -470,7 +379,7 @@ export const APP_THEMES = [
         label: 'Neon',
         desc: 'Soft synthwave',
         special: 'neon',
-        swatch: ['#12101a', '#1a1628', '#5ec8d8'],
+        swatch: ['#12101a', '#1a1622', '#5ec8d8'],
         tokens: {
             '--bg-primary': '#12101a',
             '--bg-surface': '#161422',
@@ -590,40 +499,18 @@ export const APP_THEMES = [
     }
 ];
 
-export function readAppTheme() {
-    try {
-        const stored = localStorage.getItem(STORAGE_KEY);
-        if (stored && APP_THEMES.some((t) => t.id === stored)) return stored;
-    } catch {
-        /* ignore */
-    }
-    return 'dark';
-}
-
-export function writeAppTheme(themeId) {
-    try {
-        localStorage.setItem(STORAGE_KEY, themeId);
-    } catch {
-        /* ignore */
-    }
-}
-
+/* Get theme by ID */
 export function getThemeById(themeId) {
     return APP_THEMES.find((t) => t.id === themeId) || APP_THEMES[0];
 }
 
+/* Apply a preset theme (overwrites user theme) */
 export function applyAppTheme(themeId, { silent = false } = {}) {
     const theme = getThemeById(themeId);
     const root = document.documentElement;
 
-    // First, apply custom token overrides if any exist
-    applyCustomTokenOverrides();
-
-    // Then apply preset theme tokens (these will override custom tokens for non-customized values)
-    TOKEN_KEYS.forEach((key) => {
-        const value = theme.tokens[key];
-        if (value) root.style.setProperty(key, value);
-    });
+    // Apply preset tokens (overwrites user theme)
+    applyUserTheme(theme.tokens);
 
     root.dataset.appTheme = theme.id;
 
@@ -633,7 +520,9 @@ export function applyAppTheme(themeId, { silent = false } = {}) {
     ChromeBackground.apply(chrome, { silent: true });
     document.body.style.backgroundColor = desktop;
 
-    if (!silent) writeAppTheme(theme.id);
+    if (!silent) {
+        writeUserTheme(theme.tokens);
+    }
     syncClockStyleForTheme(theme.id);
 }
 
@@ -692,16 +581,32 @@ export function buildThemeOptionsHtml(selectedId, { compact = false } = {}) {
     return sections.join('');
 }
 
+/* Check if theme has been customized from default */
 export function isAppThemeCustomized() {
-    return readAppTheme() !== 'dark';
+    const userTheme = readUserTheme();
+    return TOKEN_KEYS.some((key) => userTheme[key]?.toLowerCase() !== DEFAULT_TOKENS[key]?.toLowerCase());
 }
 
 export const AppTheme = {
     currentId: 'dark',
 
     init() {
-        this.currentId = readAppTheme();
-        applyAppTheme(this.currentId, { silent: true });
+        const userTheme = readUserTheme();
+        applyUserTheme(userTheme);
+        // Determine current theme by comparing to presets
+        const matchingTheme = APP_THEMES.find(t => {
+            return TOKEN_KEYS.every(key => 
+                (t.tokens[key] || '').toLowerCase() === (userTheme[key] || '').toLowerCase()
+            );
+        });
+        this.currentId = matchingTheme?.id || 'dark';
+        // Apply desktop/chrome backgrounds
+        const desktop = userTheme['--desktop-bg'];
+        const chrome = userTheme['--chrome-bg'];
+        DesktopBackground.apply(desktop, { silent: true });
+        ChromeBackground.apply(chrome, { silent: true });
+        document.body.style.backgroundColor = desktop;
+        syncClockStyleForTheme(this.currentId);
     },
 
     setTheme(themeId) {

@@ -10,7 +10,6 @@ import { initGridMetrics, DEFAULT_PLACEMENT_STEP } from './gridDensity.js';
 import { BoardPlacement } from './boardPlacement.js';
 
 const CUSTOMIZATION_KEYS = [
-    'matrix_app_theme',
     'matrix_desktop_bg',
     'matrix_chrome_bg',
     'matrix_clock_style',
