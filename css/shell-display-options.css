@@ -230,10 +230,11 @@
     border-radius: 50%;
 }
 
-/* Theme grid container in display options modal - ROWS layout */
+/* Theme grid container in display options modal - HORIZONTAL layout */
 .display-options-modal .display-options-theme-grid {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
     gap: 0.25rem;
 }
 
@@ -412,10 +413,11 @@
     justify-content: space-between;
 }
 
-/* Background row group for theme token buttons - ROWS layout */
+/* Background row group for theme token buttons - HORIZONTAL layout */
 .display-options-bg-row-group {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
     gap: 0.25rem;
 }
 
