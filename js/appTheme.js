@@ -481,16 +481,16 @@ function buildThemeButton(theme, selectedId, compact) {
     if (compact) {
         return `<button type="button" class="app-theme-option app-theme-option--compact${selected ? ' is-selected' : ''}" data-theme="${theme.id}" role="menuitemradio" aria-checked="${selected}" title="${escapeHtml(theme.label)}" aria-label="${escapeHtml(theme.label)}">
             ${swatchHtml(theme.swatch)}
-            ${selected ? '<span class="clock-style-check" aria-hidden="true">✓</span>' : ''}
+            ${selected ? '<span class="app-theme-check" aria-hidden="true">✓</span>' : ''}
         </button>`;
     }
-    return `<button type="button" class="clock-style-option app-theme-option${selected ? ' is-selected' : ''}" data-theme="${theme.id}" role="menuitemradio" aria-checked="${selected}">
+    return `<button type="button" class="app-theme-option${selected ? ' is-selected' : ''}" data-theme="${theme.id}" role="menuitemradio" aria-checked="${selected}">
         ${swatchHtml(theme.swatch)}
-        <span class="clock-style-meta">
-            <span class="clock-style-label">${escapeHtml(theme.label)}</span>
-            <span class="clock-style-desc">${escapeHtml(theme.desc)}</span>
+        <span class="app-theme-meta">
+            <span class="app-theme-label">${escapeHtml(theme.label)}</span>
+            <span class="app-theme-desc">${escapeHtml(theme.desc)}</span>
         </span>
-        ${selected ? '<span class="clock-style-check" aria-hidden="true">✓</span>' : ''}
+        ${selected ? '<span class="app-theme-check" aria-hidden="true">✓</span>' : ''}
     </button>`;
 }
 
@@ -519,6 +519,10 @@ export function buildThemeOptionsHtml(selectedId, { compact = false } = {}) {
     }
 
     return sections.join('');
+}
+
+export function isAppThemeCustomized() {
+    return readAppTheme() !== 'dark';
 }
 
 export const AppTheme = {

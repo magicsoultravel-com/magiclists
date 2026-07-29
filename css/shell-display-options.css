@@ -219,7 +219,7 @@
     height: 0.85rem;
 }
 
-.display-options-modal .app-theme-option--compact .clock-style-check {
+.display-options-modal .app-theme-option--compact .app-theme-check {
     position: absolute;
     top: -0.15rem;
     right: -0.15rem;
@@ -228,13 +228,6 @@
     color: var(--accent);
     background: var(--bg-surface);
     border-radius: 50%;
-}
-
-.display-options-modal .clock-style-check {
-    flex-shrink: 0;
-    font-size: 0.62rem;
-    line-height: 1;
-    color: var(--accent);
 }
 
 /* Theme grid container in display options modal */
@@ -260,6 +253,61 @@
     color: var(--text-muted);
     text-transform: uppercase;
     letter-spacing: 0.02em;
+}
+
+/* Theme option button (non-compact) */
+.app-theme-option {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.4rem;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    background: var(--bg-card);
+    color: var(--text-main);
+    font: inherit;
+    cursor: pointer;
+    transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.app-theme-option:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.app-theme-option.is-selected {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border-color));
+}
+
+.app-theme-option .app-theme-swatch {
+    width: 1.6rem;
+    height: 0.85rem;
+}
+
+.app-theme-option .app-theme-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.1rem;
+}
+
+.app-theme-option .app-theme-label {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text-main);
+}
+
+.app-theme-option .app-theme-desc {
+    font-size: 0.62rem;
+    color: var(--text-muted);
+}
+
+.app-theme-option .app-theme-check {
+    flex-shrink: 0;
+    font-size: 0.62rem;
+    line-height: 1;
+    color: var(--accent);
 }
 
 /* Side panel specific overrides */
