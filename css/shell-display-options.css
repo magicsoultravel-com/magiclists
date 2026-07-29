@@ -188,10 +188,6 @@
     background: color-mix(in srgb, var(--accent) 6%, var(--bg-card));
 }
 
-.note-font-select option {
-    font-family: inherit;
-}
-
 /* Theme picker in modal */
 .display-options-modal .app-theme-option--compact {
     position: relative;

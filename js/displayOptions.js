@@ -236,11 +236,12 @@ export const DisplayOptions = {
         </button>`;
     },
 
-    noteFontSelectHtml(selectedId) {
+noteFontSelectHtml(selectedId) {
         return `<select id="display-opt-note-font" class="note-font-select" aria-label="Note font">
             ${NOTE_FONTS.map((font) => {
                 const selected = font.id === selectedId;
-                return `<option value="${font.id}"${selected ? ' selected' : ''}>${escapeHtml(font.label)}</option>`;
+                const style = font.family ? ` style="font-family:${font.family}"` : '';
+                return `<option value="${font.id}"${selected ? ' selected' : ''}${style}>${escapeHtml(font.label)}</option>`;
             }).join('')}
         </select>`;
     },
