@@ -48,7 +48,8 @@ const DEFAULTS = {
     desktopGradient: false,
     desktopGridLines: false,
     noteFontId: 'default',
-    brandIconId: 'clipboard'
+    brandIconId: 'clipboard',
+    useCategoryColors: true
 };
 
 export function readDisplayOptions() {
@@ -66,7 +67,8 @@ export function readDisplayOptions() {
             desktopGradient: raw.desktopGradient === true,
             desktopGridLines: raw.desktopGridLines === true,
             noteFontId,
-            brandIconId: resolveBrandIconId(raw.brandIconId)
+            brandIconId: resolveBrandIconId(raw.brandIconId),
+            useCategoryColors: raw.useCategoryColors !== false
         };
     } catch {
         return { ...DEFAULTS, noteFontId: readNoteFont() };
@@ -88,6 +90,7 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     root.dataset.showNoteLines = options.showLineCount ? '1' : '0';
     root.dataset.desktopGradient = options.desktopGradient ? '1' : '0';
     root.dataset.desktopGridLines = options.desktopGridLines ? '1' : '0';
+    root.dataset.useCategoryColors = options.useCategoryColors ? '1' : '0';
     applyNoteFont(options.noteFontId);
     applyBrandIcon(options.brandIconId);
 
@@ -104,6 +107,7 @@ function isCustomized(options) {
         || options.showLineCount
         || options.desktopGradient
         || options.desktopGridLines
+        || !options.useCategoryColors
         || isNoteFontCustomized(options.noteFontId)
         || isAppThemeCustomized()
         || NoteFontScale.isCustomized()
@@ -399,6 +403,7 @@ export const DisplayOptions = {
                             <div class="display-options-check-grid">
                                 ${this.optionRow('display-opt-category-band', 'Category color band', opts.showCategoryBand)}
                                 ${this.optionRow('display-opt-category', 'Category name', opts.showCategoryName)}
+                                ${this.optionRow('display-opt-use-category-colors', 'Use category colors', opts.useCategoryColors)}
                                 ${this.optionRow('display-opt-created', 'Created date', opts.showCreatedDate)}
                                 ${this.optionRow('display-opt-note-size', 'Note size', opts.showNoteSize)}
                                 ${this.optionRow('display-opt-note-lines', 'Number of lines', opts.showLineCount)}
@@ -450,6 +455,7 @@ export const DisplayOptions = {
         bindToggle('display-opt-note-lines', 'showLineCount');
         bindToggle('display-opt-gradient', 'desktopGradient');
         bindToggle('display-opt-grid-lines', 'desktopGridLines');
+        bindToggle('display-opt-use-category-colors', 'useCategoryColors');
 
         root.querySelectorAll('.app-theme-option').forEach((btn) => {
             btn.addEventListener('click', (e) => {

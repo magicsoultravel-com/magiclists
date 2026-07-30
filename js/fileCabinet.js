@@ -687,7 +687,6 @@ function buildFileCabinetCategoryColumn({
     const col = document.createElement('div');
     col.className = 'file-cabinet-category';
     col.dataset.category = catName;
-    col.style.setProperty('--file-cabinet-category-color', color);
 
     const header = document.createElement('div');
     header.className = 'file-cabinet-category-header';
@@ -724,7 +723,6 @@ function buildFileCabinetRolloutStack({ catName, items, activeCategories, UI }) 
     const stack = document.createElement('div');
     stack.className = 'file-cabinet-tab-stack';
     stack.dataset.category = catName;
-    stack.style.setProperty('--file-cabinet-category-color', color);
 
 items.forEach((item, index) => {
         const card = createCardComponent(UI, item, activeCategories);
@@ -924,12 +922,11 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
                 const slot = document.createElement('div');
                 slot.className = 'file-cabinet-filed-slot';
                 slot.dataset.category = catName;
-                slot.style.setProperty('--file-cabinet-category-color', color);
 
                 const chip = document.createElement('div');
                 chip.className = 'file-cabinet-filed-chip';
                 chip.dataset.category = catName;
-                chip.style.setProperty('--file-cabinet-category-color', color);
+
                 chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span class="file-cabinet-filed-chip-name u-truncate">${escapeHTML(catName)} (${items.length})</span><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
 
                 const rollout = document.createElement('div');

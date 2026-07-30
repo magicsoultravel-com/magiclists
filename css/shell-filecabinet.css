@@ -29,12 +29,12 @@
     font-weight: 600;
     color: var(--text-main);
     line-height: 1.2;
-    border-left: 2px solid var(--file-cabinet-category-color, var(--border-color));
+    border-left: 2px solid var(--card-category-color, var(--border-color));
 }
 
 .file-cabinet-filed-chip.is-file-cabinet-drop-target {
-    background: color-mix(in srgb, var(--file-cabinet-category-color, var(--accent-color)) 14%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--file-cabinet-category-color, var(--accent-color)) 35%, transparent);
+    background: color-mix(in srgb, var(--card-category-color, var(--accent-color)) 14%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--card-category-color, var(--accent-color)) 35%, transparent);
 }
 
 .file-cabinet-filed-chip-name {
@@ -55,8 +55,8 @@
 }
 
 .file-cabinet-filed-chip.is-fold-preview-source {
-    background: color-mix(in srgb, var(--file-cabinet-category-color, var(--accent-color)) 12%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--file-cabinet-category-color, var(--accent-color)) 28%, transparent);
+    background: color-mix(in srgb, var(--card-category-color, var(--accent-color)) 12%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--card-category-color, var(--accent-color)) 28%, transparent);
 }
 
 /* Filed chip rollout popover */
@@ -93,12 +93,12 @@
         135deg,
         transparent 0,
         transparent 5px,
-        color-mix(in srgb, var(--file-cabinet-category-color, var(--text-muted)) 10%, transparent) 5px,
-        color-mix(in srgb, var(--file-cabinet-category-color, var(--text-muted)) 10%, transparent) 6px
+        color-mix(in srgb, var(--card-category-color, var(--text-muted)) 10%, transparent) 5px,
+        color-mix(in srgb, var(--card-category-color, var(--text-muted)) 10%, transparent) 6px
     );
     box-shadow:
         0 4px 12px rgba(0, 0, 0, 0.16),
-        inset 0 0 0 1px color-mix(in srgb, var(--file-cabinet-category-color, var(--accent-color)) 22%, var(--border-color));
+        inset 0 0 0 1px color-mix(in srgb, var(--card-category-color, var(--accent-color)) 22%, var(--border-color));
 }
 
 /* File cabinet categories */
@@ -147,8 +147,8 @@
 
 .file-cabinet-category.is-file-cabinet-drop-target {
     border-radius: 0.3rem;
-    background: color-mix(in srgb, var(--file-cabinet-category-color, var(--accent-color)) 10%, transparent);
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--file-cabinet-category-color, var(--accent-color)) 30%, transparent);
+    background: color-mix(in srgb, var(--card-category-color, var(--accent-color)) 10%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--card-category-color, var(--accent-color)) 30%, transparent);
 }
 
 .file-cabinet-category-dot {
