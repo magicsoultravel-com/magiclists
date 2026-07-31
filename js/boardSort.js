@@ -38,7 +38,7 @@ export function sortBoardItems(items, sortPrefs) {
     return [...(items || [])].sort((a, b) => compareBoardItems(a, b, sortPrefs));
 }
 
-function buildMenuItems(prefs, overlayEnabled = false) {
+function buildMenuItems(prefs) {
     return [
         { heading: 'Direction' },
         { id: 'dir:horizontal', label: 'Horizontally', selected: prefs.direction === 'horizontal' },
@@ -52,18 +52,7 @@ function buildMenuItems(prefs, overlayEnabled = false) {
         { divider: true },
         { heading: 'Order' },
         { id: 'order:asc', label: 'Ascending', selected: prefs.dir === 'asc' },
-        { id: 'order:desc', label: 'Descending', selected: prefs.dir === 'desc' },
-        { divider: true },
-        { heading: 'Expanded layout' },
-        {
-            checkbox: true,
-            id: 'cascade',
-            inputId: 'board-sort-cascade',
-            label: 'Cascade',
-            hint: 'Overlay: fill row/column in stacks; expanded in one stack',
-            checked: prefs.cascade === true,
-            disabled: !overlayEnabled
-        }
+        { id: 'order:desc', label: 'Descending', selected: prefs.dir === 'desc' }
     ];
 }
 
@@ -83,14 +72,10 @@ export const BoardSort = {
         this.ctx = ctx;
     },
 
-    isOverlayEnabled() {
-        return this.ctx?.isOverlayEnabled?.() === true;
-    },
-
     refreshMenu() {
         if (!DrawingToolbarMenu.isOpen()) return;
         const prefs = readBoardSort();
-        DrawingToolbarMenu.setItems(buildMenuItems(prefs, this.isOverlayEnabled()));
+        DrawingToolbarMenu.setItems(buildMenuItems(prefs));
     },
 
     applyPref(id) {
@@ -104,19 +89,7 @@ export const BoardSort = {
         this.ctx?.onSort?.(prefs);
         this.syncButtonState();
         if (DrawingToolbarMenu.isOpen()) {
-            DrawingToolbarMenu.setItems(buildMenuItems(prefs, this.isOverlayEnabled()));
-        }
-    },
-
-    toggleCascade(checked) {
-        if (!this.isOverlayEnabled()) return;
-        const prefs = readBoardSort();
-        prefs.cascade = !!checked;
-        writeBoardSort(prefs);
-        this.ctx?.onSort?.(prefs);
-        this.syncButtonState();
-        if (DrawingToolbarMenu.isOpen()) {
-            DrawingToolbarMenu.setItems(buildMenuItems(prefs, this.isOverlayEnabled()));
+            DrawingToolbarMenu.setItems(buildMenuItems(prefs));
         }
     },
 
@@ -126,8 +99,7 @@ export const BoardSort = {
         this.triggerBtn.classList.toggle('is-active', isBoardSortCustomized(prefs));
         const dirLabel = prefs.direction === 'vertical' ? 'vertically' : 'horizontally';
         const orderLabel = prefs.dir === 'asc' ? 'ascending' : 'descending';
-        const layoutSuffix = prefs.cascade ? ', cascade' : '';
-        const title = `Sort board (${sortFieldLabel(prefs.field)}, ${orderLabel}, ${dirLabel}${layoutSuffix})`;
+        const title = `Sort board (${sortFieldLabel(prefs.field)}, ${orderLabel}, ${dirLabel})`;
         this.triggerBtn.title = title;
         this.triggerBtn.setAttribute('aria-label', title);
     },
@@ -145,12 +117,9 @@ export const BoardSort = {
             DrawingToolbarMenu.toggle({
                 anchor: btn,
                 ariaLabel: 'Sort board',
-                items: buildMenuItems(prefs, this.isOverlayEnabled()),
+                items: buildMenuItems(prefs),
                 closeOnSelect: false,
-                onSelect: (id) => this.applyPref(id),
-                onToggle: (id, checked) => {
-                    if (id === 'cascade') this.toggleCascade(checked);
-                }
+                onSelect: (id) => this.applyPref(id)
             });
         };
         btn.addEventListener('click', this.boundHandler);

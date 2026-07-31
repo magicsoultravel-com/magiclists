@@ -1,8 +1,4 @@
 import { cellsToSpanH, getGridMetrics } from './gridDensity.js';
-import {
-    FILE_CABINET_STACK_OFFSET_X,
-    FILE_CABINET_STACK_OFFSET_Y
-} from './fileCabinet.js';
 
 /** Minimum expanded-align region height (two grid rows). */
 const MIN_REGION_ROWS = 2;
@@ -12,97 +8,6 @@ export const ALIGN_REGION_MARGIN = 8;
 
 /** Extra spacing between aligned expanded notes (added to grid gap). */
 export const ALIGN_NOTE_GAP_EXTRA = 4;
-
-/** Max overlapping tiles per cascade stack (file-cabinet depth). */
-export const CASCADE_PER_STACK = 4;
-
-/** @deprecated Use CASCADE_PER_STACK */
-export const CASCADE_PER_LINE = CASCADE_PER_STACK;
-
-export function chunkForStacks(items, maxPerStack = CASCADE_PER_STACK) {
-    const chunks = [];
-    const list = items || [];
-    for (let i = 0; i < list.length; i += maxPerStack) {
-        chunks.push(list.slice(i, i + maxPerStack));
-    }
-    return chunks;
-}
-
-export function computeStackFootprint(
-    count,
-    w,
-    h,
-    offsetX = FILE_CABINET_STACK_OFFSET_X,
-    offsetY = FILE_CABINET_STACK_OFFSET_Y
-) {
-    const n = Math.max(0, Math.floor(count));
-    const tileW = Math.max(1, Math.round(w));
-    const tileH = Math.max(1, Math.round(h));
-    if (n <= 0) return { w: tileW, h: tileH };
-    return {
-        w: tileW + Math.max(0, n - 1) * offsetX,
-        h: tileH + Math.max(0, n - 1) * offsetY
-    };
-}
-
-export function computeStackRects(
-    sizes,
-    baseX,
-    baseY,
-    {
-        offsetX = FILE_CABINET_STACK_OFFSET_X,
-        offsetY = FILE_CABINET_STACK_OFFSET_Y
-    } = {}
-) {
-    return (sizes || []).map((size, index) => ({
-        x: Math.round(baseX + index * offsetX),
-        y: Math.round(baseY + index * offsetY),
-        w: Math.max(1, Math.round(size.w)),
-        h: Math.max(1, Math.round(size.h))
-    }));
-}
-
-/**
- * One stack per row (horizontal sort) or per column (vertical sort).
- * Each stack holds up to CASCADE_PER_STACK overlapping tiles before the next row/column.
- */
-export function layoutCascadeChunkAnchors(footprints, direction, startPos, gap, slotFootprint) {
-    const strideX = Math.max(1, (slotFootprint?.w ?? 0) + gap);
-    const strideY = Math.max(1, (slotFootprint?.h ?? 0) + gap);
-    return (footprints || []).map((_fp, index) => {
-        if (direction === 'vertical') {
-            return { x: startPos.x + index * strideX, y: startPos.y };
-        }
-        return { x: startPos.x, y: startPos.y + index * strideY };
-    });
-}
-
-export function computeStackBounds(rects) {
-    if (!rects?.length) return { x: 0, y: 0, w: 0, h: 0 };
-    const minX = Math.min(...rects.map((rect) => rect.x));
-    const minY = Math.min(...rects.map((rect) => rect.y));
-    const maxX = Math.max(...rects.map((rect) => rect.x + rect.w));
-    const maxY = Math.max(...rects.map((rect) => rect.y + rect.h));
-    return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
-}
-
-export function centerStackInRegion(relRects, region) {
-    if (!relRects?.length || !region) return relRects || [];
-    const stackW = Math.max(...relRects.map((rect) => rect.x + rect.w), 1);
-    const stackH = Math.max(...relRects.map((rect) => rect.y + rect.h), 1);
-    const baseX = region.x + Math.max(0, (region.w - stackW) / 2);
-    const baseY = region.y + Math.max(0, (region.h - stackH) / 2);
-    return relRects.map((rect) => ({
-        ...rect,
-        x: Math.round(baseX + rect.x),
-        y: Math.round(baseY + rect.y)
-    }));
-}
-
-export function computeCascadeStackRects(sizes, region) {
-    const rel = computeStackRects(sizes, 0, 0);
-    return centerStackInRegion(rel, region);
-}
 
 export function getAlignGridDims(count, direction = 'horizontal') {
     const n = Math.max(0, Math.floor(count));

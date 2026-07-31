@@ -24,7 +24,7 @@ export const SIDEBAR_BACKUP_KEYS = [
 ];
 
 const DEFAULT_NOTES_LIST_SORT = { field: 'date', dir: 'desc' };
-const DEFAULT_BOARD_SORT = { direction: 'horizontal', field: 'date', dir: 'desc', cascade: false };
+const DEFAULT_BOARD_SORT = { direction: 'horizontal', field: 'date', dir: 'desc' };
 
 const DEFAULT_DOCK = { docked: true, x: null, y: null };
 
@@ -166,8 +166,7 @@ export function readBoardSort() {
             ? stored.field
             : DEFAULT_BOARD_SORT.field;
         const dir = stored.dir === 'asc' ? 'asc' : 'desc';
-        const cascade = stored.cascade === true;
-        return { direction, field, dir, cascade };
+        return { direction, field, dir };
     } catch {
         return { ...DEFAULT_BOARD_SORT };
     }
@@ -180,8 +179,7 @@ export function writeBoardSort(sort) {
 export function isBoardSortCustomized(sort = readBoardSort()) {
     return sort.direction !== DEFAULT_BOARD_SORT.direction
         || sort.field !== DEFAULT_BOARD_SORT.field
-        || sort.dir !== DEFAULT_BOARD_SORT.dir
-        || sort.cascade === true;
+        || sort.dir !== DEFAULT_BOARD_SORT.dir;
 }
 
 export function readSidebarWidth() {

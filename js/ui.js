@@ -1,4 +1,4 @@
-import { mountFloatChrome } from './desktopFloatChrome.js';
+﻿import { mountFloatChrome } from './desktopFloatChrome.js';
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import {
     categoryKey,
@@ -41,15 +41,8 @@ import {
 } from './fileCabinet.js';
 import { sortBoardItems } from './boardSort.js';
 import {
-    CASCADE_PER_STACK,
-    chunkForStacks,
     computeAlignRegion,
-    computeCascadeStackRects,
-    computeStackBounds,
-    computeStackFootprint,
-    computeStackRects,
     getExpandedAlignSlots,
-    layoutCascadeChunkAnchors,
     slotsToRegionRects
 } from './boardSortAlign.js';
 import { syncCabinetSplitter } from './shellResize.js';
@@ -138,9 +131,9 @@ import {
 } from './board/boardExtents.js';
 import {
     clampNoteToBoardEdges as clampNoteToBoardEdgesCore,
-    clampManualNoteRect as clampManualNoteRectCore,
     snapNotePosition as snapNotePositionCore,
     snapNoteRect as snapNoteRectCore,
+
     readNoteRect as readNoteRectCore,
     applyNoteRect as applyNoteRectCore,
     findFirstCanvasSlot as findFirstCanvasSlotCore,
@@ -1280,42 +1273,6 @@ resnapBoardPositions(canvas, { reflow = false } = {}) {
         });
     },
 
-    packExpandedAlignFreeform(canvas, expandedItems, pinnedIds, {
-        placed,
-        anchor,
-        bounds,
-        metrics,
-        direction = 'horizontal'
-    }) {
-        const { packW, origin, edgePad, viewportBottom } = bounds;
-        const canvasW = Math.max(canvas?.clientWidth || 320, packW + origin * 2);
-        const unpinned = expandedItems.filter((item) => item?.id && !pinnedIds.has(item.id));
-        if (!unpinned.length) return;
-
-        const slots = getExpandedAlignSlots(unpinned.length, direction);
-        const region = computeAlignRegion({
-            packW,
-            startX: anchor.startX,
-            startY: anchor.startY,
-            regionW: anchor.regionW,
-            viewportBottom,
-            origin,
-            edgePad,
-            metrics
-        });
-        const rects = slotsToRegionRects(slots, region, { gap: metrics.gap });
-
-        unpinned.forEach((item, index) => {
-            const raw = rects[index];
-            if (!raw) return;
-            const slot = clampManualNoteRectCore(raw, { maxW: canvasW, maxH: viewportBottom });
-            this.saveGridLayout(item.id, slot, { updateRemembered: true });
-            const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
-            if (card) this.applyNoteRect(card, slot, { settling: true });
-            placed.push({ ...slot });
-        });
-    },
-
     packGridBoard(canvas, collapsedItems, expandedItems, {
         pinnedIds = new Set(),
         layoutMode = 'grid',
@@ -1445,280 +1402,11 @@ resnapBoardPositions(canvas, { reflow = false } = {}) {
         });
     },
 
-    getCascadeZIndexBase(canvas, pinnedIds) {
-        let maxZ = 0;
-        canvas?.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
-            const id = card.dataset.id;
-            if (!id || !pinnedIds?.has(id)) return;
-            const z = parseInt(card.style.zIndex, 10);
-            if (Number.isFinite(z)) maxZ = Math.max(maxZ, z);
-        });
-        return maxZ;
-    },
-
-    assignCascadeCardZ(card, zOrder) {
-        if (!card || !zOrder) return;
-        this.initDesktopCardStack(card, zOrder.next);
-        zOrder.next += 1;
-    },
-
-    packCollapsedCascadeFreeform(canvas, collapsedItems, pinnedIds, {
-        placed,
-        direction,
-        minCoord,
-        metrics,
-        canvasW,
-        zOrder
-    }) {
-        const unpinned = collapsedItems.filter((item) => item?.id && !pinnedIds.has(item.id));
-        if (!unpinned.length) return;
-
-        const chunks = chunkForStacks(unpinned);
-        const sample = this.resolveSortItemSize(unpinned[0], 'grid', false);
-        const slotFootprint = computeStackFootprint(CASCADE_PER_STACK, sample.w, sample.h);
-        const footprints = chunks.map((chunk) => {
-            const { w, h } = this.resolveSortItemSize(chunk[0], 'grid', false);
-            return computeStackFootprint(chunk.length, w, h);
-        });
-        let anchors = layoutCascadeChunkAnchors(
-            footprints,
-            direction,
-            { x: minCoord, y: minCoord },
-            metrics.gap,
-            slotFootprint
-        );
-
-        anchors = anchors.map((anchor, stackIndex) => {
-            const fp = footprints[stackIndex];
-            const candidate = { x: anchor.x, y: anchor.y, w: fp.w, h: fp.h };
-            if (!placed.some((p) => rectsOverlapCore(candidate, p, metrics.gap))) {
-                return anchor;
-            }
-            const near = this.findFreeformSortSlot(fp.w, fp.h, placed, canvasW, {
-                startX: anchor.x,
-                startY: anchor.y,
-                direction
-            });
-            return { x: near.x, y: near.y };
-        });
-
-        chunks.forEach((chunk, stackIndex) => {
-            const anchor = anchors[stackIndex];
-            const fp = footprints[stackIndex];
-            const sizes = chunk.map((item) => this.resolveSortItemSize(item, 'grid', false));
-            const rects = computeStackRects(sizes, anchor.x, anchor.y);
-
-            chunk.forEach((item, itemIndex) => {
-                const slot = rects[itemIndex];
-                if (!slot) return;
-                this.saveGridLayout(item.id, slot, { updateRemembered: false });
-                const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
-                if (card) {
-                    this.applyNoteRect(card, slot, { settling: true });
-                    this.assignCascadeCardZ(card, zOrder);
-                }
-            });
-
-            placed.push({ x: anchor.x, y: anchor.y, w: fp.w, h: fp.h });
-        });
-    },
-
-    packExpandedCascadeFreeform(canvas, expandedItems, pinnedIds, {
-        placed,
-        anchor,
-        bounds,
-        metrics,
-        zOrder
-    }) {
-        const { packW, origin, edgePad, viewportBottom } = bounds;
-        const canvasW = Math.max(canvas?.clientWidth || 320, packW + origin * 2);
-        const unpinned = expandedItems.filter((item) => item?.id && !pinnedIds.has(item.id));
-        if (!unpinned.length) return;
-
-        const sizes = unpinned.map((item) => this.resolveSortItemSize(item, 'grid', true));
-        const region = computeAlignRegion({
-            packW,
-            startX: anchor.startX,
-            startY: anchor.startY,
-            regionW: anchor.regionW,
-            viewportBottom,
-            origin,
-            edgePad,
-            metrics
-        });
-        let rects = computeCascadeStackRects(sizes, region);
-
-        const nudgeStack = (deltaX, deltaY) => {
-            if (!deltaX && !deltaY) return;
-            rects = rects.map((rect) => ({
-                ...rect,
-                x: rect.x + deltaX,
-                y: rect.y + deltaY
-            }));
-        };
-
-        let stackBounds = computeStackBounds(rects);
-        if (stackBounds.w > 0 && placed.some((p) => rectsOverlapCore(stackBounds, p, metrics.gap))) {
-            const near = this.findFreeformSortSlot(stackBounds.w, stackBounds.h, placed, canvasW, {
-                startX: stackBounds.x,
-                startY: stackBounds.y,
-                direction: 'horizontal'
-            });
-            nudgeStack(near.x - stackBounds.x, near.y - stackBounds.y);
-            stackBounds = computeStackBounds(rects);
-        }
-
-        const minX = metrics.origin + metrics.edgePad;
-        const minY = minX;
-        const rightLimit = canvasW - metrics.edgePad;
-        const bottomLimit = viewportBottom - metrics.edgePad;
-        if (stackBounds.x < minX) nudgeStack(minX - stackBounds.x, 0);
-        if (stackBounds.y < minY) nudgeStack(0, minY - stackBounds.y);
-        stackBounds = computeStackBounds(rects);
-        if (stackBounds.x + stackBounds.w > rightLimit) {
-            nudgeStack(rightLimit - (stackBounds.x + stackBounds.w), 0);
-        }
-        if (stackBounds.y + stackBounds.h > bottomLimit) {
-            nudgeStack(0, bottomLimit - (stackBounds.y + stackBounds.h));
-        }
-
-        unpinned.forEach((item, index) => {
-            const slot = rects[index];
-            if (!slot) return;
-            this.saveGridLayout(item.id, slot, { updateRemembered: true });
-            const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
-            if (card) {
-                this.applyNoteRect(card, slot, { settling: true });
-                this.assignCascadeCardZ(card, zOrder);
-            }
-        });
-
-        stackBounds = computeStackBounds(rects);
-        if (stackBounds.w > 0) {
-            placed.push({
-                x: stackBounds.x,
-                y: stackBounds.y,
-                w: stackBounds.w,
-                h: stackBounds.h
-            });
-        }
-    },
-
-    packSortFreeformBoard(canvas, collapsedItems, expandedItems, sortPrefs, pinnedIds) {
-        const metrics = getGridMetrics();
-        const direction = sortPrefs.direction === 'vertical' ? 'vertical' : 'horizontal';
-        const canvasW = Math.max(canvas.clientWidth || 320, 320);
-        const minCoord = metrics.origin + metrics.edgePad;
-        const placed = [];
-
-        pinnedIds.forEach((id) => {
-            const saved = this.getGridLayout()[id];
-            if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.w)) {
-                placed.push({ x: saved.x, y: saved.y, w: saved.w, h: saved.h });
-            }
-        });
-
-        const unpinnedCollapsed = collapsedItems.filter((item) => !pinnedIds.has(item.id));
-        const unpinnedExpanded = expandedItems.filter((item) => !pinnedIds.has(item.id));
-        const { origin, packW, edgePad } = this.getGridBoardBounds(canvas);
-
-        if (sortPrefs.cascade) {
-            const zOrder = { next: this.getCascadeZIndexBase(canvas, pinnedIds) };
-            this.packCollapsedCascadeFreeform(canvas, collapsedItems, pinnedIds, {
-                placed,
-                direction,
-                minCoord,
-                metrics,
-                canvasW,
-                zOrder
-            });
-
-            const collapsedRects = unpinnedCollapsed
-                .map((item) => {
-                    const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
-                    if (!card) return null;
-                    return this.readNoteRect(card);
-                })
-                .filter((rect) => rect && Number.isFinite(rect.x));
-            const hasExpandedGap = unpinnedCollapsed.length && unpinnedExpanded.length;
-            const expandedAnchor = this.computeExpandedAlignAnchor(
-                direction,
-                hasExpandedGap ? collapsedRects : [],
-                { origin, edgePad, packW, yStart: minCoord, metrics }
-            );
-            const viewport = getGridViewportBounds(canvas);
-
-            this.packExpandedCascadeFreeform(canvas, expandedItems, pinnedIds, {
-                placed,
-                anchor: expandedAnchor,
-                bounds: { packW, origin, edgePad, viewportBottom: viewport.viewportBottom },
-                metrics,
-                zOrder
-            });
-            this.updateBoardCanvasExtents(canvas);
-            return;
-        }
-
-        const packGroup = (items, startPos) => {
-            let cursor = { x: startPos?.x ?? minCoord, y: startPos?.y ?? minCoord };
-            items.forEach((item) => {
-                if (!item?.id || pinnedIds.has(item.id)) return;
-                const isExp = this.isItemLayoutExpanded(item, 'grid');
-                const { w, h } = this.resolveSortItemSize(item, 'grid', isExp);
-                const slot = this.findFreeformSortSlot(w, h, placed, canvasW, {
-                    startX: cursor.x,
-                    startY: cursor.y,
-                    direction
-                });
-                this.saveGridLayout(item.id, slot, { updateRemembered: isExp });
-                const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
-                if (card) {
-                    this.applyNoteRect(card, slot, { settling: true });
-                }
-                placed.push({ ...slot });
-                if (direction === 'vertical') {
-                    cursor = { x: slot.x, y: slot.y + metrics.strideY + metrics.gap };
-                } else {
-                    cursor = { x: slot.x + metrics.strideX + metrics.gap, y: slot.y };
-                }
-            });
-            return placed;
-        };
-
-        packGroup(collapsedItems, { x: minCoord, y: minCoord });
-
-        const collapsedRects = unpinnedCollapsed
-            .map((item) => {
-                const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(item.id)}"]`);
-                if (!card) return null;
-                return this.readNoteRect(card);
-            })
-            .filter((rect) => rect && Number.isFinite(rect.x));
-        const hasExpandedGap = unpinnedCollapsed.length && unpinnedExpanded.length;
-        const expandedAnchor = this.computeExpandedAlignAnchor(
-            direction,
-            hasExpandedGap ? collapsedRects : [],
-            { origin, edgePad, packW, yStart: minCoord, metrics }
-        );
-
-        if (unpinnedExpanded.length) {
-            const viewport = getGridViewportBounds(canvas);
-            this.packExpandedAlignFreeform(canvas, expandedItems, pinnedIds, {
-                placed,
-                anchor: expandedAnchor,
-                bounds: { packW, origin, edgePad, viewportBottom: viewport.viewportBottom },
-                metrics,
-                direction
-            });
-        }
-        this.updateBoardCanvasExtents(canvas);
-    },
-
     sortBoardLayout(viewMode, items, sortPrefs, { fileCabinetActive } = {}) {
         const visibleItems = BoardOperations.getVisibleItems(items || []);
         if (!visibleItems.length) return;
 
-        const mode = 'grid';
+        const mode = normalizeViewMode(viewMode);
         const canvas = document.getElementById('app-canvas');
         if (!canvas) return;
 
@@ -1736,11 +1424,7 @@ resnapBoardPositions(canvas, { reflow = false } = {}) {
         const sortedExpanded = sortBoardItems(expanded, sortPrefs);
         const pinnedIds = new Set(this.getBoardPins());
 
-        if (isBoardOverlayEnabled() && sortPrefs.cascade) {
-            this.packSortFreeformBoard(canvas, sortedCollapsed, sortedExpanded, sortPrefs, pinnedIds);
-        } else {
-            this.packSortGridBoard(canvas, sortedCollapsed, sortedExpanded, sortPrefs, pinnedIds);
-        }
+        this.packSortGridBoard(canvas, sortedCollapsed, sortedExpanded, sortPrefs, pinnedIds);
 
         window.dispatchEvent(new CustomEvent('board:visibility_changed', {
             detail: { flushLayout: false, skipGridReflow: true }
@@ -1799,6 +1483,8 @@ resnapBoardPositions(canvas, { reflow = false } = {}) {
     saveCompactBoardLayout(itemId, slot, _sortBy) {
         if (!itemId || !slot) return;
         const small = getSmallRect(readTileSmallFootprint());
+
+
         const rect = {
             x: Math.round(slot.x),
             y: Math.round(slot.y),
