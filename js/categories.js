@@ -62,6 +62,33 @@ export function categoryKey(name) {
     return String(name || '').trim().toLowerCase();
 }
 
+/**
+ * Detect categories whose names collide after normalization (case/trim).
+ * Detection only — this never mutates or removes anything. Ambiguous data is
+ * reported, not "fixed", so a user's intentional duplicates are preserved.
+ *
+ * @param {Array} categories - category objects or name strings
+ * @returns {Array<{ name: string, occurrences: number }>}
+ */
+export function detectDuplicateCategories(categories = []) {
+    const counts = new Map();
+    const firstByKey = new Map();
+    (Array.isArray(categories) ? categories : []).forEach((cat) => {
+        const name = typeof cat === 'string' ? cat : cat?.name;
+        if (!name) return;
+        const key = categoryKey(name);
+        counts.set(key, (counts.get(key) || 0) + 1);
+        if (!firstByKey.has(key)) firstByKey.set(key, name);
+    });
+    const duplicates = [];
+    counts.forEach((occurrences, key) => {
+        if (occurrences > 1) {
+            duplicates.push({ name: firstByKey.get(key), occurrences });
+        }
+    });
+    return duplicates;
+}
+
 export function resolveCategoryColor(name, categories, { fallback = UNCATEGORIZED_COLOR } = {}) {
     const key = categoryKey(name);
     if (!key) return fallback;

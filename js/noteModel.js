@@ -33,6 +33,32 @@ export function createNoteId() {
     return `item_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+let stepIdSeq = 0;
+
+export function createStepId() {
+    stepIdSeq += 1;
+    return `step_${Date.now()}_${stepIdSeq}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * Ensure every checklist step has an id. Existing ids are preserved; missing
+ * ids are generated. Step order, text and completion state are never modified.
+ * This is a non-destructive repair (see api.js repairDatabase invariant).
+ *
+ * @param {Array} steps - checklist step objects
+ * @returns {{ steps: Array, added: number }}
+ */
+export function ensureStepIds(steps) {
+    if (!Array.isArray(steps)) return { steps: [], added: 0 };
+    let added = 0;
+    const next = steps.map((step) => {
+        if (step && typeof step === 'object' && step.id) return step;
+        added += 1;
+        return { ...step, id: createStepId() };
+    });
+    return { steps: next, added };
+}
+
 export function nowInSeconds() {
     return Math.floor(Date.now() / 1000);
 }

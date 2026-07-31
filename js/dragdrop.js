@@ -454,6 +454,10 @@ export const DragDropEngine = {
                         // 1. Read current note rect from DOM card
                         const rect = UI.readNoteRect(card);
                         // 2. Write x, y, width, height to item object
+                        // NOTE: Embedded layout fields (x/y/width/height) are actively
+                        // maintained runtime state, duplicated alongside matrix_grid_layout.
+                        // Do NOT strip them in repair/migration until a single authoritative
+                        // layout model exists.
                         item.x = rect.x;
                         item.y = rect.y;
                         item.width = rect.w;

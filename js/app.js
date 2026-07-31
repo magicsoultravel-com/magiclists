@@ -121,6 +121,7 @@ class Application {
             restoreViewSession(AppState.viewSettings.sortBy);
             BootProgress.set(20, 'Preferences…');
             this.checkAuthSession();
+            this.logRepairDiagnostics();
             Editor.init();
             await ToolsManager.init(() => AppState.items);
             BootProgress.set(30, 'Tools…');
@@ -268,6 +269,23 @@ DrawingBoard.init(this);
         if (cachedToken) localStorage.removeItem('admin_token');
         AppState.user.isLoggedIn = false;
         AppState.user.token = null;
+    }
+
+    // Diagnostics from the latest repairDatabase() run (normal load or save).
+    // Logged in the console for observability — no toast, no permanent UI.
+    logRepairDiagnostics() {
+        try {
+            const diagnostics = API.getLastRepairDiagnostics();
+            if (!diagnostics) return;
+            if (diagnostics.schemaUpgraded
+                || diagnostics.stepIdsMigrated > 0
+                || diagnostics.duplicateCategoriesDetected.length > 0
+                || diagnostics.warnings.length > 0) {
+                console.info('[repairDatabase]', diagnostics);
+            }
+        } catch {
+            /* diagnostics are best-effort */
+        }
     }
 
     loadCategoriesStore() {

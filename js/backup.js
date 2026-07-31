@@ -1,4 +1,5 @@
 /** @module {"owns":"local backup export/import, encrypted packages", "related":["cloudBackup.js","api.js"]} */
+import { repairDatabase } from './api.js';
 import {
     ensureUncategorizedCategory,
     normalizeCategories,
@@ -197,14 +198,10 @@ export function timestampFromBackupFilename(name) {
     return Number.isFinite(ts) ? ts : null;
 }
 
-let stepIdSeq = 0;
-
-function createStepId() {
-    stepIdSeq += 1;
-    return `step_${Date.now()}_${stepIdSeq}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
 function migrateImportedStep(step) {
+    // Step IDs are ensured by repairDatabase() before import normalization
+    // runs; this helper only fills defensive shape defaults. Existing step
+    // IDs (added upstream) are preserved via ...step.
     if (!step || typeof step !== 'object') return step;
     return {
         startDateTime: '',
@@ -213,7 +210,6 @@ function migrateImportedStep(step) {
         completed: false,
         text: '',
         ...step,
-        id: createStepId(),
         level: Number.isFinite(Number(step.level)) ? Number(step.level) : 0,
         completed: step.completed === true
     };
@@ -248,24 +244,30 @@ export function migrateImportedItem(item) {
 
 export function migrateImportedDatabase(db, categories = []) {
     if (!db || typeof db !== 'object') return db;
+
+    // Unify with the normal load path: apply the shared non-destructive
+    // repair first (schemaVersion metadata, step ID normalization, duplicate
+    // category detection), then apply import-specific normalization on top.
+    const repaired = repairDatabase(db);
+    if (!repaired || typeof repaired !== 'object') return db;
+
     const names = ensureUncategorizedCategory(normalizeCategories(categories, { keepEmpty: true }))
         .map((c) => c.name);
     return {
-        ...db,
+        ...repaired,
         auth: {
             admin_token: 'dev-admin-secret-2026',
-            ...(db.auth || {})
+            ...(repaired.auth || {})
         },
         settings: {
-            ...(db.settings || {}),
-            categories: names.length ? names : (db.settings?.categories || [])
+            ...(repaired.settings || {}),
+            categories: names.length ? names : (repaired.settings?.categories || [])
         },
-        items: Array.isArray(db.items) ? db.items.map(migrateImportedItem) : []
+        items: Array.isArray(repaired.items) ? repaired.items.map(migrateImportedItem) : []
     };
 }
 
 export function applyBackupToStorage(parsedBackup) {
-    stepIdSeq = 0;
     const categories = parsedBackup.matrix_custom_categories
         ? ensureUncategorizedCategory(normalizeCategories(parsedBackup.matrix_custom_categories, { keepEmpty: true }))
         : [];
