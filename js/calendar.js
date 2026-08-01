@@ -134,7 +134,7 @@ export const Calendar = {
             if (this.hiddenCategories.includes(itemCategory)) return;
             
             // Check checklist steps first
-            if (item.type === 'checklist' && item.steps && item.steps.length > 0) {
+            if (item.steps && item.steps.length > 0) {
                 item.steps.forEach(step => {
                     let startDate = null;
                     let endDate = null;

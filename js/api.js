@@ -2,7 +2,7 @@
 import { DEFAULT_CATEGORIES, detectDuplicateCategories } from './categories.js';
 import { purgeLayoutForItem } from './layoutStorage.js';
 import { normalizeTileSize } from './tileGeometry.js';
-import { ensureStepIds, getCreatedTimestamp, getUpdatedTimestamp } from './noteModel.js';
+import { ensureStepIds, ensureStepLevels, getCreatedTimestamp, getUpdatedTimestamp } from './noteModel.js';
 
 function normalizeItemTileSize(tileSize) {
     return normalizeTileSize(tileSize);
@@ -107,14 +107,29 @@ function runDatabaseRepair(db) {
         const updatedAt = getUpdatedTimestamp(item);
 
         let itemChanged = false;
-        let nextSteps = null;
-        if (Array.isArray(item.steps) && item.steps.length > 0) {
+        let nextSteps = item.steps;
+        if (!Array.isArray(item.steps)) {
+            nextSteps = [];
+            itemChanged = true;
+        } else if (item.steps.length > 0) {
             const stepResult = ensureStepIds(item.steps);
             if (stepResult.added > 0) {
                 nextSteps = stepResult.steps;
                 stepIdsMigrated += stepResult.added;
                 itemChanged = true;
             }
+            // Backfill missing/invalid `level` on steps to fix indent/outdent on old notes
+            const levelResult = ensureStepLevels(nextSteps);
+            if (levelResult.added > 0) {
+                nextSteps = levelResult.steps;
+                itemChanged = true;
+            }
+        }
+
+        // Backfill missing editorBodyLayout to 'both' (safe default matching new notes)
+        const nextEditorBodyLayout = item.editorBodyLayout || 'both';
+        if (!item.editorBodyLayout) {
+            itemChanged = true;
         }
 
         if (!itemChanged
@@ -125,7 +140,8 @@ function runDatabaseRepair(db) {
         }
 
         const next = { ...item };
-        if (nextSteps) next.steps = nextSteps;
+        if (nextSteps !== item.steps) next.steps = nextSteps;
+        if (nextEditorBodyLayout !== item.editorBodyLayout) next.editorBodyLayout = nextEditorBodyLayout;
         if (item.tileSize !== tileSize) next.tileSize = tileSize;
         if (item.created_at !== createdAt) next.created_at = createdAt;
         if (item.updated_at !== updatedAt) next.updated_at = updatedAt;

@@ -165,7 +165,7 @@ export function resolveNoteBodyVisibility(item, { canEdit = false, inModalEditor
     }
     return {
         showContent: !!hasContent,
-        showChecklist: item.type === 'checklist' && item.steps && item.steps.length > 0
+        showChecklist: item.steps && item.steps.length > 0
     };
 }
 

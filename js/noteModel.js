@@ -59,6 +59,26 @@ export function ensureStepIds(steps) {
     return { steps: next, added };
 }
 
+/**
+ * Ensure every checklist step has a valid `level` property. Existing levels
+ * are preserved; missing or invalid levels default to 0. Step order, text,
+ * completion state, and ids are never modified.
+ * This is a non-destructive repair (see api.js repairDatabase invariant).
+ *
+ * @param {Array} steps - checklist step objects
+ * @returns {{ steps: Array, added: number }}
+ */
+export function ensureStepLevels(steps) {
+    if (!Array.isArray(steps)) return { steps: [], added: 0 };
+    let added = 0;
+    const next = steps.map((step) => {
+        if (step && typeof step === 'object' && typeof step.level === 'number') return step;
+        added += 1;
+        return { ...step, level: 0 };
+    });
+    return { steps: next, added };
+}
+
 export function nowInSeconds() {
     return Math.floor(Date.now() / 1000);
 }
