@@ -146,6 +146,7 @@ function commitInlineChecklistOp(item, beforeItem, { localOnly = false } = {}) {
             item: afterNorm,
             preserveView: true,
             beforeItem: beforeNorm,
+            skipRerender: true,
             mergeKey: `${afterNorm.id}:struct`,
             mergeWindow: false
         }
