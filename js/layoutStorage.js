@@ -535,6 +535,11 @@ function buildContext(items = [], categories = []) {
     const tileSizeById = new Map();
     (items || []).forEach((item) => {
         if (!item?.id) return;
+        // Archived or hidden-from-board items are not rendered on the board,
+        // so their spatial/layout entries are stale and should be pruned by
+        // reconciliation. This keeps imported notes from "resetting" to a
+        // saved position they no longer occupy.
+        if (item.status === 'archived' || item.hiddenFromBoard === true) return;
         liveIds.add(item.id);
         tileSizeById.set(item.id, resolveTileSize(item));
     });

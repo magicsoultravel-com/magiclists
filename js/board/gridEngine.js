@@ -106,6 +106,14 @@ export function applyGridBoardLayout(deps, canvas, layout, { animate = true, sav
 
 export function reflowGridBoard(deps, canvas, actorId, { animate = true, actorRect: explicitActorRect = null } = {}) {
     if (!canvas?.classList.contains('view-grid')) return;
+    // A reflow without an actor is a "settle" pass (initial render, sort, etc.).
+    // Running the push-resolution engine here would re-pack every card and
+    // re-save, clobbering the user's saved positions on reload. Only update
+    // extents/scroll policy — never re-pack or re-save.
+    if (!actorId) {
+        deps.scheduleBoardCanvasExtents(canvas);
+        return;
+    }
     let actorRect = explicitActorRect;
     if (!actorRect && actorId) {
         const activeDesktop = DesktopManager.getActiveDesktop();

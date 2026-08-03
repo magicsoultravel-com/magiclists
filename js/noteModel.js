@@ -187,16 +187,30 @@ export function normalizeItemForSave(item, { preserveEmptySteps = false } = {}) 
         ? item.startDateTime
         : defaultStartDateTimeNow();
 
+    // Only derive a title when there is genuinely savable content. Never let
+    // deriveNoteTitle overwrite an existing title with 'Untitled' when the
+    // note has no content — this protects old imported notes whose empty
+    // checklist steps were stripped by a non-preserving save path.
+    const hasSavable = hasTitle
+        || stripRichText(content).trim()
+        || steps.some((step) => stripRichText(step?.text || '').trim())
+        || (sheetIsActive({ noteTemplate: item.noteTemplate }) && sheetHasContent(item.sheet));
+    const title = hasTitle
+        ? item.title
+        : (hasSavable
+            ? deriveNoteTitle({
+                content,
+                steps,
+                sheet: item.sheet,
+                noteTemplate: item.noteTemplate
+            })
+            : item.title || '');
+
     return {
         ...item,
         steps,
         type: steps.length > 0 ? 'checklist' : 'note',
-        title: hasTitle ? item.title : deriveNoteTitle({
-            content,
-            steps,
-            sheet: item.sheet,
-            noteTemplate: item.noteTemplate
-        }),
+        title,
         startDateTime,
         tileSize: normalizeTileSize(item.tileSize)
     };

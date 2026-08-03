@@ -13,6 +13,14 @@ const EDITOR_ZOOM_STEP = 0.05;
 // Desktop autosave debounce timer (shared across all inline editors)
 let desktopAutoSaveTimer = null;
 
+/**
+ * Sync a single inline-editable field's DOM value back to the item object.
+ * Handles both rich-text and plain-text content fields.
+ * @param {HTMLElement} el - The inline-editable element
+ * @param {object} item - The note item to update
+ * @param {string} el.dataset.field - The field name ('title', 'content', or 'step-text')
+ * @param {string} [el.dataset.stepId] - The step ID when field is 'step-text'
+ */
 function syncInlineFieldToItem(el, item) {
     const field = el.dataset.field;
     if (el.classList.contains('rich-text--edit')) {
@@ -35,18 +43,39 @@ function syncInlineFieldToItem(el, item) {
     }
 }
 
-function emitItemMutation(item, { preserveView = false, beforeItem = null, skipRerender = false, mergeKey = null, mergeWindow = true } = {}) {
-    const preserveEmptySteps = preserveView && skipRerender;
-    const normalized = normalizeItemForSave(item, { preserveEmptySteps });
+/**
+ * Emit an item:mutation_requested event with the normalized item and optional beforeItem snapshot.
+ * @param {object} item - The note item (will be normalized in-place via Object.assign)
+ * @param {object} [opts] - Options
+ * @param {boolean} [opts.preserveView=false] - If true, preserves the current view state
+ * @param {object|null} [opts.beforeItem=null] - Pre-mutation snapshot for undo/redo
+ * @param {boolean} [opts.skipRerender=false] - If true, skips re-rendering the note surface
+ * @param {string|null} [opts.mergeKey=null] - Key for merging consecutive mutations
+ * @param {boolean} [opts.mergeWindow=true] - Whether to allow merging with adjacent changes
+ */
+function emitItemMutation(item, { preserveView = false, beforeItem = null, skipRerender = false, mergeKey = null, mergeWindow = true, preserveEmptySteps = null } = {}) {
+    const preserveEmpty = preserveEmptySteps !== null
+        ? preserveEmptySteps
+        : (preserveView && skipRerender);
+    const normalized = normalizeItemForSave(item, { preserveEmptySteps: preserveEmpty });
     Object.assign(item, normalized);
     const normalizedBefore = beforeItem
-        ? normalizeItemForSave(beforeItem, { preserveEmptySteps })
+        ? normalizeItemForSave(beforeItem, { preserveEmptySteps: preserveEmpty })
         : null;
     window.dispatchEvent(new CustomEvent('item:mutation_requested', {
         detail: { item: normalized, preserveView, beforeItem: normalizedBefore, skipRerender, mergeKey, mergeWindow }
     }));
 }
 
+/**
+ * Apply a mutation to an item, capturing a beforeItem snapshot for undo/redo.
+ * @param {object} item - The note item to mutate
+ * @param {function(object): void} mutator - Function that mutates the item in-place
+ * @param {object} [opts] - Options
+ * @param {boolean} [opts.preserveView=false] - If true, preserves the current view state
+ * @param {boolean} [opts.skipRerender=false] - If true, skips re-rendering the note surface
+ * @param {boolean} [opts.localOnly=false] - If true, only mutates locally without emitting event
+ */
 function mutateItem(item, mutator, { preserveView = false, skipRerender = false, localOnly = false } = {}) {
     const beforeItem = JSON.parse(JSON.stringify(item));
     mutator(item);
@@ -55,6 +84,11 @@ function mutateItem(item, mutator, { preserveView = false, skipRerender = false,
     }
 }
 
+/**
+ * Sync all inline-editable fields and sheet cells from the DOM back to the item object.
+ * @param {HTMLElement} root - The editor shell/root element
+ * @param {object} item - The note item to update
+ */
 function syncItemBodyFromDom(root, item) {
     root?.querySelectorAll('.card-inline-edit').forEach((el) => {
         const field = el.dataset.field;
@@ -65,6 +99,15 @@ function syncItemBodyFromDom(root, item) {
     syncSheetFromDom(root, item);
 }
 
+/**
+ * Commit an inline text operation (title, content, or step text) to the item and emit a mutation event.
+ * @param {object} item - The note item
+ * @param {object} beforeItem - Pre-mutation snapshot for undo/redo
+ * @param {object} [opts] - Options
+ * @param {boolean} [opts.localOnly=false] - If true, only mutates locally without emitting event
+ * @param {string|null} [opts.mergeKey=null] - Key for merging consecutive mutations
+ * @param {boolean} [opts.mergeWindow=true] - Whether to allow merging with adjacent changes
+ */
 function commitInlineTextOp(item, beforeItem, { localOnly = false, mergeKey = null, mergeWindow = true } = {}) {
     if (localOnly || !beforeItem) return;
     const preserveEmptySteps = true;
@@ -84,6 +127,13 @@ function commitInlineTextOp(item, beforeItem, { localOnly = false, mergeKey = nu
     }));
 }
 
+/**
+ * Commit an inline checklist operation (step add/remove/reorder/indent/outdent) to the item and emit a mutation event.
+ * @param {object} item - The note item
+ * @param {object} beforeItem - Pre-mutation snapshot for undo/redo
+ * @param {object} [opts] - Options
+ * @param {boolean} [opts.localOnly=false] - If true, only mutates locally without emitting event
+ */
 function commitInlineChecklistOp(item, beforeItem, { localOnly = false } = {}) {
     if (localOnly || !beforeItem) return;
     const preserveEmptySteps = true;
@@ -102,6 +152,10 @@ function commitInlineChecklistOp(item, beforeItem, { localOnly = false } = {}) {
     }));
 }
 
+/**
+ * Create a blank checklist step object with default values.
+ * @returns {object} A new step object with id, text, completed, level, startDateTime, endDateTime
+ */
 function createBlankChecklistStep() {
     return {
         id: `step_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
@@ -113,6 +167,16 @@ function createBlankChecklistStep() {
     };
 }
 
+/**
+ * Build interaction options for sheet-grid note templates.
+ * @param {HTMLElement} shell - The editor shell element
+ * @param {object} item - The note item
+ * @param {object} [opts] - Options
+ * @param {boolean} [opts.localOnly=false] - If true, only mutates locally without emitting event
+ * @param {function} [opts.onChange=()=>{}] - Callback for change events
+ * @param {function} [opts.refresh=()=>{}] - Callback for refresh events
+ * @returns {object} Interaction options object with prepareSnapshot, commitCellEdit, commitStructure, onUndo, onRedo
+ */
 function buildSheetInteractionOptions(shell, item, { localOnly = false, onChange = () => {}, refresh = () => {} } = {}) {
     return {
         localOnly,
@@ -140,14 +204,17 @@ function buildSheetInteractionOptions(shell, item, { localOnly = false, onChange
 }
 
 /**
-  * Schedule a debounced autosave for desktop inline editing.
-  * Uses a 1000ms debounce to provide responsive saving while avoiding excessive writes.
-  * Immediately syncs the active field to the item to ensure data is never lost.
-  * @param {HTMLElement} root - The editor shell/root element
-  * @param {object} item - The note item being edited
-  * @param {HTMLElement} [activeEl] - The currently focused editable element (optional)
-  */
+ * Schedule a debounced autosave for desktop inline editing.
+ * Uses a 1000ms debounce to provide responsive saving while avoiding excessive writes.
+ * Immediately syncs the active field to the item to ensure data is never lost.
+ * @param {HTMLElement} root - The editor shell/root element
+ * @param {object} item - The note item being edited
+ * @param {HTMLElement} [activeEl] - The currently focused editable element (optional)
+ */
 function scheduleDesktopAutoSave(root, item, activeEl) {
+    // Take snapshot BEFORE any DOM-to-item sync so beforeItem captures pre-mutation state
+    const beforeItem = JSON.parse(JSON.stringify(item));
+    
     // Immediately sync the active field to ensure data is never lost
     // This runs synchronously and does NOT trigger a re-render
     if (activeEl && activeEl.classList.contains('card-inline-edit')) {
@@ -157,8 +224,6 @@ function scheduleDesktopAutoSave(root, item, activeEl) {
     if (desktopAutoSaveTimer) clearTimeout(desktopAutoSaveTimer);
     desktopAutoSaveTimer = setTimeout(() => {
         desktopAutoSaveTimer = null;
-        // Take snapshot BEFORE syncing DOM to item
-        const beforeItem = JSON.parse(JSON.stringify(item));
         // Sync any remaining DOM changes to item
         syncItemBodyFromDom(root, item);
         // Emit mutation with correct beforeItem
@@ -204,6 +269,20 @@ function clearDesktopAutoSaveTimer() {
     }
 }
 
+/**
+ * Attach DOM event listeners for inline editing interactions on a note surface.
+ * Handles input events, blur saves, keydown navigation, mousedown propagation, and link clicks.
+ * Uses dataset flags (shellBubbleBound, linkClickBound) to prevent duplicate listener attachment on re-renders.
+ * @param {HTMLElement} root - The editor shell/root element
+ * @param {object} item - The note item being edited
+ * @param {object} [opts] - Options
+ * @param {function} [opts.refresh] - Callback for refresh events
+ * @param {boolean} [opts.localOnly=false] - If true, uses onChange instead of debounced autosave
+ * @param {function} [opts.onChange] - Callback for change events (used when localOnly=true)
+ * @param {boolean} [opts.stopMousedownPropagation=false] - If true, stops mousedown propagation on interactive elements
+ * @param {boolean} [opts.richEdit=false] - Whether rich text editing is enabled
+ * @param {function|null} [opts.onRaiseCard=null] - Callback to raise the card to front
+ */
 function attachNoteBodyInteractions(root, item, {
     refresh = () => {},
     localOnly = false,
@@ -318,6 +397,11 @@ function attachNoteBodyInteractions(root, item, {
     }
 }
 
+/**
+ * Update the editor meta stats display (e.g., word count, step count).
+ * @param {HTMLElement} shell - The editor shell element
+ * @param {object} item - The note item
+ */
 function updateNoteMetaStats(shell, item) {
     const statsEl = shell?.querySelector('.editor-meta-stats');
     if (statsEl && item) {

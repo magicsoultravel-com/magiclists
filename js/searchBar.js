@@ -152,7 +152,7 @@ this.globalKeyHandler = (e) => {
     },
 
     renderTitleRow(hit) {
-        const typeLabel = hit.type === 'checklist' ? 'Checklist' : 'Note';
+        const typeLabel = (hit.item?.steps?.length > 0 || hit.type === 'checklist') ? 'Checklist' : 'Note';
         const category = hit.category
             ? `<span class="search-results-meta">${escapeHTML(hit.category)}</span>`
             : '';

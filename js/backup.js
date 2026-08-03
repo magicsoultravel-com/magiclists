@@ -54,6 +54,12 @@ export function buildBackupPackage() {
     const databasePayload = localStorage.getItem('matrix_database');
     let matrix_database = databasePayload ? JSON.parse(databasePayload) : null;
     if (matrix_database) {
+        // Run the shared non-destructive repair so exports are always clean:
+        // drops id-less structural-twin duplicates and backfills missing
+        // id/schema metadata. This prevents a malformed local state (e.g. an
+        // id-less snapshot pushed as a new item) from being serialized as
+        // authoritative.
+        matrix_database = repairDatabase(matrix_database);
         matrix_database = {
             ...matrix_database,
             settings: {

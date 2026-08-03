@@ -821,10 +821,12 @@ reapplySmallFootprintOnBoard() {
 
     finalizeRender(canvas, boardPane, renderOptions) {
         this.updateBoardCanvasExtents(canvas);
+        // Cards are already placed at their saved positions by layoutBoard.
+        // Do NOT run the push-resolution reflow here: with actorId=null it
+        // re-packs every card and re-saves, clobbering the user's saved
+        // positions on every reload. Only update scroll policy (non-destructive).
         if (!renderOptions.skipGridReflow && !isBoardOverlayEnabled()) {
-            requestAnimationFrame(() => {
-                this.reflowGridBoard(canvas, null, { animate: false });
-            });
+            this.updateGridScrollPolicy(canvas, { forcing: false });
         }
     },
 

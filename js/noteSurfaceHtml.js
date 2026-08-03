@@ -157,10 +157,12 @@ export function resolveNoteBodyVisibility(item, { canEdit = false, inModalEditor
         return { showContent: true, showChecklist: true };
     }
     if (canEdit) {
+        // In edit mode the checklist section (and its "+" button) must ALWAYS
+        // render so users can add a first item at any time, even when the note
+        // has editorBodyLayout === 'content' and zero existing steps.
         return {
             showContent: hasContent || layout === 'both' || layout === 'content',
-            showChecklist: layout !== 'content'
-                && (layout === 'both' || layout === 'checklist' || (item.steps && item.steps.length > 0))
+            showChecklist: true
         };
     }
     return {

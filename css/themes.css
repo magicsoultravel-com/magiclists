@@ -2273,3 +2273,37 @@ html[data-app-theme="miami"] .sheet-grid-wrap {
         opacity: 0.65;
     }
 }
+
+/* ==========================================================================
+   AUTO-CONTRAST GUARD — custom note backgrounds always win over theme colors.
+   applyCardTheme() paints the shell and sets --card-fg / --card-muted inline on
+   the .has-custom-bg shell. These higher-specificity, later-source rules
+   re-assert them so theme typography overrides never force an unreadable color
+   on a custom-background note (board surface or modal editor). Default notes
+   carry no .has-custom-bg, so they still pick up the theme color.
+   ========================================================================== */
+html[data-app-theme] .mini-card .has-custom-bg .mini-card-title,
+html[data-app-theme] .mini-card .has-custom-bg .card-content-preview,
+html[data-app-theme] .mini-card .has-custom-bg .step-text,
+html[data-app-theme] #editor-overlay .has-custom-bg .mini-card-title,
+html[data-app-theme] #editor-overlay .has-custom-bg .card-content-preview,
+html[data-app-theme] #editor-overlay .has-custom-bg .step-text {
+    color: var(--card-fg) !important;
+}
+
+html[data-app-theme] .mini-card .has-custom-bg .category-name,
+html[data-app-theme] .mini-card .has-custom-bg .editor-created-date,
+html[data-app-theme] .mini-card .has-custom-bg .editor-note-size,
+html[data-app-theme] .mini-card .has-custom-bg .editor-note-lines,
+html[data-app-theme] #editor-overlay .has-custom-bg .category-name,
+html[data-app-theme] #editor-overlay .has-custom-bg .editor-created-date,
+html[data-app-theme] #editor-overlay .has-custom-bg .editor-note-size,
+html[data-app-theme] #editor-overlay .has-custom-bg .editor-note-lines {
+    color: var(--card-muted) !important;
+}
+
+/* Custom-bg note shells in the modal editor must keep the user's painted
+   background rather than the theme-forced card background. */
+html[data-app-theme] #editor-overlay .editor-note-shell.has-custom-bg {
+    background-color: var(--chrome-bg, var(--bg-surface)) !important;
+}

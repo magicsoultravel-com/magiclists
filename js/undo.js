@@ -486,21 +486,28 @@ export const UndoManager = {
     } = {}) {
         if (this.isApplying || !handlers.isEnabled() || !beforeItem || !afterItem) return;
         
-        // Filter to only content-related fields
+        // Filter to only content-related fields, but always carry the item's id
+        // so undo/redo can merge content deltas onto the real note (an id-less
+        // entry would be saved as a brand-new duplicate by saveItem).
         const filteredBefore = {};
         const filteredAfter = {};
         for (const key of CONTENT_FIELDS) {
             if (beforeItem?.[key] !== undefined) filteredBefore[key] = beforeItem[key];
             if (afterItem?.[key] !== undefined) filteredAfter[key] = afterItem[key];
         }
-        
+        const entryId = beforeItem?.id ?? afterItem?.id;
+        if (typeof entryId === 'string' && entryId) {
+            filteredBefore.id = entryId;
+            filteredAfter.id = entryId;
+        }
+
         if (itemsEqual(filteredBefore, filteredAfter)) return;
 
         const after = cloneItem(filteredAfter);
         const entryLabel = label || historyLabelForItem(after);
         const now = Date.now();
         const top = this.undoStack[this.undoStack.length - 1];
-        const key = mergeKey || `${after.id}:content`;
+        const key = mergeKey || `${after.id || 'note'}:content`;
 
         if (mergeWindow && top?.kind === 'change' && top.mergeKey === key && now - (top.mergedAt || 0) < MERGE_MS) {
             top.forwardDelta = itemForwardDelta(top.before, after);

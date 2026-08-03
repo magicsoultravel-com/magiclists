@@ -2,7 +2,6 @@
 import { applyCardTheme } from './cardTheme.js';
 import { ColorPicker, PALETTE_NOTE, randomNoteColor, resolveNoteColor } from './colorPicker.js';
 import { EditorModalChrome } from './editorModalChrome.js';
-import { stripRichText } from './richText.js';
 import { CARD_ICONS } from './icons.js';
 import {
     combineDateTime,
@@ -195,7 +194,9 @@ export const Editor = {
         Object.assign(this.activeItem, currentData);
         // Update lastPersistedItem after successful persist
         this.lastPersistedItem = JSON.parse(JSON.stringify(this.activeItem));
-        NoteSurface.emitItemMutation(this.activeItem, { preserveView: true });
+        // skipRerender + preserveView makes preserveEmptySteps true so empty
+        // checklist items are preserved — matching the surface/board save path.
+        NoteSurface.emitItemMutation(this.activeItem, { preserveView: true, skipRerender: true });
         return true;
     },
 
@@ -227,9 +228,10 @@ export const Editor = {
         }
         const finalBgColor = resolveNoteColor(document.getElementById('edit-bg-color-value')?.value);
         const allSteps = this.activeItem.steps || [];
-        const steps = normalize
-            ? allSteps.filter((step) => stripRichText(step.text || '').trim())
-            : allSteps;
+        // Preserve empty checklist items so they are not destroyed on save —
+        // matching the surface/board save path. Only the type is derived from
+        // the presence of any steps (including empty ones).
+        const steps = allSteps;
 
         const data = {
             ...this.activeItem,
@@ -262,7 +264,7 @@ export const Editor = {
         if (data.noteTemplate === 'default' || !data.noteTemplate) {
             delete data.noteTemplate;
         }
-        return normalize ? normalizeItemForSave(data) : data;
+        return normalize ? normalizeItemForSave(data, { preserveEmptySteps: true }) : data;
     },
     
     resetEditorState() {
@@ -567,7 +569,9 @@ export const Editor = {
         const data = this.collectFormData({ normalize: true });
         data.status = isArchived ? 'active' : 'archived';
         Object.assign(this.activeItem, data);
-        NoteSurface.emitItemMutation(this.activeItem, { preserveView: false, beforeItem });
+        // preserveEmptySteps: true so archiving/restoring never strips empty
+        // checklist steps from old imported notes (see noteModel normalizeItemForSave).
+        NoteSurface.emitItemMutation(this.activeItem, { preserveView: false, beforeItem, preserveEmptySteps: true });
         this.close();
     },
     

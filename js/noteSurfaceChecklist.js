@@ -1,11 +1,10 @@
 /** @module {"owns":"checklist operations, drag/drop, state management", "related":["noteSurface.js","checklistSteps.js","noteBodyConversion.js","richText.js"], "events":[]} */
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { escapeHTML, escapeAttr } from './domEscape.js';
-import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, collectStepSubtree, canIndentStep, normalizeChecklistLevels, computeVisibleInsertBounds, reorderActiveStepsFromDomOrder, applySubtreeLevelDelta, resolvePointerDropTarget, resolveDropTarget, buildVisibleChecklistSteps } from './checklistSteps.js';
-import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyConversion.js';
-import { stripRichText, sanitizeRichHtml, hasRichMarkup } from './richText.js';
+import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, collectStepSubtree, canIndentStep, normalizeChecklistLevels, computeVisibleInsertBounds, reorderActiveStepsFromDomOrder, applySubtreeLevelDelta, resolvePointerDropTarget, resolveDropTarget } from './checklistSteps.js';
+import { stripRichText, sanitizeRichHtml, hasRichMarkup, linkifyPlainUrls } from './richText.js';
 import { mutateItem, syncItemBodyFromDom, syncInlineFieldToItem, commitInlineChecklistOp, flushDesktopAutoSave } from './noteSurfaceMutations.js';
-import { focusInlineEdit, canInlineEditText, renderRichHtml, splitInlineEditAtCaret, insertTextAtCaret, handleInlineEditArrowNav } from './noteSurfaceEditing.js';
+import { focusInlineEdit, canInlineEditText, splitInlineEditAtCaret, insertTextAtCaret, handleInlineEditArrowNav } from './noteSurfaceEditing.js';
 import { copyPlainTextToClipboard } from './clipboard.js';
 
 
@@ -192,20 +191,16 @@ export function bindChecklistInteractions(root, item, {
               if (stepIdx < 0) return;
               applySubtreeLevelDelta(item.steps, stepIdx, 1);
               normalizeChecklistLevels(item.steps);
-               // Surgical DOM update: update level attribute and tree guides in-place
-               updateRowLevelInDom(row, item.steps[stepIdx], root, item);
-               const indentTargetEl = row.querySelector('.step-text.card-inline-edit');
-               requestAnimationFrame(() => {
-                   if (indentTargetEl) {
-                       focusStepTextAtEdge(indentTargetEl, 'end');
-                   }
-               });
-               if (localOnly) {
-                   onChange();
-               } else {
-                   commitInlineChecklistOp(item, beforeItem, { localOnly });
-               }
-               return;
+              // Set pending focus so refreshNoteBody restores caret on the same step
+              setPendingChecklistFocus(root, stepId, 'end');
+              if (localOnly) {
+                  onChange();
+              } else {
+                  commitInlineChecklistOp(item, beforeItem, { localOnly });
+              }
+              // Full refresh so tree guides and button states update on ALL rows
+              refresh();
+              return;
           }
 
          // --- step outdent ---
@@ -227,19 +222,15 @@ export function bindChecklistInteractions(root, item, {
              if (stepIdx < 0) return;
              applySubtreeLevelDelta(item.steps, stepIdx, -1);
              normalizeChecklistLevels(item.steps);
-             // Surgical DOM update: update level attribute and tree guides in-place
-             updateRowLevelInDom(row, item.steps[stepIdx], root, item);
-             const outdentTargetEl = row.querySelector('.step-text.card-inline-edit');
-             requestAnimationFrame(() => {
-                 if (outdentTargetEl) {
-                     focusStepTextAtEdge(outdentTargetEl, 'end');
-                 }
-             });
+             // Set pending focus so refreshNoteBody restores caret on the same step
+             setPendingChecklistFocus(root, stepId, 'end');
             if (localOnly) {
                 onChange();
             } else {
                 commitInlineChecklistOp(item, beforeItem, { localOnly });
             }
+            // Full refresh so tree guides and button states update on ALL rows
+            refresh();
             return;
         }
 
@@ -286,9 +277,16 @@ export function bindChecklistInteractions(root, item, {
     if (addBtn && root.contains(addBtn)) {
         e.preventDefault();
         e.stopPropagation();
+        // Flush any pending autosave AND synchronously sync the focused step's
+        // text to the model BEFORE inserting a new row. This prevents typed text
+        // from being lost during re-render / rapid-fire clicks.
+        flushDesktopAutoSave(root, item);
+        syncFocusedStepTextToItem(root, item);
         const newStepId = insertChecklistStep(root, item, { localOnly, onChange });
+        // The insert is surgical (row already in DOM). Do NOT call refresh() here —
+        // a full re-render would race with the focused text sync. Focus is handled
+        // by setPendingChecklistFocus on the next refresh cycle if needed.
         if (newStepId) setPendingChecklistFocus(root, newStepId, 'start');
-        if (localOnly) refresh();
         return;
     }
     });
@@ -348,54 +346,6 @@ function invalidateChecklistCache() {
     _cacheTimestamp = 0;
 }
 
-// Shared helper: focus step text element and set caret at edge
-function focusStepTextAtEdge(el, edge = 'start') {
-    if (!el) return;
-    // Cache scroll position before focus to prevent browser scroll-snap
-    const scrollContainer = el.closest('.editor-note-body') || document.documentElement;
-    const cachedScrollTop = scrollContainer.scrollTop;
-    // Also capture canvas scroll for board surface operations
-    const canvasScrollPos = captureCanvasScroll();
-    el.focus({ preventScroll: true });
-    // Restore scroll if browser changed it
-    if (scrollContainer.scrollTop !== cachedScrollTop) {
-        scrollContainer.scrollTop = cachedScrollTop;
-    }
-    // Restore canvas scroll after focus
-    restoreCanvasScroll(canvasScrollPos);
-    const range = document.createRange();
-    range.selectNodeContents(el);
-    range.collapse(edge === 'start');
-    const sel = window.getSelection();
-    sel?.removeAllRanges();
-    sel?.addRange(range);
-}
-
-// Surgical DOM update: update a row's level attribute and tree guides in-place
-function updateRowLevelInDom(row, step, root, item) {
-    if (!row || !step) return;
-    const { active } = partitionChecklistSteps(item.steps || []);
-    const stepIdx = active.findIndex((s) => s.id === step.id);
-    const newLevel = getStepLevel(step);
-    
-    row.dataset.level = String(newLevel);
-    
-    const treeGutter = row.querySelector('.step-tree-gutter');
-    if (treeGutter && stepIdx >= 0) {
-        const treeGuides = buildVisibleChecklistSteps(active, item.id, getChecklistCollapsedKeys())
-            .find((s) => s.step.id === step.id)?.treeGuides || [];
-        treeGutter.innerHTML = treeGuides.map(({ role }) => 
-            `<span class="step-tree-guide step-tree-guide--${role}" aria-hidden="true"></span>`
-        ).join('');
-    }
-    
-    const outdentBtn = row.querySelector('.step-outdent-btn');
-    if (outdentBtn) outdentBtn.disabled = newLevel <= 0;
-    
-    const indentBtn = row.querySelector('.step-indent-btn');
-    if (indentBtn) indentBtn.disabled = !canIndentStep(active, stepIdx);
-}
-
 // Surgical DOM update: insert a new step row into the DOM
 function insertStepRowInDom(root, newStep, item, { afterStepId = null, richEdit = false } = {}) {
     if (!root || !newStep || !item) return null;
@@ -440,6 +390,30 @@ function syncChecklistStepToItem(el, item) {
     const step = item.steps?.find((s) => s.id === stepId);
     if (step) {
         step.text = el.textContent || '';
+    }
+}
+
+/**
+ * Synchronously sync the currently-focused checklist step's text into the item
+ * model. This prevents typed text from being lost before a DOM insertion or
+ * re-render (e.g. clicking "+", indent/outdent, or rapid-fire clicks). It only
+ * touches the focused step, avoiding the risk of clobbering other unsynced state.
+ * @param {HTMLElement} root - The editor body / checklist root element
+ * @param {object} item - The note item
+ */
+function syncFocusedStepTextToItem(root, item) {
+    if (!root || !item) return;
+    const active = document.activeElement;
+    if (!active || !root.contains(active)) return;
+    if (!active.classList?.contains('step-text')) return;
+    const stepId = active.dataset.stepId;
+    if (!stepId) return;
+    const step = (item.steps || []).find((s) => s.id === stepId);
+    if (!step) return;
+    if (active.classList.contains('rich-text--edit')) {
+        step.text = sanitizeRichHtml(linkifyPlainUrls(active.innerHTML));
+    } else {
+        step.text = active.textContent || '';
     }
 }
 
@@ -818,6 +792,9 @@ export function insertChecklistStep(root, item, {
     onChange = () => {}
 } = {}) {
     if (!item) return null;
+    // Flush the focused step's text into the model before any DOM mutation so
+    // typed text is never lost (guards against rapid-fire + clicks too).
+    syncFocusedStepTextToItem(root, item);
     const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
     const steps = item.steps || [];
     const newStep = {
@@ -865,9 +842,12 @@ export function insertChecklistStep(root, item, {
     // Restore canvas scroll position after DOM insertion
     restoreCanvasScroll(scrollPos);
     
-    if (!localOnly) {
-        commitInlineChecklistOp(item, beforeItem, { localOnly });
-    }
+    // Always commit a real, immediate structural mutation — even in the modal
+    // (localOnly=true). This atomically persists the full accumulated item.steps
+    // with preserveEmptySteps=true, so rapid successive "+" clicks do not lose
+    // intermediate empty rows to a deferred DOM re-sync. onChange() is still
+    // called for the editor's internal state/size/render updates.
+    if (beforeItem) commitInlineChecklistOp(item, beforeItem, { localOnly: false });
     onChange();
     return newStep.id;
 }
@@ -1062,10 +1042,12 @@ export function handleChecklistEnter(root, item, e, { localOnly = false, onChang
     restoreCanvasScroll(scrollPos);
 
     // CRITICAL: Commit as atomic batch operation - both the modified step and the new step
-    // are saved together in a single mutation to prevent race conditions
-    if (!localOnly) {
-        commitInlineChecklistOp(item, beforeItem, { localOnly });
-    }
+    // are saved together in a single mutation to prevent race conditions.
+    // Always persist immediately — even in the modal (localOnly=true) — so rapid
+    // Enter+typing sequences atomically accumulate every line in item.steps and
+    // cannot be clobbered by a deferred DOM re-sync. onChange() is still called
+    // for the editor's internal state/size/render updates.
+    if (beforeItem) commitInlineChecklistOp(item, beforeItem, { localOnly: false });
     onChange();
     return newStep.id;
 }
