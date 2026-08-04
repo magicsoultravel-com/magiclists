@@ -148,18 +148,8 @@ export function updateBoardCanvasExtents(canvas, { readCardRect = readNoteRect, 
             return;
         }
 
-        const zoom = parseFloat(canvas?.dataset?.desktopZoom) || 1;
-        const origin = getOrigin
-            ? getOrigin(canvas)
-            : (canvas.classList.contains('view-grid')
-                ? getGridBoardBounds(canvas).origin
-                : CANVAS_LAYOUT_ORIGIN);
-        const placed = [...cards].map((c) => readCardRect(c));
-        const bottom = placed.reduce((m, r) => Math.max(m, r.y + r.h), 0);
-        const right = placed.reduce((m, r) => Math.max(m, r.x + r.w), 0);
-        boardPane.style.minHeight = `${bottom + origin + getCanvasColGap()}px`;
-        const viewportW = (canvas.clientWidth || 320) / zoom;
-        boardPane.style.minWidth = `${Math.max(viewportW, right + origin + getCanvasColGap())}px`;
+        // We no longer resize the boardPane based on content to prevent the positive feedback loop.
+        // The container (.desktop-surface) handles scrolling, and #app-canvas is allowed to overflow.
         updateDesktopScrollPolicy(canvas);
 
         // Clear the flag after update

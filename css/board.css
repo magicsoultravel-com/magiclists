@@ -657,7 +657,8 @@ body.is-file-cabinet-drag-active {
     flex: 1;
     display: flex;
     flex-direction: column;
-    overflow: auto; /* SCROLLBARS MOVED HERE */
+    overflow-x: hidden; /* SCROLLBARS MOVED HERE - horizontal clamped */
+    overflow-y: auto; /* preserve vertical scrolling */
     min-width: 0; /* SAFETY NET */
     min-height: 0; /* SAFETY NET */
 }

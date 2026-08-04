@@ -155,6 +155,7 @@ textarea.form-input {
     color: var(--text-muted);
     font-size: 0.9rem;
     padding: 3rem 0;
+    min-width: 0;
 }
 
 .storage-quota-modal {

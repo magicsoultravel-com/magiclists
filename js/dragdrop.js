@@ -416,7 +416,7 @@ export const DragDropEngine = {
             if (snapEnabled) {
                 autoScrollDesktopCanvas(canvas, e.clientX, e.clientY, { scrollX: false });
                 runLayoutPreview(dragActive.card);
-            } else {
+            } else if (!isBoardOverlayEnabled()) {
                 runExtentsUpdate();
                 autoScrollDesktopCanvas(canvas, e.clientX, e.clientY);
             }
@@ -569,7 +569,7 @@ export const DragDropEngine = {
             if (snapEnabled) {
                 autoScrollDesktopCanvas(canvas, e.clientX, e.clientY, { scrollX: false });
                 runLayoutPreview(card);
-            } else {
+            } else if (!isBoardOverlayEnabled()) {
                 runExtentsUpdate();
                 autoScrollDesktopCanvas(canvas, e.clientX, e.clientY);
             }
