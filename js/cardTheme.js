@@ -48,6 +48,18 @@ const THEME_PROPS = [
     '--card-panel-bg'
 ];
 
+/* The .has-custom-bg class lives on the .editor-note-shell, but several CSS
+   selectors (e.g. .mini-card:not(.has-custom-bg)) key off the .mini-card
+   ancestor. Keep those classes in sync on the nearest .mini-card so the
+   :not() rules correctly exclude custom-background cards. */
+function syncCardAncestorClasses(el, { hasCustomBg, light }) {
+    const card = el.closest('.mini-card');
+    if (!card) return;
+    card.classList.toggle('has-custom-bg', hasCustomBg);
+    card.classList.toggle('card-theme-light', hasCustomBg && light);
+    card.classList.toggle('card-theme-dark', hasCustomBg && !light);
+}
+
 export function applyCardTheme(el, backgroundColor, { paintBackground = false } = {}) {
     if (!el) return;
 
@@ -56,6 +68,7 @@ export function applyCardTheme(el, backgroundColor, { paintBackground = false } 
         el.classList.remove('has-custom-bg', 'card-theme-light', 'card-theme-dark');
         THEME_PROPS.forEach((prop) => el.style.removeProperty(prop));
         if (paintBackground) el.style.backgroundColor = '';
+        syncCardAncestorClasses(el, { hasCustomBg: false, light: false });
         return;
     }
 
@@ -67,6 +80,7 @@ export function applyCardTheme(el, backgroundColor, { paintBackground = false } 
     el.classList.add('has-custom-bg');
     el.classList.toggle('card-theme-light', light);
     el.classList.toggle('card-theme-dark', !light);
+    syncCardAncestorClasses(el, { hasCustomBg: true, light });
 
     el.style.setProperty('--card-fg', light ? '#121218' : '#ececf1');
     el.style.setProperty('--card-muted', light ? '#4b5563' : '#b0b0b8');
