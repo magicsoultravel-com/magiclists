@@ -147,7 +147,8 @@ export function computeBoardLayout(deps, items, bounds, {
     getTileDefaultRect,
     resolveTileSize,
     findSlot,
-    snapRect
+    snapRect,
+    clampRect
 }) {
     const { origin, packW, maxH, edgePad } = bounds;
     const layout = getLayout();
@@ -169,11 +170,16 @@ export function computeBoardLayout(deps, items, bounds, {
         let rect;
 
         if (saved && Number.isFinite(saved.x) && Number.isFinite(saved.w)) {
-            // Use saved layout position
+            // Use saved layout position VERBATIM — only clamp to board bounds,
+            // never re-snap to the placement stride. This preserves the user's
+            // exact placement across renders, desktop switches, and reloads.
             const cardRect = { x: saved.x, y: saved.y, w: saved.w, h: saved.h };
-            rect = snapRect(cardRect, { maxW: packW, maxH, origin, edgePad, itemId: item.id });
+            rect = clampRect
+                ? clampRect(cardRect, { packW, maxH, origin, edgePad })
+                : snapRect(cardRect, { maxW: packW, maxH, origin, edgePad, itemId: item.id });
         } else {
-            // Calculate new position
+            // Calculate new position — only unsaved cards are auto-placed
+            // against the current packing width.
             const tileDefaults = getTileDefaultRect(resolveTileSize(item));
             let w = tileDefaults.w;
             let h = tileDefaults.h;

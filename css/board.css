@@ -669,13 +669,16 @@ body.is-file-cabinet-drag-active {
     display: block !important;
     flex: 1; /* TAKES REMAINING SPACE */
     min-height: 0;
-    overflow: visible; /* NATURAL SIZING - SCROLLBARS ON CONTAINER */
+    overflow: auto; /* SCROLLBARS ON CANVAS - lets cards escape viewport on zoom */
     min-width: 0; /* SAFETY NET */
     min-height: 0; /* SAFETY NET */
     transform-origin: top left;
     transform: scale(var(--desktop-zoom, 1));
     will-change: transform; /* HARDWARE ACCELERATION */
 }
+- [x] Preserve saved positions verbatim in gridEngine.js computeBoardLayout
+- [x] Add clampRect dep in ui.js
+- [x] Verify push resolution uses stabilized packW
 
 /* ZOOM CONTAINERS - APPLIED TO BODY/HTML IN BASE.CSS */
 #workspace-main.desktop-zoom-enabled .desktop-surface {

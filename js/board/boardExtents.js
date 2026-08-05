@@ -7,10 +7,27 @@ import {
 } from './layoutKeys.js';
 import { readNoteRect } from './noteGeometry.js';
 import { DesktopManager } from '../desktopManager.js';
+import { SIDEBAR_DEFAULT_WIDTH } from '../sidebarPrefs.js';
 
 export const DESKTOP_BOARD_PANE_CLASS = 'desktop-board-pane';
 
 const boardExtentsFrames = new WeakMap();
+
+// Stable layout width independent of the live canvas width (sidebar resizing).
+// Captured once so packW doesn't shift when the sidebar is resized, which
+// would otherwise re-pack saved cards on every render.
+let stableLayoutWidth = null;
+
+export function getStableBoardLayoutWidth() {
+    if (stableLayoutWidth != null) return stableLayoutWidth;
+    const viewportW = typeof window !== 'undefined' ? window.innerWidth : 1280;
+    stableLayoutWidth = Math.max(320, viewportW - SIDEBAR_DEFAULT_WIDTH);
+    return stableLayoutWidth;
+}
+
+export function resetStableBoardLayoutWidth() {
+    stableLayoutWidth = null;
+}
 
 function readStorageLayoutExtent() {
     let maxBottom = 0;
@@ -64,7 +81,8 @@ export function getBoardContentExtent(canvas) {
 export function getGridBoardBounds(canvas) {
     const zoom = parseFloat(canvas?.dataset?.desktopZoom) || 1;
     const { origin, edgePad, canvasGridW, columnMinInnerW } = getGridMetrics();
-    const rawW = Math.max((canvas?.clientWidth || 320) / zoom, canvasGridW + origin * 2);
+    const stableW = getStableBoardLayoutWidth() / zoom;
+    const rawW = Math.max(stableW, canvasGridW + origin * 2);
     const packW = Math.max(columnMinInnerW, rawW - origin * 2 - edgePad * 2);
 
     const viewportMinH = Math.max(

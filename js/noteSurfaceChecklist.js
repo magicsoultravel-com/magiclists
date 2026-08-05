@@ -1,7 +1,7 @@
 /** @module {"owns":"checklist operations, drag/drop, state management", "related":["noteSurface.js","checklistSteps.js","noteBodyConversion.js","richText.js"], "events":[]} */
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { escapeHTML, escapeAttr } from './domEscape.js';
-import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, collectStepSubtree, canIndentStep, normalizeChecklistLevels, computeVisibleInsertBounds, reorderActiveStepsFromDomOrder, applySubtreeLevelDelta, resolvePointerDropTarget, resolveDropTarget } from './checklistSteps.js';
+import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, collectStepSubtree, canIndentStep, normalizeChecklistLevels, computeVisibleInsertBounds, reorderActiveStepsFromDomOrder, applySubtreeLevelDelta, resolvePointerDropTarget, resolveDropTarget, buildVisibleChecklistSteps, annotateChecklistTreeGuides } from './checklistSteps.js';
 import { stripRichText, sanitizeRichHtml, hasRichMarkup, linkifyPlainUrls } from './richText.js';
 import { mutateItem, syncItemBodyFromDom, syncInlineFieldToItem, commitInlineChecklistOp, flushDesktopAutoSave } from './noteSurfaceMutations.js';
 import { focusInlineEdit, canInlineEditText, splitInlineEditAtCaret, insertTextAtCaret, handleInlineEditArrowNav } from './noteSurfaceEditing.js';
@@ -351,12 +351,25 @@ function insertStepRowInDom(root, newStep, item, { afterStepId = null, richEdit 
     if (!root || !newStep || !item) return null;
     
     const { active } = partitionChecklistSteps(item.steps || []);
-    const rowHtml = buildChecklistRowHtml(newStep, {
-        hasKids: stepHasDescendants(active, active.findIndex((s) => s.id === newStep.id)),
+    // Compute tree guides using the same pipeline as buildExpandedChecklistHtml
+    // so the surgically-inserted row renders with correct visual indentation.
+    const collapsedKeys = getChecklistCollapsedKeys();
+    const visibleRows = annotateChecklistTreeGuides(
+        buildVisibleChecklistSteps(active, item.id, collapsedKeys)
+    );
+    const newRowInfo = visibleRows.find((r) => r.step.id === newStep.id) || {
+        hasKids: false,
         isCollapsed: false,
         collapseKey: '',
+        treeGuides: []
+    };
+    
+    const rowHtml = buildChecklistRowHtml(newStep, {
+        hasKids: newRowInfo.hasKids,
+        isCollapsed: newRowInfo.isCollapsed,
+        collapseKey: newRowInfo.collapseKey,
         isDoneSection: false,
-        treeGuides: [],
+        treeGuides: newRowInfo.treeGuides,
         canEdit: true,
         richEdit,
         active

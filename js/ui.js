@@ -600,6 +600,20 @@ reapplySmallFootprintOnBoard() {
         return clampNoteToBoardEdgesCore(rect, opts);
     },
 
+    // Preserve a saved card's position VERBATIM — never clamp to packW/maxH.
+    // This allows cards saved beyond the visible width to overflow naturally,
+    // producing a horizontal scrollbar on zoom-in instead of being forced
+    // back inside the (shrinking) packing width.
+    preserveSavedBoardRect(rect) {
+        if (!rect) return rect;
+        return {
+            x: Math.max(0, rect.x),
+            y: Math.max(0, rect.y),
+            w: rect.w,
+            h: rect.h
+        };
+    },
+
     gridBoardRectForCard(card, savedRect, isExpanded, itemId = null) {
         // 1. Safely resolve the ID whether a card exists or the ID is passed directly
         const id = itemId || card?.dataset?.id;
@@ -791,7 +805,8 @@ reapplySmallFootprintOnBoard() {
             snapRect: (rect, opts) => this.snapNoteRect(
                 this.gridBoardRectForCard(null, rect, this.isSavedLayoutExpanded(opts.itemId), opts.itemId),
                 opts
-            )
+            ),
+            clampRect: (rect) => this.preserveSavedBoardRect(rect)
         });
 
         // Apply layout to DOM
