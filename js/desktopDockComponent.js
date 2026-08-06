@@ -56,7 +56,7 @@ function createPinButton() {
 function renderDesktopButtons(drawer, items = []) {
     const count = DesktopManager.getDesktopCount();
     drawer.innerHTML = '';
-    
+
     for (let i = 1; i <= count; i++) {
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -66,34 +66,32 @@ function renderDesktopButtons(drawer, items = []) {
         btn.dataset.desktopId = String(i);
         btn.title = `Desktop ${i}`;
         btn.setAttribute('aria-label', `Desktop ${i}`);
-        
+
         // Count visible notes on this desktop (excluding hidden and archived)
         const notesForDesktop = DesktopManager.getAllNotesForDesktop(i, items);
-        const visibleNotes = notesForDesktop.filter(item => 
+        const visibleNotes = notesForDesktop.filter(item =>
             !BoardOperations.isHiddenFromBoard(item) && !BoardOperations.isArchived(item)
         );
         const noteCount = visibleNotes.length;
-        
+
         // Colored square with note count inside
         btn.innerHTML = `<span class="desktop-dock-icon"><span class="desktop-dock-count">${noteCount}</span></span>`;
-        
+
         if (i === DesktopManager.getActiveDesktop()) {
             btn.classList.add('active');
             btn.setAttribute('aria-current', 'true');
         }
-        
+
         btn.addEventListener('click', (e) => {
             e.stopPropagation();
             DesktopManager.setActiveDesktop(i);
             // Don't close drawer - allows easy switching between desktops
-            // Dispatch event for workspace refresh (Phase 2 will handle)
             window.dispatchEvent(new CustomEvent('desktop:changed', {
                 detail: { desktopId: i }
             }));
         });
 
         // Drag-over support for desktop dock drop detection
-        // Track drag state per-button using dataset
         btn.addEventListener('pointerenter', () => {
             btn.dataset.dragOver = 'true';
             btn.classList.add('drag-over');
@@ -107,12 +105,7 @@ function renderDesktopButtons(drawer, items = []) {
         drawer.appendChild(btn);
     }
 
-    // Append separator and PIN button at the end of the rollout
-    const separator = document.createElement('div');
-    separator.className = 'desktop-dock-separator';
-    separator.setAttribute('aria-hidden', 'true');
-    drawer.appendChild(separator);
-
+    // PIN button floats in the corner of the drawer (positioned via CSS)
     drawer.appendChild(_pinBtn);
 }
 
@@ -166,7 +159,6 @@ function updatePinButton() {
 function bindEvents() {
     _toggleEl.addEventListener('click', (e) => {
         e.stopPropagation();
-        // Toggle expanded state on explicit click
         _isExpanded = !_isExpanded;
         if (_isExpanded) {
             openDrawer();
@@ -175,20 +167,15 @@ function bindEvents() {
         }
     });
 
-    // Container-level hover handling for smooth drag-and-drop
-    // Add is-hovered class on pointerenter
     _containerEl.addEventListener('pointerenter', () => {
         _containerEl.classList.add('is-hovered');
-        // Open drawer only if not explicitly expanded
         if (!_isExpanded) {
             openDrawer();
         }
     });
 
-    // Remove is-hovered class and close drawer only if not expanded
     _containerEl.addEventListener('pointerleave', () => {
         _containerEl.classList.remove('is-hovered');
-        // Close drawer only if not explicitly expanded by click
         if (!_isExpanded) {
             closeDrawer();
         }
@@ -196,7 +183,7 @@ function bindEvents() {
 
     // Close drawer when clicking outside — but only if not pinned
     document.addEventListener('click', (e) => {
-        if (_isPinned) return; // PIN locks the drawer open
+        if (_isPinned) return;
         if (_isDrawerOpen && !_containerEl.contains(e.target)) {
             _isExpanded = false;
             closeDrawer();
@@ -217,7 +204,6 @@ function bindEvents() {
         const nowPinned = DesktopManager.toggleDockPinned();
         updatePinButton();
         if (nowPinned) {
-            // When pinning, ensure the drawer is open and expanded
             if (!_isDrawerOpen) {
                 openDrawer();
             }
@@ -228,20 +214,17 @@ function bindEvents() {
         }
     });
 
-// Listen for desktop changes to update UI
     DesktopManager.onDesktopChange(() => {
         updateActiveButton();
     });
-    
-// Listen for desktop count changes to refresh button list
+
     window.addEventListener('desktop:count_changed', () => {
         if (_drawerEl) {
             renderDesktopButtons(_drawerEl, _items);
             updateActiveButton();
         }
     });
-    
-    // Listen for item mutations to update note counts
+
     window.addEventListener('item:mutation_requested', () => {
         if (_drawerEl) {
             renderDesktopButtons(_drawerEl, _items);
@@ -249,7 +232,6 @@ function bindEvents() {
         }
     });
 
-    // Listen for dock pin changes (e.g. from another context)
     DesktopManager.onDockPinChange(() => {
         updatePinButton();
     });
@@ -257,38 +239,31 @@ function bindEvents() {
 
 export const DesktopDock = {
     init() {
-        // Create elements
         _toggleEl = createTogglePill();
         _drawerEl = createDrawer();
         _pinBtn = createPinButton();
-        
-        // Combine into container
+
         const container = document.createElement('div');
         container.id = 'desktop-dock';
         container.className = 'desktop-dock';
         container.appendChild(_toggleEl);
         container.appendChild(_drawerEl);
-        
-        // Store container reference for hover handling
+
         _containerEl = container;
-        
-        // Find workspace shell for mounting
+
         const workspaceShell = document.getElementById('workspace-shell');
         if (workspaceShell) {
             workspaceShell.appendChild(container);
         }
-        
-        // Render initial buttons with stored items
+
         renderDesktopButtons(_drawerEl, _items);
-        
-        // Apply persisted pin state
+
         updatePinButton();
         if (_isPinned) {
             _isExpanded = true;
             openDrawer();
         }
-        
-        // Bind events
+
         bindEvents();
     },
 
@@ -297,7 +272,6 @@ export const DesktopDock = {
     },
 
     isDragActive() {
-        // Check if any button has drag-over state
         if (!_drawerEl) return false;
         return _drawerEl.querySelector('.desktop-dock-btn[drag-over="true"]') !== null;
     },
