@@ -74,7 +74,7 @@ function renderDesktopButtons(drawer, items = []) {
         );
         const noteCount = visibleNotes.length;
 
-        // Colored square with note count inside
+        // Colored square icon with plain text note count centered inside
         btn.innerHTML = `<span class="desktop-dock-icon"><span class="desktop-dock-count">${noteCount}</span></span>`;
 
         if (i === DesktopManager.getActiveDesktop()) {
@@ -151,7 +151,7 @@ function updatePinButton() {
     _pinBtn.title = _isPinned ? 'Unpin desktop switcher' : 'Pin desktop switcher';
     _pinBtn.setAttribute('aria-label', _isPinned ? 'Unpin desktop switcher' : 'Pin desktop switcher');
     _pinBtn.innerHTML = _isPinned ? CARD_ICONS.unpin : CARD_ICONS.pin;
-    _pinBtn.classList.toggle('is-pinned', _isPinned);
+    _pinBtn.classList.toggle('is-active', _isPinned);
     _toggleEl.classList.toggle('is-pinned', _isPinned);
     _containerEl?.classList.toggle('is-pinned', _isPinned);
 }

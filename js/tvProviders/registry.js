@@ -54,12 +54,12 @@ export const TvProviderRegistry = {
         return this.getProvider(this.getActiveProviderId());
     },
 
-    setActiveProvider(providerId) {
+    async setActiveProvider(providerId) {
         if (!PROVIDERS[providerId]) return;
         const prev = loadSettings().catalogProvider;
         saveSettings({ catalogProvider: providerId });
         if (prev !== providerId) {
-            this.getProvider(prev).invalidateCache?.();
+            await this.getProvider(prev).invalidateCache?.();
         }
     },
 
@@ -108,17 +108,17 @@ export const TvProviderRegistry = {
         return results;
     },
 
-    refreshCatalog() {
+    async refreshCatalog() {
         const provider = this.getActiveProvider();
-        provider.invalidateCache?.();
+        await provider.invalidateCache?.();
         return provider.getCountries({ refresh: true });
     },
 
-    clearActiveCache() {
-        this.getActiveProvider().clearCache?.();
+    async clearActiveCache() {
+        await this.getActiveProvider().clearCache?.();
     },
 
-    clearAllCaches() {
-        Object.values(PROVIDERS).forEach((p) => p.clearCache?.());
+    async clearAllCaches() {
+        await Promise.all(Object.values(PROVIDERS).map((p) => p.clearCache?.()));
     }
 };

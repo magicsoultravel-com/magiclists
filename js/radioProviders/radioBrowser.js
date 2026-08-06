@@ -52,15 +52,15 @@ export const RadioBrowserProvider = {
         return RadioBrowserApi.discoverServers();
     },
 
-    setMirror(hostname) {
-        RadioBrowserApi.setMirrorHost(hostname);
+    async setMirror(hostname) {
+        await RadioBrowserApi.setMirrorHost(hostname);
     },
 
-    invalidateCache() {
-        RadioBrowserApi.invalidateQueryCache();
+    async invalidateCache() {
+        await RadioBrowserApi.invalidateQueryCache();
     },
 
-    clearCache() {
-        RadioBrowserApi.clearCache();
+    async clearCache() {
+        await RadioBrowserApi.clearCache();
     }
 };

@@ -1,3 +1,5 @@
+import { IndexedDBStore } from './storage/indexedDbStore.js';
+
 const CACHE_KEY = 'matrix_radio_cache';
 const API_BASE_SESSION_KEY = 'matrix_radio_api_base';
 const USER_AGENT = 'magiclists/1.0';
@@ -20,16 +22,21 @@ const FALLBACK_SERVERS = [
     'at1.api.radio-browser.info'
 ];
 
-function loadCache() {
+async function loadCache() {
     try {
-        return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+        const cached = await IndexedDBStore.get(CACHE_KEY, CACHE_KEY);
+        return cached || {};
     } catch {
         return {};
     }
 }
 
-function saveCache(cache) {
-    localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+async function saveCache(cache) {
+    try {
+        await IndexedDBStore.set(CACHE_KEY, cache);
+    } catch {
+        /* quota or storage error — cache is non-critical, in-memory fallback handles it */
+    }
 }
 
 function isFresh(entry, ttl) {
@@ -77,7 +84,7 @@ async function discoverServers() {
 }
 
 async function resolveApiBase(force = false) {
-    const cache = loadCache();
+    const cache = await loadCache();
     if (!force && isFresh(cache.apiBase, TTL.apiBase) && cache.apiBase?.data) {
         sessionStorage.setItem(API_BASE_SESSION_KEY, cache.apiBase.data);
         return cache.apiBase.data;
@@ -91,7 +98,7 @@ async function resolveApiBase(force = false) {
     const base = `https://${shuffled[0]}/json`;
 
     cache.apiBase = { cachedAt: Date.now(), data: base };
-    saveCache(cache);
+    await saveCache(cache);
     sessionStorage.setItem(API_BASE_SESSION_KEY, base);
     return base;
 }
@@ -128,9 +135,9 @@ async function apiFetch(path, { method = 'GET', skipCache = false } = {}) {
             const data = await res.json();
             if (base !== sessionStorage.getItem(API_BASE_SESSION_KEY)) {
                 sessionStorage.setItem(API_BASE_SESSION_KEY, base);
-                const cache = loadCache();
+                const cache = await loadCache();
                 cache.apiBase = { cachedAt: Date.now(), data: base };
-                saveCache(cache);
+                await saveCache(cache);
             }
             return data;
         } catch (e) {
@@ -141,15 +148,15 @@ async function apiFetch(path, { method = 'GET', skipCache = false } = {}) {
     throw lastError || new Error('Radio API request failed');
 }
 
-function readCachedBucket(bucket, key, ttl) {
-    const cache = loadCache();
+async function readCachedBucket(bucket, key, ttl) {
+    const cache = await loadCache();
     const entry = key ? cache[bucket]?.[key] : cache[bucket];
     if (isFresh(entry, ttl)) return entry.data;
     return null;
 }
 
-function writeCachedBucket(bucket, key, data, ttlBucket) {
-    const cache = loadCache();
+async function writeCachedBucket(bucket, key, data, ttlBucket) {
+    const cache = await loadCache();
     if (key) {
         if (!cache[bucket]) cache[bucket] = {};
         cache[bucket][key] = { cachedAt: Date.now(), data };
@@ -159,14 +166,14 @@ function writeCachedBucket(bucket, key, data, ttlBucket) {
     if (bucket === 'queries') {
         cache.queries = trimQueryCache(cache.queries);
     }
-    saveCache(cache);
+    await saveCache(cache);
     return data;
 }
 
 export const RadioBrowserApi = {
     async getCountries({ refresh = false } = {}) {
         if (!refresh) {
-            const cached = readCachedBucket('countries', null, TTL.countries);
+            const cached = await readCachedBucket('countries', null, TTL.countries);
             if (cached) return cached;
         }
         const data = await apiFetch('/countries', { skipCache: refresh });
@@ -175,7 +182,7 @@ export const RadioBrowserApi = {
 
     async getTags({ refresh = false } = {}) {
         if (!refresh) {
-            const cached = readCachedBucket('tags', null, TTL.tags);
+            const cached = await readCachedBucket('tags', null, TTL.tags);
             if (cached) return cached;
         }
         const data = await apiFetch('/tags?limit=80&order=stationcount&reverse=true', { skipCache: refresh });
@@ -197,7 +204,7 @@ export const RadioBrowserApi = {
         const key = hashQuery({ ...params, hideOffline, offset, order, reverse });
 
         if (!refresh) {
-            const cached = readCachedBucket('queries', key, TTL.queries);
+            const cached = await readCachedBucket('queries', key, TTL.queries);
             if (cached) return cached;
         }
 
@@ -220,11 +227,11 @@ export const RadioBrowserApi = {
         }
 
         const data = await apiFetch(path, { skipCache: refresh });
-        const cache = loadCache();
+        const cache = await loadCache();
         if (!cache.queries) cache.queries = {};
         cache.queries[key] = { cachedAt: Date.now(), data };
         cache.queries = trimQueryCache(cache.queries);
-        saveCache(cache);
+        await saveCache(cache);
         return data;
     },
 
@@ -232,14 +239,14 @@ export const RadioBrowserApi = {
         if (!uuid) return null;
 
         if (!forPlay && !refresh) {
-            const cached = readCachedBucket('stations', uuid, TTL.stations);
+            const cached = await readCachedBucket('stations', uuid, TTL.stations);
             if (cached) return cached;
         }
 
         const data = await apiFetch(`/stations/byuuid/${encodeURIComponent(uuid)}`, { skipCache: refresh || forPlay });
         const station = Array.isArray(data) ? data[0] : data;
         if (station && !forPlay) {
-            writeCachedBucket('stations', uuid, station, TTL.stations);
+            await writeCachedBucket('stations', uuid, station, TTL.stations);
         }
         return station || null;
     },
@@ -260,33 +267,33 @@ export const RadioBrowserApi = {
         }
     },
 
-    invalidateQueryCache() {
-        const cache = loadCache();
+    async invalidateQueryCache() {
+        const cache = await loadCache();
         delete cache.queries;
-        saveCache(cache);
+        await saveCache(cache);
     },
 
     async discoverServers() {
         return discoverServers();
     },
 
-    clearCache() {
-        localStorage.removeItem(CACHE_KEY);
+    async clearCache() {
+        await IndexedDBStore.remove(CACHE_KEY);
         sessionStorage.removeItem(API_BASE_SESSION_KEY);
     },
 
-    setMirrorHost(hostname) {
+    async setMirrorHost(hostname) {
         if (!hostname) {
             sessionStorage.removeItem(API_BASE_SESSION_KEY);
-            const cache = loadCache();
+            const cache = await loadCache();
             delete cache.apiBase;
-            saveCache(cache);
+            await saveCache(cache);
             return;
         }
         const base = `https://${hostname}/json`;
         sessionStorage.setItem(API_BASE_SESSION_KEY, base);
-        const cache = loadCache();
+        const cache = await loadCache();
         cache.apiBase = { cachedAt: Date.now(), data: base };
-        saveCache(cache);
+        await saveCache(cache);
     }
 };

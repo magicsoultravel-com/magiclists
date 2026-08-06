@@ -1,4 +1,5 @@
 import { normalizeStation, PROVIDER_IPTV_ORG } from './stationShape.js';
+import { IndexedDBStore } from '../storage/indexedDbStore.js';
 
 const IPTV_CHANNELS_URL = 'https://iptv-org.github.io/api/channels.json';
 const IPTV_STREAMS_URL = 'https://iptv-org.github.io/api/streams.json';
@@ -6,16 +7,23 @@ const IPTV_COUNTRIES_URL = 'https://iptv-org.github.io/api/countries.json';
 const CACHE_KEY = 'matrix_radio_iptv_cache';
 const TTL = 24 * 60 * 60 * 1000;
 
-function loadCache() {
+async function loadCache() {
     try {
-        return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+        const cached = await IndexedDBStore.get(CACHE_KEY, CACHE_KEY);
+        if (!cached) return null;
+        if (!isFresh(cached)) return null;
+        return cached.data;
     } catch {
-        return {};
+        return null;
     }
 }
 
-function saveCache(data) {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ cachedAt: Date.now(), data }));
+async function saveCache(data) {
+    try {
+        await IndexedDBStore.set(CACHE_KEY, { cachedAt: Date.now(), data });
+    } catch {
+        /* quota or storage error — in-memory catalog still works this session */
+    }
 }
 
 function isFresh(entry) {
@@ -23,9 +31,9 @@ function isFresh(entry) {
 }
 
 async function loadCatalog(refresh = false) {
-    const cached = loadCache();
-    if (!refresh && isFresh(cached) && cached.data) {
-        return cached.data;
+    const cached = await loadCache();
+    if (!refresh && cached) {
+        return cached;
     }
 
     const [channelsRes, streamsRes, countriesRes] = await Promise.all([
@@ -97,7 +105,7 @@ async function loadCatalog(refresh = false) {
     });
 
     const catalog = { stations, countryList, byId, byCountry };
-    saveCache(catalog);
+    await saveCache(catalog);
     return catalog;
 }
 
@@ -156,11 +164,11 @@ export const IptvOrgProvider = {
         /* no-op */
     },
 
-    invalidateCache() {
-        localStorage.removeItem(CACHE_KEY);
+    async invalidateCache() {
+        await IndexedDBStore.remove(CACHE_KEY);
     },
 
-    clearCache() {
-        localStorage.removeItem(CACHE_KEY);
+    async clearCache() {
+        await IndexedDBStore.remove(CACHE_KEY);
     }
 };

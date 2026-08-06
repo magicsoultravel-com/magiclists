@@ -306,7 +306,7 @@ export const SidebarTv = {
         `;
 
         body.querySelector('[data-tv-provider]')?.addEventListener('change', async (e) => {
-            TvProviderRegistry.setActiveProvider(e.target.value);
+            await TvProviderRegistry.setActiveProvider(e.target.value);
             this.countries = [];
             await this.prefetchCountries();
             if (TvPopover.mode === 'browse' && !TvPopover.panel?.classList.contains('is-hidden')) {
@@ -334,7 +334,7 @@ export const SidebarTv = {
         });
 
         body.querySelector('[data-tv-clear-cache]')?.addEventListener('click', async () => {
-            TvProviderRegistry.clearAllCaches();
+            await TvProviderRegistry.clearAllCaches();
             this.countries = [];
             try {
                 await this.prefetchCountries();

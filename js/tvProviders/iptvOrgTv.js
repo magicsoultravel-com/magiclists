@@ -1,4 +1,5 @@
 import { normalizeChannel, PROVIDER_IPTV_ORG } from './channelShape.js';
+import { IndexedDBStore } from '../storage/indexedDbStore.js';
 
 const IPTV_CHANNELS_URL = 'https://iptv-org.github.io/api/channels.json';
 const IPTV_STREAMS_URL = 'https://iptv-org.github.io/api/streams.json';
@@ -7,11 +8,22 @@ const IPTV_BLOCKLIST_URL = 'https://iptv-org.github.io/api/blocklist.json';
 const CACHE_KEY = 'matrix_tv_iptv_cache';
 const TTL = 24 * 60 * 60 * 1000;
 
-function loadCacheEntry() {
+async function loadCache() {
     try {
-        return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+        const cached = await IndexedDBStore.get(CACHE_KEY, CACHE_KEY);
+        if (!cached) return null;
+        if (!isFresh(cached)) return null;
+        return cached.data;
     } catch {
-        return {};
+        return null;
+    }
+}
+
+async function saveCachePayload(data) {
+    try {
+        await IndexedDBStore.set(CACHE_KEY, { cachedAt: Date.now(), data });
+    } catch {
+        /* quota or private mode — in-memory catalog still works this session */
     }
 }
 
@@ -45,36 +57,20 @@ function hydrateCatalog(data) {
     };
 }
 
-function saveCachePayload(data) {
-    const payload = {
-        channels: data.channels,
-        countryList: data.countryList
-    };
-    try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ cachedAt: Date.now(), data: payload }));
-    } catch {
-        /* quota or private mode — in-memory catalog still works this session */
-    }
-}
-
-function invalidateCacheStorage() {
-    localStorage.removeItem(CACHE_KEY);
-}
-
-function readCachedCatalog(refresh) {
+async function readCachedCatalog(refresh) {
     if (refresh) return null;
-    const entry = loadCacheEntry();
-    if (!isFresh(entry) || !entry.data) return null;
-    const catalog = hydrateCatalog(entry.data);
+    const entry = await loadCache();
+    if (!entry) return null;
+    const catalog = hydrateCatalog(entry);
     if (!catalog) {
-        invalidateCacheStorage();
+        await IndexedDBStore.remove(CACHE_KEY);
         return null;
     }
     return catalog;
 }
 
 async function loadCatalog(refresh = false) {
-    const cached = readCachedCatalog(refresh);
+    const cached = await readCachedCatalog(refresh);
     if (cached) return cached;
 
     const [channelsRes, streamsRes, countriesRes, blocklistRes] = await Promise.all([
@@ -150,7 +146,7 @@ async function loadCatalog(refresh = false) {
         .sort((a, b) => b.stationcount - a.stationcount);
 
     const catalog = hydrateCatalog({ channels: channelsOut, countryList });
-    saveCachePayload(catalog);
+    await saveCachePayload(catalog);
     return catalog;
 }
 
@@ -205,11 +201,11 @@ export const IptvOrgTvProvider = {
         return results.filter(Boolean);
     },
 
-    invalidateCache() {
-        invalidateCacheStorage();
+    async invalidateCache() {
+        await IndexedDBStore.remove(CACHE_KEY);
     },
 
-    clearCache() {
-        invalidateCacheStorage();
+    async clearCache() {
+        await IndexedDBStore.remove(CACHE_KEY);
     }
 };

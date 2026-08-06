@@ -58,12 +58,12 @@ export const RadioProviderRegistry = {
         return this.getProvider(this.getActiveProviderId());
     },
 
-    setActiveProvider(providerId) {
+    async setActiveProvider(providerId) {
         if (!PROVIDERS[providerId]) return;
         const prev = loadSettings().catalogProvider;
         saveSettings({ catalogProvider: providerId });
         if (prev !== providerId) {
-            this.getProvider(prev).invalidateCache?.();
+            await this.getProvider(prev).invalidateCache?.();
         }
     },
 
@@ -71,21 +71,21 @@ export const RadioProviderRegistry = {
         return loadSettings().hideOfflineStations;
     },
 
-    setHideOffline(value) {
+    async setHideOffline(value) {
         saveSettings({ hideOfflineStations: !!value });
-        RadioBrowserProvider.invalidateCache();
+        await RadioBrowserProvider.invalidateCache();
     },
 
     getMirror() {
         return loadSettings().radioBrowserMirror;
     },
 
-    setMirror(hostname) {
+    async setMirror(hostname) {
         saveSettings({ radioBrowserMirror: hostname || null });
         if (hostname) {
-            RadioBrowserProvider.setMirror(hostname);
+            await RadioBrowserProvider.setMirror(hostname);
         } else {
-            RadioBrowserProvider.setMirror(null);
+            await RadioBrowserProvider.setMirror(null);
         }
     },
 
@@ -131,23 +131,23 @@ export const RadioProviderRegistry = {
         return results;
     },
 
-    refreshCatalog() {
+    async refreshCatalog() {
         const provider = this.getActiveProvider();
-        provider.invalidateCache?.();
+        await provider.invalidateCache?.();
         return provider.getCountries({ refresh: true });
     },
 
-    clearActiveCache() {
-        this.getActiveProvider().clearCache?.();
+    async clearActiveCache() {
+        await this.getActiveProvider().clearCache?.();
     },
 
-    clearAllCaches() {
-        Object.values(PROVIDERS).forEach((p) => p.clearCache?.());
+    async clearAllCaches() {
+        await Promise.all(Object.values(PROVIDERS).map((p) => p.clearCache?.()));
     }
 };
 
 // Apply saved mirror on load
 const savedMirror = loadSettings().radioBrowserMirror;
 if (savedMirror) {
-    RadioBrowserProvider.setMirror(savedMirror);
+    RadioBrowserProvider.setMirror(savedMirror).catch(() => {});
 }

@@ -369,7 +369,7 @@ export const SidebarRadio = {
         this.populateMirrorSelect(body, settings.radioBrowserMirror);
 
         body.querySelector('[data-radio-provider]')?.addEventListener('change', async (e) => {
-            RadioProviderRegistry.setActiveProvider(e.target.value);
+            await RadioProviderRegistry.setActiveProvider(e.target.value);
             body.querySelector('[data-radio-mirror-row]')?.classList.toggle('is-hidden', e.target.value !== 'radio-browser');
             this.countries = [];
             await this.prefetchCountries();
@@ -381,11 +381,11 @@ export const SidebarRadio = {
         });
 
         body.querySelector('[data-radio-mirror]')?.addEventListener('change', (e) => {
-            RadioProviderRegistry.setMirror(e.target.value || null);
+            RadioProviderRegistry.setMirror(e.target.value || null).catch(() => {});
         });
 
         body.querySelector('[data-radio-hide-offline]')?.addEventListener('change', (e) => {
-            RadioProviderRegistry.setHideOffline(e.target.checked);
+            RadioProviderRegistry.setHideOffline(e.target.checked).catch(() => {});
             if (RadioPopover.mode === 'browse' && this.browseView === 'country') {
                 this.renderBrowseCountry();
             }
@@ -402,7 +402,7 @@ export const SidebarRadio = {
         });
 
         body.querySelector('[data-radio-clear-cache]')?.addEventListener('click', () => {
-            RadioProviderRegistry.clearAllCaches();
+            RadioProviderRegistry.clearAllCaches().catch(() => {});
         });
 
         RadioPopover.reposition();
