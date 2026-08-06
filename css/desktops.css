@@ -1,4 +1,4 @@
-/** @css {"owns":"desktop switcher dock styling", "js":["desktopDockComponent.js"]} */
+/** @css {"owns":"desktop switcher dock styling, dock pin lock", "js":["desktopDockComponent.js"]} */
 /* ==========================================================================
    DESKTOP DOCK - Floating action pill with collapsible desktop switcher
    ========================================================================== */
@@ -43,6 +43,18 @@
 .desktop-dock-toggle[aria-expanded="true"] {
     background: var(--accent);
     color: #fff;
+}
+
+/* Pinned state on the toggle pill — solid accent with pin icon */
+.desktop-dock-toggle.is-pinned {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+/* When pinned, hide the toggle pill — drawer is always visible */
+.desktop-dock.is-pinned .desktop-dock-toggle {
+    display: none;
 }
 
 .desktop-dock-drawer {
@@ -190,6 +202,54 @@
     text-align: center;
 }
 
+/* ==========================================================================
+   DESKTOP DOCK PIN - Lock the drawer open
+   ========================================================================== */
+
+/* Separator between desktop buttons and the pin button */
+.desktop-dock-separator {
+    width: 1px;
+    height: 20px;
+    background: color-mix(in srgb, var(--border-color) 40%, transparent);
+    border-radius: 1px;
+    margin: 0 0.25rem;
+}
+
+/* Pin button — matches desktop dock button aesthetic */
+.desktop-dock-pin {
+    min-width: 32px;
+    height: 32px;
+    padding: 0 0.4rem;
+    border: 1px solid color-mix(in srgb, var(--border-color) 50%, transparent);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.desktop-dock-pin:hover {
+    background: color-mix(in srgb, var(--border-color) 40%, transparent);
+    color: var(--text-main);
+}
+
+/* Pinned state — accent background, white icon */
+.desktop-dock-pin.is-pinned,
+.desktop-dock-pin[aria-pressed="true"] {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+}
+
+.desktop-dock-pin:active {
+    transform: scale(0.95);
+}
+
 /* Reduce motion support */
 @media (prefers-reduced-motion: reduce) {
     .desktop-dock-drawer,
@@ -198,7 +258,8 @@
     }
     
     .desktop-dock-toggle:active,
-    .desktop-dock-btn:hover {
+    .desktop-dock-btn:hover,
+    .desktop-dock-pin:hover {
         transform: none;
     }
     

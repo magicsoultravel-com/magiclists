@@ -1,7 +1,9 @@
-/** @module {"owns":"desktop switcher dock UI, floating pill with collapsible drawer"} */
+/** @module {"owns":"desktop switcher dock UI, floating pill with collapsible drawer, dock pin lock"} */
 
 import { DesktopManager } from './desktopManager.js';
 import { BoardOperations } from './boardOperations.js';
+import { CARD_ICONS } from './icons.js';
+import { showAppToast } from './toast.js';
 
 const TOGGLE_ICON = '🖥️';
 const DRAWER_HEIGHT = 48;
@@ -13,8 +15,10 @@ const DESKTOP_COLORS = ['r', 'g', 'b', 'y', 'p', 'o', 'c'];
 let _drawerEl = null;
 let _toggleEl = null;
 let _containerEl = null;
+let _pinBtn = null;
 let _isDrawerOpen = false;
 let _isExpanded = false;
+let _isPinned = false;
 let _items = [];
 
 function createTogglePill() {
@@ -35,6 +39,18 @@ function createDrawer() {
     drawer.className = 'desktop-dock-drawer';
     drawer.setAttribute('aria-hidden', 'true');
     return drawer;
+}
+
+function createPinButton() {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'desktop-dock-pin';
+    btn.className = 'desktop-dock-pin';
+    btn.title = 'Pin desktop switcher';
+    btn.setAttribute('aria-label', 'Pin desktop switcher');
+    btn.setAttribute('aria-pressed', 'false');
+    btn.innerHTML = CARD_ICONS.pin;
+    return btn;
 }
 
 function renderDesktopButtons(drawer, items = []) {
@@ -90,6 +106,14 @@ function renderDesktopButtons(drawer, items = []) {
 
         drawer.appendChild(btn);
     }
+
+    // Append separator and PIN button at the end of the rollout
+    const separator = document.createElement('div');
+    separator.className = 'desktop-dock-separator';
+    separator.setAttribute('aria-hidden', 'true');
+    drawer.appendChild(separator);
+
+    drawer.appendChild(_pinBtn);
 }
 
 function openDrawer() {
@@ -127,6 +151,18 @@ function updateActiveButton() {
     });
 }
 
+function updatePinButton() {
+    if (!_pinBtn) return;
+    _isPinned = DesktopManager.isDockPinned();
+    _pinBtn.setAttribute('aria-pressed', _isPinned ? 'true' : 'false');
+    _pinBtn.title = _isPinned ? 'Unpin desktop switcher' : 'Pin desktop switcher';
+    _pinBtn.setAttribute('aria-label', _isPinned ? 'Unpin desktop switcher' : 'Pin desktop switcher');
+    _pinBtn.innerHTML = _isPinned ? CARD_ICONS.unpin : CARD_ICONS.pin;
+    _pinBtn.classList.toggle('is-pinned', _isPinned);
+    _toggleEl.classList.toggle('is-pinned', _isPinned);
+    _containerEl?.classList.toggle('is-pinned', _isPinned);
+}
+
 function bindEvents() {
     _toggleEl.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -158,19 +194,37 @@ function bindEvents() {
         }
     });
 
-    // Close drawer when clicking outside
+    // Close drawer when clicking outside — but only if not pinned
     document.addEventListener('click', (e) => {
+        if (_isPinned) return; // PIN locks the drawer open
         if (_isDrawerOpen && !_containerEl.contains(e.target)) {
             _isExpanded = false;
             closeDrawer();
         }
     });
 
-    // Close drawer on escape
+    // Close drawer on escape — but only if not pinned
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && _isDrawerOpen) {
+        if (e.key === 'Escape' && _isDrawerOpen && !_isPinned) {
             _isExpanded = false;
             closeDrawer();
+        }
+    });
+
+    // PIN button click handler
+    _pinBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const nowPinned = DesktopManager.toggleDockPinned();
+        updatePinButton();
+        if (nowPinned) {
+            // When pinning, ensure the drawer is open and expanded
+            if (!_isDrawerOpen) {
+                openDrawer();
+            }
+            _isExpanded = true;
+            showAppToast('Desktop switcher pinned');
+        } else {
+            showAppToast('Desktop switcher unpinned');
         }
     });
 
@@ -194,6 +248,11 @@ function bindEvents() {
             updateActiveButton();
         }
     });
+
+    // Listen for dock pin changes (e.g. from another context)
+    DesktopManager.onDockPinChange(() => {
+        updatePinButton();
+    });
 }
 
 export const DesktopDock = {
@@ -201,6 +260,7 @@ export const DesktopDock = {
         // Create elements
         _toggleEl = createTogglePill();
         _drawerEl = createDrawer();
+        _pinBtn = createPinButton();
         
         // Combine into container
         const container = document.createElement('div');
@@ -221,6 +281,13 @@ export const DesktopDock = {
         // Render initial buttons with stored items
         renderDesktopButtons(_drawerEl, _items);
         
+        // Apply persisted pin state
+        updatePinButton();
+        if (_isPinned) {
+            _isExpanded = true;
+            openDrawer();
+        }
+        
         // Bind events
         bindEvents();
     },
@@ -233,6 +300,10 @@ export const DesktopDock = {
         // Check if any button has drag-over state
         if (!_drawerEl) return false;
         return _drawerEl.querySelector('.desktop-dock-btn[drag-over="true"]') !== null;
+    },
+
+    isPinned() {
+        return _isPinned;
     },
 
     open() {

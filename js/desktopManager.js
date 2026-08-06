@@ -9,6 +9,8 @@ const DEFAULT_ACTIVE_DESKTOP = 1;
 let _desktopCount = DEFAULT_DESKTOP_COUNT;
 let _activeDesktop = DEFAULT_ACTIVE_DESKTOP;
 let _changeListeners = [];
+let _isDockPinned = false;
+let _pinListeners = [];
 
 // Load persisted state from localStorage
 function loadState() {
@@ -24,11 +26,13 @@ function loadState() {
                 Math.max(1, parsed.activeDesktop || DEFAULT_ACTIVE_DESKTOP),
                 _desktopCount
             );
+            _isDockPinned = parsed.dockPinned === true;
         }
     } catch {
         // Ignore parse errors, use defaults
         _desktopCount = DEFAULT_DESKTOP_COUNT;
         _activeDesktop = DEFAULT_ACTIVE_DESKTOP;
+        _isDockPinned = false;
     }
 }
 
@@ -37,7 +41,8 @@ function persistState() {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
             desktopCount: _desktopCount,
-            activeDesktop: _activeDesktop
+            activeDesktop: _activeDesktop,
+            dockPinned: _isDockPinned
         }));
     } catch {
         // Ignore quota errors
@@ -54,6 +59,17 @@ function notifyDesktopChange() {
             callback(_activeDesktop);
         } catch (err) {
             console.error('[DesktopManager] Listener error:', err);
+        }
+    });
+}
+
+// Notify listeners of dock pin change
+function notifyPinChange() {
+    _pinListeners.forEach(callback => {
+        try {
+            callback(_isDockPinned);
+        } catch (err) {
+            console.error('[DesktopManager] Pin listener error:', err);
         }
     });
 }
@@ -203,6 +219,38 @@ export const DesktopManager = {
     // Unsubscribe from desktop change events
     offDesktopChange(callback) {
         _changeListeners = _changeListeners.filter(cb => cb !== callback);
+    },
+
+    // Check if the desktop dock drawer is pinned open
+    isDockPinned() {
+        return _isDockPinned;
+    },
+
+    // Set the dock pin state (persists to localStorage, notifies listeners)
+    setDockPinned(pinned) {
+        const next = !!pinned;
+        if (_isDockPinned === next) return _isDockPinned;
+        _isDockPinned = next;
+        persistState();
+        notifyPinChange();
+        return _isDockPinned;
+    },
+
+    // Toggle the dock pin state
+    toggleDockPinned() {
+        return this.setDockPinned(!_isDockPinned);
+    },
+
+    // Subscribe to dock pin change events
+    onDockPinChange(callback) {
+        if (typeof callback === 'function') {
+            _pinListeners.push(callback);
+        }
+    },
+
+    // Unsubscribe from dock pin change events
+    offDockPinChange(callback) {
+        _pinListeners = _pinListeners.filter(cb => cb !== callback);
     }
 };
 

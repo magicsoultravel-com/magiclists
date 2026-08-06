@@ -23,6 +23,8 @@ const CUSTOMIZATION_KEYS = [
     'matrix_grid_fineness_migrated',
     'matrix_board_padding',
     'matrix_placement_stride',
+    /* Desktop dock pin state */
+    'magicnotes_desktops_config',
     /* Consolidated theme tokens key */
     CUSTOM_THEME_TOKENS_KEY
 ];
