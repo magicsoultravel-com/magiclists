@@ -219,7 +219,6 @@
     font-size: 0.75rem;
     cursor: pointer;
     flex-shrink: 0;
-    margin-left: 0.25rem;
     transition: opacity 0.12s ease, color 0.12s ease;
     display: inline-flex;
     align-items: center;
