@@ -6,6 +6,7 @@ import { renderSidebarModuleHeaderHtml } from './sidebarModules.js';
 import { conditionLabel, weatherIconSvg, weatherIconSvgFromCode } from './weatherProviders/weatherIcons.js';
 
 const REFRESH_ICON = ACTION_ICONS.resetCustomization;
+const EXT_LINK_ICON = '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M5 2.4H2.9a1.4 1.4 0 0 0-1.4 1.4v5.3A1.4 1.4 0 0 0 2.9 10.5h5.3a1.4 1.4 0 0 0 1.4-1.4V7M7.3 1.5h3.2v3.2M10.4 1.6 5 7" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 export const SidebarWeather = {
     root: null,
@@ -18,6 +19,7 @@ export const SidebarWeather = {
 
         this.renderShell();
         this.bindShellListeners();
+        this.updateExtLink();
 
         this.onStateChanged = () => this.renderContent();
         window.addEventListener('weather:state_changed', this.onStateChanged);
@@ -39,7 +41,8 @@ export const SidebarWeather = {
                     <span class="sidebar-weather__compact-icon" data-weather-compact-icon></span>
                     <span class="sidebar-weather__compact-temp" data-weather-compact-temp>—</span>
                 </div>
-                <button type="button" class="btn btn--compact btn-icon sidebar-weather__refresh" data-weather-refresh title="Refresh weather" aria-label="Refresh weather">${REFRESH_ICON}</button>`;
+                <button type="button" class="btn btn--compact btn-icon sidebar-weather__refresh" data-weather-refresh title="Refresh weather" aria-label="Refresh weather">${REFRESH_ICON}</button>
+                <a class="btn btn--compact btn-icon sidebar-weather__extlink" data-weather-extlink href="#" target="_blank" rel="noopener noreferrer" title="Open IMGW weather (meteo.imgw.pl)" aria-label="Open IMGW weather">${EXT_LINK_ICON}</a>`;
         this.root.innerHTML = `
             ${renderSidebarModuleHeaderHtml({ headerId: 'weather-section-header', title: 'Weather', extrasHtml })}
             <div class="collapsable-section" id="weather-section">
@@ -55,8 +58,16 @@ export const SidebarWeather = {
         });
     },
 
+    updateExtLink() {
+        const { settings } = WeatherApi.getState();
+        const url = WeatherApi.getPogodaUrl(settings.lat, settings.lon);
+        const el = this.root?.querySelector('[data-weather-extlink]');
+        if (el) el.setAttribute('href', url);
+    },
+
     renderContent() {
         const { snapshot, loading, lastRefreshAt, settings } = WeatherApi.getState();
+        this.updateExtLink();
         this.updateCompact(snapshot, loading);
         const body = this.root?.querySelector('[data-weather-body]');
         if (!body) return;
@@ -117,7 +128,6 @@ export const SidebarWeather = {
             const sel = loc.id === settings.locationId ? 'selected' : '';
             return `<option value="${escapeHtml(loc.id)}" ${sel}>${escapeHtml(loc.label)}</option>`;
         }).join('');
-        const pogodaUrl = WeatherApi.getPogodaUrl(settings.lat, settings.lon);
         const showSynop = this.isSourceEnabled(settings, 'imgw-synop') && snapshot.observation?.stationName;
         const showWarnings = this.isSourceEnabled(settings, 'imgw-warnings') && (snapshot.alerts?.length || 0) > 0;
         const providers = WeatherApi.listProviders();
@@ -188,7 +198,6 @@ export const SidebarWeather = {
             ${forecastError ? `<p class="tool-msg sidebar-weather__msg sidebar-weather__msg--warn">${escapeHtml(forecastError.message)}</p>` : ''}
             <div class="sidebar-weather__footer">
                 <span class="sidebar-weather__updated">${formatUpdated(lastRefreshAt, stale)}</span>
-                <a class="sidebar-weather__link" href="${escapeHtml(pogodaUrl)}" target="_blank" rel="noopener noreferrer">IMGW ↗</a>
             </div>
             <div class="sidebar-weather__settings">
                 <button type="button" class="btn btn--compact sidebar-weather__settings-toggle" data-weather-settings-toggle aria-expanded="${this.settingsOpen}">

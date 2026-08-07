@@ -605,6 +605,11 @@ executeDataBackupExport() {
             });
             
             const content = sections.join('\n\n');
+
+            // Report export size
+            const lineCount = content.split('\n').length;
+            showAppToast(`Exported ${lineCount} lines from ${sortedItems.length} notes`);
+
             const blob = new Blob([content], { type: 'text/plain' });
             const virtualLink = document.createElement('a');
             virtualLink.href = URL.createObjectURL(blob);
