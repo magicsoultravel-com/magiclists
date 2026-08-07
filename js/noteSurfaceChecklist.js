@@ -143,7 +143,10 @@ export function bindChecklistInteractions(root, item, {
             if (!stepId) return;
             const focusStepId = removeChecklistStepAndFocus(root, item, stepId, { localOnly, onChange });
             if (focusStepId) setPendingChecklistFocus(root, focusStepId, 'end');
-            if (localOnly) refresh();
+            // Always refresh (matches indent/outdent) so the row disappears
+            // immediately on the board surface too (localOnly=false), not just
+            // in the modal editor.
+            refresh();
             return;
         }
 

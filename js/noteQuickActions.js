@@ -4,6 +4,7 @@ import { copyPlainTextToClipboard } from './clipboard.js';
 import { itemToPlainCopyText, itemToTxtExportText, sortItemsForTxtExport } from './noteBodyConversion.js';
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { NoteSurface } from './noteSurface.js';
+import { applyItemCardTheme } from './noteSurfaceHtml.js';
 import { isDesktopCard } from './ui.js';
 import { BoardOperations } from './boardOperations.js';
 import { DisplayOptions } from './displayOptions.js';
@@ -13,7 +14,35 @@ import { Fullscreen } from './fullscreen.js';
 import { UndoManager } from './undo.js';
 import { BoardOverlay } from './boardOverlay.js';
 
-function attachCardActionButton(btn, handler) {
+/**
+ * Attach a quick-action button using a "commit then act" pattern.
+ *
+ * Pressing a quick action while the note is being edited inline causes the
+ * button to grab focus, which blurs the focused `.card-inline-edit` and runs
+ * the editor's blur/autosave logic. Previously that first press was entirely
+ * absorbed by "escaping the edit" and a second press was needed to act — in
+ * both the surface/board editor and the modal editor.
+ *
+ * This wrapper collapses that into a single press:
+ *  1. `commit()` runs synchronously on `mousedown`, BEFORE the button takes
+ *     focus, so the latest keystrokes in the active inline field are captured.
+ *  2. The `handler` is deferred to the next animation frame so it runs after
+ *     the editable's blur/autosave/reflow has settled — which is what lets
+ *     popovers (color/emoji pickers) and state toggles "stick" on the first
+ *     press instead of being cancelled by the edit-exit reflow.
+ *
+ * For keyboard activation (click without a preceding mousedown), `commit()` and
+ * `handler` both run immediately; the `handledByMouse` guard prevents the click
+ * fallback from double-firing a mousedown-triggered action.
+ *
+ * @param {HTMLElement} btn - The quick-action button.
+ * @param {Function} handler - The action to perform.
+ * @param {{ commit?: Function|null, defer?: boolean }} [opts]
+ * @param {Function|null} [opts.commit] - Synchronous callback that captures the
+ *   currently focused inline edit before focus moves (e.g. commitFocusedInlineField).
+ * @param {boolean} [opts.defer=true] - Defer `handler` to the next animation frame.
+ */
+function attachCardActionButton(btn, handler, { commit = null, defer = true } = {}) {
     if (!btn) return;
 
     let handledByMouse = false;
@@ -21,7 +50,14 @@ function attachCardActionButton(btn, handler) {
         if (e.button !== 0) return;
         e.stopPropagation();
         handledByMouse = true;
-        handler(e);
+        // Commit synchronously so the action sees the latest in-progress edit.
+        if (typeof commit === 'function') commit();
+        if (defer) {
+            // Let the editable's blur/autosave/reflow finish, then act on a stable DOM.
+            requestAnimationFrame(() => handler(e));
+        } else {
+            handler(e);
+        }
     });
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -29,6 +65,7 @@ function attachCardActionButton(btn, handler) {
             handledByMouse = false;
             return;
         }
+        if (typeof commit === 'function') commit();
         handler(e);
     });
 }
@@ -68,9 +105,12 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
         ? (card?.querySelector('.editor-note-shell') || card)
         : (editor?.mountZone?.querySelector('.editor-note-shell') || editor?.mountZone);
 
+    // Synchronous commit used before the button steals focus from the active inline edit.
+    const boardCommit = surface === 'board' ? () => NoteSurface.commitFocusedInlineField(card, item) : null;
+    const modalCommit = surface === 'modal' ? () => editor.syncActiveItemFromDom() : null;
+
     attachCardActionButton(copyBtn, async () => {
         if (surface === 'board') {
-            NoteSurface.commitFocusedInlineField(card, item);
             const shell = card.querySelector('.editor-note-shell');
             if (shell) NoteSurface.syncItemBodyFromDom(shell, item);
             const ok = await copyPlainTextToClipboard(itemToPlainCopyText(item));
@@ -83,7 +123,7 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
             if (ok) NoteSurface.flashCopyFeedback(copyBtn);
             else NoteSurface.flashCopyFeedback(copyBtn, 'Copy failed', { failed: true });
         }
-    });
+    }, { commit: boardCommit || modalCommit });
 
     attachCardActionButton(pinBtn, () => {
         const pinned = ui.toggleBoardPin(item.id);
@@ -93,7 +133,6 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
 
     attachCardActionButton(colorBtn, () => {
         if (surface === 'board') {
-            NoteSurface.commitFocusedInlineField(card, item);
             if (isDesktopCard(card)) ui.raiseDesktopCard(card);
             if (!localStorage.getItem('admin_token')) return;
             ColorPicker.open({
@@ -105,41 +144,38 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
                     NoteSurface.mutateItem(item, (it) => {
                         it.backgroundColor = color || THEME_DEFAULT_COLOR;
                     }, { preserveView: true, skipRerender: true });
-                    ui.applyItemCardTheme(card, item);
+                    applyItemCardTheme(card, item);
                 }
             });
         } else {
             editor.openColorPicker();
         }
-    });
+    }, { commit: boardCommit });
 
     attachCardActionButton(iconBtn, () => {
         if (surface === 'board') {
-            NoteSurface.commitFocusedInlineField(card, item);
             if (isDesktopCard(card)) ui.raiseDesktopCard(card);
             if (!localStorage.getItem('admin_token')) return;
             NoteSurface.openEmojiPickerForNote(iconRoot, iconBtn, item);
         } else {
             editor.openEmojiPicker();
         }
-    });
+    }, { commit: boardCommit });
 
     attachCardActionButton(hideBtn, () => {
         if (surface === 'board') {
-            NoteSurface.commitFocusedInlineField(card, item);
             BoardOperations.hideFromBoard(item);
         } else {
             editor.syncActiveItemFromDom();
             Object.assign(item, editor.collectFormData());
             BoardOperations.hideFromBoard(item);
         }
-    });
+    }, { commit: boardCommit || modalCommit });
 
     if (calBtn) {
         BoardOperations.syncCalendarButtonUI(item, calBtn);
         attachCardActionButton(calBtn, () => {
             if (surface === 'board') {
-                NoteSurface.commitFocusedInlineField(card, item);
                 BoardOperations.toggleCardCalendar(item, calBtn);
             } else {
                 editor.syncActiveItemFromDom();
@@ -148,7 +184,7 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
                 editor.markInteracted();
                 editor.triggerAutoSave();
             }
-        });
+        }, { commit: boardCommit || modalCommit });
     }
 }
 
@@ -182,6 +218,8 @@ export function bindNoteQuickActions(mount, item, { surface, ui, card, ctx, edit
         buttons.toggleBtn.addEventListener('mousedown', (e) => {
             if (e.button !== 0) return;
             e.stopPropagation();
+            // Capture the active inline edit before this button steals focus.
+            NoteSurface.commitFocusedInlineField(card, item);
         });
         buttons.toggleBtn.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -191,8 +229,6 @@ export function bindNoteQuickActions(mount, item, { surface, ui, card, ctx, edit
     }
 
     attachCardActionButton(buttons.editBtn, () => {
-
-        NoteSurface.commitFocusedInlineField(card, item);
         if (isDesktopCard(card)) ui.raiseDesktopCard(card);
         if (card.dataset.skipExpand) {
             delete card.dataset.skipExpand;
@@ -200,7 +236,7 @@ export function bindNoteQuickActions(mount, item, { surface, ui, card, ctx, edit
         }
         if (!localStorage.getItem('admin_token')) return;
         window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: { item } }));
-    });
+    }, { commit: boardCommit });
 }
 
 function bindModalQuickActions(toolbarMount, item, ui, editor) {
@@ -215,13 +251,15 @@ function bindModalQuickActions(toolbarMount, item, ui, editor) {
     editor.calendarToggleBtn = buttons.calBtn;
 
     if (buttons.archiveBtn) {
-        attachCardActionButton(buttons.archiveBtn, () => editor.emitArchiveAction());
+        attachCardActionButton(buttons.archiveBtn, () => editor.emitArchiveAction(), { commit: () => editor.syncActiveItemFromDom() });
     }
 
     if (buttons.closeBtn) {
         buttons.closeBtn.addEventListener('mousedown', (e) => {
             if (e.button !== 0) return;
             e.stopPropagation();
+            // Capture the active inline edit before this button steals focus.
+            editor.syncActiveItemFromDom();
         });
         buttons.closeBtn.addEventListener('click', (e) => {
             e.stopPropagation();

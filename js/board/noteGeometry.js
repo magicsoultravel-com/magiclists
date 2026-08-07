@@ -46,13 +46,6 @@ export function gridRowStride(w, h, metrics = getGridMetrics()) {
     return geoCellsToSpanH(hCells) + metrics.gap;
 }
 
-export function snapPackCoord(value, origin, pad, packStride) {
-    const anchor = origin + pad;
-    const rel = Math.max(0, value - anchor);
-    const step = packStride || getGridMetrics().strideX;
-    return anchor + Math.round(rel / step) * step;
-}
-
 export function snapGridCoord(value, stride) {
     const step = stride ?? getGridMetrics().strideX;
     return Math.max(0, Math.round(value / step) * step);
@@ -100,18 +93,11 @@ export function snapNotePosition(rect, { maxW = Infinity, maxH = Infinity, origi
     const pad = edgePad ?? metrics.edgePad;
     const w = Math.max(FREEFORM_MIN_W, Math.round(rect.w));
     const h = Math.max(FREEFORM_MIN_H, Math.round(rect.h));
-    const atSmall = isCollapsedSpatialSize(w, h);
-    let x;
-    let y;
-    if (atSmall) {
-        const xPack = gridColumnStride(w, h, metrics);
-        const yPack = gridRowStride(w, h, metrics);
-        x = snapPackCoord(rect.x, origin, pad, xPack);
-        y = snapPackCoord(rect.y, origin, pad, yPack);
-    } else {
-        x = snapGridCoord(rect.x, metrics.placementStrideX);
-        y = snapGridCoord(rect.y, metrics.placementStrideY);
-    }
+    // Position snapping is size-independent: minimal/collapsed and enlarged notes
+    // both snap to the user's placement (snap) grid so dragging behaves identically
+    // for every tile size (previously collapsed notes snapped to the tile stride).
+    let x = snapGridCoord(rect.x, metrics.placementStrideX);
+    let y = snapGridCoord(rect.y, metrics.placementStrideY);
     const minX = origin + pad;
     const minY = origin + pad;
     x = Math.max(minX, x);
@@ -137,11 +123,11 @@ export function snapNoteRect(rect, { maxW = Infinity, maxH = Infinity, origin = 
     const footprint = readTileSmallFootprint();
     if (isCollapsedSpatialSize(rect.w, rect.h)) {
         const small = getSmallRect(footprint);
-        const xPack = gridColumnStride(small.w, small.h, metrics);
-        const yPack = gridRowStride(small.w, small.h, metrics);
+        // Position is delegated to snapNotePosition (placement grid), consistent
+        // with every tile size; here we only normalize the footprint to small.
         const snapped = {
-            x: snapPackCoord(rect.x, origin, pad, xPack),
-            y: snapPackCoord(rect.y, origin, pad, yPack),
+            x: rect.x,
+            y: rect.y,
             w: small.w,
             h: small.h
         };
