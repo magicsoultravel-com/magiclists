@@ -236,7 +236,7 @@ export function bindNoteQuickActions(mount, item, { surface, ui, card, ctx, edit
         }
         if (!localStorage.getItem('admin_token')) return;
         window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: { item } }));
-    }, { commit: boardCommit });
+    }, { commit: () => NoteSurface.commitFocusedInlineField(card, item) });
 }
 
 function bindModalQuickActions(toolbarMount, item, ui, editor) {
