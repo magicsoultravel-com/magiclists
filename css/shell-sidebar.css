@@ -26,6 +26,12 @@
     width: var(--sidebar-width, 220px);
 }
 
+/* Zoomed wrapper that ALSO owns the sidebar-level scroll. Resizing the
+   sidebar zooms the module content in/out so items keep a consistent
+   logical width. The scrollbar lives on this same zoomed element, so its
+   scroll geometry tracks the scaled content (wheel + scrollbar work at
+   every zoom level). Docked sections expand full-height here; their
+   overflow scrolls at the sidebar level instead of clipping. */
 .side-panel-scale-inner {
     display: flex;
     flex-direction: column;
@@ -33,6 +39,10 @@
     min-height: 0;
     width: calc((var(--sidebar-width, 220px) - var(--sidebar-pad-x, 1rem)) / var(--sidebar-ui-scale, 1));
     zoom: var(--sidebar-ui-scale, 1);
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in srgb, var(--text-muted) 30%, transparent) transparent;
 }
 
 @supports not (zoom: 1) {
@@ -41,6 +51,31 @@
         transform: scale(var(--sidebar-ui-scale, 1));
         transform-origin: top left;
     }
+}
+
+.side-panel-scale-inner::-webkit-scrollbar {
+    width: 6px;
+}
+
+.side-panel-scale-inner::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--text-muted) 30%, transparent);
+    border-radius: 3px;
+}
+
+.side-panel-scale-inner::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* Docked collapsable sections must not clip long content — the zoomed
+   .side-panel-scale-inner above is the sidebar-level scroll container. */
+.side-panel .collapsable-section {
+    max-height: none;
+    overflow: visible;
+}
+
+.side-panel .collapsable-section.collapsed {
+    max-height: 0;
+    overflow: hidden;
 }
 
 .side-panel-brand-host {
@@ -274,9 +309,10 @@
 
 .shell-splitter--v {
     width: 6px;
-    margin: 0 -2px;
+    margin: 0;
     cursor: col-resize;
     align-self: stretch;
+    background: var(--chrome-bg, var(--bg-surface));
 }
 
 .shell-splitter--h {

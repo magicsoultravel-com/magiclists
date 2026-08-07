@@ -217,6 +217,7 @@ function bindSplitterDrag(handle, axis) {
     let startX = 0;
     let startY = 0;
     let startSize = 0;
+    let lastSize = 0;
 
     const beginResize = () => {
         document.body.classList.add('is-shell-resizing');
@@ -228,25 +229,25 @@ function bindSplitterDrag(handle, axis) {
     const endResize = (e) => {
         if (!resizing) return;
         resizing = false;
-        document.body.classList.remove('is-shell-resizing', 'is-shell-resizing--v', 'is-shell-resizing--h');
         handle.classList.remove('is-active');
         try {
             handle.releasePointerCapture(e.pointerId);
         } catch { /* ignore */ }
 
         if (axis === 'v') {
-            const width = sidebarPanel?.offsetWidth;
-            if (width) {
-                const clamped = applySidebarWidth(width);
-                if (clamped) writeSidebarWidth(clamped);
-            }
+            // Commit the final width while the transition is still disabled
+            // (body.is-shell-resizing is still set), then re-enable transitions.
+            const clamped = applySidebarWidth(lastSize || sidebarPanel?.offsetWidth);
+            document.body.classList.remove('is-shell-resizing', 'is-shell-resizing--v', 'is-shell-resizing--h');
+            if (clamped) writeSidebarWidth(clamped);
             dispatchDesktopBoundsChanged();
         } else {
             const mount = document.getElementById('file-cabinet');
-            const height = mount?.offsetHeight;
+            const height = lastSize || mount?.offsetHeight;
             if (mount && height) {
                 applyCabinetHeight(mount, height, { persist: true });
             }
+            document.body.classList.remove('is-shell-resizing', 'is-shell-resizing--h', 'is-shell-resizing--v');
         }
     };
 
@@ -267,6 +268,7 @@ function bindSplitterDrag(handle, axis) {
         resizing = true;
         startX = e.clientX;
         startY = e.clientY;
+        lastSize = startSize;
         handle.setPointerCapture(e.pointerId);
         beginResize();
     });
@@ -276,6 +278,7 @@ function bindSplitterDrag(handle, axis) {
 
         if (axis === 'v') {
             const next = clampSidebarWidth(startSize + (e.clientX - startX));
+            lastSize = next;
             sidebarPanel.style.setProperty('--sidebar-width', `${next}px`);
             applySidebarUiScale(next);
             notifySidebarWidthChanged();
@@ -283,6 +286,7 @@ function bindSplitterDrag(handle, axis) {
             const mount = document.getElementById('file-cabinet');
             if (!mount) return;
             const next = clampCabinetHeight(startSize + (e.clientY - startY), mount);
+            lastSize = next;
             applyCabinetHeight(mount, next);
         }
     });
