@@ -277,11 +277,9 @@ function bindSplitterDrag(handle, axis) {
         if (!resizing) return;
 
         if (axis === 'v') {
-            const next = clampSidebarWidth(startSize + (e.clientX - startX));
-            lastSize = next;
-            sidebarPanel.style.setProperty('--sidebar-width', `${next}px`);
-            applySidebarUiScale(next);
-            notifySidebarWidthChanged();
+            // Single source of truth: applySidebarWidth sets --sidebar-width,
+            // applies the UI scale and dispatches the change notification.
+            lastSize = applySidebarWidth(startSize + (e.clientX - startX));
         } else {
             const mount = document.getElementById('file-cabinet');
             if (!mount) return;

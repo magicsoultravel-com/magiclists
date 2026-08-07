@@ -40,11 +40,6 @@ import {
     sortBoardLayoutWithFileCabinet
 } from './fileCabinet.js';
 import { sortBoardItems } from './boardSort.js';
-import {
-    computeAlignRegion,
-    getExpandedAlignSlots,
-    slotsToRegionRects
-} from './boardSortAlign.js';
 import { syncCabinetSplitter } from './shellResize.js';
 import { raiseDesktopElement, syncDesktopStackSeq } from './desktopStack.js';
 import { readTileSmallFootprint } from './tileFootprint.js';
@@ -137,7 +132,6 @@ import {
     readNoteRect as readNoteRectCore,
     applyNoteRect as applyNoteRectCore,
     findFirstCanvasSlot as findFirstCanvasSlotCore,
-    findFirstCanvasSlotVertical as findFirstCanvasSlotVerticalCore,
     findNearestGridSlot as findNearestGridSlotCore,
     gridColumnStride as gridColumnStrideCore,
     rectsOverlap as rectsOverlapCore
@@ -1225,10 +1219,9 @@ resnapBoardPositions(canvas, { reflow = false } = {}) {
         return { collapsed, expanded };
     },
 
-    computeExpandedAlignAnchor(direction, collapsedRects, {
+    computeExpandedSetStart(direction, collapsedRects, {
         origin,
         edgePad,
-        packW,
         yStart,
         metrics = getGridMetrics()
     } = {}) {
@@ -1241,9 +1234,10 @@ resnapBoardPositions(canvas, { reflow = false } = {}) {
             const right = collapsedRects.length
                 ? collapsedRects.reduce((max, rect) => Math.max(max, rect.x + rect.w), minX)
                 : minX;
-            const startX = right + metrics.gap + colStride;
-            const regionW = Math.max(metrics.strideX, packW - (startX - minX));
-            return { startX, startY: minY, regionW };
+            return {
+                startX: right + metrics.gap + colStride,
+                startY: minY
+            };
         }
 
         const rowStride = getPackStrideYForRect(small.w, small.h);
@@ -1252,42 +1246,8 @@ resnapBoardPositions(canvas, { reflow = false } = {}) {
             : minY;
         return {
             startX: minX,
-            startY: bottom + metrics.gap + rowStride,
-            regionW: packW
+            startY: bottom + metrics.gap + rowStride
         };
-    },
-
-    packExpandedAlignGrid(canvas, expandedItems, pinnedIds, {
-        placed,
-        layout,
-        anchor,
-        bounds,
-        metrics,
-        direction = 'horizontal'
-    }) {
-        const { origin, packW, viewportBottom, edgePad } = bounds;
-        const unpinned = expandedItems.filter((item) => item?.id && !pinnedIds.has(item.id));
-        if (!unpinned.length) return;
-
-        const slots = getExpandedAlignSlots(unpinned.length, direction);
-        const region = computeAlignRegion({
-            packW,
-            startX: anchor.startX,
-            startY: anchor.startY,
-            regionW: anchor.regionW,
-            viewportBottom,
-            origin,
-            edgePad,
-            metrics
-        });
-        const rects = slotsToRegionRects(slots, region, { gap: metrics.gap });
-
-        unpinned.forEach((item, index) => {
-            const rect = rects[index];
-            if (!rect) return;
-            layout.set(item.id, rect);
-            placed.push({ ...rect });
-        });
     },
 
     packGridBoard(canvas, collapsedItems, expandedItems, {
@@ -1332,10 +1292,8 @@ resnapBoardPositions(canvas, { reflow = false } = {}) {
                 if (!item?.id || pinnedIds.has(item.id)) return;
                 const isExp = this.isItemLayoutExpanded(item, layoutMode);
                 const { w, h } = this.resolveSortItemSize(item, layoutMode, isExp);
-                const slotOpts = { origin, edgePad, yMin, xMin, maxH };
-                let slot = dir === 'vertical'
-                    ? findFirstCanvasSlotVerticalCore(w, h, placed, canvasW, slotOpts)
-                    : findFirstCanvasSlotCore(w, h, placed, canvasW, slotOpts);
+                const slotOpts = { origin, edgePad, yMin, xMin, maxH, direction: dir };
+                let slot = findFirstCanvasSlotCore(w, h, placed, canvasW, slotOpts);
                 slot = this.snapNoteRect(slot, snapBounds);
                 layout.set(item.id, slot);
                 placed.push({ ...slot });
@@ -1350,28 +1308,12 @@ resnapBoardPositions(canvas, { reflow = false } = {}) {
             .map((item) => layout.get(item.id))
             .filter((rect) => rect && Number.isFinite(rect.x));
         const hasExpandedGap = unpinnedCollapsed.length && unpinnedExpanded.length;
-        const expandedAnchor = this.computeExpandedAlignAnchor(
+        const expandedStart = this.computeExpandedSetStart(
             dir,
             hasExpandedGap ? collapsedRects : [],
-            { origin, edgePad, packW, yStart, metrics }
+            { origin, edgePad, yStart, metrics }
         );
-
-        if (unpinnedExpanded.length) {
-            const viewport = getGridViewportBounds(canvas);
-            this.packExpandedAlignGrid(canvas, expandedItems, pinnedIds, {
-                placed,
-                layout,
-                anchor: expandedAnchor,
-                bounds: {
-                    origin,
-                    packW,
-                    viewportBottom: viewport.viewportBottom,
-                    edgePad
-                },
-                metrics,
-                direction: dir
-            });
-        }
+        packGroup(expandedItems, expandedStart);
 
         if (persistOnly) {
             if (!save) return layout;

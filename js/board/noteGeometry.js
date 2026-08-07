@@ -38,14 +38,6 @@ export function gridColumnStride(w, h, metrics = getGridMetrics()) {
     return geoCellsToSpanW(wCells) + metrics.gap;
 }
 
-export function gridRowStride(w, h, metrics = getGridMetrics()) {
-    if (isCollapsedSpatialSize(w, h)) {
-        return h + metrics.gap;
-    }
-    const hCells = Math.max(1, geoSpanToCellsH(h));
-    return geoCellsToSpanH(hCells) + metrics.gap;
-}
-
 export function snapGridCoord(value, stride) {
     const step = stride ?? getGridMetrics().strideX;
     return Math.max(0, Math.round(value / step) * step);
@@ -155,52 +147,52 @@ export function snapNoteRect(rect, { maxW = Infinity, maxH = Infinity, origin = 
     return snapNotePosition(snapped, { maxW, maxH, origin, edgePad: pad });
 }
 
-export function findFirstCanvasSlot(w, h, placed, canvasW, { origin = CANVAS_LAYOUT_ORIGIN, edgePad, yMin } = {}) {
+export function findFirstCanvasSlot(w, h, placed, canvasW, {
+    origin = CANVAS_LAYOUT_ORIGIN,
+    edgePad,
+    xMin,
+    yMin,
+    maxH = Infinity,
+    direction = 'horizontal'
+} = {}) {
     const metrics = getGridMetrics();
     const pad = edgePad ?? metrics.edgePad;
     const packW = Math.max(metrics.canvasGridW, canvasW - origin * 2 - pad * 2);
-    const xOrigin = origin + pad;
-    const yOrigin = Math.max(origin + pad, yMin ?? origin + pad);
-    const rowStride = gridColumnStride(w, h, metrics);
-    const yStride = getPackStrideYForRect(w, h);
-    let y = yOrigin;
-    while (true) {
-        let x = xOrigin;
-        while (x + w <= origin + pad + packW + 1) {
-            const candidate = snapNoteRect(
-                { x, y, w, h },
-                { maxW: packW, origin, edgePad: pad }
-            );
-            if (!placed.some((p) => rectsOverlap(candidate, p, metrics.gap))) {
-                return candidate;
-            }
-            x += rowStride;
-        }
-        y += yStride;
-    }
-}
-
-export function findFirstCanvasSlotVertical(w, h, placed, canvasW, { origin = CANVAS_LAYOUT_ORIGIN, edgePad, xMin, yMin, maxH } = {}) {
-    const metrics = getGridMetrics();
-    const pad = edgePad ?? metrics.edgePad;
-    const packW = Math.max(metrics.canvasGridW, canvasW - origin * 2 - pad * 2);
-    const xOrigin = Math.max(origin + pad, xMin ?? origin + pad);
-    const yOrigin = Math.max(origin + pad, yMin ?? origin + pad);
     const colStride = gridColumnStride(w, h, metrics);
     const yStride = getPackStrideYForRect(w, h);
-    const bottomLimit = (maxH ?? origin + metrics.strideY * 40) + 1;
+    const isVertical = direction === 'vertical';
+    const xOrigin = Math.max(origin + pad, xMin ?? origin + pad);
+    const yOrigin = Math.max(origin + pad, yMin ?? origin + pad);
+    // Horizontal packing is unbounded downward; vertical packing respects maxH.
+    const snapBounds = isVertical
+        ? { maxW: packW, origin, edgePad: pad, maxH }
+        : { maxW: packW, origin, edgePad: pad };
+    const isFree = (x, y) => {
+        const candidate = snapNoteRect({ x, y, w, h }, snapBounds);
+        return placed.some((p) => rectsOverlap(candidate, p, metrics.gap)) ? null : candidate;
+    };
+
+    if (!isVertical) {
+        let y = yOrigin;
+        while (true) {
+            let x = xOrigin;
+            while (x + w <= origin + pad + packW + 1) {
+                const candidate = isFree(x, y);
+                if (candidate) return candidate;
+                x += colStride;
+            }
+            y += yStride;
+        }
+    }
+
+    const bottomLimit = (maxH < Infinity ? maxH : origin + metrics.strideY * 40) + 1;
     let x = xOrigin;
     let guard = 0;
     while (guard < 800) {
         let y = yOrigin;
         while (y + h <= bottomLimit) {
-            const candidate = snapNoteRect(
-                { x, y, w, h },
-                { maxW: packW, origin, edgePad: pad, maxH }
-            );
-            if (!placed.some((p) => rectsOverlap(candidate, p, metrics.gap))) {
-                return candidate;
-            }
+            const candidate = isFree(x, y);
+            if (candidate) return candidate;
             y += yStride;
         }
         x += colStride;
