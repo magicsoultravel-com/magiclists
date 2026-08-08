@@ -12,7 +12,7 @@
     display: flex;
     flex-direction: column;
     gap: 0;
-    padding: 0.55rem 0.5rem 0.45rem;
+    padding: 0.55rem 0 0.45rem 0.5rem;
     background: var(--chrome-bg, var(--bg-surface));
     border-right: 2px solid color-mix(in srgb, var(--text-muted) 35%, var(--border-color));
     overflow: hidden;
@@ -218,6 +218,8 @@
     box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
     overflow: hidden;
     pointer-events: auto;
+    opacity: var(--sidebar-undock-opacity, 1);
+    transition: opacity 0.2s ease;
 }
 
 .sidebar-module--undocked .collapsable-header {
@@ -263,6 +265,59 @@
     display: flex;
 }
 
+/* Clock compact view - show clock in header when collapsed */
+.sidebar-clock__compact {
+    display: none;
+}
+
+/* Hide expand toggle when clock is collapsed - clock IS the content */
+.sidebar-clock .collapsable-header:has(.collapsable-toggle.collapsed) .collapsable-toggle {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+/* Show expand toggle on hover when collapsed */
+.sidebar-clock:hover .collapsable-header:has(.collapsable-toggle.collapsed) .collapsable-toggle {
+    opacity: 1;
+}
+
+.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-clock__compact {
+    display: inline-flex;
+    align-items: center;
+}
+
+.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-clock__title {
+    display: none;
+}
+
+/* Compact clock sizing */
+.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-clock__compact .clock-display {
+    gap: 0.15rem;
+}
+
+.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-clock__compact .clock-chip {
+    font-size: 0.65rem;
+    padding: 0.1rem 0.3rem;
+}
+
+.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-clock__compact .clock-chip--date {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-clock__compact .clock-mantel {
+    display: none;
+}
+
+.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-clock__compact .clock-analog {
+    display: none;
+}
+
+.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-clock__compact .clock-segment {
+    display: none;
+}
+
 .sidebar-module--dragging .collapsable-header {
     cursor: grabbing;
     opacity: var(--desktop-drag-opacity, 0.85);
@@ -270,10 +325,15 @@
 
 .sidebar-module__dock {
     flex-shrink: 0;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
+.sidebar-module:hover .sidebar-module__dock {
     opacity: 0.8;
 }
 
-.sidebar-module__dock:hover {
+.sidebar-module:hover .sidebar-module__dock:hover {
     opacity: 1;
 }
 

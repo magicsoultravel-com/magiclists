@@ -218,40 +218,6 @@ export function getStepRowLevel(row) {
     return Math.min(4, Math.floor(n));
 }
 
-export function reorderActiveStepsFromDomOrder(activeSteps, visibleOrderIds, itemId, collapsedKeys = {}) {
-    const stepById = new Map(activeSteps.map((step) => [step.id, step]));
-    const visibleSet = new Set(visibleOrderIds);
-    const placed = new Set();
-    const result = [];
-
-    for (const id of visibleOrderIds) {
-        const step = stepById.get(id);
-        if (!step || placed.has(id)) continue;
-        result.push(step);
-        placed.add(id);
-
-        const idx = activeSteps.findIndex((s) => s.id === id);
-        const collapseKey = `${itemId}:${id}`;
-        if (idx < 0 || !collapsedKeys[collapseKey] || !stepHasDescendants(activeSteps, idx)) continue;
-
-        const rootLevel = getStepLevel(step);
-        for (let i = idx + 1; i < activeSteps.length; i++) {
-            const child = activeSteps[i];
-            const level = getStepLevel(child);
-            if (level <= rootLevel) break;
-            if (visibleSet.has(child.id) || placed.has(child.id)) continue;
-            result.push(child);
-            placed.add(child.id);
-        }
-    }
-
-    for (const step of activeSteps) {
-        if (!placed.has(step.id)) result.push(step);
-    }
-
-    return result;
-}
-
 export function stepHasDescendants(steps, index) {
     const level = getStepLevel(steps[index]);
     for (let i = index + 1; i < steps.length; i++) {
@@ -332,4 +298,303 @@ export function annotateChecklistTreeGuides(visibleRows) {
         }
         return { ...row, treeGuides };
     });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// H3-B: explicit parentId + order position model
+//
+// level stays the authored visual indent (gap-tolerant, first item may be any
+// level 0-4 — never derived). parentId records the structural parent: the
+// nearest PRECEDING step with a strictly lower level (identical to
+// findStepParentIndex semantics), or null when no such step exists. order is a
+// global 0..n-1 sequence index. Every mutation below refreshes position
+// metadata via refreshStepsPosition so parentId/order can never drift from the
+// real state — the model is the single source of truth.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Compute parentId for every step: nearest preceding step with a strictly lower
+ * level (gap-tolerant, same rule as findStepParentIndex). O(n) single pass via
+ * a monotonic ancestor stack.
+ * @param {Array} steps - flat step array
+ * @returns {Map<string, string|null>}
+ */
+export function computeStepParentIds(steps) {
+    const parentIds = new Map();
+    const stack = [];
+    (steps || []).forEach((step) => {
+        if (!step || typeof step !== 'object' || !step.id) return;
+        const level = getStepLevel(step);
+        while (stack.length && stack[stack.length - 1].level >= level) stack.pop();
+        parentIds.set(step.id, stack.length ? stack[stack.length - 1].id : null);
+        stack.push({ level, id: step.id });
+    });
+    return parentIds;
+}
+
+/**
+ * Renumber `order` (0..n-1) and refresh `parentId` from level ordering, in
+ * place. Called by every mutation so the position metadata is always current.
+ */
+export function refreshStepsPosition(steps) {
+    if (!Array.isArray(steps)) return steps;
+    const parentIds = computeStepParentIds(steps);
+    steps.forEach((step, i) => {
+        if (!step || typeof step !== 'object') return;
+        step.order = i;
+        step.parentId = parentIds.get(step.id) ?? null;
+    });
+    return steps;
+}
+
+/** Non-mutating canonical projection: returns a NEW array with parentId/order. */
+export function stepsToParentOrder(steps) {
+    if (!Array.isArray(steps)) return [];
+    const next = steps.map((step) => (step && typeof step === 'object' ? { ...step } : step));
+    return refreshStepsPosition(next);
+}
+
+/** Reconstruct canonical array order from `order` (falls back to array order). */
+export function stepsFromParentOrder(steps) {
+    if (!Array.isArray(steps)) return [];
+    const ordered = [...steps].sort((a, b) => {
+        const oa = Number.isInteger(a?.order) ? a.order : Infinity;
+        const ob = Number.isInteger(b?.order) ? b.order : Infinity;
+        return (oa - ob) || 0;
+    });
+    return refreshStepsPosition(ordered);
+}
+
+/**
+ * Non-destructive repair mirroring ensureStepIds/ensureStepLevels. Fills missing
+ * parentId/order and canonicalizes stale ones. Never rewrites ids/text/levels.
+ * @returns {{ steps: Array, added: number }}
+ */
+export function ensureStepsParentOrder(steps) {
+    if (!Array.isArray(steps)) return { steps: [], added: 0 };
+    const parentIds = computeStepParentIds(steps);
+    let added = 0;
+    const next = steps.map((step, i) => {
+        if (!step || typeof step !== 'object') return step;
+        const canonicalParent = parentIds.get(step.id) ?? null;
+        const hasOrder = Number.isInteger(step.order) && step.order >= 0;
+        const hasParent = step.parentId === canonicalParent;
+        if (hasOrder && hasParent) return step;
+        added += 1;
+        return { ...step, order: hasOrder ? step.order : i, parentId: canonicalParent };
+    });
+    return { steps: next, added };
+}
+
+/**
+ * Collect invariant violations for the position model. Used by unit + fuzz tests.
+ * @returns {Array<string>} empty when all invariants hold
+ */
+export function assertStepsInvariants(steps) {
+    if (!Array.isArray(steps)) return ['steps is not an array'];
+    const issues = [];
+    const canonical = computeStepParentIds(steps);
+    const indexById = new Map();
+    steps.forEach((step, i) => {
+        if (step?.id) indexById.set(step.id, i);
+    });
+    steps.forEach((step, i) => {
+        if (!step || typeof step !== 'object') {
+            issues.push(`[${i}] not an object`);
+            return;
+        }
+        if (!step.id || indexById.get(step.id) !== i) {
+            issues.push(`[${i}] missing or duplicate id`);
+            return;
+        }
+        if (step.order !== i) issues.push(`[${i}] order ${step.order} !== ${i}`);
+        const expected = canonical.get(step.id) ?? null;
+        if (step.parentId !== expected) {
+            issues.push(`[${i}] parentId ${step.parentId} !== canonical ${expected}`);
+        }
+        if (step.parentId === step.id) issues.push(`[${i}] self-referential parentId`);
+        if (step.parentId && !indexById.has(step.parentId)) {
+            issues.push(`[${i}] dangling parentId ${step.parentId}`);
+        }
+        if (step.parentId) {
+            const parentIdx = indexById.get(step.parentId);
+            if (parentIdx > i) issues.push(`[${i}] parent appears after child`);
+            if (getStepLevel(steps[parentIdx]) >= getStepLevel(step)) {
+                issues.push(`[${i}] parent level not strictly lower`);
+            }
+        }
+    });
+    return issues;
+}
+
+/** Toggle a step's completion in place. Order and positions are untouched. */
+export function toggleStepCompletion(steps, stepId, completed) {
+    const step = (steps || []).find((s) => s?.id === stepId);
+    if (!step) return false;
+    if (step.completed === completed) return false;
+    step.completed = completed;
+    return true;
+}
+
+/**
+ * Insert a new sibling step after afterStepId (or append when omitted).
+ * The new step inherits the anchor's level; position metadata is refreshed.
+ * @returns {{ steps: Array, step: Object }}
+ */
+export function addChecklistStep(steps, { afterStepId = null, text = '', completed = false, level, newId = null } = {}) {
+    const list = Array.isArray(steps) ? steps.map((s) => s) : [];
+    if (!newId) newId = `step_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const afterIdx = afterStepId ? list.findIndex((s) => s?.id === afterStepId) : list.length - 1;
+    const anchor = afterIdx >= 0 ? list[afterIdx] : null;
+    const step = {
+        id: newId,
+        text: String(text ?? ''),
+        completed: completed === true,
+        level: Math.min(4, Math.max(0, Number.isFinite(level) ? level : (anchor ? getStepLevel(anchor) : 0))),
+        parentId: null,
+        order: list.length
+    };
+    const insertAt = afterIdx >= 0 ? afterIdx + 1 : list.length;
+    const next = [...list.slice(0, insertAt), step, ...list.slice(insertAt)];
+    return { steps: refreshStepsPosition(next), step };
+}
+
+/**
+ * Split a step at Enter: the original keeps beforeText (as a sibling), a new
+ * step with afterText is inserted after it (or after its whole subtree when the
+ * group is collapsed). Position metadata is refreshed.
+ * @returns {{ steps: Array, newStep: Object|null }}
+ */
+export function splitChecklistStep(steps, stepId, beforeText, afterText, { afterSubtree = false, newId = null } = {}) {
+    const list = Array.isArray(steps) ? [...steps] : [];
+    const idx = list.findIndex((s) => s?.id === stepId);
+    if (idx < 0) return { steps: list, newStep: null };
+    const step = list[idx];
+    step.text = String(beforeText ?? '');
+    if (!newId) newId = `step_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    let insertAt = idx + 1;
+    if (afterSubtree) {
+        insertAt = idx + collectStepSubtree(list, idx).length;
+    }
+    const newStep = {
+        id: newId,
+        text: String(afterText ?? ''),
+        completed: false,
+        level: getStepLevel(step),
+        parentId: null,
+        order: insertAt
+    };
+    list.splice(insertAt, 0, newStep);
+    return { steps: refreshStepsPosition(list), newStep };
+}
+
+/**
+ * Delete a step. Children left behind are re-parented automatically by the
+ * nearest-preceding-lower-level rule via refreshStepsPosition.
+ * @returns {{ steps: Array, prevStepId: string|null, nextStepId: string|null }}
+ */
+export function deleteChecklistStep(steps, stepId) {
+    const list = Array.isArray(steps) ? [...steps] : [];
+    const idx = list.findIndex((s) => s?.id === stepId);
+    if (idx < 0) return { steps: list, prevStepId: null, nextStepId: null };
+    const prevStepId = idx > 0 ? (list[idx - 1]?.id ?? null) : null;
+    const nextStepId = idx + 1 < list.length ? (list[idx + 1]?.id ?? null) : null;
+    list.splice(idx, 1);
+    return { steps: refreshStepsPosition(list), prevStepId, nextStepId };
+}
+
+/** Merge stepIdx into its previous step (Enter/Backspace merge on an empty row). */
+export function mergeChecklistStepIntoPrev(steps, stepIdx) {
+    const list = Array.isArray(steps) ? [...steps] : [];
+    if (stepIdx <= 0 || stepIdx >= list.length) return { steps: list, merged: false };
+    const prev = list[stepIdx - 1];
+    const step = list[stepIdx];
+    prev.text = `${prev.text || ''}\n${step.text || ''}`;
+    list.splice(stepIdx, 1);
+    return { steps: refreshStepsPosition(list), merged: true };
+}
+
+/** Indent a whole subtree by one level (grouping preserved) and refresh metadata. */
+export function indentChecklistSteps(steps, startIndex) {
+    if (!steps?.[startIndex]) return steps;
+    applySubtreeLevelDelta(steps, startIndex, 1);
+    return refreshStepsPosition(steps);
+}
+
+/** Outdent a whole subtree by one level (clamped at 0) and refresh metadata. */
+export function outdentChecklistSteps(steps, startIndex) {
+    if (!steps?.[startIndex]) return steps;
+    applySubtreeLevelDelta(steps, startIndex, -1);
+    return refreshStepsPosition(steps);
+}
+
+/**
+ * Model-first drag commit.
+ *
+ * The DOM is used only for pointer hit-test geometry; the resulting drop target
+ * (insertIndex into the visible-others list, dropMode, anchorStepId) drives this
+ * pure rebuild of the steps array. Structure is never read back from the DOM.
+ *
+ * @param {Array} steps - full item.steps
+ * @param {string} blockRootId - id of the dragged block's root step
+ * @param {Object} opts
+ * @param {'sibling'|'child'} [opts.dropMode]
+ * @param {number} [opts.insertIndex] - drop index into the visible-others list
+ * @param {string|null} [opts.anchorStepId] - row the pointer is over (child mode parent)
+ * @param {string} [opts.itemId] - for collapse-key based visibility
+ * @param {Object} [opts.collapsedKeys]
+ * @returns {{ steps: Array, parentId: string|null, levelChanged: boolean }}
+ */
+export function moveChecklistStepBlock(steps, blockRootId, {
+    dropMode = 'sibling',
+    insertIndex = 0,
+    anchorStepId = null,
+    itemId = '',
+    collapsedKeys = {}
+} = {}) {
+    const list = Array.isArray(steps) ? steps : [];
+    const { active, done } = partitionChecklistSteps(list);
+    const rootIdx = active.findIndex((s) => s.id === blockRootId);
+    if (rootIdx < 0) return { steps: list, parentId: null, levelChanged: false };
+    const block = collectStepSubtree(active, rootIdx);
+    const blockIds = new Set(block.map((s) => s.id));
+
+    const othersActive = active.filter((s) => !blockIds.has(s.id));
+    const othersVisible = buildVisibleChecklistSteps(active, itemId, collapsedKeys)
+        .filter((row) => !blockIds.has(row.step.id))
+        .map((row) => row.step.id);
+
+    let targetModelIndex;
+    if (dropMode === 'child' && anchorStepId) {
+        const anchorIdx = othersActive.findIndex((s) => s.id === anchorStepId);
+        targetModelIndex = anchorIdx >= 0 ? anchorIdx + 1 : 0;
+    } else if (insertIndex < othersVisible.length) {
+        const targetId = othersVisible[insertIndex];
+        const ti = othersActive.findIndex((s) => s.id === targetId);
+        targetModelIndex = ti >= 0 ? ti : othersActive.length;
+    } else if (othersVisible.length) {
+        const lastId = othersVisible[othersVisible.length - 1];
+        const ti = othersActive.findIndex((s) => s.id === lastId);
+        targetModelIndex = ti >= 0 ? ti + 1 : othersActive.length;
+    } else {
+        targetModelIndex = 0;
+    }
+
+    const reordered = [
+        ...othersActive.slice(0, targetModelIndex),
+        ...block,
+        ...othersActive.slice(targetModelIndex)
+    ];
+
+    const beforeLevel = getStepLevel(block[0]);
+    const dropResult = resolveDropTarget(reordered, blockRootId, { mode: dropMode });
+    const rootIdxFinal = reordered.findIndex((s) => s.id === blockRootId);
+    const afterLevel = rootIdxFinal >= 0 ? getStepLevel(reordered[rootIdxFinal]) : beforeLevel;
+
+    refreshStepsPosition(reordered);
+    return {
+        steps: [...reordered, ...done],
+        parentId: dropResult?.parentId || null,
+        levelChanged: beforeLevel !== afterLevel
+    };
 }

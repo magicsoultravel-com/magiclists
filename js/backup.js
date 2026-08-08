@@ -213,6 +213,8 @@ function migrateImportedStep(step) {
         startDateTime: '',
         endDateTime: '',
         level: 0,
+        parentId: null,
+        order: 0,
         completed: false,
         text: '',
         ...step,

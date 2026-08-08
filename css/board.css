@@ -170,14 +170,10 @@ body.is-file-cabinet-drag-active {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-height: 30px;
-    min-width: 84px;
-    padding: 0.35rem 0.75rem;
-    border-radius: 6px;
-    border: 1px solid var(--border-color);
-    background: rgba(255, 255, 255, 0.035);
+    min-width: 64px;
+    padding: 0;
     color: #f8fafc;
-    font-size: 0.82rem;
+    font-size: 0.75rem;
     font-weight: 400;
     letter-spacing: 0;
     font-variant-numeric: tabular-nums;
@@ -337,6 +333,19 @@ body.is-file-cabinet-drag-active {
     display: none;
 }
 
+
+#digital-clock[data-clock-style="military"] .clock-chip--date,
+#digital-clock[data-clock-style="digital-seconds"] .clock-chip--date {
+    display: none;
+}
+
+#digital-clock[data-clock-style="military"] .clock-chip--time,
+#digital-clock[data-clock-style="digital-seconds"] .clock-chip--time {
+    min-width: 148px;
+    letter-spacing: 0.01em;
+}
+
+
 #digital-clock[data-clock-style="compact"] .clock-chip--time {
     min-width: 148px;
     letter-spacing: 0.01em;
@@ -352,7 +361,7 @@ body.is-file-cabinet-drag-active {
 }
 
 #digital-clock[data-clock-style="retro"] .clock-chip--time {
-    font-size: 0.88rem;
+    font-size: 0.75rem;
     font-weight: 500;
 }
 

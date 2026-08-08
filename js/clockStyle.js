@@ -155,7 +155,7 @@ function previewMarkup(style, now) {
     }
     const time = formatTime(now, style === 'compact' ? 'digital' : style);
     const date = formatDate(now, style);
-    if (style === 'compact') {
+    if (style === 'compact' || style === 'military' || style === 'digital-seconds') {
         return `<span class="clock-style-preview clock-style-preview--compact">${date} · ${time}</span>`;
     }
     if (style === 'retro') {
@@ -361,7 +361,7 @@ export const ClockStyle = {
         const timeStr = formatTime(now, style);
         const dateStr = formatDate(now, style);
 
-        if (style === 'compact') {
+        if (style === 'compact' || style === 'military' || style === 'digital-seconds') {
             this.timeEl.textContent = `${dateStr} · ${timeStr}`;
             this.dateEl.textContent = '';
             return;
@@ -427,7 +427,7 @@ export const ClockStyle = {
             if (!preview) return;
             const time = formatTime(now, style === 'compact' ? 'digital' : style);
             const date = formatDate(now, style);
-            if (style === 'compact') {
+            if (style === 'compact' || style === 'military' || style === 'digital-seconds') {
                 preview.textContent = `${date} · ${time}`;
                 return;
             }

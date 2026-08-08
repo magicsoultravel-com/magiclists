@@ -16,6 +16,7 @@ import {
     snapNotePosition,
     snapNoteRect,
     findFirstCanvasSlot,
+    packTwoSetRects,
     pushGridCardRect,
     resolveGridPushLayout
 } from '../js/board/noteGeometry.js';
@@ -229,3 +230,97 @@ describe('resolveGridPushLayout', () => {
     });
 });
 
+
+describe('packTwoSetRects (board sort bin-packing)', () => {
+    it('packs collapsed cards first at their real small size (no flattening)', () => {
+        const { rects } = packTwoSetRects({
+            collapsed: [
+                { id: 'a', w: 65, h: 32 },
+                { id: 'b', w: 65, h: 32 },
+                { id: 'c', w: 65, h: 32 }
+            ],
+            expanded: [],
+            origin: 2,
+            packW: 500,
+            maxH: 400,
+            edgePad: 1,
+            direction: 'horizontal'
+        });
+        const cols = rects.filter((r) => r.set === 'collapsed');
+        assert.equal(cols.length, 3);
+        cols.forEach(({ rect }) => {
+            assert.equal(rect.w, 65);
+            assert.equal(rect.h, 32);
+        });
+        assert.equal(cols[0].rect.y, 3);
+    });
+
+    it('packs expanded notes into a second block below, each at real size (no flattening)', () => {
+        const { rects } = packTwoSetRects({
+            collapsed: [
+                { id: 'c1', w: 65, h: 32 },
+                { id: 'c2', w: 65, h: 32 }
+            ],
+            expanded: [
+                { id: 'e1', w: 98, h: 131 },
+                { id: 'e2', w: 65, h: 98 }
+            ],
+            origin: 2,
+            packW: 500,
+            maxH: 400,
+            edgePad: 1,
+            direction: 'horizontal'
+        });
+        const collapsedRects = rects.filter((r) => r.set === 'collapsed').map((r) => r.rect);
+        const expandedRects = rects.filter((r) => r.set === 'expanded').map((r) => r.rect);
+        const bottomCol = Math.max(...collapsedRects.map((r) => r.y + r.h));
+        expandedRects.forEach((r) => assert.ok(r.y >= bottomCol, 'expanded should be below collapsed'));
+        assert.equal(expandedRects[0].w, 98);
+        assert.equal(expandedRects[0].h, 131);
+        assert.equal(expandedRects[1].w, 65);
+        assert.equal(expandedRects[1].h, 98);
+        const all = [...collapsedRects, ...expandedRects];
+        for (let i = 0; i < all.length; i += 1) {
+            for (let j = i + 1; j < all.length; j += 1) {
+                assert.equal(rectsOverlap(all[i], all[j], M.gap), false);
+            }
+        }
+    });
+
+    it('vertical packs expanded notes to the right of the collapsed set', () => {
+        const { rects } = packTwoSetRects({
+            collapsed: [
+                { id: 'c1', w: 65, h: 32 },
+                { id: 'c2', w: 65, h: 32 }
+            ],
+            expanded: [{ id: 'e1', w: 98, h: 98 }],
+            origin: 2,
+            packW: 500,
+            maxH: 400,
+            edgePad: 1,
+            direction: 'vertical'
+        });
+        const collapsedRects = rects.filter((r) => r.set === 'collapsed').map((r) => r.rect);
+        const expandedRects = rects.filter((r) => r.set === 'expanded').map((r) => r.rect);
+        const rightCol = Math.max(...collapsedRects.map((r) => r.x + r.w));
+        expandedRects.forEach((r) => assert.ok(r.x >= rightCol, 'expanded should be right of collapsed'));
+        assert.equal(expandedRects[0].w, 98);
+        assert.equal(expandedRects[0].h, 98);
+    });
+
+    it('packs around pre-placed (pinned) rects without overlapping them', () => {
+        const pinned = { x: 3, y: 3, w: 65, h: 32 };
+        const { rects } = packTwoSetRects({
+            collapsed: [{ id: 'c1', w: 65, h: 32 }],
+            expanded: [],
+            placed: [pinned],
+            origin: 2,
+            packW: 500,
+            maxH: 400,
+            edgePad: 1,
+            direction: 'horizontal'
+        });
+        assert.equal(rects[0].set, 'collapsed');
+        assert.equal(rectsOverlap(rects[0].rect, pinned, M.gap), false);
+    });
+});

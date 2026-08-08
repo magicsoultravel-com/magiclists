@@ -1,7 +1,7 @@
 /** @module {"owns":"checklist operations, drag/drop, state management", "related":["noteSurface.js","checklistSteps.js","noteBodyConversion.js","richText.js"], "events":[]} */
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { escapeHTML, escapeAttr } from './domEscape.js';
-import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, collectStepSubtree, canIndentStep, normalizeChecklistLevels, computeVisibleInsertBounds, reorderActiveStepsFromDomOrder, applySubtreeLevelDelta, resolvePointerDropTarget, resolveDropTarget, buildVisibleChecklistSteps, annotateChecklistTreeGuides } from './checklistSteps.js';
+import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, canIndentStep, computeVisibleInsertBounds, resolvePointerDropTarget, buildVisibleChecklistSteps, annotateChecklistTreeGuides, addChecklistStep, splitChecklistStep, deleteChecklistStep, mergeChecklistStepIntoPrev, indentChecklistSteps, outdentChecklistSteps, moveChecklistStepBlock, toggleStepCompletion } from './checklistSteps.js';
 import { stripRichText, sanitizeRichHtml, hasRichMarkup, linkifyPlainUrls } from './richText.js';
 import { mutateItem, syncItemBodyFromDom, syncInlineFieldToItem, commitInlineChecklistOp, flushDesktopAutoSave } from './noteSurfaceMutations.js';
 import { focusInlineEdit, canInlineEditText, splitInlineEditAtCaret, insertTextAtCaret, handleInlineEditArrowNav } from './noteSurfaceEditing.js';
@@ -84,10 +84,10 @@ export function bindChecklistInteractions(root, item, {
         const newCompleted = cb.checked;
         const wasCompleted = step.completed;
         
-        // For non-structural updates (checkbox toggle), update DOM directly
-        // This avoids layout thrashing from full template rebuilds
+        // For non-structural updates (checkbox toggle), update the model in place
+        // and keep the DOM as a render of the model. Positions/order are untouched.
         if (wasCompleted !== newCompleted) {
-            step.completed = newCompleted;
+            toggleStepCompletion(item.steps, stepId, newCompleted);
             
             // Update row class
             row.classList.toggle('step-row--done', newCompleted);
@@ -192,8 +192,7 @@ export function bindChecklistInteractions(root, item, {
               const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
               const stepIdx = item.steps.findIndex((s) => s.id === stepId);
               if (stepIdx < 0) return;
-              applySubtreeLevelDelta(item.steps, stepIdx, 1);
-              normalizeChecklistLevels(item.steps);
+              indentChecklistSteps(item.steps, stepIdx);
               // Set pending focus so refreshNoteBody restores caret on the same step
               setPendingChecklistFocus(root, stepId, 'end');
               if (localOnly) {
@@ -223,8 +222,7 @@ export function bindChecklistInteractions(root, item, {
              const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
              const stepIdx = item.steps.findIndex((s) => s.id === stepId);
              if (stepIdx < 0) return;
-             applySubtreeLevelDelta(item.steps, stepIdx, -1);
-             normalizeChecklistLevels(item.steps);
+             outdentChecklistSteps(item.steps, stepIdx);
              // Set pending focus so refreshNoteBody restores caret on the same step
              setPendingChecklistFocus(root, stepId, 'end');
             if (localOnly) {
@@ -575,24 +573,19 @@ export function attachChecklistDrag(root, item, {
             let parentIdToExpand = null;
             let levelChanged = false;
             applyMutate((it) => {
-                const activeSteps = it.steps.filter((step) => !step.completed);
-                const doneSteps = it.steps.filter((step) => step.completed);
-            const visibleOrderIds = getActiveRows(root).map((r) => r.dataset.stepId);
-                const reordered = reorderActiveStepsFromDomOrder(
-                    activeSteps,
-                    visibleOrderIds,
-                    item.id,
+                // Model-first commit: the drop geometry captured during pointer
+                // tracking drives a pure rebuild of item.steps. Structure is
+                // never read back from the DOM.
+                const result = moveChecklistStepBlock(it.steps, blockRootId, {
+                    dropMode,
+                    insertIndex: activeDrag.insertIndex ?? 0,
+                    anchorStepId: activeDrag.anchorStepId || null,
+                    itemId: item.id,
                     collapsedKeys
-                );
-                const rootIdx = reordered.findIndex((step) => step.id === blockRootId);
-                const beforeLevel = rootIdx >= 0 ? getStepLevel(reordered[rootIdx]) : 0;
-                const dropResult = resolveDropTarget(reordered, blockRootId, { mode: dropMode });
-                parentIdToExpand = dropResult?.parentId || null;
-                const rootIdxAfter = reordered.findIndex((step) => step.id === blockRootId);
-                const afterLevel = rootIdxAfter >= 0 ? getStepLevel(reordered[rootIdxAfter]) : beforeLevel;
-                levelChanged = beforeLevel !== afterLevel;
-                normalizeChecklistLevels(reordered);
-                it.steps = [...reordered, ...doneSteps];
+                });
+                parentIdToExpand = result.parentId;
+                levelChanged = result.levelChanged;
+                it.steps = result.steps;
             }, { persist: false });
             expandChecklistAncestorsForStep(item, blockRootId);
             if (parentIdToExpand) {
@@ -625,7 +618,7 @@ export function attachChecklistDrag(root, item, {
 
         // Use cached rows to avoid repeated DOM queries during pointermove
         const { block, bounds, cachedRows } = activeDrag;
-        const { insertIndex, dropMode, others } = resolvePointerDropTarget(
+        const { insertIndex, dropMode, anchorRow, others } = resolvePointerDropTarget(
             e.clientY,
             e.clientX,
             cachedRows,
@@ -633,6 +626,8 @@ export function attachChecklistDrag(root, item, {
             { bounds }
         );
         activeDrag.dropMode = dropMode;
+        activeDrag.insertIndex = insertIndex;
+        activeDrag.anchorStepId = anchorRow?.dataset?.stepId || null;
 
         if (activeDrag.lastInsertIndex !== insertIndex) {
             activeDrag.lastInsertIndex = insertIndex;
@@ -687,6 +682,8 @@ export function attachChecklistDrag(root, item, {
             bounds: { minAmongOthers, maxAmongOthers },
             cachedRows,
             lastInsertIndex: -1,
+            insertIndex: 0,
+            anchorStepId: null,
             dropMode: 'sibling',
             startX: e.clientX,
             startY: e.clientY,
@@ -825,25 +822,12 @@ export function insertChecklistStep(root, item, {
     // typed text is never lost (guards against rapid-fire + clicks too).
     syncFocusedStepTextToItem(root, item);
     const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
-    const steps = item.steps || [];
-    const newStep = {
-        id: createStepId(),
+    const { steps, step: newStep } = addChecklistStep(item.steps || [], {
+        afterStepId,
         text,
         completed,
-        level: 0
-    };
-
-    if (afterStepId) {
-        const idx = steps.findIndex((s) => s.id === afterStepId);
-        if (idx >= 0) {
-            steps.splice(idx + 1, 0, newStep);
-        } else {
-            steps.push(newStep);
-        }
-    } else {
-        steps.push(newStep);
-    }
-
+        newId: createStepId()
+    });
     item.steps = steps;
     
     // Capture canvas scroll position before DOM insertion to prevent view jump
@@ -884,19 +868,17 @@ export function insertChecklistStep(root, item, {
 export function removeChecklistStepAndFocus(root, item, stepId, { localOnly = false, onChange = () => {} } = {}) {
     if (!item || !item.steps) return null;
     const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
-    const idx = item.steps.findIndex((s) => s.id === stepId);
-    if (idx < 0) return null;
-
-    const prevStep = item.steps[idx - 1];
-    const nextStep = item.steps[idx + 1];
-    item.steps.splice(idx, 1);
+    const result = deleteChecklistStep(item.steps, stepId);
+    item.steps = result.steps;
+    const prevStepId = result.prevStepId;
+    const nextStepId = result.nextStepId;
 
     if (!localOnly) {
         commitInlineChecklistOp(item, beforeItem, { localOnly });
     }
     onChange();
 
-    return prevStep?.id || nextStep?.id || null;
+    return prevStepId || nextStepId || null;
 }
 
 export function handleChecklistBackspace(e, item, { localOnly = false, onChange = () => {} } = {}) {
@@ -925,11 +907,8 @@ export function handleChecklistBackspace(e, item, { localOnly = false, onChange 
 
     const root = active.closest('.step-row--display');
     const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
-    const prevStep = item.steps[stepIdx - 1];
-    const prevText = prevStep.text || '';
-    const newText = prevText + '\n' + text;
-    prevStep.text = newText;
-    item.steps.splice(stepIdx, 1);
+    const result = mergeChecklistStepIntoPrev(item.steps, stepIdx);
+    item.steps = result.steps;
 
     if (root) {
         const prevRow = root.previousElementSibling;
@@ -970,7 +949,8 @@ export function handleChecklistDelete(e, item, { localOnly = false, onChange = (
 
     const root = active.closest('.step-row--display');
     const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
-    item.steps.splice(stepIdx, 1);
+    const result = deleteChecklistStep(item.steps, stepId);
+    item.steps = result.steps;
     if (!localOnly) {
         commitInlineChecklistOp(item, beforeItem, { localOnly });
     }
@@ -1013,16 +993,11 @@ export function handleChecklistEnter(root, item, e, { localOnly = false, onChang
         return 'stay';
     }
 
-    // Enter: split text at caret position and create a new step with the "after" text
-    // Determine the insertion index: if the step has children and the group is collapsed,
-    // insert after the entire subtree; otherwise insert right after this step
+    // Enter: split text at caret position and create a new step with the "after" text.
+    // When the group is collapsed the new row lands after the whole subtree so it
+    // is not hidden inside the collapsed group.
     const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
-    const subtree = collectStepSubtree(item.steps, stepIdx);
-    const isCollapsed = isChecklistGroupCollapsed(item.id, stepId);
-    const hasChildren = subtree.length > 1;
-    const insertIdx = hasChildren && isCollapsed
-        ? stepIdx + subtree.length
-        : stepIdx + 1;
+    const afterSubtree = stepHasDescendants(item.steps, stepIdx) && isChecklistGroupCollapsed(item.id, stepId);
 
     // CRITICAL: Directly update the item's step text with the "before" portion
     // This avoids the race condition where the pre-split full text overwrites the split lines
@@ -1033,17 +1008,15 @@ export function handleChecklistEnter(root, item, e, { localOnly = false, onChang
     } else {
         active.textContent = before;
     }
-    // Update the current step's text in the item directly
-    step.text = before;
 
-    // Create new step with the "after" text - directly assign to item steps array
-    const newStep = {
-        id: createStepId(),
-        text: after,
-        completed: false,
-        level: getStepLevel(step)
-    };
-    item.steps.splice(insertIdx, 0, newStep);
+    // Model-first split: the original step keeps "before", a new sibling gets
+    // "after"; explicit parentId/order metadata is refreshed atomically by the op.
+    const result = splitChecklistStep(item.steps, stepId, before, after, {
+        afterSubtree,
+        newId: createStepId()
+    });
+    item.steps = result.steps;
+    const newStep = result.newStep;
 
     // Capture canvas scroll position before DOM insertion to prevent view jump
     const scrollPos = captureCanvasScroll();

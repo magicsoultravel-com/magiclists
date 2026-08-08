@@ -52,6 +52,23 @@ function syncInlineFieldToItem(el, item) {
  * @param {boolean} [opts.skipRerender=false] - If true, skips re-rendering the note surface
  * @param {string|null} [opts.mergeKey=null] - Key for merging consecutive mutations
  * @param {boolean} [opts.mergeWindow=true] - Whether to allow merging with adjacent changes
+    const preserveEmptySteps = true;
+    if (localOnly || !beforeItem) return;
+    // Remove skipRerender flag for checklist toggles
+    const afterNorm = normalizeItemForSave(item, { preserveEmptySteps });
+    const beforeNorm = normalizeItemForSave(beforeItem, { preserveEmptySteps });
+    if (JSON.stringify(beforeNorm) === JSON.stringify(afterNorm)) return;
+    Object.assign(item, afterNorm);
+
+    // Dispatch mutation event with rerender
+    window.dispatchEvent(new CustomEvent('item:mutation_requested', {
+        detail: {
+            item: afterNorm,
+            preserveView: true,
+            beforeItem: beforeNorm,
+            forceRerender: true
+        }
+    }));
  */
 function emitItemMutation(item, { preserveView = false, beforeItem = null, skipRerender = false, mergeKey = null, mergeWindow = true, preserveEmptySteps = null } = {}) {
     const preserveEmpty = preserveEmptySteps !== null
@@ -163,6 +180,8 @@ function createBlankChecklistStep() {
         text: '',
         completed: false,
         level: 0,
+        parentId: null,
+        order: 0,
         startDateTime: '',
         endDateTime: ''
     };

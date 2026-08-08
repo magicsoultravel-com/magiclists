@@ -26,7 +26,8 @@ import {
     writeUserTheme,
     isTokenCustomized,
     applyUserTheme,
-    findMatchingThemeId
+    findMatchingThemeId,
+    APP_THEMES
 } from './appTheme.js';
 import {
     applyBrandIcon,
@@ -49,7 +50,8 @@ const DEFAULTS = {
     desktopGridLines: false,
     noteFontId: 'default',
     brandIconId: 'clipboard',
-    useCategoryColors: true
+    useCategoryColors: true,
+    undockedModuleOpacity: 1
 };
 
 export function readDisplayOptions() {
@@ -68,7 +70,8 @@ export function readDisplayOptions() {
             desktopGridLines: raw.desktopGridLines === true,
             noteFontId,
             brandIconId: resolveBrandIconId(raw.brandIconId),
-            useCategoryColors: raw.useCategoryColors !== false
+            useCategoryColors: raw.useCategoryColors !== false,
+            undockedModuleOpacity: Math.min(1, Math.max(0.1, Number(raw.undockedModuleOpacity) || 1))
         };
     } catch {
         return { ...DEFAULTS, noteFontId: readNoteFont() };
@@ -91,6 +94,7 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     root.dataset.desktopGradient = options.desktopGradient ? '1' : '0';
     root.dataset.desktopGridLines = options.desktopGridLines ? '1' : '0';
     root.dataset.useCategoryColors = options.useCategoryColors ? '1' : '0';
+    root.style.setProperty('--sidebar-undock-opacity', String(options.undockedModuleOpacity ?? 1));
     applyNoteFont(options.noteFontId);
     applyBrandIcon(options.brandIconId);
 
@@ -108,6 +112,7 @@ function isCustomized(options) {
         || options.desktopGradient
         || options.desktopGridLines
         || !options.useCategoryColors
+        || Math.abs((options.undockedModuleOpacity ?? 1) - 1) > 0.001
         || isNoteFontCustomized(options.noteFontId)
         || isAppThemeCustomized()
         || NoteFontScale.isCustomized()
@@ -254,6 +259,38 @@ export const DisplayOptions = {
         </div>`;
     },
 
+    sliderRow({ id, label, valuePercent, min = 0.1, max = 1, step = 0.05 }) {
+        return `<div class="display-options-slider-row">
+            <span class="display-options-slider-label">${escapeHtml(label)}</span>
+            <span class="display-options-slider-value" id="${id}-value">${valuePercent}</span>
+            <input type="range" class="display-options-slider" id="${id}" min="${min}" max="${max}" step="${step}" value="${valuePercent}" aria-label="${escapeHtml(label)}">
+        </div>`;
+    },
+
+    themeRowHtml(selectedId) {
+        const buildButton = (theme) => {
+            const selected = theme.id === selectedId;
+            return `<button type="button" class="app-theme-option app-theme-option--compact${selected ? ' is-selected' : ''}" data-theme="${theme.id}" role="menuitemradio" aria-checked="${selected}" title="${escapeHtml(theme.label)}" aria-label="${escapeHtml(theme.label)}">
+                <span class="app-theme-swatch" aria-hidden="true">${theme.swatch.map(c => `<span class="app-theme-swatch-chip" style="background:${c}"></span>`).join('')}</span>
+                ${selected ? '<span class="app-theme-check" aria-hidden="true">✓</span>' : ''}
+            </button>`;
+        };
+
+        const regular = APP_THEMES.filter(t => !t.special).map(buildButton).join('');
+        const fancy = APP_THEMES.filter(t => t.special).map(buildButton).join('');
+
+        return `
+            <div class="display-options-theme-group">
+                <span class="display-options-theme-group-label">Regular</span>
+                <div class="display-options-theme-group-buttons">${regular}</div>
+            </div>
+            <div class="display-options-theme-group">
+                <span class="display-options-theme-group-label">Fancy</span>
+                <div class="display-options-theme-group-buttons">${fancy}</div>
+            </div>
+        `;
+    },
+
     bgRow(id, label, cssVar) {
         return `<button type="button" class="display-options-bg-btn btn btn--compact btn--icon" id="${id}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">
             <span class="display-options-swatch" style="background: var(${cssVar})" aria-hidden="true"></span>
@@ -330,6 +367,15 @@ export const DisplayOptions = {
             desktopCountLabel.textContent = String(DesktopManager.getDesktopCount());
         }
 
+        const undockOpacityInput = root.querySelector('#display-opt-undock-opacity');
+        if (undockOpacityInput) {
+            undockOpacityInput.value = String(this.options.undockedModuleOpacity ?? 1);
+            const undockOpacityLabel = root.querySelector('#display-opt-undock-opacity-value');
+            if (undockOpacityLabel) {
+                undockOpacityLabel.textContent = `${Math.round((this.options.undockedModuleOpacity ?? 1) * 100)}%`;
+            }
+        }
+
         this.syncButtonState();
     },
 
@@ -369,18 +415,18 @@ export const DisplayOptions = {
                     <button type="button" class="card-act card-act--close display-options-close" id="display-opt-close" title="Close" aria-label="Close">${CARD_ICONS.close}</button>
                 </div>
                 <div class="display-options-body modal-body">
-                    <div class="display-options-grid">
-                        <section class="display-options-section display-options-section--theme">
+                    <div class="display-options-list">
+                        <div class="display-options-section display-options-section--theme">
                             <h3 class="display-options-heading">Theme</h3>
-                            <div class="display-options-theme-grid app-theme-list">${buildThemeOptionsHtml(selectedThemeId, { compact: true })}</div>
+                            ${this.themeRowHtml(selectedThemeId)}
                             <p class="display-options-subheading">Colors</p>
                             <div class="display-options-bg-row-group">
                                 ${themeTokenRows}
                             </div>
                             <p class="display-options-subheading">Site icon</p>
                             <div class="brand-icon-list">${buildBrandIconOptionsHtml(opts.brandIconId)}</div>
-                        </section>
-                        <section class="display-options-section display-options-section--typography">
+                        </div>
+                        <div class="display-options-section display-options-section--typography">
                             <h3 class="display-options-heading">Typography</h3>
                             <div class="note-font-select-wrapper">${this.noteFontSelectHtml(opts.noteFontId)}</div>
                             <div class="display-options-scale-row">
@@ -397,10 +443,10 @@ export const DisplayOptions = {
                                     disabledHint: desktopZoomEnabled ? '' : 'Desktop only'
                                 })}
                             </div>
-                        </section>
-                        <section class="display-options-section display-options-section--notes">
+                        </div>
+                        <div class="display-options-section display-options-section--notes">
                             <h3 class="display-options-heading">Notes on desktop</h3>
-                            <div class="display-options-check-grid">
+                            <div class="display-options-check-row">
                                 ${this.optionRow('display-opt-category-band', 'Category color band', opts.showCategoryBand)}
                                 ${this.optionRow('display-opt-category', 'Category name', opts.showCategoryName)}
                                 ${this.optionRow('display-opt-use-category-colors', 'Use category colors', opts.useCategoryColors)}
@@ -409,7 +455,7 @@ export const DisplayOptions = {
                                 ${this.optionRow('display-opt-note-lines', 'Number of lines', opts.showLineCount)}
                             </div>
                             <p class="display-options-subheading">Desktop appearance</p>
-                            <div class="display-options-check-grid display-options-check-grid--inline">
+                            <div class="display-options-check-row display-options-check-row--inline">
                                 ${this.optionRow('display-opt-gradient', 'Gradient background', opts.desktopGradient)}
                                 ${this.optionRow('display-opt-grid-lines', 'Show grid lines', opts.desktopGridLines)}
                             </div>
@@ -429,7 +475,18 @@ export const DisplayOptions = {
                                     valuePercent: `${DesktopManager.getDesktopCount()}`
                                 })}
                             </div>
-                        </section>
+                        </div>
+                        <div class="display-options-section display-options-section--sidebar">
+                            <h3 class="display-options-heading">Sidebar</h3>
+                            ${this.sliderRow({
+                                id: 'display-opt-undock-opacity',
+                                label: 'Undocked module opacity',
+                                valuePercent: `${Math.round((opts.undockedModuleOpacity ?? 1) * 100)}%`,
+                                min: 0.1,
+                                max: 1,
+                                step: 0.05
+                            })}
+                        </div>
                     </div>
                 </div>
                 <div class="display-options-footer">
@@ -456,6 +513,19 @@ export const DisplayOptions = {
         bindToggle('display-opt-gradient', 'desktopGradient');
         bindToggle('display-opt-grid-lines', 'desktopGridLines');
         bindToggle('display-opt-use-category-colors', 'useCategoryColors');
+
+        const undockOpacityInput = root.querySelector('#display-opt-undock-opacity');
+        if (undockOpacityInput) {
+            const updateOpacity = () => {
+                const value = parseFloat(undockOpacityInput.value);
+                if (!Number.isFinite(value)) return;
+                this.setOptions({ undockedModuleOpacity: value });
+                const label = root.querySelector('#display-opt-undock-opacity-value');
+                if (label) label.textContent = `${Math.round(value * 100)}%`;
+            };
+            undockOpacityInput.addEventListener('input', updateOpacity);
+            undockOpacityInput.addEventListener('change', updateOpacity);
+        }
 
         root.querySelectorAll('.app-theme-option').forEach((btn) => {
             btn.addEventListener('click', (e) => {

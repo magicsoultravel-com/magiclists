@@ -78,7 +78,6 @@ import {
     getLargeDefaultRect,
     isCustomTileRect as geoIsCustomTileRect,
     isCollapsedSpatialSize,
-    getPackStrideYForRect,
     getGridSnapMinH,
     resolveExpandedDefaultRect as geoResolveExpandedDefaultRect,
     isAtOrBelowCompactZone as geoIsAtOrBelowCompactZone,
@@ -128,13 +127,12 @@ import {
     clampNoteToBoardEdges as clampNoteToBoardEdgesCore,
     snapNotePosition as snapNotePositionCore,
     snapNoteRect as snapNoteRectCore,
-
     readNoteRect as readNoteRectCore,
     applyNoteRect as applyNoteRectCore,
     findFirstCanvasSlot as findFirstCanvasSlotCore,
     findNearestGridSlot as findNearestGridSlotCore,
-    gridColumnStride as gridColumnStrideCore,
-    rectsOverlap as rectsOverlapCore
+    rectsOverlap as rectsOverlapCore,
+    packTwoSetRects as packTwoSetRectsCore
 } from './board/noteGeometry.js';
 import {
     computeGridBoardLayout as computeGridBoardLayoutCore,
@@ -1219,37 +1217,6 @@ resnapBoardPositions(canvas, { reflow = false } = {}) {
         return { collapsed, expanded };
     },
 
-    computeExpandedSetStart(direction, collapsedRects, {
-        origin,
-        edgePad,
-        yStart,
-        metrics = getGridMetrics()
-    } = {}) {
-        const small = getSmallRect(readTileSmallFootprint());
-        const minX = origin + edgePad;
-        const minY = yStart;
-
-        if (direction === 'vertical') {
-            const colStride = gridColumnStrideCore(small.w, small.h, metrics);
-            const right = collapsedRects.length
-                ? collapsedRects.reduce((max, rect) => Math.max(max, rect.x + rect.w), minX)
-                : minX;
-            return {
-                startX: right + metrics.gap + colStride,
-                startY: minY
-            };
-        }
-
-        const rowStride = getPackStrideYForRect(small.w, small.h);
-        const bottom = collapsedRects.length
-            ? collapsedRects.reduce((max, rect) => Math.max(max, rect.y + rect.h), minY)
-            : minY;
-        return {
-            startX: minX,
-            startY: bottom + metrics.gap + rowStride
-        };
-    },
-
     packGridBoard(canvas, collapsedItems, expandedItems, {
         pinnedIds = new Set(),
         layoutMode = 'grid',
@@ -1260,12 +1227,10 @@ resnapBoardPositions(canvas, { reflow = false } = {}) {
         itemsById = null
     } = {}) {
         const { origin, packW, maxH, edgePad } = this.getGridBoardBounds(canvas);
-        const metrics = getGridMetrics();
         const dir = direction === 'vertical' ? 'vertical' : 'horizontal';
         const placed = [];
         const layout = new Map();
         const snapBounds = { maxW: packW, maxH, origin, edgePad };
-        const canvasW = packW + origin * 2;
         const resolveItem = (id) => (itemsById?.get(id) ?? this.resolveBoardItem(id));
 
         pinnedIds.forEach((id) => {
@@ -1284,36 +1249,28 @@ resnapBoardPositions(canvas, { reflow = false } = {}) {
             placed.push({ ...rect });
         });
 
-        const yStart = origin + edgePad;
-        const packGroup = (items, { startX, startY } = {}) => {
-            const yMin = startY ?? yStart;
-            const xMin = dir === 'vertical' ? (startX ?? origin + edgePad) : undefined;
-            items.forEach((item) => {
-                if (!item?.id || pinnedIds.has(item.id)) return;
-                const isExp = this.isItemLayoutExpanded(item, layoutMode);
-                const { w, h } = this.resolveSortItemSize(item, layoutMode, isExp);
-                const slotOpts = { origin, edgePad, yMin, xMin, maxH, direction: dir };
-                let slot = findFirstCanvasSlotCore(w, h, placed, canvasW, slotOpts);
-                slot = this.snapNoteRect(slot, snapBounds);
-                layout.set(item.id, slot);
-                placed.push({ ...slot });
-            });
-        };
-
         const unpinnedCollapsed = collapsedItems.filter((item) => !pinnedIds.has(item.id));
         const unpinnedExpanded = expandedItems.filter((item) => !pinnedIds.has(item.id));
-        packGroup(collapsedItems, { startY: yStart });
 
-        const collapsedRects = unpinnedCollapsed
-            .map((item) => layout.get(item.id))
-            .filter((rect) => rect && Number.isFinite(rect.x));
-        const hasExpandedGap = unpinnedCollapsed.length && unpinnedExpanded.length;
-        const expandedStart = this.computeExpandedSetStart(
-            dir,
-            hasExpandedGap ? collapsedRects : [],
-            { origin, edgePad, yStart, metrics }
-        );
-        packGroup(expandedItems, expandedStart);
+        const sizeForSet = (items) => items.map((item) => ({
+            id: item.id,
+            ...this.resolveSortItemSize(item, layoutMode, this.isItemLayoutExpanded(item, layoutMode))
+        }));
+
+        // Two-set, real-size bin packing: collapsed cards pack first at their real
+        // small size, then expanded notes pack into a second block below/right at
+        // their real (never flattened) size. See packTwoSetRects in noteGeometry.js.
+        const { rects: packedRects } = packTwoSetRectsCore({
+            collapsed: sizeForSet(unpinnedCollapsed),
+            expanded: sizeForSet(unpinnedExpanded),
+            placed,
+            direction: dir,
+            origin,
+            packW,
+            maxH,
+            edgePad
+        });
+        packedRects.forEach(({ id, rect }) => layout.set(id, rect));
 
         if (persistOnly) {
             if (!save) return layout;

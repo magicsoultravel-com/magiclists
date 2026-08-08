@@ -2,6 +2,7 @@
 import { stripRichText } from './richText.js';
 import { normalizeTileSize } from './tileGeometry.js';
 import { resolveNoteTemplate, sheetFirstCellText, sheetHasContent, sheetIsActive } from './sheet.js';
+import { stepsToParentOrder } from './checklistSteps.js';
 
 export function deriveNoteTitle({ title = '', content = '', steps = [], sheet = null, noteTemplate = '' } = {}) {
     const trimmedTitle = stripRichText(title).trim();
@@ -179,9 +180,12 @@ export function normalizeItemForSave(item, { preserveEmptySteps = false } = {}) 
 
     const content = String(item.content || '');
     const allSteps = item.steps || [];
-    const steps = preserveEmptySteps
+    // Canonical position projection: every save refreshes explicit parentId/order
+    // metadata so it can never drift from the real step state. level stays the
+    // authored indent and is never recalculated.
+    const steps = stepsToParentOrder(preserveEmptySteps
         ? [...allSteps]
-        : allSteps.filter((step) => stripRichText(step?.text || '').trim());
+        : allSteps.filter((step) => stripRichText(step?.text || '').trim()));
     const hasTitle = stripRichText(item.title || '').trim();
     const startDateTime = String(item.startDateTime || '').trim()
         ? item.startDateTime

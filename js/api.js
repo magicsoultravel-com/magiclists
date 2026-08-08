@@ -3,6 +3,7 @@ import { DEFAULT_CATEGORIES, detectDuplicateCategories } from './categories.js';
 import { purgeLayoutForItem } from './layoutStorage.js';
 import { normalizeTileSize } from './tileGeometry.js';
 import { createNoteId, ensureStepIds, ensureStepLevels, getCreatedTimestamp, getUpdatedTimestamp } from './noteModel.js';
+import { ensureStepsParentOrder } from './checklistSteps.js';
 
 function normalizeItemTileSize(tileSize) {
     return normalizeTileSize(tileSize);
@@ -185,6 +186,7 @@ function runDatabaseRepair(db) {
     // Per-item repairs: add missing metadata only. User-authored content
     // (title, content, categories, ordering, layout) is never modified.
     let stepIdsMigrated = 0;
+    let stepsParentOrderMigrated = 0;
     let schemaCoreBackfilled = 0;
     repaired.items = repaired.items.map((item) => {
         if (!item || typeof item !== 'object') return item;
@@ -228,6 +230,14 @@ function runDatabaseRepair(db) {
                 nextSteps = levelResult.steps;
                 itemChanged = true;
             }
+            // Backfill explicit parentId + order position metadata (H3-B model).
+            // Silent and non-destructive — existing ids/text/levels are preserved.
+            const orderResult = ensureStepsParentOrder(nextSteps);
+            if (orderResult.added > 0) {
+                nextSteps = orderResult.steps;
+                stepsParentOrderMigrated += orderResult.added;
+                itemChanged = true;
+            }
         }
 
         // Backfill missing editorBodyLayout to 'both' (safe default matching new notes)
@@ -257,6 +267,10 @@ function runDatabaseRepair(db) {
         return next;
     });
     diagnostics.stepIdsMigrated = stepIdsMigrated;
+    if (stepsParentOrderMigrated > 0) {
+        diagnostics.stepsParentOrderMigrated = stepsParentOrderMigrated;
+        diagnostics.warnings.push(`${stepsParentOrderMigrated} step(s) backfilled with explicit parentId/order position metadata.`);
+    }
     if (schemaCoreBackfilled > 0) {
         diagnostics.schemaCoreBackfilled = schemaCoreBackfilled;
         diagnostics.warnings.push(`${schemaCoreBackfilled} item(s) backfilled with missing id/schema metadata.`);

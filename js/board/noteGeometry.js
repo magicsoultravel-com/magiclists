@@ -201,6 +201,81 @@ export function findFirstCanvasSlot(w, h, placed, canvasW, {
     return { x: xOrigin, y: yOrigin, w, h };
 }
 
+/**
+ * Two-set, real-size bin packing used by the board sort flow.
+ *
+ * Collapsed cards are packed first (each at its real small size), then expanded
+ * notes are packed into a second block positioned below (horizontal) or to the
+ * right (vertical) of the collapsed set — each expanded card at its real size
+ * (never flattened to a uniform cell). This replaces the old "align region"
+ * approach that flattened expanded notes into an equal-sized grid.
+ *
+ * @param {Object} opts
+ * @param {Array<{id?:string, w:number, h:number}>} opts.collapsed - collapsed rects
+ * @param {Array<{id?:string, w:number, h:number}>} opts.expanded - expanded rects
+ * @param {Array<{x,y,w,h}>} [opts.placed] - pre-existing rects (e.g. pinned)
+ * @param {'horizontal'|'vertical'} [opts.direction]
+ * @returns {{ rects: Array<{id?:string, set:'collapsed'|'expanded', rect:{x,y,w,h}}>, area: Array } }
+ */
+export function packTwoSetRects({
+    collapsed = [],
+    expanded = [],
+    placed = [],
+    direction = 'horizontal',
+    origin = CANVAS_LAYOUT_ORIGIN,
+    packW,
+    maxH = Infinity,
+    edgePad
+} = {}) {
+    const metrics = getGridMetrics();
+    const pad = edgePad ?? metrics.edgePad;
+    const dir = direction === 'vertical' ? 'vertical' : 'horizontal';
+    const canvasW = packW + origin * 2;
+    const snapBounds = { maxW: packW, maxH, origin, edgePad: pad };
+    const out = [];
+    const area = (placed || []).map((r) => ({ ...r }));
+    const yStart = origin + pad;
+
+    const placeSet = (items, set, { startX, startY } = {}) => {
+        const yMin = startY ?? yStart;
+        const xMin = dir === 'vertical' ? (startX ?? origin + pad) : undefined;
+        items.forEach(({ id, w, h }) => {
+            const slotOpts = { origin, edgePad: pad, yMin, xMin, maxH, direction: dir };
+            let slot = findFirstCanvasSlot(w, h, area, canvasW, slotOpts);
+            slot = snapNoteRect(slot, snapBounds);
+            area.push({ ...slot });
+            out.push({ id, rect: slot, set });
+        });
+    };
+
+    placeSet(collapsed, 'collapsed', { startY: yStart });
+
+    const collapsedRects = out.filter((e) => e.set === 'collapsed').map((e) => e.rect);
+    const hasGap = collapsed.length && expanded.length;
+    const small = getSmallRect(readTileSmallFootprint());
+    let expandedStart;
+    if (hasGap) {
+        if (dir === 'vertical') {
+            const colStride = gridColumnStride(small.w, small.h, metrics);
+            const right = collapsedRects.length
+                ? collapsedRects.reduce((max, rect) => Math.max(max, rect.x + rect.w), origin + pad)
+                : origin + pad;
+            expandedStart = { startX: right + metrics.gap + colStride, startY: yStart };
+        } else {
+            const rowStride = getPackStrideYForRect(small.w, small.h);
+            const bottom = collapsedRects.length
+                ? collapsedRects.reduce((max, rect) => Math.max(max, rect.y + rect.h), yStart)
+                : yStart;
+            expandedStart = { startX: origin + pad, startY: bottom + metrics.gap + rowStride };
+        }
+    } else {
+        expandedStart = { startX: origin + pad, startY: yStart };
+    }
+    placeSet(expanded, 'expanded', expandedStart);
+
+    return { rects: out, area };
+}
+
 export function readNoteRect(card, { normalizeCollapsed = false, getTileSize = null, isActivelyResizing = false } = {}) {
     const styleW = parseFloat(card.style.width);
     const styleH = parseFloat(card.style.height);
