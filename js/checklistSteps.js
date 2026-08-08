@@ -1,5 +1,4 @@
 /** @module {"owns":"checklist tree logic, step reorder, indent/outdent", "related":["noteSurface.js","noteBodyConversion.js"]} */
-import { unwrapLineStrike, wrapLineAsStruck } from './noteBodyConversion.js';
 
 export function getStepLevel(step) {
     return Math.min(4, Math.max(0, Number(step?.level) || 0));
@@ -15,22 +14,6 @@ export function partitionChecklistSteps(steps) {
     return { active, done };
 }
 
-export function reorderStepsByCompletion(steps) {
-    if (!steps?.length) return;
-    const { active, done } = partitionChecklistSteps(steps);
-    steps.splice(0, steps.length, ...active, ...done);
-}
-
-export function moveStepOnCompletionChange(steps, step, completed) {
-    step.completed = completed;
-    if (completed) {
-        step.text = wrapLineAsStruck(step.text || '');
-    } else {
-        step.text = unwrapLineStrike(step.text || '');
-    }
-    reorderStepsByCompletion(steps);
-}
-
 export function collectStepSubtree(steps, startIndex) {
     if (!steps?.length || startIndex < 0 || startIndex >= steps.length) return [];
     const rootLevel = getStepLevel(steps[startIndex]);
@@ -40,10 +23,6 @@ export function collectStepSubtree(steps, startIndex) {
         subtree.push(steps[i]);
     }
     return subtree;
-}
-
-export function collectStepSubtreeIds(steps, startIndex) {
-    return collectStepSubtree(steps, startIndex).map((step) => step.id);
 }
 
 export function findStepParentIndex(steps, index) {
@@ -69,20 +48,19 @@ export function applySubtreeLevelDelta(steps, startIndex, delta) {
 }
 
 export function normalizeChecklistLevels(steps) {
+    // Preserve each step's authored level (first item may be any level 0-4,
+    // and gaps are allowed), only clamping to the valid 0-4 range.
     if (!steps?.length) return;
     for (let i = 0; i < steps.length; i++) {
-        const maxLevel = i === 0 ? 0 : getStepLevel(steps[i - 1]) + 1;
-        const current = getStepLevel(steps[i]);
-        steps[i].level = Math.max(0, Math.min(4, Math.min(current, maxLevel)));
+        steps[i].level = Math.min(4, Math.max(0, getStepLevel(steps[i])));
     }
 }
 
 export function canIndentStep(steps, idx) {
     if (!steps?.[idx]) return false;
-    const level = getStepLevel(steps[idx]);
-    if (level >= 4) return false;
-    const maxFromPrev = idx === 0 ? 0 : getStepLevel(steps[idx - 1]) + 1;
-    return level + 1 <= maxFromPrev;
+    // Any item (including the first) may be indented up to level 4, even if
+    // that creates a level gap. Grouping is preserved by applySubtreeLevelDelta.
+    return getStepLevel(steps[idx]) < 4;
 }
 
 export function previewDropTargetLevel(rows, insertIndex, dropMode, getLevel = getStepRowLevel) {
@@ -108,7 +86,8 @@ export function resolveDropTarget(steps, blockRootId, { mode = 'sibling' } = {})
         const parent = steps[blockStartIndex - 1];
         newRootLevel = Math.min(4, getStepLevel(parent) + 1);
     } else if (blockStartIndex === 0) {
-        newRootLevel = 0;
+        // First item of the whole list may keep any level (0-4) without a parent.
+        newRootLevel = oldRootLevel;
     } else {
         const nextIndex = blockStartIndex + subtree.length;
         newRootLevel = nextIndex < steps.length
@@ -166,7 +145,7 @@ export function computeVisibleInsertBounds(activeSteps, startIndex, visibleIds, 
     return { minAmongOthers, maxAmongOthers, subtreeIds: subtreeIds || [...blockIdSet], others };
 }
 
-export function resolvePointerDropTarget(clientY, visibleRows, blockRows, { bounds = null } = {}) {
+export function resolvePointerDropTarget(clientY, clientX, visibleRows, blockRows, { bounds = null } = {}) {
     const blockSet = new Set(blockRows);
     const others = visibleRows.filter((row) => !blockSet.has(row));
     let insertIndex = others.length;
@@ -194,67 +173,49 @@ export function resolvePointerDropTarget(clientY, visibleRows, blockRows, { boun
         insertIndex = Math.max(bounds.minAmongOthers, Math.min(bounds.maxAmongOthers, insertIndex));
     }
 
-    // Always use sibling mode - steps are reordered at the same level
-    const dropMode = 'sibling';
+    // Determine the anchor row (the row the pointer is vertically over). When the
+    // pointer is below every row there is no anchor, so only a sibling drop applies.
+    let anchorIndex = null;
+    for (let i = 0; i < others.length; i++) {
+        const box = others[i].getBoundingClientRect();
+        if (clientY <= box.bottom) {
+            anchorIndex = i;
+            break;
+        }
+    }
+    const anchorRow = anchorIndex !== null ? others[anchorIndex] : null;
+
+    // Drop mode: left half of the anchor row = sibling (reorder at the same level),
+    // right half = child (indent under the anchor row as its new parent).
+    let dropMode = 'sibling';
+    if (anchorRow && Number.isFinite(clientX)) {
+        const box = anchorRow.getBoundingClientRect();
+        if (clientX > box.left + box.width / 2) dropMode = 'child';
+    }
+
+    // A child cannot be created under a parent already at the max level (4) — its
+    // child would exceed the cap. Fall back to a sibling drop to keep the tree intact.
+    if (dropMode === 'child' && anchorRow && getStepRowLevel(anchorRow) >= 4) {
+        dropMode = 'sibling';
+    }
+
+    // Child drop inserts the block immediately after its new parent (i.e. as the
+    // parent's first child), always at least one row after the anchor.
+    if (dropMode === 'child' && anchorIndex !== null && insertIndex <= anchorIndex) {
+        insertIndex = anchorIndex + 1;
+    }
+    if (bounds && dropMode === 'child') {
+        insertIndex = Math.max(bounds.minAmongOthers, Math.min(bounds.maxAmongOthers, insertIndex));
+    }
+
     const targetLevel = previewDropTargetLevel(others, insertIndex, dropMode);
-    return { insertIndex, dropMode, others, targetLevel };
+    return { insertIndex, dropMode, anchorRow, targetLevel, others };
 }
 
 export function getStepRowLevel(row) {
     const n = Number(row?.dataset?.level);
     if (!Number.isFinite(n) || n <= 0) return 0;
     return Math.min(4, Math.floor(n));
-}
-
-export function collectDomRowBlock(rows, row) {
-    const idx = rows.indexOf(row);
-    if (idx < 0) return [row];
-    const level = getStepRowLevel(row);
-    const block = [row];
-    for (let i = idx + 1; i < rows.length; i++) {
-        if (getStepRowLevel(rows[i]) <= level) break;
-        block.push(rows[i]);
-    }
-    return block;
-}
-
-function findParentRowIndex(rows, rowIndex) {
-    const level = getStepRowLevel(rows[rowIndex]);
-    if (level <= 0) return -1;
-    for (let i = rowIndex - 1; i >= 0; i--) {
-        if (getStepRowLevel(rows[i]) < level) return i;
-    }
-    return -1;
-}
-
-export function clampChecklistInsertIndex(allRows, block, insertIndexInOthers, bounds = null) {
-    if (bounds) {
-        return Math.max(bounds.minAmongOthers, Math.min(bounds.maxAmongOthers, insertIndexInOthers));
-    }
-
-    const others = allRows.filter((row) => !block.includes(row));
-    const firstIdx = allRows.indexOf(block[0]);
-    if (firstIdx < 0) return insertIndexInOthers;
-
-    const blockLevel = getStepRowLevel(block[0]);
-    const parentIdx = findParentRowIndex(allRows, firstIdx);
-    let minIndex = 0;
-    if (parentIdx >= 0) {
-        const parentRow = allRows[parentIdx];
-        const parentInOthers = others.indexOf(parentRow);
-        minIndex = parentInOthers >= 0 ? parentInOthers + 1 : 0;
-    }
-
-    let maxIndex = others.length;
-    for (let i = firstIdx + block.length; i < allRows.length; i++) {
-        if (getStepRowLevel(allRows[i]) < blockLevel) {
-            const boundaryInOthers = others.indexOf(allRows[i]);
-            maxIndex = boundaryInOthers >= 0 ? boundaryInOthers : others.length;
-            break;
-        }
-    }
-
-    return Math.max(minIndex, Math.min(maxIndex, insertIndexInOthers));
 }
 
 export function reorderActiveStepsFromDomOrder(activeSteps, visibleOrderIds, itemId, collapsedKeys = {}) {
@@ -297,15 +258,6 @@ export function stepHasDescendants(steps, index) {
         const nextLevel = getStepLevel(steps[i]);
         if (nextLevel <= level) return false;
         if (nextLevel > level) return true;
-    }
-    return false;
-}
-
-export function levelListHasDescendants(levels, index) {
-    const level = levels[index];
-    for (let i = index + 1; i < levels.length; i++) {
-        if (levels[i] <= level) return false;
-        if (levels[i] > level) return true;
     }
     return false;
 }

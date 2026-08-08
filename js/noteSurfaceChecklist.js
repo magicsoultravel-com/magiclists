@@ -475,11 +475,11 @@ export function attachChecklistDrag(root, item, {
         return root.querySelector('.expanded-checklist-add-btn, .checklist-done-toggle');
     };
 
-    const updateDropIndicator = (ref, position = 'before') => {
+    const updateDropIndicator = (ref, position = 'before', dropMode = 'sibling') => {
         hideDropIndicator();
         if (!ref) return;
         const indicator = document.createElement('div');
-        indicator.className = 'checklist-drop-indicator is-visible';
+        indicator.className = `checklist-drop-indicator is-visible${dropMode === 'child' ? ' is-child' : ''}`;
         indicator.setAttribute('aria-hidden', 'true');
         if (position === 'after') {
             ref.insertAdjacentElement('afterend', indicator);
@@ -557,7 +557,8 @@ export function attachChecklistDrag(root, item, {
 
     const finishDrag = () => {
         if (!activeDrag) return;
-        const { block, moved, blockStepIds } = activeDrag;
+        const { block, moved, blockStepIds, dropMode: activeDropMode = 'sibling' } = activeDrag;
+        const dropMode = activeDropMode === 'child' ? 'child' : 'sibling';
         const blockRootId = blockStepIds[0];
         block.forEach((r) => r.classList.remove('is-dragging'));
         hideDropIndicator();
@@ -572,6 +573,7 @@ export function attachChecklistDrag(root, item, {
             const collapsedKeys = getCachedChecklistCollapsedKeys();
             const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
             let parentIdToExpand = null;
+            let levelChanged = false;
             applyMutate((it) => {
                 const activeSteps = it.steps.filter((step) => !step.completed);
                 const doneSteps = it.steps.filter((step) => step.completed);
@@ -582,8 +584,13 @@ export function attachChecklistDrag(root, item, {
                     item.id,
                     collapsedKeys
                 );
-                const dropResult = resolveDropTarget(reordered, blockRootId, { mode: 'sibling' });
+                const rootIdx = reordered.findIndex((step) => step.id === blockRootId);
+                const beforeLevel = rootIdx >= 0 ? getStepLevel(reordered[rootIdx]) : 0;
+                const dropResult = resolveDropTarget(reordered, blockRootId, { mode: dropMode });
                 parentIdToExpand = dropResult?.parentId || null;
+                const rootIdxAfter = reordered.findIndex((step) => step.id === blockRootId);
+                const afterLevel = rootIdxAfter >= 0 ? getStepLevel(reordered[rootIdxAfter]) : beforeLevel;
+                levelChanged = beforeLevel !== afterLevel;
                 normalizeChecklistLevels(reordered);
                 it.steps = [...reordered, ...doneSteps];
             }, { persist: false });
@@ -592,10 +599,13 @@ export function attachChecklistDrag(root, item, {
                 expandChecklistAncestorsForStep(item, parentIdToExpand);
             }
             setPendingChecklistFocus(root, blockRootId, 'end');
-            // No refresh() - drag already moved DOM elements in-place
             if (!localOnly) {
                 commitInlineChecklistOp(item, beforeItem, { localOnly });
             }
+            // A child drop (or any re-level) changed the visual indentation, so the
+            // rows must re-render at their new levels. Sibling reorders that keep the
+            // same level skip the expensive refresh (rows were already moved in place).
+            if (levelChanged) refresh();
         }
         activeDrag = null;
         // Invalidate cache after drag completes
@@ -615,12 +625,14 @@ export function attachChecklistDrag(root, item, {
 
         // Use cached rows to avoid repeated DOM queries during pointermove
         const { block, bounds, cachedRows } = activeDrag;
-        const { insertIndex, others } = resolvePointerDropTarget(
+        const { insertIndex, dropMode, others } = resolvePointerDropTarget(
             e.clientY,
+            e.clientX,
             cachedRows,
             block,
             { bounds }
         );
+        activeDrag.dropMode = dropMode;
 
         if (activeDrag.lastInsertIndex !== insertIndex) {
             activeDrag.lastInsertIndex = insertIndex;
@@ -631,7 +643,7 @@ export function attachChecklistDrag(root, item, {
             ? others[insertIndex]
             : others[others.length - 1];
         if (indicatorRef) {
-            updateDropIndicator(indicatorRef, insertIndex < others.length ? 'before' : 'after');
+            updateDropIndicator(indicatorRef, insertIndex < others.length ? 'before' : 'after', dropMode);
         }
     };
 
@@ -675,6 +687,7 @@ export function attachChecklistDrag(root, item, {
             bounds: { minAmongOthers, maxAmongOthers },
             cachedRows,
             lastInsertIndex: -1,
+            dropMode: 'sibling',
             startX: e.clientX,
             startY: e.clientY,
             moved: false
