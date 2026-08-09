@@ -18,6 +18,8 @@ import {
     ensureStepsParentOrder,
     assertStepsInvariants,
     toggleStepCompletion,
+    toggleGroupCompletion,
+    getGroupStepIds,
     addChecklistStep,
     splitChecklistStep,
     deleteChecklistStep,
@@ -262,10 +264,10 @@ describe('mutation ops keep the position model intact', () => {
         assert.deepEqual(assertStepsInvariants(base), []);
     });
 
-    it('outdentChecklistSteps clamps the subtree root at 0', () => {
+    it('outdentChecklistSteps moves subtree down one level', () => {
         const base = stepsToParentOrder([pstep('a', 2), pstep('b', 3), pstep('c', 0)]);
         outdentChecklistSteps(base, 0);
-        assert.deepEqual(base.map(getStepLevel), [0, 1, 0]);
+        assert.deepEqual(base.map(getStepLevel), [1, 2, 0]);
         assert.deepEqual(assertStepsInvariants(base), []);
     });
 
@@ -276,6 +278,57 @@ describe('mutation ops keep the position model intact', () => {
         assert.equal(base[1].completed, false);
         assert.deepEqual(base.map((s) => s.id), ['a', 'b']); // order untouched
         assert.deepEqual(assertStepsInvariants(base), []);
+    });
+
+    it('toggleGroupCompletion marks all descendants when completing parent', () => {
+        const base = stepsToParentOrder([pstep('a', 0), pstep('b', 1), pstep('c', 2), pstep('d', 0)]);
+        const affected = toggleGroupCompletion(base, 'a', true);
+        assert.deepEqual(affected, ['a', 'b', 'c']); // parent and all descendants
+        assert.equal(base[0].completed, true);
+        assert.equal(base[1].completed, true);
+        assert.equal(base[2].completed, true);
+        assert.equal(base[3].completed, false);
+        assert.deepEqual(assertStepsInvariants(base), []);
+    });
+
+    it('toggleGroupCompletion only marks parent when uncompleting', () => {
+        // Parent is already done, children are done too - uncomplete parent only
+        const steps = stepsToParentOrder([pstep('a', 0, true), pstep('b', 1, true), pstep('c', 2, true), pstep('d', 0, false)]);
+        const affected = toggleGroupCompletion(steps, 'a', false);
+        assert.deepEqual(affected, ['a']); // only parent
+        assert.equal(steps[0].completed, false);
+        assert.equal(steps[1].completed, true); // child stays done
+        assert.equal(steps[2].completed, true); // child stays done
+        assert.equal(steps[3].completed, false);
+        assert.deepEqual(assertStepsInvariants(steps), []);
+    });
+
+    it('toggleGroupCompletion works for leaf nodes (no descendants)', () => {
+        const base = stepsToParentOrder([pstep('a', 0), pstep('b', 0), pstep('c', 0)]);
+        const affected = toggleGroupCompletion(base, 'a', true);
+        assert.deepEqual(affected, ['a']); // only itself
+        assert.equal(base[0].completed, true);
+        assert.equal(base[1].completed, false);
+        assert.equal(base[2].completed, false);
+        assert.deepEqual(assertStepsInvariants(base), []);
+    });
+
+    it('getGroupStepIds returns all steps in a group', () => {
+        const base = stepsToParentOrder([pstep('a', 0), pstep('b', 1), pstep('c', 2), pstep('d', 0)]);
+        const ids = getGroupStepIds(base, 'a');
+        assert.deepEqual(ids, ['a', 'b', 'c']);
+    });
+
+    it('getGroupStepIds returns single element for leaf node', () => {
+        const base = stepsToParentOrder([pstep('a', 0), pstep('b', 0), pstep('c', 0)]);
+        const ids = getGroupStepIds(base, 'b');
+        assert.deepEqual(ids, ['b']);
+    });
+
+    it('getGroupStepIds returns empty array for non-existent step', () => {
+        const base = stepsToParentOrder([pstep('a', 0), pstep('b', 1)]);
+        const ids = getGroupStepIds(base, 'nonexistent');
+        assert.deepEqual(ids, []);
     });
 });
 

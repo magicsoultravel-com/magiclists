@@ -1,7 +1,7 @@
 /** @module {"owns":"checklist operations, drag/drop, state management", "related":["noteSurface.js","checklistSteps.js","noteBodyConversion.js","richText.js"], "events":[]} */
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { escapeHTML, escapeAttr } from './domEscape.js';
-import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, canIndentStep, computeVisibleInsertBounds, resolvePointerDropTarget, buildVisibleChecklistSteps, annotateChecklistTreeGuides, addChecklistStep, splitChecklistStep, deleteChecklistStep, mergeChecklistStepIntoPrev, indentChecklistSteps, outdentChecklistSteps, moveChecklistStepBlock, toggleStepCompletion } from './checklistSteps.js';
+import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, canIndentStep, computeVisibleInsertBounds, resolvePointerDropTarget, buildVisibleChecklistSteps, annotateChecklistTreeGuides, addChecklistStep, splitChecklistStep, deleteChecklistStep, mergeChecklistStepIntoPrev, indentChecklistSteps, outdentChecklistSteps, moveChecklistStepBlock, toggleStepCompletion, toggleGroupCompletion, getGroupStepIds } from './checklistSteps.js';
 import { stripRichText, sanitizeRichHtml, hasRichMarkup, linkifyPlainUrls } from './richText.js';
 import { mutateItem, syncItemBodyFromDom, syncInlineFieldToItem, commitInlineChecklistOp, flushDesktopAutoSave } from './noteSurfaceMutations.js';
 import { focusInlineEdit, canInlineEditText, splitInlineEditAtCaret, insertTextAtCaret, handleInlineEditArrowNav } from './noteSurfaceEditing.js';
@@ -70,7 +70,9 @@ export function bindChecklistInteractions(root, item, {
     root.dataset.checklistInteractionsBound = item.id;
 
     // --- step checkbox (toggle completion) ---
-    // Optimized: Use class toggles for non-structural updates instead of full refresh
+    // Update DOM immediately for responsive UX, then refresh to sync state.
+    // Local class toggles (done section, completed text) show instant feedback;
+    // refresh() ensures the done section moves on the board surface too.
     root.addEventListener('change', (e) => {
         const cb = e.target.closest('.step-check');
         if (!cb || !root.contains(cb)) return;
@@ -84,31 +86,58 @@ export function bindChecklistInteractions(root, item, {
         const newCompleted = cb.checked;
         const wasCompleted = step.completed;
         
+        // Check if this is a parent step (has descendants)
+        const stepIdx = (item.steps || []).findIndex(s => s.id === stepId);
+        const hasDescendants = stepHasDescendants(item.steps, stepIdx);
+        
         // For non-structural updates (checkbox toggle), update the model in place
         // and keep the DOM as a render of the model. Positions/order are untouched.
         if (wasCompleted !== newCompleted) {
-            toggleStepCompletion(item.steps, stepId, newCompleted);
-            
-            // Update row class
-            row.classList.toggle('step-row--done', newCompleted);
-            
-            // Update step text class
-            const stepTextEl = row.querySelector('.step-text');
-            if (stepTextEl) {
-                stepTextEl.classList.toggle('completed', newCompleted);
+            // Use group completion for parents, single for leaves
+            let affectedStepIds;
+            if (newCompleted && hasDescendants) {
+                // Completing a parent: mark all descendants too
+                affectedStepIds = toggleGroupCompletion(item.steps, stepId, newCompleted);
+            } else {
+                toggleStepCompletion(item.steps, stepId, newCompleted);
+                affectedStepIds = [stepId];
             }
             
-            // Move row to done section or back to active section
+            // Update row classes for all affected rows
             const doneSection = root.querySelector('.checklist-done-section');
             const addBtn = root.querySelector('.expanded-checklist-add-btn');
             const doneToggle = root.querySelector('.checklist-done-toggle');
             
+            // Collect all DOM rows for affected steps (in DOM order, parent first)
+            const affectedRows = affectedStepIds
+                .map(id => root.querySelector(`.step-row--display[data-step-id="${id}"]`))
+                .filter(r => r)
+                .sort((a, b) => a.comparePosition ? 0 : a.compareDocumentPosition(b) < 14 ? -1 : 1);
+            
+            // Update each row's classes
+            for (const r of affectedRows) {
+                r.classList.toggle('step-row--done', newCompleted);
+                const stepTextEl = r.querySelector('.step-text');
+                if (stepTextEl) {
+                    stepTextEl.classList.toggle('completed', newCompleted);
+                }
+            }
+            
             if (newCompleted && doneSection) {
-                // Move to done section
-                doneSection.appendChild(row);
-            } else if (!newCompleted && doneSection && addBtn) {
-                // Move back to active section (before add button)
-                addBtn.parentNode.insertBefore(row, addBtn);
+                // Move all rows together to done section (in reverse order to maintain sequence)
+                for (let i = affectedRows.length - 1; i >= 0; i--) {
+                    doneSection.appendChild(affectedRows[i]);
+                }
+            } else if (!newCompleted && doneSection) {
+                // When uncompleting, only the parent row is moved back
+                // (children stay done -- they can be toggled individually)
+                const parentRow = row;
+                const insertRef = findStepInsertionPosition(parentRow, item, addBtn);
+                if (insertRef) {
+                    insertRef.parentNode.insertBefore(parentRow, insertRef.nextSibling);
+                } else if (addBtn.parentNode) {
+                    addBtn.parentNode.insertBefore(parentRow, addBtn);
+                }
             }
             
             // Update done toggle visibility
@@ -124,10 +153,14 @@ export function bindChecklistInteractions(root, item, {
         // Sync to item and persist
         if (localOnly) {
             onChange();
+            refresh();
         } else {
             const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
             syncItemBodyFromDom(root, item);
             commitInlineChecklistOp(item, beforeItem, { localOnly });
+            // Always refresh to ensure the done section updates on the board surface
+            // and syncs state for both modal and surface editors.
+            refresh();
         }
     });
 
@@ -721,6 +754,80 @@ export function getActiveRows(root = document) {
     });
     return rows;
 }
+
+/**
+ * Find the correct DOM insertion position for a step when moving it from done to active section.
+ * The step should be inserted after its parent (based on parentId in the model),
+ * or after the last sibling at the same level that comes before it in tree order.
+ * 
+ * @param {HTMLElement} row - the step row to reposition
+ * @param {object} item - the note item
+ * @param {HTMLElement} addBtn - the "add step" button (anchor point for end of active section)
+ * @returns {HTMLElement|null} - the reference element after which to insert, or null to append
+ */
+function findStepInsertionPosition(row, item, addBtn) {
+    const stepId = row.dataset.stepId;
+    if (!stepId) return null;
+    
+    const step = (item.steps || []).find(s => s.id === stepId);
+    if (!step) return null;
+    
+    const parentId = step.parentId;
+    const stepLevel = step.level || 0;
+    
+    // Get all active rows in DOM order
+    const activeRows = Array.from(row.parentNode.querySelectorAll('.step-row--display:not(.step-row--done)'));
+    
+    // If no parent, insert at the end (but before add button)
+    if (!parentId) {
+        // Find the last row at level 0 or higher that comes before the add button
+        for (let i = activeRows.length - 1; i >= 0; i--) {
+            const r = activeRows[i];
+            const rLevel = Number(r.dataset.level) || 0;
+            if (rLevel <= 0 && r !== addBtn) {
+                return r; // Insert after this
+            }
+        }
+        return addBtn; // Before add button
+    }
+    
+    const parentRow = activeRows.find(r => r.dataset.stepId === parentId);
+    if (!parentRow) {
+        // Parent not found in active rows (might be in done section or moved)
+        // Insert before add button as fallback
+        return addBtn;
+    }
+    
+    // Find the last sibling or child that this step should come after
+    // It should come after:
+    // 1. Its parent
+    // 2. Any siblings of the parent that are at the same level or lower
+    
+    const parentLevel = Number(parentRow.dataset.level) || 0;
+    
+    // Find all rows after the parent, looking for the right position
+    const parentIndex = activeRows.indexOf(parentRow);
+    for (let i = parentIndex + 1; i < activeRows.length; i++) {
+        const r = activeRows[i];
+        const rLevel = Number(r.dataset.level) || 0;
+        
+        // If we find a row at the same level or higher, stop before it
+        if (rLevel <= parentLevel) {
+            // Insert after the row at i-1, or after parent if i == parentIndex + 1
+            return i > parentIndex + 1 ? activeRows[i - 1] : parentRow;
+        }
+        
+        // If the row is higher than our step's level, we might need to insert after it
+        if (rLevel < stepLevel && r !== addBtn) {
+            // Keep looking - this could be a potential insertion point
+        }
+    }
+    
+    // If we get here, insert after the parent (or before add button if parent is last)
+    const lastInParentGroup = activeRows[activeRows.length - 1];
+    return lastInParentGroup && lastInParentGroup !== addBtn ? lastInParentGroup : addBtn;
+}
+
 
 function isCollapsedGroupRow(row, collapsedKeys) {
     const itemId = row.dataset.itemId;

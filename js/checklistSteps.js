@@ -437,6 +437,62 @@ export function toggleStepCompletion(steps, stepId, completed) {
 }
 
 /**
+ * Toggle a group (parent) step and ALL its descendants.
+ * When completing a parent, all children are also marked complete.
+ * When uncompleting a parent, only the parent is marked uncompleted (children stay done).
+ * Returns the list of affected step IDs, or empty array if no changes.
+ * @param {Array} steps - The steps array
+ * @param {string} stepId - The step ID to toggle
+ * @param {boolean} completed - The completed state to set
+ * @returns {string[]} Array of step IDs that were affected
+ */
+export function toggleGroupCompletion(steps, stepId, completed) {
+    const list = steps || [];
+    const stepIdx = list.findIndex((s) => s?.id === stepId);
+    if (stepIdx < 0) return [];
+    
+    // Collect the whole subtree (parent + all descendants)
+    const subtree = collectStepSubtree(list, stepIdx);
+    if (!subtree.length) return [];
+    
+    const affectedIds = [];
+    // When completing: mark all descendants as complete too
+    // When uncompleting: only touch the parent (children remain done)
+    if (completed) {
+        // Completing: mark entire subtree
+        for (const s of subtree) {
+            if (s.completed !== completed) {
+                s.completed = completed;
+                affectedIds.push(s.id);
+            }
+        }
+    } else {
+        // Uncompleting: only the parent
+        const parent = subtree[0];
+        if (parent.completed !== completed) {
+            parent.completed = completed;
+            affectedIds.push(parent.id);
+        }
+    }
+    return affectedIds;
+}
+
+/**
+ * Find all descendant step IDs for a given step (including itself).
+ * @param {Array} steps - The steps array
+ * @param {string} stepId - The parent step ID
+ * @returns {string[]} Array of step IDs in the subtree
+ */
+export function getGroupStepIds(steps, stepId) {
+    const list = steps || [];
+    const stepIdx = list.findIndex((s) => s?.id === stepId);
+    if (stepIdx < 0) return [];
+    
+    const subtree = collectStepSubtree(list, stepIdx);
+    return subtree.map(s => s.id);
+}
+
+/**
  * Insert a new sibling step after afterStepId (or append when omitted).
  * The new step inherits the anchor's level; position metadata is refreshed.
  * @returns {{ steps: Array, step: Object }}
@@ -498,7 +554,9 @@ export function deleteChecklistStep(steps, stepId) {
     const idx = list.findIndex((s) => s?.id === stepId);
     if (idx < 0) return { steps: list, prevStepId: null, nextStepId: null };
     const prevStepId = idx > 0 ? (list[idx - 1]?.id ?? null) : null;
-    const nextStepId = idx + 1 < list.length ? (list[idx + 1]?.id ?? null) : null;
+    const subtree = collectStepSubtree(list, idx);
+    const nextIdx = idx + subtree.length - 1;
+    const nextStepId = nextIdx + 1 < list.length ? (list[nextIdx + 1]?.id ?? null) : null;
     list.splice(idx, 1);
     return { steps: refreshStepsPosition(list), prevStepId, nextStepId };
 }
@@ -558,6 +616,36 @@ export function moveChecklistStepBlock(steps, blockRootId, {
     if (rootIdx < 0) return { steps: list, parentId: null, levelChanged: false };
     const block = collectStepSubtree(active, rootIdx);
     const blockIds = new Set(block.map((s) => s.id));
+    
+    // Also include done steps that are descendants of the block root
+    // These need to move with the block to maintain tree structure
+    const rootIds = new Set([blockRootId, ...block.map(s => s.id)]);
+    const doneInBlock = [];
+    const doneNotInBlock = [];
+    for (const d of done) {
+        let isDescendant = false;
+        let currentId = d.parentId;
+        while (currentId) {
+            if (rootIds.has(currentId)) {
+                isDescendant = true;
+                break;
+            }
+            const parent = list.find(s => s.id === currentId);
+            currentId = parent?.parentId;
+        }
+        if (isDescendant) {
+            doneInBlock.push(d);
+        } else {
+            doneNotInBlock.push(d);
+        }
+    }
+    
+    // Merge done steps into block at correct positions based on their parentId
+    // The done steps need to be interleaved with active steps in the block
+    // We use a single array and sort by original order to maintain tree structure
+    const allBlockSteps = [...block, ...doneInBlock];
+    // Sort by the original order property to maintain proper tree order
+    allBlockSteps.sort((a, b) => (a.order || 0) - (b.order || 0));
 
     const othersActive = active.filter((s) => !blockIds.has(s.id));
     const othersVisible = buildVisibleChecklistSteps(active, itemId, collapsedKeys)
@@ -580,9 +668,10 @@ export function moveChecklistStepBlock(steps, blockRootId, {
         targetModelIndex = 0;
     }
 
+    // Build reordered array - the block now includes interleaved done steps
     const reordered = [
         ...othersActive.slice(0, targetModelIndex),
-        ...block,
+        ...allBlockSteps,
         ...othersActive.slice(targetModelIndex)
     ];
 
@@ -592,8 +681,15 @@ export function moveChecklistStepBlock(steps, blockRootId, {
     const afterLevel = rootIdxFinal >= 0 ? getStepLevel(reordered[rootIdxFinal]) : beforeLevel;
 
     refreshStepsPosition(reordered);
+    // Use doneNotInBlock to preserve tree structure - done steps that are
+    // descendants of the moved block stay with the block
+    // Note: doneInBlock are already interleaved in allBlockSteps above
+    const finalSteps = [...reordered, ...doneNotInBlock];
+    // Re-apply refresh to ensure order is correct after appending
+    refreshStepsPosition(finalSteps);
+    refreshStepsPosition(finalSteps);
     return {
-        steps: [...reordered, ...done],
+        steps: finalSteps,
         parentId: dropResult?.parentId || null,
         levelChanged: beforeLevel !== afterLevel
     };
