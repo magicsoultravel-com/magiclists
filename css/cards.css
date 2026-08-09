@@ -419,6 +419,21 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
 .has-custom-bg .step-text.card-inline-edit {
 }
 
+/* Ghost parent rows in the Completed section: read-only context placeholders
+   shown for an open parent whose children are already completed. */
+.has-custom-bg .step-row--ghost .step-text {
+    color: var(--card-muted);
+    font-style: italic;
+    opacity: 0.72;
+    text-decoration: none;
+    cursor: default;
+}
+
+.step-row--ghost .step-check--ghost,
+.step-check--ghost {
+    pointer-events: none;
+}
+
 .has-custom-bg .card-inline-edit:empty::before {
     color: var(--card-placeholder);
 }

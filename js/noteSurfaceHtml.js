@@ -4,7 +4,7 @@ import { UNCATEGORIZED_COLOR } from './categories.js';
 import { stripRichText, hasRichMarkup, sanitizeRichHtml } from './richText.js';
 import { isSheetTemplateActive, renderSheetHtml, defaultSheetDimsForTemplate, ensureItemSheet } from './sheet.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText } from './noteBodyConversion.js';
-import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, buildVisibleChecklistSteps, annotateChecklistTreeGuides, canIndentStep } from './checklistSteps.js';
+import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, buildVisibleChecklistSteps, buildCompletedChecklistRows, annotateChecklistTreeGuides, canIndentStep } from './checklistSteps.js';
 import { escapeHTML, escapeAttr } from './domEscape.js';
 import { isFileCabinetActive, getFileCabinetToggleLabels } from './fileCabinet.js';
 import { LEGACY_TILE_SIZE, isCollapsedSpatialSize } from './tileGeometry.js';
@@ -595,18 +595,27 @@ export function buildExpandedChecklistHtml(item, canEdit, { richEdit = false } =
             html += '<div class="checklist-done-divider" role="separator" aria-hidden="true"></div>';
         }
         html += `<div class="checklist-done-section${doneCollapsed ? ' is-hidden' : ''}">`;
-        done.forEach((step) => {
-            html += buildChecklistRowHtml(step, {
-                hasKids: false,
-                isCollapsed: false,
-                collapseKey: '',
-                isDoneSection: true,
-                treeGuides: [],
-                canEdit,
-                richEdit,
-                active
+        // Completed groups keep their parent-child hierarchy: run the same
+        // collapse-aware + tree-guide pipeline as the active section so done
+        // parents show expand/collapse chevrons and their children stay nested.
+        // buildCompletedChecklistRows additionally emits a read-only "ghost" of
+        // an open parent above its completed children so those children stay
+        // grouped until the parent itself is completed (then it replaces the
+        // ghost and they join into one group).
+        annotateChecklistTreeGuides(buildCompletedChecklistRows(item.steps, item.id, collapsedKeys))
+            .forEach((row) => {
+                html += buildChecklistRowHtml(row.step, {
+                    hasKids: row.hasKids,
+                    isCollapsed: !!collapsedKeys[row.collapseKey],
+                    collapseKey: row.collapseKey,
+                    isDoneSection: true,
+                    isGhost: row.isGhost,
+                    treeGuides: row.treeGuides || [],
+                    canEdit,
+                    richEdit,
+                    active
+                });
             });
-        });
         html += '</div>';
     }
 

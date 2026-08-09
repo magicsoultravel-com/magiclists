@@ -1,7 +1,7 @@
 /** @module {"owns":"checklist operations, drag/drop, state management", "related":["noteSurface.js","checklistSteps.js","noteBodyConversion.js","richText.js"], "events":[]} */
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { escapeHTML, escapeAttr } from './domEscape.js';
-import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, canIndentStep, computeVisibleInsertBounds, resolvePointerDropTarget, buildVisibleChecklistSteps, annotateChecklistTreeGuides, addChecklistStep, splitChecklistStep, deleteChecklistStep, mergeChecklistStepIntoPrev, indentChecklistSteps, outdentChecklistSteps, moveChecklistStepBlock, toggleStepCompletion, toggleGroupCompletion, getGroupStepIds } from './checklistSteps.js';
+import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, canIndentStep, computeVisibleInsertBounds, resolvePointerDropTarget, buildVisibleChecklistSteps, annotateChecklistTreeGuides, addChecklistStep, splitChecklistStep, deleteChecklistStep, mergeChecklistStepIntoPrev, indentChecklistSteps, outdentChecklistSteps, moveChecklistStepBlock, toggleStepCompletion, toggleGroupCompletion, getGroupStepIds, buildCompletedChecklistRows } from './checklistSteps.js';
 import { stripRichText, sanitizeRichHtml, hasRichMarkup, linkifyPlainUrls } from './richText.js';
 import { mutateItem, syncItemBodyFromDom, syncInlineFieldToItem, commitInlineChecklistOp, flushDesktopAutoSave } from './noteSurfaceMutations.js';
 import { focusInlineEdit, canInlineEditText, splitInlineEditAtCaret, insertTextAtCaret, handleInlineEditArrowNav } from './noteSurfaceEditing.js';
@@ -866,13 +866,25 @@ export function toggleChecklistDoneSection(itemId) {
 
 export function getChecklistCollapsibleKeys(item) {
     if (!item?.id) return [];
-    const { active } = partitionChecklistSteps(item.steps || []);
-    const keys = [];
-    active.forEach((step, index) => {
-        if (!stepHasDescendants(active, index)) return;
-        keys.push(`${item.id}:${step.id}`);
-    });
-    return keys;
+    const { active, done } = partitionChecklistSteps(item.steps || []);
+    const keys = new Set();
+    // Collect collapsible groups per section, so completed groups stay
+    // collapseable and the expand/collapse-all toolbar covers them too.
+    const collectCollapsible = (list) => {
+        list.forEach((step, index) => {
+            if (!stepHasDescendants(list, index)) return;
+            keys.add(`${item.id}:${step.id}`);
+        });
+    };
+    collectCollapsible(active);
+    collectCollapsible(done);
+    // Ghost groups (open parents shown above their completed children) also
+    // collapse via the shared step key.
+    buildCompletedChecklistRows(item.steps, item.id, {})
+        .forEach((row) => {
+            if (row.isGhost && row.hasKids) keys.add(row.collapseKey);
+        });
+    return [...keys];
 }
 
 export function checklistGroupsAnyExpanded(item) {
@@ -1196,33 +1208,39 @@ export function buildChecklistRowHtml(step, {
     isCollapsed = false,
     collapseKey = '',
     isDoneSection = false,
+    isGhost = false,
     treeGuides = [],
     canEdit = true,
     richEdit = false,
     active = []
 } = {}) {
     const stepLevel = getStepLevel(step);
-    const activeIdx = isDoneSection ? -1 : active.findIndex((s) => s.id === step.id);
-    const collapseControl = !isDoneSection && hasKids
+    const activeIdx = (isDoneSection || isGhost) ? -1 : active.findIndex((s) => s.id === step.id);
+    // Collapse chevrons render for any parent group — including completed groups
+    // in the done section — so completed trees keep their expand/collapse control.
+    const collapseControl = hasKids
         ? `<button type="button" class="step-collapse-btn" data-collapse-key="${escapeAttr(collapseKey)}" title="${isCollapsed ? 'Expand group' : 'Collapse group'}" aria-label="${isCollapsed ? 'Expand group' : 'Collapse group'}">${isCollapsed ? CARD_ICONS.chevronRight : CARD_ICONS.chevronDown}</button>`
         : '<span class="step-collapse-spacer" aria-hidden="true"></span>';
     const dragHandle = !canEdit
         ? ''
-        : isDoneSection
+        : (isGhost || isDoneSection)
             ? '<span class="grab-handle grab-handle--step grab-handle--spacer" aria-hidden="true">⋮⋮</span>'
             : '<span class="grab-handle grab-handle--step" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>';
-    const nestControls = canEdit ? `
+    const nestControls = !isGhost && canEdit ? `
         <button type="button" class="card-act step-outdent-btn" title="Outdent" aria-label="Outdent"${stepLevel === 0 ? ' disabled' : ''}>‹</button>
         <button type="button" class="card-act step-indent-btn" title="Indent" aria-label="Indent"${!canIndentStep(active, activeIdx) ? ' disabled' : ''}>›</button>` : '';
-    const copyBtn = canEdit
+    const copyBtn = !isGhost && canEdit
         ? `<button type="button" class="card-act step-copy-btn" title="Copy item" aria-label="Copy item">${CARD_ICONS.copy}</button>`
         : '';
-    const deleteBtn = canEdit
+    const deleteBtn = !isGhost && canEdit
         ? `<button type="button" class="card-act card-act--danger step-delete-btn" title="Remove item" aria-label="Remove item">${CARD_ICONS.close}</button>`
         : '';
     const stepText = step.text || '';
     let textHtml;
-    if (canEdit && (richEdit || canInlineEditText(stepText, { richEdit }))) {
+    if (isGhost) {
+        // Ghost rows are read-only context placeholders (never editable).
+        textHtml = `<span class="step-text step-text--ghost${hasRichMarkup(stepText) ? ' rich-text' : ''}">${sanitizeRichHtml(stepText)}</span>`;
+    } else if (canEdit && (richEdit || canInlineEditText(stepText, { richEdit }))) {
         const inner = richEdit ? sanitizeRichHtml(stepText) : escapeHTML(stepText);
         const ce = richEdit ? 'true' : 'plaintext-only';
         const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
@@ -1231,18 +1249,27 @@ export function buildChecklistRowHtml(step, {
         const richClass = hasRichMarkup(stepText) ? ' rich-text' : '';
         textHtml = `<span class="step-text${richClass} ${step.completed ? 'completed' : ''}">${sanitizeRichHtml(stepText)}</span>`;
     }
-    const treeGutterHtml = !isDoneSection && treeGuides.length > 0
+    // Tree guides render for done-section rows too so completed groups keep
+    // their visual parent-child indentation.
+    const treeGutterHtml = treeGuides.length > 0
         ? `<span class="step-tree-gutter" aria-hidden="true">${treeGuides.map(({ role }) => {
             return `<span class="step-tree-guide step-tree-guide--${role}" aria-hidden="true"></span>`;
         }).join('')}</span>`
         : '';
+    const stepCheckHtml = isGhost
+        ? '<span class="step-check step-check--ghost" aria-hidden="true"></span>'
+        : `<input type="checkbox" class="step-check" ${step.completed ? 'checked' : ''}>`;
+    // Ghosts intentionally omit data-step-id so DOM scanners keyed on step ids
+    // (drag bounds, inline editing, DOM sync) skip them automatically.
+    const stepIdAttr = isGhost ? '' : ` data-step-id="${step.id}"`;
+    const ghostAttr = isGhost ? ' data-ghost-step="1"' : '';
     return `
-        <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}" data-step-id="${step.id}" data-level="${stepLevel}">
+        <div class="step-row step-row--display${step.completed ? ' step-row--done' : ''}${isGhost ? ' step-row--ghost' : ''}"${stepIdAttr}${ghostAttr} data-level="${stepLevel}">
             <div class="step-row-leading">
                 ${dragHandle}
                 ${treeGutterHtml}
                 ${collapseControl}
-                <input type="checkbox" class="step-check" ${step.completed ? 'checked' : ''}>
+                ${stepCheckHtml}
             </div>
             ${textHtml}
             <div class="step-row-actions">

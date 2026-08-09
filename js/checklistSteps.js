@@ -300,6 +300,70 @@ export function annotateChecklistTreeGuides(visibleRows) {
     });
 }
 
+/**
+ * Build the ordered list of rows to render in the Completed section.
+ *
+ * Completed steps keep their authored order. When a completed step's parent
+ * (nearest preceding step with a strictly lower level) is still open, a derived
+ * "ghost" of that parent is emitted in the parent's original position so the
+ * completed children stay visually grouped under a parent header. When the
+ * parent itself is later completed the ghost is naturally replaced by the real
+ * completed row (they are "joined" in the same parent-child group). Ghosts are
+ * only rendering hints — they are never written back into item.steps.
+ *
+ * @param {Array} steps - full flat step array
+ * @param {string} itemId - checklist owner id (collapse-key namespace)
+ * @param {Object} collapsedKeys - row collapse state map (shared with the active section)
+ * @returns {Array<{step:Object, isGhost:boolean, hasKids:boolean, isCollapsed:boolean, collapseKey:string}>}
+ *     rows ready for annotateChecklistTreeGuides(); `isGhost` marks the synthetic
+ *     placeholders. Ghosts intentionally carry no data-step-id at render time so
+ *     DOM scanners keyed on step ids (drag, editing, inline sync) ignore them.
+ */
+export function buildCompletedChecklistRows(steps, itemId, collapsedKeys = {}) {
+    const list = Array.isArray(steps) ? steps : [];
+    const doneIds = new Set();
+    for (const s of list) if (s?.completed) doneIds.add(s.id);
+
+    const ghostIds = computeGhostStepIds(list, doneIds);
+    const view = [];
+    for (const step of list) {
+        if (doneIds.has(step.id) || ghostIds.has(step.id)) view.push(step);
+    }
+
+    return buildVisibleChecklistSteps(view, itemId, collapsedKeys)
+        .map((row) => ({ ...row, isGhost: ghostIds.has(row.step.id) }));
+}
+
+/**
+ * Collect the ids of every open (not completed) step that must be rendered as a
+ * ghost so completed descendants keep their parent context: for each completed
+ * step with level > 0, walk up its ancestor chain (nearest preceding lower-level
+ * steps) and add every ancestor that is still open; stop at the first ancestor
+ * that is itself completed (its real row already appears in the Completed
+ * section).
+ * @param {Array} steps - full flat step array
+ * @param {Set<string>} doneIds - ids of completed steps
+ * @returns {Set<string>}
+ */
+function computeGhostStepIds(steps, doneIds) {
+    const ghosts = new Set();
+    if (!doneIds.size) return ghosts;
+
+    for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        if (!doneIds.has(step.id)) continue;
+        let level = getStepLevel(step);
+        for (let j = i - 1; j >= 0 && level > 0; j--) {
+            const pLevel = getStepLevel(steps[j]);
+            if (pLevel >= level) continue;
+            if (doneIds.has(steps[j].id)) break; // real completed parent nests this child
+            ghosts.add(steps[j].id);
+            level = pLevel; // keep walking up through open ancestors
+        }
+    }
+    return ghosts;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // H3-B: explicit parentId + order position model
 //

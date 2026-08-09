@@ -27,7 +27,10 @@ import {
     indentChecklistSteps,
     outdentChecklistSteps,
     moveChecklistStepBlock,
-    partitionChecklistSteps
+    partitionChecklistSteps,
+    buildVisibleChecklistSteps,
+    buildCompletedChecklistRows,
+    annotateChecklistTreeGuides
 } from '../js/checklistSteps.js';
 
 function step(id, level, completed = false) {
@@ -387,6 +390,123 @@ describe('moveChecklistStepBlock (model-first drag)', () => {
         });
         assert.deepEqual(res.steps.map((s) => s.id), ['a', 'b', 'x', 'xc', 'd']);
         assert.deepEqual(assertStepsInvariants(res.steps), []);
+    });
+});
+
+describe('done-section tree preservation (completed groups keep hierarchy)', () => {
+    it('partition keeps a completed group contiguous and in authored order', () => {
+        const steps = stepsToParentOrder([
+            pstep('group', 0, true), pstep('child1', 1, true), pstep('grandchild', 2, true),
+            pstep('child2', 1, true), pstep('open', 0, false)
+        ]);
+        const { active, done } = partitionChecklistSteps(steps);
+        assert.deepEqual(done.map((s) => s.id), ['group', 'child1', 'grandchild', 'child2']);
+        assert.deepEqual(active.map((s) => s.id), ['open']);
+    });
+
+    it('buildVisibleChecklistSteps exposes done parents with hasKids + collapse keys', () => {
+        const done = stepsToParentOrder([
+            pstep('group', 0, true), pstep('child1', 1, true), pstep('grandchild', 2, true), pstep('child2', 1, true)
+        ]);
+        const rows = buildVisibleChecklistSteps(done, 'item', {});
+        assert.deepEqual(rows.map((r) => r.step.id), ['group', 'child1', 'grandchild', 'child2']);
+        assert.equal(rows[0].hasKids, true);
+        assert.equal(rows[0].collapseKey, 'item:group');
+        assert.equal(rows[1].hasKids, true);
+        assert.equal(rows[2].hasKids, false);
+        assert.equal(rows[3].hasKids, false);
+    });
+
+    it('a collapsed done parent hides its completed descendants', () => {
+        const done = stepsToParentOrder([
+            pstep('group', 0, true), pstep('child1', 1, true), pstep('grandchild', 2, true), pstep('child2', 1, true)
+        ]);
+        const visible = buildVisibleChecklistSteps(done, 'item', { 'item:group': true });
+        assert.deepEqual(visible.map((r) => r.step.id), ['group']);
+        // Collapsing a child group hides only its own subtree, parent stays visible.
+        const partial = buildVisibleChecklistSteps(done, 'item', { 'item:child1': true });
+        assert.deepEqual(partial.map((r) => r.step.id), ['group', 'child1', 'child2']);
+    });
+
+    it('annotateChecklistTreeGuides draws the same hierarchy for done rows', () => {
+        const done = stepsToParentOrder([
+            pstep('group', 0, true), pstep('child1', 1, true), pstep('grandchild', 2, true), pstep('child2', 1, true)
+        ]);
+        const rows = annotateChecklistTreeGuides(buildVisibleChecklistSteps(done, 'item', {}));
+        assert.deepEqual(rows[0].treeGuides, []);
+        assert.deepEqual(rows[1].treeGuides.map((g) => g.role), ['start']);
+        assert.deepEqual(rows[2].treeGuides.map((g) => g.role), ['through', 'solo']);
+        assert.deepEqual(rows[3].treeGuides.map((g) => g.role), ['end']);
+    });
+});
+
+describe('ghost parents (completed children of open parents)', () => {
+    it('emits a ghost parent above a completed child and keeps the tree', () => {
+        const steps = stepsToParentOrder([
+            pstep('groc', 0, false), pstep('bread', 1, true), pstep('open', 0, false)
+        ]);
+        const rows = buildCompletedChecklistRows(steps, 'item', {});
+        assert.deepEqual(rows.map((r) => r.step.id), ['groc', 'bread']);
+        assert.deepEqual(rows.map((r) => r.isGhost), [true, false]);
+        // The ghost parent groups the completed child below it.
+        assert.equal(rows[0].hasKids, true);
+        assert.equal(rows[1].hasKids, false);
+    });
+
+    it('replaces the ghost with the real parent once it is completed (join)', () => {
+        // Child completed first...
+        const steps = stepsToParentOrder([pstep('groc', 0, false), pstep('bread', 1, true)]);
+        let rows = buildCompletedChecklistRows(steps, 'item', {});
+        assert.deepEqual(rows.map((r) => [r.step.id, r.isGhost]), [['groc', true], ['bread', false]]);
+        // ...then the parent is completed too -> the ghost becomes the real row.
+        steps[0].completed = true;
+        rows = buildCompletedChecklistRows(steps, 'item', {});
+        assert.deepEqual(rows.map((r) => [r.step.id, r.isGhost]), [['groc', false], ['bread', false]]);
+        // They now form one parent-children group in the Completed section.
+        assert.equal(rows[0].hasKids, true);
+    });
+
+    it('chains ghosts for a completed grandchild under open parent + grandparent', () => {
+        const steps = stepsToParentOrder([
+            pstep('top', 0, false), pstep('mid', 1, false), pstep('leaf', 2, true)
+        ]);
+        const rows = buildCompletedChecklistRows(steps, 'item', {});
+        assert.deepEqual(rows.map((r) => r.step.id), ['top', 'mid', 'leaf']);
+        assert.deepEqual(rows.map((r) => r.isGhost), [true, true, false]);
+    });
+
+    it('skips ghosts when the parent is already completed', () => {
+        const steps = stepsToParentOrder([
+            pstep('groc', 0, true), pstep('bread', 1, true), pstep('open', 0, false)
+        ]);
+        const rows = buildCompletedChecklistRows(steps, 'item', {});
+        assert.deepEqual(rows.map((r) => [r.step.id, r.isGhost]), [['groc', false], ['bread', false]]);
+    });
+
+    it('collapsing a ghost parent hides its completed children', () => {
+        const steps = stepsToParentOrder([
+            pstep('groc', 0, false), pstep('bread', 1, true), pstep('milk', 1, true)
+        ]);
+        const visible = buildCompletedChecklistRows(steps, 'item', { 'item:groc': true });
+        assert.deepEqual(visible.map((r) => r.step.id), ['groc']);
+        assert.deepEqual(visible.map((r) => r.isGhost), [true]);
+    });
+
+    it('gives each open parent its own ghost even with sibling groups between', () => {
+        const steps = stepsToParentOrder([
+            pstep('a', 0, false), pstep('a1', 1, true), pstep('b', 0, false), pstep('b1', 1, true)
+        ]);
+        const rows = buildCompletedChecklistRows(steps, 'item', {});
+        assert.deepEqual(rows.map((r) => [r.step.id, r.isGhost]), [
+            ['a', true], ['a1', false], ['b', true], ['b1', false]
+        ]);
+    });
+
+    it('never mutates the model: steps are untouched and ghosts are derived only', () => {
+        const steps = stepsToParentOrder([pstep('groc', 0, false), pstep('bread', 1, true)]);
+        const before = JSON.parse(JSON.stringify(steps));
+        buildCompletedChecklistRows(steps, 'item', {});
+        assert.deepEqual(JSON.parse(JSON.stringify(steps)), before);
     });
 });
 

@@ -262,6 +262,21 @@ body.is-checklist-dragging {
 .step-row--display .step-text.card-inline-edit {
 }
 
+/* Ghost parent rows in the Completed section: read-only context placeholders
+   shown for an open parent whose children are already completed. */
+.step-row--ghost .step-text {
+    color: var(--text-muted);
+    font-style: italic;
+    opacity: 0.72;
+    text-decoration: none;
+    cursor: default;
+}
+
+.step-row--ghost .step-check--ghost,
+.step-check--ghost {
+    pointer-events: none;
+}
+
 /* Quick actions grid */
 .quick-actions-grid {
     --launcher-icon-size: 15px;
