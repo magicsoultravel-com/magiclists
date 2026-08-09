@@ -79,7 +79,17 @@ export function migrateDocument(raw) {
     };
 }
 
-export function readDocument() {
+export async function readDocument() {
+    try {
+        const IndexedDBStore = await import('./storage/indexedDbCanvasStore.js');
+        const result = await IndexedDBStore.getCanvasDocument(STORAGE_KEY);
+        if (result !== null) {
+            return migrateDocument(result);
+        }
+    } catch (e) {
+        // Continue to fallback
+    }
+    
     try {
         return migrateDocument(JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'));
     } catch (e) {
@@ -87,7 +97,13 @@ export function readDocument() {
     }
 }
 
-export function writeDocument(doc) {
+export async function writeDocument(doc) {
+    try {
+        const IndexedDBStore = await import('./storage/indexedDbCanvasStore.js');
+        await IndexedDBStore.setCanvasDocument(STORAGE_KEY, doc);
+    } catch (e) {
+        // If IndexedDB fails, fall back to localStorage
+    }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
 }
 

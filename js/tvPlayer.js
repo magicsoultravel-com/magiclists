@@ -13,6 +13,9 @@ const DEFAULT_BROWSER_W = 360;
 const DEFAULT_BROWSER_H = 420;
 const DEFAULT_BROWSE_SORT = 'name';
 const DEFAULT_COUNTRY_SORT = 'count';
+const DEFAULT_BUFFER_SIZE = 15; // seconds - default for stable playback
+const MAX_BUFFER_SIZE = 120;
+const MIN_BUFFER_SIZE = 5; // Allow users to reduce to 5 for faster channel switching
 
 function migrateRecentsMeta(raw) {
     if (Array.isArray(raw.recentsMeta) && raw.recentsMeta.length) {
@@ -66,7 +69,8 @@ function loadState() {
             browserY: Number.isFinite(raw.browserY) ? raw.browserY : null,
             browserFloating: raw.browserFloating === true,
             browseSort: raw.browseSort || DEFAULT_BROWSE_SORT,
-            countrySort: raw.countrySort || DEFAULT_COUNTRY_SORT
+            countrySort: raw.countrySort || DEFAULT_COUNTRY_SORT,
+            bufferSize: Number.isFinite(raw.bufferSize) ? Math.min(MAX_BUFFER_SIZE, Math.max(MIN_BUFFER_SIZE, raw.bufferSize)) : DEFAULT_BUFFER_SIZE
         };
     } catch {
         return {
@@ -84,7 +88,8 @@ function loadState() {
             browserY: null,
             browserFloating: false,
             browseSort: DEFAULT_BROWSE_SORT,
-            countrySort: DEFAULT_COUNTRY_SORT
+            countrySort: DEFAULT_COUNTRY_SORT,
+            bufferSize: DEFAULT_BUFFER_SIZE
         };
     }
 }
@@ -120,6 +125,33 @@ export const TvPlayer = {
     volume: loadState().volume,
     videoMount: null,
 
+    // Buffer management
+    bufferSize: loadState().bufferSize || DEFAULT_BUFFER_SIZE,
+
+    // Audio/video separation infrastructure
+    audioContext: null,
+    gainNode: null,
+    videoOnlyNode: null,
+    audioOutputNode: null,
+    videoMuted: false,
+    audioPriority: 1.0,
+
+    // Stream statistics
+    connection: 'idle',
+    bandwidth: 0,
+    qualityLevel: 0,
+    qualityLabel: 'unknown',
+    errorCount: 0,
+    retryCount: 0,
+    maxRetries: 3,
+    statsRefreshInterval: null,
+
+    // Quality adaptation
+    currentMaxBitrate: null,
+
+    // Audio context lazy init flag
+    audioContextInitialized: false,
+
     init() {
         if (this.video) return;
 
@@ -133,9 +165,15 @@ export const TvPlayer = {
         this.video.className = 'tv-video';
         this.video.playsInline = true;
         this.video.setAttribute('playsinline', '');
-        this.video.preload = 'none';
+        this.video.autoplay = true; // Required for autoplay policy compliance
+        this.video.preload = 'metadata'; // Allow initial metadata load for faster startup
+        this.video.muted = true; // Required for autoplay on some browsers
         this.video.volume = this.volume;
+        if (this.volume === 0) this.video.muted = true;
         this.videoHolder.appendChild(this.video);
+
+        // Audio/video separation will be initialized lazily on first user interaction
+        // (required by Autoplay Policy - AudioContext must be created after user gesture)
 
         this.video.addEventListener('loadstart', () => {
             this.loadPhase = 'connecting';
@@ -144,6 +182,13 @@ export const TvPlayer = {
         this.video.addEventListener('canplay', () => {
             if (this.loadPhase !== 'idle') {
                 this.loadPhase = 'idle';
+                this.emitState();
+            }
+        });
+        this.video.addEventListener('canplaythrough', () => {
+            // Video has enough data to play through - signal ready for smooth playback
+            if (this.loading) {
+                this.loading = false;
                 this.emitState();
             }
         });
@@ -200,6 +245,7 @@ export const TvPlayer = {
             };
             this.emitState();
         }
+
     },
 
     mountVideo(targetEl) {
@@ -332,9 +378,72 @@ export const TvPlayer = {
 
     setVolume(value) {
         this.volume = Math.min(1, Math.max(0, value));
-        if (this.video) this.video.volume = this.volume;
+        if (this.video) {
+            this.video.volume = this.volume;
+            // Auto-mute when volume is 0, unmute when volume is > 0
+            this.video.muted = this.volume === 0;
+        }
+        // Lazy init AudioContext on user gesture (volume change)
+        if (!this.audioContextInitialized && !this.gainNode) {
+            this.initAudioVideoSeparation().catch(() => {});
+        }
+        if (this.gainNode && this.audioContext) {
+            this.gainNode.gain.setValueAtTime(this.volume * this.audioPriority, this.audioContext.currentTime);
+        }
         saveState({ volume: this.volume });
         this.emitState();
+    },
+
+    setBufferSize(size) {
+        const clamped = Math.min(MAX_BUFFER_SIZE, Math.max(MIN_BUFFER_SIZE, size));
+        saveState({ bufferSize: clamped });
+        this.bufferSize = clamped;
+        if (this.hls) {
+            this.hls.config.maxBufferLength = clamped;
+            this.hls.config.maxBufferSize = 20 * 1024 * 1024; // Keep 20MB max
+            this.hls.config.maxBitrate = 5000000; // Allow up to 5Mbps
+        }
+        this.emitState();
+        return clamped;
+    },
+
+    getBufferSize() {
+        return loadState().bufferSize || DEFAULT_BUFFER_SIZE;
+    },
+
+    updateBufferSize() {
+        const size = this.bufferSize || this.getBufferSize();
+        this.bufferSize = size;
+        if (this.hls) {
+            this.hls.config.maxBufferLength = size;
+            this.hls.config.maxBufferSize = 20 * 1024 * 1024; // Keep 20MB max
+            this.hls.config.maxBitrate = 5000000; // Allow up to 5Mbps
+        }
+    },
+
+    getBufferInfo() {
+        const video = this.video;
+        if (!video || !video.buffered || video.buffered.length === 0) {
+            return { buffered: 0, duration: 0 };
+        }
+        const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+        const duration = video.duration || 0;
+        return {
+            buffered: Math.max(0, bufferedEnd - (video.currentTime || 0)),
+            duration: duration
+        };
+    },
+
+    getStats() {
+        return {
+            connection: this.connection || 'idle',
+            bandwidth: this.bandwidth || 0,
+            qualityLevel: this.qualityLabel || 'unknown',
+            buffer: this.getBufferInfo(),
+            errorCount: this.errorCount || 0,
+            retryCount: this.retryCount || 0,
+            bufferSize: this.bufferSize || DEFAULT_BUFFER_SIZE
+        };
     },
 
     async destroyHls() {
@@ -347,12 +456,14 @@ export const TvPlayer = {
     async attachStream(url) {
         await this.destroyHls();
         const video = this.video;
+        this.connection = 'connecting';
         video.removeAttribute('src');
         video.load();
 
         if (isHlsUrl(url)) {
             if (canPlayNativeHls(video)) {
                 video.src = url;
+                this.updateBufferSize();
                 return;
             }
             const Hls = await loadHlsLibrary();
@@ -360,10 +471,48 @@ export const TvPlayer = {
                 throw new Error('HLS not supported');
             }
             await new Promise((resolve, reject) => {
-                this.hls = new Hls();
-                this.hls.on(Hls.Events.MANIFEST_PARSED, resolve);
+                this.hls = new Hls({
+                    maxBufferSize: 20 * 1024 * 1024, // 20MB max buffer (in bytes)
+                    maxBufferLength: this.getBufferSize(), // Current target in seconds
+                    minBufferLength: 1.0, // Minimum buffer to keep (helps with live TV)
+                    maxBitrate: 5000000, // Allow up to 5Mbps for all buffer sizes
+                    startPosition: 0,
+                    enableWorker: true,
+                    // Additional HLS.js config for quality adaptation
+                    abrController: Hls.AbrController,
+                    capLevelToPlayerImpl: true,
+                    // Live stream specific settings
+                    liveSyncDurationCount: 3, // Number of segments to sync to live edge
+                    liveMaxLatencyDurationCount: 10 // Max latency for live streams
+                });
+                this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    this.connection = 'connected';
+                    this.qualityLevel = 0;
+                    this.qualityLabel = 'auto';
+                    this.emitState();
+                    resolve();
+                });
                 this.hls.on(Hls.Events.ERROR, (_, data) => {
-                    if (data.fatal) reject(new Error('Stream unavailable'));
+                    if (data.fatal) {
+                        this.error = 'Stream unavailable';
+                        this.errorCount = (this.errorCount || 0) + 1;
+                        reject(new Error('Stream unavailable'));
+                    }
+                    // Auto-recover non-fatal errors
+                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                        this.hls.startLoad();
+                    } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                        this.hls.recoverMediaError();
+                    }
+                });
+                this.hls.on(Hls.Events.LEVEL_SWITCHING, (_, data) => {
+                    if (data.level !== undefined && this.hls.levels && this.hls.levels[data.level]) {
+                        this.qualityLabel = `${this.hls.levels[data.level].height}p`;
+                    }
+                    this.emitState();
+                });
+                this.hls.on(Hls.Events.BUFFER_DEPTH_UPDATE, () => {
+                    this.emitState();
                 });
                 this.hls.loadSource(url);
                 this.hls.attachMedia(video);
@@ -372,6 +521,7 @@ export const TvPlayer = {
         }
 
         video.src = url;
+        this.updateBufferSize();
     },
 
     async toggle() {
@@ -416,6 +566,87 @@ export const TvPlayer = {
         this.error = null;
         saveState({ wasPlaying: false });
         this.emitState();
+    },
+
+    async initAudioVideoSeparation() {
+        // Lazy initialization - only after user gesture
+        if (this.audioContextInitialized) return;
+        if (!this.video) return;
+
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+
+            this.audioContext = new AudioContext();
+            this.audioContextInitialized = true;
+
+            this.audioSource = this.audioContext.createMediaElementSource(this.video);
+            this.audioDestination = this.audioContext.createMediaStreamDestination();
+            this.gainNode = this.audioContext.createGain();
+
+            this.audioSource.connect(this.gainNode);
+            this.gainNode.connect(this.audioDestination);
+
+            // Try to create video-only node, but gracefully handle video-only streams
+            try {
+                const stream = this.video.captureStream ? this.video.captureStream() : this.video.srcObject;
+                if (stream && stream.getAudioTracks().length > 0) {
+                    this.videoSource = this.audioContext.createMediaStreamSource(stream);
+                    this.videoOnlyNode = this.audioContext.createMediaStreamDestination();
+                    this.videoSource.connect(this.videoOnlyNode);
+                } else {
+                    // Video-only stream - create video node differently
+                    this.videoOnlyNode = this.audioContext.createMediaStreamDestination();
+                }
+            } catch (streamError) {
+                // Video-only stream or unsupported - continue without video node
+                this.videoOnlyNode = this.audioContext.createMediaStreamDestination();
+            }
+
+            this.audioContext.resume();
+        } catch (error) {
+            console.warn('Audio/video separation not supported:', error);
+            // Clean up partial state
+            this.audioContext = null;
+            this.audioContextInitialized = false;
+            this.gainNode = null;
+            this.videoOnlyNode = null;
+        }
+    },
+
+    updateBufferSize() {
+        const bufferSize = this.getBufferSize();
+        if (this.video) {
+            this.video.preload = bufferSize > 60 ? 'auto' : 'metadata';
+        }
+        this.emitState();
+    },
+
+    prioritizeAudio() {
+        // Lazy initialize AudioContext (called on user gesture)
+        if (!this.audioContextInitialized) {
+            this.initAudioVideoSeparation().catch(() => {});
+        }
+        if (this.gainNode && this.audioContext) {
+            this.gainNode.gain.setValueAtTime(1.0, this.audioContext.currentTime);
+        }
+        this.audioPriority = 1.0;
+        this.videoMuted = true;
+    },
+
+    muteVideo() {
+        if (this.videoOnlyNode) {
+            this.videoOnlyNode.disconnect();
+        }
+        this.videoMuted = true;
+    },
+
+    enableVideo() {
+        if (this.videoOnlyNode && this.audioContext) {
+            this.videoOnlyNode.connect(this.audioContext.destination);
+        }
+        this.videoMuted = false;
+        this.audioPriority = 1.0;
     },
 
     async resumeIfWasPlaying() {
@@ -494,5 +725,125 @@ export const TvPlayer = {
             this.emitState();
             if (blocked) throw e;
         }
+    },
+
+    // Phase 3: Advanced Quality Strategies
+
+    async reduceQuality() {
+        if (!this.hls || !this.hls.levels || this.hls.levels.length <= 1) return false;
+        
+        try {
+            const currentLevel = this.hls.nextQualityLevel;
+            if (currentLevel < this.hls.levels.length - 1) {
+                // Force lower quality
+                const newLevel = Math.min(currentLevel + 1, this.hls.levels.length - 1);
+                this.hls.nextQualityLevel = newLevel;
+                this.hls.startLoad();
+                if (this.hls.levels[newLevel]) {
+                    this.qualityLabel = `${this.hls.levels[newLevel].height}p`;
+                }
+                this.emitState();
+                return true;
+            }
+        } catch (e) {
+            // Fallback: use default quality reduction
+        }
+        return false;
+    },
+
+    async improveQuality() {
+        if (!this.hls) return false;
+        this.hls.nextQualityLevel = -1; // Auto
+        this.hls.startLoad();
+        return true;
+    },
+
+    async retryStream(maxRetries = 3) {
+        if (this.retryCount >= maxRetries) return false;
+        
+        this.retryCount = Math.min(this.retryCount + 1, maxRetries);
+        this.error = null;
+        
+        // Exponential backoff: 2^retryCount seconds
+        const delay = Math.pow(2, this.retryCount) * 1000;
+        await new Promise(r => setTimeout(r, delay));
+        
+        if (this.channel && this.channel.url_resolved) {
+            await this.attachStream(this.channel.url_resolved);
+            return true;
+        }
+        return false;
+    },
+
+    async prefetchBuffer() {
+        if (!this.hls || !this.video) return false;
+        
+        const bufferInfo = this.getBufferInfo();
+        const targetBuffer = this.bufferSize;
+        
+        // If buffer is less than 50% of target, trigger proactive load
+        if (bufferInfo.buffered < targetBuffer * 0.5) {
+            this.connection = 'buffering';
+            this.hls.startLoad();
+            return true;
+        }
+        return false;
+    },
+
+    getQualityLevelIndex() {
+        return this.hls?.currentLevel ?? -1;
+    },
+
+    getQualityLabels() {
+        if (!this.hls || !this.hls.levels) return [];
+        return this.hls.levels.map((level, i) => ({
+            label: level?.height ? `${level.height}p` : `Level ${i}`,
+            bitrate: level?.bitrate || 0,
+            index: i
+        }));
+    },
+
+    setMaxQualityBitrate(bitrate) {
+        if (this.hls) {
+            this.hls.config.maxBitrate = bitrate;
+            this.currentMaxBitrate = bitrate;
+        }
+    },
+
+    // Audio priority control
+    setAudioPriority(priority) {
+        this.audioPriority = Math.min(1, Math.max(0, priority));
+        // Lazy init if needed (called on user gesture via volume slider, etc.)
+        if (!this.audioContextInitialized && !this.gainNode) {
+            this.initAudioVideoSeparation().catch(() => {});
+        }
+        if (this.gainNode && this.audioContext) {
+            this.gainNode.gain.setValueAtTime(this.audioPriority, this.audioContext.currentTime);
+        }
+    },
+
+    // Close everything and cleanup
+    async stop() {
+        this.stopStatsMonitoring();
+        if (this.hls) {
+            await this.destroyHls();
+        }
+        if (this.video) {
+            this.video.pause();
+            this.video.removeAttribute('src');
+            this.video.load();
+        }
+        if (this.audioContext) {
+            try {
+                await this.audioContext.close();
+            } catch {}
+            this.audioContext = null;
+        }
+        this.playing = false;
+        this.loading = false;
+        this.loadPhase = 'idle';
+        this.error = null;
+        this.connection = 'idle';
+        this.emitState();
     }
 };

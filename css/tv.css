@@ -168,3 +168,89 @@
     display: none;
 }
 
+/* Buffer control styling */
+.sidebar-media__buffer {
+    width: 80px;
+    margin-left: 8px;
+    cursor: pointer;
+}
+
+.sidebar-media__buffer-indicator {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    min-width: 40px;
+    text-align: center;
+    margin-left: 4px;
+}
+
+.sidebar-media__buffer-indicator.is-warning {
+    color: #ffc107; /* amber warning */
+}
+
+.sidebar-media__buffer-indicator.is-danger {
+    color: #dc3545; /* danger red */
+}
+
+.sidebar-media__buffer-indicator.is-danger::after {
+    content: " ⚠";
+}
+
+/* Quality badge styling */
+.sidebar-media__quality-badge {
+    font-size: 0.6rem;
+    font-weight: 500;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-left: 8px;
+    background: var(--accent);
+    color: var(--text-inverted);
+}
+
+.quality-240p-usd { background: #6c757d; }
+.quality-360p-usd { background: #28a745; }
+.quality-480p-usd { background: #17a2b8; }
+.quality-720p-usd { background: #007bff; }
+.quality-1080p-usd { background: #6f42c1; }
+.quality-auto-usd { background: var(--text-muted); }
+
+/* Network quality indicator */
+.network-quality-excellent { color: #28a745; }
+.network-quality-good { color: #17a2b8; }
+.network-quality-fair { color: #ffc107; }
+.network-quality-poor { color: #dc3545; }
+
+/* Stats display in transport area */
+.sidebar-media__stats {
+    font-size: 0.6rem;
+    color: var(--text-muted);
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.15rem;
+}
+
+.sidebar-media__stat-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.sidebar-media__stat-value {
+    font-weight: 500;
+}
+
+/* Audio/video separation indicators */
+.tv-audio-priority {
+    display: none; /* Hidden by default */
+}
+
+.tv-video-muted {
+    opacity: 0.7;
+}
+
+/* Buffer slider container adjustments */
+.sidebar-media__volume-row {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+

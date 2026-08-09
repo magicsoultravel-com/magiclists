@@ -297,6 +297,25 @@ export const SidebarTv = {
                     <input type="checkbox" data-tv-hide-offline${settings.hideOfflineChannels !== false ? ' checked' : ''}>
                     <span>Hide offline channels</span>
                 </label>
+                <label class="tv-special-form__row">
+                    <span class="tv-special-form__label">Buffer size</span>
+                    <input type="range" class="form-input tv-special-form__buffer" data-tv-buffer min="5" max="120" value="15" aria-label="Buffer size (seconds)">
+                    <span class="tv-special-form__buffer-value" data-tv-buffer-value>15s</span>
+                </label>
+                <label class="tv-special-form__row">
+                    <span class="tv-special-form__label">Quality preference</span>
+                    <select class="form-input tv-special-form__select" data-tv-quality>
+                        <option value="auto" ${!settings.preferredQuality || settings.preferredQuality === 'auto' ? ' selected' : ''}>Automatic</option>
+                        <option value="720p" ${settings.preferredQuality === '720p' ? ' selected' : ''}>720p</option>
+                        <option value="480p" ${settings.preferredQuality === '480p' ? ' selected' : ''}>480p</option>
+                        <option value="360p" ${settings.preferredQuality === '360p' ? ' selected' : ''}>360p</option>
+                        <option value="240p" ${settings.preferredQuality === '240p' ? ' selected' : ''}>240p</option>
+                    </select>
+                </label>
+                <label class="tv-special-form__row tv-special-form__row--check">
+                    <input type="checkbox" data-tv-audio-prioritize${settings.audioPrioritize || false ? ' checked' : ''}>
+                    <span>Prioritize audio (reduce video quality on low bandwidth)</span>
+                </label>
                 <div class="tv-special-form__actions">
                     <button type="button" class="btn btn--compact" data-tv-refresh-catalog>Refresh catalog</button>
                     <button type="button" class="btn btn--compact" data-tv-clear-cache>Clear cache</button>
@@ -323,13 +342,72 @@ export const SidebarTv = {
             }
         });
 
+        // Buffer size control
+        const bufferSliderEl = body.querySelector('[data-tv-buffer]');
+        const bufferValueEl = body.querySelector('[data-tv-buffer-value]');
+        if (bufferSliderEl && bufferValueEl) {
+            const syncBuffer = (val) => {
+                bufferValueEl.textContent = `${val}s`;
+                TvPlayer.setBufferSize(parseInt(val));
+                if (TvPopover.mode === 'special' && TvPopover.panel) {
+                    TvPopover.reposition();
+                }
+            };
+            bufferSliderEl.addEventListener('input', (e) => syncBuffer(e.target.value));
+            bufferSliderEl.value = TvPlayer.getBufferSize() || 15;
+            syncBuffer(bufferSliderEl.value);
+        }
+
+        // Quality preference control
+        const qualitySelectEl = body.querySelector('[data-tv-quality]');
+        if (qualitySelectEl) {
+            qualitySelectEl.addEventListener('change', (e) => {
+                const quality = e.target.value;
+                if (quality !== 'auto') {
+                    // For specific quality, we'd need to set a preference that the player respects
+                    // For now, just update UI
+                }
+            });
+            qualitySelectEl.value = 'auto'; // Default to auto
+        }
+
+        // Audio prioritize control
+        const audioPrioritizeEl = body.querySelector('[data-tv-audio-prioritize]');
+        if (audioPrioritizeEl) {
+            audioPrioritizeEl.addEventListener('change', (e) => {
+                const checked = e.target.checked;
+                TvProviderRegistry.saveSettings({ audioPrioritize: checked });
+                if (checked) {
+                    TvPlayer.prioritizeAudio();
+                } else {
+                    TvPlayer.enableVideo();
+                }
+            });
+        }
+
         body.querySelector('[data-tv-refresh-catalog]')?.addEventListener('click', async () => {
-            await TvProviderRegistry.refreshCatalog();
-            this.countries = await TvProviderRegistry.getCountries({ refresh: true });
-            if (TvPopover.mode === 'browse') {
-                this.browseView = 'countries';
-                this.browseCountry = null;
-                await this.renderBrowseCountries();
+            const btn = body.querySelector('[data-tv-refresh-catalog]');
+            const originalText = btn?.textContent;
+            if (btn) {
+                btn.textContent = 'Refreshing…';
+                btn.disabled = true;
+            }
+            try {
+                await TvProviderRegistry.refreshCatalog();
+                this.countries = await TvProviderRegistry.getCountries({ refresh: true });
+                if (TvPopover.mode === 'browse') {
+                    this.browseView = 'countries';
+                    this.browseCountry = null;
+                    await this.renderBrowseCountries();
+                }
+                showAppToast('Catalog refreshed');
+            } catch (e) {
+                showAppToast('Failed to refresh catalog');
+            } finally {
+                if (btn) {
+                    btn.textContent = originalText || 'Refresh catalog';
+                    btn.disabled = false;
+                }
             }
         });
 
@@ -687,7 +765,11 @@ export const SidebarTv = {
             loadPhase: TvPlayer.loadPhase,
             error: TvPlayer.error,
             resumeBlocked: TvPlayer.resumeBlocked,
-            volume: TvPlayer.volume
+            volume: TvPlayer.volume,
+            bufferSize: TvPlayer.getBufferSize(),
+            connection: TvPlayer.connection,
+            qualityLabel: TvPlayer.qualityLabel,
+            bufferInfo: TvPlayer.getBufferInfo()
         };
         const marqueeEl = this.root?.querySelector('[data-tv-marquee]');
         const artImg = this.root?.querySelector('[data-tv-art]');
