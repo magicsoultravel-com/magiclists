@@ -18,8 +18,19 @@
 .list-row--header {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 0.3rem;
+    justify-content: flex-start;
+    gap: 0.2rem;
+    padding: 0.28rem 0.35rem;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    user-select: none;
+    font-weight: 500;
+    font-size: 0.66rem;
+    background: transparent;
+}
+
+.list-row--header:hover {
+    background: rgba(255, 255, 255, 0.04);
 }
 
 .list-row--muted {
@@ -38,19 +49,6 @@
     background: rgba(255, 59, 48, 0.08);
     border-left: 2px solid #ff3b30;
     border-radius: 2px;
-}
-
-.list-row--header {
-    padding: 0.28rem 0.35rem;
-    cursor: pointer;
-    transition: background 0.15s ease;
-    user-select: none;
-    font-weight: 500;
-    font-size: 0.66rem;
-}
-
-.list-row--header:hover {
-    background: rgba(255, 255, 255, 0.04);
 }
 
 .grab-handle {

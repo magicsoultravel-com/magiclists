@@ -175,13 +175,11 @@
     line-height: 1;
     color: var(--text-muted);
     transition: transform 0.2s ease, color 0.15s ease;
-}
-
-.sidebar-module > .collapsable-header .collapsable-toggle svg {
-    display: block;
+    opacity: 0;
 }
 
 .sidebar-module > .collapsable-header:hover .collapsable-toggle {
+    opacity: 1;
     color: var(--accent);
 }
 
@@ -265,58 +263,7 @@
     display: flex;
 }
 
-/* Clock compact view - show clock in header when collapsed */
-.sidebar-clock__compact {
-    display: none;
-}
 
-/* Hide expand toggle when clock is collapsed - clock IS the content */
-.sidebar-clock .collapsable-header:has(.collapsable-toggle.collapsed) .collapsable-toggle {
-    opacity: 0;
-    transition: opacity 0.15s ease;
-}
-
-/* Show expand toggle on hover when collapsed */
-.sidebar-clock:hover .collapsable-header:has(.collapsable-toggle.collapsed) .collapsable-toggle {
-    opacity: 1;
-}
-
-.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-clock__compact {
-    display: inline-flex;
-    align-items: center;
-}
-
-.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-clock__title {
-    display: none;
-}
-
-/* Compact clock sizing */
-.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-clock__compact .clock-display {
-    gap: 0.15rem;
-}
-
-.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-clock__compact .clock-chip {
-    font-size: 0.65rem;
-    padding: 0.1rem 0.3rem;
-}
-
-.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-clock__compact .clock-chip--date {
-    font-size: 0.6rem;
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
-}
-
-.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-clock__compact .clock-mantel {
-    display: none;
-}
-
-.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-clock__compact .clock-analog {
-    display: none;
-}
-
-.collapsable-header:has(.collapsable-toggle.collapsed) .sidebar-clock__compact .clock-segment {
-    display: none;
-}
 
 .sidebar-module--dragging .collapsable-header {
     cursor: grabbing;
