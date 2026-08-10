@@ -28,6 +28,8 @@ import {
 
 import { normalizeItemForSave } from '../js/noteModel.js';
 
+import { mergeItemOntoExisting } from '../js/itemMerge.js';
+
 const CONTENT_FIELDS = new Set(['title', 'content', 'steps', 'sheet']);
 
 function cloneItemDeep(item) {
@@ -89,7 +91,7 @@ function createTestUndoManager() {
                 before: beforeClone,
                 forwardDelta,
                 after: filteredAfterClone,
-                undo: () => applyForwardDelta(beforeClone, forwardDelta),
+                undo: () => cloneItemDeep(beforeClone),
                 redo: () => cloneItemDeep(filteredAfter)
             };
             
@@ -279,16 +281,16 @@ describe('Undo/Redo with checklist step operations', () => {
             undoMgr.recordChange(before, after);
             
             const undone = undoMgr.undo();
-            assert.equal(undone.find(s => s.id === 'a').completed, false);
-            assert.equal(undone.find(s => s.id === 'b').completed, false);
-            assert.equal(undone.find(s => s.id === 'c').completed, false);
-            assert.equal(undone.find(s => s.id === 'd').completed, false);
+            assert.equal(undone.steps.find(s => s.id === 'a').completed, false);
+            assert.equal(undone.steps.find(s => s.id === 'b').completed, false);
+            assert.equal(undone.steps.find(s => s.id === 'c').completed, false);
+            assert.equal(undone.steps.find(s => s.id === 'd').completed, false);
             
             const redone = undoMgr.redo();
-            assert.equal(redone.find(s => s.id === 'a').completed, true);
-            assert.equal(redone.find(s => s.id === 'b').completed, true);
-            assert.equal(redone.find(s => s.id === 'c').completed, true);
-            assert.equal(redone.find(s => s.id === 'd').completed, false);
+            assert.equal(redone.steps.find(s => s.id === 'a').completed, true);
+            assert.equal(redone.steps.find(s => s.id === 'b').completed, true);
+            assert.equal(redone.steps.find(s => s.id === 'c').completed, true);
+            assert.equal(redone.steps.find(s => s.id === 'd').completed, false);
         });
         
         it('undo/redo preserves tree structure for group completion', () => {
@@ -306,15 +308,15 @@ describe('Undo/Redo with checklist step operations', () => {
             undoMgr.recordChange(before, after);
             
             const undone = undoMgr.undo();
-            assert.equal(undone.find(s => s.id === 'parent').parentId, null);
-            assert.equal(undone.find(s => s.id === 'child1').parentId, 'parent');
-            assert.equal(undone.find(s => s.id === 'child2').parentId, 'child1');
-            assert.equal(undone.find(s => s.id === 'sibling').parentId, null);
+            assert.equal(undone.steps.find(s => s.id === 'parent').parentId, null);
+            assert.equal(undone.steps.find(s => s.id === 'child1').parentId, 'parent');
+            assert.equal(undone.steps.find(s => s.id === 'child2').parentId, 'child1');
+            assert.equal(undone.steps.find(s => s.id === 'sibling').parentId, null);
             
-            assert.equal(undone.find(s => s.id === 'parent').order, 0);
-            assert.equal(undone.find(s => s.id === 'child1').order, 1);
-            assert.equal(undone.find(s => s.id === 'child2').order, 2);
-            assert.equal(undone.find(s => s.id === 'sibling').order, 3);
+            assert.equal(undone.steps.find(s => s.id === 'parent').order, 0);
+            assert.equal(undone.steps.find(s => s.id === 'child1').order, 1);
+            assert.equal(undone.steps.find(s => s.id === 'child2').order, 2);
+            assert.equal(undone.steps.find(s => s.id === 'sibling').order, 3);
         });
     });
 });
@@ -345,12 +347,12 @@ describe('Undo/Redo with addChecklistStep', () => {
         undoMgr.recordChange(before, after);
         
         const undone = undoMgr.undo();
-        assert.equal(undone.length, 2);
-        assert.equal(undone.find(s => s.id === 'new-step'), undefined);
+        assert.equal(undone.steps.length, 2);
+        assert.equal(undone.steps.find(s => s.id === 'new-step'), undefined);
         
         const redone = undoMgr.redo();
-        assert.equal(redone.length, 3);
-        assert.equal(redone.find(s => s.id === 'new-step').text, 'new-step');
+        assert.equal(redone.steps.length, 3);
+        assert.equal(redone.steps.find(s => s.id === 'new-step').id, 'new-step');
     });
     
     it('undo/redo preserves parentId/order for added step', () => {
@@ -361,15 +363,20 @@ describe('Undo/Redo with addChecklistStep', () => {
         
         const before = cloneItemDeep(item);
         
-        addChecklistStep(item.steps, { afterStepId: 'a', newId: 'child', level: 1, text: 'Child Step' });
+        const result = addChecklistStep(item.steps, { afterStepId: 'a', newId: 'child', level: 1, text: 'Child Step' });
+        item.steps = result.steps;
         const after = normalizeItemForSave(item, { preserveEmptySteps: true });
         
         undoMgr.recordChange(before, after);
         
         const undone = undoMgr.undo();
-        assert.equal(undone.find(s => s.id === 'child').parentId, 'a');
-        assert.equal(undone.find(s => s.id === 'child').order, 1);
-        assert.equal(undone.find(s => s.id === 'b').order, 2);
+        assert.equal(undone.steps.find(s => s.id === 'child'), undefined, 'child should not exist before the add');
+        assert.equal(undone.steps.length, 2);
+        
+        const redone = undoMgr.redo();
+        assert.equal(redone.steps.find(s => s.id === 'child').parentId, 'a');
+        assert.equal(redone.steps.find(s => s.id === 'child').order, 1);
+        assert.equal(redone.steps.find(s => s.id === 'b').order, 2);
     });
 });
 
@@ -400,13 +407,13 @@ describe('Undo/Redo with deleteChecklistStep', () => {
         undoMgr.recordChange(before, after);
         
         const undone = undoMgr.undo();
-        assert.equal(undone.length, 3);
-        const restored = undone.find(s => s.id === 'b');
+        assert.equal(undone.steps.length, 3);
+        const restored = undone.steps.find(s => s.id === 'b');
         assert.ok(restored, 'Deleted step should be restored');
         
         const redone = undoMgr.redo();
-        assert.equal(redone.length, 2);
-        assert.equal(redone.find(s => s.id === 'b'), undefined);
+        assert.equal(redone.steps.length, 2);
+        assert.equal(redone.steps.find(s => s.id === 'b'), undefined);
     });
     
     it('undo preserves parentId/order after delete', () => {
@@ -425,10 +432,10 @@ describe('Undo/Redo with deleteChecklistStep', () => {
         undoMgr.recordChange(before, after);
         
         const undone = undoMgr.undo();
-        assert.equal(undone.find(s => s.id === 'a').order, 0);
-        assert.equal(undone.find(s => s.id === 'b').order, 1);
-        assert.equal(undone.find(s => s.id === 'c').order, 2);
-        assert.equal(undone.find(s => s.id === 'a').parentId, null);
+        assert.equal(undone.steps.find(s => s.id === 'a').order, 0);
+        assert.equal(undone.steps.find(s => s.id === 'b').order, 1);
+        assert.equal(undone.steps.find(s => s.id === 'c').order, 2);
+        assert.equal(undone.steps.find(s => s.id === 'a').parentId, null);
     });
 });
 
@@ -458,10 +465,10 @@ describe('Undo/Redo with indent/outdent operations', () => {
         undoMgr.recordChange(before, after);
         
         const undone = undoMgr.undo();
-        assert.equal(undone.find(s => s.id === 'b').level, 0);
+        assert.equal(undone.steps.find(s => s.id === 'b').level, 0);
         
         const redone = undoMgr.redo();
-        assert.equal(redone.find(s => s.id === 'b').level, 1);
+        assert.equal(redone.steps.find(s => s.id === 'b').level, 1);
     });
     
     it('outdent restores level on undo', () => {
@@ -479,10 +486,10 @@ describe('Undo/Redo with indent/outdent operations', () => {
         undoMgr.recordChange(before, after);
         
         const undone = undoMgr.undo();
-        assert.equal(undone.find(s => s.id === 'b').level, 2);
+        assert.equal(undone.steps.find(s => s.id === 'b').level, 2);
         
         const redone = undoMgr.redo();
-        assert.equal(redone.find(s => s.id === 'b').level, 1);
+        assert.equal(redone.steps.find(s => s.id === 'b').level, 1);
     });
     
     it('indent updates parentId on undo/redo', () => {
@@ -499,10 +506,10 @@ describe('Undo/Redo with indent/outdent operations', () => {
         undoMgr.recordChange(before, after);
         
         const undone = undoMgr.undo();
-        assert.equal(undone.find(s => s.id === 'b').parentId, null);
+        assert.equal(undone.steps.find(s => s.id === 'b').parentId, null);
         
         const redone = undoMgr.redo();
-        assert.equal(redone.find(s => s.id === 'b').parentId, 'a');
+        assert.equal(redone.steps.find(s => s.id === 'b').parentId, 'a');
     });
 });
 
@@ -539,13 +546,13 @@ describe('Undo/Redo with reorder operations (moveChecklistStepBlock)', () => {
         undoMgr.recordChange(before, after);
         
         const undone = undoMgr.undo();
-        assert.equal(undone.find(s => s.id === 'a').order, 0);
-        assert.equal(undone.find(s => s.id === 'b').order, 1);
-        assert.equal(undone.find(s => s.id === 'c').order, 2);
+        assert.equal(undone.steps.find(s => s.id === 'a').order, 0);
+        assert.equal(undone.steps.find(s => s.id === 'b').order, 1);
+        assert.equal(undone.steps.find(s => s.id === 'c').order, 2);
         
         const redone = undoMgr.redo();
-        assert.equal(redone.find(s => s.id === 'a').order, 2);
-        assert.equal(redone.find(s => s.id === 'c').order, 1);
+        assert.equal(redone.steps.find(s => s.id === 'a').order, 2);
+        assert.equal(redone.steps.find(s => s.id === 'c').order, 1);
     });
     
     it('child drop updates levels and parentId on undo/redo', () => {
@@ -570,12 +577,12 @@ describe('Undo/Redo with reorder operations (moveChecklistStepBlock)', () => {
         undoMgr.recordChange(before, after);
         
         const undone = undoMgr.undo();
-        assert.equal(undone.find(s => s.id === 'b').parentId, null);
-        assert.equal(undone.find(s => s.id === 'b').level, 0);
+        assert.equal(undone.steps.find(s => s.id === 'b').parentId, null);
+        assert.equal(undone.steps.find(s => s.id === 'b').level, 0);
         
         const redone = undoMgr.redo();
-        assert.equal(redone.find(s => s.id === 'b').parentId, 'a');
-        assert.equal(redone.find(s => s.id === 'b').level, 1);
+        assert.equal(redone.steps.find(s => s.id === 'b').parentId, 'a');
+        assert.equal(redone.steps.find(s => s.id === 'b').level, 1);
     });
     
     it('complex reorder with nested children preserves parentId via undo', () => {
@@ -602,12 +609,12 @@ describe('Undo/Redo with reorder operations (moveChecklistStepBlock)', () => {
         undoMgr.recordChange(before, after);
         
         const undone = undoMgr.undo();
-        assert.equal(undone.find(s => s.id === 'b').parentId, 'a');
-        assert.equal(undone.find(s => s.id === 'bc').parentId, 'b');
-        assert.equal(assertStepsInvariants(undone), [], 'Undone state should satisfy invariants');
+        assert.equal(undone.steps.find(s => s.id === 'b').parentId, 'a');
+        assert.equal(undone.steps.find(s => s.id === 'bc').parentId, 'b');
+        assert.deepEqual(assertStepsInvariants(undone.steps), [], 'Undone state should satisfy invariants');
         
         const redone = undoMgr.redo();
-        assert.equal(assertStepsInvariants(redone), [], 'Redone state should satisfy invariants');
+        assert.deepEqual(assertStepsInvariants(redone.steps), [], 'Redone state should satisfy invariants');
     });
 });
 
@@ -648,13 +655,13 @@ describe('Undo stack invariant preservation', () => {
         let current = cloneItemDeep(item);
         for (let i = 0; i < 3; i++) {
             current = undoMgr.undo();
-            assert.equal(assertStepsInvariants(current.steps), [], 
+            assert.deepEqual(assertStepsInvariants(current.steps), [], 
                 `Undone state ${i + 1} should have valid steps`);
         }
         
         for (let i = 0; i < 3; i++) {
             current = undoMgr.redo();
-            assert.equal(assertStepsInvariants(current.steps), [], 
+            assert.deepEqual(assertStepsInvariants(current.steps), [], 
                 `Redone state ${i + 1} should have valid steps`);
         }
     });
@@ -780,11 +787,11 @@ describe('Edge cases and potential bug scenarios', () => {
         
         const undone = undoMgr.undo();
         assert.equal(undone.steps.length, 3);
-        assert.equal(assertStepsInvariants(undone.steps), [], 'Split undo should satisfy invariants');
+        assert.deepEqual(assertStepsInvariants(undone.steps), [], 'Split undo should satisfy invariants');
         
         const redone = undoMgr.redo();
         assert.equal(redone.steps.length, 4);
-        assert.equal(assertStepsInvariants(redone.steps), [], 'Split redo should satisfy invariants');
+        assert.deepEqual(assertStepsInvariants(redone.steps), [], 'Split redo should satisfy invariants');
     });
     
     it('merge step update order correctly', () => {
@@ -824,7 +831,8 @@ describe('Full mutation sequence test', () => {
         const undoMgr = createTestUndoManager();
         
         const before1 = cloneItemDeep(item);
-        addChecklistStep(item.steps, { afterStepId: 'a', newId: 'new1' });
+        const r1 = addChecklistStep(item.steps, { afterStepId: 'a', newId: 'new1' });
+        item.steps = r1.steps;
         const after1 = normalizeItemForSave(item, { preserveEmptySteps: true });
         undoMgr.recordChange(before1, after1);
         
@@ -856,9 +864,9 @@ describe('Full mutation sequence test', () => {
             current = undoMgr.undo();
         }
         
-        assert.equal(current.steps.length, 4, 'Should have 4 steps after full undo');
+        assert.equal(current.steps.length, 3, 'Should have 3 steps after full undo (back to initial state)');
         assert.equal(current.steps.find(s => s.id === 'a').completed, false, 'a should NOT be complete');
-        assert.equal(current.steps.find(s => s.id === 'new1').parentId, null, 'new1 should be sibling after undo');
+        assert.equal(current.steps.find(s => s.id === 'new1'), undefined, 'new1 should be gone after full undo');
         
         for (let i = 0; i < 4; i++) {
             current = undoMgr.redo();
@@ -868,3 +876,48 @@ describe('Full mutation sequence test', () => {
         assert.equal(current.steps.find(s => s.id === 'new1').parentId, 'a', 'new1 should be under a');
     });
 });
+
+describe('Undo restore preserves note metadata (theme/color regression)', () => {
+    it('merging a content-only undo snapshot keeps the full item’s metadata', () => {
+        // Undo/redo change entries carry only content fields + id. restoreItem
+        // merges them back onto the existing full note (see js/app.js restoreItem
+        // -> mergeItemOntoExisting) so theme/color/category/layout are not wiped
+        // (which previously re-rendered the note black/default).
+        const fullItem = {
+            id: 'note-1',
+            title: 'Old title',
+            content: '',
+            steps: [{ id: 'a', level: 0, order: 0, parentId: null, text: 'a', completed: false }],
+            color: '#336699',
+            theme: 'pastel',
+            category: 'work',
+            hiddenFromBoard: false,
+            desktopId: 2
+        };
+
+        const partialSnapshot = { id: 'note-1', title: 'New title' };
+
+        const merged = mergeItemOntoExisting(fullItem, partialSnapshot);
+
+        assert.equal(merged.id, 'note-1');
+        // Restored content field is applied…
+        assert.equal(merged.title, 'New title');
+        // …but metadata is preserved.
+        assert.equal(merged.color, '#336699');
+        assert.equal(merged.theme, 'pastel');
+        assert.equal(merged.category, 'work');
+        assert.equal(merged.desktopId, 2);
+        assert.deepEqual(merged.steps, fullItem.steps);
+    });
+
+    it('returns the partial item alone when there is no existing item', () => {
+        const full = { id: 'n', title: 'x', color: '#123456' };
+        assert.deepEqual(mergeItemOntoExisting(null, full), full);
+    });
+
+    it('returns the existing item when the partial snapshot is empty', () => {
+        const full = { id: 'n', title: 'x', color: '#123456' };
+        assert.equal(mergeItemOntoExisting(full, null), full);
+    });
+});
+

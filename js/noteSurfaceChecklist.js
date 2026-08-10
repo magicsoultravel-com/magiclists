@@ -599,6 +599,10 @@ export function attachChecklistDrag(root, item, {
         document.body.classList.remove('is-checklist-dragging');
         if (moved) {
             const shell = root.closest('.editor-note-shell') || root;
+            // Flush any pending text autosave before the structural move snapshot
+            // so a stale autosave can't fire after the reorder with an outdated
+            // beforeItem (which would corrupt the undo stack).
+            flushDesktopAutoSave(root, item);
             syncItemBodyFromDom(shell, item);
             // Use cached values during drag operations
             const collapsedKeys = getCachedChecklistCollapsedKeys();
@@ -986,6 +990,11 @@ export function insertChecklistStep(root, item, {
 
 export function removeChecklistStepAndFocus(root, item, stepId, { localOnly = false, onChange = () => {} } = {}) {
     if (!item || !item.steps) return null;
+    // Flush any pending text autosave BEFORE the structural snapshot so the
+    // structural undo entry captures post-typing state and a stale autosave
+    // cannot fire afterwards with an outdated beforeItem (which would corrupt
+    // the undo stack or lose/restore the line unexpectedly).
+    flushDesktopAutoSave(root, item);
     const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
     const result = deleteChecklistStep(item.steps, stepId);
     item.steps = result.steps;
@@ -1025,6 +1034,9 @@ export function handleChecklistBackspace(e, item, { localOnly = false, onChange 
     if (stepIdx === 0) return false;
 
     const root = active.closest('.step-row--display');
+    // Flush pending text autosave before the merge so the structural entry's
+    // beforeItem reflects all typed text and a stale autosave can't fire later.
+    flushDesktopAutoSave(root, item);
     const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
     const result = mergeChecklistStepIntoPrev(item.steps, stepIdx);
     item.steps = result.steps;
@@ -1067,6 +1079,9 @@ export function handleChecklistDelete(e, item, { localOnly = false, onChange = (
     }
 
     const root = active.closest('.step-row--display');
+    // Flush pending text autosave before the delete so the structural entry's
+    // beforeItem reflects all typed text and a stale autosave can't fire later.
+    flushDesktopAutoSave(root, item);
     const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
     const result = deleteChecklistStep(item.steps, stepId);
     item.steps = result.steps;
@@ -1095,6 +1110,11 @@ export function handleChecklistEnter(root, item, e, { localOnly = false, onChang
     // Instead, let splitInlineEditAtCaret run on the live DOM to calculate chunks
 
     const step = item.steps[stepIdx];
+    // Flush any pending text autosave before the split so the structural entry
+    // captures all typed text and no stale autosave fires after the split.
+    // This runs synchronously before commitInlineChecklistOp, so the deferred
+    // DOM re-sync can't clobber the split lines (see the CRITICAL below).
+    flushDesktopAutoSave(root, item);
     const { before, after } = splitInlineEditAtCaret(active);
 
     if (e.shiftKey) {

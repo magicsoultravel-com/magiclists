@@ -2,6 +2,9 @@ import { API } from './api.js';
 import { safeSetItem } from './layoutStorage.js';
 import { stripRichText } from './richText.js';
 import { showAppToast } from './toast.js';
+import { mergeItemOntoExisting } from './itemMerge.js';
+
+export { mergeItemOntoExisting };
 
 const MAX_STACK = 50;
 const MERGE_MS = 2500;

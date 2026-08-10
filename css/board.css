@@ -16,6 +16,7 @@
     min-height: 72px;
     overflow: hidden;
     padding: var(--board-area-inset-base);
+    padding-bottom: 0;
     border-bottom: 2px solid color-mix(in srgb, var(--text-muted) 35%, var(--border-color));
     background: color-mix(in srgb, var(--bg-surface) 88%, var(--bg-primary));
     --file-cabinet-ui-scale: 1;

@@ -1,81 +1,81 @@
 ---
-description: magiclists architecture map (auto-generated - do not edit by hand)
+description: magiclists architecture map (auto-generated — do not edit by hand)
 alwaysApply: true
 ---
 
 # Architecture map (generated)
 
-> Regenerate: scripts/build-architecture-map.ps1 - built 2026-07-30T15:25:05.831Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-08-10T11:49:33.303Z
 
 ## CSS load order
 
 | file | owns | js | notes | load |
 | --- | --- | --- | --- | --- |
-| css/base.css | :root tokens, tile/grid vars, .is-hidden | gridDensity.js, tileFootprint.js, appTheme.js | - | 1 |
-| css/shell-core.css | workspace shell, FAB, .btn, boot splash, shared utilities | hamburger.js, displayOptions.js, ui.js, bootProgress.js, fileCabinet.js, shellResize.js, sidebarModules.js, sidebarShell.js | - | 2 |
+| css/base.css | :root tokens, tile/grid vars, .is-hidden | gridDensity.js, tileFootprint.js, appTheme.js | — | 1 |
+| css/shell-core.css | workspace shell, FAB, .btn, boot splash, shared utilities | hamburger.js, displayOptions.js, ui.js, bootProgress.js, fileCabinet.js, shellResize.js, sidebarModules.js, sidebarShell.js | — | 2 |
 | css/shell-filecabinet.css | file cabinet drawer-specific styles, filed chip rail | fileCabinet.js, shellResize.js | unique drawer/rollout styles; base file-cabinet styles moved to board.css | 3 |
-| css/shell-sidebar.css | side panel, sidebar module undock chrome | hamburger.js, sidebarModules.js, sidebarPrefs.js | - | 4 |
-| css/shell-display-options.css | display options modal | displayOptions.js, hamburger.js | - | 5 |
-| css/shell-editor.css | note-editor typography, note footer, quick actions, checklist chrome | ui.js, noteSurface.js, displayOptions.js, hamburger.js | - | 6 |
-| css/sidebar.css | side panel, search, notes list, control bar | hamburger.js, searchBar.js, sidebarPrefs.js | - | 7 |
+| css/shell-sidebar.css | side panel, sidebar module undock chrome | hamburger.js, sidebarModules.js, sidebarPrefs.js | — | 4 |
+| css/shell-display-options.css | display options modal | displayOptions.js, hamburger.js | — | 5 |
+| css/shell-editor.css | note-editor typography, note footer, quick actions, checklist chrome | ui.js, noteSurface.js, displayOptions.js, hamburger.js | — | 6 |
+| css/sidebar.css | side panel, search, notes list, control bar | hamburger.js, searchBar.js, sidebarPrefs.js | — | 7 |
 | css/cards.css | #app-canvas, .mini-card*, color picker, custom backgrounds, checklist chrome | ui.js, colorPicker.js, cardTheme.js, noteSurface.js | desktop spatial overrides also in board.css | 8 |
-| css/overlays.css | .overlay, .modal, .collapsable-*, cloud backup popover, template picker | editor.js, editorModalChrome.js, cloudBackup.js, templatePicker.js | - | 9 |
+| css/overlays.css | .overlay, .modal, .collapsable-*, cloud backup popover, template picker | editor.js, editorModalChrome.js, cloudBackup.js, templatePicker.js | — | 9 |
 | css/board.css | grid/freeform board, clock, drag/resize, desktop inline card spatial overrides, file cabinet mode | dragdrop.js, clockStyle.js, desktopZoom.js, boardSort.js, fileCabinet.js | note footer spatial overrides cross-cut shell-editor.css; file cabinet drawer mode integration | 10 |
-| css/themes.css | html[data-app-theme] overrides, theme picker swatches | appTheme.js, themePicker.js | - | 11 |
-| css/drawing.css | magicCanvas toolbar and drawing board surface | drawingBoard.js, drawingToolbarMenu.js, drawingToolbarChrome.js | - | 12 |
-| css/tools.css | floating tool panels, chips, globe/map/alphabets/calculator/converter/timezone/timer tool bodies | toolsManager.js, toolPanelChrome.js, sidebarModules.js | - | 13 |
-| css/calendar.css | calendar tool panel month grid and hour notes | js/tools/calendar.js, calendar.js | - | 14 |
-| css/cosmos.css | cosmos tool viewport and star map chrome | js/tools/cosmos.js | - | 15 |
+| css/themes.css | html[data-app-theme] overrides, theme picker swatches | appTheme.js, themePicker.js | — | 11 |
+| css/drawing.css | magicCanvas toolbar and drawing board surface | drawingBoard.js, drawingToolbarMenu.js, drawingToolbarChrome.js | — | 12 |
+| css/tools.css | floating tool panels, chips, globe/map/alphabets/calculator/converter/timezone/timer tool bodies | toolsManager.js, toolPanelChrome.js, sidebarModules.js | — | 13 |
+| css/calendar.css | calendar tool panel month grid and hour notes | js/tools/calendar.js, calendar.js | — | 14 |
+| css/cosmos.css | cosmos tool viewport and star map chrome | js/tools/cosmos.js | — | 15 |
 | css/sidebar-media.css | shared sidebar radio/tv player and popover chrome | sidebarRadio.js, sidebarTv.js, radioPopover.js, tvPopover.js | domain-specific rules stay in radio.css and tv.css | 16 |
 | css/radio.css | sidebar radio player, now playing, popover browser | sidebarRadio.js, radioPlayer.js, radioPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell-sidebar.css | 17 |
 | css/tv.css | sidebar TV player, now playing, popover browser | sidebarTv.js, tvPlayer.js, tvPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell-sidebar.css | 18 |
-| css/weather.css | sidebar weather glance + expanded forecast panel | sidebarWeather.js, weatherApi.js | - | 19 |
-| css/sheet.css | sheet-grid note template body and table chrome | sheet.js, noteSurface.js, editor.js | - | 20 |
-| css/desktops.css | desktop switcher dock styling | desktopDockComponent.js | - | 21 |
+| css/weather.css | sidebar weather glance + expanded forecast panel | sidebarWeather.js, weatherApi.js | — | 19 |
+| css/sheet.css | sheet-grid note template body and table chrome | sheet.js, noteSurface.js, editor.js | — | 20 |
+| css/desktops.css | desktop switcher dock styling, dock pin lock | desktopDockComponent.js | — | 21 |
 
 ## JS domains (@module)
 
 | file | owns | related | events | notes |
 | --- | --- | --- | --- | --- |
-| js/api.js | item CRUD and matrix_database localStorage persistence | noteModel.js, layoutStorage.js | - | - |
-| js/app.js | application orchestration, event bus listeners, workspace init | api.js, ui.js, layoutStorage.js | item:mutation_requested, item:selected_for_edit, board:visibility_changed, calendar:add_note | - |
-| js/backup.js | local backup export/import, encrypted packages | cloudBackup.js, api.js | - | - |
-| js/board/gridEngine.js | grid board layout engine, push resolution | board/noteGeometry.js, layoutStorage.js, gridDensity.js | - | - |
-| js/board/noteGeometry.js | grid note geometry, push layout, tile bounds | board/gridEngine.js, tileGeometry.js | - | - |
-| js/boardOperations.js | item visibility, archiving, calendar integration, card actions | noteSurface.js, noteQuickActions.js, desktopManager.js | - | - |
-| js/checklistSteps.js | checklist tree logic, step reorder, indent/outdent | noteSurface.js, noteBodyConversion.js | - | - |
-| js/cloud/cloudProvider.js | cloud provider registry and factory dispatch | cloudBackup.js, cloud/megaProvider.js, cloud/localFolderProvider.js | - | - |
-| js/cloudBackup.js | cloud backup UI, MEGA and local-folder sync | backup.js, cloud/cloudProvider.js, cloud/megaProvider.js, cloud/localFolderProvider.js | - | - |
-| js/desktopCardManager.js | desktop card creation, updating, finalization, freeform dimensions | noteSurface.js, noteQuickActions.js | - | - |
-| js/desktopDockComponent.js | desktop switcher dock UI, floating pill with collapsible drawer | - | - | - |
-| js/desktopManager.js | multi-desktop state management, desktop assignment, persistence | - | - | - |
-| js/dragdrop.js | board drag-drop, resize, grid snap | layoutStorage.js, ui.js, fileCabinet.js | board:visibility_changed | - |
-| js/drawingBoard.js | magicCanvas drawing board, workspace drawing mode | canvasDocument.js, drawingToolbarMenu.js, layoutStorage.js | - | - |
-| js/editor.js | modal note editor overlay, save flow | noteSurface.js, noteQuickActions.js, editorModalChrome.js, sheet.js | item:selected_for_edit, editor:reveal_on_board | - |
-| js/fileCabinet.js | file cabinet mode, drag-to-file, filed chip rail | noteSurface.js, dragdrop.js, layoutStorage.js | filecabinet:layout_changed | - |
-| js/hamburger.js | side panel shell, notes list, category drawer, sort | searchBar.js, ui.js, sidebarHistory.js, sidebarStats.js | category:show_requested, category:order_changed | - |
-| js/icons.js | CARD_ICONS, ACTION_ICONS, FORMAT_ICONS, DRAWING_ICONS SVG constants | ui.js | - | - |
-| js/lassoGeometry.js | lasso geometry utilities - ray casting, bounding boxes | drawingBoard.js | - | - |
-| js/layoutStorage.js | board layout persistence, grid/freeform positions, storage migrations | dragdrop.js, ui.js, fileCabinet.js, board/gridEngine.js | - | - |
-| js/noteBodyConversion.js | checklist/content conversion, plain copy text | noteSurface.js, checklistSteps.js, richText.js | - | - |
-| js/noteModel.js | note item schema, normalizeItemForSave, createNoteId | richText.js, sheet.js | - | - |
-| js/noteQuickActions.js | board + modal note quick-action DOM binding | noteSurface.js, ui.js, editor.js | - | - |
-| js/noteSurface.js | note card DOM, inline edit, checklist interactions, item mutations | checklistSteps.js, richText.js, sheet.js, noteBodyConversion.js, noteQuickActions.js, noteSurfaceHtml.js, noteSurfaceEditing.js, noteSurfaceChecklist.js | item:mutation_requested | - |
-| js/noteSurfaceChecklist.js | checklist operations, drag/drop, state management | noteSurface.js, checklistSteps.js, noteBodyConversion.js, richText.js | - | - |
-| js/noteSurfaceEditing.js | note inline editing, emoji, text operations, zoom controls | noteSurface.js, noteSurfaceHtml.js, richText.js, emojiPicker.js, domEscape.js | - | - |
-| js/noteSurfaceHtml.js | note HTML building and rendering | noteSurface.js, noteModel.js, sheet.js, checklistSteps.js | - | - |
-| js/noteSurfaceMutations.js | note item mutation functions | noteSurface.js, noteSurfaceEditing.js, noteSurfaceChecklist.js, noteModel.js, sheet.js, undo.js | item:mutation_requested | - |
-| js/richText.js | rich text sanitize, linkify, strip markup | noteSurface.js, noteModel.js | - | - |
-| js/searchBar.js | sidebar search bar and results panel | searchFilter.js, hamburger.js | - | - |
-| js/sheet.js | sheet-grid note template model and table interactions | noteSurface.js, editor.js | - | - |
-| js/sidebarHistory.js | sidebar undo history module | undo.js, popoverPosition.js, sidebarModules.js | - | - |
-| js/sidebarModules.js | sidebar module registry, undock wiring, re-dock slots | sidebarUndock.js, sidebarPrefs.js, desktopStack.js, hamburger.js | - | - |
-| js/sidebarRadio.js | sidebar radio player and station browser | radioPlayer.js, radioProviders/registry.js, radioPopover.js, sidebarModules.js | - | - |
-| js/sidebarStats.js | sidebar workspace stats module | layoutStorage.js, backup.js, sidebarModules.js | - | - |
-| js/sidebarTv.js | sidebar TV player and channel browser | tvPlayer.js, tvProviders/registry.js, tvPopover.js, sidebarModules.js | tv:state_changed | - |
-| js/sidebarUndock.js | shared undock/drag/clamp for sidebar panels | desktopStack.js, popoverPosition.js, sidebarPrefs.js | - | - |
-| js/sidebarWeather.js | sidebar weather glance and forecast panel | weatherApi.js, weatherProviders/registry.js, sidebarModules.js | - | - |
-| js/tileManager.js | tile size resolution, spatial collapse state, tile classification | tileGeometry.js, noteSurface.js | - | - |
+| js/api.js | item CRUD and matrix_database localStorage persistence | noteModel.js, layoutStorage.js | — | — |
+| js/app.js | application orchestration, event bus listeners, workspace init | api.js, ui.js, layoutStorage.js | item:mutation_requested, item:selected_for_edit, board:visibility_changed, calendar:add_note | — |
+| js/backup.js | local backup export/import, encrypted packages | cloudBackup.js, api.js | — | — |
+| js/board/gridEngine.js | grid board layout engine, push resolution | board/noteGeometry.js, layoutStorage.js, gridDensity.js | — | — |
+| js/board/noteGeometry.js | grid note geometry, push layout, tile bounds | board/gridEngine.js, tileGeometry.js | — | — |
+| js/boardOperations.js | item visibility, archiving, calendar integration, card actions | noteSurface.js, noteQuickActions.js, desktopManager.js | — | — |
+| js/checklistSteps.js | checklist tree logic, step reorder, indent/outdent | noteSurface.js, noteBodyConversion.js | — | — |
+| js/cloud/cloudProvider.js | cloud provider registry and factory dispatch | cloudBackup.js, cloud/megaProvider.js, cloud/localFolderProvider.js | — | — |
+| js/cloudBackup.js | cloud backup UI, MEGA and local-folder sync | backup.js, cloud/cloudProvider.js, cloud/megaProvider.js, cloud/localFolderProvider.js | — | — |
+| js/desktopCardManager.js | desktop card creation, updating, finalization, freeform dimensions | noteSurface.js, noteQuickActions.js | — | — |
+| js/desktopDockComponent.js | desktop switcher dock UI, floating pill with collapsible drawer, dock pin lock | — | — | — |
+| js/desktopManager.js | multi-desktop state management, desktop assignment, persistence | — | — | — |
+| js/dragdrop.js | board drag-drop, resize, grid snap | layoutStorage.js, ui.js, fileCabinet.js | board:visibility_changed | — |
+| js/drawingBoard.js | magicCanvas drawing board, workspace drawing mode | canvasDocument.js, drawingToolbarMenu.js, layoutStorage.js | — | — |
+| js/editor.js | modal note editor overlay, save flow | noteSurface.js, noteQuickActions.js, editorModalChrome.js, sheet.js | item:selected_for_edit, editor:reveal_on_board | — |
+| js/fileCabinet.js | file cabinet mode, drag-to-file, filed chip rail | noteSurface.js, dragdrop.js, layoutStorage.js | filecabinet:layout_changed | — |
+| js/hamburger.js | side panel shell, notes list, category drawer, sort | searchBar.js, ui.js, sidebarHistory.js, sidebarStats.js | category:show_requested, category:order_changed | — |
+| js/icons.js | CARD_ICONS, ACTION_ICONS, FORMAT_ICONS, DRAWING_ICONS SVG constants | ui.js | — | — |
+| js/itemMerge.js | shared merge helper for undo/redo restore (preserves note metadata) | undo.js, app.js | — | — |
+| js/lassoGeometry.js | lasso geometry utilities - ray casting, bounding boxes | drawingBoard.js | — | — |
+| js/layoutStorage.js | board layout persistence, grid/freeform positions, storage migrations | dragdrop.js, ui.js, fileCabinet.js, board/gridEngine.js | — | — |
+| js/noteBodyConversion.js | checklist/content conversion, plain copy text | noteSurface.js, checklistSteps.js, richText.js | — | — |
+| js/noteModel.js | note item schema, normalizeItemForSave, createNoteId | richText.js, sheet.js | — | — |
+| js/noteQuickActions.js | board + modal note quick-action DOM binding | noteSurface.js, ui.js, editor.js | — | — |
+| js/noteSurface.js | note card DOM, inline edit, checklist interactions, item mutations | checklistSteps.js, richText.js, sheet.js, noteBodyConversion.js, noteQuickActions.js, noteSurfaceHtml.js, noteSurfaceEditing.js, noteSurfaceChecklist.js | item:mutation_requested | — |
+| js/noteSurfaceChecklist.js | checklist operations, drag/drop, state management | noteSurface.js, checklistSteps.js, noteBodyConversion.js, richText.js | — | — |
+| js/noteSurfaceEditing.js | note inline editing, emoji, text operations, zoom controls | noteSurface.js, noteSurfaceHtml.js, richText.js, emojiPicker.js, domEscape.js | — | — |
+| js/noteSurfaceHtml.js | note HTML building and rendering | noteSurface.js, noteModel.js, sheet.js, checklistSteps.js | — | — |
+| js/noteSurfaceMutations.js | note item mutation functions | noteSurface.js, noteSurfaceEditing.js, noteSurfaceChecklist.js, noteModel.js, sheet.js, undo.js | item:mutation_requested | — |
+| js/richText.js | rich text sanitize, linkify, strip markup | noteSurface.js, noteModel.js | — | — |
+| js/searchBar.js | sidebar search bar and results panel | searchFilter.js, hamburger.js | — | — |
+| js/sheet.js | sheet-grid note template model and table interactions | noteSurface.js, editor.js | — | — |
+| js/sidebarHistory.js | sidebar undo history module | undo.js, popoverPosition.js, sidebarModules.js | — | — |
+| js/sidebarModules.js | sidebar module registry, undock wiring, re-dock slots | sidebarUndock.js, sidebarPrefs.js, desktopStack.js, hamburger.js | — | — |
+| js/sidebarRadio.js | sidebar radio player and station browser | radioPlayer.js, radioProviders/registry.js, radioPopover.js, sidebarModules.js | — | — |
+| js/sidebarStats.js | sidebar workspace stats module | layoutStorage.js, backup.js, sidebarModules.js | — | — |
+| js/sidebarTv.js | sidebar TV player and channel browser | tvPlayer.js, tvProviders/registry.js, tvPopover.js, sidebarModules.js | tv:state_changed | — |
+| js/sidebarUndock.js | shared undock/drag/clamp for sidebar panels | desktopStack.js, popoverPosition.js, sidebarPrefs.js | — | — |
+| js/sidebarWeather.js | sidebar weather glance and forecast panel | weatherApi.js, weatherProviders/registry.js, sidebarModules.js | — | — |
 
 ## Tools (@tool)
 

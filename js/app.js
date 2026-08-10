@@ -21,7 +21,7 @@ import {
     UNCATEGORIZED_COLOR,
     writeStoredCategories
 } from './categories.js';
-import { UndoManager, historyLabelForItem } from './undo.js';
+import { UndoManager, historyLabelForItem, mergeItemOntoExisting } from './undo.js';
 import { DesktopBackground } from './desktopBackground.js';
 import { ChromeBackground } from './chromeBackground.js';
 import { ClockStyle } from './clockStyle.js';
@@ -205,19 +205,24 @@ DrawingBoard.init(this);
     }
 
     async restoreItem(item, preserveView = false) {
+        // Undo/redo change entries carry only content fields + id (see
+        // UndoManager.recordItemChange in js/undo.js). Merge those back onto the
+        // existing full note so theme/color/category/layout metadata is never
+        // dropped — otherwise an undo would re-render the note as black/default.
         const idx = AppState.items.findIndex((i) => i.id === item.id);
-        if (idx >= 0) AppState.items[idx] = item;
-        else AppState.items.push(item);
+        const merged = idx >= 0 ? mergeItemOntoExisting(AppState.items[idx], item) : item;
+        if (idx >= 0) AppState.items[idx] = merged;
+        else AppState.items.push(merged);
 
         if (Editor.activeItem?.id === item.id && !Editor.overlay?.classList.contains('is-hidden')) {
-            Editor.activeItem = NoteSurface.snapshotItem(item);
+            Editor.activeItem = NoteSurface.snapshotItem(merged);
             Editor.renderForm();
             Editor.updateEditorSizeLabel();
         }
 
         if (preserveView) {
             const canvas = document.getElementById('app-canvas');
-            UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
+            UI.updateSingleCard(canvas, merged, AppState.hiddenCategories);
             if (AppState.viewSettings.sortBy === 'grid') {
                 DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
             }

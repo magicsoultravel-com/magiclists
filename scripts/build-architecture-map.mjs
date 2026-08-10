@@ -1,6 +1,6 @@
 /**
  * Regenerates .cursor/rules/magiclists-architecture.mdc from index.html,
- * @css headers in css/*.css, @module headers in js/**/*.js, and @tool metadata.
+ * @css headers in css files, @module headers in JS files, and @tool metadata.
  *
  * Run: node scripts/build-architecture-map.mjs
  */
