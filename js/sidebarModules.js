@@ -20,7 +20,7 @@ export const SIDEBAR_MODULE_WIDTH = 220;
 
 /** @type {ReadonlyArray<{ id: string, rootId: string, headerId: string, sectionId: string, startCollapsed?: boolean, expandOnUndock?: boolean, collapseIgnoreExtra?: string, dragBlockSelector?: string, onPositionChange?: () => void }>} */
 export const SIDEBAR_MODULES = [
-    { id: 'clock', rootId: 'sidebar-clock', headerId: 'clock-section-header', sectionId: 'clock-section', startCollapsed: false, collapseAlways: true, onPositionChange: () => ClockStyle.repositionPopover?.() },
+    { id: 'clock', rootId: 'sidebar-clock', headerId: 'clock-section-header', sectionId: 'clock-section', startCollapsed: false, collapseAlways: true, dragBlockSelector: '#digital-clock', onPositionChange: () => ClockStyle.repositionPopover?.() },
     { id: 'quick-actions', rootId: 'sidebar-quick-actions', headerId: 'quick-actions-header', sectionId: 'quick-actions-section', startCollapsed: true, expandOnUndock: true, collapseIgnoreExtra: '.quick-actions-header-icons' },
     { id: 'radio', rootId: 'sidebar-radio', headerId: 'radio-section-header', sectionId: 'radio-section', startCollapsed: true, dragBlockSelector: '.sidebar-radio__compact', onPositionChange: () => RadioPopover.reposition() },
     { id: 'tv', rootId: 'sidebar-tv', headerId: 'tv-section-header', sectionId: 'tv-section', startCollapsed: true, dragBlockSelector: '.sidebar-tv__compact', onPositionChange: () => TvPopover.reposition() },
@@ -115,7 +115,12 @@ export function getSidebarModuleWidth() {
 export function applyAllModuleWidths() {
     const width = getSidebarModuleWidth();
     SIDEBAR_MODULES.forEach((config) => {
-        applyModuleWidth(document.getElementById(config.rootId), width);
+        const root = document.getElementById(config.rootId);
+        // Only docked modules should track the sidebar width. Undocked windows
+        // keep the width they had at the moment they were detached; resizing
+        // the sidebar must not resize floating modules.
+        if (!root || root.classList.contains(SIDEBAR_MODULE_UNDOCKED)) return;
+        applyModuleWidth(root, width);
     });
 }
 

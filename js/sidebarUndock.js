@@ -74,6 +74,7 @@ export function initSidebarUndock(config) {
         root.style.left = '';
         root.style.top = '';
         root.style.removeProperty('z-index');
+        root.style.removeProperty('--sidebar-module-width');
         restoreToSidebar();
         writeDock({ docked: true, x: null, y: null });
     }
@@ -91,6 +92,7 @@ export function initSidebarUndock(config) {
         root.classList.add(undockedClass);
         root.style.left = `${x}px`;
         root.style.top = `${y}px`;
+        root.style.removeProperty('--sidebar-module-width');
         const clamped = applyPosition(root, x, y);
         raiseDesktopElement(root);
 

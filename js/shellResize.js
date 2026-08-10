@@ -214,6 +214,7 @@ function updateVerticalSplitterVisibility() {
 
 function bindSplitterDrag(handle, axis) {
     let resizing = false;
+    let moved = false;
     let startX = 0;
     let startY = 0;
     let startSize = 0;
@@ -234,21 +235,36 @@ function bindSplitterDrag(handle, axis) {
             handle.releasePointerCapture(e.pointerId);
         } catch { /* ignore */ }
 
+        if (!moved) {
+            // Click without a drag: nothing changed, so don't re-apply sizes,
+            // persist, or notify listeners. Re-running applySidebarWidth /
+            // applyCabinetHeight here would nudge the zoom scale and trigger
+            // layout listeners for a one-frame "bounce". A no-op click stays
+            // a no-op.
+            document.body.classList.remove('is-shell-resizing', 'is-shell-resizing--v', 'is-shell-resizing--h');
+            return;
+        }
+
         if (axis === 'v') {
             // Commit the final width while the transition is still disabled
             // (body.is-shell-resizing is still set), then re-enable transitions.
             const clamped = applySidebarWidth(lastSize || sidebarPanel?.offsetWidth);
-            document.body.classList.remove('is-shell-resizing', 'is-shell-resizing--v', 'is-shell-resizing--h');
             if (clamped) writeSidebarWidth(clamped);
-            dispatchDesktopBoundsChanged();
         } else {
             const mount = document.getElementById('file-cabinet');
             const height = lastSize || mount?.offsetHeight;
             if (mount && height) {
                 applyCabinetHeight(mount, height, { persist: true });
             }
-            document.body.classList.remove('is-shell-resizing', 'is-shell-resizing--h', 'is-shell-resizing--v');
         }
+        dispatchDesktopBoundsChanged();
+
+        // Drop the resize lock on the next frame so the re-enabled panel
+        // width/height transition starts from a fully settled value (zero
+        // delta) and never animates on release.
+        requestAnimationFrame(() => {
+            document.body.classList.remove('is-shell-resizing', 'is-shell-resizing--v', 'is-shell-resizing--h');
+        });
     };
 
     handle.addEventListener('pointerdown', (e) => {
@@ -266,6 +282,7 @@ function bindSplitterDrag(handle, axis) {
         }
 
         resizing = true;
+        moved = false;
         startX = e.clientX;
         startY = e.clientY;
         lastSize = startSize;
@@ -275,15 +292,22 @@ function bindSplitterDrag(handle, axis) {
 
     handle.addEventListener('pointermove', (e) => {
         if (!resizing) return;
+        const dx = e.clientX - startX;
+        const dy = e.clientY - startY;
+
+        // Ignore sub-threshold movement so a click with a tiny tremor never
+        // applies a size change (prevents the click "bounce").
+        if (!moved && Math.abs(dx) <= 3 && Math.abs(dy) <= 3) return;
+        moved = true;
 
         if (axis === 'v') {
             // Single source of truth: applySidebarWidth sets --sidebar-width,
             // applies the UI scale and dispatches the change notification.
-            lastSize = applySidebarWidth(startSize + (e.clientX - startX));
+            lastSize = applySidebarWidth(startSize + dx);
         } else {
             const mount = document.getElementById('file-cabinet');
             if (!mount) return;
-            const next = clampCabinetHeight(startSize + (e.clientY - startY), mount);
+            const next = clampCabinetHeight(startSize + dy, mount);
             lastSize = next;
             applyCabinetHeight(mount, next);
         }
