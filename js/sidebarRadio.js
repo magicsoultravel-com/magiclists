@@ -603,18 +603,11 @@ export const SidebarRadio = {
             } else if (append) {
                 const list = body.querySelector('.sidebar-media-list');
                 if (list && page.length) {
-                    page.map((s) => this.renderStationTile(s, { compact: true })).forEach((item) => {
-                        list.appendChild(item);
-                    });
+                    list.insertAdjacentHTML(
+                        'beforeend',
+                        page.map((s) => this.renderStationTile(s)).join('')
+                    );
                     this.bindStationTileActions(list);
-                    // Re-bind images for newly added items
-                    list.querySelectorAll('.sidebar-media-list-item__logo[src]').forEach((img) => {
-                        const parent = img.closest('.sidebar-media-list-item');
-                        bindFaviconImage(img, () => {
-                            parent?.querySelector('.sidebar-media-list-item__logo--fallback')?.classList.remove('is-hidden');
-                            img.classList.add('is-hidden');
-                        });
-                    });
                 }
                 body.querySelector('[data-radio-load-more]')?.remove();
                 if (this.browseHasMore) {
@@ -628,7 +621,7 @@ export const SidebarRadio = {
                 }
             } else {
                 body.innerHTML = `<div class="sidebar-media-list" data-radio-station-grid>
-                    ${this.browseStations.map((s) => this.renderStationTile(s, { compact: true })).join('')}
+                    ${this.browseStations.map((s) => this.renderStationTile(s)).join('')}
                 </div>
                 ${this.browseHasMore ? '<button type="button" class="btn btn--compact sidebar-media__load-more" data-radio-load-more>Load more</button>' : ''}
                 `;
@@ -673,7 +666,7 @@ export const SidebarRadio = {
         return {
             providerId: parsed.providerId,
             stationId: parsed.stationId,
-            stationuuid: meta.key,
+            stationuuid: parsed.stationId,
             name: meta.name || 'Unknown',
             favicon: meta.favicon || '',
             countrycode: meta.countrycode || ''
@@ -733,7 +726,7 @@ export const SidebarRadio = {
             if (!this.listStations.length) {
                 body.innerHTML = '<p class="tool-msg tool-msg--error">Stations unavailable.</p>';
             } else {
-                body.innerHTML = `<div class="sidebar-media-list">${this.listStations.map((s) => this.renderStationTile(s, { compact: true })).join('')}</div>`;
+                body.innerHTML = `<div class="sidebar-media-list">${this.listStations.map((s) => this.renderStationTile(s)).join('')}</div>`;
                 this.bindStationTileActions(body);
             }
         } catch {
@@ -742,14 +735,14 @@ export const SidebarRadio = {
             if (!this.listStations.length) {
                 body.innerHTML = '<p class="tool-msg tool-msg--error">Could not load list.</p>';
             } else {
-                body.innerHTML = `<div class="sidebar-media-list">${this.listStations.map((s) => this.renderStationTile(s, { compact: true })).join('')}</div>`;
+                body.innerHTML = `<div class="sidebar-media-list">${this.listStations.map((s) => this.renderStationTile(s)).join('')}</div>`;
                 this.bindStationTileActions(body);
             }
         }
         RadioPopover.reposition();
     },
 
-    renderStationTile(station, { compact = false } = {}) {
+    renderStationTile(station) {
         const uuid = stationKey(station);
         const fav = RadioPlayer.isFavorite(station);
         const playing = stationKey(RadioPlayer.station) === uuid
@@ -764,27 +757,13 @@ export const SidebarRadio = {
             : '';
         const offlineBadge = offline ? '<span class="sidebar-media-list-item__offline">off</span>' : '';
 
-        // Compact list view
-        if (compact) {
-            return `<div class="sidebar-media-list-item sidebar-media-list-item--channel${playing ? ' is-on-desktop' : ''}" data-radio-station="${escapeHtml(uuid)}" role="button" tabindex="0" title="${escapeHtml(station.name || '')}">
+        return `<div class="sidebar-media-list-item sidebar-media-list-item--channel${playing ? ' is-on-desktop' : ''}" data-radio-station="${escapeHtml(uuid)}" role="button" tabindex="0" title="${escapeHtml(station.name || '')}">
                 ${favicon}
                 <span class="sidebar-media-list-item__name">${escapeHtml(station.name || 'Unknown')}</span>
                 ${flag}
                 ${offlineBadge}
                 <button type="button" class="sidebar-media-list-item__star${fav ? ' is-active' : ''}" data-radio-star="${escapeHtml(uuid)}" title="${fav ? 'Remove favorite' : 'Add favorite'}" aria-label="${fav ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${fav ? 'true' : 'false'}">${starIcon}</button>
             </div>`;
-        }
-
-        // Tile view (legacy)
-        return `
-            <div class="sidebar-media-tile radio-tile--station${playing ? ' is-on-desktop' : ''}${offline ? ' sidebar-media-tile--offline' : ''}${compact ? ' sidebar-media-tile--compact' : ''}" data-radio-station="${escapeHtml(uuid)}" role="button" tabindex="0" title="${escapeHtml(station.name || '')}">
-                <span class="sidebar-media-tile__art">${favicon}</span>
-                <span class="sidebar-media-tile__label u-truncate">${escapeHtml(station.name || 'Unknown')}</span>
-                ${flag}
-                ${offlineBadge}
-                <button type="button" class="card-act sidebar-media-tile__star${fav ? ' is-active' : ''}" data-radio-star="${escapeHtml(uuid)}" title="${fav ? 'Remove favorite' : 'Add favorite'}" aria-label="${fav ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${fav ? 'true' : 'false'}">${starIcon}</button>
-            </div>
-        `;
     },
 
     bindStationTileActions(container) {

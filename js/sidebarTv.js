@@ -558,18 +558,11 @@ export const SidebarTv = {
             } else if (append) {
                 const list = body.querySelector('.sidebar-media-list');
                 if (list && page.length) {
-                    page.map((ch) => this.renderChannelTile(ch)).forEach((item) => {
-                        list.appendChild(item);
-                    });
+                    list.insertAdjacentHTML(
+                        'beforeend',
+                        page.map((ch) => this.renderChannelTile(ch)).join('')
+                    );
                     this.bindChannelTileActions(list);
-                    // Re-bind images for newly added items
-                    list.querySelectorAll('.sidebar-media-list-item__logo[src]').forEach((img) => {
-                        const parent = img.closest('.sidebar-media-list-item');
-                        bindFaviconImage(img, () => {
-                            parent?.querySelector('.sidebar-media-list-item__logo--fallback')?.classList.remove('is-hidden');
-                            img.classList.add('is-hidden');
-                        });
-                    });
                 }
                 body.querySelector('[data-tv-load-more]')?.remove();
                 if (this.browseHasMore) {

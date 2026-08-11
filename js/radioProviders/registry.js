@@ -1,8 +1,7 @@
 import { RadioBrowserProvider } from './radioBrowser.js';
 import { IptvOrgProvider } from './iptvOrg.js';
-import { PROVIDER_IPTV_ORG, PROVIDER_RADIO_BROWSER } from './stationShape.js';
-
-const STATE_KEY = 'matrix_radio_state';
+import { PROVIDER_IPTV_ORG, PROVIDER_RADIO_BROWSER, parseStationKey } from './stationShape.js';
+import { loadRadioState, patchRadioState } from '../radioState.js';
 
 const PROVIDERS = {
     [PROVIDER_RADIO_BROWSER]: RadioBrowserProvider,
@@ -10,27 +9,16 @@ const PROVIDERS = {
 };
 
 function loadSettings() {
-    try {
-        const raw = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
-        return {
-            catalogProvider: raw.catalogProvider || PROVIDER_RADIO_BROWSER,
-            radioBrowserMirror: raw.radioBrowserMirror || null,
-            hideOfflineStations: raw.hideOfflineStations !== false
-        };
-    } catch {
-        return {
-            catalogProvider: PROVIDER_RADIO_BROWSER,
-            radioBrowserMirror: null,
-            hideOfflineStations: true
-        };
-    }
+    const state = loadRadioState();
+    return {
+        catalogProvider: state.catalogProvider || PROVIDER_RADIO_BROWSER,
+        radioBrowserMirror: state.radioBrowserMirror || null,
+        hideOfflineStations: state.hideOfflineStations !== false
+    };
 }
 
 function saveSettings(patch) {
-    const current = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
-    const next = { ...current, ...patch };
-    localStorage.setItem(STATE_KEY, JSON.stringify(next));
-    return next;
+    return patchRadioState(patch);
 }
 
 export const RadioProviderRegistry = {
@@ -115,9 +103,8 @@ export const RadioProviderRegistry = {
     async getStationsByRefs(refs, opts = {}) {
         const byProvider = new Map();
         refs.forEach((key) => {
-            const parsed = typeof key === 'string' && key.includes(':')
-                ? { providerId: key.slice(0, key.indexOf(':')), stationId: key.slice(key.indexOf(':') + 1) }
-                : { providerId: PROVIDER_RADIO_BROWSER, stationId: key };
+            const parsed = parseStationKey(key) || { providerId: PROVIDER_RADIO_BROWSER, stationId: key };
+            if (!parsed.stationId) return;
             if (!byProvider.has(parsed.providerId)) byProvider.set(parsed.providerId, []);
             byProvider.get(parsed.providerId).push(parsed.stationId);
         });
