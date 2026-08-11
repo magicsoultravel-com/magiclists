@@ -394,13 +394,44 @@ export const RadioPlayer = {
             station = await RadioProviderRegistry.getStation(parsed, { forPlay: true });
         }
 
-        if (station && !station.url_resolved) {
-            const parsed = parseStationKey(stationKey(station));
-            station = await RadioProviderRegistry.getStation(parsed, { forPlay: true });
+        const key = stationKey(station);
+        if (!key || !station) {
+            this.loading = false;
+            this.loadPhase = 'idle';
+            this.error = 'Invalid station';
+            this.emitState();
+            return;
         }
 
-        const key = stationKey(station);
-        if (!key || !station) return;
+        // Fetch station data if URL is missing or station is incomplete
+        if (!station.url_resolved) {
+            const parsed = parseStationKey(key);
+            const fetched = await RadioProviderRegistry.getStation(parsed, { forPlay: true });
+            if (!fetched || !fetched.url_resolved || fetched.lastcheckok === 0) {
+                this.loading = false;
+                this.loadPhase = 'idle';
+                this.error = fetched ? 'Stream unavailable' : 'Could not load station';
+                if (fetched && fetched.lastcheckok === 0) {
+                    this.error = 'Station offline';
+                }
+                this.emitState();
+                return;
+            }
+            station = fetched;
+        } else if (station.lastcheckok === 0) {
+            this.loading = false;
+            this.loadPhase = 'idle';
+            this.error = 'Station offline';
+            this.emitState();
+            return;
+        }
+
+        // Normalize and set station BEFORE emitState so UI shows correct station
+        this.station = normalizeStation(station, station.providerId) || station;
+        saveState({
+            lastStationKey: key,
+            lastStationName: station.name || ''
+        });
 
         this.recentRecordedForKey = null;
         this.loading = true;
@@ -410,19 +441,6 @@ export const RadioPlayer = {
         this.emitState();
 
         try {
-            if (!station.url_resolved) {
-                throw new Error('No stream URL');
-            }
-            if (station.lastcheckok === 0) {
-                throw new Error('Station offline');
-            }
-
-            this.station = normalizeStation(station, station.providerId) || station;
-            saveState({
-                lastStationKey: key,
-                lastStationName: station.name || ''
-            });
-
             const provider = RadioProviderRegistry.getProvider(station.providerId);
             provider.reportClick?.(station.stationId);
 
@@ -443,9 +461,6 @@ export const RadioPlayer = {
                 saveState({ wasPlaying: false });
             } else {
                 this.error = e?.message === 'Station offline' ? 'Station offline' : 'Stream unavailable';
-            }
-            if (typeof stationOrKey === 'object' && stationOrKey?.name) {
-                this.station = normalizeStation(stationOrKey, stationOrKey.providerId) || stationOrKey;
             }
             this.emitState();
             if (blocked) throw e;

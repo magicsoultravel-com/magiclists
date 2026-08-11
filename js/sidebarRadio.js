@@ -54,7 +54,16 @@ export const SidebarRadio = {
             if (tab === 'browse' && this.browseView === 'country') {
                 this.updatePlayingTiles();
             } else if (tab === 'recents' || tab === 'favorites') {
-                this.refreshOpenPanel();
+                // Use updatePlayingTiles for live updates to avoid removing tiles mid-click
+                // Full refresh only needed when panel is first opened or explicitly requested
+                const playingKey = stationKey(RadioPlayer.station);
+                if (!this.listStations.length) {
+                    this.refreshOpenPanel();
+                } else if (playingKey || RadioPlayer.loading) {
+                    this.updatePlayingTiles();
+                } else {
+                    this.refreshOpenPanel();
+                }
             }
         };
         window.addEventListener('radio:state_changed', this.onStateChanged);
