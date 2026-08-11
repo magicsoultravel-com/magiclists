@@ -18,6 +18,8 @@ export const TvPopover = {
     onTabChange: null,
     onOpen: null,
     tabsBound: false,
+    controlsBound: false,
+    controlsUpdateInterval: null,
 
     ensurePanel() {
         if (this.panel) return this.panel;
@@ -33,7 +35,71 @@ export const TvPopover = {
                 <button type="button" class="card-act sidebar-media-popover__close" data-tv-pop-close title="Close" aria-label="Close">${CARD_ICONS.close}</button>
             </div>
             <div class="tv-popover__video-wrap is-hidden" data-tv-video-wrap>
-                <div class="tv-popover__video-slot" data-tv-video-slot aria-label="Live video"></div>
+                <div class="tv-popover__video-slot" data-tv-video-slot aria-label="Live video">
+                    <div class="tv-video-controls" data-tv-video-controls>
+                        <div class="tv-video-controls__top">
+                            <div class="tv-stats-tooltip" data-tv-stats-tooltip>
+                                <div class="tv-stats-tooltip__row">
+                                    <span class="tv-stats-tooltip__label">Quality</span>
+                                    <span class="tv-stats-tooltip__value" data-tv-stat-quality>-</span>
+                                </div>
+                                <div class="tv-stats-tooltip__row">
+                                    <span class="tv-stats-tooltip__label">Bandwidth</span>
+                                    <span class="tv-stats-tooltip__value" data-tv-stat-bandwidth>-</span>
+                                </div>
+                                <div class="tv-stats-tooltip__row">
+                                    <span class="tv-stats-tooltip__label">Buffer</span>
+                                    <span class="tv-stats-tooltip__value" data-tv-stat-buffer>-</span>
+                                </div>
+                            </div>
+                            <div class="tv-video-controls__settings">
+                                <button type="button" class="tv-controls-btn" data-tv-settings-btn title="Stream settings" aria-label="Stream settings" aria-expanded="false">
+                                    <svg viewBox="0 0 12 12" width="14" height="14" focusable="false"><circle cx="6" cy="6" r="2.2" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.5V2.2M6 9.8v-1.3M3.5 6H2.2M9.8 6H8.5M4.2 4.2 3.2 3.2M8.8 8.8l-1-1M7.8 4.2l1-1M4.2 7.8l-1 1" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linecap="round"/></svg>
+                                </button>
+                                <div class="tv-settings-popover is-hidden" data-tv-settings-popover role="menu">
+                                    <div class="tv-settings-popover__header">
+                                        <span class="tv-settings-popover__title">Stream settings</span>
+                                        <button type="button" class="tv-settings-popover__close" data-tv-settings-close title="Close settings" aria-label="Close settings">${CARD_ICONS.close}</button>
+                                    </div>
+                                    <div class="tv-settings-popover__section">
+                                        <span class="tv-settings-popover__label">Quality</span>
+                                        <div class="tv-settings-popover__options" data-tv-quality-options></div>
+                                    </div>
+                                    <div class="tv-settings-popover__section tv-settings-popover__section--muted">
+                                        <span class="tv-settings-popover__label">More settings coming soon</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="tv-video-controls__center">
+                            <button type="button" class="tv-controls-btn tv-play-btn" data-tv-play-pause-btn title="Play/Pause" aria-label="Play/Pause">
+                                <svg data-tv-play-icon viewBox="0 0 12 12" width="20" height="20" focusable="false"></svg>
+                            </button>
+                        </div>
+                        <div class="tv-video-controls__bottom">
+                            <div class="tv-controls-bar" data-tv-controls-bar>
+                                <div class="tv-controls-bar__buffer" data-tv-buffer-fill></div>
+                                <div class="tv-controls-bar__live"></div>
+                            </div>
+                            <div class="tv-controls-info">
+                                <span data-tv-latency-info>Live</span>
+                                <div class="tv-volume-cluster" data-tv-volume-cluster>
+                                    <button type="button" class="tv-controls-btn tv-volume-btn" data-tv-mute-btn title="Mute or unmute" aria-label="Mute or unmute" aria-pressed="false">
+                                        <svg data-tv-mute-icon viewBox="0 0 12 12" width="12" height="12" focusable="false"></svg>
+                                    </button>
+                                    <button type="button" class="tv-controls-btn tv-volume-step" data-tv-volume-down title="Volume down" aria-label="Volume down">
+                                        <svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.5 6h7" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+                                    </button>
+                                    <span class="tv-volume-pct" data-tv-volume-pct>85%</span>
+                                    <button type="button" class="tv-controls-btn tv-volume-step" data-tv-volume-up title="Volume up" aria-label="Volume up">
+                                        <svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 2.5v7M2.5 6h7" fill="none" stroke="currentColor" stroke-width="1"/></svg>
+                                    </button>
+                                </div>
+                                <span data-tv-quality-badge>Auto</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="sidebar-media-popover__toolbar is-hidden" data-tv-pop-toolbar></div>
             <div class="sidebar-media-popover__body" data-tv-pop-body></div>
@@ -54,6 +120,7 @@ export const TvPopover = {
         this.bindResize(panel);
         this.bindHeaderDrag(panel);
         this.bindTabs(panel);
+        this.bindVideoControls(panel);
         panel.addEventListener('pointerdown', () => {
             raiseUndockedAttachStack(this.attachEl, panel);
         });
@@ -74,6 +141,205 @@ export const TvPopover = {
                 this.onTabChange?.(tab);
             }
         });
+    },
+
+    bindVideoControls(panel) {
+        if (this.controlsBound) return;
+        this.controlsBound = true;
+
+        const controls = panel.querySelector('[data-tv-video-controls]');
+        const slot = panel.querySelector('[data-tv-video-slot]');
+        if (!controls || !slot) return;
+
+        panel.querySelector('[data-tv-play-pause-btn]')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            TvPlayer.toggle();
+        });
+
+        // Volume cluster
+        panel.querySelector('[data-tv-mute-btn]')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            TvPlayer.toggleMute();
+        });
+        panel.querySelector('[data-tv-volume-up]')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            TvPlayer.adjustVolume(0.05);
+        });
+        panel.querySelector('[data-tv-volume-down]')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            TvPlayer.adjustVolume(-0.05);
+        });
+
+        // Inline settings popover
+        const settingsBtn = panel.querySelector('[data-tv-settings-btn]');
+        const settingsPopover = panel.querySelector('[data-tv-settings-popover]');
+        const closeSettingsBtn = panel.querySelector('[data-tv-settings-close]');
+
+        const closeSettings = () => {
+            settingsPopover?.classList.add('is-hidden');
+            settingsBtn?.setAttribute('aria-expanded', 'false');
+        };
+        const toggleSettings = () => {
+            const isOpen = !settingsPopover?.classList.contains('is-hidden');
+            if (isOpen) {
+                closeSettings();
+            } else {
+                this.renderQualityOptions();
+                settingsPopover?.classList.remove('is-hidden');
+                settingsBtn?.setAttribute('aria-expanded', 'true');
+            }
+        };
+        settingsBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleSettings();
+        });
+        closeSettingsBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeSettings();
+        });
+
+        // Close popover when clicking outside the settings area
+        slot.addEventListener('click', (e) => {
+            if (e.target.closest('.tv-video-controls__settings') || e.target.closest('.tv-controls-btn') || e.target.closest('.tv-controls-bar')) return;
+            closeSettings();
+            TvPlayer.toggle();
+        });
+
+        // Quality option selection
+        panel.querySelector('[data-tv-quality-options]')?.addEventListener('click', (e) => {
+            const opt = e.target.closest('[data-quality-index]');
+            if (!opt) return;
+            e.stopPropagation();
+            TvPlayer.setQualityLevel(parseInt(opt.getAttribute('data-quality-index'), 10));
+            this.renderQualityOptions();
+        });
+    },
+
+    renderQualityOptions() {
+        const container = this.panel?.querySelector('[data-tv-quality-options]');
+        if (!container) return;
+        const opts = TvPlayer.getQualityOptions();
+        const currentIdx = TvPlayer.getQualityLevelIndex();
+        const currentLabel = TvPlayer.qualityLabel;
+        container.innerHTML = opts.map((opt) => {
+            const isActive = opt.index === -1
+                ? !TvPlayer.hls || currentLabel === 'Auto' || currentIdx < 0
+                : opt.index === currentIdx;
+            return `<button type="button" class="tv-settings-option${isActive ? ' is-active' : ''}" data-quality-index="${opt.index}">${opt.label}</button>`;
+        }).join('');
+    },
+
+    updateVideoControls() {
+        const panel = this.panel;
+        if (!panel || panel.classList.contains('is-hidden')) return;
+
+        const state = {
+            playing: TvPlayer.playing,
+            qualityLabel: TvPlayer.qualityLabel,
+            stats: TvPlayer.getStats()
+        };
+
+        const playIcon = panel.querySelector('[data-tv-play-icon]');
+        if (playIcon) {
+            if (state.playing) {
+                playIcon.innerHTML = '<path d="M3.8 2.6v6.8M8.2 2.6v6.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/>';
+            } else {
+                playIcon.innerHTML = '<path d="M4.2 2.4v7.2l6-2.4z" fill="currentColor"/>';
+            }
+        }
+
+        const bufferFill = panel.querySelector('[data-tv-buffer-fill]');
+        if (bufferFill) {
+            bufferFill.style.width = `${TvPlayer.getBufferPercentage()}%`;
+        }
+
+        const qualityBadge = panel.querySelector('[data-tv-quality-badge]');
+        if (qualityBadge) {
+            qualityBadge.textContent = state.qualityLabel || 'Auto';
+        }
+
+        const latencyInfo = panel.querySelector('[data-tv-latency-info]');
+        if (latencyInfo && state.stats.liveLatency !== null) {
+            const latency = state.stats.liveLatency;
+            const latencySec = Math.round(latency);
+            latencyInfo.textContent = `${latencySec}s behind`;
+            latencyInfo.className = 'tv-controls-info__latency';
+            if (latency < 2) {
+                latencyInfo.classList.add('is-good');
+            } else if (latency > 8) {
+                latencyInfo.classList.add('is-poor');
+            }
+        } else if (latencyInfo) {
+            latencyInfo.textContent = 'Live';
+            latencyInfo.className = 'tv-controls-info__latency';
+        }
+
+        // Volume cluster refresh
+        const volPct = panel.querySelector('[data-tv-volume-pct]');
+        if (volPct) {
+            volPct.textContent = `${Math.round((TvPlayer.muted ? 0 : TvPlayer.volume) * 100)}%`;
+        }
+        const muteBtn = panel.querySelector('[data-tv-mute-btn]');
+        const muteIcon = panel.querySelector('[data-tv-mute-icon]');
+        if (muteBtn && muteIcon) {
+            const isMuted = TvPlayer.muted || TvPlayer.volume === 0;
+            muteBtn.setAttribute('aria-pressed', isMuted ? 'true' : 'false');
+            if (isMuted) {
+                muteIcon.innerHTML = '<path d="M2.6 4.6h2l2.6-2.4v7.6L4.6 7.4h-2" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/><path d="M8 4.2 10 7M10 4.2 8 7" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/>';
+            } else {
+                muteIcon.innerHTML = '<path d="M2.6 4.6h2l2.6-2.4v7.6L4.6 7.4h-2" fill="none" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/><path d="M7.6 4.4a2.8 2.8 0 0 1 0 3.2M8.8 3.2a4.6 4.6 0 0 1 0 5.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/>';
+            }
+        }
+
+        // Keep quality options in sync while open
+        const popover = panel.querySelector('[data-tv-settings-popover]');
+        if (popover && !popover.classList.contains('is-hidden')) {
+            this.renderQualityOptions();
+        }
+    },
+
+    updateStatsDisplay() {
+        const panel = this.panel;
+        if (!panel) return;
+
+        const stats = TvPlayer.getStats();
+        
+        const qualityEl = panel.querySelector('[data-tv-stat-quality]');
+        const bandwidthEl = panel.querySelector('[data-tv-stat-bandwidth]');
+        const bufferEl = panel.querySelector('[data-tv-stat-buffer]');
+
+        if (qualityEl) {
+            qualityEl.textContent = stats.qualityLevel || 'Auto';
+        }
+
+        if (bandwidthEl && stats.bandwidth > 0) {
+            const mbps = (stats.bandwidth / 1000000).toFixed(1);
+            bandwidthEl.textContent = `${mbps} Mbps`;
+        } else if (bandwidthEl) {
+            bandwidthEl.textContent = 'N/A';
+        }
+
+        if (bufferEl) {
+            const bufferSec = (stats.buffer.buffered || 0).toFixed(1);
+            bufferEl.textContent = `${bufferSec}s`;
+        }
+    },
+
+    startStatsUpdates() {
+        if (this.controlsUpdateInterval) return;
+        this.controlsUpdateInterval = setInterval(() => {
+            if (!this.panel?.classList.contains('is-hidden') && this.mode !== 'special') {
+                this.updateVideoControls();
+                this.updateStatsDisplay();
+            }
+        }, 2000);
+    },
+
+    stopStatsUpdates() {
+        if (this.controlsUpdateInterval) {
+            clearInterval(this.controlsUpdateInterval);
+            this.controlsUpdateInterval = null;
+        }
     },
 
     setActiveTab(tab) {
@@ -192,6 +458,7 @@ export const TvPopover = {
         wrap?.classList.toggle('is-hidden', !showVideo);
         if (showVideo && slot) {
             TvPlayer.mountVideo(slot);
+            this.updateVideoControls();
         } else if (inSettings || this.panel?.classList.contains('is-hidden')) {
             TvPlayer.mountToHolder();
         }
@@ -231,6 +498,7 @@ export const TvPopover = {
         raiseUndockedAttachStack(attachEl, panel);
         this.syncVideoMount();
         this.onOpen?.();
+        this.startStatsUpdates();
 
         requestAnimationFrame(() => {
             this.reposition();
@@ -289,6 +557,10 @@ export const TvPopover = {
     close(resetAnchor = true) {
         this.detachListeners();
         this.detachBoundsWatcher();
+        this.stopStatsUpdates();
+        // Clean up the inline settings popover on close.
+        this.panel?.querySelector('[data-tv-settings-popover]')?.classList.add('is-hidden');
+        this.panel?.querySelector('[data-tv-settings-btn]')?.setAttribute('aria-expanded', 'false');
         if (resetAnchor) {
             this.iconAnchor?.setAttribute('aria-expanded', 'false');
         }

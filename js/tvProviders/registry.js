@@ -12,14 +12,12 @@ function loadSettings() {
         const raw = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
         return {
             catalogProvider: raw.catalogProvider || PROVIDER_IPTV_ORG,
-            hideOfflineChannels: raw.hideOfflineChannels !== false,
-            audioPrioritize: raw.audioPrioritize === true
+            hideOfflineChannels: raw.hideOfflineChannels !== false
         };
     } catch {
         return {
             catalogProvider: PROVIDER_IPTV_ORG,
-            hideOfflineChannels: true,
-            audioPrioritize: false
+            hideOfflineChannels: true
         };
     }
 }

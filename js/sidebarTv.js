@@ -312,10 +312,6 @@ export const SidebarTv = {
                         <option value="240p" ${settings.preferredQuality === '240p' ? ' selected' : ''}>240p</option>
                     </select>
                 </label>
-                <label class="tv-special-form__row tv-special-form__row--check">
-                    <input type="checkbox" data-tv-audio-prioritize${settings.audioPrioritize || false ? ' checked' : ''}>
-                    <span>Prioritize audio (reduce video quality on low bandwidth)</span>
-                </label>
                 <div class="tv-special-form__actions">
                     <button type="button" class="btn btn--compact" data-tv-refresh-catalog>Refresh catalog</button>
                     <button type="button" class="btn btn--compact" data-tv-clear-cache>Clear cache</button>
@@ -369,20 +365,6 @@ export const SidebarTv = {
                 }
             });
             qualitySelectEl.value = 'auto'; // Default to auto
-        }
-
-        // Audio prioritize control
-        const audioPrioritizeEl = body.querySelector('[data-tv-audio-prioritize]');
-        if (audioPrioritizeEl) {
-            audioPrioritizeEl.addEventListener('change', (e) => {
-                const checked = e.target.checked;
-                TvProviderRegistry.saveSettings({ audioPrioritize: checked });
-                if (checked) {
-                    TvPlayer.prioritizeAudio();
-                } else {
-                    TvPlayer.enableVideo();
-                }
-            });
         }
 
         body.querySelector('[data-tv-refresh-catalog]')?.addEventListener('click', async () => {

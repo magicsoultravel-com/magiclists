@@ -123,18 +123,12 @@ export const TvPlayer = {
     resumeBlocked: false,
     recentRecordedForKey: null,
     volume: loadState().volume,
+    lastVolume: loadState().volume || 0.85,
+    muted: false,
     videoMount: null,
 
     // Buffer management
     bufferSize: loadState().bufferSize || DEFAULT_BUFFER_SIZE,
-
-    // Audio/video separation infrastructure
-    audioContext: null,
-    gainNode: null,
-    videoOnlyNode: null,
-    audioOutputNode: null,
-    videoMuted: false,
-    audioPriority: 1.0,
 
     // Stream statistics
     connection: 'idle',
@@ -148,9 +142,6 @@ export const TvPlayer = {
 
     // Quality adaptation
     currentMaxBitrate: null,
-
-    // Audio context lazy init flag
-    audioContextInitialized: false,
 
     init() {
         if (this.video) return;
@@ -167,13 +158,12 @@ export const TvPlayer = {
         this.video.setAttribute('playsinline', '');
         this.video.autoplay = true; // Required for autoplay policy compliance
         this.video.preload = 'metadata'; // Allow initial metadata load for faster startup
-        this.video.muted = true; // Required for autoplay on some browsers
+        this.video.muted = this.volume === 0;
         this.video.volume = this.volume;
         if (this.volume === 0) this.video.muted = true;
+        this.muted = this.volume === 0;
+        this.lastVolume = this.volume > 0 ? this.volume : 0.85;
         this.videoHolder.appendChild(this.video);
-
-        // Audio/video separation will be initialized lazily on first user interaction
-        // (required by Autoplay Policy - AudioContext must be created after user gesture)
 
         this.video.addEventListener('loadstart', () => {
             this.loadPhase = 'connecting';
@@ -377,21 +367,42 @@ export const TvPlayer = {
     },
 
     setVolume(value) {
-        this.volume = Math.min(1, Math.max(0, value));
+        const clamped = Math.min(1, Math.max(0, value));
+        this.volume = clamped;
+        if (clamped > 0) {
+            this.lastVolume = clamped;
+            this.muted = false;
+        }
         if (this.video) {
-            this.video.volume = this.volume;
-            // Auto-mute when volume is 0, unmute when volume is > 0
-            this.video.muted = this.volume === 0;
-        }
-        // Lazy init AudioContext on user gesture (volume change)
-        if (!this.audioContextInitialized && !this.gainNode) {
-            this.initAudioVideoSeparation().catch(() => {});
-        }
-        if (this.gainNode && this.audioContext) {
-            this.gainNode.gain.setValueAtTime(this.volume * this.audioPriority, this.audioContext.currentTime);
+            this.video.volume = clamped;
+            this.video.muted = clamped === 0;
         }
         saveState({ volume: this.volume });
         this.emitState();
+    },
+
+    adjustVolume(delta) {
+        const next = Math.min(1, Math.max(0, (this.muted ? this.lastVolume || 0.85 : this.volume) + delta));
+        this.setVolume(next);
+    },
+
+    mute() {
+        this.muted = true;
+        if (this.video) this.video.muted = true;
+        this.emitState();
+    },
+
+    unmute() {
+        this.muted = false;
+        this.setVolume(this.lastVolume > 0 ? this.lastVolume : 0.85);
+    },
+
+    toggleMute() {
+        if (this.muted) {
+            this.unmute();
+        } else {
+            this.mute();
+        }
     },
 
     setBufferSize(size) {
@@ -435,15 +446,67 @@ export const TvPlayer = {
     },
 
     getStats() {
+        const bandwidth = this.getBandwidth();
+        let qualityLevel = this.qualityLabel || 'unknown';
+        // Derive the active level live when HLS has parsed levels.
+        if (this.hls && Array.isArray(this.hls.levels)) {
+            const idx = this.hls.currentLevel;
+            if (idx >= 0 && this.hls.levels[idx]?.height) {
+                qualityLevel = `${this.hls.levels[idx].height}p`;
+            }
+        }
         return {
             connection: this.connection || 'idle',
-            bandwidth: this.bandwidth || 0,
-            qualityLevel: this.qualityLabel || 'unknown',
+            bandwidth,
+            qualityLevel,
             buffer: this.getBufferInfo(),
             errorCount: this.errorCount || 0,
             retryCount: this.retryCount || 0,
-            bufferSize: this.bufferSize || DEFAULT_BUFFER_SIZE
+            bufferSize: this.bufferSize || DEFAULT_BUFFER_SIZE,
+            liveLatency: this.getLiveLatency(),
+            volume: this.volume,
+            muted: this.muted
         };
+    },
+
+    getBandwidth() {
+        // HLS.js maintains a live ABR bandwidth estimate (bits/sec) on every
+        // fragment load — no extra polling needed on our side.
+        if (this.hls?.bandwidthEstimate) {
+            return this.hls.bandwidthEstimate;
+        }
+        // Fallback: report the current level's declared bitrate.
+        if (this.hls && Array.isArray(this.hls.levels)) {
+            const idx = this.hls.currentLevel >= 0
+                ? this.hls.currentLevel
+                : this.hls.level;
+            if (idx >= 0 && this.hls.levels[idx]?.bitrate) {
+                return this.hls.levels[idx].bitrate;
+            }
+        }
+        return this.bandwidth || 0;
+    },
+
+    getLiveLatency() {
+        if (!this.video || !this.hls) return null;
+        try {
+            const latency = this.hls.latency;
+            return typeof latency === 'number' ? latency : null;
+        } catch {
+            return null;
+        }
+    },
+
+    getBufferPercentage() {
+        const info = this.getBufferInfo();
+        if (!info || info.buffered <= 0) return 0;
+        // Live HLS streams report Infinity duration; fall back to the
+        // configured target buffer size as the denominator (buffer health %).
+        const denominator = Number.isFinite(info.duration) && info.duration > 0
+            ? info.duration
+            : (this.bufferSize || DEFAULT_BUFFER_SIZE);
+        if (!denominator) return 0;
+        return Math.min(100, Math.max(0, (info.buffered / denominator) * 100));
     },
 
     async destroyHls() {
@@ -568,85 +631,12 @@ export const TvPlayer = {
         this.emitState();
     },
 
-    async initAudioVideoSeparation() {
-        // Lazy initialization - only after user gesture
-        if (this.audioContextInitialized) return;
-        if (!this.video) return;
-
-        try {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            if (!AudioContext) return;
-
-            this.audioContext = new AudioContext();
-            this.audioContextInitialized = true;
-
-            this.audioSource = this.audioContext.createMediaElementSource(this.video);
-            this.audioDestination = this.audioContext.createMediaStreamDestination();
-            this.gainNode = this.audioContext.createGain();
-
-            this.audioSource.connect(this.gainNode);
-            this.gainNode.connect(this.audioDestination);
-
-            // Try to create video-only node, but gracefully handle video-only streams
-            try {
-                const stream = this.video.captureStream ? this.video.captureStream() : this.video.srcObject;
-                if (stream && stream.getAudioTracks().length > 0) {
-                    this.videoSource = this.audioContext.createMediaStreamSource(stream);
-                    this.videoOnlyNode = this.audioContext.createMediaStreamDestination();
-                    this.videoSource.connect(this.videoOnlyNode);
-                } else {
-                    // Video-only stream - create video node differently
-                    this.videoOnlyNode = this.audioContext.createMediaStreamDestination();
-                }
-            } catch (streamError) {
-                // Video-only stream or unsupported - continue without video node
-                this.videoOnlyNode = this.audioContext.createMediaStreamDestination();
-            }
-
-            this.audioContext.resume();
-        } catch (error) {
-            console.warn('Audio/video separation not supported:', error);
-            // Clean up partial state
-            this.audioContext = null;
-            this.audioContextInitialized = false;
-            this.gainNode = null;
-            this.videoOnlyNode = null;
-        }
-    },
-
     updateBufferSize() {
         const bufferSize = this.getBufferSize();
         if (this.video) {
             this.video.preload = bufferSize > 60 ? 'auto' : 'metadata';
         }
         this.emitState();
-    },
-
-    prioritizeAudio() {
-        // Lazy initialize AudioContext (called on user gesture)
-        if (!this.audioContextInitialized) {
-            this.initAudioVideoSeparation().catch(() => {});
-        }
-        if (this.gainNode && this.audioContext) {
-            this.gainNode.gain.setValueAtTime(1.0, this.audioContext.currentTime);
-        }
-        this.audioPriority = 1.0;
-        this.videoMuted = true;
-    },
-
-    muteVideo() {
-        if (this.videoOnlyNode) {
-            this.videoOnlyNode.disconnect();
-        }
-        this.videoMuted = true;
-    },
-
-    enableVideo() {
-        if (this.videoOnlyNode && this.audioContext) {
-            this.videoOnlyNode.connect(this.audioContext.destination);
-        }
-        this.videoMuted = false;
-        this.audioPriority = 1.0;
     },
 
     async resumeIfWasPlaying() {
@@ -794,6 +784,41 @@ export const TvPlayer = {
         return this.hls?.currentLevel ?? -1;
     },
 
+    getQualityOptions() {
+        const levels = this.getQualityLabels();
+        return [
+            { label: 'Auto', index: -1 },
+            ...levels.map((l) => ({ label: l.label, index: l.index }))
+        ];
+    },
+
+    setQualityLevel(index) {
+        if (!this.hls) return false;
+        const target = Number.isFinite(index) ? index : -1;
+        try {
+            if (target < 0) {
+                // Auto: allow ABR to switch freely.
+                this.hls.nextQualityLevel = -1;
+                this.hls.startLoad();
+                this.qualityLabel = 'Auto';
+                this.emitState();
+                return true;
+            }
+            if (this.hls.levels && target < this.hls.levels.length) {
+                this.hls.nextQualityLevel = target;
+                this.hls.startLoad();
+                if (this.hls.levels[target]?.height) {
+                    this.qualityLabel = `${this.hls.levels[target].height}p`;
+                }
+                this.emitState();
+                return true;
+            }
+        } catch (e) {
+            return false;
+        }
+        return false;
+    },
+
     getQualityLabels() {
         if (!this.hls || !this.hls.levels) return [];
         return this.hls.levels.map((level, i) => ({
@@ -810,21 +835,12 @@ export const TvPlayer = {
         }
     },
 
-    // Audio priority control
-    setAudioPriority(priority) {
-        this.audioPriority = Math.min(1, Math.max(0, priority));
-        // Lazy init if needed (called on user gesture via volume slider, etc.)
-        if (!this.audioContextInitialized && !this.gainNode) {
-            this.initAudioVideoSeparation().catch(() => {});
-        }
-        if (this.gainNode && this.audioContext) {
-            this.gainNode.gain.setValueAtTime(this.audioPriority, this.audioContext.currentTime);
-        }
-    },
-
     // Close everything and cleanup
     async stop() {
-        this.stopStatsMonitoring();
+        if (this.statsRefreshInterval) {
+            clearInterval(this.statsRefreshInterval);
+            this.statsRefreshInterval = null;
+        }
         if (this.hls) {
             await this.destroyHls();
         }
@@ -832,12 +848,6 @@ export const TvPlayer = {
             this.video.pause();
             this.video.removeAttribute('src');
             this.video.load();
-        }
-        if (this.audioContext) {
-            try {
-                await this.audioContext.close();
-            } catch {}
-            this.audioContext = null;
         }
         this.playing = false;
         this.loading = false;
