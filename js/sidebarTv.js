@@ -176,10 +176,10 @@ export const SidebarTv = {
             });
         });
         bindFaviconImage(this.root.querySelector('[data-tv-art]'), () => {
-            this.root.querySelector('[data-tv-art-fallback]')?.classList.add('is-hidden');
+            this.root.querySelector('[data-tv-art-fallback]')?.classList.remove('is-hidden');
         });
         bindFaviconImage(this.root.querySelector('[data-tv-compact-art]'), () => {
-            this.root.querySelector('[data-tv-compact-art-fallback]')?.classList.add('is-hidden');
+            this.root.querySelector('[data-tv-compact-art-fallback]')?.classList.remove('is-hidden');
         });
     },
 
@@ -459,13 +459,13 @@ export const SidebarTv = {
         return list;
     },
 
-    renderCountryTile(c) {
+    renderCountryList(c) {
         const code = c.iso_3166_1 || '';
-        const count = c.stationcount ? `${c.stationcount}` : '';
-        return `<button type="button" class="sidebar-media-tile sidebar-media-tile--country" data-tv-country="${escapeHtml(code)}" data-tv-country-name="${escapeHtml(c.name || code)}" title="${escapeHtml(c.name || code)}">
-            <span class="sidebar-media-tile__flag" aria-hidden="true">${countryFlagEmoji(code)}</span>
-            <span class="sidebar-media-tile__label u-truncate">${escapeHtml(c.name || code)}</span>
-            ${count ? `<span class="sidebar-media-tile__meta">${escapeHtml(count)}</span>` : ''}
+        const count = c.stationcount ? `${c.stationcount} stations` : '';
+        return `<button type="button" class="sidebar-media-list-item sidebar-media-list-item--country" data-tv-country="${escapeHtml(code)}" data-tv-country-name="${escapeHtml(c.name || code)}" title="${escapeHtml(c.name || code)}">
+            <span class="sidebar-media-list-item__flag" aria-hidden="true">${countryFlagEmoji(code)}</span>
+            <span class="sidebar-media-list-item__name">${escapeHtml(c.name || code)}</span>
+            ${count ? `<span class="sidebar-media-list-item__meta">${escapeHtml(count)}</span>` : ''}
         </button>`;
     },
 
@@ -496,7 +496,7 @@ export const SidebarTv = {
             body.innerHTML = '<p class="tool-msg">No countries match.</p>';
             return;
         }
-        body.innerHTML = `<div class="sidebar-media-tile-grid" data-tv-country-grid>${filtered.map((c) => this.renderCountryTile(c)).join('')}</div>`;
+        body.innerHTML = `<div class="sidebar-media-list">${filtered.map((c) => this.renderCountryList(c)).join('')}</div>`;
         body.querySelectorAll('[data-tv-country]').forEach((tile) => {
             tile.addEventListener('click', () => {
                 this.openBrowseCountry(tile.getAttribute('data-tv-country'), tile.getAttribute('data-tv-country-name') || tile.getAttribute('data-tv-country'));
@@ -556,12 +556,20 @@ export const SidebarTv = {
             if (!this.browseChannels.length) {
                 body.innerHTML = '<p class="tool-msg">No channels in this country.</p>';
             } else if (append) {
-                const grid = body.querySelector('[data-tv-channel-grid]');
-                if (grid && page.length) {
-                    const wrapper = document.createElement('div');
-                    wrapper.innerHTML = page.map((ch) => this.renderChannelTile(ch)).join('');
-                    while (wrapper.firstChild) grid.appendChild(wrapper.firstChild);
-                    this.bindChannelTileActions(grid);
+                const list = body.querySelector('.sidebar-media-list');
+                if (list && page.length) {
+                    page.map((ch) => this.renderChannelTile(ch)).forEach((item) => {
+                        list.appendChild(item);
+                    });
+                    this.bindChannelTileActions(list);
+                    // Re-bind images for newly added items
+                    list.querySelectorAll('.sidebar-media-list-item__logo[src]').forEach((img) => {
+                        const parent = img.closest('.sidebar-media-list-item');
+                        bindFaviconImage(img, () => {
+                            parent?.querySelector('.sidebar-media-list-item__logo--fallback')?.classList.remove('is-hidden');
+                            img.classList.add('is-hidden');
+                        });
+                    });
                 }
                 body.querySelector('[data-tv-load-more]')?.remove();
                 if (this.browseHasMore) {
@@ -574,7 +582,7 @@ export const SidebarTv = {
                     this.bindBrowseCountryControls(body);
                 }
             } else {
-                body.innerHTML = `<div class="sidebar-media-tile-grid sidebar-media-tile-grid--items" data-tv-channel-grid>
+                body.innerHTML = `<div class="sidebar-media-list" data-tv-channel-grid>
                     ${this.browseChannels.map((ch) => this.renderChannelTile(ch)).join('')}
                 </div>${this.browseHasMore ? '<button type="button" class="btn btn--compact sidebar-media__load-more" data-tv-load-more>Load more</button>' : ''}`;
                 this.bindChannelTileActions(body);
@@ -654,14 +662,14 @@ export const SidebarTv = {
             this.listChannels = metaList.map((meta) => byKey.get(meta.key) || this.channelFromMeta(meta)).filter(Boolean);
             if (!this.listChannels.length) body.innerHTML = '<p class="tool-msg tool-msg--error">Channels unavailable.</p>';
             else {
-                body.innerHTML = `<div class="sidebar-media-tile-grid sidebar-media-tile-grid--items">${this.listChannels.map((ch) => this.renderChannelTile(ch)).join('')}</div>`;
+                body.innerHTML = `<div class="sidebar-media-list">${this.listChannels.map((ch) => this.renderChannelTile(ch)).join('')}</div>`;
                 this.bindChannelTileActions(body);
             }
         } catch {
             if (seq !== this.loadSeq) return;
             this.listChannels = fallback;
             body.innerHTML = this.listChannels.length
-                ? `<div class="sidebar-media-tile-grid sidebar-media-tile-grid--items">${this.listChannels.map((ch) => this.renderChannelTile(ch)).join('')}</div>`
+                ? `<div class="sidebar-media-list">${this.listChannels.map((ch) => this.renderChannelTile(ch)).join('')}</div>`
                 : '<p class="tool-msg tool-msg--error">Could not load list.</p>';
             if (this.listChannels.length) this.bindChannelTileActions(body);
         }
@@ -669,32 +677,38 @@ export const SidebarTv = {
     },
 
     renderChannelTile(channel) {
+        // Use compact list view instead of tiles
+        return this.renderChannelListItem(channel);
+    },
+
+    renderChannelListItem(channel) {
         const uuid = channelKey(channel);
         const fav = TvPlayer.isFavorite(channel);
         const playing = channelKey(TvPlayer.channel) === uuid && (TvPlayer.playing || TvPlayer.loading);
         const offline = channel.lastcheckok === 0;
         const logoHtml = channel.logo
-            ? `<img class="tv-tile__logo is-hidden" src="${escapeHtml(channel.logo)}" alt="" width="32" height="32" loading="lazy" decoding="async">`
-            : '<span class="tv-tile__logo tv-tile__logo--fallback" aria-hidden="true">📺</span>';
-        const flag = channel.countrycode ? `<span class="sidebar-media-tile__badge" aria-hidden="true">${countryFlagEmoji(channel.countrycode)}</span>` : '';
+            ? `<img class="sidebar-media-list-item__logo" src="${escapeHtml(channel.logo)}" alt="" width="20" height="20" loading="lazy" decoding="async">`
+            : '<span class="sidebar-media-list-item__logo sidebar-media-list-item__logo--fallback" aria-hidden="true">📺</span>';
+        const flag = channel.countrycode ? `<span class="sidebar-media-list-item__flag">${countryFlagEmoji(channel.countrycode)}</span>` : '';
         const starIcon = fav ? CARD_ICONS.starFilled : CARD_ICONS.star;
-        return `<div class="sidebar-media-tile tv-tile--channel${playing ? ' is-on-desktop' : ''}${offline ? ' sidebar-media-tile--offline' : ''}" data-tv-channel="${escapeHtml(uuid)}" role="button" tabindex="0" title="${escapeHtml(channel.name || '')}">
-            <span class="sidebar-media-tile__art">${logoHtml}</span>
-            <span class="sidebar-media-tile__label u-truncate">${escapeHtml(channel.name || 'Unknown')}</span>
+        return `<div class="sidebar-media-list-item sidebar-media-list-item--channel${playing ? ' is-on-desktop' : ''}" data-tv-channel="${escapeHtml(uuid)}" role="button" tabindex="0" title="${escapeHtml(channel.name || '')}">
+            ${logoHtml}
+            <span class="sidebar-media-list-item__name">${escapeHtml(channel.name || 'Unknown')}</span>
             ${flag}
-            ${offline ? '<span class="sidebar-media-tile__offline">offline</span>' : ''}
-            <button type="button" class="card-act sidebar-media-tile__star${fav ? ' is-active' : ''}" data-tv-star="${escapeHtml(uuid)}" title="${fav ? 'Remove favorite' : 'Add favorite'}" aria-label="${fav ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${fav ? 'true' : 'false'}">${starIcon}</button>
+            ${offline ? '<span class="sidebar-media-list-item__offline">off</span>' : ''}
+            <button type="button" class="sidebar-media-list-item__star${fav ? ' is-active' : ''}" data-tv-star="${escapeHtml(uuid)}" title="${fav ? 'Remove favorite' : 'Add favorite'}" aria-label="${fav ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${fav ? 'true' : 'false'}">${starIcon}</button>
         </div>`;
     },
 
     bindChannelTileActions(container) {
         if (!container) return;
-        container.querySelectorAll('.tv-tile__logo[src]').forEach((img) => {
+        // Handle image loading for list items
+        container.querySelectorAll('.sidebar-media-list-item__logo[src]').forEach((img) => {
+            const parent = img.closest('.sidebar-media-list-item');
             bindFaviconImage(img, () => {
-                const empty = document.createElement('span');
-                empty.className = 'tv-tile__logo tv-tile__logo--empty';
-                empty.setAttribute('aria-hidden', 'true');
-                img.replaceWith(empty);
+                // When image fails, show the fallback emoji
+                parent?.querySelector('.sidebar-media-list-item__logo--fallback')?.classList.remove('is-hidden');
+                img.classList.add('is-hidden');
             });
         });
         container.querySelectorAll('[data-tv-star]').forEach((btn) => {

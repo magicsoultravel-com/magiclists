@@ -193,10 +193,10 @@ export const SidebarRadio = {
         const artImg = this.root.querySelector('[data-radio-art]');
         const compactArtImg = this.root.querySelector('[data-radio-compact-art]');
         bindFaviconImage(artImg, () => {
-            this.root.querySelector('[data-radio-art-fallback]')?.classList.add('is-hidden');
+            this.root.querySelector('[data-radio-art-fallback]')?.classList.remove('is-hidden');
         });
         bindFaviconImage(compactArtImg, () => {
-            this.root.querySelector('[data-radio-compact-art-fallback]')?.classList.add('is-hidden');
+            this.root.querySelector('[data-radio-compact-art-fallback]')?.classList.remove('is-hidden');
         });
     },
 
@@ -461,11 +461,7 @@ export const SidebarRadio = {
             return;
         }
 
-        body.innerHTML = `
-            <div class="sidebar-media-tile-grid" data-radio-country-grid>
-                ${filtered.map((c) => this.renderCountryTile(c)).join('')}
-            </div>
-        `;
+        body.innerHTML = `<div class="sidebar-media-list">${filtered.map((c) => this.renderCountryList(c)).join('')}</div>`;
 
         body.querySelectorAll('[data-radio-country]').forEach((tile) => {
             tile.addEventListener('click', () => {
@@ -478,17 +474,15 @@ export const SidebarRadio = {
         RadioPopover.reposition();
     },
 
-    renderCountryTile(c) {
+    renderCountryList(c) {
         const code = c.iso_3166_1 || '';
         const flag = countryFlagEmoji(code);
-        const count = c.stationcount ? `${c.stationcount}` : '';
-        return `
-            <button type="button" class="sidebar-media-tile sidebar-media-tile--country" data-radio-country="${escapeHtml(code)}" data-radio-country-name="${escapeHtml(c.name || code)}" title="${escapeHtml(c.name || code)}">
-                <span class="sidebar-media-tile__flag" aria-hidden="true">${flag}</span>
-                <span class="sidebar-media-tile__label u-truncate">${escapeHtml(c.name || code)}</span>
-                ${count ? `<span class="sidebar-media-tile__meta">${escapeHtml(count)}</span>` : ''}
-            </button>
-        `;
+        const count = c.stationcount ? `${c.stationcount} stations` : '';
+        return `<button type="button" class="sidebar-media-list-item sidebar-media-list-item--country" data-radio-country="${escapeHtml(code)}" data-radio-country-name="${escapeHtml(c.name || code)}" title="${escapeHtml(c.name || code)}">
+            <span class="sidebar-media-list-item__flag" aria-hidden="true">${flag}</span>
+            <span class="sidebar-media-list-item__name">${escapeHtml(c.name || code)}</span>
+            ${count ? `<span class="sidebar-media-list-item__meta">${escapeHtml(count)}</span>` : ''}
+        </button>`;
     },
 
     renderSortSelect(options, current, attrName, label) {
@@ -607,14 +601,20 @@ export const SidebarRadio = {
             if (!this.browseStations.length) {
                 body.innerHTML = '<p class="tool-msg">No stations in this country.</p>';
             } else if (append) {
-                const grid = body.querySelector('[data-radio-station-grid]');
-                if (grid && page.length) {
-                    const wrapper = document.createElement('div');
-                    wrapper.innerHTML = page.map((s) => this.renderStationTile(s)).join('');
-                    while (wrapper.firstChild) {
-                        grid.appendChild(wrapper.firstChild);
-                    }
-                    this.bindStationTileActions(grid);
+                const list = body.querySelector('.sidebar-media-list');
+                if (list && page.length) {
+                    page.map((s) => this.renderStationTile(s, { compact: true })).forEach((item) => {
+                        list.appendChild(item);
+                    });
+                    this.bindStationTileActions(list);
+                    // Re-bind images for newly added items
+                    list.querySelectorAll('.sidebar-media-list-item__logo[src]').forEach((img) => {
+                        const parent = img.closest('.sidebar-media-list-item');
+                        bindFaviconImage(img, () => {
+                            parent?.querySelector('.sidebar-media-list-item__logo--fallback')?.classList.remove('is-hidden');
+                            img.classList.add('is-hidden');
+                        });
+                    });
                 }
                 body.querySelector('[data-radio-load-more]')?.remove();
                 if (this.browseHasMore) {
@@ -627,11 +627,10 @@ export const SidebarRadio = {
                     this.bindBrowseCountryControls(body);
                 }
             } else {
-                body.innerHTML = `
-                    <div class="sidebar-media-tile-grid sidebar-media-tile-grid--items" data-radio-station-grid>
-                        ${this.browseStations.map((s) => this.renderStationTile(s)).join('')}
-                    </div>
-                    ${this.browseHasMore ? '<button type="button" class="btn btn--compact sidebar-media__load-more" data-radio-load-more>Load more</button>' : ''}
+                body.innerHTML = `<div class="sidebar-media-list" data-radio-station-grid>
+                    ${this.browseStations.map((s) => this.renderStationTile(s, { compact: true })).join('')}
+                </div>
+                ${this.browseHasMore ? '<button type="button" class="btn btn--compact sidebar-media__load-more" data-radio-load-more>Load more</button>' : ''}
                 `;
                 this.bindStationTileActions(body);
                 this.bindBrowseCountryControls(body);
@@ -734,7 +733,7 @@ export const SidebarRadio = {
             if (!this.listStations.length) {
                 body.innerHTML = '<p class="tool-msg tool-msg--error">Stations unavailable.</p>';
             } else {
-                body.innerHTML = `<div class="sidebar-media-tile-grid sidebar-media-tile-grid--items">${this.listStations.map((s) => this.renderStationTile(s)).join('')}</div>`;
+                body.innerHTML = `<div class="sidebar-media-list">${this.listStations.map((s) => this.renderStationTile(s, { compact: true })).join('')}</div>`;
                 this.bindStationTileActions(body);
             }
         } catch {
@@ -743,7 +742,7 @@ export const SidebarRadio = {
             if (!this.listStations.length) {
                 body.innerHTML = '<p class="tool-msg tool-msg--error">Could not load list.</p>';
             } else {
-                body.innerHTML = `<div class="sidebar-media-tile-grid sidebar-media-tile-grid--items">${this.listStations.map((s) => this.renderStationTile(s)).join('')}</div>`;
+                body.innerHTML = `<div class="sidebar-media-list">${this.listStations.map((s) => this.renderStationTile(s, { compact: true })).join('')}</div>`;
                 this.bindStationTileActions(body);
             }
         }
@@ -758,13 +757,25 @@ export const SidebarRadio = {
         const offline = station.lastcheckok === 0;
         const starIcon = fav ? CARD_ICONS.starFilled : CARD_ICONS.star;
         const favicon = station.favicon
-            ? `<img class="radio-tile__favicon is-hidden" src="${escapeHtml(station.favicon)}" alt="" width="32" height="32" loading="lazy" decoding="async">`
-            : '<span class="radio-tile__favicon radio-tile__favicon--fallback" aria-hidden="true">♪</span>';
+            ? `<img class="sidebar-media-list-item__logo" src="${escapeHtml(station.favicon)}" alt="" width="20" height="20" loading="lazy" decoding="async">`
+            : '<span class="sidebar-media-list-item__logo sidebar-media-list-item__logo--fallback" aria-hidden="true">♪</span>';
         const flag = station.countrycode
-            ? `<span class="sidebar-media-tile__badge" aria-hidden="true">${countryFlagEmoji(station.countrycode)}</span>`
+            ? `<span class="sidebar-media-list-item__flag">${countryFlagEmoji(station.countrycode)}</span>`
             : '';
-        const offlineBadge = offline ? '<span class="sidebar-media-tile__offline">offline</span>' : '';
+        const offlineBadge = offline ? '<span class="sidebar-media-list-item__offline">off</span>' : '';
 
+        // Compact list view
+        if (compact) {
+            return `<div class="sidebar-media-list-item sidebar-media-list-item--channel${playing ? ' is-on-desktop' : ''}" data-radio-station="${escapeHtml(uuid)}" role="button" tabindex="0" title="${escapeHtml(station.name || '')}">
+                ${favicon}
+                <span class="sidebar-media-list-item__name">${escapeHtml(station.name || 'Unknown')}</span>
+                ${flag}
+                ${offlineBadge}
+                <button type="button" class="sidebar-media-list-item__star${fav ? ' is-active' : ''}" data-radio-star="${escapeHtml(uuid)}" title="${fav ? 'Remove favorite' : 'Add favorite'}" aria-label="${fav ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${fav ? 'true' : 'false'}">${starIcon}</button>
+            </div>`;
+        }
+
+        // Tile view (legacy)
         return `
             <div class="sidebar-media-tile radio-tile--station${playing ? ' is-on-desktop' : ''}${offline ? ' sidebar-media-tile--offline' : ''}${compact ? ' sidebar-media-tile--compact' : ''}" data-radio-station="${escapeHtml(uuid)}" role="button" tabindex="0" title="${escapeHtml(station.name || '')}">
                 <span class="sidebar-media-tile__art">${favicon}</span>
@@ -779,12 +790,13 @@ export const SidebarRadio = {
     bindStationTileActions(container) {
         if (!container) return;
 
-        container.querySelectorAll('.radio-tile__favicon[src]').forEach((img) => {
+        // Handle image loading for list items
+        container.querySelectorAll('.sidebar-media-list-item__logo[src]').forEach((img) => {
+            const parent = img.closest('.sidebar-media-list-item');
             bindFaviconImage(img, () => {
-                const empty = document.createElement('span');
-                empty.className = 'radio-tile__favicon radio-tile__favicon--empty';
-                empty.setAttribute('aria-hidden', 'true');
-                img.replaceWith(empty);
+                // When image fails, show the fallback emoji
+                parent?.querySelector('.sidebar-media-list-item__logo--fallback')?.classList.remove('is-hidden');
+                img.classList.add('is-hidden');
             });
         });
 

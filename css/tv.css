@@ -622,8 +622,16 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    max-width: 120px;
+    min-width: 0;
+    flex-shrink: 1;
+    flex: 1 1 auto;
+    max-width: 160px;
     line-height: 1.2;
+}
+
+/* Hide TV station name when sidebar is collapsed */
+.side-panel.is-collapsed .sidebar-tv__compact-name {
+    display: none;
 }
 
 .sidebar-tv__compact-name.is-hidden {
