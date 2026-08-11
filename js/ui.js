@@ -469,9 +469,12 @@ export const UI = {
             this.scheduleBoardCanvasExtents(canvas);
         }
         if (canvas?.classList.contains('view-grid') && !isBoardOverlayEnabled()) {
-            const reflowOpts = { animate: true };
-            if (ctx.actorRect) reflowOpts.actorRect = ctx.actorRect;
-            requestAnimationFrame(() => this.reflowGridBoard(canvas, item.id, reflowOpts));
+            // Only reflow on expand, never on collapse — collapsing must not rearrange neighbors
+            if (!isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(item))) {
+                const reflowOpts = { animate: true };
+                if (ctx.actorRect) reflowOpts.actorRect = ctx.actorRect;
+                requestAnimationFrame(() => this.reflowGridBoard(canvas, item.id, reflowOpts));
+            }
         }
     },
 
@@ -503,7 +506,9 @@ export const UI = {
 
         if (this.isSpatiallyCollapsed(card)) {
             removeFromFileCabinetOrder(item.id);
-            const rect = this.resolveBoardExpandPlacement(card, item);
+            // Use resolveBoardExpandRect to keep the current position and restore remembered size,
+            // instead of resolveBoardExpandPlacement which placed the card at the viewport center.
+            const rect = this.resolveBoardExpandRect(card, item);
             this.applySpatialToggleRect(card, item, rect, { ...ctx, actorRect: rect });
             this.raiseDesktopCard(card);
             requestAnimationFrame(() => {

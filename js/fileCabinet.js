@@ -1272,8 +1272,8 @@ export function saveFiledCabinetLayout(itemId, rect, sortBy) {
     const layout = JSON.parse(localStorage.getItem('matrix_grid_layout') || '{}');
     const prev = layout[itemId] || {};
     layout[itemId] = { ...prev, ...entry };
-    delete layout[itemId].rememberedW;
-    delete layout[itemId].rememberedH;
+    // Preserve rememberedW/H so that expand-from-cabinet can restore the old size.
+    // These were written by fileItemToCabinet's persistRememberedSpatialSize call.
     localStorage.setItem('matrix_grid_layout', JSON.stringify(layout));
 }
 
