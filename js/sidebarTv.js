@@ -3,6 +3,7 @@ import { TvProviderRegistry } from './tvProviders/registry.js';
 import { channelKey, parseChannelKey } from './tvProviders/channelShape.js';
 import { TvPlayer } from './tvPlayer.js';
 import { TvPopover } from './tvPopover.js';
+import { TvPip } from './tvPip.js';
 import { escapeHtml, countryFlagEmoji, debounce, syncMarquee, bindFaviconImage } from './tvUtils.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { renderSidebarModuleHeaderHtml } from './sidebarModules.js';
@@ -35,6 +36,7 @@ export const SidebarTv = {
         if (!this.root) return;
 
         TvPlayer.init();
+        TvPip.init();
         this.renderShell();
         this.bindShellListeners();
 
@@ -133,6 +135,7 @@ export const SidebarTv = {
                         <span data-tv-play-icon></span>
                     </button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-tv-open="browse" title="Browse channels" aria-label="Browse channels" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.tvBrowse}</button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action is-hidden" data-tv-pip title="Pop out" aria-label="Pop out" aria-pressed="false">${ACTION_ICONS.pictureInPicture}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-tv__action--heart is-hidden" data-tv-favorite title="Add favorite" aria-label="Add favorite" aria-pressed="false">${CARD_ICONS.heart}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-tv-open="special" title="TV settings" aria-label="TV settings" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioSpecial}</button>
                 </div>
@@ -149,6 +152,7 @@ export const SidebarTv = {
             if (!channelKey(TvPlayer.channel)) return;
             this.tryToggleFavorite(TvPlayer.channel);
         });
+        TvPip.registerButton(this.root.querySelector('[data-tv-pip]'));
         this.root.querySelectorAll('[data-tv-channel-context]').forEach((el) => {
             el.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -881,6 +885,11 @@ export const SidebarTv = {
                 favBtn.setAttribute('title', label);
                 favBtn.setAttribute('aria-label', label);
             }
+        }
+
+        const pipBtn = this.root?.querySelector('[data-tv-pip]');
+        if (pipBtn) {
+            pipBtn.classList.toggle('is-hidden', !TvPip.supported() || !channelKey(state.channel));
         }
 
         transport?.classList.toggle('sidebar-media__now-playing--active', !!(state.channel || state.playing || state.loading));

@@ -199,6 +199,21 @@
     pointer-events: none;
 }
 
+.tv-video-controls__actions {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.3rem;
+}
+
+.tv-video-controls__actions .tv-controls-btn.is-active {
+    background: color-mix(in srgb, var(--accent) 42%, rgba(0, 0, 0, 0.6));
+    border-color: color-mix(in srgb, var(--accent) 80%, rgba(255, 255, 255, 0.2));
+}
+
+.sidebar-tv [data-tv-pip].is-active {
+    color: var(--accent);
+}
+
 .tv-video-controls__center {
     display: flex;
     justify-content: center;

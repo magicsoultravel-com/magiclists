@@ -1,6 +1,7 @@
 import { positionPanelBelowElement, clampPanelToViewport, raiseUndockedAttachStack } from './popoverPosition.js';
 import { TvPlayer } from './tvPlayer.js';
-import { CARD_ICONS } from './icons.js';
+import { TvPip } from './tvPip.js';
+import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 
 const MIN_BROWSER_W = 320;
 const MIN_BROWSER_H = 280;
@@ -52,7 +53,9 @@ export const TvPopover = {
                                     <span class="tv-stats-tooltip__value" data-tv-stat-buffer>-</span>
                                 </div>
                             </div>
-                            <div class="tv-video-controls__settings">
+                            <div class="tv-video-controls__actions">
+                                <button type="button" class="tv-controls-btn" data-tv-pip-btn title="Pop out" aria-label="Pop out" aria-pressed="false">${ACTION_ICONS.pictureInPicture}</button>
+                                <div class="tv-video-controls__settings">
                                 <button type="button" class="tv-controls-btn" data-tv-settings-btn title="Stream settings" aria-label="Stream settings" aria-expanded="false">
                                     <svg viewBox="0 0 12 12" width="14" height="14" focusable="false"><circle cx="6" cy="6" r="2.2" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.5V2.2M6 9.8v-1.3M3.5 6H2.2M9.8 6H8.5M4.2 4.2 3.2 3.2M8.8 8.8l-1-1M7.8 4.2l1-1M4.2 7.8l-1 1" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linecap="round"/></svg>
                                 </button>
@@ -69,6 +72,7 @@ export const TvPopover = {
                                         <span class="tv-settings-popover__label">More settings coming soon</span>
                                     </div>
                                 </div>
+                            </div>
                             </div>
                         </div>
                         <div class="tv-video-controls__center">
@@ -152,6 +156,8 @@ export const TvPopover = {
         const controls = panel.querySelector('[data-tv-video-controls]');
         const slot = panel.querySelector('[data-tv-video-slot]');
         if (!controls || !slot) return;
+
+        TvPip.registerButton(panel.querySelector('[data-tv-pip-btn]'));
 
         panel.querySelector('[data-tv-play-pause-btn]')?.addEventListener('click', (e) => {
             e.stopPropagation();

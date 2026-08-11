@@ -958,6 +958,10 @@ export const TvPlayer = {
 
     // Close everything and cleanup
     async stop() {
+        // If the video is floating in a Picture-in-Picture window, bring it back first.
+        if (document.pictureInPictureElement && typeof document.exitPictureInPicture === 'function') {
+            try { await document.exitPictureInPicture(); } catch { /* ignore */ }
+        }
         if (this.statsRefreshInterval) {
             clearInterval(this.statsRefreshInterval);
             this.statsRefreshInterval = null;

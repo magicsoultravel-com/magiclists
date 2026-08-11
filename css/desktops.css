@@ -65,18 +65,24 @@
     background: color-mix(in srgb, var(--bg-primary) 70%, transparent);
     backdrop-filter: blur(14px);
     border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+    /* outline removed */
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     transform: translateY(0);
     opacity: 0;
     pointer-events: none;
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
 }
 
 .desktop-dock-drawer.is-open {
     opacity: 1;
     pointer-events: auto;
     transform: translateY(-8px);
+}
+
+/* Show pin button on hover of drawer (only visible on hover) */
+.desktop-dock-drawer:hover .desktop-dock-pin {
+    opacity: 1;
 }
 
 .desktop-dock-btn {
@@ -203,8 +209,11 @@
    DESKTOP DOCK PIN - Lock the drawer open
    ========================================================================== */
 
-/* Pin button — matches .card-act / .card-act--pin aesthetic */
+/* Pin button — hidden by default, shows on hover only (no orange styling) */
 .desktop-dock-pin {
+    position: absolute;
+    top: 4px;
+    right: 4px;
     width: 16px;
     height: 16px;
     padding: 0;
@@ -218,6 +227,14 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Show pin button on hover of drawer - make it fully interactive */
+.desktop-dock-drawer:hover .desktop-dock-pin {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .desktop-dock-pin svg {
@@ -229,10 +246,9 @@
     background: rgba(255, 255, 255, 0.06);
 }
 
-/* Pinned state — amber, matches .card-act--pin.is-active */
+/* Pinned state — uses accent color instead of orange, hidden until hover */
 .desktop-dock-pin.is-active {
-    color: #fbbf24;
-    opacity: 1;
+    color: var(--accent);
 }
 
 /* Reduce motion support */
