@@ -314,7 +314,7 @@
     top: 0;
     left: 0;
     height: 100%;
-    background: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.45);
     border-radius: 2px;
     transition: width 0.3s ease;
     pointer-events: none;
@@ -332,6 +332,7 @@
     box-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
     transition: left 0.15s ease, opacity 0.2s ease;
     z-index: 2;
+    opacity: 0.85;
 }
 
 .tv-controls-bar__seek-thumb.is-hidden {

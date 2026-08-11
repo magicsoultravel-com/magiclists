@@ -55,6 +55,7 @@ export const TvPopover = {
                             </div>
                             <div class="tv-video-controls__actions">
                                 <button type="button" class="tv-controls-btn" data-tv-pip-btn title="Pop out" aria-label="Pop out" aria-pressed="false">${ACTION_ICONS.pictureInPicture}</button>
+                                <button type="button" class="tv-controls-btn" data-tv-fav-btn title="Add favorite" aria-label="Add favorite" aria-pressed="false">${CARD_ICONS.star}</button>
                                 <div class="tv-video-controls__settings">
                                 <button type="button" class="tv-controls-btn" data-tv-settings-btn title="Stream settings" aria-label="Stream settings" aria-expanded="false">
                                     <svg viewBox="0 0 12 12" width="14" height="14" focusable="false"><circle cx="6" cy="6" r="2.2" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.5V2.2M6 9.8v-1.3M3.5 6H2.2M9.8 6H8.5M4.2 4.2 3.2 3.2M8.8 8.8l-1-1M7.8 4.2l1-1M4.2 7.8l-1 1" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linecap="round"/></svg>
@@ -158,6 +159,11 @@ export const TvPopover = {
         if (!controls || !slot) return;
 
         TvPip.registerButton(panel.querySelector('[data-tv-pip-btn]'));
+
+        panel.querySelector('[data-tv-fav-btn]')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            TvPlayer.toggleFavorite(TvPlayer.channel);
+        });
 
         panel.querySelector('[data-tv-play-pause-btn]')?.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -305,7 +311,7 @@ export const TvPopover = {
                 bufferFill.style.width = `${bufferPct}%`;
             }
             if (seekThumb) {
-                const thumbLeft = seekInfo.isLive ? seekInfo.progress : ((seekInfo.current / (seekInfo.bufferedEnd || 1)) * 100);
+                const thumbLeft = seekInfo.progress || 0;
                 seekThumb.style.left = `${Math.min(100, Math.max(0, thumbLeft))}%`;
                 seekThumb.classList.toggle('is-hidden', seekInfo.isLive && (seekInfo.behindLive === null || seekInfo.behindLive <= 1));
             }
@@ -321,6 +327,16 @@ export const TvPopover = {
                     seekInfoEl.textContent = `${fmt(cur)} / ${fmt(dur)}`;
                 }
             }
+        }
+
+        const favBtn = panel.querySelector('[data-tv-fav-btn]');
+        if (favBtn) {
+            const isFav = TvPlayer.channel ? TvPlayer.isFavorite(TvPlayer.channel) : false;
+            favBtn.innerHTML = isFav ? CARD_ICONS.starFilled : CARD_ICONS.star;
+            favBtn.setAttribute('aria-pressed', isFav ? 'true' : 'false');
+            favBtn.setAttribute('title', isFav ? 'Remove favorite' : 'Add favorite');
+            favBtn.setAttribute('aria-label', isFav ? 'Remove favorite' : 'Add favorite');
+            favBtn.classList.toggle('is-active', isFav);
         }
 
         const qualityBadge = panel.querySelector('[data-tv-quality-badge]');

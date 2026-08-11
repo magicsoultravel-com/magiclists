@@ -218,6 +218,14 @@ export const TvPlayer = {
                 this.updatePauseBuffer();
             }
         });
+        // Keep monitoring the buffer while paused so it fills to the user's
+        // configured buffer size (progress fires when buffered ranges grow).
+        this.video.addEventListener('progress', () => {
+            if (this.pausePhase !== 'idle') {
+                this.updatePauseBuffer();
+                this.emitState();
+            }
+        });
         this.video.addEventListener('pause', () => {
             this.playing = false;
             if (this.pausePhase !== 'idle') {
@@ -513,8 +521,9 @@ export const TvPlayer = {
         const current = video.currentTime || 0;
         const bufferedStart = video.buffered.start(0);
         const bufferedEnd = video.buffered.end(video.buffered.length - 1);
-        const seekableStart = Math.max(current, bufferedStart);
-        const seekableEnd = isLive ? bufferedEnd : bufferedEnd;
+        // Allow seeking anywhere within the buffered range (both backward and forward)
+        const seekableStart = bufferedStart;
+        const seekableEnd = bufferedEnd;
         const seekableDuration = Math.max(0, seekableEnd - seekableStart);
         const progress = seekableDuration > 0 ? ((current - seekableStart) / seekableDuration) * 100 : 0;
         let behindLive = null;
@@ -539,8 +548,8 @@ export const TvPlayer = {
         const current = video.currentTime || 0;
         const bufferedStart = video.buffered.start(0);
         const bufferedEnd = video.buffered.end(video.buffered.length - 1);
-        const seekableStart = Math.max(current, bufferedStart);
-        const seekableEnd = isLive ? bufferedEnd : bufferedEnd;
+        const seekableStart = bufferedStart;
+        const seekableEnd = bufferedEnd;
         const target = Math.min(seekableEnd, Math.max(seekableStart, time));
         if (target !== video.currentTime) {
             video.currentTime = target;
@@ -556,6 +565,11 @@ export const TvPlayer = {
                 this.pausePhase = 'ready';
             } else {
                 this.pausePhase = 'buffering';
+                // Keep the HLS load loop active so the buffer fills up to the
+                // user-configured target while paused.
+                if (this.hls) {
+                    this.hls.startLoad();
+                }
             }
             this.emitState();
         }

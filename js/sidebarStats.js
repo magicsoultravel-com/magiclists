@@ -58,19 +58,13 @@ export const SidebarStats = {
 
 async function getIndexedDBStats() {
     try {
-        const dbPromise = IndexedDBStore.openDb();
-        if (!dbPromise) {
-            return { sizeBytes: 0, entryCount: 0, breakdown: [] };
-        }
-        const db = await dbPromise;
-        const allKeys = await db.getAllKeys();
-        const entries = await Promise.all(allKeys.map(async (key) => {
-            const value = await db.get(key);
+        const records = await IndexedDBStore.getAll();
+        const entries = records.map(({ key, value }) => {
             const valueStr = typeof value === 'string' ? value : JSON.stringify(value);
             const keyBytes = new TextEncoder().encode(key).length;
             const valueBytes = new TextEncoder().encode(valueStr).length;
             return { key, sizeBytes: keyBytes + valueBytes };
-        }));
+        });
         entries.sort((a, b) => b.sizeBytes - a.sizeBytes);
         const sizeBytes = entries.reduce((sum, e) => sum + e.sizeBytes, 0);
         const breakdown = entries.slice(0, 5).map(e => `${e.key}: ${formatStorageSize(e.sizeBytes)}`);

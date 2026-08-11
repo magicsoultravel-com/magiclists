@@ -66,6 +66,11 @@ function clearMemory() {
     if (memoryFallback) memoryFallback.clear();
 }
 
+function getAllFromMemory() {
+    if (!memoryFallback) return [];
+    return Array.from(memoryFallback, ([key, value]) => ({ key, value }));
+}
+
 /**
  * Get a value from IndexedDB (or in-memory fallback).
  *
@@ -169,6 +174,27 @@ async function remove(key) {
 }
 
 /**
+ * Get all entries from IndexedDB (or in-memory fallback).
+ *
+ * @returns {Promise<Array<{key: string, value: any}>>} All stored records,
+ *   or an empty array if no fallback is available.
+ */
+async function getAll() {
+    const db = await openDb();
+    if (!db) {
+        return getAllFromMemory();
+    }
+
+    return new Promise((resolve) => {
+        const tx = db.transaction(STORE_NAME, 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => resolve(getAllFromMemory());
+    });
+}
+
+/**
  * Clear all entries from IndexedDB (or in-memory fallback).
  *
  * @returns {Promise<void>}
@@ -197,5 +223,6 @@ export const IndexedDBStore = {
     set,
     remove,
     clear,
+    getAll,
     openDb
 };
