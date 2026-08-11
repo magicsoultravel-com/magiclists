@@ -98,6 +98,7 @@ export const SidebarTv = {
                         <img class="sidebar-media__compact-art-img is-hidden" data-tv-compact-art alt="">
                         <span class="sidebar-media__compact-art-fallback" data-tv-compact-art-fallback aria-hidden="true">📺</span>
                     </button>
+                    <span class="sidebar-tv__compact-name" data-tv-compact-name></span>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-tv-play aria-label="Play or pause">
                         <span data-tv-play-icon></span>
                     </button>
@@ -298,9 +299,14 @@ export const SidebarTv = {
                     <span>Hide offline channels</span>
                 </label>
                 <label class="tv-special-form__row">
-                    <span class="tv-special-form__label">Buffer size</span>
-                    <input type="range" class="form-input tv-special-form__buffer" data-tv-buffer min="5" max="120" value="15" aria-label="Buffer size (seconds)">
+                    <span class="tv-special-form__label">Rewind buffer</span>
+                    <input type="range" class="form-input tv-special-form__buffer" data-tv-buffer min="5" max="120" value="15" aria-label="Rewind buffer (seconds)">
                     <span class="tv-special-form__buffer-value" data-tv-buffer-value>15s</span>
+                </label>
+                <label class="tv-special-form__row">
+                    <span class="tv-special-form__label">Buffer ahead</span>
+                    <input type="range" class="form-input tv-special-form__buffer" data-tv-live-offset min="1" max="30" value="3" aria-label="Buffer ahead (seconds)">
+                    <span class="tv-special-form__buffer-value" data-tv-live-offset-value>3s</span>
                 </label>
                 <label class="tv-special-form__row">
                     <span class="tv-special-form__label">Quality preference</span>
@@ -338,7 +344,7 @@ export const SidebarTv = {
             }
         });
 
-        // Buffer size control
+        // Rewind buffer control
         const bufferSliderEl = body.querySelector('[data-tv-buffer]');
         const bufferValueEl = body.querySelector('[data-tv-buffer-value]');
         if (bufferSliderEl && bufferValueEl) {
@@ -352,6 +358,22 @@ export const SidebarTv = {
             bufferSliderEl.addEventListener('input', (e) => syncBuffer(e.target.value));
             bufferSliderEl.value = TvPlayer.getBufferSize() || 15;
             syncBuffer(bufferSliderEl.value);
+        }
+
+        // Buffer ahead (live offset) control
+        const liveOffsetSliderEl = body.querySelector('[data-tv-live-offset]');
+        const liveOffsetValueEl = body.querySelector('[data-tv-live-offset-value]');
+        if (liveOffsetSliderEl && liveOffsetValueEl) {
+            const syncLiveOffset = (val) => {
+                liveOffsetValueEl.textContent = `${val}s`;
+                TvPlayer.setLiveOffset(parseInt(val));
+                if (TvPopover.mode === 'special' && TvPopover.panel) {
+                    TvPopover.reposition();
+                }
+            };
+            liveOffsetSliderEl.addEventListener('input', (e) => syncLiveOffset(e.target.value));
+            liveOffsetSliderEl.value = TvPlayer.getLiveOffset() || 3;
+            syncLiveOffset(liveOffsetSliderEl.value);
         }
 
         // Quality preference control
@@ -774,6 +796,16 @@ export const SidebarTv = {
         else if (state.channel?.name) titleText = state.channel.name;
 
         if (marqueeEl) syncMarquee(marqueeEl, titleText, { error: isError || !!state.resumeBlocked });
+
+        const compactNameEl = this.root?.querySelector('[data-tv-compact-name]');
+        if (compactNameEl) {
+            if (state.channel?.name && !state.resumeBlocked && !state.error) {
+                compactNameEl.textContent = state.channel.name;
+                compactNameEl.classList.remove('is-hidden');
+            } else {
+                compactNameEl.classList.add('is-hidden');
+            }
+        }
 
         const code = state.channel?.countrycode;
         if (localeBtn && flagEl && countryNameEl) {

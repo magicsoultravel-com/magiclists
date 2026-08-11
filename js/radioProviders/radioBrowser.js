@@ -38,10 +38,13 @@ export const RadioBrowserProvider = {
     },
 
     async getStationsByIds(ids, opts = {}) {
-        const results = await Promise.all(
+        const results = await Promise.allSettled(
             ids.map((id) => this.getStationById(id, opts))
         );
-        return results.filter(Boolean);
+        return results
+            .filter((r) => r.status === 'fulfilled')
+            .map((r) => r.value)
+            .filter(Boolean);
     },
 
     reportClick(stationId) {

@@ -79,10 +79,12 @@ export const TvPopover = {
                         <div class="tv-video-controls__bottom">
                             <div class="tv-controls-bar" data-tv-controls-bar>
                                 <div class="tv-controls-bar__buffer" data-tv-buffer-fill></div>
+                                <div class="tv-controls-bar__seek-thumb" data-tv-seek-thumb></div>
                                 <div class="tv-controls-bar__live"></div>
                             </div>
                             <div class="tv-controls-info">
                                 <span data-tv-latency-info>Live</span>
+                                <span class="tv-seek-info" data-tv-seek-info></span>
                                 <div class="tv-volume-cluster" data-tv-volume-cluster>
                                     <button type="button" class="tv-controls-btn tv-volume-btn" data-tv-mute-btn title="Mute or unmute" aria-label="Mute or unmute" aria-pressed="false">
                                         <svg data-tv-mute-icon viewBox="0 0 12 12" width="12" height="12" focusable="false"></svg>
@@ -213,6 +215,45 @@ export const TvPopover = {
             TvPlayer.setQualityLevel(parseInt(opt.getAttribute('data-quality-index'), 10));
             this.renderQualityOptions();
         });
+
+        this.bindSeekControls(panel);
+    },
+
+    bindSeekControls(panel) {
+        const bar = panel.querySelector('[data-tv-controls-bar]');
+        if (!bar) return;
+
+        const getTargetTime = (clientX) => {
+            const rect = bar.getBoundingClientRect();
+            const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+            const seekInfo = TvPlayer.getSeekInfo();
+            const seekableStart = seekInfo.bufferedStart;
+            const seekableEnd = seekInfo.bufferedEnd;
+            const seekableDuration = Math.max(0, seekableEnd - seekableStart);
+            return seekableDuration > 0 ? seekableStart + ratio * seekableDuration : seekInfo.current;
+        };
+
+        const onPointerDown = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            bar.setPointerCapture(e.pointerId);
+            const target = getTargetTime(e.clientX);
+            TvPlayer.seekTo(target);
+            const onMove = (ev) => {
+                const t = getTargetTime(ev.clientX);
+                TvPlayer.seekTo(t);
+            };
+            const onUp = () => {
+                bar.removeEventListener('pointermove', onMove);
+                bar.removeEventListener('pointerup', onUp);
+                bar.removeEventListener('pointercancel', onUp);
+            };
+            bar.addEventListener('pointermove', onMove);
+            bar.addEventListener('pointerup', onUp);
+            bar.addEventListener('pointercancel', onUp);
+        };
+
+        bar.addEventListener('pointerdown', onPointerDown);
     },
 
     renderQualityOptions() {
@@ -249,8 +290,31 @@ export const TvPopover = {
         }
 
         const bufferFill = panel.querySelector('[data-tv-buffer-fill]');
-        if (bufferFill) {
-            bufferFill.style.width = `${TvPlayer.getBufferPercentage()}%`;
+        const seekThumb = panel.querySelector('[data-tv-seek-thumb]');
+        const seekInfoEl = panel.querySelector('[data-tv-seek-info]');
+        if (bufferFill || seekThumb) {
+            const seekInfo = state.stats.seekInfo || TvPlayer.getSeekInfo();
+            const bufferPct = TvPlayer.getBufferPercentage();
+            if (bufferFill) {
+                bufferFill.style.width = `${bufferPct}%`;
+            }
+            if (seekThumb) {
+                const thumbLeft = seekInfo.isLive ? seekInfo.progress : ((seekInfo.current / (seekInfo.bufferedEnd || 1)) * 100);
+                seekThumb.style.left = `${Math.min(100, Math.max(0, thumbLeft))}%`;
+                seekThumb.classList.toggle('is-hidden', seekInfo.isLive && (seekInfo.behindLive === null || seekInfo.behindLive <= 1));
+            }
+            if (seekInfoEl) {
+                if (seekInfo.isLive) {
+                    const behind = seekInfo.behindLive !== null ? Math.round(seekInfo.behindLive) : '?';
+                    const rewind = Math.round(seekInfo.bufferedEnd - seekInfo.current);
+                    seekInfoEl.textContent = `${behind}s behind • ${rewind}s rewindable`;
+                } else {
+                    const cur = Math.floor(seekInfo.current);
+                    const dur = Math.floor(seekInfo.bufferedEnd || seekInfo.current);
+                    const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+                    seekInfoEl.textContent = `${fmt(cur)} / ${fmt(dur)}`;
+                }
+            }
         }
 
         const qualityBadge = panel.querySelector('[data-tv-quality-badge]');
@@ -312,11 +376,15 @@ export const TvPopover = {
             qualityEl.textContent = stats.qualityLevel || 'Auto';
         }
 
-        if (bandwidthEl && stats.bandwidth > 0) {
-            const mbps = (stats.bandwidth / 1000000).toFixed(1);
-            bandwidthEl.textContent = `${mbps} Mbps`;
-        } else if (bandwidthEl) {
-            bandwidthEl.textContent = 'N/A';
+        if (bandwidthEl) {
+            if (stats.bandwidth > 0) {
+                const mbps = (stats.bandwidth / 1000000).toFixed(1);
+                bandwidthEl.textContent = `${mbps} Mbps`;
+            } else if (stats.connection === 'connecting' || stats.loadPhase === 'buffering') {
+                bandwidthEl.textContent = 'estimating…';
+            } else {
+                bandwidthEl.textContent = '—';
+            }
         }
 
         if (bufferEl) {

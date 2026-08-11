@@ -44,6 +44,14 @@ function loadState() {
     try {
         const raw = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
 
+        // Clean up transient properties that may have been saved by older app versions
+        delete raw.miniPlayerDocked;
+        delete raw.miniPlayerX;
+        delete raw.miniPlayerY;
+        delete raw.panelDocked;
+        delete raw.panelX;
+        delete raw.panelY;
+
         const favorites = Array.isArray(raw.favorites)
             ? raw.favorites.map(migrateFavoriteRef)
             : [];

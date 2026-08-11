@@ -708,7 +708,13 @@ export const SidebarRadio = {
 
         const metaList = kind === 'recents'
             ? RadioPlayer.getRecentsMeta()
-            : keys.map((key) => ({ key, name: '', favicon: '', countrycode: '' }));
+            : keys.map((key) => {
+                const cached = this.listStations.find((s) => stationKey(s) === key)
+                    || this.browseStations.find((s) => stationKey(s) === key);
+                return cached
+                    ? { key, name: cached.name || '', favicon: cached.favicon || '', countrycode: cached.countrycode || '' }
+                    : { key, name: '', favicon: '', countrycode: '' };
+            });
 
         const fallbackStations = metaList
             .map((meta) => this.stationFromMeta(meta))

@@ -245,7 +245,7 @@ export const RadioBrowserApi = {
 
         const data = await apiFetch(`/stations/byuuid/${encodeURIComponent(uuid)}`, { skipCache: refresh || forPlay });
         const station = Array.isArray(data) ? data[0] : data;
-        if (station && !forPlay) {
+        if (station) {
             await writeCachedBucket('stations', uuid, station, TTL.stations);
         }
         return station || null;

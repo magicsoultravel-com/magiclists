@@ -16,6 +16,9 @@ const DEFAULT_COUNTRY_SORT = 'count';
 const DEFAULT_BUFFER_SIZE = 15; // seconds - default for stable playback
 const MAX_BUFFER_SIZE = 120;
 const MIN_BUFFER_SIZE = 5; // Allow users to reduce to 5 for faster channel switching
+const DEFAULT_LIVE_OFFSET = 3;
+const MAX_LIVE_OFFSET = 30;
+const MIN_LIVE_OFFSET = 1;
 
 function migrateRecentsMeta(raw) {
     if (Array.isArray(raw.recentsMeta) && raw.recentsMeta.length) {
@@ -70,7 +73,8 @@ function loadState() {
             browserFloating: raw.browserFloating === true,
             browseSort: raw.browseSort || DEFAULT_BROWSE_SORT,
             countrySort: raw.countrySort || DEFAULT_COUNTRY_SORT,
-            bufferSize: Number.isFinite(raw.bufferSize) ? Math.min(MAX_BUFFER_SIZE, Math.max(MIN_BUFFER_SIZE, raw.bufferSize)) : DEFAULT_BUFFER_SIZE
+            bufferSize: Number.isFinite(raw.bufferSize) ? Math.min(MAX_BUFFER_SIZE, Math.max(MIN_BUFFER_SIZE, raw.bufferSize)) : DEFAULT_BUFFER_SIZE,
+            liveOffset: Number.isFinite(raw.liveOffset) ? Math.min(MAX_LIVE_OFFSET, Math.max(MIN_LIVE_OFFSET, raw.liveOffset)) : DEFAULT_LIVE_OFFSET
         };
     } catch {
         return {
@@ -89,7 +93,8 @@ function loadState() {
             browserFloating: false,
             browseSort: DEFAULT_BROWSE_SORT,
             countrySort: DEFAULT_COUNTRY_SORT,
-            bufferSize: DEFAULT_BUFFER_SIZE
+            bufferSize: DEFAULT_BUFFER_SIZE,
+            liveOffset: DEFAULT_LIVE_OFFSET
         };
     }
 }
@@ -129,16 +134,22 @@ export const TvPlayer = {
 
     // Buffer management
     bufferSize: loadState().bufferSize || DEFAULT_BUFFER_SIZE,
+    liveOffset: loadState().liveOffset || DEFAULT_LIVE_OFFSET,
 
     // Stream statistics
     connection: 'idle',
     bandwidth: 0,
     qualityLevel: 0,
-    qualityLabel: 'unknown',
+    qualityLabel: 'Auto',
     errorCount: 0,
     retryCount: 0,
     maxRetries: 3,
     statsRefreshInterval: null,
+    toggling: false,
+
+    // Pause / seek state
+    pausePhase: 'idle', // 'idle' | 'pausing' | 'buffering' | 'ready'
+    seekInfo: null,
 
     // Quality adaptation
     currentMaxBitrate: null,
@@ -186,6 +197,7 @@ export const TvPlayer = {
             this.playing = true;
             this.loading = false;
             this.loadPhase = 'idle';
+            this.pausePhase = 'idle';
             this.error = null;
             this.resumeBlocked = false;
             saveState({ wasPlaying: true });
@@ -196,18 +208,32 @@ export const TvPlayer = {
             }
             this.emitState();
         });
+        this.video.addEventListener('timeupdate', () => {
+            if (this.pausePhase !== 'idle') {
+                this.updatePauseBuffer();
+            }
+        });
         this.video.addEventListener('pause', () => {
             this.playing = false;
+            if (this.pausePhase !== 'idle') {
+                this.updatePauseBuffer();
+            }
             this.emitState();
         });
         this.video.addEventListener('waiting', () => {
             this.loading = true;
             this.loadPhase = 'buffering';
+            if (this.pausePhase !== 'idle') {
+                this.pausePhase = 'buffering';
+            }
             this.emitState();
         });
         this.video.addEventListener('stalled', () => {
             if (this.playing || this.loading) {
                 this.loadPhase = 'buffering';
+                if (this.pausePhase !== 'idle') {
+                    this.pausePhase = 'buffering';
+                }
                 this.emitState();
             }
         });
@@ -259,12 +285,14 @@ export const TvPlayer = {
             playing: this.playing,
             loading: this.loading,
             loadPhase: this.loadPhase,
+            pausePhase: this.pausePhase,
             error: this.error,
             resumeBlocked: this.resumeBlocked,
             volume: this.volume,
             favorites: this.getFavorites(),
             recents: this.getRecents(),
-            recentsMeta: this.getRecentsMeta()
+            recentsMeta: this.getRecentsMeta(),
+            seekInfo: this.getSeekInfo()
         });
     },
 
@@ -445,9 +473,83 @@ export const TvPlayer = {
         };
     },
 
+    getLiveOffset() {
+        return loadState().liveOffset || DEFAULT_LIVE_OFFSET;
+    },
+
+    setLiveOffset(offset) {
+        const clamped = Math.min(MAX_LIVE_OFFSET, Math.max(MIN_LIVE_OFFSET, offset));
+        saveState({ liveOffset: clamped });
+        this.liveOffset = clamped;
+        if (this.hls) {
+            this.hls.config.liveSyncDurationCount = clamped;
+            this.hls.startLoad();
+        }
+        this.emitState();
+        return clamped;
+    },
+
+    getSeekInfo() {
+        const video = this.video;
+        if (!video || !video.buffered || video.buffered.length === 0) {
+            return { current: 0, bufferedStart: 0, bufferedEnd: 0, isLive: !Number.isFinite(video?.duration), progress: 0, behindLive: null };
+        }
+        const duration = video.duration;
+        const isLive = !Number.isFinite(duration);
+        const current = video.currentTime || 0;
+        const bufferedStart = video.buffered.start(0);
+        const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+        const seekableStart = Math.max(current, bufferedStart);
+        const seekableEnd = isLive ? bufferedEnd : bufferedEnd;
+        const seekableDuration = Math.max(0, seekableEnd - seekableStart);
+        const progress = seekableDuration > 0 ? ((current - seekableStart) / seekableDuration) * 100 : 0;
+        let behindLive = null;
+        if (isLive && this.hls && typeof this.hls.latency === 'number') {
+            behindLive = this.hls.latency;
+        }
+        return {
+            current,
+            bufferedStart: seekableStart,
+            bufferedEnd: seekableEnd,
+            isLive,
+            progress: Math.min(100, Math.max(0, progress)),
+            behindLive
+        };
+    },
+
+    seekTo(time) {
+        const video = this.video;
+        if (!video || !video.buffered || video.buffered.length === 0) return;
+        const duration = video.duration;
+        const isLive = !Number.isFinite(duration);
+        const current = video.currentTime || 0;
+        const bufferedStart = video.buffered.start(0);
+        const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+        const seekableStart = Math.max(current, bufferedStart);
+        const seekableEnd = isLive ? bufferedEnd : bufferedEnd;
+        const target = Math.min(seekableEnd, Math.max(seekableStart, time));
+        if (target !== video.currentTime) {
+            video.currentTime = target;
+            this.emitState();
+        }
+    },
+
+    updatePauseBuffer() {
+        if (this.pausePhase === 'idle' || this.pausePhase === 'pausing') {
+            const info = this.getBufferInfo();
+            const target = this.bufferSize || DEFAULT_BUFFER_SIZE;
+            if (info.buffered >= target * 0.9) {
+                this.pausePhase = 'ready';
+            } else {
+                this.pausePhase = 'buffering';
+            }
+            this.emitState();
+        }
+    },
+
     getStats() {
         const bandwidth = this.getBandwidth();
-        let qualityLevel = this.qualityLabel || 'unknown';
+        let qualityLevel = this.qualityLabel || 'Auto';
         // Derive the active level live when HLS has parsed levels.
         if (this.hls && Array.isArray(this.hls.levels)) {
             const idx = this.hls.currentLevel;
@@ -465,7 +567,9 @@ export const TvPlayer = {
             bufferSize: this.bufferSize || DEFAULT_BUFFER_SIZE,
             liveLatency: this.getLiveLatency(),
             volume: this.volume,
-            muted: this.muted
+            muted: this.muted,
+            seekInfo: this.getSeekInfo(),
+            pausePhase: this.pausePhase
         };
     },
 
@@ -545,7 +649,7 @@ export const TvPlayer = {
                     abrController: Hls.AbrController,
                     capLevelToPlayerImpl: true,
                     // Live stream specific settings
-                    liveSyncDurationCount: 3, // Number of segments to sync to live edge
+                    liveSyncDurationCount: this.getLiveOffset(), // Segments to sync to live edge
                     liveMaxLatencyDurationCount: 10 // Max latency for live streams
                 });
                 this.hls.on(Hls.Events.MANIFEST_PARSED, () => {
@@ -554,6 +658,12 @@ export const TvPlayer = {
                     this.qualityLabel = 'auto';
                     this.emitState();
                     resolve();
+                });
+                this.hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+                    if (data.level !== undefined && this.hls.levels && this.hls.levels[data.level]) {
+                        this.qualityLabel = `${this.hls.levels[data.level].height}p`;
+                    }
+                    this.emitState();
                 });
                 this.hls.on(Hls.Events.ERROR, (_, data) => {
                     if (data.fatal) {
@@ -588,32 +698,43 @@ export const TvPlayer = {
     },
 
     async toggle() {
-        if (this.playing) {
-            this.pause();
-            return;
-        }
-        this.resumeBlocked = false;
-        if (this.channel?.url_resolved && (this.video?.src || this.hls)) {
-            try {
-                await this.video.play();
-            } catch {
-                this.error = 'Playback blocked';
-                this.resumeBlocked = true;
-                saveState({ wasPlaying: false });
-                this.emitState();
+        if (this.toggling) return;
+        this.toggling = true;
+        try {
+            if (this.playing) {
+                this.pause();
+                return;
             }
-            return;
-        }
-        if (this.channel) {
-            await this.playChannel(this.channel);
+            this.resumeBlocked = false;
+            if (this.channel?.url_resolved && (this.video?.src || this.hls)) {
+                try {
+                    await this.video.play();
+                } catch {
+                    this.error = 'Playback blocked';
+                    this.resumeBlocked = true;
+                    saveState({ wasPlaying: false });
+                    this.emitState();
+                }
+                return;
+            }
+            if (this.channel) {
+                await this.playChannel(this.channel);
+            }
+        } finally {
+            this.toggling = false;
         }
     },
 
     pause() {
         this.video?.pause();
         this.playing = false;
+        this.pausePhase = 'pausing';
         saveState({ wasPlaying: false });
+        if (this.hls) {
+            this.hls.startLoad();
+        }
         this.emitState();
+        this.updatePauseBuffer();
     },
 
     stop() {
