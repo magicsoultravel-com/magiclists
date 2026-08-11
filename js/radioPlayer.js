@@ -8,6 +8,7 @@ import {
 import {
     RADIO_RECENTS_CAP,
     DEFAULT_BROWSE_SORT,
+    DEFAULT_BROWSE_SORT_DIR,
     DEFAULT_COUNTRY_SORT,
     loadRadioState,
     patchRadioState
@@ -146,6 +147,15 @@ export const RadioPlayer = {
 
     saveBrowseSort(sort) {
         saveState({ browseSort: sort || DEFAULT_BROWSE_SORT });
+    },
+
+    getBrowseSortDir() {
+        const dir = loadState().browseSortDir;
+        return dir === 'asc' || dir === 'desc' ? dir : DEFAULT_BROWSE_SORT_DIR;
+    },
+
+    saveBrowseSortDir(dir) {
+        saveState({ browseSortDir: dir === 'asc' ? 'asc' : 'desc' });
     },
 
     getCountrySort() {
@@ -290,17 +300,21 @@ export const RadioPlayer = {
 
     async playStation(stationOrKey) {
         this.init();
+        const requestedKey = typeof stationOrKey === 'string'
+            ? migrateFavoriteRef(stationOrKey)
+            : stationKey(stationOrKey);
+
         let station = typeof stationOrKey === 'object' && stationOrKey !== null
             ? stationOrKey
             : null;
 
-        if (!station && typeof stationOrKey === 'string') {
-            const parsed = parseStationKey(stationOrKey);
+        if (!station && requestedKey) {
+            const parsed = parseStationKey(requestedKey);
             station = await RadioProviderRegistry.getStation(parsed, { forPlay: true });
         }
 
-        const key = stationKey(station);
-        if (!key || !station) {
+        let key = migrateFavoriteRef(stationKey(station) || requestedKey);
+        if (!key) {
             this.loading = false;
             this.loadPhase = 'idle';
             this.error = 'Invalid station';
@@ -308,21 +322,34 @@ export const RadioPlayer = {
             return;
         }
 
+        // Reuse in-memory station when it matches and already has a stream URL
+        if ((!station || !station.url_resolved)
+            && stationKey(this.station) === key
+            && this.station?.url_resolved) {
+            station = this.station;
+        }
+
         // Fetch station data if URL is missing or station is incomplete
-        if (!station.url_resolved) {
+        if (!station?.url_resolved) {
             const parsed = parseStationKey(key);
             const fetched = await RadioProviderRegistry.getStation(parsed, { forPlay: true });
             if (!fetched || !fetched.url_resolved || fetched.lastcheckok === 0) {
-                this.loading = false;
-                this.loadPhase = 'idle';
-                this.error = fetched ? 'Stream unavailable' : 'Could not load station';
-                if (fetched && fetched.lastcheckok === 0) {
-                    this.error = 'Station offline';
+                // Last resort: currently playing same key with a URL
+                if (stationKey(this.station) === key && this.station?.url_resolved) {
+                    station = this.station;
+                } else {
+                    this.loading = false;
+                    this.loadPhase = 'idle';
+                    this.error = fetched ? 'Stream unavailable' : 'Could not load station';
+                    if (fetched && fetched.lastcheckok === 0) {
+                        this.error = 'Station offline';
+                    }
+                    this.emitState();
+                    return;
                 }
-                this.emitState();
-                return;
+            } else {
+                station = fetched;
             }
-            station = fetched;
         } else if (station.lastcheckok === 0) {
             this.loading = false;
             this.loadPhase = 'idle';
@@ -333,9 +360,10 @@ export const RadioPlayer = {
 
         // Normalize and set station BEFORE emitState so UI shows correct station
         this.station = normalizeStation(station, station.providerId) || station;
+        key = stationKey(this.station) || key;
         saveState({
             lastStationKey: key,
-            lastStationName: station.name || ''
+            lastStationName: this.station.name || ''
         });
 
         this.recentRecordedForKey = null;
@@ -346,11 +374,11 @@ export const RadioPlayer = {
         this.emitState();
 
         try {
-            const provider = RadioProviderRegistry.getProvider(station.providerId);
-            provider.reportClick?.(station.stationId);
+            const provider = RadioProviderRegistry.getProvider(this.station.providerId);
+            provider.reportClick?.(this.station.stationId);
 
-            if (this.audio.src !== station.url_resolved) {
-                this.audio.src = station.url_resolved;
+            if (this.audio.src !== this.station.url_resolved) {
+                this.audio.src = this.station.url_resolved;
                 this.audio.load();
             }
             await this.audio.play();

@@ -12,6 +12,7 @@ const RECENTS_CAP = 20;
 const DEFAULT_BROWSER_W = 360;
 const DEFAULT_BROWSER_H = 420;
 const DEFAULT_BROWSE_SORT = 'name';
+const DEFAULT_BROWSE_SORT_DIR = 'asc';
 const DEFAULT_COUNTRY_SORT = 'count';
 const DEFAULT_BUFFER_SIZE = 15; // seconds - default for stable playback
 const MAX_BUFFER_SIZE = 120;
@@ -72,6 +73,9 @@ function loadState() {
             browserY: Number.isFinite(raw.browserY) ? raw.browserY : null,
             browserFloating: raw.browserFloating === true,
             browseSort: raw.browseSort || DEFAULT_BROWSE_SORT,
+            browseSortDir: raw.browseSortDir === 'asc' || raw.browseSortDir === 'desc'
+                ? raw.browseSortDir
+                : DEFAULT_BROWSE_SORT_DIR,
             countrySort: raw.countrySort || DEFAULT_COUNTRY_SORT,
             bufferSize: Number.isFinite(raw.bufferSize) ? Math.min(MAX_BUFFER_SIZE, Math.max(MIN_BUFFER_SIZE, raw.bufferSize)) : DEFAULT_BUFFER_SIZE,
             liveOffset: Number.isFinite(raw.liveOffset) ? Math.min(MAX_LIVE_OFFSET, Math.max(MIN_LIVE_OFFSET, raw.liveOffset)) : DEFAULT_LIVE_OFFSET
@@ -92,6 +96,7 @@ function loadState() {
             browserY: null,
             browserFloating: false,
             browseSort: DEFAULT_BROWSE_SORT,
+            browseSortDir: DEFAULT_BROWSE_SORT_DIR,
             countrySort: DEFAULT_COUNTRY_SORT,
             bufferSize: DEFAULT_BUFFER_SIZE,
             liveOffset: DEFAULT_LIVE_OFFSET
@@ -318,6 +323,15 @@ export const TvPlayer = {
 
     saveBrowseSort(sort) {
         saveState({ browseSort: sort || DEFAULT_BROWSE_SORT });
+    },
+
+    getBrowseSortDir() {
+        const dir = loadState().browseSortDir;
+        return dir === 'asc' || dir === 'desc' ? dir : DEFAULT_BROWSE_SORT_DIR;
+    },
+
+    saveBrowseSortDir(dir) {
+        saveState({ browseSortDir: dir === 'desc' ? 'desc' : 'asc' });
     },
 
     getCountrySort() {

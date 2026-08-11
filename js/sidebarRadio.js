@@ -9,10 +9,14 @@ import { renderSidebarModuleHeaderHtml } from './sidebarModules.js';
 
 const BROWSE_PAGE_SIZE = 60;
 const BROWSE_SORT_OPTIONS = [
-    { value: 'clickcount', label: 'Popular' },
     { value: 'name', label: 'Name' },
+    { value: 'clickcount', label: 'Popular' },
     { value: 'votes', label: 'Votes' },
     { value: 'bitrate', label: 'Bitrate' }
+];
+const BROWSE_SORT_DIR_OPTIONS = [
+    { value: 'asc', label: 'Ascending' },
+    { value: 'desc', label: 'Descending' }
 ];
 
 const COUNTRY_SORT_OPTIONS = [
@@ -29,6 +33,8 @@ export const SidebarRadio = {
     browseStations: [],
     browseOffset: 0,
     browseHasMore: false,
+    browseLoading: false,
+    browseScrollObserver: null,
     listStations: [],
     activeTab: 'browse',
     loadSeq: 0,
@@ -517,6 +523,7 @@ export const SidebarRadio = {
         return `
             <div class="sidebar-media-popover__toolbar-row sidebar-media-popover__toolbar-row--end">
                 ${this.renderSortSelect(BROWSE_SORT_OPTIONS, RadioPlayer.getBrowseSort(), 'data-radio-sort', 'Sort stations')}
+                ${this.renderSortSelect(BROWSE_SORT_DIR_OPTIONS, RadioPlayer.getBrowseSortDir(), 'data-radio-sort-dir', 'Sort direction')}
             </div>
         `;
     },
@@ -542,18 +549,80 @@ export const SidebarRadio = {
             if (!window.confirm(msg)) return false;
         }
 
-        RadioPlayer.toggleFavorite(station || parseStationKey(key));
-        if (RadioPopover.mode && !RadioPopover.panel?.classList.contains('is-hidden')) {
-            this.refreshOpenPanel();
-        }
+        const isFav = RadioPlayer.toggleFavorite(station || parseStationKey(key));
+        this.updateFavoriteStars(key, isFav);
         this.updateTransport();
         return true;
+    },
+
+    updateFavoriteStars(key, isFav) {
+        if (!key) return;
+        const body = RadioPopover.getBodyEl();
+        if (!body || RadioPopover.panel?.classList.contains('is-hidden')) return;
+
+        const starIcon = isFav ? CARD_ICONS.starFilled : CARD_ICONS.star;
+        const label = isFav ? 'Remove favorite' : 'Add favorite';
+        body.querySelectorAll(`[data-radio-star="${CSS.escape(key)}"]`).forEach((btn) => {
+            btn.classList.toggle('is-active', isFav);
+            btn.setAttribute('aria-pressed', isFav ? 'true' : 'false');
+            btn.setAttribute('aria-label', label);
+            btn.title = label;
+            btn.innerHTML = starIcon;
+        });
+
+        // On Favorites tab, drop the row when unfavorited instead of re-rendering the panel
+        if (!isFav && RadioPopover.activeTab === 'favorites') {
+            body.querySelector(`[data-radio-station="${CSS.escape(key)}"]`)?.remove();
+            if (!body.querySelector('[data-radio-station]')) {
+                body.innerHTML = '<p class="tool-msg">Heart stations while listening.</p>';
+                RadioPopover.setToolbarHtml('');
+            }
+        }
+    },
+
+    disconnectBrowseScroll() {
+        if (this.browseScrollObserver) {
+            this.browseScrollObserver.disconnect();
+            this.browseScrollObserver = null;
+        }
+    },
+
+    setupBrowseScroll(body) {
+        this.disconnectBrowseScroll();
+        const sentinel = body?.querySelector('[data-radio-scroll-sentinel]');
+        if (!sentinel || !body) return;
+
+        this.browseScrollObserver = new IntersectionObserver((entries) => {
+            const hit = entries.some((e) => e.isIntersecting);
+            if (!hit) return;
+            this.maybeLoadMoreBrowse();
+        }, {
+            root: body,
+            rootMargin: '120px',
+            threshold: 0
+        });
+        this.browseScrollObserver.observe(sentinel);
+        this.maybeLoadMoreBrowse();
+    },
+
+    maybeLoadMoreBrowse() {
+        if (!this.browseHasMore || this.browseLoading) return;
+        if (this.browseView !== 'country') return;
+        const body = RadioPopover.getBodyEl();
+        const sentinel = body?.querySelector('[data-radio-scroll-sentinel]');
+        if (!sentinel || !body) return;
+        const sRect = sentinel.getBoundingClientRect();
+        const rRect = body.getBoundingClientRect();
+        if (sRect.top > rRect.bottom + 120) return;
+        this.browseOffset += BROWSE_PAGE_SIZE;
+        this.renderBrowseCountry(true);
     },
 
     async openBrowseCountry(code, name) {
         this.browseView = 'country';
         this.browseCountry = { code, name };
         this.browseOffset = 0;
+        this.disconnectBrowseScroll();
         await this.renderBrowseCountry();
     },
 
@@ -561,30 +630,41 @@ export const SidebarRadio = {
         const { code, name } = this.browseCountry || {};
         RadioPopover.setTitle(name || 'Stations');
         RadioPopover.setBackVisible(true, () => {
+            this.disconnectBrowseScroll();
             this.browseView = 'countries';
             this.browseCountry = null;
             this.browseOffset = 0;
             this.browseStations = [];
             this.renderBrowseCountries();
         });
-        RadioPopover.setToolbarHtml(this.renderBrowseSortToolbar());
+
+        // Only rebuild toolbar on full refresh — append must not wipe sort listeners
+        if (!append) {
+            RadioPopover.setToolbarHtml(this.renderBrowseSortToolbar());
+            this.bindBrowseCountryControls();
+        }
 
         const body = RadioPopover.getBodyEl();
         if (!body) return;
 
         if (!append) {
             body.innerHTML = '<p class="tool-msg">Loading…</p>';
+        } else {
+            const sentinel = body.querySelector('[data-radio-scroll-sentinel]');
+            if (sentinel) sentinel.textContent = 'Loading…';
         }
 
         const sort = RadioPlayer.getBrowseSort();
+        const sortDir = RadioPlayer.getBrowseSortDir();
         const seq = ++this.loadSeq;
+        this.browseLoading = true;
         try {
             const data = await RadioProviderRegistry.searchStations({
                 countrycode: code,
                 limit: BROWSE_PAGE_SIZE,
                 offset: this.browseOffset,
                 order: sort,
-                reverse: sort !== 'name',
+                reverse: sortDir === 'desc',
                 hideOffline: RadioProviderRegistry.getHideOffline()
             });
             if (seq !== this.loadSeq) return;
@@ -599,9 +679,11 @@ export const SidebarRadio = {
             }
 
             if (!this.browseStations.length) {
+                this.disconnectBrowseScroll();
                 body.innerHTML = '<p class="tool-msg">No stations in this country.</p>';
             } else if (append) {
                 const list = body.querySelector('.sidebar-media-list');
+                const sentinel = body.querySelector('[data-radio-scroll-sentinel]');
                 if (list && page.length) {
                     list.insertAdjacentHTML(
                         'beforeend',
@@ -609,44 +691,61 @@ export const SidebarRadio = {
                     );
                     this.bindStationTileActions(list);
                 }
-                body.querySelector('[data-radio-load-more]')?.remove();
-                if (this.browseHasMore) {
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'btn btn--compact sidebar-media__load-more';
-                    btn.setAttribute('data-radio-load-more', '');
-                    btn.textContent = 'Load more';
-                    body.appendChild(btn);
-                    this.bindBrowseCountryControls(body);
+                if (sentinel) {
+                    if (this.browseHasMore) {
+                        sentinel.textContent = '';
+                        sentinel.classList.remove('is-hidden');
+                    } else {
+                        sentinel.remove();
+                        this.disconnectBrowseScroll();
+                    }
                 }
             } else {
                 body.innerHTML = `<div class="sidebar-media-list" data-radio-station-grid>
                     ${this.browseStations.map((s) => this.renderStationTile(s)).join('')}
                 </div>
-                ${this.browseHasMore ? '<button type="button" class="btn btn--compact sidebar-media__load-more" data-radio-load-more>Load more</button>' : ''}
+                ${this.browseHasMore ? '<div class="sidebar-media-scroll-sentinel" data-radio-scroll-sentinel aria-hidden="true"></div>' : ''}
                 `;
                 this.bindStationTileActions(body);
-                this.bindBrowseCountryControls(body);
+                this.setupBrowseScroll(body);
                 this.scrollToHighlightedStation(body);
             }
         } catch {
             if (seq !== this.loadSeq) return;
-            body.innerHTML = '<p class="tool-msg tool-msg--error">Could not load stations.</p>';
+            if (!append) {
+                body.innerHTML = '<p class="tool-msg tool-msg--error">Could not load stations.</p>';
+            } else {
+                const sentinel = body.querySelector('[data-radio-scroll-sentinel]');
+                if (sentinel) sentinel.textContent = 'Could not load more';
+            }
+        } finally {
+            if (seq === this.loadSeq) {
+                this.browseLoading = false;
+                if (this.browseHasMore) {
+                    requestAnimationFrame(() => this.maybeLoadMoreBrowse());
+                }
+            }
         }
         RadioPopover.reposition();
     },
 
-    bindBrowseCountryControls(body) {
-        RadioPopover.getToolbarEl()?.querySelector('[data-radio-sort]')?.addEventListener('change', (e) => {
+    bindBrowseCountryControls() {
+        const toolbar = RadioPopover.getToolbarEl();
+        if (!toolbar) return;
+
+        toolbar.querySelector('[data-radio-sort]')?.addEventListener('change', (e) => {
             RadioPlayer.saveBrowseSort(e.target.value);
             this.browseOffset = 0;
             this.browseStations = [];
-            this.renderBrowseCountry();
+            this.disconnectBrowseScroll();
+            this.renderBrowseCountry(false);
         });
-
-        body.querySelector('[data-radio-load-more]')?.addEventListener('click', () => {
-            this.browseOffset += BROWSE_PAGE_SIZE;
-            this.renderBrowseCountry(true);
+        toolbar.querySelector('[data-radio-sort-dir]')?.addEventListener('change', (e) => {
+            RadioPlayer.saveBrowseSortDir(e.target.value);
+            this.browseOffset = 0;
+            this.browseStations = [];
+            this.disconnectBrowseScroll();
+            this.renderBrowseCountry(false);
         });
     },
 
@@ -792,9 +891,7 @@ export const SidebarRadio = {
         container.querySelectorAll('[data-radio-station]').forEach((tile) => {
             const activate = () => {
                 const uuid = tile.getAttribute('data-radio-station');
-                const station = this.findStation(uuid);
-                if (station) RadioPlayer.playStation(station);
-                else if (uuid) RadioPlayer.playStation(uuid);
+                if (uuid) RadioPlayer.playStation(uuid);
             };
             tile.addEventListener('click', (e) => {
                 if (e.target.closest('[data-radio-star]')) return;

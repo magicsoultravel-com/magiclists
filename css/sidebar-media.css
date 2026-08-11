@@ -333,13 +333,6 @@
     opacity: 1;
 }
 
-.sidebar-media__load-more {
-    display: block;
-    width: 100%;
-    margin-top: 0.35rem;
-    font-size: 0.58rem;
-}
-
 .sidebar-media-popover__header {
     display: flex;
     align-items: center;
@@ -606,9 +599,18 @@
 
 /* Compact list view for TV/Radio browser - replaces tiles */
 .sidebar-media-list {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 0.15rem;
+}
+
+.sidebar-media-scroll-sentinel {
+    grid-column: 1 / -1;
+    min-height: 1.5rem;
+    padding: 0.35rem;
+    text-align: center;
+    font-size: 0.62rem;
+    color: var(--text-muted);
 }
 
 .sidebar-media-list-item {

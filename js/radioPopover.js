@@ -237,17 +237,11 @@ export const RadioPopover = {
 
     attachListeners() {
         this.detachListeners();
-        this.outsideHandler = (e) => {
-            if (this.panel?.contains(e.target)) return;
-            if (this.attachEl?.contains(e.target)) return;
-            if (this.iconAnchor?.contains(e.target)) return;
-            this.close();
-        };
+        // Intentionally no outside-click dismiss — close via X (or Escape)
         this.keyHandler = (e) => {
             if (e.key === 'Escape') this.close();
         };
         requestAnimationFrame(() => {
-            document.addEventListener('mousedown', this.outsideHandler, true);
             document.addEventListener('keydown', this.keyHandler);
         });
     },

@@ -11,6 +11,10 @@ import { showAppToast } from './toast.js';
 
 const BROWSE_PAGE_SIZE = 60;
 const BROWSE_SORT_OPTIONS = [{ value: 'name', label: 'Name' }];
+const BROWSE_SORT_DIR_OPTIONS = [
+    { value: 'asc', label: 'Ascending' },
+    { value: 'desc', label: 'Descending' }
+];
 const COUNTRY_SORT_OPTIONS = [
     { value: 'count', label: 'Most channels' },
     { value: 'name', label: 'Name' }
@@ -25,6 +29,8 @@ export const SidebarTv = {
     browseChannels: [],
     browseOffset: 0,
     browseHasMore: false,
+    browseLoading: false,
+    browseScrollObserver: null,
     listChannels: [],
     activeTab: 'browse',
     loadSeq: 0,
@@ -509,12 +515,14 @@ export const SidebarTv = {
         this.browseView = 'country';
         this.browseCountry = { code, name };
         this.browseOffset = 0;
+        this.disconnectBrowseScroll();
         await this.renderBrowseCountry();
     },
 
     renderBrowseSortToolbar() {
         return `<div class="sidebar-media-popover__toolbar-row sidebar-media-popover__toolbar-row--end">
             ${this.renderSortSelect(BROWSE_SORT_OPTIONS, TvPlayer.getBrowseSort(), 'data-tv-sort', 'Sort channels')}
+            ${this.renderSortSelect(BROWSE_SORT_DIR_OPTIONS, TvPlayer.getBrowseSortDir(), 'data-tv-sort-dir', 'Sort direction')}
         </div>`;
     },
 
@@ -524,29 +532,81 @@ export const SidebarTv = {
         </div>`;
     },
 
+    disconnectBrowseScroll() {
+        if (this.browseScrollObserver) {
+            this.browseScrollObserver.disconnect();
+            this.browseScrollObserver = null;
+        }
+    },
+
+    setupBrowseScroll(body) {
+        this.disconnectBrowseScroll();
+        const sentinel = body?.querySelector('[data-tv-scroll-sentinel]');
+        if (!sentinel || !body) return;
+
+        this.browseScrollObserver = new IntersectionObserver((entries) => {
+            const hit = entries.some((e) => e.isIntersecting);
+            if (!hit) return;
+            this.maybeLoadMoreBrowse();
+        }, {
+            root: body,
+            rootMargin: '120px',
+            threshold: 0
+        });
+        this.browseScrollObserver.observe(sentinel);
+        this.maybeLoadMoreBrowse();
+    },
+
+    maybeLoadMoreBrowse() {
+        if (!this.browseHasMore || this.browseLoading) return;
+        if (this.browseView !== 'country') return;
+        const body = TvPopover.getBodyEl();
+        const sentinel = body?.querySelector('[data-tv-scroll-sentinel]');
+        if (!sentinel || !body) return;
+        const sRect = sentinel.getBoundingClientRect();
+        const rRect = body.getBoundingClientRect();
+        if (sRect.top > rRect.bottom + 120) return;
+        this.browseOffset += BROWSE_PAGE_SIZE;
+        this.renderBrowseCountry(true);
+    },
+
     async renderBrowseCountry(append = false) {
         const { code, name } = this.browseCountry || {};
         TvPopover.setTitle(name || 'Channels');
         TvPopover.setBackVisible(true, () => {
+            this.disconnectBrowseScroll();
             this.browseView = 'countries';
             this.browseCountry = null;
             this.browseOffset = 0;
             this.browseChannels = [];
             this.renderBrowseCountries();
         });
-        TvPopover.setToolbarHtml(this.renderBrowseSortToolbar());
+
+        // Only rebuild toolbar on full refresh — append must not wipe sort listeners
+        if (!append) {
+            TvPopover.setToolbarHtml(this.renderBrowseSortToolbar());
+            this.bindBrowseCountryControls();
+        }
+
         const body = TvPopover.getBodyEl();
         if (!body) return;
-        if (!append) body.innerHTML = '<p class="tool-msg">Loading…</p>';
+        if (!append) {
+            body.innerHTML = '<p class="tool-msg">Loading…</p>';
+        } else {
+            const sentinel = body.querySelector('[data-tv-scroll-sentinel]');
+            if (sentinel) sentinel.textContent = 'Loading…';
+        }
         const sort = TvPlayer.getBrowseSort();
+        const sortDir = TvPlayer.getBrowseSortDir();
         const seq = ++this.loadSeq;
+        this.browseLoading = true;
         try {
             const data = await TvProviderRegistry.searchChannels({
                 countrycode: code,
                 limit: BROWSE_PAGE_SIZE,
                 offset: this.browseOffset,
                 order: sort,
-                reverse: false,
+                reverse: sortDir === 'desc',
                 hideOffline: TvProviderRegistry.getHideOffline()
             });
             if (seq !== this.loadSeq) return;
@@ -554,9 +614,11 @@ export const SidebarTv = {
             this.browseHasMore = page.length >= BROWSE_PAGE_SIZE;
             this.browseChannels = append ? [...this.browseChannels, ...page] : page;
             if (!this.browseChannels.length) {
+                this.disconnectBrowseScroll();
                 body.innerHTML = '<p class="tool-msg">No channels in this country.</p>';
             } else if (append) {
                 const list = body.querySelector('.sidebar-media-list');
+                const sentinel = body.querySelector('[data-tv-scroll-sentinel]');
                 if (list && page.length) {
                     list.insertAdjacentHTML(
                         'beforeend',
@@ -564,41 +626,60 @@ export const SidebarTv = {
                     );
                     this.bindChannelTileActions(list);
                 }
-                body.querySelector('[data-tv-load-more]')?.remove();
-                if (this.browseHasMore) {
-                    const btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.className = 'btn btn--compact sidebar-media__load-more';
-                    btn.setAttribute('data-tv-load-more', '');
-                    btn.textContent = 'Load more';
-                    body.appendChild(btn);
-                    this.bindBrowseCountryControls(body);
+                if (sentinel) {
+                    if (this.browseHasMore) {
+                        sentinel.textContent = '';
+                        sentinel.classList.remove('is-hidden');
+                    } else {
+                        sentinel.remove();
+                        this.disconnectBrowseScroll();
+                    }
                 }
             } else {
                 body.innerHTML = `<div class="sidebar-media-list" data-tv-channel-grid>
                     ${this.browseChannels.map((ch) => this.renderChannelTile(ch)).join('')}
-                </div>${this.browseHasMore ? '<button type="button" class="btn btn--compact sidebar-media__load-more" data-tv-load-more>Load more</button>' : ''}`;
+                </div>
+                ${this.browseHasMore ? '<div class="sidebar-media-scroll-sentinel" data-tv-scroll-sentinel aria-hidden="true"></div>' : ''}`;
                 this.bindChannelTileActions(body);
-                this.bindBrowseCountryControls(body);
+                this.setupBrowseScroll(body);
                 this.scrollToHighlightedChannel(body);
             }
         } catch {
             if (seq !== this.loadSeq) return;
-            body.innerHTML = '<p class="tool-msg tool-msg--error">Could not load channels.</p>';
+            if (!append) {
+                body.innerHTML = '<p class="tool-msg tool-msg--error">Could not load channels.</p>';
+            } else {
+                const sentinel = body.querySelector('[data-tv-scroll-sentinel]');
+                if (sentinel) sentinel.textContent = 'Could not load more';
+            }
+        } finally {
+            if (seq === this.loadSeq) {
+                this.browseLoading = false;
+                if (this.browseHasMore) {
+                    requestAnimationFrame(() => this.maybeLoadMoreBrowse());
+                }
+            }
         }
         TvPopover.reposition();
     },
 
-    bindBrowseCountryControls(body) {
-        TvPopover.getToolbarEl()?.querySelector('[data-tv-sort]')?.addEventListener('change', (e) => {
+    bindBrowseCountryControls() {
+        const toolbar = TvPopover.getToolbarEl();
+        if (!toolbar) return;
+
+        toolbar.querySelector('[data-tv-sort]')?.addEventListener('change', (e) => {
             TvPlayer.saveBrowseSort(e.target.value);
             this.browseOffset = 0;
             this.browseChannels = [];
-            this.renderBrowseCountry();
+            this.disconnectBrowseScroll();
+            this.renderBrowseCountry(false);
         });
-        body.querySelector('[data-tv-load-more]')?.addEventListener('click', () => {
-            this.browseOffset += BROWSE_PAGE_SIZE;
-            this.renderBrowseCountry(true);
+        toolbar.querySelector('[data-tv-sort-dir]')?.addEventListener('change', (e) => {
+            TvPlayer.saveBrowseSortDir(e.target.value);
+            this.browseOffset = 0;
+            this.browseChannels = [];
+            this.disconnectBrowseScroll();
+            this.renderBrowseCountry(false);
         });
     },
 
@@ -748,10 +829,36 @@ export const SidebarTv = {
             const name = ch?.name || '';
             if (!window.confirm(name ? `Remove "${name}" from favorites?` : 'Remove from favorites?')) return false;
         }
-        TvPlayer.toggleFavorite(typeof channelOrKey === 'object' ? channelOrKey : parseChannelKey(key));
-        if (TvPopover.mode && !TvPopover.panel?.classList.contains('is-hidden')) this.refreshOpenPanel();
+        const isFav = TvPlayer.toggleFavorite(
+            typeof channelOrKey === 'object' ? channelOrKey : parseChannelKey(key)
+        );
+        this.updateFavoriteStars(key, isFav);
         this.updateTransport();
         return true;
+    },
+
+    updateFavoriteStars(key, isFav) {
+        if (!key) return;
+        const body = TvPopover.getBodyEl();
+        if (!body || TvPopover.panel?.classList.contains('is-hidden')) return;
+
+        const starIcon = isFav ? CARD_ICONS.starFilled : CARD_ICONS.star;
+        const label = isFav ? 'Remove favorite' : 'Add favorite';
+        body.querySelectorAll(`[data-tv-star="${CSS.escape(key)}"]`).forEach((btn) => {
+            btn.classList.toggle('is-active', isFav);
+            btn.setAttribute('aria-pressed', isFav ? 'true' : 'false');
+            btn.setAttribute('aria-label', label);
+            btn.title = label;
+            btn.innerHTML = starIcon;
+        });
+
+        if (!isFav && TvPopover.activeTab === 'favorites') {
+            body.querySelector(`[data-tv-channel="${CSS.escape(key)}"]`)?.remove();
+            if (!body.querySelector('[data-tv-channel]')) {
+                body.innerHTML = '<p class="tool-msg">Heart channels while watching.</p>';
+                TvPopover.setToolbarHtml('');
+            }
+        }
     },
 
     updatePlayingTiles() {
