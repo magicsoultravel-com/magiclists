@@ -754,11 +754,21 @@ export const SidebarTv = {
     },
 
     getPlayIconHtml(state) {
+        // Priority: playing > loading/connecting/buffering > idle
+        if (state.playing) return ACTION_ICONS.radioPause;
         if (state.loading || state.loadPhase === 'connecting' || state.loadPhase === 'buffering') {
             return ACTION_ICONS.radioLoading;
         }
-        if (state.playing) return ACTION_ICONS.radioPause;
         return ACTION_ICONS.radioPlay;
+    },
+
+    // Determine if the avatar/art area should show loading state
+    // The spinner should only show when actively loading/connecting/buffering, not when paused or idle
+    getArtLoadingClass(state) {
+        const isLoading = state.loading || state.loadPhase === 'connecting' || state.loadPhase === 'buffering';
+        // When playing, we should NOT show the loading spinner on the avatar
+        // The spinner is only for actual loading states
+        return isLoading && !state.playing;
     },
 
     updateTransport(detail = null) {
@@ -847,8 +857,8 @@ export const SidebarTv = {
         updateArt(compactArtImg, compactArtFallback);
 
         const isLoading = state.loading || state.loadPhase === 'connecting' || state.loadPhase === 'buffering';
-        artBtn?.classList.toggle('sidebar-media__art--loading', isLoading);
-        this.root?.querySelector('.sidebar-media__compact-art')?.classList.toggle('sidebar-media__art--loading', isLoading);
+        artBtn?.classList.toggle('sidebar-media__art--loading', this.getArtLoadingClass(state));
+        this.root?.querySelector('.sidebar-media__compact-art')?.classList.toggle('sidebar-media__art--loading', this.getArtLoadingClass(state));
 
         const playIconHtml = this.getPlayIconHtml(state);
         this.root?.querySelectorAll('[data-tv-play-icon]').forEach((el) => { el.innerHTML = playIconHtml; });

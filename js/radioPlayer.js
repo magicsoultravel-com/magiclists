@@ -47,6 +47,32 @@ function loadState() {
         // Clean up transient properties that may have been saved by older app versions
         delete raw.miniPlayerDocked;
         delete raw.miniPlayerX;
+// Add event listeners to update station on click
+// Fix: Parse station data from DOM attributes
+const stationId = stationBtn.getAttribute('data-radio-station');
+const stationName = stationBtn.getAttribute('data-radio-name') || 'Unknown Station';
+const stationUrl = stationBtn.getAttribute('data-radio-url') || `https://example.com/stations/${stationId}`;
+
+if (!stationId) {
+  console.error('Missing station ID on button');
+  return;
+}
+
+const station = {
+  id: stationId,
+  name: stationName,
+  url: stationUrl
+};
+
+RadioPlayer.station = station;
+RadioPlayer.emitState();
+document.querySelectorAll('[data-radio-station]').forEach(stationBtn => {
+  stationBtn.addEventListener('click', () => {
+    const station = { /* Add station data from DOM attributes here */ };
+    RadioPlayer.station = station;
+    RadioPlayer.emitState();
+  });
+});
         delete raw.miniPlayerY;
         delete raw.panelDocked;
         delete raw.panelX;
