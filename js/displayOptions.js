@@ -7,9 +7,6 @@ import {
 } from './noteFont.js';
 import { NoteFontScale } from './noteFontScale.js';
 import { DesktopZoom } from './desktopZoom.js';
-import { BoardPlacement } from './boardPlacement.js';
-import { UI } from './ui.js';
-import { isBoardOverlayEnabled } from './boardOverlay.js';
 import { ChromeBackground } from './chromeBackground.js';
 import { DesktopBackground } from './desktopBackground.js';
 import { resetCustomizationToDefaults } from './customizationReset.js';
@@ -117,7 +114,6 @@ function isCustomized(options) {
         || isAppThemeCustomized()
         || NoteFontScale.isCustomized()
         || DesktopZoom.isCustomized()
-        || BoardPlacement.isCustomized()
         || ChromeBackground.isCustomized()
         || DesktopBackground.isCustomized()
         || isBrandIconCustomized(options.brandIconId)
@@ -152,7 +148,6 @@ export const DisplayOptions = {
         window.addEventListener('note:font_scale_changed', () => this.syncButtonState());
         window.addEventListener('appearance:color_changed', () => this.syncButtonState());
         window.addEventListener('app:theme_changed', () => this.syncButtonState());
-        window.addEventListener('board:placement_stride_changed', () => this.syncButtonState());
         window.addEventListener('customization:reset', () => {
             this.options = readDisplayOptions();
             applyDisplayOptions(this.options);
@@ -359,7 +354,6 @@ export const DisplayOptions = {
 
         NoteFontScale.updateLabels();
         DesktopZoom.updateButtons();
-        BoardPlacement.updateLabels();
 
         // Update desktop count stepper label
         const desktopCountLabel = root.querySelector('#display-opt-desktop-count-label');
@@ -397,7 +391,6 @@ export const DisplayOptions = {
         const opts = this.options;
         const noteScalePct = `${Math.round(NoteFontScale.getScale() * 100)}%`;
         const desktopZoomPct = `${Math.round(DesktopZoom.getScale() * 100)}%`;
-        const placementStridePx = `${BoardPlacement.getStridePx()}px`;
         const desktopZoomEnabled = this.isDesktopZoomEnabled();
 
         /* Build theme token rows */
@@ -459,14 +452,6 @@ export const DisplayOptions = {
                                 ${this.optionRow('display-opt-gradient', 'Gradient background', opts.desktopGradient)}
                                 ${this.optionRow('display-opt-grid-lines', 'Show grid lines', opts.desktopGridLines)}
                             </div>
-                            <div class="display-options-scale-row">
-                                ${this.stepperRow({
-                                    idPrefix: 'display-opt-placement-stride',
-                                    label: 'Snap spacing',
-                                    valuePercent: placementStridePx
-                                })}
-                            </div>
-                            <p class="display-options-row-hint">Snap ruler for moving notes (8–64px). Card size unchanged.</p>
                             <p class="display-options-subheading">Desktop count</p>
                             <div class="display-options-scale-row">
                                 ${this.stepperRow({
@@ -608,24 +593,6 @@ export const DisplayOptions = {
         });
 
         this.bindStepper(root, {
-            idPrefix: 'display-opt-placement-stride',
-            onOut: () => {
-                BoardPlacement.step(-1);
-                const canvas = document.getElementById('app-canvas');
-                if (canvas) {
-                    UI.resnapBoardPositions(canvas, { reflow: !isBoardOverlayEnabled() });
-                }
-            },
-            onIn: () => {
-                BoardPlacement.step(1);
-                const canvas = document.getElementById('app-canvas');
-                if (canvas) {
-                    UI.resnapBoardPositions(canvas, { reflow: !isBoardOverlayEnabled() });
-                }
-            }
-        });
-
-        this.bindStepper(root, {
             idPrefix: 'display-opt-note-scale',
             onOut: () => NoteFontScale.step(-NoteFontScale.SCALE_STEP),
             onIn: () => NoteFontScale.step(NoteFontScale.SCALE_STEP)
@@ -688,7 +655,6 @@ export const DisplayOptions = {
 
         NoteFontScale.updateLabels();
         DesktopZoom.updateButtons();
-        BoardPlacement.updateLabels();
     },
 
     openModal(anchor) {
@@ -707,7 +673,6 @@ export const DisplayOptions = {
 
         NoteFontScale.updateLabels();
         DesktopZoom.updateButtons();
-        BoardPlacement.updateLabels();
 
         overlay.classList.remove('is-hidden');
         target?.setAttribute('aria-expanded', 'true');

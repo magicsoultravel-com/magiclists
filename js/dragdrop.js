@@ -408,9 +408,30 @@ export const DragDropEngine = {
             e.preventDefault();
             const boardBounds = snapEnabled ? UI.getGridBoardBounds(canvas) : null;
             const origin = boardBounds?.origin ?? 0;
-            const minCoord = origin + (boardBounds?.edgePad ?? 0);
-            const x = Math.max(minCoord, dragActive.origX + dx);
-            const y = Math.max(minCoord, dragActive.origY + dy);
+            const edgePad = boardBounds?.edgePad ?? 0;
+            const minCoord = origin + edgePad;
+            const rawX = Math.max(minCoord, dragActive.origX + dx);
+            const rawY = Math.max(minCoord, dragActive.origY + dy);
+            let x = rawX;
+            let y = rawY;
+            if (snapEnabled && boardBounds) {
+                const snapped = UI.snapNotePosition(
+                    {
+                        x: rawX,
+                        y: rawY,
+                        w: dragActive.origW,
+                        h: dragActive.origH
+                    },
+                    {
+                        maxW: boardBounds.packW,
+                        maxH: Infinity,
+                        origin,
+                        edgePad
+                    }
+                );
+                x = snapped.x;
+                y = snapped.y;
+            }
             dragActive.card.style.left = `${x}px`;
             dragActive.card.style.top = `${y}px`;
             if (snapEnabled) {
@@ -769,12 +790,15 @@ export const DragDropEngine = {
                 if (scrollHost && isScrollbarGrip(scrollHost, e.clientX)) return;
 
                 e.stopPropagation();
+                const startRect = UI.readNoteRect(card);
                 dragActive = {
                     card,
                     startX: e.clientX,
                     startY: e.clientY,
-                    origX: parseFloat(card.style.left) || 0,
-                    origY: parseFloat(card.style.top) || 0,
+                    origX: startRect.x,
+                    origY: startRect.y,
+                    origW: startRect.w,
+                    origH: startRect.h,
                     moved: false
                 };
                 document.addEventListener('mousemove', onDragMove);

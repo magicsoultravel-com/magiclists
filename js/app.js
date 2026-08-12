@@ -38,7 +38,6 @@ import {
 import { AppTheme } from './appTheme.js';
 import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
-import { BoardPlacement } from './boardPlacement.js';
 import { BoardOverlay } from './boardOverlay.js';
 import { readViewSessions, restoreViewSession, normalizeViewMode } from './viewSession.js';
 import { DrawingBoard } from './drawingBoard.js';
@@ -103,7 +102,6 @@ class Application {
             DesktopBackground.init();
             ChromeBackground.init();
             NoteFontScale.init();
-            BoardPlacement.init();
             BoardOverlay.init();
             migrateLegacyGridLayoutIfNeeded();
             initGridMetrics();

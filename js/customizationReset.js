@@ -6,8 +6,7 @@ import { ClockStyle } from './clockStyle.js';
 import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
 import { applyTileSmallFootprint } from './tileFootprint.js';
-import { initGridMetrics, DEFAULT_PLACEMENT_STEP } from './gridDensity.js';
-import { BoardPlacement } from './boardPlacement.js';
+import { initGridMetrics } from './gridDensity.js';
 
 const CUSTOMIZATION_KEYS = [
     'matrix_desktop_bg',
@@ -22,7 +21,6 @@ const CUSTOMIZATION_KEYS = [
     'matrix_grid_fineness',
     'matrix_grid_fineness_migrated',
     'matrix_board_padding',
-    'matrix_placement_stride',
     /* Desktop dock pin state */
     'magicnotes_desktops_config',
     /* Consolidated theme tokens key */
@@ -68,7 +66,6 @@ export function resetCustomizationToDefaults() {
 
     DesktopZoom.setScale(1);
     NoteFontScale.setScale(1);
-    BoardPlacement.setStep(DEFAULT_PLACEMENT_STEP);
     initGridMetrics();
     applyTileSmallFootprint();
 

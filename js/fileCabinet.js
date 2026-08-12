@@ -925,7 +925,7 @@ export function expandFileCabinetItemToBoard({ item, dropX, dropY, UI, card = nu
             h: sizeRect.h
         };
         const bounds = UI.getGridBoardBounds(canvas);
-        placed = UI.snapNoteRect(placed, {
+        placed = UI.snapNotePosition(placed, {
             maxW: bounds.packW,
             maxH: bounds.maxH,
             origin: bounds.origin,

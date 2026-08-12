@@ -138,7 +138,7 @@ export function reflowGridBoard(deps, canvas, actorId, { animate = true, actorRe
  * @param {function} resolveTileSize - Function to resolve tile size
  * @param {function} findSlot - Function to find first canvas slot
  * @param {function} snapRect - Function to snap rect to grid
- * @returns {object} { layout: Map<itemId, rect>, placed: rect[] }
+ * @returns {object} { layout: object, placed: rect[], placedById: Map<itemId, rect> }
  */
 export function computeBoardLayout(deps, items, bounds, {
     getLayout,
@@ -153,6 +153,7 @@ export function computeBoardLayout(deps, items, bounds, {
     const { origin, packW, maxH, edgePad } = bounds;
     const layout = getLayout();
     const placed = [];
+    const placedById = new Map();
 
     const sortedItems = [...items].sort((a, b) => {
         const sa = layout[a.id];
@@ -194,9 +195,10 @@ export function computeBoardLayout(deps, items, bounds, {
         }
 
         placed.push(rect);
+        if (item.id) placedById.set(item.id, rect);
     });
 
-    return { layout, placed };
+    return { layout, placed, placedById };
 }
 
 export { getGridBoardBounds };

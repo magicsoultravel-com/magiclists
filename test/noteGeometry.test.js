@@ -3,7 +3,7 @@
 //
 // These assert on the default grid metrics, which are deterministic when no
 // user prefs exist (fineness step 1 => cellS 32, gap 1, stride 33,
-// placement stride 32, origin 2, edgePad 1). See getGridMetrics().
+// placement stride 8, origin 2, edgePad 1). See getGridMetrics().
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -23,6 +23,14 @@ import {
 import { getGridMetrics } from '../js/gridDensity.js';
 
 const M = getGridMetrics();
+
+describe('getGridMetrics (fixed 8px placement stride)', () => {
+    it('locks placement stride at a quarter-cell (8px)', () => {
+        assert.equal(M.cellS, 32);
+        assert.equal(M.placementStrideX, 8);
+        assert.equal(M.placementStrideY, 8);
+    });
+});
 
 describe('rectsOverlap', () => {
     it('returns false for separated rects', () => {
@@ -109,6 +117,17 @@ describe('snapNotePosition', () => {
         );
     });
 
+    it('snaps to the 8px placement ruler', () => {
+        const rect = snapNotePosition(
+            { x: 12, y: 20, w: 65, h: 32 },
+            { maxW: 400, maxH: 400, origin: 2, edgePad: 1 }
+        );
+        assert.equal(rect.x % 8, 0);
+        assert.equal(rect.y % 8, 0);
+        assert.equal(rect.x, 16);
+        assert.equal(rect.y, 24);
+    });
+
     it('keeps the rect inside maxW/maxH boundaries', () => {
         // Even with a tiny max, clamped position stays valid (w/h unchanged).
         const rect = snapNotePosition(
@@ -172,10 +191,10 @@ describe('findFirstCanvasSlot (horizontal & vertical)', () => {
         assert.equal(placed.some((p) => rectsOverlap(slot, p, M.gap)), false);
     });
 
-    it('vertical returns the guarded fallback when constraints leave no room', () => {
-        // packW (canvasW=0) + maxH are too small to fit a second card beside
-        // or below the blocker, so the bounded searcher falls back to the
-        // origin slot. This documents the pre-existing guard-800 behavior.
+    it('vertical packing snaps below a blocker when the 8px ruler has room', () => {
+        // With the 8px placement stride, y=36 snaps to 40, which clears the
+        // 32px-tall blocker at y=3 (bottom+gap = 36). Previously a 32px
+        // stride snapped 36 back onto the blocker and hit the guard fallback.
         const placed = [{ x: 3, y: 3, w: 65, h: 32 }];
         const slot = findFirstCanvasSlot(65, 32, placed, 0, {
             origin: 2,
@@ -183,7 +202,9 @@ describe('findFirstCanvasSlot (horizontal & vertical)', () => {
             maxH: 80,
             direction: 'vertical'
         });
-        assert.deepEqual(slot, { x: 3, y: 3, w: 65, h: 32 });
+        assert.equal(placed.some((p) => rectsOverlap(slot, p, M.gap)), false);
+        assert.ok(slot.y >= 36);
+        assert.ok(slot.y + slot.h <= 80 + 1);
     });
 });
 
@@ -217,16 +238,43 @@ describe('resolveGridPushLayout', () => {
         // Every card must be placed.
         assert.deepEqual([...layout.keys()].sort(), ['a', 'b', 'c']);
 
-        // Pinned cards keep their exact rect.
+        // Pinned cards keep their exact rect (no re-snap).
         assert.deepEqual(layout.get('a'), { x: 3, y: 3, w: 65, h: 32 });
 
+        // Non-overlapping neighbors stay put — the push engine must not
+        // re-snap the whole board when nothing collides.
+        assert.deepEqual(layout.get('b'), { x: 3, y: 36, w: 65, h: 32 });
+        assert.deepEqual(layout.get('c'), { x: 69, y: 3, w: 65, h: 32 });
+
         // No placed rect overlaps any other.
-        const placed = [...layout.values()];
-        for (let i = 0; i < placed.length; i += 1) {
-            for (let j = i + 1; j < placed.length; j += 1) {
-                assert.equal(rectsOverlap(placed[i], placed[j], M.gap), false);
+        const all = [...layout.values()];
+        for (let i = 0; i < all.length; i += 1) {
+            for (let j = i + 1; j < all.length; j += 1) {
+                assert.equal(rectsOverlap(all[i], all[j], M.gap), false);
             }
         }
+    });
+
+    it('pushes only the overlapping neighbor of the actor, leaving others still', () => {
+        const actorRect = { x: 3, y: 3, w: 65, h: 32 };
+        const far = { x: 200, y: 200, w: 65, h: 32 };
+        const layout = resolveGridPushLayout({
+            cardEntries: [
+                { id: 'actor', rect: actorRect },
+                { id: 'hit', rect: { x: 10, y: 10, w: 65, h: 32 } },
+                { id: 'far', rect: far }
+            ],
+            actorId: 'actor',
+            actorRect,
+            pinnedIds: new Set(),
+            packW: 400,
+            origin: 2,
+            maxH: 400,
+            edgePad: 1
+        });
+        assert.deepEqual(layout.get('far'), far);
+        assert.equal(rectsOverlap(layout.get('actor'), layout.get('hit'), M.gap), false);
+        assert.equal(rectsOverlap(layout.get('actor'), layout.get('far'), M.gap), false);
     });
 });
 

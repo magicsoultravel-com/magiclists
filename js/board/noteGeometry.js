@@ -409,9 +409,8 @@ export function resolveGridPushLayout({ cardEntries, actorId, actorRect, pinnedI
 
     cardEntries.forEach(({ id, rect }) => {
         if (!id || !pinnedIds.has(id)) return;
-        const snapped = snapNoteRect(rect, snapBounds);
-        layout.set(id, snapped);
-        placed.push({ ...snapped });
+        layout.set(id, { ...rect });
+        placed.push({ ...rect });
     });
 
     if (actorId && actorRect) {
@@ -428,12 +427,14 @@ export function resolveGridPushLayout({ cardEntries, actorId, actorRect, pinnedI
         .sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x);
 
     others.forEach(({ id, rect }) => {
-        let snapped = snapNoteRect(rect, snapBounds);
-        if (placed.some((p) => rectsOverlap(snapped, p))) {
-            snapped = pushGridCardRect(snapped, placed, snapOpts);
+        // Keep settled notes where they are. Only push a neighbor that actually
+        // overlaps something already placed — never re-snap the whole board.
+        let next = { ...rect };
+        if (placed.some((p) => rectsOverlap(next, p))) {
+            next = pushGridCardRect(next, placed, snapOpts);
         }
-        layout.set(id, snapped);
-        placed.push({ ...snapped });
+        layout.set(id, next);
+        placed.push({ ...next });
     });
 
     return layout;

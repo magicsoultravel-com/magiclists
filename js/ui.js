@@ -792,7 +792,7 @@ reapplySmallFootprintOnBoard() {
         canvas.appendChild(boardPane);
 
         // Compute layout using pure function
-        const { layout, placed } = computeBoardLayout(this, boardItems, bounds, {
+        const { layout, placed, placedById } = computeBoardLayout(this, boardItems, bounds, {
             getLayout: () => this.getGridLayout(),
             isExpanded: (id) => this.isSavedLayoutExpanded(id),
             resolveSpatialSize: (card, item) => this.resolveRememberedSpatialSize(card, item),
@@ -806,10 +806,13 @@ reapplySmallFootprintOnBoard() {
             clampRect: (rect) => this.preserveSavedBoardRect(rect)
         });
 
-        // Apply layout to DOM
+        // Apply layout to DOM — look up by id, never by list index.
+        // `placed` is spatially sorted; `boardItems` is not, so zipping them
+        // would swap every card the moment the item list order diverged
+        // (e.g. dragging a note in from the File Cabinet).
         boardItems.forEach((item, index) => {
             const card = createCardComponent(this, item, activeCategories);
-            const rect = placed[index];
+            const rect = placedById.get(item.id) ?? placed[index];
             const saved = layout[item.id];
 
             this.applyNoteRect(card, rect, { settling: false });
@@ -1123,31 +1126,6 @@ reapplySmallFootprintOnBoard() {
             /* ignore */
         }
         return true;
-    },
-
-resnapBoardPositions(canvas, { reflow = false } = {}) {
-        if (!canvas) return;
-        const activeDesktop = DesktopManager.getActiveDesktop();
-        const cards = canvas.querySelectorAll(`.mini-card[data-desktop="${activeDesktop}"]`);
-        const bounds = this.getGridBoardBounds(canvas);
-        const { packW, maxH, origin, edgePad } = bounds;
-        cards.forEach((card) => {
-            const id = card.dataset.id;
-            if (!id) return;
-            const live = this.readNoteRect(card);
-            const snapped = this.snapNotePosition(live, { maxW: packW, maxH, origin, edgePad });
-            const delta = Math.abs(snapped.x - live.x) + Math.abs(snapped.y - live.y);
-            if (delta < 1) return;
-            this.applyNoteRect(card, snapped, { settling: true });
-            this.saveGridLayout(id, snapped);
-        });
-        if (reflow && !isBoardOverlayEnabled()) {
-            requestAnimationFrame(() => {
-                this.reflowGridBoard(canvas, null, { animate: true });
-            });
-        } else {
-            this.updateBoardCanvasExtents(canvas);
-        }
     },
 
     applyDesktopLayoutModeSwitch(canvas) {

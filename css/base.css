@@ -32,6 +32,8 @@
     --grid-gap: 1px;
     --grid-stride-x: 33px;
     --grid-stride-y: 33px;
+    --placement-stride-x: 8px;
+    --placement-stride-y: 8px;
     --grid-origin: 2px;
     --grid-edge-pad: 1px;
     --board-area-inset-base: 0.875rem;
