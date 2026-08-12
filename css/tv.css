@@ -632,7 +632,7 @@
 
 /* Hide TV station name when sidebar is collapsed */
 .side-panel.is-collapsed .sidebar-tv__compact-name {
-    display: none;
+    display: none !important;
 }
 
 .sidebar-tv__compact-name.is-hidden {
