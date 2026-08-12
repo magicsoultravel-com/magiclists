@@ -689,6 +689,7 @@ executeDataBackupExport() {
                     { name: cleanName, color: cleanColor }
                 ], { keepEmpty: true });
                 this.syncDataStore();
+                this.updateWorkspaceCounter();
             }
         });
     }
