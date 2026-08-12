@@ -1,36 +1,15 @@
 /** @module {{"owns":"radio Google Cast support (native Cast SDK)", "related":["sidebarRadio.js","radioPlayer.js","radioPopover.js"]}} */
-const CAST_SDK_URL = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js';
-
-let sdkPromise = null;
-let apiAvailable = false;
-
-/** Lazily load the Google Cast SDK (mirrors tvHls.js loader pattern). */
+/**
+ * Resolve the Google Cast SDK.
+ * The sender library is loaded synchronously in <head> (see index.html). It must
+ * NOT be injected dynamically/async, or Chrome reports the Cast API as unavailable.
+ */
 function loadCastSdk() {
-    if (typeof window !== 'undefined' && window.cast?.framework) {
-        apiAvailable = true;
+    if (typeof window !== 'undefined' && window.cast?.framework && window.chrome?.cast) {
         return Promise.resolve(window.cast.framework);
     }
-    if (sdkPromise) return sdkPromise;
-
-    sdkPromise = new Promise((resolve, reject) => {
-        const prev = window.__onGCastApiAvailable;
-        window.__onGCastApiAvailable = (isAvailable) => {
-            if (prev) prev(isAvailable);
-            apiAvailable = isAvailable;
-            if (isAvailable && window.cast?.framework) {
-                resolve(window.cast.framework);
-            } else {
-                reject(new Error('Google Cast SDK unavailable'));
-            }
-        };
-        const script = document.createElement('script');
-        script.src = CAST_SDK_URL;
-        script.async = true;
-        script.onerror = () => reject(new Error('Failed to load Google Cast SDK'));
-        document.head.appendChild(script);
-    });
-
-    return sdkPromise;
+    // SDK was blocked, loaded too late, or reported __onGCastApiAvailable(false).
+    return Promise.reject(new Error('Google Cast SDK unavailable'));
 }
 
 export const RadioCast = {
