@@ -203,13 +203,16 @@ export function isDesktopCard(card) {
 }
 
 export const UI = {
-    flushAllInlineEditsFromCanvas(canvas, items, { forceFlush = false } = {}) {
+    flushAllInlineEditsFromCanvas(canvas, items, { forceFlush = false, skipItemId = null } = {}) {
         if (!canvas || !Array.isArray(items)) return;
         const byId = new Map(items.map((item) => [item.id, item]));
         const activeDesktop = DesktopManager.getActiveDesktop();
         canvas.querySelectorAll(`.mini-card[data-desktop="${activeDesktop}"]`).forEach((card) => {
             const item = byId.get(card.dataset.id);
             if (!item) return;
+            // While the modal editor owns this note, its board card DOM is stale.
+            // Flushing it would overwrite the modal's saved content with old HTML.
+            if (skipItemId && item.id === skipItemId) return;
             NoteSurface.commitFocusedInlineField(card, item);
             // During view reset, force flush to ensure all pending changes are saved
             // even if there's a pending focus state that would otherwise skip
@@ -662,6 +665,9 @@ reapplySmallFootprintOnBoard() {
         const card = canvas.querySelector(`.mini-card[data-id="${item.id}"]`);
         if (!card) return false;
 
+        // Keep the board lookup map on the same live item object AppState holds.
+        updateBoardItemsMap(item);
+
         // Capture canvas scroll position before full re-render to prevent view jump
         const canvasScrollTop = canvas.scrollTop || 0;
         const canvasScrollLeft = canvas.scrollLeft || 0;
@@ -680,6 +686,10 @@ reapplySmallFootprintOnBoard() {
         canvas.scrollLeft = canvasScrollLeft;
 
         return true;
+    },
+
+    updateBoardItemsMap(item) {
+        updateBoardItemsMap(item);
     },
 
     render(canvas, items, viewMode, hiddenCategories = [], renderOptions = {}) {

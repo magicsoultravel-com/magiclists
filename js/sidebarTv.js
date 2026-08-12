@@ -106,7 +106,7 @@ export const SidebarTv = {
                         <img class="sidebar-media__compact-art-img is-hidden" data-tv-compact-art alt="">
                         <span class="sidebar-media__compact-art-fallback" data-tv-compact-art-fallback aria-hidden="true">📺</span>
                     </button>
-                    <span class="sidebar-tv__compact-name" data-tv-compact-name></span>
+                    ${!document.getElementById('side-panel')?.classList.contains('is-collapsed') ? `<span class="sidebar-tv__compact-name" data-tv-compact-name></span>` : ``}
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-tv-play aria-label="Play or pause">
                         <span data-tv-play-icon></span>
                     </button>

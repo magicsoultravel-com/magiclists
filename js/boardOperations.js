@@ -73,13 +73,14 @@ export const BoardOperations = {
         return items.filter((item) => !this.isHiddenFromBoard(item) && !this.isArchived(item));
     },
 
-    flushAllInlineEditsFromCanvas(canvas, items) {
+    flushAllInlineEditsFromCanvas(canvas, items, { skipItemId = null } = {}) {
         if (!canvas || !Array.isArray(items)) return;
         const byId = new Map(items.map((item) => [item.id, item]));
         const activeDesktop = DesktopManager.getActiveDesktop();
         canvas.querySelectorAll(`.mini-card[data-desktop="${activeDesktop}"]`).forEach((card) => {
             const item = byId.get(card.dataset.id);
             if (!item) return;
+            if (skipItemId && item.id === skipItemId) return;
             NoteSurface.commitFocusedInlineField(card, item);
             if (card.dataset.pendingFocusStepId) return;
             const shell = card.querySelector('.editor-note-shell');

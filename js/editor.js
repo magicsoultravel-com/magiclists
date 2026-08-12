@@ -49,6 +49,10 @@ export const Editor = {
         this.closeAndSave({ scrollToBoard: false });
     },
 
+    approveAndClose() {
+        this.closeAndSave({ scrollToBoard: true });
+    },
+
     scheduleEditorSizeLabelUpdate() {
         if (this.metaLabelTimer) clearTimeout(this.metaLabelTimer);
         this.metaLabelTimer = setTimeout(() => {
@@ -66,7 +70,7 @@ export const Editor = {
         this.calendarToggleBtn = null;
         this.approveBtn = document.getElementById('modal-approve-btn');
 
-        this.approveBtn?.addEventListener('click', () => this.commitAndClose());
+        this.approveBtn?.addEventListener('click', () => this.approveAndClose());
         this.overlay?.addEventListener('mousedown', (e) => {
             if (e.target !== this.overlay) return;
             this.commitAndClose();
@@ -308,17 +312,19 @@ export const Editor = {
             }
 
             if (shouldPersist) {
-                if (scrollToBoard) UI.markNoteCollapsed(currentData.id);
                 this.persistNote({ force: true, normalize: true });
-                savedItem = { ...this.activeItem };
+                savedItem = NoteSurface.snapshotItem(this.activeItem);
             }
         }
 
-        const itemToReveal = scrollToBoard ? savedItem : null;
         this.animateEditorClose(() => {
             this.resetEditorState();
-            if (itemToReveal) {
-                window.dispatchEvent(new CustomEvent('editor:reveal_on_board', { detail: itemToReveal }));
+            // Always publish the saved note back onto the board so the card DOM
+            // matches AppState/localStorage. scrollToBoard only controls scrolling.
+            if (savedItem) {
+                window.dispatchEvent(new CustomEvent('editor:reveal_on_board', {
+                    detail: { item: savedItem, scrollToBoard }
+                }));
             }
         });
     },

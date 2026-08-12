@@ -921,13 +921,17 @@ executeDataBackupExport() {
         // This ensures data is saved when user refreshes the browser
         window.addEventListener('beforeunload', () => {
             // Flush modal editor if open
-            if (Editor.activeItem && Editor.overlay?.classList.contains('is-open')) {
+            const modalOpen = Editor.activeItem && Editor.overlay?.classList.contains('is-open');
+            if (modalOpen) {
                 Editor.persistNote({ force: true, normalize: true });
             }
             const canvas = document.getElementById('app-canvas');
             if (canvas) {
-                // Flush all inline edits from canvas to ensure data is saved
-                UI.flushAllInlineEditsFromCanvas(canvas, AppState.items);
+                // Skip the open modal note — its board card DOM is stale and would
+                // clobber the modal persist we just wrote.
+                UI.flushAllInlineEditsFromCanvas(canvas, AppState.items, {
+                    skipItemId: modalOpen ? Editor.activeItem.id : null
+                });
             }
         });
 
@@ -935,13 +939,15 @@ executeDataBackupExport() {
         // This prevents data loss when user switches tabs or minimizes window
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
-                // Flush modal editor if open
-                if (Editor.activeItem && Editor.overlay?.classList.contains('is-open')) {
+                const modalOpen = Editor.activeItem && Editor.overlay?.classList.contains('is-open');
+                if (modalOpen) {
                     Editor.persistNote({ force: true, normalize: true });
                 }
                 const canvas = document.getElementById('app-canvas');
                 if (canvas) {
-                    UI.flushAllInlineEditsFromCanvas(canvas, AppState.items);
+                    UI.flushAllInlineEditsFromCanvas(canvas, AppState.items, {
+                        skipItemId: modalOpen ? Editor.activeItem.id : null
+                    });
                 }
             }
         });
@@ -957,27 +963,45 @@ executeDataBackupExport() {
         });
 
         window.addEventListener('editor:reveal_on_board', async (e) => {
-            const item = e.detail;
+            const detail = e.detail;
+            const item = detail?.item ?? detail;
+            // { item, scrollToBoard } from modal close; plain item (legacy) scrolls.
+            const shouldScroll = detail?.item
+                ? detail.scrollToBoard === true
+                : true;
             if (!item?.id) return;
-            UI.markNoteCollapsed(item.id);
 
             const idx = AppState.items.findIndex((i) => i.id === item.id);
-            if (idx >= 0) AppState.items[idx] = item;
-            else AppState.items.push(item);
+            if (idx >= 0) {
+                Object.assign(AppState.items[idx], item);
+            } else {
+                AppState.items.push(item);
+            }
+            const liveItem = idx >= 0 ? AppState.items[idx] : item;
+            UI.updateBoardItemsMap(liveItem);
 
             const canvas = document.getElementById('app-canvas');
             let card = canvas?.querySelector(`.mini-card[data-id="${item.id}"]`);
-            if (!card) {
+            if (card) {
+                UI.updateSingleCard(canvas, liveItem, AppState.hiddenCategories);
+                if (AppState.viewSettings.sortBy === 'grid') {
+                    DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+                }
+            } else {
+                // New note (or card missing from this view): full sync so a board
+                // card is created when the note belongs on the active desktop.
                 await this.syncDataStore();
                 card = canvas?.querySelector(`.mini-card[data-id="${item.id}"]`);
-            } else {
-                UI.collapseBoardCardIfExpanded(card, item, AppState.hiddenCategories);
             }
 
-            requestAnimationFrame(() => {
-                card = canvas?.querySelector(`.mini-card[data-id="${item.id}"]`) || card;
-                card?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-            });
+            this.updateWorkspaceCounter();
+
+            if (shouldScroll) {
+                requestAnimationFrame(() => {
+                    card = canvas?.querySelector(`.mini-card[data-id="${item.id}"]`) || card;
+                    card?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                });
+            }
         });
 
         window.addEventListener('item:mutation_requested', async (e) => {
@@ -1013,13 +1037,21 @@ executeDataBackupExport() {
                 });
             }
 
-            if (idx !== -1) AppState.items[idx] = item;
-            else AppState.items.push(item);
+            if (idx !== -1) {
+                // Keep the same object reference so board cards / boardItemsById
+                // do not hold a zombie copy after modal (or any) skipRerender saves.
+                Object.assign(AppState.items[idx], item);
+                UI.updateBoardItemsMap(AppState.items[idx]);
+            } else {
+                AppState.items.push(item);
+                UI.updateBoardItemsMap(item);
+            }
 
             if (detail?.skipRerender || detail?.preserveView) {
                 if (!detail?.skipRerender) {
                     const canvas = document.getElementById('app-canvas');
-                    UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
+                    const liveItem = idx !== -1 ? AppState.items[idx] : item;
+                    UI.updateSingleCard(canvas, liveItem, AppState.hiddenCategories);
                     if (AppState.viewSettings.sortBy === 'grid') {
                         DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
                     }

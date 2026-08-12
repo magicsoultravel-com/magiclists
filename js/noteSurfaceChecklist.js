@@ -85,6 +85,11 @@ export function bindChecklistInteractions(root, item, {
         
         const newCompleted = cb.checked;
         const wasCompleted = step.completed;
+
+        // Snapshot before mutating so undo/persist see the prior state.
+        const beforeItem = wasCompleted !== newCompleted
+            ? prepareInlineOpSnapshot(root, item, localOnly)
+            : null;
         
         // Check if this is a parent step (has descendants)
         const stepIdx = (item.steps || []).findIndex(s => s.id === stepId);
@@ -150,18 +155,14 @@ export function bindChecklistInteractions(root, item, {
             }
         }
         
-        // Sync to item and persist
-        if (localOnly) {
-            onChange();
-            refresh();
-        } else {
-            const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
+        // Always persist immediately — even in the modal (localOnly=true) — so
+        // toggles are not lost if close races the debounced autosave.
+        if (beforeItem) {
             syncItemBodyFromDom(root, item);
-            commitInlineChecklistOp(item, beforeItem, { localOnly });
-            // Always refresh to ensure the done section updates on the board surface
-            // and syncs state for both modal and surface editors.
-            refresh();
+            commitInlineChecklistOp(item, beforeItem, { localOnly: false });
         }
+        onChange();
+        refresh();
     });
 
     // --- generic click delegation for all other step buttons ---
@@ -228,11 +229,9 @@ export function bindChecklistInteractions(root, item, {
               indentChecklistSteps(item.steps, stepIdx);
               // Set pending focus so refreshNoteBody restores caret on the same step
               setPendingChecklistFocus(root, stepId, 'end');
-              if (localOnly) {
-                  onChange();
-              } else {
-                  commitInlineChecklistOp(item, beforeItem, { localOnly });
-              }
+              // Always persist immediately — even in the modal — matching Enter-split.
+              if (beforeItem) commitInlineChecklistOp(item, beforeItem, { localOnly: false });
+              onChange();
               // Full refresh so tree guides and button states update on ALL rows
               refresh();
               return;
@@ -258,11 +257,9 @@ export function bindChecklistInteractions(root, item, {
              outdentChecklistSteps(item.steps, stepIdx);
              // Set pending focus so refreshNoteBody restores caret on the same step
              setPendingChecklistFocus(root, stepId, 'end');
-            if (localOnly) {
-                onChange();
-            } else {
-                commitInlineChecklistOp(item, beforeItem, { localOnly });
-            }
+            // Always persist immediately — even in the modal — matching Enter-split.
+            if (beforeItem) commitInlineChecklistOp(item, beforeItem, { localOnly: false });
+            onChange();
             // Full refresh so tree guides and button states update on ALL rows
             refresh();
             return;
@@ -629,9 +626,10 @@ export function attachChecklistDrag(root, item, {
                 expandChecklistAncestorsForStep(item, parentIdToExpand);
             }
             setPendingChecklistFocus(root, blockRootId, 'end');
-            if (!localOnly) {
-                commitInlineChecklistOp(item, beforeItem, { localOnly });
-            }
+            // Always persist immediately — even in the modal (localOnly=true) — so
+            // drag reorders are not lost if close races the debounced autosave.
+            if (beforeItem) commitInlineChecklistOp(item, beforeItem, { localOnly: false });
+            onChange();
             // A child drop (or any re-level) changed the visual indentation, so the
             // rows must re-render at their new levels. Sibling reorders that keep the
             // same level skip the expensive refresh (rows were already moved in place).
@@ -1001,9 +999,7 @@ export function removeChecklistStepAndFocus(root, item, stepId, { localOnly = fa
     const prevStepId = result.prevStepId;
     const nextStepId = result.nextStepId;
 
-    if (!localOnly) {
-        commitInlineChecklistOp(item, beforeItem, { localOnly });
-    }
+    if (beforeItem) commitInlineChecklistOp(item, beforeItem, { localOnly: false });
     onChange();
 
     return prevStepId || nextStepId || null;
@@ -1049,9 +1045,7 @@ export function handleChecklistBackspace(e, item, { localOnly = false, onChange 
         }
     }
 
-    if (!localOnly) {
-        commitInlineChecklistOp(item, beforeItem, { localOnly });
-    }
+    if (beforeItem) commitInlineChecklistOp(item, beforeItem, { localOnly: false });
     onChange();
     return true;
 }
@@ -1085,9 +1079,7 @@ export function handleChecklistDelete(e, item, { localOnly = false, onChange = (
     const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
     const result = deleteChecklistStep(item.steps, stepId);
     item.steps = result.steps;
-    if (!localOnly) {
-        commitInlineChecklistOp(item, beforeItem, { localOnly });
-    }
+    if (beforeItem) commitInlineChecklistOp(item, beforeItem, { localOnly: false });
     onChange();
     return true;
 }
