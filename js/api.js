@@ -1,5 +1,5 @@
 /** @module {"owns":"item CRUD and matrix_database localStorage persistence", "related":["noteModel.js","layoutStorage.js"]} */
-import { DEFAULT_CATEGORIES, detectDuplicateCategories } from './categories.js';
+import { DEFAULT_CATEGORIES, detectDuplicateCategories, dedupeCategories, normalizeCategories, applyCategoryAliasesToItems, ensureUncategorizedCategory } from './categories.js';
 import { purgeLayoutForItem } from './layoutStorage.js';
 import { normalizeTileSize } from './tileGeometry.js';
 import { createNoteId, ensureStepIds, ensureStepLevels, getCreatedTimestamp, getUpdatedTimestamp } from './noteModel.js';
@@ -174,13 +174,27 @@ function runDatabaseRepair(db) {
         }
     }
 
-    // Category duplicate detection: diagnostics only — never mutates or removes.
-    const duplicates = detectDuplicateCategories(repaired.settings?.categories || []);
-    diagnostics.duplicateCategoriesDetected = duplicates;
-    if (duplicates.length > 0) {
-        diagnostics.warnings.push(
-            `Duplicate category names detected (${duplicates.length}): ${duplicates.map((d) => d.name).join(', ')}`
-        );
+    // Merge duplicate category registry entries (case/trim); remap notes onto kept names.
+    const rawCategorySettings = repaired.settings?.categories || [];
+    const detectedDupes = detectDuplicateCategories(rawCategorySettings);
+    const { categories: dedupedCats, aliases: categoryAliases } = dedupeCategories(
+        ensureUncategorizedCategory(normalizeCategories(rawCategorySettings, { keepEmpty: true }))
+    );
+    diagnostics.duplicateCategoriesDetected = detectedDupes;
+    if (Object.keys(categoryAliases).length > 0 || detectedDupes.length > 0) {
+        const mergedExtras = detectedDupes.reduce((sum, d) => sum + Math.max(0, (d.occurrences || 0) - 1), 0);
+        repaired.settings.categories = dedupedCats.map((cat) => cat.name);
+        const remapped = applyCategoryAliasesToItems(repaired.items, categoryAliases);
+        diagnostics.duplicateCategoriesMerged = mergedExtras;
+        diagnostics.categoryAliasRemappedItems = remapped;
+        if (mergedExtras > 0 || remapped > 0 || Object.keys(categoryAliases).length > 0) {
+            diagnostics.warnings.push(
+                `Merged ${mergedExtras || Object.keys(categoryAliases).length} duplicate category entr(y/ies)`
+                + (remapped ? `; remapped ${remapped} note(s)` : '')
+                + `. Kept: ${[...new Set(Object.values(categoryAliases))].join(', ') || dedupedCats.map((c) => c.name).slice(0, 5).join(', ')}`
+            );
+            changed = true;
+        }
     }
 
     // Per-item repairs: add missing metadata only. User-authored content

@@ -19,7 +19,10 @@ import {
     normalizeCategories,
     readStoredCategories,
     UNCATEGORIZED_COLOR,
-    writeStoredCategories
+    writeStoredCategories,
+    categoryKey,
+    getLastCategoryWriteAliases,
+    applyCategoryAliasesToItems
 } from './categories.js';
 import { UndoManager, historyLabelForItem, mergeItemOntoExisting } from './undo.js';
 import { DesktopBackground } from './desktopBackground.js';
@@ -298,6 +301,7 @@ DrawingBoard.init(this);
                 const parsed = normalizeCategories(JSON.parse(storedCats), { keepEmpty: true });
                 if (parsed.length) {
                     AppState.categories = writeStoredCategories(parsed, { keepEmpty: true });
+                    this._pendingCategoryAliases = getLastCategoryWriteAliases();
                     return;
                 }
             } catch {
@@ -308,7 +312,26 @@ DrawingBoard.init(this);
         if (!AppState.categories?.length) {
             const db = API._getLocalDB();
             AppState.categories = writeStoredCategories(normalizeCategories(db.settings?.categories || []));
+            this._pendingCategoryAliases = getLastCategoryWriteAliases();
         }
+    }
+
+    applyPendingCategoryAliases() {
+        const aliases = this._pendingCategoryAliases;
+        this._pendingCategoryAliases = null;
+        if (!aliases || !Object.keys(aliases).length) return;
+        (AppState.items || []).forEach((item) => {
+            if (!item?.categories?.length) return;
+            const beforeItem = NoteSurface.snapshotItem(item);
+            const changed = applyCategoryAliasesToItems([item], aliases);
+            if (!changed) return;
+            NoteSurface.emitItemMutation(item, {
+                preserveView: true,
+                beforeItem,
+                skipRerender: true,
+                skipUndo: true
+            });
+        });
     }
 
     async syncDataStore() {
@@ -338,6 +361,7 @@ DrawingBoard.init(this);
             const data = await API.fetchItems(AppState.user.token);
             AppState.items = Array.isArray(data?.items) ? data.items : [];
             DesktopManager.sanitizeNotesDesktops(AppState.items);
+            this.applyPendingCategoryAliases();
 
             if (AppState.workspaceMode === 'drawing') {
                 /* board hidden — skip note canvas rebuild */
@@ -1126,6 +1150,43 @@ executeDataBackupExport() {
 window.addEventListener('category:order_changed', (e) => {
             AppState.categories = writeStoredCategories(e.detail || AppState.categories, { keepEmpty: true });
             this.syncDataStore();
+        });
+
+        window.addEventListener('category:renamed', async (e) => {
+            const oldName = e.detail?.oldName;
+            const newName = e.detail?.newName;
+            if (!oldName || !newName || oldName === newName) return;
+
+            const fromKey = categoryKey(oldName);
+            AppState.categories = readStoredCategories({ keepEmpty: true });
+            AppState.hiddenCategories = AppState.hiddenCategories.map((c) => (
+                categoryKey(c) === fromKey ? newName : c
+            ));
+            localStorage.setItem('matrix_hidden_categories', JSON.stringify(AppState.hiddenCategories));
+
+            (AppState.items || []).forEach((item) => {
+                if (!item?.categories?.length) return;
+                let changed = false;
+                const nextCats = item.categories.map((cat) => {
+                    if (categoryKey(cat) !== fromKey) return cat;
+                    changed = true;
+                    return newName;
+                });
+                if (!changed) return;
+                const beforeItem = NoteSurface.snapshotItem(item);
+                item.categories = nextCats;
+                NoteSurface.emitItemMutation(item, {
+                    preserveView: true,
+                    beforeItem,
+                    skipRerender: true,
+                    skipUndo: true
+                });
+            });
+
+            SidePanel.updateCategories(AppState.categories, AppState.hiddenCategories, AppState.items);
+            window.dispatchEvent(new CustomEvent('categories:toggled'));
+            window.dispatchEvent(new CustomEvent('filecabinet:layout_changed', { detail: { flushLayout: false } }));
+            await this.syncDataStore();
         });
 
         // Handle desktop switching - refresh workspace to show notes for active desktop

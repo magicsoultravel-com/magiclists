@@ -1,5 +1,5 @@
 /** @module {"owns":"file cabinet mode, drag-to-file, filed chip rail", "related":["noteSurface.js","dragdrop.js","layoutStorage.js"], "events":["filecabinet:layout_changed"]} */
-import { UNCATEGORIZED_CATEGORY, UNCATEGORIZED_COLOR, resolveCategoryColor } from './categories.js';
+import { UNCATEGORIZED_CATEGORY, UNCATEGORIZED_COLOR, resolveCategoryColor, isUncategorizedCategory, renameCategory } from './categories.js';
 import { getItemCategoryName } from './focusFilter.js';
 import { NoteSurface } from './noteSurface.js';
 import { escapeAttr, escapeHTML } from './domEscape.js';
@@ -521,6 +521,159 @@ function endFileCabinetDragGhost(card, placeholder) {
     placeholder.remove();
 }
 
+/**
+ * Lift a board card onto document.body as a fixed-position filing ghost.
+ * Returns restore metadata so the card can be put back into the canvas.
+ */
+export function beginBoardFilingGhost(card, clientX, clientY) {
+    if (!card) return null;
+    const parent = card.parentNode;
+    if (!parent) return null;
+    const rect = card.getBoundingClientRect();
+    const placeholder = document.createComment('board-filing-placeholder');
+    parent.insertBefore(placeholder, card);
+    document.body.appendChild(card);
+
+    const label = getLabelRect();
+    const offsetX = Math.min(Math.max(8, clientX - rect.left), Math.max(16, label.w - 8));
+    const offsetY = Math.min(Math.max(8, clientY - rect.top), Math.max(12, label.h - 4));
+
+    card.classList.add('spatial-at-small');
+    card.style.position = 'fixed';
+    card.style.left = `${clientX - offsetX}px`;
+    card.style.top = `${clientY - offsetY}px`;
+    card.style.width = `${label.w}px`;
+    card.style.height = `${label.h}px`;
+    card.style.margin = '0';
+    card.style.zIndex = '10000';
+    card.style.pointerEvents = 'none';
+
+    return {
+        placeholder,
+        parent,
+        offsetX,
+        offsetY
+    };
+}
+
+export function moveBoardFilingGhost(card, filingState, clientX, clientY) {
+    if (!card || !filingState) return;
+    card.style.left = `${clientX - filingState.offsetX}px`;
+    card.style.top = `${clientY - filingState.offsetY}px`;
+}
+
+/**
+ * Restore a board card from body ghost back into the canvas.
+ * @param {Object} opts.filingPreview - { w, h } original size before morph
+ * @param {Object} opts.canvasRect - { x, y } canvas-local position to restore
+ */
+export function endBoardFilingGhost(card, filingState, {
+    filingPreview = null,
+    canvasRect = null,
+    keepCollapsed = false
+} = {}) {
+    if (!card || !filingState) return;
+    const { placeholder } = filingState;
+    if (placeholder?.parentNode) {
+        placeholder.parentNode.insertBefore(card, placeholder);
+        placeholder.remove();
+    } else if (filingState.parent?.isConnected) {
+        filingState.parent.appendChild(card);
+    }
+
+    card.style.position = '';
+    card.style.left = '';
+    card.style.top = '';
+    card.style.width = '';
+    card.style.height = '';
+    card.style.margin = '';
+    card.style.zIndex = '';
+    card.style.pointerEvents = '';
+
+    if (!keepCollapsed) {
+        card.classList.remove('spatial-at-small');
+    }
+
+    if (canvasRect && Number.isFinite(canvasRect.x) && Number.isFinite(canvasRect.y)) {
+        card.style.left = `${canvasRect.x}px`;
+        card.style.top = `${canvasRect.y}px`;
+    }
+    if (filingPreview && Number.isFinite(filingPreview.w) && Number.isFinite(filingPreview.h)) {
+        card.style.width = `${filingPreview.w}px`;
+        card.style.height = `${filingPreview.h}px`;
+    }
+}
+
+/**
+ * Clear stack insert previews used during board→FC filing.
+ */
+export function clearFileCabinetFilingPreview(mount, previewState) {
+    if (previewState?.targetStack && previewState?.targetBaseline) {
+        restoreStackPreview(previewState.targetStack, previewState.targetBaseline);
+    }
+    if (previewState) {
+        previewState.targetStack = null;
+        previewState.targetBaseline = null;
+        previewState._lastPreviewKey = '';
+    }
+    clearFileCabinetSurfaceHighlights(mount);
+}
+
+/**
+ * Preview insert slot while dragging a board label over FC stacks.
+ * Mutates previewState in place: { targetStack, targetBaseline }.
+ */
+export function previewFileCabinetTabDrop(mount, dragState, clientX, clientY, previewState = {}) {
+    if (!mount || !dragState?.card) return null;
+    const canvas = document.getElementById('app-canvas');
+    const target = resolveCrossSurfaceDropTarget(clientX, clientY, {
+        dragKind: 'board-card',
+        mount,
+        canvas,
+        dragState
+    });
+
+    applyFileCabinetDropHighlight(mount, target?.kind === 'file-cabinet' ? target : null);
+    autoScrollFileCabinetInner(mount, clientX);
+
+    const draggedId = dragState.card.dataset.id;
+    if (target?.kind === 'file-cabinet' && target.targetStack) {
+        if (previewState.targetStack !== target.targetStack) {
+            if (previewState.targetStack && previewState.targetBaseline) {
+                restoreStackPreview(previewState.targetStack, previewState.targetBaseline);
+            }
+            previewState.targetStack = target.targetStack;
+            previewState.targetBaseline = snapshotStackTabs(target.targetStack);
+        }
+        applyStackPreviewPositions(target.targetStack, {
+            draggedId,
+            insertIndex: target.insertIndex,
+            settling: true
+        });
+    } else if (previewState.targetStack && previewState.targetBaseline) {
+        restoreStackPreview(previewState.targetStack, previewState.targetBaseline);
+        previewState.targetStack = null;
+        previewState.targetBaseline = null;
+    }
+
+    return target;
+}
+
+function getFileCabinetHitRect(mount) {
+    if (!mount) return null;
+    const mountRect = mount.getBoundingClientRect();
+    const splitter = document.getElementById('shell-splitter-h');
+    const splitterRect = splitter?.getBoundingClientRect?.();
+    if (!splitterRect) return mountRect;
+    // Include the horizontal splitter band as FC-adjacent so filing doesn't flicker.
+    return {
+        left: Math.min(mountRect.left, splitterRect.left),
+        right: Math.max(mountRect.right, splitterRect.right),
+        top: Math.min(mountRect.top, splitterRect.top),
+        bottom: Math.max(mountRect.bottom, splitterRect.bottom)
+    };
+}
+
 function updateStackPreviewDimensions(stackEl, slotCount, { minSlotCount = 0 } = {}) {
     if (!stackEl) return;
     const label = getLabelRect();
@@ -654,12 +807,29 @@ export function resolveCrossSurfaceDropTarget(clientX, clientY, {
         && clientY >= rect.top
         && clientY <= rect.bottom;
 
-    const mountRect = mount?.getBoundingClientRect?.();
-    if (mount && pointInRect(mountRect)) {
+    const mountHitRect = getFileCabinetHitRect(mount);
+    if (mount && pointInRect(mountHitRect)) {
         let fcTarget = resolveFileCabinetDropTarget(clientX, clientY, dragState, mount);
         if (!fcTarget?.targetCategory || fcTarget.isMountOnly) {
             const nearest = resolveNearestFileCabinetCategory(clientX, clientY, dragState, mount);
             if (nearest) fcTarget = nearest;
+        }
+        // Pointer over splitter band (inside extended hit rect but outside mount DOM)
+        if (!fcTarget || fcTarget.isMountOnly) {
+            const el = document.elementFromPoint(clientX, clientY);
+            if (el?.closest?.('#shell-splitter-h')) {
+                const nearest = resolveNearestFileCabinetCategory(clientX, clientY, dragState, mount);
+                if (nearest) fcTarget = nearest;
+                else {
+                    fcTarget = {
+                        kind: 'file-cabinet',
+                        targetStack: null,
+                        targetCategory: null,
+                        insertIndex: null,
+                        isMountOnly: true
+                    };
+                }
+            }
         }
         if (prev) prev.style.pointerEvents = prevPe || '';
         return fcTarget || {
@@ -683,7 +853,7 @@ export function resolveCrossSurfaceDropTarget(clientX, clientY, {
     const stack = document.elementsFromPoint?.(clientX, clientY) || [];
     if (prev) prev.style.pointerEvents = prevPe || '';
 
-    if (mount && stack.some((el) => el === mount || mount.contains(el))) {
+    if (mount && stack.some((el) => el === mount || mount.contains(el) || el?.id === 'shell-splitter-h' || el?.closest?.('#shell-splitter-h'))) {
         return resolveFileCabinetDropTarget(clientX, clientY, dragState, mount)
             || resolveNearestFileCabinetCategory(clientX, clientY, dragState, mount)
             || {
@@ -1113,13 +1283,17 @@ function buildFileCabinetCategoryColumn({
 
     const header = document.createElement('div');
     header.className = 'file-cabinet-category-header';
+    const canRename = !isUncategorizedCategory(catName);
+    const nameAttrs = canRename
+        ? ' class="file-cabinet-category-name u-truncate card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Category…"'
+        : ' class="file-cabinet-category-name u-truncate"';
     const grabBtnHtml = showGrabButton
         ? `<button type="button" class="card-act file-cabinet-category-grab-btn grab-handle grab-handle--col" title="Drag to reorder category" aria-label="Drag to reorder category">${CARD_ICONS.drag}</button>`
         : '';
     const foldBtnHtml = showFoldButton
         ? `<button type="button" class="card-act file-cabinet-category-fold-btn" title="Fold category" aria-label="Fold category">${FOLD_ICON}</button>`
         : '';
-    header.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span class="file-cabinet-category-name u-truncate">${escapeHTML(catName)}</span><span class="file-cabinet-category-count">${items.length}</span>${grabBtnHtml}${foldBtnHtml}`;
+    header.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span${nameAttrs}>${escapeHTML(catName)}</span><span class="file-cabinet-category-count">${items.length}</span>${grabBtnHtml}${foldBtnHtml}`;
     col.appendChild(header);
 
     const stack = document.createElement('div');
@@ -1366,7 +1540,11 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
             chip.dataset.category = catName;
             chip.style.setProperty('--card-category-color', color);
 
-            chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span class="file-cabinet-filed-chip-name u-truncate">${escapeHTML(catName)} (${items.length})</span><button type="button" class="card-act file-cabinet-filed-chip-grab grab-handle grab-handle--col" title="Drag to reorder category" aria-label="Drag to reorder category">${CARD_ICONS.drag}</button><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
+            const canRename = !isUncategorizedCategory(catName);
+            const chipNameAttrs = canRename
+                ? ' class="file-cabinet-filed-chip-name u-truncate card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Category…"'
+                : ' class="file-cabinet-filed-chip-name u-truncate"';
+            chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span${chipNameAttrs}>${escapeHTML(catName)} (${items.length})</span><button type="button" class="card-act file-cabinet-filed-chip-grab grab-handle grab-handle--col" title="Drag to reorder category" aria-label="Drag to reorder category">${CARD_ICONS.drag}</button><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
 
             const rollout = document.createElement('div');
             rollout.className = 'file-cabinet-filed-rollout';
@@ -1401,6 +1579,78 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
 
 export function initFileCabinetCategoryActions(mount, signal) {
     if (!mount || !signal) return;
+
+    const nameSelector = '.file-cabinet-category-name.card-inline-edit, .file-cabinet-filed-chip-name.card-inline-edit';
+
+    const commitNameEdit = (nameEl, { revert = false } = {}) => {
+        if (!nameEl || nameEl.dataset.renaming !== '1') return;
+        const oldName = nameEl.dataset.renameFrom || '';
+        const displayBefore = nameEl.dataset.renameDisplay || oldName;
+        delete nameEl.dataset.renaming;
+        delete nameEl.dataset.renameFrom;
+        delete nameEl.dataset.renameDisplay;
+
+        if (revert || isUncategorizedCategory(oldName)) {
+            nameEl.textContent = displayBefore;
+            return;
+        }
+
+        let next = (nameEl.textContent || '').trim();
+        if (nameEl.classList.contains('file-cabinet-filed-chip-name')) {
+            next = next.replace(/\s*\(\d+\)\s*$/, '').trim();
+        }
+        if (!next || next === oldName) {
+            nameEl.textContent = displayBefore;
+            return;
+        }
+        const result = renameCategory(oldName, next);
+        if (!result.ok) {
+            alert(result.error || 'Could not rename category.');
+            nameEl.textContent = displayBefore;
+        }
+        // category:renamed listener handles item patch + FC re-render
+    };
+
+    mount.addEventListener('focusin', (e) => {
+        const nameEl = e.target.closest?.(nameSelector);
+        if (!nameEl || !mount.contains(nameEl) || nameEl.dataset.renaming === '1') return;
+        const host = nameEl.closest('.file-cabinet-category, .file-cabinet-filed-chip');
+        const cat = host?.dataset.category;
+        if (!cat || isUncategorizedCategory(cat)) return;
+        nameEl.dataset.renaming = '1';
+        nameEl.dataset.renameFrom = cat;
+        nameEl.dataset.renameDisplay = nameEl.textContent || cat;
+        if (nameEl.classList.contains('file-cabinet-filed-chip-name')) {
+            nameEl.textContent = cat;
+        }
+    }, { signal });
+
+    mount.addEventListener('keydown', (e) => {
+        const nameEl = e.target.closest?.(nameSelector);
+        if (!nameEl || !mount.contains(nameEl)) return;
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            nameEl.blur();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            commitNameEdit(nameEl, { revert: true });
+            nameEl.blur();
+        }
+    }, { signal });
+
+    mount.addEventListener('focusout', (e) => {
+        const nameEl = e.target.closest?.(nameSelector);
+        if (!nameEl || !mount.contains(nameEl)) return;
+        // Defer so Escape can set revert before blur commit
+        queueMicrotask(() => commitNameEdit(nameEl));
+    }, { signal });
+
+    mount.addEventListener('mousedown', (e) => {
+        const nameEl = e.target.closest?.(nameSelector);
+        if (nameEl && mount.contains(nameEl)) {
+            e.stopPropagation();
+        }
+    }, { signal });
 
     mount.addEventListener('click', (e) => {
         const foldBtn = e.target.closest('.file-cabinet-category-fold-btn');

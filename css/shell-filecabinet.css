@@ -141,8 +141,12 @@
 }
 
 .file-cabinet-category-header .file-cabinet-category-grab-btn {
-    margin-left: auto;
+    margin-left: 0;
     cursor: grab;
+}
+
+.file-cabinet-category-header .file-cabinet-category-count + .file-cabinet-category-grab-btn {
+    margin-left: auto;
 }
 
 .file-cabinet-category-header .file-cabinet-category-grab-btn:active {
@@ -251,6 +255,19 @@
 .file-cabinet-category-name {
     flex: 1 1 auto;
     min-width: 0;
+}
+
+.file-cabinet-category-name.card-inline-edit,
+.file-cabinet-filed-chip-name.card-inline-edit {
+    cursor: text;
+    outline: none;
+    border-radius: 0.15rem;
+}
+
+.file-cabinet-category-name.card-inline-edit:focus,
+.file-cabinet-filed-chip-name.card-inline-edit:focus {
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-color) 45%, var(--border-color));
+    background: color-mix(in srgb, var(--bg-surface) 92%, var(--bg-primary));
 }
 
 .file-cabinet-category-count {

@@ -83,23 +83,6 @@ html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
     background-color: color-mix(in srgb, var(--accent-color) 5%, var(--bg-primary));
 }
 
-/* Board card morphs to collapsed label while hovering File Cabinet during drag */
-#app-canvas .mini-card.is-filing-to-cabinet {
-    overflow: hidden !important;
-    cursor: grabbing;
-    opacity: var(--desktop-drag-opacity, 0.9);
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-    z-index: 9999 !important;
-}
-
-#app-canvas .mini-card.is-filing-to-cabinet .ff-chrome,
-#app-canvas .mini-card.is-filing-to-cabinet .ff-resize-layer,
-#app-canvas .mini-card.is-filing-to-cabinet .editor-note-body,
-#app-canvas .mini-card.is-filing-to-cabinet .editor-meta-wrap,
-#app-canvas .mini-card.is-filing-to-cabinet .note-editor-toolbar {
-    display: none !important;
-}
-
 body.is-file-cabinet-drag-active {
     user-select: none;
     cursor: grabbing;
