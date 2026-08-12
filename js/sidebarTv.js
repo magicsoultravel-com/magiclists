@@ -106,7 +106,6 @@ export const SidebarTv = {
                         <img class="sidebar-media__compact-art-img is-hidden" data-tv-compact-art alt="">
                         <span class="sidebar-media__compact-art-fallback" data-tv-compact-art-fallback aria-hidden="true">📺</span>
                     </button>
-                    ${!document.getElementById('side-panel')?.classList.contains('is-collapsed') ? `<span class="sidebar-tv__compact-name" data-tv-compact-name></span>` : ``}
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-tv-play aria-label="Play or pause">
                         <span data-tv-play-icon></span>
                     </button>
@@ -924,16 +923,6 @@ export const SidebarTv = {
         else if (state.channel?.name) titleText = state.channel.name;
 
         if (marqueeEl) syncMarquee(marqueeEl, titleText, { error: isError || !!state.resumeBlocked });
-
-        const compactNameEl = this.root?.querySelector('[data-tv-compact-name]');
-        if (compactNameEl) {
-            if (state.channel?.name && !state.resumeBlocked && !state.error) {
-                compactNameEl.textContent = state.channel.name;
-                compactNameEl.classList.remove('is-hidden');
-            } else {
-                compactNameEl.classList.add('is-hidden');
-            }
-        }
 
         const code = state.channel?.countrycode;
         if (localeBtn && flagEl && countryNameEl) {

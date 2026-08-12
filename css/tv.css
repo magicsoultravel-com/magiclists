@@ -615,30 +615,6 @@
     gap: 6px;
 }
 
-/* Compact channel name in sidebar header */
-.sidebar-tv__compact-name {
-    font-size: 0.62rem;
-    font-weight: 500;
-    color: var(--text-main);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-width: 0;
-    flex-shrink: 1;
-    flex: 1 1 auto;
-    max-width: 160px;
-    line-height: 1.2;
-}
-
-/* Hide TV station name when sidebar is collapsed */
-.side-panel.is-collapsed .sidebar-tv__compact-name {
-    display: none !important;
-}
-
-.sidebar-tv__compact-name.is-hidden {
-    display: none;
-}
-
 /* Seek info text in controls */
 .tv-seek-info {
     font-size: 0.55rem;
