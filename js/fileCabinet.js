@@ -17,11 +17,13 @@ import { normalizeViewMode } from './viewSession.js';
 import { syncCabinetSplitter } from './shellResize.js';
 import { BoardOperations } from './boardOperations.js';
 import { createCardComponent } from './noteSurfaceHtml.js';
+import { CARD_ICONS } from './icons.js';
 
 
 export const FILE_CABINET_KEY = 'matrix_file_cabinet';
 export const FILE_CABINET_ORDER_KEY = 'matrix_file_cabinet_order';
 export const FILE_CABINET_FILED_CATEGORIES_KEY = 'matrix_file_cabinet_filed_categories';
+export const FILE_CABINET_CATEGORY_ORDER_KEY = 'matrix_file_cabinet_category_order';
 export const FILE_CABINET_HEIGHT_KEY = 'matrix_file_cabinet_height';
 
 export const FILE_CABINET_MIN_HEIGHT = 96;
@@ -43,8 +45,10 @@ function collapsedTabWidth() {
 export const FILE_CABINET_STACK_OFFSET_Y = 18;
 export const FILE_CABINET_STACK_OFFSET_X = 10;
 const FILE_CABINET_CATEGORY_HEADER_PAD = 20;
+const FILE_CABINET_SCROLL_EDGE = 36;
+const FILE_CABINET_SCROLL_STEP = 18;
 
-const DRAG_THRESHOLD = 4;
+export const DRAG_THRESHOLD = 4;
 
 export function isFileCabinetActive() {
     return localStorage.getItem(FILE_CABINET_KEY) === 'true';
@@ -158,6 +162,69 @@ export function toggleFileCabinetCategoryFiled(categoryName) {
     return idx < 0;
 }
 
+export function getFileCabinetCategoryOrder() {
+    try {
+        const raw = localStorage.getItem(FILE_CABINET_CATEGORY_ORDER_KEY);
+        const parsed = raw ? JSON.parse(raw) : [];
+        return Array.isArray(parsed) ? parsed.filter((c) => typeof c === 'string' && c.trim()) : [];
+    } catch {
+        return [];
+    }
+}
+
+export function saveFileCabinetCategoryOrder(categories) {
+    try {
+        localStorage.setItem(
+            FILE_CABINET_CATEGORY_ORDER_KEY,
+            JSON.stringify(Array.isArray(categories) ? categories : [])
+        );
+    } catch {
+        /* ignore */
+    }
+}
+
+/** Apply saved FC-only category order; append any new categories not yet saved. */
+export function applyFileCabinetCategoryOrder(categories) {
+    const cats = Array.isArray(categories) ? [...categories] : [];
+    const saved = getFileCabinetCategoryOrder();
+    if (!saved.length) return cats;
+    const remaining = new Set(cats);
+    const ordered = [];
+    saved.forEach((name) => {
+        if (!remaining.has(name)) return;
+        ordered.push(name);
+        remaining.delete(name);
+    });
+    cats.forEach((name) => {
+        if (remaining.has(name)) ordered.push(name);
+    });
+    return ordered;
+}
+
+export function persistFileCabinetCategoryOrderFromDom(mount) {
+    if (!mount) return;
+    const visible = [...mount.querySelectorAll('.file-cabinet-row > .file-cabinet-category')]
+        .map((el) => el.dataset.category)
+        .filter(Boolean);
+    const folded = [...mount.querySelectorAll('.file-cabinet-filed-slot')]
+        .map((el) => el.dataset.category)
+        .filter(Boolean);
+    const prev = getFileCabinetCategoryOrder();
+    const next = [];
+    const seen = new Set();
+    [...visible, ...folded].forEach((name) => {
+        if (seen.has(name)) return;
+        seen.add(name);
+        next.push(name);
+    });
+    prev.forEach((name) => {
+        if (seen.has(name)) return;
+        seen.add(name);
+        next.push(name);
+    });
+    saveFileCabinetCategoryOrder(next);
+}
+
 export function moveItemBetweenCategories({ itemId, fromCategory, toCategory, toIndex, item, UI }) {
     if (!itemId) return false;
     const fromCat = fromCategory || 'Uncategorized';
@@ -176,11 +243,9 @@ export function moveItemBetweenCategories({ itemId, fromCategory, toCategory, to
 
     if (fromCat !== toCat && item && UI) {
         const beforeItem = NoteSurface.snapshotItem(item);
-        const updated = {
-            ...item,
-            categories: toCat === 'Uncategorized' ? [] : [toCat]
-        };
-        NoteSurface.emitItemMutation(updated, { preserveView: true, beforeItem, skipRerender: true });
+        // Mutate live item so immediate re-renders / reconcile see the new category.
+        item.categories = toCat === 'Uncategorized' ? [] : [toCat];
+        NoteSurface.emitItemMutation(item, { preserveView: true, beforeItem, skipRerender: true });
         return true;
     }
     return fromCat !== toCat;
@@ -503,9 +568,10 @@ function applyStackPreviewPositions(stackEl, { draggedId, insertIndex = null, se
 function resolveFileCabinetDropTarget(clientX, clientY, dragState, mount) {
     if (!mount) return null;
     const prev = dragState?.card;
+    const prevPe = prev?.style.pointerEvents;
     if (prev) prev.style.pointerEvents = 'none';
     const el = document.elementFromPoint(clientX, clientY);
-    if (prev) prev.style.pointerEvents = '';
+    if (prev) prev.style.pointerEvents = prevPe || '';
 
     if (!el || !mount.contains(el)) return null;
 
@@ -515,6 +581,7 @@ function resolveFileCabinetDropTarget(clientX, clientY, dragState, mount) {
         const order = getFileCabinetOrder();
         const count = (order[category] || []).filter((id) => id !== dragState?.card?.dataset?.id).length;
         return {
+            kind: 'file-cabinet',
             targetStack: null,
             targetCategory: category,
             insertIndex: count,
@@ -533,7 +600,13 @@ function resolveFileCabinetDropTarget(clientX, clientY, dragState, mount) {
         let insertIndex = Math.floor((clientY - rect.top) / FILE_CABINET_STACK_OFFSET_Y);
         insertIndex = Math.max(0, Math.min(tabs.length, insertIndex));
         const inRollout = !!stack.closest('.file-cabinet-filed-rollout');
-        return { targetStack: stack, targetCategory: category, insertIndex, isFolded: inRollout };
+        return {
+            kind: 'file-cabinet',
+            targetStack: stack,
+            targetCategory: category,
+            insertIndex,
+            isFolded: inRollout
+        };
     }
 
     const col = el.closest('.file-cabinet-category');
@@ -541,6 +614,7 @@ function resolveFileCabinetDropTarget(clientX, clientY, dragState, mount) {
         const category = col.dataset.category || 'Uncategorized';
         const stackEl = col.querySelector('.file-cabinet-tab-stack');
         return {
+            kind: 'file-cabinet',
             targetStack: stackEl,
             targetCategory: category,
             insertIndex: 0,
@@ -548,26 +622,373 @@ function resolveFileCabinetDropTarget(clientX, clientY, dragState, mount) {
         };
     }
 
+    // Over FC mount but not a specific category — still a valid FC surface.
+    return {
+        kind: 'file-cabinet',
+        targetStack: null,
+        targetCategory: null,
+        insertIndex: null,
+        isFolded: false,
+        isMountOnly: true
+    };
+}
+
+/**
+ * Resolve drop across FC and board surfaces.
+ * Prefer geometry over elementFromPoint.contains — canvas uses CSS transform scale.
+ * @param {'fc-tab'|'board-card'} dragKind
+ */
+export function resolveCrossSurfaceDropTarget(clientX, clientY, {
+    dragKind = 'fc-tab',
+    mount = null,
+    canvas = null,
+    dragState = null
+} = {}) {
+    const prev = dragState?.card;
+    const prevPe = prev?.style.pointerEvents;
+    if (prev) prev.style.pointerEvents = 'none';
+
+    const pointInRect = (rect) => rect
+        && clientX >= rect.left
+        && clientX <= rect.right
+        && clientY >= rect.top
+        && clientY <= rect.bottom;
+
+    const mountRect = mount?.getBoundingClientRect?.();
+    if (mount && pointInRect(mountRect)) {
+        let fcTarget = resolveFileCabinetDropTarget(clientX, clientY, dragState, mount);
+        if (!fcTarget?.targetCategory || fcTarget.isMountOnly) {
+            const nearest = resolveNearestFileCabinetCategory(clientX, clientY, dragState, mount);
+            if (nearest) fcTarget = nearest;
+        }
+        if (prev) prev.style.pointerEvents = prevPe || '';
+        return fcTarget || {
+            kind: 'file-cabinet',
+            targetStack: null,
+            targetCategory: null,
+            insertIndex: null,
+            isMountOnly: true
+        };
+    }
+
+    if (dragKind === 'fc-tab' && canvas) {
+        const canvasRect = canvas.getBoundingClientRect();
+        if (pointInRect(canvasRect)) {
+            if (prev) prev.style.pointerEvents = prevPe || '';
+            return { kind: 'board', clientX, clientY };
+        }
+    }
+
+    // Secondary: elementsFromPoint can still help when geometry is ambiguous
+    const stack = document.elementsFromPoint?.(clientX, clientY) || [];
+    if (prev) prev.style.pointerEvents = prevPe || '';
+
+    if (mount && stack.some((el) => el === mount || mount.contains(el))) {
+        return resolveFileCabinetDropTarget(clientX, clientY, dragState, mount)
+            || resolveNearestFileCabinetCategory(clientX, clientY, dragState, mount)
+            || {
+                kind: 'file-cabinet',
+                targetStack: null,
+                targetCategory: null,
+                insertIndex: null,
+                isMountOnly: true
+            };
+    }
+    if (dragKind === 'fc-tab' && canvas && stack.some((el) => el === canvas || canvas.contains(el))) {
+        return { kind: 'board', clientX, clientY };
+    }
+
     return null;
 }
+
+function resolveNearestFileCabinetCategory(clientX, clientY, dragState, mount) {
+    if (!mount) return null;
+    const candidates = [
+        ...mount.querySelectorAll('.file-cabinet-category'),
+        ...mount.querySelectorAll('.file-cabinet-filed-chip')
+    ];
+    let best = null;
+    let bestDist = Infinity;
+    candidates.forEach((el) => {
+        const r = el.getBoundingClientRect();
+        const cx = Math.max(r.left, Math.min(clientX, r.right));
+        const cy = Math.max(r.top, Math.min(clientY, r.bottom));
+        const dist = Math.hypot(clientX - cx, clientY - cy);
+        if (dist < bestDist) {
+            bestDist = dist;
+            best = el;
+        }
+    });
+    // ~half a column away is still a valid snap
+    if (!best || bestDist > 96) return null;
+
+    if (best.classList.contains('file-cabinet-filed-chip')) {
+        const category = best.dataset.category || 'Uncategorized';
+        const order = getFileCabinetOrder();
+        const count = (order[category] || []).filter((id) => id !== dragState?.card?.dataset?.id).length;
+        return {
+            kind: 'file-cabinet',
+            targetStack: null,
+            targetCategory: category,
+            insertIndex: count,
+            targetChip: best,
+            isFolded: true
+        };
+    }
+
+    const category = best.dataset.category || 'Uncategorized';
+    const stackEl = best.querySelector('.file-cabinet-tab-stack');
+    if (!stackEl) {
+        return {
+            kind: 'file-cabinet',
+            targetStack: null,
+            targetCategory: category,
+            insertIndex: 0,
+            isFolded: false
+        };
+    }
+    const rect = stackEl.getBoundingClientRect();
+    const tabs = [...stackEl.querySelectorAll('.file-cabinet-tab')].filter(
+        (t) => t.dataset.id !== dragState?.card?.dataset?.id
+    );
+    let insertIndex = Math.floor((clientY - rect.top) / FILE_CABINET_STACK_OFFSET_Y);
+    insertIndex = Math.max(0, Math.min(tabs.length, insertIndex));
+    return {
+        kind: 'file-cabinet',
+        targetStack: stackEl,
+        targetCategory: category,
+        insertIndex,
+        isFolded: false
+    };
+}
+
+let activeDropHighlightKey = '';
 
 function clearFileCabinetDropTargets(mount) {
     mount?.querySelectorAll('.is-file-cabinet-drop-target').forEach((el) => {
         el.classList.remove('is-file-cabinet-drop-target');
     });
+    mount?.classList.remove('is-file-cabinet-drop-target');
+    document.getElementById('app-canvas')?.classList.remove('is-file-cabinet-board-drop-target');
+    clearFileCabinetInsertMarker(mount);
+    activeDropHighlightKey = '';
+}
+
+export function clearFileCabinetSurfaceHighlights(mount = document.getElementById('file-cabinet')) {
+    clearFileCabinetDropTargets(mount);
+}
+
+function clearFileCabinetInsertMarker(mount) {
+    mount?.querySelectorAll('.file-cabinet-insert-marker').forEach((el) => el.remove());
+}
+
+function ensureFileCabinetInsertMarker(stack, insertIndex) {
+    if (!stack || !Number.isFinite(insertIndex)) return;
+    const mount = stack.closest('#file-cabinet');
+    let marker = stack.querySelector(':scope > .file-cabinet-insert-marker');
+    if (!marker) {
+        if (mount) {
+            mount.querySelectorAll('.file-cabinet-insert-marker').forEach((el) => {
+                if (el.parentElement !== stack) el.remove();
+            });
+        }
+        marker = document.createElement('div');
+        marker.className = 'file-cabinet-insert-marker';
+        stack.appendChild(marker);
+    }
+    marker.style.top = `${Math.max(0, insertIndex) * FILE_CABINET_STACK_OFFSET_Y}px`;
+}
+
+/** Idempotent drop highlight — avoids blink from clear/re-add every frame. */
+export function applyFileCabinetDropHighlight(mount, target) {
+    if (!target) {
+        clearFileCabinetDropTargets(mount);
+        return;
+    }
+
+    const highlightKey = target.kind === 'board'
+        ? 'board'
+        : target.targetChip
+            ? `chip:${target.targetCategory}`
+            : target.isMountOnly
+                ? 'mount'
+                : `col:${target.targetCategory || ''}`;
+
+    if (highlightKey !== activeDropHighlightKey) {
+        mount?.querySelectorAll('.is-file-cabinet-drop-target').forEach((el) => {
+            el.classList.remove('is-file-cabinet-drop-target');
+        });
+        mount?.classList.remove('is-file-cabinet-drop-target');
+        document.getElementById('app-canvas')?.classList.remove('is-file-cabinet-board-drop-target');
+        activeDropHighlightKey = highlightKey;
+
+        if (target.kind === 'board') {
+            document.getElementById('app-canvas')?.classList.add('is-file-cabinet-board-drop-target');
+        } else if (target.targetChip) {
+            target.targetChip.classList.add('is-file-cabinet-drop-target');
+        } else if (target.isMountOnly) {
+            mount?.classList.add('is-file-cabinet-drop-target');
+        } else {
+            const col = target.targetStack?.closest('.file-cabinet-category')
+                || [...(mount?.querySelectorAll('.file-cabinet-category') || [])]
+                    .find((c) => c.dataset.category === target.targetCategory);
+            col?.classList.add('is-file-cabinet-drop-target');
+        }
+    }
+
+    if (target.kind === 'file-cabinet' && target.targetStack && Number.isFinite(target.insertIndex)) {
+        ensureFileCabinetInsertMarker(target.targetStack, target.insertIndex);
+    } else {
+        clearFileCabinetInsertMarker(mount);
+    }
 }
 
 function setFileCabinetDropTarget(mount, target) {
-    clearFileCabinetDropTargets(mount);
-    if (!target) return;
-    if (target.targetChip) {
-        target.targetChip.classList.add('is-file-cabinet-drop-target');
-        return;
+    applyFileCabinetDropHighlight(mount, target);
+}
+
+function autoScrollFileCabinetInner(mount, clientX) {
+    const inner = mount?.querySelector('.file-cabinet-inner');
+    if (!inner) return;
+    const rect = inner.getBoundingClientRect();
+    if (clientX > rect.right - FILE_CABINET_SCROLL_EDGE) {
+        inner.scrollLeft += FILE_CABINET_SCROLL_STEP;
+    } else if (clientX < rect.left + FILE_CABINET_SCROLL_EDGE) {
+        inner.scrollLeft = Math.max(0, inner.scrollLeft - FILE_CABINET_SCROLL_STEP);
     }
-    const col = target.targetStack?.closest('.file-cabinet-category')
-        || [...(mount?.querySelectorAll('.file-cabinet-category') || [])]
-            .find((c) => c.dataset.category === target.targetCategory);
-    col?.classList.add('is-file-cabinet-drop-target');
+}
+
+function clientToCanvasBoardPoint(canvas, clientX, clientY) {
+    if (!canvas) return { x: 8, y: 8 };
+    const zoom = parseFloat(canvas.dataset.desktopZoom);
+    const scale = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+    const rect = canvas.getBoundingClientRect();
+    return {
+        x: (clientX - rect.left) / scale + canvas.scrollLeft,
+        y: (clientY - rect.top) / scale + canvas.scrollTop
+    };
+}
+
+function ensureFileCabinetTabDragHandle(card) {
+    if (!card || card.querySelector('.card-act--drag')) return;
+    const actions = card.querySelector('.card-actions');
+    if (!actions) return;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'card-act card-act--drag';
+    btn.title = 'Drag to reorder';
+    btn.setAttribute('aria-label', 'Drag to reorder');
+    btn.innerHTML = CARD_ICONS.drag;
+    const toggle = actions.querySelector('.card-act--toggle');
+    if (toggle) actions.insertBefore(btn, toggle);
+    else actions.appendChild(btn);
+}
+
+function updateFileCabinetCategoryCount(mount, category) {
+    const col = mount?.querySelector(`.file-cabinet-category[data-category="${CSS.escape(category)}"]`);
+    if (!col) return;
+    const count = col.querySelectorAll('.file-cabinet-tab').length;
+    const countEl = col.querySelector('.file-cabinet-category-count');
+    if (countEl) countEl.textContent = String(count);
+}
+
+function flashFileCabinetDropRejected(card) {
+    if (!card) return;
+    card.classList.add('is-drop-rejected');
+    window.setTimeout(() => card.classList.remove('is-drop-rejected'), 180);
+}
+
+/**
+ * Expand a filed note onto the board at drop coords (or remembered position).
+ * Preserves item.categories.
+ */
+export function expandFileCabinetItemToBoard({ item, dropX, dropY, UI, card = null }) {
+    if (!item?.id || !UI) return false;
+    removeFromFileCabinetOrder(item.id);
+
+    const canvas = document.getElementById('app-canvas');
+    let sizeRect;
+    if (card) {
+        sizeRect = UI.resolveBoardExpandRect(card, item);
+    } else {
+        const saved = UI.getGridLayout()[item.id];
+        const remembered = UI.resolveRememberedSpatialSize(saved, item);
+        sizeRect = { x: 8, y: 8, w: remembered.w, h: remembered.h };
+    }
+
+    if (canvas && Number.isFinite(dropX) && Number.isFinite(dropY)) {
+        const point = clientToCanvasBoardPoint(canvas, dropX, dropY);
+        let placed = {
+            x: Math.max(8, point.x - sizeRect.w / 2),
+            y: Math.max(8, point.y - sizeRect.h / 2),
+            w: sizeRect.w,
+            h: sizeRect.h
+        };
+        const bounds = UI.getGridBoardBounds(canvas);
+        placed = UI.snapNoteRect(placed, {
+            maxW: bounds.packW,
+            maxH: bounds.maxH,
+            origin: bounds.origin,
+            edgePad: bounds.edgePad
+        });
+        UI.saveGridLayout(item.id, placed, { updateRemembered: true });
+    } else {
+        const savedGrid = UI.getGridLayout()[item.id];
+        const savedPos = UI.getFreeformPositions()[item.id];
+        const x = savedGrid?.x ?? savedPos?.x ?? 8;
+        const y = savedGrid?.y ?? savedPos?.y ?? 8;
+        UI.saveGridLayout(item.id, { x, y, w: sizeRect.w, h: sizeRect.h }, { updateRemembered: true });
+    }
+
+    window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
+    return true;
+}
+
+/**
+ * File a board note into the cabinet. Optionally switch category on drop.
+ * Updates live item.categories synchronously before visibility render so reconcile
+ * does not rewrite order back to the old category.
+ */
+export function fileBoardItemToCabinet({
+    item,
+    UI,
+    card = null,
+    targetCategory = null,
+    insertIndex = null
+} = {}) {
+    if (!item?.id || !UI) return false;
+    const rect = card ? UI.readNoteRect(card) : { x: 8, y: 8, w: 0, h: 0 };
+    const fromCat = getItemCategoryName(item);
+    const toCat = targetCategory || fromCat;
+
+    if (toCat !== fromCat) {
+        const beforeItem = NoteSurface.snapshotItem(item);
+        item.categories = toCat === 'Uncategorized' ? [] : [toCat];
+        NoteSurface.emitItemMutation(item, { preserveView: true, beforeItem, skipRerender: true });
+    }
+
+    fileItemToCabinet(item, UI.getActiveBoardViewMode?.() || UI.activeBoardViewMode || 'grid', UI, {
+        x: rect.x ?? 8,
+        y: rect.y ?? 8,
+        rememberW: rect.w,
+        rememberH: rect.h
+    });
+
+    if (Number.isFinite(insertIndex)) {
+        const order = getFileCabinetOrder();
+        const list = [...(order[toCat] || [])];
+        const fromIdx = list.indexOf(item.id);
+        if (fromIdx >= 0) {
+            list.splice(fromIdx, 1);
+            const clamped = Math.max(0, Math.min(insertIndex, list.length));
+            list.splice(clamped, 0, item.id);
+            order[toCat] = list;
+            saveFileCabinetOrder(order);
+        }
+    }
+
+    window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
+    return true;
 }
 
 function resetDraggedTabStyles(card, stack) {
@@ -679,7 +1100,8 @@ function buildFileCabinetCategoryColumn({
     items,
     activeCategories,
     UI,
-    showFoldButton = true
+    showFoldButton = true,
+    showGrabButton = true
 }) {
     const label = getLabelRect();
     const color = resolveCategoryColor(catName, activeCategories);
@@ -687,24 +1109,29 @@ function buildFileCabinetCategoryColumn({
     const col = document.createElement('div');
     col.className = 'file-cabinet-category';
     col.dataset.category = catName;
+    col.style.setProperty('--file-cabinet-category-color', color);
 
     const header = document.createElement('div');
     header.className = 'file-cabinet-category-header';
+    const grabBtnHtml = showGrabButton
+        ? `<button type="button" class="card-act file-cabinet-category-grab-btn grab-handle grab-handle--col" title="Drag to reorder category" aria-label="Drag to reorder category">${CARD_ICONS.drag}</button>`
+        : '';
     const foldBtnHtml = showFoldButton
         ? `<button type="button" class="card-act file-cabinet-category-fold-btn" title="Fold category" aria-label="Fold category">${FOLD_ICON}</button>`
         : '';
-    header.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span class="file-cabinet-category-name u-truncate">${escapeHTML(catName)}</span><span class="file-cabinet-category-count">${items.length}</span>${foldBtnHtml}`;
+    header.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span class="file-cabinet-category-name u-truncate">${escapeHTML(catName)}</span><span class="file-cabinet-category-count">${items.length}</span>${grabBtnHtml}${foldBtnHtml}`;
     col.appendChild(header);
 
     const stack = document.createElement('div');
     stack.className = 'file-cabinet-tab-stack';
     stack.dataset.category = catName;
 
-items.forEach((item, index) => {
-const card = createCardComponent(UI, item, activeCategories);
+    items.forEach((item, index) => {
+        const card = createCardComponent(UI, item, activeCategories);
         card.classList.add('file-cabinet-tab', 'spatial-at-small');
         card.dataset.fileCabinetCategory = catName;
         card.dataset.fileCabinetStackIndex = String(index);
+        ensureFileCabinetTabDragHandle(card);
         UI.applyNoteRect(card, { x: 0, y: 0, w: label.w, h: label.h }, { settling: false });
         UI.finalizeDesktopCard(card);
         UI.syncSpatialToggleButton(card);
@@ -718,17 +1145,17 @@ const card = createCardComponent(UI, item, activeCategories);
 
 function buildFileCabinetRolloutStack({ catName, items, activeCategories, UI }) {
     const label = getLabelRect();
-    const color = resolveCategoryColor(catName, activeCategories);
 
     const stack = document.createElement('div');
     stack.className = 'file-cabinet-tab-stack';
     stack.dataset.category = catName;
 
-items.forEach((item, index) => {
+    items.forEach((item, index) => {
         const card = createCardComponent(UI, item, activeCategories);
         card.classList.add('file-cabinet-tab', 'spatial-at-small');
         card.dataset.fileCabinetCategory = catName;
         card.dataset.fileCabinetStackIndex = String(index);
+        ensureFileCabinetTabDragHandle(card);
         UI.applyNoteRect(card, { x: 0, y: 0, w: label.w, h: label.h }, { settling: false });
         UI.finalizeDesktopCard(card);
         UI.syncSpatialToggleButton(card);
@@ -744,6 +1171,7 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
 
     let activeSlot = null;
     let pinnedByDrag = false;
+    let dragMode = false;
 
     const getSlotChip = (slot) => slot?.querySelector('.file-cabinet-filed-chip');
     const getSlotRollout = (slot) => slot?.querySelector('.file-cabinet-filed-rollout');
@@ -767,7 +1195,8 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
 
     const hidePreview = (force = false) => {
         if (!force && pinnedByDrag) return;
-        if (!force && document.body.classList.contains('is-file-cabinet-drag-active')) return;
+        if (!force && dragMode) return;
+        if (!force && document.body.classList.contains('is-file-cabinet-drag-active') && !dragMode) return;
         mount.querySelectorAll('.file-cabinet-filed-slot.is-fold-rollout-open').forEach((slot) => {
             closeSlot(slot);
         });
@@ -775,8 +1204,8 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
         activeSlot = null;
     };
 
-    const showPreview = (slot) => {
-        if (document.body.classList.contains('is-file-cabinet-drag-active')) return;
+    const showPreview = (slot, { duringDrag = false } = {}) => {
+        if (!duringDrag && document.body.classList.contains('is-file-cabinet-drag-active') && !dragMode) return;
         const ctx = getPreviewContext?.();
         if (!ctx || !slot) return;
 
@@ -816,7 +1245,8 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
 
     const maybeHidePreview = (relatedTarget) => {
         if (isInsidePreviewZone(relatedTarget)) return;
-        if (pinnedByDrag || document.body.classList.contains('is-file-cabinet-drag-active')) return;
+        if (pinnedByDrag || dragMode) return;
+        if (document.body.classList.contains('is-file-cabinet-drag-active')) return;
         hidePreview();
     };
 
@@ -824,8 +1254,8 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
         const slot = e.target.closest('.file-cabinet-filed-slot');
         if (!slot || !mount.contains(slot)) return;
         if (e.relatedTarget && slot.contains(e.relatedTarget)) return;
-        if (document.body.classList.contains('is-file-cabinet-drag-active')) return;
-        showPreview(slot);
+        if (document.body.classList.contains('is-file-cabinet-drag-active') && !dragMode) return;
+        showPreview(slot, { duringDrag: dragMode });
     }, { signal });
 
     mount.addEventListener('pointerout', (e) => {
@@ -847,19 +1277,27 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
         if (!slot && !fromRollout) return;
         requestAnimationFrame(() => {
             if (isInsidePreviewZone(document.activeElement)) return;
-            if (pinnedByDrag || document.body.classList.contains('is-file-cabinet-drag-active')) return;
+            if (pinnedByDrag || dragMode) return;
+            if (document.body.classList.contains('is-file-cabinet-drag-active')) return;
             hidePreview();
         });
     }, { signal });
 
     return {
         onDragStart(stack) {
+            dragMode = true;
             if (stack?.closest('.file-cabinet-filed-rollout')) pinnedByDrag = true;
         },
         onDragEnd() {
             const wasPinned = pinnedByDrag;
             pinnedByDrag = false;
+            dragMode = false;
             if (wasPinned) hidePreview(true);
+            else hidePreview(true);
+        },
+        showPreviewDuringDrag(slot) {
+            dragMode = true;
+            if (slot) showPreview(slot, { duringDrag: true });
         },
         hidePreview
     };
@@ -885,7 +1323,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
         byCategory.get(cat).push(item);
     });
 
-    const allCategories = (() => {
+    const allCategories = applyFileCabinetCategoryOrder((() => {
         const cats = [...byCategory.keys()];
         const boardSort = readBoardSort();
         if (boardSort.field === 'category') {
@@ -893,8 +1331,10 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
             return cats.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }) * dir);
         }
         return cats.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-    })();
-    const filedCategoryNames = getFileCabinetFiledCategories().filter((c) => byCategory.has(c));
+    })());
+    const filedCategoryNames = applyFileCabinetCategoryOrder(
+        getFileCabinetFiledCategories().filter((c) => byCategory.has(c))
+    );
     const visibleCategories = allCategories.filter((c) => !isFileCabinetCategoryFiled(c));
     const hasRail = filedCategoryNames.length > 0;
 
@@ -913,30 +1353,29 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
         rail.className = 'file-cabinet-filed-rail';
         rail.setAttribute('aria-label', 'Folded categories');
 
-        filedCategoryNames
-            .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
-            .forEach((catName) => {
-                const items = byCategory.get(catName) || [];
-                const color = resolveCategoryColor(catName, activeCategories);
+        filedCategoryNames.forEach((catName) => {
+            const items = byCategory.get(catName) || [];
+            const color = resolveCategoryColor(catName, activeCategories);
 
-                const slot = document.createElement('div');
-                slot.className = 'file-cabinet-filed-slot';
-                slot.dataset.category = catName;
+            const slot = document.createElement('div');
+            slot.className = 'file-cabinet-filed-slot';
+            slot.dataset.category = catName;
 
-                const chip = document.createElement('div');
-                chip.className = 'file-cabinet-filed-chip';
-                chip.dataset.category = catName;
+            const chip = document.createElement('div');
+            chip.className = 'file-cabinet-filed-chip';
+            chip.dataset.category = catName;
+            chip.style.setProperty('--card-category-color', color);
 
-                chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span class="file-cabinet-filed-chip-name u-truncate">${escapeHTML(catName)} (${items.length})</span><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
+            chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span class="file-cabinet-filed-chip-name u-truncate">${escapeHTML(catName)} (${items.length})</span><button type="button" class="card-act file-cabinet-filed-chip-grab grab-handle grab-handle--col" title="Drag to reorder category" aria-label="Drag to reorder category">${CARD_ICONS.drag}</button><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
 
-                const rollout = document.createElement('div');
-                rollout.className = 'file-cabinet-filed-rollout';
-                rollout.setAttribute('aria-hidden', 'true');
+            const rollout = document.createElement('div');
+            rollout.className = 'file-cabinet-filed-rollout';
+            rollout.setAttribute('aria-hidden', 'true');
 
-                slot.appendChild(chip);
-                slot.appendChild(rollout);
-                rail.appendChild(slot);
-            });
+            slot.appendChild(chip);
+            slot.appendChild(rollout);
+            rail.appendChild(slot);
+        });
 
         inner.appendChild(rail);
     }
@@ -951,7 +1390,8 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
             items,
             activeCategories,
             UI,
-            showFoldButton: true
+            showFoldButton: true,
+            showGrabButton: true
         }));
     });
 
@@ -989,10 +1429,156 @@ export function initFileCabinetCategoryActions(mount, signal) {
     }, { signal });
 }
 
-export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
+function createCategoryChipGhost(dragEl) {
+    const cat = dragEl.dataset.category || 'Uncategorized';
+    const nameEl = dragEl.querySelector('.file-cabinet-category-name, .file-cabinet-filed-chip-name');
+    let name = nameEl?.textContent?.trim() || cat;
+    name = name.replace(/\s*\(\d+\)\s*$/, '').trim() || cat;
+    const countEl = dragEl.querySelector('.file-cabinet-category-count');
+    const count = countEl?.textContent?.trim()
+        || (nameEl?.textContent?.match(/\((\d+)\)/)?.[1] ?? '');
+    const dot = dragEl.querySelector('.file-cabinet-category-dot');
+    const color = dragEl.style.getPropertyValue('--file-cabinet-category-color')?.trim()
+        || dragEl.style.getPropertyValue('--card-category-color')?.trim()
+        || dot?.style?.background
+        || 'var(--accent-color)';
+
+    const ghost = document.createElement('div');
+    ghost.className = 'file-cabinet-category-chip-ghost';
+    ghost.style.setProperty('--card-category-color', color);
+    ghost.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span class="file-cabinet-category-chip-ghost-name u-truncate">${escapeHTML(name)}${count ? ` (${escapeHTML(count)})` : ''}</span>`;
+    return ghost;
+}
+
+function initFileCabinetCategoryColumnDrag(mount, signal) {
+    if (!mount || !signal) return;
+
+    mount.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        const grab = e.target.closest('.file-cabinet-category-grab-btn, .file-cabinet-filed-chip-grab');
+        if (!grab || !mount.contains(grab)) return;
+
+        const col = grab.closest('.file-cabinet-category');
+        const slot = grab.closest('.file-cabinet-filed-slot');
+        const dragEl = col || slot;
+        if (!dragEl) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const parent = col
+            ? mount.querySelector('.file-cabinet-row')
+            : mount.querySelector('.file-cabinet-filed-rail');
+        if (!parent) return;
+
+        const siblings = [...parent.children];
+        const startIndex = siblings.indexOf(dragEl);
+        if (startIndex < 0) return;
+
+        const startX = e.clientX;
+        const startY = e.clientY;
+        let active = false;
+        let placeholder = null;
+        let ghost = null;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        const onMove = (ev) => {
+            const dx = ev.clientX - startX;
+            const dy = ev.clientY - startY;
+            if (!active && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+
+            if (!active) {
+                active = true;
+                // Measure WHILE still in the row — never after reparenting.
+                const rect = dragEl.getBoundingClientRect();
+                offsetX = Math.min(Math.max(8, ev.clientX - rect.left), Math.max(16, rect.width - 8));
+                offsetY = Math.min(Math.max(8, ev.clientY - rect.top), 18);
+
+                placeholder = document.createElement('div');
+                placeholder.className = col
+                    ? 'file-cabinet-category-placeholder'
+                    : 'file-cabinet-filed-slot-placeholder';
+                placeholder.style.width = `${rect.width}px`;
+                placeholder.style.height = `${rect.height}px`;
+                placeholder.style.minWidth = `${rect.width}px`;
+                placeholder.style.flex = '0 0 auto';
+                placeholder.dataset.category = dragEl.dataset.category || '';
+                parent.insertBefore(placeholder, dragEl);
+                dragEl.remove();
+
+                ghost = createCategoryChipGhost(dragEl);
+                document.body.appendChild(ghost);
+                ghost.style.position = 'fixed';
+                ghost.style.left = `${ev.clientX - offsetX}px`;
+                ghost.style.top = `${ev.clientY - offsetY}px`;
+                ghost.style.zIndex = '10000';
+                ghost.style.pointerEvents = 'none';
+                document.body.classList.add('is-file-cabinet-drag-active');
+                try { grab.setPointerCapture(ev.pointerId); } catch { /* ignore */ }
+            }
+
+            if (!ghost) return;
+            ghost.style.left = `${ev.clientX - offsetX}px`;
+            ghost.style.top = `${ev.clientY - offsetY}px`;
+
+            const hit = document.elementFromPoint(ev.clientX, ev.clientY);
+            const over = col
+                ? hit?.closest?.('.file-cabinet-category, .file-cabinet-category-placeholder')
+                : hit?.closest?.('.file-cabinet-filed-slot, .file-cabinet-filed-slot-placeholder');
+            if (!over || over === placeholder || over === dragEl) return;
+            if (!parent.contains(over) && over !== placeholder) return;
+
+            const overRect = over.getBoundingClientRect();
+            const before = col
+                ? ev.clientX < overRect.left + overRect.width / 2
+                : ev.clientY < overRect.top + overRect.height / 2;
+            if (before) parent.insertBefore(placeholder, over);
+            else parent.insertBefore(placeholder, over.nextSibling);
+        };
+
+        const onUp = (ev) => {
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+            document.removeEventListener('pointercancel', onUp);
+            try { grab.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
+
+            document.body.classList.remove('is-file-cabinet-drag-active');
+            ghost?.remove();
+            ghost = null;
+
+            if (!active || !placeholder?.parentNode) {
+                if (placeholder?.parentNode) {
+                    placeholder.parentNode.insertBefore(dragEl, placeholder);
+                    placeholder.remove();
+                } else if (!dragEl.isConnected) {
+                    parent.appendChild(dragEl);
+                }
+                return;
+            }
+
+            placeholder.parentNode.insertBefore(dragEl, placeholder);
+            placeholder.remove();
+            persistFileCabinetCategoryOrderFromDom(mount);
+        };
+
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+        document.addEventListener('pointercancel', onUp);
+    }, { signal });
+}
+
+/**
+ * @param {HTMLElement} mount
+ * @param {Array|Function} currentItemsOrGetter - items array or () => items
+ * @param {Object} UI
+ * @param {AbortSignal} signal
+ */
+export function initFileCabinetDrag(mount, currentItemsOrGetter = [], UI, signal) {
     if (!mount || !signal) return;
 
     initFileCabinetCategoryActions(mount, signal);
+    initFileCabinetCategoryColumnDrag(mount, signal);
 
     const foldedHoverPreview = initFileCabinetFoldedHoverPreview(
         mount,
@@ -1000,8 +1586,18 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
         signal
     );
 
-    const itemsById = () => new Map((currentItems || []).map((item) => [item.id, item]));
+    const getItems = typeof currentItemsOrGetter === 'function'
+        ? currentItemsOrGetter
+        : () => currentItemsOrGetter || [];
+    const itemsById = () => new Map(getItems().map((item) => [item.id, item]));
     let dragState = null;
+    let previewFrame = null;
+
+    const cancelPreviewFrame = () => {
+        if (!previewFrame) return;
+        cancelAnimationFrame(previewFrame);
+        previewFrame = null;
+    };
 
     const restorePreviewFromState = (state) => {
         restoreStackPreview(state.sourceStack, state.sourceBaseline);
@@ -1010,40 +1606,204 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
         }
     };
 
+    const applyPreviewAt = (clientX, clientY) => {
+        if (!dragState?.active) return null;
+        const canvas = document.getElementById('app-canvas');
+        const target = resolveCrossSurfaceDropTarget(clientX, clientY, {
+            dragKind: 'fc-tab',
+            mount,
+            canvas,
+            dragState
+        });
+        dragState.currentTarget = target;
+        setFileCabinetDropTarget(mount, target);
+
+        if (target?.kind === 'file-cabinet' && target.isFolded && target.targetChip) {
+            const slot = target.targetChip.closest('.file-cabinet-filed-slot');
+            foldedHoverPreview?.showPreviewDuringDrag(slot);
+            const refreshed = resolveFileCabinetDropTarget(clientX, clientY, dragState, mount)
+                || resolveNearestFileCabinetCategory(clientX, clientY, dragState, mount);
+            if (refreshed?.targetStack) {
+                Object.assign(target, refreshed);
+                dragState.currentTarget = target;
+                setFileCabinetDropTarget(mount, target);
+            }
+        }
+
+        const draggedId = dragState.card.dataset.id;
+        const sourceMinSlots = dragState.sourceTabCount || 0;
+        const sameStack = target?.kind === 'file-cabinet'
+            && target.targetStack
+            && target.targetStack === dragState.sourceStack;
+        const crossStack = target?.kind === 'file-cabinet'
+            && target.targetStack
+            && target.targetStack !== dragState.sourceStack;
+
+        // Single preview pass — never collapse-then-reopen the same stack in one frame.
+        if (sameStack) {
+            applyStackPreviewPositions(dragState.sourceStack, {
+                draggedId,
+                insertIndex: target.insertIndex,
+                settling: true,
+                minSlotCount: sourceMinSlots
+            });
+            if (dragState.targetStack && dragState.targetStack !== dragState.sourceStack) {
+                restoreStackPreview(dragState.targetStack, dragState.targetBaseline);
+                dragState.targetStack = null;
+                dragState.targetBaseline = null;
+            }
+        } else {
+            applyStackPreviewPositions(dragState.sourceStack, {
+                draggedId,
+                insertIndex: null,
+                settling: true,
+                minSlotCount: sourceMinSlots
+            });
+
+            if (crossStack) {
+                if (dragState.targetStack !== target.targetStack) {
+                    if (dragState.targetStack && dragState.targetBaseline) {
+                        restoreStackPreview(dragState.targetStack, dragState.targetBaseline);
+                    }
+                    dragState.targetStack = target.targetStack;
+                    dragState.targetBaseline = snapshotStackTabs(target.targetStack);
+                }
+                applyStackPreviewPositions(target.targetStack, {
+                    draggedId,
+                    insertIndex: target.insertIndex,
+                    settling: true
+                });
+            } else if (dragState.targetStack && dragState.targetStack !== dragState.sourceStack) {
+                restoreStackPreview(dragState.targetStack, dragState.targetBaseline);
+                dragState.targetStack = null;
+                dragState.targetBaseline = null;
+            }
+        }
+
+        autoScrollFileCabinetInner(mount, clientX);
+
+        const slotKey = `${dragState.sourceStack?.querySelectorAll('.file-cabinet-tab').length || 0}:${target?.targetStack?.querySelectorAll('.file-cabinet-tab').length || 0}:${target?.insertIndex ?? ''}`;
+        if (dragState._lastSlotKey !== slotKey) {
+            dragState._lastSlotKey = slotKey;
+            syncFileCabinetDrawerHeight(mount);
+        }
+        return target;
+    };
+
+    const runPreview = (clientX, clientY) => {
+        if (!dragState?.active) return;
+        dragState.lastX = clientX;
+        dragState.lastY = clientY;
+        if (previewFrame) return;
+        previewFrame = requestAnimationFrame(() => {
+            previewFrame = null;
+            if (!dragState?.active) return;
+            applyPreviewAt(dragState.lastX, dragState.lastY);
+        });
+    };
+
+    const moveTabDomToCategory = (state, toCategory, toIndex, target) => {
+        let destStack = target?.targetStack;
+        if (!destStack) {
+            destStack = mount.querySelector(
+                `.file-cabinet-category[data-category="${CSS.escape(toCategory)}"] .file-cabinet-tab-stack`
+            );
+        }
+        if (!destStack) return false;
+
+        const destTabs = [...destStack.querySelectorAll('.file-cabinet-tab')]
+            .filter((t) => t !== state.card);
+        if (toIndex >= destTabs.length) destStack.appendChild(state.card);
+        else destStack.insertBefore(state.card, destTabs[toIndex]);
+
+        state.card.dataset.fileCabinetCategory = toCategory;
+        const colorHost = destStack.closest('.file-cabinet-category');
+        const color = colorHost?.style.getPropertyValue('--file-cabinet-category-color');
+        if (color) {
+            state.card.style.setProperty('--card-category-color', color);
+            state.card.style.setProperty('--file-cabinet-category-color', color);
+        }
+        applyFileCabinetStackPositions(state.sourceStack);
+        applyFileCabinetStackPositions(destStack);
+        updateFileCabinetCategoryCount(mount, state.sourceCategory);
+        updateFileCabinetCategoryCount(mount, toCategory);
+
+        if (!state.sourceStack.querySelector('.file-cabinet-tab')) {
+            const emptyCol = state.sourceStack.closest('.file-cabinet-category');
+            emptyCol?.remove();
+            return 'structural';
+        }
+        return true;
+    };
+
     const finishDrag = (e) => {
         if (!dragState) return;
         const state = dragState;
         dragState = null;
 
-        endFileCabinetDragGhost(state.card, state.placeholder);
-
-        document.body.classList.remove('is-file-cabinet-drag-active');
-        mount.classList.remove('is-layout-active');
-        clearFileCabinetDropTargets(mount);
-        foldedHoverPreview?.onDragEnd();
+        cancelPreviewFrame();
 
         if (!state.active) {
-            if (state.sourceBaseline) restorePreviewFromState(state);
+            document.body.classList.remove('is-file-cabinet-drag-active');
+            mount.classList.remove('is-layout-active');
+            clearFileCabinetDropTargets(mount);
+            foldedHoverPreview?.onDragEnd();
             resetDraggedTabStyles(state.card, state.sourceStack);
             return;
         }
 
-        const target = state.currentTarget
-            || resolveFileCabinetDropTarget(e.clientX, e.clientY, state, mount);
-        const fromCategory = state.sourceCategory;
-        const itemId = state.card.dataset.id;
-        const item = itemsById().get(itemId);
+        // Always resolve fresh at drop — never trust stale rAF currentTarget.
+        const canvas = document.getElementById('app-canvas');
+        const target = resolveCrossSurfaceDropTarget(e.clientX, e.clientY, {
+            dragKind: 'fc-tab',
+            mount,
+            canvas,
+            dragState: state
+        });
 
         restorePreviewFromState(state);
+        clearFileCabinetDropTargets(mount);
+        document.body.classList.remove('is-file-cabinet-drag-active');
+        mount.classList.remove('is-layout-active');
+        foldedHoverPreview?.onDragEnd();
 
-        if (!target || !itemId) {
+        const fromCategory = state.sourceCategory;
+        const itemId = state.card.dataset.id;
+        const item = itemsById().get(itemId) || UI?.resolveBoardItem?.(itemId);
+
+        if (!itemId) {
+            endFileCabinetDragGhost(state.card, state.placeholder);
             resetDraggedTabStyles(state.card, state.sourceStack);
+            syncFileCabinetDrawerHeight(mount);
+            return;
+        }
+
+        // FC tab → board
+        if (target?.kind === 'board') {
+            endFileCabinetDragGhost(state.card, state.placeholder);
+            resetDraggedTabStyles(state.card, state.sourceStack);
+            expandFileCabinetItemToBoard({
+                item,
+                dropX: e.clientX,
+                dropY: e.clientY,
+                UI,
+                card: state.card
+            });
+            return;
+        }
+
+        if (!target || target.kind !== 'file-cabinet' || target.isMountOnly || !target.targetCategory) {
+            endFileCabinetDragGhost(state.card, state.placeholder);
+            resetDraggedTabStyles(state.card, state.sourceStack);
+            flashFileCabinetDropRejected(state.card);
             syncFileCabinetDrawerHeight(mount);
             return;
         }
 
         const toCategory = target.targetCategory || 'Uncategorized';
         const toIndex = target.insertIndex ?? 0;
+
+        endFileCabinetDragGhost(state.card, state.placeholder);
 
         if (fromCategory === toCategory) {
             const tabs = [...state.sourceStack.querySelectorAll('.file-cabinet-tab')];
@@ -1071,68 +1831,35 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
             item,
             UI
         });
+
+        // Folded chip without an open stack needs a full re-render.
+        if (target.isFolded && !target.targetStack) {
+            resetDraggedTabStyles(state.card, state.sourceStack);
+            window.dispatchEvent(new CustomEvent('filecabinet:layout_changed', { detail: { flushLayout: false } }));
+            return;
+        }
+
+        const moved = moveTabDomToCategory(state, toCategory, toIndex, target);
         resetDraggedTabStyles(state.card, state.sourceStack);
-        window.dispatchEvent(new CustomEvent('filecabinet:layout_changed', { detail: { flushLayout: false } }));
-    };
-    const runPreview = (clientX, clientY) => {
-        if (!dragState?.active) return;
-        if (previewFrame) return;
-        previewFrame = requestAnimationFrame(() => {
-            previewFrame = null;
-            if (!dragState?.active) return;
-
-            const target = resolveFileCabinetDropTarget(clientX, clientY, dragState, mount);
-            dragState.currentTarget = target;
-            setFileCabinetDropTarget(mount, target);
-
-            const draggedId = dragState.card.dataset.id;
-            const sourceMinSlots = dragState.sourceTabCount || 0;
-            applyStackPreviewPositions(dragState.sourceStack, {
-                draggedId,
-                insertIndex: null,
-                settling: true,
-                minSlotCount: sourceMinSlots
-            });
-
-            if (target?.targetStack && target.targetStack !== dragState.sourceStack) {
-                if (dragState.targetStack !== target.targetStack) {
-                    if (dragState.targetStack && dragState.targetBaseline) {
-                        restoreStackPreview(dragState.targetStack, dragState.targetBaseline);
-                    }
-                    dragState.targetStack = target.targetStack;
-                    dragState.targetBaseline = snapshotStackTabs(target.targetStack);
-                }
-                applyStackPreviewPositions(target.targetStack, {
-                    draggedId,
-                    insertIndex: target.insertIndex,
-                    settling: true
-                });
-            } else if (dragState.targetStack && dragState.targetStack !== dragState.sourceStack) {
-                restoreStackPreview(dragState.targetStack, dragState.targetBaseline);
-                dragState.targetStack = null;
-                dragState.targetBaseline = null;
-            } else if (target?.targetStack === dragState.sourceStack) {
-                applyStackPreviewPositions(dragState.sourceStack, {
-                    draggedId,
-                    insertIndex: target.insertIndex,
-                    settling: true,
-                    minSlotCount: dragState.sourceTabCount || 0
-                });
-            }
-
-            syncFileCabinetDrawerHeight(mount);
-        });
+        if (moved === 'structural' || moved === false) {
+            window.dispatchEvent(new CustomEvent('filecabinet:layout_changed', { detail: { flushLayout: false } }));
+            return;
+        }
+        syncFileCabinetDrawerHeight(mount);
     };
 
-    let previewFrame = null;
-
-    mount.addEventListener('mousedown', (e) => {
+    mount.addEventListener('pointerdown', (e) => {
         if (e.button !== 0) return;
-        if (e.target.closest('.card-act:not(.card-act--drag), button:not(.card-act--drag), input, textarea, a')) return;
-        const card = e.target.closest('.file-cabinet-tab');
-        if (!card) return;
+        // Restrict tab drag to the dedicated grab handle.
+        const handle = e.target.closest('.card-act--drag');
+        if (!handle) return;
+        const card = handle.closest('.file-cabinet-tab');
+        if (!card || !mount.contains(card)) return;
         const stack = card.closest('.file-cabinet-tab-stack');
         if (!stack) return;
+
+        e.preventDefault();
+        e.stopPropagation();
 
         const startX = e.clientX;
         const startY = e.clientY;
@@ -1176,6 +1903,7 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
                     fixedOffsetY: startY - rect.top
                 };
                 card.classList.add('is-file-cabinet-dragging');
+                card.style.pointerEvents = 'none';
                 document.body.classList.add('is-file-cabinet-drag-active');
                 mount.classList.add('is-layout-active');
                 card.style.position = 'fixed';
@@ -1193,9 +1921,31 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
             runPreview(ev.clientX, ev.clientY);
         };
 
-        const onUp = (ev) => {
-            document.removeEventListener('mousemove', onMove);
-            document.removeEventListener('mouseup', onUp);
+        function onKey(ev) {
+            if (ev.key !== 'Escape' || !dragState) return;
+            cancelPreviewFrame();
+            const state = dragState;
+            dragState = null;
+            if (state.active) {
+                restorePreviewFromState(state);
+                endFileCabinetDragGhost(state.card, state.placeholder);
+            }
+            clearFileCabinetDropTargets(mount);
+            document.body.classList.remove('is-file-cabinet-drag-active');
+            mount.classList.remove('is-layout-active');
+            foldedHoverPreview?.onDragEnd();
+            resetDraggedTabStyles(state.card, state.sourceStack);
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+            document.removeEventListener('pointercancel', onUp);
+            document.removeEventListener('keydown', onKey);
+        }
+
+        function onUp(ev) {
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+            document.removeEventListener('pointercancel', onUp);
+            document.removeEventListener('keydown', onKey);
             if (!dragState) {
                 dragState = {
                     active: false,
@@ -1206,11 +1956,13 @@ export function initFileCabinetDrag(mount, currentItems = [], UI, signal) {
                 };
             }
             finishDrag(ev);
-        };
+        }
 
-        document.addEventListener('mousemove', onMove);
-        document.addEventListener('mouseup', onUp);
-    }, { signal, capture: true });
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+        document.addEventListener('pointercancel', onUp);
+        document.addEventListener('keydown', onKey);
+    }, { signal });
 }
 
 export function getFileCabinetToggleLabels(inFileCabinetStrip, atLabel) {

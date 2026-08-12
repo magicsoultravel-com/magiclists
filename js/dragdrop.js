@@ -21,11 +21,11 @@ import {
     resolveCollapsedTierRect
 } from './tileGeometry.js';
 import { CANVAS_COL_GAP, CANVAS_LAYOUT_ORIGIN, getGridMetrics } from './gridDensity.js';
-import { initFileCabinetDrag, isFileCabinetActive, fileItemToCabinet, shouldFileItem } from './fileCabinet.js';
+import { initFileCabinetDrag, isFileCabinetActive, fileItemToCabinet, shouldFileItem, fileBoardItemToCabinet, resolveCrossSurfaceDropTarget, clearFileCabinetSurfaceHighlights, applyFileCabinetDropHighlight, DRAG_THRESHOLD } from './fileCabinet.js';
 import { isChecklistInteraction } from './noteSurfaceChecklist.js';
 import { DesktopManager } from './desktopManager.js';
+import { getLabelRect } from './tileGeometry.js';
 
-const DRAG_THRESHOLD = 4;
 const GRID_SCROLL_EDGE = 40;
 const GRID_SCROLL_STEP = 10;
 
@@ -267,7 +267,7 @@ export const DragDropEngine = {
         if (isFileCabinetActive()) {
             const fileCabinet = document.getElementById('file-cabinet');
             if (fileCabinet) {
-                initFileCabinetDrag(fileCabinet, currentItems, UI, signal);
+                initFileCabinetDrag(fileCabinet, () => currentItems, UI, signal);
             }
         }
     },
@@ -427,6 +427,43 @@ export const DragDropEngine = {
             allDockButtons.forEach(btn => {
                 btn.classList.toggle('drag-over', hoveredButtons.includes(btn));
             });
+
+            // Highlight File Cabinet drop target while dragging a board card
+            if (isFileCabinetActive()) {
+                const fileCabinet = document.getElementById('file-cabinet');
+                if (fileCabinet) {
+                    dragActive.card.style.pointerEvents = 'none';
+                    const fcTarget = resolveCrossSurfaceDropTarget(e.clientX, e.clientY, {
+                        dragKind: 'board-card',
+                        mount: fileCabinet,
+                        canvas,
+                        dragState: { card: dragActive.card }
+                    });
+                    dragActive.card.style.pointerEvents = '';
+
+                    if (fcTarget?.kind === 'file-cabinet') {
+                        applyFileCabinetDropHighlight(fileCabinet, fcTarget);
+                        if (!dragActive.filingPreview) {
+                            const full = UI.readNoteRect(dragActive.card);
+                            dragActive.filingPreview = { w: full.w, h: full.h };
+                            const label = getLabelRect();
+                            dragActive.card.classList.add('is-filing-to-cabinet', 'spatial-at-small');
+                            UI.applyFreeformDimensions(dragActive.card, label.w, label.h);
+                        }
+                    } else {
+                        clearFileCabinetSurfaceHighlights(fileCabinet);
+                        if (dragActive.filingPreview) {
+                            dragActive.card.classList.remove('is-filing-to-cabinet', 'spatial-at-small');
+                            UI.applyFreeformDimensions(
+                                dragActive.card,
+                                dragActive.filingPreview.w,
+                                dragActive.filingPreview.h
+                            );
+                            dragActive.filingPreview = null;
+                        }
+                    }
+                }
+            }
         };
 
         const onDragUp = (e) => {
@@ -438,6 +475,12 @@ export const DragDropEngine = {
             document.querySelectorAll('.desktop-dock-btn.drag-over').forEach(btn => {
                 btn.classList.remove('drag-over');
             });
+            clearFileCabinetSurfaceHighlights();
+            const filingPreview = dragActive.filingPreview;
+            if (filingPreview) {
+                card.classList.remove('is-filing-to-cabinet', 'spatial-at-small');
+                dragActive.filingPreview = null;
+            }
 
             if (moved) {
                 card.dataset.skipExpand = '1';
@@ -447,6 +490,9 @@ export const DragDropEngine = {
                 const dropY = e?.clientY ?? dragActive.startY;
                 const dockButtons = getDockButtonAt(dropX, dropY);
                 if (dockButtons.length > 0) {
+                    if (filingPreview) {
+                        UI.applyFreeformDimensions(card, filingPreview.w, filingPreview.h);
+                    }
                     const targetBtn = dockButtons[0];
                     const targetDesktopId = Number(targetBtn.dataset.desktopId);
                     const item = currentItems.find(i => i.id === card.dataset.id);
@@ -471,6 +517,45 @@ export const DragDropEngine = {
                         // 5. Early return to prevent subsequent layout calls from overriding coordinates
                         return;
                     }
+                }
+
+                // Board → File Cabinet drop
+                if (isFileCabinetActive()) {
+                    const fileCabinet = document.getElementById('file-cabinet');
+                    if (fileCabinet) {
+                        card.style.pointerEvents = 'none';
+                        const fcTarget = resolveCrossSurfaceDropTarget(dropX, dropY, {
+                            dragKind: 'board-card',
+                            mount: fileCabinet,
+                            canvas,
+                            dragState: { card }
+                        });
+                        card.style.pointerEvents = '';
+                        clearFileCabinetSurfaceHighlights(fileCabinet);
+                        if (fcTarget?.kind === 'file-cabinet') {
+                            const item = currentItems.find((i) => i.id === card.dataset.id);
+                            if (item) {
+                                clearLayoutPreview(false);
+                                UI.updateGridScrollPolicy(canvas, { forcing: false });
+                                canvas.classList.remove('is-layout-active', 'is-grid-forcing');
+                                fileBoardItemToCabinet({
+                                    item,
+                                    UI,
+                                    card,
+                                    targetCategory: fcTarget.targetCategory || null,
+                                    insertIndex: fcTarget.insertIndex
+                                });
+                                dragActive = null;
+                                document.removeEventListener('mousemove', onDragMove);
+                                document.removeEventListener('mouseup', onDragUp);
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                if (filingPreview) {
+                    UI.applyFreeformDimensions(card, filingPreview.w, filingPreview.h);
                 }
 
                 if (snapEnabled) {
