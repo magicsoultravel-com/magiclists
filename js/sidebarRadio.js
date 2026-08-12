@@ -3,6 +3,7 @@ import { RadioProviderRegistry } from './radioProviders/registry.js';
 import { stationKey, parseStationKey } from './radioProviders/stationShape.js';
 import { RadioPlayer } from './radioPlayer.js';
 import { RadioPopover } from './radioPopover.js';
+import { RadioCast } from './radioCast.js';
 import { escapeHtml, countryFlagEmoji, debounce, syncMarquee, bindFaviconImage } from './radioUtils.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { renderSidebarModuleHeaderHtml } from './sidebarModules.js';
@@ -45,6 +46,7 @@ export const SidebarRadio = {
         if (!this.root) return;
 
         RadioPlayer.init();
+        RadioCast.init().catch(() => {});
         this.renderShell();
         this.bindShellListeners();
 
@@ -146,6 +148,7 @@ export const SidebarRadio = {
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-radio-open="browse" title="Browse stations" aria-label="Browse stations" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioBrowse}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-radio__action--heart is-hidden" data-radio-favorite title="Add favorite" aria-label="Add favorite" aria-pressed="false">${CARD_ICONS.heart}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-radio-open="special" title="Radio settings" aria-label="Radio settings" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioSpecial}</button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-radio__cast-btn" data-radio-cast title="Cast radio" aria-label="Cast radio" aria-pressed="false">${ACTION_ICONS.cast}</button>
                 </div>
             </div>
         `;
@@ -196,6 +199,11 @@ export const SidebarRadio = {
             });
         });
 
+        this.root.querySelector('[data-radio-cast]')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.openCastPanel();
+        });
+
         const artImg = this.root.querySelector('[data-radio-art]');
         const compactArtImg = this.root.querySelector('[data-radio-compact-art]');
         bindFaviconImage(artImg, () => {
@@ -219,7 +227,8 @@ export const SidebarRadio = {
             browse: 'Browse',
             favorites: 'Favorites',
             recents: 'Recents',
-            special: 'Radio settings'
+            special: 'Radio settings',
+            cast: 'Cast radio'
         };
 
         RadioPopover.onClose = () => {
@@ -237,6 +246,18 @@ export const SidebarRadio = {
             });
             if (!opened) return;
             this.renderSpecialPanel();
+            return;
+        }
+
+        if (mode === 'cast') {
+            const opened = RadioPopover.open('cast', {
+                attachEl: this.root,
+                iconAnchor: anchor,
+                title: titles.cast,
+                force: !!browseContext
+            });
+            if (!opened) return;
+            this.renderCastPanel();
             return;
         }
 
@@ -310,6 +331,10 @@ export const SidebarRadio = {
     async refreshOpenPanel() {
         if (RadioPopover.mode === 'special') {
             this.renderSpecialPanel();
+            return;
+        }
+        if (RadioPopover.mode === 'cast') {
+            this.renderCastPanel();
             return;
         }
         await this.renderPanelContent(RadioPopover.activeTab || this.activeTab);
@@ -412,6 +437,157 @@ export const SidebarRadio = {
         });
 
         RadioPopover.reposition();
+    },
+
+    openCastPanel() {
+        const anchor = this.root.querySelector('[data-radio-cast]');
+        const opened = RadioPopover.open('cast', {
+            attachEl: this.root,
+            iconAnchor: anchor,
+            title: 'Cast radio',
+            force: false
+        });
+        if (!opened) return;
+
+        RadioPopover.onClose = () => {
+            anchor?.setAttribute('aria-expanded', 'false');
+        };
+        anchor?.setAttribute('aria-expanded', 'true');
+
+        RadioCast.init().catch(() => {});
+        this.renderCastPanel();
+    },
+
+    renderCastPanel() {
+        RadioPopover.setTitle('Cast radio');
+        RadioPopover.setBackVisible(false);
+        RadioPopover.setToolbarHtml('');
+
+        const body = RadioPopover.getBodyEl();
+        if (!body) return;
+
+        const station = RadioPlayer.station;
+        const nowKey = stationKey(station);
+        const hasStation = !!nowKey && !!station?.url_resolved;
+        const isCasting = RadioCast.isCasting();
+
+        RadioCast.updateDevices();
+        const available = RadioCast.devices;
+        const castEls = available.filter((d) => d.type === 'cast');
+        const dlnaEls = available.filter((d) => d.type === 'dlna');
+
+        body.innerHTML = `
+            <div class="radio-cast-panel">
+                <div class="radio-cast-panel__section">
+                    <div class="radio-cast-panel__section-title">Cast devices</div>
+                    ${this.renderDeviceGroup(castEls, 'cast')}
+                </div>
+
+                <div class="radio-cast-panel__section">
+                    <div class="radio-cast-panel__section-title">DLNA / UPnP devices</div>
+                    ${this.renderDeviceGroup(dlnaEls, 'dlna')}
+                </div>
+
+                <div class="radio-cast-panel__actions">
+                    <button type="button" class="btn btn--compact" data-radio-cast-go${!hasStation ? ' disabled' : ''}>Cast to selected</button>
+                    <button type="button" class="btn btn--compact" data-radio-cast-stop${isCasting ? '' : ' disabled'}>Stop all</button>
+                </div>
+                <p class="radio-cast-panel__status is-hidden" data-radio-cast-status></p>
+            </div>
+        `;
+
+        this.bindCastPanelEvents(body, hasStation);
+        RadioPopover.reposition();
+    },
+
+    renderDeviceGroup(devices, type) {
+        if (!devices.length) {
+            return `<p class="radio-cast-panel__empty">No ${type === 'cast' ? 'Cast' : 'DLNA'} devices detected.</p>`;
+        }
+        return `
+            <div class="radio-cast-panel__list">
+                ${devices.map((d) => {
+                    const selected = RadioCast.isDeviceSelected(type) || RadioCast.isDeviceSelected(d.id);
+                    const checked = selected ? ' checked' : '';
+                    return `
+                        <label class="radio-cast-panel__row">
+                            <input type="checkbox" data-radio-cast-device="${escapeHtml(d.id)}" data-radio-cast-type="${type}"${checked}>
+                            <span class="radio-cast-panel__device-name">${escapeHtml(d.name || d.id)}</span>
+                            ${d.connected ? '<span class="radio-cast-panel__connected">connected</span>' : ''}
+                        </label>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    },
+
+    bindCastPanelEvents(body, hasStation) {
+        body.querySelectorAll('[data-radio-cast-device]').forEach((input) => {
+            input.addEventListener('change', (e) => {
+                const type = e.target.getAttribute('data-radio-cast-type');
+                if (e.target.checked) {
+                    RadioCast.selectedDevices.add(type);
+                } else {
+                    RadioCast.selectedDevices.delete(type);
+                }
+                this.updateCastButton(body, hasStation);
+            });
+        });
+
+        body.querySelector('[data-radio-cast-go]')?.addEventListener('click', async (e) => {
+            if (!hasStation) return;
+            const btn = e.currentTarget;
+            const statusEl = body.querySelector('[data-radio-cast-status]');
+            btn.disabled = true;
+            statusEl.classList.remove('is-hidden');
+            statusEl.textContent = 'Casting…';
+
+            const station = RadioPlayer.station;
+            const url = station.url_resolved;
+            const name = station.name || 'Radio';
+
+            try {
+                const results = await RadioCast.castStation(url, name);
+                statusEl.textContent = results.success.length
+                    ? `Cast started on: ${results.success.join(', ')}`
+                    : 'No compatible devices were selected.';
+            } catch (err) {
+                statusEl.textContent = `Cast failed: ${err?.message || 'unknown error'}`;
+            } finally {
+                btn.disabled = false;
+                this.syncCastActiveState();
+            }
+        });
+
+        body.querySelector('[data-radio-cast-stop]')?.addEventListener('click', async () => {
+            const statusEl = body.querySelector('[data-radio-cast-status]');
+            if (statusEl) {
+                statusEl.classList.remove('is-hidden');
+                statusEl.textContent = 'Stopping…';
+            }
+            await RadioCast.stopAll();
+            if (statusEl) statusEl.textContent = 'Casting stopped.';
+            const stopBtn = body.querySelector('[data-radio-cast-stop]');
+            if (stopBtn) stopBtn.disabled = true;
+            this.syncCastActiveState();
+            if (RadioPopover.mode === 'cast') this.renderCastPanel();
+        });
+
+        this.updateCastButton(body, hasStation);
+    },
+
+    updateCastButton(body, hasStation) {
+        const btn = body?.querySelector('[data-radio-cast-go]');
+        if (!btn) return;
+        btn.disabled = !hasStation || RadioCast.selectedDevices.size === 0;
+    },
+
+    syncCastActiveState() {
+        const active = RadioCast.isCasting();
+        this.root?.querySelectorAll('[data-radio-cast]').forEach((btn) => {
+            btn.classList.toggle('is-active', active);
+            btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
     },
 
     async populateMirrorSelect(body, current) {

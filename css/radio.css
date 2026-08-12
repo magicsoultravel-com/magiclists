@@ -40,3 +40,94 @@
     gap: 0.25rem;
     padding-top: 0.15rem;
 }
+
+/* ==========================================================================
+   RADIO CAST — detected device list + multi-select controls
+   ========================================================================== */
+.sidebar-radio__cast-btn.is-active {
+    color: var(--accent, #4a9eff);
+}
+
+.radio-cast-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.15rem 0;
+}
+
+.radio-cast-panel__section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.radio-cast-panel__section-title {
+    font-size: 0.56rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.radio-cast-panel__list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+}
+
+.radio-cast-panel__row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.3rem;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.62rem;
+    color: var(--text-main);
+}
+
+.radio-cast-panel__row:hover {
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    border-color: var(--border-color);
+}
+
+.radio-cast-panel__row input {
+    accent-color: var(--accent, #4a9eff);
+    margin: 0;
+}
+
+.radio-cast-panel__device-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.radio-cast-panel__connected {
+    font-size: 0.52rem;
+    color: var(--accent, #4a9eff);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.radio-cast-panel__empty {
+    margin: 0;
+    font-size: 0.6rem;
+    font-style: italic;
+    color: var(--text-muted);
+}
+
+.radio-cast-panel__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding-top: 0.15rem;
+}
+
+.radio-cast-panel__status {
+    margin: 0;
+    font-size: 0.6rem;
+    color: var(--text-main);
+}
