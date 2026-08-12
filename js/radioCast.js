@@ -1,180 +1,127 @@
-/** @module {{"owns":"radio casting support (Chromecast + DLNA)", "related":["sidebarRadio.js","radioPlayer.js","radioPopover.js"]}} */
-import { ACTION_ICONS } from './icons.js';
+/** @module {{"owns":"radio Google Cast support (native Cast SDK)", "related":["sidebarRadio.js","radioPlayer.js","radioPopover.js"]}} */
+const CAST_SDK_URL = 'https://www.gstatic.com/cv/js/sender/v1/cast_sender.js';
 
-const CAST_APPLICATION_ID = 'ABCDENNNNN'; // Default media receiver for development
+let sdkPromise = null;
+let apiAvailable = false;
+
+/** Lazily load the Google Cast SDK (mirrors tvHls.js loader pattern). */
+function loadCastSdk() {
+    if (typeof window !== 'undefined' && window.cast?.framework) {
+        apiAvailable = true;
+        return Promise.resolve(window.cast.framework);
+    }
+    if (sdkPromise) return sdkPromise;
+
+    sdkPromise = new Promise((resolve, reject) => {
+        const prev = window.__onGCastApiAvailable;
+        window.__onGCastApiAvailable = (isAvailable) => {
+            if (prev) prev(isAvailable);
+            apiAvailable = isAvailable;
+            if (isAvailable && window.cast?.framework) {
+                resolve(window.cast.framework);
+            } else {
+                reject(new Error('Google Cast SDK unavailable'));
+            }
+        };
+        const script = document.createElement('script');
+        script.src = CAST_SDK_URL;
+        script.async = true;
+        script.onerror = () => reject(new Error('Failed to load Google Cast SDK'));
+        document.head.appendChild(script);
+    });
+
+    return sdkPromise;
+}
 
 export const RadioCast = {
-    devices: [],
-    castSession: null,
-    castInitialized: false,
-    dlnaDevices: [],
-    selectedDevices: new Set(),
-    
+    context: null,
+    session: null,
+    castDeviceName: null,
+    available: false,
+    casting: false,
+
     async init() {
-        if (this.castInitialized) return;
-        
-        if (typeof chrome !== 'undefined' && chrome.cast && chrome.castManager) {
-            try {
-                await new Promise((resolve, reject) => {
-                    chrome.cast.initialize(CAST_APPLICATION_ID, {
-                        requestId: 1,
-                        statusCallback: this.onCastStatusChanged.bind(this)
-                    }, (error) => error ? reject(error) : resolve());
-                });
-                this.castInitialized = true;
-                this.discoverDevices();
-            } catch (e) {
-                console.warn('Cast SDK init failed:', e);
-            }
-        }
-        this.discoverDLNADevices();
-    },
-    
-    onCastStatusChanged(event) {
-        if (event.status === 'connected') {
-            this.castSession = event.session;
-            this.updateDevices();
-        } else if (event.status === 'disconnected') {
-            this.castSession = null;
-            this.updateDevices();
-        }
-    },
-    
-    discoverDevices() {
-        if (typeof chrome !== 'undefined' && chrome.cast) {
-            this.devices = [];
-            this.updateDevices();
-        }
-    },
-    
-    async discoverDLNADevices() {
-        if (!navigator.onLine) return;
-        this.dlnaDevices = await this.tryDiscoverDLNA();
-        this.updateDevices();
-    },
-    
-    async tryDiscoverDLNA() {
-        // Browsers cannot send raw SSDP multicast, so zero-config discovery needs
-        // a backend/proxy. Real DLNA devices would be added here via a backend.
-        return [];
-    },
-    
-    getAvailableDevices() {
-        // Device list is populated by real Cast SDK sessions / connected DLNA devices.
-        const castDevices = this.castSession ? [{
-            id: 'cast-session',
-            type: 'cast',
-            connected: true,
-            name: 'Chromecast'
-        }] : [];
-        return [...castDevices, ...this.dlnaDevices];
-    },
-    
-    updateDevices() {
-        this.devices = this.getAvailableDevices();
-    },
-    
-    async castStation(stationUrl, stationName) {
-        const results = { success: [], failed: [], deviceCount: 0 };
+        if (this.available) return;
+        try {
+            await loadCastSdk();
+            this.available = true;
 
-        if (this.selectedDevices.has('cast') && this.castSession) {
-            try {
-                await this.castToChromecast(stationUrl, stationName);
-                results.success.push('Cast');
-                results.deviceCount++;
-            } catch (e) {
-                results.failed.push('Cast');
-            }
-        }
+            const context = window.cast.framework.CastContext.getInstance();
+            context.setOptions({
+                receiverApplicationId: window.chrome.cast.media.DEFAULT_MEDIA_RECEIVER_APP_ID,
+                autoJoinPolicy: window.chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED
+            });
+            this.context = context;
 
-        for (const device of this.dlnaDevices) {
-            if (device.connected && (this.selectedDevices.has('dlna') || this.selectedDevices.has(device.id))) {
-                try {
-                    if (device.endpoint) {
-                        await this.castToDLNA(device, stationUrl, stationName);
-                    }
-                    results.success.push(device.name || 'DLNA');
-                    results.deviceCount++;
-                } catch (e) {
-                    results.failed.push(device.name || 'DLNA');
-                }
-            }
-        }
+            context.addEventListener(
+                window.cast.framework.CastContextEventType.SESSION_STATE_CHANGED,
+                () => this.syncFromContext()
+            );
 
-        return results;
+            this.dispatchChanged();
+        } catch (e) {
+            console.warn('Cast init failed:', e);
+        }
     },
-    
-    async castToChromecast(url, name) {
-        return new Promise((resolve, reject) => {
-            if (!this.castSession) return reject(new Error('No cast session'));
-            
-            const mediaInfo = {
-                contentId: url,
-                contentType: 'audio/mpeg',
-                streamType: 'MEDIA_STREAM_TYPE_BUFFERED',
-                customData: { title: name }
-            };
-            
-            try {
-                this.castSession.load(mediaInfo);
-                resolve();
-            } catch (e) {
-                reject(e);
-            }
-        });
+
+    syncFromContext() {
+        if (!this.context) return;
+        this.session = this.context.getCurrentSession();
+        this.castDeviceName = this.session?.getCastDevice()?.friendlyName || null;
+        this.casting = !!this.session;
+        this.dispatchChanged();
     },
-    
-    async castToDLNA(device, url, name) {
-        // Simplified DLNA casting
-        return new Promise((resolve) => setTimeout(resolve, 100));
+
+    dispatchChanged() {
+        window.dispatchEvent(new CustomEvent('radio:cast_state_changed'));
     },
-    
+
+    getStatus() {
+        return {
+            available: this.available,
+            casting: this.casting,
+            deviceName: this.castDeviceName
+        };
+    },
+
+    /** Cast a station stream to a device chosen via Chrome's native Cast picker. */
+    async castStation(url, name) {
+        if (!this.available) await this.init();
+        if (!this.available || !this.context) {
+            throw new Error('Google Cast is not available in this browser.');
+        }
+        if (!url) throw new Error('No station URL to cast.');
+
+        const session = await this.context.requestSession();
+        this.session = session;
+        this.castDeviceName = session?.getCastDevice()?.friendlyName || null;
+        this.dispatchChanged();
+
+        const media = new window.chrome.cast.media.MediaInfo(url, 'audio/*');
+        const meta = new window.chrome.cast.media.GenericMediaMetadata();
+        meta.metadataType = window.chrome.cast.media.MetadataType.GENERIC;
+        meta.title = name || 'Radio';
+        media.metadata = meta;
+
+        const request = new window.chrome.cast.media.LoadRequest(media);
+        await session.loadMedia(request);
+        this.casting = true;
+        this.dispatchChanged();
+    },
+
     async stopAll() {
-        if (this.castSession) {
+        if (this.session) {
             try {
-                this.castSession.stop();
+                await this.session.stop();
             } catch (e) { /* ignore */ }
         }
-        this.castSession = null;
+        this.session = null;
+        this.castDeviceName = null;
+        this.casting = false;
+        this.dispatchChanged();
     },
-    
-    pause() {
-        if (this.castSession) {
-            this.castSession.broadcast('pause');
-        }
-    },
-    
-    resume() {
-        if (this.castSession) {
-            this.castSession.broadcast('play');
-        }
-    },
-    
-    toggleDevice(type) {
-        if (this.selectedDevices.has(type)) {
-            this.selectedDevices.delete(type);
-        } else {
-            this.selectedDevices.add(type);
-        }
-    },
-    
-    isDeviceSelected(type) {
-        return this.selectedDevices.has(type);
-    },
-    
+
     isCasting() {
-        // Only true when there is a real active session or a connected device.
-        return this.castSession !== null || this.dlnaDevices.some((d) => d.connected === true);
-    },
-    
-    getCastIconHtml(isActive = false) {
-        return `<span class="sidebar-radio-cast-icon"${isActive ? ' aria-label="Casting active"' : ''}>${ACTION_ICONS.cast}</span>`;
-    },
-    
-    reset() {
-        this.selectedDevices.clear();
-        this.castSession = null;
-        this.dlnaDevices = [];
-        this.devices = [];
+        return this.casting;
     }
 };

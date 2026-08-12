@@ -66,6 +66,10 @@ export const SidebarRadio = {
             }
         };
         window.addEventListener('radio:state_changed', this.onStateChanged);
+        window.addEventListener('radio:cast_state_changed', () => {
+            this.syncCastActiveState();
+            if (RadioPopover.mode === 'cast') this.renderCastPanel();
+        });
         this.updateTransport();
         this.restoreLastStationMeta().then(() => {
             this.updateTransport();
@@ -469,30 +473,20 @@ export const SidebarRadio = {
         const station = RadioPlayer.station;
         const nowKey = stationKey(station);
         const hasStation = !!nowKey && !!station?.url_resolved;
-        const isCasting = RadioCast.isCasting();
-
-        RadioCast.updateDevices();
-        const available = RadioCast.devices;
-        const castEls = available.filter((d) => d.type === 'cast');
-        const dlnaEls = available.filter((d) => d.type === 'dlna');
+        const status = RadioCast.getStatus();
 
         body.innerHTML = `
             <div class="radio-cast-panel">
-                <div class="radio-cast-panel__section">
-                    <div class="radio-cast-panel__section-title">Cast devices</div>
-                    ${this.renderDeviceGroup(castEls, 'cast')}
+                <p class="radio-cast-panel__avail${status.available ? ' is-ok' : ''}">
+                    ${status.available ? 'Google Cast is available.' : 'Google Cast is not available in this browser.'}
+                </p>
+                <div class="radio-cast-panel__status${status.casting ? ' is-casting' : ''}" data-radio-cast-status>
+                    ${status.casting ? `Casting to <strong>${escapeHtml(status.deviceName || 'device')}</strong>` : 'Not casting'}
                 </div>
-
-                <div class="radio-cast-panel__section">
-                    <div class="radio-cast-panel__section-title">DLNA / UPnP devices</div>
-                    ${this.renderDeviceGroup(dlnaEls, 'dlna')}
-                </div>
-
                 <div class="radio-cast-panel__actions">
-                    <button type="button" class="btn btn--compact" data-radio-cast-go${!hasStation ? ' disabled' : ''}>Cast to selected</button>
-                    <button type="button" class="btn btn--compact" data-radio-cast-stop${isCasting ? '' : ' disabled'}>Stop all</button>
+                    <button type="button" class="btn btn--compact" data-radio-cast-go${!hasStation || !status.available ? ' disabled' : ''}>Cast current station</button>
+                    <button type="button" class="btn btn--compact" data-radio-cast-stop${status.casting ? '' : ' disabled'}>Stop</button>
                 </div>
-                <p class="radio-cast-panel__status is-hidden" data-radio-cast-status></p>
             </div>
         `;
 
@@ -500,86 +494,39 @@ export const SidebarRadio = {
         RadioPopover.reposition();
     },
 
-    renderDeviceGroup(devices, type) {
-        if (!devices.length) {
-            return `<p class="radio-cast-panel__empty">No ${type === 'cast' ? 'Cast' : 'DLNA'} devices detected.</p>`;
-        }
-        return `
-            <div class="radio-cast-panel__list">
-                ${devices.map((d) => {
-                    const selected = RadioCast.isDeviceSelected(type) || RadioCast.isDeviceSelected(d.id);
-                    const checked = selected ? ' checked' : '';
-                    return `
-                        <label class="radio-cast-panel__row">
-                            <input type="checkbox" data-radio-cast-device="${escapeHtml(d.id)}" data-radio-cast-type="${type}"${checked}>
-                            <span class="radio-cast-panel__device-name">${escapeHtml(d.name || d.id)}</span>
-                            ${d.connected ? '<span class="radio-cast-panel__connected">connected</span>' : ''}
-                        </label>
-                    `;
-                }).join('')}
-            </div>
-        `;
-    },
-
     bindCastPanelEvents(body, hasStation) {
-        body.querySelectorAll('[data-radio-cast-device]').forEach((input) => {
-            input.addEventListener('change', (e) => {
-                const type = e.target.getAttribute('data-radio-cast-type');
-                if (e.target.checked) {
-                    RadioCast.selectedDevices.add(type);
-                } else {
-                    RadioCast.selectedDevices.delete(type);
-                }
-                this.updateCastButton(body, hasStation);
-            });
-        });
-
         body.querySelector('[data-radio-cast-go]')?.addEventListener('click', async (e) => {
             if (!hasStation) return;
             const btn = e.currentTarget;
-            const statusEl = body.querySelector('[data-radio-cast-status]');
             btn.disabled = true;
-            statusEl.classList.remove('is-hidden');
-            statusEl.textContent = 'Casting…';
 
             const station = RadioPlayer.station;
-            const url = station.url_resolved;
-            const name = station.name || 'Radio';
-
+            let ok = false;
             try {
-                const results = await RadioCast.castStation(url, name);
-                statusEl.textContent = results.success.length
-                    ? `Cast started on: ${results.success.join(', ')}`
-                    : 'No compatible devices were selected.';
+                await RadioCast.castStation(station.url_resolved, station.name || 'Radio');
+                ok = true;
             } catch (err) {
-                statusEl.textContent = `Cast failed: ${err?.message || 'unknown error'}`;
+                this.showCastStatus(err?.message || 'Cast failed');
             } finally {
                 btn.disabled = false;
-                this.syncCastActiveState();
+                if (ok && RadioPopover.mode === 'cast') this.renderCastPanel();
             }
         });
 
         body.querySelector('[data-radio-cast-stop]')?.addEventListener('click', async () => {
-            const statusEl = body.querySelector('[data-radio-cast-status]');
-            if (statusEl) {
-                statusEl.classList.remove('is-hidden');
-                statusEl.textContent = 'Stopping…';
-            }
             await RadioCast.stopAll();
-            if (statusEl) statusEl.textContent = 'Casting stopped.';
-            const stopBtn = body.querySelector('[data-radio-cast-stop]');
-            if (stopBtn) stopBtn.disabled = true;
-            this.syncCastActiveState();
             if (RadioPopover.mode === 'cast') this.renderCastPanel();
         });
 
-        this.updateCastButton(body, hasStation);
+        this.syncCastActiveState();
     },
 
-    updateCastButton(body, hasStation) {
-        const btn = body?.querySelector('[data-radio-cast-go]');
-        if (!btn) return;
-        btn.disabled = !hasStation || RadioCast.selectedDevices.size === 0;
+    showCastStatus(msg) {
+        const el = RadioPopover.getBodyEl()?.querySelector('[data-radio-cast-status]');
+        if (el) {
+            el.textContent = msg;
+            el.classList.add('is-casting');
+        }
     },
 
     syncCastActiveState() {
