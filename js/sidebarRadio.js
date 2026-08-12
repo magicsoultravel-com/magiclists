@@ -500,9 +500,24 @@ export const SidebarRadio = {
             const btn = e.currentTarget;
             btn.disabled = true;
 
-            const station = RadioPlayer.station;
+            let station = RadioPlayer.station;
             let ok = false;
             try {
+                if (!station?.url_resolved) {
+                    const key = stationKey(station);
+                    const parsed = parseStationKey(key);
+                    if (parsed) {
+                        const fetched = await RadioProviderRegistry.getStation(parsed, { forPlay: true });
+                        if (fetched?.url_resolved) {
+                            station = fetched;
+                            RadioPlayer.station = fetched;
+                            RadioPlayer.emitState();
+                        }
+                    }
+                }
+                if (!station?.url_resolved) {
+                    throw new Error('Station stream URL unavailable.');
+                }
                 await RadioCast.castStation(station.url_resolved, station.name || 'Radio');
                 ok = true;
             } catch (err) {

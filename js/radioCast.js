@@ -8,8 +8,18 @@ function loadCastSdk() {
     if (typeof window !== 'undefined' && window.cast?.framework && window.chrome?.cast) {
         return Promise.resolve(window.cast.framework);
     }
+    if (window.__castSdkReady) return window.__castSdkReady;
     // SDK was blocked, loaded too late, or reported __onGCastApiAvailable(false).
     return Promise.reject(new Error('Google Cast SDK unavailable'));
+}
+
+/** Guess MIME type from a stream URL for the Default Media Receiver. */
+function contentTypeForUrl(url) {
+    const path = String(url || '').split('?')[0].toLowerCase();
+    if (path.endsWith('.aac')) return 'audio/aac';
+    if (path.endsWith('.ogg') || path.endsWith('.oga')) return 'audio/ogg';
+    if (path.endsWith('.m3u8')) return 'application/x-mpegURL';
+    return 'audio/mpeg';
 }
 
 export const RadioCast = {
@@ -71,27 +81,51 @@ export const RadioCast = {
         }
         if (!url) throw new Error('No station URL to cast.');
 
-        const session = await this.context.requestSession();
+        try {
+            await this.context.requestSession();
+        } catch (err) {
+            const cancelCode = window.chrome?.cast?.ErrorCode?.CANCEL;
+            if (err === cancelCode || err?.code === cancelCode) {
+                throw new Error('Cast cancelled');
+            }
+            throw new Error('Could not start cast session.');
+        }
+
+        const session = this.context.getCurrentSession();
+        if (!session) throw new Error('Cast session not started.');
+
         this.session = session;
-        this.castDeviceName = session?.getCastDevice()?.friendlyName || null;
+        this.castDeviceName = session.getCastDevice()?.friendlyName || null;
         this.dispatchChanged();
 
-        const media = new window.chrome.cast.media.MediaInfo(url, 'audio/*');
+        const media = new window.chrome.cast.media.MediaInfo(url, contentTypeForUrl(url));
+        media.streamType = window.chrome.cast.media.StreamType.LIVE;
         const meta = new window.chrome.cast.media.GenericMediaMetadata();
         meta.metadataType = window.chrome.cast.media.MetadataType.GENERIC;
         meta.title = name || 'Radio';
         media.metadata = meta;
 
         const request = new window.chrome.cast.media.LoadRequest(media);
-        await session.loadMedia(request);
+        request.autoplay = true;
+
+        try {
+            await session.loadMedia(request);
+        } catch (err) {
+            const cancelCode = window.chrome?.cast?.ErrorCode?.CANCEL;
+            if (err === cancelCode || err?.code === cancelCode) {
+                throw new Error('Cast cancelled');
+            }
+            throw new Error('Could not load stream on cast device.');
+        }
+
         this.casting = true;
         this.dispatchChanged();
     },
 
     async stopAll() {
-        if (this.session) {
+        if (this.context) {
             try {
-                await this.session.stop();
+                await this.context.endCurrentSession(true);
             } catch (e) { /* ignore */ }
         }
         this.session = null;
