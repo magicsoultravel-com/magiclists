@@ -98,22 +98,26 @@ export function buildNoteQuickActionsHtml(item, {
     const lastClass = isModal ? 'card-act--close' : 'card-act--toggle';
     const lastId = isModal ? ' id="modal-close-btn"' : '';
     const pinTitle = pinned ? 'Unpin position (locks drag)' : 'Pin position (locks drag)';
-    const pinBtn = `<button type="button" class="card-act card-act--pin${pinned ? ' is-active' : ''}" title="${pinTitle}" aria-label="${pinTitle}" aria-pressed="${pinned ? 'true' : 'false'}">${pinned ? CARD_ICONS.unpin : CARD_ICONS.pin}</button>`;
+    const pinBtn = isModal
+        ? ''
+        : `<button type="button" class="card-act card-act--pin${pinned ? ' is-active' : ''}" title="${pinTitle}" aria-label="${pinTitle}" aria-pressed="${pinned ? 'true' : 'false'}">${pinned ? CARD_ICONS.unpin : CARD_ICONS.pin}</button>`;
     const calTitle = calHidden
         ? 'Hidden from calendar — click to show'
         : 'Shown on calendar — click to hide';
     const calBtn = `<button type="button" class="card-act card-act--cal${calHidden ? ' is-off' : ' is-on'}" title="${escapeAttr(calTitle)}" aria-label="${escapeAttr(calTitle)}">${CARD_ICONS.calendar}</button>`;
-    const showDragIcon = isModal ? true : (showDrag && !pinned);
+    const showDragIcon = isModal || (showDrag && !pinned);
     const dragBtn = showDragIcon
-        ? `<button type="button" class="card-act card-act--drag${isModal ? ' card-act--decorative' : ''}" title="Drag to move" aria-label="Drag to move"${isModal ? ' tabindex="-1" aria-hidden="true"' : ''}>${CARD_ICONS.drag}</button>`
+        ? `<button type="button" class="card-act card-act--drag" title="Drag to move" aria-label="Drag to move">${CARD_ICONS.drag}</button>`
         : '';
+    const editTitle = isModal ? 'Close' : 'Edit note';
+    const editBtn = `<button type="button" class="card-act card-act--edit" title="${editTitle}" aria-label="${editTitle}">${CARD_ICONS.edit}</button>`;
+    // Modal & board base: cal, emoji, copy, [pin], color, hide, edit, [drag], close/toggle
     let actionCount = 8;
-    if (showDragIcon) actionCount += 1;
+    if (!isModal && showDragIcon) actionCount += 1;
     if (showArchive) actionCount += 1;
 
     const archiveBtn = showArchive
-
-        ? `<button type="button" id="modal-archive-btn" class="card-act card-act--archive" title="Archive note" aria-label="Archive note">${CARD_ICONS.delete}</button>`
+        ? `<button type="button" id="modal-archive-btn" class="card-act card-act--archive" title="Move to Archive" aria-label="Move to Archive">${CARD_ICONS.delete}</button>`
         : '';
     const actionsHtml = `<div class="card-actions${isModal ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
             ${calBtn}
@@ -122,7 +126,7 @@ export function buildNoteQuickActionsHtml(item, {
             ${pinBtn}
             <button type="button" class="card-act card-act--color" title="Note color" aria-label="Note color" aria-haspopup="dialog">${CARD_ICONS.color}</button>
             <button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>
-            <button type="button" class="card-act card-act--edit" title="Edit note" aria-label="Edit note">${CARD_ICONS.edit}</button>
+            ${editBtn}
             ${dragBtn}
 
             <button type="button" class="card-act ${lastClass}"${lastId} title="${escapeHTML(expandTitle).replace(/"/g, "")}" aria-label="${escapeHTML(expandTitle).replace(/"/g, "")}">${lastIcon}</button>

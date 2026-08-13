@@ -232,27 +232,178 @@ textarea.form-input {
 }
 
 /* Editor Modal Specific Styling */
-.modal--editor {
-    max-width: 550px;
+#editor-overlay {
+    background: rgba(10, 10, 12, 0.58);
+    backdrop-filter: blur(2px);
+    padding: 16px;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.28s ease, visibility 0.28s ease;
+}
+
+#editor-overlay.is-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+#editor-overlay .modal,
+#editor-overlay .modal--editor {
+    position: relative;
+    width: min(560px, calc(100vw - 2rem));
+    max-width: none;
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    border-radius: 0;
+    overflow: visible;
+    transform: translateY(10px) scale(0.97);
+    opacity: 0;
+    transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease;
+}
+
+#editor-overlay .modal.modal--floating {
+    width: auto;
+    max-width: none;
+    max-height: none;
+    transform: none;
+    transition: opacity 0.3s ease;
+}
+
+#editor-overlay.is-open .modal {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+}
+
+#editor-overlay.is-open .modal.modal--floating {
+    transform: none;
+}
+
+#editor-overlay .modal-body {
+    overflow-y: auto;
+    max-height: calc(85vh - 120px);
+    padding-right: 0;
+}
+
+#editor-overlay .toolbar.editor-toolbar {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+#editor-overlay .modal.modal--floating .editor-toolbar {
+    cursor: grab;
+}
+
+#editor-overlay .modal.modal--floating.is-modal-dragging .editor-toolbar {
+    cursor: grabbing;
+}
+
+#editor-overlay .modal-toolbar-mount {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.35rem;
+    padding-top: 0.12rem;
+}
+
+#editor-overlay .modal-toolbar-mount > .card-act--archive {
+    flex-shrink: 0;
+    align-self: center;
+}
+
+#editor-overlay .modal-card-actions {
+    justify-content: flex-end;
+    gap: 0.18rem;
+    flex-wrap: wrap;
+}
+
+#editor-overlay .modal .modal-chrome {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 3;
+}
+
+#editor-overlay .modal .modal-resize {
+    position: absolute;
+    pointer-events: auto;
+    z-index: 5;
+}
+
+#editor-overlay .modal .modal-resize-n,
+#editor-overlay .modal .modal-resize-s {
+    left: 8px;
+    right: 8px;
+    height: 8px;
+}
+
+#editor-overlay .modal .modal-resize-e,
+#editor-overlay .modal .modal-resize-w {
+    top: 8px;
+    bottom: 8px;
+    width: 8px;
+}
+
+#editor-overlay .modal .modal-resize-nw,
+#editor-overlay .modal .modal-resize-ne,
+#editor-overlay .modal .modal-resize-sw,
+#editor-overlay .modal .modal-resize-se {
+    width: 12px;
+    height: 12px;
+}
+
+#editor-overlay .modal .modal-resize-n { top: 0; cursor: n-resize; }
+#editor-overlay .modal .modal-resize-s { bottom: 0; cursor: s-resize; }
+#editor-overlay .modal .modal-resize-e { right: 0; cursor: e-resize; }
+#editor-overlay .modal .modal-resize-w { left: 0; cursor: w-resize; }
+#editor-overlay .modal .modal-resize-nw { top: 0; left: 0; cursor: nw-resize; }
+#editor-overlay .modal .modal-resize-ne { top: 0; right: 0; cursor: ne-resize; }
+#editor-overlay .modal .modal-resize-sw { bottom: 0; left: 0; cursor: sw-resize; }
+#editor-overlay .modal .modal-resize-se { bottom: 0; right: 0; cursor: se-resize; }
+
+#editor-overlay .modal.modal--floating .modal-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow: hidden;
+}
+
+#editor-overlay .modal.modal--floating .editor-note-shell {
+    flex: 1 1 auto;
+    min-height: 0;
     display: flex;
     flex-direction: column;
 }
 
-.modal--editor .modal-body {
+#editor-overlay .modal.modal--floating .editor-note-topline,
+#editor-overlay .modal.modal--floating .editor-panel {
+    flex: 0 0 auto;
+}
+
+#editor-overlay .modal.modal--floating .editor-note-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
     overflow-y: auto;
-    max-height: calc(85vh - 120px);
-    padding-right: 0.5rem;
 }
 
-/* Modern modal improvements */
-.modal {
-    background: linear-gradient(135deg, var(--bg-surface) 0%, rgba(26, 26, 30, 0.8) 100%);
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4), 
-                inset 0 1px 0 rgba(255, 255, 255, 0.05);
-}
-
-.overlay {
-    backdrop-filter: blur(6px);
+#editor-overlay .modal.modal--floating .editor-meta-wrap {
+    flex: 0 0 auto;
+    margin-top: auto;
 }
 
 /* Improved form group styling */

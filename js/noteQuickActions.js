@@ -269,10 +269,10 @@ function bindModalQuickActions(toolbarMount, item, ui, editor) {
 
     wireSharedActions(buttons, item, { ui, surface: 'modal', editor });
 
+    // Pencil matches board layout; in the modal it closes (already editing).
     attachCardActionButton(buttons.editBtn, () => {
-        const titleEl = editor.mountZone?.querySelector('[data-field="title"]');
-        if (titleEl) NoteSurface.focusInlineEdit(titleEl, 'end');
-    });
+        editor.commitAndClose();
+    }, { commit: () => editor.syncActiveItemFromDom() });
 }
 
 /**

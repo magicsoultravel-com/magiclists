@@ -245,7 +245,7 @@ export const SidebarRadio = {
                 const bpmEl = modal.querySelector('[data-media-visualizer-bpm]');
                 RadioVisualizer.setSettings({
                     mode: modeEl?.value || 'mountains',
-                    palette: paletteEl?.value || 'neon',
+                    palette: paletteEl?.value || 'horizon',
                     sensitivity: sensitivityEl?.value || 1.0,
                     amplitude: modal.querySelector('[data-media-visualizer-amplitude]')?.value || 0.55,
                     bpm: bpmEl?.value || 120

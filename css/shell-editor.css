@@ -625,12 +625,35 @@ body.is-checklist-dragging {
     margin-bottom: 0.05rem;
 }
 
+#editor-overlay .editor-toolbar {
+    width: 100%;
+    align-items: center;
+}
+
+#editor-overlay .modal-toolbar-mount .card-actions {
+    margin-left: auto;
+    align-items: center;
+}
+
+#editor-overlay .modal-toolbar-mount > .card-act--archive {
+    align-self: center;
+}
+
+#editor-overlay .editor-note-shell {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
+    overflow: hidden;
+}
+
 /* Modal editor - topline with rigid flex layout for toolbar */
 #editor-overlay .editor-note-shell .editor-note-topline {
     display: flex;
     align-items: center;
     justify-content: space-between;
     position: relative;
+    padding-top: 0.08rem;
 }
 
 /* Modal editor - toolbar positioned statically within flex flow */

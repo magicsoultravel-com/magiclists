@@ -126,6 +126,7 @@ export const Editor = {
         this.syncEditorTheme(resolveNoteColor(this.activeItem.backgroundColor));
         this.renderForm();
         this.overlay.classList.remove('is-hidden');
+        document.body.classList.add('is-editor-modal-open');
         const modal = this.overlay.querySelector('.modal');
         if (modal) modal.classList.add('modal--editor');
         requestAnimationFrame(() => {
@@ -146,10 +147,12 @@ export const Editor = {
 
     animateEditorClose(done) {
         if (!this.overlay) {
+            document.body.classList.remove('is-editor-modal-open');
             done();
             return;
         }
         this.overlay.classList.remove('is-open');
+        document.body.classList.remove('is-editor-modal-open');
         let finished = false;
         const finish = () => {
             if (finished) return;
@@ -558,7 +561,7 @@ export const Editor = {
         if (!this.archiveBtn || !this.activeItem) return;
         const isArchived = this.activeItem.status === 'archived';
         this.archiveBtn.innerHTML = isArchived ? CARD_ICONS.unarchive : CARD_ICONS.delete;
-        this.archiveBtn.title = isArchived ? 'Restore from bin' : 'Move to bin';
+        this.archiveBtn.title = isArchived ? 'Restore from Archive' : 'Move to Archive';
         this.archiveBtn.setAttribute('aria-label', this.archiveBtn.title);
         this.archiveBtn.classList.toggle('card-act--archive-on', isArchived);
     },

@@ -1,11 +1,16 @@
 const STORAGE_KEY = 'matrix_modal_editor_geometry';
-const MIN_W = 320;
-const MIN_H = 280;
+const MIN_W = 360;
+const MIN_H = 320;
 const PAD = 16;
-const DEFAULT_W = 520;
+const DEFAULT_W = 900;
+const DEFAULT_H = 600;
 
-function defaultHeight() {
-    return window.innerHeight - PAD * 2;
+function defaultSize() {
+    const maxW = window.innerWidth - PAD * 2;
+    const maxH = window.innerHeight - PAD * 2;
+    const w = Math.min(DEFAULT_W, maxW);
+    const h = Math.min(DEFAULT_H, Math.round(window.innerHeight * 0.7), maxH);
+    return { w, h };
 }
 
 function clampGeometry(geom) {
@@ -22,6 +27,14 @@ function isDesktopViewport() {
     return window.matchMedia('(min-width: 769px)').matches;
 }
 
+function clearStoredGeometry() {
+    try {
+        localStorage.removeItem(STORAGE_KEY);
+    } catch {
+        /* ignore */
+    }
+}
+
 export const EditorModalChrome = {
     _bindings: new WeakMap(),
 
@@ -32,23 +45,6 @@ export const EditorModalChrome = {
     isInitialized(modalEl) {
         const binding = this._bindings.get(modalEl);
         return !!(binding && binding.desktopEnabled === this.isEnabled());
-    },
-
-    loadGeometry() {
-        try {
-            const raw = localStorage.getItem(STORAGE_KEY);
-            if (!raw) return null;
-            const parsed = JSON.parse(raw);
-            if (!Number.isFinite(parsed?.x) || !Number.isFinite(parsed?.w)) return null;
-            return clampGeometry(parsed);
-        } catch {
-            return null;
-        }
-    },
-
-    saveGeometry(geom) {
-        if (!geom) return;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(clampGeometry(geom)));
     },
 
     readGeometry(modalEl) {
@@ -77,8 +73,7 @@ export const EditorModalChrome = {
 
     applyDefaultCentered(modalEl) {
         if (!modalEl) return;
-        const w = Math.min(DEFAULT_W, window.innerWidth - PAD * 2);
-        const h = defaultHeight();
+        const { w, h } = defaultSize();
         this.applyGeometry(modalEl, {
             x: (window.innerWidth - w) / 2,
             y: (window.innerHeight - h) / 2,
@@ -115,8 +110,15 @@ export const EditorModalChrome = {
     init(modalEl, { onGeometryChange } = {}) {
         if (!modalEl) return;
 
+        clearStoredGeometry();
+
         const desktopEnabled = this.isEnabled();
-        if (this.isInitialized(modalEl)) return;
+
+        // Always re-center on open; geometry is session-only (not remembered).
+        if (this.isInitialized(modalEl)) {
+            if (desktopEnabled) this.applyDefaultCentered(modalEl);
+            return;
+        }
 
         this.teardown(modalEl);
 
@@ -133,25 +135,30 @@ export const EditorModalChrome = {
         }
 
         this.ensureChrome(modalEl);
-        const saved = this.loadGeometry();
-        if (saved) {
-            this.applyGeometry(modalEl, saved);
-        } else {
-            this.applyDefaultCentered(modalEl);
-        }
+        this.applyDefaultCentered(modalEl);
 
         const abort = new AbortController();
         const { signal } = abort;
-        const toolbar = modalEl.querySelector('.editor-toolbar');
         let dragActive = null;
         let resizeActive = null;
         let dragRaf = null;
         let resizeRaf = null;
 
-        const commitGeometry = () => {
+        const startDrag = (e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
             const geom = this.readGeometry(modalEl);
-            this.saveGeometry(geom);
-            onGeometryChange?.(geom);
+            dragActive = {
+                startX: e.clientX,
+                startY: e.clientY,
+                origX: geom.x,
+                origY: geom.y,
+                w: geom.w,
+                h: geom.h,
+                moved: false
+            };
+            document.addEventListener('mousemove', onDragMove);
+            document.addEventListener('mouseup', onDragUp);
         };
 
         const onDragMove = (e) => {
@@ -184,26 +191,23 @@ export const EditorModalChrome = {
                 dragRaf = null;
             }
             modalEl.classList.remove('is-modal-dragging');
-            if (dragActive.moved) commitGeometry();
+            if (dragActive.moved) onGeometryChange?.(this.readGeometry(modalEl));
             dragActive = null;
         };
 
-        toolbar?.addEventListener('mousedown', (e) => {
+        // Grab handle (and empty toolbar chrome) — delegated so toolbar re-renders stay live.
+        modalEl.addEventListener('mousedown', (e) => {
             if (e.button !== 0) return;
+            const grab = e.target.closest('.card-act--drag');
+            if (grab && modalEl.contains(grab)) {
+                e.stopPropagation();
+                startDrag(e);
+                return;
+            }
+            const toolbar = e.target.closest('.editor-toolbar');
+            if (!toolbar || !modalEl.contains(toolbar)) return;
             if (e.target.closest('.card-act, input, select, textarea, button')) return;
-            e.preventDefault();
-            const geom = this.readGeometry(modalEl);
-            dragActive = {
-                startX: e.clientX,
-                startY: e.clientY,
-                origX: geom.x,
-                origY: geom.y,
-                w: geom.w,
-                h: geom.h,
-                moved: false
-            };
-            document.addEventListener('mousemove', onDragMove);
-            document.addEventListener('mouseup', onDragUp);
+            startDrag(e);
         }, { signal });
 
         const onResizeMove = (e) => {
@@ -240,7 +244,7 @@ export const EditorModalChrome = {
                 resizeRaf = null;
             }
             modalEl.classList.remove('is-modal-resizing');
-            commitGeometry();
+            onGeometryChange?.(this.readGeometry(modalEl));
             resizeActive = null;
         };
 

@@ -191,7 +191,7 @@ function ensureVerticalSplitter() {
     verticalSplitter.className = 'shell-splitter shell-splitter--v';
     verticalSplitter.setAttribute('role', 'separator');
     verticalSplitter.setAttribute('aria-orientation', 'vertical');
-    verticalSplitter.setAttribute('aria-label', 'Resize sidebar');
+    verticalSplitter.setAttribute('aria-label', 'Resize or click to hide sidebar');
     verticalSplitter.tabIndex = 0;
 
     sidebarPanel.insertAdjacentElement('afterend', verticalSplitter);
@@ -263,7 +263,8 @@ function bindSplitterDrag(handle, axis) {
 
         if (!moved) {
             document.body.classList.remove('is-shell-resizing', 'is-shell-resizing--v', 'is-shell-resizing--h');
-            // Horizontal click toggles shut/restore; vertical click stays a no-op.
+            // Horizontal click toggles FC shut/restore.
+            // Vertical click mirrors the hide-panel icon (collapse + FAB); reopen via FAB.
             if (axis === 'h') {
                 const mount = document.getElementById('file-cabinet');
                 if (!mount) return;
@@ -275,6 +276,8 @@ function bindSplitterDrag(handle, axis) {
                     applyFileCabinetShut(mount);
                 }
                 dispatchDesktopBoundsChanged();
+            } else if (axis === 'v' && !isSidebarCollapsed()) {
+                document.getElementById('nav-panel-toggle')?.click();
             }
             return;
         }

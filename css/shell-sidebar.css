@@ -22,6 +22,12 @@
     transition: width 0.24s cubic-bezier(0.22, 1, 0.36, 1), padding 0.24s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
 }
 
+/* Keep sidebar usable while the note editor modal is open */
+body.is-editor-modal-open .side-panel {
+    position: relative;
+    z-index: 1100;
+}
+
 .side-panel:not(.is-collapsed) {
     width: var(--sidebar-width, 220px);
 }

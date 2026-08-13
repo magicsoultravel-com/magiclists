@@ -2,6 +2,7 @@ import { RadioPlayer } from './radioPlayer.js';
 
 const PALETTES = {
     neon: ['#7dd3fc', '#c084fc', '#f472b6', '#fef08a', '#34d399'],
+    horizon: ['#00f0ff', '#ff2bd6', '#b8ff3c', '#7b5cff', '#ff9f1c'],
     sunset: ['#f97316', '#fb7185', '#facc15', '#fda4af', '#fbbf24'],
     aurora: ['#22d3ee', '#34d399', '#a3e635', '#60a5fa', '#c4b5fd'],
     mono: ['#e2e8f0', '#cbd5e1', '#94a3b8', '#f8fafc', '#dbeafe'],
@@ -11,18 +12,27 @@ const PALETTES = {
 
 const DEFAULTS = {
     mode: 'mountains',
-    palette: 'neon',
+    palette: 'horizon',
     sensitivity: 1.0,
     amplitude: 0.55,
     density: 1,
     speed: 1,
-    glow: 0.65,
+    glow: 0.85,
     background: 'dark',
     bpm: 120
 };
 
 const ENERGY_FLOOR = 0.02;
 const ENERGY_SILENCE_MS = 1000;
+const DAY_CYCLE_MS = 60_000;
+const SCENE_HOLD_MS = 18_000;
+const SEA_HOLD_MS = 60_000;
+const SCENE_TRANSITION_MS = 2_800;
+const MOUNTAIN_SCENES = ['cactus', 'forest'];
+const TRAVEL_SPEED = 0.085; // screens per second (progressing right → world scrolls left)
+const FOREST_LEAF = ['#1f4d2e', '#2d6a3e', '#245536', '#3d7a4a', '#4a6b3a'];
+const FOREST_TRUNK = '#3b2a1a';
+const CACTUS_GREEN = '#4d6b3c';
 
 function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
@@ -62,6 +72,135 @@ function ampScale(settings) {
     return clamp(Number(settings.amplitude) || 0.55, 0.15, 1.5);
 }
 
+function shuffleNoRepeat(items, last) {
+    const pool = [...items];
+    for (let i = pool.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    if (pool.length > 1 && last && pool[0] === last) {
+        const swap = pool.findIndex((v, idx) => idx > 0 && v !== last);
+        if (swap > 0) [pool[0], pool[swap]] = [pool[swap], pool[0]];
+    }
+    return pool;
+}
+
+function smoothstep(edge0, edge1, x) {
+    const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
+    return t * t * (3 - 2 * t);
+}
+
+function bellWrap(t, center, width) {
+    const d = Math.min(Math.abs(t - center), 1 - Math.abs(t - center));
+    const x = clamp(1 - d / width, 0, 1);
+    return x * x * (3 - 2 * x);
+}
+
+function hexToRgb(hex) {
+    if (!hex || !/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(hex)) {
+        return [255, 255, 255];
+    }
+    const full = hex.length === 4
+        ? hex.split('').map((ch, i) => (i === 0 ? ch : ch + ch)).join('')
+        : hex;
+    const value = parseInt(full.slice(1), 16);
+    return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
+}
+
+function rgbaTuple(hex, a) {
+    const [r, g, b] = hexToRgb(hex);
+    return [r, g, b, a];
+}
+
+function lerpTuple(a, b, t) {
+    return [
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+        a[3] + (b[3] - a[3]) * t
+    ];
+}
+
+function cssRgba(tuple) {
+    return `rgba(${Math.round(tuple[0])}, ${Math.round(tuple[1])}, ${Math.round(tuple[2])}, ${tuple[3]})`;
+}
+
+function skyPaletteFrames(palette) {
+    const p0 = palette[0];
+    const p1 = palette[1];
+    const p2 = palette[2];
+    const p3 = palette[3] || palette[0];
+    const p4 = palette[4] || palette[2];
+    return {
+        night: [
+            rgbaTuple('#02010c', 1),
+            rgbaTuple(p3, 0.55),
+            rgbaTuple(p0, 0.28),
+            rgbaTuple(p0, 0.12),
+            rgbaTuple('#03040c', 1)
+        ],
+        dawn: [
+            rgbaTuple('#1a0538', 1),
+            rgbaTuple(p1, 0.9),
+            rgbaTuple(p4, 0.85),
+            rgbaTuple(p0, 0.7),
+            rgbaTuple('#0a0618', 1)
+        ],
+        day: [
+            rgbaTuple('#12003a', 1),
+            rgbaTuple(p3, 0.85),
+            rgbaTuple(p0, 0.75),
+            rgbaTuple(p1, 0.55),
+            rgbaTuple('#050816', 1)
+        ],
+        dusk: [
+            rgbaTuple('#2a0060', 1),
+            rgbaTuple(p3, 0.95),
+            rgbaTuple(p1, 0.9),
+            rgbaTuple(p4, 0.75),
+            rgbaTuple('#080414', 1)
+        ]
+    };
+}
+
+function blendedSkyStops(palette, cycleT) {
+    const frames = skyPaletteFrames(palette);
+    const keys = [
+        { t: 0, name: 'night' },
+        { t: 0.12, name: 'dawn' },
+        { t: 0.37, name: 'day' },
+        { t: 0.62, name: 'dusk' },
+        { t: 0.87, name: 'night' },
+        { t: 1, name: 'night' }
+    ];
+    let i = 0;
+    while (i < keys.length - 1 && cycleT > keys[i + 1].t) i += 1;
+    const a = keys[i];
+    const b = keys[i + 1];
+    const u = smoothstep(a.t, b.t, cycleT);
+    const from = frames[a.name];
+    const to = frames[b.name];
+    return from.map((stop, idx) => lerpTuple(stop, to[idx], u));
+}
+
+function dayCycleState(now, cycleStart) {
+    const elapsed = ((now - cycleStart) % DAY_CYCLE_MS + DAY_CYCLE_MS) % DAY_CYCLE_MS;
+    const t = elapsed / DAY_CYCLE_MS; // 0..1
+    const sunness = bellWrap(t, 0.3, 0.34);
+    const moonness = bellWrap(t, 0.82, 0.36);
+    const dayness = clamp(sunness * 1.05, 0, 1);
+    let period = 'night';
+    if (t < 0.25) period = 'dawn';
+    else if (t < 0.5) period = 'day';
+    else if (t < 0.75) period = 'dusk';
+    // Arc across the sky during their visible halves (right → left uses 1 - arc in draw)
+    const sunArc = smoothstep(0, 0.55, t);
+    const moonArc = t >= 0.45
+        ? smoothstep(0.45, 1, t)
+        : smoothstep(0, 0.2, t) * 0.15;
+    return { t, period, dayness, sunness, moonness, sunArc, moonArc, elapsed };
+}
+
 export const RadioVisualizer = {
     enabled: false,
     canvas: null,
@@ -79,6 +218,18 @@ export const RadioVisualizer = {
     silenceSince: null,
     lastPulse: 0,
     stars: null,
+    mountainCycleStart: null,
+    mountainScene: null,
+    mountainSceneQueue: [],
+    mountainSceneStartedAt: 0,
+    mountainAwaitSea: false,
+    birds: [],
+    nextBirdAt: 0,
+    travelScroll: 0,
+    _mountainLastNow: null,
+    sceneTransition: null,
+    panelWidth: null,
+    canvasHeight: 200,
 
     setCanvas(canvas) {
         this.canvas = canvas;
@@ -163,7 +314,7 @@ export const RadioVisualizer = {
         const modal = document.createElement('div');
         modal.className = 'media-visualizer-modal is-hidden';
         modal.setAttribute('role', 'dialog');
-        modal.setAttribute('aria-modal', 'true');
+        modal.setAttribute('aria-modal', 'false');
         modal.setAttribute('aria-label', 'Media visualizer');
         modal.innerHTML = `
             <div class="media-visualizer-modal__dialog">
@@ -192,6 +343,7 @@ export const RadioVisualizer = {
                         <label class="media-visualizer-modal__field">
                             <span>Palette</span>
                             <select class="form-input radio-special-form__select" data-media-visualizer-palette>
+                                <option value="horizon" selected>Horizon</option>
                                 <option value="neon">Neon</option>
                                 <option value="vapor">Vapor</option>
                                 <option value="sunset">Sunset</option>
@@ -212,19 +364,28 @@ export const RadioVisualizer = {
                             <span data-media-visualizer-bpm-label>BPM: 120</span>
                             <input type="range" min="10" max="200" step="1" value="120" data-media-visualizer-bpm>
                         </label>
+                        <div class="media-visualizer-modal__legend" data-media-visualizer-legend>
+                            <span class="media-visualizer-modal__legend-title">Neon Mountains randomizer</span>
+                            <ul>
+                                <li>Day / night cycle: ${DAY_CYCLE_MS / 1000}s (smooth blend)</li>
+                                <li>Cactus / Forest scenes: ~${SCENE_HOLD_MS / 1000}s each (shuffle, no immediate repeat)</li>
+                                <li>Sea interlude: ${SEA_HOLD_MS / 1000}s after a cactus+forest pass</li>
+                                <li>Scene crossfade: ~${SCENE_TRANSITION_MS / 1000}s</li>
+                                <li>Sea encounters (sparse): sailboat, ship, surfer, rogue wave</li>
+                                <li>Birds: every ~9–23s (V / gull / dart)</li>
+                                <li>Travel scroll: continuous rightward journey</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
+                <div class="media-visualizer-modal__resize" data-media-visualizer-resize title="Resize" aria-hidden="true"></div>
             </div>
         `;
 
         const closeBtn = modal.querySelector('[data-media-visualizer-close]');
-        closeBtn?.addEventListener('click', () => {
+        closeBtn?.addEventListener('click', (e) => {
+            e.stopPropagation();
             this.toggle(false);
-        });
-        modal.addEventListener('click', (event) => {
-            if (event.target === modal) {
-                this.toggle(false);
-            }
         });
 
         const modeEl = modal.querySelector('[data-media-visualizer-mode]');
@@ -240,7 +401,7 @@ export const RadioVisualizer = {
         const applySettings = () => {
             this.setSettings({
                 mode: modeEl?.value || 'mountains',
-                palette: paletteEl?.value || 'neon',
+                palette: paletteEl?.value || 'horizon',
                 sensitivity: sensitivityEl?.value || 1.0,
                 amplitude: amplitudeEl?.value || 0.55,
                 bpm: bpmEl?.value || 120
@@ -252,9 +413,56 @@ export const RadioVisualizer = {
         amplitudeEl?.addEventListener('input', applySettings);
         bpmEl?.addEventListener('input', applySettings);
 
+        this.bindPanelResize(modal);
+
         document.body.appendChild(modal);
         this.modal = modal;
         return modal;
+    },
+
+    bindPanelResize(modal) {
+        const handle = modal.querySelector('[data-media-visualizer-resize]');
+        const canvas = modal.querySelector('[data-media-visualizer-canvas]');
+        if (!handle || !canvas) return;
+
+        let dragging = false;
+        let startX = 0;
+        let startY = 0;
+        let startW = 0;
+        let startH = 0;
+
+        const onMove = (event) => {
+            if (!dragging) return;
+            const dx = event.clientX - startX;
+            const dy = event.clientY - startY;
+            const nextW = clamp(startW + dx, 320, Math.min(window.innerWidth - 16, 1100));
+            const nextH = clamp(startH + dy, 120, Math.min(window.innerHeight * 0.7, 560));
+            this.panelWidth = nextW;
+            this.canvasHeight = nextH;
+            modal.style.width = `${nextW}px`;
+            canvas.style.height = `${nextH}px`;
+            this.resizeCanvas();
+        };
+
+        const onUp = () => {
+            if (!dragging) return;
+            dragging = false;
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+        };
+
+        handle.addEventListener('pointerdown', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            dragging = true;
+            startX = event.clientX;
+            startY = event.clientY;
+            startW = modal.getBoundingClientRect().width;
+            startH = canvas.getBoundingClientRect().height;
+            handle.setPointerCapture?.(event.pointerId);
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+        });
     },
 
     openModal({ title = 'Radio visualizer', mediaElement = this.mediaElement || RadioPlayer?.getAudioElement?.() } = {}) {
@@ -666,7 +874,6 @@ export const RadioVisualizer = {
             ctx.fill();
         }
 
-        // Soft horizon glow
         const glow = ctx.createRadialGradient(
             width * 0.5,
             height * 0.72,
@@ -682,70 +889,682 @@ export const RadioVisualizer = {
         ctx.fillRect(0, 0, width, height);
     },
 
-    drawMountains(ctx, width, height, values, palette, motion = 1) {
+    pickNextMountainScene() {
+        if (this.mountainScene === 'sea') {
+            this.mountainSceneQueue = shuffleNoRepeat(MOUNTAIN_SCENES, null);
+            return this.mountainSceneQueue.shift();
+        }
+        if (!this.mountainSceneQueue.length) {
+            return 'sea';
+        }
+        return this.mountainSceneQueue.shift();
+    },
+
+    ensureMountainWorld(now = Date.now()) {
+        if (this.mountainCycleStart == null) {
+            this.mountainCycleStart = now;
+        }
+
+        if (!this.mountainScene) {
+            this.mountainSceneQueue = shuffleNoRepeat(MOUNTAIN_SCENES, null);
+            this.mountainScene = this.mountainSceneQueue.shift();
+            this.mountainSceneStartedAt = now;
+            this.sceneTransition = null;
+        } else if (!this.sceneTransition) {
+            const hold = this.mountainScene === 'sea' ? SEA_HOLD_MS : SCENE_HOLD_MS;
+            if (now - this.mountainSceneStartedAt >= hold) {
+                const next = this.pickNextMountainScene();
+                this.sceneTransition = {
+                    from: this.mountainScene,
+                    to: next,
+                    start: now,
+                    duration: SCENE_TRANSITION_MS
+                };
+            }
+        }
+
+        if (this.sceneTransition) {
+            const u = (now - this.sceneTransition.start) / this.sceneTransition.duration;
+            if (u >= 1) {
+                this.mountainScene = this.sceneTransition.to;
+                this.mountainSceneStartedAt = now;
+                this.sceneTransition = null;
+            }
+        }
+
+        return dayCycleState(now, this.mountainCycleStart);
+    },
+
+    wrapScreenX(worldX, width, parallax = 1) {
+        const span = width * 2.2;
+        const shifted = worldX - this.travelScroll * parallax;
+        return ((shifted % span) + span) % span - width * 0.15;
+    },
+
+    spawnBirds(width, height, now) {
+        if (now < this.nextBirdAt) return;
+        const roll = Math.random();
+        const count = roll < 0.55 ? 1 : roll < 0.85 ? 2 : 3 + Math.floor(Math.random() * 3);
+        const dir = Math.random() < 0.65 ? -1 : 1;
+        const baseY = height * (0.08 + Math.random() * 0.34);
+        const speed = (0.028 + Math.random() * 0.07) * width;
+        const style = Math.floor(Math.random() * 3);
+        for (let i = 0; i < count; i += 1) {
+            this.birds.push({
+                x: dir > 0 ? -30 - i * (14 + Math.random() * 10) : width + 30 + i * (14 + Math.random() * 10),
+                y: baseY + (Math.random() - 0.5) * 22,
+                vx: dir * speed * (0.75 + Math.random() * 0.5),
+                flap: Math.random() * Math.PI * 2,
+                flapRate: 7 + Math.random() * 8,
+                size: 2.2 + Math.random() * 3.8,
+                style,
+                bob: Math.random() * Math.PI * 2
+            });
+        }
+        this.nextBirdAt = now + 9000 + Math.random() * 14000;
+    },
+
+    updateAndDrawBirds(ctx, width, height, now, dt, palette, dayness) {
+        this.spawnBirds(width, height, now);
+        const ink = dayness > 0.5
+            ? alpha(palette[3] || '#111827', 0.8)
+            : alpha(palette[0], 0.85);
+        this.birds = this.birds.filter((b) => b.x > -50 && b.x < width + 50);
+        for (const b of this.birds) {
+            b.x += b.vx * dt;
+            b.flap += dt * b.flapRate;
+            b.bob += dt * 2.2;
+            const y = b.y + Math.sin(b.bob) * 2.5;
+            const wing = Math.sin(b.flap) * b.size * (0.7 + b.style * 0.15);
+            ctx.strokeStyle = ink;
+            ctx.fillStyle = ink;
+            ctx.lineWidth = 1.1 + b.size * 0.08;
+            ctx.beginPath();
+            if (b.style === 1) {
+                ctx.moveTo(b.x - b.size * 1.5, y + wing * 0.15);
+                ctx.quadraticCurveTo(b.x - b.size * 0.2, y - wing * 1.15, b.x, y);
+                ctx.quadraticCurveTo(b.x + b.size * 0.2, y - wing * 1.15, b.x + b.size * 1.5, y + wing * 0.15);
+                ctx.stroke();
+            } else if (b.style === 2) {
+                ctx.moveTo(b.x - b.size, y);
+                ctx.lineTo(b.x, y - wing * 0.6);
+                ctx.lineTo(b.x + b.size * 1.2, y);
+                ctx.lineTo(b.x, y + wing * 0.25);
+                ctx.closePath();
+                ctx.fill();
+            } else {
+                ctx.moveTo(b.x - b.size, y + wing * 0.25);
+                ctx.quadraticCurveTo(b.x, y - wing, b.x + b.size, y + wing * 0.25);
+                ctx.stroke();
+            }
+        }
+    },
+
+    drawSunMoon(ctx, width, height, palette, cycle, motion) {
+        const { sunness, moonness, sunArc, moonArc, dayness } = cycle;
+
+        if (sunness > 0.02) {
+            // Right → left across the sky
+            const sx = width * (0.88 - sunArc * 0.76);
+            const sy = height * (0.55 - Math.sin(sunArc * Math.PI) * 0.42);
+            const r = Math.min(width, height) * (0.055 + sunness * 0.035 + motion * 0.012);
+
+            for (let i = 3; i >= 1; i -= 1) {
+                const bloom = ctx.createRadialGradient(sx, sy, r * 0.15, sx, sy, r * (1.6 + i * 1.1));
+                bloom.addColorStop(0, alpha(palette[i % palette.length], 0.28 * sunness / i));
+                bloom.addColorStop(0.45, alpha(palette[(i + 2) % palette.length], 0.12 * sunness / i));
+                bloom.addColorStop(1, 'rgba(0,0,0,0)');
+                ctx.fillStyle = bloom;
+                ctx.beginPath();
+                ctx.arc(sx, sy, r * (1.6 + i * 1.1), 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            const core = ctx.createRadialGradient(sx, sy, r * 0.1, sx, sy, r);
+            core.addColorStop(0, alpha('#fff7ad', 0.98 * sunness));
+            core.addColorStop(0.45, alpha(palette[0], 0.9 * sunness));
+            core.addColorStop(1, alpha(palette[1], 0.55 * sunness));
+            ctx.fillStyle = core;
+            ctx.shadowBlur = 28 + this.settings.glow * 28;
+            ctx.shadowColor = alpha(palette[1], 0.85 * sunness);
+            ctx.beginPath();
+            ctx.arc(sx, sy, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+
+            if (sunness > 0.35 && dayness < 0.85) {
+                ctx.save();
+                ctx.globalAlpha = 0.1 + (1 - Math.abs(dayness - 0.55)) * 0.28 * sunness;
+                for (let i = 0; i < 9; i += 1) {
+                    const ang = -Math.PI / 2 + (i - 4) * 0.12;
+                    const grad = ctx.createLinearGradient(
+                        sx, sy,
+                        sx + Math.cos(ang) * width * 0.6,
+                        sy + Math.sin(ang) * height * 0.75
+                    );
+                    grad.addColorStop(0, alpha(palette[i % palette.length], 0.7));
+                    grad.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.strokeStyle = grad;
+                    ctx.lineWidth = 2.2;
+                    ctx.beginPath();
+                    ctx.moveTo(sx, sy);
+                    ctx.lineTo(sx + Math.cos(ang) * width * 0.6, sy + Math.sin(ang) * height * 0.75);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+        }
+
+        if (moonness > 0.02) {
+            const mx = width * (0.9 - moonArc * 0.72);
+            const my = height * (0.5 - Math.sin(moonArc * Math.PI) * 0.38);
+            const r = Math.min(width, height) * (0.045 + moonness * 0.03);
+            const halo = ctx.createRadialGradient(mx, my, r * 0.2, mx, my, r * 3.2);
+            halo.addColorStop(0, alpha(palette[0], 0.45 * moonness));
+            halo.addColorStop(0.4, alpha(palette[3], 0.22 * moonness));
+            halo.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = halo;
+            ctx.beginPath();
+            ctx.arc(mx, my, r * 3.2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = alpha(palette[0], 0.55 * moonness);
+            ctx.shadowBlur = 16 + this.settings.glow * 14;
+            ctx.shadowColor = alpha(palette[0], 0.7 * moonness);
+            ctx.beginPath();
+            ctx.arc(mx, my, r, 0, Math.PI * 2);
+            ctx.arc(mx + r * 0.35, my - r * 0.1, r * 0.85, 0, Math.PI * 2, true);
+            ctx.fill('evenodd');
+            ctx.shadowBlur = 0;
+        }
+    },
+
+    drawMountainSky(ctx, width, height, palette, motion, cycle) {
+        const { dayness, t: cycleT } = cycle;
+        const stops = blendedSkyStops(palette, cycleT);
+        const stopPos = [0, 0.28, 0.55, 0.78, 1];
+        const sky = ctx.createLinearGradient(0, 0, 0, height);
+        stops.forEach((tuple, idx) => {
+            sky.addColorStop(stopPos[idx], cssRgba(tuple));
+        });
+        ctx.fillStyle = sky;
+        ctx.fillRect(0, 0, width, height);
+
+        for (let i = 0; i < 3; i += 1) {
+            const y = height * (0.18 + i * 0.16);
+            const haze = ctx.createLinearGradient(0, y - 18, 0, y + 18);
+            haze.addColorStop(0, 'rgba(0,0,0,0)');
+            haze.addColorStop(0.5, alpha(palette[i % palette.length], 0.1 + motion * 0.08 + dayness * 0.06));
+            haze.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = haze;
+            ctx.fillRect(0, y - 18, width, 36);
+        }
+
+        const starFade = clamp(1 - dayness * 1.05, 0, 1);
+        if (starFade > 0.02) {
+            const now = Date.now();
+            const stars = this.ensureStars(width, height);
+            for (const s of stars) {
+                const tw = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(now * 0.002 * s.sp + s.tw));
+                const sx = this.wrapScreenX(s.x + width * 0.2, width, 0.15);
+                ctx.fillStyle = alpha(palette[Math.floor(s.tw) % palette.length], tw * 0.95 * starFade);
+                ctx.beginPath();
+                ctx.arc(sx, s.y, s.r * (0.8 + tw * 0.4), 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        this.drawSunMoon(ctx, width, height, palette, cycle, motion);
+
+        const glow = ctx.createRadialGradient(
+            width * 0.5,
+            height * 0.82,
+            4,
+            width * 0.5,
+            height * 0.82,
+            width * 0.7
+        );
+        const horizonColor = cssRgba(lerpTuple(
+            rgbaTuple(palette[0], 0.28 + motion * 0.18),
+            rgbaTuple(palette[1], 0.28 + motion * 0.18),
+            dayness
+        ));
+        glow.addColorStop(0, horizonColor);
+        glow.addColorStop(0.45, alpha(palette[2], 0.14));
+        glow.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = glow;
+        ctx.fillRect(0, 0, width, height);
+    },
+
+    ridgeYAt(x, width, height, layer, values, phase, t, a, pulse, scroll = 0) {
+        const pts = 48;
+        const world = (x + scroll * (0.35 + layer.li * 0.25)) / width * pts;
+        const i0 = Math.floor(world);
+        const frac = world - i0;
+        const sample = (idx) => {
+            const v = values[Math.abs(idx) % values.length] || 0;
+            const ridge = Math.sin(idx * 0.55 + phase * Math.PI * 2 + layer.li)
+                + 0.45 * Math.sin(idx * 1.3 - t * layer.speed * 1000);
+            const peak = (0.35 + v * this.settings.sensitivity * 0.8 + pulse * 0.15)
+                * layer.scale * height
+                + ridge * 6 * a;
+            return height * layer.y - peak;
+        };
+        return sample(i0) * (1 - frac) + sample(i0 + 1) * frac;
+    },
+
+    drawCactus(ctx, x, groundY, scale, color) {
+        ctx.save();
+        ctx.translate(x, groundY);
+        ctx.scale(scale, scale);
+        ctx.fillStyle = color;
+        ctx.fillRect(-2.5, -22, 5, 22);
+        ctx.fillRect(-10, -16, 8, 3);
+        ctx.fillRect(-10, -16, 3, 8);
+        ctx.fillRect(2.5, -12, 8, 3);
+        ctx.fillRect(7.5, -12, 3, 7);
+        ctx.restore();
+    },
+
+    drawTree(ctx, x, groundY, scale, trunk, leaf) {
+        ctx.save();
+        ctx.translate(x, groundY);
+        ctx.scale(scale, scale);
+        ctx.fillStyle = trunk;
+        ctx.fillRect(-1.5, -14, 3, 14);
+        ctx.fillStyle = leaf;
+        ctx.beginPath();
+        ctx.moveTo(0, -28);
+        ctx.lineTo(9, -12);
+        ctx.lineTo(-9, -12);
+        ctx.closePath();
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(0, -34);
+        ctx.lineTo(7, -18);
+        ctx.lineTo(-7, -18);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+    },
+
+    drawScrollingDecor(ctx, width, height, scene, frontLayer, values, phase, t, a, pulse, palette, dayness) {
+        const cactusColor = alpha(CACTUS_GREEN, 0.88 + dayness * 0.08);
+        const trunk = alpha(FOREST_TRUNK, 0.95);
+        const scroll = this.travelScroll;
+        const span = width * 2.2;
+
+        if (scene === 'cactus') {
+            const step = width * 0.16;
+            for (let world = -width; world < span + width; world += step) {
+                const x = this.wrapScreenX(world, width, 1);
+                if (x < -30 || x > width + 30) continue;
+                const jitter = Math.sin(world * 0.03) * 10;
+                const y = this.ridgeYAt(x, width, height, frontLayer, values, phase, t, a, pulse, scroll);
+                const scale = 0.65 + (Math.abs(Math.sin(world * 0.02)) * 0.35);
+                this.drawCactus(ctx, x + jitter * 0.2, y + 1, scale, cactusColor);
+            }
+        } else if (scene === 'forest') {
+            const step = width * 0.045;
+            for (let world = -width; world < span + width; world += step) {
+                const x = this.wrapScreenX(world, width, 1);
+                if (x < -40 || x > width + 40) continue;
+                const dens = Math.sin(world * 0.11) + Math.sin(world * 0.07 + 1.7);
+                if (dens < -0.35) continue;
+                const cluster = 2 + Math.floor((Math.sin(world * 0.19) + 1) * 2);
+                for (let c = 0; c < cluster; c += 1) {
+                    const ox = x + (c - cluster / 2) * 7 + Math.sin(world + c) * 3;
+                    const y = this.ridgeYAt(ox, width, height, frontLayer, values, phase, t, a, pulse, scroll);
+                    const leaf = alpha(FOREST_LEAF[(c + Math.floor(Math.abs(world) / 40)) % FOREST_LEAF.length], 0.92);
+                    this.drawTree(ctx, ox, y + 1, 0.5 + (c % 4) * 0.18 + Math.abs(Math.sin(world)) * 0.15, trunk, leaf);
+                }
+            }
+        }
+    },
+
+    drawSailboat(ctx, x, waterY, scale, hullColor, sailColor) {
+        ctx.save();
+        ctx.translate(x, waterY);
+        ctx.scale(scale, scale);
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = sailColor;
+        ctx.fillStyle = hullColor;
+        ctx.beginPath();
+        ctx.moveTo(-14, 0);
+        ctx.quadraticCurveTo(-10, 6, 0, 7);
+        ctx.quadraticCurveTo(10, 6, 12, 0);
+        ctx.lineTo(-14, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = alpha('#e2e8f0', 0.85);
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, -28);
+        ctx.stroke();
+        ctx.fillStyle = sailColor;
+        ctx.beginPath();
+        ctx.moveTo(1, -26);
+        ctx.lineTo(1, -4);
+        ctx.lineTo(14, -8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.moveTo(-1, -22);
+        ctx.lineTo(-1, -6);
+        ctx.lineTo(-11, -9);
+        ctx.closePath();
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = alpha(sailColor, 0.45);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-14, 3);
+        ctx.quadraticCurveTo(-22, 5, -28, 2);
+        ctx.stroke();
+        ctx.restore();
+    },
+
+    drawShip(ctx, x, waterY, scale, hullColor, accent) {
+        ctx.save();
+        ctx.translate(x, waterY);
+        ctx.scale(scale, scale);
+        ctx.fillStyle = hullColor;
+        ctx.beginPath();
+        ctx.moveTo(-28, 0);
+        ctx.lineTo(-22, 8);
+        ctx.lineTo(24, 8);
+        ctx.lineTo(30, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = alpha('#1e293b', 0.95);
+        ctx.fillRect(-12, -10, 26, 10);
+        ctx.fillStyle = accent;
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = accent;
+        ctx.fillRect(-8, -14, 4, 4);
+        ctx.fillRect(2, -14, 4, 4);
+        ctx.fillRect(12, -14, 4, 4);
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = alpha(accent, 0.4);
+        ctx.beginPath();
+        ctx.moveTo(-28, 4);
+        ctx.quadraticCurveTo(-40, 7, -48, 3);
+        ctx.stroke();
+        ctx.restore();
+    },
+
+    drawSurfer(ctx, x, waterY, scale, boardColor, suitColor) {
+        ctx.save();
+        ctx.translate(x, waterY);
+        ctx.scale(scale, scale);
+        ctx.fillStyle = boardColor;
+        ctx.beginPath();
+        ctx.ellipse(0, 2, 12, 2.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = suitColor;
+        ctx.beginPath();
+        ctx.arc(0, -6, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillRect(-1.2, -4, 2.4, 6);
+        ctx.strokeStyle = suitColor;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(-1, -1);
+        ctx.lineTo(-5, -5);
+        ctx.moveTo(1, -1);
+        ctx.lineTo(5, -4);
+        ctx.stroke();
+        ctx.restore();
+    },
+
+    drawRogueWave(ctx, x, waterTop, width, height, palette, t, strength) {
+        const crest = waterTop + 6;
+        const amp = (18 + strength * 28) * (0.85 + 0.15 * Math.sin(t * 3));
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x - 70, height);
+        ctx.lineTo(x - 70, crest + 20);
+        for (let i = 0; i <= 24; i += 1) {
+            const u = i / 24;
+            const px = x - 70 + u * 140;
+            const arch = Math.sin(u * Math.PI);
+            const y = crest + 18 - arch * amp + Math.sin(t * 4 + u * 6) * 2;
+            ctx.lineTo(px, y);
+        }
+        ctx.lineTo(x + 70, height);
+        ctx.closePath();
+        const foam = ctx.createLinearGradient(0, crest - amp, 0, height);
+        foam.addColorStop(0, alpha(palette[0], 0.55));
+        foam.addColorStop(0.35, alpha(palette[3], 0.4));
+        foam.addColorStop(1, alpha('#020617', 0.2));
+        ctx.fillStyle = foam;
+        ctx.fill();
+        ctx.strokeStyle = alpha('#e0f2fe', 0.65);
+        ctx.lineWidth = 2;
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = alpha(palette[0], 0.7);
+        ctx.beginPath();
+        for (let i = 0; i <= 24; i += 1) {
+            const u = i / 24;
+            const px = x - 70 + u * 140;
+            const arch = Math.sin(u * Math.PI);
+            const y = crest + 18 - arch * amp + Math.sin(t * 4 + u * 6) * 2;
+            if (i === 0) ctx.moveTo(px, y);
+            else ctx.lineTo(px, y);
+        }
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    },
+
+    drawSea(ctx, width, height, values, palette, motion, cycle) {
         const a = ampScale(this.settings);
-        this.drawSkyGradient(ctx, width, height, palette, motion);
+        const { pulse } = beatPulse(this.settings.bpm);
+        const t = Date.now() * 0.001;
+        const scroll = this.travelScroll;
+
+        ctx.beginPath();
+        ctx.moveTo(0, height);
+        for (let i = 0; i <= 40; i += 1) {
+            const x = (i / 40) * width;
+            const n = Math.sin((i + scroll * 0.02) * 0.4) * 8 * a;
+            ctx.lineTo(x, height * 0.52 + n);
+        }
+        ctx.lineTo(width, height);
+        ctx.closePath();
+        const land = ctx.createLinearGradient(0, height * 0.4, 0, height * 0.7);
+        land.addColorStop(0, alpha(palette[3], 0.45));
+        land.addColorStop(1, alpha(palette[1], 0.25));
+        ctx.fillStyle = land;
+        ctx.fill();
+
+        const waterTop = height * 0.54;
+        const water = ctx.createLinearGradient(0, waterTop, 0, height);
+        water.addColorStop(0, alpha(palette[0], 0.55 + cycle.dayness * 0.2));
+        water.addColorStop(0.4, alpha(palette[3], 0.45));
+        water.addColorStop(1, '#020617');
+        ctx.fillStyle = water;
+        ctx.fillRect(0, waterTop, width, height - waterTop);
+
+        for (let band = 0; band < 5; band += 1) {
+            ctx.beginPath();
+            const base = waterTop + 10 + band * (height * 0.07);
+            for (let x = 0; x <= width; x += 4) {
+                const v = values[Math.floor((x / width) * values.length) % values.length] || 0;
+                const y = base
+                    + Math.sin(x * 0.02 + scroll * 0.08 + band + t * (1.2 + band * 0.15)) * (4 + band)
+                    + Math.sin(x * 0.05 - scroll * 0.12 + t) * 3
+                    + v * 10 * a * this.settings.sensitivity
+                    + pulse * 3;
+                if (x === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+            }
+            ctx.strokeStyle = alpha(pickColor(palette, band), 0.35 + motion * 0.2 + pulse * 0.15);
+            ctx.lineWidth = 1.6 + band * 0.25;
+            ctx.shadowBlur = 10 + this.settings.glow * 10;
+            ctx.shadowColor = alpha(pickColor(palette, band), 0.65);
+            ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
+
+        ctx.strokeStyle = alpha(palette[0], 0.55 + pulse * 0.25);
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.moveTo(0, waterTop);
+        ctx.lineTo(width, waterTop);
+        ctx.stroke();
+
+        // Sparse sea encounters: mostly empty, mix of sailboat / ship / surfer / rogue wave
+        const span = width * 2.4;
+        const step = width * 1.45;
+        for (let world = 0; world < span + width; world += step) {
+            const seed = Math.sin(world * 0.017 + 1.3) * 0.5 + 0.5;
+            if (seed < 0.78) continue;
+            const x = this.wrapScreenX(world + Math.sin(world * 0.02) * 30, width, 0.9);
+            if (x < -50 || x > width + 50) continue;
+            const bob = Math.sin(t * 1.5 + world * 0.01) * 2;
+            const waterY = waterTop + 9 + bob;
+            const roll = Math.sin(world * 0.031 + 4.2) * 0.5 + 0.5;
+
+            if (roll < 0.42) {
+                const sail = alpha(pickColor(palette, Math.floor(world / step) % palette.length), 0.8);
+                this.drawSailboat(ctx, x, waterY, 0.65 + seed * 0.35, alpha('#0f172a', 0.92), sail);
+            } else if (roll < 0.68) {
+                this.drawShip(ctx, x, waterY + 1, 0.7 + seed * 0.35, alpha('#0b1220', 0.95), alpha(palette[0], 0.75));
+            } else if (roll < 0.86) {
+                this.drawSurfer(
+                    ctx, x, waterY + 2, 0.85 + seed * 0.25,
+                    alpha(palette[2], 0.85),
+                    alpha('#1e293b', 0.9)
+                );
+            } else {
+                this.drawRogueWave(ctx, x, waterTop, width, height, palette, t, seed);
+            }
+        }
+
+        for (let i = 0; i < 18; i += 1) {
+            const fx = this.wrapScreenX(i * width * 0.14 + Math.sin(i) * 20, width, 1.1);
+            const fy = waterTop + 16 + (i % 5) * 12 + Math.sin(t * 2 + i + scroll * 0.05) * 4;
+            ctx.fillStyle = alpha(palette[i % palette.length], 0.35);
+            ctx.beginPath();
+            ctx.arc(fx, fy, 1.2 + (i % 3) * 0.6, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    },
+
+    drawTerrainContent(ctx, width, height, values, palette, motion, cycle, scene, a, now) {
+        if (scene === 'sea') {
+            this.drawSea(ctx, width, height, values, palette, motion, cycle);
+            return;
+        }
 
         const layers = [
-            { y: 0.58, scale: 0.22 * a, alpha: 0.28, color: 4, speed: 0.00012 },
-            { y: 0.64, scale: 0.32 * a, alpha: 0.4, color: 1, speed: 0.00022 },
-            { y: 0.72, scale: 0.48 * a, alpha: 0.72, color: 0, speed: 0.00038 }
+            { y: 0.58, scale: 0.22 * a, alpha: 0.28, color: 4, speed: 0.00012, li: 0 },
+            { y: 0.64, scale: 0.32 * a, alpha: 0.4, color: 1, speed: 0.00022, li: 1 },
+            { y: 0.72, scale: 0.48 * a, alpha: 0.72, color: 0, speed: 0.00038, li: 2 }
         ];
         const { pulse, phase } = beatPulse(this.settings.bpm);
-        const t = Date.now();
+        const t = now;
+        const scroll = this.travelScroll;
 
-        layers.forEach((layer, li) => {
-            const pts = Math.max(18, Math.round(values.length * (0.7 + li * 0.15)));
+        layers.forEach((layer) => {
+            const pts = Math.max(22, Math.round(values.length * (0.8 + layer.li * 0.15)));
             ctx.beginPath();
             ctx.moveTo(0, height);
             for (let i = 0; i <= pts; i += 1) {
                 const x = (i / pts) * width;
-                const v = values[i % values.length] || 0;
-                const ridge = Math.sin(i * 0.55 + phase * Math.PI * 2 + li)
-                    + 0.45 * Math.sin(i * 1.3 - t * layer.speed * 1000);
-                const peak = (0.35 + v * this.settings.sensitivity * 0.8 + pulse * 0.15)
-                    * layer.scale * height
-                    + ridge * 6 * a;
-                const y = height * layer.y - peak;
+                const y = this.ridgeYAt(x, width, height, layer, values, phase, t, a, pulse, scroll);
                 ctx.lineTo(x, y);
             }
             ctx.lineTo(width, height);
             ctx.closePath();
 
             const fill = ctx.createLinearGradient(0, height * (layer.y - 0.35), 0, height);
-            fill.addColorStop(0, alpha(pickColor(palette, layer.color), layer.alpha));
-            fill.addColorStop(0.55, alpha(pickColor(palette, layer.color + 1), layer.alpha * 0.55));
+            const nightMul = 0.7 + cycle.dayness * 0.3;
+            fill.addColorStop(0, alpha(pickColor(palette, layer.color), layer.alpha * nightMul));
+            fill.addColorStop(0.55, alpha(pickColor(palette, layer.color + 1), layer.alpha * 0.55 * nightMul));
             fill.addColorStop(1, 'rgba(2, 6, 16, 0.92)');
             ctx.fillStyle = fill;
             ctx.fill();
 
-            ctx.strokeStyle = alpha(pickColor(palette, layer.color), 0.55 + pulse * 0.25);
-            ctx.lineWidth = 1.2 + li * 0.2;
-            ctx.shadowBlur = 10 + this.settings.glow * 14;
-            ctx.shadowColor = alpha(pickColor(palette, layer.color), 0.65);
+            ctx.strokeStyle = alpha(pickColor(palette, layer.color), 0.6 + pulse * 0.3);
+            ctx.lineWidth = 1.3 + layer.li * 0.25;
+            ctx.shadowBlur = 14 + this.settings.glow * 16;
+            ctx.shadowColor = alpha(pickColor(palette, layer.color), 0.75);
             ctx.beginPath();
             for (let i = 0; i <= pts; i += 1) {
                 const x = (i / pts) * width;
-                const v = values[i % values.length] || 0;
-                const ridge = Math.sin(i * 0.55 + phase * Math.PI * 2 + li)
-                    + 0.45 * Math.sin(i * 1.3 - t * layer.speed * 1000);
-                const peak = (0.35 + v * this.settings.sensitivity * 0.8 + pulse * 0.15)
-                    * layer.scale * height
-                    + ridge * 6 * a;
-                const y = height * layer.y - peak;
+                const y = this.ridgeYAt(x, width, height, layer, values, phase, t, a, pulse, scroll);
                 if (i === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
             }
             ctx.stroke();
             ctx.shadowBlur = 0;
+
+            if (layer.li === 2) {
+                this.drawScrollingDecor(
+                    ctx, width, height, scene, layer,
+                    values, phase, t, a, pulse, palette, cycle.dayness
+                );
+            }
         });
 
-        // Reflective ground strip
         const ground = ctx.createLinearGradient(0, height * 0.82, 0, height);
-        ground.addColorStop(0, alpha(palette[0], 0.12 + motion * 0.08));
+        ground.addColorStop(0, alpha(palette[0], 0.14 + motion * 0.1));
         ground.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.fillStyle = ground;
         ctx.fillRect(0, height * 0.82, width, height * 0.18);
+    },
+
+    drawMountains(ctx, width, height, values, palette, motion = 1) {
+        const a = ampScale(this.settings);
+        const now = Date.now();
+        if (this._mountainLastNow == null) this._mountainLastNow = now;
+        const dt = clamp((now - this._mountainLastNow) / 1000, 0.008, 0.05);
+        this._mountainLastNow = now;
+
+        // Travel progressing right → world scrolls left
+        let travelBoost = 1;
+        if (this.sceneTransition) {
+            // Ease through the cut with a brief speed pulse
+            const u = clamp((now - this.sceneTransition.start) / this.sceneTransition.duration, 0, 1);
+            travelBoost = 1 + Math.sin(u * Math.PI) * 0.55;
+        }
+        this.travelScroll += width * TRAVEL_SPEED * this.settings.speed * dt * travelBoost;
+
+        const cycle = this.ensureMountainWorld(now);
+        this.drawMountainSky(ctx, width, height, palette, motion, cycle);
+        this.updateAndDrawBirds(ctx, width, height, now, dt, palette, cycle.dayness);
+
+        if (this.sceneTransition) {
+            const u = smoothstep(
+                0,
+                1,
+                (now - this.sceneTransition.start) / this.sceneTransition.duration
+            );
+            ctx.save();
+            ctx.globalAlpha = 1 - u;
+            this.drawTerrainContent(
+                ctx, width, height, values, palette, motion, cycle,
+                this.sceneTransition.from, a, now
+            );
+            ctx.restore();
+            ctx.save();
+            ctx.globalAlpha = u;
+            this.drawTerrainContent(
+                ctx, width, height, values, palette, motion, cycle,
+                this.sceneTransition.to, a, now
+            );
+            ctx.restore();
+            return;
+        }
+
+        this.drawTerrainContent(
+            ctx, width, height, values, palette, motion, cycle,
+            this.mountainScene, a, now
+        );
     },
 
     drawNeonSky(ctx, width, height, values, palette, motion = 1) {
