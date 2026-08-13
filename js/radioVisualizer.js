@@ -24,15 +24,18 @@ const DEFAULTS = {
 
 const ENERGY_FLOOR = 0.02;
 const ENERGY_SILENCE_MS = 1000;
-const DAY_CYCLE_MS = 60_000;
+const DAY_CYCLE_MS = 65_000; // ~60s sky travel + ~5s under-horizon on the left
+const UNDER_HORIZON_MS = 5_000;
 const SCENE_HOLD_MS = 18_000;
 const SEA_HOLD_MS = 60_000;
-const SCENE_TRANSITION_MS = 2_800;
-const MOUNTAIN_SCENES = ['cactus', 'forest'];
+const SCENE_TRANSITION_MS = 5_500; // scroll wipe (~half a screen at travel speed)
+const MOUNTAIN_SCENES = ['cactus', 'forest', 'palm', 'flatland'];
 const TRAVEL_SPEED = 0.085; // screens per second (progressing right → world scrolls left)
 const FOREST_LEAF = ['#1f4d2e', '#2d6a3e', '#245536', '#3d7a4a', '#4a6b3a'];
 const FOREST_TRUNK = '#3b2a1a';
 const CACTUS_GREEN = '#4d6b3c';
+const PALM_LEAF = ['#2f6b3a', '#3d7a45', '#285c32', '#4a8a50'];
+const PALM_TRUNK = '#6b4a2e';
 
 function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
@@ -88,12 +91,6 @@ function shuffleNoRepeat(items, last) {
 function smoothstep(edge0, edge1, x) {
     const t = clamp((x - edge0) / (edge1 - edge0), 0, 1);
     return t * t * (3 - 2 * t);
-}
-
-function bellWrap(t, center, width) {
-    const d = Math.min(Math.abs(t - center), 1 - Math.abs(t - center));
-    const x = clamp(1 - d / width, 0, 1);
-    return x * x * (3 - 2 * x);
 }
 
 function hexToRgb(hex) {
@@ -186,18 +183,38 @@ function blendedSkyStops(palette, cycleT) {
 function dayCycleState(now, cycleStart) {
     const elapsed = ((now - cycleStart) % DAY_CYCLE_MS + DAY_CYCLE_MS) % DAY_CYCLE_MS;
     const t = elapsed / DAY_CYCLE_MS; // 0..1
-    const sunness = bellWrap(t, 0.3, 0.34);
-    const moonness = bellWrap(t, 0.82, 0.36);
+    const underFrac = UNDER_HORIZON_MS / DAY_CYCLE_MS;
+    // Sun travels right→left, then sits under the left horizon before the night sky takes over
+    const sunTravelEnd = 0.52;
+    const sunUnderEnd = sunTravelEnd + underFrac;
+    let sunArc = 0;
+    let sunness = 0;
+    if (t < sunTravelEnd) {
+        sunArc = t / sunTravelEnd;
+        sunness = clamp(Math.sin(sunArc * Math.PI) * 1.12, 0, 1);
+    } else if (t < sunUnderEnd) {
+        sunArc = 1;
+        sunness = 0;
+    }
+
+    // Moon rises after sun is under, sets on the left, then also waits under horizon
+    const moonTravelStart = sunUnderEnd;
+    const moonTravelEnd = 1 - underFrac;
+    let moonArc = 0;
+    let moonness = 0;
+    if (t >= moonTravelStart && t < moonTravelEnd) {
+        moonArc = (t - moonTravelStart) / Math.max(0.001, moonTravelEnd - moonTravelStart);
+        moonness = clamp(Math.sin(moonArc * Math.PI) * 1.08, 0, 1);
+    } else if (t >= moonTravelEnd) {
+        moonArc = 1;
+        moonness = 0;
+    }
+
     const dayness = clamp(sunness * 1.05, 0, 1);
     let period = 'night';
-    if (t < 0.25) period = 'dawn';
-    else if (t < 0.5) period = 'day';
-    else if (t < 0.75) period = 'dusk';
-    // Arc across the sky during their visible halves (right → left uses 1 - arc in draw)
-    const sunArc = smoothstep(0, 0.55, t);
-    const moonArc = t >= 0.45
-        ? smoothstep(0.45, 1, t)
-        : smoothstep(0, 0.2, t) * 0.15;
+    if (t < 0.22) period = 'dawn';
+    else if (t < sunTravelEnd) period = 'day';
+    else if (t < moonTravelStart + 0.08) period = 'dusk';
     return { t, period, dayness, sunness, moonness, sunArc, moonArc, elapsed };
 }
 
@@ -367,11 +384,11 @@ export const RadioVisualizer = {
                         <div class="media-visualizer-modal__legend" data-media-visualizer-legend>
                             <span class="media-visualizer-modal__legend-title">Neon Mountains randomizer</span>
                             <ul>
-                                <li>Day / night cycle: ${DAY_CYCLE_MS / 1000}s (smooth blend)</li>
-                                <li>Cactus / Forest scenes: ~${SCENE_HOLD_MS / 1000}s each (shuffle, no immediate repeat)</li>
-                                <li>Sea interlude: ${SEA_HOLD_MS / 1000}s after a cactus+forest pass</li>
-                                <li>Scene crossfade: ~${SCENE_TRANSITION_MS / 1000}s</li>
-                                <li>Sea encounters (sparse): sailboat, ship, surfer, rogue wave</li>
+                                <li>Day / night cycle: ${DAY_CYCLE_MS / 1000}s (incl. ${UNDER_HORIZON_MS / 1000}s under horizon)</li>
+                                <li>Land scenes: cactus / forest / palm / flatland (~${SCENE_HOLD_MS / 1000}s, shuffle)</li>
+                                <li>Sea interlude: ${SEA_HOLD_MS / 1000}s after a land pass</li>
+                                <li>Scene handoff: scroll wipe ~${SCENE_TRANSITION_MS / 1000}s (no fade)</li>
+                                <li>Sea encounters (sparse): sailboat, ship, surfer</li>
                                 <li>Birds: every ~9–23s (V / gull / dart)</li>
                                 <li>Travel scroll: continuous rightward journey</li>
                             </ul>
@@ -1142,14 +1159,28 @@ export const RadioVisualizer = {
         const frac = world - i0;
         const sample = (idx) => {
             const v = values[Math.abs(idx) % values.length] || 0;
-            const ridge = Math.sin(idx * 0.55 + phase * Math.PI * 2 + layer.li)
-                + 0.45 * Math.sin(idx * 1.3 - t * layer.speed * 1000);
-            const peak = (0.35 + v * this.settings.sensitivity * 0.8 + pulse * 0.15)
-                * layer.scale * height
-                + ridge * 6 * a;
+            // Steep triangular ridges — still pointy when amplitude is low
+            const u1 = ((idx * 0.31 + layer.li * 1.9 + phase * 0.2) % 1 + 1) % 1;
+            const u2 = ((idx * 0.17 + 0.42 + layer.li * 0.7) % 1 + 1) % 1;
+            const tent = (u) => Math.pow(1 - Math.abs(u * 2 - 1), 1.25);
+            const ridgeShape = tent(u1) * 0.72 + tent(u2) * 0.38;
+            const audioLift = v * this.settings.sensitivity * (layer.audio || 0) * height
+                + pulse * 0.1 * (layer.scale || 0.3) * height;
+            const peak = ridgeShape * layer.scale * height + audioLift + ridgeShape * 4 * a;
             return height * layer.y - peak;
         };
         return sample(i0) * (1 - frac) + sample(i0 + 1) * frac;
+    },
+
+    flatYAt(x, width, height, layer, values, phase, t, a, pulse, scroll = 0) {
+        const scrollX = x + scroll * (0.2 + layer.li * 0.12);
+        const v = values[Math.floor(((x / width) * values.length) % values.length)] || 0;
+        const roll = Math.sin(scrollX * 0.012 + layer.li)
+            + 0.35 * Math.sin(scrollX * 0.031 - t * layer.speed * 800 + phase);
+        return height * layer.y
+            - roll * (3 + layer.li * 2) * (0.55 + a * 0.35)
+            - v * 4 * a * this.settings.sensitivity
+            - pulse * 1.5;
     },
 
     drawCactus(ctx, x, groundY, scale, color) {
@@ -1187,11 +1218,54 @@ export const RadioVisualizer = {
         ctx.restore();
     },
 
+    drawPalm(ctx, x, groundY, scale, trunk, leaf, t = 0) {
+        const sway = Math.sin(t * 1.15 + x * 0.03) * 0.12;
+        ctx.save();
+        ctx.translate(x, groundY);
+        ctx.scale(scale, scale);
+        ctx.strokeStyle = trunk;
+        ctx.lineWidth = 2.4;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(-2 + sway * 8, -14, sway * 14, -30);
+        ctx.stroke();
+        ctx.fillStyle = leaf;
+        const crownX = sway * 14;
+        const crownY = -30;
+        for (let i = 0; i < 7; i += 1) {
+            const ang = -Math.PI / 2 + (i - 3) * 0.38 + sway * 0.5;
+            const len = 11 + (i % 2) * 3;
+            const tipX = crownX + Math.cos(ang) * len;
+            const tipY = crownY + Math.sin(ang) * len * 0.85 + Math.abs(Math.sin(ang)) * 4;
+            ctx.beginPath();
+            ctx.moveTo(crownX, crownY);
+            ctx.quadraticCurveTo(
+                crownX + Math.cos(ang) * len * 0.45,
+                crownY + Math.sin(ang) * len * 0.2 + 2,
+                tipX,
+                tipY
+            );
+            ctx.quadraticCurveTo(
+                crownX + Math.cos(ang + 0.25) * len * 0.4,
+                crownY + 3,
+                crownX,
+                crownY
+            );
+            ctx.fill();
+        }
+        ctx.restore();
+    },
+
     drawScrollingDecor(ctx, width, height, scene, frontLayer, values, phase, t, a, pulse, palette, dayness) {
         const cactusColor = alpha(CACTUS_GREEN, 0.88 + dayness * 0.08);
         const trunk = alpha(FOREST_TRUNK, 0.95);
+        const palmTrunk = alpha(PALM_TRUNK, 0.95);
         const scroll = this.travelScroll;
         const span = width * 2.2;
+        const groundAt = (gx) => (scene === 'flatland'
+            ? this.flatYAt(gx, width, height, frontLayer, values, phase, t, a, pulse, scroll)
+            : this.ridgeYAt(gx, width, height, frontLayer, values, phase, t, a, pulse, scroll));
 
         if (scene === 'cactus') {
             const step = width * 0.16;
@@ -1199,7 +1273,7 @@ export const RadioVisualizer = {
                 const x = this.wrapScreenX(world, width, 1);
                 if (x < -30 || x > width + 30) continue;
                 const jitter = Math.sin(world * 0.03) * 10;
-                const y = this.ridgeYAt(x, width, height, frontLayer, values, phase, t, a, pulse, scroll);
+                const y = groundAt(x + jitter * 0.2);
                 const scale = 0.65 + (Math.abs(Math.sin(world * 0.02)) * 0.35);
                 this.drawCactus(ctx, x + jitter * 0.2, y + 1, scale, cactusColor);
             }
@@ -1213,55 +1287,103 @@ export const RadioVisualizer = {
                 const cluster = 2 + Math.floor((Math.sin(world * 0.19) + 1) * 2);
                 for (let c = 0; c < cluster; c += 1) {
                     const ox = x + (c - cluster / 2) * 7 + Math.sin(world + c) * 3;
-                    const y = this.ridgeYAt(ox, width, height, frontLayer, values, phase, t, a, pulse, scroll);
+                    const y = groundAt(ox);
                     const leaf = alpha(FOREST_LEAF[(c + Math.floor(Math.abs(world) / 40)) % FOREST_LEAF.length], 0.92);
                     this.drawTree(ctx, ox, y + 1, 0.5 + (c % 4) * 0.18 + Math.abs(Math.sin(world)) * 0.15, trunk, leaf);
+                }
+            }
+        } else if (scene === 'palm') {
+            const step = width * 0.13;
+            for (let world = -width; world < span + width; world += step) {
+                const x = this.wrapScreenX(world, width, 1);
+                if (x < -40 || x > width + 40) continue;
+                if (Math.sin(world * 0.09) < -0.55) continue;
+                const y = groundAt(x);
+                const leaf = alpha(PALM_LEAF[Math.floor(Math.abs(world) / 50) % PALM_LEAF.length], 0.92);
+                this.drawPalm(ctx, x, y + 1, 0.7 + Math.abs(Math.sin(world * 0.04)) * 0.45, palmTrunk, leaf, t * 0.001);
+            }
+        } else if (scene === 'flatland') {
+            const step = width * 0.14;
+            for (let world = -width; world < span + width; world += step) {
+                const x = this.wrapScreenX(world, width, 1);
+                if (x < -40 || x > width + 40) continue;
+                const pick = Math.sin(world * 0.027 + 2.1) * 0.5 + 0.5;
+                if (pick < 0.22) continue;
+                const y = groundAt(x);
+                if (pick < 0.55) {
+                    const leaf = alpha(PALM_LEAF[Math.floor(Math.abs(world) / 60) % PALM_LEAF.length], 0.9);
+                    this.drawPalm(ctx, x, y + 1, 0.55 + pick * 0.4, palmTrunk, leaf, t * 0.001);
+                } else if (pick < 0.78) {
+                    this.drawCactus(ctx, x, y + 1, 0.5 + pick * 0.35, cactusColor);
+                } else {
+                    const leaf = alpha(FOREST_LEAF[Math.floor(Math.abs(world) / 45) % FOREST_LEAF.length], 0.88);
+                    this.drawTree(ctx, x, y + 1, 0.45 + pick * 0.25, trunk, leaf);
                 }
             }
         }
     },
 
-    drawSailboat(ctx, x, waterY, scale, hullColor, sailColor) {
+    drawSailboat(ctx, x, waterY, scale, hullColor, sailColor, t = 0) {
+        const wind = Math.sin(t * 1.05) * 0.55 + Math.sin(t * 0.33 + 1.2) * 0.35;
+        const heel = wind * 0.06;
         ctx.save();
         ctx.translate(x, waterY);
+        ctx.rotate(heel);
         ctx.scale(scale, scale);
         ctx.shadowBlur = 8;
         ctx.shadowColor = sailColor;
+
+        // Long shallow hull (not a nutshell)
         ctx.fillStyle = hullColor;
         ctx.beginPath();
-        ctx.moveTo(-14, 0);
-        ctx.quadraticCurveTo(-10, 6, 0, 7);
-        ctx.quadraticCurveTo(10, 6, 12, 0);
-        ctx.lineTo(-14, 0);
+        ctx.moveTo(-20, -2);
+        ctx.lineTo(15, -2);
+        ctx.lineTo(19, 0);
+        ctx.lineTo(14, 4.5);
+        ctx.lineTo(-14, 4.5);
+        ctx.lineTo(-20, 0);
         ctx.closePath();
         ctx.fill();
-        ctx.strokeStyle = alpha('#e2e8f0', 0.85);
-        ctx.lineWidth = 1.4;
+        ctx.fillStyle = alpha('#1e293b', 0.55);
+        ctx.fillRect(-8, -5, 11, 3);
+
+        // Mast
+        ctx.strokeStyle = alpha('#e2e8f0', 0.9);
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(0, -28);
+        ctx.moveTo(-1, -2);
+        ctx.lineTo(-1 + wind * 1.2, -32);
         ctx.stroke();
+
+        // Mainsail — belly fills with the wind
+        const mastTipX = -1 + wind * 1.2;
+        const belly = 5 + wind * 7;
         ctx.fillStyle = sailColor;
         ctx.beginPath();
-        ctx.moveTo(1, -26);
-        ctx.lineTo(1, -4);
-        ctx.lineTo(14, -8);
+        ctx.moveTo(mastTipX, -30);
+        ctx.quadraticCurveTo(mastTipX + belly, -17, -1, -3);
+        ctx.quadraticCurveTo(8 + wind * 5, -10, 15 + wind * 6, -14);
+        ctx.quadraticCurveTo(mastTipX + belly * 0.55, -22, mastTipX, -30);
         ctx.closePath();
         ctx.fill();
-        ctx.globalAlpha = 0.85;
+
+        // Foresail / jib
+        ctx.globalAlpha = 0.88;
         ctx.beginPath();
-        ctx.moveTo(-1, -22);
-        ctx.lineTo(-1, -6);
-        ctx.lineTo(-11, -9);
+        ctx.moveTo(-1, -24);
+        ctx.quadraticCurveTo(-6 - wind * 4, -14, -1, -4);
+        ctx.quadraticCurveTo(-10 - wind * 3, -10, -14 - wind * 2, -12);
+        ctx.quadraticCurveTo(-7 - wind * 3, -18, -1, -24);
         ctx.closePath();
         ctx.fill();
         ctx.globalAlpha = 1;
+
         ctx.shadowBlur = 0;
-        ctx.strokeStyle = alpha(sailColor, 0.45);
+        ctx.strokeStyle = alpha(sailColor, 0.4);
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(-14, 3);
-        ctx.quadraticCurveTo(-22, 5, -28, 2);
+        ctx.moveTo(-20, 2);
+        ctx.quadraticCurveTo(-28, 4, -34, 1);
         ctx.stroke();
         ctx.restore();
     },
@@ -1316,46 +1438,6 @@ export const RadioVisualizer = {
         ctx.moveTo(1, -1);
         ctx.lineTo(5, -4);
         ctx.stroke();
-        ctx.restore();
-    },
-
-    drawRogueWave(ctx, x, waterTop, width, height, palette, t, strength) {
-        const crest = waterTop + 6;
-        const amp = (18 + strength * 28) * (0.85 + 0.15 * Math.sin(t * 3));
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(x - 70, height);
-        ctx.lineTo(x - 70, crest + 20);
-        for (let i = 0; i <= 24; i += 1) {
-            const u = i / 24;
-            const px = x - 70 + u * 140;
-            const arch = Math.sin(u * Math.PI);
-            const y = crest + 18 - arch * amp + Math.sin(t * 4 + u * 6) * 2;
-            ctx.lineTo(px, y);
-        }
-        ctx.lineTo(x + 70, height);
-        ctx.closePath();
-        const foam = ctx.createLinearGradient(0, crest - amp, 0, height);
-        foam.addColorStop(0, alpha(palette[0], 0.55));
-        foam.addColorStop(0.35, alpha(palette[3], 0.4));
-        foam.addColorStop(1, alpha('#020617', 0.2));
-        ctx.fillStyle = foam;
-        ctx.fill();
-        ctx.strokeStyle = alpha('#e0f2fe', 0.65);
-        ctx.lineWidth = 2;
-        ctx.shadowBlur = 14;
-        ctx.shadowColor = alpha(palette[0], 0.7);
-        ctx.beginPath();
-        for (let i = 0; i <= 24; i += 1) {
-            const u = i / 24;
-            const px = x - 70 + u * 140;
-            const arch = Math.sin(u * Math.PI);
-            const y = crest + 18 - arch * amp + Math.sin(t * 4 + u * 6) * 2;
-            if (i === 0) ctx.moveTo(px, y);
-            else ctx.lineTo(px, y);
-        }
-        ctx.stroke();
-        ctx.shadowBlur = 0;
         ctx.restore();
     },
 
@@ -1416,31 +1498,30 @@ export const RadioVisualizer = {
         ctx.lineTo(width, waterTop);
         ctx.stroke();
 
-        // Sparse sea encounters: mostly empty, mix of sailboat / ship / surfer / rogue wave
+        // Sparse sea encounters: sailboat / ship / surfer
         const span = width * 2.4;
         const step = width * 1.45;
         for (let world = 0; world < span + width; world += step) {
             const seed = Math.sin(world * 0.017 + 1.3) * 0.5 + 0.5;
             if (seed < 0.78) continue;
-            const x = this.wrapScreenX(world + Math.sin(world * 0.02) * 30, width, 0.9);
+            const x = this.wrapScreenX(world + Math.sin(world * 0.02) * 30, width, 0.42);
             if (x < -50 || x > width + 50) continue;
-            const bob = Math.sin(t * 1.5 + world * 0.01) * 2;
-            const waterY = waterTop + 9 + bob;
+            const bob = Math.sin(t * 0.85 + world * 0.01) * 5.5
+                + Math.sin(t * 0.37 + world * 0.02) * 2.5;
+            const waterY = waterTop + 10 + bob;
             const roll = Math.sin(world * 0.031 + 4.2) * 0.5 + 0.5;
 
-            if (roll < 0.42) {
+            if (roll < 0.48) {
                 const sail = alpha(pickColor(palette, Math.floor(world / step) % palette.length), 0.8);
-                this.drawSailboat(ctx, x, waterY, 0.65 + seed * 0.35, alpha('#0f172a', 0.92), sail);
-            } else if (roll < 0.68) {
+                this.drawSailboat(ctx, x, waterY, 0.7 + seed * 0.35, alpha('#0f172a', 0.92), sail, t);
+            } else if (roll < 0.76) {
                 this.drawShip(ctx, x, waterY + 1, 0.7 + seed * 0.35, alpha('#0b1220', 0.95), alpha(palette[0], 0.75));
-            } else if (roll < 0.86) {
+            } else {
                 this.drawSurfer(
                     ctx, x, waterY + 2, 0.85 + seed * 0.25,
                     alpha(palette[2], 0.85),
                     alpha('#1e293b', 0.9)
                 );
-            } else {
-                this.drawRogueWave(ctx, x, waterTop, width, height, palette, t, seed);
             }
         }
 
@@ -1460,14 +1541,25 @@ export const RadioVisualizer = {
             return;
         }
 
-        const layers = [
-            { y: 0.58, scale: 0.22 * a, alpha: 0.28, color: 4, speed: 0.00012, li: 0 },
-            { y: 0.64, scale: 0.32 * a, alpha: 0.4, color: 1, speed: 0.00022, li: 1 },
-            { y: 0.72, scale: 0.48 * a, alpha: 0.72, color: 0, speed: 0.00038, li: 2 }
-        ];
+        const isFlat = scene === 'flatland';
+        const layers = isFlat
+            ? [
+                { y: 0.62, scale: 0.04, audio: 0.02 * a, alpha: 0.22, color: 4, speed: 0.0001, li: 0 },
+                { y: 0.68, scale: 0.05, audio: 0.03 * a, alpha: 0.34, color: 1, speed: 0.00018, li: 1 },
+                { y: 0.76, scale: 0.06, audio: 0.04 * a, alpha: 0.7, color: 0, speed: 0.00028, li: 2 }
+            ]
+            : [
+                // scale stays mountain-sized even at low amplitude; audio is the reactive bit
+                { y: 0.58, scale: 0.26, audio: 0.14 * a, alpha: 0.28, color: 4, speed: 0.00012, li: 0 },
+                { y: 0.64, scale: 0.38, audio: 0.2 * a, alpha: 0.4, color: 1, speed: 0.00022, li: 1 },
+                { y: 0.72, scale: 0.55, audio: 0.28 * a, alpha: 0.72, color: 0, speed: 0.00038, li: 2 }
+            ];
         const { pulse, phase } = beatPulse(this.settings.bpm);
         const t = now;
         const scroll = this.travelScroll;
+        const sampleY = (x, layer) => (isFlat
+            ? this.flatYAt(x, width, height, layer, values, phase, t, a, pulse, scroll)
+            : this.ridgeYAt(x, width, height, layer, values, phase, t, a, pulse, scroll));
 
         layers.forEach((layer) => {
             const pts = Math.max(22, Math.round(values.length * (0.8 + layer.li * 0.15)));
@@ -1475,8 +1567,7 @@ export const RadioVisualizer = {
             ctx.moveTo(0, height);
             for (let i = 0; i <= pts; i += 1) {
                 const x = (i / pts) * width;
-                const y = this.ridgeYAt(x, width, height, layer, values, phase, t, a, pulse, scroll);
-                ctx.lineTo(x, y);
+                ctx.lineTo(x, sampleY(x, layer));
             }
             ctx.lineTo(width, height);
             ctx.closePath();
@@ -1496,7 +1587,7 @@ export const RadioVisualizer = {
             ctx.beginPath();
             for (let i = 0; i <= pts; i += 1) {
                 const x = (i / pts) * width;
-                const y = this.ridgeYAt(x, width, height, layer, values, phase, t, a, pulse, scroll);
+                const y = sampleY(x, layer);
                 if (i === 0) ctx.moveTo(x, y);
                 else ctx.lineTo(x, y);
             }
@@ -1526,33 +1617,36 @@ export const RadioVisualizer = {
         this._mountainLastNow = now;
 
         // Travel progressing right → world scrolls left
-        let travelBoost = 1;
-        if (this.sceneTransition) {
-            // Ease through the cut with a brief speed pulse
-            const u = clamp((now - this.sceneTransition.start) / this.sceneTransition.duration, 0, 1);
-            travelBoost = 1 + Math.sin(u * Math.PI) * 0.55;
-        }
-        this.travelScroll += width * TRAVEL_SPEED * this.settings.speed * dt * travelBoost;
+        this.travelScroll += width * TRAVEL_SPEED * this.settings.speed * dt;
 
         const cycle = this.ensureMountainWorld(now);
         this.drawMountainSky(ctx, width, height, palette, motion, cycle);
         this.updateAndDrawBirds(ctx, width, height, now, dt, palette, cycle.dayness);
 
         if (this.sceneTransition) {
+            // New scenery enters from the right as the journey scrolls — no whole-scene fade
             const u = smoothstep(
                 0,
                 1,
                 (now - this.sceneTransition.start) / this.sceneTransition.duration
             );
+            const splitX = width * (1 - u);
+            const soft = Math.max(18, width * 0.08);
+
             ctx.save();
-            ctx.globalAlpha = 1 - u;
+            ctx.beginPath();
+            ctx.rect(0, 0, Math.max(0, splitX + soft * 0.35), height);
+            ctx.clip();
             this.drawTerrainContent(
                 ctx, width, height, values, palette, motion, cycle,
                 this.sceneTransition.from, a, now
             );
             ctx.restore();
+
             ctx.save();
-            ctx.globalAlpha = u;
+            ctx.beginPath();
+            ctx.rect(Math.max(0, splitX - soft * 0.35), 0, width - splitX + soft, height);
+            ctx.clip();
             this.drawTerrainContent(
                 ctx, width, height, values, palette, motion, cycle,
                 this.sceneTransition.to, a, now
