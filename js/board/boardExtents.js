@@ -7,7 +7,7 @@ import {
 } from './layoutKeys.js';
 import { readNoteRect } from './noteGeometry.js';
 import { DesktopManager } from '../desktopManager.js';
-import { SIDEBAR_DEFAULT_WIDTH } from '../sidebarPrefs.js';
+import { SIDEBAR_DEFAULT_WIDTH, readSidebarWidth } from '../sidebarPrefs.js';
 
 export const DESKTOP_BOARD_PANE_CLASS = 'desktop-board-pane';
 
@@ -103,6 +103,35 @@ export function getGridViewportBounds(canvas) {
     const scrollY = (canvas?.scrollTop || 0) / zoom;
     const viewportBottom = origin + scrollY + viewportH;
     return { origin, packW, viewportH, edgePad, scrollY, viewportBottom };
+}
+
+/**
+ * Live, zoom-aware board bounds used by one-shot layout actions (sort / reset).
+ * Unlike getGridBoardBounds (which uses a stable, default-sidebar width so
+ * continuous renders don't re-pack), this reads the actual board area from the
+ * canvas: `packW` reflects the real (expanded/collapsed) sidebar width and the
+ * browser zoom, while `maxH`/`viewportH` reflect the file cabinet reducing the
+ * vertical space — so sorting/resetting readjust to what the user currently sees.
+ */
+export function getLiveBoardBounds(canvas) {
+    const zoom = parseFloat(canvas?.dataset?.desktopZoom) || 1;
+    const { origin, edgePad, canvasGridW, columnMinInnerW } = getGridMetrics();
+    const fallbackW = Math.max(
+        320,
+        (typeof window !== 'undefined' ? window.innerWidth : 1280) - (readSidebarWidth() ?? SIDEBAR_DEFAULT_WIDTH)
+    );
+    const liveW = canvas?.clientWidth && canvas.clientWidth > 0 ? canvas.clientWidth : fallbackW;
+    const rawW = Math.max(liveW / zoom, canvasGridW + origin * 2);
+    const packW = Math.max(columnMinInnerW, rawW - origin * 2 - edgePad * 2);
+
+    const viewportMinH = Math.max(
+        (canvas?.clientHeight || 0) / zoom,
+        typeof window !== 'undefined' ? window.innerHeight / zoom : 800
+    );
+    const { maxBottom } = getBoardContentExtent(canvas);
+    const maxH = Math.max(viewportMinH, maxBottom + origin + getCanvasColGap());
+
+    return { origin, edgePad, packW, maxH, viewportH: Math.max(200, viewportMinH), zoom };
 }
 
 export function getDesktopBoardPane(canvas) {

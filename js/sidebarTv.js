@@ -139,6 +139,7 @@ export const SidebarTv = {
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-tv-play aria-label="Play or pause">
                         <span data-tv-play-icon></span>
                     </button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-tv-stop title="Stop" aria-label="Stop">${ACTION_ICONS.mediaStop}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-tv-open="browse" title="Browse channels" aria-label="Browse channels" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.tvBrowse}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action is-hidden" data-tv-pip title="Pop out" aria-label="Pop out" aria-pressed="false">${ACTION_ICONS.pictureInPicture}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-tv__action--heart is-hidden" data-tv-favorite title="Add favorite" aria-label="Add favorite" aria-pressed="false">${CARD_ICONS.heart}</button>
@@ -152,6 +153,7 @@ export const SidebarTv = {
         this.root.querySelectorAll('[data-tv-play]').forEach((btn) => {
             btn.addEventListener('click', () => TvPlayer.toggle());
         });
+        this.root.querySelector('[data-tv-stop]')?.addEventListener('click', () => TvPlayer.stop());
         this.root.querySelector('[data-tv-favorite]')?.addEventListener('click', (e) => {
             e.stopPropagation();
             if (!channelKey(TvPlayer.channel)) return;

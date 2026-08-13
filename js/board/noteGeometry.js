@@ -21,7 +21,12 @@ function isDesktopCard(card) {
 }
 
 export function rectsOverlap(a, b, gap) {
-    const g = gap ?? getGridMetrics().gap;
+    // Collapsed/small tiles may sit flush (0px) against each other so a compact
+    // grid of collapsed notes isn't treated as overlapping. Every other pair
+    // (expanded↔expanded, collapsed↔expanded) keeps the standard minimum gap.
+    const g = (isCollapsedSpatialSize(a.w, a.h) && isCollapsedSpatialSize(b.w, b.h))
+        ? 0
+        : (gap ?? getGridMetrics().gap);
     return !(
         a.x + a.w + g <= b.x
         || b.x + b.w + g <= a.x

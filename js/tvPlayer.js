@@ -765,21 +765,6 @@ export const TvPlayer = {
         this.updatePauseBuffer();
     },
 
-    stop() {
-        this.video?.pause();
-        this.destroyHls();
-        if (this.video) {
-            this.video.removeAttribute('src');
-            this.video.load();
-        }
-        this.playing = false;
-        this.loading = false;
-        this.loadPhase = 'idle';
-        this.error = null;
-        saveState({ wasPlaying: false });
-        this.emitState();
-    },
-
     updateBufferSize() {
         const bufferSize = this.getBufferSize();
         if (this.video) {
@@ -1007,6 +992,8 @@ export const TvPlayer = {
         this.loadPhase = 'idle';
         this.error = null;
         this.connection = 'idle';
+        this.pausePhase = 'idle';
+        saveState({ wasPlaying: false });
         this.emitState();
     }
 };

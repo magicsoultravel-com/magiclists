@@ -2,6 +2,9 @@ import { positionPanelBelowElement, clampPanelToViewport, raiseUndockedAttachSta
 import { TvPlayer } from './tvPlayer.js';
 import { TvPip } from './tvPip.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
+import { copyPlainTextToClipboard } from './clipboard.js';
+import { showAppToast } from './toast.js';
+import { channelKey } from './tvProviders/channelShape.js';
 
 const MIN_BROWSER_W = 320;
 const MIN_BROWSER_H = 280;
@@ -56,6 +59,7 @@ export const TvPopover = {
                             <div class="tv-video-controls__actions">
                                 <button type="button" class="tv-controls-btn" data-tv-pip-btn title="Pop out" aria-label="Pop out" aria-pressed="false">${ACTION_ICONS.pictureInPicture}</button>
                                 <button type="button" class="tv-controls-btn" data-tv-fav-btn title="Add favorite" aria-label="Add favorite" aria-pressed="false">${CARD_ICONS.star}</button>
+                                <button type="button" class="tv-controls-btn" data-tv-url-btn title="Copy channel link" aria-label="Copy channel link">${ACTION_ICONS.link}</button>
                                 <div class="tv-video-controls__settings">
                                 <button type="button" class="tv-controls-btn" data-tv-settings-btn title="Stream settings" aria-label="Stream settings" aria-expanded="false">
                                     <svg viewBox="0 0 12 12" width="14" height="14" focusable="false"><circle cx="6" cy="6" r="2.2" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.5V2.2M6 9.8v-1.3M3.5 6H2.2M9.8 6H8.5M4.2 4.2 3.2 3.2M8.8 8.8l-1-1M7.8 4.2l1-1M4.2 7.8l-1 1" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linecap="round"/></svg>
@@ -163,6 +167,22 @@ export const TvPopover = {
         panel.querySelector('[data-tv-fav-btn]')?.addEventListener('click', (e) => {
             e.stopPropagation();
             TvPlayer.toggleFavorite(TvPlayer.channel);
+        });
+
+        panel.querySelector('[data-tv-url-btn]')?.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const channel = TvPlayer.channel;
+            const key = channelKey(channel);
+            if (!key || !channel?.url_resolved) {
+                showAppToast('No channel to share');
+                return;
+            }
+            const success = await copyPlainTextToClipboard(channel.url_resolved);
+            if (success) {
+                showAppToast('Channel link copied to clipboard');
+            } else {
+                showAppToast('Failed to copy channel link');
+            }
         });
 
         panel.querySelector('[data-tv-play-pause-btn]')?.addEventListener('click', (e) => {

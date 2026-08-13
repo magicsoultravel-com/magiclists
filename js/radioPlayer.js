@@ -1,3 +1,4 @@
+import { RadioCast } from './radioCast.js';
 import { RadioProviderRegistry } from './radioProviders/registry.js';
 import {
     stationKey,
@@ -15,6 +16,7 @@ import {
 } from './radioState.js';
 
 const RECENTS_CAP = RADIO_RECENTS_CAP;
+const STALE_PAUSE_MS = 60_000;
 
 function loadState() {
     return loadRadioState();
@@ -36,6 +38,7 @@ export const RadioPlayer = {
     loadPhase: 'idle',
     error: null,
     resumeBlocked: false,
+    pausedAt: null,
     recentRecordedForKey: null,
     volume: loadState().volume,
 
@@ -61,6 +64,7 @@ export const RadioPlayer = {
             this.loadPhase = 'idle';
             this.error = null;
             this.resumeBlocked = false;
+            this.pausedAt = null;
             saveState({ wasPlaying: true });
             const key = stationKey(this.station);
             if (key && this.recentRecordedForKey !== key) {
@@ -246,7 +250,8 @@ export const RadioPlayer = {
             return;
         }
         this.resumeBlocked = false;
-        if (this.station?.url_resolved && this.audio?.src) {
+        const stale = this.pausedAt && (Date.now() - this.pausedAt >= STALE_PAUSE_MS);
+        if (!stale && this.station?.url_resolved && this.audio?.src) {
             try {
                 await this.audio.play();
             } catch {
@@ -265,6 +270,7 @@ export const RadioPlayer = {
     pause() {
         this.audio?.pause();
         this.playing = false;
+        this.pausedAt = Date.now();
         saveState({ wasPlaying: false });
         this.emitState();
     },
@@ -279,7 +285,12 @@ export const RadioPlayer = {
         this.loading = false;
         this.loadPhase = 'idle';
         this.error = null;
+        this.resumeBlocked = false;
+        this.pausedAt = null;
         saveState({ wasPlaying: false });
+        if (RadioCast.isCasting()) {
+            RadioCast.stopAll().catch(() => {});
+        }
         this.emitState();
     },
 
@@ -371,6 +382,7 @@ export const RadioPlayer = {
         this.loadPhase = 'connecting';
         this.error = null;
         this.resumeBlocked = false;
+        this.pausedAt = null;
         this.emitState();
 
         try {

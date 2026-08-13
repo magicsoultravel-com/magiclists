@@ -53,6 +53,83 @@ describe('rectsOverlap', () => {
             false
         );
     });
+
+    it('allows two collapsed tiles to sit flush (0px) without overlapping', () => {
+        assert.equal(
+            rectsOverlap({ x: 0, y: 0, w: 65, h: 32 }, { x: 65, y: 0, w: 65, h: 32 }),
+            false
+        );
+        assert.equal(
+            rectsOverlap({ x: 0, y: 0, w: 65, h: 32 }, { x: 0, y: 32, w: 65, h: 32 }),
+            false
+        );
+    });
+
+    it('still treats a real overlap between collapsed tiles as overlap', () => {
+        assert.equal(
+            rectsOverlap({ x: 0, y: 0, w: 65, h: 32 }, { x: 64, y: 0, w: 65, h: 32 }),
+            true
+        );
+    });
+
+    it('keeps the minimum gap for collapsed-to-expanded pairs', () => {
+        // A collapsed tile touching an expanded note is still an overlap.
+        assert.equal(
+            rectsOverlap({ x: 0, y: 0, w: 65, h: 32 }, { x: 65, y: 0, w: 98, h: 131 }),
+            true
+        );
+    });
+});
+
+describe('resolveGridPushLayout (zero-gap collapsed grid)', () => {
+    const SMALL = { w: 65, h: 32 };
+    const gridEntries = () => ['c1', 'c2', 'c3', 'c4', 'c5'].map((id, i) => ({
+        id,
+        rect: { x: i * 65, y: 0, w: SMALL.w, h: SMALL.h }
+    }));
+
+    it('keeps a flush collapsed grid settled when dragging one note out', () => {
+        const layout = resolveGridPushLayout({
+            cardEntries: gridEntries(),
+            actorId: 'c2',
+            actorRect: { x: 380, y: 150, w: 65, h: 32 },
+            pinnedIds: new Set(),
+            packW: 500,
+            origin: 0,
+            maxH: Infinity,
+            edgePad: 0
+        });
+        const settled = { c1: layout.get('c1'), c3: layout.get('c3'), c4: layout.get('c4'), c5: layout.get('c5') };
+        assert.equal(settled.c1.x, 0);
+        assert.equal(settled.c1.y, 0);
+        assert.equal(settled.c3.x, 130);
+        assert.equal(settled.c4.x, 195);
+        assert.equal(settled.c5.x, 260);
+        assert.equal(settled.c3.y, 0);
+        assert.equal(settled.c4.y, 0);
+        assert.equal(settled.c5.y, 0);
+    });
+
+    it('still pushes a neighbor that genuinely overlaps the dragged note', () => {
+        const layout = resolveGridPushLayout({
+            cardEntries: gridEntries(),
+            actorId: 'c1',
+            actorRect: { x: 60, y: 0, w: 65, h: 32 }, // overlaps c2 (65..130) by 5px
+            pinnedIds: new Set(),
+            packW: 500,
+            origin: 0,
+            maxH: Infinity,
+            edgePad: 0
+        });
+        const c2 = layout.get('c2');
+        const movedAway = c2.x !== 65 || c2.y !== 0;
+        assert.ok(movedAway, `c2 should be pushed off its original spot, got (${c2.x}, ${c2.y})`);
+        assert.equal(
+            rectsOverlap({ x: c2.x, y: c2.y, w: 65, h: 32 }, { x: 64, y: 0, w: 65, h: 32 }),
+            false,
+            'pushed c2 must not overlap the actor'
+        );
+    });
 });
 
 describe('gridColumnStride', () => {

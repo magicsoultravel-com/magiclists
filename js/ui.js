@@ -115,6 +115,7 @@ import {
 } from './board/layoutKeys.js';
 import {
     getGridBoardBounds,
+    getLiveBoardBounds,
     getGridViewportBounds,
     getDesktopBoardPane,
     ensureDesktopBoardPane,
@@ -131,8 +132,7 @@ import {
     applyNoteRect as applyNoteRectCore,
     findFirstCanvasSlot as findFirstCanvasSlotCore,
     findNearestGridSlot as findNearestGridSlotCore,
-    rectsOverlap as rectsOverlapCore,
-    packTwoSetRects as packTwoSetRectsCore
+    rectsOverlap as rectsOverlapCore
 } from './board/noteGeometry.js';
 import {
     computeGridBoardLayout as computeGridBoardLayoutCore,
@@ -145,6 +145,9 @@ import {
 // Global state for board items lookup
 let boardItemsById = new Map();
 let activeBoardViewMode = 'grid';
+
+/** How much of the available space the aligned expanded block should cover (tunable). */
+const ALIGN_SIZE_FACTOR = 0.8;
 
 function ensureSmallTile(item) {
     if (!NoteSurface.canEditInline() || resolveTileSize(item) === 'small') return;
@@ -1182,10 +1185,11 @@ reapplySmallFootprintOnBoard() {
         return !isCollapsedSpatialSize(saved.w, saved.h, tileSize);
     },
 
-    resolveSortItemSize(item, mode, isExpanded) {
+    resolveSortItemSize(item, mode, isExpanded, alignedSize = null) {
         const tileSize = resolveTileSize(item);
         const saved = getStoredItemSize(item.id, mode, this);
         if (isExpanded) {
+            if (alignedSize) return { w: alignedSize.w, h: alignedSize.h };
             if (saved && Number.isFinite(saved.w) && !isCollapsedSpatialSize(saved.w, saved.h, tileSize)) {
                 return { w: saved.w, h: saved.h };
             }
@@ -1198,6 +1202,32 @@ reapplySmallFootprintOnBoard() {
         }
         const small = getSmallRect(readTileSmallFootprint());
         return { w: small.w, h: small.h };
+    },
+
+    /**
+     * Compute one uniform size for every expanded note so the expanded block
+     * fills the page as a symmetric grid. The number of columns adapts to how
+     * many expanded notes there are (2 → split screen, 4 → 2×2, 9 → 3×3, …)
+     * while each note stays above a usable minimum width and fits packW.
+     * Returns a cell-aligned size (plus the column count) so the grid can be
+     * placed deterministically without grid-snap drift.
+     */
+    resolveAlignedExpandedSize(packW, count, minNoteW = getLargeDefaultRect().w) {
+        const metrics = getGridMetrics();
+        const gap = metrics.gap;
+        const n = Math.max(1, Number(count) || 1);
+        const availW = Math.max(metrics.columnMinInnerW, packW * ALIGN_SIZE_FACTOR);
+
+        let cols = Math.ceil(Math.sqrt(n));
+        const maxCols = Math.max(1, Math.floor((availW + gap) / (minNoteW + gap)));
+        cols = Math.max(1, Math.min(cols, maxCols));
+
+        const maxSpan = Math.floor((availW - (cols - 1) * gap) / cols);
+        const cellsPer = Math.max(1, Math.floor((maxSpan + gap) / (metrics.cellW + gap)));
+        const w = gridCellsToSpanW(cellsPer);
+        const large = getLargeDefaultRect();
+        const h = Math.max(metrics.cellS, Math.round((w * large.h) / large.w));
+        return { w, h, cols };
     },
 
     partitionCanvasItemsByExpansion(items, mode) {
@@ -1217,14 +1247,22 @@ reapplySmallFootprintOnBoard() {
         persistOnly = false,
         animate = true,
         save = true,
-        itemsById = null
+        itemsById = null,
+        alignSize = false
     } = {}) {
-        const { origin, packW, maxH, edgePad } = this.getGridBoardBounds(canvas);
+        const { origin, packW, maxH, edgePad } = this.getLiveBoardBounds(canvas);
         const dir = direction === 'vertical' ? 'vertical' : 'horizontal';
         const placed = [];
         const layout = new Map();
         const snapBounds = { maxW: packW, maxH, origin, edgePad };
         const resolveItem = (id) => (itemsById?.get(id) ?? this.resolveBoardItem(id));
+
+        // When "Align size" is on, every expanded note shares one uniform size
+        // computed to fill the page as a symmetric grid (see resolveAlignedExpandedSize).
+        const alignedExpandedSize = alignSize
+            ? this.resolveAlignedExpandedSize(packW, expandedItems.length)
+            : null;
+        const expandedSizeFor = (item, isExp) => this.resolveSortItemSize(item, layoutMode, isExp, alignedExpandedSize);
 
         pinnedIds.forEach((id) => {
             const card = canvas.querySelector(`.mini-card[data-desktop="1"][data-id="${CSS.escape(id)}"]`);
@@ -1235,7 +1273,7 @@ reapplySmallFootprintOnBoard() {
             const rect = this.snapNoteRect(
                 card
                     ? this.gridBoardRectForCard(card, saved, isExp)
-                    : { ...saved, ...this.resolveSortItemSize(item, layoutMode, isExp) },
+                    : { ...saved, ...expandedSizeFor(item, isExp) },
                 snapBounds
             );
             layout.set(id, rect);
@@ -1245,25 +1283,26 @@ reapplySmallFootprintOnBoard() {
         const unpinnedCollapsed = collapsedItems.filter((item) => !pinnedIds.has(item.id));
         const unpinnedExpanded = expandedItems.filter((item) => !pinnedIds.has(item.id));
 
-        const sizeForSet = (items) => items.map((item) => ({
+        // Unified layout: collapsed notes form a tight zero-gap grid, then the
+        // expanded notes fill their own block after them (never covering them).
+        // With Align size ON, expanded notes share one uniform size (alignedSize);
+        // otherwise each keeps its real {w,h}.
+        const collapsedSizeForSet = unpinnedCollapsed.map((item) => ({ id: item.id }));
+        const expandedSizeForSet = unpinnedExpanded.map((item) => ({
             id: item.id,
-            ...this.resolveSortItemSize(item, layoutMode, this.isItemLayoutExpanded(item, layoutMode))
+            ...expandedSizeFor(item, this.isItemLayoutExpanded(item, layoutMode))
         }));
 
-        // Two-set, real-size bin packing: collapsed cards pack first at their real
-        // small size, then expanded notes pack into a second block below/right at
-        // their real (never flattened) size. See packTwoSetRects in noteGeometry.js.
-        const { rects: packedRects } = packTwoSetRectsCore({
-            collapsed: sizeForSet(unpinnedCollapsed),
-            expanded: sizeForSet(unpinnedExpanded),
+        const packedBoardRects = this.packBoardGridRects(collapsedSizeForSet, expandedSizeForSet, {
+            alignedSize: alignSize && alignedExpandedSize ? alignedExpandedSize : null,
             placed,
-            direction: dir,
             origin,
             packW,
             maxH,
-            edgePad
+            edgePad,
+            direction: dir
         });
-        packedRects.forEach(({ id, rect }) => layout.set(id, rect));
+        packedBoardRects.forEach(({ id, rect }) => layout.set(id, rect));
 
         if (persistOnly) {
             if (!save) return layout;
@@ -1299,6 +1338,144 @@ reapplySmallFootprintOnBoard() {
         return layout;
     },
 
+    /**
+     * Unified board-layout packer used whenever the board is re-arranged by
+     * sort/reset. Collapsed notes are placed on a strict zero-gap compact grid
+     * (adjacent tiles, rows and columns) so they read as one solid block in
+     * both horizontal and vertical sort directions. Expanded notes are placed
+     * in their own block after the collapsed set (below for horizontal, right
+     * for vertical) so they never cover collapsed notes:
+     *  - alignedSize provided → every expanded note gets that uniform size.
+     *  - alignedSize null      → each expanded note keeps its real {w,h}.
+     * Positions are computed directly on tile strides (no grid-snap drift).
+     *
+     * @param {Array} collapsedItems
+     * @param {Array<{id:string,w:number,h:number}>} expandedItems
+     * @param {{w:number,h:number,cols:number}|null} alignedSize
+     * @param {{placed?:Array<{x,y,w,h}>, origin?:number, packW:number, maxH?:number, edgePad?:number, direction?:string}} opts
+     * @returns {Array<{id:string, rect:{x,y,w,h}}>}
+     */
+    packBoardGridRects(collapsedItems, expandedItems, {
+        alignedSize = null,
+        placed = [],
+        origin = CANVAS_LAYOUT_ORIGIN,
+        packW,
+        maxH = Infinity,
+        edgePad = 0,
+        direction = 'horizontal'
+    } = {}) {
+        const metrics = getGridMetrics();
+        const gap = metrics.gap;
+        const startX = origin + edgePad;
+        const startY = origin + edgePad;
+        const small = getSmallRect(readTileSmallFootprint());
+        const rects = [];
+        const collapsedRects = [];
+        // Pinned rects are the only obstacles for the collapsed grid: collapsed
+        // tiles sit edge-to-edge (zero gap) and would falsely self-overlap under
+        // rectsOverlap, so they are never checked against each other.
+        const pinnedRects = placed.slice();
+        const allPlaced = [...pinnedRects];
+
+        // --- collapsed: strict zero-gap compact grid -------------------------
+        const maxCols = Math.max(1, Math.floor(packW / small.w));
+        let col = 0;
+        let row = 0;
+        (collapsedItems || []).forEach((item) => {
+            let guard = 0;
+            while (guard < 100000) {
+                const candidate = {
+                    x: startX + col * small.w,
+                    y: startY + row * small.h,
+                    w: small.w,
+                    h: small.h
+                };
+                if (!pinnedRects.some((p) => rectsOverlapCore(candidate, p, gap))) {
+                    collapsedRects.push(candidate);
+                    rects.push({ id: item.id, rect: candidate });
+                    allPlaced.push({ ...candidate });
+                    col += 1;
+                    break;
+                }
+                col += 1;
+                if (col >= maxCols) {
+                    col = 0;
+                    row += 1;
+                }
+                guard += 1;
+            }
+        });
+
+        const collapsedBottom = collapsedRects.length
+            ? collapsedRects.reduce((m, r) => Math.max(m, r.y + r.h), startY)
+            : startY;
+        const collapsedRight = collapsedRects.length
+            ? collapsedRects.reduce((m, r) => Math.max(m, r.x + r.w), startX)
+            : startX;
+        const dir = direction === 'vertical' ? 'vertical' : 'horizontal';
+
+        // Expanded block always starts below the collapsed set (left-aligned)
+        // regardless of sort direction — direction only affects internal ordering.
+        // The block is given a small inset for visual separation from the borders.
+        const exStartX = startX + edgePad;
+        const exStartY = collapsedBottom + gap + edgePad * 2;
+
+        // --- expanded: own block after the collapsed set ----------------------
+        if (alignedSize) {
+            const { w, h } = alignedSize;
+            const colStride = w + gap;
+            const rowStride = h + gap;
+            // Cap columns at the computed grid width (which already fits ~80% of
+            // the available space) rather than letting it fill packW edge-to-edge.
+            const exMaxCols = Math.max(1, alignedSize.cols);
+            let ec = 0;
+            let er = 0;
+            (expandedItems || []).forEach((item) => {
+                let guard = 0;
+                while (guard < 20000) {
+                    const candidate = {
+                        x: exStartX + ec * colStride,
+                        y: exStartY + er * rowStride,
+                        w,
+                        h
+                    };
+                    if (candidate.x + candidate.w <= startX + packW + 1
+                        && !allPlaced.some((p) => rectsOverlapCore(candidate, p, gap))) {
+                        rects.push({ id: item.id, rect: candidate });
+                        allPlaced.push({ ...candidate });
+                        ec += 1;
+                        if (ec >= exMaxCols) {
+                            ec = 0;
+                            er += 1;
+                        }
+                        break;
+                    }
+                    ec += 1;
+                    if (ec >= exMaxCols) {
+                        ec = 0;
+                        er += 1;
+                    }
+                    guard += 1;
+                }
+            });
+        } else {
+            (expandedItems || []).forEach((item) => {
+                const slot = findFirstCanvasSlotCore(item.w, item.h, allPlaced, packW + origin * 2, {
+                    origin,
+                    edgePad,
+                    xMin: exStartX,
+                    yMin: exStartY,
+                    maxH,
+                    direction: dir
+                });
+                rects.push({ id: item.id, rect: slot });
+                allPlaced.push({ ...slot });
+            });
+        }
+
+        return rects;
+    },
+
     packSortGridBoard(canvas, collapsedItems, expandedItems, sortPrefs, pinnedIds) {
         const direction = sortPrefs.direction === 'vertical' ? 'vertical' : 'horizontal';
         this.packGridBoard(canvas, collapsedItems, expandedItems, {
@@ -1307,7 +1484,8 @@ reapplySmallFootprintOnBoard() {
             direction,
             persistOnly: false,
             animate: true,
-            save: true
+            save: true,
+            alignSize: sortPrefs.alignSize === true
         });
     },
 
@@ -1457,6 +1635,10 @@ reapplySmallFootprintOnBoard() {
         return getGridBoardBounds(canvas);
     },
 
+    getLiveBoardBounds(canvas) {
+        return getLiveBoardBounds(canvas);
+    },
+
     getDesktopBoardPane(canvas) {
         return getDesktopBoardPane(canvas);
     },
@@ -1595,24 +1777,37 @@ findDesktopCenterSlot(w, h, canvas, viewMode, { excludeId = null } = {}) {
             const bTime = Number(b.created_at || b.updated_at || 0);
             return aTime - bTime;
         });
-        const bounds = canvas ? this.getGridBoardBounds(canvas) : null;
+        const bounds = canvas ? this.getLiveBoardBounds(canvas) : null;
         const metrics = getGridMetrics();
         const origin = bounds?.origin ?? metrics.origin;
         const packW = bounds?.packW ?? Math.max(metrics.canvasGridW, 640);
-        const maxH = bounds?.maxH ?? origin + metrics.strideY * 40;
         const edgePad = bounds?.edgePad ?? metrics.edgePad;
-        const placed = [];
+
+        // Collapse every note to the small tile and lay them out on a strict,
+        // zero-gap grid (adjacent tiles, no 8px re-snap) so all rows/columns
+        // align with no spaces between them.
+        const startX = origin + edgePad;
+        const startY = origin + edgePad;
+        const colStride = small.w;
+        const rowStride = small.h;
+        let col = 0;
+        let row = 0;
 
         sorted.forEach((item) => {
             if (!item?.id) return;
             ensureSmallTile(item);
-            let slot = findFirstCanvasSlotCore(small.w, small.h, placed, packW + origin * 2, { origin, edgePad });
-            slot = this.snapNoteRect(
-                { ...slot, w: small.w, h: small.h },
-                { maxW: packW, maxH, origin, edgePad }
-            );
-            placed.push(slot);
-            this.saveCompactBoardLayout(item.id, slot, resolvedMode);
+
+            let x = startX + col * colStride;
+            let y = startY + row * rowStride;
+            if (col > 0 && x + small.w > startX + packW) {
+                col = 0;
+                row += 1;
+                x = startX;
+                y = startY + row * rowStride;
+            }
+
+            this.saveCompactBoardLayout(item.id, { x, y, w: small.w, h: small.h }, resolvedMode);
+            col += 1;
         });
     },
 

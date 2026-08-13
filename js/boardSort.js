@@ -52,7 +52,15 @@ function buildMenuItems(prefs) {
         { divider: true },
         { heading: 'Order' },
         { id: 'order:asc', label: 'Ascending', selected: prefs.dir === 'asc' },
-        { id: 'order:desc', label: 'Descending', selected: prefs.dir === 'desc' }
+        { id: 'order:desc', label: 'Descending', selected: prefs.dir === 'desc' },
+        { divider: true },
+        {
+            checkbox: true,
+            id: 'align:size',
+            label: 'Align size',
+            hint: 'Uniform size for expanded notes so they fill the page',
+            checked: prefs.alignSize === true
+        }
     ];
 }
 
@@ -93,6 +101,18 @@ export const BoardSort = {
         }
     },
 
+    applyToggle(id, checked) {
+        if (id !== 'align:size') return;
+        const prefs = readBoardSort();
+        prefs.alignSize = checked === true;
+        writeBoardSort(prefs);
+        this.ctx?.onSort?.(prefs);
+        this.syncButtonState();
+        if (DrawingToolbarMenu.isOpen()) {
+            DrawingToolbarMenu.setItems(buildMenuItems(prefs));
+        }
+    },
+
     syncButtonState() {
         if (!this.triggerBtn) return;
         const prefs = readBoardSort();
@@ -119,7 +139,8 @@ export const BoardSort = {
                 ariaLabel: 'Sort board',
                 items: buildMenuItems(prefs),
                 closeOnSelect: false,
-                onSelect: (id) => this.applyPref(id)
+                onSelect: (id) => this.applyPref(id),
+                onToggle: (id, checked) => this.applyToggle(id, checked)
             });
         };
         btn.addEventListener('click', this.boundHandler);

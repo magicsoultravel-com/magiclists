@@ -7,6 +7,8 @@ import { RadioCast } from './radioCast.js';
 import { escapeHtml, countryFlagEmoji, debounce, syncMarquee, bindFaviconImage } from './radioUtils.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { renderSidebarModuleHeaderHtml } from './sidebarModules.js';
+import { copyPlainTextToClipboard } from './clipboard.js';
+import { showAppToast } from './toast.js';
 
 const BROWSE_PAGE_SIZE = 60;
 const BROWSE_SORT_OPTIONS = [
@@ -149,10 +151,12 @@ export const SidebarRadio = {
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-radio-play aria-label="Play or pause">
                         <span data-radio-play-icon></span>
                     </button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-radio-stop title="Stop" aria-label="Stop">${ACTION_ICONS.mediaStop}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-radio-open="browse" title="Browse stations" aria-label="Browse stations" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioBrowse}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-radio__action--heart is-hidden" data-radio-favorite title="Add favorite" aria-label="Add favorite" aria-pressed="false">${CARD_ICONS.heart}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-radio-open="special" title="Radio settings" aria-label="Radio settings" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioSpecial}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-radio__cast-btn" data-radio-cast title="Cast radio" aria-label="Cast radio" aria-pressed="false">${ACTION_ICONS.cast}</button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-radio-url title="Copy station link" aria-label="Copy station link">${ACTION_ICONS.link}</button>
                 </div>
             </div>
         `;
@@ -162,6 +166,7 @@ export const SidebarRadio = {
         this.root.querySelectorAll('[data-radio-play]').forEach((btn) => {
             btn.addEventListener('click', () => RadioPlayer.toggle());
         });
+        this.root.querySelector('[data-radio-stop]')?.addEventListener('click', () => RadioPlayer.stop());
 
         this.root.querySelector('[data-radio-favorite]')?.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -206,6 +211,21 @@ export const SidebarRadio = {
         this.root.querySelector('[data-radio-cast]')?.addEventListener('click', (e) => {
             e.stopPropagation();
             this.openCastPanel();
+        });
+
+        this.root.querySelector('[data-radio-url]')?.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            const station = RadioPlayer.station;
+            if (!station?.url_resolved) {
+                showAppToast('No station to share');
+                return;
+            }
+            const success = await copyPlainTextToClipboard(station.url_resolved);
+            if (success) {
+                showAppToast('Station link copied to clipboard');
+            } else {
+                showAppToast('Failed to copy station link');
+            }
         });
 
         const artImg = this.root.querySelector('[data-radio-art]');
