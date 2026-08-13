@@ -32,7 +32,8 @@ import {
     isBrandIconCustomized,
     resolveBrandIconId
 } from './brandIcon.js';
-import { DesktopManager, MIN_DESKTOP_COUNT, MAX_DESKTOP_COUNT } from './desktopManager.js';
+import { DesktopManager, MAX_DESKTOP_COUNT, DEFAULT_DESKTOP_COUNT } from './desktopManager.js';
+import { ColorPicker, PALETTE_DESKTOP } from './colorPicker.js';
 import { createThemePicker } from './themePicker.js';
 
 const STORAGE_KEY = 'matrix_display_options';
@@ -362,17 +363,7 @@ export const DisplayOptions = {
 
         NoteFontScale.updateLabels();
         DesktopZoom.updateButtons();
-
-        // Update desktop count stepper label and min/max button state
-        const desktopCount = DesktopManager.getDesktopCount();
-        const desktopCountLabel = root.querySelector('#display-opt-desktop-count-label');
-        if (desktopCountLabel) {
-            desktopCountLabel.textContent = String(desktopCount);
-        }
-        const desktopCountOut = root.querySelector('#display-opt-desktop-count-out');
-        const desktopCountIn = root.querySelector('#display-opt-desktop-count-in');
-        if (desktopCountOut) desktopCountOut.disabled = desktopCount <= MIN_DESKTOP_COUNT;
-        if (desktopCountIn) desktopCountIn.disabled = desktopCount >= MAX_DESKTOP_COUNT;
+        this.syncDesktopTiles(root);
 
         const undockOpacityInput = root.querySelector('#display-opt-undock-opacity');
         if (undockOpacityInput) {
@@ -384,6 +375,111 @@ export const DisplayOptions = {
         }
 
         this.syncButtonState();
+    },
+
+    syncDesktopTiles(root) {
+        const count = DesktopManager.getDesktopCount();
+        root.querySelectorAll('.display-opt-desktop-tile').forEach((tile) => {
+            const id = Number(tile.dataset.desktopId);
+            const enabled = id <= count;
+            const alwaysOn = id === 1;
+            const nextOnly = id === count + 1;
+            const removable = enabled && id === count && id > 1;
+            const solid = enabled && id < count; // checked but not the end — can't remove yet
+            const locked = !enabled && !nextOnly;
+            tile.classList.toggle('is-enabled', enabled);
+            tile.classList.toggle('is-available', nextOnly);
+            tile.classList.toggle('is-removable', removable);
+            tile.classList.toggle('is-solid', solid);
+            tile.classList.toggle('is-locked', locked);
+            tile.classList.toggle('is-always-on', alwaysOn);
+            tile.setAttribute('aria-checked', enabled ? 'true' : 'false');
+            const interactive = removable || nextOnly;
+            tile.setAttribute('aria-disabled', interactive ? 'false' : 'true');
+            tile.tabIndex = interactive || alwaysOn ? 0 : -1;
+            if (alwaysOn) {
+                tile.title = 'Desktop 1 (always on)';
+            } else if (solid) {
+                tile.title = `Desktop ${id} — turn off desktop ${count} first`;
+            } else if (removable) {
+                tile.title = `Desktop ${id} — click to turn off`;
+            } else if (nextOnly) {
+                tile.title = `Desktop ${id} — click to enable`;
+            } else {
+                tile.title = `Desktop ${id} — enable ${count + 1} first`;
+            }
+            const swatch = tile.querySelector('.display-opt-desktop-swatch');
+            if (swatch) {
+                swatch.style.background = DesktopManager.getDesktopColor(id);
+            }
+            const check = tile.querySelector('.display-opt-desktop-check');
+            if (check) {
+                check.checked = enabled;
+                check.disabled = !removable && !nextOnly;
+            }
+        });
+    },
+
+    confirmRemoveDesktopWithNotes(desktopId, items) {
+        const n = DesktopManager.countNotesOnDesktop(desktopId, items);
+        if (n <= 0) return true;
+        const noteWord = n === 1 ? 'note' : 'notes';
+        return window.confirm(
+            `Desktop ${desktopId} has ${n} ${noteWord}. ` +
+            `They will be moved to Desktop 1 — no data will be lost. Continue?`
+        );
+    },
+
+    confirmResetDesktopsWithNotes(items) {
+        const count = DesktopManager.getDesktopCount();
+        if (count <= DEFAULT_DESKTOP_COUNT) return true;
+        const n = DesktopManager.countNotesOnDesktopsAbove(DEFAULT_DESKTOP_COUNT, items);
+        if (n <= 0) return true;
+        const noteWord = n === 1 ? 'note' : 'notes';
+        return window.confirm(
+            `${n} ${noteWord} on desktop${count > DEFAULT_DESKTOP_COUNT + 1 ? 's' : ''} ` +
+            `${DEFAULT_DESKTOP_COUNT + 1}${count > DEFAULT_DESKTOP_COUNT + 1 ? `–${count}` : ''} ` +
+            `will be moved to Desktop 1 — no data will be lost. Continue?`
+        );
+    },
+
+    desktopsTilesHtml() {
+        const count = DesktopManager.getDesktopCount();
+        const tiles = [];
+        for (let i = 1; i <= MAX_DESKTOP_COUNT; i++) {
+            const enabled = i <= count;
+            const alwaysOn = i === 1;
+            const nextOnly = i === count + 1;
+            const removable = enabled && i === count && i > 1;
+            const solid = enabled && i < count;
+            const locked = !enabled && !nextOnly;
+            const color = DesktopManager.getDesktopColor(i);
+            const classes = [
+                'display-opt-desktop-tile',
+                enabled ? 'is-enabled' : '',
+                nextOnly ? 'is-available' : '',
+                removable ? 'is-removable' : '',
+                solid ? 'is-solid' : '',
+                locked ? 'is-locked' : '',
+                alwaysOn ? 'is-always-on' : ''
+            ].filter(Boolean).join(' ');
+            const interactive = removable || nextOnly;
+            tiles.push(`<div
+                class="${classes}"
+                data-desktop-id="${i}"
+                role="checkbox"
+                tabindex="${interactive || alwaysOn ? 0 : -1}"
+                aria-checked="${enabled ? 'true' : 'false'}"
+                aria-disabled="${interactive ? 'false' : 'true'}"
+                aria-label="Desktop ${i}">
+                <span class="display-opt-desktop-swatch" style="background:${escapeHtml(color)}" aria-hidden="true">
+                    <span class="display-opt-desktop-num">${i}</span>
+                </span>
+                <input type="checkbox" class="display-opt-desktop-check" tabindex="-1" ${enabled ? 'checked' : ''} ${!removable && !nextOnly ? 'disabled' : ''} aria-hidden="true">
+                <button type="button" class="display-opt-desktop-color-btn" data-desktop-color="${i}" title="Desktop ${i} color" aria-label="Choose color for desktop ${i}">${CARD_ICONS.color}</button>
+            </div>`);
+        }
+        return `<div class="display-opt-desktops-grid" role="group" aria-label="Desktops">${tiles.join('')}</div>`;
     },
 
     bindStepper(root, { idPrefix, onOut, onIn, disabled = false }) {
@@ -467,14 +563,8 @@ export const DisplayOptions = {
                                 ${this.optionRow('display-opt-ruler-h', 'Horizontal ruler', opts.showRulerHorizontal)}
                                 ${this.optionRow('display-opt-ruler-v', 'Vertical ruler', opts.showRulerVertical)}
                             </div>
-                            <p class="display-options-subheading">Desktop count</p>
-                            <div class="display-options-scale-row">
-                                ${this.stepperRow({
-                                    idPrefix: 'display-opt-desktop-count',
-                                    label: 'Number of desktops',
-                                    valuePercent: `${DesktopManager.getDesktopCount()}`
-                                })}
-                            </div>
+                            <p class="display-options-subheading">Desktops</p>
+                            ${this.desktopsTilesHtml()}
                         </div>
                         <div class="display-options-section display-options-section--sidebar">
                             <h3 class="display-options-heading">Sidebar</h3>
@@ -491,6 +581,7 @@ export const DisplayOptions = {
                 </div>
                 <div class="display-options-footer">
                     <button type="button" class="btn btn--compact btn--icon display-options-reset-theme" id="display-opt-reset-theme" title="Reset theme" aria-label="Reset theme">${ACTION_ICONS.appTheme}</button>
+                    <button type="button" class="btn btn--compact display-options-reset-desktops" id="display-opt-reset-desktops" title="Reset desktops to defaults (3 desktops, standard colors)">Reset desktops</button>
                     <button type="button" class="btn btn--compact btn--icon display-options-reset" id="display-opt-reset" title="Reset to defaults" aria-label="Reset to defaults">${ACTION_ICONS.resetCustomization}</button>
                 </div>
             </div>
@@ -622,18 +713,48 @@ export const DisplayOptions = {
             onIn: () => DesktopZoom.step(DesktopZoom.ZOOM_STEP)
         });
 
-        this.bindStepper(root, {
-            idPrefix: 'display-opt-desktop-count',
-            onOut: () => {
-                const next = DesktopManager.getDesktopCount() - 1;
-                if (next < MIN_DESKTOP_COUNT) return;
-                DesktopManager.setDesktopCount(next, this.getItems?.() || []);
-            },
-            onIn: () => {
-                const next = DesktopManager.getDesktopCount() + 1;
-                if (next > MAX_DESKTOP_COUNT) return;
-                DesktopManager.setDesktopCount(next, this.getItems?.() || []);
-            }
+        root.querySelectorAll('.display-opt-desktop-tile').forEach((tile) => {
+            const toggle = () => {
+                const id = Number(tile.dataset.desktopId);
+                const items = this.getItems?.() || [];
+                const count = DesktopManager.getDesktopCount();
+                // Removing the last enabled desktop — confirm if it has notes
+                if (id === count && id > 1) {
+                    if (!this.confirmRemoveDesktopWithNotes(id, items)) return;
+                }
+                DesktopManager.toggleDesktopSlot(id, items);
+                this.syncDesktopTiles(root);
+            };
+            tile.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (e.target.closest('[data-desktop-color]')) return;
+                toggle();
+            });
+            tile.addEventListener('keydown', (e) => {
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                if (e.target.closest('[data-desktop-color]')) return;
+                e.preventDefault();
+                e.stopPropagation();
+                toggle();
+            });
+        });
+
+        root.querySelectorAll('[data-desktop-color]').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                const id = Number(btn.dataset.desktopColor);
+                ColorPicker.open({
+                    anchor: btn,
+                    presets: PALETTE_DESKTOP,
+                    value: DesktopManager.getDesktopColor(id),
+                    align: 'start',
+                    onSelect: (color) => {
+                        DesktopManager.setDesktopColor(id, color);
+                        this.syncDesktopTiles(root);
+                    }
+                });
+            });
         });
 
         root.querySelector('#display-opt-chrome-bg')?.addEventListener('click', (e) => {
@@ -655,6 +776,14 @@ export const DisplayOptions = {
             this.rebuildModal();
         });
 
+        root.querySelector('#display-opt-reset-desktops')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const items = this.getItems?.() || [];
+            if (!this.confirmResetDesktopsWithNotes(items)) return;
+            DesktopManager.resetDesktopsToDefaults(items);
+            this.syncDesktopTiles(root);
+        });
+
         root.querySelector('#display-opt-close')?.addEventListener('click', (e) => {
             e.stopPropagation();
             this.closeModal();
@@ -668,14 +797,12 @@ export const DisplayOptions = {
 
         overlay.innerHTML = this.buildModalHtml();
         this.bindModalInteractions(overlay);
+        this.syncModalUi(overlay);
 
         const newBody = overlay.querySelector('.display-options-body');
         if (newBody) {
             newBody.scrollTop = scrollTop;
         }
-
-        NoteFontScale.updateLabels();
-        DesktopZoom.updateButtons();
     },
 
     openModal(anchor) {
@@ -691,9 +818,7 @@ export const DisplayOptions = {
         const overlay = this.ensureOverlay();
         overlay.innerHTML = this.buildModalHtml();
         this.bindModalInteractions(overlay);
-
-        NoteFontScale.updateLabels();
-        DesktopZoom.updateButtons();
+        this.syncModalUi(overlay);
 
         overlay.classList.remove('is-hidden');
         target?.setAttribute('aria-expanded', 'true');

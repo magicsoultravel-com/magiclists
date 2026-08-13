@@ -303,7 +303,7 @@
 
 .sidebar-radio__action--heart.is-active,
 .sidebar-tv__action--heart.is-active {
-    color: #f87171;
+    color: var(--accent);
 }
 
 .sidebar-media__search {

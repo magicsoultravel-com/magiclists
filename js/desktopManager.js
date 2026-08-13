@@ -3,8 +3,21 @@
 const STORAGE_KEY = 'magicnotes_desktops_config';
 const DEFAULT_DESKTOP_COUNT = 3;
 const MIN_DESKTOP_COUNT = 1;
-const MAX_DESKTOP_COUNT = 7;
+const MAX_DESKTOP_COUNT = 9;
 const DEFAULT_ACTIVE_DESKTOP = 1;
+
+/** Default dock icon colors for desktops 1–9 (legacy letter palette + two extras). */
+export const DEFAULT_DESKTOP_COLORS = [
+    '#ff4d4d',
+    '#4dff4d',
+    '#4d4dff',
+    '#ffff4d',
+    '#ff4dff',
+    '#ff804d',
+    '#4dffff',
+    '#4dffb8',
+    '#b84dff'
+];
 
 // Internal state
 let _desktopCount = DEFAULT_DESKTOP_COUNT;
@@ -12,9 +25,27 @@ let _activeDesktop = DEFAULT_ACTIVE_DESKTOP;
 let _changeListeners = [];
 let _isDockPinned = false;
 let _pinListeners = [];
+let _desktopColors = [...DEFAULT_DESKTOP_COLORS];
 
 function clampDesktopCount(n) {
     return Math.min(MAX_DESKTOP_COUNT, Math.max(MIN_DESKTOP_COUNT, n));
+}
+
+function normalizeHexColor(value, fallback) {
+    if (typeof value !== 'string') return fallback;
+    const v = value.trim();
+    if (/^#[0-9a-fA-F]{6}$/.test(v)) return v.toLowerCase();
+    if (/^[0-9a-fA-F]{6}$/.test(v)) return `#${v.toLowerCase()}`;
+    return fallback;
+}
+
+function normalizeColors(raw) {
+    const next = [...DEFAULT_DESKTOP_COLORS];
+    if (!Array.isArray(raw)) return next;
+    for (let i = 0; i < MAX_DESKTOP_COUNT; i++) {
+        next[i] = normalizeHexColor(raw[i], DEFAULT_DESKTOP_COLORS[i]);
+    }
+    return next;
 }
 
 // Load persisted state from localStorage
@@ -29,12 +60,14 @@ function loadState() {
                 _desktopCount
             );
             _isDockPinned = parsed.dockPinned === true;
+            _desktopColors = normalizeColors(parsed.colors);
         }
     } catch {
         // Ignore parse errors, use defaults
         _desktopCount = DEFAULT_DESKTOP_COUNT;
         _activeDesktop = DEFAULT_ACTIVE_DESKTOP;
         _isDockPinned = false;
+        _desktopColors = [...DEFAULT_DESKTOP_COLORS];
     }
 }
 
@@ -44,7 +77,8 @@ function persistState() {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
             desktopCount: _desktopCount,
             activeDesktop: _activeDesktop,
-            dockPinned: _isDockPinned
+            dockPinned: _isDockPinned,
+            colors: _desktopColors
         }));
     } catch {
         // Ignore quota errors
@@ -172,6 +206,89 @@ export const DesktopManager = {
             fromCount: oldCount,
             toCount: numCount
         };
+    },
+
+    /**
+     * Sequential toggle for prefs UI: enabled desktops are always 1..N.
+     * - Only the last enabled slot (count) may be turned off — middle slots stay solid
+     * - Click next available slot (count+1) → grow to that count
+     * - Desktop 1 is always on; slots beyond count+1 are locked
+     */
+    toggleDesktopSlot(slot, items = []) {
+        const k = Number(slot);
+        if (!Number.isInteger(k) || k < MIN_DESKTOP_COUNT || k > MAX_DESKTOP_COUNT) {
+            return { ok: false };
+        }
+        if (k === 1) {
+            return { ok: true, migratedIds: [], locked: true };
+        }
+        // Middle enabled slots are solid — turn off only from the end
+        if (k < _desktopCount) {
+            return { ok: false, locked: true };
+        }
+        if (k === _desktopCount) {
+            return this.setDesktopCount(k - 1, items);
+        }
+        if (k === _desktopCount + 1) {
+            return this.setDesktopCount(k, items);
+        }
+        return { ok: false, locked: true };
+    },
+
+    /** Notes assigned to desktops above `desktopId` (exclusive of that id's floor). */
+    countNotesOnDesktopsAbove(desktopId, items = []) {
+        const floor = Number(desktopId) || 0;
+        if (!Array.isArray(items)) return 0;
+        return items.filter((item) => (item?.desktopId || 1) > floor).length;
+    },
+
+    /** Notes currently on a specific desktop. */
+    countNotesOnDesktop(desktopId, items = []) {
+        return this.getAllNotesForDesktop(desktopId, items).length;
+    },
+
+    getDesktopColor(desktopId) {
+        const n = Number(desktopId);
+        if (!Number.isInteger(n) || n < 1 || n > MAX_DESKTOP_COUNT) {
+            return DEFAULT_DESKTOP_COLORS[0];
+        }
+        return _desktopColors[n - 1] || DEFAULT_DESKTOP_COLORS[n - 1];
+    },
+
+    getDesktopColors() {
+        return _desktopColors.slice();
+    },
+
+    setDesktopColor(desktopId, color) {
+        const n = Number(desktopId);
+        if (!Number.isInteger(n) || n < 1 || n > MAX_DESKTOP_COUNT) return false;
+        const hex = normalizeHexColor(color, null);
+        if (!hex) return false;
+        if (_desktopColors[n - 1] === hex) return true;
+        _desktopColors[n - 1] = hex;
+        persistState();
+        window.dispatchEvent(new CustomEvent('desktop:colors_changed', {
+            detail: { desktopId: n, color: hex }
+        }));
+        return true;
+    },
+
+    /**
+     * Reset to default desktop count (3) and standard R/G/B… icon colors.
+     * Migrates orphaned notes when shrinking.
+     */
+    resetDesktopsToDefaults(items = []) {
+        _desktopColors = [...DEFAULT_DESKTOP_COLORS];
+        persistState();
+        const result = this.setDesktopCount(DEFAULT_DESKTOP_COUNT, items);
+        window.dispatchEvent(new CustomEvent('desktop:colors_changed', {
+            detail: { reset: true }
+        }));
+        // When count was already default, setDesktopCount is a no-op — still refresh dock.
+        if (result?.ok && result.toCount === undefined) {
+            window.dispatchEvent(new CustomEvent('desktop:count_changed'));
+        }
+        return result;
     },
 
     // Assign a note to a specific desktop, emitting mutation event

@@ -9,9 +9,6 @@ const TOGGLE_ICON = '🖥️';
 const DRAWER_HEIGHT = 48;
 const PILL_WIDTH_PX = 48;
 
-// Color palette for desktop icons (R, G, B, Y, P, O, C)
-const DESKTOP_COLORS = ['r', 'g', 'b', 'y', 'p', 'o', 'c'];
-
 let _drawerEl = null;
 let _toggleEl = null;
 let _containerEl = null;
@@ -60,8 +57,8 @@ function renderDesktopButtons(drawer, items = []) {
     for (let i = 1; i <= count; i++) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        const color = DESKTOP_COLORS[(i - 1) % DESKTOP_COLORS.length];
-        btn.className = `desktop-dock-btn desktop-dock-btn--${color}`;
+        const color = DesktopManager.getDesktopColor(i);
+        btn.className = 'desktop-dock-btn';
         btn.id = `desktop-dock-btn-${i}`;
         btn.dataset.desktopId = String(i);
         btn.title = `Desktop ${i}`;
@@ -75,7 +72,7 @@ function renderDesktopButtons(drawer, items = []) {
         const noteCount = visibleNotes.length;
 
         // Colored square icon with plain text note count centered inside
-        btn.innerHTML = `<span class="desktop-dock-icon"><span class="desktop-dock-count">${noteCount}</span></span>`;
+        btn.innerHTML = `<span class="desktop-dock-icon" style="background:${color}"><span class="desktop-dock-count">${noteCount}</span></span>`;
 
         if (i === DesktopManager.getActiveDesktop()) {
             btn.classList.add('active');
@@ -142,6 +139,24 @@ function updateActiveButton() {
         btn.classList.toggle('active', isActive);
         btn.setAttribute('aria-current', isActive ? 'true' : 'false');
     });
+}
+
+function updateDockVisibility() {
+    if (!_containerEl) return;
+    const single = DesktopManager.getDesktopCount() <= 1;
+    _containerEl.classList.toggle('is-single-desktop', single);
+    if (single) {
+        _isExpanded = false;
+        closeDrawer();
+        return;
+    }
+    // Leaving single-desktop: dock was display:none. If pinned, the toggle stays
+    // hidden and a closed drawer would leave nothing visible until refresh.
+    updatePinButton();
+    if (DesktopManager.isDockPinned()) {
+        _isExpanded = true;
+        openDrawer();
+    }
 }
 
 function updatePinButton() {
@@ -223,6 +238,14 @@ function bindEvents() {
             renderDesktopButtons(_drawerEl, _items);
             updateActiveButton();
         }
+        updateDockVisibility();
+    });
+
+    window.addEventListener('desktop:colors_changed', () => {
+        if (_drawerEl) {
+            renderDesktopButtons(_drawerEl, _items);
+            updateActiveButton();
+        }
     });
 
     window.addEventListener('item:mutation_requested', () => {
@@ -251,15 +274,15 @@ export const DesktopDock = {
 
         _containerEl = container;
 
-        const workspaceShell = document.getElementById('workspace-shell');
-        if (workspaceShell) {
-            workspaceShell.appendChild(container);
-        }
+        // Append to body so position:fixed is always viewport-centered
+        // (not affected by board/shell layout).
+        document.body.appendChild(container);
 
         renderDesktopButtons(_drawerEl, _items);
 
         updatePinButton();
-        if (_isPinned) {
+        updateDockVisibility();
+        if (_isPinned && DesktopManager.getDesktopCount() > 1) {
             _isExpanded = true;
             openDrawer();
         }

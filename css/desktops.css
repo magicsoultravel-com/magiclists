@@ -1,20 +1,32 @@
 /** @css {"owns":"desktop switcher dock styling, dock pin lock", "js":["desktopDockComponent.js"]} */
 /* ==========================================================================
    DESKTOP DOCK - Floating action pill with collapsible desktop switcher
+   Toggle stays fixed at viewport center; drawer expands beside it (no jitter).
    ========================================================================== */
 
 .desktop-dock {
     position: fixed;
     left: 50%;
     bottom: 0.85rem;
+    width: 42px;
+    height: 42px;
     transform: translateX(-50%);
-    display: flex;
-    align-items: flex-end;
-    gap: 0.5rem;
     z-index: 500;
+    pointer-events: none;
+}
+
+.desktop-dock > * {
+    pointer-events: auto;
+}
+
+.desktop-dock.is-single-desktop {
+    display: none !important;
 }
 
 .desktop-dock-toggle {
+    position: absolute;
+    left: 0;
+    bottom: 0;
     width: 42px;
     height: 42px;
     border: none;
@@ -25,10 +37,11 @@
     font-size: 1.2rem;
     cursor: pointer;
     box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-    transition: all 0.2s ease, transform 0.15s ease;
+    transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
     display: flex;
     align-items: center;
     justify-content: center;
+    z-index: 1;
 }
 
 .desktop-dock-toggle:hover {
@@ -52,12 +65,15 @@
     box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
-/* When pinned, hide the toggle pill — drawer is always visible */
+/* When pinned, hide the toggle pill — drawer is always visible, centered */
 .desktop-dock.is-pinned .desktop-dock-toggle {
     display: none;
 }
 
 .desktop-dock-drawer {
+    position: absolute;
+    left: calc(100% + 0.5rem);
+    bottom: 0;
     display: flex;
     align-items: center;
     gap: 0.35rem;
@@ -65,19 +81,28 @@
     background: color-mix(in srgb, var(--bg-primary) 70%, transparent);
     backdrop-filter: blur(14px);
     border-radius: 999px;
-    /* outline removed */
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
     transform: translateY(0);
     opacity: 0;
     pointer-events: none;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
+    transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
 }
 
 .desktop-dock-drawer.is-open {
     opacity: 1;
     pointer-events: auto;
     transform: translateY(-8px);
+}
+
+/* Pinned: center the drawer on the viewport (same anchor as the toggle) */
+.desktop-dock.is-pinned .desktop-dock-drawer {
+    left: 50%;
+    transform: translateX(-50%) translateY(0);
+}
+
+.desktop-dock.is-pinned .desktop-dock-drawer.is-open {
+    transform: translateX(-50%) translateY(-8px);
 }
 
 /* Show pin button on hover of drawer (only visible on hover) */
@@ -164,34 +189,7 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-}
-
-.desktop-dock-btn--r .desktop-dock-icon {
-    background: #ff4d4d;
-}
-
-.desktop-dock-btn--g .desktop-dock-icon {
-    background: #4dff4d;
-}
-
-.desktop-dock-btn--b .desktop-dock-icon {
-    background: #4d4dff;
-}
-
-.desktop-dock-btn--y .desktop-dock-icon {
-    background: #ffff4d;
-}
-
-.desktop-dock-btn--p .desktop-dock-icon {
-    background: #ff4dff;
-}
-
-.desktop-dock-btn--o .desktop-dock-icon {
-    background: #ff804d;
-}
-
-.desktop-dock-btn--c .desktop-dock-icon {
-    background: #4dffff;
+    background: #888;
 }
 
 /* Desktop dock count - plain text, same font as notes, centered in icon */
@@ -265,5 +263,10 @@
 
     .desktop-dock-btn.drag-over {
         transform: none;
+    }
+
+    .desktop-dock.is-pinned .desktop-dock-drawer,
+    .desktop-dock.is-pinned .desktop-dock-drawer.is-open {
+        transition: none;
     }
 }

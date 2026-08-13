@@ -107,6 +107,124 @@
     color: var(--text-muted);
 }
 
+/* Desktops tile picker (prefs) */
+.display-opt-desktops-grid {
+    display: grid;
+    grid-template-columns: repeat(9, minmax(0, 1fr));
+    gap: 0.28rem;
+    margin-top: 0.2rem;
+}
+
+.display-opt-desktop-tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.22rem;
+    padding: 0.35rem 0.2rem 0.3rem;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-main);
+    font: inherit;
+    cursor: pointer;
+    transition: opacity 0.12s ease;
+}
+
+.display-opt-desktop-tile:hover .display-opt-desktop-swatch {
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18), 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.display-opt-desktop-tile.is-available {
+    opacity: 0.85;
+}
+
+.display-opt-desktop-tile.is-solid {
+    cursor: default;
+}
+
+.display-opt-desktop-tile.is-removable {
+    cursor: pointer;
+}
+
+.display-opt-desktop-tile.is-locked {
+    opacity: 0.38;
+    cursor: not-allowed;
+}
+
+.display-opt-desktop-tile.is-always-on {
+    cursor: default;
+}
+
+.display-opt-desktop-swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
+}
+
+.display-opt-desktop-num {
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: #111;
+    text-shadow: 0 0 2px rgba(255, 255, 255, 0.7);
+    line-height: 1;
+}
+
+.display-opt-desktop-check {
+    width: 0.7rem;
+    height: 0.7rem;
+    margin: 0;
+    pointer-events: none;
+    accent-color: var(--accent);
+}
+
+.display-opt-desktop-color-btn {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    border: none;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    cursor: pointer;
+    transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+
+.display-opt-desktop-tile:hover .display-opt-desktop-color-btn,
+.display-opt-desktop-tile:focus-within .display-opt-desktop-color-btn {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.display-opt-desktop-color-btn:hover {
+    color: var(--text-main);
+    background: color-mix(in srgb, var(--bg-primary) 95%, transparent);
+}
+
+.display-opt-desktop-color-btn svg {
+    display: block;
+    width: 10px;
+    height: 10px;
+}
+
+@media (max-width: 720px) {
+    .display-opt-desktops-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+}
+
 /* Brand icon picker */
 .brand-icon-list {
     display: flex;
@@ -416,6 +534,24 @@
 }
 
 .display-options-reset:hover {
+    color: var(--text-main);
+}
+
+.display-options-footer {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 0.75rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.display-options-reset-desktops {
+    margin-left: auto;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+}
+
+.display-options-reset-desktops:hover {
     color: var(--text-main);
 }
 
