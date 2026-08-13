@@ -351,6 +351,7 @@ export function renderQuickActions({
             <button type="button" class="btn btn--compact btn--icon" id="btn-cloud-import" data-enabled-title="Import from cloud" title="Connect cloud first (Cloud icon)" aria-label="Import from cloud" disabled>${ACTION_ICONS.cloudImport}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-export-db" title="Export backup" aria-label="Export backup">${ACTION_ICONS.export}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-export-txt" title="Export all as TXT" aria-label="Export all as TXT">${ACTION_ICONS.exportTxt}</button>
+            <button type="button" class="btn btn--compact btn--icon schedule-export-btn" id="btn-schedule-export" title="Scheduled export" aria-label="Scheduled export">${ACTION_ICONS.scheduleExport}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-import-db" title="Import backup" aria-label="Import backup">${ACTION_ICONS.import}</button>
             <button type="button" class="btn btn--compact btn--icon btn--icon-danger" id="btn-auth-logout" title="Logout" aria-label="Logout">${ACTION_ICONS.logout}</button>
         `;
@@ -371,6 +372,7 @@ function bindQuickActionHandlers(handlers = {}) {
         onCloudImport,
         onExportDb,
         onExportAllTxt,
+        onScheduleExport,
         onImportDb,
         onLogout,
         onLogin,
@@ -403,6 +405,7 @@ function bindQuickActionHandlers(handlers = {}) {
     document.getElementById('btn-cloud-import')?.addEventListener('click', onCloudImport);
     document.getElementById('btn-export-db')?.addEventListener('click', onExportDb);
     document.getElementById('btn-export-txt')?.addEventListener('click', onExportAllTxt);
+    document.getElementById('btn-schedule-export')?.addEventListener('click', onScheduleExport);
     document.getElementById('btn-import-db')?.addEventListener('click', onImportDb);
     document.getElementById('btn-auth-logout')?.addEventListener('click', onLogout);
     document.getElementById('btn-auth-login')?.addEventListener('click', onLogin);

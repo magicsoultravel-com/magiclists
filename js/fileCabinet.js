@@ -25,11 +25,14 @@ export const FILE_CABINET_ORDER_KEY = 'matrix_file_cabinet_order';
 export const FILE_CABINET_FILED_CATEGORIES_KEY = 'matrix_file_cabinet_filed_categories';
 export const FILE_CABINET_CATEGORY_ORDER_KEY = 'matrix_file_cabinet_category_order';
 export const FILE_CABINET_HEIGHT_KEY = 'matrix_file_cabinet_height';
+export const FILE_CABINET_SHUT_KEY = 'matrix_file_cabinet_shut';
 
 export const FILE_CABINET_MIN_HEIGHT = 96;
 export const FILE_CABINET_BOARD_MIN_HEIGHT = 200;
 export const FILE_CABINET_REF_HEIGHT = 220;
 export const FILE_CABINET_MIN_HEIGHT_RATIO = 0.5;
+/** Drag/release below this snaps to shut (keeps grabber). */
+export const FILE_CABINET_SHUT_SNAP_PX = 8;
 
 export function getFileCabinetDragMinHeight() {
     return FILE_CABINET_REF_HEIGHT * FILE_CABINET_MIN_HEIGHT_RATIO;
@@ -56,6 +59,16 @@ export function isFileCabinetActive() {
 
 export function setFileCabinetActive(active) {
     localStorage.setItem(FILE_CABINET_KEY, active ? 'true' : 'false');
+    if (!active) setFileCabinetShut(false);
+}
+
+export function isFileCabinetShut() {
+    return localStorage.getItem(FILE_CABINET_SHUT_KEY) === 'true';
+}
+
+export function setFileCabinetShut(shut) {
+    if (shut) localStorage.setItem(FILE_CABINET_SHUT_KEY, 'true');
+    else localStorage.removeItem(FILE_CABINET_SHUT_KEY);
 }
 
 export function readFileCabinetHeight() {
@@ -69,6 +82,35 @@ export function writeFileCabinetHeight(height) {
         return;
     }
     localStorage.setItem(FILE_CABINET_HEIGHT_KEY, String(Math.round(height)));
+}
+
+/**
+ * Collapse FC to height 0 while keeping the mount + horizontal splitter.
+ * Preserves last open height in storage (does not write 0).
+ */
+export function applyFileCabinetShut(mount) {
+    if (!mount) return;
+    setFileCabinetShut(true);
+    mount.dataset.shut = 'true';
+    mount.dataset.fixedHeight = 'true';
+    mount.classList.add('is-file-cabinet-shut');
+    mount.classList.remove('is-rollout-active');
+    mount.style.flex = '0 0 auto';
+    mount.style.height = '0px';
+    mount.style.minHeight = '0px';
+    mount.style.maxHeight = 'none';
+    mount.style.setProperty('--file-cabinet-ui-scale', '1');
+}
+
+/**
+ * Clear shut chrome and return the height that should be restored.
+ */
+export function clearFileCabinetShut(mount) {
+    setFileCabinetShut(false);
+    if (!mount) return readFileCabinetHeight();
+    delete mount.dataset.shut;
+    mount.classList.remove('is-file-cabinet-shut');
+    return readFileCabinetHeight();
 }
 
 export function getFileCabinetOrder() {
@@ -1238,6 +1280,10 @@ export function getFileCabinetContentMinHeight(mount) {
 
 export function syncFileCabinetDrawerHeight(mount) {
     if (!mount) return;
+    if (isFileCabinetShut() || mount.dataset.shut === 'true') {
+        applyFileCabinetShut(mount);
+        return;
+    }
     const contentMin = getFileCabinetContentMinHeight(mount);
     const dragMin = getFileCabinetDragMinHeight();
     const savedHeight = readFileCabinetHeight();
@@ -1247,7 +1293,7 @@ export function syncFileCabinetDrawerHeight(mount) {
         mount.dataset.fixedHeight = 'true';
         mount.style.flex = '0 0 auto';
         mount.style.maxHeight = 'none';
-        mount.style.minHeight = `${dragMin}px`;
+        mount.style.minHeight = '0px';
         const targetH = (Number.isFinite(inlineHeight) && inlineHeight > 0)
             ? inlineHeight
             : savedHeight;
@@ -1534,11 +1580,14 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
             const slot = document.createElement('div');
             slot.className = 'file-cabinet-filed-slot';
             slot.dataset.category = catName;
+            // Set on the slot so chip + hover rollout both inherit the tint
+            // (rollout is a sibling of the chip, not a child).
+            slot.style.setProperty('--card-category-color', color);
+            slot.style.setProperty('--file-cabinet-category-color', color);
 
             const chip = document.createElement('div');
             chip.className = 'file-cabinet-filed-chip';
             chip.dataset.category = catName;
-            chip.style.setProperty('--card-category-color', color);
 
             const canRename = !isUncategorizedCategory(catName);
             const chipNameAttrs = canRename

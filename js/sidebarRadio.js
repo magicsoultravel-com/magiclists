@@ -2,6 +2,7 @@
 import { RadioProviderRegistry } from './radioProviders/registry.js';
 import { stationKey, parseStationKey } from './radioProviders/stationShape.js';
 import { RadioPlayer } from './radioPlayer.js';
+import { RadioVisualizer } from './radioVisualizer.js';
 import { RadioPopover } from './radioPopover.js';
 import { RadioCast } from './radioCast.js';
 import { escapeHtml, countryFlagEmoji, debounce, syncMarquee, bindFaviconImage } from './radioUtils.js';
@@ -154,6 +155,7 @@ export const SidebarRadio = {
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-radio-stop title="Stop" aria-label="Stop">${ACTION_ICONS.mediaStop}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-radio-open="browse" title="Browse stations" aria-label="Browse stations" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioBrowse}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-radio__action--heart is-hidden" data-radio-favorite title="Add favorite" aria-label="Add favorite" aria-pressed="false">${CARD_ICONS.heart}</button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-radio-visualizer-toggle title="Toggle radio visualizer" aria-label="Toggle radio visualizer" aria-pressed="false">${ACTION_ICONS.radioVisualizer}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-radio-open="special" title="Radio settings" aria-label="Radio settings" aria-expanded="false" aria-haspopup="dialog">${ACTION_ICONS.radioSpecial}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-radio__cast-btn" data-radio-cast title="Cast radio" aria-label="Cast radio" aria-pressed="false">${ACTION_ICONS.cast}</button>
                     <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-radio-url title="Copy station link" aria-label="Copy station link">${ACTION_ICONS.link}</button>
@@ -225,6 +227,38 @@ export const SidebarRadio = {
                 showAppToast('Station link copied to clipboard');
             } else {
                 showAppToast('Failed to copy station link');
+            }
+        });
+
+        this.root.querySelector('[data-radio-visualizer-toggle]')?.addEventListener('click', async () => {
+            const button = this.root.querySelector('[data-radio-visualizer-toggle]');
+            const enabled = await RadioVisualizer.toggle(null, RadioPlayer.getAudioElement());
+            if (button) {
+                button.setAttribute('aria-pressed', String(enabled));
+                button.classList.toggle('is-active', enabled);
+            }
+            const modal = document.querySelector('.media-visualizer-modal');
+            if (modal && enabled) {
+                const modeEl = modal.querySelector('[data-media-visualizer-mode]');
+                const paletteEl = modal.querySelector('[data-media-visualizer-palette]');
+                const sensitivityEl = modal.querySelector('[data-media-visualizer-sensitivity]');
+                const bpmEl = modal.querySelector('[data-media-visualizer-bpm]');
+                RadioVisualizer.setSettings({
+                    mode: modeEl?.value || 'mountains',
+                    palette: paletteEl?.value || 'neon',
+                    sensitivity: sensitivityEl?.value || 1.0,
+                    amplitude: modal.querySelector('[data-media-visualizer-amplitude]')?.value || 0.55,
+                    bpm: bpmEl?.value || 120
+                });
+            }
+        });
+
+        window.addEventListener('radio:visualizer_changed', (e) => {
+            const enabled = !!e.detail?.enabled;
+            const button = this.root.querySelector('[data-radio-visualizer-toggle]');
+            if (button) {
+                button.setAttribute('aria-pressed', String(enabled));
+                button.classList.toggle('is-active', enabled);
             }
         });
 

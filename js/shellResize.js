@@ -11,7 +11,11 @@ import {
     getFileCabinetDragMinHeight,
     getFileCabinetContentMinHeight,
     syncFileCabinetDrawerHeight,
-    FILE_CABINET_BOARD_MIN_HEIGHT
+    FILE_CABINET_BOARD_MIN_HEIGHT,
+    FILE_CABINET_SHUT_SNAP_PX,
+    isFileCabinetShut,
+    applyFileCabinetShut,
+    clearFileCabinetShut
 } from './fileCabinet.js';
 
 const DESKTOP_MIN_WIDTH = 280;
@@ -66,9 +70,11 @@ function sidebarScaleForWidth(width) {
 function getCabinetHeightBounds(mount) {
     const surface = document.getElementById('desktop-surface');
     const surfaceH = surface?.clientHeight || window.innerHeight;
-    const min = getFileCabinetDragMinHeight();
+    // Allow 0 so the user can drag (or click) the drawer fully shut while
+    // keeping the horizontal splitter.
+    const min = 0;
     const splitterH = horizontalSplitter?.offsetHeight || 0;
-    const max = Math.max(min, surfaceH - FILE_CABINET_BOARD_MIN_HEIGHT - splitterH);
+    const max = Math.max(getFileCabinetDragMinHeight(), surfaceH - FILE_CABINET_BOARD_MIN_HEIGHT - splitterH);
     return { min, max };
 }
 
@@ -118,29 +124,49 @@ function clampCabinetHeight(height, mount) {
     return clamp(height, min, max);
 }
 
-function applyCabinetHeight(mount, height, { persist = false } = {}) {
+function applyCabinetHeight(mount, height, { persist = false, allowShut = true } = {}) {
     if (!mount) return null;
     const clamped = clampCabinetHeight(height, mount);
+    if (allowShut && clamped <= FILE_CABINET_SHUT_SNAP_PX) {
+        applyFileCabinetShut(mount);
+        return 0;
+    }
+
+    clearFileCabinetShut(mount);
     mount.dataset.fixedHeight = 'true';
     mount.style.flex = '0 0 auto';
     mount.style.height = `${clamped}px`;
     mount.style.maxHeight = 'none';
-    mount.style.minHeight = `${getFileCabinetDragMinHeight()}px`;
+    mount.style.minHeight = '0px';
     applyCabinetUiScale(mount, clamped);
     if (persist) writeFileCabinetHeight(clamped);
     return clamped;
 }
 
+function restoreCabinetFromShut(mount) {
+    if (!mount) return null;
+    clearFileCabinetShut(mount);
+    const saved = readFileCabinetHeight();
+    const contentMin = getFileCabinetContentMinHeight(mount);
+    const target = saved
+        ?? Math.max(getFileCabinetDragMinHeight(), contentMin || 0);
+    return applyCabinetHeight(mount, target, { persist: true, allowShut: false });
+}
+
 function applyCabinetAutoHeight(mount) {
     if (!mount) return;
+    if (isFileCabinetShut() || mount.dataset.shut === 'true') {
+        applyFileCabinetShut(mount);
+        return;
+    }
     const saved = readFileCabinetHeight();
     const inlineH = parseFloat(mount.style.height);
     if (mount.dataset.fixedHeight === 'true' && Number.isFinite(inlineH) && inlineH > 0) {
-        applyCabinetHeight(mount, inlineH);
+        applyCabinetHeight(mount, inlineH, { allowShut: false });
         return;
     }
     if (saved !== null) {
-        applyCabinetHeight(mount, saved);
+        applyCabinetHeight(mount, saved, { allowShut: false });
         return;
     }
     delete mount.dataset.fixedHeight;
@@ -192,7 +218,7 @@ function ensureHorizontalSplitter() {
     horizontalSplitter.className = 'shell-splitter shell-splitter--h';
     horizontalSplitter.setAttribute('role', 'separator');
     horizontalSplitter.setAttribute('aria-orientation', 'horizontal');
-    horizontalSplitter.setAttribute('aria-label', 'Resize file cabinet');
+    horizontalSplitter.setAttribute('aria-label', 'Resize or click to shut file cabinet');
     horizontalSplitter.tabIndex = 0;
 
     mount.insertAdjacentElement('afterend', horizontalSplitter);
@@ -236,12 +262,20 @@ function bindSplitterDrag(handle, axis) {
         } catch { /* ignore */ }
 
         if (!moved) {
-            // Click without a drag: nothing changed, so don't re-apply sizes,
-            // persist, or notify listeners. Re-running applySidebarWidth /
-            // applyCabinetHeight here would nudge the zoom scale and trigger
-            // layout listeners for a one-frame "bounce". A no-op click stays
-            // a no-op.
             document.body.classList.remove('is-shell-resizing', 'is-shell-resizing--v', 'is-shell-resizing--h');
+            // Horizontal click toggles shut/restore; vertical click stays a no-op.
+            if (axis === 'h') {
+                const mount = document.getElementById('file-cabinet');
+                if (!mount) return;
+                if (isFileCabinetShut() || mount.dataset.shut === 'true') {
+                    restoreCabinetFromShut(mount);
+                } else {
+                    const openH = mount.offsetHeight;
+                    if (openH > FILE_CABINET_SHUT_SNAP_PX) writeFileCabinetHeight(openH);
+                    applyFileCabinetShut(mount);
+                }
+                dispatchDesktopBoundsChanged();
+            }
             return;
         }
 
@@ -252,8 +286,8 @@ function bindSplitterDrag(handle, axis) {
             if (clamped) writeSidebarWidth(clamped);
         } else {
             const mount = document.getElementById('file-cabinet');
-            const height = lastSize || mount?.offsetHeight;
-            if (mount && height) {
+            const height = lastSize ?? mount?.offsetHeight ?? 0;
+            if (mount) {
                 applyCabinetHeight(mount, height, { persist: true });
             }
         }
@@ -278,7 +312,11 @@ function bindSplitterDrag(handle, axis) {
         } else {
             const mount = document.getElementById('file-cabinet');
             if (!mount) return;
-            startSize = mount.offsetHeight;
+            startSize = (isFileCabinetShut() || mount.dataset.shut === 'true')
+                ? 0
+                : mount.offsetHeight;
+            // Remember open height before a possible shut so restore works.
+            if (startSize > FILE_CABINET_SHUT_SNAP_PX) writeFileCabinetHeight(startSize);
         }
 
         resizing = true;
@@ -307,9 +345,13 @@ function bindSplitterDrag(handle, axis) {
         } else {
             const mount = document.getElementById('file-cabinet');
             if (!mount) return;
+            // Leaving shut on first move: clear shut chrome so height can grow.
+            if (mount.dataset.shut === 'true' && startSize + dy > FILE_CABINET_SHUT_SNAP_PX) {
+                clearFileCabinetShut(mount);
+            }
             const next = clampCabinetHeight(startSize + dy, mount);
             lastSize = next;
-            applyCabinetHeight(mount, next);
+            applyCabinetHeight(mount, next, { allowShut: true });
         }
     });
 
@@ -331,12 +373,14 @@ function reclampAll() {
         clearSidebarAppliedWidth();
     }
     const mount = document.getElementById('file-cabinet');
-    if (mount && mount.dataset.fixedHeight === 'true') {
+    if (mount && (isFileCabinetShut() || mount.dataset.shut === 'true')) {
+        applyFileCabinetShut(mount);
+    } else if (mount && mount.dataset.fixedHeight === 'true') {
         const inlineH = parseFloat(mount.style.height);
         const height = (Number.isFinite(inlineH) && inlineH > 0)
             ? inlineH
             : (readFileCabinetHeight() ?? mount.offsetHeight);
-        const clamped = applyCabinetHeight(mount, height, { persist: true });
+        const clamped = applyCabinetHeight(mount, height, { persist: true, allowShut: false });
         if (clamped !== height) dispatchDesktopBoundsChanged();
     } else if (mount) {
         applyCabinetAutoHeight(mount);

@@ -12,6 +12,7 @@ import { getCreatedTimestamp, getUpdatedTimestamp } from './noteModel.js';
 export const BACKUP_FILE_PREFIX = 'matrix_workspace_backup_';
 export const ENCRYPTED_BACKUP_MARKER = 'matrix_encrypted_backup';
 export const LAST_LOCAL_EXPORT_KEY = 'matrix_last_local_export_at';
+export const LAST_LOCAL_TXT_EXPORT_KEY = 'matrix_last_local_txt_export_at';
 const CLOUD_CONFIG_KEY = 'matrix_cloud_config';
 
 export function formatExportTimestamp(timestamp) {
@@ -31,6 +32,30 @@ export function readLastLocalExportAt() {
 export function writeLastLocalExportAt(timestamp) {
     if (!Number.isFinite(timestamp)) return;
     localStorage.setItem(LAST_LOCAL_EXPORT_KEY, String(timestamp));
+}
+
+export function readLastLocalTxtExportAt() {
+    try {
+        const ts = Number(localStorage.getItem(LAST_LOCAL_TXT_EXPORT_KEY));
+        return Number.isFinite(ts) ? ts : null;
+    } catch {
+        return null;
+    }
+}
+
+export function writeLastLocalTxtExportAt(timestamp) {
+    if (!Number.isFinite(timestamp)) return;
+    localStorage.setItem(LAST_LOCAL_TXT_EXPORT_KEY, String(timestamp));
+}
+
+/** Stable sync fingerprint for skip-if-unchanged scheduled exports. */
+export function hashExportFingerprint(text) {
+    const str = String(text ?? '');
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) + hash) ^ str.charCodeAt(i);
+    }
+    return (hash >>> 0).toString(16);
 }
 
 export function readLastCloudExportAt() {

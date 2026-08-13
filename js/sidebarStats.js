@@ -3,7 +3,8 @@ import { formatStorageSize, getLocalStorageByteEstimate, getLocalStorageUsageBre
 import {
     formatExportTimestamp,
     readLastCloudExportAt,
-    readLastLocalExportAt
+    readLastLocalExportAt,
+    readLastLocalTxtExportAt
 } from './backup.js';
 import { IndexedDBStore } from './storage/indexedDbStore.js';
 
@@ -32,6 +33,7 @@ export const SidebarStats = {
             : '';
 
         const localExportAt = formatExportTimestamp(readLastLocalExportAt());
+        const localTxtExportAt = formatExportTimestamp(readLastLocalTxtExportAt());
         const cloudExportAt = formatExportTimestamp(readLastCloudExportAt());
 
         // Get IndexedDB stats
@@ -44,7 +46,8 @@ export const SidebarStats = {
              <span class="sidebar-storage-stat">Matrix: ${formatStorageSize(matrix)}</span>
              <span class="sidebar-storage-stat">App: ${formatStorageSize(app)}</span>
              <span class="sidebar-storage-stat">${totalLine}</span>
-             <span class="sidebar-storage-stat">Local export: ${localExportAt}</span>
+             <span class="sidebar-storage-stat">Local JSON export: ${localExportAt}</span>
+             <span class="sidebar-storage-stat">Local TXT export: ${localTxtExportAt}</span>
              <span class="sidebar-storage-stat">Cloud export: ${cloudExportAt}</span>
              <span class="sidebar-storage-stat" title="${breakdownTooltip}">IndexedDB: ${sizeStr}</span>
              ${hintLine}

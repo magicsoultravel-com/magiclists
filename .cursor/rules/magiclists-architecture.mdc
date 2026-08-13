@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-08-10T11:49:33.303Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-08-13T18:48:29.303Z
 
 ## CSS load order
 
@@ -67,6 +67,7 @@ alwaysApply: true
 | js/noteSurfaceHtml.js | note HTML building and rendering | noteSurface.js, noteModel.js, sheet.js, checklistSteps.js | — | — |
 | js/noteSurfaceMutations.js | note item mutation functions | noteSurface.js, noteSurfaceEditing.js, noteSurfaceChecklist.js, noteModel.js, sheet.js, undo.js | item:mutation_requested | — |
 | js/richText.js | rich text sanitize, linkify, strip markup | noteSurface.js, noteModel.js | — | — |
+| js/scheduledBackup.js | scheduled local JSON/TXT auto-export timer and popover | backup.js, app.js, noteQuickActions.js | — | — |
 | js/searchBar.js | sidebar search bar and results panel | searchFilter.js, hamburger.js | — | — |
 | js/sheet.js | sheet-grid note template model and table interactions | noteSurface.js, editor.js | — | — |
 | js/sidebarHistory.js | sidebar undo history module | undo.js, popoverPosition.js, sidebarModules.js | — | — |

@@ -11,7 +11,7 @@ import { ToolsManager } from './toolsManager.js';
 import { Calendar } from './calendar.js';
 import { SidePanel } from './hamburger.js';
 import { LoadingManager } from './loadingUtils.js';
-import { applyBackupToStorage, buildBackupPackage, parseBackupPackage, serializeBackupPackage, writeLastLocalExportAt } from './backup.js';
+import { applyBackupToStorage, buildBackupPackage, parseBackupPackage, serializeBackupPackage, writeLastLocalExportAt, writeLastLocalTxtExportAt } from './backup.js';
 import { reconcileLayoutStorage } from './layoutStorage.js';
 import {
     DEFAULT_CATEGORIES,
@@ -53,6 +53,7 @@ import { initAllSidebarModules } from './sidebarModules.js';
 import { SidebarStats } from './sidebarStats.js';
 import { SidebarHistory } from './sidebarHistory.js';
 import { CloudBackup } from './cloudBackup.js';
+import { ScheduledBackup } from './scheduledBackup.js';
 import { BoardSort } from './boardSort.js';
 import { BootProgress } from './bootProgress.js';
 import { renderQuickActions } from './noteQuickActions.js';
@@ -170,6 +171,10 @@ SidePanel.setupStatusClickHandlers(); /* after radio/tv/weather shells exist */
             this.setupBackupInterface();
             CloudBackup.init({ getLoggedIn: () => AppState.user.isLoggedIn });
             CloudBackup.ensureConnected().finally(() => CloudBackup.updateButtons());
+            ScheduledBackup.init({
+                getItems: () => AppState.items,
+                getLoggedIn: () => AppState.user.isLoggedIn
+            });
             TemplatePicker.init();
             this.setupUndo();
             this.setupDrawingMode();
@@ -417,6 +422,7 @@ renderQuickActions() {
                 onCloudImport: (e) => CloudBackup.handleImportClick(e.currentTarget),
                 onExportDb: () => this.executeDataBackupExport(),
                 onExportAllTxt: () => this.executeExportAllTxt(),
+                onScheduleExport: (e) => ScheduledBackup.handleClick(e.currentTarget),
                 onImportDb: () => document.getElementById('system-import-file-picker').click(),
                 onLogout: () => this.executeLogout(),
                 onLogin: () => this.executeLoginPrompt(),
@@ -430,6 +436,8 @@ renderQuickActions() {
                 }
             }
         });
+
+        ScheduledBackup.syncButton();
 
         // Bind header icons once during the initialization pipeline
         this.setupQuickActionsHeaderListeners();
@@ -643,6 +651,8 @@ executeDataBackupExport() {
             virtualLink.download = `matrix_all_notes_${new Date().toISOString().split('T')[0]}.txt`;
             virtualLink.click();
             URL.revokeObjectURL(virtualLink.href);
+            writeLastLocalTxtExportAt(Math.floor(Date.now() / 1000));
+            SidebarStats.update();
         } finally {
             // Hide loading indicator
             const exportBtn = document.getElementById('btn-export-txt');

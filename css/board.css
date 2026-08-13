@@ -29,8 +29,28 @@
     flex-direction: column;
 }
 
-.file-cabinet.is-rollout-active {
+.file-cabinet.is-rollout-active,
+.file-cabinet[data-fixed-height="true"].is-rollout-active {
     overflow: visible;
+}
+
+/* Both axes must be visible: CSS forces the other axis to auto if one stays
+   non-visible, which would still clip the folded hover rollout over the splitter. */
+.file-cabinet.is-rollout-active .file-cabinet-inner,
+.file-cabinet[data-fixed-height="true"].is-rollout-active .file-cabinet-inner {
+    overflow: visible;
+}
+
+.file-cabinet.is-file-cabinet-shut,
+.file-cabinet[data-shut="true"] {
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    overflow: hidden !important;
+    flex: 0 0 0 !important;
+    pointer-events: none;
 }
 
 .file-cabinet-empty {

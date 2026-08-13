@@ -294,10 +294,65 @@ body.is-checklist-dragging {
     height: var(--launcher-icon-size);
 }
 
+.quick-actions-grid .btn--icon svg.schedule-export-btn__ring {
+    width: calc(100% + 6px);
+    height: calc(100% + 6px);
+}
+
 .quick-actions-grid .btn--icon.active {
     color: var(--accent);
     background: color-mix(in srgb, var(--accent) 12%, transparent);
     border-color: color-mix(in srgb, var(--accent) 35%, var(--border-color));
+}
+
+.schedule-export-btn {
+    position: relative;
+    overflow: visible;
+}
+
+.schedule-export-btn__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 0;
+    position: relative;
+    z-index: 1;
+}
+
+.schedule-export-btn__ring {
+    position: absolute;
+    inset: -3px;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.schedule-export-btn__ring-track {
+    stroke: color-mix(in srgb, var(--border-color) 70%, transparent);
+    opacity: 0;
+}
+
+.schedule-export-btn.is-armed .schedule-export-btn__ring-track {
+    opacity: 0.55;
+}
+
+.schedule-export-btn__ring-progress {
+    stroke: var(--accent);
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.35s linear;
+}
+
+.schedule-export-btn.is-armed {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border-color));
+}
+
+.schedule-export-btn.is-paused {
+    color: color-mix(in srgb, var(--accent) 55%, var(--text-muted, currentColor));
+}
+
+.schedule-export-btn.is-paused .schedule-export-btn__ring-progress {
+    stroke: color-mix(in srgb, var(--accent) 55%, var(--border-color));
+    transition: none;
 }
 
 /* Card actions */

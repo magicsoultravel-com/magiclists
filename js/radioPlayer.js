@@ -30,6 +30,15 @@ function dispatchState(detail) {
     window.dispatchEvent(new CustomEvent('radio:state_changed', { detail }));
 }
 
+async function getVisualizer() {
+    try {
+        const mod = await import('./radioVisualizer.js');
+        return mod.RadioVisualizer || null;
+    } catch {
+        return null;
+    }
+}
+
 export const RadioPlayer = {
     audio: null,
     station: null,
@@ -41,24 +50,47 @@ export const RadioPlayer = {
     pausedAt: null,
     recentRecordedForKey: null,
     volume: loadState().volume,
+    analysisMode: false,
+    analysisAvailable: false,
+    analysisCorsFailed: false,
+    analysisCorsFailedKey: null,
+    loadedWithCors: false,
+    streamUrl: null,
+    recoveringAudio: false,
 
     init() {
         if (this.audio) return;
         this.audio = new Audio();
         this.audio.preload = 'none';
         this.audio.volume = this.volume;
+        this.applyCrossOriginAttr(false);
+        this.bindAudioListeners(this.audio);
 
-        this.audio.addEventListener('loadstart', () => {
+        const saved = loadState();
+        if (saved.lastStationKey) {
+            const parsed = parseStationKey(saved.lastStationKey);
+            this.station = {
+                providerId: parsed.providerId,
+                stationId: parsed.stationId,
+                stationuuid: saved.lastStationKey,
+                name: saved.lastStationName || 'Last station'
+            };
+            this.emitState();
+        }
+    },
+
+    bindAudioListeners(audio) {
+        audio.addEventListener('loadstart', () => {
             this.loadPhase = 'connecting';
             this.emitState();
         });
-        this.audio.addEventListener('canplay', () => {
+        audio.addEventListener('canplay', () => {
             if (this.loadPhase !== 'idle') {
                 this.loadPhase = 'idle';
                 this.emitState();
             }
         });
-        this.audio.addEventListener('playing', () => {
+        audio.addEventListener('playing', () => {
             this.playing = true;
             this.loading = false;
             this.loadPhase = 'idle';
@@ -73,45 +105,61 @@ export const RadioPlayer = {
             }
             this.emitState();
         });
-        this.audio.addEventListener('pause', () => {
+        audio.addEventListener('pause', () => {
             this.playing = false;
             this.emitState();
         });
-        this.audio.addEventListener('waiting', () => {
+        audio.addEventListener('waiting', () => {
             this.loading = true;
             this.loadPhase = 'buffering';
             this.emitState();
         });
-        this.audio.addEventListener('stalled', () => {
+        audio.addEventListener('stalled', () => {
             if (this.playing || this.loading) {
                 this.loadPhase = 'buffering';
                 this.emitState();
             }
         });
-        this.audio.addEventListener('error', () => {
+        audio.addEventListener('error', () => {
+            if (this.recoveringAudio) return;
+            // Delayed CORS failure: recover playback without analysis rather than killing the station
+            if (this.loadedWithCors && this.station?.url_resolved) {
+                this.markAnalysisCorsFailed();
+                this.applyCrossOriginAttr(false);
+                const url = this.station.url_resolved;
+                this.audio.src = url;
+                this.audio.load();
+                this.streamUrl = url;
+                this.loadedWithCors = false;
+                this.analysisAvailable = false;
+                this.audio.play().then(() => {
+                    this.loading = false;
+                    this.loadPhase = 'idle';
+                    this.error = null;
+                    this.emitState();
+                }).catch(async () => {
+                    const recovered = await this.resetAudioElementAndPlay();
+                    if (!recovered) {
+                        this.loading = false;
+                        this.loadPhase = 'idle';
+                        this.playing = false;
+                        this.error = 'Stream unavailable';
+                        this.emitState();
+                    }
+                });
+                return;
+            }
             this.loading = false;
             this.loadPhase = 'idle';
             this.playing = false;
             this.error = 'Stream unavailable';
             this.emitState();
         });
-        this.audio.addEventListener('ended', () => {
+        audio.addEventListener('ended', () => {
             this.playing = false;
             this.loadPhase = 'idle';
             this.emitState();
         });
-
-        const saved = loadState();
-        if (saved.lastStationKey) {
-            const parsed = parseStationKey(saved.lastStationKey);
-            this.station = {
-                providerId: parsed.providerId,
-                stationId: parsed.stationId,
-                stationuuid: saved.lastStationKey,
-                name: saved.lastStationName || 'Last station'
-            };
-            this.emitState();
-        }
     },
 
     emitState() {
@@ -244,23 +292,203 @@ export const RadioPlayer = {
         this.emitState();
     },
 
+    getAudioElement() {
+        this.init();
+        return this.audio;
+    },
+
+    wantsCorsAnalysis() {
+        return !!this.analysisMode && !this.analysisCorsFailed;
+    },
+
+    markAnalysisCorsFailed(key = stationKey(this.station)) {
+        this.analysisCorsFailed = true;
+        this.analysisCorsFailedKey = key || this.analysisCorsFailedKey;
+        this.analysisAvailable = false;
+        this.loadedWithCors = false;
+    },
+
+    clearAnalysisCorsFailedIfStationChanged(key) {
+        if (!key) return;
+        if (this.analysisCorsFailedKey && this.analysisCorsFailedKey !== key) {
+            this.analysisCorsFailed = false;
+            this.analysisCorsFailedKey = null;
+        }
+    },
+
+    applyCrossOriginAttr(force = this.wantsCorsAnalysis()) {
+        if (!this.audio) return;
+        if (force) {
+            this.audio.crossOrigin = 'anonymous';
+        } else {
+            this.audio.removeAttribute('crossorigin');
+        }
+    },
+
+    async resumeAudioGraph() {
+        const viz = await getVisualizer();
+        if (viz?.resumeContext) {
+            await viz.resumeContext();
+        }
+    },
+
+    /**
+     * Replace a MediaElementSource-poisoned Audio element with a fresh one (no CORS).
+     * @returns {Promise<boolean>}
+     */
+    async resetAudioElementAndPlay() {
+        if (this.recoveringAudio) return false;
+        this.recoveringAudio = true;
+        const url = this.station?.url_resolved;
+        const vol = this.volume;
+
+        try {
+            const viz = await getVisualizer();
+            viz?.releaseGraph?.();
+
+            try {
+                this.audio?.pause();
+            } catch {}
+
+            this.audio = new Audio();
+            this.audio.preload = 'none';
+            this.audio.volume = vol;
+            this.applyCrossOriginAttr(false);
+            this.bindAudioListeners(this.audio);
+            this.loadedWithCors = false;
+            this.analysisAvailable = false;
+            this.markAnalysisCorsFailed();
+            this.streamUrl = null;
+
+            if (!url) {
+                this.recoveringAudio = false;
+                return false;
+            }
+
+            this.audio.src = url;
+            this.audio.load();
+            this.streamUrl = url;
+            await this.audio.play();
+            this.loading = false;
+            this.loadPhase = 'idle';
+            this.error = null;
+            this.emitState();
+            this.recoveringAudio = false;
+            return true;
+        } catch (e) {
+            this.recoveringAudio = false;
+            const blocked = e?.name === 'NotAllowedError'
+                || String(e?.message || '').toLowerCase().includes('not allowed');
+            if (blocked) {
+                this.error = null;
+                this.resumeBlocked = true;
+                this.playing = false;
+                saveState({ wasPlaying: false });
+            } else {
+                this.loading = false;
+                this.loadPhase = 'idle';
+                this.playing = false;
+                this.error = 'Stream unavailable';
+            }
+            this.emitState();
+            return false;
+        }
+    },
+
+    async reloadCurrentStream({ resume = false } = {}) {
+        this.init();
+        const url = this.station?.url_resolved;
+        if (!url) return true;
+        this.audio.src = url;
+        this.audio.load();
+        this.streamUrl = url;
+        this.loadedWithCors = this.audio.crossOrigin === 'anonymous';
+        if (!resume) return true;
+        try {
+            await this.resumeAudioGraph();
+            await this.audio.play();
+            return true;
+        } catch (e) {
+            const blocked = e?.name === 'NotAllowedError'
+                || String(e?.message || '').toLowerCase().includes('not allowed');
+            if (blocked) {
+                this.error = null;
+                this.resumeBlocked = true;
+                this.playing = false;
+                saveState({ wasPlaying: false });
+                this.emitState();
+                return false;
+            }
+            this.loading = false;
+            this.loadPhase = 'idle';
+            this.playing = false;
+            this.error = 'Stream unavailable';
+            this.emitState();
+            return false;
+        }
+    },
+
+    /**
+     * Prefer analysis for future station loads. Never interrupts a playing stream.
+     * @returns {{ ok: boolean, analysisAvailable: boolean }}
+     */
+    async setAnalysisMode(enabled) {
+        this.init();
+        const next = !!enabled;
+
+        if (!next) {
+            this.analysisMode = false;
+            this.analysisAvailable = false;
+            // Keep current playback; only change preference for the next station load
+            return { ok: true, analysisAvailable: false };
+        }
+
+        this.analysisMode = true;
+        if (this.analysisCorsFailed) {
+            this.analysisAvailable = false;
+            return { ok: true, analysisAvailable: false };
+        }
+
+        const playing = !!(this.playing || (this.audio && !this.audio.paused && !this.audio.ended));
+
+        // Never reload while audio is audible — CORS reload is what cuts stations
+        if (playing) {
+            const available = this.loadedWithCors && this.audio.crossOrigin === 'anonymous';
+            this.analysisAvailable = available;
+            return { ok: true, analysisAvailable: available };
+        }
+
+        // Not playing: only mark preference. Actual CORS load happens in playStation.
+        this.analysisAvailable = false;
+        return { ok: true, analysisAvailable: false };
+    },
+
     async toggle() {
         if (this.playing) {
             this.pause();
             return;
         }
         this.resumeBlocked = false;
+        await this.resumeAudioGraph();
+
         const stale = this.pausedAt && (Date.now() - this.pausedAt >= STALE_PAUSE_MS);
         if (!stale && this.station?.url_resolved && this.audio?.src) {
             try {
                 await this.audio.play();
+                return;
             } catch {
+                // Element may be MediaElementSource-poisoned without CORS — hard recover
+                const viz = await getVisualizer();
+                if (viz?.hasMediaElementSource?.() && !this.loadedWithCors) {
+                    const recovered = await this.resetAudioElementAndPlay();
+                    if (recovered) return;
+                }
                 this.error = 'Playback blocked';
                 this.resumeBlocked = true;
                 saveState({ wasPlaying: false });
                 this.emitState();
+                return;
             }
-            return;
         }
         if (this.station) {
             await this.playStation(this.station);
@@ -281,6 +509,7 @@ export const RadioPlayer = {
             this.audio.removeAttribute('src');
             this.audio.load();
         }
+        this.streamUrl = null;
         this.playing = false;
         this.loading = false;
         this.loadPhase = 'idle';
@@ -332,6 +561,8 @@ export const RadioPlayer = {
             this.emitState();
             return;
         }
+
+        this.clearAnalysisCorsFailedIfStationChanged(key);
 
         // Reuse in-memory station when it matches and already has a stream URL
         if ((!station || !station.url_resolved)
@@ -389,11 +620,43 @@ export const RadioPlayer = {
             const provider = RadioProviderRegistry.getProvider(this.station.providerId);
             provider.reportClick?.(this.station.stationId);
 
-            if (this.audio.src !== this.station.url_resolved) {
-                this.audio.src = this.station.url_resolved;
-                this.audio.load();
+            const url = this.station.url_resolved;
+            const wantCors = this.wantsCorsAnalysis();
+            const audible = !!(this.audio && !this.audio.paused && !this.audio.ended);
+            const sameUrl = this.streamUrl === url || this.audio.src === url;
+
+            // Never CORS-upgrade an audible / already-loaded stream
+            if (sameUrl && wantCors && !this.loadedWithCors) {
+                this.analysisAvailable = false;
+                if (audible) {
+                    this.loading = false;
+                    this.loadPhase = 'idle';
+                    this.error = null;
+                    this.emitState();
+                    return;
+                }
+                // Resume without flipping CORS
+                await this.resumeAudioGraph();
+                await this.audio.play();
+                this.loading = false;
+                this.loadPhase = 'idle';
+                this.emitState();
+                return;
             }
+
+            if (!sameUrl || (wantCors && !this.loadedWithCors && !audible)) {
+                this.applyCrossOriginAttr(wantCors);
+                this.audio.src = url;
+                this.audio.load();
+                this.streamUrl = url;
+                this.loadedWithCors = wantCors && this.audio.crossOrigin === 'anonymous';
+            }
+
+            await this.resumeAudioGraph();
             await this.audio.play();
+            if (this.loadedWithCors) {
+                this.analysisAvailable = true;
+            }
         } catch (e) {
             this.loading = false;
             this.loadPhase = 'idle';
@@ -404,7 +667,39 @@ export const RadioPlayer = {
                 this.error = null;
                 this.resumeBlocked = true;
                 saveState({ wasPlaying: false });
+            } else if (this.loadedWithCors || this.wantsCorsAnalysis()) {
+                this.markAnalysisCorsFailed(key);
+                this.applyCrossOriginAttr(false);
+                try {
+                    this.audio.src = this.station.url_resolved;
+                    this.audio.load();
+                    this.streamUrl = this.station.url_resolved;
+                    this.loadedWithCors = false;
+                    await this.audio.play();
+                    this.analysisAvailable = false;
+                    this.error = null;
+                    this.emitState();
+                    return;
+                } catch (fallbackErr) {
+                    const recovered = await this.resetAudioElementAndPlay();
+                    if (recovered) return;
+                    const fallbackBlocked = fallbackErr?.name === 'NotAllowedError'
+                        || String(fallbackErr?.message || '').toLowerCase().includes('not allowed');
+                    if (fallbackBlocked) {
+                        this.error = null;
+                        this.resumeBlocked = true;
+                        saveState({ wasPlaying: false });
+                        this.emitState();
+                        throw fallbackErr;
+                    }
+                    this.error = 'Stream unavailable';
+                }
             } else {
+                const viz = await getVisualizer();
+                if (viz?.hasMediaElementSource?.()) {
+                    const recovered = await this.resetAudioElementAndPlay();
+                    if (recovered) return;
+                }
                 this.error = e?.message === 'Station offline' ? 'Station offline' : 'Stream unavailable';
             }
             this.emitState();

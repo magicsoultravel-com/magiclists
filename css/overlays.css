@@ -718,6 +718,126 @@ textarea.form-input {
     pointer-events: none;
 }
 
+/* Scheduled local export popover */
+.schedule-export-popover {
+    position: fixed;
+    z-index: 343;
+    width: min(280px, calc(100% - 16px));
+    padding: 0;
+    overflow: hidden;
+    font-size: 0.66rem;
+}
+
+.schedule-export-popover.clock-style-popover {
+    background: var(--chrome-bg, var(--bg-surface));
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+.schedule-export-popover__header {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.35rem 0.4rem 0.32rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.schedule-export-popover__title {
+    flex: 1;
+    font-weight: 600;
+    font-size: 0.72rem;
+}
+
+.schedule-export-popover__close {
+    flex-shrink: 0;
+}
+
+.schedule-export-popover__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    padding: 0.55rem 0.55rem 0.6rem;
+}
+
+.schedule-export-popover__field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+}
+
+.schedule-export-popover__label {
+    opacity: 0.75;
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.schedule-export-popover__seg {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.25rem;
+}
+
+.schedule-export-popover__seg-btn {
+    appearance: none;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    padding: 0.28rem 0.35rem;
+    font: inherit;
+    cursor: pointer;
+}
+
+.schedule-export-popover__seg-btn.is-active {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border-color));
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.schedule-export-popover__interval {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 0.35rem;
+    align-items: center;
+}
+
+.schedule-export-popover__interval input[type="range"] {
+    width: 100%;
+    accent-color: var(--accent);
+}
+
+.schedule-export-popover__amount {
+    min-width: 1.4rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.schedule-export-popover__unit {
+    min-width: 5.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--bg-surface, transparent);
+    color: inherit;
+    font: inherit;
+    padding: 0.2rem 0.3rem;
+}
+
+.schedule-export-popover__meta {
+    margin: 0;
+    opacity: 0.78;
+    font-size: 0.62rem;
+}
+
+.schedule-export-popover__actions {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+}
+
 /* Template picker */
 
 .template-picker-overlay {
