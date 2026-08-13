@@ -151,33 +151,6 @@
 
             <div id="sidebar-weather" class="sidebar-module sidebar-weather" aria-label="Weather"></div>
 
-            <div id="sidebar-categories" class="sidebar-module sidebar-categories">
-                <div class="collapsable-header sidebar-panel-list-header" id="categories-section-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed"><svg viewBox="0 0 12 12" width="9" height="9" focusable="false"><path d="M3.2 4.8 6 7.6 8.8 4.8" fill="none" stroke="currentColor" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Categories</span>
-                    <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
-                </div>
-                <div class="collapsable-section collapsed" id="categories-section">
-                    <div class="sidebar-notes-group">
-                        <div class="collapsable-header list-row--header sidebar-notes-subheader" id="categories-list-active-header">
-                            <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Active</span>
-                            <span id="categories-active-count" class="status-badge">0</span>
-                        </div>
-                        <div class="collapsable-section collapsed" id="categories-list-active-section">
-                            <div id="categories-list-active-zone" class="sidebar-notes-list"></div>
-                        </div>
-                    </div>
-                    <div class="sidebar-notes-group">
-                        <div class="collapsable-header list-row--header sidebar-notes-subheader" id="categories-list-hidden-header">
-                            <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Hidden</span>
-                            <span id="categories-hidden-count" class="status-badge">0</span>
-                        </div>
-                        <div class="collapsable-section collapsed" id="categories-list-hidden-section">
-                            <div id="categories-list-hidden-zone" class="sidebar-notes-list"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             <div id="sidebar-tools" class="sidebar-module sidebar-tools">
                 <div class="collapsable-header" id="tools-section-header">
                     <span class="collapsable-heading"><span class="collapsable-toggle collapsed"><svg viewBox="0 0 12 12" width="9" height="9" focusable="false"><path d="M3.2 4.8 6 7.6 8.8 4.8" fill="none" stroke="currentColor" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Tools</span>
@@ -190,39 +163,71 @@
 
             <div id="sidebar-notes-list" class="sidebar-module">
                 <div class="collapsable-header sidebar-notes-list-header" id="notes-list-section-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle"><svg viewBox="0 0 12 12" width="9" height="9" focusable="false"><path d="M3.2 4.8 6 7.6 8.8 4.8" fill="none" stroke="currentColor" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"/></svg></span>List</span>
+                    <span class="collapsable-heading"><span class="collapsable-toggle"><svg viewBox="0 0 12 12" width="9" height="9" focusable="false"><path d="M3.2 4.8 6 7.6 8.8 4.8" fill="none" stroke="currentColor" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Lists</span>
                     <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
                 </div>
                 <div class="collapsable-section" id="notes-list-section">
-                    <div class="sidebar-notes-group">
-                        <div class="collapsable-header list-row--header sidebar-notes-subheader" id="notes-list-active-header">
-                            <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Active</span>
-                            <span class="sidebar-notes-list-sort" id="notes-list-sort-tools">
-                                <button type="button" class="sidebar-sort-btn" id="notes-sort-title" title="Sort by title" aria-label="Sort by title"></button>
-                                <button type="button" class="sidebar-sort-btn" id="notes-sort-date" title="Sort by date" aria-label="Sort by date"></button>
-                            </span>
-                            <span id="notes-active-count" class="status-badge">0</span>
+                    <div class="sidebar-lists-branch">
+                        <div class="collapsable-header list-row--header sidebar-lists-branch-header" id="lists-notes-header">
+                            <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Notes</span>
                         </div>
-                        <div class="collapsable-section" id="notes-list-active-section">
-                            <div id="notes-list-active-zone" class="sidebar-notes-list"></div>
+                        <div class="collapsable-section" id="lists-notes-section">
+                            <div class="sidebar-notes-group">
+                                <div class="collapsable-header list-row--header sidebar-notes-subheader" id="notes-list-active-header">
+                                    <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Active</span>
+                                    <span class="sidebar-notes-list-sort" id="notes-list-sort-tools">
+                                        <button type="button" class="sidebar-sort-btn" id="notes-sort-title" title="Sort by title" aria-label="Sort by title"></button>
+                                        <button type="button" class="sidebar-sort-btn" id="notes-sort-date" title="Sort by date" aria-label="Sort by date"></button>
+                                    </span>
+                                    <span id="notes-active-count" class="status-badge">0</span>
+                                </div>
+                                <div class="collapsable-section" id="notes-list-active-section">
+                                    <div id="notes-list-active-zone" class="sidebar-notes-list"></div>
+                                </div>
+                            </div>
+                            <div class="sidebar-notes-group">
+                                <div class="collapsable-header list-row--header sidebar-notes-subheader" id="notes-list-hidden-header">
+                                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Hidden</span>
+                                    <span id="notes-hidden-count" class="status-badge">0</span>
+                                </div>
+                                <div class="collapsable-section collapsed" id="notes-list-hidden-section">
+                                    <div id="notes-list-hidden-zone" class="sidebar-notes-list"></div>
+                                </div>
+                            </div>
+                            <div class="sidebar-notes-group">
+                                <div class="collapsable-header list-row--header sidebar-notes-subheader" id="notes-list-archived-header">
+                                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Archived</span>
+                                    <span id="notes-archived-count" class="status-badge">0</span>
+                                </div>
+                                <div class="collapsable-section collapsed" id="notes-list-archived-section">
+                                    <div id="notes-list-archived-zone" class="sidebar-notes-list"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="sidebar-notes-group">
-                        <div class="collapsable-header list-row--header sidebar-notes-subheader" id="notes-list-hidden-header">
-                            <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Hidden</span>
-                            <span id="notes-hidden-count" class="status-badge">0</span>
+                    <div class="sidebar-lists-branch">
+                        <div class="collapsable-header list-row--header sidebar-lists-branch-header" id="lists-categories-header">
+                            <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Categories</span>
                         </div>
-                        <div class="collapsable-section collapsed" id="notes-list-hidden-section">
-                            <div id="notes-list-hidden-zone" class="sidebar-notes-list"></div>
-                        </div>
-                    </div>
-                    <div class="sidebar-notes-group">
-                        <div class="collapsable-header list-row--header sidebar-notes-subheader" id="notes-list-archived-header">
-                            <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Archived</span>
-                            <span id="notes-archived-count" class="status-badge">0</span>
-                        </div>
-                        <div class="collapsable-section collapsed" id="notes-list-archived-section">
-                            <div id="notes-list-archived-zone" class="sidebar-notes-list"></div>
+                        <div class="collapsable-section collapsed" id="lists-categories-section">
+                            <div class="sidebar-notes-group">
+                                <div class="collapsable-header list-row--header sidebar-notes-subheader" id="categories-list-active-header">
+                                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Active</span>
+                                    <span id="categories-active-count" class="status-badge">0</span>
+                                </div>
+                                <div class="collapsable-section collapsed" id="categories-list-active-section">
+                                    <div id="categories-list-active-zone" class="sidebar-notes-list"></div>
+                                </div>
+                            </div>
+                            <div class="sidebar-notes-group">
+                                <div class="collapsable-header list-row--header sidebar-notes-subheader" id="categories-list-hidden-header">
+                                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Hidden</span>
+                                    <span id="categories-hidden-count" class="status-badge">0</span>
+                                </div>
+                                <div class="collapsable-section collapsed" id="categories-list-hidden-section">
+                                    <div id="categories-list-hidden-zone" class="sidebar-notes-list"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

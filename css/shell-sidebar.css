@@ -108,11 +108,17 @@ body.is-editor-modal-open .side-panel {
     border-radius: 3px;
     line-height: 0;
     color: var(--text-muted);
-    opacity: 0.8;
+    opacity: 0;
+    transition: opacity 0.15s ease;
     cursor: pointer;
 }
 
-.sidebar-reattach-all:hover:not(:disabled) {
+.control-bar-brand.is-in-sidebar:hover .sidebar-reattach-all:not(:disabled),
+.sidebar-reattach-all:focus-visible:not(:disabled) {
+    opacity: 0.8;
+}
+
+.control-bar-brand.is-in-sidebar:hover .sidebar-reattach-all:hover:not(:disabled) {
     opacity: 1;
     background: var(--bg-hover, rgba(0, 0, 0, 0.06));
 }
@@ -145,7 +151,13 @@ body.is-editor-modal-open .side-panel {
 .side-panel-chrome.side-panel-clock,
 .sidebar-module.sidebar-clock {
     padding-bottom: 0.28rem;
-    border-bottom: 1px solid var(--border-color);
+}
+
+/* Subtle separators between docked modules (same token as brand / Lists branches) */
+.side-panel .sidebar-module:not(.sidebar-module--undocked) + .sidebar-module:not(.sidebar-module--undocked) {
+    margin-top: 0.15rem;
+    padding-top: 0.12rem;
+    border-top: 1px solid var(--border-color);
 }
 
 .sidebar-module > .collapsable-header {

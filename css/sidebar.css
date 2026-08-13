@@ -410,6 +410,26 @@ html[data-desktop-gradient="1"] #app-canvas.view-grid {
     color: var(--accent);
 }
 
+.sidebar-lists-branch {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.sidebar-lists-branch + .sidebar-lists-branch {
+    margin-top: 0.2rem;
+}
+
+.sidebar-lists-branch-header {
+    padding: 0.12rem 0.2rem;
+    min-height: 0;
+}
+
+.sidebar-lists-branch-header .collapsable-heading {
+    font-size: 0.68rem;
+    letter-spacing: 0.01em;
+}
+
 .sidebar-notes-group {
     display: flex;
     flex-direction: column;
@@ -418,8 +438,6 @@ html[data-desktop-gradient="1"] #app-canvas.view-grid {
 
 .sidebar-notes-group + .sidebar-notes-group {
     margin-top: 0.15rem;
-    padding-top: 0.12rem;
-    border-top: 1px solid var(--border-color);
 }
 
 .sidebar-notes-subheader {

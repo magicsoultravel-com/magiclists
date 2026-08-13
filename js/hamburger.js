@@ -111,6 +111,8 @@ setCollapsed(collapsed, { persist = true } = {}) {
     },
 
     setupStatusClickHandlers() {
+        this.bindCollapsable('lists-notes-header', 'lists-notes-section', false);
+        this.bindCollapsable('lists-categories-header', 'lists-categories-section', true);
         this.bindCollapsable('categories-list-active-header', 'categories-list-active-section', true);
         this.bindCollapsable('categories-list-hidden-header', 'categories-list-hidden-section', true);
         this.bindCollapsable('notes-list-active-header', 'notes-list-active-section', false, '.sidebar-notes-list-sort');
