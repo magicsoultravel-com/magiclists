@@ -582,12 +582,25 @@ export const DragDropEngine = {
                     const targetDesktopId = Number(targetBtn.dataset.desktopId);
                     const item = currentItems.find(i => i.id === card.dataset.id);
                     if (item) {
-                        const rect = UI.readNoteRect(card);
-                        item.x = rect.x;
-                        item.y = rect.y;
-                        item.width = rect.w;
-                        item.height = rect.h;
+                        // Preserve pull-origin board position — not the dock-adjacent
+                        // intermediary coords from the live drag. Flush on desktop:changed
+                        // would otherwise overwrite matrix_grid_layout with dock coords.
+                        const originRect = {
+                            x: dragActive.origX,
+                            y: dragActive.origY,
+                            w: dragActive.origW,
+                            h: dragActive.origH
+                        };
+                        UI.applyNoteRect(card, originRect, { settling: false });
+                        UI.saveGridLayout(card.dataset.id, originRect);
                         DesktopManager.assignNoteToDesktop(item, targetDesktopId);
+                        if (extentsFrame) {
+                            cancelAnimationFrame(extentsFrame);
+                            extentsFrame = null;
+                        }
+                        dragActive = null;
+                        document.removeEventListener('mousemove', onDragMove);
+                        document.removeEventListener('mouseup', onDragUp);
                         window.dispatchEvent(new CustomEvent('desktop:changed', {
                             detail: { desktopId: DesktopManager.getActiveDesktop() }
                         }));

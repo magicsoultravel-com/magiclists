@@ -14,7 +14,7 @@ import {
 import { getSmallRect } from './tileGeometry.js';
 import { readTileSmallFootprint } from './tileFootprint.js';
 import { normalizeViewMode } from './viewSession.js';
-import { syncCabinetSplitter } from './shellResize.js';
+import { syncCabinetSplitter, syncFileCabinetShutChrome } from './shellResize.js';
 import { BoardOperations } from './boardOperations.js';
 import { createCardComponent } from './noteSurfaceHtml.js';
 import { CARD_ICONS } from './icons.js';
@@ -31,7 +31,7 @@ export const FILE_CABINET_MIN_HEIGHT = 96;
 export const FILE_CABINET_BOARD_MIN_HEIGHT = 200;
 export const FILE_CABINET_REF_HEIGHT = 220;
 export const FILE_CABINET_MIN_HEIGHT_RATIO = 0.5;
-/** Drag/release below this snaps to shut (keeps grabber). */
+/** Drag/release below this snaps to shut (reopen via FC FAB). */
 export const FILE_CABINET_SHUT_SNAP_PX = 8;
 
 export function getFileCabinetDragMinHeight() {
@@ -59,7 +59,10 @@ export function isFileCabinetActive() {
 
 export function setFileCabinetActive(active) {
     localStorage.setItem(FILE_CABINET_KEY, active ? 'true' : 'false');
-    if (!active) setFileCabinetShut(false);
+    if (!active) {
+        setFileCabinetShut(false);
+        syncFileCabinetShutChrome();
+    }
 }
 
 export function isFileCabinetShut() {
@@ -85,7 +88,7 @@ export function writeFileCabinetHeight(height) {
 }
 
 /**
- * Collapse FC to height 0 while keeping the mount + horizontal splitter.
+ * Collapse FC to height 0 (sidebar-style). Grabber hides; reopen via FC FAB.
  * Preserves last open height in storage (does not write 0).
  */
 export function applyFileCabinetShut(mount) {
@@ -100,6 +103,7 @@ export function applyFileCabinetShut(mount) {
     mount.style.minHeight = '0px';
     mount.style.maxHeight = 'none';
     mount.style.setProperty('--file-cabinet-ui-scale', '1');
+    syncFileCabinetShutChrome();
 }
 
 /**
@@ -107,9 +111,14 @@ export function applyFileCabinetShut(mount) {
  */
 export function clearFileCabinetShut(mount) {
     setFileCabinetShut(false);
-    if (!mount) return readFileCabinetHeight();
+    if (!mount) {
+        syncFileCabinetShutChrome();
+        return readFileCabinetHeight();
+    }
     delete mount.dataset.shut;
     mount.classList.remove('is-file-cabinet-shut');
+    mount.style.opacity = '';
+    syncFileCabinetShutChrome();
     return readFileCabinetHeight();
 }
 

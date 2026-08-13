@@ -3,6 +3,7 @@ import { stripRichText } from './richText.js';
 import { normalizeTileSize } from './tileGeometry.js';
 import { resolveNoteTemplate, sheetFirstCellText, sheetHasContent, sheetIsActive } from './sheet.js';
 import { stepsToParentOrder } from './checklistSteps.js';
+import { DesktopManager } from './desktopManager.js';
 
 export function deriveNoteTitle({ title = '', content = '', steps = [], sheet = null, noteTemplate = '' } = {}) {
     const trimmedTitle = stripRichText(title).trim();
@@ -122,6 +123,7 @@ export function createDefaultNote({ startDateTime, ...overrides } = {}) {
         steps: [],
         editorBodyLayout: 'both',
         tileSize: 'large',
+        desktopId: DesktopManager.getActiveDesktop(),
         created_at: timestamp,
         updated_at: timestamp,
         ...overrides

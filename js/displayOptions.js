@@ -32,7 +32,7 @@ import {
     isBrandIconCustomized,
     resolveBrandIconId
 } from './brandIcon.js';
-import { DesktopManager, MAX_DESKTOP_COUNT } from './desktopManager.js';
+import { DesktopManager, MIN_DESKTOP_COUNT, MAX_DESKTOP_COUNT } from './desktopManager.js';
 import { createThemePicker } from './themePicker.js';
 
 const STORAGE_KEY = 'matrix_display_options';
@@ -363,11 +363,16 @@ export const DisplayOptions = {
         NoteFontScale.updateLabels();
         DesktopZoom.updateButtons();
 
-        // Update desktop count stepper label
+        // Update desktop count stepper label and min/max button state
+        const desktopCount = DesktopManager.getDesktopCount();
         const desktopCountLabel = root.querySelector('#display-opt-desktop-count-label');
         if (desktopCountLabel) {
-            desktopCountLabel.textContent = String(DesktopManager.getDesktopCount());
+            desktopCountLabel.textContent = String(desktopCount);
         }
+        const desktopCountOut = root.querySelector('#display-opt-desktop-count-out');
+        const desktopCountIn = root.querySelector('#display-opt-desktop-count-in');
+        if (desktopCountOut) desktopCountOut.disabled = desktopCount <= MIN_DESKTOP_COUNT;
+        if (desktopCountIn) desktopCountIn.disabled = desktopCount >= MAX_DESKTOP_COUNT;
 
         const undockOpacityInput = root.querySelector('#display-opt-undock-opacity');
         if (undockOpacityInput) {
@@ -620,10 +625,14 @@ export const DisplayOptions = {
         this.bindStepper(root, {
             idPrefix: 'display-opt-desktop-count',
             onOut: () => {
-                DesktopManager.setDesktopCount(DesktopManager.getDesktopCount() - 1, this.getItems?.() || []);
+                const next = DesktopManager.getDesktopCount() - 1;
+                if (next < MIN_DESKTOP_COUNT) return;
+                DesktopManager.setDesktopCount(next, this.getItems?.() || []);
             },
             onIn: () => {
-                DesktopManager.setDesktopCount(DesktopManager.getDesktopCount() + 1, this.getItems?.() || []);
+                const next = DesktopManager.getDesktopCount() + 1;
+                if (next > MAX_DESKTOP_COUNT) return;
+                DesktopManager.setDesktopCount(next, this.getItems?.() || []);
             }
         });
 

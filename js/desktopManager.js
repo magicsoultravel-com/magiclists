@@ -2,6 +2,7 @@
 
 const STORAGE_KEY = 'magicnotes_desktops_config';
 const DEFAULT_DESKTOP_COUNT = 3;
+const MIN_DESKTOP_COUNT = 1;
 const MAX_DESKTOP_COUNT = 7;
 const DEFAULT_ACTIVE_DESKTOP = 1;
 
@@ -12,18 +13,19 @@ let _changeListeners = [];
 let _isDockPinned = false;
 let _pinListeners = [];
 
+function clampDesktopCount(n) {
+    return Math.min(MAX_DESKTOP_COUNT, Math.max(MIN_DESKTOP_COUNT, n));
+}
+
 // Load persisted state from localStorage
 function loadState() {
     try {
         const raw = localStorage.getItem(STORAGE_KEY);
         if (raw) {
             const parsed = JSON.parse(raw);
-            _desktopCount = Math.min(
-                Math.max(1, parsed.desktopCount || DEFAULT_DESKTOP_COUNT),
-                MAX_DESKTOP_COUNT
-            );
+            _desktopCount = clampDesktopCount(parsed.desktopCount || DEFAULT_DESKTOP_COUNT);
             _activeDesktop = Math.min(
-                Math.max(1, parsed.activeDesktop || DEFAULT_ACTIVE_DESKTOP),
+                Math.max(MIN_DESKTOP_COUNT, parsed.activeDesktop || DEFAULT_ACTIVE_DESKTOP),
                 _desktopCount
             );
             _isDockPinned = parsed.dockPinned === true;
@@ -74,6 +76,11 @@ function notifyPinChange() {
     });
 }
 
+function isOutOfRangeDesktopId(desktopId) {
+    const n = Number(desktopId);
+    return !Number.isInteger(n) || n < MIN_DESKTOP_COUNT || n > _desktopCount;
+}
+
 export const DesktopManager = {
     // Get current active desktop ID (1-based)
     getActiveDesktop() {
@@ -83,12 +90,12 @@ export const DesktopManager = {
     // Set active desktop (validates range, persists, notifies)
     setActiveDesktop(id) {
         const numId = Number(id);
-        if (!Number.isInteger(numId) || numId < 1 || numId > _desktopCount) {
+        if (!Number.isInteger(numId) || numId < MIN_DESKTOP_COUNT || numId > _desktopCount) {
             console.warn(`[DesktopManager] Invalid desktop ID: ${id}`);
             return false;
         }
         if (_activeDesktop === numId) return true; // No change
-        
+
         _activeDesktop = numId;
         persistState();
         notifyDesktopChange();
@@ -100,53 +107,71 @@ export const DesktopManager = {
         return _desktopCount;
     },
 
-// Set desktop count (validates range, clamps active desktop, migrates orphaned notes)
+    /**
+     * Set desktop count (validates range, clamps active desktop, migrates orphaned notes).
+     * @returns {{ ok: boolean, migratedIds?: string[], activeClamped?: boolean, fromCount?: number, toCount?: number }}
+     */
     setDesktopCount(count, items = []) {
         const numCount = Number(count);
-        if (!Number.isInteger(numCount) || numCount < 1 || numCount > MAX_DESKTOP_COUNT) {
+        if (!Number.isInteger(numCount) || numCount < MIN_DESKTOP_COUNT || numCount > MAX_DESKTOP_COUNT) {
             console.warn(`[DesktopManager] Invalid desktop count: ${count}`);
-            return false;
+            return { ok: false };
         }
-        if (_desktopCount === numCount) return true; // No change
-        
+        if (_desktopCount === numCount) return { ok: true, migratedIds: [] };
+
         const oldCount = _desktopCount;
+        const prevActive = _activeDesktop;
         _desktopCount = numCount;
-        
+
         // Clamp active desktop if it exceeds new count
         if (_activeDesktop > _desktopCount) {
             _activeDesktop = _desktopCount;
         }
-        
+        const activeClamped = prevActive !== _activeDesktop;
+
+        const migratedIds = [];
         // Migrate orphaned notes (notes on desktops that no longer exist) to desktop 1
         if (oldCount > numCount && Array.isArray(items)) {
-            const migratedCount = items.filter(item => 
-                item?.desktopId && item.desktopId > numCount
-            ).length;
-            
-            if (migratedCount > 0) {
-                // Mutate orphaned notes to desktop 1
-                items.forEach(item => {
-                    if (item?.desktopId && item.desktopId > numCount) {
-                        item.desktopId = 1;
-                    }
-                });
-                
-                // Notify about the migration
+            items.forEach(item => {
+                if (!item?.id) return;
+                const id = Number(item.desktopId);
+                if (Number.isInteger(id) && id > numCount) {
+                    item.desktopId = 1;
+                    migratedIds.push(item.id);
+                }
+            });
+
+            if (migratedIds.length > 0) {
                 window.dispatchEvent(new CustomEvent('desktop:notes_migrated', {
-                    detail: { 
-                        fromCount: oldCount, 
-                        toCount: numCount, 
-                        migratedCount 
+                    detail: {
+                        fromCount: oldCount,
+                        toCount: numCount,
+                        migratedCount: migratedIds.length,
+                        migratedIds
                     }
                 }));
             }
         }
-        
+
         persistState();
         notifyDesktopChange();
-        // Notify about count change for UI refresh
         window.dispatchEvent(new CustomEvent('desktop:count_changed'));
-        return true;
+
+        // Board must re-render when active desktop was clamped or notes moved,
+        // otherwise orphaned cards stay visible as ghosts.
+        if (activeClamped || migratedIds.length > 0) {
+            window.dispatchEvent(new CustomEvent('desktop:changed', {
+                detail: { desktopId: _activeDesktop, reason: 'count_changed' }
+            }));
+        }
+
+        return {
+            ok: true,
+            migratedIds,
+            activeClamped,
+            fromCount: oldCount,
+            toCount: numCount
+        };
     },
 
     // Assign a note to a specific desktop, emitting mutation event
@@ -154,7 +179,7 @@ export const DesktopManager = {
     // No Undo/Redo tracking — desktop moves are saved immediately
     async assignNoteToDesktop(item, desktopId) {
         const numDesktopId = Number(desktopId);
-        if (!Number.isInteger(numDesktopId) || numDesktopId < 1 || numDesktopId > _desktopCount) {
+        if (!Number.isInteger(numDesktopId) || numDesktopId < MIN_DESKTOP_COUNT || numDesktopId > _desktopCount) {
             console.warn(`[DesktopManager] Invalid assignment desktop ID: ${desktopId}`);
             return false;
         }
@@ -178,25 +203,23 @@ export const DesktopManager = {
         return true;
     },
 
-    // Sanitize note object - ensure desktopId defaults to 1 if undefined
-
+    // Sanitize note object - ensure desktopId is a valid in-range id (default 1)
     // Safe for use with undo/redo snapshots
     sanitizeNoteDesktop(item) {
         if (!item) return item;
-        if (item.desktopId === undefined || item.desktopId === null) {
+        if (item.desktopId === undefined || item.desktopId === null || isOutOfRangeDesktopId(item.desktopId)) {
             return { ...item, desktopId: 1 };
         }
         return item;
     },
 
-    // Sanitize an array of notes
+    // Sanitize an array of notes (returns new array; does not mutate in place)
     sanitizeNotesDesktops(items) {
         if (!Array.isArray(items)) return items;
         return items.map(item => this.sanitizeNoteDesktop(item));
     },
 
     // Get all notes belonging to a specific desktop
-    // Helper for Phase 2 integration
     getAllNotesForDesktop(desktopId, items) {
         if (!Array.isArray(items)) return [];
         const numDesktopId = Number(desktopId) || 1;
@@ -260,4 +283,9 @@ export function initDesktopManager() {
 }
 
 // Export constants for external use
-export { DEFAULT_DESKTOP_COUNT, MAX_DESKTOP_COUNT, DEFAULT_ACTIVE_DESKTOP };
+export {
+    DEFAULT_DESKTOP_COUNT,
+    MIN_DESKTOP_COUNT,
+    MAX_DESKTOP_COUNT,
+    DEFAULT_ACTIVE_DESKTOP
+};

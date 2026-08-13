@@ -367,7 +367,7 @@ DrawingBoard.init(this);
 
             const data = await API.fetchItems(AppState.user.token);
             AppState.items = Array.isArray(data?.items) ? data.items : [];
-            DesktopManager.sanitizeNotesDesktops(AppState.items);
+            AppState.items = DesktopManager.sanitizeNotesDesktops(AppState.items);
             this.applyPendingCategoryAliases();
 
             if (AppState.workspaceMode === 'drawing') {
@@ -1211,10 +1211,24 @@ window.addEventListener('category:order_changed', (e) => {
             }
             this.updateWorkspaceCounter();
         });
-        window.addEventListener("desktop:notes_migrated", (e) => {
-            const { migratedCount } = e.detail || {};
+        window.addEventListener('desktop:notes_migrated', (e) => {
+            const { migratedCount, migratedIds } = e.detail || {};
+            const ids = Array.isArray(migratedIds) ? migratedIds : [];
+            // Persist each migrated note so shrink cannot leave orphan desktopIds in storage
+            ids.forEach((id) => {
+                const item = AppState.items.find((i) => i.id === id);
+                if (!item) return;
+                window.dispatchEvent(new CustomEvent('item:mutation_requested', {
+                    detail: {
+                        item,
+                        desktopId: item.desktopId || 1,
+                        preserveView: true,
+                        skipUndo: true
+                    }
+                }));
+            });
             if (migratedCount > 0) {
-                showAppToast(`${migratedCount} notes migrated to Desktop 1`);
+                showAppToast(`${migratedCount} note${migratedCount === 1 ? '' : 's'} moved to Desktop 1`);
             }
         });
     }

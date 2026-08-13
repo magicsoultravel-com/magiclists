@@ -14,14 +14,17 @@ import {
     FILE_CABINET_BOARD_MIN_HEIGHT,
     FILE_CABINET_SHUT_SNAP_PX,
     isFileCabinetShut,
+    isFileCabinetActive,
     applyFileCabinetShut,
     clearFileCabinetShut
 } from './fileCabinet.js';
+import { ACTION_ICONS } from './icons.js';
 
 const DESKTOP_MIN_WIDTH = 280;
 
 let verticalSplitter = null;
 let horizontalSplitter = null;
+let fileCabinetFab = null;
 let sidebarPanel = null;
 let bound = false;
 
@@ -129,6 +132,7 @@ function applyCabinetHeight(mount, height, { persist = false, allowShut = true }
     const clamped = clampCabinetHeight(height, mount);
     if (allowShut && clamped <= FILE_CABINET_SHUT_SNAP_PX) {
         applyFileCabinetShut(mount);
+        syncFileCabinetShutChrome();
         return 0;
     }
 
@@ -138,8 +142,10 @@ function applyCabinetHeight(mount, height, { persist = false, allowShut = true }
     mount.style.height = `${clamped}px`;
     mount.style.maxHeight = 'none';
     mount.style.minHeight = '0px';
+    mount.style.opacity = '';
     applyCabinetUiScale(mount, clamped);
     if (persist) writeFileCabinetHeight(clamped);
+    syncFileCabinetShutChrome();
     return clamped;
 }
 
@@ -157,6 +163,7 @@ function applyCabinetAutoHeight(mount) {
     if (!mount) return;
     if (isFileCabinetShut() || mount.dataset.shut === 'true') {
         applyFileCabinetShut(mount);
+        syncFileCabinetShutChrome();
         return;
     }
     const saved = readFileCabinetHeight();
@@ -172,6 +179,7 @@ function applyCabinetAutoHeight(mount) {
     delete mount.dataset.fixedHeight;
     mount.style.flex = '';
     syncFileCabinetDrawerHeight(mount);
+    syncFileCabinetShutChrome();
 }
 
 function ensureSidebarScaleInner() {
@@ -208,6 +216,7 @@ function ensureHorizontalSplitter() {
     }
 
     if (horizontalSplitter?.isConnected && horizontalSplitter.previousElementSibling === mount) {
+        updateHorizontalSplitterVisibility();
         return horizontalSplitter;
     }
 
@@ -223,6 +232,7 @@ function ensureHorizontalSplitter() {
 
     mount.insertAdjacentElement('afterend', horizontalSplitter);
     bindSplitterDrag(horizontalSplitter, 'h');
+    updateHorizontalSplitterVisibility();
     return horizontalSplitter;
 }
 
@@ -236,6 +246,63 @@ function updateVerticalSplitterVisibility() {
     const hidden = isSidebarCollapsed();
     verticalSplitter.classList.toggle('is-hidden', hidden);
     verticalSplitter.setAttribute('aria-hidden', hidden ? 'true' : 'false');
+}
+
+function updateHorizontalSplitterVisibility() {
+    if (!horizontalSplitter) return;
+    const hidden = isFileCabinetShut();
+    horizontalSplitter.classList.toggle('is-hidden', hidden);
+    horizontalSplitter.setAttribute('aria-hidden', hidden ? 'true' : 'false');
+}
+
+function ensureFileCabinetFab() {
+    const surface = document.getElementById('desktop-surface');
+    if (!surface) return null;
+    if (fileCabinetFab?.isConnected) return fileCabinetFab;
+
+    fileCabinetFab = document.createElement('button');
+    fileCabinetFab.type = 'button';
+    fileCabinetFab.id = 'file-cabinet-toggle-fab';
+    fileCabinetFab.className = 'file-cabinet-toggle-fab is-hidden';
+    fileCabinetFab.title = 'Show File Cabinet';
+    fileCabinetFab.setAttribute('aria-label', 'Show File Cabinet');
+    fileCabinetFab.innerHTML = ACTION_ICONS.viewFileCabinet;
+    fileCabinetFab.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const mount = document.getElementById('file-cabinet');
+        if (!mount || !isFileCabinetShut()) return;
+        restoreCabinetFromShut(mount);
+        dispatchDesktopBoundsChanged();
+    });
+    surface.insertBefore(fileCabinetFab, surface.firstChild);
+    return fileCabinetFab;
+}
+
+function removeFileCabinetFab() {
+    fileCabinetFab?.remove();
+    fileCabinetFab = null;
+}
+
+/**
+ * Sync H-splitter + reopen FAB with shut / FC-active state (sidebar-style).
+ */
+export function syncFileCabinetShutChrome() {
+    const active = isFileCabinetActive() && !!document.getElementById('file-cabinet');
+    const shut = active && isFileCabinetShut();
+
+    if (!active) {
+        removeFileCabinetFab();
+        updateHorizontalSplitterVisibility();
+        return;
+    }
+
+    ensureFileCabinetFab();
+    updateHorizontalSplitterVisibility();
+    if (fileCabinetFab) {
+        fileCabinetFab.classList.toggle('is-hidden', !shut);
+        fileCabinetFab.setAttribute('aria-hidden', shut ? 'false' : 'true');
+    }
 }
 
 function bindSplitterDrag(handle, axis) {
@@ -263,18 +330,14 @@ function bindSplitterDrag(handle, axis) {
 
         if (!moved) {
             document.body.classList.remove('is-shell-resizing', 'is-shell-resizing--v', 'is-shell-resizing--h');
-            // Horizontal click toggles FC shut/restore.
-            // Vertical click mirrors the hide-panel icon (collapse + FAB); reopen via FAB.
+            // Horizontal click shuts FC (reopen via FAB). Vertical click hides sidebar.
             if (axis === 'h') {
                 const mount = document.getElementById('file-cabinet');
-                if (!mount) return;
-                if (isFileCabinetShut() || mount.dataset.shut === 'true') {
-                    restoreCabinetFromShut(mount);
-                } else {
-                    const openH = mount.offsetHeight;
-                    if (openH > FILE_CABINET_SHUT_SNAP_PX) writeFileCabinetHeight(openH);
-                    applyFileCabinetShut(mount);
-                }
+                if (!mount || isFileCabinetShut() || mount.dataset.shut === 'true') return;
+                const openH = mount.offsetHeight;
+                if (openH > FILE_CABINET_SHUT_SNAP_PX) writeFileCabinetHeight(openH);
+                applyFileCabinetShut(mount);
+                syncFileCabinetShutChrome();
                 dispatchDesktopBoundsChanged();
             } else if (axis === 'v' && !isSidebarCollapsed()) {
                 document.getElementById('nav-panel-toggle')?.click();
@@ -378,6 +441,7 @@ function reclampAll() {
     const mount = document.getElementById('file-cabinet');
     if (mount && (isFileCabinetShut() || mount.dataset.shut === 'true')) {
         applyFileCabinetShut(mount);
+        syncFileCabinetShutChrome();
     } else if (mount && mount.dataset.fixedHeight === 'true') {
         const inlineH = parseFloat(mount.style.height);
         const height = (Number.isFinite(inlineH) && inlineH > 0)
@@ -387,6 +451,8 @@ function reclampAll() {
         if (clamped !== height) dispatchDesktopBoundsChanged();
     } else if (mount) {
         applyCabinetAutoHeight(mount);
+    } else {
+        syncFileCabinetShutChrome();
     }
 }
 
@@ -400,8 +466,10 @@ export function syncCabinetSplitter() {
     if (mount) {
         ensureHorizontalSplitter();
         applyCabinetAutoHeight(mount);
+        syncFileCabinetShutChrome();
     } else {
         removeHorizontalSplitter();
+        syncFileCabinetShutChrome();
     }
 }
 
