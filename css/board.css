@@ -87,6 +87,11 @@
     overflow-y: auto;
 }
 
+.board-ruler-frame.is-active .board-ruler-body > #app-canvas.file-cabinet-bottom {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
 html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-freeform,
 html[data-desktop-gradient="1"] #app-canvas.file-cabinet-bottom.view-grid {
     background-color: var(--desktop-bg, var(--bg-primary));
@@ -708,6 +713,13 @@ body.is-file-cabinet-drag-active {
     min-height: 0; /* SAFETY NET */
 }
 
+/* Ruler frame takes remaining space under file cabinet when active */
+.desktop-surface > .board-ruler-frame.is-active {
+    flex: 1 1 auto;
+    min-height: 0;
+    min-width: 0;
+}
+
 #app-canvas.view-freeform,
 #app-canvas.view-grid {
     position: relative;
@@ -721,9 +733,13 @@ body.is-file-cabinet-drag-active {
     transform: scale(var(--desktop-zoom, 1));
     will-change: transform; /* HARDWARE ACCELERATION */
 }
-- [x] Preserve saved positions verbatim in gridEngine.js computeBoardLayout
-- [x] Add clampRect dep in ui.js
-- [x] Verify push resolution uses stabilized packW
+
+.board-ruler-frame.is-active .board-ruler-body > #app-canvas.view-freeform,
+.board-ruler-frame.is-active .board-ruler-body > #app-canvas.view-grid {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
 
 /* ZOOM CONTAINERS - APPLIED TO BODY/HTML IN BASE.CSS */
 #workspace-main.desktop-zoom-enabled .desktop-surface {

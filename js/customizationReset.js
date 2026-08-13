@@ -35,6 +35,8 @@ const DISPLAY_DEFAULTS = {
     showLineCount: false,
     desktopGradient: false,
     desktopGridLines: false,
+    showRulerHorizontal: false,
+    showRulerVertical: false,
     noteFontId: 'default',
     brandIconId: 'clipboard',
     undockedModuleOpacity: 1

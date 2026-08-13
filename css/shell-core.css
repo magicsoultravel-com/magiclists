@@ -284,6 +284,128 @@
     min-height: 0; /* SAFETY NET: Allows flex items to shrink below intrinsic size */
 }
 
+/* Board px rulers — flex chrome around #app-canvas (keeps canvas flex:1) */
+.board-ruler-frame {
+    --board-ruler-size: 9px;
+    min-width: 0;
+    min-height: 0;
+}
+
+.board-ruler-frame:not(.is-active) {
+    display: contents;
+}
+
+.board-ruler-frame:not(.is-active) .board-ruler-top,
+.board-ruler-frame:not(.is-active) .board-ruler,
+.board-ruler-frame:not(.is-active) .board-ruler-corner {
+    display: none !important;
+}
+
+.board-ruler-frame:not(.is-active) .board-ruler-body {
+    display: contents;
+}
+
+.board-ruler-frame.is-active {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    position: relative;
+    /* Do NOT use overflow:hidden — it clips zoomed/absolute notes on #app-canvas */
+}
+
+.board-ruler-top {
+    display: none;
+    flex: 0 0 var(--board-ruler-size);
+    flex-direction: row;
+    min-width: 0;
+    min-height: var(--board-ruler-size);
+    max-height: var(--board-ruler-size);
+    background: var(--bg-surface);
+    border-bottom: 1px solid color-mix(in srgb, var(--text-muted) 35%, var(--border-color));
+}
+
+.board-ruler-frame.is-active.is-ruler-h .board-ruler-top {
+    display: flex;
+}
+
+.board-ruler-corner {
+    display: none;
+    flex: 0 0 var(--board-ruler-size);
+    width: var(--board-ruler-size);
+    min-width: var(--board-ruler-size);
+    background: var(--bg-surface);
+    border-right: 1px solid color-mix(in srgb, var(--text-muted) 28%, var(--border-color));
+    box-sizing: border-box;
+}
+
+.board-ruler-frame.is-active.is-ruler-h.is-ruler-v .board-ruler-corner {
+    display: block;
+}
+
+.board-ruler-body {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: row;
+    min-width: 0;
+    min-height: 0;
+}
+
+.board-ruler {
+    display: none;
+    box-sizing: border-box;
+    background: var(--bg-surface);
+    pointer-events: auto;
+    cursor: crosshair;
+    min-width: 0;
+    min-height: 0;
+}
+
+.board-ruler-frame.is-active.is-ruler-h .board-ruler--h {
+    display: block;
+    flex: 1 1 auto;
+    width: auto;
+    height: 100%;
+    min-width: 0;
+}
+
+.board-ruler-frame.is-active.is-ruler-v .board-ruler--v {
+    display: block;
+    flex: 0 0 var(--board-ruler-size);
+    width: var(--board-ruler-size);
+    max-width: var(--board-ruler-size);
+    height: auto;
+    align-self: stretch;
+    border-right: 1px solid color-mix(in srgb, var(--text-muted) 35%, var(--border-color));
+}
+
+.board-ruler-frame.is-active .board-ruler-body > #app-canvas {
+    flex: 1 1 auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+.board-ruler-readout {
+    position: absolute;
+    z-index: 6;
+    pointer-events: none;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-family: var(--note-font-family, inherit);
+    font-size: 0.62rem;
+    line-height: 1.25;
+    color: var(--text-main);
+    background: color-mix(in srgb, var(--bg-card) 90%, var(--accent) 10%);
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border-color));
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.28);
+    white-space: nowrap;
+}
+
+.board-ruler-readout.is-hidden {
+    display: none;
+}
+
 /* FAB - Floating action button */
 .fab-create {
     position: fixed;

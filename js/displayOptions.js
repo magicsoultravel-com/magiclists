@@ -45,6 +45,8 @@ const DEFAULTS = {
     showLineCount: false,
     desktopGradient: false,
     desktopGridLines: false,
+    showRulerHorizontal: false,
+    showRulerVertical: false,
     noteFontId: 'default',
     brandIconId: 'clipboard',
     useCategoryColors: true,
@@ -65,6 +67,8 @@ export function readDisplayOptions() {
             showLineCount: raw.showLineCount === true,
             desktopGradient: raw.desktopGradient === true,
             desktopGridLines: raw.desktopGridLines === true,
+            showRulerHorizontal: raw.showRulerHorizontal === true,
+            showRulerVertical: raw.showRulerVertical === true,
             noteFontId,
             brandIconId: resolveBrandIconId(raw.brandIconId),
             useCategoryColors: raw.useCategoryColors !== false,
@@ -90,6 +94,8 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     root.dataset.showNoteLines = options.showLineCount ? '1' : '0';
     root.dataset.desktopGradient = options.desktopGradient ? '1' : '0';
     root.dataset.desktopGridLines = options.desktopGridLines ? '1' : '0';
+    root.dataset.showRulerH = options.showRulerHorizontal ? '1' : '0';
+    root.dataset.showRulerV = options.showRulerVertical ? '1' : '0';
     root.dataset.useCategoryColors = options.useCategoryColors ? '1' : '0';
     root.style.setProperty('--sidebar-undock-opacity', String(options.undockedModuleOpacity ?? 1));
     applyNoteFont(options.noteFontId);
@@ -108,6 +114,8 @@ function isCustomized(options) {
         || options.showLineCount
         || options.desktopGradient
         || options.desktopGridLines
+        || options.showRulerHorizontal
+        || options.showRulerVertical
         || !options.useCategoryColors
         || Math.abs((options.undockedModuleOpacity ?? 1) - 1) > 0.001
         || isNoteFontCustomized(options.noteFontId)
@@ -451,6 +459,8 @@ export const DisplayOptions = {
                             <div class="display-options-check-row display-options-check-row--inline">
                                 ${this.optionRow('display-opt-gradient', 'Gradient background', opts.desktopGradient)}
                                 ${this.optionRow('display-opt-grid-lines', 'Show grid lines', opts.desktopGridLines)}
+                                ${this.optionRow('display-opt-ruler-h', 'Horizontal ruler', opts.showRulerHorizontal)}
+                                ${this.optionRow('display-opt-ruler-v', 'Vertical ruler', opts.showRulerVertical)}
                             </div>
                             <p class="display-options-subheading">Desktop count</p>
                             <div class="display-options-scale-row">
@@ -497,6 +507,8 @@ export const DisplayOptions = {
         bindToggle('display-opt-note-lines', 'showLineCount');
         bindToggle('display-opt-gradient', 'desktopGradient');
         bindToggle('display-opt-grid-lines', 'desktopGridLines');
+        bindToggle('display-opt-ruler-h', 'showRulerHorizontal');
+        bindToggle('display-opt-ruler-v', 'showRulerVertical');
         bindToggle('display-opt-use-category-colors', 'useCategoryColors');
 
         const undockOpacityInput = root.querySelector('#display-opt-undock-opacity');

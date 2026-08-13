@@ -506,7 +506,8 @@ export function ensureFileCabinetMount(active) {
         el.className = 'file-cabinet';
         el.setAttribute('aria-label', 'File Cabinet');
         const canvas = document.getElementById('app-canvas');
-        if (canvas) surface.insertBefore(el, canvas);
+        const anchor = canvas?.closest('.board-ruler-frame') || canvas;
+        if (anchor) surface.insertBefore(el, anchor);
         else surface.prepend(el);
     }
     return el;

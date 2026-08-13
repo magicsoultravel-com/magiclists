@@ -69,6 +69,7 @@ import {
 } from './fileCabinet.js';
 import { initShellResize } from './shellResize.js';
 import { initUndockedSidebarStacking } from './desktopStack.js';
+import { BoardRulers } from './boardRulers.js';
 
 function countHiddenFromBoard(items) {
     return items.filter(item => BoardOperations.isHiddenFromBoard(item)).length;
@@ -143,6 +144,7 @@ BootProgress.set(85, 'Workspace…');
             // Refresh desktop dock with note counts
             DesktopDock.refreshButtons(AppState.items);
             initShellResize();
+            BoardRulers.init();
             initUndockedSidebarStacking();
             BoardSort.init({
                 getItems: () => AppState.items,
