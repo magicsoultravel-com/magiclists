@@ -125,8 +125,7 @@
 }
 
 .media-visualizer-modal__legend {
-    grid-column: 1 / -1;
-    margin: 0.15rem 0 0;
+    margin: 0;
     padding: 0.55rem 0.65rem;
     border: 1px solid var(--border-color);
     border-radius: 8px;
@@ -155,6 +154,57 @@
 
 .media-visualizer-modal__legend li {
     margin: 0.12rem 0;
+}
+
+.media-visualizer-modal__details-toggle {
+    grid-column: 1 / -1;
+    justify-self: start;
+    margin: 0.1rem 0 0;
+    padding: 0.35rem 0.65rem;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.65);
+    color: var(--text-muted);
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+.media-visualizer-modal__details-toggle:hover {
+    color: var(--text-main);
+    border-color: rgba(148, 163, 184, 0.55);
+}
+
+.media-visualizer-modal__details {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+    max-height: 160px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: 0.2rem;
+    scrollbar-gutter: stable;
+}
+
+.media-visualizer-modal__details[hidden] {
+    display: none !important;
+}
+
+.media-visualizer-modal__recipe {
+    margin: 0;
+    padding: 0.55rem 0.65rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: rgba(2, 6, 16, 0.72);
+    color: #cbd5e1;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.58rem;
+    line-height: 1.45;
+    white-space: pre;
+    overflow-x: auto;
 }
 
 .media-visualizer-modal__resize {
