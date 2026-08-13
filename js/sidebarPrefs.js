@@ -26,7 +26,7 @@ export const SIDEBAR_BACKUP_KEYS = [
 const DEFAULT_NOTES_LIST_SORT = { field: 'date', dir: 'desc' };
 const DEFAULT_BOARD_SORT = { direction: 'horizontal', field: 'date', dir: 'desc', alignSize: false };
 
-const DEFAULT_DOCK = { docked: true, x: null, y: null };
+const DEFAULT_DOCK = { docked: true, x: null, y: null, scale: null };
 
 const LEGACY_MODULE_DOCK_KEYS = {
     'quick-actions': LEGACY_QUICK_ACTIONS_DOCK_KEY,
@@ -43,7 +43,8 @@ function normalizeDock(raw) {
     return {
         docked: raw.docked !== false,
         x: Number.isFinite(raw.x) ? raw.x : null,
-        y: Number.isFinite(raw.y) ? raw.y : null
+        y: Number.isFinite(raw.y) ? raw.y : null,
+        scale: Number.isFinite(raw.scale) ? raw.scale : null
     };
 }
 

@@ -299,6 +299,79 @@ body.is-editor-modal-open .side-panel {
     opacity: 1;
 }
 
+.sidebar-module__dock:focus-visible {
+    opacity: 1;
+}
+
+/* Frameless floating clock — face only; dock + SE resize on hover */
+.sidebar-module.sidebar-clock.sidebar-module--undocked {
+    width: auto;
+    height: auto;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+}
+
+.sidebar-module.sidebar-clock.sidebar-module--undocked > .collapsable-header {
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    min-height: 0;
+    gap: 0;
+}
+
+.sidebar-module.sidebar-clock.sidebar-module--undocked > .collapsable-header:hover {
+    background: transparent;
+}
+
+.sidebar-module.sidebar-clock.sidebar-module--undocked > .collapsable-header > #digital-clock {
+    flex: none;
+    width: max-content;
+    min-width: 0;
+    transform: scale(var(--sidebar-clock-scale, 1));
+    transform-origin: top left;
+}
+
+.sidebar-module.sidebar-clock.sidebar-module--undocked > .collapsable-header > .sidebar-module__dock {
+    position: absolute;
+    top: 0.1rem;
+    right: 0.1rem;
+    margin: 0;
+    z-index: 3;
+}
+
+.sidebar-clock__resize-se {
+    display: none;
+}
+
+.sidebar-module.sidebar-clock.sidebar-module--undocked .sidebar-clock__resize-se {
+    display: block;
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 14px;
+    height: 14px;
+    opacity: 0;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    z-index: 4;
+    cursor: se-resize;
+    transition: opacity 0.15s ease;
+}
+
+.sidebar-module.sidebar-clock.sidebar-module--undocked:hover .sidebar-clock__resize-se,
+.sidebar-module.sidebar-clock.sidebar-module--undocked.is-resizing .sidebar-clock__resize-se {
+    opacity: 0.62;
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.22);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.15);
+}
+
 
 /* Side panel collapsed state */
 .side-panel.is-collapsed {

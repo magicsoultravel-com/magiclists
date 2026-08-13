@@ -7,6 +7,8 @@ export const SIDEBAR_MODULE_UNDOCKED = 'sidebar-module--undocked';
 export const SIDEBAR_MODULE_DRAGGING = 'sidebar-module--dragging';
 export const SIDEBAR_MODULE_DOCK_SEL = '[data-sidebar-dock]';
 
+const DRAG_THRESHOLD = 4;
+
 function ensureUndockedInBody(root) {
     if (root.parentElement !== document.body) {
         document.body.appendChild(root);
@@ -27,13 +29,15 @@ function applyPosition(root, x, y) {
  *   draggingClass: string,
  *   dockSelector: string,
  *   getHeader: () => HTMLElement|null,
- *   readDock: () => { docked: boolean, x: number|null, y: number|null },
- *   writeDock: (patch: { docked?: boolean, x?: number|null, y?: number|null }) => void,
+ *   readDock: () => { docked: boolean, x: number|null, y: number|null, scale?: number|null },
+ *   writeDock: (patch: { docked?: boolean, x?: number|null, y?: number|null, scale?: number|null }) => void,
  *   restoreToSidebar: () => void,
  *   onBeforeUndock?: () => void,
  *   onPositionChange?: () => void,
  *   onStateChange?: () => void,
  *   dragBlockSelector?: string,
+ *   applyUndockChrome?: (root: HTMLElement) => void,
+ *   clearUndockChrome?: (root: HTMLElement) => void,
  * }} config
  */
 export function initSidebarUndock(config) {
@@ -49,7 +53,9 @@ export function initSidebarUndock(config) {
         onBeforeUndock,
         onPositionChange,
         onStateChange,
-        dragBlockSelector
+        dragBlockSelector,
+        applyUndockChrome,
+        clearUndockChrome
     } = config;
 
     function isUndocked() {
@@ -75,6 +81,7 @@ export function initSidebarUndock(config) {
         root.style.top = '';
         root.style.removeProperty('z-index');
         root.style.removeProperty('--sidebar-module-width');
+        clearUndockChrome?.(root);
         restoreToSidebar();
         writeDock({ docked: true, x: null, y: null });
     }
@@ -93,6 +100,7 @@ export function initSidebarUndock(config) {
         root.style.left = `${x}px`;
         root.style.top = `${y}px`;
         root.style.removeProperty('--sidebar-module-width');
+        applyUndockChrome?.(root);
         const clamped = applyPosition(root, x, y);
         raiseDesktopElement(root);
 
@@ -118,6 +126,7 @@ export function initSidebarUndock(config) {
         onBeforeUndock?.();
         ensureUndockedInBody(root);
         root.classList.add(undockedClass);
+        applyUndockChrome?.(root);
         if (x != null && y != null) {
             root.style.left = `${x}px`;
             root.style.top = `${y}px`;
@@ -160,6 +169,70 @@ export function initSidebarUndock(config) {
         });
     }
 
+    function beginDrag(e, header, root, { deferred }) {
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startLeft = parseFloat(root.style.left) || 0;
+        const startTop = parseFloat(root.style.top) || 0;
+        let dragging = !deferred;
+        let moved = false;
+
+        if (!deferred) {
+            e.preventDefault();
+            e.stopPropagation();
+            root.classList.add(draggingClass);
+            header.setPointerCapture(e.pointerId);
+        }
+
+        const onMove = (ev) => {
+            const dx = ev.clientX - startX;
+            const dy = ev.clientY - startY;
+            if (!dragging) {
+                if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+                dragging = true;
+                moved = true;
+                e.preventDefault();
+                root.classList.add(draggingClass);
+                try {
+                    header.setPointerCapture(e.pointerId);
+                } catch {
+                    /* already captured or released */
+                }
+            }
+            moved = true;
+            applyPosition(root, startLeft + dx, startTop + dy);
+            onPositionChange?.();
+        };
+
+        const onUp = (ev) => {
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+            document.removeEventListener('pointercancel', onUp);
+            if (!dragging) return;
+            dragging = false;
+            root.classList.remove(draggingClass);
+            try {
+                header.releasePointerCapture(ev.pointerId);
+            } catch {
+                /* not captured */
+            }
+            if (moved) {
+                header.dataset.suppressClick = 'true';
+                setTimeout(() => {
+                    delete header.dataset.suppressClick;
+                }, 0);
+                writeDock({
+                    x: parseFloat(root.style.left) || 0,
+                    y: parseFloat(root.style.top) || 0
+                });
+            }
+        };
+
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+        document.addEventListener('pointercancel', onUp);
+    }
+
     function bindDrag() {
         const header = getHeader();
         if (!header || header.dataset.sidebarUndockBound === 'true') return;
@@ -168,57 +241,14 @@ export function initSidebarUndock(config) {
         header.addEventListener('pointerdown', (e) => {
             if (!isUndocked()) return;
             if (e.target.closest(dockSelector) || e.target.closest('.collapsable-toggle')) return;
-            if (dragBlockSelector && e.target.closest(dragBlockSelector)) return;
+            if (e.target.closest('[data-sidebar-clock-resize]')) return;
             if (e.button !== 0) return;
 
             const root = getRoot();
             if (!root) return;
 
-            e.preventDefault();
-            e.stopPropagation();
-            let dragging = true;
-            let dragSession = true;
-            const startX = e.clientX;
-            const startY = e.clientY;
-            const startLeft = parseFloat(root.style.left) || 0;
-            const startTop = parseFloat(root.style.top) || 0;
-
-            root.classList.add(draggingClass);
-            header.setPointerCapture(e.pointerId);
-
-            const onMove = (ev) => {
-                if (!dragging) return;
-                applyPosition(
-                    root,
-                    startLeft + (ev.clientX - startX),
-                    startTop + (ev.clientY - startY)
-                );
-                onPositionChange?.();
-            };
-
-            const onUp = (ev) => {
-                if (!dragging) return;
-                dragging = false;
-                root.classList.remove(draggingClass);
-                header.releasePointerCapture(ev.pointerId);
-                if (dragSession) {
-                    header.dataset.suppressClick = 'true';
-                    requestAnimationFrame(() => {
-                        delete header.dataset.suppressClick;
-                    });
-                }
-                writeDock({
-                    x: parseFloat(root.style.left) || 0,
-                    y: parseFloat(root.style.top) || 0
-                });
-                document.removeEventListener('pointermove', onMove);
-                document.removeEventListener('pointerup', onUp);
-                document.removeEventListener('pointercancel', onUp);
-            };
-
-            document.addEventListener('pointermove', onMove);
-            document.addEventListener('pointerup', onUp);
-            document.addEventListener('pointercancel', onUp);
+            const fromBlocked = Boolean(dragBlockSelector && e.target.closest(dragBlockSelector));
+            beginDrag(e, header, root, { deferred: fromBlocked });
         });
     }
 

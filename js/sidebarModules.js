@@ -18,6 +18,10 @@ export { SIDEBAR_MODULE_UNDOCKED, SIDEBAR_MODULE_DRAGGING, SIDEBAR_MODULE_DOCK_S
 /** Radio expanded layout defines minimum sidebar module column width. */
 export const SIDEBAR_MODULE_WIDTH = 220;
 
+const CLOCK_SCALE_MIN = 0.75;
+const CLOCK_SCALE_MAX = 2.5;
+const CLOCK_SCALE_DEFAULT = 1;
+
 /** @type {ReadonlyArray<{ id: string, rootId: string, headerId: string, sectionId: string, startCollapsed?: boolean, expandOnUndock?: boolean, collapseIgnoreExtra?: string, dragBlockSelector?: string, onPositionChange?: () => void }>} */
 export const SIDEBAR_MODULES = [
     { id: 'clock', rootId: 'sidebar-clock', headerId: 'clock-section-header', sectionId: 'clock-section', startCollapsed: false, collapseAlways: true, dragBlockSelector: '#digital-clock', onPositionChange: () => ClockStyle.repositionPopover?.() },
@@ -40,6 +44,96 @@ const moduleUndockById = new Map();
 
 function notifyFloatingChromeChanged() {
     window.dispatchEvent(new CustomEvent('floating:chrome_changed'));
+}
+
+function clampClockScale(scale) {
+    if (!Number.isFinite(scale)) return CLOCK_SCALE_DEFAULT;
+    return Math.min(CLOCK_SCALE_MAX, Math.max(CLOCK_SCALE_MIN, scale));
+}
+
+function syncClockUndockLayout(root) {
+    const clock = root?.querySelector('#digital-clock');
+    if (!root || !clock) return;
+    const scale = clampClockScale(
+        parseFloat(root.style.getPropertyValue('--sidebar-clock-scale')) || CLOCK_SCALE_DEFAULT
+    );
+    // transform does not affect offsetWidth/Height — multiply by scale for the hit box.
+    root.style.width = `${clock.offsetWidth * scale}px`;
+    root.style.height = `${clock.offsetHeight * scale}px`;
+}
+
+function applyClockUndockChrome(root) {
+    if (!root) return;
+    const saved = readModuleDock('clock');
+    const scale = clampClockScale(saved.scale ?? CLOCK_SCALE_DEFAULT);
+    root.style.setProperty('--sidebar-clock-scale', String(scale));
+    syncClockUndockLayout(root);
+}
+
+function clearClockUndockChrome(root) {
+    if (!root) return;
+    root.style.removeProperty('--sidebar-clock-scale');
+    root.style.removeProperty('width');
+    root.style.removeProperty('height');
+    root.classList.remove('is-resizing');
+}
+
+function bindClockUndockResize(root) {
+    if (!root || root.dataset.clockResizeBound === 'true') return;
+    const handle = root.querySelector('[data-sidebar-clock-resize]');
+    if (!handle) return;
+    root.dataset.clockResizeBound = 'true';
+
+    handle.addEventListener('pointerdown', (e) => {
+        if (!root.classList.contains(SIDEBAR_MODULE_UNDOCKED)) return;
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startScale = clampClockScale(
+            parseFloat(root.style.getPropertyValue('--sidebar-clock-scale')) || CLOCK_SCALE_DEFAULT
+        );
+        const clock = root.querySelector('#digital-clock');
+        const rect = clock?.getBoundingClientRect();
+        const baseW = Math.max(1, (rect?.width || 1) / startScale);
+        const baseH = Math.max(1, (rect?.height || 1) / startScale);
+        const startVisual = Math.max(baseW, baseH) * startScale;
+
+        root.classList.add('is-resizing');
+        handle.setPointerCapture(e.pointerId);
+
+        const onMove = (ev) => {
+            const delta = Math.max(ev.clientX - startX, ev.clientY - startY);
+            const nextVisual = Math.max(1, startVisual + delta);
+            const nextScale = clampClockScale(nextVisual / Math.max(baseW, baseH));
+            root.style.setProperty('--sidebar-clock-scale', String(nextScale));
+            syncClockUndockLayout(root);
+            ClockStyle.repositionPopover?.();
+        };
+
+        const onUp = (ev) => {
+            root.classList.remove('is-resizing');
+            try {
+                handle.releasePointerCapture(ev.pointerId);
+            } catch {
+                /* not captured */
+            }
+            const scale = clampClockScale(
+                parseFloat(root.style.getPropertyValue('--sidebar-clock-scale')) || CLOCK_SCALE_DEFAULT
+            );
+            writeModuleDock('clock', { scale });
+            document.removeEventListener('pointermove', onMove);
+            document.removeEventListener('pointerup', onUp);
+            document.removeEventListener('pointercancel', onUp);
+            ClockStyle.repositionPopover?.();
+        };
+
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+        document.addEventListener('pointercancel', onUp);
+    });
 }
 
 export function countModulesInPanel() {
@@ -212,6 +306,7 @@ export function initAllSidebarModules() {
         const root = document.getElementById(config.rootId);
         if (!root) return;
 
+        const isClock = config.id === 'clock';
         const undock = initSidebarUndock({
             getRoot: () => document.getElementById(config.rootId),
             undockedClass: SIDEBAR_MODULE_UNDOCKED,
@@ -224,10 +319,13 @@ export function initAllSidebarModules() {
             onBeforeUndock: config.expandOnUndock ? () => expandModuleSection(config.id) : undefined,
             onPositionChange: config.onPositionChange,
             onStateChange: notifyFloatingChromeChanged,
-            dragBlockSelector: config.dragBlockSelector
+            dragBlockSelector: config.dragBlockSelector,
+            applyUndockChrome: isClock ? applyClockUndockChrome : undefined,
+            clearUndockChrome: isClock ? clearClockUndockChrome : undefined
         });
 
         moduleUndockById.set(config.id, undock);
+        if (isClock) bindClockUndockResize(root);
         undock.applyInitialDockState();
     });
 

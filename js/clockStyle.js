@@ -220,6 +220,8 @@ export const ClockStyle = {
             this.triggerBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (this.isHidden) return;
+                const header = document.getElementById('clock-section-header');
+                if (header?.dataset.suppressClick === 'true') return;
                 this.togglePopover();
             });
         }
@@ -329,6 +331,18 @@ export const ClockStyle = {
             }
         }
         this.tick();
+        this.syncUndockedLayout();
+    },
+
+    syncUndockedLayout() {
+        const root = this.clockChromeEl;
+        if (!root?.classList.contains('sidebar-module--undocked')) return;
+        const clock = this.zone;
+        if (!clock) return;
+        const scale = parseFloat(root.style.getPropertyValue('--sidebar-clock-scale')) || 1;
+        root.style.width = `${clock.offsetWidth * scale}px`;
+        root.style.height = `${clock.offsetHeight * scale}px`;
+        this.repositionPopover();
     },
 
     tick() {
