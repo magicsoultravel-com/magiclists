@@ -43,7 +43,10 @@ html[data-use-category-colors="0"] .mini-card {
 .mini-card:hover {
     transform: translateY(-2px);
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.07), 0 4px 12px rgba(0, 0, 0, 0.3);
-    border-color: var(--text-muted);
+    /* Non-left sides only — leave category band (--card-category-color) intact */
+    border-top-color: var(--text-muted);
+    border-right-color: var(--text-muted);
+    border-bottom-color: var(--text-muted);
 }
 
 .mini-card:active {

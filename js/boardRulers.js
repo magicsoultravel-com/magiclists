@@ -387,14 +387,6 @@ function onRulerVMove(e) {
     });
 }
 
-function onCanvasMove(e) {
-    if (!rulersEnabled() || !canvasEl) return;
-    setHoverCoord({
-        x: showH() ? contentXFromScreen(e.clientX, canvasEl) : null,
-        y: showV() ? contentYFromScreen(e.clientY, canvasEl) : null
-    });
-}
-
 function bindHover() {
     if (hoverBound) return;
     hoverBound = true;
@@ -410,10 +402,7 @@ function bindHover() {
             onRulerVMove(e);
             return;
         }
-        if (canvasEl.isConnected && (t === canvasEl || canvasEl.contains(t))) {
-            onCanvasMove(e);
-            return;
-        }
+        /* Board / elsewhere: no cursor chip — only ruler hover shows readout */
         if (readoutEl && (t === readoutEl || readoutEl.contains(t))) return;
         clearHoverCoord();
     }, { passive: true });

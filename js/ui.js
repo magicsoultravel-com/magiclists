@@ -92,6 +92,7 @@ import { BoardOperations } from './boardOperations.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
 import {
     applyItemCardTheme,
+    applyCardCategoryBand,
     createCardComponent,
     renderBoardEditorCard,
     refreshBoardChecklistBody,
@@ -681,7 +682,7 @@ reapplySmallFootprintOnBoard() {
 
         renderBoardEditorCard(this, card, item, activeCategories, targetCatName, categoryColor);
         applyItemCardTheme(card, item);
-        card.style.borderLeftColor = categoryColor;
+        applyCardCategoryBand(card, categoryColor);
         this.finalizeDesktopCard(card);
 
         // Restore canvas scroll position after full re-render

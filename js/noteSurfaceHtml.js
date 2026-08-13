@@ -732,18 +732,34 @@ export function refreshNoteBody(body, item, {
 }
 
 /**
- * Applies card background/theme styling
+ * Applies card background/theme styling.
+ * Sets non-left border colors only so the category band (left) stays CSS-owned.
  * @param {HTMLElement} card - The card element
  * @param {Object} item - The note item
  */
 export function applyItemCardTheme(card, item) {
     const color = resolveNoteColor(item.backgroundColor);
-    card.style.borderColor = 'rgba(255,255,255,0.15)';
+    const edge = 'rgba(255,255,255,0.15)';
+    card.style.borderTopColor = edge;
+    card.style.borderRightColor = edge;
+    card.style.borderBottomColor = edge;
     // Apply custom background to the editor-note-shell for consistent styling
     const shell = card.querySelector('.editor-note-shell');
     if (shell) {
         applyCardTheme(shell, color, { paintBackground: true });
     }
+}
+
+/**
+ * Sets the category color band via CSS variable and clears legacy inline left-border paint.
+ * CSS owns the left band via `--card-category-color`; do not set borderLeftColor.
+ * @param {HTMLElement} card - The card element
+ * @param {string} categoryColor - Resolved category color
+ */
+export function applyCardCategoryBand(card, categoryColor) {
+    if (!card) return;
+    card.style.setProperty('--card-category-color', categoryColor || UNCATEGORIZED_COLOR);
+    card.style.removeProperty('border-left-color');
 }
 
 /**
@@ -761,9 +777,9 @@ export function createCardComponent(uiInstance, item, activeCategories) {
 
     const { targetCatName, categoryColor } = getCardRenderContext(item, activeCategories);
 
-    card.style.setProperty('--card-category-color', categoryColor);
     renderBoardEditorCard(uiInstance, card, item, activeCategories, targetCatName, categoryColor);
     applyItemCardTheme(card, item);
+    applyCardCategoryBand(card, categoryColor);
     card.addEventListener('mousedown', () => uiInstance.raiseDesktopCard(card), true);
     uiInstance.syncBoardPinClass(card);
     return card;

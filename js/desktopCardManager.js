@@ -2,8 +2,6 @@
 import { NoteSurface } from './noteSurface.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
 import { mountFloatChrome } from './desktopFloatChrome.js';
-import { applyCardTheme } from './cardTheme.js';
-import { resolveNoteColor } from './colorPicker.js';
 import { isDesktopCard } from './ui.js';
 import { isSnapLayoutMode, activeBoardViewMode } from './ui.js';
 import { getGridMetrics, cellsToSpanW as gridCellsToSpanW, cellsToSpanH as gridCellsToSpanH } from './gridDensity.js';
@@ -31,16 +29,8 @@ export const DesktopCardManager = {
         card.dataset.id = item.id;
         card.dataset.desktop = '1';
 
-        // Note: getCardRenderContext would need to be imported from categories.js
-        // const { targetCatName, categoryColor } = getCardRenderContext(item, activeCategories);
-        const targetCatName = ''; // Placeholder
-        const categoryColor = '#ccc'; // Placeholder
-
-        // this.applyItemCardTheme(card, item); // Would need to be implemented
-        // card.style.borderLeftColor = categoryColor;
-        // this.renderBoardEditorCard(card, item, activeCategories, targetCatName, categoryColor);
-        // card.addEventListener('mousedown', () => this.raiseDesktopCard(card), true);
-        // this.syncBoardPinClass(card);
+        // Placeholder stub — live board cards use noteSurfaceHtml.createCardComponent
+        // (sets --card-category-color via applyCardCategoryBand; CSS owns the left band).
         return card;
     },
 
@@ -102,11 +92,8 @@ export const DesktopCardManager = {
      * @param {Object} item - The item
      */
     applyItemCardTheme(card, item) {
-        // const color = resolveNoteColor(item.backgroundColor);
-        const color = '#fff'; // Placeholder
-        // card.style.backgroundColor = color;
-        // card.style.borderColor = 'rgba(255,255,255,0.15)';
-        // applyCardTheme(card, color);
+        // Placeholder stub — live path is noteSurfaceHtml.applyItemCardTheme
+        // (non-left borders only; category band via applyCardCategoryBand).
     },
 
     /**

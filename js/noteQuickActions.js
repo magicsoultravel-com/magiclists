@@ -4,7 +4,8 @@ import { copyPlainTextToClipboard } from './clipboard.js';
 import { itemToPlainCopyText, itemToTxtExportText, sortItemsForTxtExport } from './noteBodyConversion.js';
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { NoteSurface } from './noteSurface.js';
-import { applyItemCardTheme } from './noteSurfaceHtml.js';
+import { applyItemCardTheme, applyCardCategoryBand } from './noteSurfaceHtml.js';
+import { getCardRenderContext, readStoredCategories } from './categories.js';
 import { isDesktopCard } from './ui.js';
 import { BoardOperations } from './boardOperations.js';
 import { DisplayOptions } from './displayOptions.js';
@@ -145,6 +146,8 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
                         it.backgroundColor = color || THEME_DEFAULT_COLOR;
                     }, { preserveView: true, skipRerender: true });
                     applyItemCardTheme(card, item);
+                    const { categoryColor } = getCardRenderContext(item, readStoredCategories());
+                    applyCardCategoryBand(card, categoryColor);
                 }
             });
         } else {
