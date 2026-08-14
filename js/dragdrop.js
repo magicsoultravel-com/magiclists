@@ -25,6 +25,11 @@ import { initFileCabinetDrag, isFileCabinetActive, fileItemToCabinet, shouldFile
 import { isChecklistInteraction } from './noteSurfaceChecklist.js';
 import { DesktopManager } from './desktopManager.js';
 import { getLabelRect } from './tileGeometry.js';
+import {
+    getDockButtonAt,
+    setDesktopDockDragHighlight,
+    clearDesktopDockDragHighlight
+} from './desktopDockDrop.js';
 
 const GRID_SCROLL_EDGE = 40;
 const GRID_SCROLL_STEP = 10;
@@ -232,20 +237,6 @@ function bindPointerSession({ onKeyDown, onCancel }) {
     return cleanup;
 }
 
-/**
- * Helper function to find dock buttons at a given coordinate.
- * Uses elementsFromPoint (plural) to find all elements at the point,
- * then filters for desktop-dock-btn elements.
- * @param {number} x - X coordinate
- * @param {number} y - Y coordinate
- * @returns {Element[]} Array of dock button elements at the point
- */
-function getDockButtonAt(x, y) {
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return [];
-    return document.elementsFromPoint(x, y)
-        .filter(el => el instanceof Element && el.classList.contains('desktop-dock-btn'));
-}
-
 export const DragDropEngine = {
     init(userState, currentItems, onMutationComplete) {
         if (!userState || !userState.isLoggedIn) return;
@@ -424,22 +415,31 @@ export const DragDropEngine = {
                     );
                     dragActive.fcDropTarget = fcTarget;
 
-                    if (!fcTarget || fcTarget.kind !== 'file-cabinet') {
-                        // Left FC — restore to canvas.
-                        clearFileCabinetFilingPreview(fileCabinet, dragActive.fcPreviewState);
-                        const canvasX = Math.max(0, dragActive.origX + dx);
-                        const canvasY = Math.max(0, dragActive.origY + dy);
-                        endBoardFilingGhost(dragActive.card, dragActive.filingGhost, {
-                            filingPreview: dragActive.filingPreview,
-                            canvasRect: { x: canvasX, y: canvasY }
-                        });
-                        dragActive.filingGhost = null;
-                        dragActive.filingPreview = null;
-                        dragActive.fcDropTarget = null;
-                        document.body.classList.remove('is-file-cabinet-drag-active');
+                    if (fcTarget?.kind === 'file-cabinet') {
+                        return;
                     }
+
+                    // Left FC — restore expanded board shape and continue canvas drag.
+                    clearFileCabinetFilingPreview(fileCabinet, dragActive.fcPreviewState);
+                    const canvasX = Math.max(0, dragActive.origX + dx);
+                    const canvasY = Math.max(0, dragActive.origY + dy);
+                    endBoardFilingGhost(dragActive.card, dragActive.filingGhost, {
+                        filingPreview: dragActive.filingPreview,
+                        canvasRect: { x: canvasX, y: canvasY }
+                    });
+                    UI.applyFreeformDimensions(
+                        dragActive.card,
+                        dragActive.filingPreview?.w ?? dragActive.origW,
+                        dragActive.filingPreview?.h ?? dragActive.origH
+                    );
+                    dragActive.filingGhost = null;
+                    dragActive.fcDropTarget = null;
+                    dragActive.fcPreviewState = null;
+                    document.body.classList.remove('is-file-cabinet-drag-active');
+                    // fall through to board positioning below
+                } else {
+                    return;
                 }
-                return;
             }
 
             const boardBounds = snapEnabled ? UI.getGridBoardBounds(canvas) : null;
@@ -478,12 +478,7 @@ export const DragDropEngine = {
                 autoScrollDesktopCanvas(canvas, e.clientX, e.clientY);
             }
 
-            // Desktop dock drop detection - use elementsFromPoint (plural) to find dock buttons
-            const hoveredButtons = getDockButtonAt(e.clientX, e.clientY);
-            const allDockButtons = document.querySelectorAll('.desktop-dock-btn');
-            allDockButtons.forEach(btn => {
-                btn.classList.toggle('drag-over', hoveredButtons.includes(btn));
-            });
+            setDesktopDockDragHighlight(e.clientX, e.clientY);
 
             // Enter File Cabinet filing mode: lift label ghost past the splitter.
             if (isFileCabinetActive()) {
@@ -535,6 +530,11 @@ export const DragDropEngine = {
                         y: state.origY
                     }
                 });
+                UI.applyFreeformDimensions(
+                    state.card,
+                    state.filingPreview?.w ?? state.origW,
+                    state.filingPreview?.h ?? state.origH
+                );
             } else {
                 // Drop will re-render; just clear ghost chrome.
                 state.card.classList.remove('spatial-at-small');
@@ -550,10 +550,7 @@ export const DragDropEngine = {
             const { card, moved } = dragActive;
             card.classList.remove('is-grid-dragging', 'is-freeform-dragging');
 
-            // Clear drag-over classes from dock buttons
-            document.querySelectorAll('.desktop-dock-btn.drag-over').forEach(btn => {
-                btn.classList.remove('drag-over');
-            });
+            clearDesktopDockDragHighlight();
 
             const wasFiling = !!dragActive.filingGhost;
             const filingPreview = dragActive.filingPreview;

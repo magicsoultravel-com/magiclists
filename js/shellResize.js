@@ -12,7 +12,6 @@ import {
     getFileCabinetContentMinHeight,
     syncFileCabinetDrawerHeight,
     FILE_CABINET_BOARD_MIN_HEIGHT,
-    FILE_CABINET_REF_HEIGHT,
     FILE_CABINET_MIN_HEIGHT_RATIO,
     FILE_CABINET_SHUT_SNAP_PX,
     isFileCabinetShut,
@@ -84,15 +83,19 @@ function getCabinetHeightBounds(mount) {
 }
 
 /**
- * Mirror sidebar scaling: proportional to a fixed reference size, clamped.
- * (Sidebar uses width / SIDEBAR_DEFAULT_WIDTH — not content-fit.)
+ * Content-fit scale: stay 1:1 until drawer height would clip current FC content,
+ * then shrink proportionally (per active desktop's rendered DOM).
  */
-function cabinetScaleForHeight(height) {
-    if (!height || height <= 0) return 1;
-    const ref = FILE_CABINET_REF_HEIGHT;
-    const minScale = FILE_CABINET_MIN_HEIGHT_RATIO;
-    // Cap at 1 so enlarging past the reference doesn't blow up the UI.
-    return clamp(height / ref, minScale, 1);
+function cabinetScaleForHeight(height, mount) {
+    if (!height || height <= 0 || !mount) return 1;
+    const contentMin = getFileCabinetContentMinHeight(mount);
+    if (!contentMin) return 1;
+    const styles = getComputedStyle(mount);
+    const padY = (parseFloat(styles.paddingTop) || 0) + (parseFloat(styles.paddingBottom) || 0);
+    const innerH = Math.max(1, height - padY);
+    const contentInner = Math.max(1, contentMin - padY);
+    if (innerH >= contentInner) return 1;
+    return clamp(innerH / contentInner, FILE_CABINET_MIN_HEIGHT_RATIO, 1);
 }
 
 function applySidebarUiScale(width) {
@@ -105,8 +108,13 @@ function applyCabinetUiScale(mount, height) {
     if (!mount) return;
     const effectiveHeight = height ?? mount.offsetHeight;
     if (!effectiveHeight) return;
-    const scale = cabinetScaleForHeight(effectiveHeight);
+    const scale = cabinetScaleForHeight(effectiveHeight, mount);
     mount.style.setProperty('--file-cabinet-ui-scale', String(scale));
+}
+
+/** Reapply FC UI scale after DOM/content changes (desktop switch, fold, render). */
+export function refreshFileCabinetUiScale(mount, height) {
+    applyCabinetUiScale(mount, height);
 }
 
 function clearSidebarAppliedWidth() {

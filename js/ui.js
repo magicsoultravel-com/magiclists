@@ -710,14 +710,11 @@ reapplySmallFootprintOnBoard() {
          
         const { resolvedMode, fileCabinetActive } = this.getViewState();
         this.applyCanvasClasses(canvas, fileCabinetActive);
-         
-        if (this.shouldRenderEmptyState(canvas, fileCabinetActive, visibleItems, safeItems)) {
-            this.renderEmptyState(canvas, fileCabinetActive, visibleItems, safeItems);
-            return;
-        }
 
+        // Always refresh FC for the active desktop before empty-state.
+        // FC lives outside #app-canvas; skipping this left the previous desktop's tabs.
         const { boardItems } = this.prepareBoardItems(visibleItems, fileCabinetActive, resolvedMode, activeCategories);
-         
+
         if (boardItems.length === 0) {
             this.renderEmptyState(canvas, fileCabinetActive, visibleItems, safeItems);
             return;
@@ -762,10 +759,6 @@ reapplySmallFootprintOnBoard() {
         canvas.className = 'view-grid';
         if (fileCabinetActive) canvas.classList.add('file-cabinet-bottom');
         delete canvas.dataset.focusActive;
-    },
-
-    shouldRenderEmptyState(canvas, fileCabinetActive, visibleItems, safeItems) {
-        return visibleItems.length === 0;
     },
 
     prepareBoardItems(visibleItems, fileCabinetActive, resolvedMode, activeCategories) {

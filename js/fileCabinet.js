@@ -14,10 +14,16 @@ import {
 import { getSmallRect } from './tileGeometry.js';
 import { readTileSmallFootprint } from './tileFootprint.js';
 import { normalizeViewMode } from './viewSession.js';
-import { syncCabinetSplitter, syncFileCabinetShutChrome } from './shellResize.js';
+import { syncCabinetSplitter, syncFileCabinetShutChrome, refreshFileCabinetUiScale } from './shellResize.js';
 import { BoardOperations } from './boardOperations.js';
 import { createCardComponent } from './noteSurfaceHtml.js';
 import { CARD_ICONS } from './icons.js';
+import { DesktopManager } from './desktopManager.js';
+import {
+    getDockButtonAt,
+    setDesktopDockDragHighlight,
+    clearDesktopDockDragHighlight
+} from './desktopDockDrop.js';
 
 
 export const FILE_CABINET_KEY = 'matrix_file_cabinet';
@@ -1271,6 +1277,12 @@ export function applyFileCabinetStackPositions(stackEl) {
     });
 }
 
+export function getFileCabinetUiScale(mount) {
+    if (!mount) return 1;
+    const raw = parseFloat(getComputedStyle(mount).getPropertyValue('--file-cabinet-ui-scale'));
+    return Number.isFinite(raw) && raw > 0 ? raw : 1;
+}
+
 export function getFileCabinetContentMinHeight(mount) {
     if (!mount) return FILE_CABINET_MIN_HEIGHT;
     const label = getLabelRect();
@@ -1283,9 +1295,21 @@ export function getFileCabinetContentMinHeight(mount) {
             : label.h;
         maxStackH = Math.max(maxStackH, stackH);
     });
+
+    let contentH = maxStackH + FILE_CABINET_CATEGORY_HEADER_PAD;
+
+    const rail = mount.querySelector('.file-cabinet-filed-rail');
+    if (rail) {
+        const scale = getFileCabinetUiScale(mount);
+        const railNatural = rail.getBoundingClientRect().height / scale;
+        if (Number.isFinite(railNatural) && railNatural > 0) {
+            contentH = Math.max(contentH, railNatural);
+        }
+    }
+
     const styles = getComputedStyle(mount);
     const padY = (parseFloat(styles.paddingTop) || 0) + (parseFloat(styles.paddingBottom) || 0);
-    return maxStackH + FILE_CABINET_CATEGORY_HEADER_PAD + padY;
+    return contentH + padY;
 }
 
 export function syncFileCabinetDrawerHeight(mount) {
@@ -1310,6 +1334,7 @@ export function syncFileCabinetDrawerHeight(mount) {
         if (Number.isFinite(targetH) && targetH > 0) {
             mount.style.height = `${targetH}px`;
         }
+        refreshFileCabinetUiScale(mount, targetH);
         return;
     }
     const targetH = Math.max(dragMin, contentMin);
@@ -1318,7 +1343,7 @@ export function syncFileCabinetDrawerHeight(mount) {
     mount.style.height = `${targetH}px`;
     mount.style.minHeight = `${targetH}px`;
     mount.style.maxHeight = 'none';
-    mount.style.setProperty('--file-cabinet-ui-scale', '1');
+    refreshFileCabinetUiScale(mount, targetH);
 }
 
 function buildFileCabinetCategoryColumn({
@@ -1542,6 +1567,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
         mount.style.minHeight = '';
         mount.style.maxHeight = '';
         delete mount.__fcPreviewContext;
+        refreshFileCabinetUiScale(mount);
         return;
     }
 
@@ -1634,6 +1660,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
 
     inner.appendChild(row);
     mount.appendChild(inner);
+    refreshFileCabinetUiScale(mount);
 }
 
 export function initFileCabinetCategoryActions(mount, signal) {
@@ -1759,7 +1786,42 @@ function createCategoryChipGhost(dragEl) {
     return ghost;
 }
 
-function initFileCabinetCategoryColumnDrag(mount, signal) {
+function collectFileCabinetCategoryNoteIds(mount, category, items, activeDesktop) {
+    if (!category) return [];
+    const col = mount?.querySelector(`.file-cabinet-category[data-category="${CSS.escape(category)}"]`);
+    if (col) {
+        return [...col.querySelectorAll('.file-cabinet-tab')]
+            .map((tab) => tab.dataset.id)
+            .filter(Boolean);
+    }
+    const order = getFileCabinetOrder()[category] || [];
+    const byId = new Map((items || []).map((item) => [item.id, item]));
+    return order.filter((id) => {
+        const item = byId.get(id);
+        return item && (item.desktopId || 1) === activeDesktop;
+    });
+}
+
+function assignFileCabinetItemsToDesktop(itemIds, targetDesktopId, items) {
+    const byId = new Map((items || []).map((item) => [item.id, item]));
+    let changed = false;
+    (itemIds || []).forEach((id) => {
+        const item = byId.get(id);
+        if (!item) return;
+        const current = item.desktopId || 1;
+        if (current === targetDesktopId) return;
+        DesktopManager.assignNoteToDesktop(item, targetDesktopId);
+        changed = true;
+    });
+    if (changed) {
+        window.dispatchEvent(new CustomEvent('desktop:changed', {
+            detail: { desktopId: DesktopManager.getActiveDesktop() }
+        }));
+    }
+    return changed;
+}
+
+function initFileCabinetCategoryColumnDrag(mount, getItems, signal) {
     if (!mount || !signal) return;
 
     mount.addEventListener('pointerdown', (e) => {
@@ -1783,6 +1845,7 @@ function initFileCabinetCategoryColumnDrag(mount, signal) {
         const siblings = [...parent.children];
         const startIndex = siblings.indexOf(dragEl);
         if (startIndex < 0) return;
+        const category = dragEl.dataset.category || 'Uncategorized';
 
         const startX = e.clientX;
         const startY = e.clientY;
@@ -1831,6 +1894,9 @@ function initFileCabinetCategoryColumnDrag(mount, signal) {
             ghost.style.left = `${ev.clientX - offsetX}px`;
             ghost.style.top = `${ev.clientY - offsetY}px`;
 
+            const dockButtons = setDesktopDockDragHighlight(ev.clientX, ev.clientY);
+            if (dockButtons.length > 0) return;
+
             const hit = document.elementFromPoint(ev.clientX, ev.clientY);
             const over = col
                 ? hit?.closest?.('.file-cabinet-category, .file-cabinet-category-placeholder')
@@ -1853,8 +1919,32 @@ function initFileCabinetCategoryColumnDrag(mount, signal) {
             try { grab.releasePointerCapture(ev.pointerId); } catch { /* ignore */ }
 
             document.body.classList.remove('is-file-cabinet-drag-active');
+            clearDesktopDockDragHighlight();
             ghost?.remove();
             ghost = null;
+
+            const dockButtons = getDockButtonAt(ev.clientX, ev.clientY);
+            const targetDesktopId = dockButtons.length
+                ? Number(dockButtons[0].dataset.desktopId)
+                : null;
+            const activeDesktop = DesktopManager.getActiveDesktop();
+
+            if (
+                active
+                && Number.isInteger(targetDesktopId)
+                && targetDesktopId !== activeDesktop
+            ) {
+                const items = typeof getItems === 'function' ? getItems() : [];
+                const itemIds = collectFileCabinetCategoryNoteIds(mount, category, items, activeDesktop);
+                if (placeholder?.parentNode) {
+                    placeholder.parentNode.insertBefore(dragEl, placeholder);
+                    placeholder.remove();
+                } else if (!dragEl.isConnected) {
+                    parent.appendChild(dragEl);
+                }
+                assignFileCabinetItemsToDesktop(itemIds, targetDesktopId, items);
+                return;
+            }
 
             if (!active || !placeholder?.parentNode) {
                 if (placeholder?.parentNode) {
@@ -1886,8 +1976,12 @@ function initFileCabinetCategoryColumnDrag(mount, signal) {
 export function initFileCabinetDrag(mount, currentItemsOrGetter = [], UI, signal) {
     if (!mount || !signal) return;
 
+    const getItems = typeof currentItemsOrGetter === 'function'
+        ? currentItemsOrGetter
+        : () => currentItemsOrGetter || [];
+
     initFileCabinetCategoryActions(mount, signal);
-    initFileCabinetCategoryColumnDrag(mount, signal);
+    initFileCabinetCategoryColumnDrag(mount, getItems, signal);
 
     const foldedHoverPreview = initFileCabinetFoldedHoverPreview(
         mount,
@@ -1895,9 +1989,6 @@ export function initFileCabinetDrag(mount, currentItemsOrGetter = [], UI, signal
         signal
     );
 
-    const getItems = typeof currentItemsOrGetter === 'function'
-        ? currentItemsOrGetter
-        : () => currentItemsOrGetter || [];
     const itemsById = () => new Map(getItems().map((item) => [item.id, item]));
     let dragState = null;
     let previewFrame = null;
@@ -1917,6 +2008,18 @@ export function initFileCabinetDrag(mount, currentItemsOrGetter = [], UI, signal
 
     const applyPreviewAt = (clientX, clientY) => {
         if (!dragState?.active) return null;
+        const dockButtons = setDesktopDockDragHighlight(clientX, clientY);
+        if (dockButtons.length > 0) {
+            restorePreviewFromState(dragState);
+            clearFileCabinetDropTargets(mount);
+            if (dragState.targetStack && dragState.targetStack !== dragState.sourceStack) {
+                dragState.targetStack = null;
+                dragState.targetBaseline = null;
+            }
+            dragState.currentTarget = { kind: 'desktop-dock' };
+            return dragState.currentTarget;
+        }
+
         const canvas = document.getElementById('app-canvas');
         const target = resolveCrossSurfaceDropTarget(clientX, clientY, {
             dragKind: 'fc-tab',
@@ -2056,10 +2159,18 @@ export function initFileCabinetDrag(mount, currentItemsOrGetter = [], UI, signal
             document.body.classList.remove('is-file-cabinet-drag-active');
             mount.classList.remove('is-layout-active');
             clearFileCabinetDropTargets(mount);
+            clearDesktopDockDragHighlight();
             foldedHoverPreview?.onDragEnd();
             resetDraggedTabStyles(state.card, state.sourceStack);
             return;
         }
+
+        clearDesktopDockDragHighlight();
+
+        const dockButtons = getDockButtonAt(e.clientX, e.clientY);
+        const targetDesktopId = dockButtons.length
+            ? Number(dockButtons[0].dataset.desktopId)
+            : null;
 
         // Always resolve fresh at drop — never trust stale rAF currentTarget.
         const canvas = document.getElementById('app-canvas');
@@ -2083,6 +2194,21 @@ export function initFileCabinetDrag(mount, currentItemsOrGetter = [], UI, signal
         if (!itemId) {
             endFileCabinetDragGhost(state.card, state.placeholder);
             resetDraggedTabStyles(state.card, state.sourceStack);
+            syncFileCabinetDrawerHeight(mount);
+            return;
+        }
+
+        // FC tab → desktop dock (stay filed on target desktop)
+        if (Number.isInteger(targetDesktopId)) {
+            const currentDesktop = item?.desktopId || 1;
+            endFileCabinetDragGhost(state.card, state.placeholder);
+            resetDraggedTabStyles(state.card, state.sourceStack);
+            if (targetDesktopId !== currentDesktop && item) {
+                DesktopManager.assignNoteToDesktop(item, targetDesktopId);
+                window.dispatchEvent(new CustomEvent('desktop:changed', {
+                    detail: { desktopId: DesktopManager.getActiveDesktop() }
+                }));
+            }
             syncFileCabinetDrawerHeight(mount);
             return;
         }
@@ -2240,6 +2366,7 @@ export function initFileCabinetDrag(mount, currentItemsOrGetter = [], UI, signal
                 endFileCabinetDragGhost(state.card, state.placeholder);
             }
             clearFileCabinetDropTargets(mount);
+            clearDesktopDockDragHighlight();
             document.body.classList.remove('is-file-cabinet-drag-active');
             mount.classList.remove('is-layout-active');
             foldedHoverPreview?.onDragEnd();
