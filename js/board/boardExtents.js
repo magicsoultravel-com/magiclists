@@ -7,7 +7,7 @@ import {
 } from './layoutKeys.js';
 import { readNoteRect } from './noteGeometry.js';
 import { DesktopManager } from '../desktopManager.js';
-import { SIDEBAR_DEFAULT_WIDTH, readSidebarWidth } from '../sidebarPrefs.js';
+import { SIDEBAR_DEFAULT_WIDTH, readSidebarWidth, readPanelCollapsed } from '../sidebarPrefs.js';
 
 export const DESKTOP_BOARD_PANE_CLASS = 'desktop-board-pane';
 
@@ -15,13 +15,31 @@ const boardExtentsFrames = new WeakMap();
 
 // Stable layout width independent of the live canvas width (sidebar resizing).
 // Captured once so packW doesn't shift when the sidebar is resized, which
-// would otherwise re-pack saved cards on every render.
+// would otherwise re-pack saved cards on every render. Reset when the board
+// area itself changes (sidebar collapse/expand, dock change, window resize,
+// committed sidebar drag) so placements follow the visible board edge.
 let stableLayoutWidth = null;
 
 export function getStableBoardLayoutWidth() {
     if (stableLayoutWidth != null) return stableLayoutWidth;
     const viewportW = typeof window !== 'undefined' ? window.innerWidth : 1280;
-    stableLayoutWidth = Math.max(320, viewportW - SIDEBAR_DEFAULT_WIDTH);
+
+    // The board packing width must match the *visible* board area. The sidebar
+    // collapses to 0px (and is expanded by default), so subtracting the fixed
+    // default width unconditionally would leave an invisible wall — a deadband
+    // on the right of the board where notes can't be placed or expanded.
+    // Reflect the real sidebar footprint: 0px when collapsed, otherwise the
+    // persisted custom width (or the default).
+    let sidebarWidth = 0;
+    const sidebarEl = typeof document !== 'undefined' ? document.getElementById('side-panel') : null;
+    const isSidebarCollapsed = sidebarEl
+        ? sidebarEl.classList.contains('is-collapsed')
+        : readPanelCollapsed();
+    if (!isSidebarCollapsed) {
+        sidebarWidth = readSidebarWidth() ?? SIDEBAR_DEFAULT_WIDTH;
+    }
+
+    stableLayoutWidth = Math.max(320, viewportW - sidebarWidth);
     return stableLayoutWidth;
 }
 

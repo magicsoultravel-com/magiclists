@@ -20,6 +20,7 @@ import {
     clearFileCabinetShut
 } from './fileCabinet.js';
 import { ACTION_ICONS } from './icons.js';
+import { resetStableBoardLayoutWidth } from './board/boardExtents.js';
 
 const DESKTOP_MIN_WIDTH = 280;
 
@@ -362,6 +363,7 @@ function bindSplitterDrag(handle, axis) {
             // (body.is-shell-resizing is still set), then re-enable transitions.
             const clamped = applySidebarWidth(lastSize || sidebarPanel?.offsetWidth);
             if (clamped) writeSidebarWidth(clamped);
+            resetStableBoardLayoutWidth();
         } else {
             const mount = document.getElementById('file-cabinet');
             const height = lastSize ?? mount?.offsetHeight ?? 0;
@@ -470,6 +472,7 @@ function reclampAll() {
 
 function onWindowResize() {
     reclampAll();
+    resetStableBoardLayoutWidth();
     dispatchDesktopBoundsChanged();
 }
 
@@ -492,6 +495,7 @@ export function onShellDockChanged() {
     } else {
         clearSidebarAppliedWidth();
     }
+    resetStableBoardLayoutWidth();
     reclampAll();
     dispatchDesktopBoundsChanged();
 }
@@ -503,6 +507,7 @@ export function onSidebarCollapseChanged() {
     } else {
         clearSidebarAppliedWidth();
     }
+    resetStableBoardLayoutWidth();
     reclampAll();
     dispatchDesktopBoundsChanged();
 }

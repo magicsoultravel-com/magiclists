@@ -260,7 +260,9 @@
             (function () {
                 try {
                     var stored = localStorage.getItem('matrix_panel_collapsed');
-                    var collapsed = stored === null ? true : stored === 'true';
+                    // First-time users default to the sidebar EXPANDED; only a
+                    // persisted explicit choice keeps it collapsed.
+                    var collapsed = stored === null ? false : stored === 'true';
                     var panel = document.getElementById('side-panel');
                     var fab = document.getElementById('nav-panel-toggle-fab');
                     var toggle = document.getElementById('nav-panel-toggle');

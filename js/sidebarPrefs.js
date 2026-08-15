@@ -117,7 +117,9 @@ export function writeModuleDock(moduleId, patch) {
 
 export function readPanelCollapsed() {
     const stored = localStorage.getItem(PANEL_COLLAPSED_KEY);
-    return stored === null ? true : stored === 'true';
+    // First-time users default to the sidebar EXPANDED; only a persisted
+    // explicit choice keeps it collapsed.
+    return stored === null ? false : stored === 'true';
 }
 
 export function writePanelCollapsed(collapsed) {
