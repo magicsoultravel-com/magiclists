@@ -474,15 +474,18 @@ export const RadioPlayer = {
         const stale = this.pausedAt && (Date.now() - this.pausedAt >= STALE_PAUSE_MS);
         if (!stale && this.station?.url_resolved && this.audio?.src) {
             try {
+                // If network/audio element dropped connection or is suspended/stuck after sleep, reset/reload source cleanly
+                if (this.audio.networkState === HTMLMediaElement.NETWORK_NO_SOURCE || this.audio.error || (this.audio.paused && this.audio.currentTime === 0)) {
+                    this.audio.src = this.station.url_resolved;
+                    this.audio.load();
+                }
                 await this.audio.play();
                 return;
             } catch {
-                // Element may be MediaElementSource-poisoned without CORS — hard recover
-                const viz = await getVisualizer();
-                if (viz?.hasMediaElementSource?.() && !this.loadedWithCors) {
-                    const recovered = await this.resetAudioElementAndPlay();
-                    if (recovered) return;
-                }
+                // Element may be MediaElementSource-poisoned without CORS or connection lost — hard recover
+                const recovered = await this.resetAudioElementAndPlay();
+                if (recovered) return;
+
                 this.error = 'Playback blocked';
                 this.resumeBlocked = true;
                 saveState({ wasPlaying: false });

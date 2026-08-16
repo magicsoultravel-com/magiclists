@@ -1110,10 +1110,9 @@ export const SidebarRadio = {
         const currentKey = stationKey(RadioPlayer.station);
         const active = RadioPlayer.playing || RadioPlayer.loading;
         body.querySelectorAll('[data-radio-station]').forEach((tile) => {
-            tile.classList.toggle(
-                'is-on-desktop',
-                tile.getAttribute('data-radio-station') === currentKey && active
-            );
+            const isCurrent = tile.getAttribute('data-radio-station') === currentKey && active;
+            tile.classList.toggle('is-on-desktop', isCurrent);
+            tile.classList.toggle('is-playing', isCurrent);
         });
     },
 
@@ -1121,7 +1120,14 @@ export const SidebarRadio = {
         if (state.loading || state.loadPhase === 'connecting' || state.loadPhase === 'buffering') {
             return ACTION_ICONS.radioLoading;
         }
-        if (state.playing) return ACTION_ICONS.radioPause;
+        if (state.playing) {
+            return `<span class="sidebar-media-action-wave" aria-hidden="true">
+                ${ACTION_ICONS.radioPause}
+                <svg class="sidebar-media-action-wave__svg" viewBox="0 0 12 12" width="12" height="12" focusable="false">
+                    <path class="sidebar-media-action-wave__path" d="M 0 6 Q 3 2, 6 6 T 12 6" fill="none" stroke="#34d399" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="1.5 2"/>
+                </svg>
+            </span>`;
+        }
         return ACTION_ICONS.radioPlay;
     },
 

@@ -291,11 +291,14 @@ export const RadioVisualizer = {
     birds: [],
     nextBirdAt: 0,
     travelScroll: 0,
+    tapBpmTimes: [],
+    tapBpmLastTime: 0,
     _mountainLastNow: null,
     _smoothValues: null,
     _smoothMotion: 0.35,
     sceneTransition: null,
     detailsOpen: false,
+    settingsOpen: true,
     panelWidth: null,
     canvasHeight: 200,
 
@@ -415,8 +418,17 @@ export const RadioVisualizer = {
                 </div>
                 <div class="media-visualizer-modal__body">
                     <canvas class="media-visualizer-modal__canvas" data-media-visualizer-canvas aria-label="Media visualizer canvas"></canvas>
-                    <p class="media-visualizer-modal__status" data-media-visualizer-status data-state="pending"></p>
-                    <div class="media-visualizer-modal__controls">
+                    <button type="button" class="btn btn--compact btn-icon media-visualizer-modal__settings-toggle" data-media-visualizer-settings-toggle aria-expanded="true" aria-label="Hide settings" title="Hide settings">
+                            <svg viewBox="0 0 12 12" width="12" height="12" focusable="false" aria-hidden="true">
+                                <path d="M2 3.4h8M2 6h8M2 8.6h8" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/>
+                                <circle cx="4.6" cy="3.4" r="1" fill="none" stroke="currentColor" stroke-width="0.8"/>
+                                <circle cx="7.4" cy="6" r="1" fill="none" stroke="currentColor" stroke-width="0.8"/>
+                                <circle cx="4.6" cy="8.6" r="1" fill="none" stroke="currentColor" stroke-width="0.8"/>
+                            </svg>
+                        </button>
+                    <div class="media-visualizer-modal__settings" data-media-visualizer-settings>
+                        <p class="media-visualizer-modal__status" data-media-visualizer-status data-state="pending"></p>
+                        <div class="media-visualizer-modal__controls">
                         <label class="media-visualizer-modal__field">
                             <span>Style</span>
                             <select class="form-input radio-special-form__select" data-media-visualizer-mode>
@@ -457,11 +469,14 @@ export const RadioVisualizer = {
                             <span data-media-visualizer-travel-label>Travel: 0.55×</span>
                             <input type="range" min="0.25" max="1.25" step="0.05" value="0.55" data-media-visualizer-travel title="Scroll + scenery pace">
                         </label>
-                        <label class="media-visualizer-modal__field media-visualizer-modal__field--range">
-                            <span data-media-visualizer-bpm-label>BPM: 120</span>
+                        <label class="media-visualizer-modal__field media-visualizer-modal__field--range media-visualizer-modal__bpm-field">
+                            <span class="media-visualizer-modal__bpm-label-row">
+                                <span data-media-visualizer-bpm-label>BPM: 120</span>
+                                <button type="button" class="btn btn--compact media-visualizer-modal__bpm-snap" data-media-visualizer-bpm-snap title="Tap along with the beat to set BPM" aria-label="Tap along with the beat to set BPM">○</button>
+                            </span>
                             <input type="range" min="10" max="200" step="1" value="120" data-media-visualizer-bpm>
                         </label>
-                        <button type="button" class="media-visualizer-modal__details-toggle" data-media-visualizer-details-toggle aria-expanded="false">
+                        <button type="button" class="media-visualizer-modal__details-toggle" data-media-visualizer-details-toggle aria-expanded="false" style="margin-top: 0.35rem;">
                             Show randomizer details
                         </button>
                         <div class="media-visualizer-modal__details" data-media-visualizer-details hidden>
@@ -499,6 +514,9 @@ export const RadioVisualizer = {
         const travelEl = modal.querySelector('[data-media-visualizer-travel]');
         const bpmEl = modal.querySelector('[data-media-visualizer-bpm]');
         const detailsToggle = modal.querySelector('[data-media-visualizer-details-toggle]');
+        this.bindBpmSnap(modal);
+        this.bindModalDrag(modal);
+        this.bindSettingsToggle(modal);
         const detailsEl = modal.querySelector('[data-media-visualizer-details]');
         const canvas = modal.querySelector('[data-media-visualizer-canvas]');
         if (canvas) {
@@ -545,6 +563,97 @@ export const RadioVisualizer = {
         document.body.appendChild(modal);
         this.modal = modal;
         return modal;
+    },
+
+    bindModalDrag(modal) {
+        let startX, startY, startLeft, startTop;
+        let dragging = false;
+
+        const isInteractive = (target) => target?.closest(
+            'button, input, select, textarea, a, [role="button"], [data-media-visualizer-resize], [data-media-visualizer-settings-toggle], [data-media-visualizer-details-toggle]'
+        );
+
+        const onDragStart = (e) => {
+            if (e.button !== undefined && e.button !== 0) return; // left button only
+            if (isInteractive(e.target)) return;
+            dragging = true;
+            startX = e.clientX ?? e.touches?.[0]?.clientX ?? 0;
+            startY = e.clientY ?? e.touches?.[0]?.clientY ?? 0;
+            const rect = modal.getBoundingClientRect();
+            startLeft = rect.left;
+            startTop = rect.top;
+            modal.classList.add('is-dragging');
+            if (e.cancelable) e.preventDefault();
+        };
+
+        const onDrag = (e) => {
+            if (!dragging) return;
+            const x = e.clientX ?? e.touches?.[0]?.clientX;
+            const y = e.clientY ?? e.touches?.[0]?.clientY;
+            if (x === undefined || y === undefined) return;
+            const dx = x - startX;
+            const dy = y - startY;
+            const margin = 8;
+            const newLeft = clamp(startLeft + dx, margin, Math.max(margin, window.innerWidth - 320));
+            const newTop = clamp(startTop + dy, margin, Math.max(margin, window.innerHeight - 60));
+            modal.style.left = `${newLeft}px`;
+            modal.style.top = `${newTop}px`;
+        };
+
+        const onDragEnd = () => {
+            if (!dragging) return;
+            dragging = false;
+            modal.classList.remove('is-dragging');
+        };
+
+        modal.addEventListener('mousedown', onDragStart);
+        modal.addEventListener('touchstart', onDragStart, { passive: false });
+        window.addEventListener('mousemove', onDrag);
+        window.addEventListener('touchmove', onDrag, { passive: true });
+        window.addEventListener('mouseup', onDragEnd);
+        window.addEventListener('touchend', onDragEnd);
+        window.addEventListener('blur', onDragEnd);
+    },
+
+    bindBpmSnap(modal) {
+        const bpmSnapBtn = modal.querySelector('[data-media-visualizer-bpm-snap]');
+        if (!bpmSnapBtn) return;
+
+        const applyTapBpm = () => {
+            const bpmSlider = modal.querySelector('[data-media-visualizer-bpm]');
+            const bpmLabel = modal.querySelector('[data-media-visualizer-bpm-label]');
+            if (bpmSlider) bpmSlider.value = String(this.settings.bpm);
+            if (bpmLabel) bpmLabel.textContent = `BPM: ${this.settings.bpm}`;
+        };
+
+        bpmSnapBtn.addEventListener('click', () => {
+            const now = performance.now();
+            const sinceLast = this.tapBpmLastTime ? now - this.tapBpmLastTime : 0;
+
+            // First tap or a long gap (>3s) starts a fresh cycle
+            if (!this.tapBpmLastTime || sinceLast > 3000) {
+                this.tapBpmTimes = [];
+            } else if (sinceLast >= 250) {
+                // Record the interval between this tap and the previous one.
+                // Second tap already yields BPM from this single interval;
+                // later taps average the last 2-3 consecutive beat intervals.
+                this.tapBpmTimes.push(sinceLast);
+                if (this.tapBpmTimes.length > 3) this.tapBpmTimes.shift();
+
+                const avgInterval = this.tapBpmTimes.reduce((a, b) => a + b, 0) / this.tapBpmTimes.length;
+                const bpm = Math.round(60000 / avgInterval);
+                this.settings.bpm = clamp(bpm, 10, 200);
+                applyTapBpm();
+            }
+
+            this.tapBpmLastTime = now;
+
+            // Tap pulse feedback — button stays ○, never toggles
+            bpmSnapBtn.style.transform = 'scale(0.85)';
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+                bpmSnapBtn.style.transform = '';
+            }));
+        });
     },
 
     bindPanelResize(modal) {
@@ -858,7 +967,29 @@ export const RadioVisualizer = {
         }
         // Ease motion so sky haze / glow don't flicker with every beat
         this._smoothMotion += (target - this._smoothMotion) * 0.08;
+        
         return this._smoothMotion;
+    },
+
+    bindSettingsToggle(modal) {
+        const toggleBtn = modal.querySelector('[data-media-visualizer-settings-toggle]');
+        const settingsEl = modal.querySelector('[data-media-visualizer-settings]');
+        if (!toggleBtn || !settingsEl) return;
+
+        const sync = () => {
+            const open = !!this.settingsOpen;
+            toggleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            toggleBtn.setAttribute('aria-label', open ? 'Hide settings' : 'Show settings');
+            toggleBtn.setAttribute('title', open ? 'Hide settings' : 'Show settings');
+            settingsEl.classList.toggle('is-collapsed', !open);
+        };
+
+        toggleBtn.addEventListener('click', () => {
+            this.settingsOpen = !this.settingsOpen;
+            sync();
+        });
+
+        sync();
     },
 
     smoothVizValues(values) {

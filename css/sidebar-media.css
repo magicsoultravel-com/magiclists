@@ -718,9 +718,60 @@
     min-height: auto;
 }
 
-.sidebar-media-list-item__meta {
-    font-size: 0.5rem;
-    color: var(--text-muted);
+.sidebar-media-list-item__art-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+}
+
+/* Removed wave animation on station tiles */
+
+.sidebar-media-action-wave {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 12px;
+    height: 12px;
+    vertical-align: middle;
+}
+
+.sidebar-media-action-wave svg:not(.sidebar-media-action-wave__svg) {
+    display: block;
+    width: 12px;
+    height: 12px;
+    opacity: 0.75;
+}
+
+.sidebar-media-action-wave__svg {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: 12px;
+    height: 12px;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+.sidebar-media-action-wave__path {
+    animation: sidebarMediaWaveScroll 1.6s linear infinite;
+}
+
+/* Updated wave animation for pause icon – smooth vertical oscillation */
+@keyframes sidebarMediaWaveScroll {
+    0% {
+        transform: translateX(0);
+    }
+    50% {
+        transform: translateX(-6px);
+    }
+    100% {
+        transform: translateX(0);
+    }
 }
 
 @keyframes sidebar-media-marquee {
