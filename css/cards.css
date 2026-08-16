@@ -371,6 +371,58 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
     opacity: 0.45;
 }
 
+.card-act--popout.is-active {
+    color: #93c5fd;
+}
+
+.card-act--popin:hover {
+    color: #93c5fd;
+}
+
+.mini-card.is-popout-locked {
+    outline: 1px dashed color-mix(in srgb, #60a5fa 55%, transparent);
+    outline-offset: 1px;
+}
+
+.mini-card.is-popout-locked .editor-note-body,
+.mini-card.is-popout-locked .editor-note-header {
+    opacity: 0.55;
+}
+
+.mini-card.is-popout-locked .editor-note-body {
+    pointer-events: none;
+}
+
+.mini-card.is-popout-locked .editor-note-header .card-inline-edit,
+.mini-card.is-popout-locked .editor-note-header [contenteditable="true"] {
+    pointer-events: none;
+}
+
+.mini-card.is-popout-locked .card-drag-zone,
+.mini-card.is-popout-locked .card-act--popout,
+.mini-card.is-popout-locked .card-act--popin,
+.mini-card.is-popout-locked .card-act--drag,
+.mini-card.is-popout-locked .card-act--pin,
+.mini-card.is-popout-locked .card-act--toggle,
+.mini-card.is-popout-locked .note-popout-lock-banner,
+.mini-card.is-popout-locked .ff-resize,
+.mini-card.is-popout-locked .ff-resize-layer,
+.mini-card.is-popout-locked .ff-resize-n,
+.mini-card.is-popout-locked .ff-resize-s,
+.mini-card.is-popout-locked .ff-resize-e,
+.mini-card.is-popout-locked .ff-resize-w,
+.mini-card.is-popout-locked .ff-resize-nw,
+.mini-card.is-popout-locked .ff-resize-ne,
+.mini-card.is-popout-locked .ff-resize-sw,
+.mini-card.is-popout-locked .ff-resize-se {
+    pointer-events: auto;
+}
+
+.mini-card.is-popout-locked .card-act.is-popout-locked-action {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
 .card-act--edit:hover {
     color: #a5b4fc;
 }

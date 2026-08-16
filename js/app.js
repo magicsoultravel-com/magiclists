@@ -25,6 +25,7 @@ import {
     applyCategoryAliasesToItems
 } from './categories.js';
 import { UndoManager, historyLabelForItem, mergeItemOntoExisting } from './undo.js';
+import { NotePopoutBridge } from './notePopoutBridge.js';
 import { DesktopBackground } from './desktopBackground.js';
 import { ChromeBackground } from './chromeBackground.js';
 import { ClockStyle } from './clockStyle.js';
@@ -179,6 +180,7 @@ SidePanel.setupStatusClickHandlers(); /* after radio/tv/weather shells exist */
             });
             TemplatePicker.init();
             this.setupUndo();
+            this.setupNotePopoutBridge();
             this.setupDrawingMode();
             Fullscreen.init();
 DrawingBoard.init(this);
@@ -202,8 +204,120 @@ DrawingBoard.init(this);
             onStackChange: () => {
                 SidebarHistory.renderPanel();
                 this.renderQuickActionsHeaderIcons();
+                NotePopoutBridge.broadcastUndoChanged();
             }
         });
+
+        const entryNoteId = (entry) => entry?.before?.id || entry?.item?.id || entry?.after?.id || null;
+        const guardPopoutHistory = (action) => {
+            const original = UndoManager[action].bind(UndoManager);
+            UndoManager[action] = async function guardedHistoryAction(...args) {
+                const stack = action === 'undo' ? this.undoStack : this.redoStack;
+                const entry = stack[stack.length - 1];
+                const noteId = entryNoteId(entry);
+                if (noteId && NotePopoutBridge.isClaimedByOther(noteId)) {
+                    showAppToast('Undo/redo that note in its popout window');
+                    NotePopoutBridge.openOrFocus(noteId);
+                    return;
+                }
+                return original(...args);
+            };
+        };
+        guardPopoutHistory('undo');
+        guardPopoutHistory('redo');
+    }
+
+    setupNotePopoutBridge() {
+        NotePopoutBridge.init({
+            role: 'main',
+            handlers: {
+                onClaimChanged: (noteId, item) => this.handlePopoutClaimChanged(noteId, item),
+                onNoteSaved: (noteId, item) => this.handlePopoutNoteSaved(noteId, item),
+                onUndoChanged: () => {
+                    if (!UndoManager.isApplying) {
+                        UndoManager.reloadFromStorage();
+                        SidebarHistory.renderPanel();
+                        this.renderQuickActionsHeaderIcons();
+                    }
+                }
+            }
+        });
+        // Refresh any notes already claimed by surviving popouts.
+        NotePopoutBridge.syncAllPopoutButtons();
+        this.refreshPopoutLockedCards();
+    }
+
+    handlePopoutClaimChanged(noteId, closedItem = null) {
+        NotePopoutBridge.syncAllPopoutButtons();
+        if (noteId) {
+            // Claim released (popped back in) — prefer snapshot from popout_closed,
+            // else reload from disk so unlock paints latest content.
+            if (!NotePopoutBridge.isClaimedByOther(noteId) && !NotePopoutBridge.isPoppedOut(noteId)) {
+                const fresh = closedItem
+                    || API._getLocalDB()?.items?.find((it) => it.id === noteId);
+                if (fresh) {
+                    const idx = AppState.items.findIndex((it) => it.id === noteId);
+                    if (idx >= 0) Object.assign(AppState.items[idx], fresh);
+                    else AppState.items.push(fresh);
+                    UI.updateBoardItemsMap?.(idx >= 0 ? AppState.items[idx] : fresh);
+                }
+            }
+            this.refreshPopoutLockedCard(noteId);
+            if (Editor.activeItem?.id === noteId && NotePopoutBridge.isClaimedByOther(noteId)) {
+                Editor.close?.();
+            }
+            return;
+        }
+        this.refreshPopoutLockedCards();
+    }
+
+    refreshPopoutLockedCards() {
+        const canvas = document.getElementById('app-canvas');
+        if (!canvas) return;
+        canvas.querySelectorAll('.mini-card[data-id]').forEach((card) => {
+            const id = card.dataset.id;
+            if (!id) return;
+            const item = AppState.items.find((it) => it.id === id);
+            if (item) UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
+        });
+    }
+
+    refreshPopoutLockedCard(noteId) {
+        if (!noteId) return;
+        const canvas = document.getElementById('app-canvas');
+        const item = AppState.items.find((it) => it.id === noteId);
+        if (!canvas || !item) {
+            NotePopoutBridge.syncAllPopoutButtons();
+            return;
+        }
+        UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
+        NotePopoutBridge.syncPopoutButtonUI(
+            canvas.querySelector(`.mini-card[data-id="${CSS.escape(noteId)}"] .card-act--popout`),
+            noteId
+        );
+    }
+
+    handlePopoutNoteSaved(noteId, remoteItem) {
+        if (!noteId) return;
+        const idx = AppState.items.findIndex((it) => it.id === noteId);
+        if (remoteItem) {
+            if (idx >= 0) Object.assign(AppState.items[idx], remoteItem);
+            else AppState.items.push(remoteItem);
+            UI.updateBoardItemsMap?.(idx >= 0 ? AppState.items[idx] : remoteItem);
+        } else if (idx >= 0) {
+            // Reload from storage if payload missing
+            const fresh = API._getLocalDB()?.items?.find((it) => it.id === noteId);
+            if (fresh) Object.assign(AppState.items[idx], fresh);
+        }
+        const live = AppState.items.find((it) => it.id === noteId);
+        if (!live) return;
+        const canvas = document.getElementById('app-canvas');
+        if (canvas) UI.updateSingleCard(canvas, live, AppState.hiddenCategories);
+        if (Editor.activeItem?.id === noteId && !Editor.overlay?.classList.contains('is-hidden')) {
+            Editor.activeItem = NoteSurface.snapshotItem(live);
+            Editor.renderForm();
+        }
+        this.updateWorkspaceCounter();
     }
 
     async removeItemFromWorkspace(itemId) {
@@ -221,6 +335,8 @@ DrawingBoard.init(this);
         const merged = idx >= 0 ? mergeItemOntoExisting(AppState.items[idx], item) : item;
         if (idx >= 0) AppState.items[idx] = merged;
         else AppState.items.push(merged);
+
+        NotePopoutBridge.broadcastNoteSaved(merged.id, NoteSurface.snapshotItem(merged));
 
         if (Editor.activeItem?.id === item.id && !Editor.overlay?.classList.contains('is-hidden')) {
             Editor.activeItem = NoteSurface.snapshotItem(merged);
@@ -1050,6 +1166,11 @@ executeDataBackupExport() {
             const item = detail?.item ?? detail;
             const preserveView = detail?.preserveView === true;
             if (!item?.id) return;
+
+            // Popout owns exclusive edit — ignore main-window mutations for that note.
+            if (NotePopoutBridge.isClaimedByOther(item.id) && detail?.fromPopoutSync !== true) {
+                return;
+            }
 
             const idx = AppState.items.findIndex((i) => i.id === item.id);
             const beforeSnapshot = detail?.beforeItem

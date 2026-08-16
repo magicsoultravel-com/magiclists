@@ -14,6 +14,8 @@ import { BoardSort } from './boardSort.js';
 import { Fullscreen } from './fullscreen.js';
 import { UndoManager } from './undo.js';
 import { BoardOverlay } from './boardOverlay.js';
+import { NotePopoutBridge } from './notePopoutBridge.js';
+import { showAppToast } from './toast.js';
 
 /**
  * Attach a quick-action button using a "commit then act" pattern.
@@ -95,20 +97,83 @@ function queryActionButtons(root) {
         hideBtn: actions.querySelector('.card-act--hide'),
         editBtn: actions.querySelector('.card-act--edit'),
         calBtn: actions.querySelector('.card-act--cal'),
+        popoutBtn: actions.querySelector('.card-act--popout'),
+        popinBtn: actions.querySelector('.card-act--popin'),
         closeBtn: actions.querySelector('.card-act--close')
     };
 }
 
 
 function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
-    const { copyBtn, pinBtn, dragBtn, colorBtn, iconBtn, hideBtn, calBtn } = buttons;
+    const { copyBtn, pinBtn, dragBtn, colorBtn, iconBtn, hideBtn, calBtn, popoutBtn, popinBtn } = buttons;
     const iconRoot = surface === 'board'
         ? (card?.querySelector('.editor-note-shell') || card)
-        : (editor?.mountZone?.querySelector('.editor-note-shell') || editor?.mountZone);
+        : (editor?.mountZone?.querySelector('.editor-note-shell') || editor?.mountZone || editor?.popoutRoot);
 
     // Synchronous commit used before the button steals focus from the active inline edit.
     const boardCommit = surface === 'board' ? () => NoteSurface.commitFocusedInlineField(card, item) : null;
-    const modalCommit = surface === 'modal' ? () => editor.syncActiveItemFromDom() : null;
+    const modalCommit = (surface === 'modal' || surface === 'popout')
+        ? () => editor?.syncActiveItemFromDom?.()
+        : null;
+
+    const lockedByPopout = surface === 'board' && NotePopoutBridge.isClaimedByOther(item?.id);
+
+    if (popoutBtn) {
+        NotePopoutBridge.syncPopoutButtonUI(popoutBtn, item.id);
+        attachCardActionButton(popoutBtn, () => {
+            if (surface === 'popout') {
+                editor?.closePopout?.();
+                return;
+            }
+            if (surface === 'board') {
+                NoteSurface.commitFocusedInlineField(card, item);
+            } else if (surface === 'modal') {
+                editor?.syncActiveItemFromDom?.();
+                editor?.persistNote?.({ force: true });
+            }
+            if (!localStorage.getItem('admin_token')) {
+                showAppToast('Login required to pop out notes');
+                return;
+            }
+            NotePopoutBridge.openOrFocus(item.id);
+            NotePopoutBridge.syncPopoutButtonUI(popoutBtn, item.id);
+            if (surface === 'modal' && NotePopoutBridge.isPoppedOut(item.id)) {
+                // Popout owns the note; dismiss modal without a second save race.
+                editor?.close?.();
+            }
+        }, { commit: boardCommit || modalCommit, defer: false });
+    }
+
+    if (popinBtn) {
+        // Recall a popped-out note: ask the popout window to flush + save then
+        // close itself. The popout_closed broadcast brings the final content
+        // back to the board and the card re-renders unlocked.
+        attachCardActionButton(popinBtn, () => {
+            if (surface === 'board') NoteSurface.commitFocusedInlineField(card, item);
+            else editor?.syncActiveItemFromDom?.();
+            if (NotePopoutBridge.isPoppedOut(item.id)) {
+                NotePopoutBridge.requestClose(item.id);
+                NotePopoutBridge.syncAllPopoutButtons();
+                showAppToast('Returning note to the board');
+            }
+        }, { commit: boardCommit || modalCommit, defer: false });
+    }
+
+    // Content ownership is in the popout — leave drag, pin, popout on the board card.
+    if (lockedByPopout) {
+        [colorBtn, iconBtn, hideBtn, calBtn, copyBtn].forEach((btn) => {
+            if (!btn) return;
+            btn.disabled = true;
+            btn.setAttribute('aria-disabled', 'true');
+            btn.classList.add('is-popout-locked-action');
+        });
+        attachCardActionButton(pinBtn, () => {
+            const pinned = ui.toggleBoardPin(item.id);
+            if (surface === 'board') ui.syncBoardPinClass(card);
+            syncPinButton(pinBtn, pinned, dragBtn);
+        });
+        return;
+    }
 
     attachCardActionButton(copyBtn, async () => {
         if (surface === 'board') {
@@ -119,7 +184,7 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
             else NoteSurface.flashCopyFeedback(copyBtn, 'Copy failed', { failed: true });
         } else {
             editor.syncActiveItemFromDom();
-            const data = editor.collectFormData();
+            const data = editor.collectFormData ? editor.collectFormData() : item;
             const ok = await copyPlainTextToClipboard(itemToPlainCopyText(data));
             if (ok) NoteSurface.flashCopyFeedback(copyBtn);
             else NoteSurface.flashCopyFeedback(copyBtn, 'Copy failed', { failed: true });
@@ -150,20 +215,24 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
                     applyCardCategoryBand(card, categoryColor);
                 }
             });
+        } else if (surface === 'popout') {
+            editor.openColorPicker?.();
         } else {
             editor.openColorPicker();
         }
-    }, { commit: boardCommit });
+    }, { commit: boardCommit || modalCommit });
 
     attachCardActionButton(iconBtn, () => {
         if (surface === 'board') {
             if (isDesktopCard(card)) ui.raiseDesktopCard(card);
             if (!localStorage.getItem('admin_token')) return;
             NoteSurface.openEmojiPickerForNote(iconRoot, iconBtn, item);
+        } else if (surface === 'popout') {
+            editor.openEmojiPicker?.();
         } else {
             editor.openEmojiPicker();
         }
-    }, { commit: boardCommit });
+    }, { commit: boardCommit || modalCommit });
 
     attachCardActionButton(hideBtn, () => {
         if (surface === 'board') {
@@ -180,6 +249,12 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
         attachCardActionButton(calBtn, () => {
             if (surface === 'board') {
                 BoardOperations.toggleCardCalendar(item, calBtn);
+            } else if (surface === 'popout') {
+                editor.syncActiveItemFromDom?.();
+                BoardOperations.toggleCardCalendar(item, calBtn);
+                if (editor.activeItem) editor.activeItem.hideFromCalendar = item.hideFromCalendar;
+                editor.markInteracted?.();
+                editor.triggerAutoSave?.();
             } else {
                 editor.syncActiveItemFromDom();
                 BoardOperations.toggleCardCalendar(item, calBtn);
@@ -194,13 +269,18 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
 /**
  * @param {HTMLElement} mount — board card or modal toolbar mount
  * @param {object} item
- * @param {{ surface: 'board'|'modal', ui: object, card?: HTMLElement, ctx?: object, editor?: object }} opts
+ * @param {{ surface: 'board'|'modal'|'popout', ui: object, card?: HTMLElement, ctx?: object, editor?: object }} opts
  */
 export function bindNoteQuickActions(mount, item, { surface, ui, card, ctx, editor } = {}) {
     if (!mount || !item || !ui) return;
 
     if (surface === 'modal') {
         bindModalQuickActions(mount, item, ui, editor);
+        return;
+    }
+
+    if (surface === 'popout') {
+        bindPopoutQuickActions(mount, item, ui, editor);
         return;
     }
 
@@ -238,8 +318,37 @@ export function bindNoteQuickActions(mount, item, { surface, ui, card, ctx, edit
             return;
         }
         if (!localStorage.getItem('admin_token')) return;
+        if (NotePopoutBridge.isClaimedByOther(item.id)) {
+            NotePopoutBridge.openOrFocus(item.id);
+            showAppToast('Note is open in a popout');
+            return;
+        }
         window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: { item } }));
     }, { commit: () => NoteSurface.commitFocusedInlineField(card, item) });
+}
+
+function bindPopoutQuickActions(toolbarMount, item, ui, editor) {
+    if (!editor) return;
+    const buttons = queryActionButtons(toolbarMount);
+    if (!buttons.actions) return;
+
+    editor.colorBtn = buttons.colorBtn;
+    editor.iconBtn = buttons.iconBtn;
+    editor.calendarToggleBtn = buttons.calBtn;
+
+    wireSharedActions(buttons, item, { ui, surface: 'popout', editor });
+
+    if (buttons.closeBtn) {
+        buttons.closeBtn.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            e.stopPropagation();
+            editor.syncActiveItemFromDom?.();
+        });
+        buttons.closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            editor.closePopout?.();
+        });
+    }
 }
 
 function bindModalQuickActions(toolbarMount, item, ui, editor) {

@@ -14,6 +14,7 @@ import { applyCardTheme } from './cardTheme.js';
 import { resolveNoteColor } from './colorPicker.js';
 import { NoteSurface } from './noteSurface.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
+import { NotePopoutBridge } from './notePopoutBridge.js';
 import { getCardRenderContext } from './categories.js';
 import { DesktopManager } from './desktopManager.js';
 import { flushDesktopAutoSave } from './noteSurfaceMutations.js';
@@ -79,12 +80,17 @@ export function buildNoteQuickActionsHtml(item, {
     tileSize = LEGACY_TILE_SIZE,
     tileW = 0,
     tileH = 0,
-    calHidden = !!(item?.hideFromCalendar)
+    calHidden = !!(item?.hideFromCalendar),
+    poppedOut = false
 } = {}) {
     const isModal = surface === 'modal';
+    const isPopout = surface === 'popout';
     let expandTitle;
     let lastIcon;
-    if (isModal) {
+    if (isPopout) {
+        expandTitle = 'Pop in (close window)';
+        lastIcon = CARD_ICONS.popoutExit;
+    } else if (isModal) {
         expandTitle = 'Show on board';
         lastIcon = CARD_ICONS.collapse;
     } else if (spatialTile) {
@@ -95,43 +101,64 @@ export function buildNoteQuickActionsHtml(item, {
         expandTitle = isExpanded ? 'Collapse note' : 'Expand note';
         lastIcon = isExpanded ? CARD_ICONS.collapse : CARD_ICONS.expand;
     }
-    const lastClass = isModal ? 'card-act--close' : 'card-act--toggle';
-    const lastId = isModal ? ' id="modal-close-btn"' : '';
+    const lastClass = isPopout ? 'card-act--close' : (isModal ? 'card-act--close' : 'card-act--toggle');
+    const lastId = (isModal || isPopout) ? ' id="modal-close-btn"' : '';
     const pinTitle = pinned ? 'Unpin position (locks drag)' : 'Pin position (locks drag)';
-    const pinBtn = isModal
+    const pinBtn = (isModal || isPopout)
         ? ''
         : `<button type="button" class="card-act card-act--pin${pinned ? ' is-active' : ''}" title="${pinTitle}" aria-label="${pinTitle}" aria-pressed="${pinned ? 'true' : 'false'}">${pinned ? CARD_ICONS.unpin : CARD_ICONS.pin}</button>`;
     const calTitle = calHidden
         ? 'Hidden from calendar — click to show'
         : 'Shown on calendar — click to hide';
     const calBtn = `<button type="button" class="card-act card-act--cal${calHidden ? ' is-off' : ' is-on'}" title="${escapeAttr(calTitle)}" aria-label="${escapeAttr(calTitle)}">${CARD_ICONS.calendar}</button>`;
-    const showDragIcon = isModal || (showDrag && !pinned);
+    // Board/modal: popout is a normal suite icon. Popout window: omit it (close = pop in).
+    const popTitle = poppedOut ? 'Focus popout window' : 'Pop out note';
+    const popBtn = isPopout
+        ? ''
+        : `<button type="button" class="card-act card-act--popout${poppedOut ? ' is-active' : ''}" data-note-id="${escapeAttr(item?.id || '')}" title="${escapeAttr(popTitle)}" aria-label="${escapeAttr(popTitle)}" aria-pressed="${poppedOut ? 'true' : 'false'}">${poppedOut ? CARD_ICONS.popoutExit : CARD_ICONS.popout}</button>`;
+    // Board/modal: while a popout owns the note, offer a recall action that
+    // returns it to the board (closes the popout after saving). Never in the
+    // popout window itself — its close button is the pop-in.
+    const popinTitle = 'Pop in (return note to board)';
+    const popinBtn = (!isPopout && poppedOut)
+        ? `<button type="button" class="card-act card-act--popin" title="${popinTitle}" aria-label="${popinTitle}">${CARD_ICONS.popin}</button>`
+        : '';
+    const showDragIcon = !isPopout && (isModal || (showDrag && !pinned));
     const dragBtn = showDragIcon
         ? `<button type="button" class="card-act card-act--drag" title="Drag to move" aria-label="Drag to move">${CARD_ICONS.drag}</button>`
         : '';
-    const editTitle = isModal ? 'Close' : 'Edit note';
-    const editBtn = `<button type="button" class="card-act card-act--edit" title="${editTitle}" aria-label="${editTitle}">${CARD_ICONS.edit}</button>`;
-    // Modal & board base: cal, emoji, copy, [pin], color, hide, edit, [drag], close/toggle
-    let actionCount = 8;
-    if (!isModal && showDragIcon) actionCount += 1;
+    const editTitle = isPopout ? 'Pop in' : (isModal ? 'Close' : 'Edit note');
+    const editBtn = isPopout
+        ? ''
+        : `<button type="button" class="card-act card-act--edit" title="${editTitle}" aria-label="${editTitle}">${CARD_ICONS.edit}</button>`;
+    const hideBtn = isPopout
+        ? ''
+        : `<button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>`;
+    // Board: popout, popin (popped only), cal, emoji, copy, [pin], color, hide, edit, [drag], toggle
+    // Popout: cal, emoji, copy, color, close
+    let actionCount = isPopout ? 5 : 9;
+    if (!isModal && !isPopout && showDragIcon) actionCount += 1;
+    if (!isPopout && poppedOut) actionCount += 1;
     if (showArchive) actionCount += 1;
 
     const archiveBtn = showArchive
         ? `<button type="button" id="modal-archive-btn" class="card-act card-act--archive" title="Move to Archive" aria-label="Move to Archive">${CARD_ICONS.delete}</button>`
         : '';
-    const actionsHtml = `<div class="card-actions${isModal ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
+    const actionsHtml = `<div class="card-actions${(isModal || isPopout) ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
+            ${popBtn}
+            ${popinBtn}
             ${calBtn}
             <button type="button" class="card-act card-act--emoji" title="Insert emoji" aria-label="Insert emoji" aria-haspopup="dialog" aria-expanded="false">${CARD_ICONS.insertEmoji}</button>
             <button type="button" class="card-act card-act--copy" title="Copy note as text" aria-label="Copy note as text">${CARD_ICONS.copy}</button>
             ${pinBtn}
             <button type="button" class="card-act card-act--color" title="Note color" aria-label="Note color" aria-haspopup="dialog">${CARD_ICONS.color}</button>
-            <button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>
+            ${hideBtn}
             ${editBtn}
             ${dragBtn}
 
             <button type="button" class="card-act ${lastClass}"${lastId} title="${escapeHTML(expandTitle).replace(/"/g, "")}" aria-label="${escapeHTML(expandTitle).replace(/"/g, "")}">${lastIcon}</button>
         </div>`;
-    return isModal ? `${archiveBtn}${actionsHtml}` : actionsHtml;
+    return (isModal || isPopout) ? `${archiveBtn}${actionsHtml}` : actionsHtml;
 }
 
 export function buildNoteBodyConvertButtonsHtml(item) {
@@ -795,10 +822,12 @@ export function createCardComponent(uiInstance, item, activeCategories) {
  * @param {string} categoryColor - Category color
  */
 export function renderBoardEditorCard(uiInstance, card, item, activeCategories, targetCatName, categoryColor) {
-    const canEdit = NoteSurface.canEditInline();
+    const lockedByPopout = NotePopoutBridge.isClaimedByOther(item?.id);
+    const canEdit = NoteSurface.canEditInline() && !lockedByPopout;
     const dotColor = targetCatName ? categoryColor : UNCATEGORIZED_COLOR;
     const dragZone = ' card-drag-zone';
 
+    card.classList.toggle('is-popout-locked', lockedByPopout);
     card.innerHTML = NoteSurface.buildNoteEditorShell(item, {
         canEdit,
         richEdit: true,
@@ -808,6 +837,21 @@ export function renderBoardEditorCard(uiInstance, card, item, activeCategories, 
         targetCatName,
         categoryColor: dotColor
     });
+
+    if (lockedByPopout) {
+        const shell = card.querySelector('.editor-note-shell');
+        if (shell && !shell.querySelector('.note-popout-lock-banner')) {
+            const banner = document.createElement('button');
+            banner.type = 'button';
+            banner.className = 'note-popout-lock-banner';
+            banner.textContent = 'Editing in popout — click to focus';
+            banner.addEventListener('click', (e) => {
+                e.stopPropagation();
+                NotePopoutBridge.openOrFocus(item.id);
+            });
+            shell.insertBefore(banner, shell.firstChild);
+        }
+    }
 
     bindNoteQuickActions(card, item, {
         surface: 'board',
@@ -823,6 +867,7 @@ export function renderBoardEditorCard(uiInstance, card, item, activeCategories, 
     // Create onChange callback for format commands on board surface
     // This ensures undo/redo tracking works for format commands
     const onChange = () => {
+        if (NotePopoutBridge.isClaimedByOther(item?.id)) return;
         const shell = card.querySelector('.editor-note-shell');
         if (shell && item) {
             flushDesktopAutoSave(shell, item, { mergeWindow: false });

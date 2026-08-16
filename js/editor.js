@@ -17,7 +17,9 @@ import {
 import { getCardRenderContext } from './categories.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
 import { NoteSurface } from './noteSurface.js';
+import { NotePopoutBridge } from './notePopoutBridge.js';
 import { UI } from './ui.js';
+import { showAppToast } from './toast.js';
 import { escapeQuotes } from './domEscape.js';
 import {
     attachSheetInteractions,
@@ -111,6 +113,11 @@ export const Editor = {
     },
     
     open(item = null, categoriesList = []) {
+        if (item?.id && NotePopoutBridge.isClaimedByOther(item.id)) {
+            NotePopoutBridge.openOrFocus(item.id);
+            showAppToast('Note is open in a popout');
+            return;
+        }
         this.availableCategories = categoriesList;
         this.hasUserInteracted = false;
 
@@ -398,7 +405,8 @@ export const Editor = {
                 surface: 'modal',
                 pinned: UI.isBoardPinned(item.id),
                 showDrag: true,
-                showArchive: isExistingItem
+                showArchive: isExistingItem,
+                poppedOut: NotePopoutBridge.isPoppedOut(item.id)
             });
             bindNoteQuickActions(this.toolbarMount, item, {
                 surface: 'modal',

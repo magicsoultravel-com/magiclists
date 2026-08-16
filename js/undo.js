@@ -410,6 +410,34 @@ export const UndoManager = {
         }
     },
 
+    /** Reload stacks from localStorage and refresh button state without re-persisting or notifying. */
+    reloadFromStorage() {
+        this.loadStacks();
+        const enabled = handlers.isEnabled();
+        this.undoBtn?.classList.toggle('is-hidden', !enabled);
+        this.redoBtn?.classList.toggle('is-hidden', !enabled);
+        if (this.undoBtn) {
+            this.undoBtn.disabled = !enabled || this.busy || this.undoStack.length === 0;
+            if (this.undoStack.length) {
+                const entry = this.undoStack[this.undoStack.length - 1];
+                const summary = describeHistoryEntry(entry).summary;
+                this.undoBtn.title = `Undo: ${entry.label} — ${summary} (Ctrl+Z)`;
+            } else {
+                this.undoBtn.title = 'Undo (Ctrl+Z)';
+            }
+        }
+        if (this.redoBtn) {
+            this.redoBtn.disabled = !enabled || this.busy || this.redoStack.length === 0;
+            if (this.redoStack.length) {
+                const entry = this.redoStack[this.redoStack.length - 1];
+                const summary = describeHistoryEntry(entry).summary;
+                this.redoBtn.title = `Redo: ${entry.label} — ${summary} (Ctrl+Y)`;
+            } else {
+                this.redoBtn.title = 'Redo (Ctrl+Y)';
+            }
+        }
+    },
+
     persistStacks() {
         if (!handlers.isEnabled()) return;
         trimStacks(this);

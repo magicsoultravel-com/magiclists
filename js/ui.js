@@ -89,6 +89,7 @@ import {
 } from './tileGeometry.js';
 import { NoteSurface } from './noteSurface.js';
 import { BoardOperations } from './boardOperations.js';
+import { NotePopoutBridge } from './notePopoutBridge.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
 import {
     applyItemCardTheme,
@@ -857,6 +858,7 @@ reapplySmallFootprintOnBoard() {
             surface: 'board',
             isExpanded,
             calHidden: BoardOperations.isHiddenFromCalendar(item),
+            poppedOut: NotePopoutBridge.isPoppedOut(item?.id),
             ...options
         });
     },

@@ -407,6 +407,14 @@ body.is-checklist-dragging {
     opacity: 0.45;
 }
 
+.card-act--popout.is-active {
+    color: #93c5fd;
+}
+
+.card-act--popin:hover {
+    color: #93c5fd;
+}
+
 .card-act--edit:hover {
     color: #a5b4fc;
 }
