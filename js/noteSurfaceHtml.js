@@ -139,16 +139,16 @@ export function buildNoteQuickActionsHtml(item, {
     let actionCount = isPopout ? 5 : 9;
     if (!isModal && !isPopout && showDragIcon) actionCount += 1;
     if (!isPopout && poppedOut) actionCount += 1; // popin
-    if (showArchive) actionCount += 1;
 
+    if (showArchive) actionCount += 1;
     const archiveBtn = showArchive
         ? `<button type="button" id="modal-archive-btn" class="card-act card-act--archive" title="Move to Archive" aria-label="Move to Archive">${CARD_ICONS.delete}</button>`
         : '';
     const actionsHtml = `<div class="card-actions${(isModal || isPopout) ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
             ${popBtn}
             ${popinBtn}
-            ${calBtn}
             <button type="button" class="card-act card-act--emoji" title="Insert emoji" aria-label="Insert emoji" aria-haspopup="dialog" aria-expanded="false">${CARD_ICONS.insertEmoji}</button>
+            ${calBtn}
             <button type="button" class="card-act card-act--copy" title="Copy note as text" aria-label="Copy note as text">${CARD_ICONS.copy}</button>
             ${pinBtn}
             <button type="button" class="card-act card-act--color" title="Note color" aria-label="Note color" aria-haspopup="dialog">${CARD_ICONS.color}</button>
