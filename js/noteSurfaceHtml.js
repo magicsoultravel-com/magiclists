@@ -134,7 +134,7 @@ export function buildNoteQuickActionsHtml(item, {
     const hideBtn = isPopout
         ? ''
         : `<button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>`;
-    // Board: popout, popin (popped only), cal, emoji, copy, [pin], color, hide, edit, [drag], toggle
+    // Board: popout, cal, popin (popped only), emoji, copy, [pin], color, hide, edit, [drag], toggle
     // Popout: cal, emoji, copy, color, close
     let actionCount = isPopout ? 5 : 9;
     if (!isModal && !isPopout && showDragIcon) actionCount += 1;
@@ -146,8 +146,8 @@ export function buildNoteQuickActionsHtml(item, {
         : '';
     const actionsHtml = `<div class="card-actions${(isModal || isPopout) ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
             ${popBtn}
-            ${popinBtn}
             ${calBtn}
+            ${popinBtn}
             <button type="button" class="card-act card-act--emoji" title="Insert emoji" aria-label="Insert emoji" aria-haspopup="dialog" aria-expanded="false">${CARD_ICONS.insertEmoji}</button>
             <button type="button" class="card-act card-act--copy" title="Copy note as text" aria-label="Copy note as text">${CARD_ICONS.copy}</button>
             ${pinBtn}
