@@ -204,4 +204,73 @@ describe('note popout bridge window identity', () => {
         assert.deepEqual(closedEvent.item, finalSnap,
             'pop-in must return the final snapshot so the board repaints latest content');
     });
+
+    it('force-clears an orphaned popout claim when the opener handles PiP close', async () => {
+        installGlobals({ seededWindowId: 'opener-window-id' });
+
+        const main = await loadBridge('pip-close-main');
+        const popout = await loadBridge('pip-close-popout');
+
+        const claimEvents = [];
+        main.NotePopoutBridge.init({
+            role: 'main',
+            handlers: {
+                onClaimChanged: (noteId, item) => claimEvents.push({ noteId, item })
+            }
+        });
+        popout.NotePopoutBridge.init({ role: 'popout' });
+
+        const noteId = 'note-pip-orphan';
+        assert.equal(popout.NotePopoutBridge.claim(noteId, { role: 'popout' }), true);
+        await tick();
+        assert.equal(main.NotePopoutBridge.isPoppedOut(noteId), true);
+        assert.equal(main.NotePopoutBridge.isClaimedByOther(noteId), true);
+
+        // Simulate native back-to-tab: popout dies without calling release.
+        // Main owns a different windowId, so release() would not clear the claim.
+        claimEvents.length = 0;
+        const fakePip = { closed: true };
+        main.NotePopoutBridge.pipWindows.add(fakePip);
+        main.NotePopoutBridge.openWindows.set(noteId, fakePip);
+        main.NotePopoutBridge.handlePipClosed(noteId, fakePip);
+
+        assert.equal(main.NotePopoutBridge.isPoppedOut(noteId), false,
+            'orphaned popout claim must clear on PiP pagehide');
+        assert.equal(main.NotePopoutBridge.isClaimedByOther(noteId), false);
+        assert.equal(main.NotePopoutBridge.pipWindows.has(fakePip), false);
+        assert.equal(main.NotePopoutBridge.openWindows.has(noteId), false);
+
+        const closedEvent = claimEvents.find((e) => e.noteId === noteId);
+        assert.ok(closedEvent, 'board must be notified so locked cards unlock');
+        assert.equal(closedEvent.item, null);
+    });
+
+    it('is a no-op when PiP close runs after a normal pop-in release', async () => {
+        installGlobals({ seededWindowId: 'opener-window-id' });
+
+        const main = await loadBridge('pip-idempotent-main');
+        const popout = await loadBridge('pip-idempotent-popout');
+
+        const claimEvents = [];
+        main.NotePopoutBridge.init({
+            role: 'main',
+            handlers: {
+                onClaimChanged: (noteId) => claimEvents.push(noteId)
+            }
+        });
+        popout.NotePopoutBridge.init({ role: 'popout' });
+
+        const noteId = 'note-pip-done';
+        popout.NotePopoutBridge.claim(noteId, { role: 'popout' });
+        await tick();
+        popout.NotePopoutBridge.release(noteId, { item: { id: noteId } });
+        await tick();
+
+        claimEvents.length = 0;
+        main.NotePopoutBridge.handlePipClosed(noteId, null);
+
+        assert.equal(main.NotePopoutBridge.isPoppedOut(noteId), false);
+        assert.equal(claimEvents.length, 0,
+            'second close must not re-broadcast when the claim is already gone');
+    });
 });

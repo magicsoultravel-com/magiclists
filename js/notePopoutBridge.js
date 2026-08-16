@@ -485,11 +485,41 @@ export const NotePopoutBridge = {
         body.appendChild(script);
 
         this.pipWindows.add(pipWin);
+        // Native "back to tab" / chrome close fires pagehide — not a reliable
+        // beforeunload — so the opener must adopt orphaned popout claims here.
         pipWin.addEventListener('pagehide', () => {
-            this.pipWindows.delete(pipWin);
-            if (this.openWindows.get(noteId) === pipWin) this.openWindows.delete(noteId);
+            this.handlePipClosed(noteId, pipWin);
         });
         return pipWin;
+    },
+
+    /**
+     * Opener-side cleanup when a Document PiP window closes (native back-to-tab
+     * or chrome close). Force-clears an orphaned popout claim the dead window
+     * may not have released. Idempotent when closePopout already released.
+     */
+    handlePipClosed(noteId, pipWin = null) {
+        if (pipWin) {
+            this.pipWindows.delete(pipWin);
+            if (noteId && this.openWindows.get(noteId) === pipWin) {
+                this.openWindows.delete(noteId);
+            }
+        } else if (noteId) {
+            const win = this.openWindows.get(noteId);
+            if (win) this.pipWindows.delete(win);
+            this.openWindows.delete(noteId);
+        }
+        if (!noteId) return;
+
+        const claims = pruneExpiredClaims();
+        const existing = claims[noteId];
+        if (!existing || existing.role !== 'popout') return;
+
+        delete claims[noteId];
+        writeClaims(claims);
+        this.localClaims.delete(noteId);
+        this.broadcast('popout_closed', { noteId, item: null });
+        this.notifyClaimChanges(noteId, null);
     },
 
     /** Close a frameless PiP window we opened for this note (if any). */

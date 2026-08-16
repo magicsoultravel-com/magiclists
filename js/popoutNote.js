@@ -212,20 +212,35 @@ const PopoutEditor = {
         }
     },
 
-    bindLifecycle() {
-        window.addEventListener('beforeunload', () => {
-            // Best-effort sync — cannot await here; pop-in button path awaits save.
-            clearDesktopAutoSaveTimer();
-            const shell = this.card?.querySelector('.editor-note-shell');
-            if (shell && this.activeItem) {
-                NoteSurface.syncItemBodyFromDom(shell, this.activeItem);
-                if (this.token) {
-                    // Fire-and-forget; browsers may kill the page mid-flight.
-                    API.saveItem(this.activeItem, this.token);
-                }
+    /**
+     * Best-effort flush + claim release when the popout is torn down without
+     * going through closePopout (native PiP back-to-tab fires pagehide;
+     * classic window popouts may only get beforeunload).
+     */
+    teardownOnUnload() {
+        if (this.closing) return;
+        this.closing = true;
+        clearDesktopAutoSaveTimer();
+        let snapshot = null;
+        const shell = this.card?.querySelector('.editor-note-shell');
+        if (shell && this.activeItem) {
+            NoteSurface.syncItemBodyFromDom(shell, this.activeItem);
+            snapshot = NoteSurface.snapshotItem(this.activeItem);
+            if (this.token) {
+                // Fire-and-forget; browsers may kill the page mid-flight.
+                API.saveItem(this.activeItem, this.token);
             }
-            NotePopoutBridge.release(this.noteId);
-        });
+        } else if (this.activeItem) {
+            snapshot = NoteSurface.snapshotItem(this.activeItem);
+        }
+        NotePopoutBridge.release(this.noteId, { item: snapshot });
+    },
+
+    bindLifecycle() {
+        // Document PiP: pagehide is the reliable close signal (native back-to-tab).
+        window.addEventListener('pagehide', () => this.teardownOnUnload());
+        // Classic window.open popouts: beforeunload as a best-effort fallback.
+        window.addEventListener('beforeunload', () => this.teardownOnUnload());
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) this.flushNow();
         });
