@@ -4,7 +4,7 @@ import { AppTheme } from './appTheme.js';
 import { NoteFontScale } from './noteFontScale.js';
 import { NoteSurface } from './noteSurface.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
-import { NotePopoutBridge, resolvePopoutNoteId } from './notePopoutBridge.js';
+import { NotePopoutBridge, resolvePopoutNoteId, POPOUT_COLLAPSED_W, POPOUT_COLLAPSED_H, PIP_WINDOW_W, PIP_WINDOW_H, POPUP_WINDOW_W, POPUP_WINDOW_H } from './notePopoutBridge.js';
 import { UndoManager, historyLabelForItem, mergeItemOntoExisting } from './undo.js';
 import { applyItemCardTheme, applyCardCategoryBand } from './noteSurfaceHtml.js';
 import { getCardRenderContext, readStoredCategories } from './categories.js';
@@ -13,6 +13,7 @@ import { BoardOperations } from './boardOperations.js';
 import { flushDesktopAutoSave, clearDesktopAutoSaveTimer } from './noteSurfaceMutations.js';
 import { stripRichText } from './richText.js';
 import { showAppToast } from './toast.js';
+import { CARD_ICONS } from './icons.js';
 
 const statusEl = document.getElementById('popout-status');
 const rootEl = document.getElementById('popout-root');
@@ -35,6 +36,9 @@ const PopoutEditor = {
     calendarToggleBtn: null,
     token: null,
     closing: false,
+    windowCollapsed: false,
+    rememberedOuterW: 0,
+    rememberedOuterH: 0,
 
     async boot() {
         AppTheme.init();
@@ -128,6 +132,47 @@ const PopoutEditor = {
     },
 
     markInteracted() {},
+
+    defaultExpandedSize() {
+        const isPip = document.documentElement.dataset.popoutMode === 'pip';
+        return isPip
+            ? { w: PIP_WINDOW_W, h: PIP_WINDOW_H }
+            : { w: POPUP_WINDOW_W, h: POPUP_WINDOW_H };
+    },
+
+    applyWindowSize(w, h) {
+        try {
+            window.resizeTo(Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
+        } catch (err) {
+            console.warn('[PopoutNote] resizeTo failed:', err);
+        }
+    },
+
+    syncWindowSizeButton() {
+        const btn = this.card?.querySelector('.card-act--window-size');
+        if (!btn) return;
+        const title = this.windowCollapsed ? 'Expand window' : 'Collapse window';
+        btn.title = title;
+        btn.setAttribute('aria-label', title);
+        btn.setAttribute('aria-pressed', this.windowCollapsed ? 'true' : 'false');
+        btn.innerHTML = this.windowCollapsed ? CARD_ICONS.expand : CARD_ICONS.collapse;
+    },
+
+    toggleWindowSize() {
+        if (this.windowCollapsed) {
+            const fallback = this.defaultExpandedSize();
+            const w = this.rememberedOuterW || fallback.w;
+            const h = this.rememberedOuterH || fallback.h;
+            this.applyWindowSize(w, h);
+            this.windowCollapsed = false;
+        } else {
+            this.rememberedOuterW = window.outerWidth || 0;
+            this.rememberedOuterH = window.outerHeight || 0;
+            this.applyWindowSize(POPOUT_COLLAPSED_W, POPOUT_COLLAPSED_H);
+            this.windowCollapsed = true;
+        }
+        this.syncWindowSizeButton();
+    },
 
     triggerAutoSave() {
         if (!this.card || !this.activeItem) return;
@@ -305,7 +350,8 @@ const PopoutEditor = {
         const toolbarHtml = NoteSurface.buildNoteQuickActionsHtml(this.activeItem, {
             surface: 'popout',
             calHidden: BoardOperations.isHiddenFromCalendar(this.activeItem),
-            poppedOut: true
+            poppedOut: true,
+            windowCollapsed: this.windowCollapsed
         });
 
         card.innerHTML = NoteSurface.buildNoteEditorShell(this.activeItem, {

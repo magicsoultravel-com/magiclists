@@ -10,8 +10,14 @@ export const POPOUT_HANDOFF_KEY = 'matrix_popout_handoff_id';
 const CLAIM_TTL_MS = 15000;
 const HEARTBEAT_MS = 5000;
 const POPOUT_MODE_KEY = 'matrix_display_options';
-const PIP_WINDOW_W = 520;
-const PIP_WINDOW_H = 680;
+export const PIP_WINDOW_W = 520;
+export const PIP_WINDOW_H = 680;
+/** Classic browser-popup open size (window.open features). */
+export const POPUP_WINDOW_W = 480;
+export const POPUP_WINDOW_H = 640;
+/** Compact popout size when the window-size toggle collapses the floating window. */
+export const POPOUT_COLLAPSED_W = 240;
+export const POPOUT_COLLAPSED_H = 320;
 
 /** Directory URL of the current page, for resolving relative resources in the PiP window. */
 function appDirectoryUrl() {
@@ -538,7 +544,7 @@ export const NotePopoutBridge = {
     /** Fallback: the classic window.open popup (used when PiP is off/unsupported). */
     fallbackBrowserPopout(noteId, url) {
         const name = windowNameForNote(noteId);
-        const features = 'popup=yes,width=480,height=640,menubar=no,toolbar=no,location=no,status=no';
+        const features = `popup=yes,width=${POPUP_WINDOW_W},height=${POPUP_WINDOW_H},menubar=no,toolbar=no,location=no,status=no`;
         const win = window.open(url, name, features);
         if (!win) {
             showAppToast('Pop-out blocked — allow popups for this site');

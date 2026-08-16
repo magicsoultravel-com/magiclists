@@ -81,16 +81,14 @@ export function buildNoteQuickActionsHtml(item, {
     tileW = 0,
     tileH = 0,
     calHidden = !!(item?.hideFromCalendar),
-    poppedOut = false
+    poppedOut = false,
+    windowCollapsed = false
 } = {}) {
     const isModal = surface === 'modal';
     const isPopout = surface === 'popout';
     let expandTitle;
     let lastIcon;
-    if (isPopout) {
-        expandTitle = 'Pop in (close window)';
-        lastIcon = CARD_ICONS.popoutExit;
-    } else if (isModal) {
+    if (isModal) {
         expandTitle = 'Show on board';
         lastIcon = CARD_ICONS.collapse;
     } else if (spatialTile) {
@@ -101,8 +99,8 @@ export function buildNoteQuickActionsHtml(item, {
         expandTitle = isExpanded ? 'Collapse note' : 'Expand note';
         lastIcon = isExpanded ? CARD_ICONS.collapse : CARD_ICONS.expand;
     }
-    const lastClass = isPopout ? 'card-act--close' : (isModal ? 'card-act--close' : 'card-act--toggle');
-    const lastId = (isModal || isPopout) ? ' id="modal-close-btn"' : '';
+    const lastClass = isModal ? 'card-act--close' : 'card-act--toggle';
+    const lastId = isModal ? ' id="modal-close-btn"' : '';
     const pinTitle = pinned ? 'Unpin position (locks drag)' : 'Pin position (locks drag)';
     const pinBtn = (isModal || isPopout)
         ? ''
@@ -117,11 +115,20 @@ export function buildNoteQuickActionsHtml(item, {
         ? ''
         : `<button type="button" class="card-act card-act--popout${poppedOut ? ' is-active' : ''}" data-note-id="${escapeAttr(item?.id || '')}" title="${escapeAttr(popTitle)}" aria-label="${escapeAttr(popTitle)}" aria-pressed="${poppedOut ? 'true' : 'false'}">${poppedOut ? CARD_ICONS.popoutExit : CARD_ICONS.popout}</button>`;
     // Board/modal: while a popout owns the note, offer a recall action that
-    // returns it to the board (closes the popout after saving). Never in the
-    // popout window itself — its close button is the pop-in.
+    // returns it to the board (closes the popout after saving).
     const popinTitle = 'Pop in (return note to board)';
     const popinBtn = (!isPopout && poppedOut)
         ? `<button type="button" class="card-act card-act--popin" title="${popinTitle}" aria-label="${popinTitle}">${CARD_ICONS.popin}</button>`
+        : '';
+    // Popout window: pop-in sits next to calendar (left side of the suite).
+    const closeTitle = 'Pop in (close window)';
+    const closeBtn = isPopout
+        ? `<button type="button" class="card-act card-act--close" id="modal-close-btn" title="${closeTitle}" aria-label="${closeTitle}">${CARD_ICONS.popoutExit}</button>`
+        : '';
+    const windowSizeTitle = windowCollapsed ? 'Expand window' : 'Collapse window';
+    const windowSizeIcon = windowCollapsed ? CARD_ICONS.expand : CARD_ICONS.collapse;
+    const windowSizeBtn = isPopout
+        ? `<button type="button" class="card-act card-act--window-size" title="${windowSizeTitle}" aria-label="${windowSizeTitle}" aria-pressed="${windowCollapsed ? 'true' : 'false'}">${windowSizeIcon}</button>`
         : '';
     const showDragIcon = !isPopout && (isModal || (showDrag && !pinned));
     const dragBtn = showDragIcon
@@ -135,8 +142,8 @@ export function buildNoteQuickActionsHtml(item, {
         ? ''
         : `<button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>`;
     // Board: popout, cal, popin (popped only), emoji, copy, [pin], color, hide, edit, [drag], toggle
-    // Popout: cal, emoji, copy, color, close
-    let actionCount = isPopout ? 5 : 9;
+    // Popout: cal, close (pop in), emoji, copy, color, window-size
+    let actionCount = isPopout ? 6 : 9;
     if (!isModal && !isPopout && showDragIcon) actionCount += 1;
     if (!isPopout && poppedOut) actionCount += 1; // popin
 
@@ -144,9 +151,13 @@ export function buildNoteQuickActionsHtml(item, {
     const archiveBtn = showArchive
         ? `<button type="button" id="modal-archive-btn" class="card-act card-act--archive" title="Move to Archive" aria-label="Move to Archive">${CARD_ICONS.delete}</button>`
         : '';
+    const lastBtn = isPopout
+        ? windowSizeBtn
+        : `<button type="button" class="card-act ${lastClass}"${lastId} title="${escapeHTML(expandTitle).replace(/"/g, "")}" aria-label="${escapeHTML(expandTitle).replace(/"/g, "")}">${lastIcon}</button>`;
     const actionsHtml = `<div class="card-actions${(isModal || isPopout) ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
             ${popBtn}
             ${calBtn}
+            ${closeBtn}
             ${popinBtn}
             <button type="button" class="card-act card-act--emoji" title="Insert emoji" aria-label="Insert emoji" aria-haspopup="dialog" aria-expanded="false">${CARD_ICONS.insertEmoji}</button>
             <button type="button" class="card-act card-act--copy" title="Copy note as text" aria-label="Copy note as text">${CARD_ICONS.copy}</button>
@@ -156,7 +167,7 @@ export function buildNoteQuickActionsHtml(item, {
             ${editBtn}
             ${dragBtn}
 
-            <button type="button" class="card-act ${lastClass}"${lastId} title="${escapeHTML(expandTitle).replace(/"/g, "")}" aria-label="${escapeHTML(expandTitle).replace(/"/g, "")}">${lastIcon}</button>
+            ${lastBtn}
         </div>`;
     return (isModal || isPopout) ? `${archiveBtn}${actionsHtml}` : actionsHtml;
 }

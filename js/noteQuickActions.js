@@ -99,7 +99,8 @@ function queryActionButtons(root) {
         calBtn: actions.querySelector('.card-act--cal'),
         popoutBtn: actions.querySelector('.card-act--popout'),
         popinBtn: actions.querySelector('.card-act--popin'),
-        closeBtn: actions.querySelector('.card-act--close')
+        closeBtn: actions.querySelector('.card-act--close'),
+        windowSizeBtn: actions.querySelector('.card-act--window-size')
     };
 }
 
@@ -348,6 +349,12 @@ function bindPopoutQuickActions(toolbarMount, item, ui, editor) {
             e.stopPropagation();
             editor.closePopout?.();
         });
+    }
+
+    if (buttons.windowSizeBtn) {
+        attachCardActionButton(buttons.windowSizeBtn, () => {
+            editor.toggleWindowSize?.();
+        }, { commit: () => editor.syncActiveItemFromDom?.(), defer: false });
     }
 }
 
