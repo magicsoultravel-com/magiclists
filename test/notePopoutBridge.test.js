@@ -93,6 +93,34 @@ afterEach(() => {
     delete globalThis.sessionStorage;
     delete globalThis.BroadcastChannel;
 });
+describe('popout window style (frameless PiP vs browser window)', () => {
+    it('defaults to the frameless PiP preference when no option is stored', async () => {
+        installGlobals();
+        const { readPopoutModePreference } = await import('../js/notePopoutBridge.js?pip-pref-default');
+        assert.equal(readPopoutModePreference(), 'pip');
+    });
+
+    it('respects a stored browser-window preference', async () => {
+        installGlobals();
+        localStorageStore.set('matrix_display_options', JSON.stringify({ popoutMode: 'window' }));
+        const { readPopoutModePreference } = await import('../js/notePopoutBridge.js?pip-pref-window');
+        assert.equal(readPopoutModePreference(), 'window');
+    });
+
+    it('detects supported Document Picture-in-Picture in a capable browser', async () => {
+        installGlobals();
+        globalThis.window.isSecureContext = true;
+        globalThis.window.documentPictureInPicture = { requestWindow: () => Promise.resolve(null) };
+        const { supportsDocumentPip } = await import('../js/notePopoutBridge.js?pip-detect-supported');
+        assert.equal(supportsDocumentPip(), true);
+    });
+
+    it('reports no PiP support when the browser lacks the API', async () => {
+        installGlobals();
+        const { supportsDocumentPip } = await import('../js/notePopoutBridge.js?pip-detect-unsupported');
+        assert.equal(supportsDocumentPip(), false);
+    });
+});
 describe('note popout bridge window identity', () => {
     it('gives a popout a fresh window id instead of inheriting the opener clone', async () => {
         installGlobals({ seededWindowId: 'opener-window-id' });

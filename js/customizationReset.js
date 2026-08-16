@@ -39,7 +39,8 @@ const DISPLAY_DEFAULTS = {
     showRulerVertical: false,
     noteFontId: 'default',
     brandIconId: 'clipboard',
-    undockedModuleOpacity: 1
+    undockedModuleOpacity: 1,
+    popoutMode: 'pip'
 };
 
 export function resetCustomizationToDefaults() {

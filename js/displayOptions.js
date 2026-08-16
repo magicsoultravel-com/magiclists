@@ -51,7 +51,8 @@ const DEFAULTS = {
     noteFontId: 'default',
     brandIconId: 'clipboard',
     useCategoryColors: true,
-    undockedModuleOpacity: 1
+    undockedModuleOpacity: 1,
+    popoutMode: 'pip'
 };
 
 export function readDisplayOptions() {
@@ -73,7 +74,8 @@ export function readDisplayOptions() {
             noteFontId,
             brandIconId: resolveBrandIconId(raw.brandIconId),
             useCategoryColors: raw.useCategoryColors !== false,
-            undockedModuleOpacity: Math.min(1, Math.max(0.1, Number(raw.undockedModuleOpacity) || 1))
+            undockedModuleOpacity: Math.min(1, Math.max(0.1, Number(raw.undockedModuleOpacity) || 1)),
+            popoutMode: raw.popoutMode === 'window' ? 'window' : 'pip'
         };
     } catch {
         return { ...DEFAULTS, noteFontId: readNoteFont() };
@@ -119,6 +121,7 @@ function isCustomized(options) {
         || options.showRulerVertical
         || !options.useCategoryColors
         || Math.abs((options.undockedModuleOpacity ?? 1) - 1) > 0.001
+        || options.popoutMode !== 'pip'
         || isNoteFontCustomized(options.noteFontId)
         || isAppThemeCustomized()
         || NoteFontScale.isCustomized()
@@ -566,6 +569,21 @@ export const DisplayOptions = {
                             <p class="display-options-subheading">Desktops</p>
                             ${this.desktopsTilesHtml()}
                         </div>
+                        <div class="display-options-section display-options-section--popout">
+                            <h3 class="display-options-heading">Pop-out note</h3>
+                            <p class="display-options-subheading">Window style</p>
+                            <div class="display-options-check-row" role="radiogroup" aria-label="Pop-out window style">
+                                <label class="display-options-row" for="display-opt-popout-pip">
+                                    <input type="radio" class="display-options-radio" id="display-opt-popout-pip" name="display-opt-popout" value="pip"${opts.popoutMode === 'pip' ? ' checked' : ''}>
+                                    <span class="display-options-row-label">Floating window (no browser frame)</span>
+                                </label>
+                                <label class="display-options-row" for="display-opt-popout-window">
+                                    <input type="radio" class="display-options-radio" id="display-opt-popout-window" name="display-opt-popout" value="window"${opts.popoutMode === 'window' ? ' checked' : ''}>
+                                    <span class="display-options-row-label">Browser window</span>
+                                </label>
+                            </div>
+                            <p class="display-options-row-hint">Chrome/Edge show the note in a frameless, always-on-top floating window. Other browsers automatically fall back to a normal browser window.</p>
+                        </div>
                         <div class="display-options-section display-options-section--sidebar">
                             <h3 class="display-options-heading">Sidebar</h3>
                             ${this.sliderRow({
@@ -606,6 +624,13 @@ export const DisplayOptions = {
         bindToggle('display-opt-ruler-h', 'showRulerHorizontal');
         bindToggle('display-opt-ruler-v', 'showRulerVertical');
         bindToggle('display-opt-use-category-colors', 'useCategoryColors');
+
+        root.querySelectorAll('input[name="display-opt-popout"]').forEach((radio) => {
+            radio.addEventListener('change', (e) => {
+                e.stopPropagation();
+                this.setOptions({ popoutMode: e.target.value === 'window' ? 'window' : 'pip' });
+            });
+        });
 
         const undockOpacityInput = root.querySelector('#display-opt-undock-opacity');
         if (undockOpacityInput) {

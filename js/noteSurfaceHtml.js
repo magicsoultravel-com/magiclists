@@ -138,7 +138,7 @@ export function buildNoteQuickActionsHtml(item, {
     // Popout: cal, emoji, copy, color, close
     let actionCount = isPopout ? 5 : 9;
     if (!isModal && !isPopout && showDragIcon) actionCount += 1;
-    if (!isPopout && poppedOut) actionCount += 1;
+    if (!isPopout && poppedOut) actionCount += 1; // popin
     if (showArchive) actionCount += 1;
 
     const archiveBtn = showArchive

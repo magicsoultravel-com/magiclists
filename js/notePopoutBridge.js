@@ -9,6 +9,46 @@ const WINDOW_ID_KEY = 'matrix_note_popout_window_id';
 export const POPOUT_HANDOFF_KEY = 'matrix_popout_handoff_id';
 const CLAIM_TTL_MS = 15000;
 const HEARTBEAT_MS = 5000;
+const POPOUT_MODE_KEY = 'matrix_display_options';
+const PIP_WINDOW_W = 520;
+const PIP_WINDOW_H = 680;
+
+/** Directory URL of the current page, for resolving relative resources in the PiP window. */
+function appDirectoryUrl() {
+    try {
+        const path = window.location.pathname || '/';
+        const dir = path.endsWith('/') ? path : path.replace(/[^/]+$/, '');
+        return new URL(dir, window.location.origin).href;
+    } catch {
+        return window.location.href;
+    }
+}
+
+/**
+ * Document Picture-in-Picture: opens a genuinely frameless, always-on-top
+ * window holding arbitrary content — the note, finally free of the browser
+ * frame and address bar. Chromium desktop (secure context) only.
+ */
+export function supportsDocumentPip() {
+    try {
+        return typeof window !== 'undefined'
+            && window.isSecureContext !== false
+            && !!(window.documentPictureInPicture
+                && typeof window.documentPictureInPicture.requestWindow === 'function');
+    } catch {
+        return false;
+    }
+}
+
+/** 'pip' = frameless floating window; 'window' = normal browser popup. */
+export function readPopoutModePreference() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(POPOUT_MODE_KEY) || '{}');
+        return raw && raw.popoutMode === 'window' ? 'window' : 'pip';
+    } catch {
+        return 'pip';
+    }
+}
 
 function readClaims() {
     try {
@@ -147,6 +187,8 @@ export const NotePopoutBridge = {
     heartbeatTimer: null,
     /** @type {Map<string, Window>} */
     openWindows: new Map(),
+    /** @type {Set<Window>} frameless Document Picture-in-Picture window refs */
+    pipWindows: new Set(),
     /** @type {Set<string>} notes this window currently claims */
     localClaims: new Set(),
     /** @type {NotePopoutHandlers} */
@@ -188,6 +230,9 @@ export const NotePopoutBridge = {
         if (data.type === 'claim_changed' || data.type === 'popout_opened' || data.type === 'popout_closed') {
             pruneExpiredClaims();
             this.notifyClaimChanges(data.noteId, data.type === 'popout_closed' ? (data.item || null) : null);
+            // A popout finished its flush+save; the board re-renders and a
+            // frameless PiP window can be torn down now.
+            if (data.type === 'popout_closed') this.closePipFor(data.noteId);
         }
         if (data.type === 'note_saved') {
             this.handlers.onNoteSaved?.(data.noteId, data.item || null);
@@ -258,7 +303,12 @@ export const NotePopoutBridge = {
         const claims = pruneExpiredClaims();
         const existing = claims[noteId];
         if (existing && existing.ownerId !== this.windowId) {
-            return false;
+            // On popout reload the window id changes (fresh windowId avoids
+            // sessionStorage clone collisions). The old claim is stale —
+            // allow a popout to reclaim its own note.
+            if (existing.role !== 'popout' || role !== 'popout') {
+                return false;
+            }
         }
         claims[noteId] = {
             ownerId: this.windowId,
@@ -281,6 +331,8 @@ export const NotePopoutBridge = {
             writeClaims(claims);
         }
         this.localClaims.delete(noteId);
+        const win = this.openWindows.get(noteId);
+        if (win) this.pipWindows.delete(win);
         this.openWindows.delete(noteId);
         if (broadcast) {
             this.broadcast('popout_closed', { noteId, item: item || null });
@@ -340,7 +392,7 @@ export const NotePopoutBridge = {
         writePopoutHandoff(noteId);
         const existing = this.openWindows.get(noteId);
         if (existing && !existing.closed) {
-            ensurePopoutNavigated(existing, url);
+            if (!this.pipWindows.has(existing)) ensurePopoutNavigated(existing, url);
             try {
                 existing.focus();
             } catch {
@@ -356,6 +408,105 @@ export const NotePopoutBridge = {
             return null;
         }
 
+        // Preferred: a frameless, always-on-top floating window (Chromium desktop).
+        if (this.shouldUsePipPopout()) {
+            this.openNotePipWindow(noteId)
+                .then((win) => {
+                    if (!win) return this.fallbackBrowserPopout(noteId, url);
+                    this.openWindows.set(noteId, win);
+                    try {
+                        win.focus();
+                    } catch {
+                        /* ignore */
+                    }
+                })
+                .catch(() => this.fallbackBrowserPopout(noteId, url));
+            return null;
+        }
+
+        return this.fallbackBrowserPopout(noteId, url);
+    },
+
+    /** User preference is the frameless PiP window, and the browser supports it. */
+    shouldUsePipPopout() {
+        return readPopoutModePreference() === 'pip' && supportsDocumentPip();
+    },
+
+    /**
+     * Open the note in a Document Picture-in-Picture window — no browser frame
+     * or address bar, just the note. Returns the pip window, or null on failure.
+     */
+    async openNotePipWindow(noteId) {
+        if (!supportsDocumentPip()) return null;
+        if (!noteId || !localStorage.getItem('admin_token')) return null;
+
+        let pipWin;
+        try {
+            pipWin = await window.documentPictureInPicture.requestWindow({ width: PIP_WINDOW_W, height: PIP_WINDOW_H });
+        } catch (err) {
+            console.warn('[NotePopout] Picture-in-Picture unavailable:', err);
+            return null;
+        }
+        if (!pipWin?.document) return null;
+
+        const pipDoc = pipWin.document;
+        const head = pipDoc.head;
+
+        // PiP windows can't be navigated, so we rebuild popout.html's shell here.
+        // A <base> pointing at the app directory lets relative css/scripts resolve.
+        const base = pipDoc.createElement('base');
+        base.href = appDirectoryUrl();
+        head.prepend(base);
+        document.head.querySelectorAll('link, style').forEach((el) => {
+            head.appendChild(el.cloneNode(true));
+        });
+
+        const body = pipDoc.body;
+        body.className = 'note-popout-body';
+
+        const status = pipDoc.createElement('div');
+        status.id = 'popout-status';
+        status.className = 'note-popout-status';
+        status.hidden = true;
+        body.appendChild(status);
+
+        const root = pipDoc.createElement('div');
+        root.id = 'popout-root';
+        root.className = 'note-popout-root';
+        root.setAttribute('aria-label', 'Popout note');
+        body.appendChild(root);
+
+        // Marker so popoutNote.js knows it's running inside a PiP window.
+        pipDoc.documentElement.dataset.popoutMode = 'pip';
+
+        const script = pipDoc.createElement('script');
+        script.type = 'module';
+        script.src = './js/popoutNote.js';
+        body.appendChild(script);
+
+        this.pipWindows.add(pipWin);
+        pipWin.addEventListener('pagehide', () => {
+            this.pipWindows.delete(pipWin);
+            if (this.openWindows.get(noteId) === pipWin) this.openWindows.delete(noteId);
+        });
+        return pipWin;
+    },
+
+    /** Close a frameless PiP window we opened for this note (if any). */
+    closePipFor(noteId) {
+        const win = this.openWindows.get(noteId);
+        if (!win || !this.pipWindows.has(win)) return;
+        this.pipWindows.delete(win);
+        this.openWindows.delete(noteId);
+        try {
+            win.close();
+        } catch {
+            /* ignore */
+        }
+    },
+
+    /** Fallback: the classic window.open popup (used when PiP is off/unsupported). */
+    fallbackBrowserPopout(noteId, url) {
         const name = windowNameForNote(noteId);
         const features = 'popup=yes,width=480,height=640,menubar=no,toolbar=no,location=no,status=no';
         const win = window.open(url, name, features);

@@ -309,6 +309,12 @@
     accent-color: var(--accent);
 }
 
+.display-options-radio {
+    flex-shrink: 0;
+    margin: 0;
+    accent-color: var(--accent);
+}
+
 /* Note font select dropdown */
 .note-font-select-wrapper {
     margin-bottom: 0.25rem;
