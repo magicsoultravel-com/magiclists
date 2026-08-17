@@ -616,8 +616,6 @@ body.is-shell-resizing--h * {
     align-items: center;
     gap: 0.15rem;
     margin-left: auto;
-    /* Keep the icons clear of the floating pop/dock chrome overlay in the corner */
-    padding-right: 2.4rem;
 }
 
 /* Show quick actions header icons when the toggle is collapsed (module is collapsed) */
