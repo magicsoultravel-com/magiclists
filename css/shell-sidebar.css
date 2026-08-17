@@ -168,6 +168,7 @@ body.is-editor-modal-open .side-panel {
     padding: 0.28rem 0.35rem;
     padding-right: 0.15rem;
     min-height: 1.5rem;
+    position: relative;
 }
 
 .sidebar-module > .collapsable-header > .collapsable-heading {
@@ -215,7 +216,11 @@ body.is-editor-modal-open .side-panel {
 }
 
 .sidebar-module > .collapsable-header > .sidebar-module__chrome {
-    margin-left: auto;
+    position: absolute;
+    top: 0.1rem;
+    right: 0.1rem;
+    margin: 0;
+    z-index: 2;
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
@@ -611,6 +616,8 @@ body.is-shell-resizing--h * {
     align-items: center;
     gap: 0.15rem;
     margin-left: auto;
+    /* Keep the icons clear of the floating pop/dock chrome overlay in the corner */
+    padding-right: 2.4rem;
 }
 
 /* Show quick actions header icons when the toggle is collapsed (module is collapsed) */

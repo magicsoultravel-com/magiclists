@@ -874,7 +874,7 @@ export const SidebarTv = {
 
     getPlayIconHtml(state) {
         // Priority: playing > loading/connecting/buffering > idle
-        if (state.playing) return ACTION_ICONS.radioPause;
+        if (state.playing) return ACTION_ICONS.radioPauseWave;
         if (state.loading || state.loadPhase === 'connecting' || state.loadPhase === 'buffering') {
             return ACTION_ICONS.radioLoading;
         }

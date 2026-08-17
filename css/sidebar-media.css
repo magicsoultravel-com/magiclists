@@ -758,19 +758,25 @@
 }
 
 .sidebar-media-action-wave__path {
-    animation: sidebarMediaWaveScroll 1.6s linear infinite;
+    animation: sidebarMediaWaveScroll 1.8s linear infinite;
 }
 
-/* Updated wave animation for pause icon – smooth vertical oscillation */
+/* Seamless travelling sinusoid: the wave scrolls left one full period per loop.
+   Path repeats every 12px with pathLength="3", so one period = 1 normalized unit
+   and the dasharray (total 0.25) lands an integer 4 dashes per period – the
+   dashed strobing lines up perfectly at the loop seam. */
 @keyframes sidebarMediaWaveScroll {
-    0% {
+    from {
         transform: translateX(0);
     }
-    50% {
-        transform: translateX(-6px);
+    to {
+        transform: translateX(-12px);
     }
-    100% {
-        transform: translateX(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar-media-action-wave__path {
+        animation: none;
     }
 }
 
