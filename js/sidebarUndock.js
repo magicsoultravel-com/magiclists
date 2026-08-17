@@ -6,6 +6,9 @@ import { CARD_ICONS } from './icons.js';
 export const SIDEBAR_MODULE_UNDOCKED = 'sidebar-module--undocked';
 export const SIDEBAR_MODULE_DRAGGING = 'sidebar-module--dragging';
 export const SIDEBAR_MODULE_DOCK_SEL = '[data-sidebar-dock]';
+export const SIDEBAR_MODULE_POPOUT_SEL = '[data-sidebar-popout]';
+export const SIDEBAR_MODULE_POPIN_SEL = '[data-sidebar-popin]';
+export const SIDEBAR_MODULE_CHROME_IGNORE = `${SIDEBAR_MODULE_DOCK_SEL}, ${SIDEBAR_MODULE_POPOUT_SEL}, ${SIDEBAR_MODULE_POPIN_SEL}`;
 
 const DRAG_THRESHOLD = 4;
 
@@ -150,8 +153,11 @@ export function initSidebarUndock(config) {
     }
 
     function bindDockButton() {
-        const root = getRoot();
-        root?.querySelector(dockSelector)?.addEventListener('click', (e) => {
+        document.addEventListener('click', (e) => {
+            const btn = e.target.closest(dockSelector);
+            if (!btn) return;
+            const root = getRoot();
+            if (!root?.contains(btn)) return;
             e.stopPropagation();
             toggleDock();
         });
@@ -240,7 +246,10 @@ export function initSidebarUndock(config) {
 
         header.addEventListener('pointerdown', (e) => {
             if (!isUndocked()) return;
-            if (e.target.closest(dockSelector) || e.target.closest('.collapsable-toggle')) return;
+            if (e.target.closest(dockSelector)
+                || e.target.closest(SIDEBAR_MODULE_POPOUT_SEL)
+                || e.target.closest(SIDEBAR_MODULE_POPIN_SEL)
+                || e.target.closest('.collapsable-toggle')) return;
             if (e.target.closest('[data-sidebar-clock-resize]')) return;
             if (e.button !== 0) return;
 

@@ -1,4 +1,5 @@
 import { positionPanelBelowElement, clampPanelToViewport, raiseUndockedAttachStack } from './popoverPosition.js';
+import { getAppBodyForElement } from './appDocuments.js';
 import { TvPlayer } from './tvPlayer.js';
 import { TvPip } from './tvPip.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
@@ -594,6 +595,8 @@ export const TvPopover = {
         this.activeTab = mode === 'browse' ? tab : null;
 
         const panel = this.ensurePanel();
+        const hostBody = getAppBodyForElement(attachEl || iconAnchor || this.attachEl);
+        if (panel.parentElement !== hostBody) hostBody.appendChild(panel);
         this.applyBrowserSize(panel);
         panel.classList.remove('is-hidden');
         panel.setAttribute('aria-label', title);

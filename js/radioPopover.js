@@ -1,4 +1,5 @@
 import { positionPanelBelowElement, clampPanelToViewport, raiseUndockedAttachStack } from './popoverPosition.js';
+import { getAppBodyForElement } from './appDocuments.js';
 import { RadioPlayer } from './radioPlayer.js';
 import { CARD_ICONS } from './icons.js';
 
@@ -196,6 +197,8 @@ export const RadioPopover = {
         this.activeTab = mode === 'browse' ? tab : null;
 
         const panel = this.ensurePanel();
+        const hostBody = getAppBodyForElement(attachEl || iconAnchor || this.attachEl);
+        if (panel.parentElement !== hostBody) hostBody.appendChild(panel);
         this.applyBrowserSize(panel);
         panel.classList.remove('is-hidden');
         panel.setAttribute('aria-label', title);

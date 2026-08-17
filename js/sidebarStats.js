@@ -7,6 +7,7 @@ import {
     readLastLocalTxtExportAt
 } from './backup.js';
 import { IndexedDBStore } from './storage/indexedDbStore.js';
+import { getAppElementById } from './appDocuments.js';
 
 export const SidebarStats = {
     init() {
@@ -14,7 +15,7 @@ export const SidebarStats = {
     },
 
     async update() {
-        const container = document.getElementById('sidebar-storage-stats');
+        const container = getAppElementById('sidebar-storage-stats');
         if (!container) return;
 
         const total = getLocalStorageByteEstimate();

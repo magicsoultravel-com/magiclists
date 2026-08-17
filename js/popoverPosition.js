@@ -1,17 +1,24 @@
 /** Position a fixed popover below its anchor, right-aligned, flipping above if needed. */
 import { raiseDesktopElement } from './desktopStack.js';
+import { getAppWindowForElement } from './appDocuments.js';
+
+function viewportSizeFor(anchor) {
+    const win = anchor ? getAppWindowForElement(anchor) : window;
+    return { width: win.innerWidth, height: win.innerHeight };
+}
 
 export function positionPopoverBelowAnchor(popover, anchor, { gap = 8, margin = 8 } = {}) {
     if (!popover || !anchor) return;
 
     const rect = anchor.getBoundingClientRect();
     const popRect = popover.getBoundingClientRect();
+    const viewport = viewportSizeFor(anchor);
 
     let top = rect.bottom + gap;
     let left = rect.right - popRect.width;
 
-    left = Math.max(margin, Math.min(left, window.innerWidth - popRect.width - margin));
-    if (top + popRect.height > window.innerHeight - margin) {
+    left = Math.max(margin, Math.min(left, viewport.width - popRect.width - margin));
+    if (top + popRect.height > viewport.height - margin) {
         top = rect.top - popRect.height - gap;
     }
     top = Math.max(margin, top);
@@ -27,12 +34,13 @@ export function positionPanelBelowElement(panel, anchorEl, { gap = 8, margin = 8
     const rect = anchorEl.getBoundingClientRect();
     const panelW = panel.offsetWidth;
     const panelH = panel.offsetHeight;
+    const viewport = viewportSizeFor(anchorEl);
 
     let left = rect.left;
     let top = rect.bottom + gap;
 
-    left = Math.max(margin, Math.min(left, window.innerWidth - panelW - margin));
-    if (top + panelH > window.innerHeight - margin) {
+    left = Math.max(margin, Math.min(left, viewport.width - panelW - margin));
+    if (top + panelH > viewport.height - margin) {
         top = Math.max(margin, rect.top - panelH - gap);
     } else {
         top = Math.max(margin, top);
@@ -73,9 +81,10 @@ export function positionPanelBesideSidebar(panel, anchor, { gap = 8, margin = 8 
 export function clampPanelToViewport(panel, x, y, { margin = 8 } = {}) {
     const w = panel.offsetWidth;
     const h = panel.offsetHeight;
+    const win = panel?.ownerDocument?.defaultView || window;
     return {
-        x: Math.max(margin, Math.min(x, window.innerWidth - w - margin)),
-        y: Math.max(margin, Math.min(y, window.innerHeight - h - margin))
+        x: Math.max(margin, Math.min(x, win.innerWidth - w - margin)),
+        y: Math.max(margin, Math.min(y, win.innerHeight - h - margin))
     };
 }
 

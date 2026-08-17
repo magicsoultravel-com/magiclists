@@ -1,5 +1,6 @@
 import { ACTION_ICONS } from './icons.js';
 import { positionPopoverBelowAnchor } from './popoverPosition.js';
+import { getAppBodyForElement } from './appDocuments.js';
 
 const STORAGE_KEY = 'matrix_clock_style';
 const HIDDEN_STORAGE_KEY = 'matrix_clock_hidden';
@@ -391,8 +392,9 @@ export const ClockStyle = {
             this.popover.className = 'clock-style-popover is-hidden';
             this.popover.setAttribute('role', 'menu');
             this.popover.setAttribute('aria-label', 'Clock style');
-            document.body.appendChild(this.popover);
         }
+        const body = getAppBodyForElement(this.zone || this.triggerBtn);
+        if (this.popover.parentElement !== body) body.appendChild(this.popover);
         return this.popover;
     },
 

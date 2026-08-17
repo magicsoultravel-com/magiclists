@@ -2,6 +2,7 @@
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import { describeHistoryEntry, UndoManager } from './undo.js';
 import { positionPanelBelowElement } from './popoverPosition.js';
+import { getAppElementById, getAppBodyForElement } from './appDocuments.js';
 
 export const SidebarHistory = {
     appState: null,
@@ -40,7 +41,7 @@ export const SidebarHistory = {
         tip.className = 'sidebar-history-tip clock-style-popover is-hidden';
         tip.setAttribute('role', 'tooltip');
         tip.setAttribute('aria-hidden', 'true');
-        document.body.appendChild(tip);
+        getAppBodyForElement(this.historyTipEl?.parentElement || document.body).appendChild(tip);
         this.historyTipEl = tip;
         return tip;
     },
@@ -71,8 +72,8 @@ export const SidebarHistory = {
 
     bindHistoryTipHandlers() {
         if (this.historyTipBound) return;
-        const undoList = document.getElementById('sidebar-history-undo-list');
-        const redoList = document.getElementById('sidebar-history-redo-list');
+        const undoList = getAppElementById('sidebar-history-undo-list');
+        const redoList = getAppElementById('sidebar-history-redo-list');
         if (!undoList && !redoList) return;
         this.historyTipBound = true;
 
@@ -100,10 +101,10 @@ export const SidebarHistory = {
     },
 
     renderPanel() {
-        const section = document.getElementById('sidebar-history-section');
-        const undoList = document.getElementById('sidebar-history-undo-list');
-        const redoList = document.getElementById('sidebar-history-redo-list');
-        const badge = document.getElementById('history-count-badge');
+        const section = getAppElementById('sidebar-history-section');
+        const undoList = getAppElementById('sidebar-history-undo-list');
+        const redoList = getAppElementById('sidebar-history-redo-list');
+        const badge = getAppElementById('history-count-badge');
         if (!section || !undoList || !redoList) return;
 
         const enabled = !!this.appState?.user?.isLoggedIn;

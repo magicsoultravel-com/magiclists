@@ -1,6 +1,21 @@
-/** @module {"owns":"note popout window open/focus, edit claims, BroadcastChannel sync", "related":["popoutNote.js","app.js","noteQuickActions.js"]} */
+/** @module {"owns":"note popout window open/focus, edit claims, BroadcastChannel sync", "related":["popoutNote.js","app.js","noteQuickActions.js","popoutWindows.js"]} */
 import { CARD_ICONS } from './icons.js';
 import { showAppToast } from './toast.js';
+import {
+    PIP_WINDOW_W,
+    PIP_WINDOW_H,
+    POPUP_WINDOW_W,
+    POPUP_WINDOW_H,
+    appDirectoryUrl,
+    browserPopupFeatures,
+    isPipOccupied,
+    readPopoutModePreference,
+    registerPipWindow,
+    shouldUsePipPopout,
+    supportsDocumentPip,
+    unregisterPipWindow,
+    windowNameForNote
+} from './popoutWindows.js';
 
 const CHANNEL_NAME = 'magiclists-notes';
 const CLAIMS_KEY = 'matrix_note_edit_claims';
@@ -9,52 +24,18 @@ const WINDOW_ID_KEY = 'matrix_note_popout_window_id';
 export const POPOUT_HANDOFF_KEY = 'matrix_popout_handoff_id';
 const CLAIM_TTL_MS = 15000;
 const HEARTBEAT_MS = 5000;
-const POPOUT_MODE_KEY = 'matrix_display_options';
-export const PIP_WINDOW_W = 520;
-export const PIP_WINDOW_H = 680;
-/** Classic browser-popup open size (window.open features). */
-export const POPUP_WINDOW_W = 480;
-export const POPUP_WINDOW_H = 640;
 /** Compact popout size when the window-size toggle collapses the floating window. */
 export const POPOUT_COLLAPSED_W = 240;
 export const POPOUT_COLLAPSED_H = 320;
 
-/** Directory URL of the current page, for resolving relative resources in the PiP window. */
-function appDirectoryUrl() {
-    try {
-        const path = window.location.pathname || '/';
-        const dir = path.endsWith('/') ? path : path.replace(/[^/]+$/, '');
-        return new URL(dir, window.location.origin).href;
-    } catch {
-        return window.location.href;
-    }
-}
-
-/**
- * Document Picture-in-Picture: opens a genuinely frameless, always-on-top
- * window holding arbitrary content — the note, finally free of the browser
- * frame and address bar. Chromium desktop (secure context) only.
- */
-export function supportsDocumentPip() {
-    try {
-        return typeof window !== 'undefined'
-            && window.isSecureContext !== false
-            && !!(window.documentPictureInPicture
-                && typeof window.documentPictureInPicture.requestWindow === 'function');
-    } catch {
-        return false;
-    }
-}
-
-/** 'pip' = frameless floating window; 'window' = normal browser popup. */
-export function readPopoutModePreference() {
-    try {
-        const raw = JSON.parse(localStorage.getItem(POPOUT_MODE_KEY) || '{}');
-        return raw && raw.popoutMode === 'window' ? 'window' : 'pip';
-    } catch {
-        return 'pip';
-    }
-}
+export {
+    PIP_WINDOW_W,
+    PIP_WINDOW_H,
+    POPUP_WINDOW_W,
+    POPUP_WINDOW_H,
+    readPopoutModePreference,
+    supportsDocumentPip
+};
 
 function readClaims() {
     try {
@@ -102,10 +83,6 @@ function ensureWindowId(forceNew = false) {
     } catch {
         return `win_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     }
-}
-
-function windowNameForNote(noteId) {
-    return `magiclists-note-${String(noteId).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 }
 
 function popoutUrlForNote(noteId) {
@@ -415,7 +392,8 @@ export const NotePopoutBridge = {
         }
 
         // Preferred: a frameless, always-on-top floating window (Chromium desktop).
-        if (this.shouldUsePipPopout()) {
+        // Document PiP allows one window per tab — fall back if a module/note already holds it.
+        if (this.shouldUsePipPopout() && !isPipOccupied()) {
             this.openNotePipWindow(noteId)
                 .then((win) => {
                     if (!win) return this.fallbackBrowserPopout(noteId, url);
@@ -435,7 +413,7 @@ export const NotePopoutBridge = {
 
     /** User preference is the frameless PiP window, and the browser supports it. */
     shouldUsePipPopout() {
-        return readPopoutModePreference() === 'pip' && supportsDocumentPip();
+        return shouldUsePipPopout();
     },
 
     /**
@@ -491,6 +469,7 @@ export const NotePopoutBridge = {
         body.appendChild(script);
 
         this.pipWindows.add(pipWin);
+        registerPipWindow(pipWin, { type: 'note', id: noteId });
         // Native "back to tab" / chrome close fires pagehide — not a reliable
         // beforeunload — so the opener must adopt orphaned popout claims here.
         pipWin.addEventListener('pagehide', () => {
@@ -507,12 +486,16 @@ export const NotePopoutBridge = {
     handlePipClosed(noteId, pipWin = null) {
         if (pipWin) {
             this.pipWindows.delete(pipWin);
+            unregisterPipWindow(pipWin);
             if (noteId && this.openWindows.get(noteId) === pipWin) {
                 this.openWindows.delete(noteId);
             }
         } else if (noteId) {
             const win = this.openWindows.get(noteId);
-            if (win) this.pipWindows.delete(win);
+            if (win) {
+                this.pipWindows.delete(win);
+                unregisterPipWindow(win);
+            }
             this.openWindows.delete(noteId);
         }
         if (!noteId) return;
@@ -533,6 +516,7 @@ export const NotePopoutBridge = {
         const win = this.openWindows.get(noteId);
         if (!win || !this.pipWindows.has(win)) return;
         this.pipWindows.delete(win);
+        unregisterPipWindow(win);
         this.openWindows.delete(noteId);
         try {
             win.close();
@@ -544,7 +528,7 @@ export const NotePopoutBridge = {
     /** Fallback: the classic window.open popup (used when PiP is off/unsupported). */
     fallbackBrowserPopout(noteId, url) {
         const name = windowNameForNote(noteId);
-        const features = `popup=yes,width=${POPUP_WINDOW_W},height=${POPUP_WINDOW_H},menubar=no,toolbar=no,location=no,status=no`;
+        const features = browserPopupFeatures(POPUP_WINDOW_W, POPUP_WINDOW_H);
         const win = window.open(url, name, features);
         if (!win) {
             showAppToast('Pop-out blocked — allow popups for this site');

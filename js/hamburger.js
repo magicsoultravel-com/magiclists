@@ -17,10 +17,11 @@ import {
     writeSidebarSection
 } from './sidebarPrefs.js';
 import { onSidebarCollapseChanged } from './shellResize.js';
+import { getAppElementById, getAppBodyForElement } from './appDocuments.js';
 
 export function applySectionCollapse(sectionId, headerId, startCollapsed = false) {
-    const header = document.getElementById(headerId);
-    const section = document.getElementById(sectionId);
+    const header = getAppElementById(headerId);
+    const section = getAppElementById(sectionId);
     if (!header || !section) return;
 
     const toggle = header.querySelector('.collapsable-toggle');
@@ -43,8 +44,8 @@ export function bindToggleCollapsable({
     ignoreSelector = null,
     toggleOnly = true
 }) {
-    const header = document.getElementById(headerId);
-    const section = document.getElementById(sectionId);
+    const header = getAppElementById(headerId);
+    const section = getAppElementById(sectionId);
     if (!header || !section) return;
 
     applySectionCollapse(sectionId, headerId, startCollapsed);
@@ -139,8 +140,8 @@ setCollapsed(collapsed, { persist = true } = {}) {
 
     setupNotesListSortControls() {
         if (this.notesListSortBound) return;
-        const titleBtn = document.getElementById('notes-sort-title');
-        const dateBtn = document.getElementById('notes-sort-date');
+        const titleBtn = getAppElementById('notes-sort-title');
+        const dateBtn = getAppElementById('notes-sort-date');
         if (!titleBtn || !dateBtn) return;
 
         titleBtn.innerHTML = `${ACTION_ICONS.sortAlpha}<span class="sidebar-sort-arrow" aria-hidden="true"></span>`;
@@ -173,8 +174,8 @@ setCollapsed(collapsed, { persist = true } = {}) {
 
     updateNotesListSortButtons() {
         const sort = loadNotesListSort();
-        const titleBtn = document.getElementById('notes-sort-title');
-        const dateBtn = document.getElementById('notes-sort-date');
+        const titleBtn = getAppElementById('notes-sort-title');
+        const dateBtn = getAppElementById('notes-sort-date');
         if (!titleBtn || !dateBtn) return;
 
         titleBtn.classList.toggle('is-active', sort.field === 'title');
@@ -229,7 +230,7 @@ setCollapsed(collapsed, { persist = true } = {}) {
     },
 
     renderNotesListZone(zoneId, listItems, allItems, { variant = 'active' } = {}) {
-        const zone = document.getElementById(zoneId);
+        const zone = getAppElementById(zoneId);
         if (!zone) return;
 
         const emptyLabels = {
@@ -299,9 +300,9 @@ setCollapsed(collapsed, { persist = true } = {}) {
         const hiddenItems = allItems.filter((item) => item.status !== 'archived' && BoardOperations.isHiddenFromBoard(item));
         const archivedItems = allItems.filter((item) => item.status === 'archived');
 
-        const activeCountEl = document.getElementById('notes-active-count');
-        const hiddenCountEl = document.getElementById('notes-hidden-count');
-        const archivedCountEl = document.getElementById('notes-archived-count');
+        const activeCountEl = getAppElementById('notes-active-count');
+        const hiddenCountEl = getAppElementById('notes-hidden-count');
+        const archivedCountEl = getAppElementById('notes-archived-count');
         if (activeCountEl) activeCountEl.textContent = String(activeItems.length);
         if (hiddenCountEl) hiddenCountEl.textContent = String(hiddenItems.length);
         if (archivedCountEl) archivedCountEl.textContent = String(archivedItems.length);
@@ -312,7 +313,7 @@ setCollapsed(collapsed, { persist = true } = {}) {
     },
 
     renderCategoryListZone(zoneId, names, categories, hiddenCategories, { hidden = false, uncatCount = 0 } = {}) {
-        const zone = document.getElementById(zoneId);
+        const zone = getAppElementById(zoneId);
         if (!zone) return;
 
         if (!names?.length) {
@@ -367,8 +368,8 @@ setCollapsed(collapsed, { persist = true } = {}) {
         }
         const hiddenNames = hiddenSet.filter((name) => allCategories.some((cat) => cat.name === name));
 
-        const activeCountEl = document.getElementById('categories-active-count');
-        const hiddenCountEl = document.getElementById('categories-hidden-count');
+        const activeCountEl = getAppElementById('categories-active-count');
+        const hiddenCountEl = getAppElementById('categories-hidden-count');
         if (activeCountEl) activeCountEl.textContent = String(activeNames.length);
         if (hiddenCountEl) hiddenCountEl.textContent = String(hiddenNames.length);
 

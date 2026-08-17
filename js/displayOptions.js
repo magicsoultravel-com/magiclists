@@ -570,7 +570,7 @@ export const DisplayOptions = {
                             ${this.desktopsTilesHtml()}
                         </div>
                         <div class="display-options-section display-options-section--popout">
-                            <h3 class="display-options-heading">Pop-out note</h3>
+                            <h3 class="display-options-heading">Pop-out windows</h3>
                             <p class="display-options-subheading">Window style</p>
                             <div class="display-options-check-row" role="radiogroup" aria-label="Pop-out window style">
                                 <label class="display-options-row" for="display-opt-popout-pip">
@@ -582,7 +582,7 @@ export const DisplayOptions = {
                                     <span class="display-options-row-label">Browser window</span>
                                 </label>
                             </div>
-                            <p class="display-options-row-hint">Chrome/Edge show the note in a frameless, always-on-top floating window. Other browsers automatically fall back to a normal browser window.</p>
+                            <p class="display-options-row-hint">Chrome/Edge show notes and sidebar modules in a frameless, always-on-top floating window. Other browsers automatically fall back to a normal browser window.</p>
                         </div>
                         <div class="display-options-section display-options-section--sidebar">
                             <h3 class="display-options-heading">Sidebar</h3>

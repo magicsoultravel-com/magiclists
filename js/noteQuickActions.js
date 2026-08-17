@@ -15,6 +15,7 @@ import { Fullscreen } from './fullscreen.js';
 import { UndoManager } from './undo.js';
 import { BoardOverlay } from './boardOverlay.js';
 import { NotePopoutBridge } from './notePopoutBridge.js';
+import { getAppElementById } from './appDocuments.js';
 import { showAppToast } from './toast.js';
 
 /**
@@ -422,7 +423,7 @@ export function renderQuickActions({
     isLoggedIn,
     handlers = {}
 } = {}) {
-    const zone = document.getElementById('quick-actions-zone');
+    const zone = getAppElementById('quick-actions-zone');
     if (!zone) return;
 
     const drawingActive = workspaceMode === 'drawing';

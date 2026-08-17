@@ -1,9 +1,10 @@
-/** @module {"owns":"sidebar module registry, undock wiring, re-dock slots", "related":["sidebarUndock.js","sidebarPrefs.js","desktopStack.js","hamburger.js"]} */
+/** @module {"owns":"sidebar module registry, undock wiring, re-dock slots", "related":["sidebarUndock.js","sidebarPrefs.js","desktopStack.js","hamburger.js","sidebarModulePopout.js"]} */
 import {
     initSidebarUndock,
     SIDEBAR_MODULE_UNDOCKED,
     SIDEBAR_MODULE_DRAGGING,
-    SIDEBAR_MODULE_DOCK_SEL
+    SIDEBAR_MODULE_DOCK_SEL,
+    SIDEBAR_MODULE_CHROME_IGNORE
 } from './sidebarUndock.js';
 import { readModuleDock, writeModuleDock, writeSidebarSection } from './sidebarPrefs.js';
 import { bindToggleCollapsable } from './hamburger.js';
@@ -12,6 +13,8 @@ import { TvPopover } from './tvPopover.js';
 import { ToolsManager } from './toolsManager.js';
 import { ClockStyle } from './clockStyle.js';
 import { CARD_ICONS } from './icons.js';
+import { getAppElementById } from './appDocuments.js';
+import { SidebarModulePopout, initAllModulePopouts } from './sidebarModulePopout.js';
 
 export { SIDEBAR_MODULE_UNDOCKED, SIDEBAR_MODULE_DRAGGING, SIDEBAR_MODULE_DOCK_SEL };
 
@@ -145,9 +148,19 @@ export function getModuleConfig(id) {
     return moduleById.get(id) || null;
 }
 
-export function getModuleRoot(id) {
+export function getModuleUndock(id) {
+    return moduleUndockById.get(id) || null;
+}
+
+function resolveModuleRoot(id) {
+    const placeholder = SidebarModulePopout.getPlaceholder(id);
+    if (placeholder) return placeholder;
     const config = getModuleConfig(id);
     return config ? document.getElementById(config.rootId) : null;
+}
+
+export function getModuleRoot(id) {
+    return resolveModuleRoot(id);
 }
 
 export function getModuleMount() {
@@ -159,15 +172,18 @@ export function renderSidebarModuleHeaderHtml({ headerId, title, extrasHtml = ''
             <div class="collapsable-header" id="${headerId}">
                 <span class="collapsable-heading"><span class="collapsable-toggle">${CARD_ICONS.chevronDown}</span>${title}</span>
                 ${extrasHtml}
-                <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
+                <span class="sidebar-module__chrome">
+                    <button type="button" class="card-act sidebar-module__popout" data-sidebar-popout title="Pop out module" aria-label="Pop out module"></button>
+                    <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
+                </span>
             </div>`;
 }
 
 export function expandModuleSection(id) {
     const config = getModuleConfig(id);
     if (!config?.sectionId || !config.headerId) return;
-    const section = document.getElementById(config.sectionId);
-    const header = document.getElementById(config.headerId);
+    const section = getAppElementById(config.sectionId);
+    const header = getAppElementById(config.headerId);
     if (!section) return;
     section.classList.remove('collapsed');
     header?.querySelector('.collapsable-toggle')?.classList.remove('collapsed');
@@ -208,18 +224,19 @@ export function getSidebarModuleWidth() {
 export function applyAllModuleWidths() {
     const width = getSidebarModuleWidth();
     SIDEBAR_MODULES.forEach((config) => {
-        const root = document.getElementById(config.rootId);
+        const root = resolveModuleRoot(config.id);
         // Only docked modules should track the sidebar width. Undocked windows
         // keep the width they had at the moment they were detached; resizing
         // the sidebar must not resize floating modules.
         if (!root || root.classList.contains(SIDEBAR_MODULE_UNDOCKED)) return;
+        if (root.classList.contains('sidebar-module--popout-placeholder')) return;
         applyModuleWidth(root, width);
     });
 }
 
 function normalizeModuleHeadings() {
     SIDEBAR_MODULES.forEach((config) => {
-        const header = document.getElementById(config.headerId);
+        const header = getAppElementById(config.headerId);
         if (!header) return;
         const toggle = header.querySelector('.collapsable-toggle');
         if (!toggle) return;
@@ -233,8 +250,8 @@ function normalizeModuleHeadings() {
 
 function moduleCollapseIgnoreSelector(config) {
     return config.collapseIgnoreExtra
-        ? `${SIDEBAR_MODULE_DOCK_SEL}, ${config.collapseIgnoreExtra}`
-        : SIDEBAR_MODULE_DOCK_SEL;
+        ? `${SIDEBAR_MODULE_CHROME_IGNORE}, ${config.collapseIgnoreExtra}`
+        : SIDEBAR_MODULE_CHROME_IGNORE;
 }
 
 export function bindModuleCollapsable(config) {
@@ -267,17 +284,29 @@ export function reattachAllSidebarModules() {
 }
 
 export function reattachAllFloatingChrome() {
+    SIDEBAR_MODULE_ORDER.forEach((id) => {
+        if (SidebarModulePopout.isPoppedOut(id)) SidebarModulePopout.popIn(id);
+    });
     reattachAllSidebarModules();
     ToolsManager.closeAll();
     updateReattachAllButton();
+}
+
+function poppedModuleCount() {
+    let count = 0;
+    SIDEBAR_MODULES.forEach((config) => {
+        if (SidebarModulePopout.isPoppedOut(config.id)) count += 1;
+    });
+    return count;
 }
 
 export function updateReattachAllButton() {
     const btn = document.getElementById('sidebar-reattach-all');
     if (!btn) return;
     const undocked = document.querySelectorAll(`.sidebar-module.${SIDEBAR_MODULE_UNDOCKED}`).length;
+    const popped = poppedModuleCount();
     const toolsOpen = ToolsManager.openPanels?.size ?? 0;
-    const active = undocked > 0 || toolsOpen > 0;
+    const active = undocked > 0 || popped > 0 || toolsOpen > 0;
     btn.classList.toggle('is-hidden', !active);
     btn.disabled = !active;
 }
@@ -304,14 +333,21 @@ export function initAllSidebarModules() {
     SIDEBAR_MODULES.forEach((config) => {
         const root = document.getElementById(config.rootId);
         if (!root) return;
+        root.dataset.moduleId = config.id;
 
         const isClock = config.id === 'clock';
         const undock = initSidebarUndock({
-            getRoot: () => document.getElementById(config.rootId),
+            getRoot: () => resolveModuleRoot(config.id),
             undockedClass: SIDEBAR_MODULE_UNDOCKED,
             draggingClass: SIDEBAR_MODULE_DRAGGING,
             dockSelector: SIDEBAR_MODULE_DOCK_SEL,
-            getHeader: () => (config.headerId ? document.getElementById(config.headerId) : null),
+            getHeader: () => {
+                const placeholder = SidebarModulePopout.getPlaceholder(config.id);
+                if (placeholder) {
+                    return placeholder.querySelector('.sidebar-module-popout-placeholder__header');
+                }
+                return config.headerId ? getAppElementById(config.headerId) : null;
+            },
             readDock: () => readModuleDock(config.id),
             writeDock: (patch) => writeModuleDock(config.id, patch),
             restoreToSidebar: () => restoreModuleToSidebar(config.id),
@@ -326,7 +362,11 @@ export function initAllSidebarModules() {
         moduleUndockById.set(config.id, undock);
         if (isClock) bindClockUndockResize(root);
         undock.applyInitialDockState();
+        undock.updateDockButton();
     });
+
+    initAllModulePopouts(resolveModuleRoot, (id) => moduleUndockById.get(id));
+    SidebarModulePopout.syncAllPopoutButtons();
 
     bindSidebarReattachAll();
 }
