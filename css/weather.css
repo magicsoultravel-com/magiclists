@@ -39,8 +39,12 @@
     line-height: 1;
 }
 
+.sidebar-weather__refresh {
+    flex-shrink: 0;
+    line-height: 1;
+}
+
 .sidebar-weather__extlink:hover {
-    color: var(--accent-color, #7eb8ff);
     text-decoration: none;
     background: color-mix(in srgb, var(--accent-color, #7eb8ff) 12%, transparent);
 }
@@ -302,4 +306,9 @@
 
 .sidebar-weather__source-toggle input {
     flex-shrink: 0;
+}
+
+.sidebar-weather__settings-toggle {
+    flex-shrink: 0;
+    line-height: 1;
 }

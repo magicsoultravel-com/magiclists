@@ -7,6 +7,7 @@ import { conditionLabel, weatherIconSvg, weatherIconSvgFromCode } from './weathe
 
 const REFRESH_ICON = ACTION_ICONS.resetCustomization;
 const EXT_LINK_ICON = '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M5 2.4H2.9a1.4 1.4 0 0 0-1.4 1.4v5.3A1.4 1.4 0 0 0 2.9 10.5h5.3a1.4 1.4 0 0 0 1.4-1.4V7M7.3 1.5h3.2v3.2M10.4 1.6 5 7" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const SETTINGS_ICON = ACTION_ICONS.tools;
 
 export const SidebarWeather = {
     root: null,
@@ -200,8 +201,8 @@ export const SidebarWeather = {
                 <span class="sidebar-weather__updated">${formatUpdated(lastRefreshAt, stale)}</span>
             </div>
             <div class="sidebar-weather__settings">
-                <button type="button" class="btn btn--compact sidebar-weather__settings-toggle" data-weather-settings-toggle aria-expanded="${this.settingsOpen}">
-                    ${this.settingsOpen ? 'Hide settings' : 'Settings'}
+                <button type="button" class="btn btn--compact btn-icon sidebar-weather__settings-toggle" data-weather-settings-toggle aria-expanded="${this.settingsOpen}" aria-label="${this.settingsOpen ? 'Hide settings' : 'Open settings'}">
+                    ${SETTINGS_ICON}
                 </button>
                 <div class="sidebar-weather__settings-panel ${this.settingsOpen ? '' : 'is-hidden'}" data-weather-settings-panel>
                     <label class="form-group">
