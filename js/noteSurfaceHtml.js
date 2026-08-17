@@ -850,17 +850,23 @@ export function renderBoardEditorCard(uiInstance, card, item, activeCategories, 
     });
 
     if (lockedByPopout) {
-        const shell = card.querySelector('.editor-note-shell');
-        if (shell && !shell.querySelector('.note-popout-lock-banner')) {
-            const banner = document.createElement('button');
-            banner.type = 'button';
-            banner.className = 'note-popout-lock-banner';
-            banner.textContent = 'Editing in popout — click to focus';
-            banner.addEventListener('click', (e) => {
+        // Overlay badge (no layout shift): a single large popout icon centered
+        // over the card. Clicking it focuses the owning popout window.
+        if (!card.querySelector('.note-popout-lock-overlay')) {
+            const overlay = document.createElement('div');
+            overlay.className = 'note-popout-lock-overlay';
+            const icon = document.createElement('button');
+            icon.type = 'button';
+            icon.className = 'note-popout-lock-icon';
+            icon.title = 'Editing in popout — click to focus';
+            icon.setAttribute('aria-label', 'Editing in popout — click to focus');
+            icon.innerHTML = CARD_ICONS.popout;
+            icon.addEventListener('click', (e) => {
                 e.stopPropagation();
                 NotePopoutBridge.openOrFocus(item.id);
             });
-            shell.insertBefore(banner, shell.firstChild);
+            overlay.appendChild(icon);
+            card.appendChild(overlay);
         }
     }
 

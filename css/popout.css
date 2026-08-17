@@ -69,24 +69,57 @@
     color: #93c5fd;
 }
 
-.note-popout-lock-banner {
-    display: block;
-    width: 100%;
-    border: 0;
-    border-bottom: 1px solid var(--border-color, #323238);
-    background: color-mix(in srgb, #3b82f6 18%, transparent);
-    color: var(--text-main, #e2e2e9);
-    font: inherit;
-    font-size: 0.78rem;
-    padding: 0.4rem 0.65rem;
-    text-align: left;
-    cursor: pointer;
-    position: relative;
-    z-index: 2;
+/* Popout locked overlay — an absolutely-positioned badge so the card/module
+   keeps its exact size (no banner row in the flow). The container is inert;
+   only the icon itself is clickable and focuses the popout window. */
+.note-popout-lock-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    z-index: 6;
 }
 
-.note-popout-lock-banner:hover {
-    background: color-mix(in srgb, #3b82f6 28%, transparent);
+.note-popout-lock-overlay .note-popout-lock-icon {
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.6rem;
+    height: 2.6rem;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, #60a5fa 55%, transparent);
+    border-radius: 9px;
+    background: color-mix(in srgb, #1c1c22 78%, transparent);
+    color: #93c5fd;
+    font: inherit;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgb(0 0 0 / 0.35);
+}
+
+.note-popout-lock-overlay .note-popout-lock-icon:hover {
+    background: color-mix(in srgb, #3b82f6 26%, transparent);
+    color: #bfdbfe;
+}
+
+.note-popout-lock-overlay .note-popout-lock-icon svg {
+    width: 1.35rem;
+    height: 1.35rem;
+}
+
+/* Smaller badge on compact tiles so it doesn't swallow the whole card. */
+.mini-card.tile-small .note-popout-lock-overlay .note-popout-lock-icon,
+.mini-card[data-desktop="1"].spatial-at-small .note-popout-lock-overlay .note-popout-lock-icon {
+    width: 2rem;
+    height: 2rem;
+}
+
+.mini-card.tile-small .note-popout-lock-overlay .note-popout-lock-icon svg,
+.mini-card[data-desktop="1"].spatial-at-small .note-popout-lock-overlay .note-popout-lock-icon svg {
+    width: 1.05rem;
+    height: 1.05rem;
 }
 
 .mini-card.is-popout-locked {
@@ -115,7 +148,6 @@
 .mini-card.is-popout-locked .card-act--drag,
 .mini-card.is-popout-locked .card-act--pin,
 .mini-card.is-popout-locked .card-act--toggle,
-.mini-card.is-popout-locked .note-popout-lock-banner,
 .mini-card.is-popout-locked .ff-resize,
 .mini-card.is-popout-locked .ff-resize-layer,
 .mini-card.is-popout-locked .ff-resize-n,

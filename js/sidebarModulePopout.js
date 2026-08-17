@@ -93,16 +93,21 @@ function createPlaceholder(moduleId, liveRoot) {
 
     transferShellState(liveRoot, placeholder);
 
-    const banner = document.createElement('button');
-    banner.type = 'button';
-    banner.className = 'note-popout-lock-banner sidebar-module-popout-lock-banner';
-    banner.textContent = 'Open in popout — click to focus';
-    banner.addEventListener('click', (e) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'note-popout-lock-overlay sidebar-module-popout-lock-overlay';
+    const icon = document.createElement('button');
+    icon.type = 'button';
+    icon.className = 'note-popout-lock-icon';
+    icon.title = 'Open in popout — click to focus';
+    icon.setAttribute('aria-label', 'Open in popout — click to focus');
+    icon.innerHTML = CARD_ICONS.popout;
+    icon.addEventListener('click', (e) => {
         e.stopPropagation();
         SidebarModulePopout.openOrFocus(moduleId);
     });
+    overlay.appendChild(icon);
 
-    placeholder.appendChild(banner);
+    placeholder.appendChild(overlay);
     placeholder.appendChild(buildPlaceholderHeader(moduleId));
 
     if (moduleId === 'clock') {

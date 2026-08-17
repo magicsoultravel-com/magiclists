@@ -286,10 +286,21 @@ body.is-editor-modal-open .side-panel {
     opacity: 0.85;
 }
 
-.sidebar-module-popout-lock-banner {
-    width: 100%;
-    margin-bottom: 0.25rem;
-    font-size: 0.62rem;
+.sidebar-module--popout-placeholder .note-popout-lock-overlay .note-popout-lock-icon {
+    width: 2rem;
+    height: 2rem;
+}
+
+.sidebar-module--popout-placeholder .note-popout-lock-overlay .note-popout-lock-icon svg {
+    width: 1.1rem;
+    height: 1.1rem;
+}
+
+/* Keep the placeholder title/chrome above the overlay badge so the popout,
+   pop-in and dock buttons stay clickable and visible. */
+.sidebar-module--popout-placeholder .sidebar-module-popout-placeholder__header {
+    position: relative;
+    z-index: 1;
 }
 
 .sidebar-module--popout-placeholder .sidebar-module__popout,
