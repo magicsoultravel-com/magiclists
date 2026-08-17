@@ -26,6 +26,7 @@ import {
 } from './categories.js';
 import { UndoManager, historyLabelForItem, mergeItemOntoExisting } from './undo.js';
 import { NotePopoutBridge } from './notePopoutBridge.js';
+import { shouldRefreshPopoutLockedCard } from './popoutLockRefresh.js';
 import { DesktopBackground } from './desktopBackground.js';
 import { ChromeBackground } from './chromeBackground.js';
 import { ClockStyle } from './clockStyle.js';
@@ -232,6 +233,7 @@ DrawingBoard.init(this);
             role: 'main',
             handlers: {
                 onClaimChanged: (noteId, item) => this.handlePopoutClaimChanged(noteId, item),
+                onClaimsStorageSync: () => this.handleClaimsStorageSync(),
                 onNoteSaved: (noteId, item) => this.handlePopoutNoteSaved(noteId, item),
                 onUndoChanged: () => {
                     if (!UndoManager.isApplying) {
@@ -244,6 +246,10 @@ DrawingBoard.init(this);
         });
         // Refresh any notes already claimed by surviving popouts.
         NotePopoutBridge.syncAllPopoutButtons();
+        this.refreshPopoutLockedCards();
+    }
+
+    handleClaimsStorageSync() {
         this.refreshPopoutLockedCards();
     }
 
@@ -268,7 +274,7 @@ DrawingBoard.init(this);
             }
             return;
         }
-        this.refreshPopoutLockedCards();
+        this.handleClaimsStorageSync();
     }
 
     refreshPopoutLockedCards() {
@@ -276,7 +282,7 @@ DrawingBoard.init(this);
         if (!canvas) return;
         canvas.querySelectorAll('.mini-card[data-id]').forEach((card) => {
             const id = card.dataset.id;
-            if (!id) return;
+            if (!id || !shouldRefreshPopoutLockedCard(id, card, NotePopoutBridge)) return;
             const item = AppState.items.find((it) => it.id === id);
             if (item) UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
         });
@@ -286,7 +292,8 @@ DrawingBoard.init(this);
         if (!noteId) return;
         const canvas = document.getElementById('app-canvas');
         const item = AppState.items.find((it) => it.id === noteId);
-        if (!canvas || !item) {
+        const card = canvas?.querySelector(`.mini-card[data-id="${CSS.escape(noteId)}"]`);
+        if (!canvas || !item || !card || !shouldRefreshPopoutLockedCard(noteId, card, NotePopoutBridge)) {
             NotePopoutBridge.syncAllPopoutButtons();
             return;
         }

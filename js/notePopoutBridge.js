@@ -193,7 +193,7 @@ export const NotePopoutBridge = {
 
         window.addEventListener('storage', (e) => {
             if (e.key === CLAIMS_KEY) {
-                this.notifyClaimChanges();
+                this.syncClaimsFromStorage();
             }
             if (e.key === 'matrix_database' || e.key === 'matrix_undo_history') {
                 if (e.key === 'matrix_undo_history') this.handlers.onUndoChanged?.();
@@ -258,6 +258,13 @@ export const NotePopoutBridge = {
     notifyClaimChanges(noteId = null, item = null) {
         this.handlers.onClaimChanged?.(noteId, item);
         this.syncAllPopoutButtons();
+    },
+
+    /** Cross-window claim heartbeat — refresh buttons + locked cards only. */
+    syncClaimsFromStorage() {
+        pruneExpiredClaims();
+        this.syncAllPopoutButtons();
+        this.handlers.onClaimsStorageSync?.();
     },
 
     getClaim(noteId) {

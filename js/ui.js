@@ -681,7 +681,14 @@ reapplySmallFootprintOnBoard() {
             .filter((cat) => !hiddenCategories.includes(cat.name));
         const { targetCatName, categoryColor } = getCardRenderContext(item, activeCategories);
 
-        renderBoardEditorCard(this, card, item, activeCategories, targetCatName, categoryColor);
+        const activeEdit = document.activeElement?.closest?.('.card-inline-edit');
+        const isActivelyEditing = !!(activeEdit && card.contains(activeEdit));
+
+        if (isActivelyEditing) {
+            refreshBoardEditorCard(this, card, item, activeCategories, targetCatName, categoryColor);
+        } else {
+            renderBoardEditorCard(this, card, item, activeCategories, targetCatName, categoryColor);
+        }
         applyItemCardTheme(card, item);
         applyCardCategoryBand(card, categoryColor);
         this.finalizeDesktopCard(card);
