@@ -178,7 +178,7 @@ export const RadioPopover = {
     },
 
     open(mode, { attachEl, iconAnchor, title = 'Radio', force = false, tab = 'browse' } = {}) {
-        const wasOpen = !this.panel?.classList.contains('is-hidden');
+        const wasOpen = !!(this.panel && !this.panel.classList.contains('is-hidden'));
         const sameBrowse = mode === 'browse'
             && this.mode === 'browse'
             && this.iconAnchor === iconAnchor

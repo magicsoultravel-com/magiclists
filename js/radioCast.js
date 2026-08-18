@@ -4,13 +4,26 @@
  * The sender library is loaded synchronously in <head> (see index.html). It must
  * NOT be injected dynamically/async, or Chrome reports the Cast API as unavailable.
  */
-function loadCastSdk() {
-    if (typeof window !== 'undefined' && window.cast?.framework && window.chrome?.cast) {
-        return Promise.resolve(window.cast.framework);
+const CAST_SDK_TIMEOUT_MS = 4000;
+
+/**
+ * Resolve the Google Cast SDK.
+ * The sender library is loaded synchronously in <head> (see index.html). It must
+ * NOT be injected dynamically/async, or Chrome reports the Cast API as unavailable.
+ * Loading itself is still asynchronous, so we poll briefly for window.cast instead
+ * of awaiting window.__castSdkReady — that promise never settles when the external
+ * cast_sender.js script is blocked or fails to load, which would otherwise leave the
+ * Cast panel permanently stuck on "unavailable" (e.g. the Cast button appearing dead).
+ */
+async function loadCastSdk() {
+    const deadline = Date.now() + CAST_SDK_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+        if (typeof window !== 'undefined' && window.cast?.framework && window.chrome?.cast) {
+            return window.cast.framework;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    if (window.__castSdkReady) return window.__castSdkReady;
-    // SDK was blocked, loaded too late, or reported __onGCastApiAvailable(false).
-    return Promise.reject(new Error('Google Cast SDK unavailable'));
+    throw new Error('Google Cast SDK unavailable');
 }
 
 /** Guess MIME type from a stream URL for the Default Media Receiver. */
@@ -28,9 +41,18 @@ export const RadioCast = {
     castDeviceName: null,
     available: false,
     casting: false,
+    initPromise: null,
 
     async init() {
         if (this.available) return;
+        if (this.initPromise) return this.initPromise;
+        this.initPromise = this.initSdk().finally(() => {
+            this.initPromise = null;
+        });
+        return this.initPromise;
+    },
+
+    async initSdk() {
         try {
             await loadCastSdk();
             this.available = true;

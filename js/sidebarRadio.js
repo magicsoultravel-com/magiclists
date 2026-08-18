@@ -480,18 +480,46 @@ export const SidebarRadio = {
             }
         });
 
-        body.querySelector('[data-radio-refresh-catalog]')?.addEventListener('click', async () => {
-            await RadioProviderRegistry.refreshCatalog();
-            this.countries = await RadioProviderRegistry.getCountries({ refresh: true });
-            if (RadioPopover.mode === 'browse') {
-                this.browseView = 'countries';
-                this.browseCountry = null;
-                await this.renderBrowseCountries();
+        body.querySelector('[data-radio-refresh-catalog]')?.addEventListener('click', async (e) => {
+            const btn = e.currentTarget;
+            const originalText = btn?.textContent || '';
+            if (btn) {
+                btn.textContent = 'Refreshing…';
+                btn.disabled = true;
+            }
+            try {
+                await RadioProviderRegistry.refreshCatalog();
+                this.countries = await RadioProviderRegistry.getCountries({ refresh: true });
+                if (RadioPopover.mode === 'browse') {
+                    this.browseView = 'countries';
+                    this.browseCountry = null;
+                    await this.renderBrowseCountries();
+                }
+                showAppToast('Catalog refreshed');
+            } catch {
+                showAppToast('Failed to refresh catalog');
+            } finally {
+                if (btn) {
+                    btn.textContent = originalText || 'Refresh catalog';
+                    btn.disabled = false;
+                }
             }
         });
 
-        body.querySelector('[data-radio-clear-cache]')?.addEventListener('click', () => {
-            RadioProviderRegistry.clearAllCaches().catch(() => {});
+        body.querySelector('[data-radio-clear-cache]')?.addEventListener('click', async () => {
+            try {
+                await RadioProviderRegistry.clearAllCaches();
+                this.countries = [];
+                showAppToast('Radio catalog cache cleared');
+                this.prefetchCountries();
+                if (RadioPopover.mode === 'browse' && !RadioPopover.panel?.classList.contains('is-hidden')) {
+                    this.browseView = 'countries';
+                    this.browseCountry = null;
+                    await this.renderBrowseCountries();
+                }
+            } catch {
+                showAppToast('Failed to clear the radio catalog cache');
+            }
         });
 
         RadioPopover.reposition();
@@ -532,7 +560,9 @@ export const SidebarRadio = {
         body.innerHTML = `
             <div class="radio-cast-panel">
                 <p class="radio-cast-panel__avail${status.available ? ' is-ok' : ''}">
-                    ${status.available ? 'Google Cast is available.' : 'Google Cast is not available in this browser.'}
+                    ${status.available
+        ? 'Google Cast is available.'
+        : 'Google Cast is not available. Casting requires Chrome with Google Cast support on an HTTPS connection.'}
                 </p>
                 <div class="radio-cast-panel__status${status.casting ? ' is-casting' : ''}" data-radio-cast-status>
                     ${status.casting ? `Casting to <strong>${escapeHtml(status.deviceName || 'device')}</strong>` : 'Not casting'}
