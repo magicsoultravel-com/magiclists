@@ -118,6 +118,36 @@ export const Editor = {
             showAppToast('Note is open in a popout');
             return;
         }
+        
+        // If there's an active item with a different ID, we need to save it first
+        // before opening the new note to prevent data loss.
+        if (this.activeItem && this.activeItem.id !== item?.id) {
+            // Determine the baseline for comparison:
+            // - If lastPersistedItem is set, it represents what was last saved
+            // - Otherwise, use the current activeItem snapshot (won't be overwritten by sync)
+            const baselineItem = this.lastPersistedItem || JSON.parse(JSON.stringify(this.activeItem));
+            
+            // Sync the current item from DOM to capture any unsaved changes
+            this.syncActiveItemFromDom();
+            
+            // Collect current form data and compare with baseline
+            const currentData = this.collectFormData({ normalize: true });
+            const hasChanges = JSON.stringify(currentData) !== JSON.stringify(baselineItem);
+            const shouldPersist = hasChanges
+                || (this.hasUserInteracted && !this.isNewUnsavedNote)
+                || (this.isNewUnsavedNote && noteHasSavableContent(currentData));
+            
+            if (shouldPersist) {
+                // Persist the current note before opening a new one
+                // force: true ensures we persist even if hasUserInteracted is false
+                this.persistNote({ force: true, normalize: true });
+                // Reveal the saved note on the board so UI stays consistent
+                window.dispatchEvent(new CustomEvent('editor:reveal_on_board', {
+                    detail: { item: NoteSurface.snapshotItem(this.activeItem), scrollToBoard: false }
+                }));
+            }
+        }
+        
         this.availableCategories = categoriesList;
         this.hasUserInteracted = false;
 
