@@ -9,6 +9,12 @@ export const PIP_WINDOW_H = 680;
 export const POPUP_WINDOW_W = 480;
 export const POPUP_WINDOW_H = 640;
 
+/** Tool panel popout default sizes */
+export const TOOL_PIP_W = 380;
+export const TOOL_PIP_H = 480;
+export const TOOL_POPUP_W = 380;
+export const TOOL_POPUP_H = 480;
+
 /** Sidebar module popout default sizes */
 export const MODULE_PIP_W = 260;
 export const MODULE_PIP_H = 480;
@@ -194,4 +200,8 @@ export function windowNameForModule(moduleId) {
 
 export function windowNameForNote(noteId) {
     return `magiclists-note-${String(noteId).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+}
+
+export function windowNameForTool(toolId) {
+    return `magiclists-tool-${String(toolId).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 }

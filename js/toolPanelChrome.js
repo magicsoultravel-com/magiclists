@@ -174,6 +174,7 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
             <span class="tool-panel__spacer"></span>
             <div class="tool-panel__actions">
                 <button type="button" class="card-act card-act--collapse" title="Collapse" aria-label="Collapse"></button>
+                <button type="button" class="card-act card-act--popout tool-panel__popout" title="Pop out tool" aria-label="Pop out tool" aria-pressed="false"></button>
                 <button type="button" class="card-act card-act--close" title="Remove from desktop" aria-label="Remove from desktop"></button>
             </div>
         </div>
@@ -184,8 +185,10 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     if (titleEl) titleEl.textContent = meta?.label || toolId;
 
     const collapseBtn = panel.querySelector('.card-act--collapse');
+    const popoutBtn = panel.querySelector('.card-act--popout');
     const closeBtn = panel.querySelector('.card-act--close');
     collapseBtn.innerHTML = CARD_ICONS.collapse;
+    popoutBtn.innerHTML = CARD_ICONS.popout;
     closeBtn.innerHTML = CARD_ICONS.close;
 
     const bodyEl = panel.querySelector('.tool-panel__body');
@@ -366,6 +369,11 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
         callbacks.onDismiss?.();
     });
 
+    popoutBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        callbacks.onPopout?.();
+    });
+
     bindPanelDrag(panel, persist);
     if (meta?.resizable || meta?.defaultSize) {
         mountFloatChrome(panel, { resizable: true, mode: 'tool' });
@@ -419,6 +427,53 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
             else bringToFront(panel);
         }
     };
+}
+
+/**
+ * Inject pop-in chrome into a tool panel that has been moved into a popout
+ * document.
+ *
+ * - hides the existing collapse + popout buttons
+ * - inserts a new pop-in button wired to `onPopIn`
+ * - keeps the original popout button in the DOM (hidden) so it is easy to
+ *   restore when the panel pops back into the desktop
+ *
+ * @param {HTMLElement} panel
+ * @param {() => void} onPopIn
+ */
+export function addPopinButtonToPanel(panel, onPopIn) {
+    if (!panel) return null;
+    const actions = panel.querySelector('.tool-panel__actions');
+    if (!actions) return null;
+
+    // Hide collapse while popped out (no "chip" in this context).
+    panel.querySelector('.card-act--collapse')?.classList.add('is-hidden');
+
+    // Hide popout button while popped out; we restore it when popping back.
+    panel.querySelector('.card-act--popout.tool-panel__popout')?.classList.add('is-hidden');
+
+    // Remove any previously injected pop-in (idempotent).
+    actions.querySelector('.card-act--popin.tool-panel__popin')?.remove();
+
+    const closeBtn = actions.querySelector('.card-act--close');
+    const popinBtn = document.createElement('button');
+    popinBtn.type = 'button';
+    popinBtn.className = 'card-act card-act--popin tool-panel__popin';
+    popinBtn.title = 'Pop in (return tool to desktop)';
+    popinBtn.setAttribute('aria-label', popinBtn.title);
+    popinBtn.innerHTML = CARD_ICONS.popin;
+    popinBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        onPopIn?.();
+    });
+
+    if (closeBtn && closeBtn.parentNode === actions) {
+        actions.insertBefore(popinBtn, closeBtn);
+    } else {
+        actions.appendChild(popinBtn);
+    }
+
+    return popinBtn;
 }
 
 function bindPanelDrag(panel, onEnd) {

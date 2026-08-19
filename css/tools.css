@@ -8,6 +8,16 @@
     pointer-events: none;
 }
 
+/* Tool popout window shell (PiP or popup) */
+.tool-panel-popout-body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg-primary, #121214);
+    color: var(--text-main, #e2e2e9);
+    overflow: hidden;
+    padding: 0;
+}
+
 .tool-panel {
     --tool-gap: 0.25rem;
     --tool-accent-tint: color-mix(in srgb, var(--accent) 12%, transparent);
@@ -28,6 +38,34 @@
 }
 
 .tool-panel.is-hidden {
+    display: none !important;
+}
+
+/* Desktop placeholder shown while the tool panel is moved into a popout window */
+.tool-panel--popout-placeholder.is-popout-locked {
+    outline: 1px dashed color-mix(in srgb, #60a5fa 55%, transparent);
+    outline-offset: 1px;
+}
+
+/* Keep placeholder header/buttons above the lock overlay badge */
+.tool-panel--popout-placeholder .tool-panel__header--popout-placeholder {
+    position: relative;
+    z-index: 1;
+}
+
+/* Live tool panel inside a popout window */
+.tool-panel.is-popout-live {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0;
+    min-height: 0;
+    border-radius: 0 !important;
+}
+
+/* In popout window context we don't show the collapse-to-chip action */
+.tool-panel.is-popout-live .card-act--collapse {
     display: none !important;
 }
 

@@ -1,6 +1,7 @@
 // js/toolsManager.js
 import { TOOLS_REGISTRY } from './tools/registry.js';
 import { createToolPanel, renderToolIcon } from './toolPanelChrome.js';
+import { ToolPanelPopout } from './toolPanelPopout.js';
 
 function escapeHtml(str) {
     if (!str) return '';
@@ -138,8 +139,10 @@ export const ToolsManager = {
         const meta = this.getToolMeta(toolName);
         if (!meta || !this.desktop) return;
 
-        const chrome = createToolPanel(toolName, meta, this.desktop, {
+        let chrome = null;
+        chrome = createToolPanel(toolName, meta, this.desktop, {
             onDismiss: () => this.dismiss(toolName),
+            onPopout: () => ToolPanelPopout.popOut(toolName, chrome.panel, meta),
             onResize: (bodyEl) => {
                 const entry = this.openPanels.get(toolName);
                 entry?.instance?.onPanelResize?.(bodyEl);
@@ -185,6 +188,10 @@ export const ToolsManager = {
     dismiss(toolId) {
         const entry = this.openPanels.get(toolId);
         if (!entry) return;
+
+        if (ToolPanelPopout.isPoppedOut(toolId)) {
+            ToolPanelPopout.popIn(toolId);
+        }
 
         if (entry.instance && typeof entry.instance.destroy === 'function') {
             entry.instance.destroy();
