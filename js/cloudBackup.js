@@ -1063,7 +1063,7 @@ export const CloudBackup = {
 
         this.busy = true;
         try {
-            const pkg = buildBackupPackage();
+            const pkg = await buildBackupPackage();
             const filename = backupFilename(pkg.timestamp);
             let json = serializeBackupPackage(pkg);
             if (config.encryptCheckpoints) {
@@ -1111,7 +1111,7 @@ export const CloudBackup = {
             } else {
                 parsed = parseBackupPackage(text);
             }
-            applyBackupToStorage(parsed);
+            await applyBackupToStorage(parsed);
             const itemCount = parsed.matrix_database?.items?.length ?? 0;
             alert(`Restore successful (${itemCount} items). Reloading…`);
             window.location.reload();

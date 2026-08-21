@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-08-13T18:48:29.303Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-08-21T14:35:38.916Z
 
 ## CSS load order
 
@@ -27,11 +27,13 @@ alwaysApply: true
 | css/calendar.css | calendar tool panel month grid and hour notes | js/tools/calendar.js, calendar.js | — | 14 |
 | css/cosmos.css | cosmos tool viewport and star map chrome | js/tools/cosmos.js | — | 15 |
 | css/sidebar-media.css | shared sidebar radio/tv player and popover chrome | sidebarRadio.js, sidebarTv.js, radioPopover.js, tvPopover.js | domain-specific rules stay in radio.css and tv.css | 16 |
-| css/radio.css | sidebar radio player, now playing, popover browser | sidebarRadio.js, radioPlayer.js, radioPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell-sidebar.css | 17 |
+| css/radio.css | (unknown) | — | — | 17 |
 | css/tv.css | sidebar TV player, now playing, popover browser | sidebarTv.js, tvPlayer.js, tvPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell-sidebar.css | 18 |
 | css/weather.css | sidebar weather glance + expanded forecast panel | sidebarWeather.js, weatherApi.js | — | 19 |
 | css/sheet.css | sheet-grid note template body and table chrome | sheet.js, noteSurface.js, editor.js | — | 20 |
 | css/desktops.css | desktop switcher dock styling, dock pin lock | desktopDockComponent.js | — | 21 |
+| css/popout.css | (unknown) | — | — | 22 |
+| css/media-library.css | media library sidebar module, staging dialogue, gallery overlay, media FAB | sidebarMediaLibrary.js, mediaLibraryOverlay.js, mediaStagingDialog.js, mediaPasteCatcher.js | — | 23 |
 
 ## JS domains (@module)
 
@@ -39,10 +41,12 @@ alwaysApply: true
 | --- | --- | --- | --- | --- |
 | js/api.js | item CRUD and matrix_database localStorage persistence | noteModel.js, layoutStorage.js | — | — |
 | js/app.js | application orchestration, event bus listeners, workspace init | api.js, ui.js, layoutStorage.js | item:mutation_requested, item:selected_for_edit, board:visibility_changed, calendar:add_note | — |
+| js/appDocuments.js | multi-document element lookup for module popouts | sidebarModulePopout.js, sidebarModules.js | — | — |
 | js/backup.js | local backup export/import, encrypted packages | cloudBackup.js, api.js | — | — |
 | js/board/gridEngine.js | grid board layout engine, push resolution | board/noteGeometry.js, layoutStorage.js, gridDensity.js | — | — |
 | js/board/noteGeometry.js | grid note geometry, push layout, tile bounds | board/gridEngine.js, tileGeometry.js | — | — |
 | js/boardOperations.js | item visibility, archiving, calendar integration, card actions | noteSurface.js, noteQuickActions.js, desktopManager.js | — | — |
+| js/boardRulers.js | board px rulers chrome | displayOptions.js, desktopZoom.js, fileCabinet.js | — | — |
 | js/checklistSteps.js | checklist tree logic, step reorder, indent/outdent | noteSurface.js, noteBodyConversion.js | — | — |
 | js/cloud/cloudProvider.js | cloud provider registry and factory dispatch | cloudBackup.js, cloud/megaProvider.js, cloud/localFolderProvider.js | — | — |
 | js/cloudBackup.js | cloud backup UI, MEGA and local-folder sync | backup.js, cloud/cloudProvider.js, cloud/megaProvider.js, cloud/localFolderProvider.js | — | — |
@@ -58,25 +62,39 @@ alwaysApply: true
 | js/itemMerge.js | shared merge helper for undo/redo restore (preserves note metadata) | undo.js, app.js | — | — |
 | js/lassoGeometry.js | lasso geometry utilities - ray casting, bounding boxes | drawingBoard.js | — | — |
 | js/layoutStorage.js | board layout persistence, grid/freeform positions, storage migrations | dragdrop.js, ui.js, fileCabinet.js, board/gridEngine.js | — | — |
+| js/mediaBackup.js | media library backup export/import (meta JSON, embeds, ZIP) | mediaLibrary.js, backup.js | — | — |
+| js/mediaLibrary.js | media library CRUD, thumbs, size limits | storage/indexedDbMediaStore.js, mediaMetadata.js, mediaBackup.js | — | — |
+| js/mediaLibraryOverlay.js | media library overlay gallery browser | mediaLibrary.js, mediaStagingDialog.js, sidebarMediaLibrary.js | — | — |
+| js/mediaMetadata.js | media file metadata and EXIF extraction | mediaLibrary.js | — | — |
+| js/mediaPasteCatcher.js | global clipboard paste catcher for media staging | mediaStagingDialog.js | — | — |
+| js/mediaStagingDialog.js | media staging upload dialogue before library commit | mediaLibrary.js, mediaPasteCatcher.js, mediaLibraryOverlay.js | — | — |
 | js/noteBodyConversion.js | checklist/content conversion, plain copy text | noteSurface.js, checklistSteps.js, richText.js | — | — |
 | js/noteModel.js | note item schema, normalizeItemForSave, createNoteId | richText.js, sheet.js | — | — |
+| js/notePopoutBridge.js | note popout window open/focus, edit claims, BroadcastChannel sync | popoutNote.js, app.js, noteQuickActions.js, popoutWindows.js | — | — |
 | js/noteQuickActions.js | board + modal note quick-action DOM binding | noteSurface.js, ui.js, editor.js | — | — |
 | js/noteSurface.js | note card DOM, inline edit, checklist interactions, item mutations | checklistSteps.js, richText.js, sheet.js, noteBodyConversion.js, noteQuickActions.js, noteSurfaceHtml.js, noteSurfaceEditing.js, noteSurfaceChecklist.js | item:mutation_requested | — |
 | js/noteSurfaceChecklist.js | checklist operations, drag/drop, state management | noteSurface.js, checklistSteps.js, noteBodyConversion.js, richText.js | — | — |
 | js/noteSurfaceEditing.js | note inline editing, emoji, text operations, zoom controls | noteSurface.js, noteSurfaceHtml.js, richText.js, emojiPicker.js, domEscape.js | — | — |
 | js/noteSurfaceHtml.js | note HTML building and rendering | noteSurface.js, noteModel.js, sheet.js, checklistSteps.js | — | — |
 | js/noteSurfaceMutations.js | note item mutation functions | noteSurface.js, noteSurfaceEditing.js, noteSurfaceChecklist.js, noteModel.js, sheet.js, undo.js | item:mutation_requested | — |
+| js/popoutLockRefresh.js | popout lock board refresh filter | app.js, notePopoutBridge.js | — | — |
+| js/popoutNote.js | standalone note popout window boot, edit, flush, undo | notePopoutBridge.js, noteSurface.js, api.js, undo.js | — | — |
+| js/popoutWindows.js | shared popout window helpers (PiP, browser popup, styles) | notePopoutBridge.js, sidebarModulePopout.js | — | — |
 | js/richText.js | rich text sanitize, linkify, strip markup | noteSurface.js, noteModel.js | — | — |
 | js/scheduledBackup.js | scheduled local JSON/TXT auto-export timer and popover | backup.js, app.js, noteQuickActions.js | — | — |
 | js/searchBar.js | sidebar search bar and results panel | searchFilter.js, hamburger.js | — | — |
 | js/sheet.js | sheet-grid note template model and table interactions | noteSurface.js, editor.js | — | — |
 | js/sidebarHistory.js | sidebar undo history module | undo.js, popoverPosition.js, sidebarModules.js | — | — |
-| js/sidebarModules.js | sidebar module registry, undock wiring, re-dock slots | sidebarUndock.js, sidebarPrefs.js, desktopStack.js, hamburger.js | — | — |
+| js/sidebarMediaLibrary.js | sidebar media library module chrome | mediaLibraryOverlay.js, mediaStagingDialog.js, sidebarModules.js | — | — |
+| js/sidebarModulePopout.js | sidebar module popout open/focus/pop-in, DOM portal | popoutWindows.js, sidebarModules.js, appDocuments.js | — | — |
+| js/sidebarModulePopoutShell.js | sidebar module popout placeholder shell state transfer | sidebarModulePopout.js | — | — |
+| js/sidebarModules.js | sidebar module registry, undock wiring, re-dock slots | sidebarUndock.js, sidebarPrefs.js, desktopStack.js, hamburger.js, sidebarModulePopout.js | — | — |
 | js/sidebarRadio.js | sidebar radio player and station browser | radioPlayer.js, radioProviders/registry.js, radioPopover.js, sidebarModules.js | — | — |
 | js/sidebarStats.js | sidebar workspace stats module | layoutStorage.js, backup.js, sidebarModules.js | — | — |
 | js/sidebarTv.js | sidebar TV player and channel browser | tvPlayer.js, tvProviders/registry.js, tvPopover.js, sidebarModules.js | tv:state_changed | — |
 | js/sidebarUndock.js | shared undock/drag/clamp for sidebar panels | desktopStack.js, popoverPosition.js, sidebarPrefs.js | — | — |
 | js/sidebarWeather.js | sidebar weather glance and forecast panel | weatherApi.js, weatherProviders/registry.js, sidebarModules.js | — | — |
+| js/toolPanelPopout.js | tool panel popout open/focus/pop-in, DOM portal | toolPanelChrome.js, toolsManager.js, popoutWindows.js, appDocuments.js | — | — |
 
 ## Tools (@tool)
 
@@ -92,3 +110,8 @@ alwaysApply: true
 | map | Map | tool-mount--map | 6 |
 | alphabets | Alphabets | tool-mount--alphabets | 7 |
 | cosmos | Cosmos | tool-mount--cosmos | 9 |
+
+## Validation
+
+- **WARN:** css/radio.css: missing @css header
+- **WARN:** css/popout.css: missing @css header

@@ -429,11 +429,11 @@ export const ScheduledBackup = {
             : 'Off';
     },
 
-    fireExport(config) {
+    async fireExport(config) {
         if (this.busy) return;
         this.busy = true;
         try {
-            const payload = this.buildPayload(config.format);
+            const payload = await this.buildPayload(config.format);
             const fingerprint = hashExportFingerprint(payload.text);
             const changed = fingerprint !== config.lastFingerprint;
 
@@ -463,7 +463,7 @@ export const ScheduledBackup = {
         }
     },
 
-    buildPayload(format) {
+    async buildPayload(format) {
         if (format === 'txt') {
             const text = buildTxtContent(this.getItems());
             return {
@@ -473,7 +473,7 @@ export const ScheduledBackup = {
                 timestamp: Math.floor(Date.now() / 1000)
             };
         }
-        const backupPackage = buildBackupPackage();
+        const backupPackage = await buildBackupPackage();
         const text = serializeBackupPackage(backupPackage);
         return {
             text,

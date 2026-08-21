@@ -51,6 +51,10 @@ import { Fullscreen } from './fullscreen.js';
 import { SidebarRadio } from './sidebarRadio.js';
 import { SidebarTv } from './sidebarTv.js';
 import { SidebarWeather } from './sidebarWeather.js';
+import { SidebarMediaLibrary } from './sidebarMediaLibrary.js';
+import { MediaLibraryOverlay, bindMediaFilePickers } from './mediaLibraryOverlay.js';
+import { MediaStagingDialog } from './mediaStagingDialog.js';
+import { MediaPasteCatcher, readClipboardIntoStaging } from './mediaPasteCatcher.js';
 import { initAllSidebarModules } from './sidebarModules.js';
 import { SidebarStats } from './sidebarStats.js';
 import { SidebarHistory } from './sidebarHistory.js';
@@ -162,7 +166,13 @@ BootProgress.set(85, 'Workspace…');
             SidebarRadio.init();
             SidebarTv.init();
             SidebarWeather.init();
-SidePanel.setupStatusClickHandlers(); /* after radio/tv/weather shells exist */
+            SidebarMediaLibrary.init();
+            MediaStagingDialog.init();
+            MediaLibraryOverlay.init();
+            MediaPasteCatcher.init();
+            bindMediaFilePickers();
+            this.setupMediaFab();
+            SidePanel.setupStatusClickHandlers(); /* after radio/tv/weather shells exist */
             this.renderQuickActionsHeaderIcons();
             SidebarHistory.init(AppState);
             SidebarStats.init();
@@ -645,13 +655,28 @@ renderQuickActions() {
 
     updateFabVisibility() {
         const fab = document.getElementById('fab-create');
-        if (!fab) return;
+        const mediaFab = document.getElementById('fab-media');
         const inDrawing = AppState.workspaceMode === 'drawing';
-        fab.classList.toggle('is-hidden', inDrawing);
-        if (inDrawing) return;
-        const needsLogin = !AppState.user.isLoggedIn;
-        fab.title = needsLogin ? 'New note (login required)' : 'New note';
-        fab.setAttribute('aria-label', fab.title);
+        if (fab) {
+            fab.classList.toggle('is-hidden', inDrawing);
+            if (!inDrawing) {
+                const needsLogin = !AppState.user.isLoggedIn;
+                fab.title = needsLogin ? 'New note (login required)' : 'New note';
+                fab.setAttribute('aria-label', fab.title);
+            }
+        }
+        if (mediaFab) {
+            mediaFab.classList.toggle('is-hidden', inDrawing);
+        }
+    }
+
+    setupMediaFab() {
+        const mediaFab = document.getElementById('fab-media');
+        if (!mediaFab) return;
+        mediaFab.innerHTML = ACTION_ICONS.mediaPaste;
+        mediaFab.addEventListener('click', () => {
+            readClipboardIntoStaging();
+        });
     }
 
     setupDrawingMode() {
@@ -702,7 +727,7 @@ renderQuickActions() {
         this.updateViewToggleState();
     }
 
-executeDataBackupExport() {
+async executeDataBackupExport() {
         // Show loading indicator on the export button
         const exportBtn = document.getElementById('btn-export-db');
         if (exportBtn) {
@@ -710,7 +735,7 @@ executeDataBackupExport() {
         }
         
         try {
-            const backupPackage = buildBackupPackage();
+            const backupPackage = await buildBackupPackage();
             const blob = new Blob([serializeBackupPackage(backupPackage)], { type: 'application/json' });
             const virtualLink = document.createElement('a');
             virtualLink.href = URL.createObjectURL(blob);
@@ -801,7 +826,7 @@ executeDataBackupExport() {
             reader.onload = async (event) => {
                 try {
                     const parsedBackup = parseBackupPackage(event.target.result);
-                    applyBackupToStorage(parsedBackup);
+                    await applyBackupToStorage(parsedBackup);
                     const itemCount = parsedBackup.matrix_database?.items?.length ?? 0;
                     const token = parsedBackup.matrix_database?.auth?.admin_token;
                     const tokenNote = token

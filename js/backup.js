@@ -8,6 +8,7 @@ import {
 } from './categories.js';
 import { applyLayoutBackupKeys, getLayoutBackupKeys, repairSpatialLayoutStorage } from './layoutStorage.js';
 import { getCreatedTimestamp, getUpdatedTimestamp } from './noteModel.js';
+import { applyMediaLibraryBackupSection, buildMediaLibraryBackupSection } from './mediaBackup.js';
 
 export const BACKUP_FILE_PREFIX = 'matrix_workspace_backup_';
 export const ENCRYPTED_BACKUP_MARKER = 'matrix_encrypted_backup';
@@ -72,7 +73,7 @@ export function backupFilename(timestamp = Math.floor(Date.now() / 1000)) {
     return `${BACKUP_FILE_PREFIX}${timestamp}.json`;
 }
 
-export function buildBackupPackage() {
+export async function buildBackupPackage() {
     const categories = readStoredCategories({ keepEmpty: true });
     writeStoredCategories(categories, { keepEmpty: true });
 
@@ -106,12 +107,21 @@ export function buildBackupPackage() {
             // Ignore parse errors
         }
     }
+
+    let media_library = null;
+    try {
+        media_library = await buildMediaLibraryBackupSection({ embed: true });
+    } catch (err) {
+        console.warn('[Backup] media_library section skipped', err);
+        media_library = { version: 1, exportedAt: Math.floor(Date.now() / 1000), items: [] };
+    }
     
     return {
         timestamp: Math.floor(Date.now() / 1000),
         matrix_database,
         matrix_custom_categories: categories,
         desktopsConfig,
+        media_library,
         ...Object.fromEntries(
             Object.entries(layoutKeys).map(([key, raw]) => {
                 try {
@@ -300,7 +310,7 @@ export function migrateImportedDatabase(db, categories = []) {
     };
 }
 
-export function applyBackupToStorage(parsedBackup) {
+export async function applyBackupToStorage(parsedBackup) {
     const categories = parsedBackup.matrix_custom_categories
         ? ensureUncategorizedCategory(normalizeCategories(parsedBackup.matrix_custom_categories, { keepEmpty: true }))
         : [];
@@ -346,6 +356,14 @@ export function applyBackupToStorage(parsedBackup) {
     localStorage.removeItem('matrix_calendar_hidden_ids');
 
     applyLayoutBackupKeys(parsedBackup);
+
+    if (parsedBackup.media_library) {
+        try {
+            await applyMediaLibraryBackupSection(parsedBackup.media_library);
+        } catch (err) {
+            console.warn('[Backup] media_library restore failed', err);
+        }
+    }
 
     try {
         const db = JSON.parse(localStorage.getItem('matrix_database') || '{}');
