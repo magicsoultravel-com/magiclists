@@ -8,6 +8,7 @@ import { copyPlainTextToClipboard } from './clipboard.js';
 import { stepToPlainCopyLine } from './noteBodyConversion.js';
 import { UndoManager } from './undo.js';
 import { bindNoteBodySections, updateConvertButtons, bindCollapsable } from './noteSurfaceHtml.js';
+import { bindNoteAttachments } from './noteAttachmentsUi.js';
 import { syncItemBodyFromDom, mutateItem, attachNoteBodyInteractions, updateNoteMetaStats, syncInlineFieldToItem, buildSheetInteractionOptions } from './noteSurfaceMutations.js';
 import { normalizeItemForSave } from './noteModel.js';
 import { createBlankChecklistStep } from './noteSurfaceMutations.js';
@@ -536,6 +537,7 @@ export function bindNoteEditorShell(root, item, {
     if (body) {
         attachNoteBodyInteractions(body, item, interactionOptions);
         bindNoteBodySections(body);
+        bindNoteAttachments(body, item);
         attachSheetInteractions(body, item, buildSheetInteractionOptions(shell, item, {
             localOnly,
             onChange,
@@ -584,7 +586,9 @@ export function bindNoteEditorShell(root, item, {
                 + '.checklist-done-toggle, .step-collapse-btn, .step-delete-btn, '
                 + '.step-indent-btn, .step-outdent-btn, .checklist-expand-collapse-all-btn, '
                 + '.sheet-cell-input, .sheet-struct-actions, .sheet-struct-actions .card-act, '
-                + '.note-section-header, .note-section-header .collapsable-toggle'
+                + '.note-section-header, .note-section-header .collapsable-toggle, '
+                + '.note-attachment, .note-attachment__thumb-btn, .note-attachment__label-btn, '
+                + '.note-attachment__expand, .note-attachment__detach, .note-attachment__preview'
             )) return;
             e.stopPropagation();
         });

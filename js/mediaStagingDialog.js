@@ -1,5 +1,6 @@
 /** @module {"owns":"media staging upload dialogue before library commit", "related":["mediaLibrary.js","mediaPasteCatcher.js","mediaLibraryOverlay.js"]} */
 import { escapeAttr, escapeHTML } from './domEscape.js';
+import { CARD_ICONS } from './icons.js';
 import { MEDIA_MAX_BYTES, commitMediaItems } from './mediaLibrary.js';
 import { buildMediaMetadata, formatByteSize, humanMetaRows } from './mediaMetadata.js';
 import { showAppToast } from './toast.js';
@@ -15,10 +16,15 @@ function ensureOverlay() {
     overlay = document.getElementById('media-staging-overlay');
     if (!overlay) return null;
 
+    const closeBtn = overlay.querySelector('.media-staging-panel__close');
+    if (closeBtn && !closeBtn.innerHTML) closeBtn.innerHTML = CARD_ICONS.close;
+
     overlay.addEventListener('mousedown', (e) => {
         if (e.target === overlay) close();
     });
-    overlay.querySelector('[data-media-staging-cancel]')?.addEventListener('click', () => close());
+    overlay.querySelectorAll('[data-media-staging-cancel]').forEach((btn) => {
+        btn.addEventListener('click', () => close());
+    });
     overlay.querySelector('[data-media-staging-confirm]')?.addEventListener('click', () => confirm());
     document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;

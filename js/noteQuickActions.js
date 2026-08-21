@@ -17,6 +17,8 @@ import { BoardOverlay } from './boardOverlay.js';
 import { NotePopoutBridge } from './notePopoutBridge.js';
 import { getAppElementById } from './appDocuments.js';
 import { showAppToast } from './toast.js';
+import { MediaLibraryOverlay } from './mediaLibraryOverlay.js';
+import { attachmentCount } from './mediaAttachments.js';
 
 /**
  * Attach a quick-action button using a "commit then act" pattern.
@@ -94,6 +96,7 @@ function queryActionButtons(root) {
         dragBtn: actions.querySelector('.card-act--drag'),
         toggleBtn: actions.querySelector('.card-act--toggle'),
         colorBtn: actions.querySelector('.card-act--color'),
+        attachBtn: actions.querySelector('.card-act--attach'),
         iconBtn: actions.querySelector('.card-act--emoji'),
         hideBtn: actions.querySelector('.card-act--hide'),
         editBtn: actions.querySelector('.card-act--edit'),
@@ -107,7 +110,7 @@ function queryActionButtons(root) {
 
 
 function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
-    const { copyBtn, pinBtn, dragBtn, colorBtn, iconBtn, hideBtn, calBtn, popoutBtn, popinBtn } = buttons;
+    const { copyBtn, pinBtn, dragBtn, colorBtn, attachBtn, iconBtn, hideBtn, calBtn, popoutBtn, popinBtn } = buttons;
     const iconRoot = surface === 'board'
         ? (card?.querySelector('.editor-note-shell') || card)
         : (editor?.mountZone?.querySelector('.editor-note-shell') || editor?.mountZone || editor?.popoutRoot);
@@ -163,7 +166,7 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
 
     // Content ownership is in the popout — leave drag, pin, popout on the board card.
     if (lockedByPopout) {
-        [colorBtn, iconBtn, hideBtn, calBtn, copyBtn].forEach((btn) => {
+        [colorBtn, attachBtn, iconBtn, hideBtn, calBtn, copyBtn].forEach((btn) => {
             if (!btn) return;
             btn.disabled = true;
             btn.setAttribute('aria-disabled', 'true');
@@ -223,6 +226,28 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
             editor.openColorPicker();
         }
     }, { commit: boardCommit || modalCommit });
+
+    if (attachBtn) {
+        const count = attachmentCount(item);
+        attachBtn.classList.toggle('is-active', count > 0);
+        attachBtn.setAttribute('aria-pressed', count > 0 ? 'true' : 'false');
+        const attachTitle = count ? `Attach media (${count})` : 'Attach media';
+        attachBtn.setAttribute('title', attachTitle);
+        attachBtn.setAttribute('aria-label', attachTitle);
+
+        attachCardActionButton(attachBtn, () => {
+            if (surface === 'board') {
+                if (isDesktopCard(card)) ui.raiseDesktopCard(card);
+            } else {
+                editor?.syncActiveItemFromDom?.();
+            }
+            if (!localStorage.getItem('admin_token')) {
+                showAppToast('Login required to attach media');
+                return;
+            }
+            MediaLibraryOverlay.open({ attachNoteId: item.id });
+        }, { commit: boardCommit || modalCommit });
+    }
 
     attachCardActionButton(iconBtn, () => {
         if (surface === 'board') {

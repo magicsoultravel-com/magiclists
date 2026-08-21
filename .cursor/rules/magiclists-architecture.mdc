@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-08-21T14:35:38.916Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-08-21T16:32:04.354Z
 
 ## CSS load order
 
@@ -33,7 +33,7 @@ alwaysApply: true
 | css/sheet.css | sheet-grid note template body and table chrome | sheet.js, noteSurface.js, editor.js | — | 20 |
 | css/desktops.css | desktop switcher dock styling, dock pin lock | desktopDockComponent.js | — | 21 |
 | css/popout.css | (unknown) | — | — | 22 |
-| css/media-library.css | media library sidebar module, staging dialogue, gallery overlay, media FAB | sidebarMediaLibrary.js, mediaLibraryOverlay.js, mediaStagingDialog.js, mediaPasteCatcher.js | — | 23 |
+| css/media-library.css | media library sidebar module, staging dialogue, gallery floating panel, media FAB, note attachment section | sidebarMediaLibrary.js, mediaLibraryOverlay.js, mediaStagingDialog.js, mediaPasteCatcher.js, noteAttachmentsUi.js | — | 23 |
 
 ## JS domains (@module)
 
@@ -62,12 +62,14 @@ alwaysApply: true
 | js/itemMerge.js | shared merge helper for undo/redo restore (preserves note metadata) | undo.js, app.js | — | — |
 | js/lassoGeometry.js | lasso geometry utilities - ray casting, bounding boxes | drawingBoard.js | — | — |
 | js/layoutStorage.js | board layout persistence, grid/freeform positions, storage migrations | dragdrop.js, ui.js, fileCabinet.js, board/gridEngine.js | — | — |
+| js/mediaAttachments.js | note↔media attachment helpers | mediaLibrary.js, noteSurface.js, mediaLibraryOverlay.js | — | — |
 | js/mediaBackup.js | media library backup export/import (meta JSON, embeds, ZIP) | mediaLibrary.js, backup.js | — | — |
 | js/mediaLibrary.js | media library CRUD, thumbs, size limits | storage/indexedDbMediaStore.js, mediaMetadata.js, mediaBackup.js | — | — |
-| js/mediaLibraryOverlay.js | media library overlay gallery browser | mediaLibrary.js, mediaStagingDialog.js, sidebarMediaLibrary.js | — | — |
+| js/mediaLibraryOverlay.js | media library overlay gallery browser | mediaLibrary.js, mediaStagingDialog.js, sidebarMediaLibrary.js, mediaAttachments.js | — | — |
 | js/mediaMetadata.js | media file metadata and EXIF extraction | mediaLibrary.js | — | — |
 | js/mediaPasteCatcher.js | global clipboard paste catcher for media staging | mediaStagingDialog.js | — | — |
 | js/mediaStagingDialog.js | media staging upload dialogue before library commit | mediaLibrary.js, mediaPasteCatcher.js, mediaLibraryOverlay.js | — | — |
+| js/noteAttachmentsUi.js | note card attached-media section HTML and hydrate | mediaAttachments.js, mediaLibrary.js, noteSurfaceHtml.js, mediaLibraryOverlay.js | — | — |
 | js/noteBodyConversion.js | checklist/content conversion, plain copy text | noteSurface.js, checklistSteps.js, richText.js | — | — |
 | js/noteModel.js | note item schema, normalizeItemForSave, createNoteId | richText.js, sheet.js | — | — |
 | js/notePopoutBridge.js | note popout window open/focus, edit claims, BroadcastChannel sync | popoutNote.js, app.js, noteQuickActions.js, popoutWindows.js | — | — |

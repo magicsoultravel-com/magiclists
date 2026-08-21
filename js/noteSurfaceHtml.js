@@ -18,6 +18,8 @@ import { NotePopoutBridge } from './notePopoutBridge.js';
 import { getCardRenderContext } from './categories.js';
 import { DesktopManager } from './desktopManager.js';
 import { flushDesktopAutoSave } from './noteSurfaceMutations.js';
+import { buildNoteAttachmentsSectionHtml } from './noteAttachmentsUi.js';
+import { normalizeAttachments } from './mediaAttachments.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -141,9 +143,14 @@ export function buildNoteQuickActionsHtml(item, {
     const hideBtn = isPopout
         ? ''
         : `<button type="button" class="card-act card-act--hide" title="Hide from board" aria-label="Hide from board">${CARD_ICONS.hide}</button>`;
-    // Board: popout, cal, popin (popped only), emoji, copy, [pin], color, hide, edit, [drag], toggle
-    // Popout: cal, close (pop in), emoji, copy, color, window-size
-    let actionCount = isPopout ? 6 : 9;
+    const attachCount = normalizeAttachments(item?.attachments).length;
+    const attachTitle = attachCount
+        ? `Attach media (${attachCount})`
+        : 'Attach media';
+    const attachBtn = `<button type="button" class="card-act card-act--attach${attachCount ? ' is-active' : ''}" title="${escapeAttr(attachTitle)}" aria-label="${escapeAttr(attachTitle)}" aria-pressed="${attachCount ? 'true' : 'false'}">${CARD_ICONS.attach}</button>`;
+    // Board: popout, cal, popin (popped only), emoji, copy, [pin], color, attach, hide, edit, [drag], toggle
+    // Popout: cal, close (pop in), emoji, copy, color, attach, window-size
+    let actionCount = isPopout ? 7 : 10;
     if (!isModal && !isPopout && showDragIcon) actionCount += 1;
     if (!isPopout && poppedOut) actionCount += 1; // popin
 
@@ -163,6 +170,7 @@ export function buildNoteQuickActionsHtml(item, {
             <button type="button" class="card-act card-act--copy" title="Copy note as text" aria-label="Copy note as text">${CARD_ICONS.copy}</button>
             ${pinBtn}
             <button type="button" class="card-act card-act--color" title="Note color" aria-label="Note color" aria-haspopup="dialog">${CARD_ICONS.color}</button>
+            ${attachBtn}
             ${hideBtn}
             ${editBtn}
             ${dragBtn}
@@ -218,7 +226,12 @@ export function buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false
 
     if (template === 'sheet') {
         ensureItemSheet(item, defaultSheetDimsForTemplate('sheet'));
-        return renderSheetHtml(item.sheet, { canEdit, inModalEditor });
+        let sheetHtml = renderSheetHtml(item.sheet, { canEdit, inModalEditor });
+        sheetHtml += buildNoteAttachmentsSectionHtml(item, {
+            canEdit,
+            startCollapsed: !inModalEditor
+        });
+        return sheetHtml;
     }
 
     if (template === 'meeting') {
@@ -246,6 +259,10 @@ export function buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false
         if (!item.steps) item.steps = [];
         html += buildExpandedChecklistHtml(item, canEdit, { richEdit });
     }
+    html += buildNoteAttachmentsSectionHtml(item, {
+        canEdit,
+        startCollapsed: !inModalEditor
+    });
     return html;
 }
 
@@ -334,6 +351,10 @@ function buildMeetingBodyHtml(item, { canEdit = false, inModalEditor = false, ri
         actionHtml += `<p class="meeting-datetime meeting-datetime--body">${escapeHTML(meetingWhen)}</p>`;
     }
     html += buildNoteBodySection('Action items', actionHtml);
+    html += buildNoteAttachmentsSectionHtml(item, {
+        canEdit,
+        startCollapsed: !inModalEditor
+    });
     return html;
 }
 

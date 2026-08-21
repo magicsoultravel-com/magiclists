@@ -168,7 +168,9 @@ BootProgress.set(85, 'Workspace…');
             SidebarWeather.init();
             SidebarMediaLibrary.init();
             MediaStagingDialog.init();
-            MediaLibraryOverlay.init();
+            MediaLibraryOverlay.init({
+                getItems: () => AppState.items
+            });
             MediaPasteCatcher.init();
             bindMediaFilePickers();
             this.setupMediaFab();

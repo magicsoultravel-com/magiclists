@@ -26,21 +26,19 @@ export const SidebarMediaLibrary = {
     renderShell() {
         const extrasHtml = `
                 <span class="sidebar-media-lib__compact" data-media-lib-compact title="Items in library">0</span>
-                <button type="button" class="btn btn--compact btn-icon" data-media-lib-open title="Open media library" aria-label="Open media library">${ACTION_ICONS.mediaLibrary}</button>`;
+                <button type="button" class="btn btn--compact btn--icon" data-media-lib-open title="Open media library" aria-label="Open media library">${ACTION_ICONS.mediaLibrary}</button>`;
         this.root.innerHTML = `
             ${renderSidebarModuleHeaderHtml({ headerId: 'media-library-section-header', title: 'Media', extrasHtml })}
             <div class="collapsable-section collapsed" id="media-library-section">
                 <div class="sidebar-media-lib__body">
                     <div class="sidebar-media-lib__actions">
-                        <button type="button" class="btn btn--compact" data-media-lib-upload>Upload</button>
-                        <button type="button" class="btn btn--compact" data-media-lib-clipboard>Clipboard</button>
-                        <button type="button" class="btn btn--compact" data-media-lib-browse>Browse</button>
-                    </div>
-                    <div class="sidebar-media-lib__exports">
+                        <button type="button" class="btn btn--compact btn--icon" data-media-lib-upload title="Upload files" aria-label="Upload files">${ACTION_ICONS.upload}</button>
+                        <button type="button" class="btn btn--compact btn--icon" data-media-lib-clipboard title="Add from clipboard" aria-label="Add from clipboard">${ACTION_ICONS.mediaPaste}</button>
+                        <button type="button" class="btn btn--compact btn--icon" data-media-lib-browse title="Browse library" aria-label="Browse library">${ACTION_ICONS.mediaLibrary}</button>
                         <button type="button" class="btn btn--compact btn--icon" data-media-lib-export-meta title="Export media metadata" aria-label="Export media metadata">${ACTION_ICONS.export}</button>
                         <button type="button" class="btn btn--compact btn--icon" data-media-lib-export-zip title="Export media + metadata ZIP" aria-label="Export media ZIP">${ACTION_ICONS.cloudExport}</button>
                     </div>
-                    <p class="sidebar-media-lib__hint">Paste images with Ctrl+V anywhere — confirm before adding.</p>
+                    <p class="sidebar-media-lib__hint">Paste with Ctrl+V to stage files. Use the paperclip on notes to attach.</p>
                 </div>
             </div>
         `;

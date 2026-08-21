@@ -360,6 +360,7 @@
             <div class="media-staging-panel__header">
                 <h2 class="media-staging-panel__title">Add to media library</h2>
                 <span data-media-staging-count class="sidebar-media-lib__compact">0</span>
+                <button type="button" class="card-act media-staging-panel__close" data-media-staging-cancel title="Cancel" aria-label="Cancel"></button>
             </div>
             <div class="media-staging-panel__body" data-media-staging-body></div>
             <div class="media-staging-panel__footer">
@@ -369,27 +370,16 @@
         </div>
     </div>
 
-    <div id="media-library-overlay" class="overlay media-lib-overlay is-hidden" role="dialog" aria-modal="true" aria-label="Media library">
-        <div class="media-lib-panel">
-            <div class="media-lib-panel__header">
-                <h2 class="media-lib-panel__title">Media library</h2>
-                <span data-media-lib-count class="sidebar-media-lib__compact">0</span>
-                <div class="media-lib-panel__toolbar">
-                    <button type="button" class="btn btn--compact" data-media-lib-upload>Upload</button>
-                    <button type="button" class="btn btn--compact" data-media-export-meta title="Export metadata">Meta</button>
-                    <button type="button" class="btn btn--compact" data-media-export-zip title="Export media ZIP">ZIP</button>
-                    <button type="button" class="btn btn--compact" data-media-import-meta title="Import metadata">Import meta</button>
-                    <button type="button" class="btn btn--compact" data-media-import-zip title="Import media ZIP">Import ZIP</button>
-                    <button type="button" class="btn btn--compact" data-media-lib-close>Close</button>
-                </div>
+    <div id="media-library-panel" class="media-lib-panel is-hidden" role="dialog" aria-label="Media library">
+        <div class="media-lib-panel__header" data-media-lib-header></div>
+        <div class="media-lib-attach-chip is-hidden" data-media-attach-chip></div>
+        <div class="media-lib-note-picker is-hidden" data-media-note-picker></div>
+        <div class="media-lib-panel__body">
+            <div class="media-lib-drop" data-media-lib-drop>
+                <p class="media-lib-empty is-hidden" data-media-lib-empty>No media yet. Upload, paste (Ctrl+V), or drop files here.</p>
+                <div class="media-lib-grid" data-media-lib-grid></div>
             </div>
-            <div class="media-lib-panel__body">
-                <div class="media-lib-drop" data-media-lib-drop>
-                    <p class="media-lib-empty is-hidden" data-media-lib-empty>No media yet. Upload, paste (Ctrl+V), or drop files here.</p>
-                    <div class="media-lib-grid" data-media-lib-grid></div>
-                </div>
-                <div class="media-lib-detail" data-media-lib-detail></div>
-            </div>
+            <div class="media-lib-detail" data-media-lib-detail></div>
         </div>
     </div>
 
