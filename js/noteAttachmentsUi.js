@@ -1,4 +1,4 @@
-/** @module {"owns":"note card attached-media section HTML and hydrate", "related":["mediaAttachments.js","mediaLibrary.js","noteSurfaceHtml.js","mediaLibraryOverlay.js"]} */
+/** @module {"owns":"note card attached-media section HTML and hydrate", "related":["mediaAttachments.js","mediaLibrary.js","noteSurfaceHtml.js","mediaLibraryOverlay.js","mediaQuickActions.js"]} */
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import { CARD_ICONS } from './icons.js';
 import { getMediaMeta, getObjectUrl } from './mediaLibrary.js';
@@ -6,21 +6,12 @@ import {
     detachMediaFromNote,
     normalizeAttachments
 } from './mediaAttachments.js';
+import { buildMediaQuickActionsHtml, bindMediaQuickActions, viewMediaFullSize } from './mediaQuickActions.js';
 import { showAppToast } from './toast.js';
-
-/** @type {Set<string>} session keys `noteId:mediaId` for in-note expanded rows */
-const expandedInNote = new Set();
-
-let lightboxEl = null;
-let lightboxBound = false;
 
 async function openMediaLibrary(opts) {
     const { MediaLibraryOverlay } = await import('./mediaLibraryOverlay.js');
     return MediaLibraryOverlay.open(opts);
-}
-
-function expandKey(noteId, mediaId) {
-    return `${noteId}:${mediaId}`;
 }
 
 /**
@@ -39,24 +30,25 @@ export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCo
 
     const rows = list.map((entry) => {
         const id = escapeAttr(entry.mediaId);
-        const detach = canEdit
-            ? `<button type="button" class="card-act note-attachment__detach" data-detach-media="${id}" title="Detach" aria-label="Detach">${CARD_ICONS.close}</button>`
-            : '';
+        const actions = buildMediaQuickActionsHtml({
+            mediaId: entry.mediaId,
+            context: 'note-attachment',
+            blobMissing: false,
+            showRemove: canEdit
+        });
         return `
             <div class="note-attachment" data-media-id="${id}">
                 <div class="note-attachment__compact">
-                    <button type="button" class="note-attachment__thumb-btn" data-thumb-media="${id}" title="View full size" aria-label="View full size">
-                        <span class="note-attachment__thumb" data-attach-thumb aria-hidden="true"></span>
-                    </button>
+                    <div class="note-attachment__thumb-wrap">
+                        <button type="button" class="note-attachment__thumb-btn" data-thumb-media="${id}" title="View full size" aria-label="View full size">
+                            <span class="note-attachment__thumb" data-attach-thumb aria-hidden="true"></span>
+                        </button>
+                        ${actions}
+                    </div>
                     <button type="button" class="note-attachment__label-btn" data-open-media="${id}" title="Open in media library">
                         <span class="note-attachment__label" data-attach-label>Loading…</span>
                     </button>
-                    <div class="note-attachment__actions">
-                        <button type="button" class="card-act note-attachment__expand is-hidden" data-expand-media="${id}" title="Expand in note" aria-label="Expand in note" aria-pressed="false">${CARD_ICONS.expandMedia}</button>
-                        ${detach}
-                    </div>
                 </div>
-                <div class="note-attachment__preview is-hidden" data-attach-preview></div>
             </div>`;
     }).join('');
 
@@ -97,12 +89,6 @@ function bodyInModal(body) {
  */
 export function syncNoteAttachmentsDom(item) {
     if (!item?.id) return;
-    const stillAttached = new Set(normalizeAttachments(item.attachments).map((a) => a.mediaId));
-    for (const key of [...expandedInNote]) {
-        if (!key.startsWith(`${item.id}:`)) continue;
-        const mediaId = key.slice(item.id.length + 1);
-        if (!stillAttached.has(mediaId)) expandedInNote.delete(key);
-    }
 
     for (const body of noteBodiesForItem(item.id)) {
         const canEdit = bodyCanEdit(body);
@@ -149,6 +135,9 @@ function bindMediaSectionToggle(section) {
         toggle?.classList.toggle('collapsed');
     });
 }
+
+let lightboxEl = null;
+let lightboxBound = false;
 
 function ensureLightbox() {
     if (lightboxEl) return lightboxEl;
@@ -223,47 +212,8 @@ export function closeMediaLightbox() {
     }
 }
 
-async function expandAttachmentRow(row, noteId, mediaId) {
-    const preview = row.querySelector('[data-attach-preview]');
-    const expandBtn = row.querySelector('[data-expand-media]');
-    if (!preview) return;
-    const url = await getObjectUrl(mediaId, 'blob');
-    if (!url) {
-        showAppToast('Preview unavailable');
-        return;
-    }
-    preview.innerHTML = `<img class="note-attachment__full" src="${escapeAttr(url)}" alt="">`;
-    preview.classList.remove('is-hidden');
-    row.classList.add('is-expanded');
-    expandedInNote.add(expandKey(noteId, mediaId));
-    if (expandBtn) {
-        expandBtn.innerHTML = CARD_ICONS.collapseMedia;
-        expandBtn.title = 'Collapse in note';
-        expandBtn.setAttribute('aria-label', 'Collapse in note');
-        expandBtn.setAttribute('aria-pressed', 'true');
-        expandBtn.classList.remove('is-hidden');
-    }
-}
-
-function collapseAttachmentRow(row, noteId, mediaId) {
-    const preview = row.querySelector('[data-attach-preview]');
-    const expandBtn = row.querySelector('[data-expand-media]');
-    if (preview) {
-        preview.innerHTML = '';
-        preview.classList.add('is-hidden');
-    }
-    row.classList.remove('is-expanded');
-    expandedInNote.delete(expandKey(noteId, mediaId));
-    if (expandBtn) {
-        expandBtn.innerHTML = CARD_ICONS.expandMedia;
-        expandBtn.title = 'Expand in note';
-        expandBtn.setAttribute('aria-label', 'Expand in note');
-        expandBtn.setAttribute('aria-pressed', 'false');
-    }
-}
-
 /**
- * Fill titles/thumbs and wire open/detach/expand/lightbox.
+ * Fill titles/thumbs and wire open/detach/lightbox.
  * @param {HTMLElement} root
  * @param {object} item
  */
@@ -272,32 +222,35 @@ export function bindNoteAttachments(root, item) {
     const section = root.querySelector('[data-note-attachments]');
     if (!section) return;
 
+    section.querySelectorAll('.note-attachment[data-media-id]').forEach((row) => {
+        const mediaId = row.dataset.mediaId;
+        if (!mediaId) return;
+
+        const thumbWrap = row.querySelector('.note-attachment__thumb-wrap');
+        if (thumbWrap && thumbWrap.dataset.quickActionsBound !== '1') {
+            bindMediaQuickActions(thumbWrap, {
+                context: 'note-attachment',
+                noteItem: item,
+                onRemove: () => {
+                    if (!localStorage.getItem('admin_token')) {
+                        showAppToast('Login required');
+                        return;
+                    }
+                    if (detachMediaFromNote(item, mediaId)) {
+                        showAppToast('Detached');
+                    }
+                }
+            });
+        }
+    });
+
     section.querySelectorAll('[data-thumb-media]').forEach((btn) => {
         if (btn.dataset.bound === '1') return;
         btn.dataset.bound = '1';
         btn.addEventListener('click', async (e) => {
             e.preventDefault();
             e.stopPropagation();
-            const mediaId = btn.dataset.thumbMedia;
-            const row = btn.closest('.note-attachment');
-            let isImage = row?.dataset.isImage === '1';
-            if (row && row.dataset.isImage !== '1' && row.dataset.isImage !== '0') {
-                try {
-                    const meta = await getMediaMeta(mediaId);
-                    isImage = !!(meta && !meta.blobMissing && String(meta.mime || '').startsWith('image/'));
-                    row.dataset.isImage = isImage ? '1' : '0';
-                } catch {
-                    isImage = false;
-                }
-            }
-            if (isImage) {
-                openMediaLightbox(mediaId);
-                return;
-            }
-            openMediaLibrary({
-                attachNoteId: item.id,
-                selectMediaId: mediaId
-            });
+            await viewMediaFullSize(btn.dataset.thumbMedia, { attachNoteId: item.id });
         });
     });
 
@@ -315,58 +268,21 @@ export function bindNoteAttachments(root, item) {
         });
     });
 
-    section.querySelectorAll('[data-expand-media]').forEach((btn) => {
-        if (btn.dataset.bound === '1') return;
-        btn.dataset.bound = '1';
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const mediaId = btn.dataset.expandMedia;
-            const row = btn.closest('.note-attachment');
-            if (!row || !mediaId) return;
-            if (row.classList.contains('is-expanded')) {
-                collapseAttachmentRow(row, item.id, mediaId);
-            } else {
-                expandAttachmentRow(row, item.id, mediaId).catch(() => {});
-            }
-        });
-    });
-
-    section.querySelectorAll('[data-detach-media]').forEach((btn) => {
-        if (btn.dataset.bound === '1') return;
-        btn.dataset.bound = '1';
-        btn.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            const mediaId = btn.dataset.detachMedia;
-            if (!mediaId) return;
-            if (!localStorage.getItem('admin_token')) {
-                showAppToast('Login required');
-                return;
-            }
-            if (detachMediaFromNote(item, mediaId)) {
-                showAppToast('Detached');
-            }
-        });
-    });
-
-    hydrateAttachmentRows(section, item.id).catch(() => {});
+    hydrateAttachmentRows(section).catch(() => {});
 }
 
-async function hydrateAttachmentRows(section, noteId) {
+async function hydrateAttachmentRows(section) {
     const rows = section.querySelectorAll('.note-attachment[data-media-id]');
     await Promise.all([...rows].map(async (row) => {
         const id = row.dataset.mediaId;
         const labelEl = row.querySelector('[data-attach-label]');
         const thumbEl = row.querySelector('[data-attach-thumb]');
-        const expandBtn = row.querySelector('[data-expand-media]');
         if (!id) return;
         try {
             const meta = await getMediaMeta(id);
             if (!meta) {
                 if (labelEl) labelEl.textContent = 'Missing file';
                 row.classList.add('is-missing');
-                expandBtn?.classList.add('is-hidden');
                 return;
             }
             const label = meta.title || meta.filename || 'Untitled';
@@ -374,26 +290,20 @@ async function hydrateAttachmentRows(section, noteId) {
             row.title = label;
             if (meta.blobMissing) {
                 row.classList.add('is-missing');
-                expandBtn?.classList.add('is-hidden');
                 return;
             }
             const isImage = String(meta.mime || '').startsWith('image/');
             if (isImage) {
                 row.dataset.isImage = '1';
-                expandBtn?.classList.remove('is-hidden');
                 if (thumbEl) {
                     const url = await getObjectUrl(id, 'thumb');
                     if (url) {
                         thumbEl.innerHTML = `<img src="${escapeAttr(url)}" alt="">`;
                     }
                 }
-                if (noteId && expandedInNote.has(expandKey(noteId, id))) {
-                    await expandAttachmentRow(row, noteId, id);
-                }
                 return;
             }
             row.dataset.isImage = '0';
-            expandBtn?.classList.add('is-hidden');
             if (thumbEl) {
                 const ext = (meta.mime || 'file').split('/').pop() || 'file';
                 thumbEl.innerHTML = `<span class="note-attachment__icon">${escapeHTML(ext)}</span>`;
@@ -401,7 +311,6 @@ async function hydrateAttachmentRows(section, noteId) {
         } catch {
             if (labelEl) labelEl.textContent = 'Unavailable';
             row.classList.add('is-missing');
-            expandBtn?.classList.add('is-hidden');
         }
     }));
 }

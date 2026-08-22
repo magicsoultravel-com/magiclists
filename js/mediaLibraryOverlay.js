@@ -2,7 +2,6 @@
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import {
-    getMediaRecord,
     getObjectUrl,
     listMedia,
     removeMedia,
@@ -10,7 +9,7 @@ import {
     updateMediaMeta,
     MEDIA_LIBRARY_CHANGED
 } from './mediaLibrary.js';
-import { formatByteSize, humanMetaRows } from './mediaMetadata.js';
+import { formatByteSize, humanMetaRows, formatMediaOverviewDate } from './mediaMetadata.js';
 import { isMediaStagingOpen, openMediaStaging } from './mediaStagingDialog.js';
 import { filesFromDataTransfer } from './mediaPasteCatcher.js';
 import { showAppToast } from './toast.js';
@@ -28,18 +27,21 @@ import {
     notesForAttachPicker,
     normalizeAttachments
 } from './mediaAttachments.js';
-import { resolveNoteColor } from './colorPicker.js';
-import { NoteSurface } from './noteSurface.js';
-import { stripRichText, hasRichMarkup } from './richText.js';
+import { buildMediaQuickActionsHtml, bindMediaQuickActions } from './mediaQuickActions.js';
+import { buildSidebarNoteListItemHtml } from './sidebarNoteListHtml.js';
 import { bindFloatResize, mountFloatChrome } from './desktopFloatChrome.js';
+import { raiseDesktopElement } from './desktopStack.js';
 
 const PANEL_STORAGE_KEY = 'matrix_media_lib_panel';
 const DEFAULT_W = 720;
 const DEFAULT_H = 520;
 const MIN_W = 420;
 const MIN_H = 320;
+const DEFAULT_TILE_THUMB_MAX = 104;
+const MIN_TILE_THUMB_MAX = 48;
 
 let panel = null;
+let notePickerOverlay = null;
 let selectedId = null;
 let attachNoteId = null;
 let notePickerOpen = false;
@@ -121,9 +123,82 @@ function applySavedGeometry() {
     panel.style.top = `${pos.y}px`;
 }
 
+function getTileThumbMaxHeight() {
+    const saved = loadPanelGeom();
+    const legacy = Number.isFinite(saved.previewMaxH) ? saved.previewMaxH : null;
+    const raw = Number.isFinite(saved.tileThumbMaxH) ? saved.tileThumbMaxH : legacy;
+    const h = Number.isFinite(raw) ? raw : DEFAULT_TILE_THUMB_MAX;
+    return clamp(h, MIN_TILE_THUMB_MAX, DEFAULT_TILE_THUMB_MAX);
+}
+
+function applyTileThumbMaxHeight(dropEl) {
+    if (!dropEl) return;
+    dropEl.style.setProperty('--media-tile-thumb-max', `${getTileThumbMaxHeight()}px`);
+}
+
+function ensureGridShrinkHandle(dropEl) {
+    if (!dropEl || dropEl.querySelector('[data-grid-shrink]')) return;
+    dropEl.classList.add('media-lib-drop--shrinkable');
+    const handle = document.createElement('span');
+    handle.className = 'media-lib-drop__shrink-handle';
+    handle.dataset.gridShrink = '1';
+    handle.title = 'Drag to shrink tiles';
+    handle.setAttribute('aria-label', 'Shrink tiles');
+    handle.innerHTML = CARD_ICONS.resize;
+    dropEl.appendChild(handle);
+}
+
+function bindGridShrink(dropEl) {
+    ensureGridShrinkHandle(dropEl);
+    const handle = dropEl?.querySelector('[data-grid-shrink]');
+    if (!handle || handle.dataset.bound === '1') return;
+    handle.dataset.bound = '1';
+
+    let shrinking = false;
+    let startY = 0;
+    let startMax = 0;
+
+    handle.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        shrinking = true;
+        startY = e.clientY;
+        startMax = getTileThumbMaxHeight();
+        handle.setPointerCapture(e.pointerId);
+        dropEl.classList.add('is-shrinking');
+    });
+
+    handle.addEventListener('pointermove', (e) => {
+        if (!shrinking) return;
+        const dy = e.clientY - startY;
+        const next = clamp(startMax + dy, MIN_TILE_THUMB_MAX, startMax);
+        dropEl.style.setProperty('--media-tile-thumb-max', `${next}px`);
+    });
+
+    const endShrink = (e) => {
+        if (!shrinking) return;
+        shrinking = false;
+        dropEl.classList.remove('is-shrinking');
+        try {
+            handle.releasePointerCapture(e.pointerId);
+        } catch {
+            /* ignore */
+        }
+        const current = parseFloat(dropEl.style.getPropertyValue('--media-tile-thumb-max')) || getTileThumbMaxHeight();
+        savePanelGeom({ tileThumbMaxH: Math.round(current) });
+    };
+    handle.addEventListener('pointerup', endShrink);
+    handle.addEventListener('pointercancel', endShrink);
+}
+
+export function isNotePickerOpen() {
+    return notePickerOpen;
+}
+
 function bringPanelFront() {
     if (!panel) return;
-    panel.style.zIndex = String(1100 + (Date.now() % 1000));
+    raiseDesktopElement(panel);
 }
 
 function pointerDelta(clientX, clientY, startX, startY) {
@@ -142,7 +217,8 @@ function bindPanelDrag() {
 
     header.addEventListener('pointerdown', (e) => {
         if (e.button !== 0) return;
-        if (e.target.closest('button, input, textarea, a, .btn, .card-act')) return;
+        if (e.target.closest('button, input, textarea, a, .btn')) return;
+        if (e.target.closest('.card-act') && !e.target.closest('.media-lib-panel__drag')) return;
         e.preventDefault();
         dragging = true;
         startX = e.clientX;
@@ -202,6 +278,7 @@ export const MediaLibraryOverlay = {
     init(opts = {}) {
         panel = document.getElementById('media-library-panel')
             || document.getElementById('media-library-overlay');
+        notePickerOverlay = document.getElementById('media-note-picker-overlay');
         if (!panel) return;
         getItems = typeof opts.getItems === 'function' ? opts.getItems : () => [];
 
@@ -224,6 +301,8 @@ export const MediaLibraryOverlay = {
 
         const dropZone = panel.querySelector('[data-media-lib-drop]');
         if (dropZone) {
+            applyTileThumbMaxHeight(dropZone);
+            bindGridShrink(dropZone);
             ['dragenter', 'dragover'].forEach((type) => {
                 dropZone.addEventListener(type, (e) => {
                     e.preventDefault();
@@ -241,15 +320,18 @@ export const MediaLibraryOverlay = {
 
         document.addEventListener('keydown', (e) => {
             if (e.key !== 'Escape') return;
+            if (notePickerOpen) {
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                this.closeNotePicker();
+                return;
+            }
             if (!this.isOpen()) return;
             if (isMediaStagingOpen()) return;
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
-            if (notePickerOpen) {
-                this.closeNotePicker();
-                return;
-            }
             this.close();
         }, true);
 
@@ -268,26 +350,40 @@ export const MediaLibraryOverlay = {
             panel.style.left = `${pos.x}px`;
             panel.style.top = `${pos.y}px`;
         });
+
+        notePickerOverlay?.addEventListener('click', (e) => {
+            if (e.target === notePickerOverlay) {
+                this.closeNotePicker();
+            }
+        });
     },
 
     renderChrome() {
         const header = panel.querySelector('[data-media-lib-header]');
+        const footer = panel.querySelector('[data-media-lib-footer]');
+        const closeBtn = panel.querySelector('[data-media-lib-close]');
         if (!header) return;
+
         header.innerHTML = `
-            <span class="media-lib-panel__drag" title="Drag to move" aria-hidden="true">⋮⋮</span>
-            <h2 class="media-lib-panel__title">Media library</h2>
-            <span data-media-lib-count class="sidebar-media-lib__compact">0</span>
-            <div class="media-lib-panel__toolbar">
+            <span class="media-lib-panel__drag card-act card-act--drag" title="Drag to move" aria-hidden="true">${CARD_ICONS.drag}</span>
+            <h2 class="media-lib-panel__title" data-media-lib-title>Media library</h2>
+        `;
+
+        if (footer) {
+            footer.innerHTML = `
                 <button type="button" class="btn btn--compact btn--icon" data-media-lib-upload title="Upload files" aria-label="Upload files">${ACTION_ICONS.upload}</button>
                 <button type="button" class="btn btn--compact btn--icon" data-media-lib-select-note title="Select note to attach" aria-label="Select note to attach">${ACTION_ICONS.selectNote}</button>
-                <button type="button" class="btn btn--compact btn--icon" data-media-lib-attach title="Attach selected media to note" aria-label="Attach to note" disabled>${CARD_ICONS.attach}</button>
+                <button type="button" class="btn btn--compact btn--icon is-hidden" data-media-lib-attach title="Attach selected media to note" aria-label="Attach to note" disabled>${CARD_ICONS.attach}</button>
                 <button type="button" class="btn btn--compact btn--icon" data-media-export-meta title="Export media metadata" aria-label="Export media metadata">${ACTION_ICONS.export}</button>
                 <button type="button" class="btn btn--compact btn--icon" data-media-export-zip title="Export media ZIP" aria-label="Export media ZIP">${ACTION_ICONS.cloudExport}</button>
                 <button type="button" class="btn btn--compact btn--icon" data-media-import-meta title="Import media metadata" aria-label="Import media metadata">${ACTION_ICONS.import}</button>
                 <button type="button" class="btn btn--compact btn--icon" data-media-import-zip title="Import media ZIP" aria-label="Import media ZIP">${ACTION_ICONS.cloudImport}</button>
-            </div>
-            <button type="button" class="card-act media-lib-panel__close" data-media-lib-close title="Close" aria-label="Close">${CARD_ICONS.close}</button>
-        `;
+            `;
+        }
+
+        if (closeBtn && !closeBtn.innerHTML.trim()) {
+            closeBtn.innerHTML = CARD_ICONS.close;
+        }
     },
 
     bindChrome() {
@@ -354,8 +450,10 @@ export const MediaLibraryOverlay = {
     syncAttachControls() {
         const chip = panel?.querySelector('[data-media-attach-chip]');
         const attachBtn = panel?.querySelector('[data-media-lib-attach]');
+        let clearedAttach = false;
         if (attachNoteId && !liveItem(attachNoteId)) {
             attachNoteId = null;
+            clearedAttach = true;
         }
         const target = liveItem(attachNoteId);
         if (chip) {
@@ -370,6 +468,7 @@ export const MediaLibraryOverlay = {
                 chip.querySelector('[data-media-attach-clear]')?.addEventListener('click', () => {
                     attachNoteId = null;
                     this.syncAttachControls();
+                    this.rerenderDetailIfSelected();
                 });
             } else {
                 chip.classList.add('is-hidden');
@@ -377,8 +476,24 @@ export const MediaLibraryOverlay = {
             }
         }
         if (attachBtn) {
-            attachBtn.disabled = !(target && selectedId);
+            if (target) {
+                attachBtn.classList.remove('is-hidden');
+                attachBtn.disabled = !selectedId;
+            } else {
+                attachBtn.classList.add('is-hidden');
+                attachBtn.disabled = true;
+            }
         }
+        if (clearedAttach) {
+            void this.rerenderDetailIfSelected();
+        }
+    },
+
+    async rerenderDetailIfSelected() {
+        if (!selectedId) return;
+        const items = await listMedia();
+        const item = items.find((i) => i.id === selectedId);
+        if (item) await this.renderDetail(item);
     },
 
     toggleNotePicker() {
@@ -390,61 +505,56 @@ export const MediaLibraryOverlay = {
     },
 
     openNotePicker() {
-        const picker = panel?.querySelector('[data-media-note-picker]');
-        if (!picker) return;
+        const body = notePickerOverlay?.querySelector('[data-media-note-picker-body]');
+        if (!body || !notePickerOverlay) return;
         notePickerOpen = true;
-        picker.classList.remove('is-hidden');
+        notePickerOverlay.classList.remove('is-hidden');
+        notePickerOverlay.classList.add('is-open');
         const notes = notesForAttachPicker(getItems?.() || []);
         if (!notes.length) {
-            picker.innerHTML = `<div class="media-lib-note-picker__head">
-                <span>Select note</span>
-                <button type="button" class="card-act" data-media-picker-close title="Close" aria-label="Close">${CARD_ICONS.close}</button>
-            </div>
-            <div class="sidebar-notes-list-empty">No active notes</div>`;
-        } else {
-            const rows = notes.map((item) => {
-                const accent = resolveNoteColor(item.backgroundColor);
-                const plainTitle = stripRichText(item.title || '') || 'Untitled';
-                const titleRich = hasRichMarkup(item.title);
-                const titleHtml = titleRich
-                    ? NoteSurface.renderRichHtml(item.title || '')
-                    : escapeHTML(plainTitle);
-                const dateLabel = NoteSurface.formatNoteListDate(item);
-                const selected = item.id === attachNoteId ? ' is-selected' : '';
-                return `
-                <button type="button" class="sidebar-notes-list-item has-note-color media-lib-note-picker__item${selected}" data-id="${escapeAttr(item.id)}" title="${escapeAttr(plainTitle)}" style="--note-accent:${escapeAttr(accent)}">
-                    <span class="sidebar-notes-list-item-title${titleRich ? ' rich-text' : ''}">${titleHtml}</span>
-                    <span class="sidebar-notes-list-date">${escapeHTML(dateLabel)}</span>
-                </button>`;
-            }).join('');
-            picker.innerHTML = `
+            body.innerHTML = `<div class="media-lib-note-picker">
                 <div class="media-lib-note-picker__head">
                     <span>Select note</span>
                     <button type="button" class="card-act" data-media-picker-close title="Close" aria-label="Close">${CARD_ICONS.close}</button>
                 </div>
-                <div class="media-lib-note-picker__list sidebar-notes-list">${rows}</div>
+                <div class="sidebar-notes-list-empty">No active notes</div>
+            </div>`;
+        } else {
+            const rows = notes.map((item) => buildSidebarNoteListItemHtml(item, {
+                selected: item.id === attachNoteId,
+                extraClass: ' media-lib-note-picker__item'
+            })).join('');
+            body.innerHTML = `
+                <div class="media-lib-note-picker">
+                    <div class="media-lib-note-picker__head">
+                        <span>Select note</span>
+                        <button type="button" class="card-act" data-media-picker-close title="Close" aria-label="Close">${CARD_ICONS.close}</button>
+                    </div>
+                    <div class="media-lib-note-picker__list sidebar-notes-list">${rows}</div>
+                </div>
             `;
-            picker.querySelectorAll('[data-id]').forEach((btn) => {
+            body.querySelectorAll('[data-id]').forEach((btn) => {
                 btn.addEventListener('click', () => {
                     attachNoteId = btn.dataset.id;
                     this.closeNotePicker();
                     this.syncAttachControls();
+                    this.rerenderDetailIfSelected();
                     showAppToast(`Attach target: ${noteDisplayTitle(liveItem(attachNoteId))}`);
                 });
             });
         }
-        picker.querySelector('[data-media-picker-close]')?.addEventListener('click', () => {
+        body.querySelector('[data-media-picker-close]')?.addEventListener('click', () => {
             this.closeNotePicker();
         });
     },
 
     closeNotePicker() {
         notePickerOpen = false;
-        const picker = panel?.querySelector('[data-media-note-picker]');
-        if (picker) {
-            picker.classList.add('is-hidden');
-            picker.innerHTML = '';
-        }
+        if (!notePickerOverlay) return;
+        notePickerOverlay.classList.remove('is-open');
+        notePickerOverlay.classList.add('is-hidden');
+        const body = notePickerOverlay.querySelector('[data-media-note-picker-body]');
+        if (body) body.innerHTML = '';
     },
 
     attachSelectedToNote() {
@@ -475,11 +585,17 @@ export const MediaLibraryOverlay = {
     async refresh() {
         if (!panel) return;
         this.syncAttachControls();
+        const dropZone = panel.querySelector('[data-media-lib-drop]');
+        applyTileThumbMaxHeight(dropZone);
         const items = await listMedia();
         const grid = panel.querySelector('[data-media-lib-grid]');
         const empty = panel.querySelector('[data-media-lib-empty]');
-        const countEl = panel.querySelector('[data-media-lib-count]');
-        if (countEl) countEl.textContent = String(items.length);
+        const titleEl = panel.querySelector('[data-media-lib-title]');
+        if (titleEl) {
+            titleEl.textContent = items.length
+                ? `Media library (${items.length})`
+                : 'Media library';
+        }
 
         if (!items.length) {
             if (grid) grid.innerHTML = '';
@@ -509,22 +625,58 @@ export const MediaLibraryOverlay = {
             const preview = thumbSrc
                 ? `<img src="${escapeAttr(thumbSrc)}" alt="">`
                 : `<span class="media-lib-tile__icon">${escapeHTML((item.mime || 'file').split('/').pop() || 'file')}</span>`;
+            const alreadyOnTarget = attachNoteId
+                && normalizeAttachments(liveItem(attachNoteId)?.attachments).some((a) => a.mediaId === item.id);
+            const actions = buildMediaQuickActionsHtml({
+                mediaId: item.id,
+                context: 'library-tile',
+                attachNoteId,
+                alreadyAttached: !!alreadyOnTarget,
+                blobMissing: !!item.blobMissing
+            });
             return `
-                <button type="button" class="media-lib-tile${selected}${missing}" data-media-id="${escapeAttr(item.id)}" title="${escapeAttr(item.title || item.filename)}">
-                    <span class="media-lib-tile__preview">${preview}</span>
-                    <span class="media-lib-tile__label">${escapeHTML(item.title || item.filename || 'Untitled')}</span>
+                <div class="media-lib-tile${selected}${missing}" data-media-id="${escapeAttr(item.id)}" title="${escapeAttr(item.title || item.filename)}">
+                    <div class="media-lib-tile__preview-wrap">
+                        <button type="button" class="media-lib-tile__select" data-media-select title="Select">
+                            <span class="media-lib-tile__preview">${preview}</span>
+                        </button>
+                        ${actions}
+                    </div>
+                    <button type="button" class="media-lib-tile__label" data-media-select>${escapeHTML(item.title || item.filename || 'Untitled')}</button>
                     ${item.blobMissing ? '<span class="media-lib-tile__badge">Missing</span>' : ''}
                     ${linked.length ? `<span class="media-lib-tile__badge media-lib-tile__badge--attach">${linked.length}</span>` : ''}
-                </button>
+                </div>
             `;
         }));
 
         if (grid) {
             grid.innerHTML = tiles.join('');
-            grid.querySelectorAll('[data-media-id]').forEach((btn) => {
+            grid.querySelectorAll('[data-media-select]').forEach((btn) => {
                 btn.addEventListener('click', () => {
-                    selectedId = btn.dataset.mediaId;
+                    const tile = btn.closest('[data-media-id]');
+                    if (!tile) return;
+                    selectedId = tile.dataset.mediaId;
                     this.refresh();
+                });
+            });
+            grid.querySelectorAll('.media-lib-tile__preview-wrap').forEach((wrap) => {
+                const tile = wrap.closest('[data-media-id]');
+                const mediaId = tile?.dataset.mediaId;
+                if (!mediaId) return;
+                bindMediaQuickActions(wrap, {
+                    context: 'library-tile',
+                    attachNoteId,
+                    onAttach: (id) => {
+                        selectedId = id;
+                        this.attachSelectedToNote();
+                    },
+                    onRemove: async (id) => {
+                        if (!confirm('Remove this item from the media library?')) return;
+                        await removeMedia(id);
+                        if (selectedId === id) selectedId = null;
+                        showAppToast('Removed');
+                        this.refresh();
+                    }
                 });
             });
         }
@@ -559,70 +711,84 @@ export const MediaLibraryOverlay = {
         const linkedHtml = linkedNotes.length
             ? `<div class="media-lib-detail__links">
                 <div class="media-lib-detail__links-title">Attached to</div>
-                ${linkedNotes.map((n) => `<div class="media-lib-detail__link-row">
-                        <span>${escapeHTML(noteDisplayTitle(n))}</span>
-                        <button type="button" class="btn btn--compact btn--icon" data-detach-note="${escapeAttr(n.id)}" title="Detach from note" aria-label="Detach">${CARD_ICONS.close}</button>
-                    </div>`).join('')}
+                <div class="sidebar-notes-list media-lib-detail__attached-list">
+                    ${linkedNotes.map((n) => buildSidebarNoteListItemHtml(n, {
+                        variant: 'with-act',
+                        dataIdAttr: 'data-open-note',
+                        trailingActionHtml: `<button type="button" class="card-act" data-detach-note="${escapeAttr(n.id)}" title="Detach from note" aria-label="Detach">${CARD_ICONS.close}</button>`
+                    })).join('')}
+                </div>
                </div>`
             : '<p class="media-lib-detail__links-empty">Not attached to any note</p>';
 
         const alreadyOnTarget = attachNoteId
             && normalizeAttachments(liveItem(attachNoteId)?.attachments).some((a) => a.mediaId === item.id);
 
+        const quickActions = buildMediaQuickActionsHtml({
+            mediaId: item.id,
+            context: 'library-detail',
+            attachNoteId,
+            alreadyAttached: !!alreadyOnTarget,
+            blobMissing: !!item.blobMissing,
+            showSave: true
+        });
+
+        const overviewDate = formatMediaOverviewDate(item);
+        const dateLineHtml = overviewDate
+            ? `<p class="media-lib-detail__date">${escapeHTML(overviewDate)}</p>`
+            : '';
+
         detail.innerHTML = `
-            <div class="media-lib-detail__preview">${previewHtml}</div>
+            <div class="media-lib-detail__preview" data-media-detail-preview>
+                ${previewHtml}
+                <div class="media-lib-detail__preview-actions">
+                    ${quickActions}
+                </div>
+            </div>
+            ${dateLineHtml}
             <label class="media-staging__label">Title
                 <input type="text" class="media-staging__input" data-detail-title value="${escapeAttr(item.title || '')}">
             </label>
             <label class="media-staging__label">Description
                 <textarea class="media-staging__input media-staging__textarea" data-detail-desc rows="2">${escapeHTML(item.description || '')}</textarea>
             </label>
-            <div class="media-lib-detail__actions">
-                <button type="button" class="btn btn--compact btn--icon" data-detail-save title="Save" aria-label="Save">${CARD_ICONS.save}</button>
-                <button type="button" class="btn btn--compact btn--icon" data-detail-download title="Download" aria-label="Download" ${item.blobMissing ? 'disabled' : ''}>${ACTION_ICONS.export}</button>
-                <button type="button" class="btn btn--compact btn--icon" data-detail-attach title="Attach to selected note" aria-label="Attach" ${!attachNoteId || alreadyOnTarget ? 'disabled' : ''}>${CARD_ICONS.attach}</button>
-                <button type="button" class="btn btn--compact btn--icon btn--danger" data-detail-delete title="Delete from library" aria-label="Delete">${CARD_ICONS.delete}</button>
-            </div>
             ${linkedHtml}
             <dl class="media-lib-detail__meta">${rows}</dl>
         `;
 
-        detail.querySelector('[data-detail-save]')?.addEventListener('click', async () => {
-            const title = detail.querySelector('[data-detail-title]')?.value || '';
-            const description = detail.querySelector('[data-detail-desc]')?.value || '';
-            await updateMediaMeta(item.id, { title, description });
-            showAppToast('Saved');
-            this.refresh();
-        });
-
-        detail.querySelector('[data-detail-download]')?.addEventListener('click', async () => {
-            const record = await getMediaRecord(item.id);
-            if (!record?.blob) {
-                showAppToast('File missing');
-                return;
+        const previewActions = detail.querySelector('.media-lib-detail__preview-actions');
+        bindMediaQuickActions(previewActions, {
+            context: 'library-detail',
+            attachNoteId,
+            onAttach: () => this.attachSelectedToNote(),
+            onSave: async () => {
+                const title = detail.querySelector('[data-detail-title]')?.value || '';
+                const description = detail.querySelector('[data-detail-desc]')?.value || '';
+                await updateMediaMeta(item.id, { title, description });
+                showAppToast('Saved');
+                this.refresh();
+            },
+            onRemove: async () => {
+                if (!confirm('Remove this item from the media library?')) return;
+                await removeMedia(item.id);
+                selectedId = null;
+                showAppToast('Removed');
+                this.refresh();
             }
-            const url = URL.createObjectURL(record.blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = record.filename || 'download';
-            a.click();
-            setTimeout(() => URL.revokeObjectURL(url), 2000);
         });
 
-        detail.querySelector('[data-detail-attach]')?.addEventListener('click', () => {
-            this.attachSelectedToNote();
-        });
-
-        detail.querySelector('[data-detail-delete]')?.addEventListener('click', async () => {
-            if (!confirm('Remove this item from the media library?')) return;
-            await removeMedia(item.id);
-            selectedId = null;
-            showAppToast('Removed');
-            this.refresh();
+        detail.querySelectorAll('[data-open-note]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const note = liveItem(btn.dataset.openNote);
+                if (note) {
+                    window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: note }));
+                }
+            });
         });
 
         detail.querySelectorAll('[data-detach-note]').forEach((btn) => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
                 const note = liveItem(btn.dataset.detachNote);
                 if (!note) return;
                 if (detachMediaFromNote(note, item.id)) {

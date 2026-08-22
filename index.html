@@ -370,10 +370,16 @@
         </div>
     </div>
 
+    <div id="media-note-picker-overlay" class="overlay media-note-picker-overlay is-hidden" role="dialog" aria-modal="true" aria-label="Select note to attach">
+        <div class="media-note-picker-modal">
+            <div class="media-note-picker-modal__body" data-media-note-picker-body></div>
+        </div>
+    </div>
+
     <div id="media-library-panel" class="media-lib-panel is-hidden" role="dialog" aria-label="Media library">
+        <button type="button" class="card-act media-lib-panel__close" data-media-lib-close title="Close" aria-label="Close"></button>
         <div class="media-lib-panel__header" data-media-lib-header></div>
         <div class="media-lib-attach-chip is-hidden" data-media-attach-chip></div>
-        <div class="media-lib-note-picker is-hidden" data-media-note-picker></div>
         <div class="media-lib-panel__body">
             <div class="media-lib-drop" data-media-lib-drop>
                 <p class="media-lib-empty is-hidden" data-media-lib-empty>No media yet. Upload, paste (Ctrl+V), or drop files here.</p>
@@ -381,6 +387,7 @@
             </div>
             <div class="media-lib-detail" data-media-lib-detail></div>
         </div>
+        <div class="media-lib-panel__footer" data-media-lib-footer></div>
     </div>
 
     <div id="template-picker-overlay" class="overlay template-picker-overlay is-hidden" role="dialog" aria-modal="true" aria-label="Choose note template">

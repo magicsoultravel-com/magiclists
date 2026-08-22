@@ -387,6 +387,11 @@ export function humanMetaRows(meta) {
         if (value == null || value === '') return;
         rows.push({ label, value: String(value) });
     };
+    const formatUnix = (ts) => {
+        if (!ts) return null;
+        const d = new Date(Number(ts) * 1000);
+        return Number.isNaN(d.getTime()) ? null : d.toLocaleString();
+    };
     push('Filename', meta.filename);
     push('Type', meta.mime);
     push('Size', formatByteSize(meta.byteSize));
@@ -395,6 +400,10 @@ export function humanMetaRows(meta) {
     push('Taken', meta.capturedAtLabel || (meta.capturedAt
         ? new Date(meta.capturedAt * 1000).toLocaleString()
         : null));
+    push('Added', formatUnix(meta.createdAt));
+    if (meta.updatedAt && meta.updatedAt !== meta.createdAt) {
+        push('Modified', formatUnix(meta.updatedAt));
+    }
     push('Orientation', meta.orientationLabel);
     if (meta.gps?.lat != null && meta.gps?.lon != null) {
         push('GPS', `${meta.gps.lat.toFixed(5)}, ${meta.gps.lon.toFixed(5)}`);
@@ -402,4 +411,22 @@ export function humanMetaRows(meta) {
     push('Source', meta.source);
     if (meta.blobMissing) push('Status', 'File missing (metadata only)');
     return rows;
+}
+
+/**
+ * Compact date for detail overview (Taken preferred, else Added).
+ * @param {object} meta
+ */
+export function formatMediaOverviewDate(meta) {
+    if (!meta) return '';
+    if (meta.capturedAtLabel) return `Taken ${meta.capturedAtLabel}`;
+    if (meta.capturedAt) {
+        const d = new Date(meta.capturedAt * 1000);
+        if (!Number.isNaN(d.getTime())) return `Taken ${d.toLocaleString()}`;
+    }
+    if (meta.createdAt) {
+        const d = new Date(meta.createdAt * 1000);
+        if (!Number.isNaN(d.getTime())) return `Added ${d.toLocaleString()}`;
+    }
+    return '';
 }

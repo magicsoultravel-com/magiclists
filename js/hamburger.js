@@ -1,13 +1,10 @@
 /** @module {"owns":"side panel shell, notes list, category drawer, sort", "related":["searchBar.js","ui.js","sidebarHistory.js","sidebarStats.js"], "events":["category:show_requested","category:order_changed"]} */
 import { UI } from './ui.js';
 import { BoardOperations } from './boardOperations.js';
-import { NoteSurface } from './noteSurface.js';
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import { UNCATEGORIZED_CATEGORY, UNCATEGORIZED_COLOR } from './categories.js';
 import { itemHasCategory } from './focusFilter.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
-import { resolveNoteColor } from './colorPicker.js';
-import { hasRichMarkup, stripRichText } from './richText.js';
 import {
     readNotesListSort as loadNotesListSort,
     readPanelCollapsed,
@@ -18,6 +15,7 @@ import {
 } from './sidebarPrefs.js';
 import { onSidebarCollapseChanged } from './shellResize.js';
 import { getAppElementById, getAppBodyForElement } from './appDocuments.js';
+import { buildSidebarNoteListItemHtml, buildSidebarNoteTitle as sidebarNoteTitle } from './sidebarNoteListHtml.js';
 
 export function applySectionCollapse(sectionId, headerId, startCollapsed = false) {
     const header = getAppElementById(headerId);
@@ -217,16 +215,7 @@ setCollapsed(collapsed, { persist = true } = {}) {
     },
 
     buildSidebarNoteTitle(item) {
-        const plainTitle = stripRichText(item.title || '') || 'Untitled';
-        const titleRich = hasRichMarkup(item.title);
-        const titleHtml = titleRich
-            ? NoteSurface.renderRichHtml(item.title || '')
-            : escapeHTML(plainTitle);
-        return {
-            titleAttr: escapeAttr(plainTitle),
-            titleHtml,
-            richClass: titleRich ? ' rich-text' : ''
-        };
+        return sidebarNoteTitle(item);
     },
 
     renderNotesListZone(zoneId, listItems, allItems, { variant = 'active' } = {}) {
@@ -246,27 +235,16 @@ setCollapsed(collapsed, { persist = true } = {}) {
 
         const sorted = this.sortNotesForList(listItems);
         zone.innerHTML = sorted.map((item) => {
-            const accent = resolveNoteColor(item.backgroundColor);
-            const accentStyle = ` style="--note-accent:${escapeAttr(accent)}"`;
-            const dateLabel = NoteSurface.formatNoteListDate(item);
-            const { titleAttr, titleHtml, richClass } = this.buildSidebarNoteTitle(item);
-
             if (variant === 'hidden') {
-                return `
-                <div class="sidebar-notes-list-item has-note-color sidebar-notes-list-item--with-act"${accentStyle}>
-                    <button type="button" class="sidebar-notes-list-item-main" data-id="${escapeAttr(item.id)}" title="${titleAttr}">
-                        <span class="sidebar-notes-list-item-title${richClass}">${titleHtml}</span>
-                        <span class="sidebar-notes-list-date">${escapeHTML(dateLabel)}</span>
-                    </button>
-                    <button type="button" class="card-act card-act--show unhide-btn" data-id="${escapeAttr(item.id)}" title="Unhide" aria-label="Unhide">${CARD_ICONS.show}</button>
-                </div>`;
+                return buildSidebarNoteListItemHtml(item, {
+                    variant: 'with-act',
+                    trailingActionHtml: `<button type="button" class="card-act card-act--show unhide-btn" data-id="${escapeAttr(item.id)}" title="Unhide" aria-label="Unhide">${CARD_ICONS.show}</button>`
+                });
             }
 
-            return `
-            <button type="button" class="sidebar-notes-list-item has-note-color${variant === 'archived' ? ' is-archived' : ''}" data-id="${escapeAttr(item.id)}" title="${titleAttr}"${accentStyle}>
-                <span class="sidebar-notes-list-item-title${richClass}">${titleHtml}</span>
-                <span class="sidebar-notes-list-date">${escapeHTML(dateLabel)}</span>
-            </button>`;
+            return buildSidebarNoteListItemHtml(item, {
+                extraClass: variant === 'archived' ? ' is-archived' : ''
+            });
         }).join('');
 
         zone.querySelectorAll('.sidebar-notes-list-item[data-id]').forEach((btn) => {
