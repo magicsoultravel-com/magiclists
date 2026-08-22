@@ -4,7 +4,9 @@ import {
     formatExportTimestamp,
     readLastCloudExportAt,
     readLastLocalExportAt,
-    readLastLocalTxtExportAt
+    readLastLocalTxtExportAt,
+    readLastMediaMetaExportAt,
+    readLastMediaZipExportAt
 } from './backup.js';
 import { IndexedDBStore } from './storage/indexedDbStore.js';
 import { getAppElementById } from './appDocuments.js';
@@ -35,6 +37,8 @@ export const SidebarStats = {
 
         const localExportAt = formatExportTimestamp(readLastLocalExportAt());
         const localTxtExportAt = formatExportTimestamp(readLastLocalTxtExportAt());
+        const mediaMetaExportAt = formatExportTimestamp(readLastMediaMetaExportAt());
+        const mediaZipExportAt = formatExportTimestamp(readLastMediaZipExportAt());
         const cloudExportAt = formatExportTimestamp(readLastCloudExportAt());
 
         // Get IndexedDB stats
@@ -49,6 +53,8 @@ export const SidebarStats = {
              <span class="sidebar-storage-stat">${totalLine}</span>
              <span class="sidebar-storage-stat">Local JSON export: ${localExportAt}</span>
              <span class="sidebar-storage-stat">Local TXT export: ${localTxtExportAt}</span>
+             <span class="sidebar-storage-stat">Media meta export: ${mediaMetaExportAt}</span>
+             <span class="sidebar-storage-stat">Media ZIP export: ${mediaZipExportAt}</span>
              <span class="sidebar-storage-stat">Cloud export: ${cloudExportAt}</span>
              <span class="sidebar-storage-stat" title="${breakdownTooltip}">IndexedDB: ${sizeStr}</span>
              ${hintLine}

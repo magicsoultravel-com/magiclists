@@ -39,15 +39,13 @@ export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCo
         return `
             <div class="note-attachment" data-media-id="${id}">
                 <div class="note-attachment__compact">
-                    <div class="note-attachment__thumb-wrap">
-                        <button type="button" class="note-attachment__thumb-btn" data-thumb-media="${id}" title="View full size" aria-label="View full size">
-                            <span class="note-attachment__thumb" data-attach-thumb aria-hidden="true"></span>
-                        </button>
-                        ${actions}
-                    </div>
+                    <button type="button" class="note-attachment__thumb-btn" data-thumb-media="${id}" title="View full size" aria-label="View full size">
+                        <span class="note-attachment__thumb" data-attach-thumb aria-hidden="true"></span>
+                    </button>
                     <button type="button" class="note-attachment__label-btn" data-open-media="${id}" title="Open in media library">
                         <span class="note-attachment__label" data-attach-label>Loading…</span>
                     </button>
+                    ${actions}
                 </div>
             </div>`;
     }).join('');
@@ -226,7 +224,7 @@ export function bindNoteAttachments(root, item) {
         const mediaId = row.dataset.mediaId;
         if (!mediaId) return;
 
-        const thumbWrap = row.querySelector('.note-attachment__thumb-wrap');
+        const thumbWrap = row.querySelector('.note-attachment__actions');
         if (thumbWrap && thumbWrap.dataset.quickActionsBound !== '1') {
             bindMediaQuickActions(thumbWrap, {
                 context: 'note-attachment',

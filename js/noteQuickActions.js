@@ -496,7 +496,7 @@ export function renderQuickActions({
             <button type="button" class="btn btn--compact btn--icon" id="btn-cloud-import" data-enabled-title="Import from cloud" title="Connect cloud first (Cloud icon)" aria-label="Import from cloud" disabled>${ACTION_ICONS.cloudImport}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-export-db" title="Export backup" aria-label="Export backup">${ACTION_ICONS.export}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-export-txt" title="Export all as TXT" aria-label="Export all as TXT">${ACTION_ICONS.exportTxt}</button>
-            <button type="button" class="btn btn--compact btn--icon schedule-export-btn" id="btn-schedule-export" title="Scheduled export" aria-label="Scheduled export">${ACTION_ICONS.scheduleExport}</button>
+            <button type="button" class="btn btn--compact btn--icon schedule-export-btn" id="btn-schedule-export" title="Scheduled backup" aria-label="Scheduled backup">${ACTION_ICONS.scheduleExport}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-import-db" title="Import backup" aria-label="Import backup">${ACTION_ICONS.import}</button>
             <button type="button" class="btn btn--compact btn--icon btn--icon-danger" id="btn-auth-logout" title="Logout" aria-label="Logout">${ACTION_ICONS.logout}</button>
         `;

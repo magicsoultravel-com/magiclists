@@ -365,7 +365,6 @@
 }
 
 .media-lib-drop {
-    position: relative;
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -373,41 +372,6 @@
     border-radius: 10px;
     padding: 0.5rem;
     overflow: auto;
-    --media-tile-thumb-max: 104px;
-}
-
-.media-lib-drop.is-shrinking {
-    user-select: none;
-}
-
-.media-lib-drop__shrink-handle {
-    position: absolute;
-    right: 0.35rem;
-    bottom: 0.35rem;
-    z-index: 4;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 18px;
-    height: 18px;
-    padding: 2px;
-    border-radius: 4px;
-    background: color-mix(in srgb, var(--bg-card, #1a1a1e) 82%, transparent);
-    color: var(--text-primary, #eee);
-    cursor: ns-resize;
-    opacity: 0.45;
-    touch-action: none;
-    transition: opacity 0.12s ease;
-}
-
-.media-lib-drop--shrinkable:hover .media-lib-drop__shrink-handle,
-.media-lib-drop.is-shrinking .media-lib-drop__shrink-handle {
-    opacity: 0.95;
-}
-
-.media-lib-drop__shrink-handle svg {
-    display: block;
-    pointer-events: none;
 }
 
 .media-lib-drop.is-dragover {
@@ -468,8 +432,7 @@
 
 .media-lib-tile__preview {
     width: 100%;
-    height: var(--media-tile-thumb-max, 104px);
-    max-height: var(--media-tile-thumb-max, 104px);
+    aspect-ratio: 1;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -557,10 +520,12 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
+    overflow: visible;
 }
 
 .media-lib-detail__preview-actions .media-quick-actions {
     pointer-events: auto;
+    flex-wrap: nowrap;
 }
 
 .media-quick-actions {
@@ -587,12 +552,11 @@
     right: 0.25rem;
     left: auto;
     justify-content: flex-end;
+    flex-wrap: nowrap;
 }
 
 .media-lib-tile__preview-wrap:hover .media-quick-actions,
 .media-lib-tile__preview-wrap:focus-within .media-quick-actions,
-.note-attachment__thumb-wrap:hover .media-quick-actions,
-.note-attachment__thumb-wrap:focus-within .media-quick-actions,
 .media-lib-detail__preview:hover .media-quick-actions,
 .media-lib-detail__preview:focus-within .media-quick-actions {
     opacity: 1;
@@ -684,15 +648,26 @@
 }
 
 .note-attachment__compact {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0.25rem;
     min-width: 0;
+    min-height: 1.65rem;
 }
 
-.note-attachment__thumb-wrap {
-    position: relative;
+.note-attachment__actions.step-row-actions {
     flex-shrink: 0;
+    margin-left: auto;
+    padding-left: 0.2rem;
+    background: color-mix(in srgb, var(--bg-card, var(--surface-elevated, #1a1a1e)) 88%, transparent);
+    border-radius: 4px;
+}
+
+.note-attachment:hover .note-attachment__actions,
+.note-attachment:focus-within .note-attachment__actions {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .note-attachment__thumb-btn {

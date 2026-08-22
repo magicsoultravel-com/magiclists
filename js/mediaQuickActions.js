@@ -12,7 +12,9 @@ import { showAppToast } from './toast.js';
  *   alreadyAttached?: boolean,
  *   blobMissing?: boolean,
  *   showSave?: boolean,
- *   showRemove?: boolean
+ *   showRemove?: boolean,
+ *   saveHidden?: boolean,
+ *   layout?: 'overlay' | 'inline-row'
  * }} opts
  */
 export function buildMediaQuickActionsHtml(opts) {
@@ -23,7 +25,9 @@ export function buildMediaQuickActionsHtml(opts) {
         alreadyAttached = false,
         blobMissing = false,
         showSave = false,
-        showRemove = true
+        showRemove = true,
+        saveHidden = false,
+        layout = context === 'note-attachment' ? 'inline-row' : 'overlay'
     } = opts;
 
     const showAttach = (context === 'library-tile' || context === 'library-detail')
@@ -35,22 +39,34 @@ export function buildMediaQuickActionsHtml(opts) {
     const removeClass = isNote ? '' : ' card-act--danger';
     const removeAttr = isNote ? 'data-media-action-detach' : 'data-media-action-delete';
 
-    const saveBtn = showSave
-        ? `<button type="button" class="card-act" data-media-action-save data-media-id="${mediaId}" title="Save" aria-label="Save">${CARD_ICONS.save}</button>`
+    const viewBtn = `<button type="button" class="card-act" data-media-action-view data-media-id="${mediaId}" title="View full size" aria-label="View full size">${CARD_ICONS.expandMedia}</button>`;
+    const downloadBtn = `<button type="button" class="card-act" data-media-action-download data-media-id="${mediaId}" title="Download" aria-label="Download" ${blobMissing ? 'disabled' : ''}>${CARD_ICONS.download}</button>`;
+    const attachBtn = showAttach
+        ? `<button type="button" class="card-act" data-media-action-attach data-media-id="${mediaId}" title="Attach to selected note" aria-label="Attach">${CARD_ICONS.attach}</button>`
         : '';
+    const saveBtn = showSave
+        ? `<button type="button" class="card-act${saveHidden ? ' is-hidden' : ''}" data-media-action-save data-media-id="${mediaId}" title="Save" aria-label="Save">${CARD_ICONS.save}</button>`
+        : '';
+    const removeBtn = showRemove
+        ? `<button type="button" class="card-act${removeClass}" ${removeAttr} data-media-id="${mediaId}" title="${removeTitle}" aria-label="${removeTitle}">${removeIcon}</button>`
+        : '';
+
+    if (layout === 'inline-row') {
+        return `<div class="step-row-actions note-attachment__actions">${viewBtn}${downloadBtn}${attachBtn}${saveBtn}${removeBtn}</div>`;
+    }
 
     const removeBlock = showRemove
         ? `<div class="media-quick-actions media-quick-actions--left">
-            <button type="button" class="card-act${removeClass}" ${removeAttr} data-media-id="${mediaId}" title="${removeTitle}" aria-label="${removeTitle}">${removeIcon}</button>
+            ${removeBtn}
         </div>`
         : '';
 
     return `
         ${removeBlock}
         <div class="media-quick-actions media-quick-actions--right">
-            <button type="button" class="card-act" data-media-action-view data-media-id="${mediaId}" title="View full size" aria-label="View full size">${CARD_ICONS.expandMedia}</button>
-            <button type="button" class="card-act" data-media-action-download data-media-id="${mediaId}" title="Download" aria-label="Download" ${blobMissing ? 'disabled' : ''}>${CARD_ICONS.download}</button>
-            ${showAttach ? `<button type="button" class="card-act" data-media-action-attach data-media-id="${mediaId}" title="Attach to selected note" aria-label="Attach">${CARD_ICONS.attach}</button>` : ''}
+            ${viewBtn}
+            ${downloadBtn}
+            ${attachBtn}
             ${saveBtn}
         </div>`;
 }

@@ -14,6 +14,8 @@ export const BACKUP_FILE_PREFIX = 'matrix_workspace_backup_';
 export const ENCRYPTED_BACKUP_MARKER = 'matrix_encrypted_backup';
 export const LAST_LOCAL_EXPORT_KEY = 'matrix_last_local_export_at';
 export const LAST_LOCAL_TXT_EXPORT_KEY = 'matrix_last_local_txt_export_at';
+export const LAST_MEDIA_META_EXPORT_KEY = 'matrix_last_media_meta_export_at';
+export const LAST_MEDIA_ZIP_EXPORT_KEY = 'matrix_last_media_zip_export_at';
 const CLOUD_CONFIG_KEY = 'matrix_cloud_config';
 
 export function formatExportTimestamp(timestamp) {
@@ -47,6 +49,34 @@ export function readLastLocalTxtExportAt() {
 export function writeLastLocalTxtExportAt(timestamp) {
     if (!Number.isFinite(timestamp)) return;
     localStorage.setItem(LAST_LOCAL_TXT_EXPORT_KEY, String(timestamp));
+}
+
+export function readLastMediaMetaExportAt() {
+    try {
+        const ts = Number(localStorage.getItem(LAST_MEDIA_META_EXPORT_KEY));
+        return Number.isFinite(ts) ? ts : null;
+    } catch {
+        return null;
+    }
+}
+
+export function writeLastMediaMetaExportAt(timestamp) {
+    if (!Number.isFinite(timestamp)) return;
+    localStorage.setItem(LAST_MEDIA_META_EXPORT_KEY, String(timestamp));
+}
+
+export function readLastMediaZipExportAt() {
+    try {
+        const ts = Number(localStorage.getItem(LAST_MEDIA_ZIP_EXPORT_KEY));
+        return Number.isFinite(ts) ? ts : null;
+    } catch {
+        return null;
+    }
+}
+
+export function writeLastMediaZipExportAt(timestamp) {
+    if (!Number.isFinite(timestamp)) return;
+    localStorage.setItem(LAST_MEDIA_ZIP_EXPORT_KEY, String(timestamp));
 }
 
 /** Stable sync fingerprint for skip-if-unchanged scheduled exports. */

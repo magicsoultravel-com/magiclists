@@ -12,6 +12,7 @@ import { IndexedDBMediaStore } from './storage/indexedDbMediaStore.js';
 
 export const MEDIA_META_FILE_PREFIX = 'matrix_media_meta_';
 export const MEDIA_ZIP_FILE_PREFIX = 'matrix_media_backup_';
+export const MEDIA_INCR_FILE_PREFIX = 'matrix_media_incr_';
 
 function nowSeconds() {
     return Math.floor(Date.now() / 1000);
@@ -155,11 +156,107 @@ export async function applyMediaLibraryBackupSection(section) {
     return count;
 }
 
-export async function downloadMediaMetaJson() {
+/**
+ * Scheduled / manual media meta export payload.
+ */
+export async function buildMediaMetaExportPayload() {
     const pkg = await buildMediaMetaOnlyPackage();
     const text = JSON.stringify(pkg, null, 2);
-    const blob = new Blob([text], { type: 'application/json' });
-    triggerDownload(blob, `${MEDIA_META_FILE_PREFIX}${nowSeconds()}.json`);
+    const timestamp = pkg.exportedAt || nowSeconds();
+    return {
+        text,
+        blob: new Blob([text], { type: 'application/json' }),
+        filename: `${MEDIA_META_FILE_PREFIX}${timestamp}.json`,
+        timestamp
+    };
+}
+
+export async function downloadMediaMetaJson() {
+    const payload = await buildMediaMetaExportPayload();
+    triggerDownload(payload.blob, payload.filename);
+}
+
+/**
+ * Build full or incremental media ZIP for scheduled export.
+ * @param {{ incremental?: boolean, zipSnapshot?: Record<string, number> }} [opts]
+ */
+export async function buildMediaZipExportPayload(opts = {}) {
+    const incremental = !!opts.incremental;
+    const snapshot = opts.zipSnapshot && typeof opts.zipSnapshot === 'object' ? opts.zipSnapshot : {};
+    const hasSnapshot = Object.keys(snapshot).length > 0;
+    const records = await IndexedDBMediaStore.getAll();
+    const encoder = new TextEncoder();
+    const manifestItems = [];
+    const zipFiles = [];
+    const nextSnapshot = {};
+
+    for (const record of records) {
+        const meta = toPublicMeta(record);
+        if (!meta) continue;
+        const updatedAt = Number(record.updatedAt) || Number(meta.updatedAt) || 0;
+        nextSnapshot[record.id] = updatedAt;
+
+        const includeBlob = record.blob && !record.blobMissing;
+        let shouldInclude = includeBlob;
+        if (incremental && hasSnapshot) {
+            const prev = snapshot[record.id];
+            shouldInclude = includeBlob && (prev == null || updatedAt > prev);
+        }
+
+        if (shouldInclude) {
+            const buf = new Uint8Array(await record.blob.arrayBuffer());
+            const path = `files/${record.id}_${safeName(record.filename)}`;
+            const itemMeta = { ...meta, zipPath: path };
+            manifestItems.push(itemMeta);
+            zipFiles.push({ name: path, data: buf });
+        }
+    }
+
+    if (incremental && hasSnapshot && !zipFiles.length) {
+        return {
+            skipped: true,
+            isIncremental: true,
+            nextSnapshot,
+            textForFingerprint: null,
+            blob: null,
+            filename: null,
+            timestamp: nowSeconds()
+        };
+    }
+
+    const isIncremental = incremental && hasSnapshot;
+    const timestamp = nowSeconds();
+    const manifest = {
+        version: 1,
+        exportedAt: timestamp,
+        incremental: isIncremental,
+        items: manifestItems
+    };
+    zipFiles.unshift({
+        name: 'manifest.json',
+        data: encoder.encode(JSON.stringify(manifest, null, 2))
+    });
+
+    const textForFingerprint = JSON.stringify({
+        incremental: isIncremental,
+        items: manifestItems.map((item) => ({
+            id: item.id,
+            zipPath: item.zipPath,
+            byteSize: item.byteSize,
+            updatedAt: item.updatedAt
+        }))
+    });
+
+    const prefix = isIncremental ? MEDIA_INCR_FILE_PREFIX : MEDIA_ZIP_FILE_PREFIX;
+    return {
+        skipped: false,
+        isIncremental,
+        nextSnapshot,
+        textForFingerprint,
+        blob: buildZipStore(zipFiles),
+        filename: `${prefix}${timestamp}.zip`,
+        timestamp
+    };
 }
 
 export async function importMediaMetaJsonFile(file) {
@@ -298,35 +395,10 @@ async function readZip(buffer) {
 }
 
 export async function downloadMediaZip() {
-    const records = await IndexedDBMediaStore.getAll();
-    const manifestItems = [];
-    const zipFiles = [];
-    const encoder = new TextEncoder();
-
-    for (const record of records) {
-        const meta = toPublicMeta(record);
-        if (!meta) continue;
-        manifestItems.push(meta);
-        if (record.blob && !record.blobMissing) {
-            const buf = new Uint8Array(await record.blob.arrayBuffer());
-            const path = `files/${record.id}_${safeName(record.filename)}`;
-            zipFiles.push({ name: path, data: buf });
-            meta.zipPath = path;
-        }
+    const payload = await buildMediaZipExportPayload({ incremental: false });
+    if (payload.blob && payload.filename) {
+        triggerDownload(payload.blob, payload.filename);
     }
-
-    const manifest = {
-        version: 1,
-        exportedAt: nowSeconds(),
-        items: manifestItems
-    };
-    zipFiles.unshift({
-        name: 'manifest.json',
-        data: encoder.encode(JSON.stringify(manifest, null, 2))
-    });
-
-    const zipBlob = buildZipStore(zipFiles);
-    triggerDownload(zipBlob, `${MEDIA_ZIP_FILE_PREFIX}${nowSeconds()}.zip`);
 }
 
 export async function importMediaZipFile(file) {

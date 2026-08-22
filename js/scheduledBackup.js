@@ -1,4 +1,4 @@
-/** @module {"owns":"scheduled local JSON/TXT auto-export timer and popover", "related":["backup.js","app.js","noteQuickActions.js"]} */
+/** @module {"owns":"scheduled local JSON/TXT/media auto-export timer and popover", "related":["backup.js","mediaBackup.js","app.js","noteQuickActions.js"]} */
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { positionPopoverBelowAnchor } from './popoverPosition.js';
 import {
@@ -6,16 +6,24 @@ import {
     hashExportFingerprint,
     readLastLocalExportAt,
     readLastLocalTxtExportAt,
+    readLastMediaMetaExportAt,
+    readLastMediaZipExportAt,
     serializeBackupPackage,
     writeLastLocalExportAt,
-    writeLastLocalTxtExportAt
+    writeLastLocalTxtExportAt,
+    writeLastMediaMetaExportAt,
+    writeLastMediaZipExportAt
 } from './backup.js';
+import {
+    buildMediaMetaExportPayload,
+    buildMediaZipExportPayload
+} from './mediaBackup.js';
 import { itemToTxtExportText, sortItemsForTxtExport } from './noteBodyConversion.js';
 import { SidebarStats } from './sidebarStats.js';
 
 const STORAGE_KEY = 'matrix_scheduled_export';
-const DEFAULT_TITLE = 'Scheduled export';
-const RING_CIRCUMFERENCE = 2 * Math.PI * 11; // r=11 in 24 viewBox
+const DEFAULT_TITLE = 'Scheduled backup';
+const RING_CIRCUMFERENCE = 2 * Math.PI * 11;
 
 function clampAmount(value, { allowZero = false } = {}) {
     const n = Math.round(Number(value));
@@ -24,20 +32,47 @@ function clampAmount(value, { allowZero = false } = {}) {
     return Math.min(99, Math.max(min, n));
 }
 
-function normalizeConfig(raw) {
+function normalizeNotesSection(raw, legacy) {
     const format = raw?.format === 'txt' ? 'txt' : 'json';
+    return {
+        enabled: raw?.enabled !== undefined ? !!raw.enabled : true,
+        format,
+        lastFingerprint: typeof raw?.lastFingerprint === 'string'
+            ? raw.lastFingerprint
+            : (typeof legacy?.lastFingerprint === 'string' ? legacy.lastFingerprint : null),
+        lastExportAt: Number.isFinite(Number(raw?.lastExportAt)) ? Number(raw.lastExportAt) : null
+    };
+}
+
+function normalizeMediaSection(raw) {
+    const zipSnapshot = raw?.zipSnapshot && typeof raw.zipSnapshot === 'object' ? raw.zipSnapshot : {};
+    return {
+        enabled: !!raw?.enabled,
+        incremental: !!raw?.incremental,
+        lastMetaFingerprint: typeof raw?.lastMetaFingerprint === 'string' ? raw.lastMetaFingerprint : null,
+        lastMetaExportAt: Number.isFinite(Number(raw?.lastMetaExportAt)) ? Number(raw.lastMetaExportAt) : null,
+        lastZipFingerprint: typeof raw?.lastZipFingerprint === 'string' ? raw.lastZipFingerprint : null,
+        lastZipExportAt: Number.isFinite(Number(raw?.lastZipExportAt)) ? Number(raw.lastZipExportAt) : null,
+        lastZipMode: raw?.lastZipMode === 'incremental' ? 'incremental' : (raw?.lastZipMode === 'full' ? 'full' : null),
+        zipSnapshot
+    };
+}
+
+function normalizeConfig(raw) {
     const unit = raw?.unit === 'hours' ? 'hours' : 'minutes';
+    const legacyFormat = raw?.format;
+    const hasLegacyShape = legacyFormat != null && raw?.notes == null;
     return {
         enabled: !!raw?.enabled,
         paused: !!raw?.paused,
-        format,
         amount: clampAmount(raw?.amount ?? 30, { allowZero: true }),
         unit,
         nextDueAt: Number.isFinite(Number(raw?.nextDueAt)) ? Number(raw.nextDueAt) : null,
-        lastFingerprint: typeof raw?.lastFingerprint === 'string' ? raw.lastFingerprint : null,
         remainingMsWhenPaused: Number.isFinite(Number(raw?.remainingMsWhenPaused))
             ? Number(raw.remainingMsWhenPaused)
-            : null
+            : null,
+        notes: normalizeNotesSection(raw?.notes, hasLegacyShape ? raw : null),
+        media: normalizeMediaSection(raw?.media)
     };
 }
 
@@ -122,6 +157,18 @@ function escapeAttr(value) {
         .replace(/</g, '&lt;');
 }
 
+function readNotesEnabledFromUi() {
+    return !!document.querySelector('[data-schedule-notes-enabled]')?.checked;
+}
+
+function readMediaEnabledFromUi() {
+    return !!document.querySelector('[data-schedule-media-enabled]')?.checked;
+}
+
+function readMediaIncrementalFromUi() {
+    return !!document.querySelector('[data-schedule-media-incremental]')?.checked;
+}
+
 export const ScheduledBackup = {
     getItems: () => [],
     getLoggedIn: () => true,
@@ -172,10 +219,10 @@ export const ScheduledBackup = {
         const panel = document.createElement('div');
         panel.className = 'schedule-export-popover clock-style-popover is-hidden';
         panel.setAttribute('role', 'dialog');
-        panel.setAttribute('aria-label', 'Scheduled export');
+        panel.setAttribute('aria-label', 'Scheduled backup');
         panel.innerHTML = `
             <div class="schedule-export-popover__header">
-                <span class="schedule-export-popover__title">Scheduled export</span>
+                <span class="schedule-export-popover__title">Scheduled backup</span>
                 <button type="button" class="card-act schedule-export-popover__close" data-schedule-close title="Close" aria-label="Close">${CARD_ICONS.close}</button>
             </div>
             <div class="schedule-export-popover__body" data-schedule-body></div>
@@ -236,7 +283,6 @@ export const ScheduledBackup = {
         const body = this.panel?.querySelector('[data-schedule-body]');
         if (!body) return;
         const config = readConfig();
-        const lastAt = config.format === 'txt' ? readLastLocalTxtExportAt() : readLastLocalExportAt();
         const remaining = this.getRemainingMs(config);
         const statusLine = config.enabled
             ? (config.paused
@@ -244,14 +290,13 @@ export const ScheduledBackup = {
                 : `Running · ${formatRemaining(remaining)} left`)
             : 'Off';
 
+        const jsonLast = readLastLocalExportAt();
+        const txtLast = readLastLocalTxtExportAt();
+        const metaLast = readLastMediaMetaExportAt();
+        const zipLast = readLastMediaZipExportAt();
+        const zipModeLabel = config.media.lastZipMode === 'incremental' ? 'incr' : 'full';
+
         body.innerHTML = `
-            <div class="schedule-export-popover__field">
-                <span class="schedule-export-popover__label">Export type</span>
-                <div class="schedule-export-popover__seg" role="group" aria-label="Export type">
-                    <button type="button" class="schedule-export-popover__seg-btn${config.format === 'json' ? ' is-active' : ''}" data-schedule-format="json">JSON</button>
-                    <button type="button" class="schedule-export-popover__seg-btn${config.format === 'txt' ? ' is-active' : ''}" data-schedule-format="txt">TXT</button>
-                </div>
-            </div>
             <div class="schedule-export-popover__field">
                 <span class="schedule-export-popover__label">Interval</span>
                 <div class="schedule-export-popover__interval">
@@ -263,8 +308,37 @@ export const ScheduledBackup = {
                     </select>
                 </div>
             </div>
-            <p class="schedule-export-popover__meta">Last backup: ${escapeAttr(formatRelativePast(lastAt))}</p>
             <p class="schedule-export-popover__meta" data-schedule-status>${escapeAttr(statusLine)}</p>
+            <div class="schedule-export-popover__section">
+                <label class="schedule-export-popover__section-head">
+                    <input type="checkbox" data-schedule-notes-enabled${config.notes.enabled ? ' checked' : ''}>
+                    <span>NOTES</span>
+                </label>
+                <div class="schedule-export-popover__section-body">
+                    <div class="schedule-export-popover__field">
+                        <span class="schedule-export-popover__label">Export type</span>
+                        <div class="schedule-export-popover__seg" role="group" aria-label="Notes export type">
+                            <button type="button" class="schedule-export-popover__seg-btn${config.notes.format === 'json' ? ' is-active' : ''}" data-schedule-notes-format="json">JSON</button>
+                            <button type="button" class="schedule-export-popover__seg-btn${config.notes.format === 'txt' ? ' is-active' : ''}" data-schedule-notes-format="txt">TXT</button>
+                        </div>
+                    </div>
+                    <p class="schedule-export-popover__meta">Last: JSON ${escapeAttr(formatRelativePast(jsonLast))} · TXT ${escapeAttr(formatRelativePast(txtLast))}</p>
+                </div>
+            </div>
+            <div class="schedule-export-popover__section">
+                <label class="schedule-export-popover__section-head">
+                    <input type="checkbox" data-schedule-media-enabled${config.media.enabled ? ' checked' : ''}>
+                    <span>MEDIA</span>
+                </label>
+                <div class="schedule-export-popover__section-body">
+                    <label class="schedule-export-popover__check">
+                        <input type="checkbox" data-schedule-media-incremental${config.media.incremental ? ' checked' : ''}${config.media.enabled ? '' : ' disabled'}>
+                        <span>Incremental content (meta always full)</span>
+                    </label>
+                    <p class="schedule-export-popover__meta schedule-export-popover__hint">Restore: import latest meta JSON, then ZIP files oldest → newest.</p>
+                    <p class="schedule-export-popover__meta">Last: Meta ${escapeAttr(formatRelativePast(metaLast))} · ZIP ${escapeAttr(zipLast ? `${formatRelativePast(zipLast)} (${zipModeLabel})` : 'Never')}</p>
+                </div>
+            </div>
             <div class="schedule-export-popover__actions">
                 ${config.enabled
                     ? `
@@ -275,13 +349,33 @@ export const ScheduledBackup = {
             </div>
         `;
 
-        body.querySelectorAll('[data-schedule-format]').forEach((btn) => {
+        body.querySelectorAll('[data-schedule-notes-format]').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const next = readConfig();
-                next.format = btn.getAttribute('data-schedule-format') === 'txt' ? 'txt' : 'json';
+                next.notes.format = btn.getAttribute('data-schedule-notes-format') === 'txt' ? 'txt' : 'json';
                 writeConfig(next);
                 this.renderBody();
             });
+        });
+
+        body.querySelector('[data-schedule-notes-enabled]')?.addEventListener('change', (e) => {
+            const next = readConfig();
+            next.notes.enabled = !!e.target.checked;
+            writeConfig(next);
+            this.renderBody();
+        });
+
+        body.querySelector('[data-schedule-media-enabled]')?.addEventListener('change', (e) => {
+            const next = readConfig();
+            next.media.enabled = !!e.target.checked;
+            writeConfig(next);
+            this.renderBody();
+        });
+
+        body.querySelector('[data-schedule-media-incremental]')?.addEventListener('change', (e) => {
+            const next = readConfig();
+            next.media.incremental = !!e.target.checked;
+            writeConfig(next);
         });
 
         const amountInput = body.querySelector('[data-schedule-amount]');
@@ -326,8 +420,18 @@ export const ScheduledBackup = {
         return clampAmount(input?.value, { allowZero: false });
     },
 
+    persistUiTargets(config) {
+        config.notes.enabled = readNotesEnabledFromUi();
+        config.media.enabled = readMediaEnabledFromUi();
+        config.media.incremental = readMediaIncrementalFromUi();
+        return config;
+    },
+
     start() {
-        const config = readConfig();
+        const config = this.persistUiTargets(readConfig());
+        if (!config.notes.enabled && !config.media.enabled) {
+            return;
+        }
         config.enabled = true;
         config.paused = false;
         config.amount = this.readAmountFromUi();
@@ -432,24 +536,17 @@ export const ScheduledBackup = {
     async fireExport(config) {
         if (this.busy) return;
         this.busy = true;
+        let statsDirty = false;
         try {
-            const payload = await this.buildPayload(config.format);
-            const fingerprint = hashExportFingerprint(payload.text);
-            const changed = fingerprint !== config.lastFingerprint;
-
-            if (changed) {
-                downloadBlob(payload.blob, payload.filename);
-                if (config.format === 'txt') {
-                    writeLastLocalTxtExportAt(Math.floor(Date.now() / 1000));
-                } else {
-                    writeLastLocalExportAt(payload.timestamp || Math.floor(Date.now() / 1000));
-                }
-                config.lastFingerprint = fingerprint;
-                SidebarStats.update();
+            if (config.notes.enabled) {
+                statsDirty = await this.exportNotes(config) || statsDirty;
             }
-
+            if (config.media.enabled) {
+                statsDirty = await this.exportMedia(config) || statsDirty;
+            }
             config.nextDueAt = Date.now() + intervalMs(config);
             writeConfig(config);
+            if (statsDirty) SidebarStats.update();
         } catch (err) {
             console.warn('[ScheduledBackup] export failed', err);
             config.nextDueAt = Date.now() + intervalMs(config);
@@ -463,7 +560,59 @@ export const ScheduledBackup = {
         }
     },
 
-    async buildPayload(format) {
+    async exportNotes(config) {
+        const payload = await this.buildNotesPayload(config.notes.format);
+        const fingerprint = hashExportFingerprint(payload.text);
+        if (fingerprint === config.notes.lastFingerprint) return false;
+
+        downloadBlob(payload.blob, payload.filename);
+        const ts = payload.timestamp || Math.floor(Date.now() / 1000);
+        config.notes.lastFingerprint = fingerprint;
+        config.notes.lastExportAt = ts;
+        if (config.notes.format === 'txt') {
+            writeLastLocalTxtExportAt(ts);
+        } else {
+            writeLastLocalExportAt(ts);
+        }
+        return true;
+    },
+
+    async exportMedia(config) {
+        let changed = false;
+        const metaPayload = await buildMediaMetaExportPayload();
+        const metaFp = hashExportFingerprint(metaPayload.text);
+        if (metaFp !== config.media.lastMetaFingerprint) {
+            downloadBlob(metaPayload.blob, metaPayload.filename);
+            config.media.lastMetaFingerprint = metaFp;
+            config.media.lastMetaExportAt = metaPayload.timestamp;
+            writeLastMediaMetaExportAt(metaPayload.timestamp);
+            changed = true;
+        }
+
+        const zipPayload = await buildMediaZipExportPayload({
+            incremental: config.media.incremental,
+            zipSnapshot: config.media.zipSnapshot
+        });
+
+        if (!zipPayload.skipped && zipPayload.textForFingerprint) {
+            const zipFp = hashExportFingerprint(zipPayload.textForFingerprint);
+            if (zipFp !== config.media.lastZipFingerprint) {
+                downloadBlob(zipPayload.blob, zipPayload.filename);
+                config.media.lastZipFingerprint = zipFp;
+                config.media.lastZipExportAt = zipPayload.timestamp;
+                config.media.lastZipMode = zipPayload.isIncremental ? 'incremental' : 'full';
+                config.media.zipSnapshot = zipPayload.nextSnapshot;
+                writeLastMediaZipExportAt(zipPayload.timestamp);
+                changed = true;
+            }
+        } else if (!zipPayload.skipped && zipPayload.nextSnapshot) {
+            config.media.zipSnapshot = zipPayload.nextSnapshot;
+        }
+
+        return changed;
+    },
+
+    async buildNotesPayload(format) {
         if (format === 'txt') {
             const text = buildTxtContent(this.getItems());
             return {
@@ -518,8 +667,8 @@ export const ScheduledBackup = {
 
         if (armed) {
             const label = paused
-                ? `Scheduled export paused · ${formatRemaining(remaining)} left`
-                : `Auto export in ${formatRemaining(remaining)}`;
+                ? `Scheduled backup paused · ${formatRemaining(remaining)} left`
+                : `Auto backup in ${formatRemaining(remaining)}`;
             btn.title = label;
             btn.setAttribute('aria-label', label);
         } else {

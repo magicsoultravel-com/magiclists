@@ -873,7 +873,7 @@ textarea.form-input {
 .schedule-export-popover {
     position: fixed;
     z-index: 343;
-    width: min(280px, calc(100% - 16px));
+    width: min(320px, calc(100% - 16px));
     padding: 0;
     overflow: hidden;
     font-size: 0.66rem;
@@ -987,6 +987,59 @@ textarea.form-input {
     display: flex;
     gap: 0.35rem;
     flex-wrap: wrap;
+}
+
+.schedule-export-popover__section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding: 0.4rem 0.45rem;
+    border: 1px solid color-mix(in srgb, var(--border-color) 85%, transparent);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+}
+
+.schedule-export-popover__section-head {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-weight: 600;
+    font-size: 0.64rem;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    user-select: none;
+}
+
+.schedule-export-popover__section-head input {
+    margin: 0;
+    accent-color: var(--accent);
+}
+
+.schedule-export-popover__section-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    padding-left: 1.15rem;
+}
+
+.schedule-export-popover__check {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.35rem;
+    font-size: 0.62rem;
+    opacity: 0.9;
+    cursor: pointer;
+}
+
+.schedule-export-popover__check input {
+    margin: 0.1rem 0 0;
+    accent-color: var(--accent);
+}
+
+.schedule-export-popover__hint {
+    opacity: 0.65;
+    font-size: 0.58rem;
+    line-height: 1.35;
 }
 
 /* Template picker */

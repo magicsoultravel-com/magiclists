@@ -37,8 +37,6 @@ const DEFAULT_W = 720;
 const DEFAULT_H = 520;
 const MIN_W = 420;
 const MIN_H = 320;
-const DEFAULT_TILE_THUMB_MAX = 104;
-const MIN_TILE_THUMB_MAX = 48;
 
 let panel = null;
 let notePickerOverlay = null;
@@ -121,75 +119,6 @@ function applySavedGeometry() {
     panel.style.height = `${height}px`;
     panel.style.left = `${pos.x}px`;
     panel.style.top = `${pos.y}px`;
-}
-
-function getTileThumbMaxHeight() {
-    const saved = loadPanelGeom();
-    const legacy = Number.isFinite(saved.previewMaxH) ? saved.previewMaxH : null;
-    const raw = Number.isFinite(saved.tileThumbMaxH) ? saved.tileThumbMaxH : legacy;
-    const h = Number.isFinite(raw) ? raw : DEFAULT_TILE_THUMB_MAX;
-    return clamp(h, MIN_TILE_THUMB_MAX, DEFAULT_TILE_THUMB_MAX);
-}
-
-function applyTileThumbMaxHeight(dropEl) {
-    if (!dropEl) return;
-    dropEl.style.setProperty('--media-tile-thumb-max', `${getTileThumbMaxHeight()}px`);
-}
-
-function ensureGridShrinkHandle(dropEl) {
-    if (!dropEl || dropEl.querySelector('[data-grid-shrink]')) return;
-    dropEl.classList.add('media-lib-drop--shrinkable');
-    const handle = document.createElement('span');
-    handle.className = 'media-lib-drop__shrink-handle';
-    handle.dataset.gridShrink = '1';
-    handle.title = 'Drag to shrink tiles';
-    handle.setAttribute('aria-label', 'Shrink tiles');
-    handle.innerHTML = CARD_ICONS.resize;
-    dropEl.appendChild(handle);
-}
-
-function bindGridShrink(dropEl) {
-    ensureGridShrinkHandle(dropEl);
-    const handle = dropEl?.querySelector('[data-grid-shrink]');
-    if (!handle || handle.dataset.bound === '1') return;
-    handle.dataset.bound = '1';
-
-    let shrinking = false;
-    let startY = 0;
-    let startMax = 0;
-
-    handle.addEventListener('pointerdown', (e) => {
-        if (e.button !== 0) return;
-        e.preventDefault();
-        e.stopPropagation();
-        shrinking = true;
-        startY = e.clientY;
-        startMax = getTileThumbMaxHeight();
-        handle.setPointerCapture(e.pointerId);
-        dropEl.classList.add('is-shrinking');
-    });
-
-    handle.addEventListener('pointermove', (e) => {
-        if (!shrinking) return;
-        const dy = e.clientY - startY;
-        const next = clamp(startMax + dy, MIN_TILE_THUMB_MAX, startMax);
-        dropEl.style.setProperty('--media-tile-thumb-max', `${next}px`);
-    });
-
-    const endShrink = (e) => {
-        if (!shrinking) return;
-        shrinking = false;
-        dropEl.classList.remove('is-shrinking');
-        try {
-            handle.releasePointerCapture(e.pointerId);
-        } catch {
-            /* ignore */
-        }
-        const current = parseFloat(dropEl.style.getPropertyValue('--media-tile-thumb-max')) || getTileThumbMaxHeight();
-        savePanelGeom({ tileThumbMaxH: Math.round(current) });
-    };
-    handle.addEventListener('pointerup', endShrink);
-    handle.addEventListener('pointercancel', endShrink);
 }
 
 export function isNotePickerOpen() {
@@ -301,8 +230,6 @@ export const MediaLibraryOverlay = {
 
         const dropZone = panel.querySelector('[data-media-lib-drop]');
         if (dropZone) {
-            applyTileThumbMaxHeight(dropZone);
-            bindGridShrink(dropZone);
             ['dragenter', 'dragover'].forEach((type) => {
                 dropZone.addEventListener(type, (e) => {
                     e.preventDefault();
@@ -585,8 +512,6 @@ export const MediaLibraryOverlay = {
     async refresh() {
         if (!panel) return;
         this.syncAttachControls();
-        const dropZone = panel.querySelector('[data-media-lib-drop]');
-        applyTileThumbMaxHeight(dropZone);
         const items = await listMedia();
         const grid = panel.querySelector('[data-media-lib-grid]');
         const empty = panel.querySelector('[data-media-lib-empty]');
@@ -730,7 +655,8 @@ export const MediaLibraryOverlay = {
             attachNoteId,
             alreadyAttached: !!alreadyOnTarget,
             blobMissing: !!item.blobMissing,
-            showSave: true
+            showSave: true,
+            saveHidden: true
         });
 
         const overviewDate = formatMediaOverviewDate(item);
@@ -757,6 +683,15 @@ export const MediaLibraryOverlay = {
         `;
 
         const previewActions = detail.querySelector('.media-lib-detail__preview-actions');
+        let savedTitle = item.title || '';
+        let savedDesc = item.description || '';
+        const syncSaveBtn = () => {
+            const title = detail.querySelector('[data-detail-title]')?.value ?? '';
+            const desc = detail.querySelector('[data-detail-desc]')?.value ?? '';
+            const dirty = title !== savedTitle || desc !== savedDesc;
+            detail.querySelector('[data-media-action-save]')?.classList.toggle('is-hidden', !dirty);
+        };
+
         bindMediaQuickActions(previewActions, {
             context: 'library-detail',
             attachNoteId,
@@ -764,9 +699,20 @@ export const MediaLibraryOverlay = {
             onSave: async () => {
                 const title = detail.querySelector('[data-detail-title]')?.value || '';
                 const description = detail.querySelector('[data-detail-desc]')?.value || '';
+                if (title === savedTitle && description === savedDesc) return;
                 await updateMediaMeta(item.id, { title, description });
+                savedTitle = title;
+                savedDesc = description;
+                item.title = title;
+                item.description = description;
                 showAppToast('Saved');
-                this.refresh();
+                syncSaveBtn();
+                const tileLabel = panel.querySelector(
+                    `.media-lib-tile[data-media-id="${CSS.escape(item.id)}"] .media-lib-tile__label`
+                );
+                if (tileLabel) {
+                    tileLabel.textContent = title || item.filename || 'Untitled';
+                }
             },
             onRemove: async () => {
                 if (!confirm('Remove this item from the media library?')) return;
@@ -776,6 +722,10 @@ export const MediaLibraryOverlay = {
                 this.refresh();
             }
         });
+
+        detail.querySelector('[data-detail-title]')?.addEventListener('input', syncSaveBtn);
+        detail.querySelector('[data-detail-desc]')?.addEventListener('input', syncSaveBtn);
+        syncSaveBtn();
 
         detail.querySelectorAll('[data-open-note]').forEach((btn) => {
             btn.addEventListener('click', () => {
