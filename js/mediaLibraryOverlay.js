@@ -9,7 +9,7 @@ import {
     updateMediaMeta,
     MEDIA_LIBRARY_CHANGED
 } from './mediaLibrary.js';
-import { formatByteSize, humanMetaRows, formatMediaOverviewDate } from './mediaMetadata.js';
+import { formatByteSize, humanMetaRows, formatMediaDetailDates } from './mediaMetadata.js';
 import { isMediaStagingOpen, openMediaStaging } from './mediaStagingDialog.js';
 import { filesFromDataTransfer } from './mediaPasteCatcher.js';
 import { showAppToast } from './toast.js';
@@ -136,30 +136,34 @@ function pointerDelta(clientX, clientY, startX, startY) {
 
 function bindPanelDrag() {
     const header = panel.querySelector('[data-media-lib-header]');
-    if (!header) return;
+    const dragHandle = panel.querySelector('[data-media-lib-drag]');
+    const dragTargets = [header, dragHandle].filter(Boolean);
+    if (!dragTargets.length) return;
 
     let dragging = false;
     let startX = 0;
     let startY = 0;
     let originLeft = 0;
     let originTop = 0;
+    let captureEl = null;
 
-    header.addEventListener('pointerdown', (e) => {
+    const onPointerDown = (e) => {
         if (e.button !== 0) return;
         if (e.target.closest('button, input, textarea, a, .btn')) return;
         if (e.target.closest('.card-act') && !e.target.closest('.media-lib-panel__drag')) return;
         e.preventDefault();
         dragging = true;
+        captureEl = e.currentTarget;
         startX = e.clientX;
         startY = e.clientY;
         originLeft = panel.offsetLeft;
         originTop = panel.offsetTop;
-        header.setPointerCapture(e.pointerId);
+        captureEl.setPointerCapture(e.pointerId);
         panel.classList.add('is-dragging');
         bringPanelFront();
-    });
+    };
 
-    header.addEventListener('pointermove', (e) => {
+    const onPointerMove = (e) => {
         if (!dragging) return;
         const { dx, dy } = pointerDelta(e.clientX, e.clientY, startX, startY);
         const pos = clampPanelPos(
@@ -170,21 +174,27 @@ function bindPanelDrag() {
         );
         panel.style.left = `${pos.x}px`;
         panel.style.top = `${pos.y}px`;
-    });
+    };
 
     const endDrag = (e) => {
         if (!dragging) return;
         dragging = false;
         panel.classList.remove('is-dragging');
         try {
-            header.releasePointerCapture(e.pointerId);
+            captureEl?.releasePointerCapture(e.pointerId);
         } catch {
             /* ignore */
         }
+        captureEl = null;
         savePanelGeom();
     };
-    header.addEventListener('pointerup', endDrag);
-    header.addEventListener('pointercancel', endDrag);
+
+    dragTargets.forEach((el) => {
+        el.addEventListener('pointerdown', onPointerDown);
+        el.addEventListener('pointermove', onPointerMove);
+        el.addEventListener('pointerup', endDrag);
+        el.addEventListener('pointercancel', endDrag);
+    });
 }
 
 function setupFloatingChrome() {
@@ -291,10 +301,12 @@ export const MediaLibraryOverlay = {
         const closeBtn = panel.querySelector('[data-media-lib-close]');
         if (!header) return;
 
-        header.innerHTML = `
-            <span class="media-lib-panel__drag card-act card-act--drag" title="Drag to move" aria-hidden="true">${CARD_ICONS.drag}</span>
-            <h2 class="media-lib-panel__title" data-media-lib-title>Media library</h2>
-        `;
+        header.innerHTML = `<h2 class="media-lib-panel__title" data-media-lib-title>Media library</h2>`;
+
+        const dragHandle = panel.querySelector('[data-media-lib-drag]');
+        if (dragHandle && !dragHandle.innerHTML.trim()) {
+            dragHandle.innerHTML = CARD_ICONS.drag;
+        }
 
         if (footer) {
             footer.innerHTML = `
@@ -567,7 +579,6 @@ export const MediaLibraryOverlay = {
                         </button>
                         ${actions}
                     </div>
-                    <button type="button" class="media-lib-tile__label" data-media-select>${escapeHTML(item.title || item.filename || 'Untitled')}</button>
                     ${item.blobMissing ? '<span class="media-lib-tile__badge">Missing</span>' : ''}
                     ${linked.length ? `<span class="media-lib-tile__badge media-lib-tile__badge--attach">${linked.length}</span>` : ''}
                 </div>
@@ -628,9 +639,11 @@ export const MediaLibraryOverlay = {
             previewHtml = `<p class="media-lib-detail__file">${escapeHTML(item.mime)} · ${escapeHTML(formatByteSize(item.byteSize))}</p>`;
         }
 
-        const rows = humanMetaRows(item).map((r) => (
-            `<div class="media-lib-detail__row"><dt>${escapeHTML(r.label)}</dt><dd>${escapeHTML(r.value)}</dd></div>`
-        )).join('');
+        const rows = humanMetaRows(item)
+            .filter((r) => r.label !== 'Added' && r.label !== 'Modified')
+            .map((r) => (
+                `<div class="media-lib-detail__row"><dt>${escapeHTML(r.label)}</dt><dd>${escapeHTML(r.value)}</dd></div>`
+            )).join('');
 
         const linkedNotes = findNotesForMedia(getItems?.() || [], item.id);
         const linkedHtml = linkedNotes.length
@@ -659,9 +672,12 @@ export const MediaLibraryOverlay = {
             saveHidden: true
         });
 
-        const overviewDate = formatMediaOverviewDate(item);
-        const dateLineHtml = overviewDate
-            ? `<p class="media-lib-detail__date">${escapeHTML(overviewDate)}</p>`
+        const { added, modified } = formatMediaDetailDates(item);
+        const dateLineHtml = added
+            ? `<dl class="media-lib-detail__dates">
+                <div class="media-lib-detail__date-row"><dt>Added</dt><dd>${escapeHTML(added)}</dd></div>
+                <div class="media-lib-detail__date-row"><dt>Modified</dt><dd>${escapeHTML(modified || added)}</dd></div>
+               </dl>`
             : '';
 
         detail.innerHTML = `
@@ -707,11 +723,9 @@ export const MediaLibraryOverlay = {
                 item.description = description;
                 showAppToast('Saved');
                 syncSaveBtn();
-                const tileLabel = panel.querySelector(
-                    `.media-lib-tile[data-media-id="${CSS.escape(item.id)}"] .media-lib-tile__label`
-                );
-                if (tileLabel) {
-                    tileLabel.textContent = title || item.filename || 'Untitled';
+                const tile = panel.querySelector(`.media-lib-tile[data-media-id="${CSS.escape(item.id)}"]`);
+                if (tile) {
+                    tile.title = title || item.filename || 'Untitled';
                 }
             },
             onRemove: async () => {

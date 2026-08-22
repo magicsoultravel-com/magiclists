@@ -414,19 +414,20 @@ export function humanMetaRows(meta) {
 }
 
 /**
- * Compact date for detail overview (Taken preferred, else Added).
+ * Added / Modified timestamps for media detail overview row.
  * @param {object} meta
+ * @returns {{ added: string, modified: string }}
  */
-export function formatMediaOverviewDate(meta) {
-    if (!meta) return '';
-    if (meta.capturedAtLabel) return `Taken ${meta.capturedAtLabel}`;
-    if (meta.capturedAt) {
-        const d = new Date(meta.capturedAt * 1000);
-        if (!Number.isNaN(d.getTime())) return `Taken ${d.toLocaleString()}`;
-    }
-    if (meta.createdAt) {
-        const d = new Date(meta.createdAt * 1000);
-        if (!Number.isNaN(d.getTime())) return `Added ${d.toLocaleString()}`;
-    }
-    return '';
+export function formatMediaDetailDates(meta) {
+    const formatUnix = (ts) => {
+        if (!ts) return '';
+        const d = new Date(Number(ts) * 1000);
+        return Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
+    };
+    if (!meta) return { added: '', modified: '' };
+    const added = formatUnix(meta.createdAt);
+    const modified = meta.updatedAt && meta.updatedAt !== meta.createdAt
+        ? formatUnix(meta.updatedAt)
+        : '';
+    return { added, modified };
 }

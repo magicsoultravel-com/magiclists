@@ -377,7 +377,10 @@
     </div>
 
     <div id="media-library-panel" class="media-lib-panel is-hidden" role="dialog" aria-label="Media library">
-        <button type="button" class="card-act media-lib-panel__close" data-media-lib-close title="Close" aria-label="Close"></button>
+        <div class="media-lib-panel__top-actions">
+            <span class="media-lib-panel__drag card-act card-act--drag" data-media-lib-drag title="Drag to move" aria-label="Drag to move"></span>
+            <button type="button" class="card-act media-lib-panel__close" data-media-lib-close title="Close" aria-label="Close"></button>
+        </div>
         <div class="media-lib-panel__header" data-media-lib-header></div>
         <div class="media-lib-attach-chip is-hidden" data-media-attach-chip></div>
         <div class="media-lib-panel__body">

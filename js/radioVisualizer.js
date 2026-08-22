@@ -1,4 +1,22 @@
 import { RadioPlayer } from './radioPlayer.js';
+import { CARD_ICONS, ACTION_ICONS } from './icons.js';
+import { showAppToast } from './toast.js';
+import {
+    openBrowserPopup,
+    prepareBlankPopoutDocument,
+    requestPipWindow,
+    shouldUsePipPopout
+} from './popoutWindows.js';
+import { registerAppDocument, unregisterAppDocument } from './appDocuments.js';
+
+const VISUALIZER_POPOUT_NAME = 'magiclists-radio-visualizer';
+const VISUALIZER_PREFS_KEY = 'matrix_radio_visualizer_prefs';
+
+const SPACE_CRUISE_MS = 60_000;
+const SPACE_HYPER_ENGAGE_MS = 5_500;
+const SPACE_HYPER_TRAVEL_MS = 30_000;
+const SPACE_HYPER_DISENGAGE_MS = 5_500;
+const SPACE_HYPER_CYCLE_MS = SPACE_CRUISE_MS + SPACE_HYPER_ENGAGE_MS + SPACE_HYPER_TRAVEL_MS + SPACE_HYPER_DISENGAGE_MS;
 
 const PALETTES = {
     neon: ['#7dd3fc', '#c084fc', '#f472b6', '#fef08a', '#34d399'],
@@ -37,6 +55,31 @@ const TRAVEL_SPEED = 0.05; // screens/sec at travel = 1
 const FOREST_LEAF = ['#1f4d2e', '#2d6a3e', '#245536', '#3d7a4a', '#4a6b3a'];
 const FOREST_TRUNK = '#3b2a1a';
 const CACTUS_GREEN = '#4d6b3c';
+
+const SPACE_PLANET_TYPES = ['rocky', 'gas', 'ice', 'ringed', 'binary', 'striped', 'cloudy'];
+const SPACE_NEBULA_START_MS = 20_000;
+const SPACE_NEBULA_FADE_IN_MS = 4_000;
+const SPACE_NEBULA_HOLD_MS = 12_000;
+const SPACE_NEBULA_FADE_OUT_MS = 4_000;
+const SPACE_NEBULA_END_MS = SPACE_NEBULA_START_MS + SPACE_NEBULA_FADE_IN_MS + SPACE_NEBULA_HOLD_MS + SPACE_NEBULA_FADE_OUT_MS;
+const SPACE_EARTH_CRUISE_SPAWN_MS = 38_000;
+const HYPER_WALL_COLORS = ['#67e8f9', '#38bdf8', '#a78bfa', '#f472b6', '#fb923c', '#facc15', '#34d399', '#818cf8'];
+
+function readVisualizerPrefs() {
+    try {
+        return JSON.parse(localStorage.getItem(VISUALIZER_PREFS_KEY) || 'null') || {};
+    } catch {
+        return {};
+    }
+}
+
+function writeVisualizerPrefs(data) {
+    try {
+        localStorage.setItem(VISUALIZER_PREFS_KEY, JSON.stringify(data));
+    } catch {
+        /* ignore quota */
+    }
+}
 
 /** Compact Neon Mountains recipe (full impl is much larger). */
 const NEON_MOUNTAINS_RECIPE = `// Neon Mountains — randomizer recipe
@@ -299,8 +342,108 @@ export const RadioVisualizer = {
     sceneTransition: null,
     detailsOpen: false,
     settingsOpen: true,
+    chromeMinimal: false,
+    poppedOut: false,
+    popoutWindow: null,
+    popoutDoc: null,
+    popoutOnKey: null,
+    popoutOnPageHide: null,
+    savedDockRect: null,
+    spaceTrip: null,
     panelWidth: null,
     canvasHeight: 200,
+    _storedLayout: null,
+    _prefsLoaded: false,
+
+    loadStoredPrefs() {
+        const stored = readVisualizerPrefs();
+        if (stored.settings && typeof stored.settings === 'object') {
+            this.setSettings(stored.settings, { persist: false });
+        }
+        if (stored.ui && typeof stored.ui === 'object') {
+            if (typeof stored.ui.settingsOpen === 'boolean') this.settingsOpen = stored.ui.settingsOpen;
+            if (typeof stored.ui.chromeMinimal === 'boolean') this.chromeMinimal = stored.ui.chromeMinimal;
+            if (typeof stored.ui.detailsOpen === 'boolean') this.detailsOpen = stored.ui.detailsOpen;
+        }
+        if (stored.layout && typeof stored.layout === 'object') {
+            this._storedLayout = stored.layout;
+        }
+    },
+
+    saveStoredPrefs() {
+        writeVisualizerPrefs({
+            settings: { ...this.settings },
+            ui: {
+                settingsOpen: !!this.settingsOpen,
+                chromeMinimal: !!this.chromeMinimal,
+                detailsOpen: !!this.detailsOpen
+            },
+            layout: this.getLayoutPrefs(),
+            open: !!this.enabled
+        });
+    },
+
+    getLayoutPrefs() {
+        if (this.savedDockRect) {
+            return { ...this.savedDockRect };
+        }
+        if (!this.modal) {
+            return this._storedLayout || {};
+        }
+        const canvas = this.modal.querySelector('[data-media-visualizer-canvas]');
+        const rect = this.modal.getBoundingClientRect();
+        const left = Number.parseFloat(this.modal.style.left);
+        const top = Number.parseFloat(this.modal.style.top);
+        return {
+            left: Number.isFinite(left) ? left : rect.left,
+            top: Number.isFinite(top) ? top : rect.top,
+            width: this.panelWidth || rect.width,
+            canvasHeight: this.canvasHeight || canvas?.getBoundingClientRect().height || 200
+        };
+    },
+
+    applyStoredLayout(modal) {
+        const layout = this._storedLayout;
+        if (!layout || !modal) return;
+
+        const canvas = modal.querySelector('[data-media-visualizer-canvas]');
+        const width = clamp(Number(layout.width) || 720, 320, 1100);
+        const canvasHeight = clamp(Number(layout.canvasHeight) || 200, 120, 560);
+        const margin = 8;
+        const leftRaw = Number(layout.left);
+        const topRaw = Number(layout.top);
+        const left = Number.isFinite(leftRaw)
+            ? clamp(leftRaw, margin, Math.max(margin, window.innerWidth - 320))
+            : null;
+        const top = Number.isFinite(topRaw)
+            ? clamp(topRaw, margin, Math.max(margin, window.innerHeight - 60))
+            : null;
+
+        modal.style.width = `${width}px`;
+        if (left != null) modal.style.left = `${left}px`;
+        if (top != null) modal.style.top = `${top}px`;
+        if (canvas) canvas.style.height = `${canvasHeight}px`;
+        this.panelWidth = width;
+        this.canvasHeight = canvasHeight;
+        this.resizeCanvas();
+    },
+
+    applyStoredSettingsToControls(modal) {
+        const modeEl = modal.querySelector('[data-media-visualizer-mode]');
+        const paletteEl = modal.querySelector('[data-media-visualizer-palette]');
+        const sensitivityEl = modal.querySelector('[data-media-visualizer-sensitivity]');
+        const amplitudeEl = modal.querySelector('[data-media-visualizer-amplitude]');
+        const travelEl = modal.querySelector('[data-media-visualizer-travel]');
+        const bpmEl = modal.querySelector('[data-media-visualizer-bpm]');
+
+        if (modeEl) modeEl.value = this.settings.mode;
+        if (paletteEl) paletteEl.value = this.settings.palette;
+        if (sensitivityEl) sensitivityEl.value = String(this.settings.sensitivity);
+        if (amplitudeEl) amplitudeEl.value = String(this.settings.amplitude);
+        if (travelEl) travelEl.value = String(this.settings.travel);
+        if (bpmEl) bpmEl.value = String(this.settings.bpm);
+        this.syncControlLabels();
+    },
 
     setCanvas(canvas) {
         this.canvas = canvas;
@@ -321,7 +464,8 @@ export const RadioVisualizer = {
         }
     },
 
-    setSettings(patch = {}) {
+    setSettings(patch = {}, { persist = true } = {}) {
+        const prevMode = this.settings.mode;
         this.settings = { ...this.settings, ...patch };
         this.settings.sensitivity = clamp(Number(this.settings.sensitivity) || 1, 0.35, 2.5);
         this.settings.amplitude = clamp(Number(this.settings.amplitude) || 0.55, 0.15, 1.5);
@@ -330,10 +474,14 @@ export const RadioVisualizer = {
         this.settings.travel = clamp(Number(this.settings.travel) || 0.55, 0.25, 1.25);
         this.settings.glow = clamp(Number(this.settings.glow) || 0.65, 0, 1.5);
         this.settings.bpm = clamp(Math.round(Number(this.settings.bpm) || 120), 10, 200);
+        if (patch.mode && patch.mode !== prevMode) {
+            this.spaceTrip = null;
+        }
         this.syncControlLabels();
         if (this.canvas && !this.enabled) {
             this.drawIdleFrame();
         }
+        if (persist) this.saveStoredPrefs();
     },
 
     travelPace() {
@@ -405,6 +553,11 @@ export const RadioVisualizer = {
     ensureModal() {
         if (this.modal) return this.modal;
 
+        if (!this._prefsLoaded) {
+            this.loadStoredPrefs();
+            this._prefsLoaded = true;
+        }
+
         const modal = document.createElement('div');
         modal.className = 'media-visualizer-modal is-hidden';
         modal.setAttribute('role', 'dialog');
@@ -412,9 +565,15 @@ export const RadioVisualizer = {
         modal.setAttribute('aria-label', 'Media visualizer');
         modal.innerHTML = `
             <div class="media-visualizer-modal__dialog">
-                <div class="media-visualizer-modal__header">
-                    <span class="media-visualizer-modal__title">Radio visualizer</span>
-                    <button type="button" class="card-act media-visualizer-modal__close" data-media-visualizer-close aria-label="Close visualizer">×</button>
+                <div class="media-visualizer-modal__header tool-panel__header" data-media-visualizer-drag>
+                    <span class="media-visualizer-modal__icon tool-panel__icon" aria-hidden="true">${ACTION_ICONS.radioVisualizer}</span>
+                    <span class="media-visualizer-modal__title tool-panel__title">Radio visualizer</span>
+                    <span class="tool-panel__spacer"></span>
+                    <div class="media-visualizer-modal__actions tool-panel__actions">
+                        <button type="button" class="card-act card-act--collapse media-visualizer-modal__minimize" data-media-visualizer-minimize title="Minimal view" aria-label="Minimal view">${CARD_ICONS.collapse}</button>
+                        <button type="button" class="card-act card-act--popout media-visualizer-modal__popout" data-media-visualizer-popout title="Pop out" aria-label="Pop out">${CARD_ICONS.popout}</button>
+                        <button type="button" class="card-act media-visualizer-modal__close" data-media-visualizer-close title="Close" aria-label="Close visualizer">${CARD_ICONS.close}</button>
+                    </div>
                 </div>
                 <div class="media-visualizer-modal__body">
                     <canvas class="media-visualizer-modal__canvas" data-media-visualizer-canvas aria-label="Media visualizer canvas"></canvas>
@@ -435,6 +594,7 @@ export const RadioVisualizer = {
                                 <option value="mountains">Neon Mountains</option>
                                 <option value="sky">Neon Sky</option>
                                 <option value="auroraBands">Aurora Bands</option>
+                                <option value="spaceTrip">Space Trip</option>
                                 <option value="bars">Bars</option>
                                 <option value="waveform">Wave</option>
                                 <option value="particles">Particles</option>
@@ -497,14 +657,20 @@ export const RadioVisualizer = {
                         </div>
                     </div>
                 </div>
+                <div class="media-visualizer-modal__chrome-overlay" data-media-visualizer-chrome-overlay hidden>
+                    <button type="button" class="card-act card-act--collapse media-visualizer-modal__expand" data-media-visualizer-expand title="Show controls" aria-label="Show controls">${CARD_ICONS.expand}</button>
+                    <button type="button" class="card-act card-act--popout media-visualizer-modal__popout" data-media-visualizer-popout title="Pop out" aria-label="Pop out">${CARD_ICONS.popout}</button>
+                    <button type="button" class="card-act media-visualizer-modal__close" data-media-visualizer-close title="Close" aria-label="Close visualizer">${CARD_ICONS.close}</button>
+                </div>
                 <div class="media-visualizer-modal__resize" data-media-visualizer-resize title="Resize" aria-hidden="true"></div>
             </div>
         `;
 
-        const closeBtn = modal.querySelector('[data-media-visualizer-close]');
-        closeBtn?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.toggle(false);
+        modal.querySelectorAll('[data-media-visualizer-close]').forEach((closeBtn) => {
+            closeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggle(false);
+            });
         });
 
         const modeEl = modal.querySelector('[data-media-visualizer-mode]');
@@ -517,6 +683,7 @@ export const RadioVisualizer = {
         this.bindBpmSnap(modal);
         this.bindModalDrag(modal);
         this.bindSettingsToggle(modal);
+        this.bindChromeActions(modal);
         const detailsEl = modal.querySelector('[data-media-visualizer-details]');
         const canvas = modal.querySelector('[data-media-visualizer-canvas]');
         if (canvas) {
@@ -538,6 +705,7 @@ export const RadioVisualizer = {
         detailsToggle?.addEventListener('click', () => {
             this.detailsOpen = !this.detailsOpen;
             syncDetails();
+            this.saveStoredPrefs();
         });
         syncDetails();
 
@@ -560,8 +728,21 @@ export const RadioVisualizer = {
 
         this.bindPanelResize(modal);
 
+        this.applyStoredSettingsToControls(modal);
+        this.applyStoredLayout(modal);
+
+        const settingsEl = modal.querySelector('[data-media-visualizer-settings]');
+        const settingsToggle = modal.querySelector('[data-media-visualizer-settings-toggle]');
+        if (settingsEl) settingsEl.classList.toggle('is-collapsed', !this.settingsOpen);
+        if (settingsToggle) {
+            settingsToggle.setAttribute('aria-expanded', this.settingsOpen ? 'true' : 'false');
+            settingsToggle.setAttribute('aria-label', this.settingsOpen ? 'Hide settings' : 'Show settings');
+            settingsToggle.setAttribute('title', this.settingsOpen ? 'Hide settings' : 'Show settings');
+        }
+
         document.body.appendChild(modal);
         this.modal = modal;
+        this.syncChromeMode();
         return modal;
     },
 
@@ -570,10 +751,11 @@ export const RadioVisualizer = {
         let dragging = false;
 
         const isInteractive = (target) => target?.closest(
-            'button, input, select, textarea, a, [role="button"], [data-media-visualizer-resize], [data-media-visualizer-settings-toggle], [data-media-visualizer-details-toggle]'
+            'button, input, select, textarea, a, [role="button"], [data-media-visualizer-resize], [data-media-visualizer-settings-toggle], [data-media-visualizer-details-toggle], [data-media-visualizer-chrome-overlay], .tool-panel__actions'
         );
 
         const onDragStart = (e) => {
+            if (this.poppedOut) return;
             if (e.button !== undefined && e.button !== 0) return; // left button only
             if (isInteractive(e.target)) return;
             dragging = true;
@@ -588,14 +770,15 @@ export const RadioVisualizer = {
 
         const onDrag = (e) => {
             if (!dragging) return;
+            const ownerWin = modal.ownerDocument?.defaultView || window;
             const x = e.clientX ?? e.touches?.[0]?.clientX;
             const y = e.clientY ?? e.touches?.[0]?.clientY;
             if (x === undefined || y === undefined) return;
             const dx = x - startX;
             const dy = y - startY;
             const margin = 8;
-            const newLeft = clamp(startLeft + dx, margin, Math.max(margin, window.innerWidth - 320));
-            const newTop = clamp(startTop + dy, margin, Math.max(margin, window.innerHeight - 60));
+            const newLeft = clamp(startLeft + dx, margin, Math.max(margin, ownerWin.innerWidth - 320));
+            const newTop = clamp(startTop + dy, margin, Math.max(margin, ownerWin.innerHeight - 60));
             modal.style.left = `${newLeft}px`;
             modal.style.top = `${newTop}px`;
         };
@@ -604,6 +787,7 @@ export const RadioVisualizer = {
             if (!dragging) return;
             dragging = false;
             modal.classList.remove('is-dragging');
+            this.saveStoredPrefs();
         };
 
         modal.addEventListener('mousedown', onDragStart);
@@ -685,6 +869,7 @@ export const RadioVisualizer = {
             dragging = false;
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onUp);
+            this.saveStoredPrefs();
         };
 
         handle.addEventListener('pointerdown', (event) => {
@@ -711,12 +896,16 @@ export const RadioVisualizer = {
         const canvas = modal.querySelector('[data-media-visualizer-canvas]');
         if (canvas) this.setCanvas(canvas);
         this.syncControlLabels();
+        this.syncChromeMode();
         this.updateStatus();
         return modal;
     },
 
     closeModal() {
         this.enabled = false;
+        if (this.poppedOut) {
+            this.popIn();
+        }
         if (this.rafId) {
             cancelAnimationFrame(this.rafId);
             this.rafId = null;
@@ -731,6 +920,19 @@ export const RadioVisualizer = {
         this.updateStatus();
         if (this.canvas) {
             this.drawIdleFrame();
+        }
+        this.saveStoredPrefs();
+    },
+
+    async restoreSession() {
+        if (this._sessionRestored) return;
+        this._sessionRestored = true;
+        const stored = readVisualizerPrefs();
+        if (!stored.open || this.enabled) return;
+        try {
+            await this.toggle(true, RadioPlayer?.getAudioElement?.());
+        } catch {
+            /* ignore restore failures */
         }
     },
 
@@ -845,6 +1047,7 @@ export const RadioVisualizer = {
             this.updateStatus();
             this.start();
             this.dispatchEnabledChange();
+            this.saveStoredPrefs();
             return true;
         }
 
@@ -987,9 +1190,205 @@ export const RadioVisualizer = {
         toggleBtn.addEventListener('click', () => {
             this.settingsOpen = !this.settingsOpen;
             sync();
+            this.saveStoredPrefs();
         });
 
         sync();
+    },
+
+    syncChromeMode() {
+        const modal = this.modal;
+        if (!modal) return;
+
+        modal.classList.toggle('is-minimal', !!this.chromeMinimal);
+
+        const overlay = modal.querySelector('[data-media-visualizer-chrome-overlay]');
+        if (overlay) {
+            overlay.hidden = !this.chromeMinimal;
+        }
+
+        const minimizeBtn = modal.querySelector('[data-media-visualizer-minimize]');
+        if (minimizeBtn) {
+            minimizeBtn.hidden = !!this.chromeMinimal;
+        }
+
+        this.syncPopoutButtons();
+    },
+
+    syncPopoutButtons() {
+        const modal = this.modal;
+        if (!modal) return;
+        const label = this.poppedOut ? 'Pop in' : 'Pop out';
+        const icon = this.poppedOut ? CARD_ICONS.popoutExit : CARD_ICONS.popout;
+        modal.querySelectorAll('[data-media-visualizer-popout]').forEach((btn) => {
+            btn.innerHTML = icon;
+            btn.title = label;
+            btn.setAttribute('aria-label', label);
+            btn.classList.toggle('is-active', this.poppedOut);
+        });
+    },
+
+    bindChromeActions(modal) {
+        modal.querySelector('[data-media-visualizer-minimize]')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.chromeMinimal = true;
+            this.settingsOpen = false;
+            const settingsEl = modal.querySelector('[data-media-visualizer-settings]');
+            const toggleBtn = modal.querySelector('[data-media-visualizer-settings-toggle]');
+            if (settingsEl) settingsEl.classList.add('is-collapsed');
+            if (toggleBtn) {
+                toggleBtn.setAttribute('aria-expanded', 'false');
+                toggleBtn.setAttribute('aria-label', 'Show settings');
+                toggleBtn.setAttribute('title', 'Show settings');
+            }
+            this.syncChromeMode();
+            this.resizeCanvas();
+            this.saveStoredPrefs();
+        });
+
+        modal.querySelector('[data-media-visualizer-expand]')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.chromeMinimal = false;
+            this.syncChromeMode();
+            this.resizeCanvas();
+            this.saveStoredPrefs();
+        });
+
+        modal.querySelectorAll('[data-media-visualizer-popout]').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (this.poppedOut) this.popIn();
+                else this.popOut();
+            });
+        });
+    },
+
+    saveDockRect() {
+        if (!this.modal || this.poppedOut) return;
+        const rect = this.modal.getBoundingClientRect();
+        const canvas = this.modal.querySelector('[data-media-visualizer-canvas]');
+        this.savedDockRect = {
+            left: rect.left,
+            top: rect.top,
+            width: this.panelWidth || rect.width,
+            canvasHeight: this.canvasHeight || canvas?.getBoundingClientRect().height || 200
+        };
+        this.saveStoredPrefs();
+    },
+
+    restoreDockRect() {
+        if (!this.modal || !this.savedDockRect) return;
+        const { left, top, width, canvasHeight } = this.savedDockRect;
+        this.modal.style.left = `${left}px`;
+        this.modal.style.top = `${top}px`;
+        this.modal.style.width = `${width}px`;
+        const canvas = this.modal.querySelector('[data-media-visualizer-canvas]');
+        if (canvas && canvasHeight) {
+            canvas.style.height = `${canvasHeight}px`;
+            this.canvasHeight = canvasHeight;
+        }
+        this.panelWidth = width;
+        this.resizeCanvas();
+    },
+
+    async popOut() {
+        if (!this.modal || this.poppedOut) {
+            try { this.popoutWindow?.focus(); } catch { /* ignore */ }
+            return;
+        }
+
+        this.saveDockRect();
+        const rect = this.modal.getBoundingClientRect();
+        const w = Math.max(480, Math.round(rect.width));
+        const h = Math.max(320, Math.round(rect.height));
+
+        const onPageHide = () => {
+            if (this.poppedOut) this.popIn({ fromExternalClose: true });
+        };
+
+        let win = null;
+
+        if (shouldUsePipPopout()) {
+            win = await requestPipWindow({
+                width: w,
+                height: h,
+                owner: { type: 'visualizer', id: 'radio' },
+                onPageHide
+            });
+        }
+
+        if (!win) {
+            win = openBrowserPopup('about:blank', VISUALIZER_POPOUT_NAME, w, h);
+            if (!win) {
+                showAppToast('Could not open visualizer popout window');
+                return;
+            }
+            win.addEventListener('pagehide', onPageHide);
+            prepareBlankPopoutDocument(win, 'media-visualizer-popout-body');
+        }
+
+        const popDoc = win.document;
+        registerAppDocument(popDoc);
+
+        popDoc.body.appendChild(this.modal);
+        this.modal.classList.add('is-popout-live');
+        this.modal.style.left = '0';
+        this.modal.style.top = '0';
+        this.modal.style.width = '100%';
+        this.modal.style.height = '100%';
+
+        const onKey = (e) => {
+            if (e.key !== 'Escape') return;
+            e.preventDefault();
+            this.popIn();
+        };
+        popDoc.addEventListener('keydown', onKey);
+
+        this.poppedOut = true;
+        this.popoutWindow = win;
+        this.popoutDoc = popDoc;
+        this.popoutOnKey = onKey;
+        this.popoutOnPageHide = onPageHide;
+        this.syncPopoutButtons();
+        this.resizeCanvas();
+
+        try { win.focus(); } catch { /* ignore */ }
+    },
+
+    popIn({ fromExternalClose = false } = {}) {
+        if (!this.modal || !this.poppedOut) return;
+
+        const popDoc = this.popoutDoc;
+        if (this.popoutOnKey && popDoc) {
+            popDoc.removeEventListener('keydown', this.popoutOnKey);
+        }
+        if (!fromExternalClose && this.popoutWindow && !this.popoutWindow.closed) {
+            try { this.popoutWindow.close(); } catch { /* ignore */ }
+        }
+
+        if (popDoc && popDoc !== document) {
+            unregisterAppDocument(popDoc);
+        }
+
+        this.modal.classList.remove('is-popout-live');
+        this.modal.style.left = '';
+        this.modal.style.top = '';
+        this.modal.style.width = '';
+        this.modal.style.height = '';
+        document.body.appendChild(this.modal);
+
+        this.poppedOut = false;
+        this.popoutWindow = null;
+        this.popoutDoc = null;
+        this.popoutOnKey = null;
+        this.popoutOnPageHide = null;
+
+        this.restoreDockRect();
+        this.savedDockRect = null;
+        this.syncPopoutButtons();
+        this.syncChromeMode();
+        this.resizeCanvas();
+        this.saveStoredPrefs();
     },
 
     smoothVizValues(values) {
@@ -1021,6 +1420,11 @@ export const RadioVisualizer = {
         const height = canvas.clientHeight || 90;
         const palette = PALETTES[this.settings.palette] || PALETTES.neon;
         const values = this.synthValues(36, 0.55);
+        ctx.clearRect(0, 0, width, height);
+        if (this.settings.mode === 'spaceTrip') {
+            this.drawSpaceTrip(ctx, width, height, values, palette, 0.35);
+            return;
+        }
         this.drawMountains(ctx, width, height, values, palette, 0.35);
     },
 
@@ -1116,6 +1520,9 @@ export const RadioVisualizer = {
             case 'spiral':
                 this.fillBackdrop(ctx, width, height);
                 this.drawSpiral(ctx, width, height, values, palette, motion);
+                break;
+            case 'spaceTrip':
+                this.drawSpaceTrip(ctx, width, height, values, palette, motion);
                 break;
             case 'bars':
             default:
@@ -2123,6 +2530,977 @@ export const RadioVisualizer = {
         ctx.strokeStyle = alpha(palette[3], 0.8);
         ctx.lineWidth = 1.4;
         ctx.stroke();
+        ctx.restore();
+    },
+
+    spawnSpaceStar() {
+        const roll = Math.random();
+        const kind = roll < 0.14 ? 'trail' : roll < 0.32 ? 'bright' : roll < 0.62 ? 'normal' : 'dim';
+        return {
+            x: (Math.random() - 0.5) * 2.6,
+            y: (Math.random() - 0.5) * 2.6,
+            z: Math.random() * 1.85 + 0.06,
+            hue: Math.random(),
+            tw: Math.random() * Math.PI * 2,
+            kind,
+            colorIdx: Math.floor(Math.random() * 6),
+            sizeMul: 0.55 + Math.random() * 1.6,
+            history: kind === 'trail' ? [] : null
+        };
+    },
+
+    getSpaceTripCycleIndex(now, state) {
+        return Math.floor((now - (state.cycleAnchor || now)) / SPACE_HYPER_CYCLE_MS);
+    },
+
+    getSpaceTripCruiseElapsed(now, state) {
+        const elapsed = (now - (state.cycleAnchor || now)) % SPACE_HYPER_CYCLE_MS;
+        return elapsed < SPACE_CRUISE_MS ? elapsed : -1;
+    },
+
+    isEarthCruise(now, state) {
+        return this.getSpaceTripCycleIndex(now, state) % 2 === 1;
+    },
+
+    spawnSpaceEarthPlanet() {
+        return {
+            x: (Math.random() - 0.5) * 0.06,
+            y: (Math.random() - 0.5) * 0.05,
+            z: 2.15 + Math.random() * 0.45,
+            radius: 0.072 + Math.random() * 0.038,
+            colorIdx: 0,
+            type: 'earth',
+            sizeClass: 'headOn',
+            spin: Math.random() * Math.PI * 2,
+            seed: Math.random(),
+            dodgeDir: Math.random() < 0.5 ? -1 : 1
+        };
+    },
+
+    spawnSpacePlanet(palette, state, now) {
+        const type = SPACE_PLANET_TYPES[Math.floor(Math.random() * SPACE_PLANET_TYPES.length)];
+        const roll = Math.random();
+        const earthCruise = this.isEarthCruise(now, state);
+        let sizeClass = 'medium';
+        if (roll < 0.22) sizeClass = 'small';
+        else if (roll < 0.52) sizeClass = 'medium';
+        else if (roll < 0.76) sizeClass = 'large';
+        else if (!earthCruise) sizeClass = 'headOn';
+        else sizeClass = 'large';
+
+        const headOn = sizeClass === 'headOn';
+        const x = headOn ? (Math.random() - 0.5) * 0.12 : (Math.random() - 0.5) * 1.15;
+        const y = headOn ? (Math.random() - 0.5) * 0.1 : (Math.random() - 0.5) * 0.75;
+        const z = headOn ? 2.2 + Math.random() * 0.75 : 3.2 + Math.random() * 1.6;
+
+        let radius;
+        if (sizeClass === 'small') radius = 0.012 + Math.random() * 0.016;
+        else if (sizeClass === 'medium') radius = 0.02 + Math.random() * 0.028;
+        else if (sizeClass === 'large') radius = 0.042 + Math.random() * 0.05;
+        else radius = 0.062 + Math.random() * 0.072;
+
+        return {
+            x,
+            y,
+            z,
+            radius,
+            colorIdx: Math.floor(Math.random() * palette.length),
+            type,
+            sizeClass,
+            spin: Math.random() * Math.PI * 2,
+            seed: Math.random(),
+            dodgeDir: headOn ? (Math.random() < 0.5 ? -1 : 1) : 0
+        };
+    },
+
+    getSpaceTripNebulaStrength(now, state) {
+        const hyper = this.getSpaceTripHyperPhase(now, state);
+        if (hyper.mode !== 'cruise') return 0;
+
+        const cruiseElapsed = (now - (state.cycleAnchor || now)) % SPACE_HYPER_CYCLE_MS;
+        if (cruiseElapsed < SPACE_NEBULA_START_MS || cruiseElapsed > SPACE_NEBULA_END_MS) return 0;
+
+        const fadeInEnd = SPACE_NEBULA_START_MS + SPACE_NEBULA_FADE_IN_MS;
+        const fadeOutStart = SPACE_NEBULA_END_MS - SPACE_NEBULA_FADE_OUT_MS;
+
+        if (cruiseElapsed < fadeInEnd) {
+            return smoothstep(SPACE_NEBULA_START_MS, fadeInEnd, cruiseElapsed);
+        }
+        if (cruiseElapsed > fadeOutStart) {
+            return 1 - smoothstep(fadeOutStart, SPACE_NEBULA_END_MS, cruiseElapsed);
+        }
+        return 1;
+    },
+
+    drawSpaceTripNebula(ctx, width, height, cx, cy, state, palette, strength, pulse, motion, now) {
+        if (strength <= 0.01 || !state) return;
+
+        const pulseLight = 0.55 + pulse * 0.45 + motion * 0.2;
+        const w = width;
+        const h = height;
+        const span = Math.hypot(w, h);
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+
+        ctx.fillStyle = alpha(pickColor(palette, 2), strength * 0.04 * pulseLight);
+        ctx.fillRect(0, 0, w, h);
+
+        const wash = ctx.createRadialGradient(cx, cy, span * 0.02, cx, cy, span * 0.72);
+        wash.addColorStop(0, alpha(pickColor(palette, 1), strength * 0.14 * pulseLight));
+        wash.addColorStop(0.35, alpha(pickColor(palette, 3), strength * 0.1 * pulseLight));
+        wash.addColorStop(0.72, alpha(pickColor(palette, 0), strength * 0.06 * pulseLight));
+        wash.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = wash;
+        ctx.fillRect(0, 0, w, h);
+
+        const blobs = this.ensureNebulaBlobs(state, palette);
+        for (const blob of blobs) {
+            const bx = cx + blob.ox * w * 0.72 * strength;
+            const by = cy + blob.oy * h * 0.68 * strength;
+            const br = blob.r * span * (0.62 + strength * 0.42);
+            const flicker = 0.65 + 0.35 * Math.sin(now * 0.002 * blob.sp + pulse * Math.PI * 2);
+            const grad = ctx.createRadialGradient(bx, by, 0, bx, by, br);
+            grad.addColorStop(0, alpha(blob.color, strength * blob.a * flicker * pulseLight * 1.2));
+            grad.addColorStop(0.4, alpha(blob.color, strength * blob.a * 0.55 * flicker));
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, w, h);
+        }
+
+        for (let i = 0; i < 16; i += 1) {
+            const lx = cx + Math.sin(now * 0.0015 + i * 1.3) * w * 0.38;
+            const ly = cy + Math.cos(now * 0.0012 + i * 0.9) * h * 0.32;
+            const lr = 28 + Math.sin(now * 0.004 + i) * 22;
+            const lg = ctx.createRadialGradient(lx, ly, 0, lx, ly, lr);
+            lg.addColorStop(0, alpha(pickColor(palette, i + 1), strength * 0.42 * pulseLight));
+            lg.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = lg;
+            ctx.fillRect(0, 0, w, h);
+        }
+
+        ctx.restore();
+    },
+
+    ensureNebulaWisps(state, palette, count = 36) {
+        if (state.nebulaWisps?.length) return state.nebulaWisps;
+        state.nebulaWisps = Array.from({ length: count }, (_, i) => ({
+            x: (Math.random() - 0.5) * 2.2,
+            y: (Math.random() - 0.5) * 1.6,
+            z: Math.random() * 1.4 + 0.12,
+            ang: Math.random() * Math.PI * 2,
+            size: 0.012 + Math.random() * 0.028,
+            aspect: 1.8 + Math.random() * 2.8,
+            colorIdx: i + 2,
+            alpha: 0.12 + Math.random() * 0.18
+        }));
+        return state.nebulaWisps;
+    },
+
+    spawnNebulaWisp() {
+        return {
+            x: (Math.random() - 0.5) * 2.2,
+            y: (Math.random() - 0.5) * 1.6,
+            z: 1.1 + Math.random() * 0.75,
+            ang: Math.random() * Math.PI * 2,
+            size: 0.012 + Math.random() * 0.028,
+            aspect: 1.8 + Math.random() * 2.8,
+            colorIdx: Math.floor(Math.random() * 6),
+            alpha: 0.12 + Math.random() * 0.18
+        };
+    },
+
+    drawSpaceTripNebulaWisps(ctx, cx, cy, fov, state, palette, strength, pulse, viewPanX, viewPanY) {
+        if (strength <= 0.01 || !state.nebulaWisps?.length) return;
+
+        const pulseLight = 0.55 + pulse * 0.45;
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+
+        for (const wisp of state.nebulaWisps) {
+            if (wisp.z < 0.025) continue;
+            const invZ = 1 / Math.max(wisp.z, 0.02);
+            const sx = cx + viewPanX + wisp.x * fov * invZ;
+            const sy = cy + viewPanY + wisp.y * fov * invZ;
+            const baseR = wisp.size * fov * invZ;
+            if (baseR < 0.4) continue;
+
+            const approach = clamp((1.4 - wisp.z) / 1.2, 0, 1);
+            const a = wisp.alpha * strength * pulseLight * (0.25 + approach * 0.75);
+            const col = pickColor(palette, wisp.colorIdx);
+            ctx.fillStyle = alpha(col, a);
+            ctx.beginPath();
+            ctx.ellipse(sx, sy, baseR * wisp.aspect, baseR * 0.82, wisp.ang, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        ctx.restore();
+    },
+
+    ensureNebulaBlobs(state, palette) {
+        if (state.nebulaBlobs?.length) return state.nebulaBlobs;
+        state.nebulaBlobs = Array.from({ length: 7 }, (_, i) => ({
+            ox: (Math.random() - 0.5) * 1.6,
+            oy: (Math.random() - 0.5) * 1.2,
+            r: 0.55 + Math.random() * 0.55,
+            a: 0.18 + Math.random() * 0.22,
+            sp: 0.6 + Math.random() * 1.4,
+            color: pickColor(palette, i + 1)
+        }));
+        return state.nebulaBlobs;
+    },
+
+    getSpaceTripHyperPhase(now, state) {
+        const elapsed = (now - (state.cycleAnchor || now)) % SPACE_HYPER_CYCLE_MS;
+        const cruiseEnd = SPACE_CRUISE_MS;
+        const engageEnd = cruiseEnd + SPACE_HYPER_ENGAGE_MS;
+        const travelEnd = engageEnd + SPACE_HYPER_TRAVEL_MS;
+        const disengageEnd = travelEnd + SPACE_HYPER_DISENGAGE_MS;
+
+        if (elapsed < cruiseEnd) {
+            return { mode: 'cruise', mix: 0, speedMul: 1 };
+        }
+        if (elapsed < engageEnd) {
+            const t = (elapsed - cruiseEnd) / SPACE_HYPER_ENGAGE_MS;
+            const ease = smoothstep(0, 1, t);
+            return { mode: 'engage', mix: ease, speedMul: 1 + ease * 2.5 };
+        }
+        if (elapsed < travelEnd) {
+            return { mode: 'hyper', mix: 1, speedMul: 4.5 };
+        }
+        if (elapsed < disengageEnd) {
+            const t = (elapsed - travelEnd) / SPACE_HYPER_DISENGAGE_MS;
+            const ease = 1 - smoothstep(0, 1, t);
+            return { mode: 'disengage', mix: ease, speedMul: 1 + ease * 2.5 };
+        }
+        return { mode: 'cruise', mix: 0, speedMul: 1 };
+    },
+
+    updateSpaceTripRoll(state, now, dt) {
+        const dodging = (state.dodge?.strength || 0) > 0.08;
+        if (!dodging && (!state.nextRollAt || now >= state.nextRollAt)) {
+            state.rollTarget = (Math.random() - 0.5) * 0.14;
+            state.nextRollAt = now + 4000 + Math.random() * 7000;
+        }
+        if (!dodging) {
+            state.rollAngle += (state.rollTarget - state.rollAngle) * Math.min(1, dt * 1.8);
+            state.rollAngle += Math.sin(now * 0.0007) * 0.002;
+        }
+    },
+
+    updateSpaceTripDodge(state, dt, fov) {
+        let threat = null;
+        for (const planet of state.planets) {
+            const isClosePass = planet.type === 'earth' || planet.sizeClass === 'headOn';
+            if (!isClosePass) continue;
+            const centered = Math.abs(planet.x) < 0.28 && Math.abs(planet.y) < 0.22;
+            if (planet.z < 0.42 && planet.z > 0.008 && centered) {
+                if (!threat || planet.z < threat.z) threat = planet;
+            }
+        }
+
+        if (!state.dodge) {
+            state.dodge = { panX: 0, panY: 0, roll: 0, strength: 0 };
+        }
+        const dodge = state.dodge;
+
+        if (threat && threat.z < 0.36) {
+            const urgency = smoothstep(0.36, 0.07, threat.z);
+            if (!threat.dodgeDir) threat.dodgeDir = Math.random() < 0.5 ? -1 : 1;
+            const dir = threat.dodgeDir;
+            dodge.targetPanX = dir * fov * (0.28 + urgency * 0.72);
+            dodge.targetPanY = -fov * (0.04 + urgency * 0.14);
+            dodge.targetRoll = dir * (0.18 + urgency * 0.42);
+            dodge.strength = urgency;
+        } else {
+            dodge.targetPanX = 0;
+            dodge.targetPanY = 0;
+            dodge.targetRoll = 0;
+            dodge.strength = 0;
+        }
+
+        const snapIn = threat ? Math.min(1, dt * 9) : Math.min(1, dt * 2.2);
+        dodge.panX += ((dodge.targetPanX || 0) - dodge.panX) * snapIn;
+        dodge.panY += ((dodge.targetPanY || 0) - dodge.panY) * snapIn;
+        dodge.roll += ((dodge.targetRoll || 0) - dodge.roll) * snapIn;
+    },
+
+    ensureSpaceTripWarp(state) {
+        if (state.tunnelWarp?.rings?.length) return state.tunnelWarp;
+
+        const ringCount = 20;
+        const streakCount = 80;
+        state.tunnelWarp = {
+            rings: Array.from({ length: ringCount }, (_, i) => ({
+                z: 0.04 + (i / ringCount) * 0.96,
+                drift: Math.random() * Math.PI * 2,
+                colorIdx: i % HYPER_WALL_COLORS.length
+            })),
+            streaks: Array.from({ length: streakCount }, (_, i) => ({
+                ang: (i / streakCount) * Math.PI * 2 + Math.random() * 0.15,
+                radial: 0.38 + Math.random() * 0.12,
+                z: Math.random() * 1.1 + 0.1,
+                len: 0.07 + Math.random() * 0.16,
+                colorIdx: i % HYPER_WALL_COLORS.length
+            }))
+        };
+        return state.tunnelWarp;
+    },
+
+    respawnTunnelRing(warp, ring) {
+        const maxZ = warp.rings.reduce((max, r) => Math.max(max, r.z), 0);
+        ring.z = maxZ + 0.048 + Math.random() * 0.02;
+        ring.drift = Math.random() * Math.PI * 2;
+        ring.colorIdx = Math.floor(Math.random() * HYPER_WALL_COLORS.length);
+    },
+
+    respawnTunnelStreak(streak) {
+        streak.ang = Math.random() * Math.PI * 2;
+        streak.radial = 0.38 + Math.random() * 0.12;
+        streak.z = 0.85 + Math.random() * 0.35;
+        streak.len = 0.07 + Math.random() * 0.16;
+        streak.colorIdx = Math.floor(Math.random() * HYPER_WALL_COLORS.length);
+    },
+
+    spaceTripProject(cx, cy, fov, viewPanX, viewPanY, x, y, z) {
+        const invZ = 1 / Math.max(z, 0.02);
+        return {
+            sx: cx + viewPanX + x * fov * invZ,
+            sy: cy + viewPanY + y * fov * invZ,
+            invZ
+        };
+    },
+
+    drawSpaceTripTunnel(ctx, width, height, cx, cy, state, palette, hyperMix, motion, pulse, fov, viewPanX, viewPanY) {
+        if (hyperMix <= 0.01) return;
+
+        const warp = this.ensureSpaceTripWarp(state);
+        const now = Date.now();
+        const px = cx + viewPanX;
+        const py = cy + viewPanY;
+        const project = (x, y, z) => this.spaceTripProject(cx, cy, fov, viewPanX, viewPanY, x, y, z);
+        const wall = 0.48;
+        const wallY = 0.86;
+        const segments = 24;
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = hyperMix;
+        ctx.shadowBlur = 0;
+
+        const bloomR = fov * (0.18 + hyperMix * 0.22);
+        const bloom = ctx.createRadialGradient(px, py, 0, px, py, bloomR);
+        bloom.addColorStop(0, alpha('#f8fafc', 0.06 + hyperMix * 0.22 + pulse * 0.1));
+        bloom.addColorStop(0.25, alpha('#7dd3fc', 0.08 + hyperMix * 0.14));
+        bloom.addColorStop(0.55, alpha('#6366f1', 0.04 + hyperMix * 0.06));
+        bloom.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = bloom;
+        ctx.fillRect(0, 0, width, height);
+
+        const sortedRings = [...warp.rings].sort((a, b) => b.z - a.z);
+
+        for (let ri = 0; ri < sortedRings.length - 1; ri += 1) {
+            const rFar = sortedRings[ri];
+            const rNear = sortedRings[ri + 1];
+            const twist = rFar.drift + now * 0.000015;
+            const depthFade = clamp((1 - rNear.z * 0.65) * (0.45 + pulse * 0.35 + motion * 0.15), 0.06, 1);
+
+            for (let s = 0; s < segments; s += 1) {
+                const ang = (s / segments) * Math.PI * 2 + twist;
+                const cos = Math.cos(ang);
+                const sin = Math.sin(ang);
+                const pFar = project(cos * wall, sin * wall * wallY, rFar.z);
+                const pNear = project(cos * wall, sin * wall * wallY, rNear.z);
+
+                const col = HYPER_WALL_COLORS[(s + ri) % HYPER_WALL_COLORS.length];
+                ctx.strokeStyle = alpha(col, depthFade * (0.18 + hyperMix * 0.42));
+                ctx.lineWidth = 0.6 + pNear.invZ * 0.35;
+                ctx.beginPath();
+                ctx.moveTo(pFar.sx, pFar.sy);
+                ctx.lineTo(pNear.sx, pNear.sy);
+                ctx.stroke();
+            }
+
+            if (ri % 2 === 0) {
+                for (let s = 0; s < 6; s += 1) {
+                    const ang = (s / 6) * Math.PI * 2 + twist * 1.1;
+                    const cos = Math.cos(ang);
+                    const sin = Math.sin(ang);
+                    const pCenter = project(0, 0, rFar.z);
+                    const pEdge = project(cos * wall * 0.92, sin * wall * wallY * 0.92, rFar.z);
+                    ctx.strokeStyle = alpha('#e0f2fe', depthFade * hyperMix * 0.12);
+                    ctx.lineWidth = 0.5;
+                    ctx.beginPath();
+                    ctx.moveTo(pCenter.sx, pCenter.sy);
+                    ctx.lineTo(pEdge.sx, pEdge.sy);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        for (const ring of sortedRings) {
+            const invZ = 1 / Math.max(ring.z, 0.02);
+            const rx = fov * invZ * wall;
+            const ry = fov * invZ * wall * wallY;
+            const twist = ring.drift + now * 0.000015;
+            const ringFade = clamp((1 - ring.z * 0.55) * (0.35 + pulse * 0.4), 0.08, 0.95);
+            const col = HYPER_WALL_COLORS[ring.colorIdx % HYPER_WALL_COLORS.length];
+
+            ctx.strokeStyle = alpha(col, ringFade * (0.25 + hyperMix * 0.45));
+            ctx.lineWidth = 0.8 + invZ * 0.55;
+            ctx.beginPath();
+            ctx.ellipse(px, py, rx, ry, twist * 0.08, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.strokeStyle = alpha('#f0f9ff', ringFade * hyperMix * 0.15);
+            ctx.lineWidth = 0.4 + invZ * 0.2;
+            ctx.beginPath();
+            ctx.ellipse(px, py, rx * 0.98, ry * 0.98, twist * 0.08, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        for (const streak of warp.streaks) {
+            const cos = Math.cos(streak.ang);
+            const sin = Math.sin(streak.ang);
+            const r = streak.radial;
+            const zNear = streak.z;
+            const zFar = streak.z + streak.len;
+            const pNear = project(cos * r, sin * r * wallY, zNear);
+            const pFar = project(cos * r, sin * r * wallY, zFar);
+            const streakFade = clamp(pNear.invZ * 0.12, 0.08, 1) * hyperMix;
+            const col = HYPER_WALL_COLORS[streak.colorIdx % HYPER_WALL_COLORS.length];
+
+            ctx.strokeStyle = alpha(col, streakFade * (0.35 + pulse * 0.25));
+            ctx.lineWidth = 0.5 + pNear.invZ * 0.55;
+            ctx.beginPath();
+            ctx.moveTo(pFar.sx, pFar.sy);
+            ctx.lineTo(pNear.sx, pNear.sy);
+            ctx.stroke();
+
+            if (hyperMix > 0.65) {
+                const pCore = project(cos * r * 0.08, sin * r * wallY * 0.08, zNear);
+                ctx.strokeStyle = alpha('#ffffff', streakFade * 0.28);
+                ctx.lineWidth = 0.35 + pNear.invZ * 0.3;
+                ctx.beginPath();
+                ctx.moveTo(pCore.sx, pCore.sy);
+                ctx.lineTo(pNear.sx, pNear.sy);
+                ctx.stroke();
+            }
+        }
+
+        ctx.restore();
+    },
+
+    drawSpaceEarth(ctx, sx, sy, pr, fade) {
+        const ocean = '#1d4ed8';
+        const land = '#15803d';
+        const landHi = '#22c55e';
+        const cloud = '#f8fafc';
+        const atm = '#7dd3fc';
+
+        const atmGrad = ctx.createRadialGradient(sx, sy, pr * 0.85, sx, sy, pr * 1.18);
+        atmGrad.addColorStop(0, alpha(atm, 0.05 * fade));
+        atmGrad.addColorStop(0.55, alpha(atm, 0.22 * fade));
+        atmGrad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = atmGrad;
+        ctx.beginPath();
+        ctx.arc(sx, sy, pr * 1.18, 0, Math.PI * 2);
+        ctx.fill();
+
+        const bodyGrad = ctx.createRadialGradient(
+            sx - pr * 0.22,
+            sy - pr * 0.24,
+            pr * 0.08,
+            sx,
+            sy,
+            pr
+        );
+        bodyGrad.addColorStop(0, alpha('#60a5fa', fade));
+        bodyGrad.addColorStop(0.55, alpha(ocean, fade));
+        bodyGrad.addColorStop(1, alpha('#0f172a', 0.85 * fade));
+        ctx.fillStyle = bodyGrad;
+        ctx.beginPath();
+        ctx.arc(sx, sy, pr, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(sx, sy, pr, 0, Math.PI * 2);
+        ctx.clip();
+
+        const continents = [
+            { ox: -0.22, oy: -0.08, rx: 0.28, ry: 0.22, rot: -0.3 },
+            { ox: 0.18, oy: 0.12, rx: 0.22, ry: 0.18, rot: 0.5 },
+            { ox: -0.05, oy: 0.28, rx: 0.18, ry: 0.12, rot: 0.1 },
+            { ox: 0.32, oy: -0.18, rx: 0.14, ry: 0.1, rot: -0.6 }
+        ];
+        for (const c of continents) {
+            ctx.fillStyle = alpha(land, 0.88 * fade);
+            ctx.beginPath();
+            ctx.ellipse(
+                sx + c.ox * pr,
+                sy + c.oy * pr,
+                c.rx * pr,
+                c.ry * pr,
+                c.rot,
+                0,
+                Math.PI * 2
+            );
+            ctx.fill();
+            ctx.fillStyle = alpha(landHi, 0.35 * fade);
+            ctx.beginPath();
+            ctx.ellipse(
+                sx + c.ox * pr - pr * 0.04,
+                sy + c.oy * pr - pr * 0.04,
+                c.rx * pr * 0.55,
+                c.ry * pr * 0.5,
+                c.rot,
+                0,
+                Math.PI * 2
+            );
+            ctx.fill();
+        }
+
+        for (let i = 0; i < 6; i += 1) {
+            const ang = i * 1.4 + pr * 0.002;
+            ctx.fillStyle = alpha(cloud, 0.28 * fade);
+            ctx.beginPath();
+            ctx.ellipse(
+                sx + Math.cos(ang) * pr * 0.35,
+                sy + Math.sin(ang) * pr * 0.25,
+                pr * 0.22,
+                pr * 0.08,
+                ang * 0.5,
+                0,
+                Math.PI * 2
+            );
+            ctx.fill();
+        }
+        ctx.restore();
+    },
+
+    drawSpacePlanet(ctx, sx, sy, pr, planet, palette, fade) {
+        const bodyColor = pickColor(palette, planet.colorIdx);
+        const atmColor = pickColor(palette, planet.colorIdx + 2);
+        const accent = pickColor(palette, planet.colorIdx + 1);
+        const type = planet.type || 'rocky';
+
+        ctx.save();
+
+        if (type === 'earth') {
+            this.drawSpaceEarth(ctx, sx, sy, pr, fade);
+            ctx.restore();
+            return;
+        }
+
+        if (type === 'binary') {
+            const sep = pr * 0.55;
+            const r1 = pr * 0.62;
+            const r2 = pr * 0.48;
+            for (const [ox, r, col] of [[-sep, r1, bodyColor], [sep, r2, accent]]) {
+                const g = ctx.createRadialGradient(ox + sx - r * 0.2, sy - r * 0.2, r * 0.1, ox + sx, sy, r);
+                g.addColorStop(0, alpha(atmColor, 0.85 * fade));
+                g.addColorStop(1, alpha(col, 0.75 * fade));
+                ctx.fillStyle = g;
+                ctx.beginPath();
+                ctx.arc(sx + ox, sy, r, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+            return;
+        }
+
+        const grad = ctx.createRadialGradient(
+            sx - pr * 0.28,
+            sy - pr * 0.28,
+            pr * 0.06,
+            sx,
+            sy,
+            pr
+        );
+        grad.addColorStop(0, alpha(atmColor, 0.9 * fade));
+        grad.addColorStop(0.55, alpha(bodyColor, 0.88 * fade));
+        grad.addColorStop(1, alpha(bodyColor, 0.2 * fade));
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(sx, sy, pr, 0, Math.PI * 2);
+        ctx.fill();
+
+        if (type === 'gas') {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(sx, sy, pr, 0, Math.PI * 2);
+            ctx.clip();
+            for (let i = -3; i <= 3; i += 1) {
+                const bandY = sy + i * pr * 0.22;
+                ctx.fillStyle = alpha(pickColor(palette, planet.colorIdx + i + 3), 0.35 * fade);
+                ctx.fillRect(sx - pr, bandY - pr * 0.08, pr * 2, pr * 0.16);
+            }
+            ctx.restore();
+        } else if (type === 'rocky') {
+            const craters = 4 + Math.floor(planet.seed * 4);
+            for (let i = 0; i < craters; i += 1) {
+                const ang = planet.seed * 12.9898 + i * 2.399;
+                const dist = pr * (0.15 + (Math.sin(ang) * 0.5 + 0.5) * 0.55);
+                const cx = sx + Math.cos(ang) * dist;
+                const cy = sy + Math.sin(ang) * dist * 0.85;
+                const cr = pr * (0.08 + (Math.sin(ang * 2) * 0.5 + 0.5) * 0.12);
+                ctx.fillStyle = alpha(bodyColor, 0.45 * fade);
+                ctx.beginPath();
+                ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = alpha('#000', 0.25 * fade);
+                ctx.lineWidth = Math.max(0.5, cr * 0.15);
+                ctx.stroke();
+            }
+        } else if (type === 'ice') {
+            ctx.fillStyle = alpha('#e2e8f0', 0.35 * fade);
+            ctx.beginPath();
+            ctx.ellipse(sx - pr * 0.15, sy - pr * 0.2, pr * 0.35, pr * 0.18, -0.4, 0, Math.PI * 2);
+            ctx.fill();
+        } else if (type === 'striped') {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(sx, sy, pr, 0, Math.PI * 2);
+            ctx.clip();
+            for (let i = 0; i < 5; i += 1) {
+                const x = sx - pr + (i / 4) * pr * 2;
+                ctx.fillStyle = alpha(pickColor(palette, planet.colorIdx + i), 0.28 * fade);
+                ctx.fillRect(x - pr * 0.12, sy - pr, pr * 0.24, pr * 2);
+            }
+            ctx.restore();
+        } else if (type === 'cloudy') {
+            for (let i = 0; i < 5; i += 1) {
+                const ang = planet.spin + i * 1.3;
+                const ox = Math.cos(ang) * pr * 0.35;
+                const oy = Math.sin(ang) * pr * 0.25;
+                ctx.fillStyle = alpha(accent, 0.22 * fade);
+                ctx.beginPath();
+                ctx.ellipse(sx + ox, sy + oy, pr * 0.38, pr * 0.22, ang, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        if (type === 'ringed') {
+            ctx.strokeStyle = alpha(accent, 0.55 * fade);
+            ctx.lineWidth = Math.max(1, pr * 0.06);
+            ctx.beginPath();
+            ctx.ellipse(sx, sy, pr * 1.75, pr * 0.34, -0.32, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.strokeStyle = alpha(atmColor, 0.3 * fade);
+            ctx.lineWidth = Math.max(0.5, pr * 0.04);
+            ctx.beginPath();
+            ctx.ellipse(sx, sy, pr * 1.45, pr * 0.28, -0.32, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+
+        ctx.restore();
+    },
+
+    ensureSpaceTripState(width, height) {
+        const density = clamp(Number(this.settings.density) || 1, 0.3, 2.2);
+        const targetCount = Math.max(160, Math.round(280 * density));
+
+        if (!this.spaceTrip || this.spaceTrip.width !== width || this.spaceTrip.height !== height) {
+            const stars = Array.from({ length: targetCount }, () => this.spawnSpaceStar());
+            const now = Date.now();
+            this.spaceTrip = {
+                width,
+                height,
+                stars,
+                planets: [],
+                nextPlanetAt: now + 8000 + Math.random() * 10000,
+                lastFrameTime: null,
+                cycleAnchor: now,
+                rollAngle: 0,
+                rollTarget: 0,
+                nextRollAt: now + 3000,
+                tunnelWarp: null,
+                nebulaBlobs: null,
+                nebulaWisps: null,
+                earthSpawnedCycle: -1,
+                dodge: { panX: 0, panY: 0, roll: 0, strength: 0 }
+            };
+            return this.spaceTrip;
+        }
+
+        while (this.spaceTrip.stars.length < targetCount) {
+            this.spaceTrip.stars.push(this.spawnSpaceStar());
+        }
+        while (this.spaceTrip.stars.length > targetCount) {
+            this.spaceTrip.stars.pop();
+        }
+        return this.spaceTrip;
+    },
+
+    updateSpaceTrip(dt, motion, values) {
+        const state = this.spaceTrip;
+        if (!state) return;
+
+        const now = Date.now();
+        const { pulse } = beatPulse(this.settings.bpm, now);
+        const a = ampScale(this.settings);
+        const avg = values?.length
+            ? values.reduce((sum, value) => sum + (value || 0), 0) / values.length
+            : 0.3;
+        const hyper = this.getSpaceTripHyperPhase(now, state);
+        const warpBoost = 1 + avg * this.settings.sensitivity * 0.8 * a + pulse * 0.15 + motion * 0.08;
+        const speed = this.travelPace() * this.settings.speed * 0.45 * warpBoost * hyper.speedMul * dt;
+        const fov = Math.min(state.width || 640, state.height || 480) * 0.55;
+
+        this.updateSpaceTripDodge(state, dt, fov);
+        this.updateSpaceTripRoll(state, now, dt);
+
+        const warp = this.ensureSpaceTripWarp(state);
+        for (const ring of warp.rings) {
+            ring.z -= speed;
+            if (ring.z <= 0.02) this.respawnTunnelRing(warp, ring);
+        }
+        for (const streak of warp.streaks) {
+            streak.z -= speed;
+            if (streak.z <= 0.02) this.respawnTunnelStreak(streak);
+        }
+
+        const nebulaStrength = this.getSpaceTripNebulaStrength(now, state);
+        if (nebulaStrength > 0) {
+            const palette = PALETTES[this.settings.palette] || PALETTES.horizon;
+            for (const wisp of this.ensureNebulaWisps(state, palette)) {
+                wisp.z -= speed;
+                if (wisp.z <= 0.02) {
+                    const respawn = this.spawnNebulaWisp();
+                    Object.assign(wisp, respawn);
+                }
+            }
+        }
+
+        for (const star of state.stars) {
+            if (star.history) {
+                star.history.unshift({ x: star.x, y: star.y, z: star.z });
+                if (star.history.length > 6) star.history.pop();
+            }
+            star.z -= speed;
+            if (star.z <= 0.02) {
+                const respawn = this.spawnSpaceStar();
+                star.x = respawn.x;
+                star.y = respawn.y;
+                star.z = respawn.z;
+                star.hue = respawn.hue;
+                star.tw = respawn.tw;
+                star.kind = respawn.kind;
+                star.colorIdx = respawn.colorIdx;
+                star.sizeMul = respawn.sizeMul;
+                star.history = respawn.history;
+            }
+        }
+
+        if (hyper.mix < 0.85) {
+            const cycleIndex = this.getSpaceTripCycleIndex(now, state);
+            const cruiseElapsed = this.getSpaceTripCruiseElapsed(now, state);
+
+            if (this.isEarthCruise(now, state) && cruiseElapsed >= 0) {
+                if (state.earthSpawnedCycle !== cycleIndex && cruiseElapsed >= SPACE_EARTH_CRUISE_SPAWN_MS) {
+                    const hasEarth = state.planets.some((planet) => planet.type === 'earth');
+                    if (!hasEarth) {
+                        state.planets.push(this.spawnSpaceEarthPlanet());
+                    }
+                    state.earthSpawnedCycle = cycleIndex;
+                }
+            }
+
+            for (let i = state.planets.length - 1; i >= 0; i -= 1) {
+                const planet = state.planets[i];
+                const planetSpeed = planet.type === 'earth' || planet.sizeClass === 'headOn'
+                    ? speed * 1.05
+                    : speed * 0.9;
+                planet.z -= planetSpeed;
+                if (planet.z < 0.006) state.planets.splice(i, 1);
+            }
+
+            if (now >= state.nextPlanetAt) {
+                const palette = PALETTES[this.settings.palette] || PALETTES.horizon;
+                state.planets.push(this.spawnSpacePlanet(palette, state, now));
+                state.nextPlanetAt = now + (8000 + Math.random() * 10000) / this.travelPace();
+            }
+        } else if (state.planets.length) {
+            state.planets.length = 0;
+        }
+
+        state.lastHyper = hyper;
+        state.lastFrameTime = now;
+    },
+
+    drawSpaceTrip(ctx, width, height, values, palette, motion = 1) {
+        const cx = width / 2;
+        const cy = height / 2;
+        const fov = Math.min(width, height) * 0.55;
+        const now = Date.now();
+        const { pulse } = beatPulse(this.settings.bpm, now);
+        const a = ampScale(this.settings);
+
+        const state = this.ensureSpaceTripState(width, height);
+        const dt = state.lastFrameTime
+            ? Math.min(0.05, (now - state.lastFrameTime) / 1000)
+            : 0.016;
+        this.updateSpaceTrip(dt, motion, values);
+
+        const hyper = state.lastHyper || this.getSpaceTripHyperPhase(now, state);
+        const hyperMix = hyper.mix;
+
+        ctx.fillStyle = '#010204';
+        ctx.fillRect(0, 0, width, height);
+
+        const nebulaStrength = this.getSpaceTripNebulaStrength(now, state);
+
+        if (nebulaStrength < 0.15) {
+            const edgeVig = ctx.createRadialGradient(
+                cx,
+                cy,
+                Math.max(width, height) * 0.5,
+                cx,
+                cy,
+                Math.max(width, height) * 0.95
+            );
+            edgeVig.addColorStop(0, 'rgba(0,0,0,0)');
+            edgeVig.addColorStop(1, 'rgba(0,0,0,0.45)');
+            ctx.fillStyle = edgeVig;
+            ctx.fillRect(0, 0, width, height);
+        }
+
+        if (nebulaStrength > 0.01) {
+            this.drawSpaceTripNebula(ctx, width, height, cx, cy, state, palette, nebulaStrength, pulse, motion, now);
+            this.ensureNebulaWisps(state, palette);
+        }
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate((state.rollAngle || 0) + (state.dodge?.roll || 0));
+        ctx.translate(-cx, -cy);
+
+        const viewPanX = state.dodge?.panX || 0;
+        const viewPanY = state.dodge?.panY || 0;
+
+        if (nebulaStrength > 0.01) {
+            this.drawSpaceTripNebulaWisps(ctx, cx, cy, fov, state, palette, nebulaStrength, pulse, viewPanX, viewPanY);
+        }
+
+        if (hyperMix < 0.35) {
+            setGlow(ctx, palette, this.settings.glow * 0.75);
+        } else {
+            ctx.shadowBlur = 0;
+        }
+
+        const avg = values?.length
+            ? values.reduce((sum, value) => sum + (value || 0), 0) / values.length
+            : 0.3;
+        const streakMul = (0.4 + avg * this.settings.sensitivity * a + pulse * 0.3) * this.settings.amplitude;
+        const travelStep = this.travelPace() * 0.02 * (hyper.speedMul || 1);
+        const starFade = 1 - hyperMix * 0.92;
+
+        const projectStar = (x, y, z) => {
+            const invZ = 1 / Math.max(z, 0.02);
+            return {
+                sx: cx + viewPanX + x * fov * invZ,
+                sy: cy + viewPanY + y * fov * invZ,
+                invZ
+            };
+        };
+
+        if (hyperMix > 0.01) {
+            this.drawSpaceTripTunnel(ctx, width, height, cx, cy, state, palette, hyperMix, motion, pulse, fov, viewPanX, viewPanY);
+        }
+
+        for (const star of state.stars) {
+            const { sx, sy, invZ } = projectStar(star.x, star.y, star.z);
+            if (sx < -32 || sx > width + 32 || sy < -32 || sy > height + 32) continue;
+
+            const kindMul = star.kind === 'bright' ? 1.55 : star.kind === 'trail' ? 1.25 : star.kind === 'dim' ? 0.55 : 1;
+            const twinkle = 0.5 + 0.5 * Math.sin(now * 0.003 * this.settings.speed + star.tw);
+            const brightness = clamp(
+                (0.32 + twinkle * 0.48 + pulse * 0.28 + motion * 0.18) * invZ * 0.42 * starFade * kindMul,
+                0.06,
+                1
+            );
+            const size = (0.45 + brightness * 2.1) * Math.min(invZ * 0.16, 2.8) * (star.sizeMul || 1);
+            const color = pickColor(palette, star.colorIdx ?? Math.floor(star.hue * palette.length));
+            const warm = star.kind === 'bright' ? '#fef9c3' : color;
+
+            if (star.history?.length > 1 && starFade > 0.08) {
+                for (let h = star.history.length - 1; h >= 0; h -= 1) {
+                    const pt = star.history[h];
+                    const proj = projectStar(pt.x, pt.y, pt.z);
+                    const trailA = brightness * (0.08 + (1 - h / star.history.length) * 0.35);
+                    ctx.strokeStyle = alpha(warm, trailA);
+                    ctx.lineWidth = Math.max(0.35, size * 0.35);
+                    if (h < star.history.length - 1) {
+                        const next = star.history[h + 1];
+                        const nextProj = projectStar(next.x, next.y, next.z);
+                        ctx.beginPath();
+                        ctx.moveTo(nextProj.sx, nextProj.sy);
+                        ctx.lineTo(proj.sx, proj.sy);
+                        ctx.stroke();
+                    }
+                }
+            }
+
+            const prevZ = star.z + travelStep * (star.kind === 'trail' ? 1.8 : 1) * (1 + hyperMix * 12);
+            const prev = projectStar(star.x, star.y, prevZ);
+            const streakBoost = star.kind === 'trail' ? 10 : star.kind === 'bright' ? 6 : 4;
+            const hyperStreak = 1 + hyperMix * 16;
+            const streakLen = size * streakMul * streakBoost * hyperStreak;
+
+            if (streakLen > 1 || invZ > 0.35) {
+                ctx.strokeStyle = alpha(warm, brightness);
+                ctx.lineWidth = Math.max(0.45, size * (star.kind === 'trail' ? 0.65 : 0.48));
+                ctx.beginPath();
+                ctx.moveTo(prev.sx, prev.sy);
+                ctx.lineTo(sx, sy);
+                ctx.stroke();
+            }
+
+            if (starFade > 0.08) {
+                if (star.kind === 'bright') {
+                    ctx.fillStyle = alpha(warm, brightness * 0.35);
+                    ctx.beginPath();
+                    ctx.arc(sx, sy, Math.max(0.8, size * 1.8), 0, Math.PI * 2);
+                    ctx.fill();
+                }
+                ctx.fillStyle = alpha(warm, brightness);
+                ctx.beginPath();
+                ctx.arc(sx, sy, Math.max(0.4, size), 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        if (hyperMix < 0.92) {
+            for (const planet of state.planets) {
+                if (planet.z < 0.008) continue;
+
+                const invZ = 1 / Math.max(planet.z, 0.02);
+                const sx = cx + viewPanX + planet.x * fov * invZ;
+                const sy = cy + viewPanY + planet.y * fov * invZ;
+                const isClosePass = planet.type === 'earth' || planet.sizeClass === 'headOn';
+                const maxR = isClosePass
+                    ? Math.max(width, height) * 1.4
+                    : planet.sizeClass === 'large'
+                        ? Math.min(width, height) * 0.18
+                        : planet.sizeClass === 'small'
+                            ? Math.min(width, height) * 0.06
+                            : Math.min(width, height) * 0.11;
+                const pr = Math.min(planet.radius * fov * invZ, maxR);
+
+                if (!isClosePass && pr < 1.2) continue;
+                if (isClosePass && pr < 0.5 && planet.z > 0.4) continue;
+
+                const approachFade = planet.z > 1.05
+                    ? clamp((1.65 - planet.z) / 0.6, 0, 1)
+                    : 1;
+                const fade = approachFade * (1 - hyperMix);
+                if (fade <= 0.02) continue;
+
+                this.drawSpacePlanet(ctx, sx, sy, pr, planet, palette, fade);
+            }
+        }
+
         ctx.restore();
     }
 };

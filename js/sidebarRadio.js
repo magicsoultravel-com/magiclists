@@ -74,6 +74,9 @@ export const SidebarRadio = {
             if (RadioPopover.mode === 'cast') this.renderCastPanel();
         });
         this.updateTransport();
+        requestAnimationFrame(() => {
+            RadioVisualizer.restoreSession();
+        });
         this.restoreLastStationMeta().then(() => {
             this.updateTransport();
             return RadioPlayer.resumeIfWasPlaying();

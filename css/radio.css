@@ -38,32 +38,48 @@
 }
 
 .media-visualizer-modal__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-    padding: 0.75rem 0.9rem;
-    border-bottom: 1px solid var(--border-color);
-    background: rgba(15, 23, 42, 0.7);
-    cursor: default;
-    flex-shrink: 0;
+    cursor: grab;
 }
 
-.media-visualizer-modal__header.dragging {
+.media-visualizer-modal__header.dragging,
+.media-visualizer-modal.is-dragging .media-visualizer-modal__header {
     cursor: grabbing;
 }
 
+.media-visualizer-modal__icon {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    color: var(--text-muted);
+}
+
 .media-visualizer-modal__title {
-    font-size: 0.78rem;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    text-transform: none;
     color: var(--text-main);
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.media-visualizer-modal:hover .tool-panel__actions,
+.media-visualizer-modal:focus-within .tool-panel__actions,
+.media-visualizer-modal.is-dragging .tool-panel__actions {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.media-visualizer-modal__actions .card-act {
+    width: 18px;
+    height: 18px;
 }
 
 .media-visualizer-modal__close {
-    width: 2rem;
-    height: 2rem;
+    width: 18px;
+    height: 18px;
     border-radius: 999px;
 }
 
@@ -74,7 +90,7 @@
     padding: 0.9rem;
     min-height: 0;
     flex: 1;
-    overflow: auto;
+    overflow: hidden;
 }
 
 .media-visualizer-modal__canvas {
@@ -84,7 +100,7 @@
     min-height: 120px;
     border: 1px solid var(--border-color);
     border-radius: 10px;
-    background: radial-gradient(circle at center, rgba(99, 102, 241, 0.2), rgba(8, 12, 18, 0.94));
+    background: #010204;
     flex-shrink: 0;
 }
 
@@ -368,6 +384,14 @@
     display: flex;
     flex-direction: column;
     gap: 0.7rem;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+}
+
+.media-visualizer-modal.has-details-open .media-visualizer-modal__settings {
+    max-height: min(42vh, 320px);
 }
 
 .media-visualizer-modal__settings.is-collapsed {
@@ -382,4 +406,84 @@
 .media-visualizer-modal.is-dragging * {
     cursor: grabbing !important;
     user-select: none;
+}
+
+/* Minimal chrome — canvas only, hover overlay actions */
+.media-visualizer-modal.is-minimal .media-visualizer-modal__header,
+.media-visualizer-modal.is-minimal .media-visualizer-modal__settings-toggle,
+.media-visualizer-modal.is-minimal .media-visualizer-modal__settings {
+    display: none !important;
+}
+
+.media-visualizer-modal.is-minimal .media-visualizer-modal__body {
+    padding: 0;
+    gap: 0;
+    flex: 1;
+    overflow: hidden;
+}
+
+.media-visualizer-modal.is-minimal .media-visualizer-modal__canvas {
+    flex: 1;
+    min-height: 0;
+    height: 100% !important;
+    border: 0;
+    border-radius: 16px;
+}
+
+.media-visualizer-modal__chrome-overlay {
+    position: absolute;
+    top: 0.55rem;
+    right: 0.55rem;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.2rem 0.28rem;
+    border-radius: 999px;
+    background: rgba(8, 12, 18, 0.72);
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    backdrop-filter: blur(6px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+
+.media-visualizer-modal.is-minimal:hover .media-visualizer-modal__chrome-overlay,
+.media-visualizer-modal.is-minimal:focus-within .media-visualizer-modal__chrome-overlay {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.media-visualizer-modal__chrome-overlay[hidden] {
+    display: none !important;
+}
+
+/* Popout window fill */
+.media-visualizer-modal.is-popout-live {
+    position: fixed;
+    inset: 0;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    min-width: 0;
+    min-height: 0;
+    border-radius: 0;
+    border: 0;
+    box-shadow: none;
+}
+
+.media-visualizer-modal.is-popout-live .media-visualizer-modal__dialog {
+    height: 100%;
+}
+
+.media-visualizer-modal.is-popout-live.is-minimal .media-visualizer-modal__canvas {
+    border-radius: 0;
+}
+
+.media-visualizer-popout-body {
+    margin: 0;
+    overflow: hidden;
+    background: #070b12;
+    min-height: 100vh;
 }
