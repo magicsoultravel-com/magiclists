@@ -1,4 +1,4 @@
-/** @tool {"label":"Alphabets","order":7,"resizable":true,"resizeMode":"fill","mountClass":"tool-mount--alphabets","defaultSize":{"w":420,"h":480},"minSize":{"w":340,"h":360}} */
+/** @tool {"label":"Cards","order":7,"resizable":true,"resizeMode":"fill","mountClass":"tool-mount--alphabets","defaultSize":{"w":420,"h":480},"minSize":{"w":340,"h":360}} */
 /** @tool-icon <path d="M2.5 3.2h2.1c.9 0 1.5.5 1.5 1.2 0 .5-.3.9-.8 1.1.6.2 1 .7 1 1.3V9H4.8V6.9c0-.4-.2-.6-.6-.6H3.8V9H2.5V3.2zm5.2 0h1.3V9H7.7V3.2zm3.1 0c1.1 0 1.9.8 1.9 2.5V9h-1.3V5.9c0-.8-.4-1.2-1-1.2-.6 0-1 .4-1 1.2V9H8.1V3.2h1.3v.5z" fill="currentColor"/> */
 import { ALPHABETS } from './alphabets-data.js';
 
@@ -28,6 +28,7 @@ const SPEECH_MODE = {
     cirth: 'romanEn',
     'elder-futhark': 'romanEn',
     'anglo-saxon': 'romanEn',
+    numerals: 'native',
 };
 
 const NATIVE_LANG = {
@@ -58,14 +59,14 @@ function getSpeakPayload(entry, page, { arabicIsolated = null } = {}) {
     switch (mode) {
         case 'native':
             return {
-                text: arabicIsolated || entry.charLower || entry.char,
-                lang: NATIVE_LANG[page.id] || 'en-US',
+                text: entry.speak || arabicIsolated || entry.charLower || entry.char,
+                lang: entry.lang || NATIVE_LANG[page.id] || 'en-US',
             };
         case 'letter':
             return { text: entry.char, lang: 'en-US' };
         case 'roman':
         case 'romanEn':
-            return { text: entry.roman, lang: 'en-US' };
+            return { text: entry.speak || entry.roman, lang: 'en-US' };
         default:
             return { text: entry.char, lang: 'en-US' };
     }
@@ -392,9 +393,15 @@ export const Alphabets = {
         const glossHtml = entry.gloss
             ? `<span class="alphabet-cell__gloss">${entry.gloss}</span>`
             : '';
+        const glypLen = String(entry.char).length;
+        const sizeClass = glypLen > 4
+            ? ' alphabet-cell__char--tiny'
+            : glypLen > 1
+                ? ' alphabet-cell__char--small'
+                : '';
         return `
             <div class="alphabet-cell" ${speakAttrs(getSpeakPayload(entry, this._page))}>
-                <span class="alphabet-cell__char" style="font-family:${scriptFont}">${entry.char}</span>
+                <span class="alphabet-cell__char${sizeClass}" style="font-family:${scriptFont}">${entry.char}</span>
                 <span class="alphabet-cell__roman">${entry.roman}</span>
                 ${glossHtml}
             </div>
@@ -490,9 +497,12 @@ export const Alphabets = {
         const scriptFont = page.fontFamily || 'inherit';
         const blocks = (page.sections || []).map((section) => {
             const cells = section.chars.map((entry) => this.renderCell(entry, scriptFont)).join('');
+            const sectionGridClass = section.gridClass
+                ? this.getGridClass({ ...page, gridClass: section.gridClass })
+                : this.getGridClass(page);
             return `
                 <h4 class="alphabet-section__title">${section.title}</h4>
-                <div class="${this.getGridClass(page)}">${cells}</div>
+                <div class="${sectionGridClass}">${cells}</div>
             `;
         }).join('');
         return `<div class="alphabet-sections">${blocks}</div>`;

@@ -946,7 +946,7 @@
 }
 
 /* ==========================================================================
-   ALPHABETS TOOL
+   CARDS TOOL (alphabets + numerals)
    ========================================================================== */
 .tool-panel--map:not(.tool-panel--auto-height) .tool-panel__body,
 .tool-panel--alphabets:not(.tool-panel--auto-height) .tool-panel__body {
@@ -1063,6 +1063,57 @@
 
 .alphabet-grid--chinese {
     grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+}
+
+.alphabet-grid--maya {
+    grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+}
+
+.alphabet-grid--maya .alphabet-cell {
+    min-height: 3.4rem;
+    padding-left: 0.1rem;
+    padding-right: 0.1rem;
+}
+
+.alphabet-grid--maya .alphabet-cell__char {
+    font-size: 1.05rem;
+    letter-spacing: 0.02em;
+    line-height: 1.1;
+}
+
+.alphabet-grid--egypt {
+    grid-template-columns: repeat(auto-fill, minmax(58px, 1fr));
+}
+
+.alphabet-grid--egypt .alphabet-cell__char {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.alphabet-grid--cuneiform {
+    grid-template-columns: repeat(auto-fill, minmax(52px, 1fr));
+}
+
+.alphabet-grid--phoenician {
+    grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+}
+
+.alphabet-grid--maya .alphabet-cell__char--small,
+.alphabet-grid--egypt .alphabet-cell__char--small,
+.alphabet-grid--cuneiform .alphabet-cell__char--small {
+    font-size: 0.72rem;
+    letter-spacing: 0.01em;
+}
+
+.alphabet-grid--maya .alphabet-cell__char--tiny,
+.alphabet-grid--cuneiform .alphabet-cell__char--tiny {
+    font-size: 0.5rem;
+    letter-spacing: 0;
+}
+
+.alphabet-grid--egypt .alphabet-cell__char--tiny {
+    font-size: 0.6rem;
+    letter-spacing: 0;
 }
 
 .alphabet-cell {
