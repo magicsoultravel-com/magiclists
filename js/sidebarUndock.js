@@ -38,7 +38,6 @@ function applyPosition(root, x, y) {
  *   onBeforeUndock?: () => void,
  *   onPositionChange?: () => void,
  *   onStateChange?: () => void,
- *   dragBlockSelector?: string,
  *   applyUndockChrome?: (root: HTMLElement) => void,
  *   clearUndockChrome?: (root: HTMLElement) => void,
  * }} config
@@ -56,7 +55,6 @@ export function initSidebarUndock(config) {
         onBeforeUndock,
         onPositionChange,
         onStateChange,
-        dragBlockSelector,
         applyUndockChrome,
         clearUndockChrome
     } = config;
@@ -256,8 +254,9 @@ export function initSidebarUndock(config) {
             const root = getRoot();
             if (!root) return;
 
-            const fromBlocked = Boolean(dragBlockSelector && e.target.closest(dragBlockSelector));
-            beginDrag(e, header, root, { deferred: fromBlocked });
+            // Defer the drag until the pointer moves past the threshold so a
+            // plain click on the header/title can still toggle collapse/expand.
+            beginDrag(e, header, root, { deferred: true });
         });
     }
 
