@@ -41,8 +41,8 @@ export const SidebarWeather = {
                     <span class="sidebar-weather__compact-icon" data-weather-compact-icon></span>
                     <span class="sidebar-weather__compact-temp" data-weather-compact-temp>—</span>
                 </div>
-                <button type="button" class="btn btn--compact btn-icon sidebar-header-icon-btn" data-weather-refresh title="Refresh weather" aria-label="Refresh weather">${REFRESH_ICON}</button>
-                <a class="btn btn--compact btn-icon sidebar-header-icon-btn" data-weather-extlink href="#" target="_blank" rel="noopener noreferrer" title="Open IMGW weather (meteo.imgw.pl)" aria-label="Open IMGW weather">${CARD_ICONS.externalLink}</a>`;
+                <button type="button" class="btn btn--compact btn--icon sidebar-header-icon-btn" data-weather-refresh title="Refresh weather" aria-label="Refresh weather">${REFRESH_ICON}</button>
+                <a class="btn btn--compact btn--icon sidebar-header-icon-btn" data-weather-extlink href="#" target="_blank" rel="noopener noreferrer" title="Open IMGW weather (meteo.imgw.pl)" aria-label="Open IMGW weather">${CARD_ICONS.externalLink}</a>`;
         this.root.innerHTML = `
             ${renderSidebarModuleHeaderHtml({ headerId: 'weather-section-header', title: 'Weather', extrasHtml })}
             <div class="collapsable-section" id="weather-section">

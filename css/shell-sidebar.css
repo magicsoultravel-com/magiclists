@@ -123,7 +123,7 @@ body.is-editor-modal-open .side-panel {
 
 .control-bar-brand.is-in-sidebar:hover .sidebar-reattach-all:hover:not(:disabled) {
     opacity: 1;
-    background: var(--bg-hover, rgba(0, 0, 0, 0.06));
+    background: var(--bg-hover);
 }
 
 .sidebar-reattach-all:disabled {
@@ -202,7 +202,7 @@ body.is-editor-modal-open .side-panel {
 }
 
 .sidebar-module > .collapsable-header:hover {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--bg-hover, rgba(255, 255, 255, 0.05));
 }
 
 .sidebar-module > .collapsable-header .collapsable-toggle.collapsed {
@@ -245,6 +245,18 @@ body.is-editor-modal-open .side-panel {
 .sidebar-module__popin:focus-visible,
 .sidebar-module__dock:focus-visible {
     opacity: 1;
+}
+
+/* Header chip highlight: accent ring on hover/focus; the fill itself comes
+   from .card-act:hover (token-based) so light themes stay correct. */
+.sidebar-module__popout:hover,
+.sidebar-module__popin:hover,
+.sidebar-module__dock:hover,
+.sidebar-module__popout:focus-visible,
+.sidebar-module__popin:focus-visible,
+.sidebar-module__dock:focus-visible {
+    border-radius: 3px;
+    box-shadow: var(--hover-accent-ring, inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent));
 }
 
 .sidebar-module__popout.is-active {

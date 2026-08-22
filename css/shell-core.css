@@ -143,8 +143,12 @@
     pointer-events: none;
 }
 
-.btn:hover {
-    background: var(--border-color);
+/* :where() keeps this at (0,2,0) so theme hovers (themes.css) still override */
+.btn:hover:where(:not(:disabled):not(.active)) {
+    background: color-mix(in srgb, var(--accent) 10%, var(--bg-card));
+    border-color: color-mix(in srgb, var(--accent) 35%, var(--border-color));
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    transform: translateY(-1px);
 }
 
 .btn:hover::before {
@@ -154,6 +158,17 @@
 .btn.active {
     background: var(--accent);
     border-color: var(--accent);
+}
+
+/* Solid-fill variants keep their identity on hover — brighten, don't re-tint */
+.btn--accent:hover:where(:not(:disabled)) {
+    background: color-mix(in srgb, var(--accent) 82%, #fff);
+    border-color: color-mix(in srgb, var(--accent) 55%, #fff);
+}
+
+.btn--danger:hover:where(:not(:disabled)) {
+    background: color-mix(in srgb, #ef4444 18%, #4a1515);
+    border-color: #b91c1c;
 }
 
 .btn--block-gap {
@@ -168,15 +183,60 @@
     justify-content: center;
     padding: 0.3rem;
     min-height: 28px;
+    /* Snappier spring than .btn's 0.2s so the hover "slide out" reads crisply
+       at small sizes (same house curve as the shell springs). */
+    transition: all 0.16s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .btn--icon svg {
     display: block;
 }
 
-.btn--icon-danger:hover {
+/* Clearly visible hover/focus highlight for icon buttons (sidebar headers,
+   quick actions, media chips): accent wash + inset ring, aligned with the
+   app's accent-based active states. Derived from live tokens, so it stays
+   correct across all themes including light ones. The tiny lift + drop
+   shadow adds a subtle "sliding out of the surface" 3D cue. */
+.btn--icon:hover:where(:not(:disabled):not(.active)),
+.sidebar-header-icon-btn:hover:where(:not(.active)),
+.quick-act-header-btn:hover:where(:not(.active)),
+.btn--icon:focus-visible:where(:not(:disabled):not(.active)),
+.sidebar-header-icon-btn:focus-visible:where(:not(.active)),
+.quick-act-header-btn:focus-visible:where(:not(.active)) {
+    color: var(--text-main);
+    background: var(--hover-accent-bg, color-mix(in srgb, var(--accent) 14%, transparent));
+    box-shadow: var(--hover-accent-ring, inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent)), 0 2px 6px rgba(0, 0, 0, 0.22);
+    transform: translateY(-1px) scale(1.05);
+}
+
+/* Tactile press: button settles back onto the surface */
+.btn:active:where(:not(:disabled)),
+.btn--icon:active:where(:not(:disabled)),
+.sidebar-header-icon-btn:active,
+.quick-act-header-btn:active {
+    transform: translateY(0) scale(0.97);
+    transition-duration: 0.06s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .btn:hover:where(:not(:disabled):not(.active)),
+    .btn:active:where(:not(:disabled)),
+    .btn--icon:hover:where(:not(:disabled):not(.active)),
+    .btn--icon:active:where(:not(:disabled)),
+    .sidebar-header-icon-btn:hover:where(:not(.active)),
+    .sidebar-header-icon-btn:active,
+    .quick-act-header-btn:hover:where(:not(.active)),
+    .quick-act-header-btn:active {
+        transform: none;
+    }
+}
+
+/* Danger keeps its red identity but still gets a highlighted surface */
+.btn--icon-danger:hover:where(:not(:disabled)) {
     color: #fca5a5;
     border-color: #7f1d1d;
+    background: rgba(239, 68, 68, 0.14);
+    box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.28), 0 2px 6px rgba(0, 0, 0, 0.22);
 }
 
 /* Boot splash */

@@ -51,6 +51,12 @@
     --theme-accent-overlay-12: color-mix(in srgb, var(--accent) 12%, transparent);
     --theme-accent-border-35: color-mix(in srgb, var(--accent) 35%, var(--border-color));
     --theme-accent-bg-6: color-mix(in srgb, var(--accent) 6%, var(--bg-card));
+
+    /* Interaction feedback — derived from live tokens so light/dark themes
+       both get correct, clearly visible hover highlights */
+    --bg-hover: color-mix(in srgb, var(--text-main) 8%, transparent);
+    --hover-accent-bg: color-mix(in srgb, var(--accent) 14%, transparent);
+    --hover-accent-ring: inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent);
     
     font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     background-color: var(--desktop-bg, var(--bg-primary));

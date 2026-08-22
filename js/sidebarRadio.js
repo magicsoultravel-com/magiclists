@@ -123,10 +123,10 @@ export const SidebarRadio = {
                         <img class="sidebar-media__compact-art-img is-hidden" data-radio-compact-art alt="">
                         <span class="sidebar-media__compact-art-fallback" data-radio-compact-art-fallback aria-hidden="true">♪</span>
                     </button>
-                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-header-icon-btn" data-radio-play aria-label="Play or pause">
+                    <button type="button" class="btn btn--compact btn--icon sidebar-media__action sidebar-header-icon-btn" data-radio-play aria-label="Play or pause">
                         <span data-radio-play-icon></span>
                     </button>
-                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-header-icon-btn" data-radio-stop title="Stop" aria-label="Stop">${ACTION_ICONS.mediaStop}</button>
+                    <button type="button" class="btn btn--compact btn--icon sidebar-media__action sidebar-header-icon-btn" data-radio-stop title="Stop" aria-label="Stop">${ACTION_ICONS.mediaStop}</button>
                 </div>`;
         this.root.innerHTML = `
             ${renderSidebarModuleHeaderHtml({ headerId: 'radio-section-header', title: 'Radio', extrasHtml: compactHtml })}

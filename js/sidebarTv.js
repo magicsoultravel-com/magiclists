@@ -107,10 +107,10 @@ export const SidebarTv = {
                         <img class="sidebar-media__compact-art-img is-hidden" data-tv-compact-art alt="">
                         <span class="sidebar-media__compact-art-fallback" data-tv-compact-art-fallback aria-hidden="true">📺</span>
                     </button>
-                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-header-icon-btn" data-tv-play aria-label="Play or pause">
+                    <button type="button" class="btn btn--compact btn--icon sidebar-media__action sidebar-header-icon-btn" data-tv-play aria-label="Play or pause">
                         <span data-tv-play-icon></span>
                     </button>
-                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-header-icon-btn" data-tv-stop title="Stop" aria-label="Stop">${ACTION_ICONS.mediaStop}</button>
+                    <button type="button" class="btn btn--compact btn--icon sidebar-media__action sidebar-header-icon-btn" data-tv-stop title="Stop" aria-label="Stop">${ACTION_ICONS.mediaStop}</button>
                 </div>`;
         this.root.innerHTML = `
             ${renderSidebarModuleHeaderHtml({ headerId: 'tv-section-header', title: 'TV', extrasHtml: compactHtml })}
