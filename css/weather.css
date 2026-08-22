@@ -22,31 +22,8 @@
     color: var(--text-main);
 }
 
-.sidebar-weather__compact-label {
-    display: none;
-}
-
-.sidebar-weather__refresh--loading svg {
+[data-weather-refresh].is-loading svg {
     animation: sidebar-weather-spin 0.85s linear infinite;
-}
-
-/* Header external link (IMGW) icon button — always visible, sits next to refresh */
-.sidebar-weather__extlink {
-    flex-shrink: 0;
-    margin-left: 0.1rem;
-    color: var(--accent-color, #7eb8ff);
-    text-decoration: none;
-    line-height: 1;
-}
-
-.sidebar-weather__refresh {
-    flex-shrink: 0;
-    line-height: 1;
-}
-
-.sidebar-weather__extlink:hover {
-    text-decoration: none;
-    background: color-mix(in srgb, var(--accent-color, #7eb8ff) 12%, transparent);
 }
 
 @keyframes sidebar-weather-spin {
@@ -54,7 +31,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .sidebar-weather__refresh--loading svg {
+    [data-weather-refresh].is-loading svg {
         animation: none;
     }
 }

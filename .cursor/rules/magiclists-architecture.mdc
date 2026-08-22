@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-08-22T13:42:42.690Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-08-22T16:43:35.946Z
 
 ## CSS load order
 
@@ -68,8 +68,9 @@ alwaysApply: true
 | js/mediaLibraryOverlay.js | media library overlay gallery browser | mediaLibrary.js, mediaStagingDialog.js, sidebarMediaLibrary.js, mediaAttachments.js | — | — |
 | js/mediaMetadata.js | media file metadata and EXIF extraction | mediaLibrary.js | — | — |
 | js/mediaPasteCatcher.js | global clipboard paste catcher for media staging | mediaStagingDialog.js | — | — |
+| js/mediaQuickActions.js | shared media hover quick actions | mediaLibrary.js, noteAttachmentsUi.js, mediaLibraryOverlay.js | — | — |
 | js/mediaStagingDialog.js | media staging upload dialogue before library commit | mediaLibrary.js, mediaPasteCatcher.js, mediaLibraryOverlay.js | — | — |
-| js/noteAttachmentsUi.js | note card attached-media section HTML and hydrate | mediaAttachments.js, mediaLibrary.js, noteSurfaceHtml.js, mediaLibraryOverlay.js | — | — |
+| js/noteAttachmentsUi.js | note card attached-media section HTML and hydrate | mediaAttachments.js, mediaLibrary.js, noteSurfaceHtml.js, mediaLibraryOverlay.js, mediaQuickActions.js | — | — |
 | js/noteBodyConversion.js | checklist/content conversion, plain copy text | noteSurface.js, checklistSteps.js, richText.js | — | — |
 | js/noteModel.js | note item schema, normalizeItemForSave, createNoteId | richText.js, sheet.js | — | — |
 | js/notePopoutBridge.js | note popout window open/focus, edit claims, BroadcastChannel sync | popoutNote.js, app.js, noteQuickActions.js, popoutWindows.js | — | — |
@@ -83,7 +84,7 @@ alwaysApply: true
 | js/popoutNote.js | standalone note popout window boot, edit, flush, undo | notePopoutBridge.js, noteSurface.js, api.js, undo.js | — | — |
 | js/popoutWindows.js | shared popout window helpers (PiP, browser popup, styles) | notePopoutBridge.js, sidebarModulePopout.js | — | — |
 | js/richText.js | rich text sanitize, linkify, strip markup | noteSurface.js, noteModel.js | — | — |
-| js/scheduledBackup.js | scheduled local JSON/TXT auto-export timer and popover | backup.js, app.js, noteQuickActions.js | — | — |
+| js/scheduledBackup.js | scheduled local JSON/TXT/media auto-export timer and popover | backup.js, mediaBackup.js, app.js, noteQuickActions.js | — | — |
 | js/searchBar.js | sidebar search bar and results panel | searchFilter.js, hamburger.js | — | — |
 | js/sheet.js | sheet-grid note template model and table interactions | noteSurface.js, editor.js | — | — |
 | js/sidebarHistory.js | sidebar undo history module | undo.js, popoverPosition.js, sidebarModules.js | — | — |
@@ -91,6 +92,7 @@ alwaysApply: true
 | js/sidebarModulePopout.js | sidebar module popout open/focus/pop-in, DOM portal | popoutWindows.js, sidebarModules.js, appDocuments.js | — | — |
 | js/sidebarModulePopoutShell.js | sidebar module popout placeholder shell state transfer | sidebarModulePopout.js | — | — |
 | js/sidebarModules.js | sidebar module registry, undock wiring, re-dock slots | sidebarUndock.js, sidebarPrefs.js, desktopStack.js, hamburger.js, sidebarModulePopout.js | — | — |
+| js/sidebarNoteListHtml.js | shared sidebar note list row HTML | hamburger.js, mediaLibraryOverlay.js | — | — |
 | js/sidebarRadio.js | sidebar radio player and station browser | radioPlayer.js, radioProviders/registry.js, radioPopover.js, sidebarModules.js | — | — |
 | js/sidebarStats.js | sidebar workspace stats module | layoutStorage.js, backup.js, sidebarModules.js | — | — |
 | js/sidebarTv.js | sidebar TV player and channel browser | tvPlayer.js, tvProviders/registry.js, tvPopover.js, sidebarModules.js | tv:state_changed | — |

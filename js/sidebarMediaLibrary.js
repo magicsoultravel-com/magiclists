@@ -26,7 +26,7 @@ export const SidebarMediaLibrary = {
     renderShell() {
         const extrasHtml = `
                 <span class="sidebar-media-lib__compact" data-media-lib-compact title="Items in library">0</span>
-                <button type="button" class="btn btn--compact btn--icon" data-media-lib-open title="Open media library" aria-label="Open media library">${ACTION_ICONS.mediaLibrary}</button>`;
+                <button type="button" class="btn btn--compact btn--icon sidebar-header-icon-btn" data-media-lib-open title="Open media library" aria-label="Open media library">${ACTION_ICONS.mediaLibrary}</button>`;
         this.root.innerHTML = `
             ${renderSidebarModuleHeaderHtml({ headerId: 'media-library-section-header', title: 'Media', extrasHtml })}
             <div class="collapsable-section collapsed" id="media-library-section">

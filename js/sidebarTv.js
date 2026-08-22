@@ -106,9 +106,10 @@ export const SidebarTv = {
                         <img class="sidebar-media__compact-art-img is-hidden" data-tv-compact-art alt="">
                         <span class="sidebar-media__compact-art-fallback" data-tv-compact-art-fallback aria-hidden="true">📺</span>
                     </button>
-                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-tv-play aria-label="Play or pause">
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-header-icon-btn" data-tv-play aria-label="Play or pause">
                         <span data-tv-play-icon></span>
                     </button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-header-icon-btn" data-tv-stop title="Stop" aria-label="Stop">${ACTION_ICONS.mediaStop}</button>
                     <input type="range" class="sidebar-media__volume-compact" data-tv-volume-compact min="0" max="100" value="85" aria-label="Volume">
                 </div>`;
         this.root.innerHTML = `
@@ -153,7 +154,9 @@ export const SidebarTv = {
         this.root.querySelectorAll('[data-tv-play]').forEach((btn) => {
             btn.addEventListener('click', () => TvPlayer.toggle());
         });
-        this.root.querySelector('[data-tv-stop]')?.addEventListener('click', () => TvPlayer.stop());
+        this.root.querySelectorAll('[data-tv-stop]').forEach((btn) => {
+            btn.addEventListener('click', () => TvPlayer.stop());
+        });
         this.root.querySelector('[data-tv-favorite]')?.addEventListener('click', (e) => {
             e.stopPropagation();
             if (!channelKey(TvPlayer.channel)) return;

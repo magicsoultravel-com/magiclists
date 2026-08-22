@@ -1,12 +1,11 @@
 /** @module {"owns":"sidebar weather glance and forecast panel", "related":["weatherApi.js","weatherProviders/registry.js","sidebarModules.js"]} */
 import { WeatherApi } from './weatherApi.js';
 import { escapeHtml } from './radioUtils.js';
-import { ACTION_ICONS } from './icons.js';
+import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { renderSidebarModuleHeaderHtml } from './sidebarModules.js';
 import { conditionLabel, weatherIconSvg, weatherIconSvgFromCode } from './weatherProviders/weatherIcons.js';
 
 const REFRESH_ICON = ACTION_ICONS.resetCustomization;
-const EXT_LINK_ICON = '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M5 2.4H2.9a1.4 1.4 0 0 0-1.4 1.4v5.3A1.4 1.4 0 0 0 2.9 10.5h5.3a1.4 1.4 0 0 0 1.4-1.4V7M7.3 1.5h3.2v3.2M10.4 1.6 5 7" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const SETTINGS_ICON = ACTION_ICONS.tools;
 
 export const SidebarWeather = {
@@ -42,8 +41,8 @@ export const SidebarWeather = {
                     <span class="sidebar-weather__compact-icon" data-weather-compact-icon></span>
                     <span class="sidebar-weather__compact-temp" data-weather-compact-temp>—</span>
                 </div>
-                <button type="button" class="btn btn--compact btn-icon sidebar-weather__refresh" data-weather-refresh title="Refresh weather" aria-label="Refresh weather">${REFRESH_ICON}</button>
-                <a class="btn btn--compact btn-icon sidebar-weather__extlink" data-weather-extlink href="#" target="_blank" rel="noopener noreferrer" title="Open IMGW weather (meteo.imgw.pl)" aria-label="Open IMGW weather">${EXT_LINK_ICON}</a>`;
+                <button type="button" class="btn btn--compact btn-icon sidebar-header-icon-btn" data-weather-refresh title="Refresh weather" aria-label="Refresh weather">${REFRESH_ICON}</button>
+                <a class="btn btn--compact btn-icon sidebar-header-icon-btn" data-weather-extlink href="#" target="_blank" rel="noopener noreferrer" title="Open IMGW weather (meteo.imgw.pl)" aria-label="Open IMGW weather">${CARD_ICONS.popout}</a>`;
         this.root.innerHTML = `
             ${renderSidebarModuleHeaderHtml({ headerId: 'weather-section-header', title: 'Weather', extrasHtml })}
             <div class="collapsable-section" id="weather-section">
@@ -92,7 +91,7 @@ export const SidebarWeather = {
         const iconEl = this.root?.querySelector('[data-weather-compact-icon]');
         const refreshBtn = this.root?.querySelector('[data-weather-refresh]');
 
-        refreshBtn?.classList.toggle('sidebar-weather__refresh--loading', !!loading);
+        refreshBtn?.classList.toggle('is-loading', !!loading);
 
         if (!snapshot?.current) {
             tempEl.textContent = loading ? '…' : '—';

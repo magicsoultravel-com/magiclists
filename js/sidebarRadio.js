@@ -122,9 +122,10 @@ export const SidebarRadio = {
                         <img class="sidebar-media__compact-art-img is-hidden" data-radio-compact-art alt="">
                         <span class="sidebar-media__compact-art-fallback" data-radio-compact-art-fallback aria-hidden="true">♪</span>
                     </button>
-                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action" data-radio-play aria-label="Play or pause">
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-header-icon-btn" data-radio-play aria-label="Play or pause">
                         <span data-radio-play-icon></span>
                     </button>
+                    <button type="button" class="btn btn--compact btn-icon sidebar-media__action sidebar-header-icon-btn" data-radio-stop title="Stop" aria-label="Stop">${ACTION_ICONS.mediaStop}</button>
                     <input type="range" class="sidebar-media__volume-compact" data-radio-volume-compact min="0" max="100" value="85" aria-label="Volume">
                 </div>`;
         this.root.innerHTML = `
@@ -171,7 +172,9 @@ export const SidebarRadio = {
         this.root.querySelectorAll('[data-radio-play]').forEach((btn) => {
             btn.addEventListener('click', () => RadioPlayer.toggle());
         });
-        this.root.querySelector('[data-radio-stop]')?.addEventListener('click', () => RadioPlayer.stop());
+        this.root.querySelectorAll('[data-radio-stop]').forEach((btn) => {
+            btn.addEventListener('click', () => RadioPlayer.stop());
+        });
 
         this.root.querySelector('[data-radio-favorite]')?.addEventListener('click', (e) => {
             e.stopPropagation();

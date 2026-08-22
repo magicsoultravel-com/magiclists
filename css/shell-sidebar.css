@@ -135,10 +135,6 @@ body.is-editor-modal-open .side-panel {
     min-width: 0;
 }
 
-.control-bar-brand.is-in-sidebar .sidebar-reattach-all {
-    margin-left: auto;
-}
-
 .side-panel-chrome {
     flex-shrink: 0;
     padding: 0 0.05rem;
@@ -208,11 +204,6 @@ body.is-editor-modal-open .side-panel {
 
 .sidebar-module > .collapsable-header .collapsable-toggle.collapsed {
     transform: rotate(-90deg);
-}
-
-.sidebar-module > .collapsable-header > .sidebar-module__dock {
-    margin-left: auto;
-    flex-shrink: 0;
 }
 
 .sidebar-module > .collapsable-header > .sidebar-module__chrome {
@@ -610,7 +601,7 @@ body.is-shell-resizing--h * {
     cursor: row-resize !important;
 }
 
-/* Quick actions header icons (visibility controlled by JS when section collapsed/expanded) */
+/* Quick actions header icons (visibility via :has collapsed / undocked rules) */
 .quick-actions-header-icons {
     display: none;
     align-items: center;
@@ -623,14 +614,24 @@ body.is-shell-resizing--h * {
     display: flex;
 }
 
+/* Shared collapsed-header icon chrome (Actions, Radio/TV, Weather, Media).
+   Specificity must beat .side-panel .btn-icon / .btn--icon padding. */
+.side-panel .sidebar-header-icon-btn,
+.sidebar-module .sidebar-header-icon-btn,
+.sidebar-header-icon-btn,
 .quick-act-header-btn {
     min-width: 22px;
     min-height: 22px;
     padding: 0.12rem;
     font-size: 0.75rem;
     line-height: 1;
+    color: var(--text-muted);
+    text-decoration: none;
 }
 
+.side-panel .sidebar-header-icon-btn svg,
+.sidebar-module .sidebar-header-icon-btn svg,
+.sidebar-header-icon-btn svg,
 .quick-act-header-btn svg {
     width: 12px;
     height: 12px;

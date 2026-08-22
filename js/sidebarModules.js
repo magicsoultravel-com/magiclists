@@ -31,7 +31,7 @@ export const SIDEBAR_MODULES = [
     { id: 'quick-actions', rootId: 'sidebar-quick-actions', headerId: 'quick-actions-header', sectionId: 'quick-actions-section', startCollapsed: true, expandOnUndock: true, collapseIgnoreExtra: '.quick-actions-header-icons' },
     { id: 'radio', rootId: 'sidebar-radio', headerId: 'radio-section-header', sectionId: 'radio-section', startCollapsed: true, dragBlockSelector: '.sidebar-radio__compact', onPositionChange: () => RadioPopover.reposition() },
     { id: 'tv', rootId: 'sidebar-tv', headerId: 'tv-section-header', sectionId: 'tv-section', startCollapsed: true, dragBlockSelector: '.sidebar-tv__compact', onPositionChange: () => TvPopover.reposition() },
-    { id: 'weather', rootId: 'sidebar-weather', headerId: 'weather-section-header', sectionId: 'weather-section', startCollapsed: true, expandOnUndock: true, collapseIgnoreExtra: '.sidebar-weather__refresh, .sidebar-weather__extlink', dragBlockSelector: '.sidebar-weather__compact, .sidebar-weather__refresh, .sidebar-weather__extlink' },
+    { id: 'weather', rootId: 'sidebar-weather', headerId: 'weather-section-header', sectionId: 'weather-section', startCollapsed: true, expandOnUndock: true, collapseIgnoreExtra: '[data-weather-refresh], [data-weather-extlink]', dragBlockSelector: '.sidebar-weather__compact, [data-weather-refresh], [data-weather-extlink]' },
     { id: 'media-library', rootId: 'sidebar-media-library', headerId: 'media-library-section-header', sectionId: 'media-library-section', startCollapsed: true, expandOnUndock: true, collapseIgnoreExtra: '.sidebar-media-lib__compact, [data-media-lib-open]', dragBlockSelector: '.sidebar-media-lib__compact, [data-media-lib-open]' },
     { id: 'tools', rootId: 'sidebar-tools', headerId: 'tools-section-header', sectionId: 'tools-section', startCollapsed: true, expandOnUndock: true },
     { id: 'notes-list', rootId: 'sidebar-notes-list', headerId: 'notes-list-section-header', sectionId: 'notes-list-section', startCollapsed: false, expandOnUndock: true },
@@ -316,7 +316,7 @@ export function bindSidebarReattachAll() {
     const btn = document.getElementById('sidebar-reattach-all');
     if (!btn || btn.dataset.bound === 'true') return;
     btn.dataset.bound = 'true';
-    btn.innerHTML = CARD_ICONS.pin;
+    btn.innerHTML = CARD_ICONS.reattachAll;
     btn.addEventListener('click', (e) => {
         e.stopPropagation();
         reattachAllFloatingChrome();
