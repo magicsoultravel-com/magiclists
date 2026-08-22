@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Neon strip note icon">
+  <rect width="512" height="512" rx="96" fill="#26262B"/>
+  <rect x="96" y="16" width="320" height="480" rx="48" fill="#FF6EC7" stroke="#00F5FF" stroke-width="24"/>
+  <rect x="160" y="132" width="192" height="32" rx="16" fill="#A8FF60"/>
+  <rect x="160" y="240" width="192" height="32" rx="16" fill="#A8FF60"/>
+  <rect x="160" y="348" width="192" height="32" rx="16" fill="#A8FF60"/>
+</svg>

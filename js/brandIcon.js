@@ -56,6 +56,13 @@ export const BRAND_ICONS = [
         svg: './assets/brand/icon-comet.svg',
         ico: './assets/brand/favicon-comet.ico',
         appleTouch: './assets/brand/apple-touch-comet.png'
+    },
+    {
+        id: 'strip',
+        label: 'Neon strip',
+        svg: './assets/brand/icon-strip.svg',
+        ico: './assets/brand/favicon-strip.ico',
+        appleTouch: './assets/brand/apple-touch-strip.png'
     }
 ];
 
