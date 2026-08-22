@@ -1,4 +1,4 @@
-/** @module {"owns":"media library overlay gallery browser", "related":["mediaLibrary.js","mediaStagingDialog.js","sidebarMediaLibrary.js","mediaAttachments.js"]} */
+/** @module {"owns":"media library overlay gallery browser", "related":["mediaLibrary.js","mediaStagingDialog.js","noteQuickActions.js","mediaAttachments.js"]} */
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import {

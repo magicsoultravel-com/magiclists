@@ -163,8 +163,11 @@ export async function buildMediaMetaExportPayload() {
     const pkg = await buildMediaMetaOnlyPackage();
     const text = JSON.stringify(pkg, null, 2);
     const timestamp = pkg.exportedAt || nowSeconds();
+    // Exclude wall-clock exportedAt so scheduled skip-if-unchanged stays stable.
+    const textForFingerprint = JSON.stringify({ version: pkg.version, items: pkg.items });
     return {
         text,
+        textForFingerprint,
         blob: new Blob([text], { type: 'application/json' }),
         filename: `${MEDIA_META_FILE_PREFIX}${timestamp}.json`,
         timestamp

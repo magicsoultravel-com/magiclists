@@ -51,7 +51,6 @@ import { Fullscreen } from './fullscreen.js';
 import { SidebarRadio } from './sidebarRadio.js';
 import { SidebarTv } from './sidebarTv.js';
 import { SidebarWeather } from './sidebarWeather.js';
-import { SidebarMediaLibrary } from './sidebarMediaLibrary.js';
 import { MediaLibraryOverlay, bindMediaFilePickers } from './mediaLibraryOverlay.js';
 import { MediaStagingDialog } from './mediaStagingDialog.js';
 import { MediaPasteCatcher, readClipboardIntoStaging } from './mediaPasteCatcher.js';
@@ -166,7 +165,6 @@ BootProgress.set(85, 'Workspace…');
             SidebarRadio.init();
             SidebarTv.init();
             SidebarWeather.init();
-            SidebarMediaLibrary.init();
             MediaStagingDialog.init();
             MediaLibraryOverlay.init({
                 getItems: () => AppState.items

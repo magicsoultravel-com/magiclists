@@ -491,6 +491,7 @@ export function renderQuickActions({
     } else {
         const accountGroup = `
             <button type="button" class="btn btn--compact btn--icon" id="btn-add-category" title="Add category" aria-label="Add category">${ACTION_ICONS.category}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="btn-media-library" title="Open media library" aria-label="Open media library">${ACTION_ICONS.mediaLibrary}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-cloud" title="Cloud backup" aria-label="Cloud backup">${ACTION_ICONS.cloud}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-cloud-export" data-enabled-title="Export to cloud" title="Connect cloud first (Cloud icon)" aria-label="Export to cloud" disabled>${ACTION_ICONS.cloudExport}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-cloud-import" data-enabled-title="Import from cloud" title="Connect cloud first (Cloud icon)" aria-label="Import from cloud" disabled>${ACTION_ICONS.cloudImport}</button>
@@ -545,6 +546,9 @@ function bindQuickActionHandlers(handlers = {}) {
     document.getElementById('btn-file-cabinet-toggle')?.addEventListener('click', onToggleFileCabinet);
     document.getElementById('btn-drawing-mode')?.addEventListener('click', onToggleDrawing);
     document.getElementById('btn-add-category')?.addEventListener('click', onAddCategory);
+    document.getElementById('btn-media-library')?.addEventListener('click', () => {
+        MediaLibraryOverlay.open();
+    });
     document.getElementById('btn-cloud')?.addEventListener('click', onCloudClick);
     document.getElementById('btn-cloud-export')?.addEventListener('click', onCloudExport);
     document.getElementById('btn-cloud-import')?.addEventListener('click', onCloudImport);

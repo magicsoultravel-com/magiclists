@@ -1,6 +1,6 @@
-/** @css {"owns":"media library sidebar module, staging dialogue, gallery floating panel, media FAB, note attachment section, media lightbox", "js":["sidebarMediaLibrary.js","mediaLibraryOverlay.js","mediaStagingDialog.js","mediaPasteCatcher.js","noteAttachmentsUi.js"]} */
+/** @css {"owns":"media staging dialogue, gallery floating panel, media FAB, note attachment section, media lightbox", "js":["mediaLibraryOverlay.js","mediaStagingDialog.js","mediaPasteCatcher.js","noteAttachmentsUi.js"]} */
 
-/* Sidebar module */
+/* Staging count chip (also used in staging dialogue header) */
 .sidebar-media-lib__compact {
     display: inline-flex;
     align-items: center;
@@ -12,27 +12,6 @@
     border-radius: 999px;
     background: color-mix(in srgb, var(--text-primary) 12%, transparent);
     color: var(--text-secondary, var(--text-primary));
-}
-
-.sidebar-media-lib__body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-    padding: 0.35rem 0.15rem 0.5rem;
-}
-
-.sidebar-media-lib__actions,
-.sidebar-media-lib__exports {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-}
-
-.sidebar-media-lib__hint {
-    margin: 0;
-    font-size: calc(0.65rem * var(--note-font-scale, 1));
-    line-height: 1.35;
-    color: var(--text-secondary, #888);
 }
 
 /* Media FAB */

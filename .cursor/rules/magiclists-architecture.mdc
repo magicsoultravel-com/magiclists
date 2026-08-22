@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-08-22T16:43:35.946Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-08-22T17:33:01.698Z
 
 ## CSS load order
 
@@ -33,7 +33,7 @@ alwaysApply: true
 | css/sheet.css | sheet-grid note template body and table chrome | sheet.js, noteSurface.js, editor.js | — | 20 |
 | css/desktops.css | desktop switcher dock styling, dock pin lock | desktopDockComponent.js | — | 21 |
 | css/popout.css | (unknown) | — | — | 22 |
-| css/media-library.css | media library sidebar module, staging dialogue, gallery floating panel, media FAB, note attachment section, media lightbox | sidebarMediaLibrary.js, mediaLibraryOverlay.js, mediaStagingDialog.js, mediaPasteCatcher.js, noteAttachmentsUi.js | — | 23 |
+| css/media-library.css | media staging dialogue, gallery floating panel, media FAB, note attachment section, media lightbox | mediaLibraryOverlay.js, mediaStagingDialog.js, mediaPasteCatcher.js, noteAttachmentsUi.js | — | 23 |
 
 ## JS domains (@module)
 
@@ -65,7 +65,7 @@ alwaysApply: true
 | js/mediaAttachments.js | note↔media attachment helpers | mediaLibrary.js, noteSurface.js, mediaLibraryOverlay.js | — | — |
 | js/mediaBackup.js | media library backup export/import (meta JSON, embeds, ZIP) | mediaLibrary.js, backup.js | — | — |
 | js/mediaLibrary.js | media library CRUD, thumbs, size limits | storage/indexedDbMediaStore.js, mediaMetadata.js, mediaBackup.js | — | — |
-| js/mediaLibraryOverlay.js | media library overlay gallery browser | mediaLibrary.js, mediaStagingDialog.js, sidebarMediaLibrary.js, mediaAttachments.js | — | — |
+| js/mediaLibraryOverlay.js | media library overlay gallery browser | mediaLibrary.js, mediaStagingDialog.js, noteQuickActions.js, mediaAttachments.js | — | — |
 | js/mediaMetadata.js | media file metadata and EXIF extraction | mediaLibrary.js | — | — |
 | js/mediaPasteCatcher.js | global clipboard paste catcher for media staging | mediaStagingDialog.js | — | — |
 | js/mediaQuickActions.js | shared media hover quick actions | mediaLibrary.js, noteAttachmentsUi.js, mediaLibraryOverlay.js | — | — |
@@ -88,7 +88,6 @@ alwaysApply: true
 | js/searchBar.js | sidebar search bar and results panel | searchFilter.js, hamburger.js | — | — |
 | js/sheet.js | sheet-grid note template model and table interactions | noteSurface.js, editor.js | — | — |
 | js/sidebarHistory.js | sidebar undo history module | undo.js, popoverPosition.js, sidebarModules.js | — | — |
-| js/sidebarMediaLibrary.js | sidebar media library module chrome | mediaLibraryOverlay.js, mediaStagingDialog.js, sidebarModules.js | — | — |
 | js/sidebarModulePopout.js | sidebar module popout open/focus/pop-in, DOM portal | popoutWindows.js, sidebarModules.js, appDocuments.js | — | — |
 | js/sidebarModulePopoutShell.js | sidebar module popout placeholder shell state transfer | sidebarModulePopout.js | — | — |
 | js/sidebarModules.js | sidebar module registry, undock wiring, re-dock slots | sidebarUndock.js, sidebarPrefs.js, desktopStack.js, hamburger.js, sidebarModulePopout.js | — | — |
