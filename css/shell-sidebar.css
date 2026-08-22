@@ -661,6 +661,15 @@ body.is-shell-resizing--h * {
     height: 12px;
 }
 
+/* Quick-action glyphs (view free/grid, file cabinet, undo, redo) are drawn
+   thin/sparse inside their viewBox, so at 12px they read smaller than the
+   solid radio/weather glyphs. Render them slightly larger to match — the
+   app's own launcher renders these same icons at 15px. Buttons stay 22×22. */
+.quick-actions-header-icons .quick-act-header-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
 .quick-act-header-btn.active {
     color: var(--accent);
     background: color-mix(in srgb, var(--accent) 12%, transparent);
