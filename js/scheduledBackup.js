@@ -562,7 +562,7 @@ export const ScheduledBackup = {
 
     async exportNotes(config) {
         const payload = await this.buildNotesPayload(config.notes.format);
-        const fingerprint = hashExportFingerprint(payload.text);
+        const fingerprint = hashExportFingerprint(payload.textForFingerprint || payload.text);
         if (fingerprint === config.notes.lastFingerprint) return false;
 
         downloadBlob(payload.blob, payload.filename);
@@ -580,7 +580,7 @@ export const ScheduledBackup = {
     async exportMedia(config) {
         let changed = false;
         const metaPayload = await buildMediaMetaExportPayload();
-        const metaFp = hashExportFingerprint(metaPayload.text);
+        const metaFp = hashExportFingerprint(metaPayload.textForFingerprint || metaPayload.text);
         if (metaFp !== config.media.lastMetaFingerprint) {
             downloadBlob(metaPayload.blob, metaPayload.filename);
             config.media.lastMetaFingerprint = metaFp;
@@ -624,8 +624,21 @@ export const ScheduledBackup = {
         }
         const backupPackage = await buildBackupPackage();
         const text = serializeBackupPackage(backupPackage);
+        // Strip wall-clock fields so scheduled skip-if-unchanged stays stable.
+        const { timestamp: _ts, media_library: mediaLib, ...stableRest } = backupPackage;
+        const stableMedia = mediaLib && typeof mediaLib === 'object'
+            ? (() => {
+                const { exportedAt: _exportedAt, ...restMedia } = mediaLib;
+                return restMedia;
+            })()
+            : mediaLib;
+        const textForFingerprint = serializeBackupPackage({
+            ...stableRest,
+            media_library: stableMedia
+        });
         return {
             text,
+            textForFingerprint,
             blob: new Blob([text], { type: 'application/json' }),
             filename: `matrix_workspace_backup_${backupPackage.timestamp}.json`,
             timestamp: backupPackage.timestamp
