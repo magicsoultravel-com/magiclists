@@ -19,6 +19,9 @@
     font-size: 0.66rem;
     --sidebar-ui-scale: 1;
     --sidebar-pad-x: 1rem;
+    /* Uniform horizontal spacing for every item in collapsed module rows
+       (quick-action buttons, radio/tv art+play/stop, weather glance+chips). */
+    --sidebar-compact-gap: 0.25rem;
     transition: width 0.24s cubic-bezier(0.22, 1, 0.36, 1), padding 0.24s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
 }
 
@@ -605,7 +608,7 @@ body.is-shell-resizing--h * {
 .quick-actions-header-icons {
     display: none;
     align-items: center;
-    gap: 0.15rem;
+    gap: var(--sidebar-compact-gap, 0.25rem);
     margin-left: auto;
 }
 
@@ -614,15 +617,34 @@ body.is-shell-resizing--h * {
     display: flex;
 }
 
-/* Shared collapsed-header icon chrome (Actions, Radio/TV, Weather, Media).
-   Specificity must beat .side-panel .btn-icon / .btn--icon padding. */
+/* Collapsed rows use the same uniform item spacing as the radio/tv/weather
+   compact rows, including the gap between a module's headers and its buttons. */
+.side-panel .collapsable-header:has(.collapsable-toggle.collapsed) {
+    gap: var(--sidebar-compact-gap, 0.25rem);
+}
+
+/* Collapsed header icons (Actions, Radio/TV, Weather, Media).
+   Every collapsed-module icon button renders the same outer 22×22 box with the
+   12×12 glyph dead-center. box-sizing: border-box makes 22px the OUTER size on
+   all of them (default content-box would inflate the padded .btn chips). */
 .side-panel .sidebar-header-icon-btn,
+.side-panel .sidebar-module .sidebar-header-icon-btn,
 .sidebar-module .sidebar-header-icon-btn,
 .sidebar-header-icon-btn,
-.quick-act-header-btn {
+.quick-act-header-btn,
+.sidebar-media__compact-art {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 22px;
+    height: 22px;
+    /* min-* guard: .btn--icon (used by the Actions header buttons) sets
+       min-height: 28px which would otherwise inflate those chips. */
     min-width: 22px;
     min-height: 22px;
-    padding: 0.12rem;
+    padding: 0;
+    box-sizing: border-box;
     font-size: 0.75rem;
     line-height: 1;
     color: var(--text-muted);
@@ -630,9 +652,11 @@ body.is-shell-resizing--h * {
 }
 
 .side-panel .sidebar-header-icon-btn svg,
+.side-panel .sidebar-module .sidebar-header-icon-btn svg,
 .sidebar-module .sidebar-header-icon-btn svg,
 .sidebar-header-icon-btn svg,
 .quick-act-header-btn svg {
+    display: block;
     width: 12px;
     height: 12px;
 }

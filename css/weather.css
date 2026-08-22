@@ -6,7 +6,7 @@
 /* Compact header container (visibility controlled by shell-sidebar.css) */
 .sidebar-weather__compact {
     align-items: center;
-    gap: 0.25rem;
+    gap: var(--sidebar-compact-gap, 0.25rem);
     flex-wrap: nowrap;
 }
 
@@ -14,6 +14,15 @@
     display: flex;
     color: var(--accent-color, #7eb8ff);
     flex-shrink: 0;
+}
+
+/* Match the shared collapsed-header glyph size (12×12, see the collapsed
+   header icon rule in shell-sidebar.css). */
+.sidebar-panel .sidebar-weather__compact-icon svg,
+.sidebar-weather__compact-icon svg {
+    display: block;
+    width: 12px;
+    height: 12px;
 }
 
 .sidebar-weather__compact-temp {

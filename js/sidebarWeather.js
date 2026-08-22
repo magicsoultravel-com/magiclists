@@ -42,7 +42,7 @@ export const SidebarWeather = {
                     <span class="sidebar-weather__compact-temp" data-weather-compact-temp>—</span>
                 </div>
                 <button type="button" class="btn btn--compact btn-icon sidebar-header-icon-btn" data-weather-refresh title="Refresh weather" aria-label="Refresh weather">${REFRESH_ICON}</button>
-                <a class="btn btn--compact btn-icon sidebar-header-icon-btn" data-weather-extlink href="#" target="_blank" rel="noopener noreferrer" title="Open IMGW weather (meteo.imgw.pl)" aria-label="Open IMGW weather">${CARD_ICONS.popout}</a>`;
+                <a class="btn btn--compact btn-icon sidebar-header-icon-btn" data-weather-extlink href="#" target="_blank" rel="noopener noreferrer" title="Open IMGW weather (meteo.imgw.pl)" aria-label="Open IMGW weather">${CARD_ICONS.externalLink}</a>`;
         this.root.innerHTML = `
             ${renderSidebarModuleHeaderHtml({ headerId: 'weather-section-header', title: 'Weather', extrasHtml })}
             <div class="collapsable-section" id="weather-section">
@@ -102,7 +102,7 @@ export const SidebarWeather = {
         const current = snapshot.current;
         tempEl.textContent = current.temp != null ? `${Math.round(current.temp)}°` : '—';
         if (iconEl) {
-            iconEl.innerHTML = weatherIconSvgFromCode(current.icon, current, { size: 16 });
+            iconEl.innerHTML = weatherIconSvgFromCode(current.icon, current, { size: 12 });
         }
     },
 
