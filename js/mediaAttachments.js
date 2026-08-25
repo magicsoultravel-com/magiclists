@@ -152,7 +152,7 @@ export function updateAttachmentView(item, mediaId, patch = {}, { syncUi = true 
         list[idx] = next;
         it.attachments = list;
         changed = true;
-    }, { preserveView: true });
+    }, { preserveView: true, skipRerender: true });
     if (changed && syncUi) syncAttachmentsUi(item);
     return changed;
 }

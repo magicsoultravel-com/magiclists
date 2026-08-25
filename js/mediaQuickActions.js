@@ -39,7 +39,7 @@ export function buildMediaQuickActionsHtml(opts) {
     const removeClass = isNote ? '' : ' card-act--danger';
     const removeAttr = isNote ? 'data-media-action-detach' : 'data-media-action-delete';
 
-    const viewBtn = `<button type="button" class="card-act" data-media-action-view data-media-id="${mediaId}" title="View full size" aria-label="View full size">${CARD_ICONS.expandMedia}</button>`;
+    const viewBtn = `<button type="button" class="card-act" data-media-action-view data-media-id="${mediaId}" title="View full size" aria-label="View full size">${CARD_ICONS.show}</button>`;
     const expandInNoteBtn = isNote
         ? `<button type="button" class="card-act note-attachment__expand is-hidden" data-expand-media="${mediaId}" title="Expand in note" aria-label="Expand in note" aria-pressed="false">${CARD_ICONS.expandMedia}</button>`
         : '';

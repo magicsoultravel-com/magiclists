@@ -984,6 +984,7 @@ html[data-app-theme="slate"] .file-cabinet-filed-chip.is-file-cabinet-drop-targe
 
 html[data-app-theme="slate"] .file-cabinet-category {
     background-color: #3d5548;
+    background-image: none;
     border-radius: 0 0 6px 6px;
     padding: 0 0.35rem 0.45rem;
     box-shadow: inset 3px 0 6px rgba(0, 0, 0, 0.14), inset -3px 0 6px rgba(0, 0, 0, 0.14), inset 0 -4px 8px rgba(0, 0, 0, 0.2);
@@ -1524,6 +1525,7 @@ html[data-app-theme="neon"] .file-cabinet-filed-chip.is-file-cabinet-drop-target
 
 html[data-app-theme="neon"] .file-cabinet-category {
     background-color: #1a1628;
+    background-image: none;
     border-radius: 0 0 6px 6px;
     padding: 0 0.35rem 0.45rem;
     box-shadow:
@@ -1720,6 +1722,7 @@ html[data-app-theme="miami"] .file-cabinet-filed-chip.is-file-cabinet-drop-targe
 
 html[data-app-theme="miami"] .file-cabinet-category {
     background-color: #221830;
+    background-image: none;
     border-radius: 0 0 6px 6px;
     padding: 0 0.35rem 0.45rem;
     box-shadow:
@@ -1928,6 +1931,7 @@ html[data-app-theme="spaceship"] .file-cabinet-filed-chip.is-file-cabinet-drop-t
 
 html[data-app-theme="spaceship"] .file-cabinet-category {
     background-color: #222830;
+    background-image: none;
     border-radius: 0 0 4px 4px;
     padding: 0 0.35rem 0.45rem;
     box-shadow:
@@ -2190,6 +2194,7 @@ html[data-app-theme="night-sky"] .file-cabinet-filed-chip.is-file-cabinet-drop-t
 
 html[data-app-theme="night-sky"] .file-cabinet-category {
     background-color: #121c30;
+    background-image: none;
     border-radius: 0 0 6px 6px;
     padding: 0 0.35rem 0.45rem;
     box-shadow:

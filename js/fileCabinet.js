@@ -1402,6 +1402,8 @@ function buildFileCabinetCategoryColumn({
     const col = document.createElement('div');
     col.className = 'file-cabinet-category';
     col.dataset.category = catName;
+    // Match folded slots so expanded wash + drop highlight share the same tint vars.
+    col.style.setProperty('--card-category-color', color);
     col.style.setProperty('--file-cabinet-category-color', color);
 
     const header = document.createElement('div');
