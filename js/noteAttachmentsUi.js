@@ -3,22 +3,40 @@ import { escapeAttr, escapeHTML } from './domEscape.js';
 import { CARD_ICONS } from './icons.js';
 import { getMediaMeta, getObjectUrl } from './mediaLibrary.js';
 import {
+    ATTACH_SCALE_STEPS,
+    clampAttachScale,
     detachMediaFromNote,
-    normalizeAttachments
+    normalizeAttachments,
+    stepAttachScale,
+    updateAttachmentView
 } from './mediaAttachments.js';
 import { buildMediaQuickActionsHtml, bindMediaQuickActions, viewMediaFullSize } from './mediaQuickActions.js';
 import { showAppToast } from './toast.js';
-
-/** @type {Set<string>} session keys `noteId:mediaId` for in-note expanded rows */
-const expandedInNote = new Set();
 
 async function openMediaLibrary(opts) {
     const { MediaLibraryOverlay } = await import('./mediaLibraryOverlay.js');
     return MediaLibraryOverlay.open(opts);
 }
 
-function expandKey(noteId, mediaId) {
-    return `${noteId}:${mediaId}`;
+function attachmentEntry(item, mediaId) {
+    return normalizeAttachments(item?.attachments).find((a) => a.mediaId === mediaId) || null;
+}
+
+function applyFullImageScale(img, scale) {
+    if (!img) return;
+    const s = clampAttachScale(scale);
+    img.style.width = `${100 * s}%`;
+}
+
+function syncZoomButtonState(preview, scale) {
+    if (!preview) return;
+    const s = clampAttachScale(scale);
+    const min = ATTACH_SCALE_STEPS[0];
+    const max = ATTACH_SCALE_STEPS[ATTACH_SCALE_STEPS.length - 1];
+    const outBtn = preview.querySelector('[data-attach-zoom-out]');
+    const inBtn = preview.querySelector('[data-attach-zoom-in]');
+    if (outBtn) outBtn.disabled = s <= min;
+    if (inBtn) inBtn.disabled = s >= max;
 }
 
 /**
@@ -95,12 +113,6 @@ function bodyInModal(body) {
  */
 export function syncNoteAttachmentsDom(item) {
     if (!item?.id) return;
-    const stillAttached = new Set(normalizeAttachments(item.attachments).map((a) => a.mediaId));
-    for (const key of [...expandedInNote]) {
-        if (!key.startsWith(`${item.id}:`)) continue;
-        const mediaId = key.slice(item.id.length + 1);
-        if (!stillAttached.has(mediaId)) expandedInNote.delete(key);
-    }
 
     for (const body of noteBodiesForItem(item.id)) {
         const canEdit = bodyCanEdit(body);
@@ -224,7 +236,12 @@ export function closeMediaLightbox() {
     }
 }
 
-async function expandAttachmentRow(row, noteId, mediaId) {
+/**
+ * @param {HTMLElement} row
+ * @param {string} mediaId
+ * @param {number} [scale]
+ */
+async function expandAttachmentRow(row, mediaId, scale = 1) {
     const preview = row.querySelector('[data-attach-preview]');
     const expandBtn = row.querySelector('[data-expand-media]');
     if (!preview) return;
@@ -233,10 +250,19 @@ async function expandAttachmentRow(row, noteId, mediaId) {
         showAppToast('Preview unavailable');
         return;
     }
-    preview.innerHTML = `<img class="note-attachment__full" src="${escapeAttr(url)}" alt="">`;
+    const s = clampAttachScale(scale);
+    const widthPct = 100 * s;
+    preview.innerHTML = `
+        <div class="note-attachment__zoom" role="group" aria-label="Zoom image">
+            <button type="button" class="card-act" data-attach-zoom-out title="Zoom out" aria-label="Zoom out">${CARD_ICONS.minus}</button>
+            <button type="button" class="card-act" data-attach-zoom-in title="Zoom in" aria-label="Zoom in">${CARD_ICONS.plus}</button>
+        </div>
+        <img class="note-attachment__full" data-attach-full src="${escapeAttr(url)}" alt="" style="width: ${widthPct}%">
+    `;
     preview.classList.remove('is-hidden');
     row.classList.add('is-expanded');
-    expandedInNote.add(expandKey(noteId, mediaId));
+    row.dataset.attachScale = String(s);
+    syncZoomButtonState(preview, s);
     if (expandBtn) {
         expandBtn.innerHTML = CARD_ICONS.collapseMedia;
         expandBtn.title = 'Collapse in note';
@@ -246,7 +272,10 @@ async function expandAttachmentRow(row, noteId, mediaId) {
     }
 }
 
-function collapseAttachmentRow(row, noteId, mediaId) {
+/**
+ * @param {HTMLElement} row
+ */
+function collapseAttachmentRow(row) {
     const preview = row.querySelector('[data-attach-preview]');
     const expandBtn = row.querySelector('[data-expand-media]');
     if (preview) {
@@ -254,7 +283,7 @@ function collapseAttachmentRow(row, noteId, mediaId) {
         preview.classList.add('is-hidden');
     }
     row.classList.remove('is-expanded');
-    expandedInNote.delete(expandKey(noteId, mediaId));
+    delete row.dataset.attachScale;
     if (expandBtn) {
         expandBtn.innerHTML = CARD_ICONS.expandMedia;
         expandBtn.title = 'Expand in note';
@@ -264,7 +293,7 @@ function collapseAttachmentRow(row, noteId, mediaId) {
 }
 
 /**
- * Fill titles/thumbs and wire open/detach/expand/lightbox.
+ * Fill titles/thumbs and wire open/detach/expand/zoom/lightbox.
  * @param {HTMLElement} root
  * @param {object} item
  */
@@ -329,17 +358,45 @@ export function bindNoteAttachments(root, item) {
             const row = btn.closest('.note-attachment');
             if (!row || !mediaId) return;
             if (row.classList.contains('is-expanded')) {
-                collapseAttachmentRow(row, item.id, mediaId);
+                collapseAttachmentRow(row);
+                updateAttachmentView(item, mediaId, { expanded: false }, { syncUi: false });
             } else {
-                expandAttachmentRow(row, item.id, mediaId).catch(() => {});
+                const entry = attachmentEntry(item, mediaId);
+                expandAttachmentRow(row, mediaId, entry?.scale ?? 1)
+                    .then(() => {
+                        updateAttachmentView(item, mediaId, { expanded: true }, { syncUi: false });
+                    })
+                    .catch(() => {});
             }
         });
     });
 
-    hydrateAttachmentRows(section, item.id).catch(() => {});
+    if (section.dataset.zoomBound !== '1') {
+        section.dataset.zoomBound = '1';
+        section.addEventListener('click', (e) => {
+            const zoomIn = e.target.closest('[data-attach-zoom-in]');
+            const zoomOut = e.target.closest('[data-attach-zoom-out]');
+            if (!zoomIn && !zoomOut) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const row = (zoomIn || zoomOut).closest('.note-attachment');
+            const mediaId = row?.dataset.mediaId;
+            if (!row || !mediaId || !row.classList.contains('is-expanded')) return;
+            const cur = clampAttachScale(row.dataset.attachScale || attachmentEntry(item, mediaId)?.scale || 1);
+            const next = stepAttachScale(cur, zoomIn ? 1 : -1);
+            if (next === cur) return;
+            row.dataset.attachScale = String(next);
+            const preview = row.querySelector('[data-attach-preview]');
+            applyFullImageScale(preview?.querySelector('[data-attach-full]'), next);
+            syncZoomButtonState(preview, next);
+            updateAttachmentView(item, mediaId, { scale: next }, { syncUi: false });
+        });
+    }
+
+    hydrateAttachmentRows(section, item).catch(() => {});
 }
 
-async function hydrateAttachmentRows(section, noteId) {
+async function hydrateAttachmentRows(section, item) {
     const rows = section.querySelectorAll('.note-attachment[data-media-id]');
     await Promise.all([...rows].map(async (row) => {
         const id = row.dataset.mediaId;
@@ -373,8 +430,9 @@ async function hydrateAttachmentRows(section, noteId) {
                         thumbEl.innerHTML = `<img src="${escapeAttr(url)}" alt="">`;
                     }
                 }
-                if (noteId && expandedInNote.has(expandKey(noteId, id))) {
-                    await expandAttachmentRow(row, noteId, id);
+                const entry = attachmentEntry(item, id);
+                if (entry?.expanded) {
+                    await expandAttachmentRow(row, id, entry.scale);
                 }
                 return;
             }

@@ -2,6 +2,9 @@
 import { NoteSurface } from './noteSurface.js';
 import { stripRichText } from './richText.js';
 
+/** Discrete scale steps for expand-in-note image size */
+export const ATTACH_SCALE_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
 function nowSeconds() {
     return Math.floor(Date.now() / 1000);
 }
@@ -13,9 +16,43 @@ function syncAttachmentsUi(item) {
 }
 
 /**
- * Normalize note.attachments to `{ mediaId, attachedAt }[]`.
+ * Snap scale to nearest allowed step (default 1).
+ * @param {unknown} scale
+ * @returns {number}
+ */
+export function clampAttachScale(scale) {
+    const n = Number(scale);
+    if (!Number.isFinite(n)) return 1;
+    let best = ATTACH_SCALE_STEPS[0];
+    let bestDist = Infinity;
+    for (const step of ATTACH_SCALE_STEPS) {
+        const dist = Math.abs(step - n);
+        if (dist < bestDist) {
+            bestDist = dist;
+            best = step;
+        }
+    }
+    return best;
+}
+
+/**
+ * Step scale up (+1) or down (-1) within ATTACH_SCALE_STEPS.
+ * @param {unknown} scale
+ * @param {number} dir
+ * @returns {number}
+ */
+export function stepAttachScale(scale, dir) {
+    const cur = clampAttachScale(scale);
+    const idx = ATTACH_SCALE_STEPS.indexOf(cur);
+    const next = idx + (dir > 0 ? 1 : -1);
+    if (next < 0 || next >= ATTACH_SCALE_STEPS.length) return cur;
+    return ATTACH_SCALE_STEPS[next];
+}
+
+/**
+ * Normalize note.attachments to `{ mediaId, attachedAt, expanded, scale }[]`.
  * @param {unknown} list
- * @returns {Array<{ mediaId: string, attachedAt: number }>}
+ * @returns {Array<{ mediaId: string, attachedAt: number, expanded: boolean, scale: number }>}
  */
 export function normalizeAttachments(list) {
     if (!Array.isArray(list)) return [];
@@ -30,9 +67,15 @@ export function normalizeAttachments(list) {
         const attachedAt = Number(
             typeof entry === 'object' && entry ? entry.attachedAt : 0
         );
+        const expanded = !!(typeof entry === 'object' && entry && entry.expanded);
+        const scale = clampAttachScale(
+            typeof entry === 'object' && entry ? entry.scale : 1
+        );
         out.push({
             mediaId,
-            attachedAt: Number.isFinite(attachedAt) && attachedAt > 0 ? attachedAt : nowSeconds()
+            attachedAt: Number.isFinite(attachedAt) && attachedAt > 0 ? attachedAt : nowSeconds(),
+            expanded,
+            scale
         });
     }
     return out;
@@ -58,7 +101,7 @@ export function attachMediaToNote(item, mediaId) {
     NoteSurface.mutateItem(item, (it) => {
         const list = normalizeAttachments(it.attachments);
         if (list.some((a) => a.mediaId === mediaId)) return;
-        list.push({ mediaId, attachedAt: nowSeconds() });
+        list.push({ mediaId, attachedAt: nowSeconds(), expanded: false, scale: 1 });
         it.attachments = list;
         added = true;
     }, { preserveView: true });
@@ -84,6 +127,34 @@ export function detachMediaFromNote(item, mediaId) {
     }, { preserveView: true });
     if (removed) syncAttachmentsUi(item);
     return removed;
+}
+
+/**
+ * Update expand-in-note view state for one attachment (expanded / scale).
+ * @param {object} item
+ * @param {string} mediaId
+ * @param {{ expanded?: boolean, scale?: number }} patch
+ * @param {{ syncUi?: boolean }} [opts]
+ * @returns {boolean}
+ */
+export function updateAttachmentView(item, mediaId, patch = {}, { syncUi = true } = {}) {
+    if (!item?.id || !mediaId || !patch || typeof patch !== 'object') return false;
+    let changed = false;
+    NoteSurface.mutateItem(item, (it) => {
+        const list = normalizeAttachments(it.attachments);
+        const idx = list.findIndex((a) => a.mediaId === mediaId);
+        if (idx < 0) return;
+        const prev = list[idx];
+        const next = { ...prev };
+        if ('expanded' in patch) next.expanded = !!patch.expanded;
+        if ('scale' in patch) next.scale = clampAttachScale(patch.scale);
+        if (next.expanded === prev.expanded && next.scale === prev.scale) return;
+        list[idx] = next;
+        it.attachments = list;
+        changed = true;
+    }, { preserveView: true });
+    if (changed && syncUi) syncAttachmentsUi(item);
+    return changed;
 }
 
 /**

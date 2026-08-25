@@ -51,8 +51,6 @@ export const FILE_CABINET_STACK_OFFSET_Y = 18;
 export const FILE_CABINET_STACK_OFFSET_X = 10;
 /** Floor width for open category columns (px). Long titles truncate; more tabs can grow past this. */
 export const FILE_CABINET_DRAWER_WIDTH = 160;
-/** Fallback width for folded chip rail / hover rollout when chip is not measurable. */
-export const FILE_CABINET_CHIP_WIDTH = 120;
 const FILE_CABINET_CATEGORY_HEADER_PAD = 20;
 const FILE_CABINET_SCROLL_EDGE = 36;
 const FILE_CABINET_SCROLL_STEP = 18;
@@ -67,14 +65,6 @@ function fileCabinetColumnWidth(slotCount) {
     const slots = Math.max(slotCount || 0, 1);
     const contentWidth = tabW + (slots - 1) * FILE_CABINET_STACK_OFFSET_X;
     return Math.max(contentWidth, FILE_CABINET_DRAWER_WIDTH);
-}
-
-/** Folded-chip width for hover rollout alignment (matches rail, not open-drawer floor). */
-function fileCabinetChipWidth(rolloutOrStack) {
-    const slot = rolloutOrStack?.closest?.('.file-cabinet-filed-slot');
-    const chip = slot?.querySelector?.('.file-cabinet-filed-chip');
-    const w = chip?.offsetWidth;
-    return Number.isFinite(w) && w > 0 ? Math.round(w) : FILE_CABINET_CHIP_WIDTH;
 }
 
 export const DRAG_THRESHOLD = 4;
@@ -756,23 +746,28 @@ function updateStackPreviewDimensions(stackEl, slotCount, { minSlotCount = 0 } =
     if (!stackEl) return;
     const label = getLabelRect();
     const count = Math.max(slotCount, minSlotCount, 1);
-    const stackHeight = label.h + (count - 1) * FILE_CABINET_STACK_OFFSET_Y;
+    const stackHeight = Math.max(label.h + (count - 1) * FILE_CABINET_STACK_OFFSET_Y, label.h);
     const rollout = stackEl.closest('.file-cabinet-filed-rollout');
-    const width = rollout
-        ? fileCabinetChipWidth(rollout)
-        : fileCabinetColumnWidth(count);
+
+    if (rollout) {
+        // Width owned by CSS (flush to chip / rail line); JS only sets stack height.
+        stackEl.style.width = '';
+        stackEl.style.minWidth = '';
+        stackEl.style.height = `${stackHeight}px`;
+        rollout.style.width = '';
+        rollout.style.minWidth = '';
+        rollout.style.height = '';
+        return;
+    }
+
+    const width = fileCabinetColumnWidth(count);
     stackEl.style.width = `${width}px`;
-    stackEl.style.height = `${Math.max(stackHeight, label.h)}px`;
+    stackEl.style.height = `${stackHeight}px`;
     const col = stackEl.closest('.file-cabinet-category');
     if (col) {
         col.style.width = `${width}px`;
         col.style.minWidth = `${width}px`;
         col.style.flexBasis = `${width}px`;
-    }
-    if (rollout) {
-        rollout.style.width = `${width}px`;
-        rollout.style.minWidth = `${width}px`;
-        rollout.style.height = `${Math.max(stackHeight, label.h)}px`;
     }
 }
 
@@ -1289,24 +1284,25 @@ export function applyFileCabinetStackPositions(stackEl) {
         ? label.h + (count - 1) * FILE_CABINET_STACK_OFFSET_Y
         : label.h;
     const rollout = stackEl.closest('.file-cabinet-filed-rollout');
-    const width = rollout
-        ? fileCabinetChipWidth(rollout)
-        : fileCabinetColumnWidth(count);
-
-    stackEl.style.width = `${width}px`;
-    stackEl.style.height = `${Math.max(stackHeight, label.h)}px`;
-
-    const col = stackEl.closest('.file-cabinet-category');
-    if (col) {
-        col.style.width = `${width}px`;
-        col.style.minWidth = `${width}px`;
-        col.style.flexBasis = `${width}px`;
-    }
 
     if (rollout) {
-        rollout.style.width = `${width}px`;
-        rollout.style.minWidth = `${width}px`;
-        rollout.style.height = `${Math.max(stackHeight, label.h)}px`;
+        // Width owned by CSS (flush to chip / rail line); JS only sets stack height.
+        stackEl.style.width = '';
+        stackEl.style.minWidth = '';
+        stackEl.style.height = `${Math.max(stackHeight, label.h)}px`;
+        rollout.style.width = '';
+        rollout.style.minWidth = '';
+        rollout.style.height = '';
+    } else {
+        const width = fileCabinetColumnWidth(count);
+        stackEl.style.width = `${width}px`;
+        stackEl.style.height = `${Math.max(stackHeight, label.h)}px`;
+        const col = stackEl.closest('.file-cabinet-category');
+        if (col) {
+            col.style.width = `${width}px`;
+            col.style.minWidth = `${width}px`;
+            col.style.flexBasis = `${width}px`;
+        }
     }
 
     let layoutIndex = 0;

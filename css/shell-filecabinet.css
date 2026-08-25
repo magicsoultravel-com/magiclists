@@ -3,25 +3,29 @@
    FILE CABINET - Drawer-specific styles (filed chip rail, rollout, tabs)
    ========================================================================== */
 
-/* Filed chip rail */
+/* Filed chip rail — flush chip + preview to border-right divider */
 .file-cabinet-filed-rail {
+    box-sizing: border-box;
     flex: 0 0 120px;
+    width: 120px;
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
-    padding-right: 0.45rem;
     border-right: 1px solid color-mix(in srgb, var(--text-muted) 22%, var(--border-color));
     overflow: visible;
 }
 
 .file-cabinet-filed-slot {
     position: relative;
+    width: 100%;
 }
 
 .file-cabinet-filed-chip {
     display: flex;
     align-items: center;
     gap: 0.25rem;
+    box-sizing: border-box;
+    width: 100%;
     min-width: 0;
     padding: 0.2rem 0.15rem;
     border-radius: 0.25rem;
@@ -79,11 +83,12 @@
     box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--card-category-color, var(--accent-color)) 28%, transparent);
 }
 
-/* Filed chip rollout popover */
+/* Filed chip rollout popover — same width as chip (slot), flush to rail line */
 .file-cabinet-filed-rollout {
     position: absolute;
     top: 100%;
     left: 0;
+    right: 0;
     z-index: 130;
     overflow: visible;
     opacity: 0;
@@ -97,6 +102,8 @@
     overflow: hidden;
     width: 0;
     height: 0;
+    left: 0;
+    right: auto;
     padding: 0;
     margin: 0;
     box-shadow: none;
@@ -105,6 +112,7 @@
 .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout {
     z-index: 500;
     box-sizing: border-box;
+    width: auto;
     padding: 0.3rem;
     opacity: 1;
     pointer-events: auto;
@@ -123,6 +131,11 @@
     box-shadow:
         0 4px 12px rgba(0, 0, 0, 0.16),
         inset 0 0 0 1px color-mix(in srgb, var(--card-category-color, var(--accent-color)) 32%, var(--border-color));
+}
+
+.file-cabinet-filed-rollout .file-cabinet-tab-stack {
+    width: 100%;
+    min-width: 0;
 }
 
 /* File cabinet categories */

@@ -753,19 +753,49 @@
 }
 
 .note-attachment__preview {
+    position: relative;
     width: 100%;
     min-width: 0;
+    overflow: auto;
 }
 
 .note-attachment__preview.is-hidden {
     display: none;
 }
 
+.note-attachment__zoom {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.35rem;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1rem;
+    padding: 0.12rem;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--bg-card, var(--surface-elevated, #1a1a1e)) 88%, transparent);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+.note-attachment__preview:hover .note-attachment__zoom,
+.note-attachment__preview:focus-within .note-attachment__zoom {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.note-attachment__zoom .card-act:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
 .note-attachment__full {
     display: block;
     width: 100%;
+    max-width: none;
     height: auto;
-    max-height: min(70vh, 100%);
+    max-height: none;
     object-fit: contain;
     border-radius: 6px;
     background: color-mix(in srgb, var(--text-primary) 6%, transparent);
