@@ -40,6 +40,9 @@
 .file-cabinet-filed-chip-name {
     flex: 1 1 auto;
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .file-cabinet-filed-chip .file-cabinet-filed-chip-expand {
@@ -132,14 +135,9 @@
 }
 
 .file-cabinet-category {
-    --file-cabinet-stack-offset-x: 10px;
-    /* Default = 4 cascaded tabs; JS grows when there are more notes. */
     flex: 0 0 auto;
-    box-sizing: border-box;
-    width: calc(var(--tile-small-w, 65px) + 3 * var(--file-cabinet-stack-offset-x));
-    min-width: calc(var(--tile-small-w, 65px) + 3 * var(--file-cabinet-stack-offset-x));
-    max-width: 100%;
-    overflow: hidden;
+    width: auto;
+    min-width: 160px;
 }
 
 .file-cabinet-category-header {
@@ -316,7 +314,7 @@
 /* File cabinet tabs - use same styling as spatial-at-small for consistency */
 .file-cabinet-tab-stack {
     position: relative;
-    min-width: calc(var(--tile-small-w, 65px) + 3 * var(--file-cabinet-stack-offset-x, 10px));
+    min-width: 160px;
 }
 
 .file-cabinet .file-cabinet-tab {

@@ -49,8 +49,8 @@ const EXPAND_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="
 
 export const FILE_CABINET_STACK_OFFSET_Y = 18;
 export const FILE_CABINET_STACK_OFFSET_X = 10;
-/** Floor drawer width as if this many tabs were cascaded (title truncates; more notes grow). */
-export const FILE_CABINET_DRAWER_MIN_SLOTS = 4;
+/** Floor width for open category columns (px). Long titles truncate; more tabs can grow past this. */
+export const FILE_CABINET_DRAWER_WIDTH = 160;
 const FILE_CABINET_CATEGORY_HEADER_PAD = 20;
 const FILE_CABINET_SCROLL_EDGE = 36;
 const FILE_CABINET_SCROLL_STEP = 18;
@@ -59,11 +59,12 @@ function collapsedTabWidth() {
     return getLabelRect().w;
 }
 
-/** Column/stack width: at least MIN_SLOTS cascade, then grows with note count. */
+/** Open-column width: at least FILE_CABINET_DRAWER_WIDTH, grows with cascaded tabs. */
 function fileCabinetColumnWidth(slotCount) {
     const tabW = collapsedTabWidth();
-    const slots = Math.max(slotCount || 0, FILE_CABINET_DRAWER_MIN_SLOTS, 1);
-    return tabW + (slots - 1) * FILE_CABINET_STACK_OFFSET_X;
+    const slots = Math.max(slotCount || 0, 1);
+    const contentWidth = tabW + (slots - 1) * FILE_CABINET_STACK_OFFSET_X;
+    return Math.max(contentWidth, FILE_CABINET_DRAWER_WIDTH);
 }
 
 export const DRAG_THRESHOLD = 4;
@@ -745,11 +746,9 @@ function updateStackPreviewDimensions(stackEl, slotCount, { minSlotCount = 0 } =
     if (!stackEl) return;
     const label = getLabelRect();
     const count = Math.max(slotCount, minSlotCount, 1);
-    const tabW = collapsedTabWidth();
-    const contentWidth = tabW + (count - 1) * FILE_CABINET_STACK_OFFSET_X;
     const columnWidth = fileCabinetColumnWidth(count);
     const stackHeight = label.h + (count - 1) * FILE_CABINET_STACK_OFFSET_Y;
-    stackEl.style.width = `${Math.max(contentWidth, columnWidth)}px`;
+    stackEl.style.width = `${columnWidth}px`;
     stackEl.style.height = `${Math.max(stackHeight, label.h)}px`;
     const col = stackEl.closest('.file-cabinet-category');
     if (col) {
@@ -1274,16 +1273,12 @@ export function applyFileCabinetStackPositions(stackEl) {
     const tabs = [...stackEl.querySelectorAll('.file-cabinet-tab')];
     const label = getLabelRect();
     const count = tabs.length;
-    const tabW = collapsedTabWidth();
-    const contentWidth = count > 0
-        ? tabW + (count - 1) * FILE_CABINET_STACK_OFFSET_X
-        : tabW;
     const columnWidth = fileCabinetColumnWidth(count);
     const stackHeight = count > 0
         ? label.h + (count - 1) * FILE_CABINET_STACK_OFFSET_Y
         : label.h;
 
-    stackEl.style.width = `${Math.max(contentWidth, columnWidth)}px`;
+    stackEl.style.width = `${columnWidth}px`;
     stackEl.style.height = `${Math.max(stackHeight, label.h)}px`;
 
     const col = stackEl.closest('.file-cabinet-category');
