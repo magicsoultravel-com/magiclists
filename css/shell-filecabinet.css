@@ -48,9 +48,26 @@
     padding: 0.05rem;
 }
 
+.file-cabinet-filed-chip .file-cabinet-category-open-all-btn {
+    flex: 0 0 auto;
+    opacity: 0;
+    padding: 0.05rem;
+    transition: opacity 0.12s ease;
+}
+
 .file-cabinet-filed-chip:hover .file-cabinet-filed-chip-expand,
 .file-cabinet-filed-chip:focus-within .file-cabinet-filed-chip-expand,
 .file-cabinet-filed-chip.is-fold-preview-source .file-cabinet-filed-chip-expand {
+    opacity: 1;
+}
+
+.file-cabinet-filed-chip:hover .file-cabinet-category-open-all-btn,
+.file-cabinet-filed-chip:focus-within .file-cabinet-category-open-all-btn,
+.file-cabinet-filed-chip.is-fold-preview-source .file-cabinet-category-open-all-btn {
+    opacity: 0.75;
+}
+
+.file-cabinet-filed-chip .file-cabinet-category-open-all-btn:hover {
     opacity: 1;
 }
 
@@ -115,9 +132,14 @@
 }
 
 .file-cabinet-category {
+    --file-cabinet-stack-offset-x: 10px;
+    /* Default = 4 cascaded tabs; JS grows when there are more notes. */
     flex: 0 0 auto;
-    width: auto;
-    min-width: 160px;
+    box-sizing: border-box;
+    width: calc(var(--tile-small-w, 65px) + 3 * var(--file-cabinet-stack-offset-x));
+    min-width: calc(var(--tile-small-w, 65px) + 3 * var(--file-cabinet-stack-offset-x));
+    max-width: 100%;
+    overflow: hidden;
 }
 
 .file-cabinet-category-header {
@@ -126,6 +148,8 @@
     gap: 0.3rem;
     margin-bottom: 0.3rem;
     min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
     font-size: 0.52rem;
     font-weight: 600;
     color: var(--text-main);
@@ -133,7 +157,8 @@
 }
 
 .file-cabinet-category-header .file-cabinet-category-fold-btn,
-.file-cabinet-category-header .file-cabinet-category-grab-btn {
+.file-cabinet-category-header .file-cabinet-category-grab-btn,
+.file-cabinet-category-header .file-cabinet-category-open-all-btn {
     flex: 0 0 auto;
     opacity: 0;
     padding: 0.05rem;
@@ -160,12 +185,15 @@
 .file-cabinet-category-header:hover .file-cabinet-category-fold-btn,
 .file-cabinet-category-header:focus-within .file-cabinet-category-fold-btn,
 .file-cabinet-category-header:hover .file-cabinet-category-grab-btn,
-.file-cabinet-category-header:focus-within .file-cabinet-category-grab-btn {
+.file-cabinet-category-header:focus-within .file-cabinet-category-grab-btn,
+.file-cabinet-category-header:hover .file-cabinet-category-open-all-btn,
+.file-cabinet-category-header:focus-within .file-cabinet-category-open-all-btn {
     opacity: 0.75;
 }
 
 .file-cabinet-category-header .file-cabinet-category-fold-btn:hover,
-.file-cabinet-category-header .file-cabinet-category-grab-btn:hover {
+.file-cabinet-category-header .file-cabinet-category-grab-btn:hover,
+.file-cabinet-category-header .file-cabinet-category-open-all-btn:hover {
     opacity: 1;
 }
 
@@ -259,6 +287,9 @@
 .file-cabinet-category-name {
     flex: 1 1 auto;
     min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .file-cabinet-category-name.card-inline-edit,
@@ -285,7 +316,7 @@
 /* File cabinet tabs - use same styling as spatial-at-small for consistency */
 .file-cabinet-tab-stack {
     position: relative;
-    min-width: 160px;
+    min-width: calc(var(--tile-small-w, 65px) + 3 * var(--file-cabinet-stack-offset-x, 10px));
 }
 
 .file-cabinet .file-cabinet-tab {

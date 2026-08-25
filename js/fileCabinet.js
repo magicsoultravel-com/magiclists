@@ -17,7 +17,7 @@ import { normalizeViewMode } from './viewSession.js';
 import { syncCabinetSplitter, syncFileCabinetShutChrome, refreshFileCabinetUiScale } from './shellResize.js';
 import { BoardOperations } from './boardOperations.js';
 import { createCardComponent } from './noteSurfaceHtml.js';
-import { CARD_ICONS } from './icons.js';
+import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { DesktopManager } from './desktopManager.js';
 import {
     getDockButtonAt,
@@ -47,15 +47,24 @@ export function getFileCabinetDragMinHeight() {
 const FOLD_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3 7l3-3 3 3" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const EXPAND_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3 5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+export const FILE_CABINET_STACK_OFFSET_Y = 18;
+export const FILE_CABINET_STACK_OFFSET_X = 10;
+/** Floor drawer width as if this many tabs were cascaded (title truncates; more notes grow). */
+export const FILE_CABINET_DRAWER_MIN_SLOTS = 4;
+const FILE_CABINET_CATEGORY_HEADER_PAD = 20;
+const FILE_CABINET_SCROLL_EDGE = 36;
+const FILE_CABINET_SCROLL_STEP = 18;
+
 function collapsedTabWidth() {
     return getLabelRect().w;
 }
 
-export const FILE_CABINET_STACK_OFFSET_Y = 18;
-export const FILE_CABINET_STACK_OFFSET_X = 10;
-const FILE_CABINET_CATEGORY_HEADER_PAD = 20;
-const FILE_CABINET_SCROLL_EDGE = 36;
-const FILE_CABINET_SCROLL_STEP = 18;
+/** Column/stack width: at least MIN_SLOTS cascade, then grows with note count. */
+function fileCabinetColumnWidth(slotCount) {
+    const tabW = collapsedTabWidth();
+    const slots = Math.max(slotCount || 0, FILE_CABINET_DRAWER_MIN_SLOTS, 1);
+    return tabW + (slots - 1) * FILE_CABINET_STACK_OFFSET_X;
+}
 
 export const DRAG_THRESHOLD = 4;
 
@@ -737,20 +746,21 @@ function updateStackPreviewDimensions(stackEl, slotCount, { minSlotCount = 0 } =
     const label = getLabelRect();
     const count = Math.max(slotCount, minSlotCount, 1);
     const tabW = collapsedTabWidth();
-    const stackWidth = tabW + (count - 1) * FILE_CABINET_STACK_OFFSET_X;
+    const contentWidth = tabW + (count - 1) * FILE_CABINET_STACK_OFFSET_X;
+    const columnWidth = fileCabinetColumnWidth(count);
     const stackHeight = label.h + (count - 1) * FILE_CABINET_STACK_OFFSET_Y;
-    stackEl.style.width = `${stackWidth}px`;
+    stackEl.style.width = `${Math.max(contentWidth, columnWidth)}px`;
     stackEl.style.height = `${Math.max(stackHeight, label.h)}px`;
     const col = stackEl.closest('.file-cabinet-category');
     if (col) {
-        col.style.width = `${stackWidth}px`;
-        col.style.minWidth = `${stackWidth}px`;
-        col.style.flexBasis = `${stackWidth}px`;
+        col.style.width = `${columnWidth}px`;
+        col.style.minWidth = `${columnWidth}px`;
+        col.style.flexBasis = `${columnWidth}px`;
     }
     const rollout = stackEl.closest('.file-cabinet-filed-rollout');
     if (rollout) {
-        rollout.style.width = `${stackWidth}px`;
-        rollout.style.minWidth = `${stackWidth}px`;
+        rollout.style.width = `${columnWidth}px`;
+        rollout.style.minWidth = `${columnWidth}px`;
         rollout.style.height = `${Math.max(stackHeight, label.h)}px`;
     }
 }
@@ -1129,8 +1139,9 @@ function flashFileCabinetDropRejected(card) {
 /**
  * Expand a filed note onto the board at drop coords (or remembered position).
  * Preserves item.categories.
+ * @param {{ silent?: boolean }} [opts] - When silent, skip board:visibility_changed (for bulk).
  */
-export function expandFileCabinetItemToBoard({ item, dropX, dropY, UI, card = null }) {
+export function expandFileCabinetItemToBoard({ item, dropX, dropY, UI, card = null, silent = false }) {
     if (!item?.id || !UI) return false;
     removeFromFileCabinetOrder(item.id);
 
@@ -1166,6 +1177,31 @@ export function expandFileCabinetItemToBoard({ item, dropX, dropY, UI, card = nu
         const x = savedGrid?.x ?? savedPos?.x ?? 8;
         const y = savedGrid?.y ?? savedPos?.y ?? 8;
         UI.saveGridLayout(item.id, { x, y, w: sizeRect.w, h: sizeRect.h }, { updateRemembered: true });
+    }
+
+    if (!silent) {
+        window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
+    }
+    return true;
+}
+
+/**
+ * Expand every filed note in a category onto the board (remembered positions/sizes).
+ * Clears fold state for the category. Fires one board:visibility_changed.
+ */
+export function expandFileCabinetCategoryToBoard(categoryName, UI) {
+    if (!UI) return false;
+    const cat = categoryName || 'Uncategorized';
+    const ids = [...(getFileCabinetOrder()[cat] || [])];
+    if (!ids.length) return false;
+
+    ids.forEach((id) => {
+        expandFileCabinetItemToBoard({ item: { id }, UI, silent: true });
+    });
+
+    if (isFileCabinetCategoryFiled(cat)) {
+        const filed = getFileCabinetFiledCategories().filter((c) => c !== cat);
+        saveFileCabinetFiledCategories(filed);
     }
 
     window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
@@ -1239,27 +1275,28 @@ export function applyFileCabinetStackPositions(stackEl) {
     const label = getLabelRect();
     const count = tabs.length;
     const tabW = collapsedTabWidth();
-    const stackWidth = count > 0
+    const contentWidth = count > 0
         ? tabW + (count - 1) * FILE_CABINET_STACK_OFFSET_X
         : tabW;
+    const columnWidth = fileCabinetColumnWidth(count);
     const stackHeight = count > 0
         ? label.h + (count - 1) * FILE_CABINET_STACK_OFFSET_Y
         : label.h;
 
-    stackEl.style.width = `${stackWidth}px`;
+    stackEl.style.width = `${Math.max(contentWidth, columnWidth)}px`;
     stackEl.style.height = `${Math.max(stackHeight, label.h)}px`;
 
     const col = stackEl.closest('.file-cabinet-category');
     if (col) {
-        col.style.width = `${stackWidth}px`;
-        col.style.minWidth = `${stackWidth}px`;
-        col.style.flexBasis = `${stackWidth}px`;
+        col.style.width = `${columnWidth}px`;
+        col.style.minWidth = `${columnWidth}px`;
+        col.style.flexBasis = `${columnWidth}px`;
     }
 
     const rollout = stackEl.closest('.file-cabinet-filed-rollout');
     if (rollout) {
-        rollout.style.width = `${stackWidth}px`;
-        rollout.style.minWidth = `${stackWidth}px`;
+        rollout.style.width = `${columnWidth}px`;
+        rollout.style.minWidth = `${columnWidth}px`;
         rollout.style.height = `${Math.max(stackHeight, label.h)}px`;
     }
 
@@ -1371,10 +1408,11 @@ function buildFileCabinetCategoryColumn({
     const grabBtnHtml = showGrabButton
         ? `<button type="button" class="card-act file-cabinet-category-grab-btn grab-handle grab-handle--col" title="Drag to reorder category" aria-label="Drag to reorder category">${CARD_ICONS.drag}</button>`
         : '';
+    const openAllBtnHtml = `<button type="button" class="card-act file-cabinet-category-open-all-btn" title="Open all below" aria-label="Open all below">${ACTION_ICONS.expandAll}</button>`;
     const foldBtnHtml = showFoldButton
         ? `<button type="button" class="card-act file-cabinet-category-fold-btn" title="Fold category" aria-label="Fold category">${FOLD_ICON}</button>`
         : '';
-    header.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span${nameAttrs}>${escapeHTML(catName)}</span><span class="file-cabinet-category-count">${items.length}</span>${grabBtnHtml}${foldBtnHtml}`;
+    header.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span${nameAttrs}>${escapeHTML(catName)}</span><span class="file-cabinet-category-count">${items.length}</span>${grabBtnHtml}${openAllBtnHtml}${foldBtnHtml}`;
     col.appendChild(header);
 
     const stack = document.createElement('div');
@@ -1629,7 +1667,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
             const chipNameAttrs = canRename
                 ? ' class="file-cabinet-filed-chip-name u-truncate card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Category…"'
                 : ' class="file-cabinet-filed-chip-name u-truncate"';
-            chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span${chipNameAttrs}>${escapeHTML(catName)} (${items.length})</span><button type="button" class="card-act file-cabinet-filed-chip-grab grab-handle grab-handle--col" title="Drag to reorder category" aria-label="Drag to reorder category">${CARD_ICONS.drag}</button><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
+            chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span${chipNameAttrs}>${escapeHTML(catName)} (${items.length})</span><button type="button" class="card-act file-cabinet-filed-chip-grab grab-handle grab-handle--col" title="Drag to reorder category" aria-label="Drag to reorder category">${CARD_ICONS.drag}</button><button type="button" class="card-act file-cabinet-category-open-all-btn" title="Open all below" aria-label="Open all below">${ACTION_ICONS.expandAll}</button><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
 
             const rollout = document.createElement('div');
             rollout.className = 'file-cabinet-filed-rollout';
@@ -1663,7 +1701,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
     refreshFileCabinetUiScale(mount);
 }
 
-export function initFileCabinetCategoryActions(mount, signal) {
+export function initFileCabinetCategoryActions(mount, signal, UI = null) {
     if (!mount || !signal) return;
 
     const nameSelector = '.file-cabinet-category-name.card-inline-edit, .file-cabinet-filed-chip-name.card-inline-edit';
@@ -1739,6 +1777,15 @@ export function initFileCabinetCategoryActions(mount, signal) {
     }, { signal });
 
     mount.addEventListener('click', (e) => {
+        const openAllBtn = e.target.closest('.file-cabinet-category-open-all-btn');
+        if (openAllBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            const host = openAllBtn.closest('.file-cabinet-category, .file-cabinet-filed-chip');
+            const cat = host?.dataset.category;
+            if (cat && UI) expandFileCabinetCategoryToBoard(cat, UI);
+            return;
+        }
         const foldBtn = e.target.closest('.file-cabinet-category-fold-btn');
         if (foldBtn) {
             e.preventDefault();
@@ -1980,7 +2027,7 @@ export function initFileCabinetDrag(mount, currentItemsOrGetter = [], UI, signal
         ? currentItemsOrGetter
         : () => currentItemsOrGetter || [];
 
-    initFileCabinetCategoryActions(mount, signal);
+    initFileCabinetCategoryActions(mount, signal, UI);
     initFileCabinetCategoryColumnDrag(mount, getItems, signal);
 
     const foldedHoverPreview = initFileCabinetFoldedHoverPreview(
