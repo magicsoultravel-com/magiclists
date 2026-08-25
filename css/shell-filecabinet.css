@@ -104,7 +104,7 @@
 
 .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout {
     z-index: 500;
-    box-sizing: content-box;
+    box-sizing: border-box;
     padding: 0.3rem;
     opacity: 1;
     pointer-events: auto;

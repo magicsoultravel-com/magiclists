@@ -663,9 +663,19 @@
 }
 
 .note-attachment:hover .note-attachment__actions,
-.note-attachment:focus-within .note-attachment__actions {
+.note-attachment:focus-within .note-attachment__actions,
+.note-attachment.is-expanded .note-attachment__actions {
     opacity: 1;
     pointer-events: auto;
+}
+
+.note-attachment__expand {
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+
+.note-attachment__expand:hover {
+    opacity: 1;
 }
 
 .note-attachment__thumb-btn {

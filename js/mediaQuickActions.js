@@ -40,6 +40,9 @@ export function buildMediaQuickActionsHtml(opts) {
     const removeAttr = isNote ? 'data-media-action-detach' : 'data-media-action-delete';
 
     const viewBtn = `<button type="button" class="card-act" data-media-action-view data-media-id="${mediaId}" title="View full size" aria-label="View full size">${CARD_ICONS.expandMedia}</button>`;
+    const expandInNoteBtn = isNote
+        ? `<button type="button" class="card-act note-attachment__expand is-hidden" data-expand-media="${mediaId}" title="Expand in note" aria-label="Expand in note" aria-pressed="false">${CARD_ICONS.expandMedia}</button>`
+        : '';
     const downloadBtn = `<button type="button" class="card-act" data-media-action-download data-media-id="${mediaId}" title="Download" aria-label="Download" ${blobMissing ? 'disabled' : ''}>${CARD_ICONS.download}</button>`;
     const attachBtn = showAttach
         ? `<button type="button" class="card-act" data-media-action-attach data-media-id="${mediaId}" title="Attach to selected note" aria-label="Attach">${CARD_ICONS.attach}</button>`
@@ -52,7 +55,7 @@ export function buildMediaQuickActionsHtml(opts) {
         : '';
 
     if (layout === 'inline-row') {
-        return `<div class="step-row-actions note-attachment__actions">${viewBtn}${downloadBtn}${attachBtn}${saveBtn}${removeBtn}</div>`;
+        return `<div class="step-row-actions note-attachment__actions">${expandInNoteBtn}${viewBtn}${downloadBtn}${attachBtn}${saveBtn}${removeBtn}</div>`;
     }
 
     const removeBlock = showRemove

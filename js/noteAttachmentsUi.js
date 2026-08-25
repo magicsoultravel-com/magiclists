@@ -9,9 +9,16 @@ import {
 import { buildMediaQuickActionsHtml, bindMediaQuickActions, viewMediaFullSize } from './mediaQuickActions.js';
 import { showAppToast } from './toast.js';
 
+/** @type {Set<string>} session keys `noteId:mediaId` for in-note expanded rows */
+const expandedInNote = new Set();
+
 async function openMediaLibrary(opts) {
     const { MediaLibraryOverlay } = await import('./mediaLibraryOverlay.js');
     return MediaLibraryOverlay.open(opts);
+}
+
+function expandKey(noteId, mediaId) {
+    return `${noteId}:${mediaId}`;
 }
 
 /**
@@ -47,6 +54,7 @@ export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCo
                     </button>
                     ${actions}
                 </div>
+                <div class="note-attachment__preview is-hidden" data-attach-preview></div>
             </div>`;
     }).join('');
 
@@ -87,6 +95,12 @@ function bodyInModal(body) {
  */
 export function syncNoteAttachmentsDom(item) {
     if (!item?.id) return;
+    const stillAttached = new Set(normalizeAttachments(item.attachments).map((a) => a.mediaId));
+    for (const key of [...expandedInNote]) {
+        if (!key.startsWith(`${item.id}:`)) continue;
+        const mediaId = key.slice(item.id.length + 1);
+        if (!stillAttached.has(mediaId)) expandedInNote.delete(key);
+    }
 
     for (const body of noteBodiesForItem(item.id)) {
         const canEdit = bodyCanEdit(body);
@@ -210,8 +224,47 @@ export function closeMediaLightbox() {
     }
 }
 
+async function expandAttachmentRow(row, noteId, mediaId) {
+    const preview = row.querySelector('[data-attach-preview]');
+    const expandBtn = row.querySelector('[data-expand-media]');
+    if (!preview) return;
+    const url = await getObjectUrl(mediaId, 'blob');
+    if (!url) {
+        showAppToast('Preview unavailable');
+        return;
+    }
+    preview.innerHTML = `<img class="note-attachment__full" src="${escapeAttr(url)}" alt="">`;
+    preview.classList.remove('is-hidden');
+    row.classList.add('is-expanded');
+    expandedInNote.add(expandKey(noteId, mediaId));
+    if (expandBtn) {
+        expandBtn.innerHTML = CARD_ICONS.collapseMedia;
+        expandBtn.title = 'Collapse in note';
+        expandBtn.setAttribute('aria-label', 'Collapse in note');
+        expandBtn.setAttribute('aria-pressed', 'true');
+        expandBtn.classList.remove('is-hidden');
+    }
+}
+
+function collapseAttachmentRow(row, noteId, mediaId) {
+    const preview = row.querySelector('[data-attach-preview]');
+    const expandBtn = row.querySelector('[data-expand-media]');
+    if (preview) {
+        preview.innerHTML = '';
+        preview.classList.add('is-hidden');
+    }
+    row.classList.remove('is-expanded');
+    expandedInNote.delete(expandKey(noteId, mediaId));
+    if (expandBtn) {
+        expandBtn.innerHTML = CARD_ICONS.expandMedia;
+        expandBtn.title = 'Expand in note';
+        expandBtn.setAttribute('aria-label', 'Expand in note');
+        expandBtn.setAttribute('aria-pressed', 'false');
+    }
+}
+
 /**
- * Fill titles/thumbs and wire open/detach/lightbox.
+ * Fill titles/thumbs and wire open/detach/expand/lightbox.
  * @param {HTMLElement} root
  * @param {object} item
  */
@@ -266,21 +319,40 @@ export function bindNoteAttachments(root, item) {
         });
     });
 
-    hydrateAttachmentRows(section).catch(() => {});
+    section.querySelectorAll('[data-expand-media]').forEach((btn) => {
+        if (btn.dataset.bound === '1') return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const mediaId = btn.dataset.expandMedia;
+            const row = btn.closest('.note-attachment');
+            if (!row || !mediaId) return;
+            if (row.classList.contains('is-expanded')) {
+                collapseAttachmentRow(row, item.id, mediaId);
+            } else {
+                expandAttachmentRow(row, item.id, mediaId).catch(() => {});
+            }
+        });
+    });
+
+    hydrateAttachmentRows(section, item.id).catch(() => {});
 }
 
-async function hydrateAttachmentRows(section) {
+async function hydrateAttachmentRows(section, noteId) {
     const rows = section.querySelectorAll('.note-attachment[data-media-id]');
     await Promise.all([...rows].map(async (row) => {
         const id = row.dataset.mediaId;
         const labelEl = row.querySelector('[data-attach-label]');
         const thumbEl = row.querySelector('[data-attach-thumb]');
+        const expandBtn = row.querySelector('[data-expand-media]');
         if (!id) return;
         try {
             const meta = await getMediaMeta(id);
             if (!meta) {
                 if (labelEl) labelEl.textContent = 'Missing file';
                 row.classList.add('is-missing');
+                expandBtn?.classList.add('is-hidden');
                 return;
             }
             const label = meta.title || meta.filename || 'Untitled';
@@ -288,20 +360,26 @@ async function hydrateAttachmentRows(section) {
             row.title = label;
             if (meta.blobMissing) {
                 row.classList.add('is-missing');
+                expandBtn?.classList.add('is-hidden');
                 return;
             }
             const isImage = String(meta.mime || '').startsWith('image/');
             if (isImage) {
                 row.dataset.isImage = '1';
+                expandBtn?.classList.remove('is-hidden');
                 if (thumbEl) {
                     const url = await getObjectUrl(id, 'thumb');
                     if (url) {
                         thumbEl.innerHTML = `<img src="${escapeAttr(url)}" alt="">`;
                     }
                 }
+                if (noteId && expandedInNote.has(expandKey(noteId, id))) {
+                    await expandAttachmentRow(row, noteId, id);
+                }
                 return;
             }
             row.dataset.isImage = '0';
+            expandBtn?.classList.add('is-hidden');
             if (thumbEl) {
                 const ext = (meta.mime || 'file').split('/').pop() || 'file';
                 thumbEl.innerHTML = `<span class="note-attachment__icon">${escapeHTML(ext)}</span>`;
@@ -309,6 +387,7 @@ async function hydrateAttachmentRows(section) {
         } catch {
             if (labelEl) labelEl.textContent = 'Unavailable';
             row.classList.add('is-missing');
+            expandBtn?.classList.add('is-hidden');
         }
     }));
 }

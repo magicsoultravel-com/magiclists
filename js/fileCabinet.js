@@ -51,6 +51,8 @@ export const FILE_CABINET_STACK_OFFSET_Y = 18;
 export const FILE_CABINET_STACK_OFFSET_X = 10;
 /** Floor width for open category columns (px). Long titles truncate; more tabs can grow past this. */
 export const FILE_CABINET_DRAWER_WIDTH = 160;
+/** Fallback width for folded chip rail / hover rollout when chip is not measurable. */
+export const FILE_CABINET_CHIP_WIDTH = 120;
 const FILE_CABINET_CATEGORY_HEADER_PAD = 20;
 const FILE_CABINET_SCROLL_EDGE = 36;
 const FILE_CABINET_SCROLL_STEP = 18;
@@ -65,6 +67,14 @@ function fileCabinetColumnWidth(slotCount) {
     const slots = Math.max(slotCount || 0, 1);
     const contentWidth = tabW + (slots - 1) * FILE_CABINET_STACK_OFFSET_X;
     return Math.max(contentWidth, FILE_CABINET_DRAWER_WIDTH);
+}
+
+/** Folded-chip width for hover rollout alignment (matches rail, not open-drawer floor). */
+function fileCabinetChipWidth(rolloutOrStack) {
+    const slot = rolloutOrStack?.closest?.('.file-cabinet-filed-slot');
+    const chip = slot?.querySelector?.('.file-cabinet-filed-chip');
+    const w = chip?.offsetWidth;
+    return Number.isFinite(w) && w > 0 ? Math.round(w) : FILE_CABINET_CHIP_WIDTH;
 }
 
 export const DRAG_THRESHOLD = 4;
@@ -746,20 +756,22 @@ function updateStackPreviewDimensions(stackEl, slotCount, { minSlotCount = 0 } =
     if (!stackEl) return;
     const label = getLabelRect();
     const count = Math.max(slotCount, minSlotCount, 1);
-    const columnWidth = fileCabinetColumnWidth(count);
     const stackHeight = label.h + (count - 1) * FILE_CABINET_STACK_OFFSET_Y;
-    stackEl.style.width = `${columnWidth}px`;
+    const rollout = stackEl.closest('.file-cabinet-filed-rollout');
+    const width = rollout
+        ? fileCabinetChipWidth(rollout)
+        : fileCabinetColumnWidth(count);
+    stackEl.style.width = `${width}px`;
     stackEl.style.height = `${Math.max(stackHeight, label.h)}px`;
     const col = stackEl.closest('.file-cabinet-category');
     if (col) {
-        col.style.width = `${columnWidth}px`;
-        col.style.minWidth = `${columnWidth}px`;
-        col.style.flexBasis = `${columnWidth}px`;
+        col.style.width = `${width}px`;
+        col.style.minWidth = `${width}px`;
+        col.style.flexBasis = `${width}px`;
     }
-    const rollout = stackEl.closest('.file-cabinet-filed-rollout');
     if (rollout) {
-        rollout.style.width = `${columnWidth}px`;
-        rollout.style.minWidth = `${columnWidth}px`;
+        rollout.style.width = `${width}px`;
+        rollout.style.minWidth = `${width}px`;
         rollout.style.height = `${Math.max(stackHeight, label.h)}px`;
     }
 }
@@ -1273,25 +1285,27 @@ export function applyFileCabinetStackPositions(stackEl) {
     const tabs = [...stackEl.querySelectorAll('.file-cabinet-tab')];
     const label = getLabelRect();
     const count = tabs.length;
-    const columnWidth = fileCabinetColumnWidth(count);
     const stackHeight = count > 0
         ? label.h + (count - 1) * FILE_CABINET_STACK_OFFSET_Y
         : label.h;
+    const rollout = stackEl.closest('.file-cabinet-filed-rollout');
+    const width = rollout
+        ? fileCabinetChipWidth(rollout)
+        : fileCabinetColumnWidth(count);
 
-    stackEl.style.width = `${columnWidth}px`;
+    stackEl.style.width = `${width}px`;
     stackEl.style.height = `${Math.max(stackHeight, label.h)}px`;
 
     const col = stackEl.closest('.file-cabinet-category');
     if (col) {
-        col.style.width = `${columnWidth}px`;
-        col.style.minWidth = `${columnWidth}px`;
-        col.style.flexBasis = `${columnWidth}px`;
+        col.style.width = `${width}px`;
+        col.style.minWidth = `${width}px`;
+        col.style.flexBasis = `${width}px`;
     }
 
-    const rollout = stackEl.closest('.file-cabinet-filed-rollout');
     if (rollout) {
-        rollout.style.width = `${columnWidth}px`;
-        rollout.style.minWidth = `${columnWidth}px`;
+        rollout.style.width = `${width}px`;
+        rollout.style.minWidth = `${width}px`;
         rollout.style.height = `${Math.max(stackHeight, label.h)}px`;
     }
 
