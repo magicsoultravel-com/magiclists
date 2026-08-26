@@ -1,6 +1,7 @@
 import { DesktopBackground } from './desktopBackground.js';
 import { ChromeBackground } from './chromeBackground.js';
 import { syncClockStyleForTheme } from './clockStyle.js';
+import { applyThemeSkin } from './themeSkins.js';
 
 /* Single source of truth: consolidated theme tokens key */
 export const CUSTOM_THEME_TOKENS_KEY = 'matrix_custom_theme_tokens';
@@ -513,6 +514,7 @@ export function applyAppTheme(themeId, { silent = false } = {}) {
     applyUserTheme(theme.tokens);
 
     root.dataset.appTheme = theme.id;
+    applyThemeSkin(theme.special ? theme.id : null);
 
     const desktop = theme.tokens['--desktop-bg'];
     const chrome = theme.tokens['--chrome-bg'];
@@ -600,6 +602,9 @@ export const AppTheme = {
             );
         });
         this.currentId = matchingTheme?.id || 'dark';
+        const root = document.documentElement;
+        root.dataset.appTheme = this.currentId;
+        applyThemeSkin(matchingTheme?.special ? matchingTheme.id : null);
         // Apply desktop/chrome backgrounds
         const desktop = userTheme['--desktop-bg'];
         const chrome = userTheme['--chrome-bg'];

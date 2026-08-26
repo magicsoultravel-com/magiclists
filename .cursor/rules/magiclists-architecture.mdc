@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-08-22T17:33:01.698Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-08-26T14:20:54.570Z
 
 ## CSS load order
 
@@ -21,7 +21,7 @@ alwaysApply: true
 | css/cards.css | #app-canvas, .mini-card*, color picker, custom backgrounds, checklist chrome | ui.js, colorPicker.js, cardTheme.js, noteSurface.js | desktop spatial overrides also in board.css | 8 |
 | css/overlays.css | .overlay, .modal, .collapsable-*, cloud backup popover, template picker | editor.js, editorModalChrome.js, cloudBackup.js, templatePicker.js | — | 9 |
 | css/board.css | grid/freeform board, clock, drag/resize, desktop inline card spatial overrides, file cabinet mode | dragdrop.js, clockStyle.js, desktopZoom.js, boardSort.js, fileCabinet.js | note footer spatial overrides cross-cut shell-editor.css; file cabinet drawer mode integration | 10 |
-| css/themes.css | html[data-app-theme] overrides, theme picker swatches | appTheme.js, themePicker.js | — | 11 |
+| css/themes.css | html[data-app-theme] overrides, theme picker swatches | appTheme.js, themePicker.js, themeSkins.js | — | 11 |
 | css/drawing.css | magicCanvas toolbar and drawing board surface | drawingBoard.js, drawingToolbarMenu.js, drawingToolbarChrome.js | — | 12 |
 | css/tools.css | floating tool panels, chips, globe/map/alphabets/calculator/converter/timezone/timer tool bodies | toolsManager.js, toolPanelChrome.js, sidebarModules.js | — | 13 |
 | css/calendar.css | calendar tool panel month grid and hour notes | js/tools/calendar.js, calendar.js | — | 14 |
@@ -111,7 +111,7 @@ alwaysApply: true
 | timer | Timer | tool-mount--timer | 4 |
 | globe | Globe | tool-mount--globe | 5 |
 | map | Map | tool-mount--map | 6 |
-| alphabets | Alphabets | tool-mount--alphabets | 7 |
+| alphabets | Cards | tool-mount--alphabets | 7 |
 | cosmos | Cosmos | tool-mount--cosmos | 9 |
 
 ## Validation
