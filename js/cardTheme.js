@@ -33,7 +33,7 @@ function relativeLuminance({ r, g, b }) {
     return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
 }
 
-const THEME_PROPS = [
+export const THEME_PROPS = [
     '--card-fg',
     '--card-muted',
     '--card-action-bg',
@@ -48,6 +48,10 @@ const THEME_PROPS = [
     '--card-panel-bg'
 ];
 
+function isThemeSkinLocked() {
+    return document.documentElement.dataset.themeSkin === '1';
+}
+
 /* The .has-custom-bg class lives on the .editor-note-shell, but several CSS
    selectors (e.g. .mini-card:not(.has-custom-bg)) key off the .mini-card
    ancestor. Keep those classes in sync on the nearest .mini-card so the
@@ -60,15 +64,35 @@ function syncCardAncestorClasses(el, { hasCustomBg, light }) {
     card.classList.toggle('card-theme-dark', hasCustomBg && !light);
 }
 
+/** Strip luminance contrast overrides so fancy-skin --card-fg inherits from html. */
+export function clearCardThemeContrast(el) {
+    if (!el) return;
+    THEME_PROPS.forEach((prop) => el.style.removeProperty(prop));
+    el.classList.remove('card-theme-light', 'card-theme-dark');
+    const card = el.closest('.mini-card');
+    if (card) card.classList.remove('card-theme-light', 'card-theme-dark');
+}
+
 export function applyCardTheme(el, backgroundColor, { paintBackground = false } = {}) {
     if (!el) return;
 
+    const skinLocked = isThemeSkinLocked();
     const rgb = parseCssColor(backgroundColor);
+
     if (!rgb) {
         el.classList.remove('has-custom-bg', 'card-theme-light', 'card-theme-dark');
         THEME_PROPS.forEach((prop) => el.style.removeProperty(prop));
         if (paintBackground) el.style.backgroundColor = '';
         syncCardAncestorClasses(el, { hasCustomBg: false, light: false });
+        return;
+    }
+
+    /* Fancy skins lock note fill + text; do not apply per-note luminance contrast. */
+    if (skinLocked) {
+        clearCardThemeContrast(el);
+        el.classList.add('has-custom-bg');
+        syncCardAncestorClasses(el, { hasCustomBg: true, light: false });
+        if (paintBackground) el.style.backgroundColor = backgroundColor;
         return;
     }
 

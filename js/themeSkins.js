@@ -1,5 +1,7 @@
 /** Theme skin tokens — fancy theme surfaces beyond color picker TOKEN_KEYS. */
 
+import { applyCardTheme, clearCardThemeContrast } from './cardTheme.js';
+
 export const SKIN_TOKEN_KEYS = [
     "--card-action-bg",
     "--card-action-fg",
@@ -549,16 +551,32 @@ export const THEME_SKINS = {
     },
 };
 
+function clearVisibleCardContrast() {
+    document.querySelectorAll('.editor-note-shell, .mini-card.has-custom-bg').forEach((el) => {
+        clearCardThemeContrast(el);
+    });
+}
+
+function restoreVisibleCardContrast() {
+    document.querySelectorAll('.editor-note-shell').forEach((shell) => {
+        const bg = shell.style.backgroundColor;
+        if (bg) applyCardTheme(shell, bg, { paintBackground: false });
+        else clearCardThemeContrast(shell);
+    });
+}
+
 export function applyThemeSkin(themeId) {
     const root = document.documentElement;
     const skin = THEME_SKINS[themeId];
     SKIN_TOKEN_KEYS.forEach((key) => root.style.removeProperty(key));
     if (!skin) {
         delete root.dataset.themeSkin;
+        restoreVisibleCardContrast();
         return;
     }
     root.dataset.themeSkin = '1';
     Object.entries(skin).forEach(([key, value]) => root.style.setProperty(key, value));
+    clearVisibleCardContrast();
 }
 
 export function clearThemeSkin() {
