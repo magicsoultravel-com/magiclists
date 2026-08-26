@@ -2,8 +2,15 @@
 import { NoteSurface } from './noteSurface.js';
 import { stripRichText } from './richText.js';
 
-/** Discrete scale steps for expand-in-note image size */
-export const ATTACH_SCALE_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+/** Discrete scale range for expand-in-note image size */
+export const ATTACH_SCALE_MIN = 0.2;
+export const ATTACH_SCALE_MAX = 3;
+export const ATTACH_SCALE_STEP = 0.1;
+export const ATTACH_SCALE_DEFAULT = 1;
+
+function roundAttachScale(n) {
+    return Math.round(n * 10) / 10;
+}
 
 function nowSeconds() {
     return Math.floor(Date.now() / 1000);
@@ -16,37 +23,27 @@ function syncAttachmentsUi(item) {
 }
 
 /**
- * Snap scale to nearest allowed step (default 1).
+ * Clamp scale to 0.2–3 in 0.1 steps (default 1).
  * @param {unknown} scale
  * @returns {number}
  */
 export function clampAttachScale(scale) {
     const n = Number(scale);
-    if (!Number.isFinite(n)) return 1;
-    let best = ATTACH_SCALE_STEPS[0];
-    let bestDist = Infinity;
-    for (const step of ATTACH_SCALE_STEPS) {
-        const dist = Math.abs(step - n);
-        if (dist < bestDist) {
-            bestDist = dist;
-            best = step;
-        }
-    }
-    return best;
+    if (!Number.isFinite(n)) return ATTACH_SCALE_DEFAULT;
+    const clamped = Math.min(ATTACH_SCALE_MAX, Math.max(ATTACH_SCALE_MIN, n));
+    return roundAttachScale(clamped);
 }
 
 /**
- * Step scale up (+1) or down (-1) within ATTACH_SCALE_STEPS.
+ * Step scale up (+1) or down (-1) by ATTACH_SCALE_STEP.
  * @param {unknown} scale
  * @param {number} dir
  * @returns {number}
  */
 export function stepAttachScale(scale, dir) {
     const cur = clampAttachScale(scale);
-    const idx = ATTACH_SCALE_STEPS.indexOf(cur);
-    const next = idx + (dir > 0 ? 1 : -1);
-    if (next < 0 || next >= ATTACH_SCALE_STEPS.length) return cur;
-    return ATTACH_SCALE_STEPS[next];
+    const delta = dir > 0 ? ATTACH_SCALE_STEP : -ATTACH_SCALE_STEP;
+    return clampAttachScale(cur + delta);
 }
 
 /**

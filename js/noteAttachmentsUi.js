@@ -3,7 +3,9 @@ import { escapeAttr, escapeHTML } from './domEscape.js';
 import { CARD_ICONS } from './icons.js';
 import { getMediaMeta, getObjectUrl } from './mediaLibrary.js';
 import {
-    ATTACH_SCALE_STEPS,
+    ATTACH_SCALE_DEFAULT,
+    ATTACH_SCALE_MAX,
+    ATTACH_SCALE_MIN,
     clampAttachScale,
     detachMediaFromNote,
     normalizeAttachments,
@@ -31,12 +33,21 @@ function applyFullImageScale(img, scale) {
 function syncZoomButtonState(preview, scale) {
     if (!preview) return;
     const s = clampAttachScale(scale);
-    const min = ATTACH_SCALE_STEPS[0];
-    const max = ATTACH_SCALE_STEPS[ATTACH_SCALE_STEPS.length - 1];
     const outBtn = preview.querySelector('[data-attach-zoom-out]');
+    const resetBtn = preview.querySelector('[data-attach-zoom-reset]');
     const inBtn = preview.querySelector('[data-attach-zoom-in]');
-    if (outBtn) outBtn.disabled = s <= min;
-    if (inBtn) inBtn.disabled = s >= max;
+    if (outBtn) outBtn.disabled = s <= ATTACH_SCALE_MIN;
+    if (resetBtn) resetBtn.disabled = s === ATTACH_SCALE_DEFAULT;
+    if (inBtn) inBtn.disabled = s >= ATTACH_SCALE_MAX;
+}
+
+function setAttachmentRowScale(row, item, mediaId, scale) {
+    const next = clampAttachScale(scale);
+    row.dataset.attachScale = String(next);
+    const preview = row.querySelector('[data-attach-preview]');
+    applyFullImageScale(preview?.querySelector('[data-attach-full]'), next);
+    syncZoomButtonState(preview, next);
+    updateAttachmentView(item, mediaId, { scale: next }, { syncUi: false });
 }
 
 /**
@@ -255,6 +266,7 @@ async function expandAttachmentRow(row, mediaId, scale = 1) {
     preview.innerHTML = `
         <div class="note-attachment__zoom" role="group" aria-label="Zoom image">
             <button type="button" class="card-act" data-attach-zoom-out title="Zoom out" aria-label="Zoom out">${CARD_ICONS.minus}</button>
+            <button type="button" class="card-act" data-attach-zoom-reset title="Reset zoom" aria-label="Reset zoom">${CARD_ICONS.zoomReset}</button>
             <button type="button" class="card-act" data-attach-zoom-in title="Zoom in" aria-label="Zoom in">${CARD_ICONS.plus}</button>
         </div>
         <img class="note-attachment__full" data-attach-full src="${escapeAttr(url)}" alt="" style="width: ${widthPct}%">
@@ -376,20 +388,21 @@ export function bindNoteAttachments(root, item) {
         section.addEventListener('click', (e) => {
             const zoomIn = e.target.closest('[data-attach-zoom-in]');
             const zoomOut = e.target.closest('[data-attach-zoom-out]');
-            if (!zoomIn && !zoomOut) return;
+            const zoomReset = e.target.closest('[data-attach-zoom-reset]');
+            if (!zoomIn && !zoomOut && !zoomReset) return;
             e.preventDefault();
             e.stopPropagation();
-            const row = (zoomIn || zoomOut).closest('.note-attachment');
+            const row = (zoomIn || zoomOut || zoomReset).closest('.note-attachment');
             const mediaId = row?.dataset.mediaId;
             if (!row || !mediaId || !row.classList.contains('is-expanded')) return;
-            const cur = clampAttachScale(row.dataset.attachScale || attachmentEntry(item, mediaId)?.scale || 1);
+            if (zoomReset) {
+                setAttachmentRowScale(row, item, mediaId, ATTACH_SCALE_DEFAULT);
+                return;
+            }
+            const cur = clampAttachScale(row.dataset.attachScale || attachmentEntry(item, mediaId)?.scale || ATTACH_SCALE_DEFAULT);
             const next = stepAttachScale(cur, zoomIn ? 1 : -1);
             if (next === cur) return;
-            row.dataset.attachScale = String(next);
-            const preview = row.querySelector('[data-attach-preview]');
-            applyFullImageScale(preview?.querySelector('[data-attach-full]'), next);
-            syncZoomButtonState(preview, next);
-            updateAttachmentView(item, mediaId, { scale: next }, { syncUi: false });
+            setAttachmentRowScale(row, item, mediaId, next);
         });
     }
 
