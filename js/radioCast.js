@@ -1,17 +1,12 @@
 /** @module {{"owns":"radio Google Cast support (native Cast SDK)", "related":["sidebarRadio.js","radioPlayer.js","radioPopover.js"]}} */
-/**
- * Resolve the Google Cast SDK.
- * The sender library is loaded synchronously in <head> (see index.html). It must
- * NOT be injected dynamically/async, or Chrome reports the Cast API as unavailable.
- */
 const CAST_SDK_TIMEOUT_MS = 4000;
 
 /**
  * Resolve the Google Cast SDK.
  * The sender library is loaded synchronously in <head> (see index.html). It must
  * NOT be injected dynamically/async, or Chrome reports the Cast API as unavailable.
- * Loading itself is still asynchronous, so we poll briefly for window.cast instead
- * of awaiting window.__castSdkReady — that promise never settles when the external
+ * Loading itself is still asynchronous, so we poll briefly for window.cast instead of
+ * waiting on the SDK's readiness callback — that signal never fires when the external
  * cast_sender.js script is blocked or fails to load, which would otherwise leave the
  * Cast panel permanently stuck on "unavailable" (e.g. the Cast button appearing dead).
  */

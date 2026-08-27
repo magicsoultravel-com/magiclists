@@ -332,6 +332,17 @@
     color: var(--accent, #4a9eff);
 }
 
+.radio-cast-panel__status.is-error {
+    color: #f87171;
+}
+
+.radio-cast-panel .btn:disabled,
+.radio-cast-panel .btn.is-disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 
 /* BPM field — slider sized like the other sliders; tap button on the label row */
 .media-visualizer-modal__bpm-field {

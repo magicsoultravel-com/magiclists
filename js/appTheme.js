@@ -448,6 +448,24 @@ export const APP_THEMES = [
         }
     },
     {
+        id: 'nebula',
+        label: 'Nebula',
+        desc: 'Cosmic clouds & violet glow',
+        special: 'nebula',
+        swatch: ['#0c0618', '#1a1230', '#c084fc'],
+        tokens: {
+            '--bg-primary': '#12081f',
+            '--bg-surface': '#1a0e2e',
+            '--bg-card': '#1a1230',
+            '--text-main': '#f0e8ff',
+            '--text-muted': '#a898c8',
+            '--accent': '#c084fc',
+            '--border-color': '#3a2860',
+            '--desktop-bg': '#1a0a38',
+            '--chrome-bg': '#12081f'
+        }
+    },
+    {
         id: 'rose',
         label: 'Rose',
         desc: 'Soft blush',

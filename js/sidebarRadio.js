@@ -560,7 +560,9 @@ export const SidebarRadio = {
 
         const station = RadioPlayer.station;
         const nowKey = stationKey(station);
-        const hasStation = !!nowKey && !!station?.url_resolved;
+        // Only require a station key to enable casting — url_resolved may still
+        // need resolving on click, which bindCastPanelEvents handles below.
+        const hasStation = !!nowKey;
         const status = RadioCast.getStatus();
 
         body.innerHTML = `
@@ -630,7 +632,8 @@ export const SidebarRadio = {
         const el = RadioPopover.getBodyEl()?.querySelector('[data-radio-cast-status]');
         if (el) {
             el.textContent = msg;
-            el.classList.add('is-casting');
+            el.classList.remove('is-casting');
+            el.classList.add('is-error');
         }
     },
 

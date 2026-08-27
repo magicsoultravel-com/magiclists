@@ -873,6 +873,146 @@ html[data-app-theme="night-sky"] #btn-drawing-mode.active { background: color-mi
     }
 }
 
+/* Nebula — cosmic clouds + violet glow */
+html[data-app-theme="nebula"] {
+    --desktop-surface-image:
+        radial-gradient(1.5px 1.5px at 12% 22%, rgba(255, 255, 255, 0.7), transparent),
+        radial-gradient(1px 1px at 38% 14%, rgba(255, 240, 255, 0.55), transparent),
+        radial-gradient(1px 1px at 58% 48%, rgba(192, 132, 252, 0.55), transparent),
+        radial-gradient(1.5px 1.5px at 78% 18%, rgba(255, 255, 255, 0.65), transparent),
+        radial-gradient(1px 1px at 88% 62%, rgba(103, 232, 249, 0.5), transparent),
+        radial-gradient(1px 1px at 24% 72%, rgba(232, 121, 249, 0.45), transparent),
+        radial-gradient(1px 1px at 46% 88%, rgba(255, 255, 255, 0.4), transparent),
+        radial-gradient(ellipse 70% 55% at 18% 28%, rgba(168, 85, 247, 0.55), transparent 62%),
+        radial-gradient(ellipse 65% 50% at 82% 22%, rgba(236, 72, 153, 0.48), transparent 60%),
+        radial-gradient(ellipse 75% 55% at 55% 68%, rgba(34, 211, 238, 0.42), transparent 62%),
+        radial-gradient(ellipse 50% 40% at 40% 45%, rgba(192, 132, 252, 0.4), transparent 58%),
+        radial-gradient(ellipse 45% 35% at 70% 55%, rgba(244, 114, 182, 0.35), transparent 55%),
+        radial-gradient(ellipse 55% 42% at 30% 78%, rgba(99, 102, 241, 0.38), transparent 58%),
+        radial-gradient(ellipse 100% 70% at 50% 100%, rgba(60, 20, 100, 0.65), transparent 58%),
+        linear-gradient(180deg, #1a0a38 0%, #2a1050 28%, #1e1848 55%, #0c1838 78%, #080414 100%);
+    --card-surface-image:
+        radial-gradient(ellipse 90% 50% at 20% 0%, rgba(192, 132, 252, 0.18), transparent 55%),
+        radial-gradient(ellipse 70% 40% at 90% 100%, rgba(232, 121, 249, 0.14), transparent 50%),
+        linear-gradient(135deg, rgba(103, 232, 249, 0.08) 0%, transparent 45%, rgba(192, 132, 252, 0.1) 100%);
+    --card-surface-size: 100% 100%;
+    --card-surface-repeat: no-repeat;
+    --chrome-surface-image:
+        radial-gradient(1px 1px at 18% 25%, rgba(192, 132, 252, 0.28), transparent),
+        radial-gradient(1px 1px at 65% 55%, rgba(232, 121, 249, 0.18), transparent),
+        linear-gradient(180deg, rgba(192, 132, 252, 0.14) 0%, rgba(232, 121, 249, 0.1) 50%, rgba(103, 232, 249, 0.08) 100%);
+    --file-cabinet-surface-image:
+        radial-gradient(ellipse 80% 60% at 30% 40%, rgba(192, 132, 252, 0.12), transparent),
+        radial-gradient(ellipse 60% 50% at 80% 70%, rgba(232, 121, 249, 0.1), transparent);
+    --file-cabinet-category-surface-image: none;
+}
+
+html[data-app-theme="nebula"] #app-canvas::before,
+html[data-app-theme="nebula"] #app-canvas.file-cabinet-bottom::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image:
+        radial-gradient(1.5px 1.5px at 10% 16%, rgba(255, 255, 255, 0.95), transparent),
+        radial-gradient(1px 1px at 26% 42%, rgba(232, 121, 249, 0.85), transparent),
+        radial-gradient(1px 1px at 44% 10%, rgba(255, 255, 255, 0.9), transparent),
+        radial-gradient(1.5px 1.5px at 61% 32%, rgba(192, 132, 252, 0.8), transparent),
+        radial-gradient(1px 1px at 74% 56%, rgba(103, 232, 249, 0.85), transparent),
+        radial-gradient(1px 1px at 18% 70%, rgba(255, 255, 255, 0.65), transparent),
+        radial-gradient(1px 1px at 38% 84%, rgba(192, 132, 252, 0.85), transparent),
+        radial-gradient(1px 1px at 66% 74%, rgba(255, 255, 255, 0.7), transparent),
+        radial-gradient(1.5px 1.5px at 88% 22%, rgba(232, 121, 249, 0.95), transparent),
+        radial-gradient(1px 1px at 94% 48%, rgba(103, 232, 249, 0.6), transparent),
+        radial-gradient(1px 1px at 52% 50%, rgba(255, 255, 255, 0.55), transparent);
+    animation: nebula-glow-slow 7s ease-in-out infinite;
+}
+
+html[data-app-theme="nebula"] #app-canvas::after,
+html[data-app-theme="nebula"] #app-canvas.file-cabinet-bottom::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image:
+        radial-gradient(ellipse 48% 38% at 20% 38%, rgba(168, 85, 247, 0.38), transparent 70%),
+        radial-gradient(ellipse 42% 34% at 78% 28%, rgba(236, 72, 153, 0.34), transparent 68%),
+        radial-gradient(ellipse 45% 36% at 52% 72%, rgba(34, 211, 238, 0.3), transparent 65%),
+        radial-gradient(ellipse 35% 28% at 38% 52%, rgba(192, 132, 252, 0.28), transparent 68%),
+        radial-gradient(ellipse 32% 26% at 68% 58%, rgba(244, 114, 182, 0.24), transparent 65%),
+        radial-gradient(1px 1px at 15% 28%, rgba(255, 255, 255, 0.8), transparent),
+        radial-gradient(1.5px 1.5px at 35% 18%, rgba(192, 132, 252, 0.95), transparent),
+        radial-gradient(1px 1px at 55% 64%, rgba(255, 255, 255, 0.7), transparent),
+        radial-gradient(1px 1px at 70% 38%, rgba(232, 121, 249, 0.7), transparent),
+        radial-gradient(1px 1px at 82% 78%, rgba(103, 232, 249, 0.9), transparent),
+        radial-gradient(1px 1px at 8% 55%, rgba(255, 255, 255, 0.5), transparent),
+        radial-gradient(1.5px 1.5px at 46% 90%, rgba(232, 121, 249, 0.8), transparent),
+        radial-gradient(1px 1px at 90% 12%, rgba(255, 255, 255, 0.6), transparent);
+    animation: nebula-glow-fast 4.2s ease-in-out infinite;
+}
+
+html[data-app-theme="nebula"] .file-cabinet-filed-chip::after {
+    content: '';
+    position: absolute;
+    right: 1.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #f5e8ff, #c084fc 55%, #a855f7);
+    box-shadow: 0 0 6px rgba(232, 121, 249, 0.45);
+}
+
+html[data-app-theme="nebula"] .file-cabinet-filed-chip.is-file-cabinet-drop-target {
+    background: color-mix(in srgb, #c084fc 14%, #160e28);
+    box-shadow: inset 0 0 0 1px rgba(192, 132, 252, 0.38), inset 0 2px 4px rgba(0, 0, 0, 0.22);
+}
+
+html[data-app-theme="nebula"] .file-cabinet-category.is-file-cabinet-drop-target {
+    background: color-mix(in srgb, #e879f9 12%, #1a1230);
+    box-shadow:
+        inset 0 0 0 1px rgba(232, 121, 249, 0.32),
+        inset 3px 0 6px rgba(0, 0, 0, 0.08),
+        inset -3px 0 6px rgba(0, 0, 0, 0.08),
+        inset 0 -4px 8px rgba(0, 0, 0, 0.14);
+}
+
+html[data-app-theme="nebula"] .btn.active {
+    background: linear-gradient(135deg, color-mix(in srgb, #c084fc 60%, #0a0618), color-mix(in srgb, #e879f9 40%, #0a0618));
+    border-color: #c084fc;
+    color: #f8f0ff;
+}
+
+html[data-app-theme="nebula"] .quick-actions-grid .btn--icon.active { color: #f8f0ff; }
+
+html[data-app-theme="nebula"] #btn-drawing-mode.active {
+    background: linear-gradient(135deg, color-mix(in srgb, #c084fc 26%, transparent), color-mix(in srgb, #e879f9 16%, transparent));
+}
+
+@keyframes nebula-glow-slow {
+    0%, 100% { opacity: 0.35; }
+    50% { opacity: 0.85; }
+}
+
+@keyframes nebula-glow-fast {
+    0%, 100% { opacity: 0.55; }
+    35% { opacity: 0.2; }
+    70% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html[data-app-theme="nebula"] #app-canvas::before,
+    html[data-app-theme="nebula"] #app-canvas.file-cabinet-bottom::before,
+    html[data-app-theme="nebula"] #app-canvas::after,
+    html[data-app-theme="nebula"] #app-canvas.file-cabinet-bottom::after {
+        animation: none;
+        opacity: 0.65;
+    }
+}
+
 /* Sheet grid — subtle header tint per theme */
 html[data-app-theme="parchment"] .sheet-grid-wrap,
 html[data-app-theme="wood"] .sheet-grid-wrap,
@@ -883,7 +1023,8 @@ html[data-app-theme="corkboard"] .sheet-grid-wrap {
 }
 
 html[data-app-theme="neon"] .sheet-grid-wrap,
-html[data-app-theme="miami"] .sheet-grid-wrap {
+html[data-app-theme="miami"] .sheet-grid-wrap,
+html[data-app-theme="nebula"] .sheet-grid-wrap {
     --sheet-head-border: color-mix(in srgb, var(--accent-color, #6366f1) 18%, var(--border-color));
 }
 
