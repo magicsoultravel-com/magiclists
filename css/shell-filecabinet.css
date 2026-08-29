@@ -201,6 +201,65 @@ html:not([data-theme-skin="1"])[data-file-cabinet-bg="carbon-fiber"] .file-cabin
         );
 }
 
+/* Wood - vertical grain planks */
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="wood"] .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout,
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="wood"] .file-cabinet-category {
+    background-image:
+        linear-gradient(
+            180deg,
+            color-mix(in srgb, #a97b50 22%, transparent) 0%,
+            color-mix(in srgb, #5b3a1e 24%, transparent) 100%
+        ),
+        repeating-linear-gradient(
+            90deg,
+            color-mix(in srgb, #6b4423 14%, transparent) 0 2px,
+            transparent 2px 15px,
+            color-mix(in srgb, #4a2c15 10%, transparent) 15px 17px,
+            transparent 17px 33px,
+            color-mix(in srgb, #6b4423 8%, transparent) 33px 36px,
+            transparent 36px 58px
+        ),
+        linear-gradient(
+            180deg,
+            color-mix(in srgb, #ffffff 7%, transparent) 0%,
+            transparent 32%
+        );
+}
+
+/* Stone tablet - aged speckled stone */
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="stone"] .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout,
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="stone"] .file-cabinet-category {
+    background-image:
+        radial-gradient(1px 1px at 22% 28%, color-mix(in srgb, #57503f 34%, transparent), transparent),
+        radial-gradient(1.5px 1.5px at 68% 20%, color-mix(in srgb, #2f2b22 30%, transparent), transparent),
+        radial-gradient(1.2px 1.2px at 42% 58%, color-mix(in srgb, #7d7460 26%, transparent), transparent),
+        radial-gradient(1.4px 1.4px at 80% 72%, color-mix(in srgb, #332e24 30%, transparent), transparent),
+        radial-gradient(1px 1.2px at 12% 84%, color-mix(in srgb, #8a816c 24%, transparent), transparent),
+        linear-gradient(
+            180deg,
+            color-mix(in srgb, #b0a78f 22%, transparent) 0%,
+            color-mix(in srgb, #6f685a 10%, transparent) 100%
+        );
+}
+
+/* Bricks - woven masonry (mortar lines over brick) */
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="bricks"] .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout,
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="bricks"] .file-cabinet-category {
+    background-color: color-mix(in srgb, #a45335 52%, transparent);
+    background-image:
+        linear-gradient(335deg, color-mix(in srgb, #6e341d 70%, transparent) 23px, transparent 23px),
+        linear-gradient(155deg, color-mix(in srgb, #6e341d 70%, transparent) 23px, transparent 23px),
+        linear-gradient(335deg, color-mix(in srgb, #6e341d 70%, transparent) 23px, transparent 23px),
+        linear-gradient(155deg, color-mix(in srgb, #6e341d 70%, transparent) 23px, transparent 23px),
+        linear-gradient(
+            180deg,
+            color-mix(in srgb, var(--card-category-color, var(--file-cabinet-category-color, var(--accent-color))) 10%, transparent) 0%,
+            transparent 100%
+        );
+    background-size: 58px 58px;
+    background-position: 0 2px, 4px 35px, 29px 31px, 34px 6px, 0 0;
+}
+
 /* Gradient - soft vertical depth in the category color */
 html:not([data-theme-skin="1"])[data-file-cabinet-bg="gradient"] .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout,
 html:not([data-theme-skin="1"])[data-file-cabinet-bg="gradient"] .file-cabinet-category {

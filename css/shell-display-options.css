@@ -329,7 +329,8 @@
     margin-bottom: 0.25rem;
 }
 
-.note-font-select {
+.note-font-select,
+.file-cabinet-bg-select {
     width: 100%;
     max-width: 280px;
     padding: 0.35rem 0.5rem;
@@ -349,9 +350,19 @@
     background-size: 10px 10px;
 }
 
-.note-font-select:hover {
+.note-font-select:hover,
+.file-cabinet-bg-select:hover {
     border-color: color-mix(in srgb, var(--accent) 35%, var(--border-color));
     background: color-mix(in srgb, var(--accent) 6%, var(--bg-card));
+}
+
+/* File cabinet drawer background dropdown — disabled under fancy themes */
+.file-cabinet-bg-select-wrapper.is-disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.file-cabinet-bg-select-wrapper.is-disabled .file-cabinet-bg-select {
+    cursor: not-allowed;
 }
 
 /* ==========================================================================

@@ -38,7 +38,7 @@ import { createThemePicker } from './themePicker.js';
 
 const STORAGE_KEY = 'matrix_display_options';
 
-const FILE_CABINET_BG_OPTIONS = ['none', 'smooth', 'striped', 'dots', 'polished-metal', 'carbon-fiber', 'gradient', 'sunset'];
+const FILE_CABINET_BG_OPTIONS = ['none', 'smooth', 'striped', 'dots', 'polished-metal', 'carbon-fiber', 'wood', 'stone', 'bricks', 'gradient', 'sunset'];
 
 const DEFAULTS = {
     showCategoryBand: true,
@@ -395,17 +395,15 @@ export const DisplayOptions = {
 
         /* File cabinet drawer background — locked to None under fancy themes */
         const fancySkin = document.documentElement.dataset.themeSkin === '1';
-        const fcInputs = root.querySelectorAll('input[name="display-opt-fc-bg"]');
-        if (fcInputs.length) {
+        const fcBgSelect = root.querySelector('#display-opt-fc-bg');
+        if (fcBgSelect) {
             if (fancySkin && this.options.fileCabinetBg !== 'none') {
                 this.setOptions({ fileCabinetBg: 'none' });
             }
             const active = fancySkin ? 'none' : (this.options.fileCabinetBg || 'smooth');
-            fcInputs.forEach((radio) => {
-                radio.checked = radio.value === active;
-                radio.disabled = fancySkin;
-                radio.closest('.display-options-row')?.classList.toggle('is-disabled', fancySkin);
-            });
+            fcBgSelect.value = active;
+            fcBgSelect.disabled = fancySkin;
+            fcBgSelect.closest('.file-cabinet-bg-select-wrapper')?.classList.toggle('is-disabled', fancySkin);
             const hint = root.querySelector('#display-opt-fc-bg-hint');
             if (hint) {
                 hint.textContent = fancySkin
@@ -532,6 +530,9 @@ export const DisplayOptions = {
             { value: 'dots', label: 'Dots' },
             { value: 'polished-metal', label: 'Polished metal' },
             { value: 'carbon-fiber', label: 'Carbon fiber' },
+            { value: 'wood', label: 'Wood' },
+            { value: 'stone', label: 'Stone tablet' },
+            { value: 'bricks', label: 'Bricks' },
             { value: 'gradient', label: 'Gradient' },
             { value: 'sunset', label: 'Sunset' }
         ];
@@ -542,13 +543,13 @@ export const DisplayOptions = {
             <div class="display-options-section display-options-section--file-cabinet">
                 <h3 class="display-options-heading">File cabinet</h3>
                 <p class="display-options-subheading">Drawer background</p>
-                <div class="display-options-check-row" role="radiogroup" aria-label="File cabinet drawer background">
-                    ${options.map((o) => `
-                        <label class="display-options-row${locked ? ' is-disabled' : ''}" for="display-opt-fc-bg-${o.value}">
-                            <input type="radio" class="display-options-radio" id="display-opt-fc-bg-${o.value}" name="display-opt-fc-bg" value="${o.value}"${active === o.value ? ' checked' : ''}${locked ? ' disabled' : ''}>
-                            <span class="display-options-row-label">${escapeHtml(o.label)}</span>
-                        </label>
-                    `).join('')}
+                <div class="file-cabinet-bg-select-wrapper${locked ? ' is-disabled' : ''}">
+                    <select id="display-opt-fc-bg" class="file-cabinet-bg-select" aria-label="File cabinet drawer background"${locked ? ' disabled' : ''}>
+                        ${options.map((o) => {
+                            const selected = active === o.value;
+                            return `<option value="${o.value}"${selected ? ' selected' : ''}>${escapeHtml(o.label)}</option>`;
+                        }).join('')}
+                    </select>
                 </div>
                 <p class="display-options-row-hint" id="display-opt-fc-bg-hint">${escapeHtml(hint)}</p>
             </div>
@@ -703,13 +704,14 @@ export const DisplayOptions = {
             });
         });
 
-        root.querySelectorAll('input[name="display-opt-fc-bg"]').forEach((radio) => {
-            radio.addEventListener('change', (e) => {
+        const fcBgSelect = root.querySelector('#display-opt-fc-bg');
+        if (fcBgSelect) {
+            fcBgSelect.addEventListener('change', (e) => {
                 e.stopPropagation();
-                if (radio.disabled) return;
+                if (fcBgSelect.disabled) return;
                 this.setOptions({ fileCabinetBg: e.target.value });
             });
-        });
+        }
 
         const undockOpacityInput = root.querySelector('#display-opt-undock-opacity');
         if (undockOpacityInput) {
