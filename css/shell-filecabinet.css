@@ -110,7 +110,8 @@
 }
 
 /* Category-tint wash: folded hover preview + expanded drawers (standard themes).
-   Fancy themes override .file-cabinet-category with material skins in themes.css. */
+   Fancy themes override .file-cabinet-category with material skins in themes.css;
+   the opt-in drawer background styles below never apply while a fancy skin is active. */
 .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout,
 .file-cabinet-category {
     background-color: color-mix(
@@ -118,6 +119,15 @@
         var(--card-category-color, var(--file-cabinet-category-color, var(--accent-color))) 16%,
         color-mix(in srgb, var(--bg-surface) 90%, var(--bg-primary))
     );
+}
+
+/* Drawer background picker (Display options -> File cabinet).
+   Default is Smooth (base wash above, no background-image). The choices below
+   are gated to standard themes so fancy theme skins always own the file cabinet. */
+
+/* Striped - original diagonal hatch in the category color */
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="striped"] .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout,
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="striped"] .file-cabinet-category {
     background-image: repeating-linear-gradient(
         135deg,
         transparent 0,
@@ -133,6 +143,28 @@
             transparent
         ) 6px
     );
+}
+
+/* Dots - subtle dot grid in the category color */
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="dots"] .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout,
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="dots"] .file-cabinet-category {
+    background-image: radial-gradient(
+        circle,
+        color-mix(
+            in srgb,
+            var(--card-category-color, var(--file-cabinet-category-color, var(--text-muted))) 22%,
+            transparent
+        ) 1.25px,
+        transparent 1.5px
+    );
+    background-size: 8px 8px;
+}
+
+/* None - no tint wash, container background shows through */
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="none"] .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout,
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="none"] .file-cabinet-category {
+    background-color: transparent;
+    background-image: none;
 }
 
 .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout {

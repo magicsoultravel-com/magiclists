@@ -315,6 +315,15 @@
     accent-color: var(--accent);
 }
 
+/* Disabled option rows (e.g. file cabinet drawer background under fancy themes) */
+.display-options-row.is-disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+.display-options-row.is-disabled .display-options-row-label {
+    cursor: not-allowed;
+}
+
 /* Note font select dropdown */
 .note-font-select-wrapper {
     margin-bottom: 0.25rem;

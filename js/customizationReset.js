@@ -40,7 +40,8 @@ const DISPLAY_DEFAULTS = {
     noteFontId: 'default',
     brandIconId: 'clipboard',
     undockedModuleOpacity: 1,
-    popoutMode: 'pip'
+    popoutMode: 'pip',
+    fileCabinetBg: 'smooth'
 };
 
 export function resetCustomizationToDefaults() {

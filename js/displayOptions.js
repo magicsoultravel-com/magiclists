@@ -38,6 +38,8 @@ import { createThemePicker } from './themePicker.js';
 
 const STORAGE_KEY = 'matrix_display_options';
 
+const FILE_CABINET_BG_OPTIONS = ['none', 'smooth', 'striped', 'dots'];
+
 const DEFAULTS = {
     showCategoryBand: true,
     showCategoryName: true,
@@ -52,7 +54,8 @@ const DEFAULTS = {
     brandIconId: 'clipboard',
     useCategoryColors: true,
     undockedModuleOpacity: 1,
-    popoutMode: 'pip'
+    popoutMode: 'pip',
+    fileCabinetBg: 'smooth'
 };
 
 export function readDisplayOptions() {
@@ -75,7 +78,8 @@ export function readDisplayOptions() {
             brandIconId: resolveBrandIconId(raw.brandIconId),
             useCategoryColors: raw.useCategoryColors !== false,
             undockedModuleOpacity: Math.min(1, Math.max(0.1, Number(raw.undockedModuleOpacity) || 1)),
-            popoutMode: raw.popoutMode === 'window' ? 'window' : 'pip'
+            popoutMode: raw.popoutMode === 'window' ? 'window' : 'pip',
+            fileCabinetBg: FILE_CABINET_BG_OPTIONS.includes(raw.fileCabinetBg) ? raw.fileCabinetBg : 'smooth'
         };
     } catch {
         return { ...DEFAULTS, noteFontId: readNoteFont() };
@@ -100,6 +104,7 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     root.dataset.showRulerH = options.showRulerHorizontal ? '1' : '0';
     root.dataset.showRulerV = options.showRulerVertical ? '1' : '0';
     root.dataset.useCategoryColors = options.useCategoryColors ? '1' : '0';
+    root.dataset.fileCabinetBg = root.dataset.themeSkin === '1' ? 'none' : (options.fileCabinetBg || 'smooth');
     root.style.setProperty('--sidebar-undock-opacity', String(options.undockedModuleOpacity ?? 1));
     applyNoteFont(options.noteFontId);
     applyBrandIcon(options.brandIconId);
@@ -122,6 +127,7 @@ function isCustomized(options) {
         || !options.useCategoryColors
         || Math.abs((options.undockedModuleOpacity ?? 1) - 1) > 0.001
         || options.popoutMode !== 'pip'
+        || options.fileCabinetBg !== 'smooth'
         || isNoteFontCustomized(options.noteFontId)
         || isAppThemeCustomized()
         || NoteFontScale.isCustomized()
@@ -159,7 +165,17 @@ export const DisplayOptions = {
 
         window.addEventListener('note:font_scale_changed', () => this.syncButtonState());
         window.addEventListener('appearance:color_changed', () => this.syncButtonState());
-        window.addEventListener('app:theme_changed', () => this.syncButtonState());
+        window.addEventListener('app:theme_changed', (e) => {
+            const theme = getThemeById(e.detail);
+            if (theme?.special) {
+                /* Fancy theme — file cabinet drawer background locks to None. */
+                this.setOptions({ fileCabinetBg: 'none' });
+            } else {
+                /* Regular/custom theme — revert to the Smooth default. */
+                this.setOptions({ fileCabinetBg: 'smooth' });
+            }
+            this.syncButtonState();
+        });
         window.addEventListener('customization:reset', () => {
             this.options = readDisplayOptions();
             applyDisplayOptions(this.options);
@@ -377,6 +393,27 @@ export const DisplayOptions = {
             }
         }
 
+        /* File cabinet drawer background — locked to None under fancy themes */
+        const fancySkin = document.documentElement.dataset.themeSkin === '1';
+        const fcInputs = root.querySelectorAll('input[name="display-opt-fc-bg"]');
+        if (fcInputs.length) {
+            if (fancySkin && this.options.fileCabinetBg !== 'none') {
+                this.setOptions({ fileCabinetBg: 'none' });
+            }
+            const active = fancySkin ? 'none' : (this.options.fileCabinetBg || 'smooth');
+            fcInputs.forEach((radio) => {
+                radio.checked = radio.value === active;
+                radio.disabled = fancySkin;
+                radio.closest('.display-options-row')?.classList.toggle('is-disabled', fancySkin);
+            });
+            const hint = root.querySelector('#display-opt-fc-bg-hint');
+            if (hint) {
+                hint.textContent = fancySkin
+                    ? 'Locked to None while a fancy theme is active.'
+                    : 'Drawer background for open file cabinet drawers.';
+            }
+        }
+
         this.syncButtonState();
     },
 
@@ -485,6 +522,35 @@ export const DisplayOptions = {
         return `<div class="display-opt-desktops-grid" role="group" aria-label="Desktops">${tiles.join('')}</div>`;
     },
 
+    fileCabinetBgRowHtml() {
+        const locked = document.documentElement.dataset.themeSkin === '1';
+        const active = locked ? 'none' : (this.options.fileCabinetBg || 'smooth');
+        const options = [
+            { value: 'none', label: 'None' },
+            { value: 'smooth', label: 'Smooth' },
+            { value: 'striped', label: 'Striped' },
+            { value: 'dots', label: 'Dots' }
+        ];
+        const hint = locked
+            ? 'Locked to None while a fancy theme is active.'
+            : 'Drawer background for open file cabinet drawers.';
+        return `
+            <div class="display-options-section display-options-section--file-cabinet">
+                <h3 class="display-options-heading">File cabinet</h3>
+                <p class="display-options-subheading">Drawer background</p>
+                <div class="display-options-check-row" role="radiogroup" aria-label="File cabinet drawer background">
+                    ${options.map((o) => `
+                        <label class="display-options-row${locked ? ' is-disabled' : ''}" for="display-opt-fc-bg-${o.value}">
+                            <input type="radio" class="display-options-radio" id="display-opt-fc-bg-${o.value}" name="display-opt-fc-bg" value="${o.value}"${active === o.value ? ' checked' : ''}${locked ? ' disabled' : ''}>
+                            <span class="display-options-row-label">${escapeHtml(o.label)}</span>
+                        </label>
+                    `).join('')}
+                </div>
+                <p class="display-options-row-hint" id="display-opt-fc-bg-hint">${escapeHtml(hint)}</p>
+            </div>
+        `;
+    },
+
     bindStepper(root, { idPrefix, onOut, onIn, disabled = false }) {
         if (disabled) return;
         root.querySelector(`#${idPrefix}-out`)?.addEventListener('click', (e) => {
@@ -569,6 +635,7 @@ export const DisplayOptions = {
                             <p class="display-options-subheading">Desktops</p>
                             ${this.desktopsTilesHtml()}
                         </div>
+                        ${this.fileCabinetBgRowHtml()}
                         <div class="display-options-section display-options-section--popout">
                             <h3 class="display-options-heading">Pop-out windows</h3>
                             <p class="display-options-subheading">Window style</p>
@@ -629,6 +696,14 @@ export const DisplayOptions = {
             radio.addEventListener('change', (e) => {
                 e.stopPropagation();
                 this.setOptions({ popoutMode: e.target.value === 'window' ? 'window' : 'pip' });
+            });
+        });
+
+        root.querySelectorAll('input[name="display-opt-fc-bg"]').forEach((radio) => {
+            radio.addEventListener('change', (e) => {
+                e.stopPropagation();
+                if (radio.disabled) return;
+                this.setOptions({ fileCabinetBg: e.target.value });
             });
         });
 
