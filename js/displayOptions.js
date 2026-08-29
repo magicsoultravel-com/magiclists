@@ -38,7 +38,7 @@ import { createThemePicker } from './themePicker.js';
 
 const STORAGE_KEY = 'matrix_display_options';
 
-const FILE_CABINET_BG_OPTIONS = ['none', 'smooth', 'striped', 'dots'];
+const FILE_CABINET_BG_OPTIONS = ['none', 'smooth', 'striped', 'dots', 'polished-metal', 'carbon-fiber', 'gradient', 'sunset'];
 
 const DEFAULTS = {
     showCategoryBand: true,
@@ -529,7 +529,11 @@ export const DisplayOptions = {
             { value: 'none', label: 'None' },
             { value: 'smooth', label: 'Smooth' },
             { value: 'striped', label: 'Striped' },
-            { value: 'dots', label: 'Dots' }
+            { value: 'dots', label: 'Dots' },
+            { value: 'polished-metal', label: 'Polished metal' },
+            { value: 'carbon-fiber', label: 'Carbon fiber' },
+            { value: 'gradient', label: 'Gradient' },
+            { value: 'sunset', label: 'Sunset' }
         ];
         const hint = locked
             ? 'Locked to None while a fancy theme is active.'

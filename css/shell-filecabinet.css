@@ -160,6 +160,85 @@ html:not([data-theme-skin="1"])[data-file-cabinet-bg="dots"] .file-cabinet-categ
     background-size: 8px 8px;
 }
 
+/* Polished metal - brushed metallic sheen over the category tint */
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="polished-metal"] .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout,
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="polished-metal"] .file-cabinet-category {
+    background-image:
+        linear-gradient(
+            180deg,
+            color-mix(in srgb, #ffffff 22%, transparent) 0%,
+            transparent 35%,
+            color-mix(in srgb, #000000 10%, transparent) 62%,
+            color-mix(in srgb, #ffffff 16%, transparent) 100%
+        ),
+        repeating-linear-gradient(
+            90deg,
+            transparent 0,
+            transparent 24px,
+            color-mix(in srgb, #ffffff 6%, transparent) 24px,
+            color-mix(in srgb, #ffffff 6%, transparent) 26px
+        );
+}
+
+/* Carbon fiber - dark woven diagonals */
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="carbon-fiber"] .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout,
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="carbon-fiber"] .file-cabinet-category {
+    background-image:
+        linear-gradient(
+            135deg,
+            color-mix(in srgb, #000000 16%, transparent) 0%,
+            color-mix(in srgb, #000000 4%, transparent) 100%
+        ),
+        repeating-linear-gradient(
+            45deg,
+            color-mix(in srgb, #000000 14%, transparent) 0 2px,
+            transparent 2px 6px
+        ),
+        repeating-linear-gradient(
+            -45deg,
+            color-mix(in srgb, #ffffff 5%, transparent) 0 2px,
+            transparent 2px 6px
+        );
+}
+
+/* Gradient - soft vertical depth in the category color */
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="gradient"] .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout,
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="gradient"] .file-cabinet-category {
+    background-image: linear-gradient(
+        180deg,
+        color-mix(
+            in srgb,
+            var(--card-category-color, var(--file-cabinet-category-color, var(--accent-color))) 26%,
+            transparent
+        ) 0%,
+        transparent 65%,
+        color-mix(
+            in srgb,
+            var(--card-category-color, var(--file-cabinet-category-color, var(--accent-color))) 12%,
+            transparent
+        ) 100%
+    );
+}
+
+/* Sunset - diagonal color fade across the drawer */
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="sunset"] .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout,
+html:not([data-theme-skin="1"])[data-file-cabinet-bg="sunset"] .file-cabinet-category {
+    background-image: linear-gradient(
+        135deg,
+        color-mix(
+            in srgb,
+            var(--card-category-color, var(--file-cabinet-category-color, var(--accent-color))) 34%,
+            transparent
+        ) 0%,
+        color-mix(
+            in srgb,
+            var(--card-category-color, var(--file-cabinet-category-color, var(--accent-color))) 8%,
+            transparent
+        ) 55%,
+        transparent 100%
+    );
+}
+
 /* None - no tint wash, container background shows through */
 html:not([data-theme-skin="1"])[data-file-cabinet-bg="none"] .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout,
 html:not([data-theme-skin="1"])[data-file-cabinet-bg="none"] .file-cabinet-category {
