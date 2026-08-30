@@ -33,6 +33,7 @@
     box-sizing: border-box;
     width: 100%;
     min-width: 0;
+    min-height: 16px;
     padding: 0.2rem 0.15rem;
     border-radius: 0.25rem;
     font-size: 0.52rem;
@@ -40,6 +41,7 @@
     color: var(--text-main);
     line-height: 1.2;
     border-left: 2px solid var(--card-category-color, var(--border-color));
+    position: relative;
 }
 
 .file-cabinet-filed-chip.is-file-cabinet-drop-target {
@@ -55,43 +57,63 @@
     white-space: nowrap;
 }
 
-.file-cabinet-filed-chip .file-cabinet-filed-chip-expand {
-    flex: 0 0 auto;
-    opacity: 0.55;
-    padding: 0.05rem;
-}
-
-.file-cabinet-filed-chip .file-cabinet-category-open-all-btn,
-.file-cabinet-filed-chip .file-cabinet-category-color-btn,
-.file-cabinet-filed-chip .file-cabinet-category-hide-btn {
-    flex: 0 0 auto;
+/* Category header/chip quick actions — match .card-actions on expanded notes */
+.file-cabinet-category-actions {
+    position: absolute;
+    top: 0;
+    right: 1px;
+    z-index: 8;
+    display: inline-flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1px;
+    padding: 0;
     opacity: 0;
-    padding: 0.05rem;
+    background: none;
+    pointer-events: none;
     transition: opacity 0.12s ease;
 }
 
-.file-cabinet-filed-chip:hover .file-cabinet-filed-chip-expand,
-.file-cabinet-filed-chip:focus-within .file-cabinet-filed-chip-expand,
-.file-cabinet-filed-chip.is-fold-preview-source .file-cabinet-filed-chip-expand {
+.file-cabinet-category-header:hover .file-cabinet-category-actions,
+.file-cabinet-category-header:focus-within .file-cabinet-category-actions,
+.file-cabinet-filed-chip:hover .file-cabinet-category-actions,
+.file-cabinet-filed-chip:focus-within .file-cabinet-category-actions,
+.file-cabinet-filed-chip.is-fold-preview-source .file-cabinet-category-actions {
     opacity: 1;
+    pointer-events: auto;
 }
 
-.file-cabinet-filed-chip:hover .file-cabinet-category-open-all-btn,
-.file-cabinet-filed-chip:focus-within .file-cabinet-category-open-all-btn,
-.file-cabinet-filed-chip.is-fold-preview-source .file-cabinet-category-open-all-btn,
-.file-cabinet-filed-chip:hover .file-cabinet-category-color-btn,
-.file-cabinet-filed-chip:focus-within .file-cabinet-category-color-btn,
-.file-cabinet-filed-chip.is-fold-preview-source .file-cabinet-category-color-btn,
-.file-cabinet-filed-chip:hover .file-cabinet-category-hide-btn,
-.file-cabinet-filed-chip:focus-within .file-cabinet-category-hide-btn,
-.file-cabinet-filed-chip.is-fold-preview-source .file-cabinet-category-hide-btn {
-    opacity: 0.75;
+.file-cabinet-category-actions .card-act {
+    flex: 0 0 auto;
+    opacity: 1;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text-muted);
 }
 
-.file-cabinet-filed-chip .file-cabinet-category-open-all-btn:hover,
-.file-cabinet-filed-chip .file-cabinet-category-color-btn:hover,
-.file-cabinet-filed-chip .file-cabinet-category-hide-btn:hover {
-    opacity: 1;
+.file-cabinet-category-actions .card-act:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.file-cabinet-category-actions .file-cabinet-filed-chip-grab {
+    cursor: grab;
+}
+
+.file-cabinet-category-actions .file-cabinet-filed-chip-grab:active {
+    cursor: grabbing;
+}
+
+.file-cabinet-category-actions .file-cabinet-category-grab-btn {
+    cursor: grab;
+}
+
+.file-cabinet-category-actions .file-cabinet-category-grab-btn:active {
+    cursor: grabbing;
 }
 
 .file-cabinet-filed-chip.is-fold-preview-source {
@@ -371,61 +393,14 @@ html:not([data-theme-skin="1"])[data-file-cabinet-bg="none"] .file-cabinet-categ
     gap: 0.3rem;
     margin-bottom: 0.3rem;
     min-width: 0;
+    min-height: 16px;
     max-width: 100%;
-    overflow: hidden;
+    overflow: visible;
     font-size: 0.52rem;
     font-weight: 600;
     color: var(--text-main);
     line-height: 1.2;
-}
-
-.file-cabinet-category-header .file-cabinet-category-fold-btn,
-.file-cabinet-category-header .file-cabinet-category-grab-btn,
-.file-cabinet-category-header .file-cabinet-category-open-all-btn,
-.file-cabinet-category-header .file-cabinet-category-color-btn,
-.file-cabinet-category-header .file-cabinet-category-hide-btn {
-    flex: 0 0 auto;
-    opacity: 0;
-    padding: 0.05rem;
-    transition: opacity 0.12s ease;
-}
-
-.file-cabinet-category-header .file-cabinet-category-fold-btn {
-    margin-left: 0;
-}
-
-.file-cabinet-category-header .file-cabinet-category-grab-btn {
-    margin-left: 0;
-    cursor: grab;
-}
-
-.file-cabinet-category-header .file-cabinet-category-count + .file-cabinet-category-grab-btn {
-    margin-left: auto;
-}
-
-.file-cabinet-category-header .file-cabinet-category-grab-btn:active {
-    cursor: grabbing;
-}
-
-.file-cabinet-category-header:hover .file-cabinet-category-fold-btn,
-.file-cabinet-category-header:focus-within .file-cabinet-category-fold-btn,
-.file-cabinet-category-header:hover .file-cabinet-category-grab-btn,
-.file-cabinet-category-header:focus-within .file-cabinet-category-grab-btn,
-.file-cabinet-category-header:hover .file-cabinet-category-open-all-btn,
-.file-cabinet-category-header:focus-within .file-cabinet-category-open-all-btn,
-.file-cabinet-category-header:hover .file-cabinet-category-color-btn,
-.file-cabinet-category-header:focus-within .file-cabinet-category-color-btn,
-.file-cabinet-category-header:hover .file-cabinet-category-hide-btn,
-.file-cabinet-category-header:focus-within .file-cabinet-category-hide-btn {
-    opacity: 0.75;
-}
-
-.file-cabinet-category-header .file-cabinet-category-fold-btn:hover,
-.file-cabinet-category-header .file-cabinet-category-grab-btn:hover,
-.file-cabinet-category-header .file-cabinet-category-open-all-btn:hover,
-.file-cabinet-category-header .file-cabinet-category-color-btn:hover,
-.file-cabinet-category-header .file-cabinet-category-hide-btn:hover {
-    opacity: 1;
+    position: relative;
 }
 
 .file-cabinet-category.is-file-cabinet-drop-target {
@@ -482,18 +457,6 @@ html:not([data-theme-skin="1"])[data-file-cabinet-bg="none"] .file-cabinet-categ
 .file-cabinet-category-chip-ghost-name {
     flex: 1 1 auto;
     min-width: 0;
-}
-
-.file-cabinet-filed-chip .file-cabinet-filed-chip-grab {
-    flex: 0 0 auto;
-    opacity: 0;
-    padding: 0.05rem;
-    cursor: grab;
-}
-
-.file-cabinet-filed-chip:hover .file-cabinet-filed-chip-grab,
-.file-cabinet-filed-chip:focus-within .file-cabinet-filed-chip-grab {
-    opacity: 0.75;
 }
 
 .file-cabinet-insert-marker {

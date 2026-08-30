@@ -53,6 +53,11 @@ function buildFileCabinetCategoryActionButtons({ canManage = true } = {}) {
     return `<button type="button" class="card-act card-act--color file-cabinet-category-color-btn" title="Category color" aria-label="Category color">${CARD_ICONS.color}</button><button type="button" class="card-act card-act--hide file-cabinet-category-hide-btn" title="Hide category" aria-label="Hide category">${CARD_ICONS.hide}</button>`;
 }
 
+function wrapFileCabinetCategoryActions(buttonsHtml) {
+    if (!buttonsHtml?.trim()) return '';
+    return `<div class="file-cabinet-category-actions">${buttonsHtml}</div>`;
+}
+
 /** Categories to render — only those with filed notes on the active desktop. */
 function buildFileCabinetCategoryNames(byCategory) {
     const list = [...byCategory.keys()];
@@ -1480,7 +1485,8 @@ function buildFileCabinetCategoryColumn({
         ? `<button type="button" class="card-act file-cabinet-category-fold-btn" title="Fold category" aria-label="Fold category">${FOLD_ICON}</button>`
         : '';
     const manageBtnsHtml = buildFileCabinetCategoryActionButtons({ canManage: canRename });
-    header.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span${nameAttrs}>${escapeHTML(catName)}</span><span class="file-cabinet-category-count">${items.length}</span>${grabBtnHtml}${manageBtnsHtml}${openAllBtnHtml}${foldBtnHtml}`;
+    const actionsHtml = wrapFileCabinetCategoryActions(`${grabBtnHtml}${manageBtnsHtml}${openAllBtnHtml}${foldBtnHtml}`);
+    header.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span${nameAttrs}>${escapeHTML(catName)}</span><span class="file-cabinet-category-count">${items.length}</span>${actionsHtml}`;
     col.appendChild(header);
 
     const stack = document.createElement('div');
@@ -1728,7 +1734,8 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
                 ? ' class="file-cabinet-filed-chip-name u-truncate card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Category…"'
                 : ' class="file-cabinet-filed-chip-name u-truncate"';
             const manageBtnsHtml = buildFileCabinetCategoryActionButtons({ canManage: canRename });
-            chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span${chipNameAttrs}>${escapeHTML(catName)} (${items.length})</span><button type="button" class="card-act file-cabinet-filed-chip-grab grab-handle grab-handle--col" title="Drag to reorder category" aria-label="Drag to reorder category">${CARD_ICONS.drag}</button>${manageBtnsHtml}<button type="button" class="card-act file-cabinet-category-open-all-btn" title="Open all below" aria-label="Open all below">${ACTION_ICONS.expandAll}</button><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
+            const chipActionsHtml = wrapFileCabinetCategoryActions(`<button type="button" class="card-act file-cabinet-filed-chip-grab grab-handle grab-handle--col" title="Drag to reorder category" aria-label="Drag to reorder category">${CARD_ICONS.drag}</button>${manageBtnsHtml}<button type="button" class="card-act file-cabinet-category-open-all-btn" title="Open all below" aria-label="Open all below">${ACTION_ICONS.expandAll}</button><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`);
+            chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span${chipNameAttrs}>${escapeHTML(catName)} (${items.length})</span>${chipActionsHtml}`;
 
             const rollout = document.createElement('div');
             rollout.className = 'file-cabinet-filed-rollout';

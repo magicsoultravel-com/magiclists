@@ -519,6 +519,37 @@ html[data-desktop-gradient="1"] #app-canvas.view-grid {
     padding-right: 0.08rem;
 }
 
+.sidebar-notes-list-item--category.sidebar-notes-list-item--with-act {
+    position: relative;
+    cursor: default;
+}
+
+.sidebar-notes-list-item--category .sidebar-notes-list-item-title {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sidebar-notes-list-item--category .card-act {
+    position: absolute;
+    top: 0;
+    right: 0.1rem;
+    z-index: 2;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+    background: transparent;
+    box-shadow: none;
+}
+
+.sidebar-notes-list-item--category:hover .card-act,
+.sidebar-notes-list-item--category:focus-within .card-act {
+    opacity: 1;
+    pointer-events: auto;
+}
+
 .sidebar-notes-list .card-act {
     opacity: 0.55;
     flex-shrink: 0;
