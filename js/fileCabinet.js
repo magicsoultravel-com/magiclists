@@ -5,6 +5,7 @@ import { NoteSurface } from './noteSurface.js';
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import { sortBoardItems } from './boardSort.js';
 import { readBoardSort } from './sidebarPrefs.js';
+import { ColorPicker, PALETTE_NOTE } from './colorPicker.js';
 import {
     isCollapsedSpatialSize,
     getLabelRect,
@@ -46,6 +47,50 @@ export function getFileCabinetDragMinHeight() {
 
 const FOLD_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3 7l3-3 3 3" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const EXPAND_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M3 5l3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function buildFileCabinetCategoryActionButtons({ canManage = true } = {}) {
+    if (!canManage) return '';
+    return `<button type="button" class="card-act card-act--color file-cabinet-category-color-btn" title="Category color" aria-label="Category color">${CARD_ICONS.color}</button><button type="button" class="card-act card-act--hide file-cabinet-category-hide-btn" title="Hide category" aria-label="Hide category">${CARD_ICONS.hide}</button>`;
+}
+
+/** Categories to render — only those with filed notes on the active desktop. */
+function buildFileCabinetCategoryNames(byCategory) {
+    const list = [...byCategory.keys()];
+    const boardSort = readBoardSort();
+    if (boardSort.field === 'category') {
+        const dir = boardSort.dir === 'asc' ? 1 : -1;
+        list.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }) * dir);
+    } else {
+        list.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    }
+    return applyFileCabinetCategoryOrder(list);
+}
+
+/** Patch category color in place — avoids full board/FC re-render. */
+export function applyCategoryColorLive(catName, color, items = []) {
+    const clean = color && String(color).trim() ? String(color).trim() : UNCATEGORIZED_COLOR;
+    const catSel = `.file-cabinet-category[data-category="${CSS.escape(catName)}"], .file-cabinet-filed-slot[data-category="${CSS.escape(catName)}"]`;
+    document.querySelectorAll(catSel).forEach((el) => {
+        el.style.setProperty('--card-category-color', clean);
+        el.style.setProperty('--file-cabinet-category-color', clean);
+        el.querySelector('.file-cabinet-category-dot')?.style.setProperty('background', clean);
+    });
+
+    document.querySelectorAll(`.mini-card[data-file-cabinet-category="${CSS.escape(catName)}"]`).forEach((card) => {
+        card.style.setProperty('--card-category-color', clean);
+    });
+
+    const matchIds = new Set(
+        (items || []).filter((item) => getItemCategoryName(item) === catName).map((item) => item.id)
+    );
+    if (!matchIds.size) return;
+
+    document.querySelectorAll('.mini-card[data-id]').forEach((card) => {
+        if (!matchIds.has(card.dataset.id)) return;
+        card.style.setProperty('--card-category-color', clean);
+        card.querySelector('.badge-dot')?.style.setProperty('background-color', clean);
+    });
+}
 
 export const FILE_CABINET_STACK_OFFSET_Y = 18;
 export const FILE_CABINET_STACK_OFFSET_X = 10;
@@ -248,6 +293,21 @@ export function saveFileCabinetCategoryOrder(categories) {
     } catch {
         /* ignore */
     }
+}
+
+export function appendFileCabinetCategoryOrder(name) {
+    const cat = String(name || '').trim();
+    if (!cat) return;
+    const order = getFileCabinetCategoryOrder();
+    if (order.includes(cat)) return;
+    saveFileCabinetCategoryOrder([...order, cat]);
+}
+
+export function removeCategoryFromFileCabinetLayout(name) {
+    const cat = String(name || '').trim();
+    if (!cat) return;
+    saveFileCabinetFiledCategories(getFileCabinetFiledCategories().filter((c) => c !== cat));
+    saveFileCabinetCategoryOrder(getFileCabinetCategoryOrder().filter((c) => c !== cat));
 }
 
 /** Apply saved FC-only category order; append any new categories not yet saved. */
@@ -1419,7 +1479,8 @@ function buildFileCabinetCategoryColumn({
     const foldBtnHtml = showFoldButton
         ? `<button type="button" class="card-act file-cabinet-category-fold-btn" title="Fold category" aria-label="Fold category">${FOLD_ICON}</button>`
         : '';
-    header.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span${nameAttrs}>${escapeHTML(catName)}</span><span class="file-cabinet-category-count">${items.length}</span>${grabBtnHtml}${openAllBtnHtml}${foldBtnHtml}`;
+    const manageBtnsHtml = buildFileCabinetCategoryActionButtons({ canManage: canRename });
+    header.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span${nameAttrs}>${escapeHTML(catName)}</span><span class="file-cabinet-category-count">${items.length}</span>${grabBtnHtml}${manageBtnsHtml}${openAllBtnHtml}${foldBtnHtml}`;
     col.appendChild(header);
 
     const stack = document.createElement('div');
@@ -1607,7 +1668,8 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
     if (!mount) return;
     mount.innerHTML = '';
 
-    if (!filedItems.length) {
+    const safeFiledItems = Array.isArray(filedItems) ? filedItems : [];
+    if (!safeFiledItems.length) {
         mount.innerHTML = '<div class="file-cabinet-empty">No filed notes — use File away on a note to add tabs here.</div>';
         mount.style.minHeight = '';
         mount.style.maxHeight = '';
@@ -1618,23 +1680,16 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
 
     const order = getFileCabinetOrder();
     const byCategory = new Map();
-    filedItems.forEach((item) => {
+    safeFiledItems.forEach((item) => {
         const cat = getItemCategoryName(item);
         if (!byCategory.has(cat)) byCategory.set(cat, []);
         byCategory.get(cat).push(item);
     });
 
-    const allCategories = applyFileCabinetCategoryOrder((() => {
-        const cats = [...byCategory.keys()];
-        const boardSort = readBoardSort();
-        if (boardSort.field === 'category') {
-            const dir = boardSort.dir === 'asc' ? 1 : -1;
-            return cats.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }) * dir);
-        }
-        return cats.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-    })());
+    const allCategories = buildFileCabinetCategoryNames(byCategory);
+    const allCategorySet = new Set(allCategories);
     const filedCategoryNames = applyFileCabinetCategoryOrder(
-        getFileCabinetFiledCategories().filter((c) => byCategory.has(c))
+        getFileCabinetFiledCategories().filter((c) => allCategorySet.has(c))
     );
     const visibleCategories = allCategories.filter((c) => !isFileCabinetCategoryFiled(c));
     const hasRail = filedCategoryNames.length > 0;
@@ -1661,8 +1716,6 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
             const slot = document.createElement('div');
             slot.className = 'file-cabinet-filed-slot';
             slot.dataset.category = catName;
-            // Set on the slot so chip + hover rollout both inherit the tint
-            // (rollout is a sibling of the chip, not a child).
             slot.style.setProperty('--card-category-color', color);
             slot.style.setProperty('--file-cabinet-category-color', color);
 
@@ -1674,7 +1727,8 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
             const chipNameAttrs = canRename
                 ? ' class="file-cabinet-filed-chip-name u-truncate card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Category…"'
                 : ' class="file-cabinet-filed-chip-name u-truncate"';
-            chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span${chipNameAttrs}>${escapeHTML(catName)} (${items.length})</span><button type="button" class="card-act file-cabinet-filed-chip-grab grab-handle grab-handle--col" title="Drag to reorder category" aria-label="Drag to reorder category">${CARD_ICONS.drag}</button><button type="button" class="card-act file-cabinet-category-open-all-btn" title="Open all below" aria-label="Open all below">${ACTION_ICONS.expandAll}</button><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
+            const manageBtnsHtml = buildFileCabinetCategoryActionButtons({ canManage: canRename });
+            chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span${chipNameAttrs}>${escapeHTML(catName)} (${items.length})</span><button type="button" class="card-act file-cabinet-filed-chip-grab grab-handle grab-handle--col" title="Drag to reorder category" aria-label="Drag to reorder category">${CARD_ICONS.drag}</button>${manageBtnsHtml}<button type="button" class="card-act file-cabinet-category-open-all-btn" title="Open all below" aria-label="Open all below">${ACTION_ICONS.expandAll}</button><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
 
             const rollout = document.createElement('div');
             rollout.className = 'file-cabinet-filed-rollout';
@@ -1685,6 +1739,14 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
             rail.appendChild(slot);
         });
 
+        const addBtn = document.createElement('button');
+        addBtn.type = 'button';
+        addBtn.className = 'btn btn--compact btn--icon file-cabinet-add-category-btn';
+        addBtn.title = 'Add category';
+        addBtn.setAttribute('aria-label', 'Add category');
+        addBtn.innerHTML = ACTION_ICONS.plus;
+        rail.appendChild(addBtn);
+
         inner.appendChild(rail);
     }
 
@@ -1692,7 +1754,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
     row.className = 'file-cabinet-row';
 
     visibleCategories.forEach((catName) => {
-        const items = sortItemsByFileCabinetOrder(byCategory.get(catName), catName, order);
+        const items = sortItemsByFileCabinetOrder(byCategory.get(catName) || [], catName, order);
         row.appendChild(buildFileCabinetCategoryColumn({
             catName,
             items,
@@ -1705,7 +1767,13 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
 
     inner.appendChild(row);
     mount.appendChild(inner);
+    mount.style.minHeight = '';
+    mount.style.maxHeight = '';
     refreshFileCabinetUiScale(mount);
+}
+
+function readStoredCategoriesFromContext(mount) {
+    return mount?.__fcPreviewContext?.activeCategories || [];
 }
 
 export function initFileCabinetCategoryActions(mount, signal, UI = null) {
@@ -1784,6 +1852,46 @@ export function initFileCabinetCategoryActions(mount, signal, UI = null) {
     }, { signal });
 
     mount.addEventListener('click', (e) => {
+        const addBtn = e.target.closest('.file-cabinet-add-category-btn');
+        if (addBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            window.dispatchEvent(new CustomEvent('category:add_prompt', { detail: { anchor: addBtn } }));
+            return;
+        }
+
+        const colorBtn = e.target.closest('.file-cabinet-category-color-btn');
+        if (colorBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            const host = colorBtn.closest('.file-cabinet-category, .file-cabinet-filed-chip');
+            const cat = host?.dataset.category;
+            if (!cat || isUncategorizedCategory(cat)) return;
+            ColorPicker.open({
+                anchor: colorBtn,
+                presets: PALETTE_NOTE,
+                value: resolveCategoryColor(cat, readStoredCategoriesFromContext(mount)),
+                align: 'end',
+                onSelect: (color) => {
+                    window.dispatchEvent(new CustomEvent('category:color_changed', {
+                        detail: { name: cat, color }
+                    }));
+                }
+            });
+            return;
+        }
+
+        const hideBtn = e.target.closest('.file-cabinet-category-hide-btn');
+        if (hideBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            const host = hideBtn.closest('.file-cabinet-category, .file-cabinet-filed-chip');
+            const cat = host?.dataset.category;
+            if (!cat || isUncategorizedCategory(cat)) return;
+            window.dispatchEvent(new CustomEvent('category:hide_requested', { detail: { name: cat } }));
+            return;
+        }
+
         const openAllBtn = e.target.closest('.file-cabinet-category-open-all-btn');
         if (openAllBtn) {
             e.preventDefault();

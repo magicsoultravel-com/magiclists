@@ -464,6 +464,7 @@ export function renderQuickActions({
         <button class="btn btn--compact btn--icon ${overlayActive ? 'active' : ''}" id="btn-freeform-toggle" title="${viewTitle}" aria-label="${viewTitle}" aria-pressed="${overlayActive ? 'true' : 'false'}">${viewIcon}</button>
         <button class="btn btn--compact btn--icon ${fileCabinetActive ? 'active' : ''}" id="btn-file-cabinet-toggle" title="${fileCabinetTitle}" aria-label="${fileCabinetTitle}" aria-pressed="${fileCabinetActive ? 'true' : 'false'}">${ACTION_ICONS.viewFileCabinet}</button>
         <button class="btn btn--compact btn--icon ${drawingActive ? 'active' : ''}" id="btn-drawing-mode" title="magicCanvas" aria-label="magicCanvas">${ACTION_ICONS.drawingPencil}</button>
+        <button type="button" class="btn btn--compact btn--icon" id="btn-add-category" title="Add category" aria-label="Add category"></button>
     `;
 
     const historyGroup = `
@@ -490,7 +491,6 @@ export function renderQuickActions({
             <button type="button" class="btn btn--compact btn--block" id="btn-auth-login">Login</button>`;
     } else {
         const accountGroup = `
-            <button type="button" class="btn btn--compact btn--icon" id="btn-add-category" title="Add category" aria-label="Add category">${ACTION_ICONS.category}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-media-library" title="Open media library" aria-label="Open media library">${ACTION_ICONS.mediaLibrary}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-cloud" title="Cloud backup" aria-label="Cloud backup">${ACTION_ICONS.cloud}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-cloud-export" data-enabled-title="Export to cloud" title="Connect cloud first (Cloud icon)" aria-label="Export to cloud" disabled>${ACTION_ICONS.cloudExport}</button>
@@ -541,6 +541,9 @@ function bindQuickActionHandlers(handlers = {}) {
     if (sortBtn) sortBtn.innerHTML = ACTION_ICONS.sortAlpha;
     BoardSort.rebindTrigger();
     Fullscreen.rebindMainButton();
+
+    const addCategoryBtn = document.getElementById('btn-add-category');
+    if (addCategoryBtn) addCategoryBtn.innerHTML = ACTION_ICONS.category;
 
     document.getElementById('btn-freeform-toggle')?.addEventListener('click', onToggleOverlay);
     document.getElementById('btn-file-cabinet-toggle')?.addEventListener('click', onToggleFileCabinet);

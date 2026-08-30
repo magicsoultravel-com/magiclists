@@ -348,6 +348,55 @@ function renameLocalStorageStringArray(storageKey, oldName, newName) {
  * Does not patch note items — callers should handle AppState.items.
  * @returns {{ ok: true, oldName: string, newName: string } | { ok: false, error: string }}
  */
+/**
+ * Validate a proposed category name against the registry.
+ * @returns {{ ok: true, cleanName: string } | { ok: false, error: string }}
+ */
+export function validateNewCategoryName(name, existingCategories = []) {
+    const cleanName = String(name || '').trim();
+    if (!cleanName) return { ok: false, error: 'Name is required.' };
+    if (isUncategorizedCategory(cleanName)) {
+        return { ok: false, error: 'Uncategorized is reserved.' };
+    }
+    const exists = (existingCategories || []).some(
+        (cat) => categoryKey(typeof cat === 'string' ? cat : cat?.name) === categoryKey(cleanName)
+    );
+    if (exists) return { ok: false, error: 'That category name already exists.' };
+    return { ok: true, cleanName };
+}
+
+/**
+ * Add a category to the registry and persist.
+ * @returns {Array} updated category list
+ */
+export function addCategoryToRegistry(name, color, existingCategories = []) {
+    const validation = validateNewCategoryName(name, existingCategories);
+    if (!validation.ok) return null;
+    const cleanColor = color && String(color).trim() ? String(color).trim() : UNCATEGORIZED_COLOR;
+    return writeStoredCategories([
+        ...(existingCategories || []),
+        { name: validation.cleanName, color: cleanColor }
+    ], { keepEmpty: true });
+}
+
+/**
+ * Update an existing category color in the registry.
+ * @returns {Array|null} updated category list, or null if not found
+ */
+export function updateCategoryColor(name, color, existingCategories = readStoredCategories({ keepEmpty: true })) {
+    const key = categoryKey(name);
+    if (!key || isUncategorizedCategory(name)) return null;
+    const cleanColor = color && String(color).trim() ? String(color).trim() : UNCATEGORIZED_COLOR;
+    let found = false;
+    const next = (existingCategories || []).map((cat) => {
+        if (categoryKey(cat.name) !== key) return cat;
+        found = true;
+        return { ...cat, color: cleanColor };
+    });
+    if (!found) return null;
+    return writeStoredCategories(next, { keepEmpty: true });
+}
+
 export function renameCategory(oldName, newName) {
     const from = String(oldName || '').trim();
     const to = String(newName || '').trim();

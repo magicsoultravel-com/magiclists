@@ -318,9 +318,17 @@ setCollapsed(collapsed, { persist = true } = {}) {
                 </div>`;
             }
 
+            if (catName === UNCATEGORIZED_CATEGORY) {
+                return `
+                <div class="sidebar-notes-list-item sidebar-notes-list-item--category sidebar-notes-list-item--label has-note-color"${accentStyle}>
+                    <span class="sidebar-notes-list-item-title">${title}</span>
+                </div>`;
+            }
+
             return `
-            <div class="sidebar-notes-list-item sidebar-notes-list-item--category sidebar-notes-list-item--label has-note-color"${accentStyle}>
+            <div class="sidebar-notes-list-item sidebar-notes-list-item--category sidebar-notes-list-item--with-act has-note-color"${accentStyle}>
                 <span class="sidebar-notes-list-item-title">${title}</span>
+                <button type="button" class="card-act card-act--hide hide-category-btn" data-category="${escapeAttr(catName)}" title="Hide" aria-label="Hide">${CARD_ICONS.hide}</button>
             </div>`;
         }).join('');
 
@@ -328,6 +336,12 @@ setCollapsed(collapsed, { persist = true } = {}) {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 window.dispatchEvent(new CustomEvent('category:show_requested', { detail: { name: btn.dataset.category } }));
+            });
+        });
+        zone.querySelectorAll('.hide-category-btn').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                window.dispatchEvent(new CustomEvent('category:hide_requested', { detail: { name: btn.dataset.category } }));
             });
         });
     },

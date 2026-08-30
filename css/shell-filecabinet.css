@@ -15,6 +15,12 @@
     overflow: visible;
 }
 
+.file-cabinet-add-category-btn {
+    align-self: center;
+    margin-top: auto;
+    flex: 0 0 auto;
+}
+
 .file-cabinet-filed-slot {
     position: relative;
     width: 100%;
@@ -55,7 +61,9 @@
     padding: 0.05rem;
 }
 
-.file-cabinet-filed-chip .file-cabinet-category-open-all-btn {
+.file-cabinet-filed-chip .file-cabinet-category-open-all-btn,
+.file-cabinet-filed-chip .file-cabinet-category-color-btn,
+.file-cabinet-filed-chip .file-cabinet-category-hide-btn {
     flex: 0 0 auto;
     opacity: 0;
     padding: 0.05rem;
@@ -70,11 +78,19 @@
 
 .file-cabinet-filed-chip:hover .file-cabinet-category-open-all-btn,
 .file-cabinet-filed-chip:focus-within .file-cabinet-category-open-all-btn,
-.file-cabinet-filed-chip.is-fold-preview-source .file-cabinet-category-open-all-btn {
+.file-cabinet-filed-chip.is-fold-preview-source .file-cabinet-category-open-all-btn,
+.file-cabinet-filed-chip:hover .file-cabinet-category-color-btn,
+.file-cabinet-filed-chip:focus-within .file-cabinet-category-color-btn,
+.file-cabinet-filed-chip.is-fold-preview-source .file-cabinet-category-color-btn,
+.file-cabinet-filed-chip:hover .file-cabinet-category-hide-btn,
+.file-cabinet-filed-chip:focus-within .file-cabinet-category-hide-btn,
+.file-cabinet-filed-chip.is-fold-preview-source .file-cabinet-category-hide-btn {
     opacity: 0.75;
 }
 
-.file-cabinet-filed-chip .file-cabinet-category-open-all-btn:hover {
+.file-cabinet-filed-chip .file-cabinet-category-open-all-btn:hover,
+.file-cabinet-filed-chip .file-cabinet-category-color-btn:hover,
+.file-cabinet-filed-chip .file-cabinet-category-hide-btn:hover {
     opacity: 1;
 }
 
@@ -365,7 +381,9 @@ html:not([data-theme-skin="1"])[data-file-cabinet-bg="none"] .file-cabinet-categ
 
 .file-cabinet-category-header .file-cabinet-category-fold-btn,
 .file-cabinet-category-header .file-cabinet-category-grab-btn,
-.file-cabinet-category-header .file-cabinet-category-open-all-btn {
+.file-cabinet-category-header .file-cabinet-category-open-all-btn,
+.file-cabinet-category-header .file-cabinet-category-color-btn,
+.file-cabinet-category-header .file-cabinet-category-hide-btn {
     flex: 0 0 auto;
     opacity: 0;
     padding: 0.05rem;
@@ -394,13 +412,19 @@ html:not([data-theme-skin="1"])[data-file-cabinet-bg="none"] .file-cabinet-categ
 .file-cabinet-category-header:hover .file-cabinet-category-grab-btn,
 .file-cabinet-category-header:focus-within .file-cabinet-category-grab-btn,
 .file-cabinet-category-header:hover .file-cabinet-category-open-all-btn,
-.file-cabinet-category-header:focus-within .file-cabinet-category-open-all-btn {
+.file-cabinet-category-header:focus-within .file-cabinet-category-open-all-btn,
+.file-cabinet-category-header:hover .file-cabinet-category-color-btn,
+.file-cabinet-category-header:focus-within .file-cabinet-category-color-btn,
+.file-cabinet-category-header:hover .file-cabinet-category-hide-btn,
+.file-cabinet-category-header:focus-within .file-cabinet-category-hide-btn {
     opacity: 0.75;
 }
 
 .file-cabinet-category-header .file-cabinet-category-fold-btn:hover,
 .file-cabinet-category-header .file-cabinet-category-grab-btn:hover,
-.file-cabinet-category-header .file-cabinet-category-open-all-btn:hover {
+.file-cabinet-category-header .file-cabinet-category-open-all-btn:hover,
+.file-cabinet-category-header .file-cabinet-category-color-btn:hover,
+.file-cabinet-category-header .file-cabinet-category-hide-btn:hover {
     opacity: 1;
 }
 

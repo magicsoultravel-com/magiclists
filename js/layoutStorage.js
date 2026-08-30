@@ -60,6 +60,7 @@ const LAYOUT_BACKUP_KEYS = [
     'matrix_hidden_board_ids',
     'matrix_calendar_hidden_ids',
     'matrix_collapsed_categories',
+    'matrix_hidden_categories',
     'matrix_file_cabinet',
     'matrix_file_cabinet_order',
     'matrix_file_cabinet_filed_categories',
