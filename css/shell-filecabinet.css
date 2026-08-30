@@ -346,7 +346,11 @@ html:not([data-theme-skin="1"])[data-file-cabinet-bg="none"] .file-cabinet-categ
 .file-cabinet-filed-slot.is-fold-rollout-open .file-cabinet-filed-rollout {
     z-index: 500;
     box-sizing: border-box;
+    /* Shrink-wrap to the stack (JS sizes it to the note cascade) instead of the
+       slot box; min-width keeps the chip-width floor (never narrower than as-is). */
+    right: auto;
     width: auto;
+    min-width: 100%;
     padding: 0.3rem;
     opacity: 1;
     pointer-events: auto;

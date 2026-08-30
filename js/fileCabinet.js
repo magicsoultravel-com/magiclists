@@ -101,6 +101,8 @@ export const FILE_CABINET_STACK_OFFSET_Y = 18;
 export const FILE_CABINET_STACK_OFFSET_X = 10;
 /** Floor width for open category columns (px). Long titles truncate; more tabs can grow past this. */
 export const FILE_CABINET_DRAWER_WIDTH = 160;
+/** Open drawers never shrink below this many cards of height, even when emptier. */
+export const FILE_CABINET_DRAWER_MIN_CARDS = 4;
 const FILE_CABINET_CATEGORY_HEADER_PAD = 20;
 const FILE_CABINET_SCROLL_EDGE = 36;
 const FILE_CABINET_SCROLL_STEP = 18;
@@ -109,12 +111,27 @@ function collapsedTabWidth() {
     return getLabelRect().w;
 }
 
-/** Open-column width: at least FILE_CABINET_DRAWER_WIDTH, grows with cascaded tabs. */
+/** Width of a cascaded tab stack (px): first tab plus one FILE_CABINET_STACK_OFFSET_X per extra note.
+ *  Note count only — titles never widen a drawer (they truncate with ellipsis). */
+function fileCabinetCascadeWidth(count) {
+    const slots = Math.max(count || 0, 1);
+    return collapsedTabWidth() + (slots - 1) * FILE_CABINET_STACK_OFFSET_X;
+}
+
+/** Open-column width: at least FILE_CABINET_DRAWER_WIDTH, grows with cascaded notes only. */
 function fileCabinetColumnWidth(slotCount) {
-    const tabW = collapsedTabWidth();
-    const slots = Math.max(slotCount || 0, 1);
-    const contentWidth = tabW + (slots - 1) * FILE_CABINET_STACK_OFFSET_X;
-    return Math.max(contentWidth, FILE_CABINET_DRAWER_WIDTH);
+    return Math.max(fileCabinetCascadeWidth(slotCount), FILE_CABINET_DRAWER_WIDTH);
+}
+
+/** Height of a cascaded tab stack (px): first tab plus one FILE_CABINET_STACK_OFFSET_Y per extra note. */
+function fileCabinetCascadeHeight(count) {
+    const slots = Math.max(count || 0, 1);
+    return getLabelRect().h + (slots - 1) * FILE_CABINET_STACK_OFFSET_Y;
+}
+
+/** Open-drawer minimum stack height: fits FILE_CABINET_DRAWER_MIN_CARDS cards. */
+function fileCabinetDrawerMinHeight() {
+    return fileCabinetCascadeHeight(FILE_CABINET_DRAWER_MIN_CARDS);
 }
 
 export const DRAG_THRESHOLD = 4;
@@ -809,14 +826,14 @@ function getFileCabinetHitRect(mount) {
 
 function updateStackPreviewDimensions(stackEl, slotCount, { minSlotCount = 0 } = {}) {
     if (!stackEl) return;
-    const label = getLabelRect();
     const count = Math.max(slotCount, minSlotCount, 1);
-    const stackHeight = Math.max(label.h + (count - 1) * FILE_CABINET_STACK_OFFSET_Y, label.h);
+    const stackHeight = fileCabinetCascadeHeight(count);
     const rollout = stackEl.closest('.file-cabinet-filed-rollout');
 
     if (rollout) {
-        // Width owned by CSS (flush to chip / rail line); JS only sets stack height.
-        stackEl.style.width = '';
+        // Preview adapts to the notes: JS sizes the stack to the tab cascade;
+        // the popover shrink-wraps via CSS (min-width keeps the chip-width floor).
+        stackEl.style.width = `${fileCabinetCascadeWidth(count)}px`;
         stackEl.style.minWidth = '';
         stackEl.style.height = `${stackHeight}px`;
         rollout.style.width = '';
@@ -827,7 +844,8 @@ function updateStackPreviewDimensions(stackEl, slotCount, { minSlotCount = 0 } =
 
     const width = fileCabinetColumnWidth(count);
     stackEl.style.width = `${width}px`;
-    stackEl.style.height = `${stackHeight}px`;
+    // Drag previews keep the open-drawer minimum height (preview popovers do not).
+    stackEl.style.height = `${Math.max(stackHeight, fileCabinetDrawerMinHeight())}px`;
     const col = stackEl.closest('.file-cabinet-category');
     if (col) {
         col.style.width = `${width}px`;
@@ -1345,14 +1363,13 @@ export function applyFileCabinetStackPositions(stackEl) {
     const tabs = [...stackEl.querySelectorAll('.file-cabinet-tab')];
     const label = getLabelRect();
     const count = tabs.length;
-    const stackHeight = count > 0
-        ? label.h + (count - 1) * FILE_CABINET_STACK_OFFSET_Y
-        : label.h;
+    const stackHeight = fileCabinetCascadeHeight(count);
     const rollout = stackEl.closest('.file-cabinet-filed-rollout');
 
     if (rollout) {
-        // Width owned by CSS (flush to chip / rail line); JS only sets stack height.
-        stackEl.style.width = '';
+        // Preview adapts to the notes: stack width = tab cascade; the popover
+        // shrink-wraps via CSS (min-width keeps the chip-width floor).
+        stackEl.style.width = `${fileCabinetCascadeWidth(count)}px`;
         stackEl.style.minWidth = '';
         stackEl.style.height = `${Math.max(stackHeight, label.h)}px`;
         rollout.style.width = '';
@@ -1361,7 +1378,8 @@ export function applyFileCabinetStackPositions(stackEl) {
     } else {
         const width = fileCabinetColumnWidth(count);
         stackEl.style.width = `${width}px`;
-        stackEl.style.height = `${Math.max(stackHeight, label.h)}px`;
+        // Open drawers keep a FILE_CABINET_DRAWER_MIN_CARDS-card minimum height.
+        stackEl.style.height = `${Math.max(stackHeight, fileCabinetDrawerMinHeight())}px`;
         const col = stackEl.closest('.file-cabinet-category');
         if (col) {
             col.style.width = `${width}px`;
@@ -1397,10 +1415,8 @@ export function getFileCabinetContentMinHeight(mount) {
     mount.querySelectorAll('.file-cabinet-tab-stack').forEach((stack) => {
         if (stack.closest('.file-cabinet-filed-rollout')) return;
         const count = stack.querySelectorAll('.file-cabinet-tab').length;
-        const stackH = count > 0
-            ? label.h + (count - 1) * FILE_CABINET_STACK_OFFSET_Y
-            : label.h;
-        maxStackH = Math.max(maxStackH, stackH);
+        // Include the open-drawer minimum so the cabinet can't drag shorter than it.
+        maxStackH = Math.max(maxStackH, fileCabinetCascadeHeight(count), fileCabinetDrawerMinHeight());
     });
 
     let contentH = maxStackH + FILE_CABINET_CATEGORY_HEADER_PAD;
@@ -1505,8 +1521,11 @@ function buildFileCabinetCategoryColumn({
         stack.appendChild(card);
     });
 
-    applyFileCabinetStackPositions(stack);
     col.appendChild(stack);
+    // Position after append so the column itself receives the note-count inline
+    // width (pre-append the closest('.file-cabinet-category') lookup fails and
+    // CSS width:auto would let a long title stretch the drawer).
+    applyFileCabinetStackPositions(stack);
     return col;
 }
 
@@ -1530,6 +1549,9 @@ function buildFileCabinetRolloutStack({ catName, items, activeCategories, UI }) 
     });
 
     applyFileCabinetStackPositions(stack);
+    // Pre-append the stack takes the open-column branch (no rollout ancestor yet);
+    // pin it to the pure cascade width so the preview popover hugs the notes.
+    stack.style.width = `${fileCabinetCascadeWidth(items.length)}px`;
     return stack;
 }
 
