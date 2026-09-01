@@ -61,12 +61,19 @@ function getSpeakPayload(entry, page, { arabicIsolated = null } = {}) {
             return {
                 text: entry.speak || arabicIsolated || entry.charLower || entry.char,
                 lang: entry.lang || NATIVE_LANG[page.id] || 'en-US',
+                fallback: entry.speakEn || null,
             };
         case 'letter':
             return { text: entry.char, lang: 'en-US' };
         case 'roman':
         case 'romanEn':
-            return { text: entry.speak || entry.roman, lang: 'en-US' };
+            // Honor per-entry languages so IPA examples ("tu" fr-FR, "deux" fr-FR …)
+            // are voiced by the right voice instead of flat English TTS.
+            return {
+                text: entry.speak || entry.roman,
+                lang: entry.lang || 'en-US',
+                fallback: entry.speakEn || null,
+            };
         default:
             return { text: entry.char, lang: 'en-US' };
     }
@@ -74,8 +81,9 @@ function getSpeakPayload(entry, page, { arabicIsolated = null } = {}) {
 
 function speakAttrs(payload) {
     const morseAttr = payload.morse ? ' data-alph-morse="1"' : '';
+    const fallbackAttr = payload.fallback ? ` data-alph-fallback="${escapeAttr(payload.fallback)}"` : '';
     const langAttr = payload.morse ? '' : ` data-alph-lang="${escapeAttr(payload.lang || 'en-US')}"`;
-    return `data-alph-speak="${escapeAttr(payload.text)}" role="button" tabindex="0"${langAttr}${morseAttr}`;
+    return `data-alph-speak="${escapeAttr(payload.text)}" role="button" tabindex="0"${langAttr}${fallbackAttr}${morseAttr}`;
 }
 
 function scheduleMorseTone(ctx, startTime, duration, freq = 660) {
@@ -263,7 +271,16 @@ export const Alphabets = {
             this.playMorse(text);
             return;
         }
-        this.speakText(text, cell.getAttribute('data-alph-lang') || 'en-US');
+        const lang = cell.getAttribute('data-alph-lang') || 'en-US';
+        const fallback = cell.getAttribute('data-alph-fallback');
+        // If no voice for the target language is installed (common for Hebrew,
+        // Arabic, Thai, Tamil…), fall back to the romanized name/sound so the
+        // cell still "reads out" something meaningful.
+        if (fallback && !this.pickVoice(lang)) {
+            this.speakText(fallback, 'en-US');
+            return;
+        }
+        this.speakText(text, lang);
     },
 
     pickVoice(lang) {
@@ -449,11 +466,11 @@ export const Alphabets = {
         return `<div class="alphabet-grid alphabet-grid--hebrew">${cells}</div>`;
     },
 
-    renderArabicForm(form, scriptFont, isolated) {
+    renderArabicForm(form, scriptFont, letter) {
         if (!form) {
             return '<span class="alphabet-arabic__form alphabet-arabic__form--empty">—</span>';
         }
-        const payload = getSpeakPayload({ char: isolated }, this._page, { arabicIsolated: isolated });
+        const payload = getSpeakPayload(letter, this._page, { arabicIsolated: letter.isolated });
         return `<span class="alphabet-arabic__form alphabet-arabic__form--speak" ${speakAttrs(payload)} style="font-family:${scriptFont}">${form}</span>`;
     },
 
@@ -462,10 +479,10 @@ export const Alphabets = {
         const rows = (page.letters || []).map((letter) => `
             <div class="alphabet-arabic__row">
                 <span class="alphabet-arabic__roman">${letter.roman}</span>
-                ${this.renderArabicForm(letter.isolated, scriptFont, letter.isolated)}
-                ${this.renderArabicForm(letter.initial, scriptFont, letter.isolated)}
-                ${this.renderArabicForm(letter.medial, scriptFont, letter.isolated)}
-                ${this.renderArabicForm(letter.final, scriptFont, letter.isolated)}
+                ${this.renderArabicForm(letter.isolated, scriptFont, letter)}
+                ${this.renderArabicForm(letter.initial, scriptFont, letter)}
+                ${this.renderArabicForm(letter.medial, scriptFont, letter)}
+                ${this.renderArabicForm(letter.final, scriptFont, letter)}
             </div>
         `).join('');
         return `
@@ -510,28 +527,43 @@ export const Alphabets = {
 
     renderJapanese(page) {
         const scriptFont = page.fontFamily || 'inherit';
-        const kataRows = page.rowsKatakana || [];
-        const rows = (page.rows || []).map((row, i) => {
-            const hiraCells = row.chars.map((entry) => this.renderCell(entry, scriptFont)).join('');
-            const kataRow = kataRows[i];
+        const renderPairRow = (hiraRow, kataRow) => {
+            const hiraCells = (hiraRow?.chars || []).map((entry) => this.renderCell(entry, scriptFont)).join('');
             const kataCells = (kataRow?.chars || []).map((entry) => this.renderCell(entry, scriptFont)).join('');
             return `
                 <div class="alphabet-japanese-row">
-                    <span class="alphabet-kana-row__label">${row.label}</span>
+                    <span class="alphabet-kana-row__label">${hiraRow?.label || ''}</span>
                     <div class="alphabet-japanese-row__cols">
                         <div class="alphabet-kana-row__cells">${hiraCells}</div>
                         <div class="alphabet-kana-row__cells">${kataCells}</div>
                     </div>
                 </div>
             `;
-        }).join('');
+        };
+        const renderBlock = (title, hiraRows, kataRows) => {
+            if (!hiraRows?.length) return '';
+            const rows = hiraRows.map((row, i) => renderPairRow(row, (kataRows || [])[i])).join('');
+            return `
+                <div class="alphabet-japanese__sub">
+                    <h4 class="alphabet-section__title">${title}</h4>
+                    ${rows}
+                </div>
+            `;
+        };
+
+        const baseRows = (page.rows || []).map((row, i) => renderPairRow(row, (page.rowsKatakana || [])[i])).join('');
+        const dakuBlock = renderBlock('Dakuten ゛ · voiced', page.rowsDakuten, page.rowsKatakanaDakuten);
+        const handakuBlock = renderBlock('Handakuten ゜ · p-series', page.rowsHandakuten, page.rowsKatakanaHandakuten);
+
         return `
             <div class="alphabet-japanese">
                 <div class="alphabet-japanese__header">
                     <span>Hiragana</span>
                     <span>Katakana</span>
                 </div>
-                ${rows}
+                ${baseRows}
+                ${dakuBlock}
+                ${handakuBlock}
             </div>
         `;
     },

@@ -1228,6 +1228,32 @@
     letter-spacing: 0.04em;
 }
 
+.alphabet-japanese__sub {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.alphabet-japanese__sub .alphabet-section__title {
+    margin: 0.3rem 0 0.2rem;
+    padding-left: 1.95rem;
+}
+
+.alphabet-grid--ipa {
+    grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
+}
+
+.alphabet-grid--ipa .alphabet-cell {
+    min-height: 3.6rem;
+    padding-left: 0.3rem;
+    padding-right: 0.3rem;
+}
+
+.alphabet-grid--ipa .alphabet-cell__gloss {
+    word-break: normal;
+    overflow-wrap: anywhere;
+}
+
 .alphabet-japanese-row {
     display: flex;
     align-items: flex-start;
