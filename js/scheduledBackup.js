@@ -20,6 +20,16 @@ import {
 } from './mediaBackup.js';
 import { itemToTxtExportText, sortItemsForTxtExport } from './noteBodyConversion.js';
 import { SidebarStats } from './sidebarStats.js';
+import {
+    CLAIM_JITTER_MAX_MS,
+    CLAIM_SETTLE_MS,
+    createClaim,
+    finalizeClaim,
+    isClaimActive,
+    mayCommit,
+    normalizeClaim,
+    scheduleNextDue
+} from './backupClaim.js';
 
 const STORAGE_KEY = 'matrix_scheduled_export';
 const DEFAULT_TITLE = 'Scheduled backup';
@@ -71,6 +81,7 @@ function normalizeConfig(raw) {
         remainingMsWhenPaused: Number.isFinite(Number(raw?.remainingMsWhenPaused))
             ? Number(raw.remainingMsWhenPaused)
             : null,
+        runningClaim: normalizeClaim(raw?.runningClaim),
         notes: normalizeNotesSection(raw?.notes, hasLegacyShape ? raw : null),
         media: normalizeMediaSection(raw?.media)
     };
@@ -150,6 +161,10 @@ function downloadBlob(blob, filename) {
     URL.revokeObjectURL(virtualLink.href);
 }
 
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function escapeAttr(value) {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -180,6 +195,14 @@ export const ScheduledBackup = {
     init({ getItems, getLoggedIn } = {}) {
         if (typeof getItems === 'function') this.getItems = getItems;
         if (typeof getLoggedIn === 'function') this.getLoggedIn = getLoggedIn;
+        // Other tabs update their ring/labels the moment a claim or finalize
+        // lands, instead of waiting up to 500ms for their own tick.
+        window.addEventListener('storage', (event) => {
+            if (event.key === STORAGE_KEY) {
+                this.syncButton();
+                this.refreshOpenStatus();
+            }
+        });
         this.resumeFromStorage();
         this.syncButton();
     },
@@ -513,7 +536,14 @@ export const ScheduledBackup = {
             return;
         }
         if (Number.isFinite(config.nextDueAt) && Date.now() >= config.nextDueAt) {
-            this.fireExport(config);
+            // A fresh claim means another tab is mid-export — stand down until it
+            // finalizes (nextDueAt already advanced) or its lease expires.
+            if (isClaimActive(config.runningClaim)) {
+                this.syncButton();
+                this.refreshOpenStatus();
+                return;
+            }
+            this.claimAndFire(config);
             return;
         }
         this.syncButton();
@@ -533,24 +563,63 @@ export const ScheduledBackup = {
             : 'Off';
     },
 
-    async fireExport(config) {
+    /**
+     * Two-phase single-writer commit. Called by onTick when the schedule is due
+     * and no other tab holds a live claim.
+     */
+    async claimAndFire(config) {
+        if (this.busy) return;
+        const claim = createClaim();
+
+        // Consume the due slot BEFORE exporting so no other tab sees "due" while
+        // this export is in flight (even if this tab crashes mid-export).
+        config.nextDueAt = Date.now() + intervalMs(config);
+        config.runningClaim = claim;
+        writeConfig(config);
+
+        // Settle: simultaneous bids across tabs resolve by last-write-wins.
+        // The jitter staggers identical tick timings so one bid clearly
+        // survives; the winner is the tab whose token is still stored.
+        const jitter = Math.random() * CLAIM_JITTER_MAX_MS;
+        await sleep(CLAIM_SETTLE_MS + jitter);
+
+        const latest = readConfig();
+        if (!mayCommit(claim, latest)) {
+            // Another tab won the slot — stand down without exporting. The
+            // winner already advanced nextDueAt, so we wait for the next interval.
+            this.syncButton();
+            return;
+        }
+        await this.fireExport(latest, claim.token);
+    },
+
+    /**
+     * Run the actual exports as the confirmed claim holder, then finalize by
+     * merging results onto the freshest config (claim-scoped).
+     * @param {object} config
+     * @param {string} claimToken
+     */
+    async fireExport(config, claimToken) {
         if (this.busy) return;
         this.busy = true;
         let statsDirty = false;
         try {
+            const results = { notes: null, media: null };
             if (config.notes.enabled) {
-                statsDirty = await this.exportNotes(config) || statsDirty;
+                const notesResult = await this.exportNotes(config);
+                statsDirty = notesResult.changed || statsDirty;
+                results.notes = notesResult.patch;
             }
             if (config.media.enabled) {
-                statsDirty = await this.exportMedia(config) || statsDirty;
+                const mediaResult = await this.exportMedia(config);
+                statsDirty = mediaResult.changed || statsDirty;
+                results.media = mediaResult.patch;
             }
-            config.nextDueAt = Date.now() + intervalMs(config);
-            writeConfig(config);
+            this.finalizeExport(claimToken, results);
             if (statsDirty) SidebarStats.update();
         } catch (err) {
             console.warn('[ScheduledBackup] export failed', err);
-            config.nextDueAt = Date.now() + intervalMs(config);
-            writeConfig(config);
+            this.finalizeExport(claimToken, null);
         } finally {
             this.busy = false;
             this.syncButton();
@@ -560,31 +629,58 @@ export const ScheduledBackup = {
         }
     },
 
+    /**
+     * Merge export results (fingerprints / timestamps / zip snapshot) onto the
+     * FRESH config, clear our claim, and re-arm nextDueAt only when the
+     * schedule is still enabled and not paused. This is what prevents a Stop or
+     * Pause clicked in another tab mid-export from being resurrected, and what
+     * lets a losing tab's finalize be a clean no-op.
+     */
+    finalizeExport(claimToken, results) {
+        const merged = finalizeClaim(claimToken, readConfig(), results || {});
+        if (!merged) return; // claim lost/expired — another window owns the slot.
+        writeConfig(scheduleNextDue(merged, intervalMs(merged)));
+    },
+
+    /**
+     * Build + download a notes payload. Returns a { changed, patch } pair so the
+     * caller can merge the result without touching the shared config directly.
+     */
     async exportNotes(config) {
         const payload = await this.buildNotesPayload(config.notes.format);
         const fingerprint = hashExportFingerprint(payload.textForFingerprint || payload.text);
-        if (fingerprint === config.notes.lastFingerprint) return false;
+        if (fingerprint === config.notes.lastFingerprint) {
+            return { changed: false, patch: null };
+        }
 
         downloadBlob(payload.blob, payload.filename);
         const ts = payload.timestamp || Math.floor(Date.now() / 1000);
-        config.notes.lastFingerprint = fingerprint;
-        config.notes.lastExportAt = ts;
         if (config.notes.format === 'txt') {
             writeLastLocalTxtExportAt(ts);
         } else {
             writeLastLocalExportAt(ts);
         }
-        return true;
+        return {
+            changed: true,
+            patch: { lastFingerprint: fingerprint, lastExportAt: ts }
+        };
     },
 
+    /**
+     * Build + download media meta / zip payloads. Returns a { changed, patch }
+     * pair (see exportNotes). Only the confirmed claim winner's patch is ever
+     * written to the shared config, keeping the incremental ZIP chain linear.
+     */
     async exportMedia(config) {
+        const mediaPatch = {};
         let changed = false;
+
         const metaPayload = await buildMediaMetaExportPayload();
         const metaFp = hashExportFingerprint(metaPayload.textForFingerprint || metaPayload.text);
         if (metaFp !== config.media.lastMetaFingerprint) {
             downloadBlob(metaPayload.blob, metaPayload.filename);
-            config.media.lastMetaFingerprint = metaFp;
-            config.media.lastMetaExportAt = metaPayload.timestamp;
+            mediaPatch.lastMetaFingerprint = metaFp;
+            mediaPatch.lastMetaExportAt = metaPayload.timestamp;
             writeLastMediaMetaExportAt(metaPayload.timestamp);
             changed = true;
         }
@@ -598,18 +694,16 @@ export const ScheduledBackup = {
             const zipFp = hashExportFingerprint(zipPayload.textForFingerprint);
             if (zipFp !== config.media.lastZipFingerprint) {
                 downloadBlob(zipPayload.blob, zipPayload.filename);
-                config.media.lastZipFingerprint = zipFp;
-                config.media.lastZipExportAt = zipPayload.timestamp;
-                config.media.lastZipMode = zipPayload.isIncremental ? 'incremental' : 'full';
-                config.media.zipSnapshot = zipPayload.nextSnapshot;
+                mediaPatch.lastZipFingerprint = zipFp;
+                mediaPatch.lastZipExportAt = zipPayload.timestamp;
+                mediaPatch.lastZipMode = zipPayload.isIncremental ? 'incremental' : 'full';
+                mediaPatch.zipSnapshot = zipPayload.nextSnapshot;
                 writeLastMediaZipExportAt(zipPayload.timestamp);
                 changed = true;
             }
-        } else if (!zipPayload.skipped && zipPayload.nextSnapshot) {
-            config.media.zipSnapshot = zipPayload.nextSnapshot;
         }
 
-        return changed;
+        return { changed, patch: changed ? mediaPatch : null };
     },
 
     async buildNotesPayload(format) {
@@ -679,9 +773,12 @@ export const ScheduledBackup = {
         }
 
         if (armed) {
+            const backingUp = isClaimActive(config.runningClaim);
             const label = paused
                 ? `Scheduled backup paused · ${formatRemaining(remaining)} left`
-                : `Auto backup in ${formatRemaining(remaining)}`;
+                : (backingUp
+                    ? 'Scheduled backup running…'
+                    : `Auto backup in ${formatRemaining(remaining)}`);
             btn.title = label;
             btn.setAttribute('aria-label', label);
         } else {

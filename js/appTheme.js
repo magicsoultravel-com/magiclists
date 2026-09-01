@@ -2,6 +2,7 @@ import { DesktopBackground } from './desktopBackground.js';
 import { ChromeBackground } from './chromeBackground.js';
 import { syncClockStyleForTheme } from './clockStyle.js';
 import { applyThemeSkin } from './themeSkins.js';
+import { broadcastStateChange } from './sync.js';
 
 /* Single source of truth: consolidated theme tokens key */
 export const CUSTOM_THEME_TOKENS_KEY = 'matrix_custom_theme_tokens';
@@ -65,6 +66,8 @@ export function readUserTheme() {
 export function writeUserTheme(tokens) {
     try {
         localStorage.setItem(CUSTOM_THEME_TOKENS_KEY, JSON.stringify(tokens));
+        // Cross-tab sync: other windows re-apply the theme live.
+        broadcastStateChange('theme', { key: CUSTOM_THEME_TOKENS_KEY });
     } catch {
         /* ignore */
     }

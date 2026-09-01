@@ -14,6 +14,8 @@ import { flushDesktopAutoSave, clearDesktopAutoSaveTimer } from './noteSurfaceMu
 import { stripRichText } from './richText.js';
 import { showAppToast } from './toast.js';
 import { CARD_ICONS } from './icons.js';
+import { initCrossTabSync } from './sync.js';
+import { readDisplayOptions, applyDisplayOptions } from './displayOptions.js';
 
 const statusEl = document.getElementById('popout-status');
 const rootEl = document.getElementById('popout-root');
@@ -77,6 +79,17 @@ const PopoutEditor = {
                 },
                 onUndoChanged: () => {
                     if (!UndoManager.isApplying) UndoManager.reloadFromStorage();
+                }
+            }
+        });
+
+        // Track theme/display-option changes made in other windows, live.
+        // Note-level content sync is already handled by the bridge (note_saved).
+        initCrossTabSync({
+            onVisualRefresh: (scope) => {
+                if (scope === 'theme') AppTheme.init();
+                else if (scope === 'display') {
+                    applyDisplayOptions(readDisplayOptions());
                 }
             }
         });

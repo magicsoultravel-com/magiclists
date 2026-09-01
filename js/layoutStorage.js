@@ -1,4 +1,4 @@
-/** @module {"owns":"board layout persistence, grid/freeform positions, storage migrations", "related":["dragdrop.js","ui.js","fileCabinet.js","board/gridEngine.js"]} */
+/** @module {"owns":"board layout persistence, grid/freeform positions, storage migrations", "related":["dragdrop.js","ui.js","fileCabinet.js","board/gridEngine.js","sync.js"]} */
 import {
     categoryKey,
     isUncategorizedCategory,
@@ -20,6 +20,7 @@ import {
 import { readTileSmallFootprint } from './tileFootprint.js';
 import { SIDEBAR_BACKUP_KEYS } from './sidebarPrefs.js';
 import { readViewSessions, writeViewSessions, VIEW_MODES } from './viewSession.js';
+import { broadcastStateChange, STORAGE_SCOPE_MAP } from './sync.js';
 
 import {
     GRID_LAYOUT_KEY,
@@ -91,14 +92,20 @@ function isQuotaError(err) {
 }
 
 export function safeSetItem(key, value, writeState = null) {
+    const notifySync = () => {
+        const scope = STORAGE_SCOPE_MAP[key];
+        if (scope) broadcastStateChange(scope, { key });
+    };
     try {
         localStorage.setItem(key, value);
+        notifySync();
         return true;
     } catch (err) {
         if (!isQuotaError(err)) throw err;
         try {
             localStorage.removeItem(key);
             localStorage.setItem(key, value);
+            notifySync();
             return true;
         } catch (retryErr) {
             if (!isQuotaError(retryErr)) throw retryErr;

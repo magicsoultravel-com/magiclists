@@ -1,6 +1,7 @@
-/** @module {"owns":"item CRUD and matrix_database localStorage persistence", "related":["noteModel.js","layoutStorage.js"]} */
+/** @module {"owns":"item CRUD and matrix_database localStorage persistence", "related":["noteModel.js","layoutStorage.js","sync.js"]} */
 import { DEFAULT_CATEGORIES, detectDuplicateCategories, dedupeCategories, normalizeCategories, applyCategoryAliasesToItems, ensureUncategorizedCategory } from './categories.js';
 import { purgeLayoutForItem } from './layoutStorage.js';
+import { broadcastStateChange } from './sync.js';
 import { normalizeTileSize } from './tileGeometry.js';
 import { createNoteId, ensureStepIds, ensureStepLevels, getCreatedTimestamp, getUpdatedTimestamp } from './noteModel.js';
 import { ensureStepsParentOrder } from './checklistSteps.js';
@@ -397,6 +398,10 @@ export const API = {
             purgeLayoutForItem(normalized.id);
         }
 
+        // Cross-tab sync: tell every other window the notes changed. The
+        // receiving tab refreshes the board (targeted card when noteId known).
+        broadcastStateChange('notes', { key: 'matrix_database', noteId: normalized.id });
+
         return true;
     },
 
@@ -410,6 +415,7 @@ export const API = {
         if (db.items.length !== initialLength) {
             this._writeLocalDB(db);
             purgeLayoutForItem(itemId);
+            broadcastStateChange('notes', { key: 'matrix_database', noteId: itemId });
             return true;
         }
         return false;

@@ -43,7 +43,7 @@ import {
     migrateGridSpanCardWidthIfNeeded,
     migrateLegacyGridLayoutIfNeeded
 } from './gridDensity.js';
-import { AppTheme } from './appTheme.js';
+import { AppTheme, readUserTheme, applyUserTheme } from './appTheme.js';
 import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
 import { BoardOverlay } from './boardOverlay.js';
@@ -69,6 +69,8 @@ import { DesktopDock } from './desktopDockComponent.js';
 import { DesktopManager } from './desktopManager.js';
 import { TemplatePicker } from './templatePicker.js';
 import { itemToTxtExportText, sortItemsForTxtExport } from './noteBodyConversion.js';
+import { initCrossTabSync, broadcastStateChange } from './sync.js';
+import { readDisplayOptions, applyDisplayOptions } from './displayOptions.js';
 import { showAppToast } from './toast.js';
 import {
     migrateItemsToFileCabinet,
@@ -199,6 +201,7 @@ BootProgress.set(85, 'Workspace…');
             TemplatePicker.init();
             this.setupUndo();
             this.setupNotePopoutBridge();
+            this.setupCrossTabSync();
             this.setupDrawingMode();
             Fullscreen.init();
 DrawingBoard.init(this);
@@ -342,6 +345,104 @@ DrawingBoard.init(this);
             Editor.renderForm();
         }
         this.updateWorkspaceCounter();
+    }
+
+    setupCrossTabSync() {
+        let toastShown = false;
+        initCrossTabSync({
+            onBoardRefresh: (scopes, info) => this.refreshBoardFromSync(scopes, info),
+            onVisualRefresh: (scope) => this.applyVisualFromSync(scope),
+            onDeferred: () => {
+                if (!toastShown) {
+                    toastShown = true;
+                    showAppToast('Another window changed the workspace — will refresh when you finish');
+                }
+            },
+            onRefreshed: () => {
+                toastShown = false;
+            }
+        });
+    }
+
+    /** Re-sync cached AppState + re-render the board/sidebar from shared storage. */
+    refreshBoardFromSync(scopes, info) {
+        const canvas = document.getElementById('app-canvas');
+        if (!canvas) return;
+
+        // Notes may have come back from archive while this tab was in drawing
+        // workspace; board re-renders are only meaningful in notes mode.
+        if (AppState.workspaceMode === 'drawing') return;
+
+        // Re-read the single source of truth (localStorage) into the cached state
+        // so the UI paints whatever the other tab committed.
+        AppState.hiddenCategories = JSON.parse(localStorage.getItem('matrix_hidden_categories') || '[]');
+        AppState.workspaceMode = localStorage.getItem('matrix_workspace_mode') === 'drawing' ? 'drawing' : 'notes';
+        AppState.viewSettings.sortBy = normalizeViewMode(
+            localStorage.getItem('matrix_desktop_layout')
+                || localStorage.getItem('matrix_preferred_view')
+                || 'grid'
+        );
+        AppState.viewSettings.fileCabinet = localStorage.getItem('matrix_file_cabinet') === 'true';
+
+        const data = API._getLocalDB();
+        if (Array.isArray(data?.items)) {
+            AppState.items = DesktopManager.sanitizeNotesDesktops(data.items);
+        }
+        this.applyPendingCategoryAliases();
+
+        // Single-note saves hint a targeted card refresh — cheapest path. Any
+        // other scope (or a structural change in the notes set) uses a full re-render.
+        const isSingleNote = scopes.length === 1
+            && scopes[0] === 'notes'
+            && info?.noteId
+            && !info?.deleted
+            && AppState.items.some((i) => i.id === info.noteId);
+        if (isSingleNote && !this.isUserBusyOnCard(info.noteId)) {
+            const item = AppState.items.find((i) => i.id === info.noteId);
+            if (item) UI.updateSingleCard(canvas, item, AppState.hiddenCategories);
+        } else {
+            UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories);
+        }
+
+        // A cross-tab refresh just rebuilt the board DOM (or replaced
+        // AppState.items) — rebind drag/resize listeners and refresh the
+        // engine's captured items, matching the render+init pairing used by
+        // every other render site. Skipping this left new cards without
+        // mousedown bindings (drag locked) and the engine on a stale array.
+        DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+
+        this.refreshSidebarAfterSync();
+    }
+
+    /** True if this tab is actively editing the given card — don't clobber it. */
+    isUserBusyOnCard(noteId) {
+        if (!noteId) return false;
+        const active = document.activeElement?.closest?.('.card-inline-edit');
+        if (!active) return false;
+        const card = active.closest?.('.mini-card');
+        return !!card && card.dataset?.id === noteId;
+    }
+
+    /* Keep the sidebar/dock/history chrome in step after a sync refresh. */
+    refreshSidebarAfterSync() {
+        this.updateWorkspaceCounter();
+        DesktopDock.refreshButtons(AppState.items);
+        NotePopoutBridge.syncAllPopoutButtons();
+        SidebarHistory.renderPanel();
+        this.renderQuickActionsHeaderIcons();
+        BoardSort.refreshMenu();
+        Calendar.refresh?.();
+    }
+
+    /* Immediate, non-destructive re-apply for theme/display scopes. */
+    applyVisualFromSync(scope) {
+        if (scope === 'theme') {
+            applyUserTheme(readUserTheme());
+        } else if (scope === 'display') {
+            applyDisplayOptions(readDisplayOptions());
+            DesktopZoom.apply();
+            BoardRulers.sync?.();
+        }
     }
 
     async removeItemFromWorkspace(itemId) {

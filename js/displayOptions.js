@@ -35,6 +35,7 @@ import {
 import { DesktopManager, MAX_DESKTOP_COUNT, DEFAULT_DESKTOP_COUNT } from './desktopManager.js';
 import { ColorPicker, PALETTE_DESKTOP } from './colorPicker.js';
 import { createThemePicker } from './themePicker.js';
+import { broadcastStateChange } from './sync.js';
 
 const STORAGE_KEY = 'matrix_display_options';
 
@@ -89,6 +90,8 @@ export function readDisplayOptions() {
 export function writeDisplayOptions(options) {
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(options));
+        // Cross-tab sync: other windows re-apply display options live.
+        broadcastStateChange('display', { key: STORAGE_KEY });
     } catch { /* ignore */ }
 }
 
