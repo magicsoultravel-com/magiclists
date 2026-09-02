@@ -16,6 +16,9 @@ import { showAppToast } from './toast.js';
 import { CARD_ICONS } from './icons.js';
 import { initCrossTabSync } from './sync.js';
 import { readDisplayOptions, applyDisplayOptions } from './displayOptions.js';
+import { MediaStagingDialog } from './mediaStagingDialog.js';
+import { MediaPasteCatcher } from './mediaPasteCatcher.js';
+import { registerLiveNoteSource } from './notePasteContext.js';
 
 const statusEl = document.getElementById('popout-status');
 const rootEl = document.getElementById('popout-root');
@@ -122,6 +125,12 @@ const PopoutEditor = {
         this.updateDocumentTitle();
         this.render();
         this.bindLifecycle();
+
+        registerLiveNoteSource((noteId) => (
+            this.activeItem?.id === noteId ? this.activeItem : null
+        ));
+        MediaStagingDialog.init();
+        MediaPasteCatcher.init();
 
         window.addEventListener('item:mutation_requested', (e) => this.onMutation(e));
     },

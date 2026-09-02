@@ -57,6 +57,7 @@ import { SidebarWeather } from './sidebarWeather.js';
 import { MediaLibraryOverlay, bindMediaFilePickers } from './mediaLibraryOverlay.js';
 import { MediaStagingDialog } from './mediaStagingDialog.js';
 import { MediaPasteCatcher, readClipboardIntoStaging } from './mediaPasteCatcher.js';
+import { registerLiveNoteSource, setModalEditorNoteIdResolver } from './notePasteContext.js';
 import { initAllSidebarModules } from './sidebarModules.js';
 import { SidebarStats } from './sidebarStats.js';
 import { SidebarHistory } from './sidebarHistory.js';
@@ -175,6 +176,11 @@ BootProgress.set(85, 'Workspace…');
             SidebarTv.init();
             SidebarWeather.init();
             MediaStagingDialog.init();
+            registerLiveNoteSource((noteId) => AppState.items.find((i) => i.id === noteId) || null);
+            registerLiveNoteSource((noteId) => (
+                Editor.activeItem?.id === noteId ? Editor.activeItem : null
+            ));
+            setModalEditorNoteIdResolver(() => Editor.activeItem?.id || null);
             MediaLibraryOverlay.init({
                 getItems: () => AppState.items
             });

@@ -16,11 +16,31 @@
     <link rel="stylesheet" href="./css/overlays.css?v=dev_1.9.1">
     <link rel="stylesheet" href="./css/themes.css?v=dev_1.9.1">
     <link rel="stylesheet" href="./css/sheet.css?v=dev_1.0.1">
+    <link rel="stylesheet" href="./css/media-library.css?v=dev_1.0.0">
     <link rel="stylesheet" href="./css/popout.css?v=dev_1.0.0">
 </head>
 <body class="note-popout-body">
     <div id="popout-status" class="note-popout-status" hidden></div>
     <div id="popout-root" class="note-popout-root" aria-label="Popout note"></div>
+
+    <div id="media-staging-overlay" class="overlay media-staging-overlay is-hidden" role="dialog" aria-modal="true" aria-label="Add to media library">
+        <div class="media-staging-panel">
+            <div class="media-staging-panel__header">
+                <div class="media-staging-panel__heading">
+                    <h2 class="media-staging-panel__title">Add to media library</h2>
+                    <p class="media-staging-panel__subtitle is-hidden" data-media-staging-target></p>
+                </div>
+                <span data-media-staging-count class="sidebar-media-lib__compact">0</span>
+                <button type="button" class="card-act media-staging-panel__close" data-media-staging-cancel title="Cancel" aria-label="Cancel"></button>
+            </div>
+            <div class="media-staging-panel__body" data-media-staging-body></div>
+            <div class="media-staging-panel__footer">
+                <button type="button" class="btn btn--compact" data-media-staging-cancel>Cancel</button>
+                <button type="button" class="btn btn--compact" data-media-staging-confirm>Add to library</button>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="./js/popoutNote.js"></script>
 </body>
 </html>

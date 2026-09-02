@@ -222,6 +222,21 @@
     min-width: 0;
 }
 
+.media-staging-panel__heading {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.media-staging-panel__subtitle {
+    margin: 0.15rem 0 0;
+    font-size: calc(0.58rem * var(--note-font-scale, 1));
+    font-weight: 400;
+    opacity: 0.75;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .media-lib-panel__footer {
     display: flex;
     flex-wrap: wrap;

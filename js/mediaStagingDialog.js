@@ -1,8 +1,10 @@
-/** @module {"owns":"media staging upload dialogue before library commit", "related":["mediaLibrary.js","mediaPasteCatcher.js","mediaLibraryOverlay.js"]} */
+/** @module {"owns":"media staging upload dialogue before library commit", "related":["mediaLibrary.js","mediaPasteCatcher.js","mediaLibraryOverlay.js","notePasteContext.js","mediaAttachments.js"]} */
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import { CARD_ICONS } from './icons.js';
+import { attachMediaToNote, noteDisplayTitle } from './mediaAttachments.js';
 import { MEDIA_MAX_BYTES, commitMediaItems } from './mediaLibrary.js';
 import { buildMediaMetadata, formatByteSize, humanMetaRows } from './mediaMetadata.js';
+import { resolveLiveNoteItem } from './notePasteContext.js';
 import { showAppToast } from './toast.js';
 
 let overlay = null;
@@ -10,6 +12,8 @@ let overlay = null;
 let pending = [];
 let stagingSeq = 0;
 let onCommitted = null;
+/** @type {string|null} */
+let attachNoteId = null;
 
 function ensureOverlay() {
     if (overlay) return overlay;
@@ -44,7 +48,7 @@ function nextStagingId() {
 
 /**
  * @param {Array<Blob|File>} files
- * @param {{ source?: string }} [opts]
+ * @param {{ source?: string, attachNoteId?: string|null }} [opts]
  */
 export async function openMediaStaging(files, opts = {}) {
     ensureOverlay();
@@ -54,6 +58,10 @@ export async function openMediaStaging(files, opts = {}) {
     if (!list.length) {
         showAppToast('No files to add');
         return;
+    }
+
+    if ('attachNoteId' in opts) {
+        attachNoteId = opts.attachNoteId || null;
     }
 
     const source = opts.source || 'upload';
@@ -88,12 +96,15 @@ export async function openMediaStaging(files, opts = {}) {
 /**
  * Append more files into an already-open staging dialog (or open it).
  * @param {Array<Blob|File>} files
- * @param {{ source?: string }} [opts]
+ * @param {{ source?: string, attachNoteId?: string|null }} [opts]
  */
 export async function appendMediaStaging(files, opts = {}) {
     if (!isOpen()) {
         await openMediaStaging(files, opts);
         return;
+    }
+    if ('attachNoteId' in opts) {
+        attachNoteId = opts.attachNoteId || null;
     }
     await openMediaStaging(files, opts);
 }
@@ -109,6 +120,7 @@ function isOpen() {
 function close() {
     if (!overlay) return;
     clearPending();
+    attachNoteId = null;
     overlay.classList.remove('is-open');
     overlay.classList.add('is-hidden');
 }
@@ -144,13 +156,36 @@ function render() {
     const body = overlay.querySelector('[data-media-staging-body]');
     const countEl = overlay.querySelector('[data-media-staging-count]');
     const confirmBtn = overlay.querySelector('[data-media-staging-confirm]');
+    const titleEl = overlay.querySelector('.media-staging-panel__title');
+    const targetEl = overlay.querySelector('[data-media-staging-target]');
     if (!body) return;
+
+    const attachTarget = attachNoteId ? resolveLiveNoteItem(attachNoteId) : null;
+    if (titleEl) {
+        titleEl.textContent = attachNoteId ? 'Add & attach to note' : 'Add to media library';
+    }
+    if (targetEl) {
+        if (attachNoteId) {
+            const label = attachTarget ? noteDisplayTitle(attachTarget) : 'Note';
+            targetEl.textContent = label;
+            targetEl.classList.remove('is-hidden');
+        } else {
+            targetEl.textContent = '';
+            targetEl.classList.add('is-hidden');
+        }
+    }
 
     if (countEl) countEl.textContent = String(pending.length);
     const validCount = pending.filter((p) => !p.tooLarge).length;
     if (confirmBtn) {
         confirmBtn.disabled = validCount === 0;
-        confirmBtn.textContent = validCount ? `Add ${validCount} to library` : 'Add to library';
+        if (attachNoteId) {
+            confirmBtn.textContent = validCount === 1
+                ? 'Add & attach'
+                : (validCount ? `Add ${validCount} & attach` : 'Add & attach');
+        } else {
+            confirmBtn.textContent = validCount ? `Add ${validCount} to library` : 'Add to library';
+        }
     }
 
     body.innerHTML = pending.map((item) => {
@@ -211,15 +246,35 @@ async function confirm() {
     }
     const confirmBtn = overlay?.querySelector('[data-media-staging-confirm]');
     if (confirmBtn) confirmBtn.disabled = true;
+    const targetId = attachNoteId;
     try {
-        await commitMediaItems(toCommit.map((p) => ({
+        const results = await commitMediaItems(toCommit.map((p) => ({
             blob: p.blob,
             title: p.title,
             description: p.description,
             source: p.source,
             filename: p.filename
         })));
-        showAppToast(toCommit.length === 1 ? 'Added to media library' : `Added ${toCommit.length} items to media library`);
+        if (targetId) {
+            const note = resolveLiveNoteItem(targetId);
+            if (note) {
+                for (const meta of results) {
+                    attachMediaToNote(note, meta.id);
+                }
+                const title = noteDisplayTitle(note);
+                showAppToast(toCommit.length === 1
+                    ? `Added and attached to ${title}`
+                    : `Added ${toCommit.length} items and attached to ${title}`);
+            } else {
+                showAppToast(toCommit.length === 1
+                    ? 'Added to media library'
+                    : `Added ${toCommit.length} items to media library`);
+            }
+        } else {
+            showAppToast(toCommit.length === 1
+                ? 'Added to media library'
+                : `Added ${toCommit.length} items to media library`);
+        }
         const cb = onCommitted;
         close();
         cb?.();
