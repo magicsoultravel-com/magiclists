@@ -171,12 +171,18 @@ export function writeFileCabinetHeight(height) {
 }
 
 /**
- * Collapse FC to height 0 (sidebar-style). Grabber hides; reopen via FC FAB.
+ * Apply FC shut chrome (DOM only — height 0, reopen FAB visible).
+ * Persisting the shut state is the CALLER's job: the user-intent sites
+ * (splitter click / drag snap-to-shut) call setFileCabinetShut(true)
+ * explicitly before calling this. This function must never write storage —
+ * it also re-applies chrome during cross-tab refreshes, where localStorage
+ * is already the fresher source of truth. Writing "shut" back from stale
+ * DOM state here is what used to re-collapse a cabinet another tab had
+ * just expanded (cross-tab ping-pong).
  * Preserves last open height in storage (does not write 0).
  */
 export function applyFileCabinetShut(mount) {
     if (!mount) return;
-    setFileCabinetShut(true);
     mount.dataset.shut = 'true';
     mount.dataset.fixedHeight = 'true';
     mount.classList.add('is-file-cabinet-shut');
@@ -1437,9 +1443,18 @@ export function getFileCabinetContentMinHeight(mount) {
 
 export function syncFileCabinetDrawerHeight(mount) {
     if (!mount) return;
-    if (isFileCabinetShut() || mount.dataset.shut === 'true') {
+    // localStorage is the single source of truth for shut state — never trust
+    // the mount's dataset.shut (the element is reused across re-renders, so a
+    // stale flag would re-persist "shut" over a fresher cross-tab expand).
+    if (isFileCabinetShut()) {
         applyFileCabinetShut(mount);
         return;
+    }
+    // Open per storage — heal any stale shut chrome left by a previous shut
+    // cycle (CSS pins height to 0 while the shut class/dataset linger).
+    // clearFileCabinetShut's storage write is a no-op when the key is absent.
+    if (mount.dataset.shut === 'true' || mount.classList.contains('is-file-cabinet-shut')) {
+        clearFileCabinetShut(mount);
     }
     const contentMin = getFileCabinetContentMinHeight(mount);
     const dragMin = getFileCabinetDragMinHeight();

@@ -16,6 +16,7 @@ import {
     FILE_CABINET_SHUT_SNAP_PX,
     isFileCabinetShut,
     isFileCabinetActive,
+    setFileCabinetShut,
     applyFileCabinetShut,
     clearFileCabinetShut
 } from './fileCabinet.js';
@@ -144,6 +145,8 @@ function applyCabinetHeight(mount, height, { persist = false, allowShut = true }
     if (!mount) return null;
     const clamped = clampCabinetHeight(height, mount);
     if (allowShut && clamped <= FILE_CABINET_SHUT_SNAP_PX) {
+        // User intent (drag snap-to-shut): persist first, then apply chrome.
+        setFileCabinetShut(true);
         applyFileCabinetShut(mount);
         syncFileCabinetShutChrome();
         return 0;
@@ -174,10 +177,20 @@ function restoreCabinetFromShut(mount) {
 
 function applyCabinetAutoHeight(mount) {
     if (!mount) return;
-    if (isFileCabinetShut() || mount.dataset.shut === 'true') {
+    // localStorage is the single source of truth for shut state — never trust
+    // the mount's dataset.shut (the element is reused across re-renders, so a
+    // stale flag would re-persist "shut" over a fresher cross-tab expand —
+    // the ping-pong that kept collapsing newly expanded cabinets).
+    if (isFileCabinetShut()) {
         applyFileCabinetShut(mount);
         syncFileCabinetShutChrome();
         return;
+    }
+    // Open per storage — heal stale shut chrome before measuring (CSS pins
+    // height to 0 while .is-file-cabinet-shut / [data-shut] linger).
+    // clearFileCabinetShut's storage write is a no-op when the key is absent.
+    if (mount.dataset.shut === 'true' || mount.classList.contains('is-file-cabinet-shut')) {
+        clearFileCabinetShut(mount);
     }
     const saved = readFileCabinetHeight();
     const inlineH = parseFloat(mount.style.height);
@@ -346,9 +359,11 @@ function bindSplitterDrag(handle, axis) {
             // Horizontal click shuts FC (reopen via FAB). Vertical click hides sidebar.
             if (axis === 'h') {
                 const mount = document.getElementById('file-cabinet');
-                if (!mount || isFileCabinetShut() || mount.dataset.shut === 'true') return;
+                if (!mount || isFileCabinetShut()) return;
                 const openH = mount.offsetHeight;
                 if (openH > FILE_CABINET_SHUT_SNAP_PX) writeFileCabinetHeight(openH);
+                // User intent (click splitter to shut): persist, then chrome.
+                setFileCabinetShut(true);
                 applyFileCabinetShut(mount);
                 syncFileCabinetShutChrome();
                 dispatchDesktopBoundsChanged();
@@ -392,7 +407,7 @@ function bindSplitterDrag(handle, axis) {
         } else {
             const mount = document.getElementById('file-cabinet');
             if (!mount) return;
-            startSize = (isFileCabinetShut() || mount.dataset.shut === 'true')
+            startSize = isFileCabinetShut()
                 ? 0
                 : mount.offsetHeight;
             // Remember open height before a possible shut so restore works.
@@ -426,7 +441,7 @@ function bindSplitterDrag(handle, axis) {
             const mount = document.getElementById('file-cabinet');
             if (!mount) return;
             // Leaving shut on first move: clear shut chrome so height can grow.
-            if (mount.dataset.shut === 'true' && startSize + dy > FILE_CABINET_SHUT_SNAP_PX) {
+            if (isFileCabinetShut() && startSize + dy > FILE_CABINET_SHUT_SNAP_PX) {
                 clearFileCabinetShut(mount);
             }
             const next = clampCabinetHeight(startSize + dy, mount);
@@ -453,7 +468,7 @@ function reclampAll() {
         clearSidebarAppliedWidth();
     }
     const mount = document.getElementById('file-cabinet');
-    if (mount && (isFileCabinetShut() || mount.dataset.shut === 'true')) {
+    if (mount && isFileCabinetShut()) {
         applyFileCabinetShut(mount);
         syncFileCabinetShutChrome();
     } else if (mount && mount.dataset.fixedHeight === 'true') {
