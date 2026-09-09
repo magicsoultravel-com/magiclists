@@ -208,6 +208,15 @@
     font-style: italic;
 }
 
+.sidebar-media__art {
+    position: relative;
+    z-index: 1;
+}
+
+.sidebar-media__art--loading {
+    z-index: 2;
+}
+
 .sidebar-media__art--loading::after {
     content: '';
     position: absolute;

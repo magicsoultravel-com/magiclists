@@ -223,6 +223,7 @@
     "test/popoutLockRefresh.test.js",
     "test/popoutWindows.test.js",
     "test/radioCast.test.js",
+    "test/mediaBrowserButton.test.js",
     "test/sidebarModulePopout.test.js",
     "test/undo.test.js"
   ]
