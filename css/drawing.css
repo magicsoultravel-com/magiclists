@@ -543,6 +543,10 @@
     cursor: default;
 }
 
+.drawing-canvas[data-tool="pointer"]:not([style*="cursor"]) {
+    cursor: default;
+}
+
 .drawing-canvas[data-tool="eraser"] {
     cursor: cell;
 }

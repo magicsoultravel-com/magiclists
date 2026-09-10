@@ -21,7 +21,8 @@ function emptyPage(format, background, backgroundColor) {
         background: background || 'blank',
         backgroundColor: backgroundColor || '',
         strokes: [],
-        texts: []
+        texts: [],
+        images: []
     };
 }
 
@@ -36,6 +37,7 @@ export function createEmptyDocument(canvasMode) {
         infinite: {
             strokes: [],
             texts: [],
+            images: [],
             background: 'blank',
             backgroundColor: '',
             bounds: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 }
@@ -53,11 +55,17 @@ export function migrateDocument(raw) {
             doc.activePageId = doc.pages[0].id;
         }
         if (!doc.infinite) {
-            doc.infinite = { strokes: [], texts: [], background: 'blank', backgroundColor: '', bounds: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 } };
+            doc.infinite = { strokes: [], texts: [], images: [], background: 'blank', backgroundColor: '', bounds: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 } };
         }
+        if (!Array.isArray(doc.infinite.images)) doc.infinite.images = [];
         if (!doc.viewport) doc.viewport = { scale: 1, offsetX: 0, offsetY: 0 };
         if (CANVAS_MODES.indexOf(doc.canvasMode) < 0) doc.canvasMode = 'a4';
-        doc.pages.forEach((p) => { if (p.backgroundColor == null) p.backgroundColor = ''; });
+        doc.pages.forEach((p) => {
+            if (p.backgroundColor == null) p.backgroundColor = '';
+            if (!Array.isArray(p.images)) p.images = [];
+            if (!Array.isArray(p.texts)) p.texts = [];
+            if (!Array.isArray(p.strokes)) p.strokes = [];
+        });
         if (doc.infinite && doc.infinite.backgroundColor == null) doc.infinite.backgroundColor = '';
         return doc;
     }
@@ -72,6 +80,7 @@ export function migrateDocument(raw) {
         infinite: {
             strokes: strokes.slice(),
             texts: [],
+            images: [],
             background: 'blank',
             bounds: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 }
         },
@@ -136,6 +145,12 @@ export function getActiveTexts(doc) {
     return page ? page.texts : [];
 }
 
+export function getActiveImages(doc) {
+    if (doc.canvasMode === 'infinite') return doc.infinite.images || [];
+    var page = getActivePage(doc);
+    return page ? (page.images || []) : [];
+}
+
 export function setActiveStrokes(doc, strokes) {
     if (doc.canvasMode === 'infinite') doc.infinite.strokes = strokes;
     else {
@@ -149,6 +164,14 @@ export function setActiveTexts(doc, texts) {
     else {
         var page = getActivePage(doc);
         if (page) page.texts = texts;
+    }
+}
+
+export function setActiveImages(doc, images) {
+    if (doc.canvasMode === 'infinite') doc.infinite.images = images;
+    else {
+        var page = getActivePage(doc);
+        if (page) page.images = images;
     }
 }
 

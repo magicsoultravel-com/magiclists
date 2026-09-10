@@ -65,6 +65,12 @@ export function strokeHasPointInPolygon(item, polygon) {
         return rectIntersectsPolygon(bounds, polygon);
     }
 
+    // Image placement
+    if (item.tool === 'image' || (item.mediaId && item.width != null && item.height != null)) {
+        const bounds = getImageBounds(item);
+        return rectIntersectsPolygon(bounds, polygon);
+    }
+
     // Shape stroke
     if (item.x0 != null && item.y0 != null && item.x1 != null && item.y1 != null) {
         const bounds = getShapeBounds(item);
@@ -112,6 +118,19 @@ function getTextBounds(item) {
         maxY: item.y + height
     };
 }
+
+function getImageBounds(item) {
+    const width = Math.max(1, item.width || 1);
+    const height = Math.max(1, item.height || 1);
+    return {
+        minX: item.x ?? 0,
+        minY: item.y ?? 0,
+        maxX: (item.x ?? 0) + width,
+        maxY: (item.y ?? 0) + height
+    };
+}
+
+export { getImageBounds };
 
 /**
  * Calculate the bounding box of a polygon.
@@ -179,6 +198,12 @@ export function getStrokesBounds(items) {
             minY = Math.min(minY, bounds.minY);
             maxX = Math.max(maxX, bounds.maxX);
             maxY = Math.max(maxY, bounds.maxY);
+        } else if (item.tool === 'image' || (item.mediaId && item.width != null && item.height != null)) {
+            const bounds = getImageBounds(item);
+            minX = Math.min(minX, bounds.minX);
+            minY = Math.min(minY, bounds.minY);
+            maxX = Math.max(maxX, bounds.maxX);
+            maxY = Math.max(maxY, bounds.maxY);
         } else if (item.x0 != null && item.y0 != null && item.x1 != null && item.y1 != null) {
             const bounds = getShapeBounds(item);
             minX = Math.min(minX, bounds.minX);
@@ -240,6 +265,11 @@ export function clampStrokesToBounds(items, pageBounds) {
             const height = bounds.maxY - bounds.minY;
             item.x = clamp(item.x, minX, maxX - width);
             item.y = clamp(item.y, minY, maxY - height);
+        } else if (item.tool === 'image' || (item.mediaId && item.width != null && item.height != null)) {
+            const width = Math.max(1, item.width || 1);
+            const height = Math.max(1, item.height || 1);
+            item.x = clamp(item.x ?? 0, minX, maxX - width);
+            item.y = clamp(item.y ?? 0, minY, maxY - height);
         } else if (item.x0 != null && item.y0 != null && item.x1 != null && item.y1 != null) {
             item.x0 = clamp(item.x0, minX, maxX);
             item.y0 = clamp(item.y0, minY, maxY);
@@ -308,9 +338,9 @@ export function translateStrokes(items, dx, dy) {
                 point.x += dx;
                 point.y += dy;
             }
-        } else if (item.tool === 'text') {
-            item.x += dx;
-            item.y += dy;
+        } else if (item.tool === 'text' || item.tool === 'image' || (item.mediaId && item.width != null)) {
+            item.x = (item.x ?? 0) + dx;
+            item.y = (item.y ?? 0) + dy;
         } else if (item.x0 != null && item.y0 != null && item.x1 != null && item.y1 != null) {
             item.x0 += dx;
             item.y0 += dy;
@@ -336,6 +366,40 @@ export function rectToPolygon(x0, y0, x1, y1) {
         { x: Math.max(x0, x1), y: Math.max(y0, y1) },
         { x: Math.min(x0, x1), y: Math.max(y0, y1) }
     ];
+}
+
+/** Pixel threshold below which a drag is treated as a click. */
+export const BOX_SELECT_CLICK_THRESHOLD = 6;
+
+/**
+ * Build a selection polygon from two pointer points.
+ * Tiny boxes become a click hit-area centered on the start point.
+ *
+ * @param {number} x0
+ * @param {number} y0
+ * @param {number} x1
+ * @param {number} y1
+ * @param {number} [threshold=BOX_SELECT_CLICK_THRESHOLD]
+ * @returns {{ kind: 'click'|'drag', polygon: Array<{x:number,y:number}>, width: number, height: number }}
+ */
+export function resolveBoxSelection(x0, y0, x1, y1, threshold = BOX_SELECT_CLICK_THRESHOLD) {
+    const width = Math.abs(x1 - x0);
+    const height = Math.abs(y1 - y0);
+    if (width < threshold && height < threshold) {
+        const half = threshold / 2;
+        return {
+            kind: 'click',
+            width,
+            height,
+            polygon: rectToPolygon(x0 - half, y0 - half, x0 + half, y0 + half)
+        };
+    }
+    return {
+        kind: 'drag',
+        width,
+        height,
+        polygon: rectToPolygon(x0, y0, x1, y1)
+    };
 }
 
 /**

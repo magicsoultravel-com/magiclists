@@ -6,6 +6,7 @@ import { DisplayOptions } from './displayOptions.js';
 import { Fullscreen } from './fullscreen.js';
 import {
     readDocument, writeDocument, getActiveStrokes, getActiveTexts, setActiveStrokes, setActiveTexts,
+    getActiveImages, setActiveImages,
     getActiveBackground, setActiveBackground, getActiveBackgroundColor, setActiveBackgroundColor,
     getPageDimensions, addPage, nextPage, prevPage,
     expandInfiniteBounds, STORAGE_KEY, createId, CANVAS_MODES, BACKGROUNDS
@@ -21,8 +22,20 @@ import {
     clampStrokesToBounds,
     translateStrokes,
     getPageBounds,
-    rectToPolygon
+    rectToPolygon,
+    getImageBounds,
+    resolveBoxSelection
 } from './lassoGeometry.js';
+import {
+    loadImage,
+    clearImageCache,
+    ensureImagesLoaded,
+    initialImageSize,
+    drawImageObject,
+    MIN_IMAGE_SIDE
+} from './canvasImages.js';
+import { listMedia } from './mediaLibrary.js';
+import { showAppToast } from './toast.js';
 
 const PREFS_KEY = 'matrix_drawing_prefs';
 const WIDTH_MIN = 1;
@@ -31,6 +44,8 @@ const DEFAULT_WIDTH = 10;
 const HIGHLIGHTER_WIDTH = 14;
 const HISTORY_MAX = 50;
 const SAVE_DEBOUNCE_MS = 400;
+const RESIZE_HANDLE_SIZE = 10;
+const RESIZE_HANDLE_HIT = 14;
 
 const POINTER_ITEMS = [
     { id: 'pen', label: 'Pen' },
@@ -189,17 +204,21 @@ export const DrawingBoard = {
     brandNotesText: 'magicNotes',
     colorRolloutOpen: false,
 
-    // Lasso tool state
+    // Marquee / rectangle select state (lasso button = rect marquee mode)
     isLassoActive: false,
-    lassoPoints: [],
     selectedStrokes: new Set(),
     isDraggingLasso: false,
     lassoDragStart: null,
     
-    // Pointer (Select) tool state
+    // Shared box-select state (pointer tool + lasso marquee)
     isBoxSelecting: false,
     boxSelectStart: null,
     boxSelectCurrent: null,
+
+    // Resize handle state (for selected image objects)
+    resizeHandle: null,
+    resizeStart: null,
+    hoverHandle: null,
 
     init(app) {
         this.app = app;
@@ -272,6 +291,10 @@ export const DrawingBoard = {
         this.toolbarEl = null;
         this.draftStroke = null;
         this.shapePreview = null;
+        this.resizeHandle = null;
+        this.resizeStart = null;
+        this.hoverHandle = null;
+        clearImageCache();
     },
 
     hideToolbar() {
@@ -293,7 +316,8 @@ export const DrawingBoard = {
             canvasMode: this.doc.canvasMode,
             activePageId: this.doc.activePageId,
             strokes: JSON.parse(JSON.stringify(getActiveStrokes(this.doc))),
-            texts: JSON.parse(JSON.stringify(getActiveTexts(this.doc)))
+            texts: JSON.parse(JSON.stringify(getActiveTexts(this.doc))),
+            images: JSON.parse(JSON.stringify(getActiveImages(this.doc)))
         };
     },
 
@@ -305,6 +329,7 @@ export const DrawingBoard = {
         if (snapshot?.kind === 'layer') {
             setActiveStrokes(this.doc, JSON.parse(JSON.stringify(snapshot.strokes || [])));
             setActiveTexts(this.doc, JSON.parse(JSON.stringify(snapshot.texts || [])));
+            setActiveImages(this.doc, JSON.parse(JSON.stringify(snapshot.images || [])));
         } else {
             this.doc = JSON.parse(JSON.stringify(snapshot));
         }
@@ -319,6 +344,14 @@ export const DrawingBoard = {
 
     setStrokes(strokes) {
         setActiveStrokes(this.doc, strokes);
+    },
+
+    images() {
+        return getActiveImages(this.doc);
+    },
+
+    setImages(images) {
+        setActiveImages(this.doc, images);
     },
 
     clientToCanvas(clientX, clientY) {
@@ -394,6 +427,8 @@ export const DrawingBoard = {
         this.activeTool = 'brush';
         this.prefs.activeStyle = style;
         this.prefs.activeTool = 'brush';
+        if (this.isLassoActive) this.isLassoActive = false;
+        if (this.canvas) this.canvas.dataset.tool = 'brush';
         writePrefs(this.prefs);
         this.renderToolbar();
     },
@@ -401,6 +436,8 @@ export const DrawingBoard = {
     setTool(tool) {
         this.activeTool = tool;
         this.prefs.activeTool = tool;
+        // setTool is used by V / shapes / eraser — leave dedicated marquee mode
+        if (this.isLassoActive) this.isLassoActive = false;
         if (this.canvas) this.canvas.dataset.tool = tool;
         writePrefs(this.prefs);
         this.renderToolbar();
@@ -469,38 +506,26 @@ export const DrawingBoard = {
 
         this.canvas.setPointerCapture(e.pointerId);
 
-        // Pointer (Select) tool - check if clicking on center point of selection
-        if (this.activeTool === 'pointer' && this.selectedStrokes.size > 0) {
+        // Resize handles take priority when something is selected
+        if (this.selectedStrokes.size > 0) {
+            const handle = this.hitResizeHandle(x, y);
+            if (handle) {
+                this.startResize(handle, x, y);
+                return;
+            }
             const bounds = getStrokesBounds(this.getSelectedStrokesArray());
-            const centerX = bounds.minX + bounds.width / 2;
-            const centerY = bounds.minY + bounds.height / 2;
-            const handleRadius = 10;
-            if (Math.hypot(x - centerX, y - centerY) <= handleRadius) {
+            if (x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY) {
                 this.startLassoDrag(x, y);
                 return;
             }
         }
 
-        // Lasso tool - check if clicking on center point of selection
-        if (this.selectedStrokes.size > 0 && !this.isLassoActive) {
-            const bounds = getStrokesBounds(this.getSelectedStrokesArray());
-            const centerX = bounds.minX + bounds.width / 2;
-            const centerY = bounds.minY + bounds.height / 2;
-            const handleRadius = 10;
-            if (Math.hypot(x - centerX, y - centerY) <= handleRadius) {
-                this.startLassoDrag(x, y);
-                return;
+        // Rectangle marquee (lasso mode or pointer select tool)
+        if (this.isLassoActive || this.activeTool === 'pointer') {
+            // Starting a new marquee outside the selection clears it
+            if (this.selectedStrokes.size > 0) {
+                this.selectedStrokes.clear();
             }
-        }
-
-        // Lasso tool handling
-        if (this.isLassoActive) {
-            this.beginLassoPath(x, y);
-            return;
-        }
-
-        // Pointer (Select) tool - start box selection
-        if (this.activeTool === 'pointer') {
             this.beginBoxSelect(x, y);
             return;
         }
@@ -550,6 +575,13 @@ export const DrawingBoard = {
         if (e.pointerType === 'touch' && this.penPointerActive) return;
         const events = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [e];
 
+        // Resize selected images via grab handles
+        if (this.resizeHandle && this.resizeStart) {
+            const pt = this.clientToCanvas(e.clientX, e.clientY);
+            this.applyResize(pt.x, pt.y);
+            return;
+        }
+
         // Drag selected items (used by both pointer and lasso modes)
         if (this.isDraggingLasso && this.lassoDragStart) {
             const pt = this.clientToCanvas(e.clientX, e.clientY);
@@ -560,15 +592,14 @@ export const DrawingBoard = {
             return;
         }
 
-        // Lasso tool handling
-        if (this.isLassoActive && this.lassoPoints.length > 0) {
+        // Hover cursor affordances for pointer/select when idle
+        if (!this.isBoxSelecting && !this.draftStroke && !this.shapePreview
+            && (this.activeTool === 'pointer' || this.isLassoActive || this.selectedStrokes.size > 0)) {
             const pt = this.clientToCanvas(e.clientX, e.clientY);
-            this.extendLassoPath(pt.x, pt.y);
-            this.requestRedraw();
-            return;
+            this.updateHoverCursor(pt.x, pt.y);
         }
 
-        // Pointer (Select) tool - update box selection
+        // Rectangle marquee update
         if (this.isBoxSelecting && this.boxSelectStart) {
             const pt = this.clientToCanvas(e.clientX, e.clientY);
             this.updateBoxSelect(pt.x, pt.y);
@@ -604,28 +635,23 @@ export const DrawingBoard = {
         if (e.pointerType === 'pen') this.penPointerActive = false;
         try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
 
-        // Pointer (Select) tool - finish box selection
+        // Finish resize
+        if (this.resizeHandle) {
+            this.finishResize();
+            this.redraw();
+            return;
+        }
+
+        // Finish rectangle marquee
         if (this.isBoxSelecting) {
             this.endBoxSelect();
             this.redraw();
             return;
         }
 
-        // Lasso tool - finish dragging
+        // Finish dragging selection
         if (this.isDraggingLasso) {
             this.finishLassoDrag();
-            this.redraw();
-            return;
-        }
-
-        // Lasso tool handling
-        if (this.isLassoActive && this.lassoPoints.length > 0) {
-            if (this.closeLassoPath()) {
-                this.selectStrokesInLasso();
-                if (this.selectedStrokes.size > 0) {
-                    this.pushLayerHistory();
-                }
-            }
             this.redraw();
             return;
         }
@@ -655,7 +681,7 @@ export const DrawingBoard = {
         }
     },
 
-    // Pointer (Select) tool - box selection methods
+    // Pointer / lasso shared rectangle marquee methods
     beginBoxSelect(x, y) {
         this.isBoxSelecting = true;
         this.boxSelectStart = { x, y };
@@ -676,21 +702,19 @@ export const DrawingBoard = {
 
         const { x: x0, y: y0 } = this.boxSelectStart;
         const { x: x1, y: y1 } = this.boxSelectCurrent;
-        
-        // Calculate box dimensions
-        const width = Math.abs(x1 - x0);
-        const height = Math.abs(y1 - y0);
-        
-        // If it's a small box (single click), use 6x6 pixel area
-        if (width < 6 && height < 6) {
-            const polygon = rectToPolygon(x0 - 3, y0 - 3, x0 + 3, y0 + 3);
-            this.selectStrokesInPolygon(polygon);
+        const result = resolveBoxSelection(x0, y0, x1, y1);
+
+        this.selectedStrokes.clear();
+        if (result.kind === 'click') {
+            // Point-hit: select items under the tiny click rect, or clear if none
+            this.selectStrokesInPolygon(result.polygon);
+            if (this.selectedStrokes.size === 0) {
+                // Empty click — selection already cleared above
+            }
         } else {
-            // Normal box selection
-            const polygon = rectToPolygon(x0, y0, x1, y1);
-            this.selectStrokesInPolygon(polygon);
+            this.selectStrokesInPolygon(result.polygon);
         }
-        
+
         this.isBoxSelecting = false;
         this.boxSelectStart = null;
         this.boxSelectCurrent = null;
@@ -701,6 +725,7 @@ export const DrawingBoard = {
 
         const strokes = this.strokes();
         const texts = getActiveTexts(this.doc);
+        const images = this.images();
         this.selectedStrokes.clear();
 
         for (const stroke of strokes) {
@@ -713,10 +738,12 @@ export const DrawingBoard = {
                 this.selectedStrokes.add(text);
             }
         }
-
-        if (this.selectedStrokes.size > 0) {
-            this.pushLayerHistory();
+        for (const image of images) {
+            if (strokeHasPointInPolygon(image, polygon)) {
+                this.selectedStrokes.add(image);
+            }
         }
+        // Select-only must not push undo history
     },
 
     placeTextBox(x, y) {
@@ -765,6 +792,17 @@ export const DrawingBoard = {
             this.setStrokes(strokes);
             this.scheduleSave();
         }
+        const images = this.images().filter((img) => !this.hitImage(img, x, y, radius));
+        if (images.length !== this.images().length) {
+            this.setImages(images);
+            this.scheduleSave();
+        }
+    },
+
+    hitImage(img, x, y, radius) {
+        if (!img) return false;
+        const b = getImageBounds(img);
+        return x >= b.minX - radius && x <= b.maxX + radius && y >= b.minY - radius && y <= b.maxY + radius;
     },
 
     hitStroke(stroke, x, y, radius) {
@@ -773,6 +811,9 @@ export const DrawingBoard = {
         }
         if (stroke.tool === 'text') {
             return x >= stroke.x - radius && x <= stroke.x + 200 && y >= stroke.y - radius && y <= stroke.y + 60;
+        }
+        if (stroke.tool === 'image') {
+            return this.hitImage(stroke, x, y, radius);
         }
         const x0 = Math.min(stroke.x0, stroke.x1);
         const x1 = Math.max(stroke.x0, stroke.x1);
@@ -789,6 +830,11 @@ export const DrawingBoard = {
     redraw() {
         if (!this.ctx || !this.canvas) return;
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+        const images = this.images();
+        ensureImagesLoaded(images, () => { if (this.active) this.requestRedraw(); });
+        images.forEach((img) => drawImageObject(this.ctx, img));
+
         this.strokes().forEach((stroke) => {
             if (stroke.tool === 'brush') drawBrushStroke(this.ctx, stroke);
             else drawShapeStroke(this.ctx, stroke);
@@ -796,8 +842,8 @@ export const DrawingBoard = {
         getActiveTexts(this.doc).forEach((t) => drawTextObject(this.ctx, t));
         if (this.draftStroke) drawBrushStroke(this.ctx, this.draftStroke);
         if (this.shapePreview) drawShapeStroke(this.ctx, this.shapePreview);
-        
-        // Render lasso overlay (path, box selection, and selection box)
+
+        // Render lasso overlay (path, box selection, selection box, resize handles)
         if (this.isLassoActive || this.selectedStrokes.size > 0 || this.isBoxSelecting) {
             this.renderLassoOverlay();
         }
@@ -814,12 +860,14 @@ export const DrawingBoard = {
     },
 
     clearAll() {
-        if (!this.strokes().length && !getActiveTexts(this.doc).length) return;
+        if (!this.strokes().length && !getActiveTexts(this.doc).length && !this.images().length) return;
         if (!confirm('Clear the current canvas page?')) return;
         this.pushLayerHistory();
         this.setStrokes([]);
+        this.setImages([]);
         if (this.doc.canvasMode === 'infinite') this.doc.infinite.texts = [];
         else { const page = this.doc.pages.find((p) => p.id === this.doc.activePageId); if (page) page.texts = []; }
+        this.selectedStrokes.clear();
         this.redraw();
         this.scheduleSave();
     },
@@ -1014,7 +1062,8 @@ export const DrawingBoard = {
                 <span class="drawing-dropdown-icon">${this.shapeTriggerIcon()}</span>
                 <span class="drawing-dropdown-chevron">${CHEVRON}</span>
             </button>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-lasso" title="Lasso Select (L)" aria-label="Lasso Select" ${this.isLassoActive ? 'aria-pressed="true"' : ''}>${DRAWING_ICONS.lasso}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="draw-insert-image" title="Insert image" aria-label="Insert image" aria-haspopup="menu">${DRAWING_ICONS.image}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="draw-lasso" title="Rectangle select (L)" aria-label="Rectangle select" ${this.isLassoActive ? 'aria-pressed="true"' : ''}>${DRAWING_ICONS.lasso}</button>
             <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-canvas" aria-haspopup="menu" aria-expanded="false" title="Canvas settings" aria-label="Canvas settings">
                 <span class="drawing-dropdown-label">Canvas</span>
                 <span class="drawing-dropdown-chevron">${CHEVRON}</span>
@@ -1080,6 +1129,11 @@ export const DrawingBoard = {
             });
         });
 
+        q('#draw-insert-image')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.openImageInsertMenu(e.currentTarget);
+        });
+
         q('#draw-menu-canvas')?.addEventListener('click', (e) => {
             e.stopPropagation();
             const anchor = e.currentTarget;
@@ -1128,10 +1182,22 @@ export const DrawingBoard = {
             return true;
         }
         
-        // Escape to clear lasso selection or exit lasso mode
+        // Escape to clear selection or exit rectangle-select mode
         if (e.key === 'Escape') {
+            if (this.resizeHandle) {
+                this.finishResize();
+                this.redraw();
+                return true;
+            }
             if (this.isDraggingLasso) {
                 this.finishLassoDrag();
+                this.redraw();
+                return true;
+            }
+            if (this.isBoxSelecting) {
+                this.isBoxSelecting = false;
+                this.boxSelectStart = null;
+                this.boxSelectCurrent = null;
                 this.redraw();
                 return true;
             }
@@ -1144,7 +1210,7 @@ export const DrawingBoard = {
         return false;
     },
 
-    // Lasso tool methods
+    // Marquee (lasso button) methods — rectangle select mode
     toggleLassoMode() {
         if (this.isLassoActive) {
             this.clearLassoSelection();
@@ -1155,62 +1221,32 @@ export const DrawingBoard = {
 
     startLassoMode() {
         this.isLassoActive = true;
-        this.lassoPoints = [];
         this.selectedStrokes.clear();
         this.isDraggingLasso = false;
+        this.isBoxSelecting = false;
+        this.boxSelectStart = null;
+        this.boxSelectCurrent = null;
+        // Marquee mode uses pointer-style selection; keep activeTool as pointer for prefs
+        this.activeTool = 'pointer';
+        this.prefs.activeTool = 'pointer';
+        writePrefs(this.prefs);
         if (this.canvas) this.canvas.dataset.tool = 'lasso';
         this.renderToolbar();
+        this.redraw();
     },
 
     clearLassoSelection() {
         this.isLassoActive = false;
-        this.lassoPoints = [];
         this.selectedStrokes.clear();
         this.isDraggingLasso = false;
         this.lassoDragStart = null;
+        this.isBoxSelecting = false;
+        this.boxSelectStart = null;
+        this.boxSelectCurrent = null;
         // Do not wipe textLayer here — it may contain active contentEditable boxes.
         if (this.canvas) this.canvas.dataset.tool = this.activeTool;
         this.renderToolbar();
-    },
-
-    beginLassoPath(x, y) {
-        this.lassoPoints = [{ x, y }];
-    },
-
-    extendLassoPath(x, y) {
-        if (this.lassoPoints.length === 0) return;
-        // Only add if far enough from last point to avoid too many points
-        const last = this.lassoPoints[this.lassoPoints.length - 1];
-        const dist = Math.hypot(x - last.x, y - last.y);
-        if (dist > 2) {
-            this.lassoPoints.push({ x, y });
-        }
-    },
-
-    closeLassoPath() {
-        if (this.lassoPoints.length < 3) return false;
-        // Connect last point to first
-        this.lassoPoints.push(this.lassoPoints[0]);
-        return true;
-    },
-
-    selectStrokesInLasso() {
-        if (this.lassoPoints.length < 3) return;
-
-        const strokes = this.strokes();
-        const texts = getActiveTexts(this.doc);
-        this.selectedStrokes.clear();
-
-        for (const stroke of strokes) {
-            if (strokeHasPointInPolygon(stroke, this.lassoPoints)) {
-                this.selectedStrokes.add(stroke);
-            }
-        }
-        for (const text of texts) {
-            if (strokeHasPointInPolygon(text, this.lassoPoints)) {
-                this.selectedStrokes.add(text);
-            }
-        }
+        this.redraw();
     },
 
     getSelectedStrokesArray() {
@@ -1248,55 +1284,37 @@ export const DrawingBoard = {
 
     renderLassoOverlay() {
         if (!this.ctx || !this.canvas) return;
-        
-        // Render dashed blue box selection marquee
+
+        // Dashed blue rectangle marquee while dragging
         if (this.isBoxSelecting && this.boxSelectStart && this.boxSelectCurrent) {
             const x0 = Math.min(this.boxSelectStart.x, this.boxSelectCurrent.x);
             const y0 = Math.min(this.boxSelectStart.y, this.boxSelectCurrent.y);
             const x1 = Math.max(this.boxSelectStart.x, this.boxSelectCurrent.x);
             const y1 = Math.max(this.boxSelectStart.y, this.boxSelectCurrent.y);
-            const width = x1 - x0;
-            const height = y1 - y0;
-            
+
             this.ctx.save();
-            this.ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)'; // Blue with opacity
-            this.ctx.fillStyle = 'rgba(59, 130, 246, 0.15)'; // Light blue fill
+            this.ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
+            this.ctx.fillStyle = 'rgba(59, 130, 246, 0.15)';
             this.ctx.lineWidth = 1.5;
             this.ctx.setLineDash([4, 2]);
-            this.ctx.strokeRect(x0, y0, width, height);
+            this.ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+            this.ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
             this.ctx.restore();
         }
-        
-        // Render dashed blue lasso path
-        if (this.lassoPoints.length > 0) {
-            this.ctx.save();
-            this.ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)'; // Blue with opacity
-            this.ctx.fillStyle = 'rgba(59, 130, 246, 0.15)'; // Light blue fill
-            this.ctx.lineWidth = 2;
-            this.ctx.setLineDash([6, 4]);
-            this.ctx.beginPath();
-            this.ctx.moveTo(this.lassoPoints[0].x, this.lassoPoints[0].y);
-            for (let i = 1; i < this.lassoPoints.length; i++) {
-                this.ctx.lineTo(this.lassoPoints[i].x, this.lassoPoints[i].y);
-            }
-            this.ctx.stroke();
-            this.ctx.fill();
-            this.ctx.setLineDash([]);
-            this.ctx.restore();
-        }
-        
-        // Render selection bounding box
+
+        // Selection bounding box + resize handles
         if (this.selectedStrokes.size > 0) {
             const bounds = getStrokesBounds(this.getSelectedStrokesArray());
             this.ctx.save();
-            this.ctx.strokeStyle = '#3b82f6'; // Blue border
-            this.ctx.fillStyle = 'rgba(59, 130, 246, 0.1)'; // Semi-transparent fill
+            this.ctx.strokeStyle = '#3b82f6';
+            this.ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
             this.ctx.lineWidth = 1.5;
             this.ctx.setLineDash([4, 2]);
             this.ctx.strokeRect(bounds.minX, bounds.minY, bounds.width, bounds.height);
+            this.ctx.setLineDash([]);
             this.ctx.restore();
-            
-            // Render drag handles (simple center point)
+
+            // Center move handle
             const centerX = bounds.minX + bounds.width / 2;
             const centerY = bounds.minY + bounds.height / 2;
             this.ctx.save();
@@ -1305,7 +1323,251 @@ export const DrawingBoard = {
             this.ctx.arc(centerX, centerY, 6, 0, Math.PI * 2);
             this.ctx.fill();
             this.ctx.restore();
+
+            // Corner/edge resize handles
+            this.getResizeHandles(bounds).forEach((h) => {
+                this.ctx.save();
+                this.ctx.fillStyle = '#ffffff';
+                this.ctx.strokeStyle = '#3b82f6';
+                this.ctx.lineWidth = 1.5;
+                this.ctx.fillRect(h.x - RESIZE_HANDLE_SIZE / 2, h.y - RESIZE_HANDLE_SIZE / 2, RESIZE_HANDLE_SIZE, RESIZE_HANDLE_SIZE);
+                this.ctx.strokeRect(h.x - RESIZE_HANDLE_SIZE / 2, h.y - RESIZE_HANDLE_SIZE / 2, RESIZE_HANDLE_SIZE, RESIZE_HANDLE_SIZE);
+                this.ctx.restore();
+            });
         }
+    },
+
+    getResizeHandles(bounds) {
+        if (!bounds) return [];
+        const { minX, minY, maxX, maxY } = bounds;
+        const midX = (minX + maxX) / 2;
+        const midY = (minY + maxY) / 2;
+        return [
+            { id: 'nw', x: minX, y: minY, cursor: 'nwse-resize' },
+            { id: 'n', x: midX, y: minY, cursor: 'ns-resize' },
+            { id: 'ne', x: maxX, y: minY, cursor: 'nesw-resize' },
+            { id: 'e', x: maxX, y: midY, cursor: 'ew-resize' },
+            { id: 'se', x: maxX, y: maxY, cursor: 'nwse-resize' },
+            { id: 's', x: midX, y: maxY, cursor: 'ns-resize' },
+            { id: 'sw', x: minX, y: maxY, cursor: 'nesw-resize' },
+            { id: 'w', x: minX, y: midY, cursor: 'ew-resize' }
+        ];
+    },
+
+    hitResizeHandle(x, y) {
+        if (this.selectedStrokes.size === 0) return null;
+        const bounds = getStrokesBounds(this.getSelectedStrokesArray());
+        const handles = this.getResizeHandles(bounds);
+        for (const h of handles) {
+            if (Math.abs(x - h.x) <= RESIZE_HANDLE_HIT / 2 && Math.abs(y - h.y) <= RESIZE_HANDLE_HIT / 2) {
+                return h;
+            }
+        }
+        return null;
+    },
+
+    startResize(handle, x, y) {
+        const selected = this.getSelectedStrokesArray();
+        if (!selected.length) return;
+        const bounds = getStrokesBounds(selected);
+        this.pushLayerHistory();
+        this.resizeHandle = handle.id;
+        this.resizeStart = {
+            x,
+            y,
+            bounds: { ...bounds },
+            // Snapshot each selected item's geometry so we can scale from original
+            items: selected.map((item) => ({
+                ref: item,
+                x: item.x,
+                y: item.y,
+                width: item.width,
+                height: item.height,
+                x0: item.x0,
+                y0: item.y0,
+                x1: item.x1,
+                y1: item.y1,
+                points: item.points ? item.points.map((p) => ({ ...p })) : null
+            }))
+        };
+    },
+
+    applyResize(x, y) {
+        if (!this.resizeHandle || !this.resizeStart) return;
+        const start = this.resizeStart.bounds;
+        const handle = this.resizeHandle;
+        let newMinX = start.minX;
+        let newMinY = start.minY;
+        let newMaxX = start.maxX;
+        let newMaxY = start.maxY;
+
+        if (handle.includes('w')) newMinX = Math.min(x, start.maxX - MIN_IMAGE_SIDE);
+        if (handle.includes('e')) newMaxX = Math.max(x, start.minX + MIN_IMAGE_SIDE);
+        if (handle.includes('n')) newMinY = Math.min(y, start.maxY - MIN_IMAGE_SIDE);
+        if (handle.includes('s')) newMaxY = Math.max(y, start.minY + MIN_IMAGE_SIDE);
+
+        // Maintain aspect ratio for corner handles
+        const isCorner = handle.length === 2;
+        if (isCorner && start.width > 0 && start.height > 0) {
+            const aspect = start.width / start.height;
+            let w = newMaxX - newMinX;
+            let h = newMaxY - newMinY;
+            if (w / h > aspect) {
+                h = w / aspect;
+            } else {
+                w = h * aspect;
+            }
+            if (handle.includes('w')) newMinX = newMaxX - w;
+            else newMaxX = newMinX + w;
+            if (handle.includes('n')) newMinY = newMaxY - h;
+            else newMaxY = newMinY + h;
+        }
+
+        const newW = Math.max(MIN_IMAGE_SIDE, newMaxX - newMinX);
+        const newH = Math.max(MIN_IMAGE_SIDE, newMaxY - newMinY);
+        const scaleX = start.width > 0 ? newW / start.width : 1;
+        const scaleY = start.height > 0 ? newH / start.height : 1;
+
+        for (const snap of this.resizeStart.items) {
+            const item = snap.ref;
+            if (!item) continue;
+            if (item.tool === 'image' || (item.mediaId && snap.width != null)) {
+                item.x = newMinX + (snap.x - start.minX) * scaleX;
+                item.y = newMinY + (snap.y - start.minY) * scaleY;
+                item.width = Math.max(MIN_IMAGE_SIDE, snap.width * scaleX);
+                item.height = Math.max(MIN_IMAGE_SIDE, snap.height * scaleY);
+            } else if (Array.isArray(item.points) && snap.points) {
+                for (let i = 0; i < item.points.length; i++) {
+                    item.points[i].x = newMinX + (snap.points[i].x - start.minX) * scaleX;
+                    item.points[i].y = newMinY + (snap.points[i].y - start.minY) * scaleY;
+                }
+            } else if (item.tool === 'text') {
+                item.x = newMinX + (snap.x - start.minX) * scaleX;
+                item.y = newMinY + (snap.y - start.minY) * scaleY;
+                if (item.fontSize) item.fontSize = Math.max(8, (snap.height || item.fontSize) * scaleY);
+            } else if (snap.x0 != null) {
+                item.x0 = newMinX + (snap.x0 - start.minX) * scaleX;
+                item.y0 = newMinY + (snap.y0 - start.minY) * scaleY;
+                item.x1 = newMinX + (snap.x1 - start.minX) * scaleX;
+                item.y1 = newMinY + (snap.y1 - start.minY) * scaleY;
+            }
+        }
+
+        const dims = getPageDimensions(this.doc);
+        const pageBounds = getPageBounds(this.doc, dims);
+        clampStrokesToBounds(this.getSelectedStrokesArray(), pageBounds);
+        this.redraw();
+    },
+
+    finishResize() {
+        if (!this.resizeHandle) return;
+        this.resizeHandle = null;
+        this.resizeStart = null;
+        this.scheduleSave();
+    },
+
+    updateHoverCursor(x, y) {
+        if (!this.canvas) return;
+        if (this.selectedStrokes.size > 0) {
+            const handle = this.hitResizeHandle(x, y);
+            if (handle) {
+                this.hoverHandle = handle.id;
+                this.canvas.style.cursor = handle.cursor;
+                return;
+            }
+            const bounds = getStrokesBounds(this.getSelectedStrokesArray());
+            if (x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY) {
+                this.hoverHandle = null;
+                this.canvas.style.cursor = 'move';
+                return;
+            }
+        }
+        this.hoverHandle = null;
+        this.canvas.style.cursor = this.activeTool === 'pointer' ? 'default' : '';
+        if (this.canvas.dataset.tool) {
+            // Fall back to CSS data-tool rules when not hovering selection
+            this.canvas.style.cursor = '';
+        }
+    },
+
+    async openImageInsertMenu(anchor) {
+        let items;
+        try {
+            const media = await listMedia();
+            const images = (media || []).filter((m) => (m.mime || '').startsWith('image/') && m.blobPresent !== false);
+            if (!images.length) {
+                showAppToast('No images in the media library yet');
+                return;
+            }
+            items = [
+                { heading: 'Insert from media library' },
+                ...images.slice(0, 40).map((m) => ({
+                    id: m.id,
+                    label: m.title || m.filename || m.id,
+                    icon: DRAWING_ICONS.image
+                }))
+            ];
+        } catch (err) {
+            showAppToast('Could not open media library');
+            return;
+        }
+
+        DrawingToolbarMenu.toggle({
+            anchor,
+            ariaLabel: 'Insert image',
+            items,
+            onSelect: (id) => { this.insertImageFromMedia(id); }
+        });
+    },
+
+    async insertImageFromMedia(mediaId) {
+        if (!mediaId || !this.doc) return;
+        const img = await loadImage(mediaId);
+        if (!img) {
+            showAppToast('Could not load that image');
+            return;
+        }
+
+        const size = initialImageSize(img.naturalWidth, img.naturalHeight);
+        // Center in the current viewport (bitmap space)
+        const vp = this.viewportEl?.getBoundingClientRect();
+        let cx;
+        let cy;
+        if (vp) {
+            const world = this.clientToCanvas(vp.left + vp.width / 2, vp.top + vp.height / 2);
+            cx = world.x;
+            cy = world.y;
+        } else {
+            const dims = getPageDimensions(this.doc);
+            cx = dims.width / 2;
+            cy = dims.height / 2;
+        }
+
+        const item = {
+            id: createId('img'),
+            tool: 'image',
+            mediaId,
+            x: cx - size.width / 2,
+            y: cy - size.height / 2,
+            width: size.width,
+            height: size.height,
+            naturalWidth: img.naturalWidth,
+            naturalHeight: img.naturalHeight
+        };
+
+        this.pushLayerHistory();
+        const images = this.images().slice();
+        images.push(item);
+        this.setImages(images);
+        if (this.doc.canvasMode === 'infinite') {
+            expandInfiniteBounds(this.doc, item.x, item.y);
+            expandInfiniteBounds(this.doc, item.x + item.width, item.y + item.height);
+        }
+        this.selectedStrokes.clear();
+        this.selectedStrokes.add(item);
+        this.setTool('pointer');
+        this.scheduleSave();
+        this.redraw();
     },
 
 };

@@ -26,6 +26,8 @@ import {
     setActiveStrokes,
     getActiveTexts,
     setActiveTexts,
+    getActiveImages,
+    setActiveImages,
     getPageDimensions,
     STORAGE_KEY
 } from '../js/canvasDocument.js';
@@ -46,6 +48,8 @@ describe('canvasDocument', () => {
         assert.equal(doc.version, 2);
         assert.equal(doc.canvasMode, 'a4');
         assert.ok(Array.isArray(doc.pages));
+        assert.ok(Array.isArray(doc.pages[0].images));
+        assert.ok(Array.isArray(doc.infinite.images));
         assert.ok(doc.infinite);
         assert.ok(doc.viewport);
     });
@@ -71,6 +75,22 @@ describe('canvasDocument', () => {
         const strokes = getActiveStrokes(doc);
         assert.equal(strokes.length, 1);
         assert.equal(strokes[0].id, 'old');
+        assert.ok(Array.isArray(doc.infinite.images));
+        assert.equal(doc.infinite.images.length, 0);
+    });
+
+    it('migrateDocument backfills images on legacy v2 pages', () => {
+        const raw = {
+            version: 2,
+            canvasMode: 'a4',
+            activePageId: 'p1',
+            pages: [{ id: 'p1', format: 'a4', background: 'blank', strokes: [], texts: [] }],
+            infinite: { strokes: [], texts: [], background: 'blank', bounds: { minX: 0, minY: 0, maxX: 100, maxY: 100 } },
+            viewport: { scale: 1, offsetX: 0, offsetY: 0 }
+        };
+        const doc = migrateDocument(raw);
+        assert.ok(Array.isArray(doc.pages[0].images));
+        assert.ok(Array.isArray(doc.infinite.images));
     });
 
     it('active text helpers work in page mode', () => {
@@ -78,6 +98,17 @@ describe('canvasDocument', () => {
         const texts = [{ id: 't1', tool: 'text', x: 10, y: 20, text: 'hello' }];
         setActiveTexts(doc, texts);
         assert.deepEqual(getActiveTexts(doc), texts);
+    });
+
+    it('active image helpers work in page and infinite modes', () => {
+        const pageDoc = createEmptyDocument('a4');
+        const images = [{ id: 'img1', tool: 'image', mediaId: 'media_1', x: 0, y: 0, width: 100, height: 80 }];
+        setActiveImages(pageDoc, images);
+        assert.deepEqual(getActiveImages(pageDoc), images);
+
+        const infDoc = createEmptyDocument('infinite');
+        setActiveImages(infDoc, images);
+        assert.deepEqual(getActiveImages(infDoc), images);
     });
 
     it('getPageDimensions returns infinite bounds for infinite mode', () => {
