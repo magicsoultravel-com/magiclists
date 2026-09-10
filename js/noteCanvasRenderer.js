@@ -110,6 +110,15 @@ function resolvePreviewSize(canvasEl) {
     };
 }
 
+/** Match the host note card color so blank previews don't paint desktop black. */
+function resolveHostNoteFill(canvasEl) {
+    const host = canvasEl?.closest?.('.mini-card, .editor-note-shell');
+    if (!host) return '';
+    const bg = getComputedStyle(host).backgroundColor;
+    if (!bg || bg === 'transparent' || bg === 'rgba(0, 0, 0, 0)') return '';
+    return bg;
+}
+
 function drawLayer(ctx, layer) {
     const images = layer.images || [];
     const strokes = layer.strokes || [];
@@ -159,9 +168,9 @@ export function renderNoteCanvas(canvasEl, doc, { onLoaded } = {}) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
 
-    // Draw background at full element size.
+    // Draw background at full element size — prefer note canvas fill, else host note color.
     renderBackground(ctx, layer.background || 'blank', cssW, cssH, {
-        fillColor: layer.backgroundColor || ''
+        fillColor: layer.backgroundColor || resolveHostNoteFill(canvasEl) || ''
     });
 
     // Load media images referenced by the canvas and re-render when ready.
