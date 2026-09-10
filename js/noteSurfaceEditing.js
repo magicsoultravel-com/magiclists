@@ -588,7 +588,8 @@ export function bindNoteEditorShell(root, item, {
                 + '.sheet-cell-input, .sheet-struct-actions, .sheet-struct-actions .card-act, '
                 + '.note-section-header, .note-section-header .collapsable-toggle, '
                 + '.note-attachment, .note-attachment__thumb-btn, .note-attachment__label-btn, '
-                + '.note-attachment__expand, .note-attachment__detach, .note-attachment__preview'
+                + '.note-attachment__expand, .note-attachment__detach, .note-media-canvas, '
+                + '.note-media-canvas__tile, .note-media-canvas__reset'
             )) return;
             e.stopPropagation();
         });

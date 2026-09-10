@@ -6,14 +6,21 @@ import {
     ATTACH_SCALE_DEFAULT,
     ATTACH_SCALE_MAX,
     ATTACH_SCALE_MIN,
+    clampAttachCoord,
     clampAttachScale,
     detachMediaFromNote,
     normalizeAttachments,
+    resetAttachmentCanvas,
     stepAttachScale,
     updateAttachmentView
 } from './mediaAttachments.js';
 import { buildMediaQuickActionsHtml, bindMediaQuickActions, viewMediaFullSize } from './mediaQuickActions.js';
 import { showAppToast } from './toast.js';
+
+const CANVAS_PAD = 12;
+const CASCADE_STEP = 18;
+const TILE_WIDTH_FRAC = 0.42;
+const TILE_WIDTH_MIN = 96;
 
 async function openMediaLibrary(opts) {
     const { MediaLibraryOverlay } = await import('./mediaLibraryOverlay.js');
@@ -24,6 +31,18 @@ function attachmentEntry(item, mediaId) {
     return normalizeAttachments(item?.attachments).find((a) => a.mediaId === mediaId) || null;
 }
 
+function canvasRoot(section) {
+    return section?.querySelector?.('[data-note-media-canvas]') || null;
+}
+
+function canvasViewport(section) {
+    return canvasRoot(section)?.querySelector?.('[data-note-media-viewport]') || null;
+}
+
+function canvasSurface(section) {
+    return canvasRoot(section)?.querySelector?.('[data-note-media-surface]') || null;
+}
+
 function releaseAttachmentRowUrls(row) {
     const mediaId = row.dataset.mediaId || null;
     if (!mediaId) return;
@@ -31,8 +50,13 @@ function releaseAttachmentRowUrls(row) {
         delete row.dataset.thumbClaimed;
         releaseObjectUrl(mediaId, 'thumb');
     }
-    if (row.dataset.blobClaimed) {
-        delete row.dataset.blobClaimed;
+}
+
+function releaseCanvasTileUrls(tile) {
+    const mediaId = tile?.dataset?.mediaId || null;
+    if (!mediaId) return;
+    if (tile.dataset.blobClaimed) {
+        delete tile.dataset.blobClaimed;
         releaseObjectUrl(mediaId, 'blob');
     }
 }
@@ -42,32 +66,281 @@ function releaseSectionUrls(section) {
     section.querySelectorAll('.note-attachment[data-media-id]').forEach((row) => {
         releaseAttachmentRowUrls(row);
     });
+    section.querySelectorAll('.note-media-canvas__tile[data-media-id]').forEach((tile) => {
+        releaseCanvasTileUrls(tile);
+    });
 }
 
-function applyFullImageScale(img, scale) {
-    if (!img) return;
-    const s = clampAttachScale(scale);
-    img.style.width = `${100 * s}%`;
+function nextCanvasZ(surface) {
+    const cur = Number(surface.dataset.zTop || 1);
+    const next = (Number.isFinite(cur) ? cur : 1) + 1;
+    surface.dataset.zTop = String(next);
+    return next;
 }
 
-function syncZoomButtonState(preview, scale) {
-    if (!preview) return;
+function bringTileToFront(tile) {
+    const surface = tile?.closest?.('[data-note-media-surface]');
+    if (!tile || !surface) return;
+    tile.style.zIndex = String(nextCanvasZ(surface));
+}
+
+function baseTileWidthPx(viewport) {
+    const w = viewport?.clientWidth || 200;
+    return Math.max(TILE_WIDTH_MIN, Math.round(w * TILE_WIDTH_FRAC));
+}
+
+function applyTileScale(tile, scale, viewport) {
+    if (!tile) return;
     const s = clampAttachScale(scale);
-    const outBtn = preview.querySelector('[data-attach-zoom-out]');
-    const resetBtn = preview.querySelector('[data-attach-zoom-reset]');
-    const inBtn = preview.querySelector('[data-attach-zoom-in]');
+    tile.dataset.attachScale = String(s);
+    tile.style.width = `${Math.round(baseTileWidthPx(viewport) * s)}px`;
+    syncZoomButtonState(tile, s);
+}
+
+function syncZoomButtonState(host, scale) {
+    if (!host) return;
+    const s = clampAttachScale(scale);
+    const outBtn = host.querySelector('[data-attach-zoom-out]');
+    const resetBtn = host.querySelector('[data-attach-zoom-reset]');
+    const inBtn = host.querySelector('[data-attach-zoom-in]');
     if (outBtn) outBtn.disabled = s <= ATTACH_SCALE_MIN;
     if (resetBtn) resetBtn.disabled = s === ATTACH_SCALE_DEFAULT;
     if (inBtn) inBtn.disabled = s >= ATTACH_SCALE_MAX;
 }
 
-function setAttachmentRowScale(row, item, mediaId, scale) {
+function setTilePosition(tile, x, y) {
+    const px = clampAttachCoord(x) ?? 0;
+    const py = clampAttachCoord(y) ?? 0;
+    tile.style.left = `${px}px`;
+    tile.style.top = `${py}px`;
+    tile.dataset.attachX = String(px);
+    tile.dataset.attachY = String(py);
+}
+
+function syncCanvasExtents(section) {
+    const viewport = canvasViewport(section);
+    const surface = canvasSurface(section);
+    if (!viewport || !surface) return;
+    const tiles = surface.querySelectorAll('.note-media-canvas__tile');
+    let maxR = viewport.clientWidth;
+    let maxB = viewport.clientHeight;
+    tiles.forEach((tile) => {
+        const x = Number(tile.dataset.attachX || 0);
+        const y = Number(tile.dataset.attachY || 0);
+        maxR = Math.max(maxR, x + tile.offsetWidth + CANVAS_PAD);
+        maxB = Math.max(maxB, y + tile.offsetHeight + CANVAS_PAD);
+    });
+    surface.style.width = `${Math.round(maxR)}px`;
+    surface.style.height = `${Math.round(maxB)}px`;
+}
+
+function updateCanvasVisibility(section) {
+    const root = canvasRoot(section);
+    if (!root) return;
+    const count = root.querySelectorAll('.note-media-canvas__tile').length;
+    root.classList.toggle('is-hidden', count === 0);
+    root.hidden = count === 0;
+    if (count > 0) syncCanvasExtents(section);
+}
+
+function sizeCanvasViewport(section) {
+    const viewport = canvasViewport(section);
+    if (!viewport) return;
+    const card = section.closest('.mini-card, .editor-note-shell, #editor-overlay');
+    const hostH = card?.clientHeight || 0;
+    const h = hostH
+        ? Math.round(Math.max(120, Math.min(260, hostH * 0.42)))
+        : 180;
+    viewport.style.height = `${h}px`;
+}
+
+function defaultCascadePos(item, mediaId) {
+    const list = normalizeAttachments(item?.attachments);
+    const idx = Math.max(0, list.findIndex((a) => a.mediaId === mediaId));
+    return {
+        x: CANVAS_PAD + idx * CASCADE_STEP,
+        y: CANVAS_PAD + idx * CASCADE_STEP
+    };
+}
+
+function setExpandButtonState(expandBtn, expanded) {
+    if (!expandBtn) return;
+    if (expanded) {
+        expandBtn.innerHTML = CARD_ICONS.collapseMedia;
+        expandBtn.title = 'Collapse in note';
+        expandBtn.setAttribute('aria-label', 'Collapse in note');
+        expandBtn.setAttribute('aria-pressed', 'true');
+        expandBtn.classList.remove('is-hidden');
+        return;
+    }
+    expandBtn.innerHTML = CARD_ICONS.expandMedia;
+    expandBtn.title = 'Expand in note';
+    expandBtn.setAttribute('aria-label', 'Expand in note');
+    expandBtn.setAttribute('aria-pressed', 'false');
+}
+
+function bindTileDrag(tile, item, mediaId, section) {
+    if (!tile || tile.dataset.dragBound === '1') return;
+    tile.dataset.dragBound = '1';
+
+    let dragging = false;
+    let startX = 0;
+    let startY = 0;
+    let originX = 0;
+    let originY = 0;
+
+    tile.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        bringTileToFront(tile);
+        if (e.target.closest('.note-attachment__zoom, .card-act, button')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        dragging = true;
+        startX = e.clientX;
+        startY = e.clientY;
+        originX = Number(tile.dataset.attachX || 0);
+        originY = Number(tile.dataset.attachY || 0);
+        tile.classList.add('is-dragging');
+        try {
+            tile.setPointerCapture(e.pointerId);
+        } catch { /* ignore */ }
+    });
+
+    tile.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        e.preventDefault();
+        const x = Math.max(0, Math.round(originX + (e.clientX - startX)));
+        const y = Math.max(0, Math.round(originY + (e.clientY - startY)));
+        setTilePosition(tile, x, y);
+        syncCanvasExtents(section);
+    });
+
+    const endDrag = (e) => {
+        if (!dragging) return;
+        dragging = false;
+        tile.classList.remove('is-dragging');
+        try {
+            tile.releasePointerCapture(e.pointerId);
+        } catch { /* ignore */ }
+        const x = Number(tile.dataset.attachX || 0);
+        const y = Number(tile.dataset.attachY || 0);
+        updateAttachmentView(item, mediaId, { x, y }, { syncUi: false });
+        syncCanvasExtents(section);
+    };
+
+    tile.addEventListener('pointerup', endDrag);
+    tile.addEventListener('pointercancel', endDrag);
+}
+
+/**
+ * @param {HTMLElement} section
+ * @param {HTMLElement} row
+ * @param {object} item
+ * @param {string} mediaId
+ * @param {{ scale?: number, x?: number|null, y?: number|null }} [layout]
+ */
+async function expandAttachmentOnCanvas(section, row, item, mediaId, layout = {}) {
+    const surface = canvasSurface(section);
+    const viewport = canvasViewport(section);
+    const expandBtn = row.querySelector('[data-expand-media]');
+    if (!surface || !viewport) return;
+
+    let tile = surface.querySelector(`.note-media-canvas__tile[data-media-id="${CSS.escape(mediaId)}"]`);
+    if (tile) {
+        row.classList.add('is-expanded');
+        setExpandButtonState(expandBtn, true);
+        updateCanvasVisibility(section);
+        return;
+    }
+
+    const url = await getObjectUrl(mediaId, 'blob');
+    if (!url) {
+        showAppToast('Preview unavailable');
+        return;
+    }
+    if (!section.isConnected) {
+        releaseObjectUrl(mediaId, 'blob');
+        return;
+    }
+
+    sizeCanvasViewport(section);
+
+    const s = clampAttachScale(layout.scale ?? 1);
+    const cascade = defaultCascadePos(item, mediaId);
+    const x = clampAttachCoord(layout.x) ?? cascade.x;
+    const y = clampAttachCoord(layout.y) ?? cascade.y;
+
+    tile = document.createElement('div');
+    tile.className = 'note-media-canvas__tile';
+    tile.dataset.mediaId = mediaId;
+    tile.dataset.blobClaimed = '1';
+    tile.innerHTML = `
+        <div class="note-attachment__zoom" role="group" aria-label="Zoom image">
+            <button type="button" class="card-act" data-attach-zoom-out title="Zoom out" aria-label="Zoom out">${CARD_ICONS.minus}</button>
+            <button type="button" class="card-act" data-attach-zoom-reset title="Reset zoom" aria-label="Reset zoom">${CARD_ICONS.zoomReset}</button>
+            <button type="button" class="card-act" data-attach-zoom-in title="Zoom in" aria-label="Zoom in">${CARD_ICONS.plus}</button>
+        </div>
+        <img class="note-media-canvas__img" data-attach-full src="${escapeAttr(url)}" alt="">
+    `;
+    surface.appendChild(tile);
+    applyTileScale(tile, s, viewport);
+    setTilePosition(tile, x, y);
+    bringTileToFront(tile);
+    bindTileDrag(tile, item, mediaId, section);
+
+    row.classList.add('is-expanded');
+    row.dataset.attachScale = String(s);
+    setExpandButtonState(expandBtn, true);
+    updateCanvasVisibility(section);
+
+    if (layout.x == null || layout.y == null) {
+        updateAttachmentView(item, mediaId, { x, y }, { syncUi: false });
+    }
+}
+
+/**
+ * @param {HTMLElement} section
+ * @param {HTMLElement} row
+ * @param {string} mediaId
+ */
+function collapseAttachmentFromCanvas(section, row, mediaId) {
+    const surface = canvasSurface(section);
+    const expandBtn = row.querySelector('[data-expand-media]');
+    const tile = surface?.querySelector?.(`.note-media-canvas__tile[data-media-id="${CSS.escape(mediaId)}"]`);
+    if (tile) {
+        releaseCanvasTileUrls(tile);
+        tile.remove();
+    }
+    row.classList.remove('is-expanded');
+    delete row.dataset.attachScale;
+    setExpandButtonState(expandBtn, false);
+    updateCanvasVisibility(section);
+}
+
+function setAttachmentTileScale(section, row, item, mediaId, scale) {
     const next = clampAttachScale(scale);
+    const viewport = canvasViewport(section);
+    const surface = canvasSurface(section);
+    const tile = surface?.querySelector?.(`.note-media-canvas__tile[data-media-id="${CSS.escape(mediaId)}"]`);
+    if (tile) applyTileScale(tile, next, viewport);
     row.dataset.attachScale = String(next);
-    const preview = row.querySelector('[data-attach-preview]');
-    applyFullImageScale(preview?.querySelector('[data-attach-full]'), next);
-    syncZoomButtonState(preview, next);
     updateAttachmentView(item, mediaId, { scale: next }, { syncUi: false });
+    syncCanvasExtents(section);
+}
+
+function clearCanvasDom(section) {
+    const surface = canvasSurface(section);
+    if (!surface) return;
+    surface.querySelectorAll('.note-media-canvas__tile').forEach((tile) => {
+        releaseCanvasTileUrls(tile);
+        tile.remove();
+    });
+    section.querySelectorAll('.note-attachment.is-expanded').forEach((row) => {
+        row.classList.remove('is-expanded');
+        delete row.dataset.attachScale;
+        setExpandButtonState(row.querySelector('[data-expand-media]'), false);
+    });
+    updateCanvasVisibility(section);
 }
 
 /**
@@ -103,7 +376,6 @@ export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCo
                     </button>
                     ${actions}
                 </div>
-                <div class="note-attachment__preview is-hidden" data-attach-preview></div>
             </div>`;
     }).join('');
 
@@ -114,6 +386,15 @@ export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCo
                 </div>
                 <div class="note-section-body collapsable-section${collapsedClass}">
                     <div class="note-attachments__list">${rows}</div>
+                    <div class="note-media-canvas is-hidden" data-note-media-canvas hidden>
+                        <div class="note-media-canvas__toolbar">
+                            <span class="note-media-canvas__title">Note canvas</span>
+                            <button type="button" class="card-act note-media-canvas__reset" data-reset-media-canvas title="Reset canvas" aria-label="Reset canvas">${CARD_ICONS.zoomReset}</button>
+                        </div>
+                        <div class="note-media-canvas__viewport" data-note-media-viewport>
+                            <div class="note-media-canvas__surface" data-note-media-surface></div>
+                        </div>
+                    </div>
                 </div>
             </div>`;
 }
@@ -277,73 +558,6 @@ export function closeMediaLightbox() {
 }
 
 /**
- * @param {HTMLElement} row
- * @param {string} mediaId
- * @param {number} [scale]
- */
-async function expandAttachmentRow(row, mediaId, scale = 1) {
-    const preview = row.querySelector('[data-attach-preview]');
-    const expandBtn = row.querySelector('[data-expand-media]');
-    if (!preview) return;
-    const url = await getObjectUrl(mediaId, 'blob');
-    if (!url) {
-        showAppToast('Preview unavailable');
-        return;
-    }
-    if (!row.isConnected) {
-        releaseObjectUrl(mediaId, 'blob');
-        return;
-    }
-    row.dataset.blobClaimed = '1';
-    const s = clampAttachScale(scale);
-    const widthPct = 100 * s;
-    preview.innerHTML = `
-        <div class="note-attachment__zoom" role="group" aria-label="Zoom image">
-            <button type="button" class="card-act" data-attach-zoom-out title="Zoom out" aria-label="Zoom out">${CARD_ICONS.minus}</button>
-            <button type="button" class="card-act" data-attach-zoom-reset title="Reset zoom" aria-label="Reset zoom">${CARD_ICONS.zoomReset}</button>
-            <button type="button" class="card-act" data-attach-zoom-in title="Zoom in" aria-label="Zoom in">${CARD_ICONS.plus}</button>
-        </div>
-        <img class="note-attachment__full" data-attach-full src="${escapeAttr(url)}" alt="" style="width: ${widthPct}%">
-    `;
-    preview.classList.remove('is-hidden');
-    row.classList.add('is-expanded');
-    row.dataset.attachScale = String(s);
-    syncZoomButtonState(preview, s);
-    if (expandBtn) {
-        expandBtn.innerHTML = CARD_ICONS.collapseMedia;
-        expandBtn.title = 'Collapse in note';
-        expandBtn.setAttribute('aria-label', 'Collapse in note');
-        expandBtn.setAttribute('aria-pressed', 'true');
-        expandBtn.classList.remove('is-hidden');
-    }
-}
-
-/**
- * @param {HTMLElement} row
- */
-function collapseAttachmentRow(row) {
-    const mediaId = row.dataset.mediaId || null;
-    const preview = row.querySelector('[data-attach-preview]');
-    const expandBtn = row.querySelector('[data-expand-media]');
-    if (preview) {
-        preview.innerHTML = '';
-        preview.classList.add('is-hidden');
-    }
-    row.classList.remove('is-expanded');
-    delete row.dataset.attachScale;
-    if (mediaId && row.dataset.blobClaimed) {
-        delete row.dataset.blobClaimed;
-        releaseObjectUrl(mediaId, 'blob');
-    }
-    if (expandBtn) {
-        expandBtn.innerHTML = CARD_ICONS.expandMedia;
-        expandBtn.title = 'Expand in note';
-        expandBtn.setAttribute('aria-label', 'Expand in note');
-        expandBtn.setAttribute('aria-pressed', 'false');
-    }
-}
-
-/**
  * Fill titles/thumbs and wire open/detach/expand/zoom/lightbox.
  * @param {HTMLElement} root
  * @param {object} item
@@ -352,6 +566,8 @@ export function bindNoteAttachments(root, item) {
     if (!root || !item) return;
     const section = root.querySelector('[data-note-attachments]');
     if (!section) return;
+
+    sizeCanvasViewport(section);
 
     section.querySelectorAll('.note-attachment[data-media-id]').forEach((row) => {
         const mediaId = row.dataset.mediaId;
@@ -409,11 +625,15 @@ export function bindNoteAttachments(root, item) {
             const row = btn.closest('.note-attachment');
             if (!row || !mediaId) return;
             if (row.classList.contains('is-expanded')) {
-                collapseAttachmentRow(row);
+                collapseAttachmentFromCanvas(section, row, mediaId);
                 updateAttachmentView(item, mediaId, { expanded: false }, { syncUi: false });
             } else {
                 const entry = attachmentEntry(item, mediaId);
-                expandAttachmentRow(row, mediaId, entry?.scale ?? 1)
+                expandAttachmentOnCanvas(section, row, item, mediaId, {
+                    scale: entry?.scale ?? 1,
+                    x: entry?.x,
+                    y: entry?.y
+                })
                     .then(() => {
                         updateAttachmentView(item, mediaId, { expanded: true }, { syncUi: false });
                     })
@@ -422,26 +642,41 @@ export function bindNoteAttachments(root, item) {
         });
     });
 
-    if (section.dataset.zoomBound !== '1') {
-        section.dataset.zoomBound = '1';
+    if (section.dataset.canvasControlsBound !== '1') {
+        section.dataset.canvasControlsBound = '1';
         section.addEventListener('click', (e) => {
+            const resetBtn = e.target.closest('[data-reset-media-canvas]');
+            if (resetBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                clearCanvasDom(section);
+                resetAttachmentCanvas(item, { syncUi: false });
+                return;
+            }
+
             const zoomIn = e.target.closest('[data-attach-zoom-in]');
             const zoomOut = e.target.closest('[data-attach-zoom-out]');
             const zoomReset = e.target.closest('[data-attach-zoom-reset]');
             if (!zoomIn && !zoomOut && !zoomReset) return;
             e.preventDefault();
             e.stopPropagation();
-            const row = (zoomIn || zoomOut || zoomReset).closest('.note-attachment');
-            const mediaId = row?.dataset.mediaId;
-            if (!row || !mediaId || !row.classList.contains('is-expanded')) return;
+            const tile = (zoomIn || zoomOut || zoomReset).closest('.note-media-canvas__tile');
+            const mediaId = tile?.dataset?.mediaId;
+            const row = mediaId
+                ? section.querySelector(`.note-attachment[data-media-id="${CSS.escape(mediaId)}"]`)
+                : null;
+            if (!tile || !mediaId || !row) return;
+            bringTileToFront(tile);
             if (zoomReset) {
-                setAttachmentRowScale(row, item, mediaId, ATTACH_SCALE_DEFAULT);
+                setAttachmentTileScale(section, row, item, mediaId, ATTACH_SCALE_DEFAULT);
                 return;
             }
-            const cur = clampAttachScale(row.dataset.attachScale || attachmentEntry(item, mediaId)?.scale || ATTACH_SCALE_DEFAULT);
+            const cur = clampAttachScale(
+                tile.dataset.attachScale || attachmentEntry(item, mediaId)?.scale || ATTACH_SCALE_DEFAULT
+            );
             const next = stepAttachScale(cur, zoomIn ? 1 : -1);
             if (next === cur) return;
-            setAttachmentRowScale(row, item, mediaId, next);
+            setAttachmentTileScale(section, row, item, mediaId, next);
         });
     }
 
@@ -489,7 +724,11 @@ async function hydrateAttachmentRows(section, item) {
                 }
                 const entry = attachmentEntry(item, id);
                 if (entry?.expanded) {
-                    await expandAttachmentRow(row, id, entry.scale);
+                    await expandAttachmentOnCanvas(section, row, item, id, {
+                        scale: entry.scale,
+                        x: entry.x,
+                        y: entry.y
+                    });
                 }
                 return;
             }

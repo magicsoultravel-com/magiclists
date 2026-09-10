@@ -47,9 +47,20 @@ export function stepAttachScale(scale, dir) {
 }
 
 /**
- * Normalize note.attachments to `{ mediaId, attachedAt, expanded, scale }[]`.
+ * Canvas position in px (null when unset / use default cascade).
+ * @param {unknown} value
+ * @returns {number|null}
+ */
+export function clampAttachCoord(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return null;
+    return Math.round(Math.max(0, n));
+}
+
+/**
+ * Normalize note.attachments to `{ mediaId, attachedAt, expanded, scale, x, y }[]`.
  * @param {unknown} list
- * @returns {Array<{ mediaId: string, attachedAt: number, expanded: boolean, scale: number }>}
+ * @returns {Array<{ mediaId: string, attachedAt: number, expanded: boolean, scale: number, x: number|null, y: number|null }>}
  */
 export function normalizeAttachments(list) {
     if (!Array.isArray(list)) return [];
@@ -68,11 +79,19 @@ export function normalizeAttachments(list) {
         const scale = clampAttachScale(
             typeof entry === 'object' && entry ? entry.scale : 1
         );
+        const x = clampAttachCoord(
+            typeof entry === 'object' && entry ? entry.x : null
+        );
+        const y = clampAttachCoord(
+            typeof entry === 'object' && entry ? entry.y : null
+        );
         out.push({
             mediaId,
             attachedAt: Number.isFinite(attachedAt) && attachedAt > 0 ? attachedAt : nowSeconds(),
             expanded,
-            scale
+            scale,
+            x,
+            y
         });
     }
     return out;
@@ -98,7 +117,7 @@ export function attachMediaToNote(item, mediaId) {
     NoteSurface.mutateItem(item, (it) => {
         const list = normalizeAttachments(it.attachments);
         if (list.some((a) => a.mediaId === mediaId)) return;
-        list.push({ mediaId, attachedAt: nowSeconds(), expanded: false, scale: 1 });
+        list.push({ mediaId, attachedAt: nowSeconds(), expanded: false, scale: 1, x: null, y: null });
         it.attachments = list;
         added = true;
     }, { preserveView: true });
@@ -127,10 +146,10 @@ export function detachMediaFromNote(item, mediaId) {
 }
 
 /**
- * Update expand-in-note view state for one attachment (expanded / scale).
+ * Update expand-in-note / canvas view state for one attachment.
  * @param {object} item
  * @param {string} mediaId
- * @param {{ expanded?: boolean, scale?: number }} patch
+ * @param {{ expanded?: boolean, scale?: number, x?: number|null, y?: number|null }} patch
  * @param {{ syncUi?: boolean }} [opts]
  * @returns {boolean}
  */
@@ -145,9 +164,41 @@ export function updateAttachmentView(item, mediaId, patch = {}, { syncUi = true 
         const next = { ...prev };
         if ('expanded' in patch) next.expanded = !!patch.expanded;
         if ('scale' in patch) next.scale = clampAttachScale(patch.scale);
-        if (next.expanded === prev.expanded && next.scale === prev.scale) return;
+        if ('x' in patch) next.x = clampAttachCoord(patch.x);
+        if ('y' in patch) next.y = clampAttachCoord(patch.y);
+        if (
+            next.expanded === prev.expanded
+            && next.scale === prev.scale
+            && next.x === prev.x
+            && next.y === prev.y
+        ) return;
         list[idx] = next;
         it.attachments = list;
+        changed = true;
+    }, { preserveView: true, skipRerender: true });
+    if (changed && syncUi) syncAttachmentsUi(item);
+    return changed;
+}
+
+/**
+ * Collapse all canvas tiles and clear saved positions for a note.
+ * @param {object} item
+ * @param {{ syncUi?: boolean }} [opts]
+ * @returns {boolean}
+ */
+export function resetAttachmentCanvas(item, { syncUi = true } = {}) {
+    if (!item?.id) return false;
+    let changed = false;
+    NoteSurface.mutateItem(item, (it) => {
+        const list = normalizeAttachments(it.attachments);
+        let nextChanged = false;
+        const next = list.map((entry) => {
+            if (!entry.expanded && entry.x == null && entry.y == null) return entry;
+            nextChanged = true;
+            return { ...entry, expanded: false, x: null, y: null };
+        });
+        if (!nextChanged) return;
+        it.attachments = next;
         changed = true;
     }, { preserveView: true, skipRerender: true });
     if (changed && syncUi) syncAttachmentsUi(item);
