@@ -33,6 +33,8 @@ import {
     getPageDimensions,
     switchCanvasMode,
     expandInfiniteBounds,
+    shrinkInfiniteBounds,
+    INFINITE_MIN_SIZE,
     STORAGE_KEY
 } from '../js/canvasDocument.js';
 import { clearCanvasDocuments, getCanvasDocument, setCanvasDocument } from '../js/storage/indexedDbCanvasStore.js';
@@ -142,6 +144,45 @@ describe('canvasDocument', () => {
         expandInfiniteBounds(doc, -200, -300, 400);
         assert.equal(doc.infinite.bounds.minX, 0);
         assert.equal(doc.infinite.bounds.minY, 0);
+    });
+
+    it('shrinkInfiniteBounds fits content and never goes below minimum', () => {
+        const doc = createEmptyDocument('infinite');
+        doc.infinite.bounds = { minX: 0, minY: 0, maxX: 8000, maxY: 9000 };
+        setActiveStrokes(doc, [{
+            id: 's1',
+            tool: 'brush',
+            points: [{ x: 10, y: 20 }, { x: 100, y: 80 }]
+        }]);
+
+        assert.equal(shrinkInfiniteBounds(doc, { margin: 400, minSize: INFINITE_MIN_SIZE }), true);
+        assert.equal(doc.infinite.bounds.minX, 0);
+        assert.equal(doc.infinite.bounds.minY, 0);
+        assert.equal(doc.infinite.bounds.maxX, INFINITE_MIN_SIZE);
+        assert.equal(doc.infinite.bounds.maxY, INFINITE_MIN_SIZE);
+
+        setActiveStrokes(doc, [{
+            id: 's2',
+            tool: 'brush',
+            points: [{ x: 5000, y: 100 }, { x: 5200, y: 200 }]
+        }]);
+        assert.equal(shrinkInfiniteBounds(doc, { margin: 400 }), true);
+        assert.equal(doc.infinite.bounds.maxX, 5600);
+        assert.ok(doc.infinite.bounds.maxY >= INFINITE_MIN_SIZE);
+
+        setActiveStrokes(doc, []);
+        setActiveTexts(doc, []);
+        setActiveImages(doc, []);
+        assert.equal(shrinkInfiniteBounds(doc), true);
+        assert.equal(doc.infinite.bounds.maxX, INFINITE_MIN_SIZE);
+        assert.equal(doc.infinite.bounds.maxY, INFINITE_MIN_SIZE);
+        assert.equal(doc.infinite.bounds.minX, 0);
+        assert.equal(doc.infinite.bounds.minY, 0);
+    });
+
+    it('shrinkInfiniteBounds is a no-op outside infinite mode', () => {
+        const doc = createEmptyDocument('a4');
+        assert.equal(shrinkInfiniteBounds(doc), false);
     });
 
     it('migrateDocument pins legacy negative infinite mins to 0', () => {

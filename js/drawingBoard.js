@@ -9,7 +9,7 @@ import {
     getActiveImages, setActiveImages,
     getActiveBackground, setActiveBackground, getActiveBackgroundColor, setActiveBackgroundColor,
     getPageDimensions, addPage, nextPage, prevPage, switchCanvasMode,
-    expandInfiniteBounds, STORAGE_KEY, createId, CANVAS_MODES, BACKGROUNDS
+    expandInfiniteBounds, shrinkInfiniteBounds, STORAGE_KEY, createId, CANVAS_MODES, BACKGROUNDS
 } from './canvasDocument.js';
 import { BRUSH_STYLES, drawBrushStroke, drawShapeStroke, drawTextObject } from './canvasBrushes.js';
 import { renderBackground } from './canvasBackgrounds.js';
@@ -283,6 +283,7 @@ export const DrawingBoard = {
         CanvasViewport.loadFromDoc(this.doc.viewport);
         CanvasViewport.setHandMode(this.activeTool === 'pan');
         if (this.canvas) this.canvas.dataset.tool = this.activeTool;
+        this.shrinkInfiniteIfNeeded();
         this.renderToolbar();
         this.updateZoomLevel();
         this.resize();
@@ -471,6 +472,41 @@ export const DrawingBoard = {
             this.resize();
             this.scheduleSave();
         }
+    },
+
+    shrinkInfiniteIfNeeded() {
+        if (!this.doc || this.doc.canvasMode !== 'infinite') return false;
+        if (!shrinkInfiniteBounds(this.doc)) return false;
+        this.resize();
+        this.scheduleSave();
+        return true;
+    },
+
+    goToPrevPage() {
+        if (!prevPage(this.doc)) return;
+        this.shrinkInfiniteIfNeeded();
+        this.resize();
+        this.scheduleSave();
+        this.renderToolbar();
+        this.redraw();
+    },
+
+    goToNextPage() {
+        if (!nextPage(this.doc)) return;
+        this.shrinkInfiniteIfNeeded();
+        this.resize();
+        this.scheduleSave();
+        this.renderToolbar();
+        this.redraw();
+    },
+
+    addCanvasPage() {
+        addPage(this.doc);
+        this.shrinkInfiniteIfNeeded();
+        this.resize();
+        this.scheduleSave();
+        this.renderToolbar();
+        this.redraw();
     },
 
     adjustWidth(delta, { refreshMenu = false } = {}) {
@@ -895,6 +931,7 @@ export const DrawingBoard = {
         this.setImages([]);
         setActiveTexts(this.doc, []);
         this.selectedStrokes.clear();
+        this.shrinkInfiniteIfNeeded();
         this.redraw();
         this.scheduleSave();
     },
@@ -1090,18 +1127,15 @@ export const DrawingBoard = {
             return;
         }
         if (id === 'page-prev') {
-            if (prevPage(this.doc)) { this.resize(); this.scheduleSave(); this.renderToolbar(); }
+            this.goToPrevPage();
             return;
         }
         if (id === 'page-next') {
-            if (nextPage(this.doc)) { this.resize(); this.scheduleSave(); this.renderToolbar(); }
+            this.goToNextPage();
             return;
         }
         if (id === 'page-add') {
-            addPage(this.doc);
-            this.resize();
-            this.scheduleSave();
-            this.renderToolbar();
+            this.addCanvasPage();
             return;
         }
         if (FORMAT_ITEMS.some((item) => item.id === id)) {
@@ -1255,18 +1289,9 @@ export const DrawingBoard = {
             });
         });
 
-        q('#draw-page-prev')?.addEventListener('click', () => {
-            if (prevPage(this.doc)) { this.resize(); this.scheduleSave(); this.renderToolbar(); }
-        });
-        q('#draw-page-next')?.addEventListener('click', () => {
-            if (nextPage(this.doc)) { this.resize(); this.scheduleSave(); this.renderToolbar(); }
-        });
-        q('#draw-page-add')?.addEventListener('click', () => {
-            addPage(this.doc);
-            this.resize();
-            this.scheduleSave();
-            this.renderToolbar();
-        });
+        q('#draw-page-prev')?.addEventListener('click', () => this.goToPrevPage());
+        q('#draw-page-next')?.addEventListener('click', () => this.goToNextPage());
+        q('#draw-page-add')?.addEventListener('click', () => this.addCanvasPage());
 
         // Export menu disabled until canvasExport.js is unified with live renderer.
 

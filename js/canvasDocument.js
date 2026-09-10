@@ -302,8 +302,60 @@ export function prevPage(doc) {
     return false;
 }
 
+const INFINITE_MIN_SIZE = 3000;
+const INFINITE_BOUNDS_MARGIN = 400;
+
+function contentBoundsFromActivePage(doc) {
+    var items = []
+        .concat(getActiveStrokes(doc) || [])
+        .concat(getActiveTexts(doc) || [])
+        .concat(getActiveImages(doc) || []);
+    if (!items.length) {
+        return { minX: 0, minY: 0, maxX: 0, maxY: 0, empty: true };
+    }
+
+    var minX = Infinity;
+    var minY = Infinity;
+    var maxX = -Infinity;
+    var maxY = -Infinity;
+
+    items.forEach(function (item) {
+        if (!item) return;
+        if (Array.isArray(item.points) && item.points.length) {
+            item.points.forEach(function (point) {
+                if (!point) return;
+                if (point.x < minX) minX = point.x;
+                if (point.x > maxX) maxX = point.x;
+                if (point.y < minY) minY = point.y;
+                if (point.y > maxY) maxY = point.y;
+            });
+            return;
+        }
+        if (item.x0 != null && item.y0 != null && item.x1 != null && item.y1 != null) {
+            minX = Math.min(minX, item.x0, item.x1);
+            maxX = Math.max(maxX, item.x0, item.x1);
+            minY = Math.min(minY, item.y0, item.y1);
+            maxY = Math.max(maxY, item.y0, item.y1);
+            return;
+        }
+        if (item.x != null && item.y != null) {
+            var w = Number(item.width) || Number(item.fontSize) || 0;
+            var h = Number(item.height) || Number(item.fontSize) || 0;
+            minX = Math.min(minX, item.x);
+            maxX = Math.max(maxX, item.x + w);
+            minY = Math.min(minY, item.y);
+            maxY = Math.max(maxY, item.y + h);
+        }
+    });
+
+    if (minX === Infinity) {
+        return { minX: 0, minY: 0, maxX: 0, maxY: 0, empty: true };
+    }
+    return { minX: minX, minY: minY, maxX: maxX, maxY: maxY, empty: false };
+}
+
 export function expandInfiniteBounds(doc, x, y, margin) {
-    var m = margin || 400;
+    var m = margin == null ? INFINITE_BOUNDS_MARGIN : margin;
     var b = doc.infinite.bounds;
     var prev = { minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY };
     // Top/left are fixed at the origin; only grow right and down.
@@ -314,4 +366,31 @@ export function expandInfiniteBounds(doc, x, y, margin) {
     return b.minX !== prev.minX || b.minY !== prev.minY || b.maxX !== prev.maxX || b.maxY !== prev.maxY;
 }
 
-export { STORAGE_KEY, createId };
+/**
+ * Fit infinite bounds to active-page content (+ margin), never below MIN_SIZE.
+ * Intended for activate / page change / clear — not per-stroke.
+ */
+export function shrinkInfiniteBounds(doc, options) {
+    if (!doc || doc.canvasMode !== 'infinite' || !doc.infinite) return false;
+    var margin = options && options.margin != null ? options.margin : INFINITE_BOUNDS_MARGIN;
+    var minSize = options && options.minSize != null ? options.minSize : INFINITE_MIN_SIZE;
+    if (!doc.infinite.bounds) {
+        doc.infinite.bounds = { minX: 0, minY: 0, maxX: minSize, maxY: minSize };
+    }
+    var b = doc.infinite.bounds;
+    var prev = { minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY };
+    var content = contentBoundsFromActivePage(doc);
+    var nextMaxX = minSize;
+    var nextMaxY = minSize;
+    if (!content.empty) {
+        nextMaxX = Math.max(minSize, content.maxX + margin);
+        nextMaxY = Math.max(minSize, content.maxY + margin);
+    }
+    b.minX = 0;
+    b.minY = 0;
+    b.maxX = nextMaxX;
+    b.maxY = nextMaxY;
+    return b.minX !== prev.minX || b.minY !== prev.minY || b.maxX !== prev.maxX || b.maxY !== prev.maxY;
+}
+
+export { STORAGE_KEY, createId, INFINITE_MIN_SIZE, INFINITE_BOUNDS_MARGIN };
