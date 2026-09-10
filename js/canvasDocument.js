@@ -214,6 +214,55 @@ export function getPageDimensions(doc) {
     return { width: fmt.width, height: fmt.height };
 }
 
+function cloneLayer(value) {
+    return JSON.parse(JSON.stringify(value));
+}
+
+/**
+ * Switch canvas mode while keeping the active drawing visible.
+ * A4/A5/A3 share the same page store; Infinite uses doc.infinite —
+ * this snapshots the active layer and writes it into the destination store.
+ */
+export function switchCanvasMode(doc, mode) {
+    if (!doc || CANVAS_MODES.indexOf(mode) < 0) return false;
+    if (doc.canvasMode === mode) {
+        if (mode !== 'infinite') {
+            var samePage = getActivePage(doc);
+            if (samePage) samePage.format = mode;
+        }
+        return false;
+    }
+
+    var prevMode = doc.canvasMode;
+    var prevDims = getPageDimensions(doc);
+    var payload = {
+        strokes: cloneLayer(getActiveStrokes(doc)),
+        texts: cloneLayer(getActiveTexts(doc)),
+        images: cloneLayer(getActiveImages(doc)),
+        background: getActiveBackground(doc),
+        backgroundColor: getActiveBackgroundColor(doc)
+    };
+
+    doc.canvasMode = mode;
+
+    if (mode !== 'infinite') {
+        var page = getActivePage(doc);
+        if (page) page.format = mode;
+    } else if (prevMode !== 'infinite') {
+        var b = doc.infinite.bounds || { minX: 0, minY: 0, maxX: 3000, maxY: 3000 };
+        b.maxX = Math.max(b.maxX, b.minX + Math.max(3000, prevDims.width));
+        b.maxY = Math.max(b.maxY, b.minY + Math.max(3000, prevDims.height));
+        doc.infinite.bounds = b;
+    }
+
+    setActiveStrokes(doc, payload.strokes);
+    setActiveTexts(doc, payload.texts);
+    setActiveImages(doc, payload.images);
+    setActiveBackground(doc, payload.background);
+    setActiveBackgroundColor(doc, payload.backgroundColor);
+    return true;
+}
+
 export function addPage(doc) {
     var fmt = doc.canvasMode === 'infinite' ? 'a4' : (PAGE_FORMATS[doc.canvasMode] ? doc.canvasMode : 'a4');
     var page = emptyPage(fmt, getActiveBackground(doc), getActiveBackgroundColor(doc));

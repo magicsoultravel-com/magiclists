@@ -50,6 +50,10 @@ export const CanvasViewport = {
         }
         this.scale = scale;
         this.applyTransform();
+        this.viewportEl?.dispatchEvent(new CustomEvent('canvas:zoom', {
+            detail: { scale: this.scale },
+            bubbles: true
+        }));
     },
 
     stepZoom(delta, pivotX, pivotY) {

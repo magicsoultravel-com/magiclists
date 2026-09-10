@@ -8,7 +8,7 @@ import {
     readDocument, writeDocument, getActiveStrokes, getActiveTexts, setActiveStrokes, setActiveTexts,
     getActiveImages, setActiveImages,
     getActiveBackground, setActiveBackground, getActiveBackgroundColor, setActiveBackgroundColor,
-    getPageDimensions, addPage, nextPage, prevPage,
+    getPageDimensions, addPage, nextPage, prevPage, switchCanvasMode,
     expandInfiniteBounds, STORAGE_KEY, createId, CANVAS_MODES, BACKGROUNDS
 } from './canvasDocument.js';
 import { BRUSH_STYLES, drawBrushStroke, drawShapeStroke, drawTextObject } from './canvasBrushes.js';
@@ -246,6 +246,7 @@ export const DrawingBoard = {
         this.bgCtx = this.bgCanvas?.getContext('2d');
 
         CanvasViewport.init(this.innerEl, this.viewportEl);
+        this.viewportEl?.addEventListener('canvas:zoom', () => this.updateZoomLevel());
 
         this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
         this.canvas.addEventListener('pointermove', (e) => this.onPointerMove(e));
@@ -273,6 +274,7 @@ export const DrawingBoard = {
         CanvasViewport.loadFromDoc(this.doc.viewport);
         if (this.canvas) this.canvas.dataset.tool = this.activeTool;
         this.renderToolbar();
+        this.updateZoomLevel();
         this.resize();
         this.redraw();
     },
@@ -885,12 +887,18 @@ export const DrawingBoard = {
 
     setCanvasMode(mode) {
         if (!CANVAS_MODES.includes(mode)) return;
-        this.history.push(this.getSnapshot());
-        this.doc.canvasMode = mode;
-        if (mode !== 'infinite') {
-            const page = this.doc.pages.find((p) => p.id === this.doc.activePageId) || this.doc.pages[0];
-            if (page) page.format = mode;
+        if (this.doc.canvasMode === mode) {
+            if (mode !== 'infinite') {
+                const page = this.doc.pages.find((p) => p.id === this.doc.activePageId) || this.doc.pages[0];
+                if (page) page.format = mode;
+            }
+            this.resize();
+            this.scheduleSave();
+            this.renderToolbar();
+            return;
         }
+        this.history.push(this.getSnapshot());
+        switchCanvasMode(this.doc, mode);
         this.resize();
         this.scheduleSave();
         this.renderToolbar();
@@ -986,14 +994,6 @@ export const DrawingBoard = {
         items.push(...withSel(GRID_BACKGROUNDS));
         items.push({ heading: 'Writing' });
         items.push(...withSel(WRITING_BACKGROUNDS));
-        if (this.doc.canvasMode !== 'infinite') {
-            items.push({ heading: 'Pages' });
-            items.push(
-                { id: 'page-prev', label: 'Previous page', icon: DRAWING_ICONS.pagePrev },
-                { id: 'page-next', label: 'Next page', icon: DRAWING_ICONS.pageNext },
-                { id: 'page-add', label: 'Add page', icon: DRAWING_ICONS.pageAdd }
-            );
-        }
         items.push({ heading: 'Fill' });
         const swatch = this.pageBackgroundSwatch();
         items.push({
@@ -1043,48 +1043,71 @@ export const DrawingBoard = {
         DrawingToolbarMenu.close();
         const brush = this.currentBrush();
         const isPointerActive = this.activeTool === 'pointer';
+        const isInfinite = this.doc.canvasMode === 'infinite';
+        const pageIdx = this.doc.pages.findIndex((p) => p.id === this.doc.activePageId);
+        const pageCount = this.doc.pages.length;
+        const canPrev = !isInfinite && pageIdx > 0;
+        const canNext = !isInfinite && pageIdx >= 0 && pageIdx < pageCount - 1;
 
         this.toolbarEl.innerHTML = `
-            <button type="button" class="btn btn--compact drawing-toolbar-dropdown ${isPointerActive ? 'active' : ''}" id="draw-menu-pointer" aria-haspopup="menu" aria-expanded="false" title="Pointer tools (V)" aria-label="Pointer tools">
-                <span class="drawing-dropdown-icon">${this.pointerTriggerIcon()}</span>
-                <span class="drawing-dropdown-width" id="draw-pointer-width">${brush.width}px</span>
-                <span class="drawing-dropdown-chevron">${CHEVRON}</span>
-            </button>
-            <span class="format-toolbar-sep" aria-hidden="true"></span>
-            <div class="drawing-color-group" id="draw-color-group">
-                <button type="button" class="btn btn--compact btn--icon drawing-color-chip-btn" id="draw-color-btn" title="Color" aria-label="Color" aria-expanded="false" style="--chip-color:${brush.color}">
-                    <span class="drawing-color-chip" style="background:${brush.color}"></span>
+            <div class="drawing-toolbar-row">
+                <button type="button" class="btn btn--compact drawing-toolbar-dropdown ${isPointerActive ? 'active' : ''}" id="draw-menu-pointer" aria-haspopup="menu" aria-expanded="false" title="Pointer tools (V)" aria-label="Pointer tools">
+                    <span class="drawing-dropdown-icon">${this.pointerTriggerIcon()}</span>
+                    <span class="drawing-dropdown-width" id="draw-pointer-width">${brush.width}px</span>
+                    <span class="drawing-dropdown-chevron">${CHEVRON}</span>
                 </button>
-                <div class="drawing-color-rollout" id="draw-color-rollout" aria-hidden="true"></div>
+                <span class="format-toolbar-sep" aria-hidden="true"></span>
+                <div class="drawing-color-group" id="draw-color-group">
+                    <button type="button" class="btn btn--compact btn--icon drawing-color-chip-btn" id="draw-color-btn" title="Color" aria-label="Color" aria-expanded="false" style="--chip-color:${brush.color}">
+                        <span class="drawing-color-chip" style="background:${brush.color}"></span>
+                    </button>
+                    <div class="drawing-color-rollout" id="draw-color-rollout" aria-hidden="true"></div>
+                </div>
+                <span class="format-toolbar-sep" aria-hidden="true"></span>
+                <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-shapes" aria-haspopup="menu" aria-expanded="false" title="Shapes" aria-label="Shapes">
+                    <span class="drawing-dropdown-icon">${this.shapeTriggerIcon()}</span>
+                    <span class="drawing-dropdown-chevron">${CHEVRON}</span>
+                </button>
+                <button type="button" class="btn btn--compact btn--icon" id="draw-insert-image" title="Insert image" aria-label="Insert image" aria-haspopup="menu">${DRAWING_ICONS.image}</button>
+                <button type="button" class="btn btn--compact btn--icon" id="draw-lasso" title="Rectangle select (L)" aria-label="Rectangle select" ${this.isLassoActive ? 'aria-pressed="true"' : ''}>${DRAWING_ICONS.lasso}</button>
+                <button type="button" class="btn btn--compact btn--icon" id="draw-display-options" title="Display options" aria-label="Display options" aria-expanded="false" aria-haspopup="menu">${ACTION_ICONS.displayOptions}</button>
+                <button type="button" class="btn btn--compact btn--icon" id="draw-fullscreen" title="Full screen" aria-label="Full screen" aria-pressed="false">${ACTION_ICONS.fullscreenEnter}</button>
+                <span class="format-toolbar-sep" aria-hidden="true"></span>
+                <button type="button" class="btn btn--compact btn--icon" id="draw-zoom-out" title="Zoom out" aria-label="Zoom out">${DRAWING_ICONS.zoomOut}</button>
+                <span class="drawing-zoom-level" id="draw-zoom-level" title="Zoom level" aria-label="Zoom level">100%</span>
+                <button type="button" class="btn btn--compact btn--icon" id="draw-zoom-in" title="Zoom in" aria-label="Zoom in">${DRAWING_ICONS.zoomIn}</button>
+                <span class="format-toolbar-sep" aria-hidden="true"></span>
+                <button type="button" class="btn btn--compact btn--icon" id="draw-undo" title="Undo" aria-label="Undo" ${this.history.canUndo ? '' : 'disabled'}>${ACTION_ICONS.undo}</button>
+                <button type="button" class="btn btn--compact btn--icon" id="draw-redo" title="Redo" aria-label="Redo" ${this.history.canRedo ? '' : 'disabled'}>${ACTION_ICONS.redo}</button>
+                <button type="button" class="btn btn--compact btn--icon" id="draw-clear" title="Clear" aria-label="Clear">${ACTION_ICONS.layoutReset}</button>
+                <button type="button" class="btn btn--compact btn--icon" id="draw-toolbar-hide" title="Hide toolbar" aria-label="Hide toolbar">${ACTION_ICONS.collapseAll}</button>
+                <button type="button" class="btn btn--compact btn--icon" id="draw-exit-drawing" title="Exit drawing mode" aria-label="Exit drawing mode">${ACTION_ICONS.viewFree}</button>
             </div>
-            <span class="format-toolbar-sep" aria-hidden="true"></span>
-            <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-shapes" aria-haspopup="menu" aria-expanded="false" title="Shapes" aria-label="Shapes">
-                <span class="drawing-dropdown-icon">${this.shapeTriggerIcon()}</span>
-                <span class="drawing-dropdown-chevron">${CHEVRON}</span>
-            </button>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-insert-image" title="Insert image" aria-label="Insert image" aria-haspopup="menu">${DRAWING_ICONS.image}</button>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-lasso" title="Rectangle select (L)" aria-label="Rectangle select" ${this.isLassoActive ? 'aria-pressed="true"' : ''}>${DRAWING_ICONS.lasso}</button>
-            <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-canvas" aria-haspopup="menu" aria-expanded="false" title="Canvas settings" aria-label="Canvas settings">
-                <span class="drawing-dropdown-label">Canvas</span>
-                <span class="drawing-dropdown-chevron">${CHEVRON}</span>
-            </button>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-display-options" title="Display options" aria-label="Display options" aria-expanded="false" aria-haspopup="menu">${ACTION_ICONS.displayOptions}</button>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-fullscreen" title="Full screen" aria-label="Full screen" aria-pressed="false">${ACTION_ICONS.fullscreenEnter}</button>
-            <span class="format-toolbar-sep" aria-hidden="true"></span>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-zoom-out" title="Zoom out" aria-label="Zoom out">${DRAWING_ICONS.zoomOut}</button>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-zoom-in" title="Zoom in" aria-label="Zoom in">${DRAWING_ICONS.zoomIn}</button>
-            <span class="format-toolbar-sep" aria-hidden="true"></span>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-undo" title="Undo" aria-label="Undo" ${this.history.canUndo ? '' : 'disabled'}>${ACTION_ICONS.undo}</button>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-redo" title="Redo" aria-label="Redo" ${this.history.canRedo ? '' : 'disabled'}>${ACTION_ICONS.redo}</button>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-clear" title="Clear" aria-label="Clear">${ACTION_ICONS.layoutReset}</button>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-toolbar-hide" title="Hide toolbar" aria-label="Hide toolbar">${ACTION_ICONS.collapseAll}</button>
-            <button type="button" class="btn btn--compact btn--icon" id="draw-exit-drawing" title="Exit drawing mode" aria-label="Exit drawing mode">${ACTION_ICONS.viewFree}</button>
+            <div class="drawing-toolbar-row drawing-toolbar-row--meta">
+                <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-canvas" aria-haspopup="menu" aria-expanded="false" title="Canvas settings" aria-label="Canvas settings">
+                    <span class="drawing-dropdown-label">Canvas</span>
+                    <span class="drawing-dropdown-chevron">${CHEVRON}</span>
+                </button>
+                <span class="drawing-page-nav${isInfinite ? ' is-hidden' : ''}" ${isInfinite ? 'aria-hidden="true"' : ''} aria-label="Page navigation">
+                    <button type="button" class="btn btn--compact btn--icon" id="draw-page-prev" title="Previous page" aria-label="Previous page" ${canPrev ? '' : 'disabled'}>${DRAWING_ICONS.pagePrev}</button>
+                    <span class="drawing-page-label" id="draw-page-label" title="Current page">${this.pageLabel()}</span>
+                    <button type="button" class="btn btn--compact btn--icon" id="draw-page-next" title="Next page" aria-label="Next page" ${canNext ? '' : 'disabled'}>${DRAWING_ICONS.pageNext}</button>
+                    <button type="button" class="btn btn--compact btn--icon" id="draw-page-add" title="Add page" aria-label="Add page">${DRAWING_ICONS.pageAdd}</button>
+                </span>
+            </div>
         `;
         this.bindToolbar();
+        this.updateZoomLevel();
         if (wasColorOpen) {
             const btn = this.toolbarEl.querySelector('#draw-color-btn');
             if (btn) this.toggleColorRollout(btn);
         }
+    },
+
+    updateZoomLevel() {
+        const el = this.toolbarEl?.querySelector('#draw-zoom-level');
+        if (!el) return;
+        el.textContent = `${Math.round(CanvasViewport.scale * 100)}%`;
     },
 
     bindToolbar() {
@@ -1143,6 +1166,19 @@ export const DrawingBoard = {
                 items: this.canvasMenuItems(),
                 onSelect: (id) => this.handleCanvasMenu(id, anchor)
             });
+        });
+
+        q('#draw-page-prev')?.addEventListener('click', () => {
+            if (prevPage(this.doc)) { this.resize(); this.scheduleSave(); this.renderToolbar(); }
+        });
+        q('#draw-page-next')?.addEventListener('click', () => {
+            if (nextPage(this.doc)) { this.resize(); this.scheduleSave(); this.renderToolbar(); }
+        });
+        q('#draw-page-add')?.addEventListener('click', () => {
+            addPage(this.doc);
+            this.resize();
+            this.scheduleSave();
+            this.renderToolbar();
         });
 
         // Export menu disabled until canvasExport.js is unified with live renderer.

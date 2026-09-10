@@ -28,7 +28,10 @@ import {
     setActiveTexts,
     getActiveImages,
     setActiveImages,
+    getActiveBackground,
+    setActiveBackground,
     getPageDimensions,
+    switchCanvasMode,
     STORAGE_KEY
 } from '../js/canvasDocument.js';
 import { clearCanvasDocuments, getCanvasDocument, setCanvasDocument } from '../js/storage/indexedDbCanvasStore.js';
@@ -116,6 +119,28 @@ describe('canvasDocument', () => {
         const dims = getPageDimensions(doc);
         assert.ok(dims.width >= 800);
         assert.ok(dims.height >= 600);
+    });
+
+    it('switchCanvasMode keeps active strokes when moving a4 ↔ infinite', () => {
+        const doc = createEmptyDocument('a4');
+        const strokes = [{ id: 's1', tool: 'brush', points: [{ x: 10, y: 20 }] }];
+        const texts = [{ id: 't1', tool: 'text', x: 1, y: 2, text: 'hi' }];
+        setActiveStrokes(doc, strokes);
+        setActiveTexts(doc, texts);
+        setActiveBackground(doc, 'grid');
+
+        assert.equal(switchCanvasMode(doc, 'infinite'), true);
+        assert.equal(doc.canvasMode, 'infinite');
+        assert.deepEqual(getActiveStrokes(doc), strokes);
+        assert.deepEqual(getActiveTexts(doc), texts);
+        assert.equal(getActiveBackground(doc), 'grid');
+
+        assert.equal(switchCanvasMode(doc, 'a4'), true);
+        assert.equal(doc.canvasMode, 'a4');
+        assert.deepEqual(getActiveStrokes(doc), strokes);
+        assert.deepEqual(getActiveTexts(doc), texts);
+        assert.equal(getActiveBackground(doc), 'grid');
+        assert.equal(doc.pages[0].format, 'a4');
     });
 
     it('legacy localStorage drawing is migrated to IndexedDB on read', async () => {
