@@ -43,7 +43,8 @@ export const CARD_ICONS = {
     minus: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 6h7.6" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round"/></svg>',
     zoomReset: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M6 2.4a3.4 3.4 0 1 0 2.1 6.1L7.1 9.4" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.1 7.2 7.1 9.2 9.1 7.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     expandMedia: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2.2 4.2V2.2h2M9.8 4.2V2.2h-2M2.2 7.8v2h2M9.8 7.8v2h-2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    collapseMedia: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M4.2 2.2V4.2h-2M7.8 2.2V4.2h2M4.2 9.8V7.8h-2M7.8 9.8V7.8h2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+    collapseMedia: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M4.2 2.2V4.2h-2M7.8 2.2V4.2h2M4.2 9.8V7.8h-2M7.8 9.8V7.8h2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    drawingPencil: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M8.4 1.4 10.6 3.6 4.8 9.4 2.2 9.8l.4-2.6 5.8-5.8z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M7.2 2.6 9.4 4.8" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linecap="round"/></svg>'
 };
 
 export const FORMAT_ICONS = {

@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-08-26T14:20:54.570Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-09-10T22:45:16.796Z
 
 ## CSS load order
 
@@ -39,14 +39,16 @@ alwaysApply: true
 
 | file | owns | related | events | notes |
 | --- | --- | --- | --- | --- |
-| js/api.js | item CRUD and matrix_database localStorage persistence | noteModel.js, layoutStorage.js | — | — |
+| js/api.js | item CRUD and matrix_database localStorage persistence | noteModel.js, layoutStorage.js, sync.js | — | — |
 | js/app.js | application orchestration, event bus listeners, workspace init | api.js, ui.js, layoutStorage.js | item:mutation_requested, item:selected_for_edit, board:visibility_changed, calendar:add_note | — |
 | js/appDocuments.js | multi-document element lookup for module popouts | sidebarModulePopout.js, sidebarModules.js | — | — |
 | js/backup.js | local backup export/import, encrypted packages | cloudBackup.js, api.js | — | — |
+| js/backupClaim.js | cross-tab scheduled-backup claim/lease coordination | scheduledBackup.js, backup.js, mediaBackup.js | — | — |
 | js/board/gridEngine.js | grid board layout engine, push resolution | board/noteGeometry.js, layoutStorage.js, gridDensity.js | — | — |
 | js/board/noteGeometry.js | grid note geometry, push layout, tile bounds | board/gridEngine.js, tileGeometry.js | — | — |
 | js/boardOperations.js | item visibility, archiving, calendar integration, card actions | noteSurface.js, noteQuickActions.js, desktopManager.js | — | — |
 | js/boardRulers.js | board px rulers chrome | displayOptions.js, desktopZoom.js, fileCabinet.js | — | — |
+| js/canvasImages.js | magicCanvas image cache and draw helpers | mediaLibrary.js, drawingBoard.js, canvasDocument.js | — | — |
 | js/checklistSteps.js | checklist tree logic, step reorder, indent/outdent | noteSurface.js, noteBodyConversion.js | — | — |
 | js/cloud/cloudProvider.js | cloud provider registry and factory dispatch | cloudBackup.js, cloud/megaProvider.js, cloud/localFolderProvider.js | — | — |
 | js/cloudBackup.js | cloud backup UI, MEGA and local-folder sync | backup.js, cloud/cloudProvider.js, cloud/megaProvider.js, cloud/localFolderProvider.js | — | — |
@@ -61,18 +63,20 @@ alwaysApply: true
 | js/icons.js | CARD_ICONS, ACTION_ICONS, FORMAT_ICONS, DRAWING_ICONS SVG constants | ui.js | — | — |
 | js/itemMerge.js | shared merge helper for undo/redo restore (preserves note metadata) | undo.js, app.js | — | — |
 | js/lassoGeometry.js | lasso geometry utilities - ray casting, bounding boxes | drawingBoard.js | — | — |
-| js/layoutStorage.js | board layout persistence, grid/freeform positions, storage migrations | dragdrop.js, ui.js, fileCabinet.js, board/gridEngine.js | — | — |
+| js/layoutStorage.js | board layout persistence, grid/freeform positions, storage migrations | dragdrop.js, ui.js, fileCabinet.js, board/gridEngine.js, sync.js | — | — |
 | js/mediaAttachments.js | note↔media attachment helpers | mediaLibrary.js, noteSurface.js, mediaLibraryOverlay.js | — | — |
 | js/mediaBackup.js | media library backup export/import (meta JSON, embeds, ZIP) | mediaLibrary.js, backup.js | — | — |
 | js/mediaLibrary.js | media library CRUD, thumbs, size limits | storage/indexedDbMediaStore.js, mediaMetadata.js, mediaBackup.js | — | — |
 | js/mediaLibraryOverlay.js | media library overlay gallery browser | mediaLibrary.js, mediaStagingDialog.js, noteQuickActions.js, mediaAttachments.js | — | — |
 | js/mediaMetadata.js | media file metadata and EXIF extraction | mediaLibrary.js | — | — |
-| js/mediaPasteCatcher.js | global clipboard paste catcher for media staging | mediaStagingDialog.js | — | — |
+| js/mediaPasteCatcher.js | global clipboard paste catcher for media staging | mediaStagingDialog.js, notePasteContext.js | — | — |
 | js/mediaQuickActions.js | shared media hover quick actions | mediaLibrary.js, noteAttachmentsUi.js, mediaLibraryOverlay.js | — | — |
-| js/mediaStagingDialog.js | media staging upload dialogue before library commit | mediaLibrary.js, mediaPasteCatcher.js, mediaLibraryOverlay.js | — | — |
+| js/mediaStagingDialog.js | media staging upload dialogue before library commit | mediaLibrary.js, mediaPasteCatcher.js, mediaLibraryOverlay.js, notePasteContext.js, mediaAttachments.js | — | — |
 | js/noteAttachmentsUi.js | note card attached-media section HTML and hydrate | mediaAttachments.js, mediaLibrary.js, noteSurfaceHtml.js, mediaLibraryOverlay.js, mediaQuickActions.js | — | — |
 | js/noteBodyConversion.js | checklist/content conversion, plain copy text | noteSurface.js, checklistSteps.js, richText.js | — | — |
+| js/noteCanvasRenderer.js | inline note canvas rendering from item.canvas | noteAttachmentsUi.js, drawingBoard.js, canvasDocument.js | — | — |
 | js/noteModel.js | note item schema, normalizeItemForSave, createNoteId | richText.js, sheet.js | — | — |
+| js/notePasteContext.js | note paste target resolution for clipboard media attach | mediaPasteCatcher.js, mediaStagingDialog.js, mediaAttachments.js | — | — |
 | js/notePopoutBridge.js | note popout window open/focus, edit claims, BroadcastChannel sync | popoutNote.js, app.js, noteQuickActions.js, popoutWindows.js | — | — |
 | js/noteQuickActions.js | board + modal note quick-action DOM binding | noteSurface.js, ui.js, editor.js | — | — |
 | js/noteSurface.js | note card DOM, inline edit, checklist interactions, item mutations | checklistSteps.js, richText.js, sheet.js, noteBodyConversion.js, noteQuickActions.js, noteSurfaceHtml.js, noteSurfaceEditing.js, noteSurfaceChecklist.js | item:mutation_requested | — |
@@ -97,6 +101,7 @@ alwaysApply: true
 | js/sidebarTv.js | sidebar TV player and channel browser | tvPlayer.js, tvProviders/registry.js, tvPopover.js, sidebarModules.js | tv:state_changed | — |
 | js/sidebarUndock.js | shared undock/drag/clamp for sidebar panels | desktopStack.js, popoverPosition.js, sidebarPrefs.js | — | — |
 | js/sidebarWeather.js | sidebar weather glance and forecast panel | weatherApi.js, weatherProviders/registry.js, sidebarModules.js | — | — |
+| js/sync.js | cross-tab state sync — BroadcastChannel primary, storage-event insurance | app.js, api.js, layoutStorage.js, displayOptions.js, appTheme.js, popoutNote.js | — | — |
 | js/toolPanelPopout.js | tool panel popout open/focus/pop-in, DOM portal | toolPanelChrome.js, toolsManager.js, popoutWindows.js, appDocuments.js | — | — |
 
 ## Tools (@tool)

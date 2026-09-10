@@ -221,6 +221,11 @@ export const DrawingBoard = {
     resizeStart: null,
     hoverHandle: null,
 
+    // Note-canvas mode state
+    activeNoteId: null,
+    isNoteCanvasMode: false,
+    noteCanvasItem: null,
+
     init(app) {
         this.app = app;
         this.boardEl = document.getElementById('drawing-board');
@@ -274,6 +279,9 @@ export const DrawingBoard = {
         this.prefs = readPrefs();
         this.activeTool = this.prefs.activeTool;
         this.activeStyle = this.prefs.activeStyle;
+        this.isNoteCanvasMode = false;
+        this.activeNoteId = null;
+        this.noteCanvasItem = null;
 
         if (this.brandEl) this.brandEl.textContent = 'magicCanvas';
 
@@ -288,6 +296,46 @@ export const DrawingBoard = {
         this.updateZoomLevel();
         this.resize();
         this.redraw();
+    },
+
+    async activateForNote(item) {
+        if (!item?.id) return;
+        const { normalizeNoteCanvas } = await import('./noteModel.js');
+        this.active = true;
+        this.isNoteCanvasMode = true;
+        this.activeNoteId = item.id;
+        this.noteCanvasItem = item;
+        this.doc = normalizeNoteCanvas(item.canvas);
+        this.prefs = readPrefs();
+        this.activeTool = this.prefs.activeTool;
+        this.activeStyle = this.prefs.activeStyle;
+
+        DrawingToolbarChrome.show();
+        this.toolbarEl = DrawingToolbarChrome.getToolbarMount();
+
+        const title = item.title || 'Note';
+        if (this.brandEl) this.brandEl.textContent = `magicCanvas: ${title}`;
+
+        this.boardEl.classList.remove('is-hidden');
+        this.boardEl.setAttribute('aria-hidden', 'false');
+
+        CanvasViewport.loadFromDoc(this.doc.viewport || { scale: 1, offsetX: 0, offsetY: 0 });
+        CanvasViewport.setHandMode(this.activeTool === 'pan');
+        if (this.canvas) this.canvas.dataset.tool = this.activeTool;
+        this.shrinkInfiniteIfNeeded();
+        this.renderToolbar();
+        this.updateZoomLevel();
+        this.resize();
+        this.redraw();
+    },
+
+    async exitNoteCanvas() {
+        if (!this.isNoteCanvasMode) return;
+        const item = this.noteCanvasItem;
+        await this.deactivate();
+        if (!item) return;
+        // Notify the app to return focus to the board and re-render the note card.
+        window.dispatchEvent(new CustomEvent('note:canvas_draw_exited', { detail: { item } }));
     },
 
     async deactivate() {
@@ -309,6 +357,9 @@ export const DrawingBoard = {
         this.hoverHandle = null;
         CanvasViewport.setHandMode(false);
         clearImageCache();
+        this.isNoteCanvasMode = false;
+        this.activeNoteId = null;
+        this.noteCanvasItem = null;
     },
 
     hideToolbar() {
@@ -944,6 +995,15 @@ export const DrawingBoard = {
     async flushSave() {
         clearTimeout(this.saveTimer);
         this.doc.viewport = CanvasViewport.toDoc();
+        if (this.isNoteCanvasMode && this.noteCanvasItem) {
+            const item = this.noteCanvasItem;
+            const doc = JSON.parse(JSON.stringify(this.doc));
+            const { mutateItem } = await import('./noteSurfaceMutations.js');
+            mutateItem(item, (it) => {
+                it.canvas = doc;
+            }, { preserveView: true, skipRerender: true });
+            return;
+        }
         await writeDocument(this.doc);
     },
 
@@ -1159,6 +1219,9 @@ export const DrawingBoard = {
         const pageCount = this.doc.pages.length;
         const canPrev = pageIdx > 0;
         const canNext = pageIdx >= 0 && pageIdx < pageCount - 1;
+        const exitBtn = this.isNoteCanvasMode
+            ? `<button type="button" class="btn btn--compact btn--icon" id="draw-back-to-note" title="Back to note" aria-label="Back to note">${ACTION_ICONS.viewFree}</button>`
+            : `<button type="button" class="btn btn--compact btn--icon" id="draw-exit-drawing" title="Exit drawing mode" aria-label="Exit drawing mode">${ACTION_ICONS.viewFree}</button>`;
 
         this.toolbarEl.innerHTML = `
             <div class="drawing-toolbar-row">
@@ -1193,7 +1256,7 @@ export const DrawingBoard = {
                 <button type="button" class="btn btn--compact btn--icon" id="draw-redo" title="Redo" aria-label="Redo" ${this.history.canRedo ? '' : 'disabled'}>${ACTION_ICONS.redo}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-clear" title="Clear" aria-label="Clear">${ACTION_ICONS.layoutReset}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-toolbar-hide" title="Hide toolbar" aria-label="Hide toolbar">${ACTION_ICONS.collapseAll}</button>
-                <button type="button" class="btn btn--compact btn--icon" id="draw-exit-drawing" title="Exit drawing mode" aria-label="Exit drawing mode">${ACTION_ICONS.viewFree}</button>
+                ${exitBtn}
             </div>
             <div class="drawing-toolbar-row drawing-toolbar-row--meta">
                 <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-canvas" aria-haspopup="menu" aria-expanded="false" title="Canvas settings" aria-label="Canvas settings">
@@ -1229,6 +1292,7 @@ export const DrawingBoard = {
 
         q('#draw-toolbar-hide')?.addEventListener('click', () => { ColorPicker.close(); this.colorRolloutOpen = false; this.hideToolbar(); });
         q('#draw-exit-drawing')?.addEventListener('click', () => { this.app.switchWorkspaceMode('notes'); });
+        q('#draw-back-to-note')?.addEventListener('click', () => { this.exitNoteCanvas(); });
         q('#draw-undo')?.addEventListener('click', () => this.undo());
         q('#draw-redo')?.addEventListener('click', () => this.redo());
         q('#draw-clear')?.addEventListener('click', () => this.clearAll());

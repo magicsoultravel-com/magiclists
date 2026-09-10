@@ -3,7 +3,7 @@ import { DEFAULT_CATEGORIES, detectDuplicateCategories, dedupeCategories, normal
 import { purgeLayoutForItem } from './layoutStorage.js';
 import { broadcastStateChange } from './sync.js';
 import { normalizeTileSize } from './tileGeometry.js';
-import { createNoteId, ensureStepIds, ensureStepLevels, getCreatedTimestamp, getUpdatedTimestamp } from './noteModel.js';
+import { createNoteId, ensureStepIds, ensureStepLevels, getCreatedTimestamp, getUpdatedTimestamp, normalizeNoteCanvas } from './noteModel.js';
 import { ensureStepsParentOrder } from './checklistSteps.js';
 
 function normalizeItemTileSize(tileSize) {
@@ -46,7 +46,8 @@ const SCHEMA_CORE_DEFAULTS = {
     isRecurring: false,
     hideFromCalendar: false,
     hiddenFromBoard: false,
-    attachments: []
+    attachments: [],
+    canvas: null
 };
 
 function itemStepIdSet(item) {
@@ -261,6 +262,13 @@ function runDatabaseRepair(db) {
             itemChanged = true;
         }
 
+        // Normalize note canvas to a valid canvasDocument v2 document.
+        // Non-destructive: missing/invalid values become an empty canvas.
+        const nextCanvas = normalizeNoteCanvas(base.canvas);
+        if (nextCanvas !== base.canvas) {
+            itemChanged = true;
+        }
+
         if (!itemChanged
             && base.tileSize === tileSize
             && base.created_at === createdAt
@@ -275,6 +283,7 @@ function runDatabaseRepair(db) {
         const next = { ...base };
         if (nextSteps !== base.steps) next.steps = nextSteps;
         if (nextEditorBodyLayout !== base.editorBodyLayout) next.editorBodyLayout = nextEditorBodyLayout;
+        if (nextCanvas !== base.canvas) next.canvas = nextCanvas;
         if (base.tileSize !== tileSize) next.tileSize = tileSize;
         if (base.created_at !== createdAt) next.created_at = createdAt;
         if (base.updated_at !== updatedAt) next.updated_at = updatedAt;

@@ -3,32 +3,32 @@ import { escapeAttr, escapeHTML } from './domEscape.js';
 import { CARD_ICONS } from './icons.js';
 import { getMediaMeta, getObjectUrl, releaseObjectUrl } from './mediaLibrary.js';
 import {
-    ATTACH_SCALE_DEFAULT,
-    ATTACH_SCALE_MAX,
-    ATTACH_SCALE_MIN,
-    clampAttachCoord,
-    clampAttachScale,
     detachMediaFromNote,
-    normalizeAttachments,
-    resetAttachmentCanvas,
-    stepAttachScale,
-    updateAttachmentView
+    normalizeAttachments
 } from './mediaAttachments.js';
 import { buildMediaQuickActionsHtml, bindMediaQuickActions, viewMediaFullSize } from './mediaQuickActions.js';
 import { showAppToast } from './toast.js';
+import { createEmptyNoteCanvas } from './noteModel.js';
+import { renderNoteCanvas, refreshNoteCanvasPreview } from './noteCanvasRenderer.js';
+import { initialImageSize } from './canvasImages.js';
+import { mutateItem } from './noteSurfaceMutations.js';
 
-const CANVAS_PAD = 12;
 const CASCADE_STEP = 18;
-const TILE_WIDTH_FRAC = 0.42;
-const TILE_WIDTH_MIN = 96;
+const CANVAS_PAD = 24;
+
+function noteHasVisibleCanvas(item) {
+    return !!(item?.canvas && !item?.canvasHidden);
+}
+
+function paintNoteCanvasPreview(section, item) {
+    if (!section || !noteHasVisibleCanvas(item)) return;
+    sizeCanvasViewport(section);
+    refreshNoteCanvasPreview(section, item);
+}
 
 async function openMediaLibrary(opts) {
     const { MediaLibraryOverlay } = await import('./mediaLibraryOverlay.js');
     return MediaLibraryOverlay.open(opts);
-}
-
-function attachmentEntry(item, mediaId) {
-    return normalizeAttachments(item?.attachments).find((a) => a.mediaId === mediaId) || null;
 }
 
 function canvasRoot(section) {
@@ -39,8 +39,74 @@ function canvasViewport(section) {
     return canvasRoot(section)?.querySelector?.('[data-note-media-viewport]') || null;
 }
 
-function canvasSurface(section) {
-    return canvasRoot(section)?.querySelector?.('[data-note-media-surface]') || null;
+function canvasPreview(section) {
+    return canvasRoot(section)?.querySelector?.('[data-note-canvas-preview]') || null;
+}
+
+function ensureNoteCanvas(item) {
+    if (item?.canvas) return item.canvas;
+    const doc = createEmptyNoteCanvas();
+    mutateItem(item, (it) => {
+        it.canvas = doc;
+        it.canvasHidden = false;
+    }, { preserveView: true, skipRerender: true });
+    return doc;
+}
+
+function getNoteCanvasLayer(item) {
+    if (!item?.canvas) return null;
+    return item.canvas.pages?.find((p) => p.id === item.canvas.activePageId) || null;
+}
+
+function getNoteCanvasImages(item) {
+    const layer = getNoteCanvasLayer(item);
+    if (!layer) return [];
+    if (!Array.isArray(layer.images)) layer.images = [];
+    return layer.images;
+}
+
+function setNoteCanvasImages(item, images) {
+    const layer = getNoteCanvasLayer(item);
+    if (!layer) return;
+    layer.images = images;
+}
+
+function imageIsInNoteCanvas(item, mediaId) {
+    return getNoteCanvasImages(item).some((img) => img.mediaId === mediaId);
+}
+
+function removeMediaImageFromNoteCanvas(item, mediaId) {
+    const images = getNoteCanvasImages(item);
+    const next = images.filter((img) => img.mediaId !== mediaId);
+    if (next.length !== images.length) {
+        setNoteCanvasImages(item, next);
+    }
+}
+
+async function addMediaImageToNoteCanvas(item, mediaId) {
+    const doc = ensureNoteCanvas(item);
+    const images = getNoteCanvasImages(item);
+    if (images.some((img) => img.mediaId === mediaId)) return null;
+
+    const img = await (await import('./canvasImages.js')).loadImage(mediaId);
+    if (!img) return null;
+
+    const size = initialImageSize(img.naturalWidth, img.naturalHeight);
+    const cascade = defaultCascadePos(item, mediaId);
+
+    const imageObj = {
+        id: `img_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        tool: 'image',
+        mediaId,
+        x: cascade.x,
+        y: cascade.y,
+        width: size.width,
+        height: size.height,
+        naturalWidth: img.naturalWidth,
+        naturalHeight: img.naturalHeight
+    };
+    images.push(imageObj);
+    return imageObj;
 }
 
 function releaseAttachmentRowUrls(row) {
@@ -66,81 +132,20 @@ function releaseSectionUrls(section) {
     section.querySelectorAll('.note-attachment[data-media-id]').forEach((row) => {
         releaseAttachmentRowUrls(row);
     });
-    section.querySelectorAll('.note-media-canvas__tile[data-media-id]').forEach((tile) => {
-        releaseCanvasTileUrls(tile);
-    });
 }
 
-function nextCanvasZ(surface) {
-    const cur = Number(surface.dataset.zTop || 1);
-    const next = (Number.isFinite(cur) ? cur : 1) + 1;
-    surface.dataset.zTop = String(next);
-    return next;
-}
-
-function bringTileToFront(tile) {
-    const surface = tile?.closest?.('[data-note-media-surface]');
-    if (!tile || !surface) return;
-    tile.style.zIndex = String(nextCanvasZ(surface));
-}
-
-function baseTileWidthPx(viewport) {
-    const w = viewport?.clientWidth || 200;
-    return Math.max(TILE_WIDTH_MIN, Math.round(w * TILE_WIDTH_FRAC));
-}
-
-function applyTileScale(tile, scale, viewport) {
-    if (!tile) return;
-    const s = clampAttachScale(scale);
-    tile.dataset.attachScale = String(s);
-    tile.style.width = `${Math.round(baseTileWidthPx(viewport) * s)}px`;
-    syncZoomButtonState(tile, s);
-}
-
-function syncZoomButtonState(host, scale) {
-    if (!host) return;
-    const s = clampAttachScale(scale);
-    const outBtn = host.querySelector('[data-attach-zoom-out]');
-    const resetBtn = host.querySelector('[data-attach-zoom-reset]');
-    const inBtn = host.querySelector('[data-attach-zoom-in]');
-    if (outBtn) outBtn.disabled = s <= ATTACH_SCALE_MIN;
-    if (resetBtn) resetBtn.disabled = s === ATTACH_SCALE_DEFAULT;
-    if (inBtn) inBtn.disabled = s >= ATTACH_SCALE_MAX;
-}
-
-function setTilePosition(tile, x, y) {
-    const px = clampAttachCoord(x) ?? 0;
-    const py = clampAttachCoord(y) ?? 0;
-    tile.style.left = `${px}px`;
-    tile.style.top = `${py}px`;
-    tile.dataset.attachX = String(px);
-    tile.dataset.attachY = String(py);
-}
-
-function syncCanvasExtents(section) {
-    const viewport = canvasViewport(section);
-    const surface = canvasSurface(section);
-    if (!viewport || !surface) return;
-    const tiles = surface.querySelectorAll('.note-media-canvas__tile');
-    let maxR = viewport.clientWidth;
-    let maxB = viewport.clientHeight;
-    tiles.forEach((tile) => {
-        const x = Number(tile.dataset.attachX || 0);
-        const y = Number(tile.dataset.attachY || 0);
-        maxR = Math.max(maxR, x + tile.offsetWidth + CANVAS_PAD);
-        maxB = Math.max(maxB, y + tile.offsetHeight + CANVAS_PAD);
-    });
-    surface.style.width = `${Math.round(maxR)}px`;
-    surface.style.height = `${Math.round(maxB)}px`;
-}
-
-function updateCanvasVisibility(section) {
+function showNoteMediaCanvas(section) {
     const root = canvasRoot(section);
     if (!root) return;
-    const count = root.querySelectorAll('.note-media-canvas__tile').length;
-    root.classList.toggle('is-hidden', count === 0);
-    root.hidden = count === 0;
-    if (count > 0) syncCanvasExtents(section);
+    root.classList.remove('is-hidden');
+    root.hidden = false;
+}
+
+function hideNoteMediaCanvas(section) {
+    const root = canvasRoot(section);
+    if (!root) return;
+    root.classList.add('is-hidden');
+    root.hidden = true;
 }
 
 function sizeCanvasViewport(section) {
@@ -179,123 +184,26 @@ function setExpandButtonState(expandBtn, expanded) {
     expandBtn.setAttribute('aria-pressed', 'false');
 }
 
-function bindTileDrag(tile, item, mediaId, section) {
-    if (!tile || tile.dataset.dragBound === '1') return;
-    tile.dataset.dragBound = '1';
-
-    let dragging = false;
-    let startX = 0;
-    let startY = 0;
-    let originX = 0;
-    let originY = 0;
-
-    tile.addEventListener('pointerdown', (e) => {
-        if (e.button !== 0) return;
-        bringTileToFront(tile);
-        if (e.target.closest('.note-attachment__zoom, .card-act, button')) return;
-        e.preventDefault();
-        e.stopPropagation();
-        dragging = true;
-        startX = e.clientX;
-        startY = e.clientY;
-        originX = Number(tile.dataset.attachX || 0);
-        originY = Number(tile.dataset.attachY || 0);
-        tile.classList.add('is-dragging');
-        try {
-            tile.setPointerCapture(e.pointerId);
-        } catch { /* ignore */ }
-    });
-
-    tile.addEventListener('pointermove', (e) => {
-        if (!dragging) return;
-        e.preventDefault();
-        const x = Math.max(0, Math.round(originX + (e.clientX - startX)));
-        const y = Math.max(0, Math.round(originY + (e.clientY - startY)));
-        setTilePosition(tile, x, y);
-        syncCanvasExtents(section);
-    });
-
-    const endDrag = (e) => {
-        if (!dragging) return;
-        dragging = false;
-        tile.classList.remove('is-dragging');
-        try {
-            tile.releasePointerCapture(e.pointerId);
-        } catch { /* ignore */ }
-        const x = Number(tile.dataset.attachX || 0);
-        const y = Number(tile.dataset.attachY || 0);
-        updateAttachmentView(item, mediaId, { x, y }, { syncUi: false });
-        syncCanvasExtents(section);
-    };
-
-    tile.addEventListener('pointerup', endDrag);
-    tile.addEventListener('pointercancel', endDrag);
-}
-
 /**
  * @param {HTMLElement} section
  * @param {HTMLElement} row
  * @param {object} item
  * @param {string} mediaId
- * @param {{ scale?: number, x?: number|null, y?: number|null }} [layout]
  */
-async function expandAttachmentOnCanvas(section, row, item, mediaId, layout = {}) {
-    const surface = canvasSurface(section);
-    const viewport = canvasViewport(section);
+async function expandAttachmentOnCanvas(section, row, item, mediaId) {
     const expandBtn = row.querySelector('[data-expand-media]');
-    if (!surface || !viewport) return;
+    if (!section) return;
 
-    let tile = surface.querySelector(`.note-media-canvas__tile[data-media-id="${CSS.escape(mediaId)}"]`);
-    if (tile) {
-        row.classList.add('is-expanded');
-        setExpandButtonState(expandBtn, true);
-        updateCanvasVisibility(section);
-        return;
-    }
-
-    const url = await getObjectUrl(mediaId, 'blob');
-    if (!url) {
+    const added = await addMediaImageToNoteCanvas(item, mediaId);
+    if (!added) {
         showAppToast('Preview unavailable');
         return;
     }
-    if (!section.isConnected) {
-        releaseObjectUrl(mediaId, 'blob');
-        return;
-    }
-
-    sizeCanvasViewport(section);
-
-    const s = clampAttachScale(layout.scale ?? 1);
-    const cascade = defaultCascadePos(item, mediaId);
-    const x = clampAttachCoord(layout.x) ?? cascade.x;
-    const y = clampAttachCoord(layout.y) ?? cascade.y;
-
-    tile = document.createElement('div');
-    tile.className = 'note-media-canvas__tile';
-    tile.dataset.mediaId = mediaId;
-    tile.dataset.blobClaimed = '1';
-    tile.innerHTML = `
-        <div class="note-attachment__zoom" role="group" aria-label="Zoom image">
-            <button type="button" class="card-act" data-attach-zoom-out title="Zoom out" aria-label="Zoom out">${CARD_ICONS.minus}</button>
-            <button type="button" class="card-act" data-attach-zoom-reset title="Reset zoom" aria-label="Reset zoom">${CARD_ICONS.zoomReset}</button>
-            <button type="button" class="card-act" data-attach-zoom-in title="Zoom in" aria-label="Zoom in">${CARD_ICONS.plus}</button>
-        </div>
-        <img class="note-media-canvas__img" data-attach-full src="${escapeAttr(url)}" alt="">
-    `;
-    surface.appendChild(tile);
-    applyTileScale(tile, s, viewport);
-    setTilePosition(tile, x, y);
-    bringTileToFront(tile);
-    bindTileDrag(tile, item, mediaId, section);
 
     row.classList.add('is-expanded');
-    row.dataset.attachScale = String(s);
     setExpandButtonState(expandBtn, true);
-    updateCanvasVisibility(section);
-
-    if (layout.x == null || layout.y == null) {
-        updateAttachmentView(item, mediaId, { x, y }, { syncUi: false });
-    }
+    showNoteMediaCanvas(section);
+    refreshNoteCanvasPreview(section, item);
 }
 
 /**
@@ -303,59 +211,42 @@ async function expandAttachmentOnCanvas(section, row, item, mediaId, layout = {}
  * @param {HTMLElement} row
  * @param {string} mediaId
  */
-function collapseAttachmentFromCanvas(section, row, mediaId) {
-    const surface = canvasSurface(section);
+function collapseAttachmentFromCanvas(section, row, item, mediaId) {
     const expandBtn = row.querySelector('[data-expand-media]');
-    const tile = surface?.querySelector?.(`.note-media-canvas__tile[data-media-id="${CSS.escape(mediaId)}"]`);
-    if (tile) {
-        releaseCanvasTileUrls(tile);
-        tile.remove();
-    }
+    removeMediaImageFromNoteCanvas(item, mediaId);
     row.classList.remove('is-expanded');
     delete row.dataset.attachScale;
     setExpandButtonState(expandBtn, false);
-    updateCanvasVisibility(section);
-}
-
-function setAttachmentTileScale(section, row, item, mediaId, scale) {
-    const next = clampAttachScale(scale);
-    const viewport = canvasViewport(section);
-    const surface = canvasSurface(section);
-    const tile = surface?.querySelector?.(`.note-media-canvas__tile[data-media-id="${CSS.escape(mediaId)}"]`);
-    if (tile) applyTileScale(tile, next, viewport);
-    row.dataset.attachScale = String(next);
-    updateAttachmentView(item, mediaId, { scale: next }, { syncUi: false });
-    syncCanvasExtents(section);
+    refreshNoteCanvasPreview(section, item);
 }
 
 function clearCanvasDom(section) {
-    const surface = canvasSurface(section);
-    if (!surface) return;
-    surface.querySelectorAll('.note-media-canvas__tile').forEach((tile) => {
-        releaseCanvasTileUrls(tile);
-        tile.remove();
-    });
+    if (!section) return;
     section.querySelectorAll('.note-attachment.is-expanded').forEach((row) => {
         row.classList.remove('is-expanded');
         delete row.dataset.attachScale;
         setExpandButtonState(row.querySelector('[data-expand-media]'), false);
     });
-    updateCanvasVisibility(section);
 }
 
 /**
- * Collapsible Media section — only when the note has attachments.
+ * Collapsible Media + Canvas section.
+ * Renders when the note has attachments or an active canvas.
  * @param {object} item
  * @param {{ canEdit?: boolean, startCollapsed?: boolean }} [opts]
  */
 export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCollapsed = true } = {}) {
     const list = normalizeAttachments(item?.attachments);
-    if (!list.length) return '';
+    const hasCanvas = !!item?.canvas && !item?.canvasHidden;
+    if (!list.length && !hasCanvas) return '';
 
     const count = list.length;
-    const title = count === 1 ? 'Media (1)' : `Media (${count})`;
+    const title = count > 0
+        ? (count === 1 ? 'Media (1)' : `Media (${count})`)
+        : 'Note canvas';
     const collapsedClass = startCollapsed ? ' collapsed' : '';
     const toggleCollapsed = startCollapsed ? ' collapsed' : '';
+    const canvasHiddenClass = hasCanvas ? '' : ' is-hidden';
 
     const rows = list.map((entry) => {
         const id = escapeAttr(entry.mediaId);
@@ -386,13 +277,14 @@ export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCo
                 </div>
                 <div class="note-section-body collapsable-section${collapsedClass}">
                     <div class="note-attachments__list">${rows}</div>
-                    <div class="note-media-canvas is-hidden" data-note-media-canvas hidden>
+                    <div class="note-media-canvas${canvasHiddenClass}" data-note-media-canvas ${hasCanvas ? '' : 'hidden'}>
                         <div class="note-media-canvas__toolbar">
                             <span class="note-media-canvas__title">Note canvas</span>
+                            <button type="button" class="card-act note-media-canvas__enter-drawing" data-enter-drawing title="Draw in magicCanvas" aria-label="Draw in magicCanvas">${CARD_ICONS.drawingPencil}</button>
                             <button type="button" class="card-act note-media-canvas__reset" data-reset-media-canvas title="Reset canvas" aria-label="Reset canvas">${CARD_ICONS.zoomReset}</button>
                         </div>
                         <div class="note-media-canvas__viewport" data-note-media-viewport>
-                            <div class="note-media-canvas__surface" data-note-media-surface></div>
+                            <canvas class="note-media-canvas__preview" data-note-canvas-preview></canvas>
                         </div>
                     </div>
                 </div>
@@ -420,7 +312,7 @@ function bodyInModal(body) {
 }
 
 /**
- * Rebuild Media section(s) for a note in the live DOM (board + modal).
+ * Rebuild Media + Canvas section(s) for a note in the live DOM (board + modal).
  * @param {object} item
  */
 export function syncNoteAttachmentsDom(item) {
@@ -428,7 +320,7 @@ export function syncNoteAttachmentsDom(item) {
 
     for (const body of noteBodiesForItem(item.id)) {
         const canEdit = bodyCanEdit(body);
-        const startCollapsed = !bodyInModal(body);
+        const startCollapsed = !bodyInModal(body) && !noteHasVisibleCanvas(item);
         const html = buildNoteAttachmentsSectionHtml(item, { canEdit, startCollapsed });
         const existing = body.querySelector('[data-note-attachments]');
         if (!html) {
@@ -441,7 +333,8 @@ export function syncNoteAttachmentsDom(item) {
             const wasCollapsed = existing.querySelector('.note-section-body')?.classList.contains('collapsed');
             existing.outerHTML = html;
             const next = body.querySelector('[data-note-attachments]');
-            if (next && wasCollapsed !== undefined) {
+            // Keep prior collapse only when there is no visible canvas to show.
+            if (next && wasCollapsed !== undefined && !noteHasVisibleCanvas(item)) {
                 const sectionBody = next.querySelector('.note-section-body');
                 const toggle = next.querySelector('.collapsable-toggle');
                 if (wasCollapsed) {
@@ -456,12 +349,32 @@ export function syncNoteAttachmentsDom(item) {
             body.insertAdjacentHTML('beforeend', html);
         }
         const nextSection = body.querySelector('[data-note-attachments]');
-        bindMediaSectionToggle(nextSection);
         bindNoteAttachments(body, item);
+        if (noteHasVisibleCanvas(item)) {
+            paintNoteCanvasPreview(nextSection, item);
+        }
     }
 }
 
-function bindMediaSectionToggle(section) {
+/**
+ * Sync only the note canvas preview(s) for an item without rebuilding the whole section.
+ * @param {object} item
+ */
+export function syncNoteCanvasDom(item) {
+    if (!item?.id) return;
+    for (const body of noteBodiesForItem(item.id)) {
+        const section = body.querySelector('[data-note-attachments]');
+        if (!section) continue;
+        if (item.canvas && !item.canvasHidden) {
+            showNoteMediaCanvas(section);
+            paintNoteCanvasPreview(section, item);
+        } else {
+            hideNoteMediaCanvas(section);
+        }
+    }
+}
+
+function bindMediaSectionToggle(section, item) {
     const header = section?.querySelector('.note-section-header');
     if (!header || header.dataset.bound === '1') return;
     header.dataset.bound = '1';
@@ -469,8 +382,11 @@ function bindMediaSectionToggle(section) {
         e.stopPropagation();
         const bodyEl = header.nextElementSibling;
         const toggle = header.querySelector('.collapsable-toggle');
-        bodyEl?.classList.toggle('collapsed');
+        const collapsed = bodyEl?.classList.toggle('collapsed');
         toggle?.classList.toggle('collapsed');
+        if (!collapsed) {
+            paintNoteCanvasPreview(section, item);
+        }
     });
 }
 
@@ -567,7 +483,8 @@ export function bindNoteAttachments(root, item) {
     const section = root.querySelector('[data-note-attachments]');
     if (!section) return;
 
-    sizeCanvasViewport(section);
+    bindMediaSectionToggle(section, item);
+    paintNoteCanvasPreview(section, item);
 
     section.querySelectorAll('.note-attachment[data-media-id]').forEach((row) => {
         const mediaId = row.dataset.mediaId;
@@ -625,19 +542,9 @@ export function bindNoteAttachments(root, item) {
             const row = btn.closest('.note-attachment');
             if (!row || !mediaId) return;
             if (row.classList.contains('is-expanded')) {
-                collapseAttachmentFromCanvas(section, row, mediaId);
-                updateAttachmentView(item, mediaId, { expanded: false }, { syncUi: false });
+                collapseAttachmentFromCanvas(section, row, item, mediaId);
             } else {
-                const entry = attachmentEntry(item, mediaId);
-                expandAttachmentOnCanvas(section, row, item, mediaId, {
-                    scale: entry?.scale ?? 1,
-                    x: entry?.x,
-                    y: entry?.y
-                })
-                    .then(() => {
-                        updateAttachmentView(item, mediaId, { expanded: true }, { syncUi: false });
-                    })
-                    .catch(() => {});
+                expandAttachmentOnCanvas(section, row, item, mediaId).catch(() => {});
             }
         });
     });
@@ -649,34 +556,30 @@ export function bindNoteAttachments(root, item) {
             if (resetBtn) {
                 e.preventDefault();
                 e.stopPropagation();
+                if (!confirm('Reset note canvas? This clears media positions and drawings.')) return;
+                mutateItem(item, (it) => {
+                    it.canvas = createEmptyNoteCanvas();
+                    const list = normalizeAttachments(it.attachments);
+                    for (const entry of list) entry.expanded = false;
+                    it.attachments = list;
+                }, { preserveView: true, skipRerender: true });
                 clearCanvasDom(section);
-                resetAttachmentCanvas(item, { syncUi: false });
+                refreshNoteCanvasPreview(section, item);
                 return;
             }
 
-            const zoomIn = e.target.closest('[data-attach-zoom-in]');
-            const zoomOut = e.target.closest('[data-attach-zoom-out]');
-            const zoomReset = e.target.closest('[data-attach-zoom-reset]');
-            if (!zoomIn && !zoomOut && !zoomReset) return;
-            e.preventDefault();
-            e.stopPropagation();
-            const tile = (zoomIn || zoomOut || zoomReset).closest('.note-media-canvas__tile');
-            const mediaId = tile?.dataset?.mediaId;
-            const row = mediaId
-                ? section.querySelector(`.note-attachment[data-media-id="${CSS.escape(mediaId)}"]`)
-                : null;
-            if (!tile || !mediaId || !row) return;
-            bringTileToFront(tile);
-            if (zoomReset) {
-                setAttachmentTileScale(section, row, item, mediaId, ATTACH_SCALE_DEFAULT);
+            const drawBtn = e.target.closest('[data-enter-drawing]');
+            if (drawBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                if (window.opener) {
+                    window.opener.dispatchEvent(new CustomEvent('note:canvas_draw_requested', { detail: { item } }));
+                    showAppToast('Opened drawing workspace in main window');
+                } else {
+                    window.dispatchEvent(new CustomEvent('note:canvas_draw_requested', { detail: { item } }));
+                }
                 return;
             }
-            const cur = clampAttachScale(
-                tile.dataset.attachScale || attachmentEntry(item, mediaId)?.scale || ATTACH_SCALE_DEFAULT
-            );
-            const next = stepAttachScale(cur, zoomIn ? 1 : -1);
-            if (next === cur) return;
-            setAttachmentTileScale(section, row, item, mediaId, next);
         });
     }
 
@@ -722,13 +625,10 @@ async function hydrateAttachmentRows(section, item) {
                         }
                     }
                 }
-                const entry = attachmentEntry(item, id);
-                if (entry?.expanded) {
-                    await expandAttachmentOnCanvas(section, row, item, id, {
-                        scale: entry.scale,
-                        x: entry.x,
-                        y: entry.y
-                    });
+                const isExpanded = imageIsInNoteCanvas(item, id);
+                setExpandButtonState(expandBtn, isExpanded);
+                if (isExpanded) {
+                    row.classList.add('is-expanded');
                 }
                 return;
             }

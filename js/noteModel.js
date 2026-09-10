@@ -4,6 +4,7 @@ import { normalizeTileSize } from './tileGeometry.js';
 import { resolveNoteTemplate, sheetFirstCellText, sheetHasContent, sheetIsActive } from './sheet.js';
 import { stepsToParentOrder } from './checklistSteps.js';
 import { DesktopManager } from './desktopManager.js';
+import { createEmptyDocument, migrateDocument } from './canvasDocument.js';
 
 export function deriveNoteTitle({ title = '', content = '', steps = [], sheet = null, noteTemplate = '' } = {}) {
     const trimmedTitle = stripRichText(title).trim();
@@ -33,6 +34,26 @@ export function deriveNoteTitle({ title = '', content = '', steps = [], sheet = 
 
 export function createNoteId() {
     return `item_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/**
+ * Create an empty canvas document for a note.
+ * Uses infinite canvas mode so media and drawings can be placed freely.
+ * @returns {object}
+ */
+export function createEmptyNoteCanvas() {
+    return createEmptyDocument('infinite');
+}
+
+/**
+ * Normalize a raw note canvas payload into a valid canvasDocument v2 document.
+ * Returns a fresh empty note canvas if the input is missing or invalid.
+ * @param {unknown} raw
+ * @returns {object}
+ */
+export function normalizeNoteCanvas(raw) {
+    if (!raw || typeof raw !== 'object') return createEmptyNoteCanvas();
+    return migrateDocument(raw);
 }
 
 let stepIdSeq = 0;
@@ -120,6 +141,7 @@ export function createDefaultNote({ startDateTime, ...overrides } = {}) {
         hideFromCalendar: false,
         hiddenFromBoard: false,
         attachments: [],
+        canvas: null,
         steps: [],
         editorBodyLayout: 'both',
         tileSize: 'large',

@@ -19,6 +19,7 @@ import { getAppElementById } from './appDocuments.js';
 import { showAppToast } from './toast.js';
 import { MediaLibraryOverlay } from './mediaLibraryOverlay.js';
 import { attachmentCount } from './mediaAttachments.js';
+import { createEmptyNoteCanvas } from './noteModel.js';
 
 /**
  * Attach a quick-action button using a "commit then act" pattern.
@@ -102,6 +103,7 @@ function queryActionButtons(root) {
         editBtn: actions.querySelector('.card-act--edit'),
         calBtn: actions.querySelector('.card-act--cal'),
         popoutBtn: actions.querySelector('.card-act--popout'),
+        drawBtn: actions.querySelector('.card-act--draw'),
         popinBtn: actions.querySelector('.card-act--popin'),
         closeBtn: actions.querySelector('.card-act--close'),
         windowSizeBtn: actions.querySelector('.card-act--window-size')
@@ -110,7 +112,7 @@ function queryActionButtons(root) {
 
 
 function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
-    const { copyBtn, pinBtn, dragBtn, colorBtn, attachBtn, iconBtn, hideBtn, calBtn, popoutBtn, popinBtn } = buttons;
+    const { copyBtn, pinBtn, dragBtn, colorBtn, attachBtn, iconBtn, hideBtn, calBtn, popoutBtn, popinBtn, drawBtn } = buttons;
     const iconRoot = surface === 'board'
         ? (card?.querySelector('.editor-note-shell') || card)
         : (editor?.mountZone?.querySelector('.editor-note-shell') || editor?.mountZone || editor?.popoutRoot);
@@ -246,6 +248,32 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
                 return;
             }
             MediaLibraryOverlay.open({ attachNoteId: item.id });
+        }, { commit: boardCommit || modalCommit });
+    }
+
+    if (drawBtn) {
+        attachCardActionButton(drawBtn, () => {
+            const hadCanvas = !!item.canvas;
+            const nextHidden = hadCanvas ? !item.canvasHidden : false;
+            NoteSurface.mutateItem(item, (it) => {
+                if (!hadCanvas) {
+                    it.canvas = createEmptyNoteCanvas();
+                    it.canvasHidden = false;
+                } else {
+                    it.canvasHidden = nextHidden;
+                }
+            }, { preserveView: true, skipRerender: true });
+            drawBtn.classList.toggle('is-active', !nextHidden);
+            drawBtn.setAttribute('aria-pressed', !nextHidden ? 'true' : 'false');
+            drawBtn.setAttribute('title', nextHidden ? 'Show note canvas' : 'Hide note canvas');
+            drawBtn.setAttribute('aria-label', nextHidden ? 'Show note canvas' : 'Hide note canvas');
+            import('./noteAttachmentsUi.js').then(({ syncNoteAttachmentsDom, syncNoteCanvasDom }) => {
+                if (!hadCanvas) {
+                    syncNoteAttachmentsDom(item);
+                } else {
+                    syncNoteCanvasDom(item);
+                }
+            }).catch(() => {});
         }, { commit: boardCommit || modalCommit });
     }
 

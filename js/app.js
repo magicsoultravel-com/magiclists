@@ -846,6 +846,50 @@ renderQuickActions() {
         this.updateViewToggleState();
     }
 
+    async enterNoteCanvasMode(item) {
+        if (!item?.id) return;
+        AppState.workspaceMode = 'drawing';
+        const shell = document.getElementById('workspace-shell');
+        const canvas = document.getElementById('app-canvas');
+        const drawBtn = document.getElementById('btn-drawing-mode');
+        shell?.setAttribute('data-drawing-mode', '');
+        canvas?.classList.add('is-hidden');
+        drawBtn?.classList.add('active');
+        DesktopZoom.apply({ enabled: false });
+        await DrawingBoard.activateForNote(item);
+        this.updateFabVisibility();
+    }
+
+    async exitNoteCanvasMode(item) {
+        await DrawingBoard.deactivate();
+        AppState.workspaceMode = 'notes';
+        localStorage.setItem('matrix_workspace_mode', 'notes');
+
+        const shell = document.getElementById('workspace-shell');
+        const canvas = document.getElementById('app-canvas');
+        const drawBtn = document.getElementById('btn-drawing-mode');
+        shell?.removeAttribute('data-drawing-mode');
+        canvas?.classList.remove('is-hidden');
+        drawBtn?.classList.remove('active');
+        this.updateDesktopZoomVisibility();
+
+        if (AppState.items.length) {
+            UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories);
+            DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+        }
+
+        this.updateFabVisibility();
+        this.updateLayoutResetVisibility();
+        this.updateViewToggleState();
+
+        if (item?.id) {
+            requestAnimationFrame(() => {
+                const card = canvas?.querySelector(`.mini-card[data-id="${CSS.escape(item.id)}"]`);
+                card?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            });
+        }
+    }
+
 async executeDataBackupExport() {
         // Show loading indicator on the export button
         const exportBtn = document.getElementById('btn-export-db');
@@ -1263,6 +1307,17 @@ async executeDataBackupExport() {
             const detail = e.detail;
             const item = detail?.item ?? detail;
             Editor.open(item, AppState.categories);
+        });
+
+        window.addEventListener('note:canvas_draw_requested', (e) => {
+            const item = e.detail?.item;
+            if (!item?.id) return;
+            this.enterNoteCanvasMode(item);
+        });
+
+        window.addEventListener('note:canvas_draw_exited', (e) => {
+            const item = e.detail?.item;
+            this.exitNoteCanvasMode(item);
         });
 
         window.addEventListener('editor:reveal_on_board', async (e) => {

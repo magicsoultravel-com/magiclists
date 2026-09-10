@@ -116,6 +116,11 @@ export function buildNoteQuickActionsHtml(item, {
     const popBtn = isPopout
         ? ''
         : `<button type="button" class="card-act card-act--popout${poppedOut ? ' is-active' : ''}" data-note-id="${escapeAttr(item?.id || '')}" title="${escapeAttr(popTitle)}" aria-label="${escapeAttr(popTitle)}" aria-pressed="${poppedOut ? 'true' : 'false'}">${poppedOut ? CARD_ICONS.popoutExit : CARD_ICONS.popout}</button>`;
+    const canvasActive = !!(item?.canvas && !item?.canvasHidden);
+    const drawTitle = canvasActive ? 'Hide note canvas' : 'Show note canvas';
+    const drawBtn = isPopout
+        ? ''
+        : `<button type="button" class="card-act card-act--draw${canvasActive ? ' is-active' : ''}" data-note-id="${escapeAttr(item?.id || '')}" title="${escapeAttr(drawTitle)}" aria-label="${escapeAttr(drawTitle)}" aria-pressed="${canvasActive ? 'true' : 'false'}">${CARD_ICONS.drawingPencil}</button>`;
     // Board/modal: while a popout owns the note, offer a recall action that
     // returns it to the board (closes the popout after saving).
     const popinTitle = 'Pop in (return note to board)';
@@ -150,7 +155,7 @@ export function buildNoteQuickActionsHtml(item, {
     const attachBtn = `<button type="button" class="card-act card-act--attach${attachCount ? ' is-active' : ''}" title="${escapeAttr(attachTitle)}" aria-label="${escapeAttr(attachTitle)}" aria-pressed="${attachCount ? 'true' : 'false'}">${CARD_ICONS.attach}</button>`;
     // Board: popout, cal, popin (popped only), emoji, copy, [pin], color, attach, hide, edit, [drag], toggle
     // Popout: cal, close (pop in), emoji, copy, color, attach, window-size
-    let actionCount = isPopout ? 7 : 10;
+    let actionCount = isPopout ? 7 : 11;
     if (!isModal && !isPopout && showDragIcon) actionCount += 1;
     if (!isPopout && poppedOut) actionCount += 1; // popin
 
@@ -163,6 +168,7 @@ export function buildNoteQuickActionsHtml(item, {
         : `<button type="button" class="card-act ${lastClass}"${lastId} title="${escapeHTML(expandTitle).replace(/"/g, "")}" aria-label="${escapeHTML(expandTitle).replace(/"/g, "")}">${lastIcon}</button>`;
     const actionsHtml = `<div class="card-actions${(isModal || isPopout) ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
             ${popBtn}
+            ${drawBtn}
             ${calBtn}
             ${closeBtn}
             ${popinBtn}
@@ -223,13 +229,14 @@ export function resolveNoteBodyVisibility(item, { canEdit = false, inModalEditor
 
 export function buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false, richEdit = false } = {}) {
     const template = resolveNoteTemplate(item);
+    const attachmentsCollapsed = !inModalEditor && !(item?.canvas && !item?.canvasHidden);
 
     if (template === 'sheet') {
         ensureItemSheet(item, defaultSheetDimsForTemplate('sheet'));
         let sheetHtml = renderSheetHtml(item.sheet, { canEdit, inModalEditor });
         sheetHtml += buildNoteAttachmentsSectionHtml(item, {
             canEdit,
-            startCollapsed: !inModalEditor
+            startCollapsed: attachmentsCollapsed
         });
         return sheetHtml;
     }
@@ -261,7 +268,7 @@ export function buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false
     }
     html += buildNoteAttachmentsSectionHtml(item, {
         canEdit,
-        startCollapsed: !inModalEditor
+        startCollapsed: attachmentsCollapsed
     });
     return html;
 }
@@ -300,6 +307,9 @@ function bindNoteBodySections(root) {
     if (!root || root.dataset.noteSectionsBound === '1') return;
     root.dataset.noteSectionsBound = '1';
     root.querySelectorAll('.note-body-section .note-section-header').forEach((header) => {
+        // Media/canvas section collapse is owned by noteAttachmentsUi.bindMediaSectionToggle
+        // so expand can re-paint the canvas preview.
+        if (header.closest('[data-note-attachments]')) return;
         header.addEventListener('click', (e) => {
             e.stopPropagation();
             const body = header.nextElementSibling;
@@ -353,7 +363,7 @@ function buildMeetingBodyHtml(item, { canEdit = false, inModalEditor = false, ri
     html += buildNoteBodySection('Action items', actionHtml);
     html += buildNoteAttachmentsSectionHtml(item, {
         canEdit,
-        startCollapsed: !inModalEditor
+        startCollapsed: !inModalEditor && !(item?.canvas && !item?.canvasHidden)
     });
     return html;
 }
