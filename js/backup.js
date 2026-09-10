@@ -7,6 +7,7 @@ import {
     writeStoredCategories
 } from './categories.js';
 import { applyLayoutBackupKeys, getLayoutBackupKeys, repairSpatialLayoutStorage } from './layoutStorage.js';
+import { applyDrawingBackupKeys, getDrawingBackupKeys } from './drawingBoard.js';
 import { getCreatedTimestamp, getUpdatedTimestamp } from './noteModel.js';
 import { applyMediaLibraryBackupSection, buildMediaLibraryBackupSection } from './mediaBackup.js';
 
@@ -126,7 +127,8 @@ export async function buildBackupPackage() {
     }
 
     const layoutKeys = getLayoutBackupKeys();
-    
+    const drawingKeys = await getDrawingBackupKeys();
+
     // Include desktop configuration in backup
     const desktopConfig = localStorage.getItem('magicnotes_desktops_config');
     let desktopsConfig = null;
@@ -154,6 +156,15 @@ export async function buildBackupPackage() {
         media_library,
         ...Object.fromEntries(
             Object.entries(layoutKeys).map(([key, raw]) => {
+                try {
+                    return [key, JSON.parse(raw)];
+                } catch {
+                    return [key, raw];
+                }
+            })
+        ),
+        ...Object.fromEntries(
+            Object.entries(drawingKeys).map(([key, raw]) => {
                 try {
                     return [key, JSON.parse(raw)];
                 } catch {
@@ -386,6 +397,12 @@ export async function applyBackupToStorage(parsedBackup) {
     localStorage.removeItem('matrix_calendar_hidden_ids');
 
     applyLayoutBackupKeys(parsedBackup);
+
+    try {
+        await applyDrawingBackupKeys(parsedBackup);
+    } catch (err) {
+        console.warn('[Backup] drawing section restore failed', err);
+    }
 
     if (parsedBackup.media_library) {
         try {

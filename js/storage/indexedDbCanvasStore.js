@@ -1,5 +1,5 @@
 /**
- * IndexedDBC antvasStore - IndexedDB storage specifically for magicCanvas documents.
+ * IndexedDBCanvasStore - IndexedDB storage specifically for magicCanvas documents.
  * 
  * Uses the existing magicnotes_cache_db database with a canvas_store object store.
  * Falls back to localStorage if IndexedDB is unavailable (private mode, disabled, etc.).
@@ -9,8 +9,12 @@
  */
 
 const DB_NAME = 'magicnotes_cache_db';
-const DB_VERSION = 1;
+// Bump to 2 so the shared DB can add the canvas_store alongside cache_store.
+// Both storage modules create their own stores if missing so load order doesn't matter.
+const DB_VERSION = 2;
 const CANVAS_STORE = 'canvas_store';
+// The cache store lives in the same DB; ensure it exists regardless of load order.
+const CACHE_STORE = 'cache_store';
 
 let canvasDbPromise = null;
 let canvasMemoryFallback = null;
@@ -32,6 +36,9 @@ function openCanvasDb() {
             const db = req.result;
             if (!db.objectStoreNames.contains(CANVAS_STORE)) {
                 db.createObjectStore(CANVAS_STORE, { keyPath: 'key' });
+            }
+            if (!db.objectStoreNames.contains(CACHE_STORE)) {
+                db.createObjectStore(CACHE_STORE, { keyPath: 'key' });
             }
         };
         req.onsuccess = () => resolve(req.result);
@@ -185,7 +192,11 @@ async function clearCanvasDocuments() {
     });
 }
 
-export const IndexedDBC antvasStore = {
+// Named exports used by canvasDocument.js
+export { getCanvasDocument, setCanvasDocument, removeCanvasDocument, clearCanvasDocuments };
+
+// Legacy object export (kept for any external consumers) — name fixed from typo.
+export const IndexedDBCanvasStore = {
     get: getCanvasDocument,
     set: setCanvasDocument,
     remove: removeCanvasDocument,

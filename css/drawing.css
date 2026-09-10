@@ -7,10 +7,6 @@
     display: none !important;
 }
 
-.control-bar-actions-group.is-hidden {
-    display: none !important;
-}
-
 .drawing-toolbar-panel {
     position: absolute;
     z-index: 12;
@@ -201,79 +197,11 @@
     cursor: crosshair;
 }
 
-.drawing-toolbar-group {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2rem;
-}
-
-.drawing-width-control {
-    gap: 0.15rem;
-}
-
-.drawing-width-label {
-    font-size: 0.62rem;
-    font-variant-numeric: tabular-nums;
-    min-width: 2.2rem;
-    text-align: center;
-    color: var(--text-muted);
-}
-
-.drawing-color-row {
-    gap: 0.18rem;
-}
-
-.drawing-color-swatch {
-    width: 1.05rem;
-    height: 1.05rem;
-    border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    padding: 0;
-    cursor: pointer;
-    flex-shrink: 0;
-}
-
-.drawing-color-swatch.is-active {
-    box-shadow: 0 0 0 2px var(--accent);
-}
-
-.drawing-color-input {
-    width: 1.2rem;
-    height: 1.2rem;
-    padding: 0;
-    border: 1px solid var(--border-color);
-    border-radius: 50%;
-    background: transparent;
-    cursor: pointer;
-}
-
-.drawing-color-input::-webkit-color-swatch-wrapper {
-    padding: 0;
-}
-
-.drawing-color-input::-webkit-color-swatch {
-    border: none;
-    border-radius: 50%;
-}
-
-.drawing-toolbar-summary {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    font-size: 0.62rem;
-    color: var(--text-muted);
-}
-
 .drawing-color-chip {
     width: 0.75rem;
     height: 0.75rem;
     border-radius: 50%;
     border: 1px solid rgba(255, 255, 255, 0.25);
-}
-
-.drawing-style-chip {
-    display: inline-flex;
-    align-items: center;
 }
 
 .drawing-toolbar-dropdown {
@@ -552,19 +480,12 @@
     box-shadow: 0 0 0 2px var(--accent);
 }
 
-.drawing-toolbar-panel__body .draw-style-btn.active,
-.drawing-toolbar-panel__body .draw-tool-btn.active,
-.drawing-toolbar-panel__body .draw-mode-btn.active,
-.drawing-toolbar-panel__body .draw-bg-btn.active {
-    background: color-mix(in srgb, var(--accent) 35%, transparent);
-    color: var(--text-main);
-}
-
 #btn-drawing-mode.active {
     background: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
-#btn-fullscreen.is-active {
+#btn-fullscreen.is-active,
+#draw-fullscreen.is-active {
     color: var(--accent);
 }
 
@@ -573,63 +494,60 @@
    ========================================================================== */
 
 /* Pointer/Select button active state */
-#draw-menu-pointer.active,
-#draw-menu-pointer[aria-pressed="true"] {
+#draw-menu-pointer.active {
     background: color-mix(in srgb, var(--accent) 35%, transparent);
     color: var(--text-main);
 }
 
 /* Lasso button active state */
-#draw-lasso.is-active,
 #draw-lasso[aria-pressed="true"] {
     background: color-mix(in srgb, var(--accent) 35%, transparent);
     color: var(--text-main);
 }
 
-/* Lasso selection bounding box */
-.lasso-selection-box {
-    position: absolute;
-    border: 1.5px dashed #3b82f6;
-    background: rgba(59, 130, 246, 0.1);
-    pointer-events: none;
-    z-index: 10;
+/* Lasso selection is rendered on canvas; no DOM overlay styles needed. */
+
+/* ==========================================================================
+   MISSING / ADDITIONAL HELPERS
+   ========================================================================== */
+
+/* Toolbar separators emitted by drawingBoard.js renderToolbar() */
+.format-toolbar-sep {
+    display: inline-block;
+    width: 1px;
+    height: 1.1rem;
+    background: rgba(255, 255, 255, 0.15);
+    margin: 0 0.15rem;
+    flex-shrink: 0;
 }
 
-/* Lasso drag handle (center point) */
-.lasso-drag-handle {
-    position: absolute;
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: #3b82f6;
-    border: 2px solid rgba(255, 255, 255, 0.8);
-    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
-    pointer-events: auto;
-    cursor: grab;
-    z-index: 11;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
+/* Infinite canvas gets a subtle dotted boundary so it doesn't look identical to paged mode */
+.is-infinite-canvas {
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+    background-size: 24px 24px;
 }
 
-.lasso-drag-handle:active {
+/* Viewport panning cursor */
+.canvas-viewport.is-panning,
+.canvas-viewport:has(.canvas-viewport-inner.is-panning) {
     cursor: grabbing;
 }
 
-/* Lasso path styling (rendered via canvas, but CSS for reference) */
-.lasso-path {
-    position: absolute;
-    pointer-events: none;
-    z-index: 9;
+.canvas-viewport:not(.is-panning) {
+    cursor: grab;
 }
 
-/* Lasso active cursor */
-.drawing-canvas.lasso-active {
-    cursor: crosshair;
+/* Tool-specific cursors on the drawing canvas */
+.drawing-canvas[data-tool="pointer"],
+.drawing-canvas[data-tool="lasso"] {
+    cursor: default;
 }
 
-/* Lasso mode indicator in toolbar */
-.drawing-dropdown-icon.lasso-active {
-    filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.5));
+.drawing-canvas[data-tool="eraser"] {
+    cursor: cell;
+}
+
+.drawing-canvas[data-tool="text"] {
+    cursor: text;
 }
 

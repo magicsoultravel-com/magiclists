@@ -1,7 +1,8 @@
 import { ACTION_ICONS } from './icons.js';
 
 function isSupported() {
-    return typeof document.documentElement.requestFullscreen === 'function';
+    return typeof document !== 'undefined'
+        && typeof document.documentElement?.requestFullscreen === 'function';
 }
 
 export const Fullscreen = {

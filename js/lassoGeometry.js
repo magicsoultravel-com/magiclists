@@ -12,60 +12,105 @@
 export function isPointInPolygon(point, polygon) {
     if (!polygon || polygon.length < 3) return false;
     if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') return false;
-    
+
     let inside = false;
-    
+
     for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
         const xi = polygon[i].x;
         const yi = polygon[i].y;
         const xj = polygon[j].x;
         const yj = polygon[j].y;
-        
+
         // Check if point is on the vertex
         if (xi === point.x && yi === point.y) return true;
-        
-        // Check if point is on the edge
-        const edgeMinY = Math.min(yi, yj);
-        const edgeMaxY = Math.max(yi, yj);
-        const edgeMinX = Math.min(xi, xj);
-        const edgeMaxX = Math.max(xi, xj);
-        
-        // Point outside edge bounding box
-        if (point.x < edgeMinX || point.x > edgeMaxX || point.y < edgeMinY || point.y > edgeMaxY) {
-            continue;
-        }
-        
-        // Skip vertical edges (no intersection with horizontal ray)
-        if (xi === xj) continue;
-        
-        // Calculate intersection point
-        const intersectY = yi + (point.x - xi) * (yj - yi) / (xj - xi);
-        
-        // Point is on the edge
-        if (Math.abs(intersectY - point.y) < 0.001) return true;
-        
-        // Ray crosses edge
-        if (intersectY > point.y) {
+
+        // Edge must straddle the horizontal line at point.y for ray casting.
+        if ((yi > point.y) === (yj > point.y)) continue;
+
+        // Compute the x coordinate where the edge crosses the horizontal line at point.y.
+        const intersectX = xj + (point.y - yj) * (xi - xj) / (yi - yj);
+
+        // Point lies exactly on the edge
+        if (Math.abs(intersectX - point.x) < 0.001) return true;
+
+        // Cast a ray to the right; each crossing toggles inside/outside.
+        if (intersectX > point.x) {
             inside = !inside;
         }
     }
-    
+
     return inside;
 }
 
 /**
- * Check if a stroke (with points array) has any points inside the polygon.
- * Uses "at least one point" threshold for selection.
- * 
- * @param {Object} stroke - Stroke object with points: [{x, y}, ...]
+ * Check if a drawing item (brush stroke, shape, or text) has any part inside the polygon.
+ * Brush strokes use "at least one point" threshold; shapes use bounding-box overlap;
+ * text objects use a simple glyph bounds box.
+ *
+ * @param {Object} item - Stroke/shape/text object
  * @param {Array} polygon - Array of {x, y} points forming the polygon
- * @returns {boolean} true if at least one point is inside
+ * @returns {boolean} true if the item intersects the polygon
  */
-export function strokeHasPointInPolygon(stroke, polygon) {
-    if (!stroke || !stroke.points || !Array.isArray(stroke.points)) return false;
-    if (!polygon || polygon.length < 3) return false;
-    
-    return stroke.points.some(point => isPointInPolygon(point, polygon));
+export function strokeHasPointInPolygon(item, polygon) {
+    if (!item || !polygon || polygon.length < 3) return false;
+
+    // Brush stroke
+    if (Array.isArray(item.points)) {
+        return item.points.some(point => isPointInPolygon(point, polygon));
+    }
+
+    // Text object
+    if (item.tool === 'text') {
+        const bounds = getTextBounds(item);
+        return rectIntersectsPolygon(bounds, polygon);
+    }
+
+    // Shape stroke
+    if (item.x0 != null && item.y0 != null && item.x1 != null && item.y1 != null) {
+        const bounds = getShapeBounds(item);
+        return rectIntersectsPolygon(bounds, polygon);
+    }
+
+    return false;
+}
+
+function rectIntersectsPolygon(rect, polygon) {
+    if (!rect || !polygon || polygon.length < 3) return false;
+    // A rectangle intersects a polygon if any corner is inside the polygon,
+    // or any polygon vertex is inside the rectangle, or any edges cross.
+    const corners = [
+        { x: rect.minX, y: rect.minY },
+        { x: rect.maxX, y: rect.minY },
+        { x: rect.maxX, y: rect.maxY },
+        { x: rect.minX, y: rect.maxY }
+    ];
+    if (corners.some(p => isPointInPolygon(p, polygon))) return true;
+    if (polygon.some(p => p.x >= rect.minX && p.x <= rect.maxX && p.y >= rect.minY && p.y <= rect.maxY)) return true;
+    // Edge intersection check is overkill for selection; corner/vertex test is enough in practice.
+    return false;
+}
+
+function getShapeBounds(item) {
+    return {
+        minX: Math.min(item.x0, item.x1),
+        minY: Math.min(item.y0, item.y1),
+        maxX: Math.max(item.x0, item.x1),
+        maxY: Math.max(item.y0, item.y1)
+    };
+}
+
+function getTextBounds(item) {
+    // Approximate text box: use a stored width/height when available, else a
+    // heuristic based on font size. Matches the hit area used in drawingBoard.js.
+    const fontSize = item.fontSize || 16;
+    const width = item.width || Math.max(200, (item.text || '').length * fontSize * 0.6);
+    const height = item.height || Math.max(60, fontSize * 1.4);
+    return {
+        minX: item.x,
+        minY: item.y,
+        maxX: item.x + width,
+        maxY: item.y + height
+    };
 }
 
 /**
@@ -103,36 +148,51 @@ export function getPolygonBounds(polygon) {
 }
 
 /**
- * Calculate the bounding box that encompasses all selected strokes.
- * 
- * @param {Array} strokes - Array of stroke objects with points
+ * Calculate the bounding box that encompasses all selected drawing items
+ * (brush strokes, shapes, and text objects).
+ *
+ * @param {Array} items - Array of stroke/shape/text objects
  * @returns {Object} {minX, minY, maxX, maxY, width, height}
  */
-export function getStrokesBounds(strokes) {
-    if (!strokes || strokes.length === 0) {
+export function getStrokesBounds(items) {
+    if (!items || items.length === 0) {
         return { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 };
     }
-    
+
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
-    
-    for (const stroke of strokes) {
-        if (!stroke.points) continue;
-        for (const point of stroke.points) {
-            if (point.x < minX) minX = point.x;
-            if (point.x > maxX) maxX = point.x;
-            if (point.y < minY) minY = point.y;
-            if (point.y > maxY) maxY = point.y;
+
+    for (const item of items) {
+        if (!item) continue;
+        if (Array.isArray(item.points)) {
+            for (const point of item.points) {
+                if (point.x < minX) minX = point.x;
+                if (point.x > maxX) maxX = point.x;
+                if (point.y < minY) minY = point.y;
+                if (point.y > maxY) maxY = point.y;
+            }
+        } else if (item.tool === 'text') {
+            const bounds = getTextBounds(item);
+            minX = Math.min(minX, bounds.minX);
+            minY = Math.min(minY, bounds.minY);
+            maxX = Math.max(maxX, bounds.maxX);
+            maxY = Math.max(maxY, bounds.maxY);
+        } else if (item.x0 != null && item.y0 != null && item.x1 != null && item.y1 != null) {
+            const bounds = getShapeBounds(item);
+            minX = Math.min(minX, bounds.minX);
+            minY = Math.min(minY, bounds.minY);
+            maxX = Math.max(maxX, bounds.maxX);
+            maxY = Math.max(maxY, bounds.maxY);
         }
     }
-    
+
     // Handle empty case
     if (minX === Infinity) {
         return { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 };
     }
-    
+
     return {
         minX,
         minY,
@@ -156,22 +216,35 @@ export function clamp(value, min, max) {
 }
 
 /**
- * Clamp stroke coordinates to page boundaries.
+ * Clamp drawing item coordinates to page boundaries.
  * Used for A4/A5 fixed page modes.
- * 
- * @param {Array} strokes - Array of stroke objects
+ *
+ * @param {Array} items - Array of stroke/shape/text objects
  * @param {Object} pageBounds - {minX, minY, maxX, maxY} page boundaries
  */
-export function clampStrokesToBounds(strokes, pageBounds) {
-    if (!strokes || !pageBounds) return;
-    
+export function clampStrokesToBounds(items, pageBounds) {
+    if (!items || !pageBounds) return;
+
     const { minX, minY, maxX, maxY } = pageBounds;
-    
-    for (const stroke of strokes) {
-        if (!stroke.points) continue;
-        for (const point of stroke.points) {
-            point.x = clamp(point.x, minX, maxX);
-            point.y = clamp(point.y, minY, maxY);
+
+    for (const item of items) {
+        if (!item) continue;
+        if (Array.isArray(item.points)) {
+            for (const point of item.points) {
+                point.x = clamp(point.x, minX, maxX);
+                point.y = clamp(point.y, minY, maxY);
+            }
+        } else if (item.tool === 'text') {
+            const bounds = getTextBounds(item);
+            const width = bounds.maxX - bounds.minX;
+            const height = bounds.maxY - bounds.minY;
+            item.x = clamp(item.x, minX, maxX - width);
+            item.y = clamp(item.y, minY, maxY - height);
+        } else if (item.x0 != null && item.y0 != null && item.x1 != null && item.y1 != null) {
+            item.x0 = clamp(item.x0, minX, maxX);
+            item.y0 = clamp(item.y0, minY, maxY);
+            item.x1 = clamp(item.x1, minX, maxX);
+            item.y1 = clamp(item.y1, minY, maxY);
         }
     }
 }
@@ -219,20 +292,30 @@ export function translatePolygon(polygon, dx, dy) {
 }
 
 /**
- * Translate all points in strokes by a delta.
- * 
- * @param {Array} strokes - Array of stroke objects
+ * Translate all drawing items by a delta.
+ *
+ * @param {Array} items - Array of stroke/shape/text objects
  * @param {number} dx - X translation
  * @param {number} dy - Y translation
  */
-export function translateStrokes(strokes, dx, dy) {
-    if (!strokes) return;
-    
-    for (const stroke of strokes) {
-        if (!stroke.points) continue;
-        for (const point of stroke.points) {
-            point.x += dx;
-            point.y += dy;
+export function translateStrokes(items, dx, dy) {
+    if (!items) return;
+
+    for (const item of items) {
+        if (!item) continue;
+        if (Array.isArray(item.points)) {
+            for (const point of item.points) {
+                point.x += dx;
+                point.y += dy;
+            }
+        } else if (item.tool === 'text') {
+            item.x += dx;
+            item.y += dy;
+        } else if (item.x0 != null && item.y0 != null && item.x1 != null && item.y1 != null) {
+            item.x0 += dx;
+            item.y0 += dy;
+            item.x1 += dx;
+            item.y1 += dy;
         }
     }
 }

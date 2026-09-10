@@ -80,6 +80,7 @@ export function migrateDocument(raw) {
 }
 
 export async function readDocument() {
+    // Primary source: IndexedDB (no legacy migration here — handled below).
     try {
         const IndexedDBStore = await import('./storage/indexedDbCanvasStore.js');
         const result = await IndexedDBStore.getCanvasDocument(STORAGE_KEY);
@@ -89,12 +90,20 @@ export async function readDocument() {
     } catch (e) {
         // Continue to fallback
     }
-    
+
+    // Fallback / migration source: legacy localStorage drawing data.
     try {
-        return migrateDocument(JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'));
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+            const doc = migrateDocument(JSON.parse(raw));
+            // Persist the migrated document to the primary store and keep localStorage as mirror.
+            await writeDocument(doc);
+            return doc;
+        }
     } catch (e) {
-        return createEmptyDocument();
+        // Ignore parse errors and fall through to empty document
     }
+    return createEmptyDocument();
 }
 
 export async function writeDocument(doc) {
@@ -102,9 +111,13 @@ export async function writeDocument(doc) {
         const IndexedDBStore = await import('./storage/indexedDbCanvasStore.js');
         await IndexedDBStore.setCanvasDocument(STORAGE_KEY, doc);
     } catch (e) {
-        // If IndexedDB fails, fall back to localStorage
+        // If IndexedDB fails, localStorage below acts as the fallback mirror.
     }
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(doc));
+    } catch (e) {
+        // Ignore quota errors — IndexedDB is the primary store.
+    }
 }
 
 export function getActivePage(doc) {

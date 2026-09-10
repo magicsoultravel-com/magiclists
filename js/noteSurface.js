@@ -314,7 +314,8 @@ function focusPendingChecklistStep(card) {
 
 // Global board event listener for item:mutation_requested
 // This is the master event receiver that handles all item mutations on the board canvas
-window.addEventListener('item:mutation_requested', (e) => {
+if (typeof window !== 'undefined') {
+    window.addEventListener('item:mutation_requested', (e) => {
     const { item, skipRerender, preserveView } = e.detail;
     
     // Update local in-memory data cache/reference copy with the fresh item state
@@ -330,7 +331,8 @@ window.addEventListener('item:mutation_requested', (e) => {
     // This would be implemented by the board's render system
     // For now, we'll trigger a full refresh through the standard mechanism
     // In a real implementation, this would call the board's render function
-});
+    });
+}
 
 // Main NoteSurface object
 // Note: escapeHTML, escapeAttr, hasRichMarkup, stripRichText, linkifyPlainUrls, sanitizeRichHtml

@@ -904,6 +904,12 @@ export async function reconcileLayoutStorage({ items = [], categories = [], show
                     } catch {
                         /* ignore */
                     }
+                    try {
+                        const { clearCanvasDocuments } = await import('./storage/indexedDbCanvasStore.js');
+                        await clearCanvasDocuments();
+                    } catch {
+                        /* ignore IndexedDB unavailable / unsupported */
+                    }
                     stats = createReconcileStats();
                     writeState = { quotaExceeded: false, failedKey: null };
                     applyReconcileWrites(context, stats, writeState);

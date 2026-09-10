@@ -53,7 +53,7 @@ function isExcludedPasteField(field) {
  * @param {Element|null|undefined} activeEl
  * @returns {{ noteId: string, field: string }|null}
  */
-export function resolveNotePasteTarget(activeEl = document.activeElement) {
+export function resolveNotePasteTarget(activeEl = (typeof document !== 'undefined' ? document.activeElement : null)) {
     const field = activeEl?.closest?.('.card-inline-edit');
     if (!field || isExcludedPasteField(field)) return null;
 

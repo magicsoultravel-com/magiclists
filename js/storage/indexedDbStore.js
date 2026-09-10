@@ -15,8 +15,12 @@
  */
 
 const DB_NAME = 'magicnotes_cache_db';
-const DB_VERSION = 1;
+// Bump to 2 so the shared DB can host both cache_store and canvas_store.
+// Both storage modules create their own stores if missing so load order doesn't matter.
+const DB_VERSION = 2;
 const STORE_NAME = 'cache_store';
+// The canvas store lives in the same DB; ensure it exists regardless of load order.
+const CANVAS_STORE_NAME = 'canvas_store';
 
 let dbPromise = null;
 let memoryFallback = null;
@@ -35,7 +39,13 @@ function openDb() {
 
         const req = indexedDB.open(DB_NAME, DB_VERSION);
         req.onupgradeneeded = () => {
-            req.result.createObjectStore(STORE_NAME, { keyPath: 'key' });
+            const db = req.result;
+            if (!db.objectStoreNames.contains(STORE_NAME)) {
+                db.createObjectStore(STORE_NAME, { keyPath: 'key' });
+            }
+            if (!db.objectStoreNames.contains(CANVAS_STORE_NAME)) {
+                db.createObjectStore(CANVAS_STORE_NAME, { keyPath: 'key' });
+            }
         };
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => {

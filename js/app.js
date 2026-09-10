@@ -212,9 +212,9 @@ BootProgress.set(85, 'Workspace…');
             Fullscreen.init();
 DrawingBoard.init(this);
             if (AppState.workspaceMode === 'drawing') {
-                requestAnimationFrame(() => this.applyWorkspaceMode('drawing', { skipPersist: true }));
+                await this.applyWorkspaceMode('drawing', { skipPersist: true });
             }
-            
+
             // Initialize Desktop Dock after workspace is ready
             DesktopDock.init();
         } finally {
@@ -371,24 +371,29 @@ DrawingBoard.init(this);
     }
 
     /** Re-sync cached AppState + re-render the board/sidebar from shared storage. */
-    refreshBoardFromSync(scopes, info) {
+    async refreshBoardFromSync(scopes, info) {
         const canvas = document.getElementById('app-canvas');
         if (!canvas) return;
-
-        // Notes may have come back from archive while this tab was in drawing
-        // workspace; board re-renders are only meaningful in notes mode.
-        if (AppState.workspaceMode === 'drawing') return;
 
         // Re-read the single source of truth (localStorage) into the cached state
         // so the UI paints whatever the other tab committed.
         AppState.hiddenCategories = JSON.parse(localStorage.getItem('matrix_hidden_categories') || '[]');
-        AppState.workspaceMode = localStorage.getItem('matrix_workspace_mode') === 'drawing' ? 'drawing' : 'notes';
+        const remoteWorkspaceMode = localStorage.getItem('matrix_workspace_mode') === 'drawing' ? 'drawing' : 'notes';
         AppState.viewSettings.sortBy = normalizeViewMode(
             localStorage.getItem('matrix_desktop_layout')
                 || localStorage.getItem('matrix_preferred_view')
                 || 'grid'
         );
         AppState.viewSettings.fileCabinet = localStorage.getItem('matrix_file_cabinet') === 'true';
+
+        // If another tab changed the workspace mode, apply it before doing any
+        // notes-board work (and skip the notes re-render while in drawing mode).
+        if (remoteWorkspaceMode !== AppState.workspaceMode) {
+            AppState.workspaceMode = remoteWorkspaceMode;
+            await this.applyWorkspaceMode(remoteWorkspaceMode, { skipPersist: true });
+        }
+
+        if (AppState.workspaceMode === 'drawing') return;
 
         const data = API._getLocalDB();
         if (Array.isArray(data?.items)) {
@@ -661,9 +666,9 @@ renderQuickActions() {
             handlers: {
                 onToggleOverlay: () => this.toggleBoardOverlay(),
                 onToggleFileCabinet: () => this.toggleFileCabinet(),
-                onToggleDrawing: () => {
-                    if (AppState.workspaceMode === 'drawing') this.switchWorkspaceMode('notes');
-                    else this.switchWorkspaceMode('drawing');
+                onToggleDrawing: async () => {
+                    if (AppState.workspaceMode === 'drawing') await this.switchWorkspaceMode('notes');
+                    else await this.switchWorkspaceMode('drawing');
                 },
                 onAddCategory: (e) => this.executeAddCategoryPrompt(e?.currentTarget),
                 onCloudClick: (e) => CloudBackup.handleCloudClick(e.currentTarget),
@@ -675,9 +680,9 @@ renderQuickActions() {
                 onImportDb: () => document.getElementById('system-import-file-picker').click(),
                 onLogout: () => this.executeLogout(),
                 onLogin: () => this.executeLoginPrompt(),
-                onLayoutReset: () => {
+                onLayoutReset: async () => {
                     if (AppState.workspaceMode === 'drawing') {
-                        this.switchWorkspaceMode('notes');
+                        await this.switchWorkspaceMode('notes');
                     }
                     UI.resetBoardLayout(AppState.viewSettings.sortBy, AppState.items, {
                         fileCabinetActive: AppState.viewSettings.fileCabinet
@@ -799,13 +804,13 @@ renderQuickActions() {
         });
     }
 
-    switchWorkspaceMode(mode) {
+    async switchWorkspaceMode(mode) {
         if (mode !== 'notes' && mode !== 'drawing') return;
         if (AppState.workspaceMode === mode) return;
-        this.applyWorkspaceMode(mode);
+        await this.applyWorkspaceMode(mode);
     }
 
-    applyWorkspaceMode(mode, { skipPersist = false } = {}) {
+    async applyWorkspaceMode(mode, { skipPersist = false } = {}) {
         AppState.workspaceMode = mode;
         if (!skipPersist) {
             localStorage.setItem('matrix_workspace_mode', mode);
@@ -821,13 +826,13 @@ renderQuickActions() {
             drawBtn?.classList.add('active');
 
             DesktopZoom.apply({ enabled: false });
-            DrawingBoard.activate();
+            await DrawingBoard.activate();
         } else {
             shell?.removeAttribute('data-drawing-mode');
             canvas?.classList.remove('is-hidden');
             drawBtn?.classList.remove('active');
 
-            DrawingBoard.deactivate();
+            await DrawingBoard.deactivate();
             this.updateDesktopZoomVisibility();
 
             if (AppState.items.length) {
@@ -1099,7 +1104,7 @@ async executeDataBackupExport() {
         
         try {
             if (AppState.workspaceMode === 'drawing') {
-                this.switchWorkspaceMode('notes');
+                await this.switchWorkspaceMode('notes');
             }
             const next = !AppState.viewSettings.fileCabinet;
             const canvas = document.getElementById('app-canvas');
@@ -1167,9 +1172,9 @@ async executeDataBackupExport() {
     setupLayoutResetButton() {
         const btn = document.getElementById('btn-layout-reset');
         if (btn) btn.innerHTML = ACTION_ICONS.layoutReset;
-        btn?.addEventListener('click', () => {
+        btn?.addEventListener('click', async () => {
             if (AppState.workspaceMode === 'drawing') {
-                this.switchWorkspaceMode('notes');
+                await this.switchWorkspaceMode('notes');
             }
             UI.resetBoardLayout(AppState.viewSettings.sortBy, AppState.items, {
                 fileCabinetActive: AppState.viewSettings.fileCabinet

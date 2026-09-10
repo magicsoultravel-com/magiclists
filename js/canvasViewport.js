@@ -74,6 +74,7 @@ export const CanvasViewport = {
             if (e.code === 'Space') {
                 this.spaceHeld = false;
                 this.panning = false;
+                this.viewportEl?.classList.remove('is-panning');
             }
         });
 
@@ -87,6 +88,7 @@ export const CanvasViewport = {
         this.viewportEl?.addEventListener('pointerdown', (e) => {
             if (e.button === 1 || this.spaceHeld) {
                 this.panning = true;
+                this.viewportEl?.classList.add('is-panning');
                 this.panStart = { x: e.clientX - this.offsetX, y: e.clientY - this.offsetY, id: e.pointerId };
                 this.viewportEl.setPointerCapture(e.pointerId);
                 e.preventDefault();
@@ -103,6 +105,7 @@ export const CanvasViewport = {
         const endPan = (e) => {
             if (!this.panning) return;
             this.panning = false;
+            this.viewportEl?.classList.remove('is-panning');
             this.panStart = null;
             try { this.viewportEl?.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
         };

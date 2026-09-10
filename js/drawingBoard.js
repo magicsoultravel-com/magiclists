@@ -13,10 +13,9 @@ import {
 import { BRUSH_STYLES, drawBrushStroke, drawShapeStroke, drawTextObject } from './canvasBrushes.js';
 import { renderBackground } from './canvasBackgrounds.js';
 import { CanvasViewport } from './canvasViewport.js';
-import { exportCanvasPng, exportCanvasPdf } from './canvasExport.js';
+// import { exportCanvasPng, exportCanvasPdf } from './canvasExport.js'; // Disabled until export renderer is unified.
 import { DrawingToolbarChrome } from './drawingToolbarChrome.js';
 import {
-    isPointInPolygon,
     strokeHasPointInPolygon,
     getStrokesBounds,
     clampStrokesToBounds,
@@ -93,11 +92,6 @@ const FORMAT_ITEMS = [
     { id: 'a5', label: 'A5 page' },
     { id: 'a3', label: 'A3 page' },
     { id: 'infinite', label: 'Infinite canvas' }
-];
-
-const EXPORT_ITEMS = [
-    { id: 'export-png', label: 'Export PNG' },
-    { id: 'export-pdf', label: 'Export PDF' }
 ];
 
 function defaultWidthForStyle(style) {
@@ -243,11 +237,11 @@ export const DrawingBoard = {
         window.addEventListener('resize', () => { if (this.active) this.resize(); });
     },
 
-    activate() {
+    async activate() {
         this.active = true;
         DrawingToolbarChrome.show();
         this.toolbarEl = DrawingToolbarChrome.getToolbarMount();
-        this.doc = readDocument();
+        this.doc = await readDocument();
         this.prefs = readPrefs();
         this.activeTool = this.prefs.activeTool;
         this.activeStyle = this.prefs.activeStyle;
@@ -258,14 +252,15 @@ export const DrawingBoard = {
         this.boardEl.setAttribute('aria-hidden', 'false');
 
         CanvasViewport.loadFromDoc(this.doc.viewport);
+        if (this.canvas) this.canvas.dataset.tool = this.activeTool;
         this.renderToolbar();
         this.resize();
         this.redraw();
     },
 
-    deactivate() {
+    async deactivate() {
         this.active = false;
-        this.flushSave();
+        await this.flushSave();
         ColorPicker.close();
         DrawingToolbarMenu.close();
         this.colorRolloutOpen = false;
@@ -406,6 +401,7 @@ export const DrawingBoard = {
     setTool(tool) {
         this.activeTool = tool;
         this.prefs.activeTool = tool;
+        if (this.canvas) this.canvas.dataset.tool = tool;
         writePrefs(this.prefs);
         this.renderToolbar();
     },
@@ -554,17 +550,7 @@ export const DrawingBoard = {
         if (e.pointerType === 'touch' && this.penPointerActive) return;
         const events = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [e];
 
-        // Lasso tool - dragging selected strokes
-        if (this.isDraggingLasso && this.lassoDragStart) {
-            const pt = this.clientToCanvas(e.clientX, e.clientY);
-            const dx = pt.x - this.lassoDragStart.x;
-            const dy = pt.y - this.lassoDragStart.y;
-            this.dragLassoSelection(dx, dy);
-            this.lassoDragStart = { x: pt.x, y: pt.y };
-            return;
-        }
-
-        // Pointer (Select) tool - dragging selected strokes
+        // Drag selected items (used by both pointer and lasso modes)
         if (this.isDraggingLasso && this.lassoDragStart) {
             const pt = this.clientToCanvas(e.clientX, e.clientY);
             const dx = pt.x - this.lassoDragStart.x;
@@ -712,16 +698,22 @@ export const DrawingBoard = {
 
     selectStrokesInPolygon(polygon) {
         if (polygon.length < 3) return;
-        
+
         const strokes = this.strokes();
+        const texts = getActiveTexts(this.doc);
         this.selectedStrokes.clear();
-        
+
         for (const stroke of strokes) {
             if (strokeHasPointInPolygon(stroke, polygon)) {
                 this.selectedStrokes.add(stroke);
             }
         }
-        
+        for (const text of texts) {
+            if (strokeHasPointInPolygon(text, polygon)) {
+                this.selectedStrokes.add(text);
+            }
+        }
+
         if (this.selectedStrokes.size > 0) {
             this.pushLayerHistory();
         }
@@ -837,10 +829,10 @@ export const DrawingBoard = {
         this.saveTimer = setTimeout(() => this.flushSave(), SAVE_DEBOUNCE_MS);
     },
 
-    flushSave() {
+    async flushSave() {
         clearTimeout(this.saveTimer);
         this.doc.viewport = CanvasViewport.toDoc();
-        writeDocument(this.doc);
+        await writeDocument(this.doc);
     },
 
     setCanvasMode(mode) {
@@ -1027,10 +1019,6 @@ export const DrawingBoard = {
                 <span class="drawing-dropdown-label">Canvas</span>
                 <span class="drawing-dropdown-chevron">${CHEVRON}</span>
             </button>
-            <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-export" aria-haspopup="menu" aria-expanded="false" title="Export" aria-label="Export">
-                <span class="drawing-dropdown-label">Export</span>
-                <span class="drawing-dropdown-chevron">${CHEVRON}</span>
-            </button>
             <button type="button" class="btn btn--compact btn--icon" id="draw-display-options" title="Display options" aria-label="Display options" aria-expanded="false" aria-haspopup="menu">${ACTION_ICONS.displayOptions}</button>
             <button type="button" class="btn btn--compact btn--icon" id="draw-fullscreen" title="Full screen" aria-label="Full screen" aria-pressed="false">${ACTION_ICONS.fullscreenEnter}</button>
             <span class="format-toolbar-sep" aria-hidden="true"></span>
@@ -1103,18 +1091,7 @@ export const DrawingBoard = {
             });
         });
 
-        q('#draw-menu-export')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            DrawingToolbarMenu.toggle({
-                anchor: e.currentTarget,
-                ariaLabel: 'Export',
-                items: EXPORT_ITEMS,
-                onSelect: (id) => {
-                    if (id === 'export-png') exportCanvasPng();
-                    else if (id === 'export-pdf') exportCanvasPdf();
-                }
-            });
-        });
+        // Export menu disabled until canvasExport.js is unified with live renderer.
 
         // Lasso button click handler
         q('#draw-lasso')?.addEventListener('click', (e) => {
@@ -1181,6 +1158,7 @@ export const DrawingBoard = {
         this.lassoPoints = [];
         this.selectedStrokes.clear();
         this.isDraggingLasso = false;
+        if (this.canvas) this.canvas.dataset.tool = 'lasso';
         this.renderToolbar();
     },
 
@@ -1190,7 +1168,8 @@ export const DrawingBoard = {
         this.selectedStrokes.clear();
         this.isDraggingLasso = false;
         this.lassoDragStart = null;
-        this.textLayer.innerHTML = '';
+        // Do not wipe textLayer here — it may contain active contentEditable boxes.
+        if (this.canvas) this.canvas.dataset.tool = this.activeTool;
         this.renderToolbar();
     },
 
@@ -1217,13 +1196,19 @@ export const DrawingBoard = {
 
     selectStrokesInLasso() {
         if (this.lassoPoints.length < 3) return;
-        
+
         const strokes = this.strokes();
+        const texts = getActiveTexts(this.doc);
         this.selectedStrokes.clear();
-        
+
         for (const stroke of strokes) {
             if (strokeHasPointInPolygon(stroke, this.lassoPoints)) {
                 this.selectedStrokes.add(stroke);
+            }
+        }
+        for (const text of texts) {
+            if (strokeHasPointInPolygon(text, this.lassoPoints)) {
+                this.selectedStrokes.add(text);
             }
         }
     },
@@ -1323,35 +1308,58 @@ export const DrawingBoard = {
         }
     },
 
-    isLassoButtonActive() {
-        return this.isLassoActive;
-    }
 };
 
 const TOOLBAR_STATE_KEY = 'matrix_drawing_toolbar';
 
-export function getDrawingBackupKeys() {
+export async function getDrawingBackupKeys() {
+    // IndexedDB is the primary store; read the persisted document directly.
+    let matrix_global_drawing = null;
+    try {
+        const doc = await readDocument();
+        matrix_global_drawing = JSON.stringify(doc);
+    } catch (e) {
+        matrix_global_drawing = localStorage.getItem(STORAGE_KEY);
+    }
+
     return {
-        matrix_global_drawing: localStorage.getItem(STORAGE_KEY),
+        matrix_global_drawing,
         matrix_drawing_prefs: localStorage.getItem(PREFS_KEY),
         matrix_workspace_mode: localStorage.getItem('matrix_workspace_mode'),
-        matrix_drawing_toolbar: localStorage.getItem(TOOLBAR_STATE_KEY),
-        matrix_drawing_toolbar_hidden: localStorage.getItem(TOOLBAR_STATE_KEY),
-        matrix_canvas_viewport: localStorage.getItem('matrix_canvas_viewport')
+        matrix_drawing_toolbar: localStorage.getItem(TOOLBAR_STATE_KEY)
     };
 }
 
-export function applyDrawingBackupKeys(backup) {
+export async function applyDrawingBackupKeys(backup) {
     if (backup.matrix_global_drawing != null) {
-        localStorage.setItem(STORAGE_KEY, typeof backup.matrix_global_drawing === 'string'
-            ? backup.matrix_global_drawing : JSON.stringify(backup.matrix_global_drawing));
+        let doc = backup.matrix_global_drawing;
+        if (typeof doc === 'string') {
+            try {
+                doc = JSON.parse(doc);
+            } catch {
+                // Leave as raw string; writeDocument will fail gracefully below.
+            }
+        }
+        try {
+            await writeDocument(doc);
+        } catch (e) {
+            // Fallback to localStorage only if IndexedDB write fails.
+        }
+        try {
+            localStorage.setItem(STORAGE_KEY, typeof doc === 'string' ? doc : JSON.stringify(doc));
+        } catch (e) {
+            // Ignore quota errors.
+        }
     }
     if (backup.matrix_drawing_prefs != null) {
-        localStorage.setItem(PREFS_KEY, typeof backup.matrix_drawing_prefs === 'string'
-            ? backup.matrix_drawing_prefs : JSON.stringify(backup.matrix_drawing_prefs));
+        const prefs = typeof backup.matrix_drawing_prefs === 'string'
+            ? backup.matrix_drawing_prefs : JSON.stringify(backup.matrix_drawing_prefs);
+        localStorage.setItem(PREFS_KEY, prefs);
     }
-    if (backup.matrix_workspace_mode != null) localStorage.setItem('matrix_workspace_mode', backup.matrix_workspace_mode);
-    const toolbarState = backup.matrix_drawing_toolbar ?? backup.matrix_drawing_toolbar_hidden;
+    if (backup.matrix_workspace_mode != null) {
+        localStorage.setItem('matrix_workspace_mode', backup.matrix_workspace_mode);
+    }
+    const toolbarState = backup.matrix_drawing_toolbar;
     if (toolbarState != null) {
         if (typeof toolbarState === 'string' && toolbarState === 'true') {
             localStorage.setItem(TOOLBAR_STATE_KEY, JSON.stringify({ collapsed: true }));
