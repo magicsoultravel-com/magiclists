@@ -41,6 +41,27 @@
         </div>
     </div>
 
+    <input type="file" id="media-library-file-picker" class="is-hidden" multiple>
+    <input type="file" id="media-meta-import-picker" class="is-hidden" accept=".json,application/json">
+    <input type="file" id="media-zip-import-picker" class="is-hidden" accept=".zip,application/zip">
+
+    <div id="media-library-panel" class="media-lib-panel is-hidden" role="dialog" aria-label="Media library">
+        <div class="media-lib-panel__top-actions">
+            <span class="media-lib-panel__drag card-act card-act--drag" data-media-lib-drag title="Drag to move" aria-label="Drag to move"></span>
+            <button type="button" class="card-act media-lib-panel__close" data-media-lib-close title="Close" aria-label="Close"></button>
+        </div>
+        <div class="media-lib-panel__header" data-media-lib-header></div>
+        <div class="media-lib-attach-chip is-hidden" data-media-attach-chip></div>
+        <div class="media-lib-panel__body">
+            <div class="media-lib-drop" data-media-lib-drop>
+                <p class="media-lib-empty is-hidden" data-media-lib-empty>No media yet. Upload, paste (Ctrl+V), or drop files here.</p>
+                <div class="media-lib-grid" data-media-lib-grid></div>
+            </div>
+            <div class="media-lib-detail" data-media-lib-detail></div>
+        </div>
+        <div class="media-lib-panel__footer" data-media-lib-footer></div>
+    </div>
+
     <script type="module" src="./js/popoutNote.js"></script>
 </body>
 </html>

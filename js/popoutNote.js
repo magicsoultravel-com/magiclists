@@ -18,6 +18,7 @@ import { initCrossTabSync } from './sync.js';
 import { readDisplayOptions, applyDisplayOptions } from './displayOptions.js';
 import { MediaStagingDialog } from './mediaStagingDialog.js';
 import { MediaPasteCatcher } from './mediaPasteCatcher.js';
+import { MediaLibraryOverlay, bindMediaFilePickers } from './mediaLibraryOverlay.js';
 import { registerLiveNoteSource } from './notePasteContext.js';
 
 const statusEl = document.getElementById('popout-status');
@@ -131,6 +132,8 @@ const PopoutEditor = {
         ));
         MediaStagingDialog.init();
         MediaPasteCatcher.init();
+        MediaLibraryOverlay.init({ getItems: () => [] });
+        bindMediaFilePickers();
 
         window.addEventListener('item:mutation_requested', (e) => this.onMutation(e));
     },

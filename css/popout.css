@@ -165,3 +165,8 @@
     opacity: 0.35;
     cursor: not-allowed;
 }
+
+/* Popout media library overlay is view-only: hide attach/note-picker controls. */
+.note-popout-body [data-media-lib-select-note] {
+    display: none;
+}
