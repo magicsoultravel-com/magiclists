@@ -11,19 +11,25 @@ const ORIENTATION_LABELS = {
     8: 'Rotated 90° CCW'
 };
 
+function shouldSwapDimensions(orientation) {
+    return [5, 6, 7, 8].includes(orientation);
+}
+
 /**
  * @param {Blob|File} blob
+ * @param {number|null} [orientation] - EXIF orientation tag
  * @returns {Promise<{ width: number|null, height: number|null }>}
  */
-export async function readImageDimensions(blob) {
+export async function readImageDimensions(blob, orientation = null) {
     if (!blob || !String(blob.type || '').startsWith('image/')) {
         return { width: null, height: null };
     }
+    const swap = shouldSwapDimensions(orientation);
     try {
         if (typeof createImageBitmap === 'function') {
             const bmp = await createImageBitmap(blob);
-            const width = bmp.width;
-            const height = bmp.height;
+            const width = swap ? bmp.height : bmp.width;
+            const height = swap ? bmp.width : bmp.height;
             bmp.close?.();
             return { width, height };
         }
@@ -35,7 +41,10 @@ export async function readImageDimensions(blob) {
         const img = new Image();
         img.onload = () => {
             URL.revokeObjectURL(url);
-            resolve({ width: img.naturalWidth || null, height: img.naturalHeight || null });
+            resolve({
+                width: (swap ? img.naturalHeight : img.naturalWidth) || null,
+                height: (swap ? img.naturalWidth : img.naturalHeight) || null
+            });
         };
         img.onerror = () => {
             URL.revokeObjectURL(url);
@@ -275,13 +284,13 @@ export async function buildMediaMetadata(blob, opts = {}) {
         || guessFilename(blob);
     const mime = blob.type || guessMime(filename) || 'application/octet-stream';
     const byteSize = blob.size || 0;
-    const dims = await readImageDimensions(blob);
     let exif = {};
     try {
         exif = await extractExifFromBlob(blob);
     } catch {
         exif = {};
     }
+    const dims = await readImageDimensions(blob, exif.orientation);
 
     const capturedAt = parseExifDateToUnix(exif.capturedAtLabel) || null;
 
@@ -327,13 +336,27 @@ function guessMime(filename) {
     return '';
 }
 
+function applyExifOrientation(ctx, orientation) {
+    switch (orientation) {
+        case 2: ctx.scale(-1, 1); break;
+        case 3: ctx.rotate(Math.PI); break;
+        case 4: ctx.scale(1, -1); break;
+        case 5: ctx.rotate(Math.PI / 2); ctx.scale(-1, 1); break;
+        case 6: ctx.rotate(Math.PI / 2); break;
+        case 7: ctx.rotate(-Math.PI / 2); ctx.scale(-1, 1); break;
+        case 8: ctx.rotate(-Math.PI / 2); break;
+        default: break;
+    }
+}
+
 /**
- * Generate a small JPEG thumbnail for image blobs.
+ * Generate a small JPEG thumbnail for image blobs, honoring EXIF orientation.
  * @param {Blob} blob
  * @param {number} [maxEdge=240]
+ * @param {number|null} [orientation]
  * @returns {Promise<Blob|null>}
  */
-export async function generateThumbnail(blob, maxEdge = 240) {
+export async function generateThumbnail(blob, maxEdge = 240, orientation = null) {
     if (!blob || !String(blob.type || '').startsWith('image/')) return null;
     try {
         let bitmap;
@@ -342,18 +365,23 @@ export async function generateThumbnail(blob, maxEdge = 240) {
         } else {
             return null;
         }
+        const swap = shouldSwapDimensions(orientation);
         const scale = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height, 1));
         const w = Math.max(1, Math.round(bitmap.width * scale));
         const h = Math.max(1, Math.round(bitmap.height * scale));
+        const targetW = swap ? h : w;
+        const targetH = swap ? w : h;
         const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
+        canvas.width = targetW;
+        canvas.height = targetH;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
             bitmap.close?.();
             return null;
         }
-        ctx.drawImage(bitmap, 0, 0, w, h);
+        ctx.translate(targetW / 2, targetH / 2);
+        applyExifOrientation(ctx, orientation);
+        ctx.drawImage(bitmap, -w / 2, -h / 2);
         bitmap.close?.();
         const thumb = await new Promise((resolve) => {
             canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.72);

@@ -6,7 +6,7 @@ export const MEDIA_MAX_BYTES = 25 * 1024 * 1024;
 export const MEDIA_EMBED_CAP = 256 * 1024;
 export const MEDIA_LIBRARY_CHANGED = 'media:library_changed';
 
-const objectUrls = new Map();
+const objectUrls = new Map(); // key -> { url, refs }
 
 function nowSeconds() {
     return Math.floor(Date.now() / 1000);
@@ -69,7 +69,7 @@ export async function commitMediaItem(blob, opts = {}) {
     });
     const id = opts.id || createMediaId();
     const ts = nowSeconds();
-    const thumbBlob = await generateThumbnail(blob);
+    const thumbBlob = await generateThumbnail(blob, 240, extracted.orientation);
 
     const record = {
         id,
@@ -131,14 +131,12 @@ export async function updateMediaMeta(id, patch = {}) {
     if (patch.description !== undefined) record.description = String(patch.description || '').trim();
     record.updatedAt = nowSeconds();
     await IndexedDBMediaStore.put(record);
-    revokeObjectUrl(id);
     notifyChanged();
     return toPublicMeta(record);
 }
 
 export async function removeMedia(id) {
     revokeObjectUrl(id);
-    revokeThumbUrl(id);
     await IndexedDBMediaStore.remove(id);
     notifyChanged();
 }
@@ -154,6 +152,22 @@ export async function putMediaRecord(record) {
     return ok;
 }
 
+/**
+ * Batch upsert records and emit a single change event.
+ * @param {object[]} records
+ */
+export async function putMediaRecords(records) {
+    const valid = (records || []).filter((r) => r?.id);
+    if (!valid.length) return 0;
+    let okCount = 0;
+    for (const record of valid) {
+        const ok = await IndexedDBMediaStore.put(record);
+        if (ok) okCount += 1;
+    }
+    if (okCount) notifyChanged();
+    return okCount;
+}
+
 export async function countMedia() {
     const all = await IndexedDBMediaStore.getAll();
     return all.length;
@@ -165,34 +179,54 @@ export async function countMedia() {
  */
 export async function getObjectUrl(id, which = 'blob') {
     const key = `${which}:${id}`;
-    if (objectUrls.has(key)) return objectUrls.get(key);
+    if (objectUrls.has(key)) {
+        const entry = objectUrls.get(key);
+        entry.refs += 1;
+        return entry.url;
+    }
     const record = await IndexedDBMediaStore.get(id);
     if (!record) return null;
     const blob = which === 'thumb' ? (record.thumbBlob || record.blob) : record.blob;
     if (!blob) return null;
     const url = URL.createObjectURL(blob);
-    objectUrls.set(key, url);
+    objectUrls.set(key, { url, refs: 1 });
     return url;
 }
 
-export function revokeObjectUrl(id) {
-    for (const which of ['blob', 'thumb']) {
-        const key = `${which}:${id}`;
-        const url = objectUrls.get(key);
-        if (url) {
-            URL.revokeObjectURL(url);
+/**
+ * Release a previously claimed object URL. The URL is only revoked when the
+ * reference count reaches zero, so multiple consumers can safely share URLs.
+ * @param {string} id
+ * @param {'blob'|'thumb'} [which]
+ */
+export function releaseObjectUrl(id, which = 'blob') {
+    const keys = which === 'all' ? ['blob', 'thumb'] : [which];
+    for (const k of keys) {
+        const key = `${k}:${id}`;
+        const entry = objectUrls.get(key);
+        if (!entry) continue;
+        entry.refs = Math.max(0, entry.refs - 1);
+        if (entry.refs === 0) {
+            URL.revokeObjectURL(entry.url);
             objectUrls.delete(key);
         }
     }
 }
 
-function revokeThumbUrl(id) {
-    revokeObjectUrl(id);
+export function revokeObjectUrl(id) {
+    for (const which of ['blob', 'thumb']) {
+        const key = `${which}:${id}`;
+        const entry = objectUrls.get(key);
+        if (entry) {
+            URL.revokeObjectURL(entry.url);
+            objectUrls.delete(key);
+        }
+    }
 }
 
 export function revokeAllObjectUrls() {
-    for (const url of objectUrls.values()) {
-        URL.revokeObjectURL(url);
+    for (const entry of objectUrls.values()) {
+        URL.revokeObjectURL(entry.url);
     }
     objectUrls.clear();
 }
@@ -215,8 +249,10 @@ export const MediaLibrary = {
     updateMediaMeta,
     removeMedia,
     putMediaRecord,
+    putMediaRecords,
     countMedia,
     getObjectUrl,
+    releaseObjectUrl,
     revokeObjectUrl,
     revokeAllObjectUrls,
     toPublicMeta

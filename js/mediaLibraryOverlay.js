@@ -4,8 +4,8 @@ import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import {
     getObjectUrl,
     listMedia,
+    releaseObjectUrl,
     removeMedia,
-    revokeAllObjectUrls,
     updateMediaMeta,
     MEDIA_LIBRARY_CHANGED
 } from './mediaLibrary.js';
@@ -43,8 +43,8 @@ let notePickerOverlay = null;
 let selectedId = null;
 let attachNoteId = null;
 let notePickerOpen = false;
-/** @type {Map<string, string>} */
-let thumbUrls = new Map();
+/** @type {Set<string>} object URL keys currently claimed by this panel */
+let claimedUrlKeys = new Set();
 /** @type {null | (() => object[])} */
 let getItems = null;
 let floatChromeBound = false;
@@ -98,6 +98,20 @@ function clampPanelPos(x, y, w, h) {
         x: clamp(x, b.left, Math.max(b.left, b.right - w)),
         y: clamp(y, b.top, Math.max(b.top, b.bottom - h))
     };
+}
+
+async function claimUrl(id, which) {
+    const url = await getObjectUrl(id, which);
+    if (url) claimedUrlKeys.add(`${which}:${id}`);
+    return url;
+}
+
+function releaseAllClaimedUrls() {
+    for (const key of claimedUrlKeys) {
+        const [which, id] = key.split(':');
+        releaseObjectUrl(id, which);
+    }
+    claimedUrlKeys.clear();
 }
 
 function applySavedGeometry() {
@@ -381,8 +395,7 @@ export const MediaLibraryOverlay = {
         selectedId = null;
         attachNoteId = null;
         notePickerOpen = false;
-        thumbUrls.clear();
-        revokeAllObjectUrls();
+        releaseAllClaimedUrls();
         this.closeNotePicker();
     },
 
@@ -550,11 +563,8 @@ export const MediaLibraryOverlay = {
         const tiles = await Promise.all(items.map(async (item) => {
             let thumbSrc = '';
             if (!item.blobMissing && String(item.mime || '').startsWith('image/')) {
-                const url = await getObjectUrl(item.id, 'thumb');
-                if (url) {
-                    thumbUrls.set(item.id, url);
-                    thumbSrc = url;
-                }
+                const url = await claimUrl(item.id, 'thumb');
+                if (url) thumbSrc = url;
             }
             const missing = item.blobMissing ? ' media-lib-tile--missing' : '';
             const selected = item.id === selectedId ? ' is-selected' : '';
@@ -631,7 +641,7 @@ export const MediaLibraryOverlay = {
 
         let previewHtml = '';
         if (!item.blobMissing && String(item.mime || '').startsWith('image/')) {
-            const url = await getObjectUrl(item.id, 'blob');
+            const url = await claimUrl(item.id, 'blob');
             if (url) previewHtml = `<img class="media-lib-detail__img" src="${escapeAttr(url)}" alt="">`;
         } else if (item.blobMissing) {
             previewHtml = '<p class="media-lib-detail__missing">File bytes missing — re-import media ZIP or re-upload.</p>';

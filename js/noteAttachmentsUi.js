@@ -1,7 +1,7 @@
 /** @module {"owns":"note card attached-media section HTML and hydrate", "related":["mediaAttachments.js","mediaLibrary.js","noteSurfaceHtml.js","mediaLibraryOverlay.js","mediaQuickActions.js"]} */
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import { CARD_ICONS } from './icons.js';
-import { getMediaMeta, getObjectUrl } from './mediaLibrary.js';
+import { getMediaMeta, getObjectUrl, releaseObjectUrl } from './mediaLibrary.js';
 import {
     ATTACH_SCALE_DEFAULT,
     ATTACH_SCALE_MAX,
@@ -22,6 +22,26 @@ async function openMediaLibrary(opts) {
 
 function attachmentEntry(item, mediaId) {
     return normalizeAttachments(item?.attachments).find((a) => a.mediaId === mediaId) || null;
+}
+
+function releaseAttachmentRowUrls(row) {
+    const mediaId = row.dataset.mediaId || null;
+    if (!mediaId) return;
+    if (row.dataset.thumbClaimed) {
+        delete row.dataset.thumbClaimed;
+        releaseObjectUrl(mediaId, 'thumb');
+    }
+    if (row.dataset.blobClaimed) {
+        delete row.dataset.blobClaimed;
+        releaseObjectUrl(mediaId, 'blob');
+    }
+}
+
+function releaseSectionUrls(section) {
+    if (!section) return;
+    section.querySelectorAll('.note-attachment[data-media-id]').forEach((row) => {
+        releaseAttachmentRowUrls(row);
+    });
 }
 
 function applyFullImageScale(img, scale) {
@@ -131,10 +151,12 @@ export function syncNoteAttachmentsDom(item) {
         const html = buildNoteAttachmentsSectionHtml(item, { canEdit, startCollapsed });
         const existing = body.querySelector('[data-note-attachments]');
         if (!html) {
+            releaseSectionUrls(existing);
             existing?.remove();
             continue;
         }
         if (existing) {
+            releaseSectionUrls(existing);
             const wasCollapsed = existing.querySelector('.note-section-body')?.classList.contains('collapsed');
             existing.outerHTML = html;
             const next = body.querySelector('[data-note-attachments]');
@@ -216,6 +238,7 @@ function ensureLightbox() {
  */
 export async function openMediaLightbox(mediaId) {
     if (!mediaId) return;
+    closeMediaLightbox();
     const meta = await getMediaMeta(mediaId);
     if (!meta || meta.blobMissing || !String(meta.mime || '').startsWith('image/')) {
         showAppToast('Preview unavailable');
@@ -227,6 +250,7 @@ export async function openMediaLightbox(mediaId) {
         return;
     }
     const el = ensureLightbox();
+    el.dataset.claimedMediaId = mediaId;
     const img = el.querySelector('[data-lightbox-img]');
     if (img) {
         img.src = url;
@@ -245,6 +269,11 @@ export function closeMediaLightbox() {
         img.removeAttribute('src');
         img.alt = '';
     }
+    const mediaId = lightboxEl.dataset.claimedMediaId || null;
+    if (mediaId) {
+        delete lightboxEl.dataset.claimedMediaId;
+        releaseObjectUrl(mediaId, 'blob');
+    }
 }
 
 /**
@@ -261,6 +290,11 @@ async function expandAttachmentRow(row, mediaId, scale = 1) {
         showAppToast('Preview unavailable');
         return;
     }
+    if (!row.isConnected) {
+        releaseObjectUrl(mediaId, 'blob');
+        return;
+    }
+    row.dataset.blobClaimed = '1';
     const s = clampAttachScale(scale);
     const widthPct = 100 * s;
     preview.innerHTML = `
@@ -288,6 +322,7 @@ async function expandAttachmentRow(row, mediaId, scale = 1) {
  * @param {HTMLElement} row
  */
 function collapseAttachmentRow(row) {
+    const mediaId = row.dataset.mediaId || null;
     const preview = row.querySelector('[data-attach-preview]');
     const expandBtn = row.querySelector('[data-expand-media]');
     if (preview) {
@@ -296,6 +331,10 @@ function collapseAttachmentRow(row) {
     }
     row.classList.remove('is-expanded');
     delete row.dataset.attachScale;
+    if (mediaId && row.dataset.blobClaimed) {
+        delete row.dataset.blobClaimed;
+        releaseObjectUrl(mediaId, 'blob');
+    }
     if (expandBtn) {
         expandBtn.innerHTML = CARD_ICONS.expandMedia;
         expandBtn.title = 'Expand in note';
@@ -440,7 +479,12 @@ async function hydrateAttachmentRows(section, item) {
                 if (thumbEl) {
                     const url = await getObjectUrl(id, 'thumb');
                     if (url) {
-                        thumbEl.innerHTML = `<img src="${escapeAttr(url)}" alt="">`;
+                        if (!row.isConnected) {
+                            releaseObjectUrl(id, 'thumb');
+                        } else {
+                            row.dataset.thumbClaimed = '1';
+                            thumbEl.innerHTML = `<img src="${escapeAttr(url)}" alt="">`;
+                        }
                     }
                 }
                 const entry = attachmentEntry(item, id);

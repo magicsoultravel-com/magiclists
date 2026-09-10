@@ -3,7 +3,7 @@ import {
     MEDIA_EMBED_CAP,
     getMediaRecord,
     listMedia,
-    putMediaRecord,
+    putMediaRecords,
     toPublicMeta,
     createMediaId
 } from './mediaLibrary.js';
@@ -103,7 +103,7 @@ export async function buildMediaMetaOnlyPackage() {
 export async function applyMediaLibraryBackupSection(section) {
     if (!section || typeof section !== 'object') return 0;
     const items = Array.isArray(section.items) ? section.items : [];
-    let count = 0;
+    const records = [];
 
     for (const entry of items) {
         if (!entry || typeof entry !== 'object') continue;
@@ -117,7 +117,7 @@ export async function applyMediaLibraryBackupSection(section) {
             try {
                 blob = base64ToBlob(entry.dataBase64, entry.mime || 'application/octet-stream');
                 blobMissing = false;
-                thumbBlob = (await generateThumbnail(blob)) || thumbBlob;
+                thumbBlob = (await generateThumbnail(blob, 240, entry.orientation)) || thumbBlob;
             } catch {
                 blob = existing?.blob || null;
                 blobMissing = !blob;
@@ -127,7 +127,7 @@ export async function applyMediaLibraryBackupSection(section) {
         }
 
         const ts = nowSeconds();
-        const record = {
+        records.push({
             id,
             filename: entry.filename || existing?.filename || 'file',
             mime: entry.mime || existing?.mime || 'application/octet-stream',
@@ -149,11 +149,9 @@ export async function applyMediaLibraryBackupSection(section) {
             blob,
             thumbBlob,
             blobMissing
-        };
-        await putMediaRecord(record);
-        count += 1;
+        });
     }
-    return count;
+    return putMediaRecords(records);
 }
 
 /**
@@ -411,7 +409,7 @@ export async function importMediaZipFile(file) {
     if (!manifestBytes) throw new Error('Missing manifest.json in media ZIP');
     const manifest = JSON.parse(new TextDecoder().decode(manifestBytes));
     const items = Array.isArray(manifest.items) ? manifest.items : [];
-    let count = 0;
+    const records = [];
     const ts = nowSeconds();
 
     for (const entry of items) {
@@ -431,8 +429,8 @@ export async function importMediaZipFile(file) {
             const data = files.get(path);
             blob = new Blob([data], { type: entry.mime || 'application/octet-stream' });
         }
-        const thumbBlob = blob ? await generateThumbnail(blob) : null;
-        await putMediaRecord({
+        const thumbBlob = blob ? await generateThumbnail(blob, 240, entry.orientation) : null;
+        records.push({
             id,
             filename: entry.filename || 'file',
             mime: entry.mime || 'application/octet-stream',
@@ -455,9 +453,8 @@ export async function importMediaZipFile(file) {
             thumbBlob,
             blobMissing: !blob
         });
-        count += 1;
     }
-    return count;
+    return putMediaRecords(records);
 }
 
 function triggerDownload(blob, filename) {

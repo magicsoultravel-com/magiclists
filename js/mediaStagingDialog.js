@@ -54,11 +54,26 @@ export async function openMediaStaging(files, opts = {}) {
     ensureOverlay();
     if (!overlay) return;
 
-    const list = Array.from(files || []).filter(Boolean);
-    if (!list.length) {
+    if ('attachNoteId' in opts) {
+        attachNoteId = opts.attachNoteId || null;
+    }
+
+    const added = await addFilesToStaging(files, opts);
+    if (!added) {
         showAppToast('No files to add');
         return;
     }
+
+    render();
+    overlay.classList.remove('is-hidden');
+    requestAnimationFrame(() => {
+        requestAnimationFrame(() => overlay?.classList.add('is-open'));
+    });
+}
+
+async function addFilesToStaging(files, opts = {}) {
+    const list = Array.from(files || []).filter(Boolean);
+    if (!list.length) return false;
 
     if ('attachNoteId' in opts) {
         attachNoteId = opts.attachNoteId || null;
@@ -85,12 +100,7 @@ export async function openMediaStaging(files, opts = {}) {
             tooLarge
         });
     }
-
-    render();
-    overlay.classList.remove('is-hidden');
-    requestAnimationFrame(() => {
-        requestAnimationFrame(() => overlay?.classList.add('is-open'));
-    });
+    return true;
 }
 
 /**
@@ -103,10 +113,8 @@ export async function appendMediaStaging(files, opts = {}) {
         await openMediaStaging(files, opts);
         return;
     }
-    if ('attachNoteId' in opts) {
-        attachNoteId = opts.attachNoteId || null;
-    }
-    await openMediaStaging(files, opts);
+    const added = await addFilesToStaging(files, opts);
+    if (added) render();
 }
 
 export function isMediaStagingOpen() {

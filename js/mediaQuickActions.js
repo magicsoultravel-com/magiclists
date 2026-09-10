@@ -88,7 +88,7 @@ export async function downloadMediaFile(mediaId) {
     a.href = url;
     a.download = record.filename || 'download';
     a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
 /**
