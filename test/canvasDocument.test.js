@@ -32,6 +32,7 @@ import {
     setActiveBackground,
     getPageDimensions,
     switchCanvasMode,
+    expandInfiniteBounds,
     STORAGE_KEY
 } from '../js/canvasDocument.js';
 import { clearCanvasDocuments, getCanvasDocument, setCanvasDocument } from '../js/storage/indexedDbCanvasStore.js';
@@ -121,6 +122,51 @@ describe('canvasDocument', () => {
         assert.ok(dims.height >= 600);
     });
 
+    it('expandInfiniteBounds keeps top/left at 0 and grows right/bottom', () => {
+        const doc = createEmptyDocument('infinite');
+        doc.infinite.bounds = { minX: 0, minY: 0, maxX: 1000, maxY: 1000 };
+
+        assert.equal(expandInfiniteBounds(doc, 50, 50, 400), false);
+        assert.equal(doc.infinite.bounds.minX, 0);
+        assert.equal(doc.infinite.bounds.minY, 0);
+        assert.equal(doc.infinite.bounds.maxX, 1000);
+        assert.equal(doc.infinite.bounds.maxY, 1000);
+
+        assert.equal(expandInfiniteBounds(doc, 1200, 1500, 400), true);
+        assert.equal(doc.infinite.bounds.minX, 0);
+        assert.equal(doc.infinite.bounds.minY, 0);
+        assert.equal(doc.infinite.bounds.maxX, 1600);
+        assert.equal(doc.infinite.bounds.maxY, 1900);
+
+        // Negative drawing coords must not pull the origin past 0,0.
+        expandInfiniteBounds(doc, -200, -300, 400);
+        assert.equal(doc.infinite.bounds.minX, 0);
+        assert.equal(doc.infinite.bounds.minY, 0);
+    });
+
+    it('migrateDocument pins legacy negative infinite mins to 0', () => {
+        const raw = {
+            version: 2,
+            canvasMode: 'infinite',
+            activePageId: 'p1',
+            pages: [{ id: 'p1', format: 'a4', background: 'blank', strokes: [], texts: [], images: [] }],
+            infinite: {
+                strokes: [],
+                texts: [],
+                images: [],
+                background: 'blank',
+                backgroundColor: '',
+                bounds: { minX: -400, minY: -200, maxX: 2000, maxY: 1800 }
+            },
+            viewport: { scale: 1, offsetX: 0, offsetY: 0 }
+        };
+        const doc = migrateDocument(raw);
+        assert.equal(doc.infinite.bounds.minX, 0);
+        assert.equal(doc.infinite.bounds.minY, 0);
+        assert.ok(doc.infinite.bounds.maxX >= 2000);
+        assert.ok(doc.infinite.bounds.maxY >= 1800);
+    });
+
     it('switchCanvasMode keeps active strokes when moving a4 ↔ infinite', () => {
         const doc = createEmptyDocument('a4');
         const strokes = [{ id: 's1', tool: 'brush', points: [{ x: 10, y: 20 }] }];
@@ -141,6 +187,49 @@ describe('canvasDocument', () => {
         assert.deepEqual(getActiveTexts(doc), texts);
         assert.equal(getActiveBackground(doc), 'grid');
         assert.equal(doc.pages[0].format, 'a4');
+    });
+
+    it('infinite mode shares page content so pagination works', () => {
+        const doc = createEmptyDocument('infinite');
+        const page1Strokes = [{ id: 'p1', tool: 'brush', points: [{ x: 1, y: 1 }] }];
+        setActiveStrokes(doc, page1Strokes);
+        const page2 = doc.pages[0];
+        // add second page via pages API shape used by addPage
+        doc.pages.push({
+            id: 'page_2',
+            format: 'a4',
+            background: 'blank',
+            backgroundColor: '',
+            strokes: [{ id: 'p2', tool: 'brush', points: [{ x: 2, y: 2 }] }],
+            texts: [],
+            images: []
+        });
+        assert.deepEqual(getActiveStrokes(doc), page1Strokes);
+        doc.activePageId = 'page_2';
+        assert.equal(getActiveStrokes(doc)[0].id, 'p2');
+        doc.activePageId = page2.id;
+        assert.equal(getActiveStrokes(doc)[0].id, 'p1');
+    });
+
+    it('migrateDocument promotes legacy infinite content onto the active page', () => {
+        const raw = {
+            version: 2,
+            canvasMode: 'infinite',
+            activePageId: 'p1',
+            pages: [{ id: 'p1', format: 'a4', background: 'blank', strokes: [], texts: [], images: [] }],
+            infinite: {
+                strokes: [{ id: 'legacy', points: [{ x: 3, y: 4 }] }],
+                texts: [],
+                images: [],
+                background: 'dots',
+                backgroundColor: '',
+                bounds: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 }
+            },
+            viewport: { scale: 1, offsetX: 0, offsetY: 0 }
+        };
+        const doc = migrateDocument(raw);
+        assert.equal(getActiveStrokes(doc)[0].id, 'legacy');
+        assert.equal(getActiveBackground(doc), 'dots');
     });
 
     it('legacy localStorage drawing is migrated to IndexedDB on read', async () => {

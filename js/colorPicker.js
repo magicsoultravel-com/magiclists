@@ -351,6 +351,8 @@ export const ColorPicker = {
         this.anchor?.setAttribute('aria-expanded', 'false');
         this.anchor = null;
         this.onSelect = null;
+        const done = this.onClose;
+        this.onClose = null;
         if (this.outsideHandler) {
             document.removeEventListener('mousedown', this.outsideHandler, true);
             this.outsideHandler = null;
@@ -363,6 +365,7 @@ export const ColorPicker = {
             this.popover.removeEventListener('click', this.eyedropperClickHandler);
             this.eyedropperClickHandler = null;
         }
+        done?.();
     },
 
     open({ anchor, presets = PALETTE_NOTE, value = '', onSelect, align = 'end', mode = 'popover', container = null, onClose = null }) {
@@ -395,6 +398,7 @@ export const ColorPicker = {
 
         this.anchor = anchor;
         this.onSelect = onSelect;
+        this.onClose = onClose;
         this.align = align;
         this.mode = 'popover';
         this.closeOnSelect = false;

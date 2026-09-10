@@ -56,6 +56,45 @@
     color: var(--text-main);
 }
 
+.drawing-toolbar-tool-echo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    max-width: 8.5rem;
+    padding: 0.1rem 0.38rem 0.1rem 0.28rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border-color));
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color: var(--text-main);
+    font-size: 0.58rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    pointer-events: none;
+}
+
+.drawing-toolbar-tool-echo__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 0.9rem;
+    height: 0.9rem;
+    color: var(--accent);
+    line-height: 0;
+    flex-shrink: 0;
+}
+
+.drawing-toolbar-tool-echo__icon svg {
+    width: 0.78rem;
+    height: 0.78rem;
+}
+
+.drawing-toolbar-tool-echo__label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .drawing-toolbar-panel__spacer {
     flex: 1;
 }
@@ -168,6 +207,71 @@
     inset: 0;
     overflow: hidden;
     touch-action: none;
+}
+
+.canvas-scrollbar {
+    position: absolute;
+    z-index: 6;
+    background: color-mix(in srgb, var(--bg-surface, #1a1a1e) 55%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+    pointer-events: auto;
+}
+
+.canvas-scrollbar.is-hidden {
+    display: none !important;
+}
+
+.canvas-scrollbar--x {
+    left: 4px;
+    right: 14px;
+    bottom: 4px;
+    height: 8px;
+    border-radius: 999px;
+}
+
+.canvas-scrollbar--y {
+    top: 4px;
+    right: 4px;
+    bottom: 14px;
+    width: 8px;
+    border-radius: 999px;
+}
+
+.canvas-viewport.has-scrollbar-x.has-scrollbar-y .canvas-scrollbar--x {
+    right: 14px;
+}
+
+.canvas-viewport.has-scrollbar-x.has-scrollbar-y .canvas-scrollbar--y {
+    bottom: 14px;
+}
+
+.canvas-scrollbar__thumb {
+    position: absolute;
+    top: 0;
+    left: 0;
+    min-width: 28px;
+    min-height: 28px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 55%, #ffffff 20%);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+    cursor: grab;
+    touch-action: none;
+}
+
+.canvas-scrollbar--x .canvas-scrollbar__thumb {
+    height: 100%;
+    min-height: 0;
+    width: 40%;
+}
+
+.canvas-scrollbar--y .canvas-scrollbar__thumb {
+    width: 100%;
+    min-width: 0;
+    height: 40%;
+}
+
+.canvas-scrollbar__thumb:active {
+    cursor: grabbing;
 }
 
 .canvas-viewport-inner {
@@ -435,98 +539,6 @@
     max-width: 100%;
 }
 
-.drawing-color-rollout {
-    display: flex;
-    align-items: center;
-    overflow: hidden;
-    max-width: 0;
-    opacity: 0;
-    pointer-events: none;
-    transition:
-        max-width 0.22s cubic-bezier(0.22, 1, 0.36, 1),
-        opacity 0.18s ease,
-        margin 0.22s cubic-bezier(0.22, 1, 0.36, 1);
-    margin-left: 0;
-}
-
-.drawing-color-rollout.is-open {
-    max-width: 28rem;
-    opacity: 1;
-    pointer-events: auto;
-    margin-left: 0.25rem;
-}
-
-.drawing-color-rollout.is-opening .color-picker-tile {
-    animation: drawColorTileIn 0.2s cubic-bezier(0.22, 1, 0.36, 1) backwards;
-}
-
-.drawing-color-rollout.is-opening .color-picker-tile:nth-child(1) { animation-delay: 0ms; }
-.drawing-color-rollout.is-opening .color-picker-tile:nth-child(2) { animation-delay: 20ms; }
-.drawing-color-rollout.is-opening .color-picker-tile:nth-child(3) { animation-delay: 40ms; }
-.drawing-color-rollout.is-opening .color-picker-tile:nth-child(4) { animation-delay: 60ms; }
-.drawing-color-rollout.is-opening .color-picker-tile:nth-child(5) { animation-delay: 80ms; }
-.drawing-color-rollout.is-opening .color-picker-tile:nth-child(6) { animation-delay: 100ms; }
-.drawing-color-rollout.is-opening .color-picker-tile:nth-child(7) { animation-delay: 120ms; }
-.drawing-color-rollout.is-opening .color-picker-tile:nth-child(8) { animation-delay: 140ms; }
-
-@keyframes drawColorTileIn {
-    from {
-        opacity: 0;
-        transform: scale(0.82) translateX(-4px);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1) translateX(0);
-    }
-}
-
-.color-picker-body--inline {
-    padding: 0;
-}
-
-.color-picker-body--inline .color-picker-main {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    flex-wrap: nowrap;
-}
-
-.color-picker-grid--inline {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 0.2rem;
-    grid-template-columns: unset;
-    grid-template-rows: unset;
-}
-
-.color-picker-grid--inline .color-picker-tile,
-.color-picker-grid--inline-user .color-picker-tile {
-    width: 1.05rem;
-    height: 1.05rem;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-
-.color-picker-divider--inline {
-    width: 1px;
-    height: 1.05rem;
-    margin: 0 0.1rem;
-}
-
-.color-picker-label {
-    font-size: 10px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--text-muted, #8e8e93);
-    margin: 0 0.1rem 0 0.05rem;
-}
-
-.color-picker-grid--inline-user {
-    display: flex;
-    gap: 0.2rem;
-}
-
 .drawing-color-chip-btn[aria-expanded="true"] {
     box-shadow: 0 0 0 2px var(--accent);
 }
@@ -545,7 +557,9 @@
    ========================================================================== */
 
 /* Pointer/Select button active state */
-#draw-menu-pointer.active {
+#draw-menu-pointer.active,
+#draw-eraser.active,
+#draw-pan.active {
     background: color-mix(in srgb, var(--accent) 35%, transparent);
     color: var(--text-main);
 }
@@ -580,12 +594,25 @@
 
 /* Viewport panning cursor */
 .canvas-viewport.is-panning,
+.canvas-viewport.is-hand-mode.is-panning,
 .canvas-viewport:has(.canvas-viewport-inner.is-panning) {
     cursor: grabbing;
 }
 
-.canvas-viewport:not(.is-panning) {
+.canvas-viewport.is-hand-mode,
+.canvas-viewport.is-space-pan {
     cursor: grab;
+}
+
+.canvas-viewport.is-hand-mode .drawing-canvas,
+.canvas-viewport.is-space-pan .drawing-canvas {
+    cursor: grab !important;
+}
+
+.canvas-viewport.is-hand-mode.is-panning .drawing-canvas,
+.canvas-viewport.is-space-pan.is-panning .drawing-canvas,
+.canvas-viewport.is-panning .drawing-canvas {
+    cursor: grabbing !important;
 }
 
 /* Tool-specific cursors on the drawing canvas */

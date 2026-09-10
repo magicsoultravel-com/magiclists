@@ -1,12 +1,14 @@
 const STORAGE_KEY = 'matrix_global_drawing';
 
 export const PAGE_FORMATS = {
-    a5: { width: 874, height: 1240, label: 'A5' },
+    a2: { width: 2480, height: 3508, label: 'A2' },
+    a3: { width: 1754, height: 2480, label: 'A3' },
     a4: { width: 1240, height: 1754, label: 'A4' },
-    a3: { width: 1754, height: 2480, label: 'A3' }
+    a5: { width: 874, height: 1240, label: 'A5' },
+    a6: { width: 620, height: 874, label: 'A6' }
 };
 
-export const CANVAS_MODES = ['a4', 'a5', 'a3', 'infinite'];
+export const CANVAS_MODES = ['a2', 'a3', 'a4', 'a5', 'a6', 'infinite'];
 export const BACKGROUNDS = ['blank', 'grid', 'dots', 'graph', 'coarse', 'isometric', 'ruled', 'hex', 'notebook', 'staff', 'football'];
 
 function createId(prefix) {
@@ -65,8 +67,11 @@ export function migrateDocument(raw) {
             if (!Array.isArray(p.images)) p.images = [];
             if (!Array.isArray(p.texts)) p.texts = [];
             if (!Array.isArray(p.strokes)) p.strokes = [];
+            if (p.format && !PAGE_FORMATS[p.format]) p.format = 'a4';
         });
         if (doc.infinite && doc.infinite.backgroundColor == null) doc.infinite.backgroundColor = '';
+        normalizeInfiniteBounds(doc);
+        promoteInfiniteLayerToActivePage(doc);
         return doc;
     }
     const strokes = Array.isArray(raw.strokes) ? raw.strokes : [];
@@ -133,75 +138,75 @@ export function getActivePage(doc) {
     return doc.pages.find(function (p) { return p.id === doc.activePageId; }) || doc.pages[0];
 }
 
+function layerIsEmpty(layer) {
+    return !layer
+        || ((!layer.strokes || !layer.strokes.length)
+            && (!layer.texts || !layer.texts.length)
+            && (!layer.images || !layer.images.length));
+}
+
+/** One-time reconcile: page store is canonical; lift legacy infinite content onto the active page. */
+function promoteInfiniteLayerToActivePage(doc) {
+    if (!doc || !doc.infinite) return;
+    var page = getActivePage(doc);
+    if (!page || !layerIsEmpty(page)) return;
+    if (layerIsEmpty(doc.infinite)) return;
+    page.strokes = Array.isArray(doc.infinite.strokes) ? doc.infinite.strokes.slice() : [];
+    page.texts = Array.isArray(doc.infinite.texts) ? doc.infinite.texts.slice() : [];
+    page.images = Array.isArray(doc.infinite.images) ? doc.infinite.images.slice() : [];
+    if (doc.infinite.background) page.background = doc.infinite.background;
+    if (doc.infinite.backgroundColor) page.backgroundColor = doc.infinite.backgroundColor;
+}
+
 export function getActiveStrokes(doc) {
-    if (doc.canvasMode === 'infinite') return doc.infinite.strokes;
     var page = getActivePage(doc);
     return page ? page.strokes : [];
 }
 
 export function getActiveTexts(doc) {
-    if (doc.canvasMode === 'infinite') return doc.infinite.texts;
     var page = getActivePage(doc);
     return page ? page.texts : [];
 }
 
 export function getActiveImages(doc) {
-    if (doc.canvasMode === 'infinite') return doc.infinite.images || [];
     var page = getActivePage(doc);
     return page ? (page.images || []) : [];
 }
 
 export function setActiveStrokes(doc, strokes) {
-    if (doc.canvasMode === 'infinite') doc.infinite.strokes = strokes;
-    else {
-        var page = getActivePage(doc);
-        if (page) page.strokes = strokes;
-    }
+    var page = getActivePage(doc);
+    if (page) page.strokes = strokes;
 }
 
 export function setActiveTexts(doc, texts) {
-    if (doc.canvasMode === 'infinite') doc.infinite.texts = texts;
-    else {
-        var page = getActivePage(doc);
-        if (page) page.texts = texts;
-    }
+    var page = getActivePage(doc);
+    if (page) page.texts = texts;
 }
 
 export function setActiveImages(doc, images) {
-    if (doc.canvasMode === 'infinite') doc.infinite.images = images;
-    else {
-        var page = getActivePage(doc);
-        if (page) page.images = images;
-    }
+    var page = getActivePage(doc);
+    if (page) page.images = images;
 }
 
 export function getActiveBackground(doc) {
-    if (doc.canvasMode === 'infinite') return doc.infinite.background || 'blank';
     var page = getActivePage(doc);
     return page ? page.background || 'blank' : 'blank';
 }
 
 export function setActiveBackground(doc, background) {
-    if (doc.canvasMode === 'infinite') doc.infinite.background = background;
-    else {
-        var page = getActivePage(doc);
-        if (page) page.background = background;
-    }
+    var page = getActivePage(doc);
+    if (page) page.background = background;
 }
 
 export function getActiveBackgroundColor(doc) {
-    if (doc.canvasMode === 'infinite') return doc.infinite.backgroundColor || '';
     var page = getActivePage(doc);
     return page && page.backgroundColor ? page.backgroundColor : '';
 }
 
 export function setActiveBackgroundColor(doc, color) {
     const hex = color || '';
-    if (doc.canvasMode === 'infinite') doc.infinite.backgroundColor = hex;
-    else {
-        var page = getActivePage(doc);
-        if (page) page.backgroundColor = hex;
-    }
+    var page = getActivePage(doc);
+    if (page) page.backgroundColor = hex;
 }
 
 export function getPageDimensions(doc) {
@@ -214,14 +219,23 @@ export function getPageDimensions(doc) {
     return { width: fmt.width, height: fmt.height };
 }
 
-function cloneLayer(value) {
-    return JSON.parse(JSON.stringify(value));
+/** Pin infinite origin at (0,0); only the right/bottom edge may grow. */
+export function normalizeInfiniteBounds(doc) {
+    if (!doc || !doc.infinite) return;
+    var b = doc.infinite.bounds || { minX: 0, minY: 0, maxX: 3000, maxY: 3000 };
+    var extentX = Math.max(3000, (b.maxX || 0) - Math.min(0, b.minX || 0), b.maxX || 0);
+    var extentY = Math.max(3000, (b.maxY || 0) - Math.min(0, b.minY || 0), b.maxY || 0);
+    doc.infinite.bounds = {
+        minX: 0,
+        minY: 0,
+        maxX: Math.max(3000, extentX),
+        maxY: Math.max(3000, extentY)
+    };
 }
 
 /**
  * Switch canvas mode while keeping the active drawing visible.
- * A4/A5/A3 share the same page store; Infinite uses doc.infinite —
- * this snapshots the active layer and writes it into the destination store.
+ * Content lives on pages in every mode; Infinite only changes viewport bounds.
  */
 export function switchCanvasMode(doc, mode) {
     if (!doc || CANVAS_MODES.indexOf(mode) < 0) return false;
@@ -235,13 +249,6 @@ export function switchCanvasMode(doc, mode) {
 
     var prevMode = doc.canvasMode;
     var prevDims = getPageDimensions(doc);
-    var payload = {
-        strokes: cloneLayer(getActiveStrokes(doc)),
-        texts: cloneLayer(getActiveTexts(doc)),
-        images: cloneLayer(getActiveImages(doc)),
-        background: getActiveBackground(doc),
-        backgroundColor: getActiveBackgroundColor(doc)
-    };
 
     doc.canvasMode = mode;
 
@@ -249,22 +256,28 @@ export function switchCanvasMode(doc, mode) {
         var page = getActivePage(doc);
         if (page) page.format = mode;
     } else if (prevMode !== 'infinite') {
+        if (!doc.infinite) {
+            doc.infinite = {
+                strokes: [],
+                texts: [],
+                images: [],
+                background: 'blank',
+                backgroundColor: '',
+                bounds: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 }
+            };
+        }
         var b = doc.infinite.bounds || { minX: 0, minY: 0, maxX: 3000, maxY: 3000 };
-        b.maxX = Math.max(b.maxX, b.minX + Math.max(3000, prevDims.width));
-        b.maxY = Math.max(b.maxY, b.minY + Math.max(3000, prevDims.height));
+        b.minX = 0;
+        b.minY = 0;
+        b.maxX = Math.max(b.maxX, 3000, prevDims.width);
+        b.maxY = Math.max(b.maxY, 3000, prevDims.height);
         doc.infinite.bounds = b;
     }
-
-    setActiveStrokes(doc, payload.strokes);
-    setActiveTexts(doc, payload.texts);
-    setActiveImages(doc, payload.images);
-    setActiveBackground(doc, payload.background);
-    setActiveBackgroundColor(doc, payload.backgroundColor);
     return true;
 }
 
 export function addPage(doc) {
-    var fmt = doc.canvasMode === 'infinite' ? 'a4' : (PAGE_FORMATS[doc.canvasMode] ? doc.canvasMode : 'a4');
+    var fmt = PAGE_FORMATS[doc.canvasMode] ? doc.canvasMode : 'a4';
     var page = emptyPage(fmt, getActiveBackground(doc), getActiveBackgroundColor(doc));
     doc.pages.push(page);
     doc.activePageId = page.id;
@@ -292,10 +305,13 @@ export function prevPage(doc) {
 export function expandInfiniteBounds(doc, x, y, margin) {
     var m = margin || 400;
     var b = doc.infinite.bounds;
-    b.minX = Math.min(b.minX, x - m);
-    b.minY = Math.min(b.minY, y - m);
-    b.maxX = Math.max(b.maxX, x + m);
-    b.maxY = Math.max(b.maxY, y + m);
+    var prev = { minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY };
+    // Top/left are fixed at the origin; only grow right and down.
+    b.minX = 0;
+    b.minY = 0;
+    b.maxX = Math.max(b.maxX, x + m, 0);
+    b.maxY = Math.max(b.maxY, y + m, 0);
+    return b.minX !== prev.minX || b.minY !== prev.minY || b.maxX !== prev.maxX || b.maxY !== prev.maxY;
 }
 
 export { STORAGE_KEY, createId };

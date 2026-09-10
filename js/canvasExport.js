@@ -8,9 +8,11 @@
 // ============================================================================
 
 export const PAGE_FORMATS = {
+    a2: { width: 2480, height: 3508, label: 'A2' },
     a3: { width: 1754, height: 2480, label: 'A3' },
     a4: { width: 1240, height: 1754, label: 'A4' },
-    a5: { width: 874, height: 1240, label: 'A5' }
+    a5: { width: 874, height: 1240, label: 'A5' },
+    a6: { width: 620, height: 874, label: 'A6' }
 };
 
 // Default settings for template rendering

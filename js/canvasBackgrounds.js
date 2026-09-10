@@ -119,9 +119,9 @@ function drawRuledLines(ctx, width, height, lineH = 32, startY = 48) {
     }
 }
 
-function drawStaffBlock(ctx, width, top, lineGap, lineStartX) {
+function drawStaffBlock(ctx, width, top, lineGap, lineStartX, clefX = 28) {
     ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-    drawTrebleClef(ctx, 28, top, lineGap);
+    drawTrebleClef(ctx, clefX, top, lineGap);
     for (let i = 0; i < 5; i++) {
         const y = top + i * lineGap;
         ctx.beginPath();
@@ -132,115 +132,84 @@ function drawStaffBlock(ctx, width, top, lineGap, lineStartX) {
 }
 
 function drawFootballField(ctx, width, height, margin = 40) {
-    const fieldLeft = margin;
-    const fieldRight = width - margin;
-    const fieldTop = margin;
-    const fieldBottom = height - margin;
-    
-    const fieldWidth = fieldRight - fieldLeft;
-    const fieldHeight = fieldBottom - fieldTop;
-    
-    // Center line
-    const centerX = (fieldLeft + fieldRight) / 2;
-    
-    // Center circle
+    // FIFA pitch ~105×68 — fit at 100% inside the page without stretching.
+    const pitchAspect = 105 / 68;
+    const availW = Math.max(1, width - margin * 2);
+    const availH = Math.max(1, height - margin * 2);
+    let fieldWidth;
+    let fieldHeight;
+    if (availW / availH > pitchAspect) {
+        fieldHeight = availH;
+        fieldWidth = fieldHeight * pitchAspect;
+    } else {
+        fieldWidth = availW;
+        fieldHeight = fieldWidth / pitchAspect;
+    }
+    const fieldLeft = (width - fieldWidth) / 2;
+    const fieldTop = (height - fieldHeight) / 2;
+    const fieldRight = fieldLeft + fieldWidth;
+    const fieldBottom = fieldTop + fieldHeight;
+
+    const centerX = fieldLeft + fieldWidth / 2;
+    const centerY = fieldTop + fieldHeight / 2;
+    const scale = fieldWidth / 1050;
+
     const centerCircleRadius = fieldWidth * 0.10;
-    
-    // Penalty areas
-    const penaltyAreaLength = fieldHeight * 0.15;
-    const penaltyAreaWidth = fieldWidth * 0.40;
-    
-    // Penalty spots
-    const penaltySpotX = fieldLeft + penaltyAreaLength;
-    const penaltySpotXR = fieldRight - penaltyAreaLength;
-    const penaltySpotY = fieldTop + fieldHeight / 2;
-    
-    // Goal boxes
-    const goalBoxLength = fieldHeight * 0.06;
-    const goalBoxWidth = fieldWidth * 0.20;
-    
+    const penaltyAreaDepth = fieldWidth * 0.16;
+    const penaltyAreaWidth = fieldHeight * 0.52;
+    const goalBoxDepth = fieldWidth * 0.055;
+    const goalBoxWidth = fieldHeight * 0.24;
+    const spotR = Math.max(2, 3.5 * scale);
+    const arcR = Math.max(10, fieldWidth * 0.09);
+    const cornerRadius = Math.max(8, 14 * scale);
+
     ctx.strokeStyle = 'rgba(255,255,255,0.16)';
-    ctx.lineWidth = 1.5;
-    
-    // Outer boundary
+    ctx.fillStyle = 'rgba(255,255,255,0.16)';
+    ctx.lineWidth = Math.max(1.25, 1.75 * scale);
+
     ctx.strokeRect(fieldLeft, fieldTop, fieldWidth, fieldHeight);
-    
-    // Center line
+
     ctx.beginPath();
     ctx.moveTo(centerX, fieldTop);
     ctx.lineTo(centerX, fieldBottom);
     ctx.stroke();
-    
-    // Center circle
+
     ctx.beginPath();
-    ctx.arc(centerX, penaltySpotY, centerCircleRadius, 0, Math.PI * 2);
+    ctx.arc(centerX, centerY, centerCircleRadius, 0, Math.PI * 2);
     ctx.stroke();
-    
-    // Left penalty area
-    const leftPenaltyTop = fieldTop + (fieldHeight - penaltyAreaWidth) / 2;
-    const leftPenaltyBottom = fieldTop + (fieldHeight + penaltyAreaWidth) / 2;
-    
-    // Left penalty box
-    ctx.strokeRect(fieldLeft, leftPenaltyTop, penaltyAreaLength, penaltyAreaWidth);
-    
-    // Left penalty spot
+
+    const leftPenaltyTop = centerY - penaltyAreaWidth / 2;
+    ctx.strokeRect(fieldLeft, leftPenaltyTop, penaltyAreaDepth, penaltyAreaWidth);
     ctx.beginPath();
-    ctx.arc(penaltySpotX, penaltySpotY, 4, 0, Math.PI * 2);
+    ctx.arc(fieldLeft + penaltyAreaDepth, centerY, spotR, 0, Math.PI * 2);
     ctx.fill();
-    
-    // Left penalty arc
     ctx.beginPath();
-    ctx.arc(penaltySpotX, penaltySpotY, 8, Math.PI, 1.5 * Math.PI);
+    ctx.arc(fieldLeft + penaltyAreaDepth, centerY, arcR, -Math.PI / 2, Math.PI / 2);
     ctx.stroke();
-    
-    // Right penalty area
-    const rightPenaltyTop = leftPenaltyTop;
-    const rightPenaltyBottom = leftPenaltyBottom;
-    
-    // Right penalty box
-    ctx.strokeRect(fieldRight - penaltyAreaLength, rightPenaltyTop, penaltyAreaLength, penaltyAreaWidth);
-    
-    // Right penalty spot
+
+    ctx.strokeRect(fieldRight - penaltyAreaDepth, leftPenaltyTop, penaltyAreaDepth, penaltyAreaWidth);
     ctx.beginPath();
-    ctx.arc(penaltySpotXR, penaltySpotY, 4, 0, Math.PI * 2);
+    ctx.arc(fieldRight - penaltyAreaDepth, centerY, spotR, 0, Math.PI * 2);
     ctx.fill();
-    
-    // Right penalty arc
     ctx.beginPath();
-    ctx.arc(penaltySpotXR, penaltySpotY, 8, 1.5 * Math.PI, 2 * Math.PI);
+    ctx.arc(fieldRight - penaltyAreaDepth, centerY, arcR, Math.PI / 2, -Math.PI / 2);
     ctx.stroke();
-    
-    // Goal boxes (smaller areas at each end)
-    const goalBoxTop = fieldTop + (fieldHeight - goalBoxWidth) / 2;
-    const goalBoxBottom = fieldTop + (fieldHeight + goalBoxWidth) / 2;
-    
-    // Left goal box
-    ctx.strokeRect(fieldLeft, goalBoxTop, goalBoxLength, goalBoxWidth);
-    
-    // Right goal box
-    ctx.strokeRect(fieldRight - goalBoxLength, goalBoxTop, goalBoxLength, goalBoxWidth);
-    
-    // Corner arc ticks (small arcs at corners)
-    const cornerRadius = 12;
-    
-    // Top-left corner tick
+
+    const goalBoxTop = centerY - goalBoxWidth / 2;
+    ctx.strokeRect(fieldLeft, goalBoxTop, goalBoxDepth, goalBoxWidth);
+    ctx.strokeRect(fieldRight - goalBoxDepth, goalBoxTop, goalBoxDepth, goalBoxWidth);
+
     ctx.beginPath();
-    ctx.arc(fieldLeft + cornerRadius, fieldTop + cornerRadius, cornerRadius, Math.PI, 1.5 * Math.PI);
+    ctx.arc(fieldLeft + cornerRadius, fieldTop + cornerRadius, cornerRadius, Math.PI, Math.PI * 1.5);
     ctx.stroke();
-    
-    // Top-right corner tick
     ctx.beginPath();
-    ctx.arc(fieldRight - cornerRadius, fieldTop + cornerRadius, cornerRadius, 1.5 * Math.PI, 2 * Math.PI);
+    ctx.arc(fieldRight - cornerRadius, fieldTop + cornerRadius, cornerRadius, Math.PI * 1.5, Math.PI * 2);
     ctx.stroke();
-    
-    // Bottom-left corner tick
     ctx.beginPath();
-    ctx.arc(fieldLeft + cornerRadius, fieldBottom - cornerRadius, cornerRadius, 0.5 * Math.PI, Math.PI);
+    ctx.arc(fieldLeft + cornerRadius, fieldBottom - cornerRadius, cornerRadius, Math.PI * 0.5, Math.PI);
     ctx.stroke();
-    
-    // Bottom-right corner tick
     ctx.beginPath();
-    ctx.arc(fieldRight - cornerRadius, fieldBottom - cornerRadius, cornerRadius, 0, 0.5 * Math.PI);
+    ctx.arc(fieldRight - cornerRadius, fieldBottom - cornerRadius, cornerRadius, 0, Math.PI * 0.5);
     ctx.stroke();
 }
 
@@ -282,10 +251,17 @@ export function renderBackground(ctx, type, width, height, { spacing = 24, fillC
         ctx.stroke();
         drawRuledLines(ctx, width, height);
     } else if (type === 'staff') {
-        const staffGap = 96;
-        const lineGap = 8;
-        for (let top = 40; top < height; top += staffGap) {
-            drawStaffBlock(ctx, width, top, lineGap, 48);
+        // Scale to ~100% of A4 reference so staves stay readable on every page size.
+        const refH = 1754;
+        const scale = Math.max(0.45, height / refH);
+        const lineGap = Math.max(7, 12 * scale);
+        const staffHeight = lineGap * 4;
+        const staffGap = Math.max(staffHeight + 28, 96 * scale);
+        const margin = Math.max(24, 40 * scale);
+        const clefX = Math.max(20, 28 * scale);
+        const lineStartX = Math.max(40, 52 * scale);
+        for (let top = margin; top + staffHeight < height - margin * 0.5; top += staffGap) {
+            drawStaffBlock(ctx, width, top, lineGap, lineStartX, clefX);
         }
     } else if (type === 'football') {
         drawFootballField(ctx, width, height);

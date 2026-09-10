@@ -54,8 +54,7 @@ const POINTER_ITEMS = [
     { id: 'pencil', label: 'Pencil' },
     { id: 'spray', label: 'Spray' },
     { id: 'calligraphy', label: 'Calligraphy' },
-    { id: 'brush', label: 'Brush' },
-    { id: 'eraser', label: 'Eraser' }
+    { id: 'brush', label: 'Brush' }
 ];
 
 const DRAG_SHAPE_TOOLS = [
@@ -103,9 +102,11 @@ function isDragShape(tool) {
 }
 
 const FORMAT_ITEMS = [
+    { id: 'a2', label: 'A2 page' },
+    { id: 'a3', label: 'A3 page' },
     { id: 'a4', label: 'A4 page' },
     { id: 'a5', label: 'A5 page' },
-    { id: 'a3', label: 'A3 page' },
+    { id: 'a6', label: 'A6 page' },
     { id: 'infinite', label: 'Infinite canvas' }
 ];
 
@@ -135,7 +136,7 @@ function readPrefs() {
         });
         return {
             activeStyle: BRUSH_STYLES.includes(raw?.activeStyle) ? raw.activeStyle : 'pen',
-            activeTool: ['pointer', 'brush', 'eraser', 'text', ...DRAG_SHAPE_TOOLS].includes(raw?.activeTool) ? raw.activeTool : 'pointer',
+            activeTool: ['pointer', 'brush', 'eraser', 'pan', 'text', ...DRAG_SHAPE_TOOLS].includes(raw?.activeTool) ? raw.activeTool : 'pointer',
             styles
         };
     } catch {
@@ -246,7 +247,15 @@ export const DrawingBoard = {
         this.bgCtx = this.bgCanvas?.getContext('2d');
 
         CanvasViewport.init(this.innerEl, this.viewportEl);
-        this.viewportEl?.addEventListener('canvas:zoom', () => this.updateZoomLevel());
+        this.viewportEl?.addEventListener('canvas:zoom', () => {
+            this.updateZoomLevel();
+            this.persistViewport();
+            CanvasViewport.syncScrollbars();
+        });
+        this.viewportEl?.addEventListener('canvas:pan', () => {
+            this.persistViewport();
+            CanvasViewport.syncScrollbars();
+        });
 
         this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
         this.canvas.addEventListener('pointermove', (e) => this.onPointerMove(e));
@@ -272,6 +281,7 @@ export const DrawingBoard = {
         this.boardEl.setAttribute('aria-hidden', 'false');
 
         CanvasViewport.loadFromDoc(this.doc.viewport);
+        CanvasViewport.setHandMode(this.activeTool === 'pan');
         if (this.canvas) this.canvas.dataset.tool = this.activeTool;
         this.renderToolbar();
         this.updateZoomLevel();
@@ -296,6 +306,7 @@ export const DrawingBoard = {
         this.resizeHandle = null;
         this.resizeStart = null;
         this.hoverHandle = null;
+        CanvasViewport.setHandMode(false);
         clearImageCache();
     },
 
@@ -380,6 +391,7 @@ export const DrawingBoard = {
             this.innerEl.classList.toggle('is-paged-canvas', this.doc.canvasMode !== 'infinite');
             this.innerEl.classList.toggle('is-infinite-canvas', this.doc.canvasMode === 'infinite');
         }
+        CanvasViewport.setContentSize(cssW, cssH);
         this.redrawBackground();
         this.redraw();
     },
@@ -429,6 +441,7 @@ export const DrawingBoard = {
         this.activeTool = 'brush';
         this.prefs.activeStyle = style;
         this.prefs.activeTool = 'brush';
+        CanvasViewport.setHandMode(false);
         if (this.isLassoActive) this.isLassoActive = false;
         if (this.canvas) this.canvas.dataset.tool = 'brush';
         writePrefs(this.prefs);
@@ -438,11 +451,26 @@ export const DrawingBoard = {
     setTool(tool) {
         this.activeTool = tool;
         this.prefs.activeTool = tool;
-        // setTool is used by V / shapes / eraser — leave dedicated marquee mode
+        CanvasViewport.setHandMode(tool === 'pan');
+        // setTool is used by V / shapes / eraser / pan — leave dedicated marquee mode
         if (this.isLassoActive) this.isLassoActive = false;
         if (this.canvas) this.canvas.dataset.tool = tool;
         writePrefs(this.prefs);
         this.renderToolbar();
+    },
+
+    persistViewport() {
+        if (!this.doc) return;
+        this.doc.viewport = CanvasViewport.toDoc();
+        this.scheduleSave();
+    },
+
+    expandInfiniteIfNeeded(x, y) {
+        if (this.doc.canvasMode !== 'infinite') return;
+        if (expandInfiniteBounds(this.doc, x, y)) {
+            this.resize();
+            this.scheduleSave();
+        }
     },
 
     adjustWidth(delta, { refreshMenu = false } = {}) {
@@ -483,28 +511,26 @@ export const DrawingBoard = {
             return;
         }
         const brush = this.currentBrush();
-        const rollout = this.toolbarEl?.querySelector('#draw-color-rollout');
-        if (!rollout) return;
         ColorPicker.open({
-            mode: 'inline',
-            container: rollout,
             anchor,
             presets: PALETTE_UNIFIED,
             value: brush.color,
+            align: 'end',
             onSelect: (c) => this.setColor(c, { rerender: false }),
             onClose: () => { this.colorRolloutOpen = false; }
         });
         this.colorRolloutOpen = true;
+        anchor?.setAttribute('aria-expanded', 'true');
     },
 
     onPointerDown(e) {
         if (!this.active || e.button > 0) return;
-        if (CanvasViewport.panning || CanvasViewport.spaceHeld) return;
+        if (CanvasViewport.panning || CanvasViewport.spaceHeld || CanvasViewport.handMode || this.activeTool === 'pan') return;
         if (e.pointerType === 'touch' && this.penPointerActive) return;
         if (e.pointerType === 'pen') this.penPointerActive = true;
 
         const { x, y } = this.clientToCanvas(e.clientX, e.clientY);
-        if (this.doc.canvasMode === 'infinite') expandInfiniteBounds(this.doc, x, y);
+        this.expandInfiniteIfNeeded(x, y);
 
         this.canvas.setPointerCapture(e.pointerId);
 
@@ -612,6 +638,7 @@ export const DrawingBoard = {
         if (this.draftStroke) {
             events.forEach((ev) => {
                 const pt = this.clientToCanvas(ev.clientX, ev.clientY);
+                this.expandInfiniteIfNeeded(pt.x, pt.y);
                 this.draftStroke.points.push({
                     x: pt.x, y: pt.y, p: readPressure(ev), tiltX: ev.tiltX || 0, tiltY: ev.tiltY || 0
                 });
@@ -777,8 +804,7 @@ export const DrawingBoard = {
                 color: brush.color,
                 fontFamily: 'Inter, sans-serif'
             });
-            if (this.doc.canvasMode === 'infinite') this.doc.infinite.texts = texts;
-            else { const page = this.doc.pages.find((p) => p.id === this.doc.activePageId); if (page) page.texts = texts; }
+            setActiveTexts(this.doc, texts);
             this.scheduleSave();
             this.redraw();
         };
@@ -867,8 +893,7 @@ export const DrawingBoard = {
         this.pushLayerHistory();
         this.setStrokes([]);
         this.setImages([]);
-        if (this.doc.canvasMode === 'infinite') this.doc.infinite.texts = [];
-        else { const page = this.doc.pages.find((p) => p.id === this.doc.activePageId); if (page) page.texts = []; }
+        setActiveTexts(this.doc, []);
         this.selectedStrokes.clear();
         this.redraw();
         this.scheduleSave();
@@ -917,13 +942,65 @@ export const DrawingBoard = {
         return (idx + 1) + ' / ' + this.doc.pages.length;
     },
 
+    currentToolEcho() {
+        if (this.isLassoActive) {
+            return { id: 'lasso', label: 'Select', icon: DRAWING_ICONS.lasso };
+        }
+        const tool = this.activeTool;
+        if (tool === 'pan') {
+            return { id: 'pan', label: 'Hand', icon: DRAWING_ICONS.hand };
+        }
+        if (tool === 'eraser') {
+            return { id: 'eraser', label: 'Eraser', icon: DRAWING_ICONS.eraser };
+        }
+        if (tool === 'pointer') {
+            return { id: 'pointer', label: 'Pointer', icon: DRAWING_ICONS.pointer };
+        }
+        if (tool === 'text') {
+            return { id: 'text', label: 'Text', icon: DRAWING_ICONS.text };
+        }
+        if (isDragShape(tool)) {
+            const shape = SHAPE_ITEMS.find((item) => item.id === tool);
+            return {
+                id: tool,
+                label: shape?.label || 'Shape',
+                icon: DRAWING_ICONS[tool] || DRAWING_ICONS.shapes
+            };
+        }
+        if (tool === 'brush') {
+            const style = POINTER_ITEMS.find((item) => item.id === this.activeStyle);
+            return {
+                id: this.activeStyle,
+                label: style?.label || 'Brush',
+                icon: DRAWING_ICONS[this.activeStyle] || DRAWING_ICONS.pen
+            };
+        }
+        return {
+            id: tool || 'pointer',
+            label: tool || 'Pointer',
+            icon: DRAWING_ICONS[tool] || DRAWING_ICONS.pointer
+        };
+    },
+
+    updateToolEcho() {
+        const echo = this.currentToolEcho();
+        const root = document.getElementById('draw-tool-echo');
+        const iconEl = document.getElementById('draw-tool-echo-icon');
+        const labelEl = document.getElementById('draw-tool-echo-label');
+        if (!root || !iconEl || !labelEl) return;
+        iconEl.innerHTML = echo.icon || '';
+        labelEl.textContent = echo.label;
+        root.dataset.tool = echo.id;
+        root.setAttribute('aria-label', `Current tool: ${echo.label}`);
+        root.title = `Current tool: ${echo.label}`;
+    },
+
     pointerSelected() {
-        return this.activeTool === 'eraser' ? 'eraser' : this.activeStyle;
+        return this.activeStyle;
     },
 
     pointerTriggerIcon() {
-        const id = this.pointerSelected();
-        return DRAWING_ICONS[id] || DRAWING_ICONS.pen;
+        return DRAWING_ICONS[this.activeStyle] || DRAWING_ICONS.pen;
     },
 
     shapeTriggerIcon() {
@@ -945,8 +1022,7 @@ export const DrawingBoard = {
             items: this.pointerMenuItems(),
             selected: this.pointerSelected(),
             onSelect: (id) => {
-                if (id === 'eraser') this.setTool('eraser');
-                else this.setStyle(id);
+                this.setStyle(id);
                 this.renderToolbar();
             },
             onStepper: (id, delta) => {
@@ -1042,12 +1118,13 @@ export const DrawingBoard = {
         const wasColorOpen = this.colorRolloutOpen;
         DrawingToolbarMenu.close();
         const brush = this.currentBrush();
-        const isPointerActive = this.activeTool === 'pointer';
-        const isInfinite = this.doc.canvasMode === 'infinite';
+        const isPointerActive = this.activeTool === 'pointer' || this.activeTool === 'brush';
+        const isEraserActive = this.activeTool === 'eraser';
+        const isPanActive = this.activeTool === 'pan';
         const pageIdx = this.doc.pages.findIndex((p) => p.id === this.doc.activePageId);
         const pageCount = this.doc.pages.length;
-        const canPrev = !isInfinite && pageIdx > 0;
-        const canNext = !isInfinite && pageIdx >= 0 && pageIdx < pageCount - 1;
+        const canPrev = pageIdx > 0;
+        const canNext = pageIdx >= 0 && pageIdx < pageCount - 1;
 
         this.toolbarEl.innerHTML = `
             <div class="drawing-toolbar-row">
@@ -1056,12 +1133,12 @@ export const DrawingBoard = {
                     <span class="drawing-dropdown-width" id="draw-pointer-width">${brush.width}px</span>
                     <span class="drawing-dropdown-chevron">${CHEVRON}</span>
                 </button>
+                <button type="button" class="btn btn--compact btn--icon ${isEraserActive ? 'active' : ''}" id="draw-eraser" title="Eraser (E)" aria-label="Eraser" aria-pressed="${isEraserActive ? 'true' : 'false'}">${DRAWING_ICONS.eraser}</button>
                 <span class="format-toolbar-sep" aria-hidden="true"></span>
                 <div class="drawing-color-group" id="draw-color-group">
                     <button type="button" class="btn btn--compact btn--icon drawing-color-chip-btn" id="draw-color-btn" title="Color" aria-label="Color" aria-expanded="false" style="--chip-color:${brush.color}">
                         <span class="drawing-color-chip" style="background:${brush.color}"></span>
                     </button>
-                    <div class="drawing-color-rollout" id="draw-color-rollout" aria-hidden="true"></div>
                 </div>
                 <span class="format-toolbar-sep" aria-hidden="true"></span>
                 <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-shapes" aria-haspopup="menu" aria-expanded="false" title="Shapes" aria-label="Shapes">
@@ -1073,6 +1150,7 @@ export const DrawingBoard = {
                 <button type="button" class="btn btn--compact btn--icon" id="draw-display-options" title="Display options" aria-label="Display options" aria-expanded="false" aria-haspopup="menu">${ACTION_ICONS.displayOptions}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-fullscreen" title="Full screen" aria-label="Full screen" aria-pressed="false">${ACTION_ICONS.fullscreenEnter}</button>
                 <span class="format-toolbar-sep" aria-hidden="true"></span>
+                <button type="button" class="btn btn--compact btn--icon ${isPanActive ? 'active' : ''}" id="draw-pan" title="Hand tool — pan canvas (H). Scroll also pans; Ctrl+scroll zooms; Space+drag pans." aria-label="Hand tool" aria-pressed="${isPanActive ? 'true' : 'false'}">${DRAWING_ICONS.hand}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-zoom-out" title="Zoom out" aria-label="Zoom out">${DRAWING_ICONS.zoomOut}</button>
                 <span class="drawing-zoom-level" id="draw-zoom-level" title="Zoom level" aria-label="Zoom level">100%</span>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-zoom-in" title="Zoom in" aria-label="Zoom in">${DRAWING_ICONS.zoomIn}</button>
@@ -1088,7 +1166,7 @@ export const DrawingBoard = {
                     <span class="drawing-dropdown-label">Canvas</span>
                     <span class="drawing-dropdown-chevron">${CHEVRON}</span>
                 </button>
-                <span class="drawing-page-nav${isInfinite ? ' is-hidden' : ''}" ${isInfinite ? 'aria-hidden="true"' : ''} aria-label="Page navigation">
+                <span class="drawing-page-nav" aria-label="Page navigation">
                     <button type="button" class="btn btn--compact btn--icon" id="draw-page-prev" title="Previous page" aria-label="Previous page" ${canPrev ? '' : 'disabled'}>${DRAWING_ICONS.pagePrev}</button>
                     <span class="drawing-page-label" id="draw-page-label" title="Current page">${this.pageLabel()}</span>
                     <button type="button" class="btn btn--compact btn--icon" id="draw-page-next" title="Next page" aria-label="Next page" ${canNext ? '' : 'disabled'}>${DRAWING_ICONS.pageNext}</button>
@@ -1098,6 +1176,7 @@ export const DrawingBoard = {
         `;
         this.bindToolbar();
         this.updateZoomLevel();
+        this.updateToolEcho();
         if (wasColorOpen) {
             const btn = this.toolbarEl.querySelector('#draw-color-btn');
             if (btn) this.toggleColorRollout(btn);
@@ -1123,8 +1202,12 @@ export const DrawingBoard = {
             e.stopPropagation();
             this.toggleColorRollout(e.currentTarget);
         });
-        q('#draw-zoom-in')?.addEventListener('click', () => { CanvasViewport.stepZoom(0.1); this.doc.viewport = CanvasViewport.toDoc(); });
-        q('#draw-zoom-out')?.addEventListener('click', () => { CanvasViewport.stepZoom(-0.1); this.doc.viewport = CanvasViewport.toDoc(); });
+        q('#draw-zoom-in')?.addEventListener('click', () => { CanvasViewport.stepZoom(0.1); this.persistViewport(); });
+        q('#draw-zoom-out')?.addEventListener('click', () => { CanvasViewport.stepZoom(-0.1); this.persistViewport(); });
+        q('#draw-pan')?.addEventListener('click', () => {
+            if (this.activeTool === 'pan') this.setStyle(this.activeStyle || 'pen');
+            else this.setTool('pan');
+        });
         q('#draw-display-options')?.addEventListener('click', (e) => {
             e.stopPropagation();
             DisplayOptions.toggleFrom(e.currentTarget);
@@ -1135,6 +1218,10 @@ export const DrawingBoard = {
         q('#draw-menu-pointer')?.addEventListener('click', (e) => {
             e.stopPropagation();
             this.openPointerMenu(e.currentTarget);
+        });
+
+        q('#draw-eraser')?.addEventListener('click', () => {
+            this.setTool('eraser');
         });
 
         q('#draw-menu-shapes')?.addEventListener('click', (e) => {
@@ -1208,6 +1295,19 @@ export const DrawingBoard = {
         if (e.key === 'v' || e.key === 'V') {
             e.preventDefault();
             this.setTool('pointer');
+            return true;
+        }
+
+        if (e.key === 'e' || e.key === 'E') {
+            e.preventDefault();
+            this.setTool('eraser');
+            return true;
+        }
+
+        if (e.key === 'h' || e.key === 'H') {
+            e.preventDefault();
+            if (this.activeTool === 'pan') this.setStyle(this.activeStyle || 'pen');
+            else this.setTool('pan');
             return true;
         }
         
@@ -1596,8 +1696,8 @@ export const DrawingBoard = {
         images.push(item);
         this.setImages(images);
         if (this.doc.canvasMode === 'infinite') {
-            expandInfiniteBounds(this.doc, item.x, item.y);
-            expandInfiniteBounds(this.doc, item.x + item.width, item.y + item.height);
+            this.expandInfiniteIfNeeded(item.x, item.y);
+            this.expandInfiniteIfNeeded(item.x + item.width, item.y + item.height);
         }
         this.selectedStrokes.clear();
         this.selectedStrokes.add(item);
