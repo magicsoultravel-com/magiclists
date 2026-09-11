@@ -87,9 +87,10 @@ function fitTransform(cssW, cssH, bounds) {
     const width = Math.max(1, bounds.maxX - bounds.minX);
     const height = Math.max(1, bounds.maxY - bounds.minY);
     // Allow upscale so stroke-only doodles fill the preview (images still fit via min).
+    // Top-left align so preview matches magicCanvas page origin (not centered).
     const scale = Math.min(cssW / width, cssH / height);
-    const offsetX = (cssW - width * scale) / 2 - bounds.minX * scale;
-    const offsetY = (cssH - height * scale) / 2 - bounds.minY * scale;
+    const offsetX = -bounds.minX * scale;
+    const offsetY = -bounds.minY * scale;
     return { scale, offsetX, offsetY };
 }
 

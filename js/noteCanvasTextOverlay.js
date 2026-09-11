@@ -10,17 +10,53 @@ import {
     itemToNoteCanvasOverlayText,
     itemToPlainContentText,
     itemToPlainActiveChecklistText,
+    itemToActiveChecklistRows,
     migrateNoteCanvasTextFlags
 } from './noteBodyConversion.js';
 
 export { migrateNoteCanvasTextFlags };
 
 const PAD = 48;
-const FONT_SIZE = 20;
+export const OVERLAY_FONT_DEFAULT = 20;
+export const OVERLAY_FONT_MIN = 12;
+export const OVERLAY_FONT_MAX = 48;
+export const OVERLAY_FONT_STEP = 2;
 const LINE_HEIGHT = 1.35;
-const FONT = `${FONT_SIZE}px system-ui, -apple-system, "Segoe UI", sans-serif`;
-const LINE_STEP = FONT_SIZE * LINE_HEIGHT;
 const GROW_MARGIN = 80;
+const FONT_FAMILY = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+
+/**
+ * Clamp / snap overlay font size for a note.
+ * @param {object} [item]
+ * @returns {number}
+ */
+export function resolveOverlayFontSize(item) {
+    const n = Number(item?.canvasOverlayFontSize);
+    const raw = Number.isFinite(n) ? n : OVERLAY_FONT_DEFAULT;
+    const snapped = Math.round(raw / OVERLAY_FONT_STEP) * OVERLAY_FONT_STEP;
+    return Math.min(OVERLAY_FONT_MAX, Math.max(OVERLAY_FONT_MIN, snapped));
+}
+
+/** Percent of default text height (100% = OVERLAY_FONT_DEFAULT). */
+export function overlayFontSizeToPercent(fontSize) {
+    const size = resolveOverlayFontSize({ canvasOverlayFontSize: fontSize });
+    return Math.round((size / OVERLAY_FONT_DEFAULT) * 100);
+}
+
+/** Map a percent of default height back to a clamped font size. */
+export function percentToOverlayFontSize(percent) {
+    const n = Number(percent);
+    const raw = Number.isFinite(n) ? (n / 100) * OVERLAY_FONT_DEFAULT : OVERLAY_FONT_DEFAULT;
+    return resolveOverlayFontSize({ canvasOverlayFontSize: raw });
+}
+
+function overlayFont(fontSize) {
+    return `${fontSize}px ${FONT_FAMILY}`;
+}
+
+function lineStepFor(fontSize) {
+    return fontSize * LINE_HEIGHT;
+}
 
 function parseCssColor(input) {
     if (!input || typeof input !== 'string') return null;
@@ -134,6 +170,71 @@ export function resolveNoteOverlayPlainText(item) {
     };
 }
 
+function pushTextLines(out, ctx, text, columnWidth) {
+    for (const line of wrapPlainText(ctx, text, columnWidth)) {
+        out.push({ kind: 'text', text: line });
+    }
+}
+
+function pushChecklistRows(out, ctx, item, columnWidth, fontSize) {
+    const { header, rows } = itemToActiveChecklistRows(item);
+    if (!rows.length) return;
+    if (header) pushTextLines(out, ctx, header, columnWidth);
+
+    const box = fontSize * 0.85;
+    const gap = fontSize * 0.35;
+    const indentUnit = fontSize * 0.9;
+
+    for (const row of rows) {
+        const indentPx = (row.indentLevel || 0) * indentUnit;
+        const textMax = Math.max(40, columnWidth - indentPx - box - gap);
+        const wrapped = wrapPlainText(ctx, row.text, textMax);
+        wrapped.forEach((line, i) => {
+            out.push({
+                kind: 'check',
+                text: line,
+                indentLevel: row.indentLevel || 0,
+                showBox: i === 0
+            });
+        });
+    }
+}
+
+/**
+ * Build structured overlay lines (plain text + checklist rows with empty boxes).
+ * @param {object} item
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {number} fontSize
+ * @param {number} columnWidth
+ * @returns {{ lines: object[], isPlaceholder: boolean }}
+ */
+function buildOverlayLines(item, ctx, fontSize, columnWidth) {
+    migrateNoteCanvasTextFlags(item);
+    const showContent = !!item?.canvasShowNoteContent;
+    const showChecklist = !!item?.canvasShowNoteChecklist;
+    if (!showContent && !showChecklist) return { lines: [], isPlaceholder: false };
+
+    const { text, isPlaceholder } = resolveNoteOverlayPlainText(item);
+    if (!text) return { lines: [], isPlaceholder: false };
+
+    if (isPlaceholder) {
+        return {
+            lines: wrapPlainText(ctx, text, columnWidth).map((line) => ({ kind: 'text', text: line })),
+            isPlaceholder: true
+        };
+    }
+
+    const lines = [];
+    const content = showContent ? itemToPlainContentText(item).trim() : '';
+    const checklistPlain = showChecklist ? itemToPlainActiveChecklistText(item).trim() : '';
+
+    if (content) pushTextLines(lines, ctx, content, columnWidth);
+    if (content && checklistPlain) lines.push({ kind: 'text', text: '' });
+    if (checklistPlain) pushChecklistRows(lines, ctx, item, columnWidth, fontSize);
+
+    return { lines, isPlaceholder: false };
+}
+
 /**
  * Measure wrapped overlay lines for the note.
  * @param {object} item
@@ -142,36 +243,39 @@ export function resolveNoteOverlayPlainText(item) {
 export function measureNoteTextOverlay(item, ctx = null) {
     const measureCtx = ctx || makeMeasureCtx();
     const columnWidth = noteTextColumnWidth();
-    const { text, isPlaceholder } = resolveNoteOverlayPlainText(item);
-    if (!text || !measureCtx) {
+    const fontSize = resolveOverlayFontSize(item);
+    const lineStep = lineStepFor(fontSize);
+    if (!measureCtx) {
         return {
             lines: [],
-            lineStep: LINE_STEP,
+            fontSize,
+            lineStep,
             pad: PAD,
             columnWidth,
             textHeight: 0,
             isPlaceholder: false
         };
     }
-    measureCtx.font = FONT;
-    const lines = wrapPlainText(measureCtx, text, columnWidth);
+    measureCtx.font = overlayFont(fontSize);
+    const { lines, isPlaceholder } = buildOverlayLines(item, measureCtx, fontSize, columnWidth);
     return {
         lines,
-        lineStep: LINE_STEP,
+        fontSize,
+        lineStep,
         pad: PAD,
         columnWidth,
-        textHeight: PAD * 2 + lines.length * LINE_STEP,
+        textHeight: lines.length ? PAD * 2 + lines.length * lineStep : 0,
         isPlaceholder
     };
 }
 
-function pageContentHeight(doc) {
+function pageContentHeight(doc, fontSize) {
     const dims = getPageDimensions(doc);
-    return Math.max(LINE_STEP, dims.height - PAD * 2);
+    return Math.max(lineStepFor(fontSize), dims.height - PAD * 2);
 }
 
-function linesPerPage(doc) {
-    return Math.max(1, Math.floor(pageContentHeight(doc) / LINE_STEP));
+function linesPerPage(doc, fontSize) {
+    return Math.max(1, Math.floor(pageContentHeight(doc, fontSize) / lineStepFor(fontSize)));
 }
 
 /**
@@ -210,7 +314,7 @@ export function ensureCanvasFitsNoteText(doc, item) {
         return changed;
     }
 
-    const perPage = linesPerPage(doc);
+    const perPage = linesPerPage(doc, measured.fontSize);
     const pagesNeeded = Math.max(1, Math.ceil(measured.lines.length / perPage));
     while ((doc.pages?.length || 0) < pagesNeeded) {
         addPage(doc);
@@ -235,16 +339,34 @@ export function estimateNoteTextOverlayBounds(item) {
     };
 }
 
-function paintLines(ctx, lines, { fillColor, isPlaceholder } = {}) {
+function paintOverlayLines(ctx, lines, { fillColor, isPlaceholder, fontSize, lineStep } = {}) {
+    const box = fontSize * 0.85;
+    const gap = fontSize * 0.35;
+    const indentUnit = fontSize * 0.9;
+    const ink = contrastInkForBackground(fillColor);
+
     ctx.save();
-    ctx.font = FONT;
+    ctx.font = overlayFont(fontSize);
     ctx.textBaseline = 'top';
-    ctx.fillStyle = contrastInkForBackground(fillColor);
+    ctx.fillStyle = ink;
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = Math.max(1, fontSize * 0.08);
     if (isPlaceholder) ctx.globalAlpha = 0.42;
+
     let y = PAD;
     for (const line of lines) {
-        if (line) ctx.fillText(line, PAD, y);
-        y += LINE_STEP;
+        if (line.kind === 'check') {
+            const indentPx = (line.indentLevel || 0) * indentUnit;
+            const x = PAD + indentPx;
+            if (line.showBox) {
+                const boxY = y + Math.max(0, (lineStep - box) * 0.2);
+                ctx.strokeRect(x, boxY, box, box);
+            }
+            if (line.text) ctx.fillText(line.text, x + box + gap, y);
+        } else if (line.text) {
+            ctx.fillText(line.text, PAD, y);
+        }
+        y += lineStep;
     }
     ctx.restore();
 }
@@ -262,14 +384,16 @@ export function paintNoteTextOverlay(ctx, item, { fillColor = '', doc = null, pa
 
     let lines = measured.lines;
     if (doc && doc.canvasMode !== 'infinite') {
-        const perPage = linesPerPage(doc);
+        const perPage = linesPerPage(doc, measured.fontSize);
         const start = Math.max(0, pageIndex) * perPage;
         lines = measured.lines.slice(start, start + perPage);
     }
     if (!lines.length) return;
-    paintLines(ctx, lines, {
+    paintOverlayLines(ctx, lines, {
         fillColor,
-        isPlaceholder: measured.isPlaceholder
+        isPlaceholder: measured.isPlaceholder,
+        fontSize: measured.fontSize,
+        lineStep: measured.lineStep
     });
 }
 

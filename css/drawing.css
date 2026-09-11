@@ -110,7 +110,8 @@
 }
 
 .drawing-toolbar-note-title.is-hidden,
-.drawing-toolbar-note-text.is-hidden {
+.drawing-toolbar-note-text.is-hidden,
+.drawing-toolbar-note-size.is-hidden {
     display: none !important;
 }
 
@@ -128,6 +129,35 @@
     color: var(--text-on-accent, #fff);
     background: var(--accent);
     border-color: var(--accent);
+}
+
+.drawing-toolbar-note-size {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1rem;
+    flex-shrink: 0;
+    margin-left: 0.15rem;
+}
+
+.drawing-toolbar-note-size__btn {
+    opacity: 0.75;
+    min-width: 1.35rem;
+    padding-inline: 0.2rem;
+}
+
+.drawing-toolbar-note-size__btn:hover {
+    opacity: 1;
+}
+
+.drawing-toolbar-note-size__value {
+    min-width: 2.6rem;
+    text-align: center;
+    font-size: 0.62rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted, var(--text-main));
+    line-height: 1.2;
+    user-select: none;
 }
 
 .drawing-toolbar-panel__spacer {

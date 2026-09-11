@@ -224,26 +224,43 @@ export function itemToPlainContentText(item) {
 }
 
 /**
+ * Structured incomplete checklist rows for canvas overlay paint (skips completed).
+ * @param {object} item
+ * @returns {{ header: string|null, rows: Array<{ indentLevel: number, text: string }> }}
+ */
+export function itemToActiveChecklistRows(item) {
+    const template = item?.noteTemplate;
+    const steps = (item?.steps || []).filter((step) => step && !step.completed);
+    if (!steps.length) return { header: null, rows: [] };
+
+    const rows = orderStepsActiveThenDone(steps)
+        .map((step) => {
+            const text = stripRichText(step?.text || '').replace(/\u2028/g, '\n').trim();
+            if (!text) return null;
+            const level = Number(step?.level);
+            return {
+                indentLevel: Number.isFinite(level) ? Math.min(4, Math.max(0, Math.floor(level))) : 0,
+                text
+            };
+        })
+        .filter(Boolean);
+
+    return {
+        header: template === 'meeting' && rows.length ? 'Action Items:' : null,
+        rows
+    };
+}
+
+/**
  * Plain incomplete checklist lines only (skips completed steps).
  * @param {object} item
  * @returns {string}
  */
 export function itemToPlainActiveChecklistText(item) {
-    const template = item?.noteTemplate;
-    const steps = (item?.steps || []).filter((step) => step && !step.completed);
-    if (!steps.length) return '';
-
-    if (template === 'meeting') {
-        const lines = orderStepsActiveThenDone(steps)
-            .map(stepToPlainCopyLine)
-            .filter((l) => l.trim());
-        return lines.length ? `Action Items:\n${lines.join('\n')}` : '';
-    }
-
-    return orderStepsActiveThenDone(steps)
-        .map(stepToPlainCopyLine)
-        .filter((l) => l.trim())
-        .join('\n');
+    const { header, rows } = itemToActiveChecklistRows(item);
+    if (!rows.length) return '';
+    const lines = rows.map((row) => spacesForLevel(row.indentLevel) + row.text);
+    return header ? `${header}\n${lines.join('\n')}` : lines.join('\n');
 }
 
 /**

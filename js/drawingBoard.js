@@ -42,7 +42,12 @@ import {
     ensureCanvasFitsNoteText,
     noteHasTextOverlayEnabled,
     activePageIndex,
-    migrateNoteCanvasTextFlags
+    migrateNoteCanvasTextFlags,
+    resolveOverlayFontSize,
+    overlayFontSizeToPercent,
+    OVERLAY_FONT_MIN,
+    OVERLAY_FONT_MAX,
+    OVERLAY_FONT_STEP
 } from './noteCanvasTextOverlay.js';
 
 const PREFS_KEY = 'matrix_drawing_prefs';
@@ -1149,6 +1154,10 @@ export const DrawingBoard = {
         const titleEl = document.getElementById('draw-note-title');
         const contentBtn = document.getElementById('draw-note-show-content');
         const checklistBtn = document.getElementById('draw-note-show-checklist');
+        const sizeGroup = document.getElementById('draw-note-overlay-size-group');
+        const sizeLabel = document.getElementById('draw-note-overlay-size');
+        const smallerBtn = document.getElementById('draw-note-overlay-smaller');
+        const largerBtn = document.getElementById('draw-note-overlay-larger');
         const noteMode = !!(this.isNoteCanvasMode && this.noteCanvasItem);
         if (this.noteCanvasItem) migrateNoteCanvasTextFlags(this.noteCanvasItem);
 
@@ -1208,6 +1217,73 @@ export const DrawingBoard = {
             icon: FORMAT_ICONS.toChecklist,
             flag: 'checklist'
         });
+
+        if (sizeGroup) {
+            if (noteMode) {
+                sizeGroup.hidden = false;
+                sizeGroup.classList.remove('is-hidden');
+                const size = resolveOverlayFontSize(this.noteCanvasItem);
+                const percent = overlayFontSizeToPercent(size);
+                if (sizeLabel) {
+                    sizeLabel.textContent = `${percent}%`;
+                    sizeLabel.title = `Text height ${size} (canvas units)`;
+                }
+                if (smallerBtn) {
+                    smallerBtn.disabled = size <= OVERLAY_FONT_MIN;
+                    smallerBtn.title = 'Smaller overlay text';
+                    smallerBtn.setAttribute('aria-label', 'Smaller overlay text');
+                    if (!smallerBtn.dataset.bound) {
+                        smallerBtn.dataset.bound = '1';
+                        smallerBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            this.nudgeNoteOverlayFontSize(-OVERLAY_FONT_STEP);
+                        });
+                    }
+                }
+                if (largerBtn) {
+                    largerBtn.disabled = size >= OVERLAY_FONT_MAX;
+                    largerBtn.title = 'Larger overlay text';
+                    largerBtn.setAttribute('aria-label', 'Larger overlay text');
+                    if (!largerBtn.dataset.bound) {
+                        largerBtn.dataset.bound = '1';
+                        largerBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            this.nudgeNoteOverlayFontSize(OVERLAY_FONT_STEP);
+                        });
+                    }
+                }
+            } else {
+                sizeGroup.hidden = true;
+                sizeGroup.classList.add('is-hidden');
+            }
+        }
+    },
+
+    async nudgeNoteOverlayFontSize(delta) {
+        const item = this.noteCanvasItem;
+        if (!item || !this.isNoteCanvasMode) return;
+        const next = resolveOverlayFontSize({
+            canvasOverlayFontSize: resolveOverlayFontSize(item) + delta
+        });
+        if (next === resolveOverlayFontSize(item) && item.canvasOverlayFontSize === next) return;
+        item.canvasOverlayFontSize = next;
+        this.updateNoteToolbarChrome();
+        if (noteHasTextOverlayEnabled(item)) {
+            ensureCanvasFitsNoteText(this.doc, item);
+            this.resize();
+        } else {
+            this.redrawBackground();
+            this.redraw();
+        }
+        try {
+            const { mutateItem } = await import('./noteSurfaceMutations.js');
+            mutateItem(item, (it) => {
+                it.canvasOverlayFontSize = next;
+            }, { preserveView: true, skipRerender: true, localOnly: true });
+        } catch {
+            /* ignore persist helper load errors — size already set on item */
+        }
+        this.scheduleSave();
     },
 
     async toggleNoteTextOverlayLayer(flag) {
