@@ -67,6 +67,8 @@ function bindDrag(handle, el, onEnd) {
     if (!handle || !el) return;
     handle.addEventListener('pointerdown', (e) => {
         if (e.button !== 0) return;
+        // Let toolbar buttons / inputs receive clicks (toggles live in the header).
+        if (e.target.closest('button, a, input, select, textarea, [data-no-drag]')) return;
         e.preventDefault();
         const startX = e.clientX;
         const startY = e.clientY;

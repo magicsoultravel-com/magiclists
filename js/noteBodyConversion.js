@@ -196,21 +196,19 @@ export function stepToPlainCopyLine(step) {
     return indent + stripRichText(body).replace(/\u2028/g, '\n');
 }
 
-export function itemToPlainCopyText(item) {
+/**
+ * Plain content/sheet/meeting text for a note (no title, no checklist).
+ * @param {object} item
+ * @returns {string}
+ */
+export function itemToPlainContentText(item) {
     const blocks = [];
-    const title = stripRichText(item?.title || '').trim();
-    if (title) blocks.push(title);
-
     const template = item?.noteTemplate;
     if (template === 'meeting') {
         const attendees = sheetIsActive(item) && item.sheet ? sheetToTsv(item.sheet).trim() : '';
         if (attendees) blocks.push(`Attendees:\n${attendees}`);
         const content = stripRichText(item?.content || '').replace(/\u2028/g, '\n').trim();
         if (content) blocks.push(`Agenda:\n${content}`);
-        const lines = orderStepsActiveThenDone(item?.steps || [])
-            .map(stepToPlainCopyLine)
-            .filter((l) => l.trim());
-        if (lines.length) blocks.push(`Action Items:\n${lines.join('\n')}`);
         return blocks.join('\n\n');
     }
 
@@ -222,10 +220,104 @@ export function itemToPlainCopyText(item) {
 
     const content = stripRichText(item?.content || '').replace(/\u2028/g, '\n').trim();
     if (content) blocks.push(content);
-    const lines = orderStepsActiveThenDone(item?.steps || [])
+    return blocks.join('\n\n');
+}
+
+/**
+ * Plain incomplete checklist lines only (skips completed steps).
+ * @param {object} item
+ * @returns {string}
+ */
+export function itemToPlainActiveChecklistText(item) {
+    const template = item?.noteTemplate;
+    const steps = (item?.steps || []).filter((step) => step && !step.completed);
+    if (!steps.length) return '';
+
+    if (template === 'meeting') {
+        const lines = orderStepsActiveThenDone(steps)
+            .map(stepToPlainCopyLine)
+            .filter((l) => l.trim());
+        return lines.length ? `Action Items:\n${lines.join('\n')}` : '';
+    }
+
+    return orderStepsActiveThenDone(steps)
+        .map(stepToPlainCopyLine)
+        .filter((l) => l.trim())
+        .join('\n');
+}
+
+/**
+ * Compose copy-paper overlay text from note flags.
+ * @param {object} item
+ * @param {{ content?: boolean, checklist?: boolean }} [flags]
+ * @returns {string}
+ */
+export function itemToNoteCanvasOverlayText(item, flags = {}) {
+    const showContent = flags.content ?? !!item?.canvasShowNoteContent;
+    const showChecklist = flags.checklist ?? !!item?.canvasShowNoteChecklist;
+    const blocks = [];
+    if (showContent) {
+        const content = itemToPlainContentText(item);
+        if (content) blocks.push(content);
+    }
+    if (showChecklist) {
+        const checklist = itemToPlainActiveChecklistText(item);
+        if (checklist) blocks.push(checklist);
+    }
+    return blocks.join('\n\n');
+}
+
+/**
+ * Migrate legacy canvasShowNoteText onto the two new flags.
+ * @param {object} item
+ * @returns {object} item
+ */
+export function migrateNoteCanvasTextFlags(item) {
+    if (!item || typeof item !== 'object') return item;
+    if (item.canvasShowNoteText) {
+        if (item.canvasShowNoteContent == null) item.canvasShowNoteContent = true;
+        if (item.canvasShowNoteChecklist == null) item.canvasShowNoteChecklist = true;
+        delete item.canvasShowNoteText;
+    }
+    return item;
+}
+
+/**
+ * Plain body/checklist/sheet text for a note (no title).
+ * Includes all checklist steps (active then done) for copy/export.
+ * @param {object} item
+ * @returns {string}
+ */
+export function itemToPlainBodyText(item) {
+    const blocks = [];
+    const content = itemToPlainContentText(item);
+    if (content) blocks.push(content);
+
+    const template = item?.noteTemplate;
+    const steps = item?.steps || [];
+    if (!steps.length) return blocks.join('\n\n');
+
+    if (template === 'meeting') {
+        const lines = orderStepsActiveThenDone(steps)
+            .map(stepToPlainCopyLine)
+            .filter((l) => l.trim());
+        if (lines.length) blocks.push(`Action Items:\n${lines.join('\n')}`);
+        return blocks.join('\n\n');
+    }
+
+    const lines = orderStepsActiveThenDone(steps)
         .map(stepToPlainCopyLine)
         .filter((l) => l.trim());
     if (lines.length) blocks.push(lines.join('\n'));
+    return blocks.join('\n\n');
+}
+
+export function itemToPlainCopyText(item) {
+    const blocks = [];
+    const title = stripRichText(item?.title || '').trim();
+    if (title) blocks.push(title);
+    const body = itemToPlainBodyText(item);
+    if (body) blocks.push(body);
     return blocks.join('\n\n');
 }
 

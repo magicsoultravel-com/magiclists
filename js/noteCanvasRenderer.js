@@ -3,6 +3,14 @@ import { renderBackground } from './canvasBackgrounds.js';
 import { drawBrushStroke, drawShapeStroke, drawTextObject } from './canvasBrushes.js';
 import { ensureImagesLoaded, drawImageObject } from './canvasImages.js';
 import { getActivePage } from './canvasDocument.js';
+import {
+    paintNoteTextOverlay,
+    estimateNoteTextOverlayBounds,
+    noteHasTextOverlayEnabled,
+    migrateNoteCanvasTextFlags,
+    activePageIndex
+} from './noteCanvasTextOverlay.js';
+import { resolveNoteColor } from './colorPicker.js';
 
 const IS_DRAG_SHAPE = new Set([
     'line', 'arrow', 'rect', 'rounded_rect', 'ellipse', 'triangle', 'diamond',
@@ -141,20 +149,33 @@ function drawLayer(ctx, layer) {
     }
 }
 
+function unionBounds(a, b) {
+    if (!a) return b;
+    if (!b) return a;
+    return {
+        minX: Math.min(a.minX, b.minX),
+        minY: Math.min(a.minY, b.minY),
+        maxX: Math.max(a.maxX, b.maxX),
+        maxY: Math.max(a.maxY, b.maxY)
+    };
+}
+
 /**
  * Render a note canvas document into a target HTML canvas element.
  * The document is scaled to fit inside the element while preserving aspect ratio.
  * @param {HTMLCanvasElement} canvasEl
  * @param {object} doc - canvasDocument v2
- * @param {{ onLoaded?: () => void }} [opts]
+ * @param {{ onLoaded?: () => void, item?: object }} [opts]
  */
-export function renderNoteCanvas(canvasEl, doc, { onLoaded } = {}) {
+export function renderNoteCanvas(canvasEl, doc, { onLoaded, item } = {}) {
     if (!canvasEl || !doc) return;
     const ctx = canvasEl.getContext('2d');
     if (!ctx) return;
 
     const layer = getActiveLayer(doc);
     if (!layer) return;
+
+    if (item) migrateNoteCanvasTextFlags(item);
 
     const dpr = window.devicePixelRatio || 1;
     const { cssW, cssH } = resolvePreviewSize(canvasEl);
@@ -168,20 +189,34 @@ export function renderNoteCanvas(canvasEl, doc, { onLoaded } = {}) {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
 
+    const fillColor = layer.backgroundColor
+        || resolveHostNoteFill(canvasEl)
+        || (item ? resolveNoteColor(item.backgroundColor) : '')
+        || '';
+
     // Draw background at full element size — prefer note canvas fill, else host note color.
-    renderBackground(ctx, layer.background || 'blank', cssW, cssH, {
-        fillColor: layer.backgroundColor || resolveHostNoteFill(canvasEl) || ''
-    });
+    renderBackground(ctx, layer.background || 'blank', cssW, cssH, { fillColor });
 
     // Load media images referenced by the canvas and re-render when ready.
     ensureImagesLoaded(layer.images || [], onLoaded);
 
-    const bounds = getLayerBounds(layer);
+    let bounds = getLayerBounds(layer);
+    const showOverlay = noteHasTextOverlayEnabled(item);
+    if (showOverlay) {
+        bounds = unionBounds(bounds, estimateNoteTextOverlayBounds(item)) || bounds;
+    }
     const { scale, offsetX, offsetY } = fitTransform(cssW, cssH, bounds);
 
     ctx.save();
     ctx.translate(offsetX, offsetY);
     ctx.scale(scale, scale);
+    if (showOverlay) {
+        paintNoteTextOverlay(ctx, item, {
+            fillColor,
+            doc,
+            pageIndex: activePageIndex(doc)
+        });
+    }
     drawLayer(ctx, layer);
     ctx.restore();
 }
@@ -201,7 +236,8 @@ export function refreshNoteCanvasPreview(section, item) {
 
     const paint = () => {
         renderNoteCanvas(canvas, item.canvas, {
-            onLoaded: () => renderNoteCanvas(canvas, item.canvas)
+            item,
+            onLoaded: () => renderNoteCanvas(canvas, item.canvas, { item })
         });
     };
 

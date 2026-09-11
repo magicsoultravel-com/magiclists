@@ -95,6 +95,41 @@
     white-space: nowrap;
 }
 
+.drawing-toolbar-note-title {
+    display: inline-block;
+    max-width: 12ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--text-muted, var(--text-main));
+    line-height: 1.2;
+    vertical-align: middle;
+}
+
+.drawing-toolbar-note-title.is-hidden,
+.drawing-toolbar-note-text.is-hidden {
+    display: none !important;
+}
+
+.drawing-toolbar-note-text {
+    flex-shrink: 0;
+    opacity: 0.75;
+}
+
+.drawing-toolbar-note-text:hover {
+    opacity: 1;
+}
+
+.drawing-toolbar-note-text.active {
+    opacity: 1;
+    color: var(--text-on-accent, #fff);
+    background: var(--accent);
+    border-color: var(--accent);
+}
+
 .drawing-toolbar-panel__spacer {
     flex: 1;
 }

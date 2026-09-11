@@ -1,6 +1,6 @@
 /** @module {"owns":"magicCanvas drawing board, workspace drawing mode", "related":["canvasDocument.js","drawingToolbarMenu.js","layoutStorage.js"]} */
-import { ACTION_ICONS, DRAWING_ICONS } from './icons.js';
-import { ColorPicker, PALETTE_UNIFIED } from './colorPicker.js';
+import { ACTION_ICONS, DRAWING_ICONS, FORMAT_ICONS } from './icons.js';
+import { ColorPicker, PALETTE_UNIFIED, resolveNoteColor } from './colorPicker.js';
 import { DrawingToolbarMenu, CHEVRON } from './drawingToolbarMenu.js';
 import { DisplayOptions } from './displayOptions.js';
 import { Fullscreen } from './fullscreen.js';
@@ -36,6 +36,14 @@ import {
 } from './canvasImages.js';
 import { listMedia } from './mediaLibrary.js';
 import { showAppToast } from './toast.js';
+import { stripRichText } from './richText.js';
+import {
+    paintNoteTextOverlay,
+    ensureCanvasFitsNoteText,
+    noteHasTextOverlayEnabled,
+    activePageIndex,
+    migrateNoteCanvasTextFlags
+} from './noteCanvasTextOverlay.js';
 
 const PREFS_KEY = 'matrix_drawing_prefs';
 const WIDTH_MIN = 1;
@@ -284,6 +292,7 @@ export const DrawingBoard = {
         this.noteCanvasItem = null;
 
         if (this.brandEl) this.brandEl.textContent = 'magicCanvas';
+        this.updateNoteToolbarChrome();
 
         this.boardEl.classList.remove('is-hidden');
         this.boardEl.setAttribute('aria-hidden', 'false');
@@ -301,6 +310,7 @@ export const DrawingBoard = {
     async activateForNote(item) {
         if (!item?.id) return;
         const { normalizeNoteCanvas } = await import('./noteModel.js');
+        migrateNoteCanvasTextFlags(item);
         this.active = true;
         this.isNoteCanvasMode = true;
         this.activeNoteId = item.id;
@@ -313,8 +323,8 @@ export const DrawingBoard = {
         DrawingToolbarChrome.show();
         this.toolbarEl = DrawingToolbarChrome.getToolbarMount();
 
-        const title = item.title || 'Note';
-        if (this.brandEl) this.brandEl.textContent = `magicCanvas: ${title}`;
+        if (this.brandEl) this.brandEl.textContent = 'magicCanvas';
+        this.updateNoteToolbarChrome();
 
         this.boardEl.classList.remove('is-hidden');
         this.boardEl.setAttribute('aria-hidden', 'false');
@@ -323,9 +333,13 @@ export const DrawingBoard = {
         CanvasViewport.setHandMode(this.activeTool === 'pan');
         if (this.canvas) this.canvas.dataset.tool = this.activeTool;
         this.shrinkInfiniteIfNeeded();
+        if (noteHasTextOverlayEnabled(item)) {
+            ensureCanvasFitsNoteText(this.doc, item);
+        }
         this.renderToolbar();
         this.updateZoomLevel();
         this.resize();
+        this.redrawBackground();
         this.redraw();
     },
 
@@ -360,6 +374,7 @@ export const DrawingBoard = {
         this.isNoteCanvasMode = false;
         this.activeNoteId = null;
         this.noteCanvasItem = null;
+        this.updateNoteToolbarChrome();
     },
 
     hideToolbar() {
@@ -449,7 +464,12 @@ export const DrawingBoard = {
     },
 
     pageBackgroundFill() {
-        return getActiveBackgroundColor(this.doc) || '';
+        const custom = getActiveBackgroundColor(this.doc);
+        if (custom) return custom;
+        if (this.isNoteCanvasMode && this.noteCanvasItem) {
+            return resolveNoteColor(this.noteCanvasItem.backgroundColor) || '';
+        }
+        return '';
     },
 
     pageBackgroundSwatch() {
@@ -460,9 +480,24 @@ export const DrawingBoard = {
 
     redrawBackground() {
         if (!this.bgCtx || !this.bgCanvas) return;
+        const fillColor = this.pageBackgroundFill();
         renderBackground(this.bgCtx, getActiveBackground(this.doc), this.bgCanvas.width, this.bgCanvas.height, {
-            fillColor: this.pageBackgroundFill()
+            fillColor
         });
+        // Note text overlay is painted in redraw() on the main canvas (under strokes).
+    },
+
+    adaptNoteTextOverlayToCanvas() {
+        if (!this.isNoteCanvasMode || !this.noteCanvasItem || !this.doc) return false;
+        migrateNoteCanvasTextFlags(this.noteCanvasItem);
+        if (!noteHasTextOverlayEnabled(this.noteCanvasItem)) return false;
+        const grew = ensureCanvasFitsNoteText(this.doc, this.noteCanvasItem);
+        if (grew) this.resize();
+        else {
+            this.redrawBackground();
+            this.redraw();
+        }
+        return grew;
     },
 
     setPageBackgroundColor(color) {
@@ -527,7 +562,12 @@ export const DrawingBoard = {
 
     shrinkInfiniteIfNeeded() {
         if (!this.doc || this.doc.canvasMode !== 'infinite') return false;
-        if (!shrinkInfiniteBounds(this.doc)) return false;
+        const shrank = shrinkInfiniteBounds(this.doc);
+        // Keep copy-paper text extents after content-based shrink.
+        const grewOverlay = this.isNoteCanvasMode && noteHasTextOverlayEnabled(this.noteCanvasItem)
+            ? ensureCanvasFitsNoteText(this.doc, this.noteCanvasItem)
+            : false;
+        if (!shrank && !grewOverlay) return false;
         this.resize();
         this.scheduleSave();
         return true;
@@ -539,6 +579,7 @@ export const DrawingBoard = {
         this.resize();
         this.scheduleSave();
         this.renderToolbar();
+        this.redrawBackground();
         this.redraw();
     },
 
@@ -548,6 +589,7 @@ export const DrawingBoard = {
         this.resize();
         this.scheduleSave();
         this.renderToolbar();
+        this.redrawBackground();
         this.redraw();
     },
 
@@ -946,6 +988,15 @@ export const DrawingBoard = {
         if (!this.ctx || !this.canvas) return;
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
 
+        // Copy-paper note text under strokes (same world coords as drawing).
+        if (this.isNoteCanvasMode && noteHasTextOverlayEnabled(this.noteCanvasItem)) {
+            paintNoteTextOverlay(this.ctx, this.noteCanvasItem, {
+                fillColor: this.pageBackgroundFill(),
+                doc: this.doc,
+                pageIndex: activePageIndex(this.doc)
+            });
+        }
+
         const images = this.images();
         ensureImagesLoaded(images, () => { if (this.active) this.requestRedraw(); });
         images.forEach((img) => drawImageObject(this.ctx, img));
@@ -1014,6 +1065,7 @@ export const DrawingBoard = {
                 const page = this.doc.pages.find((p) => p.id === this.doc.activePageId) || this.doc.pages[0];
                 if (page) page.format = mode;
             }
+            this.adaptNoteTextOverlayToCanvas();
             this.resize();
             this.scheduleSave();
             this.renderToolbar();
@@ -1021,6 +1073,7 @@ export const DrawingBoard = {
         }
         this.history.push(this.getSnapshot());
         switchCanvasMode(this.doc, mode);
+        this.adaptNoteTextOverlayToCanvas();
         this.resize();
         this.scheduleSave();
         this.renderToolbar();
@@ -1090,6 +1143,104 @@ export const DrawingBoard = {
         root.dataset.tool = echo.id;
         root.setAttribute('aria-label', `Current tool: ${echo.label}`);
         root.title = `Current tool: ${echo.label}`;
+    },
+
+    updateNoteToolbarChrome() {
+        const titleEl = document.getElementById('draw-note-title');
+        const contentBtn = document.getElementById('draw-note-show-content');
+        const checklistBtn = document.getElementById('draw-note-show-checklist');
+        const noteMode = !!(this.isNoteCanvasMode && this.noteCanvasItem);
+        if (this.noteCanvasItem) migrateNoteCanvasTextFlags(this.noteCanvasItem);
+
+        if (titleEl) {
+            if (noteMode) {
+                const full = stripRichText(this.noteCanvasItem.title || '').trim() || 'Untitled';
+                titleEl.textContent = full;
+                titleEl.title = full;
+                titleEl.setAttribute('aria-label', full);
+                titleEl.hidden = false;
+                titleEl.classList.remove('is-hidden');
+            } else {
+                titleEl.textContent = '';
+                titleEl.removeAttribute('title');
+                titleEl.removeAttribute('aria-label');
+                titleEl.hidden = true;
+                titleEl.classList.add('is-hidden');
+            }
+        }
+
+        const bindToggle = (btn, { on, titleOn, titleOff, icon, flag }) => {
+            if (!btn) return;
+            if (noteMode) {
+                btn.hidden = false;
+                btn.classList.remove('is-hidden');
+                btn.classList.toggle('active', on);
+                btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+                btn.title = on ? titleOn : titleOff;
+                btn.setAttribute('aria-label', on ? titleOn : titleOff);
+                if (!btn.dataset.bound) {
+                    btn.dataset.bound = '1';
+                    btn.innerHTML = icon;
+                    btn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.toggleNoteTextOverlayLayer(flag);
+                    });
+                }
+            } else {
+                btn.hidden = true;
+                btn.classList.add('is-hidden');
+                btn.classList.remove('active');
+                btn.setAttribute('aria-pressed', 'false');
+            }
+        };
+
+        bindToggle(contentBtn, {
+            on: !!this.noteCanvasItem?.canvasShowNoteContent,
+            titleOn: 'Hide note content',
+            titleOff: 'Show note content',
+            icon: DRAWING_ICONS.text,
+            flag: 'content'
+        });
+        bindToggle(checklistBtn, {
+            on: !!this.noteCanvasItem?.canvasShowNoteChecklist,
+            titleOn: 'Hide checklist',
+            titleOff: 'Show checklist',
+            icon: FORMAT_ICONS.toChecklist,
+            flag: 'checklist'
+        });
+    },
+
+    async toggleNoteTextOverlayLayer(flag) {
+        const item = this.noteCanvasItem;
+        if (!item || !this.isNoteCanvasMode) return;
+        migrateNoteCanvasTextFlags(item);
+        const key = flag === 'checklist' ? 'canvasShowNoteChecklist' : 'canvasShowNoteContent';
+        const next = !item[key];
+        // Flip immediately so UI + paint don't wait on the dynamic import.
+        item[key] = next;
+        this.updateNoteToolbarChrome();
+        if (next) {
+            CanvasViewport.offsetX = 0;
+            CanvasViewport.offsetY = 0;
+            CanvasViewport.clampOffsets();
+            CanvasViewport.applyTransform();
+            CanvasViewport.syncScrollbars?.();
+            ensureCanvasFitsNoteText(this.doc, item);
+            this.resize();
+        } else {
+            this.redrawBackground();
+            this.redraw();
+        }
+        try {
+            const { mutateItem } = await import('./noteSurfaceMutations.js');
+            mutateItem(item, (it) => {
+                migrateNoteCanvasTextFlags(it);
+                it[key] = next;
+            }, { preserveView: true, skipRerender: true, localOnly: true });
+        } catch {
+            /* ignore persist helper load errors — flag already set on item */
+        }
+        this.scheduleSave();
     },
 
     pointerSelected() {
@@ -1274,6 +1425,7 @@ export const DrawingBoard = {
         this.bindToolbar();
         this.updateZoomLevel();
         this.updateToolEcho();
+        this.updateNoteToolbarChrome();
         if (wasColorOpen) {
             const btn = this.toolbarEl.querySelector('#draw-color-btn');
             if (btn) this.toggleColorRollout(btn);
