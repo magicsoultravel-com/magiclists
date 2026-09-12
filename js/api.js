@@ -7,7 +7,8 @@ import { createNoteId, ensureStepIds, ensureStepLevels, getCreatedTimestamp, get
 import { ensureStepsParentOrder } from './checklistSteps.js';
 import {
     collectNoteCanvasMediaIds,
-    noteCanvasHasContent
+    noteCanvasHasContent,
+    ensureCanvasVisibleIfContent
 } from './noteFieldOwnership.js';
 import { normalizeAttachments } from './mediaAttachments.js';
 
@@ -53,19 +54,12 @@ export function reconcileItemMediaCanvas(item) {
             item.canvas = null;
             if (item.canvasHidden != null) delete item.canvasHidden;
             changed = true;
-        } else if (typeof item.canvasHidden !== 'boolean') {
-            // Stale notes often omit canvasHidden; treat as visible.
-            item.canvasHidden = false;
-            changed = true;
-        } else if (item.canvasHidden === true) {
-            // Pre-fix stuck state: hidden canvas + no attachment rows meant the
-            // Media section was omitted on the board, so Show canvas could not
-            // rebuild the preview. Force-visible once during repair.
-            const list = normalizeAttachments(item.attachments);
-            if (list.length === 0) {
-                item.canvasHidden = false;
-                changed = true;
-            }
+        } else {
+            // Canvas has real content: always show it. Stale pre-fix notes often
+            // kept canvasHidden=true while attachments existed, so the board Media
+            // list showed but the Note canvas block stayed hidden (modal could still
+            // look fine after a draft refresh). Force-visible on every repair load.
+            if (ensureCanvasVisibleIfContent(item)) changed = true;
         }
     }
 

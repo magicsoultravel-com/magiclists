@@ -9,6 +9,7 @@ import {
 import { buildMediaQuickActionsHtml, bindMediaQuickActions, viewMediaFullSize } from './mediaQuickActions.js';
 import { showAppToast } from './toast.js';
 import { createEmptyNoteCanvas } from './noteModel.js';
+import { ensureCanvasVisibleIfContent } from './noteFieldOwnership.js';
 import { renderNoteCanvas, refreshNoteCanvasPreview } from './noteCanvasRenderer.js';
 import { initialImageSize } from './canvasImages.js';
 import { mutateItem } from './noteSurfaceMutations.js';
@@ -330,6 +331,9 @@ function bodyInModal(body) {
  */
 export function syncNoteAttachmentsDom(item) {
     if (!item?.id) return;
+    // If drawings exist but canvasHidden is stuck true, unhide before rebuild so
+    // board and modal both get a visible Note canvas block.
+    ensureCanvasVisibleIfContent(item);
 
     for (const body of noteBodiesForItem(item.id)) {
         const canEdit = bodyCanEdit(body);

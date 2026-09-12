@@ -16,7 +16,8 @@ import {
 } from './noteModel.js';
 import {
     mergeModalOwnedOntoLive,
-    patchSharedFieldsOntoDraft
+    patchSharedFieldsOntoDraft,
+    ensureCanvasVisibleIfContent
 } from './noteFieldOwnership.js';
 import { getCardRenderContext } from './categories.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
@@ -78,7 +79,8 @@ export const Editor = {
         if (!this.activeItem?.id) return false;
         const live = liveItem || this.resolveLiveItem(this.activeItem.id);
         if (!live || live.id !== this.activeItem.id) return false;
-        const changed = patchSharedFieldsOntoDraft(this.activeItem, live);
+        const unhid = ensureCanvasVisibleIfContent(live);
+        const changed = patchSharedFieldsOntoDraft(this.activeItem, live) || unhid;
         if (!changed) return false;
         import('./noteAttachmentsUi.js').then(({ syncNoteAttachmentsDom }) => {
             if (this.activeItem?.id === live.id && !this.overlay?.classList.contains('is-hidden')) {
@@ -199,6 +201,23 @@ export const Editor = {
         this.activeItem = item ? NoteSurface.snapshotItem(item) : createDefaultNote({ backgroundColor: randomNoteColor() });
         if (!this.activeItem.editorBodyLayout) {
             this.activeItem.editorBodyLayout = 'both';
+        }
+        // Repair stuck hidden canvases as soon as the modal opens, and mirror
+        // onto the live AppState note so the board card can show Note canvas too.
+        {
+            const live = item?.id ? this.resolveLiveItem(item.id) : null;
+            const liveUnhid = live ? ensureCanvasVisibleIfContent(live) : false;
+            const draftUnhid = ensureCanvasVisibleIfContent(this.activeItem);
+            if (liveUnhid) {
+                patchSharedFieldsOntoDraft(this.activeItem, live);
+                NoteSurface.emitItemMutation(live, { preserveView: true, skipRerender: true });
+            }
+            if (liveUnhid || draftUnhid) {
+                import('./noteAttachmentsUi.js').then(({ syncNoteAttachmentsDom }) => {
+                    const target = (item?.id && this.resolveLiveItem(item.id)) || this.activeItem;
+                    if (target) syncNoteAttachmentsDom(target);
+                }).catch(() => {});
+            }
         }
         this.isNewUnsavedNote = isNew || !noteHasSavableContent(this.activeItem);
         if (this.activeItem.hideFromCalendar === undefined) {

@@ -158,12 +158,54 @@ describe('reconcileItemMediaCanvas', () => {
             id: 'n1',
             canvas,
             canvasHidden: true,
-            attachments: []
+            attachments: [{ mediaId: 'm9', attachedAt: 1, expanded: true, scale: 1, x: null, y: null }]
         };
         assert.equal(reconcileItemMediaCanvas(item), true);
         assert.equal(item.canvasHidden, false);
         assert.equal(item.attachments.length, 1);
         assert.equal(item.attachments[0].mediaId, 'm9');
+    });
+
+    it('mergeModalOwnedOntoLive recovers draft canvas when live lost it', () => {
+        const canvas = createEmptyNoteCanvas();
+        canvas.pages[0].strokes.push({
+            style: 'pen',
+            width: 2,
+            color: '#0f0',
+            points: [{ x: 0, y: 0, p: 0.5 }, { x: 1, y: 1, p: 0.5 }]
+        });
+        const live = {
+            id: 'n1',
+            title: 'Live',
+            content: '',
+            attachments: [],
+            canvas: null,
+            canvasHidden: true
+        };
+        const draft = {
+            id: 'n1',
+            title: 'Draft',
+            content: '',
+            steps: [],
+            categories: [],
+            visibility: 'private',
+            status: 'active',
+            backgroundColor: '',
+            startDateTime: '',
+            endDateTime: '',
+            editorBodyLayout: 'both',
+            isRecurring: false,
+            hideFromCalendar: false,
+            hiddenFromBoard: false,
+            attachments: [{ mediaId: 'm1', attachedAt: 1, expanded: true, scale: 1, x: null, y: null }],
+            canvas,
+            canvasHidden: false
+        };
+        const merged = mergeModalOwnedOntoLive(live, draft);
+        assert.equal(merged.title, 'Draft');
+        assert.ok(merged.canvas);
+        assert.equal(merged.canvasHidden, false);
+        assert.equal(merged.attachments.length, 1);
     });
 });
 

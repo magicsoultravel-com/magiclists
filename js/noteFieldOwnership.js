@@ -64,6 +64,10 @@ function cloneValue(value) {
  * Shared and ExternalOnly ride from live automatically.
  * For new notes with no live item, returns a clone of the draft.
  *
+ * Safety net: if the draft still holds canvas/attachments content that live lost
+ * (pre-reconcile clobber / skipped board refresh), prefer the draft Shared slice
+ * so closing the modal cannot wipe drawings the user can still see.
+ *
  * @param {object|null|undefined} liveItem
  * @param {object} draft
  * @returns {object}
@@ -88,6 +92,35 @@ export function mergeModalOwnedOntoLive(liveItem, draft) {
             out[key] = draft[key];
         }
     }
+
+    // Recover Shared content visible in the modal draft but missing on live.
+    const draftHasCanvas = noteCanvasHasContent(draft.canvas);
+    const liveHasCanvas = noteCanvasHasContent(out.canvas);
+    if (draftHasCanvas && !liveHasCanvas) {
+        out.canvas = cloneValue(draft.canvas);
+        out.canvasHidden = false;
+    } else if (liveHasCanvas && out.canvasHidden) {
+        // Live has drawings but stays hidden — board omits the Note canvas block.
+        out.canvasHidden = false;
+    }
+
+    const draftAtt = Array.isArray(draft.attachments) ? draft.attachments : [];
+    const liveAtt = Array.isArray(out.attachments) ? out.attachments : [];
+    if (draftAtt.length > liveAtt.length) {
+        // Union by mediaId (draft-first for recovered membership).
+        const seen = new Set();
+        const merged = [];
+        for (const entry of [...draftAtt, ...liveAtt]) {
+            const id = typeof entry === 'string' ? entry : entry?.mediaId;
+            if (!id || seen.has(id)) continue;
+            seen.add(id);
+            merged.push(typeof entry === 'string'
+                ? { mediaId: entry, attachedAt: 0, expanded: false, scale: 1, x: null, y: null }
+                : entry);
+        }
+        out.attachments = merged;
+    }
+
     return out;
 }
 
@@ -152,6 +185,19 @@ export function noteCanvasHasContent(canvas) {
         if ((inf.shapes || []).length) return true;
     }
     return false;
+}
+
+/**
+ * If a note canvas has strokes/images/text, ensure it is not left hidden.
+ * Mutates the item in place. Returns true when canvasHidden was cleared.
+ * @param {object|null|undefined} item
+ * @returns {boolean}
+ */
+export function ensureCanvasVisibleIfContent(item) {
+    if (!item || !noteCanvasHasContent(item.canvas)) return false;
+    if (item.canvasHidden === false) return false;
+    item.canvasHidden = false;
+    return true;
 }
 
 /**

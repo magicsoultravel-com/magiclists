@@ -1190,7 +1190,12 @@ export const DrawingBoard = {
             const { mutateItem } = await import('./noteSurfaceMutations.js');
             mutateItem(item, (it) => {
                 it.canvas = doc;
+                // Drawing implies the note canvas should be visible on board/modal.
+                it.canvasHidden = false;
             }, { preserveView: true, skipRerender: true });
+            import('./noteAttachmentsUi.js').then(({ syncNoteAttachmentsDom }) => {
+                syncNoteAttachmentsDom(item);
+            }).catch(() => {});
             return;
         }
         await writeDocument(this.doc);
