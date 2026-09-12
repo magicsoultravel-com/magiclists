@@ -1,6 +1,7 @@
 /** @module {"owns":"note↔media attachment helpers", "related":["mediaLibrary.js","noteSurface.js","mediaLibraryOverlay.js"]} */
 import { NoteSurface } from './noteSurface.js';
 import { stripRichText } from './richText.js';
+import { removeMediaIdFromNoteCanvas } from './noteFieldOwnership.js';
 
 /** Discrete scale range for expand-in-note image size */
 export const ATTACH_SCALE_MIN = 0.2;
@@ -126,7 +127,8 @@ export function attachMediaToNote(item, mediaId) {
 }
 
 /**
- * Remove a media id from a note's attachments.
+ * Remove a media id from a note's attachments (membership) and from canvas images
+ * (presentation). Collapse/canvas-only delete must not call this.
  * @param {object} item
  * @param {string} mediaId
  * @returns {boolean}
@@ -137,7 +139,8 @@ export function detachMediaFromNote(item, mediaId) {
     NoteSurface.mutateItem(item, (it) => {
         const before = normalizeAttachments(it.attachments);
         const list = before.filter((a) => a.mediaId !== mediaId);
-        if (list.length === before.length) return;
+        const canvasRemoved = removeMediaIdFromNoteCanvas(it.canvas, mediaId);
+        if (list.length === before.length && !canvasRemoved) return;
         it.attachments = list;
         removed = true;
     }, { preserveView: true });

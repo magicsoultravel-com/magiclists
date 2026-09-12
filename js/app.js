@@ -181,6 +181,7 @@ BootProgress.set(85, 'Workspace…');
                 Editor.activeItem?.id === noteId ? Editor.activeItem : null
             ));
             setModalEditorNoteIdResolver(() => Editor.activeItem?.id || null);
+            Editor.setLiveItemResolver((noteId) => AppState.items.find((i) => i.id === noteId) || null);
             MediaLibraryOverlay.init({
                 getItems: () => AppState.items
             });
@@ -848,6 +849,8 @@ renderQuickActions() {
 
     async enterNoteCanvasMode(item) {
         if (!item?.id) return;
+        // Always bind DrawingBoard to the live AppState note (Shared SoT for canvas).
+        const live = AppState.items.find((i) => i.id === item.id) || item;
         AppState.workspaceMode = 'drawing';
         const shell = document.getElementById('workspace-shell');
         const canvas = document.getElementById('app-canvas');
@@ -856,7 +859,7 @@ renderQuickActions() {
         canvas?.classList.add('is-hidden');
         drawBtn?.classList.add('active');
         DesktopZoom.apply({ enabled: false });
-        await DrawingBoard.activateForNote(item);
+        await DrawingBoard.activateForNote(live);
         this.updateFabVisibility();
     }
 
@@ -882,6 +885,13 @@ renderQuickActions() {
         this.updateLayoutResetVisibility();
         this.updateViewToggleState();
 
+        // Modal stays open underneath drawing — refresh Shared media/canvas UI from live.
+        const noteId = item?.id;
+        if (noteId && Editor.activeItem?.id === noteId && !Editor.overlay?.classList.contains('is-hidden')) {
+            const live = AppState.items.find((i) => i.id === noteId);
+            if (live) Editor.applySharedFromLive(live);
+        }
+
         if (item?.id) {
             requestAnimationFrame(() => {
                 const card = canvas?.querySelector(`.mini-card[data-id="${CSS.escape(item.id)}"]`);
@@ -890,7 +900,7 @@ renderQuickActions() {
         }
     }
 
-async executeDataBackupExport() {
+    async executeDataBackupExport() {
         // Show loading indicator on the export button
         const exportBtn = document.getElementById('btn-export-db');
         if (exportBtn) {
@@ -1410,10 +1420,19 @@ async executeDataBackupExport() {
                 UI.updateBoardItemsMap(item);
             }
 
+            // Modal draft is a subscriber: patch Shared fields + refresh media/canvas
+            // UI only (no full renderForm) when live Shared diverges from the draft.
+            const liveItem = idx !== -1 ? AppState.items[idx] : item;
+            const modalOpen = Editor.activeItem?.id === item.id
+                && Editor.overlay
+                && !Editor.overlay.classList.contains('is-hidden');
+            if (modalOpen && detail?.mergeKey !== 'modal-owned-persist') {
+                Editor.applySharedFromLive(liveItem);
+            }
+
             if (detail?.skipRerender || detail?.preserveView) {
                 if (!detail?.skipRerender) {
                     const canvas = document.getElementById('app-canvas');
-                    const liveItem = idx !== -1 ? AppState.items[idx] : item;
                     UI.updateSingleCard(canvas, liveItem, AppState.hiddenCategories);
                     if (AppState.viewSettings.sortBy === 'grid') {
                         DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());

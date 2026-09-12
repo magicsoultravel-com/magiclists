@@ -84,7 +84,7 @@ function removeMediaImageFromNoteCanvas(item, mediaId) {
 }
 
 async function addMediaImageToNoteCanvas(item, mediaId) {
-    const doc = ensureNoteCanvas(item);
+    ensureNoteCanvas(item);
     const images = getNoteCanvasImages(item);
     if (images.some((img) => img.mediaId === mediaId)) return null;
 
@@ -105,7 +105,16 @@ async function addMediaImageToNoteCanvas(item, mediaId) {
         naturalWidth: img.naturalWidth,
         naturalHeight: img.naturalHeight
     };
-    images.push(imageObj);
+
+    // Persist presentation onto Shared canvas (membership is attachments).
+    mutateItem(item, (it) => {
+        ensureNoteCanvas(it);
+        const list = getNoteCanvasImages(it);
+        if (list.some((imgEntry) => imgEntry.mediaId === mediaId)) return;
+        list.push(imageObj);
+        it.canvasHidden = false;
+    }, { preserveView: true, skipRerender: true });
+
     return imageObj;
 }
 
@@ -213,7 +222,9 @@ async function expandAttachmentOnCanvas(section, row, item, mediaId) {
  */
 function collapseAttachmentFromCanvas(section, row, item, mediaId) {
     const expandBtn = row.querySelector('[data-expand-media]');
-    removeMediaImageFromNoteCanvas(item, mediaId);
+    mutateItem(item, (it) => {
+        removeMediaImageFromNoteCanvas(it, mediaId);
+    }, { preserveView: true, skipRerender: true });
     row.classList.remove('is-expanded');
     delete row.dataset.attachScale;
     setExpandButtonState(expandBtn, false);
@@ -320,7 +331,8 @@ export function syncNoteAttachmentsDom(item) {
 
     for (const body of noteBodiesForItem(item.id)) {
         const canEdit = bodyCanEdit(body);
-        const startCollapsed = !bodyInModal(body) && !noteHasVisibleCanvas(item);
+        const hasAttachments = normalizeAttachments(item?.attachments).length > 0;
+        const startCollapsed = !(hasAttachments || noteHasVisibleCanvas(item));
         const html = buildNoteAttachmentsSectionHtml(item, { canEdit, startCollapsed });
         const existing = body.querySelector('[data-note-attachments]');
         if (!html) {

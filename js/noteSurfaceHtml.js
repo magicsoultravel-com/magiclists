@@ -227,9 +227,15 @@ export function resolveNoteBodyVisibility(item, { canEdit = false, inModalEditor
     };
 }
 
+function mediaSectionStartCollapsed(item) {
+    const hasAttachments = normalizeAttachments(item?.attachments).length > 0;
+    const hasVisibleCanvas = !!(item?.canvas && !item?.canvasHidden);
+    return !(hasAttachments || hasVisibleCanvas);
+}
+
 export function buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false, richEdit = false } = {}) {
     const template = resolveNoteTemplate(item);
-    const attachmentsCollapsed = !inModalEditor && !(item?.canvas && !item?.canvasHidden);
+    const attachmentsCollapsed = mediaSectionStartCollapsed(item);
 
     if (template === 'sheet') {
         ensureItemSheet(item, defaultSheetDimsForTemplate('sheet'));
@@ -363,7 +369,7 @@ function buildMeetingBodyHtml(item, { canEdit = false, inModalEditor = false, ri
     html += buildNoteBodySection('Action items', actionHtml);
     html += buildNoteAttachmentsSectionHtml(item, {
         canEdit,
-        startCollapsed: !inModalEditor && !(item?.canvas && !item?.canvasHidden)
+        startCollapsed: mediaSectionStartCollapsed(item)
     });
     return html;
 }

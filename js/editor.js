@@ -14,6 +14,10 @@ import {
     normalizeItemForSave,
     parseStoredDateTime
 } from './noteModel.js';
+import {
+    mergeModalOwnedOntoLive,
+    patchSharedFieldsOntoDraft
+} from './noteFieldOwnership.js';
 import { getCardRenderContext } from './categories.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
 import { NoteSurface } from './noteSurface.js';
@@ -41,6 +45,48 @@ export const Editor = {
     isNewUnsavedNote: false,
     lastPersistedItem: null,
     fabClickListenerBound: false,
+    /** @type {((noteId: string) => object|null)|null} */
+    liveItemResolver: null,
+
+    /**
+     * Register how the modal resolves the live AppState note for reconciliation.
+     * @param {(noteId: string) => object|null} fn
+     */
+    setLiveItemResolver(fn) {
+        this.liveItemResolver = typeof fn === 'function' ? fn : null;
+    },
+
+    /**
+     * @param {string|null|undefined} [noteId]
+     * @returns {object|null}
+     */
+    resolveLiveItem(noteId = this.activeItem?.id) {
+        if (!noteId || !this.liveItemResolver) return null;
+        try {
+            return this.liveItemResolver(noteId) || null;
+        } catch {
+            return null;
+        }
+    },
+
+    /**
+     * Patch Shared fields from live onto the draft and refresh media/canvas UI only.
+     * @param {object} [liveItem]
+     * @returns {boolean}
+     */
+    applySharedFromLive(liveItem) {
+        if (!this.activeItem?.id) return false;
+        const live = liveItem || this.resolveLiveItem(this.activeItem.id);
+        if (!live || live.id !== this.activeItem.id) return false;
+        const changed = patchSharedFieldsOntoDraft(this.activeItem, live);
+        if (!changed) return false;
+        import('./noteAttachmentsUi.js').then(({ syncNoteAttachmentsDom }) => {
+            if (this.activeItem?.id === live.id && !this.overlay?.classList.contains('is-hidden')) {
+                syncNoteAttachmentsDom(this.activeItem);
+            }
+        }).catch(() => {});
+        return true;
+    },
 
     isColorPickerOpen() {
         if (ColorPicker.eyedropperCleanup) return true;
@@ -233,12 +279,19 @@ export const Editor = {
         if (!force && unchanged) return true;
 
         this.isNewUnsavedNote = false;
+        // Align draft ModalOwned with the merged payload, then deep-clone Shared
+        // from the merge result so the draft never aliases the live note.
         Object.assign(this.activeItem, currentData);
+        patchSharedFieldsOntoDraft(this.activeItem, currentData);
         // Update lastPersistedItem after successful persist
-        this.lastPersistedItem = JSON.parse(JSON.stringify(this.activeItem));
+        this.lastPersistedItem = JSON.parse(JSON.stringify(currentData));
         // skipRerender + preserveView makes preserveEmptySteps true so empty
         // checklist items are preserved — matching the surface/board save path.
-        NoteSurface.emitItemMutation(this.activeItem, { preserveView: true, skipRerender: true });
+        NoteSurface.emitItemMutation(currentData, {
+            preserveView: true,
+            skipRerender: true,
+            mergeKey: 'modal-owned-persist'
+        });
         return true;
     },
 
@@ -260,6 +313,10 @@ export const Editor = {
         NoteSurface.syncItemBodyFromDom(this.mountZone, this.activeItem);
     },
 
+    /**
+     * Sync ModalOwned from DOM into the draft, then merge onto the live item
+     * so Shared/External fields are never clobbered by a stale draft snapshot.
+     */
     collectFormData({ normalize = false } = {}) {
         this.syncActiveItemFromDom();
         const templateEl = document.getElementById('edit-template');
@@ -275,37 +332,36 @@ export const Editor = {
         // the presence of any steps (including empty ones).
         const steps = allSteps;
 
-        const data = {
-            ...this.activeItem,
-            title: this.activeItem.title || '',
-            type: steps.length > 0 ? 'checklist' : 'note',
-            visibility: document.getElementById('edit-visibility')?.value || 'private',
-            status: document.getElementById('edit-status')?.value || 'active',
-            content: this.activeItem.content || '',
-            steps,
-            categories: (() => {
-                const cat = document.getElementById('edit-category')?.value?.trim() || '';
-                return cat ? [cat] : [];
-            })(),
-            backgroundColor: finalBgColor,
-            startDateTime: combineDateTime(
-                document.getElementById('edit-start-date')?.value || '',
-                document.getElementById('edit-start-time')?.value || ''
-            ),
-            endDateTime: combineDateTime(
-                document.getElementById('edit-end-date')?.value || '',
-                document.getElementById('edit-end-time')?.value || ''
-            ),
-            isRecurring: this.activeItem.isRecurring === true,
-            hideFromCalendar: this.activeItem.hideFromCalendar === true,
-            hiddenFromBoard: this.activeItem.hiddenFromBoard === true,
-            editorBodyLayout: resolveEditorBodyLayoutUnchecked(this.activeItem),
-            noteTemplate: this.activeItem.noteTemplate,
-            sheet: this.activeItem.sheet
-        };
-        if (data.noteTemplate === 'default' || !data.noteTemplate) {
-            delete data.noteTemplate;
+        // Write ModalOwned onto the draft first (source for the overlay).
+        this.activeItem.title = this.activeItem.title || '';
+        this.activeItem.type = steps.length > 0 ? 'checklist' : 'note';
+        this.activeItem.visibility = document.getElementById('edit-visibility')?.value || 'private';
+        this.activeItem.status = document.getElementById('edit-status')?.value || 'active';
+        this.activeItem.content = this.activeItem.content || '';
+        this.activeItem.steps = steps;
+        this.activeItem.categories = (() => {
+            const cat = document.getElementById('edit-category')?.value?.trim() || '';
+            return cat ? [cat] : [];
+        })();
+        this.activeItem.backgroundColor = finalBgColor;
+        this.activeItem.startDateTime = combineDateTime(
+            document.getElementById('edit-start-date')?.value || '',
+            document.getElementById('edit-start-time')?.value || ''
+        );
+        this.activeItem.endDateTime = combineDateTime(
+            document.getElementById('edit-end-date')?.value || '',
+            document.getElementById('edit-end-time')?.value || ''
+        );
+        this.activeItem.isRecurring = this.activeItem.isRecurring === true;
+        this.activeItem.hideFromCalendar = this.activeItem.hideFromCalendar === true;
+        this.activeItem.hiddenFromBoard = this.activeItem.hiddenFromBoard === true;
+        this.activeItem.editorBodyLayout = resolveEditorBodyLayoutUnchecked(this.activeItem);
+        if (this.activeItem.noteTemplate === 'default' || !this.activeItem.noteTemplate) {
+            delete this.activeItem.noteTemplate;
         }
+
+        const live = this.resolveLiveItem(this.activeItem.id);
+        const data = mergeModalOwnedOntoLive(live, this.activeItem);
         return normalize ? normalizeItemForSave(data, { preserveEmptySteps: true }) : data;
     },
     

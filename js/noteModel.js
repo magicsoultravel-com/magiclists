@@ -5,6 +5,7 @@ import { resolveNoteTemplate, sheetFirstCellText, sheetHasContent, sheetIsActive
 import { stepsToParentOrder } from './checklistSteps.js';
 import { DesktopManager } from './desktopManager.js';
 import { createEmptyDocument, migrateDocument } from './canvasDocument.js';
+import { noteCanvasHasContent } from './noteFieldOwnership.js';
 
 export function deriveNoteTitle({ title = '', content = '', steps = [], sheet = null, noteTemplate = '' } = {}) {
     const trimmedTitle = stripRichText(title).trim();
@@ -152,11 +153,22 @@ export function createDefaultNote({ startDateTime, ...overrides } = {}) {
     };
 }
 
-export function noteHasSavableContent({ title = '', content = '', steps = [], sheet = null, noteTemplate = '' } = {}) {
+export function noteHasSavableContent({
+    title = '',
+    content = '',
+    steps = [],
+    sheet = null,
+    noteTemplate = '',
+    attachments = [],
+    canvas = null
+} = {}) {
     if (stripRichText(title).trim()) return true;
     if (stripRichText(content).trim()) return true;
     if (sheetIsActive({ noteTemplate }) && sheetHasContent(sheet)) return true;
-    return (steps || []).some((step) => stripRichText(step?.text || '').trim());
+    if ((steps || []).some((step) => stripRichText(step?.text || '').trim())) return true;
+    if (Array.isArray(attachments) && attachments.length > 0) return true;
+    if (noteCanvasHasContent(canvas)) return true;
+    return false;
 }
 
 export function formatLocalDateTimeParts(date = new Date()) {

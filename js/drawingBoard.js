@@ -2200,6 +2200,12 @@ export const DrawingBoard = {
         this.setTool('pointer');
         this.scheduleSave();
         this.redraw();
+
+        // Membership: canvas insert must also attach to the note's media list.
+        if (this.isNoteCanvasMode && this.noteCanvasItem) {
+            const { attachMediaToNote } = await import('./mediaAttachments.js');
+            attachMediaToNote(this.noteCanvasItem, mediaId);
+        }
     },
 
 };

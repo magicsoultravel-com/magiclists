@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-09-10T22:45:16.796Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-09-12T19:28:43.642Z
 
 ## CSS load order
 
@@ -75,6 +75,8 @@ alwaysApply: true
 | js/noteAttachmentsUi.js | note card attached-media section HTML and hydrate | mediaAttachments.js, mediaLibrary.js, noteSurfaceHtml.js, mediaLibraryOverlay.js, mediaQuickActions.js | — | — |
 | js/noteBodyConversion.js | checklist/content conversion, plain copy text | noteSurface.js, checklistSteps.js, richText.js | — | — |
 | js/noteCanvasRenderer.js | inline note canvas rendering from item.canvas | noteAttachmentsUi.js, drawingBoard.js, canvasDocument.js | — | — |
+| js/noteCanvasTextOverlay.js | non-editable note text overlay for note-canvas bg / preview | drawingBoard.js, noteCanvasRenderer.js, noteBodyConversion.js | — | — |
+| js/noteFieldOwnership.js | note field ownership contract and modal draft reconciliation | noteModel.js, editor.js, app.js, mediaAttachments.js | — | — |
 | js/noteModel.js | note item schema, normalizeItemForSave, createNoteId | richText.js, sheet.js | — | — |
 | js/notePasteContext.js | note paste target resolution for clipboard media attach | mediaPasteCatcher.js, mediaStagingDialog.js, mediaAttachments.js | — | — |
 | js/notePopoutBridge.js | note popout window open/focus, edit claims, BroadcastChannel sync | popoutNote.js, app.js, noteQuickActions.js, popoutWindows.js | — | — |
