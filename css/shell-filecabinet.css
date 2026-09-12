@@ -553,7 +553,7 @@ html:not([data-theme-skin="1"])[data-file-cabinet-bg="none"] .file-cabinet-categ
 /* File cabinet tabs - use same styling as spatial-at-small for consistency */
 .file-cabinet-tab-stack {
     position: relative;
-    min-width: 160px;
+    min-width: 0;
 }
 
 .file-cabinet .file-cabinet-tab {

@@ -170,9 +170,30 @@ function fileCabinetStackWidth(count) {
     return (cols - 1) * fileCabinetStackPitch() + fileCabinetCascadeWidth(lastCount);
 }
 
-/** Open-column width: at least FILE_CABINET_DRAWER_WIDTH, grows with wrapped cascade columns. */
-function fileCabinetColumnWidth(slotCount) {
-    return Math.max(fileCabinetStackWidth(slotCount), FILE_CABINET_DRAWER_WIDTH);
+/** Left+right padding on `.file-cabinet-category` (shelf inset around the notes). */
+function fileCabinetCategoryPadX(colEl) {
+    if (!colEl) return 0;
+    const styles = getComputedStyle(colEl);
+    return (parseFloat(styles.paddingLeft) || 0) + (parseFloat(styles.paddingRight) || 0);
+}
+
+/**
+ * Open drawer: stack = note cascade width; shelf = stack + CSS L/R padding.
+ * Without the pad, border-box sizing makes the rightmost note (e.g. Tunes) stick
+ * out past the shelf background while left/bottom still look inset.
+ */
+function applyOpenDrawerStackDimensions(stackEl, count) {
+    const stackW = fileCabinetStackWidth(count);
+    const stackH = Math.max(fileCabinetStackHeight(count), fileCabinetDrawerMinHeight());
+    stackEl.style.width = `${stackW}px`;
+    stackEl.style.minWidth = `${stackW}px`;
+    stackEl.style.height = `${stackH}px`;
+    const col = stackEl.closest('.file-cabinet-category');
+    if (!col) return;
+    const colW = Math.max(stackW + fileCabinetCategoryPadX(col), FILE_CABINET_DRAWER_WIDTH);
+    col.style.width = `${colW}px`;
+    col.style.minWidth = `${colW}px`;
+    col.style.flexBasis = `${colW}px`;
 }
 
 /** Open-drawer minimum stack height: fits FILE_CABINET_DRAWER_MIN_CARDS cards. */
@@ -910,16 +931,7 @@ function updateStackPreviewDimensions(stackEl, slotCount, { minSlotCount = 0 } =
         return;
     }
 
-    const width = fileCabinetColumnWidth(count);
-    stackEl.style.width = `${width}px`;
-    // Drag previews keep the open-drawer minimum height (preview popovers do not).
-    stackEl.style.height = `${Math.max(stackHeight, fileCabinetDrawerMinHeight())}px`;
-    const col = stackEl.closest('.file-cabinet-category');
-    if (col) {
-        col.style.width = `${width}px`;
-        col.style.minWidth = `${width}px`;
-        col.style.flexBasis = `${width}px`;
-    }
+    applyOpenDrawerStackDimensions(stackEl, count);
 }
 
 function applyStackPreviewPositions(stackEl, { draggedId, insertIndex = null, settling = true, minSlotCount = 0 } = {}) {
@@ -1447,16 +1459,7 @@ export function applyFileCabinetStackPositions(stackEl) {
         rollout.style.minWidth = '';
         rollout.style.height = '';
     } else {
-        const width = fileCabinetColumnWidth(count);
-        stackEl.style.width = `${width}px`;
-        // Open drawers keep a FILE_CABINET_DRAWER_MIN_CARDS-card minimum height.
-        stackEl.style.height = `${Math.max(stackHeight, fileCabinetDrawerMinHeight())}px`;
-        const col = stackEl.closest('.file-cabinet-category');
-        if (col) {
-            col.style.width = `${width}px`;
-            col.style.minWidth = `${width}px`;
-            col.style.flexBasis = `${width}px`;
-        }
+        applyOpenDrawerStackDimensions(stackEl, count);
     }
 
     let layoutIndex = 0;
@@ -2406,6 +2409,9 @@ export function initFileCabinetDrag(mount, currentItemsOrGetter = [], UI, signal
             state.card.style.setProperty('--card-category-color', color);
             state.card.style.setProperty('--file-cabinet-category-color', color);
         }
+        // Must clear before apply — applyFileCabinetStackPositions skips dragging tabs,
+        // which would leave dest siblings packed one slot early and the moved note unpositioned.
+        state.card.classList.remove('is-file-cabinet-dragging', 'layout-settling', 'layout-preview');
         applyFileCabinetStackPositions(state.sourceStack);
         applyFileCabinetStackPositions(destStack);
         updateFileCabinetCategoryCount(mount, state.sourceCategory);
@@ -2546,7 +2552,8 @@ export function initFileCabinetDrag(mount, currentItemsOrGetter = [], UI, signal
         }
 
         const moved = moveTabDomToCategory(state, toCategory, toIndex, target);
-        resetDraggedTabStyles(state.card, state.sourceStack);
+        const destStackForReset = state.card.closest('.file-cabinet-tab-stack') || target?.targetStack;
+        resetDraggedTabStyles(state.card, destStackForReset);
         if (moved === 'structural' || moved === false) {
             window.dispatchEvent(new CustomEvent('filecabinet:layout_changed', { detail: { flushLayout: false } }));
             return;
