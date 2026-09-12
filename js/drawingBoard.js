@@ -18,13 +18,15 @@ import { CanvasViewport } from './canvasViewport.js';
 import { DrawingToolbarChrome } from './drawingToolbarChrome.js';
 import {
     strokeHasPointInPolygon,
+    itemIntersectsRect,
     getStrokesBounds,
     clampStrokesToBounds,
     translateStrokes,
     getPageBounds,
-    rectToPolygon,
     getImageBounds,
-    resolveBoxSelection
+    resolveBoxSelection,
+    boxSelectThresholdWorld,
+    BOX_SELECT_CLICK_THRESHOLD
 } from './lassoGeometry.js';
 import {
     loadImage,
@@ -279,7 +281,9 @@ export const DrawingBoard = {
     selectedStrokes: new Set(),
     isDraggingLasso: false,
     lassoDragStart: null,
-    
+    lassoDragMoved: false,
+    lassoHistoryPushed: false,
+
     // Shared box-select state (pointer tool + lasso marquee)
     isBoxSelecting: false,
     boxSelectStart: null,
@@ -289,6 +293,7 @@ export const DrawingBoard = {
     resizeHandle: null,
     resizeStart: null,
     hoverHandle: null,
+    lastHoverCursor: null,
 
     // Note-canvas mode state
     activeNoteId: null,
@@ -627,7 +632,11 @@ export const DrawingBoard = {
         CanvasViewport.setHandMode(tool === 'pan');
         // setTool is used by V / shapes / eraser / pan — leave dedicated marquee mode
         if (this.isLassoActive) this.isLassoActive = false;
-        if (this.canvas) this.canvas.dataset.tool = tool;
+        if (this.canvas) {
+            this.canvas.dataset.tool = tool;
+            this.canvas.style.cursor = '';
+            this.lastHoverCursor = null;
+        }
         writePrefs(this.prefs);
         this.renderToolbar();
     },
@@ -774,10 +783,7 @@ export const DrawingBoard = {
 
         // Rectangle marquee (lasso mode or pointer select tool)
         if (this.isLassoActive || this.activeTool === 'pointer') {
-            // Starting a new marquee outside the selection clears it
-            if (this.selectedStrokes.size > 0) {
-                this.selectedStrokes.clear();
-            }
+            // Keep prior selection visible until endBoxSelect commits the replacement
             this.beginBoxSelect(x, y);
             return;
         }
@@ -951,6 +957,7 @@ export const DrawingBoard = {
         this.isBoxSelecting = true;
         this.boxSelectStart = { x, y };
         this.boxSelectCurrent = { x, y };
+        this.requestRedraw();
     },
 
     updateBoxSelect(x, y) {
@@ -967,15 +974,17 @@ export const DrawingBoard = {
 
         const { x: x0, y: y0 } = this.boxSelectStart;
         const { x: x1, y: y1 } = this.boxSelectCurrent;
-        const result = resolveBoxSelection(x0, y0, x1, y1);
+        const threshold = boxSelectThresholdWorld(
+            BOX_SELECT_CLICK_THRESHOLD,
+            CanvasViewport.scale,
+            window.devicePixelRatio || 1
+        );
+        const result = resolveBoxSelection(x0, y0, x1, y1, threshold);
 
+        // Commit selection in one shot (replaces any prior selection)
         this.selectedStrokes.clear();
-        if (result.kind === 'click') {
-            // Point-hit: select items under the tiny click rect, or clear if none
-            this.selectStrokesInPolygon(result.polygon);
-            if (this.selectedStrokes.size === 0) {
-                // Empty click — selection already cleared above
-            }
+        if (result.rect) {
+            this.selectStrokesInRect(result.rect);
         } else {
             this.selectStrokesInPolygon(result.polygon);
         }
@@ -983,6 +992,32 @@ export const DrawingBoard = {
         this.isBoxSelecting = false;
         this.boxSelectStart = null;
         this.boxSelectCurrent = null;
+    },
+
+    selectStrokesInRect(rect) {
+        if (!rect) return;
+
+        const strokes = this.strokes();
+        const texts = getActiveTexts(this.doc);
+        const images = this.images();
+        this.selectedStrokes.clear();
+
+        for (const stroke of strokes) {
+            if (itemIntersectsRect(stroke, rect)) {
+                this.selectedStrokes.add(stroke);
+            }
+        }
+        for (const text of texts) {
+            if (itemIntersectsRect(text, rect)) {
+                this.selectedStrokes.add(text);
+            }
+        }
+        for (const image of images) {
+            if (itemIntersectsRect(image, rect)) {
+                this.selectedStrokes.add(image);
+            }
+        }
+        // Select-only must not push undo history
     },
 
     selectStrokesInPolygon(polygon) {
@@ -1056,11 +1091,7 @@ export const DrawingBoard = {
             this.setStrokes(strokes);
             this.scheduleSave();
         }
-        const images = this.images().filter((img) => !this.hitImage(img, x, y, radius));
-        if (images.length !== this.images().length) {
-            this.setImages(images);
-            this.scheduleSave();
-        }
+        // Eraser skips media/images — remove those via Clear or selection tooling.
     },
 
     hitImage(img, x, y, radius) {
@@ -1553,7 +1584,7 @@ export const DrawingBoard = {
                     <span class="drawing-dropdown-chevron">${CHEVRON}</span>
                 </button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-insert-image" title="Insert image" aria-label="Insert image" aria-haspopup="menu">${DRAWING_ICONS.image}</button>
-                <button type="button" class="btn btn--compact btn--icon" id="draw-lasso" title="Rectangle select (L)" aria-label="Rectangle select" ${this.isLassoActive ? 'aria-pressed="true"' : ''}>${DRAWING_ICONS.lasso}</button>
+                <button type="button" class="btn btn--compact btn--icon ${this.isLassoActive ? 'active' : ''}" id="draw-lasso" title="Rectangle select (L)" aria-label="Rectangle select" aria-pressed="${this.isLassoActive ? 'true' : 'false'}">${DRAWING_ICONS.lasso}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-fullscreen" title="Full screen" aria-label="Full screen" aria-pressed="false">${ACTION_ICONS.fullscreenEnter}</button>
                 <span class="format-toolbar-sep" aria-hidden="true"></span>
                 <button type="button" class="btn btn--compact btn--icon ${isPanActive ? 'active' : ''}" id="draw-pan" title="Hand tool — pan canvas (H). Scroll also pans; Ctrl+scroll zooms; Space+drag pans." aria-label="Hand tool" aria-pressed="${isPanActive ? 'true' : 'false'}">${DRAWING_ICONS.hand}</button>
@@ -1770,7 +1801,17 @@ export const DrawingBoard = {
                 this.redraw();
                 return true;
             }
-            if (this.isLassoActive || this.selectedStrokes.size > 0) {
+            // Two-step Escape: clear selection first; exit marquee mode only when empty
+            if (this.selectedStrokes.size > 0) {
+                this.selectedStrokes.clear();
+                this.isDraggingLasso = false;
+                this.lassoDragStart = null;
+                this.lassoDragMoved = false;
+                this.lassoHistoryPushed = false;
+                this.redraw();
+                return true;
+            }
+            if (this.isLassoActive) {
                 this.clearLassoSelection();
                 return true;
             }
@@ -1792,6 +1833,8 @@ export const DrawingBoard = {
         this.isLassoActive = true;
         this.selectedStrokes.clear();
         this.isDraggingLasso = false;
+        this.lassoDragMoved = false;
+        this.lassoHistoryPushed = false;
         this.isBoxSelecting = false;
         this.boxSelectStart = null;
         this.boxSelectCurrent = null;
@@ -1809,11 +1852,17 @@ export const DrawingBoard = {
         this.selectedStrokes.clear();
         this.isDraggingLasso = false;
         this.lassoDragStart = null;
+        this.lassoDragMoved = false;
+        this.lassoHistoryPushed = false;
         this.isBoxSelecting = false;
         this.boxSelectStart = null;
         this.boxSelectCurrent = null;
         // Do not wipe textLayer here — it may contain active contentEditable boxes.
-        if (this.canvas) this.canvas.dataset.tool = this.activeTool;
+        if (this.canvas) {
+            this.canvas.dataset.tool = this.activeTool;
+            this.canvas.style.cursor = '';
+            this.lastHoverCursor = null;
+        }
         this.renderToolbar();
         this.redraw();
     },
@@ -1824,31 +1873,42 @@ export const DrawingBoard = {
 
     startLassoDrag(x, y) {
         if (this.selectedStrokes.size === 0) return;
-        
+
         this.isDraggingLasso = true;
         this.lassoDragStart = { x, y };
-        this.pushLayerHistory();
+        this.lassoDragMoved = false;
+        this.lassoHistoryPushed = false;
     },
 
     dragLassoSelection(dx, dy) {
         if (!this.isDraggingLasso || this.selectedStrokes.size === 0) return;
-        
+        if (!dx && !dy) return;
+
+        if (!this.lassoHistoryPushed) {
+            this.pushLayerHistory();
+            this.lassoHistoryPushed = true;
+        }
+        this.lassoDragMoved = true;
+
         translateStrokes(this.getSelectedStrokesArray(), dx, dy);
-        
+
         // Clamp to page bounds for fixed page modes
         const dims = getPageDimensions(this.doc);
         const pageBounds = getPageBounds(this.doc, dims);
         clampStrokesToBounds(this.getSelectedStrokesArray(), pageBounds);
-        
-        this.redraw();
+
+        this.requestRedraw();
     },
 
     finishLassoDrag() {
         if (!this.isDraggingLasso) return;
-        
+
+        const moved = this.lassoDragMoved;
         this.isDraggingLasso = false;
         this.lassoDragStart = null;
-        this.scheduleSave();
+        this.lassoDragMoved = false;
+        this.lassoHistoryPushed = false;
+        if (moved) this.scheduleSave();
     },
 
     renderLassoOverlay() {
@@ -2037,23 +2097,29 @@ export const DrawingBoard = {
 
     updateHoverCursor(x, y) {
         if (!this.canvas) return;
+        let next = '';
         if (this.selectedStrokes.size > 0) {
             const handle = this.hitResizeHandle(x, y);
             if (handle) {
                 this.hoverHandle = handle.id;
-                this.canvas.style.cursor = handle.cursor;
-                return;
+                next = handle.cursor;
+            } else {
+                const bounds = getStrokesBounds(this.getSelectedStrokesArray());
+                if (x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY) {
+                    this.hoverHandle = null;
+                    next = 'move';
+                } else {
+                    this.hoverHandle = null;
+                    next = '';
+                }
             }
-            const bounds = getStrokesBounds(this.getSelectedStrokesArray());
-            if (x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY) {
-                this.hoverHandle = null;
-                this.canvas.style.cursor = 'move';
-                return;
-            }
+        } else {
+            this.hoverHandle = null;
+            next = '';
         }
-        this.hoverHandle = null;
-        // Clear inline cursor so CSS data-tool rules apply for the active tool
-        this.canvas.style.cursor = '';
+        if (this.lastHoverCursor === next) return;
+        this.lastHoverCursor = next;
+        this.canvas.style.cursor = next;
     },
 
     async openImageInsertMenu(anchor) {

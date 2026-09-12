@@ -43,6 +43,67 @@ export function isPointInPolygon(point, polygon) {
 }
 
 /**
+ * Axis-aligned rect intersection (inclusive edges).
+ * @param {{minX:number,minY:number,maxX:number,maxY:number}} a
+ * @param {{minX:number,minY:number,maxX:number,maxY:number}} b
+ */
+export function rectsIntersect(a, b) {
+    if (!a || !b) return false;
+    return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
+}
+
+/**
+ * Build a normalized AABB from two corners.
+ */
+export function rectFromPoints(x0, y0, x1, y1) {
+    return {
+        minX: Math.min(x0, x1),
+        minY: Math.min(y0, y1),
+        maxX: Math.max(x0, x1),
+        maxY: Math.max(y0, y1)
+    };
+}
+
+/**
+ * Robust hit-test for rectangular marquee selection.
+ * Brush points are inflated by stroke width/2; shapes/text/images use AABB overlap.
+ *
+ * @param {Object} item
+ * @param {{minX:number,minY:number,maxX:number,maxY:number}} rect
+ * @returns {boolean}
+ */
+export function itemIntersectsRect(item, rect) {
+    if (!item || !rect) return false;
+
+    if (Array.isArray(item.points)) {
+        const pad = Math.max(0, (item.width || 0) / 2);
+        for (const point of item.points) {
+            if (
+                point.x >= rect.minX - pad && point.x <= rect.maxX + pad
+                && point.y >= rect.minY - pad && point.y <= rect.maxY + pad
+            ) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    if (item.tool === 'text') {
+        return rectsIntersect(getTextBounds(item), rect);
+    }
+
+    if (item.tool === 'image' || (item.mediaId && item.width != null && item.height != null)) {
+        return rectsIntersect(getImageBounds(item), rect);
+    }
+
+    if (item.x0 != null && item.y0 != null && item.x1 != null && item.y1 != null) {
+        return rectsIntersect(getShapeBounds(item), rect);
+    }
+
+    return false;
+}
+
+/**
  * Check if a drawing item (brush stroke, shape, or text) has any part inside the polygon.
  * Brush strokes use "at least one point" threshold; shapes use bounding-box overlap;
  * text objects use a simple glyph bounds box.
@@ -54,9 +115,26 @@ export function isPointInPolygon(point, polygon) {
 export function strokeHasPointInPolygon(item, polygon) {
     if (!item || !polygon || polygon.length < 3) return false;
 
+    // Rectangular polygons: use robust AABB path (marquee select).
+    if (polygon.length === 4) {
+        const bounds = getPolygonBounds(polygon);
+        const isAxisAligned = polygon.every((p) =>
+            (Math.abs(p.x - bounds.minX) < 0.001 || Math.abs(p.x - bounds.maxX) < 0.001)
+            && (Math.abs(p.y - bounds.minY) < 0.001 || Math.abs(p.y - bounds.maxY) < 0.001)
+        );
+        if (isAxisAligned) {
+            return itemIntersectsRect(item, {
+                minX: bounds.minX,
+                minY: bounds.minY,
+                maxX: bounds.maxX,
+                maxY: bounds.maxY
+            });
+        }
+    }
+
     // Brush stroke
     if (Array.isArray(item.points)) {
-        return item.points.some(point => isPointInPolygon(point, polygon));
+        return item.points.some((point) => isPointInPolygon(point, polygon));
     }
 
     // Text object
@@ -82,8 +160,16 @@ export function strokeHasPointInPolygon(item, polygon) {
 
 function rectIntersectsPolygon(rect, polygon) {
     if (!rect || !polygon || polygon.length < 3) return false;
-    // A rectangle intersects a polygon if any corner is inside the polygon,
-    // or any polygon vertex is inside the rectangle, or any edges cross.
+    // Prefer AABB intersection when the polygon is an axis-aligned rectangle.
+    if (polygon.length === 4) {
+        const polyBounds = getPolygonBounds(polygon);
+        return rectsIntersect(rect, {
+            minX: polyBounds.minX,
+            minY: polyBounds.minY,
+            maxX: polyBounds.maxX,
+            maxY: polyBounds.maxY
+        });
+    }
     const corners = [
         { x: rect.minX, y: rect.minY },
         { x: rect.maxX, y: rect.minY },
@@ -92,7 +178,6 @@ function rectIntersectsPolygon(rect, polygon) {
     ];
     if (corners.some(p => isPointInPolygon(p, polygon))) return true;
     if (polygon.some(p => p.x >= rect.minX && p.x <= rect.maxX && p.y >= rect.minY && p.y <= rect.maxY)) return true;
-    // Edge intersection check is overkill for selection; corner/vertex test is enough in practice.
     return false;
 }
 
@@ -368,8 +453,21 @@ export function rectToPolygon(x0, y0, x1, y1) {
     ];
 }
 
-/** Pixel threshold below which a drag is treated as a click. */
+/** CSS-pixel threshold below which a drag is treated as a click. */
 export const BOX_SELECT_CLICK_THRESHOLD = 6;
+
+/**
+ * Convert a screen-space click threshold into world/bitmap units.
+ * @param {number} [screenPx=BOX_SELECT_CLICK_THRESHOLD]
+ * @param {number} [scale=1] viewport scale
+ * @param {number} [dpr=1] device pixel ratio
+ * @returns {number}
+ */
+export function boxSelectThresholdWorld(screenPx = BOX_SELECT_CLICK_THRESHOLD, scale = 1, dpr = 1) {
+    const s = Number.isFinite(scale) && scale > 0 ? scale : 1;
+    const d = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
+    return (screenPx * d) / s;
+}
 
 /**
  * Build a selection polygon from two pointer points.
@@ -379,26 +477,30 @@ export const BOX_SELECT_CLICK_THRESHOLD = 6;
  * @param {number} y0
  * @param {number} x1
  * @param {number} y1
- * @param {number} [threshold=BOX_SELECT_CLICK_THRESHOLD]
- * @returns {{ kind: 'click'|'drag', polygon: Array<{x:number,y:number}>, width: number, height: number }}
+ * @param {number} [threshold=BOX_SELECT_CLICK_THRESHOLD] world/bitmap threshold
+ * @returns {{ kind: 'click'|'drag', polygon: Array<{x:number,y:number}>, width: number, height: number, rect: {minX:number,minY:number,maxX:number,maxY:number} }}
  */
 export function resolveBoxSelection(x0, y0, x1, y1, threshold = BOX_SELECT_CLICK_THRESHOLD) {
     const width = Math.abs(x1 - x0);
     const height = Math.abs(y1 - y0);
     if (width < threshold && height < threshold) {
         const half = threshold / 2;
+        const polygon = rectToPolygon(x0 - half, y0 - half, x0 + half, y0 + half);
         return {
             kind: 'click',
             width,
             height,
-            polygon: rectToPolygon(x0 - half, y0 - half, x0 + half, y0 + half)
+            polygon,
+            rect: rectFromPoints(x0 - half, y0 - half, x0 + half, y0 + half)
         };
     }
+    const polygon = rectToPolygon(x0, y0, x1, y1);
     return {
         kind: 'drag',
         width,
         height,
-        polygon: rectToPolygon(x0, y0, x1, y1)
+        polygon,
+        rect: rectFromPoints(x0, y0, x1, y1)
     };
 }
 

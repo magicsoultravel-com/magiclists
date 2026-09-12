@@ -4,11 +4,13 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     strokeHasPointInPolygon,
+    itemIntersectsRect,
     getStrokesBounds,
     translateStrokes,
     clampStrokesToBounds,
     rectToPolygon,
     resolveBoxSelection,
+    boxSelectThresholdWorld,
     BOX_SELECT_CLICK_THRESHOLD
 } from '../js/lassoGeometry.js';
 
@@ -29,6 +31,14 @@ describe('lassoGeometry', () => {
         assert.equal(strokeHasPointInPolygon(outside, polygon), false);
     });
 
+    it('detects overlapping shape edges without contained corners', () => {
+        // Marquee overlaps middle of a large rect — AABB path must still hit
+        const polygon = rectToPolygon(40, 40, 60, 60);
+        const shape = { id: 'shape1', tool: 'rect', x0: 0, y0: 0, x1: 100, y1: 100 };
+        assert.equal(strokeHasPointInPolygon(shape, polygon), true);
+        assert.equal(itemIntersectsRect(shape, { minX: 40, minY: 40, maxX: 60, maxY: 60 }), true);
+    });
+
     it('detects text boxes intersecting a polygon', () => {
         const polygon = rectToPolygon(0, 0, 100, 100);
         const inside = { id: 't1', tool: 'text', x: 10, y: 10, text: 'hi', fontSize: 16 };
@@ -43,6 +53,14 @@ describe('lassoGeometry', () => {
         const outside = { id: 'img2', tool: 'image', mediaId: 'm2', x: 200, y: 200, width: 40, height: 30 };
         assert.equal(strokeHasPointInPolygon(inside, polygon), true);
         assert.equal(strokeHasPointInPolygon(outside, polygon), false);
+    });
+
+    it('itemIntersectsRect inflates brush hits by stroke width', () => {
+        const rect = { minX: 0, minY: 0, maxX: 10, maxY: 10 };
+        const thickNear = { tool: 'brush', width: 20, points: [{ x: 18, y: 5 }] };
+        const thinFar = { tool: 'brush', width: 2, points: [{ x: 18, y: 5 }] };
+        assert.equal(itemIntersectsRect(thickNear, rect), true);
+        assert.equal(itemIntersectsRect(thinFar, rect), false);
     });
 
     it('computes bounds across mixed item types', () => {
@@ -93,6 +111,13 @@ describe('lassoGeometry', () => {
         assert.equal(items[3].y, 5);
     });
 
+    it('boxSelectThresholdWorld scales with zoom and DPR', () => {
+        assert.equal(boxSelectThresholdWorld(6, 1, 1), 6);
+        assert.equal(boxSelectThresholdWorld(6, 1, 2), 12);
+        assert.equal(boxSelectThresholdWorld(6, 2, 1), 3);
+        assert.equal(boxSelectThresholdWorld(6, 0.5, 2), 24);
+    });
+
     it('resolveBoxSelection treats tiny drags as clicks', () => {
         const half = BOX_SELECT_CLICK_THRESHOLD / 2;
         const result = resolveBoxSelection(50, 60, 50 + half, 60 + half);
@@ -100,6 +125,12 @@ describe('lassoGeometry', () => {
         assert.deepEqual(result.polygon, rectToPolygon(
             50 - half, 60 - half, 50 + half, 60 + half
         ));
+        assert.deepEqual(result.rect, {
+            minX: 50 - half,
+            minY: 60 - half,
+            maxX: 50 + half,
+            maxY: 60 + half
+        });
     });
 
     it('resolveBoxSelection builds a drag rect above the click threshold', () => {
@@ -108,6 +139,13 @@ describe('lassoGeometry', () => {
         assert.equal(result.width, 70);
         assert.equal(result.height, 70);
         assert.deepEqual(result.polygon, rectToPolygon(10, 20, 80, 90));
+        assert.deepEqual(result.rect, { minX: 10, minY: 20, maxX: 80, maxY: 90 });
+    });
+
+    it('resolveBoxSelection uses a larger world threshold when zoomed out', () => {
+        const worldThreshold = boxSelectThresholdWorld(6, 0.5, 2); // 24
+        const result = resolveBoxSelection(50, 50, 60, 55, worldThreshold);
+        assert.equal(result.kind, 'click');
     });
 
     it('resolveBoxSelection click polygon can hit-test or leave empty (clear path)', () => {
@@ -115,6 +153,8 @@ describe('lassoGeometry', () => {
         assert.equal(click.kind, 'click');
         const hit = { id: 's1', tool: 'brush', points: [{ x: 50, y: 50 }] };
         const miss = { id: 's2', tool: 'brush', points: [{ x: 200, y: 200 }] };
+        assert.equal(itemIntersectsRect(hit, click.rect), true);
+        assert.equal(itemIntersectsRect(miss, click.rect), false);
         assert.equal(strokeHasPointInPolygon(hit, click.polygon), true);
         assert.equal(strokeHasPointInPolygon(miss, click.polygon), false);
     });
