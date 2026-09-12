@@ -486,14 +486,6 @@
     border-radius: 6px;
 }
 
-.drawing-dropdown-width {
-    font-size: 0.58rem;
-    font-variant-numeric: tabular-nums;
-    color: var(--text-muted);
-    min-width: 1.6rem;
-    text-align: center;
-}
-
 .drawing-zoom-level {
     display: inline-flex;
     align-items: center;
@@ -505,6 +497,39 @@
     letter-spacing: 0.02em;
     color: var(--text-muted);
     text-align: center;
+    user-select: none;
+}
+
+.drawing-brush-size {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1rem;
+    flex-shrink: 0;
+}
+
+.drawing-brush-size__btn {
+    opacity: 0.75;
+    min-width: 1.35rem;
+    padding-inline: 0.2rem;
+}
+
+.drawing-brush-size__btn:hover:not(:disabled) {
+    opacity: 1;
+}
+
+.drawing-brush-size__btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.drawing-brush-size__value {
+    min-width: 2.2rem;
+    text-align: center;
+    font-size: 0.62rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-muted, var(--text-main));
+    line-height: 1.2;
     user-select: none;
 }
 
@@ -546,6 +571,22 @@
 
 .drawing-menu-label {
     flex: 1;
+}
+
+.drawing-menu-meta {
+    margin-left: 0.35rem;
+    font-size: 0.58rem;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+    color: color-mix(in srgb, var(--text-muted, #94a3b8) 85%, transparent);
+    opacity: 0.8;
+}
+
+.drawing-menu-option:hover .drawing-menu-meta,
+.drawing-menu-option.is-selected .drawing-menu-meta {
+    color: color-mix(in srgb, var(--accent) 35%, var(--text-muted, #94a3b8));
+    opacity: 0.95;
 }
 
 .drawing-menu-check {
@@ -686,15 +727,34 @@
     cursor: default;
 }
 
-.drawing-canvas[data-tool="pointer"]:not([style*="cursor"]) {
-    cursor: default;
-}
-
 .drawing-canvas[data-tool="eraser"] {
     cursor: cell;
 }
 
 .drawing-canvas[data-tool="text"] {
     cursor: text;
+}
+
+.drawing-canvas[data-tool="pan"] {
+    cursor: grab;
+}
+
+.drawing-canvas[data-tool="brush"],
+.drawing-canvas[data-tool="line"],
+.drawing-canvas[data-tool="arrow"],
+.drawing-canvas[data-tool="rect"],
+.drawing-canvas[data-tool="rounded_rect"],
+.drawing-canvas[data-tool="ellipse"],
+.drawing-canvas[data-tool="triangle"],
+.drawing-canvas[data-tool="diamond"],
+.drawing-canvas[data-tool="star"],
+.drawing-canvas[data-tool="chevron"],
+.drawing-canvas[data-tool="trapezoid"],
+.drawing-canvas[data-tool="parallelogram"],
+.drawing-canvas[data-tool="cube"],
+.drawing-canvas[data-tool="pyramid"],
+.drawing-canvas[data-tool="cylinder"],
+.drawing-canvas[data-tool="sphere"] {
+    cursor: crosshair;
 }
 

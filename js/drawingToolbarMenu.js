@@ -62,7 +62,7 @@ function renderItemsHtml(items, selected) {
         const isSelected = item.selected === true || item.id === selected;
         return `<button type="button" class="drawing-menu-option${isSelected ? ' is-selected' : ''}" data-id="${item.id}" role="menuitem"${item.disabled ? ' disabled' : ''}>
             <span class="drawing-menu-icon">${item.icon || ''}</span>
-            <span class="drawing-menu-label">${escapeHtml(item.label)}</span>
+            <span class="drawing-menu-label">${escapeHtml(item.label)}${item.meta ? ` <span class="drawing-menu-meta">${escapeHtml(item.meta)}</span>` : ''}</span>
             ${isSelected ? '<span class="drawing-menu-check" aria-hidden="true">✓</span>' : ''}
         </button>`;
     }).join('');

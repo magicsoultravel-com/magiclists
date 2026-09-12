@@ -2,14 +2,14 @@
 import { ACTION_ICONS, DRAWING_ICONS, FORMAT_ICONS } from './icons.js';
 import { ColorPicker, PALETTE_UNIFIED, resolveNoteColor } from './colorPicker.js';
 import { DrawingToolbarMenu, CHEVRON } from './drawingToolbarMenu.js';
-import { DisplayOptions } from './displayOptions.js';
 import { Fullscreen } from './fullscreen.js';
 import {
     readDocument, writeDocument, getActiveStrokes, getActiveTexts, setActiveStrokes, setActiveTexts,
     getActiveImages, setActiveImages,
     getActiveBackground, setActiveBackground, getActiveBackgroundColor, setActiveBackgroundColor,
     getPageDimensions, addPage, nextPage, prevPage, switchCanvasMode,
-    expandInfiniteBounds, shrinkInfiniteBounds, STORAGE_KEY, createId, CANVAS_MODES, BACKGROUNDS
+    expandInfiniteBounds, shrinkInfiniteBounds, STORAGE_KEY, createId, CANVAS_MODES, BACKGROUNDS,
+    PAGE_FORMATS
 } from './canvasDocument.js';
 import { BRUSH_STYLES, drawBrushStroke, drawShapeStroke, drawTextObject } from './canvasBrushes.js';
 import { renderBackground } from './canvasBackgrounds.js';
@@ -60,14 +60,29 @@ const SAVE_DEBOUNCE_MS = 400;
 const RESIZE_HANDLE_SIZE = 10;
 const RESIZE_HANDLE_HIT = 14;
 
+/** Minimum world-space distance between recorded stroke points, by brush style. */
+const POINT_SPACING = {
+    pen: 1.5,
+    marker: 1.5,
+    highlighter: 2,
+    pencil: 3.5,
+    spray: 4,
+    calligraphy: 2,
+    brush: 2.5
+};
+
+/** Minimum distance used when simplifying a finished stroke (drop near-collinear points). */
+const THIN_MIN_DIST = 2;
+const THIN_COLLINEAR_EPS = 0.35;
+
 const POINTER_ITEMS = [
     { id: 'pen', label: 'Pen' },
     { id: 'marker', label: 'Marker' },
     { id: 'highlighter', label: 'Highlighter' },
     { id: 'pencil', label: 'Pencil' },
     { id: 'spray', label: 'Spray' },
-    { id: 'calligraphy', label: 'Calligraphy' },
-    { id: 'brush', label: 'Brush' }
+    { id: 'calligraphy', label: 'Broad nib' },
+    { id: 'brush', label: 'Ink brush' }
 ];
 
 const DRAG_SHAPE_TOOLS = [
@@ -125,6 +140,46 @@ const FORMAT_ITEMS = [
 
 function defaultWidthForStyle(style) {
     return style === 'highlighter' ? HIGHLIGHTER_WIDTH : DEFAULT_WIDTH;
+}
+
+function pointSpacingForStyle(style) {
+    return POINT_SPACING[style] ?? 2;
+}
+
+function dist2(a, b) {
+    const dx = a.x - b.x;
+    const dy = a.y - b.y;
+    return dx * dx + dy * dy;
+}
+
+/**
+ * Drop redundant points from a finished stroke while keeping endpoints and
+ * pressure/tilt samples that meaningfully change direction or spacing.
+ */
+function thinStrokePoints(points, minDist = THIN_MIN_DIST, collinearEps = THIN_COLLINEAR_EPS) {
+    if (!points || points.length <= 2) return points;
+    const minDist2 = minDist * minDist;
+    const kept = [points[0]];
+    for (let i = 1; i < points.length - 1; i++) {
+        const prev = kept[kept.length - 1];
+        const cur = points[i];
+        const next = points[i + 1];
+        if (dist2(prev, cur) < minDist2) continue;
+        // Drop if nearly collinear between prev → cur → next
+        const ax = cur.x - prev.x;
+        const ay = cur.y - prev.y;
+        const bx = next.x - cur.x;
+        const by = next.y - cur.y;
+        const cross = Math.abs(ax * by - ay * bx);
+        const lenA = Math.hypot(ax, ay);
+        const lenB = Math.hypot(bx, by);
+        if (lenA > 0 && lenB > 0 && cross / (lenA * lenB) < collinearEps && dist2(prev, next) < minDist2 * 9) {
+            continue;
+        }
+        kept.push(cur);
+    }
+    kept.push(points[points.length - 1]);
+    return kept;
 }
 
 function readPressure(event) {
@@ -217,6 +272,7 @@ export const DrawingBoard = {
     brandEl: null,
     brandNotesText: 'magicNotes',
     colorRolloutOpen: false,
+    bgColorRolloutOpen: false,
 
     // Marquee / rectangle select state (lasso button = rect marquee mode)
     isLassoActive: false,
@@ -249,7 +305,13 @@ export const DrawingBoard = {
         this.textLayer = document.getElementById('canvas-text-layer');
         this.brandEl = document.getElementById('app-brand');
         DrawingToolbarChrome.init();
-        DrawingToolbarChrome.onCollapse = () => requestAnimationFrame(() => this.resize());
+        DrawingToolbarChrome.onCollapse = () => {
+            ColorPicker.close();
+            DrawingToolbarMenu.close();
+            this.colorRolloutOpen = false;
+            this.bgColorRolloutOpen = false;
+            requestAnimationFrame(() => this.resize());
+        };
         DrawingToolbarChrome.onExpand = () => {
             this.renderToolbar();
             requestAnimationFrame(() => this.resize());
@@ -363,6 +425,7 @@ export const DrawingBoard = {
         ColorPicker.close();
         DrawingToolbarMenu.close();
         this.colorRolloutOpen = false;
+        this.bgColorRolloutOpen = false;
         if (this.brandEl) this.brandEl.textContent = this.brandNotesText;
         this.boardEl?.classList.add('is-hidden');
         this.boardEl?.setAttribute('aria-hidden', 'true');
@@ -505,21 +568,39 @@ export const DrawingBoard = {
         return grew;
     },
 
-    setPageBackgroundColor(color) {
+    setPageBackgroundColor(color, { rerender = true } = {}) {
         setActiveBackgroundColor(this.doc, color);
         this.redrawBackground();
         this.scheduleSave();
-        this.renderToolbar();
+        if (rerender) this.renderToolbar();
+        else this.updateBgColorChip(color);
+    },
+
+    updateBgColorChip(color) {
+        const chip = this.toolbarEl?.querySelector('.drawing-bg-color-chip');
+        const btn = this.toolbarEl?.querySelector('#draw-bg-color-btn');
+        const swatch = color || this.pageBackgroundSwatch();
+        if (chip) chip.style.background = swatch;
+        if (btn) btn.style.setProperty('--chip-color', swatch);
     },
 
     openPageBackgroundPicker(anchor) {
+        if (this.bgColorRolloutOpen) {
+            ColorPicker.close();
+            return;
+        }
+        ColorPicker.close();
+        this.colorRolloutOpen = false;
         ColorPicker.open({
             anchor,
             presets: PALETTE_UNIFIED,
             value: this.pageBackgroundFill() || this.pageBackgroundSwatch(),
             align: 'end',
-            onSelect: (c) => this.setPageBackgroundColor(c)
+            onSelect: (c) => this.setPageBackgroundColor(c, { rerender: false }),
+            onClose: () => { this.bgColorRolloutOpen = false; }
         });
+        this.bgColorRolloutOpen = true;
+        anchor?.setAttribute('aria-expanded', 'true');
     },
 
     currentBrush() {
@@ -612,17 +693,24 @@ export const DrawingBoard = {
         const cur = this.prefs.styles[style]?.width ?? DEFAULT_WIDTH;
         this.prefs.styles[style].width = Math.max(WIDTH_MIN, Math.min(WIDTH_MAX, cur + delta));
         writePrefs(this.prefs);
+        this.updateBrushSizeControls();
         if (refreshMenu && DrawingToolbarMenu.isOpen()) {
             DrawingToolbarMenu.setItems(this.pointerMenuItems(), this.pointerSelected());
-            this.updatePointerWidthLabel();
-        } else {
-            this.renderToolbar();
         }
     },
 
     updatePointerWidthLabel() {
-        const label = this.toolbarEl?.querySelector('#draw-pointer-width');
-        if (label) label.textContent = this.currentBrush().width + 'px';
+        this.updateBrushSizeControls();
+    },
+
+    updateBrushSizeControls() {
+        const width = this.currentBrush().width;
+        const label = this.toolbarEl?.querySelector('#draw-brush-width');
+        if (label) label.textContent = width + 'px';
+        const smaller = this.toolbarEl?.querySelector('#draw-brush-smaller');
+        const larger = this.toolbarEl?.querySelector('#draw-brush-larger');
+        if (smaller) smaller.disabled = width <= WIDTH_MIN;
+        if (larger) larger.disabled = width >= WIDTH_MAX;
     },
 
     setColor(color, { rerender = true } = {}) {
@@ -644,6 +732,8 @@ export const DrawingBoard = {
             ColorPicker.close();
             return;
         }
+        ColorPicker.close();
+        this.bgColorRolloutOpen = false;
         const brush = this.currentBrush();
         ColorPicker.open({
             anchor,
@@ -770,14 +860,20 @@ export const DrawingBoard = {
         }
 
         if (this.draftStroke) {
+            const minDist = pointSpacingForStyle(this.draftStroke.style || this.activeStyle);
+            const minDist2 = minDist * minDist;
+            let added = false;
             events.forEach((ev) => {
                 const pt = this.clientToCanvas(ev.clientX, ev.clientY);
                 this.expandInfiniteIfNeeded(pt.x, pt.y);
+                const last = this.draftStroke.points[this.draftStroke.points.length - 1];
+                if (last && dist2(last, pt) < minDist2) return;
                 this.draftStroke.points.push({
                     x: pt.x, y: pt.y, p: readPressure(ev), tiltX: ev.tiltX || 0, tiltY: ev.tiltY || 0
                 });
+                added = true;
             });
-            this.requestRedraw();
+            if (added) this.requestRedraw();
             return;
         }
         if (this.shapePreview) {
@@ -821,6 +917,12 @@ export const DrawingBoard = {
 
         if (this.draftStroke) {
             if (this.draftStroke.points.length >= 1) {
+                const style = this.draftStroke.style || this.activeStyle;
+                const spacing = pointSpacingForStyle(style);
+                this.draftStroke.points = thinStrokePoints(
+                    this.draftStroke.points,
+                    Math.max(THIN_MIN_DIST, spacing * 0.75)
+                );
                 const s = this.strokes();
                 s.push(this.draftStroke);
                 this.setStrokes(s);
@@ -1332,11 +1434,7 @@ export const DrawingBoard = {
     },
 
     pointerMenuItems() {
-        const brush = this.currentBrush();
-        const items = this.menuItemsWithIcons(POINTER_ITEMS);
-        items.push({ divider: true });
-        items.push({ stepper: true, id: 'brush-width', label: 'Size', value: `${brush.width}px` });
-        return items;
+        return this.menuItemsWithIcons(POINTER_ITEMS);
     },
 
     openPointerMenu(anchor) {
@@ -1348,9 +1446,6 @@ export const DrawingBoard = {
             onSelect: (id) => {
                 this.setStyle(id);
                 this.renderToolbar();
-            },
-            onStepper: (id, delta) => {
-                if (id === 'brush-width') this.adjustWidth(delta, { refreshMenu: true });
             }
         });
     },
@@ -1375,60 +1470,42 @@ export const DrawingBoard = {
         });
     },
 
-    backgroundMenuItems(bg) {
+    formatMenuItems() {
+        return this.menuItemsWithIcons(FORMAT_ITEMS.map((item) => {
+            const fmt = PAGE_FORMATS[item.id];
+            const meta = fmt
+                ? `(${fmt.mmW}×${fmt.mmH} mm · ${fmt.width}×${fmt.height} px)`
+                : '';
+            return {
+                ...item,
+                meta,
+                selected: item.id === this.doc.canvasMode
+            };
+        }));
+    },
+
+    backgroundMenuItems(bg = getActiveBackground(this.doc)) {
         const withSel = (list) => this.menuItemsWithIcons(list.map((item) => ({
             ...item,
             iconKey: item.iconKey || item.id,
             selected: item.id === bg
         })));
         const items = [];
-        items.push({ heading: 'Page format' });
-        items.push(...this.menuItemsWithIcons(FORMAT_ITEMS.map((item) => ({
-            ...item,
-            selected: item.id === this.doc.canvasMode
-        }))));
-        items.push({ divider: true });
-        items.push({ heading: 'Background' });
         items.push(...withSel([{ id: 'blank', label: 'Blank', iconKey: 'blank' }]));
         items.push({ heading: 'Grids' });
         items.push(...withSel(GRID_BACKGROUNDS));
         items.push({ heading: 'Writing' });
         items.push(...withSel(WRITING_BACKGROUNDS));
-        items.push({ heading: 'Fill' });
-        const swatch = this.pageBackgroundSwatch();
-        items.push({
-            id: 'bg-color',
-            label: 'Background color…',
-            icon: `<span class="drawing-menu-swatch" style="background:${swatch}"></span>`
-        });
         return items;
     },
 
-    canvasMenuItems() {
-        return this.backgroundMenuItems(getActiveBackground(this.doc));
-    },
-
-    handleCanvasMenu(id, anchor) {
-        if (id === 'bg-color') {
-            this.openPageBackgroundPicker(anchor);
-            return;
-        }
-        if (id === 'page-prev') {
-            this.goToPrevPage();
-            return;
-        }
-        if (id === 'page-next') {
-            this.goToNextPage();
-            return;
-        }
-        if (id === 'page-add') {
-            this.addCanvasPage();
-            return;
-        }
+    handleFormatMenu(id) {
         if (FORMAT_ITEMS.some((item) => item.id === id)) {
             this.setCanvasMode(id);
-            return;
         }
+    },
+
+    handleBackgroundMenu(id) {
         if (BACKGROUNDS.includes(id)) {
             this.setBackground(id);
         }
@@ -1437,8 +1514,10 @@ export const DrawingBoard = {
     renderToolbar() {
         if (!this.toolbarEl) return;
         const wasColorOpen = this.colorRolloutOpen;
+        const wasBgColorOpen = this.bgColorRolloutOpen;
         DrawingToolbarMenu.close();
         const brush = this.currentBrush();
+        const bgSwatch = this.pageBackgroundSwatch();
         const isPointerActive = this.activeTool === 'pointer' || this.activeTool === 'brush';
         const isEraserActive = this.activeTool === 'eraser';
         const isPanActive = this.activeTool === 'pan';
@@ -1454,9 +1533,13 @@ export const DrawingBoard = {
             <div class="drawing-toolbar-row">
                 <button type="button" class="btn btn--compact drawing-toolbar-dropdown ${isPointerActive ? 'active' : ''}" id="draw-menu-pointer" aria-haspopup="menu" aria-expanded="false" title="Pointer tools (V)" aria-label="Pointer tools">
                     <span class="drawing-dropdown-icon">${this.pointerTriggerIcon()}</span>
-                    <span class="drawing-dropdown-width" id="draw-pointer-width">${brush.width}px</span>
                     <span class="drawing-dropdown-chevron">${CHEVRON}</span>
                 </button>
+                <span class="drawing-brush-size" id="draw-brush-size-group" aria-label="Brush size">
+                    <button type="button" class="btn btn--compact btn--icon drawing-brush-size__btn" id="draw-brush-smaller" title="Decrease brush size" aria-label="Decrease brush size">${ACTION_ICONS.minus}</button>
+                    <span class="drawing-brush-size__value" id="draw-brush-width" aria-live="polite">${brush.width}px</span>
+                    <button type="button" class="btn btn--compact btn--icon drawing-brush-size__btn" id="draw-brush-larger" title="Increase brush size" aria-label="Increase brush size">${ACTION_ICONS.plus}</button>
+                </span>
                 <button type="button" class="btn btn--compact btn--icon ${isEraserActive ? 'active' : ''}" id="draw-eraser" title="Eraser (E)" aria-label="Eraser" aria-pressed="${isEraserActive ? 'true' : 'false'}">${DRAWING_ICONS.eraser}</button>
                 <span class="format-toolbar-sep" aria-hidden="true"></span>
                 <div class="drawing-color-group" id="draw-color-group">
@@ -1471,7 +1554,6 @@ export const DrawingBoard = {
                 </button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-insert-image" title="Insert image" aria-label="Insert image" aria-haspopup="menu">${DRAWING_ICONS.image}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-lasso" title="Rectangle select (L)" aria-label="Rectangle select" ${this.isLassoActive ? 'aria-pressed="true"' : ''}>${DRAWING_ICONS.lasso}</button>
-                <button type="button" class="btn btn--compact btn--icon" id="draw-display-options" title="Display options" aria-label="Display options" aria-expanded="false" aria-haspopup="menu">${ACTION_ICONS.displayOptions}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-fullscreen" title="Full screen" aria-label="Full screen" aria-pressed="false">${ACTION_ICONS.fullscreenEnter}</button>
                 <span class="format-toolbar-sep" aria-hidden="true"></span>
                 <button type="button" class="btn btn--compact btn--icon ${isPanActive ? 'active' : ''}" id="draw-pan" title="Hand tool — pan canvas (H). Scroll also pans; Ctrl+scroll zooms; Space+drag pans." aria-label="Hand tool" aria-pressed="${isPanActive ? 'true' : 'false'}">${DRAWING_ICONS.hand}</button>
@@ -1486,9 +1568,17 @@ export const DrawingBoard = {
                 ${exitBtn}
             </div>
             <div class="drawing-toolbar-row drawing-toolbar-row--meta">
-                <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-canvas" aria-haspopup="menu" aria-expanded="false" title="Canvas settings" aria-label="Canvas settings">
-                    <span class="drawing-dropdown-label">Canvas</span>
+                <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-format" aria-haspopup="menu" aria-expanded="false" title="Page format" aria-label="Page format">
+                    <span class="drawing-dropdown-label">${this.formatTriggerLabel()}</span>
                     <span class="drawing-dropdown-chevron">${CHEVRON}</span>
+                </button>
+                <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-background" aria-haspopup="menu" aria-expanded="false" title="Background" aria-label="Background">
+                    <span class="drawing-dropdown-icon">${this.typeTriggerIcon()}</span>
+                    <span class="drawing-dropdown-label">BG</span>
+                    <span class="drawing-dropdown-chevron">${CHEVRON}</span>
+                </button>
+                <button type="button" class="btn btn--compact btn--icon drawing-color-chip-btn" id="draw-bg-color-btn" title="Background fill color" aria-label="Background fill color" aria-expanded="false" style="--chip-color:${bgSwatch}">
+                    <span class="drawing-bg-color-chip drawing-color-chip" style="background:${bgSwatch}"></span>
                 </button>
                 <span class="drawing-page-nav" aria-label="Page navigation">
                     <button type="button" class="btn btn--compact btn--icon" id="draw-page-prev" title="Previous page" aria-label="Previous page" ${canPrev ? '' : 'disabled'}>${DRAWING_ICONS.pagePrev}</button>
@@ -1502,9 +1592,15 @@ export const DrawingBoard = {
         this.updateZoomLevel();
         this.updateToolEcho();
         this.updateNoteToolbarChrome();
+        this.updateBrushSizeControls();
         if (wasColorOpen) {
+            this.colorRolloutOpen = false;
             const btn = this.toolbarEl.querySelector('#draw-color-btn');
             if (btn) this.toggleColorRollout(btn);
+        } else if (wasBgColorOpen) {
+            this.bgColorRolloutOpen = false;
+            const btn = this.toolbarEl.querySelector('#draw-bg-color-btn');
+            if (btn) this.openPageBackgroundPicker(btn);
         }
     },
 
@@ -1518,7 +1614,7 @@ export const DrawingBoard = {
         if (!this.toolbarEl) return;
         const q = (sel) => this.toolbarEl.querySelector(sel);
 
-        q('#draw-toolbar-hide')?.addEventListener('click', () => { ColorPicker.close(); this.colorRolloutOpen = false; this.hideToolbar(); });
+        q('#draw-toolbar-hide')?.addEventListener('click', () => this.hideToolbar());
         q('#draw-exit-drawing')?.addEventListener('click', () => { this.app.switchWorkspaceMode('notes'); });
         q('#draw-back-to-note')?.addEventListener('click', () => { this.exitNoteCanvas(); });
         q('#draw-undo')?.addEventListener('click', () => this.undo());
@@ -1528,15 +1624,15 @@ export const DrawingBoard = {
             e.stopPropagation();
             this.toggleColorRollout(e.currentTarget);
         });
+        q('#draw-bg-color-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.openPageBackgroundPicker(e.currentTarget);
+        });
         q('#draw-zoom-in')?.addEventListener('click', () => { CanvasViewport.stepZoom(0.1); this.persistViewport(); });
         q('#draw-zoom-out')?.addEventListener('click', () => { CanvasViewport.stepZoom(-0.1); this.persistViewport(); });
         q('#draw-pan')?.addEventListener('click', () => {
             if (this.activeTool === 'pan') this.setStyle(this.activeStyle || 'pen');
             else this.setTool('pan');
-        });
-        q('#draw-display-options')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            DisplayOptions.toggleFrom(e.currentTarget);
         });
         const fsBtn = q('#draw-fullscreen');
         if (fsBtn) Fullscreen.registerButton(fsBtn);
@@ -1544,6 +1640,15 @@ export const DrawingBoard = {
         q('#draw-menu-pointer')?.addEventListener('click', (e) => {
             e.stopPropagation();
             this.openPointerMenu(e.currentTarget);
+        });
+
+        q('#draw-brush-smaller')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.adjustWidth(-1);
+        });
+        q('#draw-brush-larger')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.adjustWidth(1);
         });
 
         q('#draw-eraser')?.addEventListener('click', () => {
@@ -1570,14 +1675,25 @@ export const DrawingBoard = {
             this.openImageInsertMenu(e.currentTarget);
         });
 
-        q('#draw-menu-canvas')?.addEventListener('click', (e) => {
+        q('#draw-menu-format')?.addEventListener('click', (e) => {
             e.stopPropagation();
-            const anchor = e.currentTarget;
             DrawingToolbarMenu.toggle({
-                anchor,
-                ariaLabel: 'Canvas settings',
-                items: this.canvasMenuItems(),
-                onSelect: (id) => this.handleCanvasMenu(id, anchor)
+                anchor: e.currentTarget,
+                ariaLabel: 'Page format',
+                items: this.formatMenuItems(),
+                selected: this.doc.canvasMode,
+                onSelect: (id) => this.handleFormatMenu(id)
+            });
+        });
+
+        q('#draw-menu-background')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            DrawingToolbarMenu.toggle({
+                anchor: e.currentTarget,
+                ariaLabel: 'Background',
+                items: this.backgroundMenuItems(),
+                selected: getActiveBackground(this.doc),
+                onSelect: (id) => this.handleBackgroundMenu(id)
             });
         });
 
@@ -1936,11 +2052,8 @@ export const DrawingBoard = {
             }
         }
         this.hoverHandle = null;
-        this.canvas.style.cursor = this.activeTool === 'pointer' ? 'default' : '';
-        if (this.canvas.dataset.tool) {
-            // Fall back to CSS data-tool rules when not hovering selection
-            this.canvas.style.cursor = '';
-        }
+        // Clear inline cursor so CSS data-tool rules apply for the active tool
+        this.canvas.style.cursor = '';
     },
 
     async openImageInsertMenu(anchor) {

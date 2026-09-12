@@ -6,9 +6,14 @@ export const STYLE_CONFIG = {
     highlighter: { alpha: 0.35, widthMul: 1.8, pressureMin: 0.5, pressureRange: 0.6, pressureAlpha: true, alphaMin: 0.28, alphaRange: 0.12 },
     pencil: { alpha: 0.55, widthMul: 1, pressureMin: 0.1, pressureRange: 1.15, pressureAlpha: true, alphaMin: 0.35, alphaRange: 0.55, grain: true },
     spray: { alpha: 0.7, widthMul: 1.2, pressureMin: 0.2, pressureRange: 0.95, spray: true },
-    calligraphy: { alpha: 1, widthMul: 1, pressureMin: 0.12, pressureRange: 1.05, calligraphy: true },
-    brush: { alpha: 0.75, widthMul: 1.4, pressureMin: 0.08, pressureRange: 1.1, cjk: true }
+    // Gothic / broad-edge nib: flat chisel stamp at a fixed ~45° angle
+    calligraphy: { alpha: 1, widthMul: 1.15, pressureMin: 0.85, pressureRange: 0.35, calligraphy: true },
+    // Chinese / Sumi ink brush: soft ellipse, strong pressure response
+    brush: { alpha: 0.88, widthMul: 1.35, pressureMin: 0.12, pressureRange: 1.35, pressureAlpha: true, alphaMin: 0.35, alphaRange: 0.65, cjk: true }
 };
+
+/** Default gothic nib angle (radians). Pen tilt overrides when available. */
+const NIB_ANGLE = -Math.PI / 4;
 
 function normalizePressure(p) {
     const clamped = Math.max(0, Math.min(1, p ?? 0.5));
@@ -39,12 +44,13 @@ function drawPencilGrain(ctx, x, y, w) {
     ctx.restore();
 }
 
-function sprayDots(ctx, x, y, w, color, alpha, density = 12) {
+function sprayDots(ctx, x, y, w, color, alpha, density = 8) {
     ctx.save();
     ctx.fillStyle = color;
     ctx.globalAlpha = alpha;
     const spread = w * 1.5;
-    for (let i = 0; i < density; i++) {
+    const count = Math.min(density, 10);
+    for (let i = 0; i < count; i++) {
         const ang = Math.random() * Math.PI * 2;
         const rad = Math.random() * spread;
         const dot = Math.max(0.4, w * 0.08 * Math.random());
@@ -67,13 +73,103 @@ function stampAt(ctx, stroke, style, cfg, x, y, p) {
 function stampSegment(ctx, stroke, style, cfg, a, b) {
     const dist = Math.hypot(b.x - a.x, b.y - a.y);
     const midW = effectiveWidth(stroke.width, (a.p + b.p) / 2, style);
-    const steps = Math.max(1, Math.ceil(dist / Math.max(midW / 3, 1)));
+    // Larger step = fewer stamps; keep continuous look for grainy/pencil styles.
+    const step = Math.max(midW * 0.55, cfg.grain ? 2.2 : 1.6);
+    const steps = Math.max(1, Math.ceil(dist / step));
     for (let s = 0; s <= steps; s++) {
         const t = s / steps;
         const x = a.x + (b.x - a.x) * t;
         const y = a.y + (b.y - a.y) * t;
         const p = a.p + (b.p - a.p) * t;
         stampAt(ctx, stroke, style, cfg, x, y, p);
+    }
+}
+
+/**
+ * Resolve gothic nib angle. Prefer pen tilt when present; otherwise fixed 45°.
+ */
+function resolveNibAngle(pt) {
+    const tx = pt?.tiltX || 0;
+    const ty = pt?.tiltY || 0;
+    if (Math.abs(tx) > 2 || Math.abs(ty) > 2) {
+        return Math.atan2(ty, tx);
+    }
+    return NIB_ANGLE;
+}
+
+/**
+ * Flat chisel / broad-nib stamp — classic gothic thick/thin from stroke direction.
+ * Shape is a thin rhombus (flat tip) rotated to the nib angle.
+ */
+function stampChisel(ctx, x, y, nibW, nibAngle, alpha) {
+    const half = Math.max(nibW / 2, 0.6);
+    const tip = Math.max(nibW * 0.12, 0.45);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(nibAngle);
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    // Rhombus: long along nib edge, sharp on the writing face
+    ctx.moveTo(-half, 0);
+    ctx.lineTo(0, -tip);
+    ctx.lineTo(half, 0);
+    ctx.lineTo(0, tip);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+/**
+ * Soft Sumi / Chinese ink-brush stamp — ellipse along travel, pressure drives size.
+ */
+function stampInkBrush(ctx, x, y, w, angle, alpha) {
+    const rx = Math.max(w * 0.55, 0.5);
+    const ry = Math.max(w * 0.32, 0.35);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.globalAlpha = alpha;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Soft wet edge — lighter outer halo
+    ctx.globalAlpha = alpha * 0.22;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, rx * 1.35, ry * 1.35, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+}
+
+function stampChiselSegment(ctx, stroke, style, cfg, a, b) {
+    const dist = Math.hypot(b.x - a.x, b.y - a.y);
+    const midW = effectiveWidth(stroke.width, (a.p + b.p) / 2, style);
+    const step = Math.max(midW * 0.22, 1.1);
+    const steps = Math.max(1, Math.ceil(dist / step));
+    for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const x = a.x + (b.x - a.x) * t;
+        const y = a.y + (b.y - a.y) * t;
+        const p = a.p + (b.p - a.p) * t;
+        const pt = { tiltX: a.tiltX + ((b.tiltX || 0) - (a.tiltX || 0)) * t, tiltY: a.tiltY + ((b.tiltY || 0) - (a.tiltY || 0)) * t };
+        const nibW = effectiveWidth(stroke.width, p, style);
+        stampChisel(ctx, x, y, nibW, resolveNibAngle(pt), cfg.alpha);
+    }
+}
+
+function stampInkBrushSegment(ctx, stroke, style, cfg, a, b) {
+    const dist = Math.hypot(b.x - a.x, b.y - a.y);
+    const midW = effectiveWidth(stroke.width, (a.p + b.p) / 2, style);
+    const angle = Math.atan2(b.y - a.y, b.x - a.x);
+    const step = Math.max(midW * 0.28, 1.4);
+    const steps = Math.max(1, Math.ceil(dist / step));
+    for (let s = 0; s <= steps; s++) {
+        const t = s / steps;
+        const x = a.x + (b.x - a.x) * t;
+        const y = a.y + (b.y - a.y) * t;
+        const p = a.p + (b.p - a.p) * t;
+        const w = effectiveWidth(stroke.width, p, style);
+        const alpha = effectiveAlpha(cfg.alpha, p, style);
+        stampInkBrush(ctx, x, y, w, angle, alpha);
     }
 }
 
@@ -92,14 +188,22 @@ export function drawBrushStroke(ctx, stroke) {
     if (cfg.spray) {
         pts.forEach((pt) => {
             const w = effectiveWidth(stroke.width, pt.p, style);
-            sprayDots(ctx, pt.x, pt.y, w, stroke.color, effectiveAlpha(cfg.alpha, pt.p, style), Math.floor(6 + w * 2));
+            sprayDots(ctx, pt.x, pt.y, w, stroke.color, effectiveAlpha(cfg.alpha, pt.p, style), Math.floor(4 + Math.min(w, 12) * 0.45));
         });
         ctx.restore();
         return;
     }
 
     if (pts.length === 1) {
-        stampAt(ctx, stroke, style, cfg, pts[0].x, pts[0].y, pts[0].p);
+        if (cfg.calligraphy) {
+            const w = effectiveWidth(stroke.width, pts[0].p, style);
+            stampChisel(ctx, pts[0].x, pts[0].y, w, resolveNibAngle(pts[0]), cfg.alpha);
+        } else if (cfg.cjk) {
+            const w = effectiveWidth(stroke.width, pts[0].p, style);
+            stampInkBrush(ctx, pts[0].x, pts[0].y, w, 0, effectiveAlpha(cfg.alpha, pts[0].p, style));
+        } else {
+            stampAt(ctx, stroke, style, cfg, pts[0].x, pts[0].y, pts[0].p);
+        }
         ctx.restore();
         return;
     }
@@ -109,36 +213,12 @@ export function drawBrushStroke(ctx, stroke) {
         const b = pts[i];
 
         if (cfg.calligraphy) {
-            let w = effectiveWidth(stroke.width, (a.p + b.p) / 2, style);
-            const tilt = Math.abs(a.tiltX || 0) + Math.abs(a.tiltY || 0);
-            w *= 0.6 + Math.min(tilt / 90, 1) * 0.8;
-            const angle = Math.atan2(b.y - a.y, b.x - a.x) + ((a.tiltX || 0) * Math.PI) / 360;
-            ctx.globalAlpha = effectiveAlpha(cfg.alpha, (a.p + b.p) / 2, style);
-            ctx.save();
-            ctx.translate(a.x, a.y);
-            ctx.rotate(angle);
-            ctx.beginPath();
-            ctx.ellipse((b.x - a.x) / 2, (b.y - a.y) / 2, Math.max(w, 0.5), Math.max(w * 0.35, 0.3), 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.restore();
+            stampChiselSegment(ctx, stroke, style, cfg, a, b);
             continue;
         }
 
         if (cfg.cjk) {
-            const w = effectiveWidth(stroke.width, (a.p + b.p) / 2, style);
-            const steps = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (w * 0.35)));
-            for (let s = 0; s <= steps; s++) {
-                const t = s / steps;
-                const x = a.x + (b.x - a.x) * t;
-                const y = a.y + (b.y - a.y) * t;
-                const taper = 0.35 + 0.65 * (1 - Math.abs(t - 0.5) * 2);
-                const p = a.p + (b.p - a.p) * t;
-                const pw = effectiveWidth(stroke.width, p, style) * taper;
-                ctx.globalAlpha = effectiveAlpha(cfg.alpha, p, style) * (0.4 + taper * 0.5);
-                ctx.beginPath();
-                ctx.arc(x, y, Math.max(pw / 2, 0.4), 0, Math.PI * 2);
-                ctx.fill();
-            }
+            stampInkBrushSegment(ctx, stroke, style, cfg, a, b);
             continue;
         }
 
