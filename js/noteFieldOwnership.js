@@ -155,6 +155,33 @@ export function noteCanvasHasContent(canvas) {
 }
 
 /**
+ * Collect every mediaId referenced by canvas image objects.
+ * @param {unknown} canvas
+ * @returns {string[]}
+ */
+export function collectNoteCanvasMediaIds(canvas) {
+    if (!canvas || typeof canvas !== 'object') return [];
+    const ids = [];
+    const seen = new Set();
+    const take = (images) => {
+        if (!Array.isArray(images)) return;
+        for (const img of images) {
+            const id = img?.mediaId;
+            if (!id || typeof id !== 'string' || seen.has(id)) continue;
+            seen.add(id);
+            ids.push(id);
+        }
+    };
+    if (Array.isArray(canvas.pages)) {
+        for (const page of canvas.pages) take(page?.images);
+    }
+    if (canvas.infinite && typeof canvas.infinite === 'object') {
+        take(canvas.infinite.images);
+    }
+    return ids;
+}
+
+/**
  * Remove every canvas image object with the given mediaId from a note canvas doc.
  * Mutates `canvas` in place when provided; returns whether anything was removed.
  *

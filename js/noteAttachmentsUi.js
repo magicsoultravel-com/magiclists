@@ -242,14 +242,16 @@ function clearCanvasDom(section) {
 
 /**
  * Collapsible Media + Canvas section.
- * Renders when the note has attachments or an active canvas.
+ * Renders when the note has attachments or a canvas document (even if hidden),
+ * so the draw toggle can reveal the preview without rebuilding from scratch.
  * @param {object} item
  * @param {{ canEdit?: boolean, startCollapsed?: boolean }} [opts]
  */
 export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCollapsed = true } = {}) {
     const list = normalizeAttachments(item?.attachments);
-    const hasCanvas = !!item?.canvas && !item?.canvasHidden;
-    if (!list.length && !hasCanvas) return '';
+    const hasCanvasDoc = !!item?.canvas;
+    const hasVisibleCanvas = hasCanvasDoc && !item?.canvasHidden;
+    if (!list.length && !hasCanvasDoc) return '';
 
     const count = list.length;
     const title = count > 0
@@ -257,7 +259,7 @@ export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCo
         : 'Note canvas';
     const collapsedClass = startCollapsed ? ' collapsed' : '';
     const toggleCollapsed = startCollapsed ? ' collapsed' : '';
-    const canvasHiddenClass = hasCanvas ? '' : ' is-hidden';
+    const canvasHiddenClass = hasVisibleCanvas ? '' : ' is-hidden';
 
     const rows = list.map((entry) => {
         const id = escapeAttr(entry.mediaId);
@@ -288,7 +290,7 @@ export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCo
                 </div>
                 <div class="note-section-body collapsable-section${collapsedClass}">
                     <div class="note-attachments__list">${rows}</div>
-                    <div class="note-media-canvas${canvasHiddenClass}" data-note-media-canvas ${hasCanvas ? '' : 'hidden'}>
+                    <div class="note-media-canvas${canvasHiddenClass}" data-note-media-canvas ${hasVisibleCanvas ? '' : 'hidden'}>
                         <div class="note-media-canvas__toolbar">
                             <span class="note-media-canvas__title">Note canvas</span>
                             <button type="button" class="card-act note-media-canvas__enter-drawing" data-enter-drawing title="Draw in magicCanvas" aria-label="Draw in magicCanvas">${CARD_ICONS.drawingPencil}</button>

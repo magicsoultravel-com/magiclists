@@ -5,9 +5,93 @@ import { broadcastStateChange } from './sync.js';
 import { normalizeTileSize } from './tileGeometry.js';
 import { createNoteId, ensureStepIds, ensureStepLevels, getCreatedTimestamp, getUpdatedTimestamp, normalizeNoteCanvas } from './noteModel.js';
 import { ensureStepsParentOrder } from './checklistSteps.js';
+import {
+    collectNoteCanvasMediaIds,
+    noteCanvasHasContent
+} from './noteFieldOwnership.js';
+import { normalizeAttachments } from './mediaAttachments.js';
 
 function normalizeItemTileSize(tileSize) {
     return normalizeTileSize(tileSize);
+}
+
+function nowSeconds() {
+    return Math.floor(Date.now() / 1000);
+}
+
+/**
+ * Force-adapt stale note media/canvas state from pre-reconcile saves:
+ * - keep null canvas as null (do not invent empty docs)
+ * - normalize real canvas docs; drop empty canvas shells
+ * - coerce canvasHidden; ensure canvas image mediaIds are in attachments
+ * @param {object} item
+ * @returns {boolean} whether the item was mutated
+ */
+export function reconcileItemMediaCanvas(item) {
+    if (!item || typeof item !== 'object') return false;
+    let changed = false;
+
+    if (item.canvas == null) {
+        if (item.canvasHidden != null) {
+            delete item.canvasHidden;
+            changed = true;
+        }
+    } else if (typeof item.canvas !== 'object') {
+        item.canvas = null;
+        delete item.canvasHidden;
+        changed = true;
+    } else {
+        const normalized = normalizeNoteCanvas(item.canvas);
+        if (JSON.stringify(normalized) !== JSON.stringify(item.canvas)) {
+            item.canvas = normalized;
+            changed = true;
+        } else {
+            item.canvas = normalized;
+        }
+
+        if (!noteCanvasHasContent(item.canvas)) {
+            item.canvas = null;
+            if (item.canvasHidden != null) delete item.canvasHidden;
+            changed = true;
+        } else if (typeof item.canvasHidden !== 'boolean') {
+            // Stale notes often omit canvasHidden; treat as visible.
+            item.canvasHidden = false;
+            changed = true;
+        } else if (item.canvasHidden === true) {
+            // Pre-fix stuck state: hidden canvas + no attachment rows meant the
+            // Media section was omitted on the board, so Show canvas could not
+            // rebuild the preview. Force-visible once during repair.
+            const list = normalizeAttachments(item.attachments);
+            if (list.length === 0) {
+                item.canvasHidden = false;
+                changed = true;
+            }
+        }
+    }
+
+    if (item.canvas && noteCanvasHasContent(item.canvas)) {
+        const mediaIds = collectNoteCanvasMediaIds(item.canvas);
+        const list = normalizeAttachments(item.attachments);
+        let listChanged = false;
+        for (const mediaId of mediaIds) {
+            if (list.some((a) => a.mediaId === mediaId)) continue;
+            list.push({
+                mediaId,
+                attachedAt: nowSeconds(),
+                expanded: true,
+                scale: 1,
+                x: null,
+                y: null
+            });
+            listChanged = true;
+        }
+        if (listChanged) {
+            item.attachments = list;
+            changed = true;
+        }
+    }
+
+    return changed;
 }
 
 const DEFAULT_DATABASE_SEED = {
@@ -204,6 +288,7 @@ function runDatabaseRepair(db) {
     let stepIdsMigrated = 0;
     let stepsParentOrderMigrated = 0;
     let schemaCoreBackfilled = 0;
+    let mediaCanvasReconciled = 0;
     repaired.items = repaired.items.map((item) => {
         if (!item || typeof item !== 'object') return item;
 
@@ -262,17 +347,17 @@ function runDatabaseRepair(db) {
             itemChanged = true;
         }
 
-        // Normalize note canvas to a valid canvasDocument v2 document.
-        // Non-destructive: missing/invalid values become an empty canvas.
-        const nextCanvas = normalizeNoteCanvas(base.canvas);
-        if (nextCanvas !== base.canvas) {
-            itemChanged = true;
-        }
+        // Reconcile media/canvas Shared state (null stays null; ensure membership).
+        const canvasItem = { ...base, editorBodyLayout: nextEditorBodyLayout };
+        if (nextSteps !== base.steps) canvasItem.steps = nextSteps;
+        const mediaCanvasChanged = reconcileItemMediaCanvas(canvasItem);
+        if (mediaCanvasChanged) itemChanged = true;
 
         if (!itemChanged
             && base.tileSize === tileSize
             && base.created_at === createdAt
-            && base.updated_at === updatedAt) {
+            && base.updated_at === updatedAt
+            && !mediaCanvasChanged) {
             return base;
         }
 
@@ -283,7 +368,13 @@ function runDatabaseRepair(db) {
         const next = { ...base };
         if (nextSteps !== base.steps) next.steps = nextSteps;
         if (nextEditorBodyLayout !== base.editorBodyLayout) next.editorBodyLayout = nextEditorBodyLayout;
-        if (nextCanvas !== base.canvas) next.canvas = nextCanvas;
+        if (mediaCanvasChanged) {
+            next.canvas = canvasItem.canvas ?? null;
+            next.attachments = canvasItem.attachments;
+            if ('canvasHidden' in canvasItem) next.canvasHidden = canvasItem.canvasHidden;
+            else delete next.canvasHidden;
+            mediaCanvasReconciled += 1;
+        }
         if (base.tileSize !== tileSize) next.tileSize = tileSize;
         if (base.created_at !== createdAt) next.created_at = createdAt;
         if (base.updated_at !== updatedAt) next.updated_at = updatedAt;
@@ -298,6 +389,10 @@ function runDatabaseRepair(db) {
     if (schemaCoreBackfilled > 0) {
         diagnostics.schemaCoreBackfilled = schemaCoreBackfilled;
         diagnostics.warnings.push(`${schemaCoreBackfilled} item(s) backfilled with missing id/schema metadata.`);
+    }
+    if (mediaCanvasReconciled > 0) {
+        diagnostics.mediaCanvasReconciled = mediaCanvasReconciled;
+        diagnostics.warnings.push(`${mediaCanvasReconciled} item(s) reconciled media/canvas membership and visibility.`);
     }
 
     return { db: repaired, diagnostics, changed };

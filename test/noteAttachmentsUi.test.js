@@ -36,4 +36,20 @@ describe('noteAttachmentsUi module loads and exports functions', () => {
         // Canvas area should be hidden when item.canvas is absent.
         assert.ok(html.includes('note-media-canvas is-hidden'));
     });
+
+    it('buildNoteAttachmentsSectionHtml keeps section when canvas exists but is hidden', () => {
+        const item = createDefaultNote();
+        item.canvas = {
+            version: 2,
+            canvasMode: 'infinite',
+            activePageId: 'p1',
+            pages: [{ id: 'p1', format: 'a4', background: 'blank', backgroundColor: '', strokes: [{ id: 's' }], texts: [], images: [] }],
+            infinite: { strokes: [], texts: [], images: [], background: 'blank', backgroundColor: '', bounds: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 } },
+            viewport: { scale: 1, offsetX: 0, offsetY: 0 }
+        };
+        item.canvasHidden = true;
+        const html = buildNoteAttachmentsSectionHtml(item);
+        assert.ok(html.includes('data-note-attachments'));
+        assert.ok(html.includes('note-media-canvas is-hidden'));
+    });
 });

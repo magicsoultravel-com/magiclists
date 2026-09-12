@@ -7,9 +7,11 @@ import {
     patchSharedFieldsOntoDraft,
     sharedFieldsDiffer,
     noteCanvasHasContent,
-    removeMediaIdFromNoteCanvas
+    removeMediaIdFromNoteCanvas,
+    collectNoteCanvasMediaIds
 } from '../js/noteFieldOwnership.js';
 import { noteHasSavableContent, createEmptyNoteCanvas } from '../js/noteModel.js';
+import { reconcileItemMediaCanvas } from '../js/api.js';
 
 describe('noteFieldOwnership contract', () => {
     it('lists modal-owned and shared field sets', () => {
@@ -121,6 +123,47 @@ describe('noteFieldOwnership contract', () => {
         assert.equal(doc.pages[0].images.length, 1);
         assert.equal(doc.pages[0].images[0].mediaId, 'm2');
         assert.equal(removeMediaIdFromNoteCanvas(doc, 'missing'), false);
+    });
+
+    it('collectNoteCanvasMediaIds returns unique media ids', () => {
+        const doc = createEmptyNoteCanvas();
+        doc.pages[0].images.push({ mediaId: 'm1' }, { mediaId: 'm1' }, { mediaId: 'm2' });
+        assert.deepEqual(collectNoteCanvasMediaIds(doc), ['m1', 'm2']);
+    });
+});
+
+describe('reconcileItemMediaCanvas', () => {
+    it('keeps null canvas as null and does not invent an empty doc', () => {
+        const item = { id: 'n1', canvas: null, attachments: [] };
+        assert.equal(reconcileItemMediaCanvas(item), false);
+        assert.equal(item.canvas, null);
+    });
+
+    it('drops empty canvas shells and clears canvasHidden', () => {
+        const item = {
+            id: 'n1',
+            canvas: createEmptyNoteCanvas(),
+            canvasHidden: true,
+            attachments: []
+        };
+        assert.equal(reconcileItemMediaCanvas(item), true);
+        assert.equal(item.canvas, null);
+        assert.equal('canvasHidden' in item, false);
+    });
+
+    it('attaches canvas image mediaIds and unhides stuck hidden canvases', () => {
+        const canvas = createEmptyNoteCanvas();
+        canvas.pages[0].images.push({ mediaId: 'm9', tool: 'image' });
+        const item = {
+            id: 'n1',
+            canvas,
+            canvasHidden: true,
+            attachments: []
+        };
+        assert.equal(reconcileItemMediaCanvas(item), true);
+        assert.equal(item.canvasHidden, false);
+        assert.equal(item.attachments.length, 1);
+        assert.equal(item.attachments[0].mediaId, 'm9');
     });
 });
 
