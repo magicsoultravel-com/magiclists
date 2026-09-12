@@ -1,0 +1,21 @@
+/** @css {"owns":"unit converter tool body","js":["js/tools/converter.js"]} */
+/* ==========================================================================
+   CONVERTER TOOL
+   ========================================================================== */
+.conv-output {
+    background: var(--tool-surface, var(--bg-primary));
+    border: 1px solid var(--border-color);
+    color: var(--accent);
+    padding: 0.2rem 0.35rem;
+    font-family: monospace;
+    border-radius: 3px;
+    min-height: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    font-weight: 600;
+}
+
+.conv-input {
+    font-family: monospace;
+}

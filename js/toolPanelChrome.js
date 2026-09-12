@@ -173,7 +173,9 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
             <span class="tool-panel__title"></span>
             <span class="tool-panel__spacer"></span>
             <div class="tool-panel__actions">
-                <button type="button" class="card-act card-act--collapse" title="Collapse" aria-label="Collapse"></button>
+                <button type="button" class="card-act card-act--collapse" title="Collapse to chip" aria-label="Collapse to chip"></button>
+                <button type="button" class="card-act card-act--minimize tool-panel__minimize" title="Minimize header" aria-label="Minimize header" aria-pressed="false"></button>
+                <button type="button" class="card-act card-act--maximize tool-panel__maximize is-hidden" title="Restore header" aria-label="Restore header" aria-pressed="true"></button>
                 <button type="button" class="card-act card-act--popout tool-panel__popout" title="Pop out tool" aria-label="Pop out tool" aria-pressed="false"></button>
                 <button type="button" class="card-act card-act--close" title="Remove from desktop" aria-label="Remove from desktop"></button>
             </div>
@@ -185,9 +187,13 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     if (titleEl) titleEl.textContent = meta?.label || toolId;
 
     const collapseBtn = panel.querySelector('.card-act--collapse');
+    const minimizeBtn = panel.querySelector('.card-act--minimize');
+    const maximizeBtn = panel.querySelector('.card-act--maximize');
     const popoutBtn = panel.querySelector('.card-act--popout');
     const closeBtn = panel.querySelector('.card-act--close');
     collapseBtn.innerHTML = CARD_ICONS.collapse;
+    minimizeBtn.innerHTML = CARD_ICONS.minimize;
+    maximizeBtn.innerHTML = CARD_ICONS.maximize;
     popoutBtn.innerHTML = CARD_ICONS.popout;
     closeBtn.innerHTML = CARD_ICONS.close;
 
@@ -196,6 +202,7 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
 
     let chip = null;
     let collapsed = !!saved.collapsed;
+    let minimal = !!saved.minimal;
     let chipReadoutText = '';
 
     const persist = (extra = {}) => {
@@ -205,6 +212,7 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
             w: panel.offsetWidth,
             h: panel.offsetHeight,
             collapsed,
+            minimal,
             ...extra
         });
     };
@@ -280,6 +288,7 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
 
     const collapse = () => {
         collapsed = true;
+        if (minimal) setMinimal(false);
         if (!chip) createChip();
         positionChip(true);
         panel.classList.add('is-hidden');
@@ -302,8 +311,25 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
         callbacks.onResize?.(bodyEl);
     };
 
+    const setMinimal = (value) => {
+        minimal = !!value;
+        panel.classList.toggle('tool-panel--minimal', minimal);
+        minimizeBtn?.classList.toggle('is-hidden', minimal);
+        maximizeBtn?.classList.toggle('is-hidden', !minimal);
+        minimizeBtn?.setAttribute('aria-pressed', minimal ? 'true' : 'false');
+        maximizeBtn?.setAttribute('aria-pressed', minimal ? 'false' : 'true');
+        persist();
+        if (!minimal) {
+            callbacks.onResize?.(bodyEl);
+        }
+    };
+
+    const minimize = () => setMinimal(true);
+    const restore = () => setMinimal(false);
+
     const show = () => {
         desktop.appendChild(panel);
+        setMinimal(minimal);
         if (collapsed) {
             panel.classList.add('is-hidden');
             createChip();
@@ -364,6 +390,16 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
         collapse();
     });
 
+    minimizeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        minimize();
+    });
+
+    maximizeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        restore();
+    });
+
     closeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         callbacks.onDismiss?.();
@@ -375,7 +411,7 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
     });
 
     bindPanelDrag(panel, persist);
-    if (meta?.resizable || meta?.defaultSize) {
+    if (meta?.resizable !== false) {
         mountFloatChrome(panel, { resizable: true, mode: 'tool' });
         bindFloatResize(panel, {
             mins,
@@ -418,9 +454,12 @@ export function createToolPanel(toolId, meta, desktop, callbacks = {}) {
         show,
         collapse,
         expand,
+        minimize,
+        restore,
         destroy: destroyWithCleanup,
         persist,
         isCollapsed: () => collapsed,
+        isMinimal: () => minimal,
         updateChipReadout,
         focus: () => {
             if (collapsed) expand();

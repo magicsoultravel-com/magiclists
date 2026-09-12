@@ -129,6 +129,16 @@ export const ToolsManager = {
         entry?.chrome.expand();
     },
 
+    minimize(toolId) {
+        const entry = this.openPanels.get(toolId);
+        entry?.chrome.minimize?.();
+    },
+
+    restore(toolId) {
+        const entry = this.openPanels.get(toolId);
+        entry?.chrome.restore?.();
+    },
+
     async launch(toolName) {
         if (this.openPanels.has(toolName)) {
             this.focus(toolName);

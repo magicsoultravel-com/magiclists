@@ -46,9 +46,14 @@ export const TOOLS_REGISTRY = [
         "wide": false,
         "mountClass": "tool-mount--converter",
         "resizable": true,
+        "resizeMode": "scale",
         "defaultSize": {
             "w": 340,
-            "h": 320
+            "h": 220
+        },
+        "minSize": {
+            "w": 260,
+            "h": 180
         }
     },
     {
@@ -93,8 +98,10 @@ export const TOOLS_REGISTRY = [
         "icon": "<circle cx=\"6\" cy=\"6.2\" r=\"3.8\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.95\"/><path d=\"M6 2.2v1.4M4.2 2.2h3.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.85\" stroke-linecap=\"round\"/><path d=\"M6 6.2V4.6\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"0.85\" stroke-linecap=\"round\"/>",
         "wide": false,
         "mountClass": "tool-mount--timer",
+        "resizable": true,
         "defaultSize": {
-            "w": 220
+            "w": 220,
+            "h": 260
         },
         "minSize": {
             "w": 200,

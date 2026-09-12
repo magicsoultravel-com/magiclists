@@ -1,4 +1,4 @@
-/** @tool {"label":"Timer","order":4,"mountClass":"tool-mount--timer","defaultSize":{"w":220},"minSize":{"w":200,"h":168}} */
+/** @tool {"label":"Timer","order":4,"mountClass":"tool-mount--timer","defaultSize":{"w":220,"h":260},"minSize":{"w":200,"h":168}} */
 /** @tool-icon <circle cx="6" cy="6.2" r="3.8" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M6 2.2v1.4M4.2 2.2h3.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/><path d="M6 6.2V4.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/> */
 import { ACTION_ICONS } from '../icons.js';
 

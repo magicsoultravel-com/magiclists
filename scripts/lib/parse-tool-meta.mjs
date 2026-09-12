@@ -42,7 +42,7 @@ export function parseToolFile(filePath) {
     let order = 100;
     let wide = false;
     let mountClass = '';
-    let resizable = false;
+    let resizable = true;
     let resizeMode = '';
     let defaultSize = null;
     let minSize = null;
@@ -54,7 +54,7 @@ export function parseToolFile(filePath) {
         if (meta?.order != null) order = Number(meta.order);
         if (meta?.wide) wide = true;
         if (meta?.mountClass) mountClass = String(meta.mountClass);
-        if (meta?.resizable) resizable = true;
+        if (meta && typeof meta.resizable === 'boolean') resizable = meta.resizable;
         if (meta?.resizeMode) resizeMode = String(meta.resizeMode);
         if (meta?.defaultSize) defaultSize = meta.defaultSize;
         if (meta?.minSize) minSize = meta.minSize;

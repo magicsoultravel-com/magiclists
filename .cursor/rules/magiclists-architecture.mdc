@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-09-12T19:28:43.642Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-09-12T21:01:57.198Z
 
 ## CSS load order
 
@@ -23,17 +23,24 @@ alwaysApply: true
 | css/board.css | grid/freeform board, clock, drag/resize, desktop inline card spatial overrides, file cabinet mode | dragdrop.js, clockStyle.js, desktopZoom.js, boardSort.js, fileCabinet.js | note footer spatial overrides cross-cut shell-editor.css; file cabinet drawer mode integration | 10 |
 | css/themes.css | html[data-app-theme] overrides, theme picker swatches | appTheme.js, themePicker.js, themeSkins.js | — | 11 |
 | css/drawing.css | magicCanvas toolbar and drawing board surface | drawingBoard.js, drawingToolbarMenu.js, drawingToolbarChrome.js | — | 12 |
-| css/tools.css | floating tool panels, chips, globe/map/alphabets/calculator/converter/timezone/timer tool bodies | toolsManager.js, toolPanelChrome.js, sidebarModules.js | — | 13 |
-| css/calendar.css | calendar tool panel month grid and hour notes | js/tools/calendar.js, calendar.js | — | 14 |
-| css/cosmos.css | cosmos tool viewport and star map chrome | js/tools/cosmos.js | — | 15 |
-| css/sidebar-media.css | shared sidebar radio/tv player and popover chrome | sidebarRadio.js, sidebarTv.js, radioPopover.js, tvPopover.js | domain-specific rules stay in radio.css and tv.css | 16 |
-| css/radio.css | (unknown) | — | — | 17 |
-| css/tv.css | sidebar TV player, now playing, popover browser | sidebarTv.js, tvPlayer.js, tvPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell-sidebar.css | 18 |
-| css/weather.css | sidebar weather glance + expanded forecast panel | sidebarWeather.js, weatherApi.js | — | 19 |
-| css/sheet.css | sheet-grid note template body and table chrome | sheet.js, noteSurface.js, editor.js | — | 20 |
-| css/desktops.css | desktop switcher dock styling, dock pin lock | desktopDockComponent.js | — | 21 |
-| css/popout.css | (unknown) | — | — | 22 |
-| css/media-library.css | media staging dialogue, gallery floating panel, media FAB, note attachment section, media lightbox | mediaLibraryOverlay.js, mediaStagingDialog.js, mediaPasteCatcher.js, noteAttachmentsUi.js | — | 23 |
+| css/tools.css | floating tool panels, chips, shared tool layout utilities, toolbox menu | toolsManager.js, toolPanelChrome.js, sidebarModules.js | — | 13 |
+| css/tool-timezone.css | timezone tool body | js/tools/timezone.js | — | 14 |
+| css/tool-timer.css | timer tool body | js/tools/timer.js | — | 15 |
+| css/tool-calculator.css | calculator tool body | js/tools/calculator.js | — | 16 |
+| css/tool-converter.css | unit converter tool body | js/tools/converter.js | — | 17 |
+| css/tool-map.css | map tool body | js/tools/map.js | — | 18 |
+| css/tool-globe.css | globe tool body | js/tools/globe.js | — | 19 |
+| css/tool-alphabets.css | alphabets/cards tool body | js/tools/alphabets.js | — | 20 |
+| css/calendar.css | calendar tool panel month grid and hour notes | js/tools/calendar.js, calendar.js | — | 21 |
+| css/cosmos.css | cosmos tool viewport and star map chrome | js/tools/cosmos.js | — | 22 |
+| css/sidebar-media.css | shared sidebar radio/tv player and popover chrome | sidebarRadio.js, sidebarTv.js, radioPopover.js, tvPopover.js | domain-specific rules stay in radio.css and tv.css | 23 |
+| css/radio.css | (unknown) | — | — | 24 |
+| css/tv.css | sidebar TV player, now playing, popover browser | sidebarTv.js, tvPlayer.js, tvPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell-sidebar.css | 25 |
+| css/weather.css | sidebar weather glance + expanded forecast panel | sidebarWeather.js, weatherApi.js | — | 26 |
+| css/sheet.css | sheet-grid note template body and table chrome | sheet.js, noteSurface.js, editor.js | — | 27 |
+| css/desktops.css | desktop switcher dock styling, dock pin lock | desktopDockComponent.js | — | 28 |
+| css/popout.css | (unknown) | — | — | 29 |
+| css/media-library.css | media staging dialogue, gallery floating panel, media FAB, note attachment section, media lightbox | mediaLibraryOverlay.js, mediaStagingDialog.js, mediaPasteCatcher.js, noteAttachmentsUi.js | — | 30 |
 
 ## JS domains (@module)
 

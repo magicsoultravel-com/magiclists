@@ -1,0 +1,123 @@
+/** @css {"owns":"timer tool body","js":["js/tools/timer.js"]} */
+/* ==========================================================================
+   TIMER TOOL
+   ========================================================================== */
+/* ==========================================================================
+   TIMER TOOL
+   ========================================================================== */
+
+.tool-mount--timer {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.timer-tool-stack {
+    gap: 0.35rem;
+}
+
+.timer-mode-bar {
+    justify-content: flex-start;
+    gap: 0.2rem;
+}
+
+.timer-readout {
+    text-align: center;
+    font-size: 1.05rem;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em;
+    padding: 0.45rem 0.35rem;
+    min-height: 2rem;
+}
+
+.timer-readout--done {
+    animation: timer-readout-pulse 0.8s ease-in-out 3;
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.timer-controls .btn--icon {
+    padding: 0.24rem 0.38rem;
+}
+
+.timer-lap-btn.is-hidden,
+.timer-countdown-setup.is-hidden,
+.timer-laps-block.is-hidden {
+    display: none;
+}
+
+.timer-duration-row {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    flex-wrap: nowrap;
+}
+
+.timer-duration-row label {
+    font-size: 0.58rem;
+    color: var(--text-muted);
+    flex-shrink: 0;
+}
+
+.timer-duration-input {
+    width: 2.2rem;
+    min-width: 0;
+    text-align: center;
+    padding: 0.22rem 0.12rem;
+    font-size: 0.68rem;
+}
+
+.timer-laps-block {
+    margin-top: 0.1rem;
+}
+
+.timer-laps-block .collapsable-header {
+    background: var(--bg-card);
+}
+
+.timer-laps-section:not(.collapsed) .timer-laps {
+    max-height: 110px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: color-mix(in srgb, var(--text-main) 2%, transparent);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 0.25rem;
+}
+
+.timer-laps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.12rem;
+}
+
+.timer-laps-empty {
+    margin: 0;
+    text-align: center;
+}
+
+.timer-lap-row {
+    display: grid;
+    grid-template-columns: 1.6rem 1fr 1fr;
+    gap: 0.25rem;
+    align-items: center;
+    padding: 0.18rem 0.22rem;
+    border-radius: 3px;
+    font-size: 0.62rem;
+    font-family: monospace;
+    color: var(--text-muted);
+}
+
+.timer-lap-index {
+    color: var(--text-main);
+    opacity: 0.75;
+}
+
+.timer-lap-split,
+.timer-lap-total {
+    text-align: right;
+}
+
+.timer-lap-total {
+    color: var(--text-main);
+}
