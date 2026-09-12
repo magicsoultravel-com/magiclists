@@ -170,6 +170,13 @@ export function sizeCanvasViewport(section) {
     const card = section.closest('.mini-card, .editor-note-shell, #editor-overlay');
     const hostH = card?.clientHeight || 0;
     const hostW = card?.clientWidth || section?.clientWidth || 0;
+    // Before grid placement / drawer transitions settle, the host card can still
+    // report a 0 box. Baking an explicit viewport size from that would freeze a
+    // stale (collapsed ~2px or oversized) size forever. Let the CSS natural size
+    // (.note-media-canvas__viewport → 100% × 180px) drive the preview until the
+    // card has a real measured box, then size explicitly and let
+    // refreshNoteCanvasPreview re-paint once layout settles.
+    if (hostH < 2 && hostW < 2) return;
     const h = hostH
         ? Math.round(Math.max(120, Math.min(260, hostH * 0.42)))
         : 180;
@@ -260,6 +267,12 @@ function clearCanvasDom(section) {
  * @param {{ canEdit?: boolean, startCollapsed?: boolean }} [opts]
  */
 export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCollapsed = true } = {}) {
+    // Render choke point: a canvas with real content must never be emitted hidden,
+    // otherwise every full-board rebuild (File Cabinet toggle, category change,
+    // desktop switch, …) can make it disappear until another sync re-fixes state.
+    // Mirrors the repair-on-read/write behavior in api.js (reconcileItemMediaCanvas)
+    // and syncNoteAttachmentsDom, so all render paths agree with the persisted item.
+    ensureCanvasVisibleIfContent(item);
     const list = normalizeAttachments(item?.attachments);
     const hasCanvasDoc = !!item?.canvas;
     const hasVisibleCanvas = hasCanvasDoc && !item?.canvasHidden;
@@ -675,4 +688,32 @@ async function hydrateAttachmentRows(section, item) {
             expandBtn?.classList.add('is-hidden');
         }
     }));
+}
+/**
+ * Dev-only diagnostics: dump each board card's note-canvas invariants so a
+ * "canvas disappeared" bug can be pinned to hidden/collapsed/size/bitmap failure
+ * in one glance. From the DevTools console on the running app (localhost:45781):
+ *   import('./js/noteAttachmentsUi.js').then(m => m.dumpNoteCanvasState())
+ * @returns {Array<object>} one row per board card with a media/canvas section
+ */
+export function dumpNoteCanvasState() {
+    const rows = [];
+    document.querySelectorAll('.mini-card[data-id]').forEach((card) => {
+        const section = card.querySelector('[data-note-attachments]');
+        if (!section) return;
+        const block = section.querySelector('[data-note-media-canvas]');
+        const viewport = block?.querySelector('[data-note-media-viewport]') || null;
+        const canvas = block?.querySelector('[data-note-canvas-preview]') || null;
+        const body = section.querySelector('.note-section-body');
+        rows.push({
+            id: card.dataset.id,
+            title: (card.querySelector('.editor-note-title, .card-title, [data-field="title"]')?.textContent || '').trim().slice(0, 24),
+            sectionCollapsed: !!body?.classList.contains('collapsed'),
+            canvasBlockHidden: !!block?.classList.contains('is-hidden') || !!block?.hasAttribute('hidden'),
+            viewportSize: viewport ? `${viewport.style.width || 'css'} x ${viewport.style.height || '180'}` : 'none',
+            canvasBitmap: canvas ? `${canvas.width}x${canvas.height}` : 'missing'
+        });
+    });
+    console.table(rows);
+    return rows;
 }

@@ -46,14 +46,35 @@ describe('noteAttachmentsUi module loads and exports functions', () => {
             version: 2,
             canvasMode: 'infinite',
             activePageId: 'p1',
-            pages: [{ id: 'p1', format: 'a4', background: 'blank', backgroundColor: '', strokes: [{ id: 's' }], texts: [], images: [] }],
+            pages: [{ id: 'p1', format: 'a4', background: 'blank', backgroundColor: '', strokes: [], texts: [], images: [] }],
             infinite: { strokes: [], texts: [], images: [], background: 'blank', backgroundColor: '', bounds: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 } },
             viewport: { scale: 1, offsetX: 0, offsetY: 0 }
         };
         item.canvasHidden = true;
         const html = buildNoteAttachmentsSectionHtml(item);
         assert.ok(html.includes('data-note-attachments'));
+        // An EMPTY canvas shell stays hidden so the draw toggle can reveal it later
+        // (only canvases with real content are force-visible by the render choke point).
         assert.ok(html.includes('note-media-canvas is-hidden'));
+    });
+
+    it('buildNoteAttachmentsSectionHtml self-heals a canvas stuck hidden with content', () => {
+        const item = createDefaultNote();
+        item.canvas = {
+            version: 2,
+            canvasMode: 'infinite',
+            activePageId: 'p1',
+            pages: [{ id: 'p1', format: 'a4', background: 'blank', backgroundColor: '', strokes: [{ id: 's1' }], texts: [], images: [] }],
+            infinite: { strokes: [], texts: [], images: [], background: 'blank', backgroundColor: '', bounds: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 } },
+            viewport: { scale: 1, offsetX: 0, offsetY: 0 }
+        };
+        item.canvasHidden = true; // stale flag with real content (drawn, then a full-board rebuild)
+        const html = buildNoteAttachmentsSectionHtml(item, { canEdit: true, startCollapsed: false });
+        assert.ok(html.includes('data-note-canvas-preview'));
+        assert.ok(!html.includes('note-media-canvas is-hidden'));
+        assert.ok(!/data-note-media-canvas[^>]*\shidden/.test(html));
+        // The render choke point also fixes the in-memory flag so later renders agree.
+        assert.equal(item.canvasHidden, false);
     });
 
     it('sizeCanvasViewport sets explicit width and height from the host card', () => {
@@ -102,7 +123,11 @@ describe('noteAttachmentsUi module loads and exports functions', () => {
 
         sizeCanvasViewport(section);
 
-        assert.equal(viewport.style.width, '320px');
-        assert.equal(viewport.style.height, '180px');
+        // No real card box yet — must NOT bake a stale explicit size; the CSS
+        // natural viewport size (.note-media-canvas__viewport = 100% × 180px)
+        // drives the preview until the card is actually laid out, then
+        // refreshNoteCanvasPreview re-paints once layout settles.
+        assert.equal(viewport.style.width, undefined);
+        assert.equal(viewport.style.height, undefined);
     });
 });

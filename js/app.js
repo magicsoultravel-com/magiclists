@@ -113,6 +113,7 @@ const AppState = {
 class Application {
     constructor() {
         this._syncQueue = Promise.resolve();
+        this._pendingItemSaves = new Set();
     }
 
     async init() {
@@ -616,6 +617,14 @@ DrawingBoard.init(this);
         try {
             if (canvas && AppState.workspaceMode !== 'drawing') {
                 UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
+            }
+
+            // Never re-read items from storage while a mutation save is still in
+            // flight: a render rebuilt from stale ancestors (e.g. File Cabinet toggle
+            // right after drawing) could otherwise make the freshly drawn note canvas
+            // invisible on the board. Wait for pending saves to settle first.
+            if (this._pendingItemSaves?.size) {
+                await Promise.allSettled([...this._pendingItemSaves]);
             }
 
             const data = await API.fetchItems(AppState.user.token);
@@ -1394,7 +1403,10 @@ renderQuickActions() {
                     ? JSON.parse(JSON.stringify(AppState.items[idx]))
                     : null;
 
-            const success = await API.saveItem(item, AppState.user.token);
+            const saveTask = API.saveItem(item, AppState.user.token);
+            this._pendingItemSaves.add(saveTask);
+            const success = await saveTask;
+            this._pendingItemSaves.delete(saveTask);
             if (!success) {
                 alert('Could not save note. Log in with the correct admin token (default dev: dev-admin-secret-2026).');
                 return;
@@ -1437,6 +1449,16 @@ renderQuickActions() {
                     if (AppState.viewSettings.sortBy === 'grid') {
                         DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
                     }
+                } else {
+                    // skipRerender saves (drawing canvas, draw toggle, …) intentionally skip the
+                    // single-card re-render, but the board card may have been rebuilt from a re-fetch
+                    // while the save was in flight (File Cabinet toggle, category change) — leaving the
+                    // media/canvas section stale, e.g. an invisible note canvas. Sync just that section
+                    // so the board card always agrees with the persisted item.
+                    import('./noteAttachmentsUi.js').then(({ syncNoteAttachmentsDom }) => {
+                        const current = AppState.items.find((i) => i.id === liveItem?.id) || liveItem;
+                        syncNoteAttachmentsDom(current);
+                    }).catch(() => {});
                 }
                 this.updateWorkspaceCounter();
                 return;

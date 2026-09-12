@@ -247,16 +247,24 @@ export function refreshNoteCanvasPreview(section, item) {
         });
     };
 
+    // Paint immediately, then keep re-painting until the preview has a settled,
+    // drawable box. Full-board rebuilds (grid placement, File Cabinet drawer height
+    // transition) can take several frames to lay the card out, so the old 2-frame
+    // retry budget was frequently exhausted before layout settled — leaving the note
+    // canvas blank/invisible on the board until an unrelated later re-render.
     paint();
 
-    const { ready } = resolvePreviewSize(canvas);
-    if (!ready) {
-        requestAnimationFrame(() => {
+    let retries = 0;
+    const MAX_RETRIES = 20;
+    const settle = () => {
+        const { ready } = resolvePreviewSize(canvas);
+        if (ready || retries >= MAX_RETRIES) {
             paint();
-            requestAnimationFrame(paint);
-        });
-        return;
-    }
-    // One post-layout pass even when size looks ready (card may still be settling).
-    requestAnimationFrame(paint);
+            return;
+        }
+        retries += 1;
+        requestAnimationFrame(settle);
+    };
+
+    requestAnimationFrame(settle);
 }

@@ -785,9 +785,6 @@
     display: none;
 }
 
-.desktop-surface--file-cabinet .note-media-canvas {
-    display: none;
-}
 
 .note-media-canvas__toolbar {
     display: flex;
