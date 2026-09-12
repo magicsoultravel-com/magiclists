@@ -103,6 +103,10 @@ export const FILE_CABINET_STACK_OFFSET_X = 10;
 export const FILE_CABINET_DRAWER_WIDTH = 160;
 /** Open drawers never shrink below this many cards of height, even when emptier. */
 export const FILE_CABINET_DRAWER_MIN_CARDS = 4;
+/** Notes per side-by-side cascade group; further notes wrap into another column (wider, not taller). */
+export const FILE_CABINET_DRAWER_CARDS_PER_COL = 8;
+/** Residual gap (px) after the 50% face-to-face pack in fileCabinetStackPitch. */
+export const FILE_CABINET_COL_GAP = 0;
 const FILE_CABINET_CATEGORY_HEADER_PAD = 20;
 const FILE_CABINET_SCROLL_EDGE = 36;
 const FILE_CABINET_SCROLL_STEP = 18;
@@ -111,27 +115,85 @@ function collapsedTabWidth() {
     return getLabelRect().w;
 }
 
-/** Width of a cascaded tab stack (px): first tab plus one FILE_CABINET_STACK_OFFSET_X per extra note.
- *  Note count only — titles never widen a drawer (they truncate with ellipsis). */
+/** Width of a single cascaded column (px): first tab plus one OFFSET_X per extra note in that column. */
 function fileCabinetCascadeWidth(count) {
     const slots = Math.max(count || 0, 1);
     return collapsedTabWidth() + (slots - 1) * FILE_CABINET_STACK_OFFSET_X;
 }
 
-/** Open-column width: at least FILE_CABINET_DRAWER_WIDTH, grows with cascaded notes only. */
-function fileCabinetColumnWidth(slotCount) {
-    return Math.max(fileCabinetCascadeWidth(slotCount), FILE_CABINET_DRAWER_WIDTH);
-}
-
-/** Height of a cascaded tab stack (px): first tab plus one FILE_CABINET_STACK_OFFSET_Y per extra note. */
+/** Height of a cascaded column (px): first tab plus one OFFSET_Y per extra note in that column. */
 function fileCabinetCascadeHeight(count) {
     const slots = Math.max(count || 0, 1);
     return getLabelRect().h + (slots - 1) * FILE_CABINET_STACK_OFFSET_Y;
 }
 
+function fileCabinetCascadeCol(index) {
+    return Math.floor(Math.max(0, index) / FILE_CABINET_DRAWER_CARDS_PER_COL);
+}
+
+function fileCabinetCascadeSlot(index) {
+    return Math.max(0, index) % FILE_CABINET_DRAWER_CARDS_PER_COL;
+}
+
+/**
+ * Pitch between cascade column origins.
+ * Perceived gap = left-col leading-tab right edge → right-col left edge
+ * (= cascade fan + COL_GAP when columns sit fully past each other).
+ * Use half of that so columns sit 50% closer without stacking on the same origin.
+ */
+function fileCabinetStackPitch() {
+    const fan = (FILE_CABINET_DRAWER_CARDS_PER_COL - 1) * FILE_CABINET_STACK_OFFSET_X;
+    return collapsedTabWidth() + Math.round((fan + FILE_CABINET_COL_GAP) / 2);
+}
+
+function fileCabinetTabLeft(index) {
+    return fileCabinetCascadeCol(index) * fileCabinetStackPitch()
+        + fileCabinetCascadeSlot(index) * FILE_CABINET_STACK_OFFSET_X;
+}
+
+function fileCabinetTabTop(index) {
+    return fileCabinetCascadeSlot(index) * FILE_CABINET_STACK_OFFSET_Y;
+}
+
+/** Stack height for N notes: capped at one column of FILE_CABINET_DRAWER_CARDS_PER_COL. */
+function fileCabinetStackHeight(count) {
+    const capped = Math.min(Math.max(count || 0, 1), FILE_CABINET_DRAWER_CARDS_PER_COL);
+    return fileCabinetCascadeHeight(capped);
+}
+
+/** Total width of a multi-column wrapped stack (px). */
+function fileCabinetStackWidth(count) {
+    const n = Math.max(count || 0, 1);
+    const cols = Math.ceil(n / FILE_CABINET_DRAWER_CARDS_PER_COL);
+    if (cols <= 1) return fileCabinetCascadeWidth(n);
+    const lastCount = n - (cols - 1) * FILE_CABINET_DRAWER_CARDS_PER_COL;
+    return (cols - 1) * fileCabinetStackPitch() + fileCabinetCascadeWidth(lastCount);
+}
+
+/** Open-column width: at least FILE_CABINET_DRAWER_WIDTH, grows with wrapped cascade columns. */
+function fileCabinetColumnWidth(slotCount) {
+    return Math.max(fileCabinetStackWidth(slotCount), FILE_CABINET_DRAWER_WIDTH);
+}
+
 /** Open-drawer minimum stack height: fits FILE_CABINET_DRAWER_MIN_CARDS cards. */
 function fileCabinetDrawerMinHeight() {
     return fileCabinetCascadeHeight(FILE_CABINET_DRAWER_MIN_CARDS);
+}
+
+/** Insert index from pointer position inside a tab stack (2D wrap-aware). */
+function fileCabinetInsertIndexFromPoint(stackEl, clientX, clientY, tabCount) {
+    const rect = stackEl.getBoundingClientRect();
+    const scale = getFileCabinetUiScale(stackEl.closest('#file-cabinet')) || 1;
+    const dx = (clientX - rect.left) / scale;
+    const dy = (clientY - rect.top) / scale;
+    const pitch = fileCabinetStackPitch();
+    const maxCol = Math.max(0, Math.ceil(Math.max(tabCount, 1) / FILE_CABINET_DRAWER_CARDS_PER_COL));
+    let col = Math.floor(dx / pitch);
+    col = Math.max(0, Math.min(maxCol, col));
+    let slot = Math.floor(dy / FILE_CABINET_STACK_OFFSET_Y);
+    slot = Math.max(0, Math.min(FILE_CABINET_DRAWER_CARDS_PER_COL, slot));
+    const insertIndex = col * FILE_CABINET_DRAWER_CARDS_PER_COL + slot;
+    return Math.max(0, Math.min(tabCount, insertIndex));
 }
 
 export const DRAG_THRESHOLD = 4;
@@ -833,13 +895,13 @@ function getFileCabinetHitRect(mount) {
 function updateStackPreviewDimensions(stackEl, slotCount, { minSlotCount = 0 } = {}) {
     if (!stackEl) return;
     const count = Math.max(slotCount, minSlotCount, 1);
-    const stackHeight = fileCabinetCascadeHeight(count);
+    const stackHeight = fileCabinetStackHeight(count);
     const rollout = stackEl.closest('.file-cabinet-filed-rollout');
 
     if (rollout) {
-        // Preview adapts to the notes: JS sizes the stack to the tab cascade;
+        // Preview adapts to the notes: JS sizes the stack to the wrapped tab cascade;
         // the popover shrink-wraps via CSS (min-width keeps the chip-width floor).
-        stackEl.style.width = `${fileCabinetCascadeWidth(count)}px`;
+        stackEl.style.width = `${fileCabinetStackWidth(count)}px`;
         stackEl.style.minWidth = '';
         stackEl.style.height = `${stackHeight}px`;
         rollout.style.width = '';
@@ -868,8 +930,8 @@ function applyStackPreviewPositions(stackEl, { draggedId, insertIndex = null, se
     tabs.forEach((tab, i) => {
         if (insertIndex != null && i === insertIndex) visualIndex++;
         tab.style.position = 'absolute';
-        tab.style.left = `${visualIndex * FILE_CABINET_STACK_OFFSET_X}px`;
-        tab.style.top = `${visualIndex * FILE_CABINET_STACK_OFFSET_Y}px`;
+        tab.style.left = `${fileCabinetTabLeft(visualIndex)}px`;
+        tab.style.top = `${fileCabinetTabTop(visualIndex)}px`;
         tab.style.width = `${collapsedTabWidth()}px`;
         tab.style.height = `${label.h}px`;
         tab.style.zIndex = String(visualIndex + 1);
@@ -909,12 +971,10 @@ function resolveFileCabinetDropTarget(clientX, clientY, dragState, mount) {
     const stack = el.closest('.file-cabinet-tab-stack');
     if (stack) {
         const category = stack.dataset.category || 'Uncategorized';
-        const rect = stack.getBoundingClientRect();
         const tabs = [...stack.querySelectorAll('.file-cabinet-tab')].filter(
             (t) => t.dataset.id !== dragState?.card?.dataset?.id
         );
-        let insertIndex = Math.floor((clientY - rect.top) / FILE_CABINET_STACK_OFFSET_Y);
-        insertIndex = Math.max(0, Math.min(tabs.length, insertIndex));
+        const insertIndex = fileCabinetInsertIndexFromPoint(stack, clientX, clientY, tabs.length);
         const inRollout = !!stack.closest('.file-cabinet-filed-rollout');
         return {
             kind: 'file-cabinet',
@@ -1080,12 +1140,10 @@ function resolveNearestFileCabinetCategory(clientX, clientY, dragState, mount) {
             isFolded: false
         };
     }
-    const rect = stackEl.getBoundingClientRect();
     const tabs = [...stackEl.querySelectorAll('.file-cabinet-tab')].filter(
         (t) => t.dataset.id !== dragState?.card?.dataset?.id
     );
-    let insertIndex = Math.floor((clientY - rect.top) / FILE_CABINET_STACK_OFFSET_Y);
-    insertIndex = Math.max(0, Math.min(tabs.length, insertIndex));
+    const insertIndex = fileCabinetInsertIndexFromPoint(stackEl, clientX, clientY, tabs.length);
     return {
         kind: 'file-cabinet',
         targetStack: stackEl,
@@ -1129,7 +1187,14 @@ function ensureFileCabinetInsertMarker(stack, insertIndex) {
         marker.className = 'file-cabinet-insert-marker';
         stack.appendChild(marker);
     }
-    marker.style.top = `${Math.max(0, insertIndex) * FILE_CABINET_STACK_OFFSET_Y}px`;
+    const idx = Math.max(0, insertIndex);
+    const col = fileCabinetCascadeCol(idx);
+    const slot = fileCabinetCascadeSlot(idx);
+    // At a column boundary (slot 0 after wrap), mark the start of that column strip.
+    marker.style.left = `${col * fileCabinetStackPitch()}px`;
+    marker.style.right = 'auto';
+    marker.style.width = `${fileCabinetCascadeWidth(FILE_CABINET_DRAWER_CARDS_PER_COL)}px`;
+    marker.style.top = `${slot * FILE_CABINET_STACK_OFFSET_Y}px`;
 }
 
 /** Idempotent drop highlight — avoids blink from clear/re-add every frame. */
@@ -1369,13 +1434,13 @@ export function applyFileCabinetStackPositions(stackEl) {
     const tabs = [...stackEl.querySelectorAll('.file-cabinet-tab')];
     const label = getLabelRect();
     const count = tabs.length;
-    const stackHeight = fileCabinetCascadeHeight(count);
+    const stackHeight = fileCabinetStackHeight(count);
     const rollout = stackEl.closest('.file-cabinet-filed-rollout');
 
     if (rollout) {
-        // Preview adapts to the notes: stack width = tab cascade; the popover
+        // Preview adapts to the notes: stack width = wrapped tab cascade; the popover
         // shrink-wraps via CSS (min-width keeps the chip-width floor).
-        stackEl.style.width = `${fileCabinetCascadeWidth(count)}px`;
+        stackEl.style.width = `${fileCabinetStackWidth(count)}px`;
         stackEl.style.minWidth = '';
         stackEl.style.height = `${Math.max(stackHeight, label.h)}px`;
         rollout.style.width = '';
@@ -1398,8 +1463,8 @@ export function applyFileCabinetStackPositions(stackEl) {
     tabs.forEach((card) => {
         if (card.classList.contains('is-file-cabinet-dragging')) return;
         card.style.position = 'absolute';
-        card.style.left = `${layoutIndex * FILE_CABINET_STACK_OFFSET_X}px`;
-        card.style.top = `${layoutIndex * FILE_CABINET_STACK_OFFSET_Y}px`;
+        card.style.left = `${fileCabinetTabLeft(layoutIndex)}px`;
+        card.style.top = `${fileCabinetTabTop(layoutIndex)}px`;
         card.style.width = `${collapsedTabWidth()}px`;
         card.style.height = `${label.h}px`;
         card.style.zIndex = String(layoutIndex + 1);
@@ -1422,7 +1487,7 @@ export function getFileCabinetContentMinHeight(mount) {
         if (stack.closest('.file-cabinet-filed-rollout')) return;
         const count = stack.querySelectorAll('.file-cabinet-tab').length;
         // Include the open-drawer minimum so the cabinet can't drag shorter than it.
-        maxStackH = Math.max(maxStackH, fileCabinetCascadeHeight(count), fileCabinetDrawerMinHeight());
+        maxStackH = Math.max(maxStackH, fileCabinetStackHeight(count), fileCabinetDrawerMinHeight());
     });
 
     let contentH = maxStackH + FILE_CABINET_CATEGORY_HEADER_PAD;
@@ -1566,7 +1631,7 @@ function buildFileCabinetRolloutStack({ catName, items, activeCategories, UI }) 
     applyFileCabinetStackPositions(stack);
     // Pre-append the stack takes the open-column branch (no rollout ancestor yet);
     // pin it to the pure cascade width so the preview popover hugs the notes.
-    stack.style.width = `${fileCabinetCascadeWidth(items.length)}px`;
+    stack.style.width = `${fileCabinetStackWidth(items.length)}px`;
     return stack;
 }
 
@@ -1785,10 +1850,10 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
 
         const addBtn = document.createElement('button');
         addBtn.type = 'button';
-        addBtn.className = 'btn btn--compact btn--icon file-cabinet-add-category-btn';
+        addBtn.className = 'file-cabinet-add-category-btn';
         addBtn.title = 'Add category';
         addBtn.setAttribute('aria-label', 'Add category');
-        addBtn.innerHTML = ACTION_ICONS.plus;
+        addBtn.innerHTML = '<svg viewBox="0 0 16 16" width="18" height="18" focusable="false" aria-hidden="true"><path d="M8 2.5v11M2.5 8h11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
         rail.appendChild(addBtn);
 
         inner.appendChild(rail);
