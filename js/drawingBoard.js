@@ -1567,7 +1567,7 @@ export const DrawingBoard = {
 
         this.toolbarEl.innerHTML = `
             <div class="drawing-toolbar-row">
-                <button type="button" class="btn btn--compact drawing-toolbar-dropdown ${isPointerActive ? 'active' : ''}" id="draw-menu-pointer" aria-haspopup="menu" aria-expanded="false" title="Pointer tools (V)" aria-label="Pointer tools">
+                <button type="button" class="btn btn--compact drawing-toolbar-dropdown ${isPointerActive ? 'active' : ''}" id="draw-menu-pointer" aria-haspopup="menu" aria-expanded="false" title="Pointer tools" aria-label="Pointer tools">
                     <span class="drawing-dropdown-icon">${this.pointerTriggerIcon()}</span>
                     <span class="drawing-dropdown-chevron">${CHEVRON}</span>
                 </button>
@@ -1576,7 +1576,7 @@ export const DrawingBoard = {
                     <span class="drawing-brush-size__value" id="draw-brush-width" aria-live="polite">${brush.width}px</span>
                     <button type="button" class="btn btn--compact btn--icon drawing-brush-size__btn" id="draw-brush-larger" title="Increase brush size" aria-label="Increase brush size">${ACTION_ICONS.plus}</button>
                 </span>
-                <button type="button" class="btn btn--compact btn--icon ${isEraserActive ? 'active' : ''}" id="draw-eraser" title="Eraser (E)" aria-label="Eraser" aria-pressed="${isEraserActive ? 'true' : 'false'}">${DRAWING_ICONS.eraser}</button>
+                <button type="button" class="btn btn--compact btn--icon ${isEraserActive ? 'active' : ''}" id="draw-eraser" title="Eraser" aria-label="Eraser" aria-pressed="${isEraserActive ? 'true' : 'false'}">${DRAWING_ICONS.eraser}</button>
                 <span class="format-toolbar-sep" aria-hidden="true"></span>
                 <div class="drawing-color-group" id="draw-color-group">
                     <button type="button" class="btn btn--compact btn--icon drawing-color-chip-btn" id="draw-color-btn" title="Color" aria-label="Color" aria-expanded="false" style="--chip-color:${brush.color}">
@@ -1589,10 +1589,10 @@ export const DrawingBoard = {
                     <span class="drawing-dropdown-chevron">${CHEVRON}</span>
                 </button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-insert-image" title="Insert image" aria-label="Insert image" aria-haspopup="menu">${DRAWING_ICONS.image}</button>
-                <button type="button" class="btn btn--compact btn--icon ${this.isLassoActive ? 'active' : ''}" id="draw-lasso" title="Rectangle select (L)" aria-label="Rectangle select" aria-pressed="${this.isLassoActive ? 'true' : 'false'}">${DRAWING_ICONS.lasso}</button>
+                <button type="button" class="btn btn--compact btn--icon ${this.isLassoActive ? 'active' : ''}" id="draw-lasso" title="Rectangle select" aria-label="Rectangle select" aria-pressed="${this.isLassoActive ? 'true' : 'false'}">${DRAWING_ICONS.lasso}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-fullscreen" title="Full screen" aria-label="Full screen" aria-pressed="false">${ACTION_ICONS.fullscreenEnter}</button>
                 <span class="format-toolbar-sep" aria-hidden="true"></span>
-                <button type="button" class="btn btn--compact btn--icon ${isPanActive ? 'active' : ''}" id="draw-pan" title="Hand tool — pan canvas (H). Scroll also pans; Ctrl+scroll zooms; Space+drag pans." aria-label="Hand tool" aria-pressed="${isPanActive ? 'true' : 'false'}">${DRAWING_ICONS.hand}</button>
+                <button type="button" class="btn btn--compact btn--icon ${isPanActive ? 'active' : ''}" id="draw-pan" title="Hand tool — pan canvas. Scroll also pans; Ctrl+scroll zooms; Space+drag pans." aria-label="Hand tool" aria-pressed="${isPanActive ? 'true' : 'false'}">${DRAWING_ICONS.hand}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-zoom-out" title="Zoom out" aria-label="Zoom out">${DRAWING_ICONS.zoomOut}</button>
                 <span class="drawing-zoom-level" id="draw-zoom-level" title="Zoom level" aria-label="Zoom level">100%</span>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-zoom-in" title="Zoom in" aria-label="Zoom in">${DRAWING_ICONS.zoomIn}</button>
@@ -1759,34 +1759,7 @@ export const DrawingBoard = {
             if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); this.undo(); return true; }
             if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); this.redo(); return true; }
         }
-        
-        // Pointer tool keyboard shortcut
-        if (e.key === 'v' || e.key === 'V') {
-            e.preventDefault();
-            this.setTool('pointer');
-            return true;
-        }
 
-        if (e.key === 'e' || e.key === 'E') {
-            e.preventDefault();
-            this.setTool('eraser');
-            return true;
-        }
-
-        if (e.key === 'h' || e.key === 'H') {
-            e.preventDefault();
-            if (this.activeTool === 'pan') this.setStyle(this.activeStyle || 'pen');
-            else this.setTool('pan');
-            return true;
-        }
-        
-        // Lasso tool keyboard shortcut
-        if (e.key === 'l' || e.key === 'L') {
-            e.preventDefault();
-            this.toggleLassoMode();
-            return true;
-        }
-        
         // Escape to clear selection or exit rectangle-select mode
         if (e.key === 'Escape') {
             if (this.resizeHandle) {
