@@ -9,9 +9,11 @@ import {
 import { applyLayoutBackupKeys, getLayoutBackupKeys, repairSpatialLayoutStorage } from './layoutStorage.js';
 import { applyDrawingBackupKeys, getDrawingBackupKeys } from './drawingBoard.js';
 import { getCreatedTimestamp, getUpdatedTimestamp } from './noteModel.js';
-import { applyMediaLibraryBackupSection, buildMediaLibraryBackupSection } from './mediaBackup.js';
+import { applyMediaLibraryBackupSection, buildMediaLibraryBackupSection, applyMediaFromZipMap, collectMediaZipEntries, buildZipStore, readZip } from './mediaBackup.js';
 
-export const BACKUP_FILE_PREFIX = 'matrix_workspace_backup_';
+export const BACKUP_FILE_PREFIX = 'magicnotes_backup_';
+export const LEGACY_BACKUP_FILE_PREFIX = 'matrix_workspace_backup_';
+export const TXT_FILE_PREFIX = 'magicnotes_notes_';
 export const ENCRYPTED_BACKUP_MARKER = 'matrix_encrypted_backup';
 export const LAST_LOCAL_EXPORT_KEY = 'matrix_last_local_export_at';
 export const LAST_LOCAL_TXT_EXPORT_KEY = 'matrix_last_local_txt_export_at';
@@ -104,7 +106,20 @@ export function backupFilename(timestamp = Math.floor(Date.now() / 1000)) {
     return `${BACKUP_FILE_PREFIX}${timestamp}.json`;
 }
 
-export async function buildBackupPackage() {
+export function archiveFilename(timestamp = Math.floor(Date.now() / 1000)) {
+    return `${BACKUP_FILE_PREFIX}${timestamp}.zip`;
+}
+
+export function txtExportFilename(date = new Date()) {
+    const day = date instanceof Date ? date : new Date();
+    return `${TXT_FILE_PREFIX}${day.toISOString().split('T')[0]}.txt`;
+}
+
+/**
+ * @param {{ embed?: boolean }} [opts]
+ */
+export async function buildBackupPackage(opts = {}) {
+    const embed = opts.embed !== false;
     const categories = readStoredCategories({ keepEmpty: true });
     writeStoredCategories(categories, { keepEmpty: true });
 
@@ -142,7 +157,7 @@ export async function buildBackupPackage() {
 
     let media_library = null;
     try {
-        media_library = await buildMediaLibraryBackupSection({ embed: true });
+        media_library = await buildMediaLibraryBackupSection({ embed });
     } catch (err) {
         console.warn('[Backup] media_library section skipped', err);
         media_library = { version: 1, exportedAt: Math.floor(Date.now() / 1000), items: [] };
@@ -173,6 +188,82 @@ export async function buildBackupPackage() {
             })
         )
     };
+}
+
+/** Stable fingerprint text for a backup package (strips wall-clock fields). */
+export function stableBackupFingerprintText(backupPackage) {
+    const { timestamp: _ts, media_library: mediaLib, ...stableRest } = backupPackage || {};
+    const stableMedia = mediaLib && typeof mediaLib === 'object'
+        ? (() => {
+            const { exportedAt: _exportedAt, ...restMedia } = mediaLib;
+            return restMedia;
+        })()
+        : mediaLib;
+    return serializeBackupPackage({
+        ...stableRest,
+        media_library: stableMedia
+    });
+}
+
+/**
+ * Full restore archive: workspace.json + media/ tree.
+ * @returns {Promise<{
+ *   blob: Blob,
+ *   filename: string,
+ *   timestamp: number,
+ *   textForFingerprint: string,
+ *   nextSnapshot: Record<string, number>
+ * }>}
+ */
+export async function buildFullBackupArchivePayload() {
+    const backupPackage = await buildBackupPackage({ embed: false });
+    const encoder = new TextEncoder();
+    const workspaceText = serializeBackupPackage(backupPackage);
+    const media = await collectMediaZipEntries({
+        incremental: false,
+        pathPrefix: 'media/'
+    });
+
+    const zipFiles = [
+        { name: 'workspace.json', data: encoder.encode(workspaceText) },
+        ...media.zipFiles
+    ];
+
+    const timestamp = backupPackage.timestamp || media.timestamp || Math.floor(Date.now() / 1000);
+    const textForFingerprint = JSON.stringify({
+        workspace: stableBackupFingerprintText(backupPackage),
+        media: media.textForFingerprint
+    });
+
+    return {
+        blob: buildZipStore(zipFiles),
+        filename: archiveFilename(timestamp),
+        timestamp,
+        textForFingerprint,
+        nextSnapshot: media.nextSnapshot || {}
+    };
+}
+
+/**
+ * Restore a full archive ZIP (workspace.json + media/).
+ * @param {File|Blob} file
+ */
+export async function importFullBackupArchive(file) {
+    const buffer = await file.arrayBuffer();
+    const files = await readZip(buffer);
+    const workspaceBytes = files.get('workspace.json');
+    if (!workspaceBytes) {
+        throw new Error('Not a Magic Notes full backup (missing workspace.json)');
+    }
+    const parsed = parseBackupPackage(new TextDecoder().decode(workspaceBytes));
+    await applyBackupToStorage(parsed);
+    if (files.has('media/manifest.json')) {
+        await applyMediaFromZipMap(files, {
+            manifestPath: 'media/manifest.json',
+            filesPrefix: 'media/'
+        });
+    }
+    return parsed;
 }
 
 export function serializeBackupPackage(pkg) {
@@ -268,14 +359,16 @@ export async function decryptBackupPackage(text, passphrase) {
 }
 
 export function isBackupFilename(name) {
-    return typeof name === 'string'
-        && name.startsWith(BACKUP_FILE_PREFIX)
-        && name.endsWith('.json');
+    if (typeof name !== 'string' || !name.endsWith('.json')) return false;
+    return name.startsWith(BACKUP_FILE_PREFIX) || name.startsWith(LEGACY_BACKUP_FILE_PREFIX);
 }
 
 export function timestampFromBackupFilename(name) {
     if (!isBackupFilename(name)) return null;
-    const raw = name.slice(BACKUP_FILE_PREFIX.length, -'.json'.length);
+    const prefix = name.startsWith(BACKUP_FILE_PREFIX)
+        ? BACKUP_FILE_PREFIX
+        : LEGACY_BACKUP_FILE_PREFIX;
+    const raw = name.slice(prefix.length, -'.json'.length);
     const ts = Number(raw);
     return Number.isFinite(ts) ? ts : null;
 }

@@ -2,13 +2,17 @@
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { positionPopoverBelowAnchor } from './popoverPosition.js';
 import {
+    backupFilename,
     buildBackupPackage,
+    buildFullBackupArchivePayload,
     hashExportFingerprint,
     readLastLocalExportAt,
     readLastLocalTxtExportAt,
     readLastMediaMetaExportAt,
     readLastMediaZipExportAt,
     serializeBackupPackage,
+    stableBackupFingerprintText,
+    txtExportFilename,
     writeLastLocalExportAt,
     writeLastLocalTxtExportAt,
     writeLastMediaMetaExportAt,
@@ -184,6 +188,11 @@ function readMediaIncrementalFromUi() {
     return !!document.querySelector('[data-schedule-media-incremental]')?.checked;
 }
 
+/** Notes JSON + Media both enabled → one full archive download. */
+function isCombinedArchiveMode(config) {
+    return !!(config?.notes?.enabled && config?.media?.enabled && config?.notes?.format === 'json');
+}
+
 export const ScheduledBackup = {
     getItems: () => [],
     getLoggedIn: () => true,
@@ -318,6 +327,14 @@ export const ScheduledBackup = {
         const metaLast = readLastMediaMetaExportAt();
         const zipLast = readLastMediaZipExportAt();
         const zipModeLabel = config.media.lastZipMode === 'incremental' ? 'incr' : 'full';
+        const combinedMode = isCombinedArchiveMode(config);
+        const incrementalDisabled = !config.media.enabled || combinedMode;
+        const restoreHint = combinedMode
+            ? 'Restore: use Import all for the combined archive.'
+            : 'Restore: import latest meta JSON, then ZIP files oldest → newest.';
+        const incrementalLabel = combinedMode
+            ? 'Incremental content (disabled — combined archive is always a full snapshot)'
+            : 'Incremental content (meta always full)';
 
         body.innerHTML = `
             <div class="schedule-export-popover__field">
@@ -355,11 +372,11 @@ export const ScheduledBackup = {
                 </label>
                 <div class="schedule-export-popover__section-body">
                     <label class="schedule-export-popover__check">
-                        <input type="checkbox" data-schedule-media-incremental${config.media.incremental ? ' checked' : ''}${config.media.enabled ? '' : ' disabled'}>
-                        <span>Incremental content (meta always full)</span>
+                        <input type="checkbox" data-schedule-media-incremental${config.media.incremental && !combinedMode ? ' checked' : ''}${incrementalDisabled ? ' disabled' : ''}>
+                        <span>${escapeAttr(incrementalLabel)}</span>
                     </label>
-                    <p class="schedule-export-popover__meta schedule-export-popover__hint">Restore: import latest meta JSON, then ZIP files oldest → newest.</p>
-                    <p class="schedule-export-popover__meta">Last: Meta ${escapeAttr(formatRelativePast(metaLast))} · ZIP ${escapeAttr(zipLast ? `${formatRelativePast(zipLast)} (${zipModeLabel})` : 'Never')}</p>
+                    <p class="schedule-export-popover__meta schedule-export-popover__hint">${escapeAttr(restoreHint)}</p>
+                    <p class="schedule-export-popover__meta">Last: Meta ${escapeAttr(formatRelativePast(metaLast))} · ZIP ${escapeAttr(zipLast ? `${formatRelativePast(zipLast)} (${combinedMode ? 'archive' : zipModeLabel})` : 'Never')}</p>
                 </div>
             </div>
             <div class="schedule-export-popover__actions">
@@ -446,7 +463,10 @@ export const ScheduledBackup = {
     persistUiTargets(config) {
         config.notes.enabled = readNotesEnabledFromUi();
         config.media.enabled = readMediaEnabledFromUi();
-        config.media.incremental = readMediaIncrementalFromUi();
+        const incrEl = document.querySelector('[data-schedule-media-incremental]');
+        if (incrEl && !incrEl.disabled) {
+            config.media.incremental = !!incrEl.checked;
+        }
         return config;
     },
 
@@ -605,15 +625,22 @@ export const ScheduledBackup = {
         let statsDirty = false;
         try {
             const results = { notes: null, media: null };
-            if (config.notes.enabled) {
-                const notesResult = await this.exportNotes(config);
-                statsDirty = notesResult.changed || statsDirty;
-                results.notes = notesResult.patch;
-            }
-            if (config.media.enabled) {
-                const mediaResult = await this.exportMedia(config);
-                statsDirty = mediaResult.changed || statsDirty;
-                results.media = mediaResult.patch;
+            if (isCombinedArchiveMode(config)) {
+                const combined = await this.exportCombinedArchive(config);
+                statsDirty = combined.changed || statsDirty;
+                results.notes = combined.notesPatch;
+                results.media = combined.mediaPatch;
+            } else {
+                if (config.notes.enabled) {
+                    const notesResult = await this.exportNotes(config);
+                    statsDirty = notesResult.changed || statsDirty;
+                    results.notes = notesResult.patch;
+                }
+                if (config.media.enabled) {
+                    const mediaResult = await this.exportMedia(config);
+                    statsDirty = mediaResult.changed || statsDirty;
+                    results.media = mediaResult.patch;
+                }
             }
             this.finalizeExport(claimToken, results);
             if (statsDirty) SidebarStats.update();
@@ -640,6 +667,34 @@ export const ScheduledBackup = {
         const merged = finalizeClaim(claimToken, readConfig(), results || {});
         if (!merged) return; // claim lost/expired — another window owns the slot.
         writeConfig(scheduleNextDue(merged, intervalMs(merged)));
+    },
+
+    /**
+     * Combined Notes(JSON)+Media → one magicnotes_backup_*.zip.
+     * Incremental is ignored; always a full media snapshot inside the archive.
+     */
+    async exportCombinedArchive(config) {
+        const payload = await buildFullBackupArchivePayload();
+        const fingerprint = hashExportFingerprint(payload.textForFingerprint);
+        if (fingerprint === config.notes.lastFingerprint) {
+            return { changed: false, notesPatch: null, mediaPatch: null };
+        }
+
+        downloadBlob(payload.blob, payload.filename);
+        const ts = payload.timestamp || Math.floor(Date.now() / 1000);
+        writeLastLocalExportAt(ts);
+        writeLastMediaZipExportAt(ts);
+
+        return {
+            changed: true,
+            notesPatch: { lastFingerprint: fingerprint, lastExportAt: ts },
+            mediaPatch: {
+                lastZipFingerprint: fingerprint,
+                lastZipExportAt: ts,
+                lastZipMode: 'full',
+                zipSnapshot: payload.nextSnapshot || {}
+            }
+        };
     },
 
     /**
@@ -712,29 +767,18 @@ export const ScheduledBackup = {
             return {
                 text,
                 blob: new Blob([text], { type: 'text/plain' }),
-                filename: `matrix_all_notes_${new Date().toISOString().split('T')[0]}.txt`,
+                filename: txtExportFilename(),
                 timestamp: Math.floor(Date.now() / 1000)
             };
         }
         const backupPackage = await buildBackupPackage();
         const text = serializeBackupPackage(backupPackage);
-        // Strip wall-clock fields so scheduled skip-if-unchanged stays stable.
-        const { timestamp: _ts, media_library: mediaLib, ...stableRest } = backupPackage;
-        const stableMedia = mediaLib && typeof mediaLib === 'object'
-            ? (() => {
-                const { exportedAt: _exportedAt, ...restMedia } = mediaLib;
-                return restMedia;
-            })()
-            : mediaLib;
-        const textForFingerprint = serializeBackupPackage({
-            ...stableRest,
-            media_library: stableMedia
-        });
+        const textForFingerprint = stableBackupFingerprintText(backupPackage);
         return {
             text,
             textForFingerprint,
             blob: new Blob([text], { type: 'application/json' }),
-            filename: `matrix_workspace_backup_${backupPackage.timestamp}.json`,
+            filename: backupFilename(backupPackage.timestamp),
             timestamp: backupPackage.timestamp
         };
     },

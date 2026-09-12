@@ -10,9 +10,9 @@ import {
 import { generateThumbnail } from './mediaMetadata.js';
 import { IndexedDBMediaStore } from './storage/indexedDbMediaStore.js';
 
-export const MEDIA_META_FILE_PREFIX = 'matrix_media_meta_';
-export const MEDIA_ZIP_FILE_PREFIX = 'matrix_media_backup_';
-export const MEDIA_INCR_FILE_PREFIX = 'matrix_media_incr_';
+export const MEDIA_META_FILE_PREFIX = 'magicnotes_media_meta_';
+export const MEDIA_ZIP_FILE_PREFIX = 'magicnotes_media_backup_';
+export const MEDIA_INCR_FILE_PREFIX = 'magicnotes_media_incr_';
 
 function nowSeconds() {
     return Math.floor(Date.now() / 1000);
@@ -178,11 +178,20 @@ export async function downloadMediaMetaJson() {
 }
 
 /**
- * Build full or incremental media ZIP for scheduled export.
- * @param {{ incremental?: boolean, zipSnapshot?: Record<string, number> }} [opts]
+ * Collect media ZIP entries (manifest + files) for a standalone or nested archive.
+ * @param {{ incremental?: boolean, zipSnapshot?: Record<string, number>, pathPrefix?: string }} [opts]
+ * @returns {Promise<{
+ *   skipped: boolean,
+ *   isIncremental: boolean,
+ *   nextSnapshot: Record<string, number>,
+ *   textForFingerprint: string|null,
+ *   zipFiles: Array<{ name: string, data: Uint8Array }>,
+ *   timestamp: number
+ * }>}
  */
-export async function buildMediaZipExportPayload(opts = {}) {
+export async function collectMediaZipEntries(opts = {}) {
     const incremental = !!opts.incremental;
+    const pathPrefix = typeof opts.pathPrefix === 'string' ? opts.pathPrefix : '';
     const snapshot = opts.zipSnapshot && typeof opts.zipSnapshot === 'object' ? opts.zipSnapshot : {};
     const hasSnapshot = Object.keys(snapshot).length > 0;
     const records = await IndexedDBMediaStore.getAll();
@@ -205,11 +214,11 @@ export async function buildMediaZipExportPayload(opts = {}) {
         }
 
         if (shouldInclude) {
-            const buf = new Uint8Array(await record.blob.arrayBuffer());
-            const path = `files/${record.id}_${safeName(record.filename)}`;
+            const relativePath = `files/${record.id}_${safeName(record.filename)}`;
+            const path = `${pathPrefix}${relativePath}`;
             const itemMeta = { ...meta, zipPath: path };
             manifestItems.push(itemMeta);
-            zipFiles.push({ name: path, data: buf });
+            zipFiles.push({ name: path, data: new Uint8Array(await record.blob.arrayBuffer()) });
         }
     }
 
@@ -219,8 +228,7 @@ export async function buildMediaZipExportPayload(opts = {}) {
             isIncremental: true,
             nextSnapshot,
             textForFingerprint: null,
-            blob: null,
-            filename: null,
+            zipFiles: [],
             timestamp: nowSeconds()
         };
     }
@@ -234,7 +242,7 @@ export async function buildMediaZipExportPayload(opts = {}) {
         items: manifestItems
     };
     zipFiles.unshift({
-        name: 'manifest.json',
+        name: `${pathPrefix}manifest.json`,
         data: encoder.encode(JSON.stringify(manifest, null, 2))
     });
 
@@ -248,15 +256,43 @@ export async function buildMediaZipExportPayload(opts = {}) {
         }))
     });
 
-    const prefix = isIncremental ? MEDIA_INCR_FILE_PREFIX : MEDIA_ZIP_FILE_PREFIX;
     return {
         skipped: false,
         isIncremental,
         nextSnapshot,
         textForFingerprint,
-        blob: buildZipStore(zipFiles),
-        filename: `${prefix}${timestamp}.zip`,
+        zipFiles,
         timestamp
+    };
+}
+
+/**
+ * Build full or incremental media ZIP for scheduled export.
+ * @param {{ incremental?: boolean, zipSnapshot?: Record<string, number> }} [opts]
+ */
+export async function buildMediaZipExportPayload(opts = {}) {
+    const collected = await collectMediaZipEntries(opts);
+    if (collected.skipped) {
+        return {
+            skipped: true,
+            isIncremental: true,
+            nextSnapshot: collected.nextSnapshot,
+            textForFingerprint: null,
+            blob: null,
+            filename: null,
+            timestamp: collected.timestamp
+        };
+    }
+
+    const prefix = collected.isIncremental ? MEDIA_INCR_FILE_PREFIX : MEDIA_ZIP_FILE_PREFIX;
+    return {
+        skipped: false,
+        isIncremental: collected.isIncremental,
+        nextSnapshot: collected.nextSnapshot,
+        textForFingerprint: collected.textForFingerprint,
+        blob: buildZipStore(collected.zipFiles),
+        filename: `${prefix}${collected.timestamp}.zip`,
+        timestamp: collected.timestamp
     };
 }
 
@@ -278,7 +314,7 @@ function safeName(name) {
  * @param {Array<{ name: string, data: Uint8Array }>} files
  * @returns {Blob}
  */
-function buildZipStore(files) {
+export function buildZipStore(files) {
     const encoder = new TextEncoder();
     const localParts = [];
     const centralParts = [];
@@ -361,7 +397,7 @@ function crc32(data) {
  * @param {ArrayBuffer} buffer
  * @returns {Promise<Map<string, Uint8Array>>}
  */
-async function readZip(buffer) {
+export async function readZip(buffer) {
     const view = new DataView(buffer);
     const bytes = new Uint8Array(buffer);
     const files = new Map();
@@ -402,11 +438,17 @@ export async function downloadMediaZip() {
     }
 }
 
-export async function importMediaZipFile(file) {
-    const buffer = await file.arrayBuffer();
-    const files = await readZip(buffer);
-    const manifestBytes = files.get('manifest.json');
-    if (!manifestBytes) throw new Error('Missing manifest.json in media ZIP');
+/**
+ * Apply media records from an already-parsed ZIP map.
+ * @param {Map<string, Uint8Array>} files
+ * @param {{ manifestPath?: string, filesPrefix?: string }} [opts]
+ * @returns {Promise<number>}
+ */
+export async function applyMediaFromZipMap(files, opts = {}) {
+    const manifestPath = opts.manifestPath || 'manifest.json';
+    const filesPrefix = typeof opts.filesPrefix === 'string' ? opts.filesPrefix : '';
+    const manifestBytes = files.get(manifestPath);
+    if (!manifestBytes) throw new Error(`Missing ${manifestPath} in media ZIP`);
     const manifest = JSON.parse(new TextDecoder().decode(manifestBytes));
     const items = Array.isArray(manifest.items) ? manifest.items : [];
     const records = [];
@@ -417,9 +459,10 @@ export async function importMediaZipFile(file) {
         let blob = null;
         let path = entry.zipPath;
         if (!path) {
-            // fallback: find files/<id>_
+            const needleA = `${filesPrefix}files/${id}_`;
+            const needleB = `${filesPrefix}files/${id}.`;
             for (const key of files.keys()) {
-                if (key.startsWith(`files/${id}_`) || key.startsWith(`files/${id}.`)) {
+                if (key.startsWith(needleA) || key.startsWith(needleB)) {
                     path = key;
                     break;
                 }
@@ -455,6 +498,12 @@ export async function importMediaZipFile(file) {
         });
     }
     return putMediaRecords(records);
+}
+
+export async function importMediaZipFile(file) {
+    const buffer = await file.arrayBuffer();
+    const files = await readZip(buffer);
+    return applyMediaFromZipMap(files);
 }
 
 function triggerDownload(blob, filename) {

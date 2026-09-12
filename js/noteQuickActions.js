@@ -463,8 +463,10 @@ function bindModalQuickActions(toolbarMount, item, ui, editor) {
  * @param {function} handlers.onCloudExport - Cloud export click handler
  * @param {function} handlers.onCloudImport - Cloud import click handler
  * @param {function} handlers.onExportDb - Export DB click handler
+ * @param {function} handlers.onExportAll - Export all (workspace+media archive) click handler
  * @param {function} handlers.onExportAllTxt - Export all as TXT click handler
  * @param {function} handlers.onImportDb - Import DB click handler
+ * @param {function} handlers.onImportAll - Import all archive click handler
  * @param {function} handlers.onLogout - Logout click handler
  * @param {function} handlers.onLogin - Login click handler
  */
@@ -523,9 +525,11 @@ export function renderQuickActions({
             <button type="button" class="btn btn--compact btn--icon" id="btn-cloud-export" data-enabled-title="Export to cloud" title="Connect cloud first (Cloud icon)" aria-label="Export to cloud" disabled>${ACTION_ICONS.cloudExport}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-cloud-import" data-enabled-title="Import from cloud" title="Connect cloud first (Cloud icon)" aria-label="Import from cloud" disabled>${ACTION_ICONS.cloudImport}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-export-db" title="Export backup" aria-label="Export backup">${ACTION_ICONS.export}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="btn-export-all" title="Export all" aria-label="Export all">${ACTION_ICONS.export}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-export-txt" title="Export all as TXT" aria-label="Export all as TXT">${ACTION_ICONS.exportTxt}</button>
             <button type="button" class="btn btn--compact btn--icon schedule-export-btn" id="btn-schedule-export" title="Scheduled backup" aria-label="Scheduled backup">${ACTION_ICONS.scheduleExport}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-import-db" title="Import backup" aria-label="Import backup">${ACTION_ICONS.import}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="btn-import-all" title="Import all" aria-label="Import all">${ACTION_ICONS.import}</button>
             <button type="button" class="btn btn--compact btn--icon btn--icon-danger" id="btn-auth-logout" title="Logout" aria-label="Logout">${ACTION_ICONS.logout}</button>
         `;
         zone.innerHTML = `${workspaceGroup}${historyGroup}${displayGroup}${layoutGroup}${shellGroup}${accountGroup}`;
@@ -544,9 +548,11 @@ function bindQuickActionHandlers(handlers = {}) {
         onCloudExport,
         onCloudImport,
         onExportDb,
+        onExportAll,
         onExportAllTxt,
         onScheduleExport,
         onImportDb,
+        onImportAll,
         onLogout,
         onLogin,
         onLayoutReset
@@ -583,9 +589,11 @@ function bindQuickActionHandlers(handlers = {}) {
     document.getElementById('btn-cloud-export')?.addEventListener('click', onCloudExport);
     document.getElementById('btn-cloud-import')?.addEventListener('click', onCloudImport);
     document.getElementById('btn-export-db')?.addEventListener('click', onExportDb);
+    document.getElementById('btn-export-all')?.addEventListener('click', onExportAll);
     document.getElementById('btn-export-txt')?.addEventListener('click', onExportAllTxt);
     document.getElementById('btn-schedule-export')?.addEventListener('click', onScheduleExport);
     document.getElementById('btn-import-db')?.addEventListener('click', onImportDb);
+    document.getElementById('btn-import-all')?.addEventListener('click', onImportAll);
     document.getElementById('btn-auth-logout')?.addEventListener('click', onLogout);
     document.getElementById('btn-auth-login')?.addEventListener('click', onLogin);
     document.getElementById('btn-layout-reset')?.addEventListener('click', onLayoutReset);

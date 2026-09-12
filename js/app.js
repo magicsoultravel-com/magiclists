@@ -11,7 +11,7 @@ import { ToolsManager } from './toolsManager.js';
 import { Calendar } from './calendar.js';
 import { SidePanel } from './hamburger.js';
 import { LoadingManager } from './loadingUtils.js';
-import { applyBackupToStorage, buildBackupPackage, parseBackupPackage, serializeBackupPackage, writeLastLocalExportAt, writeLastLocalTxtExportAt } from './backup.js';
+import { applyBackupToStorage, backupFilename, buildBackupPackage, buildFullBackupArchivePayload, importFullBackupArchive, parseBackupPackage, serializeBackupPackage, txtExportFilename, writeLastLocalExportAt, writeLastLocalTxtExportAt, writeLastMediaZipExportAt } from './backup.js';
 import { reconcileLayoutStorage } from './layoutStorage.js';
 import {
     DEFAULT_CATEGORIES,
@@ -685,9 +685,11 @@ renderQuickActions() {
                 onCloudExport: (e) => CloudBackup.exportCheckpoint(e.currentTarget),
                 onCloudImport: (e) => CloudBackup.handleImportClick(e.currentTarget),
                 onExportDb: () => this.executeDataBackupExport(),
+                onExportAll: () => this.executeFullBackupExport(),
                 onExportAllTxt: () => this.executeExportAllTxt(),
                 onScheduleExport: (e) => ScheduledBackup.handleClick(e.currentTarget),
                 onImportDb: () => document.getElementById('system-import-file-picker').click(),
+                onImportAll: () => document.getElementById('system-import-all-picker').click(),
                 onLogout: () => this.executeLogout(),
                 onLogin: () => this.executeLoginPrompt(),
                 onLayoutReset: async () => {
@@ -921,7 +923,7 @@ renderQuickActions() {
             const blob = new Blob([serializeBackupPackage(backupPackage)], { type: 'application/json' });
             const virtualLink = document.createElement('a');
             virtualLink.href = URL.createObjectURL(blob);
-            virtualLink.download = `matrix_workspace_backup_${backupPackage.timestamp}.json`;
+            virtualLink.download = backupFilename(backupPackage.timestamp);
             virtualLink.click();
             URL.revokeObjectURL(virtualLink.href);
             writeLastLocalExportAt(backupPackage.timestamp);
@@ -932,6 +934,31 @@ renderQuickActions() {
             if (exportBtn) {
                 LoadingManager.hide(exportBtn);
             }
+        }
+    }
+
+    async executeFullBackupExport() {
+        const exportBtn = document.getElementById('btn-export-all');
+        if (exportBtn) {
+            LoadingManager.show(exportBtn, 'Exporting all...');
+        }
+        try {
+            const payload = await buildFullBackupArchivePayload();
+            const virtualLink = document.createElement('a');
+            virtualLink.href = URL.createObjectURL(payload.blob);
+            virtualLink.download = payload.filename;
+            virtualLink.click();
+            URL.revokeObjectURL(virtualLink.href);
+            writeLastLocalExportAt(payload.timestamp);
+            writeLastMediaZipExportAt(payload.timestamp);
+            SidebarStats.update();
+            showAppToast('Exported full backup archive');
+        } catch (err) {
+            console.error('[Export all]', err);
+            showAppToast(err?.message || 'Export all failed');
+        } finally {
+            const btn = document.getElementById('btn-export-all');
+            if (btn) LoadingManager.hide(btn);
         }
     }
 
@@ -980,7 +1007,7 @@ renderQuickActions() {
             const blob = new Blob([content], { type: 'text/plain' });
             const virtualLink = document.createElement('a');
             virtualLink.href = URL.createObjectURL(blob);
-            virtualLink.download = `matrix_all_notes_${new Date().toISOString().split('T')[0]}.txt`;
+            virtualLink.download = txtExportFilename();
             virtualLink.click();
             URL.revokeObjectURL(virtualLink.href);
             writeLastLocalTxtExportAt(Math.floor(Date.now() / 1000));
@@ -996,36 +1023,64 @@ renderQuickActions() {
 
     setupBackupInterface() {
         const filePicker = document.getElementById('system-import-file-picker');
-        if (!filePicker) return;
-        filePicker.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            
-            // Show loading indicator on file picker
-            LoadingManager.show(filePicker, 'Importing backup...');
-            
-            const reader = new FileReader();
-            reader.onload = async (event) => {
+        if (filePicker) {
+            filePicker.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                // Show loading indicator on file picker
+                LoadingManager.show(filePicker, 'Importing backup...');
+                
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    try {
+                        const parsedBackup = parseBackupPackage(event.target.result);
+                        await applyBackupToStorage(parsedBackup);
+                        const itemCount = parsedBackup.matrix_database?.items?.length ?? 0;
+                        const token = parsedBackup.matrix_database?.auth?.admin_token;
+                        const tokenNote = token
+                            ? ' Admin session restored from backup.'
+                            : ' Log in with your admin token to see private notes.';
+                        alert(`Restore successful (${itemCount} items).${tokenNote}`);
+                        window.location.reload();
+                    } catch (err) {
+                        console.error('[Import]', err);
+                        alert('Import Aborted: Invalid or unsupported backup file.');
+                    } finally {
+                        // Hide loading indicator
+                        LoadingManager.hide(filePicker);
+                        filePicker.value = '';
+                    }
+                };
+                reader.readAsText(file);
+            });
+        }
+
+        const archivePicker = document.getElementById('system-import-all-picker');
+        if (archivePicker) {
+            archivePicker.addEventListener('change', async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const confirmed = confirm('Restore this full backup archive? Your current workspace and media library will be replaced.');
+                if (!confirmed) {
+                    archivePicker.value = '';
+                    return;
+                }
+                LoadingManager.show(archivePicker, 'Importing all...');
                 try {
-                    const parsedBackup = parseBackupPackage(event.target.result);
-                    await applyBackupToStorage(parsedBackup);
+                    const parsedBackup = await importFullBackupArchive(file);
                     const itemCount = parsedBackup.matrix_database?.items?.length ?? 0;
-                    const token = parsedBackup.matrix_database?.auth?.admin_token;
-                    const tokenNote = token
-                        ? ' Admin session restored from backup.'
-                        : ' Log in with your admin token to see private notes.';
-                    alert(`Restore successful (${itemCount} items).${tokenNote}`);
+                    alert(`Restore successful (${itemCount} items). Reloading…`);
                     window.location.reload();
                 } catch (err) {
-                    console.error('[Import]', err);
-                    alert('Import Aborted: Invalid or unsupported backup file.');
+                    console.error('[Import all]', err);
+                    alert(err?.message || 'Import Aborted: Invalid or unsupported archive.');
                 } finally {
-                    // Hide loading indicator
-                    LoadingManager.hide(filePicker);
+                    LoadingManager.hide(archivePicker);
+                    archivePicker.value = '';
                 }
-            };
-            reader.readAsText(file);
-        });
+            });
+        }
     }
 
     executeAddCategoryPrompt(anchorEl = null) {
