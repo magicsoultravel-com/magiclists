@@ -94,24 +94,29 @@ function fitTransform(cssW, cssH, bounds) {
     return { scale, offsetX, offsetY };
 }
 
-/** Resolve drawable CSS size; prefer laid-out box, fall back to viewport style height. */
+/** Resolve drawable CSS size; prefer explicit viewport style, then laid-out box. */
 function resolvePreviewSize(canvasEl) {
+    const viewport = canvasEl.closest('[data-note-media-viewport]') || canvasEl.parentElement;
+    const styledW = parseFloat(viewport?.style?.width);
+    const styledH = parseFloat(viewport?.style?.height);
+    const hasStyledW = Number.isFinite(styledW) && styledW >= 2;
+    const hasStyledH = Number.isFinite(styledH) && styledH >= 2;
+
+    // Board grid can collapse the canvas to ~2px before layout settles. Prefer the
+    // explicit viewport size set by sizeCanvasViewport when available.
+    if (hasStyledW && hasStyledH) {
+        return { cssW: styledW, cssH: styledH, ready: true };
+    }
+
     const rect = canvasEl.getBoundingClientRect();
     let cssW = rect.width;
     let cssH = rect.height;
     if (cssW >= 2 && cssH >= 2) return { cssW, cssH, ready: true };
 
-    const viewport = canvasEl.closest('[data-note-media-viewport]') || canvasEl.parentElement;
     cssW = viewport?.clientWidth || 0;
     cssH = viewport?.clientHeight || 0;
-    if (cssH < 2 && viewport?.style?.height) {
-        const parsed = parseFloat(viewport.style.height);
-        if (Number.isFinite(parsed) && parsed > 0) cssH = parsed;
-    }
-    if (cssW < 2 && viewport?.style?.width) {
-        const parsed = parseFloat(viewport.style.width);
-        if (Number.isFinite(parsed) && parsed > 0) cssW = parsed;
-    }
+    if (cssH < 2 && hasStyledH) cssH = styledH;
+    if (cssW < 2 && hasStyledW) cssW = styledW;
     return {
         cssW: Math.max(1, cssW),
         cssH: Math.max(1, cssH),

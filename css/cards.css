@@ -222,6 +222,12 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
     pointer-events: auto;
 }
 
+/* When note canvas is active, keep the action strip readable so the draw toggle stays visible. */
+.mini-card .note-editor-toolbar .card-actions:has(.card-act--draw.is-active) {
+    opacity: 1;
+    pointer-events: auto;
+}
+
 /* Backdrop hugs the visible icon count (flex shrink-wrap + max-content) */
 .mini-card.tile-small .note-editor-toolbar .card-actions::before,
 .mini-card[data-desktop="1"].spatial-at-small .note-editor-toolbar .card-actions::before {

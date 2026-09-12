@@ -1,6 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildNoteAttachmentsSectionHtml, syncNoteAttachmentsDom, syncNoteCanvasDom } from '../js/noteAttachmentsUi.js';
+import {
+    buildNoteAttachmentsSectionHtml,
+    sizeCanvasViewport
+} from '../js/noteAttachmentsUi.js';
 import { createDefaultNote } from '../js/noteModel.js';
 
 describe('noteAttachmentsUi module loads and exports functions', () => {
@@ -51,5 +54,55 @@ describe('noteAttachmentsUi module loads and exports functions', () => {
         const html = buildNoteAttachmentsSectionHtml(item);
         assert.ok(html.includes('data-note-attachments'));
         assert.ok(html.includes('note-media-canvas is-hidden'));
+    });
+
+    it('sizeCanvasViewport sets explicit width and height from the host card', () => {
+        const viewport = { style: {} };
+        const root = {
+            querySelector(sel) {
+                return String(sel).includes('data-note-media-viewport') ? viewport : null;
+            }
+        };
+        const section = {
+            clientWidth: 0,
+            closest() {
+                return { clientWidth: 440, clientHeight: 400 };
+            },
+            querySelector(sel) {
+                return String(sel).includes('data-note-media-canvas') ? root : null;
+            }
+        };
+
+        sizeCanvasViewport(section);
+
+        assert.match(viewport.style.width, /^\d+px$/);
+        assert.match(viewport.style.height, /^\d+px$/);
+        assert.ok(parseFloat(viewport.style.width) >= 120);
+        assert.ok(parseFloat(viewport.style.height) >= 120);
+        assert.equal(viewport.style.width, '431px'); // min(440, 440*0.98) rounded
+        assert.equal(viewport.style.height, '168px'); // min(260, 400*0.42) rounded
+    });
+
+    it('sizeCanvasViewport falls back when host metrics are missing', () => {
+        const viewport = { style: {} };
+        const root = {
+            querySelector(sel) {
+                return String(sel).includes('data-note-media-viewport') ? viewport : null;
+            }
+        };
+        const section = {
+            clientWidth: 0,
+            closest() {
+                return null;
+            },
+            querySelector(sel) {
+                return String(sel).includes('data-note-media-canvas') ? root : null;
+            }
+        };
+
+        sizeCanvasViewport(section);
+
+        assert.equal(viewport.style.width, '320px');
+        assert.equal(viewport.style.height, '180px');
     });
 });

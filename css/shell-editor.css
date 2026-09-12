@@ -386,6 +386,13 @@ body.is-checklist-dragging {
     opacity: 1;
 }
 
+/* Keep the canvas toggle visible on board cards even when the action strip is not hovered. */
+.mini-card .card-act--draw.is-active,
+.editor-note-shell .card-act--draw.is-active {
+    opacity: 1;
+    color: var(--accent, #60a5fa);
+}
+
 .card-act:hover {
     color: var(--text-main);
     background: var(--bg-hover, rgba(255, 255, 255, 0.06));

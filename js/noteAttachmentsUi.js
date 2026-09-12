@@ -158,14 +158,25 @@ function hideNoteMediaCanvas(section) {
     root.hidden = true;
 }
 
-function sizeCanvasViewport(section) {
+/**
+ * Size the inline note-canvas viewport from the host card box.
+ * Sets both width and height so board-grid cards do not collapse to ~2px
+ * before the preview bitmap is painted.
+ * @param {HTMLElement|null|undefined} section
+ */
+export function sizeCanvasViewport(section) {
     const viewport = canvasViewport(section);
     if (!viewport) return;
     const card = section.closest('.mini-card, .editor-note-shell, #editor-overlay');
     const hostH = card?.clientHeight || 0;
+    const hostW = card?.clientWidth || section?.clientWidth || 0;
     const h = hostH
         ? Math.round(Math.max(120, Math.min(260, hostH * 0.42)))
         : 180;
+    const w = hostW
+        ? Math.round(Math.max(120, Math.min(hostW, hostW * 0.98)))
+        : 320;
+    viewport.style.width = `${w}px`;
     viewport.style.height = `${h}px`;
 }
 
@@ -369,6 +380,7 @@ export function syncNoteAttachmentsDom(item) {
         const nextSection = body.querySelector('[data-note-attachments]');
         bindNoteAttachments(body, item);
         if (noteHasVisibleCanvas(item)) {
+            sizeCanvasViewport(nextSection);
             paintNoteCanvasPreview(nextSection, item);
         }
     }
@@ -385,6 +397,7 @@ export function syncNoteCanvasDom(item) {
         if (!section) continue;
         if (item.canvas && !item.canvasHidden) {
             showNoteMediaCanvas(section);
+            sizeCanvasViewport(section);
             paintNoteCanvasPreview(section, item);
         } else {
             hideNoteMediaCanvas(section);
