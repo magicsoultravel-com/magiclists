@@ -10,10 +10,21 @@ import {
     rotateLightboxStep,
     lightboxFitScaleForRotation,
     lightboxCanPan,
+    normalizeLightboxDoodleColor,
+    normalizeLightboxDoodlePoint,
+    lightboxDoodleToLayout,
+    lightboxDoodleFromVisual,
+    lightboxDoodleToVisual,
+    clampLightboxDoodleWidth,
+    stepLightboxDoodleWidth,
     LIGHTBOX_ZOOM_MIN,
-    LIGHTBOX_ZOOM_MAX
+    LIGHTBOX_ZOOM_MAX,
+    LIGHTBOX_DOODLE_COLORS,
+    LIGHTBOX_DOODLE_WIDTH_MIN,
+    LIGHTBOX_DOODLE_WIDTH_MAX,
+    LIGHTBOX_DOODLE_WIDTH_DEFAULT
 } from '../js/noteAttachmentsUi.js';
-import { CARD_ICONS } from '../js/icons.js';
+import { CARD_ICONS, ACTION_ICONS } from '../js/icons.js';
 import { createDefaultNote } from '../js/noteModel.js';
 
 describe('noteAttachmentsUi module loads and exports functions', () => {
@@ -200,5 +211,74 @@ describe('noteAttachmentsUi module loads and exports functions', () => {
         assert.equal(lightboxCanPan(1, 0), false);
         assert.equal(lightboxCanPan(2, 0), true);
         assert.equal(lightboxCanPan(1, 90), true);
+    });
+
+    it('normalizeLightboxDoodleColor wraps the neon trio', () => {
+        assert.equal(normalizeLightboxDoodleColor(0), 0);
+        assert.equal(normalizeLightboxDoodleColor(2), 2);
+        assert.equal(normalizeLightboxDoodleColor(3), 0);
+        assert.equal(normalizeLightboxDoodleColor(-1), LIGHTBOX_DOODLE_COLORS.length - 1);
+        assert.equal(normalizeLightboxDoodleColor('nope'), 0);
+        assert.equal(LIGHTBOX_DOODLE_COLORS.length, 3);
+    });
+
+    it('normalizeLightboxDoodlePoint clamps to 0..1', () => {
+        assert.deepEqual(normalizeLightboxDoodlePoint(0.5, 0.25), { x: 0.5, y: 0.25 });
+        assert.deepEqual(normalizeLightboxDoodlePoint(-1, 2), { x: 0, y: 1 });
+        assert.deepEqual(normalizeLightboxDoodlePoint('x', null), { x: 0, y: 0 });
+    });
+
+    it('lightboxDoodleToLayout scales normalized points into the layout box', () => {
+        assert.deepEqual(lightboxDoodleToLayout({ x: 0.5, y: 0.25 }, 200, 100), { x: 100, y: 25 });
+        assert.deepEqual(lightboxDoodleToLayout({ x: 0, y: 1 }, 80, 40), { x: 0, y: 40 });
+    });
+
+    it('lightbox doodle visual↔layout maps round-trip at 0/90/180/270', () => {
+        const layoutW = 200;
+        const layoutH = 100;
+        const samples = [
+            { x: 0, y: 0 },
+            { x: layoutW, y: 0 },
+            { x: layoutW, y: layoutH },
+            { x: 0, y: layoutH },
+            { x: layoutW / 2, y: layoutH / 2 }
+        ];
+        for (const rot of [0, 90, 180, 270]) {
+            for (const pt of samples) {
+                const vis = lightboxDoodleToVisual(pt.x, pt.y, layoutW, layoutH, rot);
+                const back = lightboxDoodleFromVisual(vis.x, vis.y, layoutW, layoutH, rot);
+                assert.ok(Math.abs(back.x - pt.x) < 1e-9, `x round-trip at ${rot}`);
+                assert.ok(Math.abs(back.y - pt.y) < 1e-9, `y round-trip at ${rot}`);
+            }
+        }
+    });
+
+    it('lightbox doodle 90° maps layout top-left into the swapped visual frame', () => {
+        // CSS rotate(90deg) about center: layout (0,0) → visual (h, 0) in h×w frame.
+        const vis = lightboxDoodleToVisual(0, 0, 200, 100, 90);
+        assert.equal(vis.x, 100);
+        assert.equal(vis.y, 0);
+        const back = lightboxDoodleFromVisual(100, 0, 200, 100, 90);
+        assert.equal(back.x, 0);
+        assert.equal(back.y, 0);
+    });
+
+    it('scribble toolbar uses the note-canvas pencil icon', () => {
+        assert.ok(String(CARD_ICONS.drawingPencil || '').includes('<svg'));
+    });
+
+    it('clampLightboxDoodleWidth keeps pen size in the magicCanvas-like range', () => {
+        assert.equal(clampLightboxDoodleWidth(6), 6);
+        assert.equal(clampLightboxDoodleWidth(0), LIGHTBOX_DOODLE_WIDTH_MIN);
+        assert.equal(clampLightboxDoodleWidth(999), LIGHTBOX_DOODLE_WIDTH_MAX);
+        assert.equal(clampLightboxDoodleWidth('nope'), LIGHTBOX_DOODLE_WIDTH_DEFAULT);
+        assert.equal(stepLightboxDoodleWidth(6, 1), 7);
+        assert.equal(stepLightboxDoodleWidth(1, -1), LIGHTBOX_DOODLE_WIDTH_MIN);
+        assert.equal(stepLightboxDoodleWidth(48, 1), LIGHTBOX_DOODLE_WIDTH_MAX);
+    });
+
+    it('pen size +/- icons exist for the doodle bar', () => {
+        assert.ok(String(ACTION_ICONS.plus || '').includes('<svg'));
+        assert.ok(String(ACTION_ICONS.minus || '').includes('<svg'));
     });
 });

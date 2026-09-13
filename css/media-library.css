@@ -952,8 +952,8 @@
     object-fit: contain;
     border-radius: 4px;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-    will-change: transform;
-    transition: transform 120ms ease;
+    /* No transform transition: discrete ±90° steps (esp. 0↔270) and
+       measure/apply cycles would interpolate the long way and look like spin. */
     user-select: none;
     -webkit-user-drag: none;
 }
@@ -1026,7 +1026,7 @@
     position: absolute;
     top: -0.35rem;
     right: -0.35rem;
-    z-index: 2;
+    z-index: 3;
     display: flex;
     gap: 0.3rem;
 }
@@ -1037,10 +1037,129 @@
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
 }
 
+.media-lightbox__tools .card-act.is-active {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35), 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
 .media-lightbox__close {
     background: var(--surface-elevated, #1a1a1e);
     border-radius: 999px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.media-lightbox__doodle {
+    position: absolute;
+    z-index: 1;
+    display: block;
+    pointer-events: none;
+    touch-action: none;
+}
+
+.media-lightbox__frame.is-doodling {
+    cursor: crosshair;
+}
+
+.media-lightbox__frame.is-doodling .media-lightbox__hint {
+    display: none;
+}
+
+.media-lightbox__doodle-bar {
+    position: absolute;
+    left: 50%;
+    bottom: 0.55rem;
+    transform: translateX(-50%);
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.28rem 0.45rem;
+    border-radius: 999px;
+    background: rgba(8, 8, 10, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+.media-lightbox__doodle-bar[hidden] {
+    display: none !important;
+}
+
+.media-lightbox__doodle-dot {
+    width: 1.05rem;
+    height: 1.05rem;
+    padding: 0;
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+    background: var(--doodle-color, #ff00ff);
+    cursor: pointer;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.media-lightbox__doodle-dot.is-active {
+    border-color: #fff;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35), inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.media-lightbox__doodle-size {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.12rem;
+    margin-left: 0.1rem;
+    padding-left: 0.35rem;
+    border-left: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.media-lightbox__doodle-size-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.35rem;
+    height: 1.35rem;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+    opacity: 0.8;
+}
+
+.media-lightbox__doodle-size-btn:hover:not(:disabled) {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.media-lightbox__doodle-size-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.media-lightbox__doodle-size-value {
+    min-width: 2.2rem;
+    text-align: center;
+    font-size: 0.68rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: rgba(255, 255, 255, 0.9);
+    user-select: none;
+}
+
+.media-lightbox__doodle-clear {
+    margin: 0;
+    margin-left: 0.15rem;
+    padding: 0.15rem 0.45rem;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.68rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.media-lightbox__doodle-clear:hover {
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .btn--danger {

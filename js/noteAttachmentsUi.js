@@ -1,6 +1,6 @@
 /** @module {"owns":"note card attached-media section HTML and hydrate", "related":["mediaAttachments.js","mediaLibrary.js","noteSurfaceHtml.js","mediaLibraryOverlay.js","mediaQuickActions.js"]} */
 import { escapeAttr, escapeHTML } from './domEscape.js';
-import { CARD_ICONS, DRAWING_ICONS } from './icons.js';
+import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { getMediaMeta, getObjectUrl, releaseObjectUrl } from './mediaLibrary.js';
 import { drawBrushStroke } from './canvasBrushes.js';
 import {
@@ -457,6 +457,8 @@ let lightboxFitScale = 1;
 /** Preview-only scribble state. Strokes live in memory; never persisted. */
 let lightboxDoodleMode = false;
 let lightboxDoodleColorIndex = 0;
+/** Pen width in image-layout CSS px (same idea as magicCanvas brush width). */
+let lightboxDoodleWidth = 6;
 let lightboxDoodles = [];
 let lightboxActiveStroke = null;
 /** Cached untransformed image layout box ({w,h} in CSS px). */
@@ -570,8 +572,35 @@ export function lightboxCanPan(zoom, rotation) {
 }
 
 export const LIGHTBOX_DOODLE_COLORS = ['#ff00ff', '#00ffff', '#00ff00'];
-/** Normalized width of a doodle stroke relative to image width. */
+/** @deprecated Prefer LIGHTBOX_DOODLE_WIDTH_DEFAULT; kept for callers that used relative width. */
 export const LIGHTBOX_DOODLE_WIDTH = 0.006;
+export const LIGHTBOX_DOODLE_WIDTH_MIN = 1;
+export const LIGHTBOX_DOODLE_WIDTH_MAX = 48;
+export const LIGHTBOX_DOODLE_WIDTH_DEFAULT = 6;
+
+/**
+ * Clamp a lightbox doodle pen width (px) to the supported range.
+ * @param {unknown} value
+ * @returns {number}
+ */
+export function clampLightboxDoodleWidth(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return LIGHTBOX_DOODLE_WIDTH_DEFAULT;
+    return Math.min(LIGHTBOX_DOODLE_WIDTH_MAX, Math.max(LIGHTBOX_DOODLE_WIDTH_MIN, Math.round(n)));
+}
+
+/**
+ * Step the doodle pen width by delta px (clamped).
+ * @param {unknown} current
+ * @param {number} delta
+ * @returns {number}
+ */
+export function stepLightboxDoodleWidth(current, delta) {
+    const step = Number(delta);
+    return clampLightboxDoodleWidth(
+        clampLightboxDoodleWidth(current) + (Number.isFinite(step) ? step : 0)
+    );
+}
 
 /**
  * Pick a doodle color index, wrapping around the neon trio.
@@ -694,7 +723,10 @@ function applyLightboxTransform() {
     const frame = lightboxFrame();
     const badge = lightboxZoomBadge();
     if (!img || !frame) return;
-    const rotated = lightboxRotation !== 0;
+    const rot = normalizeLightboxRotation(lightboxRotation);
+    const rotated = rot !== 0;
+    // Swap the CSS fit box only when the visual footprint is h×w.
+    const swappedFootprint = rot === 90 || rot === 270;
     const zoomed = lightboxZoom > LIGHTBOX_ZOOM_MIN + 1e-9;
     const effectiveZoom = lightboxZoom * lightboxFitScale;
     if (!zoomed && !rotated) {
@@ -704,9 +736,11 @@ function applyLightboxTransform() {
     } else if (rotated) {
         // Center-origin keeps 90/270-degree previews centered. Pan stays
         // outermost so drag deltas map 1:1 to screen axes at any rotation;
-        // zoom-while-rotated anchors to the image center.
+        // zoom-while-rotated anchors to the image center. Always keep an
+        // explicit rotate(Ndeg) so wraparound never depends on clearing
+        // the transform string (empty → 270deg would animate the long way).
         img.style.transformOrigin = 'center';
-        img.style.transform = `translate(${lightboxPanX}px, ${lightboxPanY}px) rotate(${lightboxRotation}deg) scale(${effectiveZoom})`;
+        img.style.transform = `translate(${lightboxPanX}px, ${lightboxPanY}px) rotate(${rot}deg) scale(${effectiveZoom})`;
         img.style.cursor = lightboxPanning ? 'grabbing' : 'grab';
     } else {
         img.style.transformOrigin = '0 0';
@@ -714,7 +748,7 @@ function applyLightboxTransform() {
         img.style.cursor = lightboxPanning ? 'grabbing' : 'grab';
     }
     frame.classList.toggle('is-zoomed', zoomed);
-    frame.classList.toggle('is-rotated', rotated);
+    frame.classList.toggle('is-rotated', swappedFootprint);
     // The doodle overlay paints in pan-free frame coordinates; the canvas
     // element itself rides the same translate so ink tracks the image
     // during drag-pans without a repaint per pointermove.
@@ -743,20 +777,12 @@ function measureLightboxFit() {
         lightboxFitScale = 1;
         return;
     }
-    const imgRect = img.getBoundingClientRect?.();
-    const frameRect = frame.getBoundingClientRect?.();
-    // Measure the untransformed layout box: temporarily clear the transform
-    // so getBoundingClientRect reflects w×h rather than the rotated footprint.
-    const prevTransform = img.style.transform;
-    const prevOrigin = img.style.transformOrigin;
-    img.style.transform = 'none';
-    const layoutRect = img.getBoundingClientRect?.();
-    img.style.transform = prevTransform;
-    img.style.transformOrigin = prevOrigin;
-    const w = layoutRect?.width || imgRect?.width || img.naturalWidth || 0;
-    const h = layoutRect?.height || imgRect?.height || img.naturalHeight || 0;
-    const fw = frameRect?.width || 0;
-    const fh = frameRect?.height || 0;
+    // offsetWidth/Height are the untransformed layout box — never clear
+    // style.transform to measure (that used to flash through CSS transitions).
+    const w = img.offsetWidth || img.naturalWidth || 0;
+    const h = img.offsetHeight || img.naturalHeight || 0;
+    const fw = frame.clientWidth || frame.offsetWidth || 0;
+    const fh = frame.clientHeight || frame.offsetHeight || 0;
     lightboxFitScale = lightboxFitScaleForRotation(rot, w, h, fw, fh);
 }
 
@@ -766,23 +792,9 @@ function measureLightboxFit() {
  */
 export function measureLightboxLayout() {
     const img = typeof lightboxImg === 'function' ? lightboxImg() : null;
-    const prevTransform = img?.style?.transform;
-    const prevOrigin = img?.style?.transformOrigin;
-    let w = 0;
-    let h = 0;
-    if (img?.getBoundingClientRect) {
-        try {
-            if (img.style) img.style.transform = 'none';
-            const rect = img.getBoundingClientRect();
-            w = rect?.width || 0;
-            h = rect?.height || 0;
-        } finally {
-            if (img.style) {
-                img.style.transform = prevTransform;
-                img.style.transformOrigin = prevOrigin;
-            }
-        }
-    }
+    // Prefer layout sizes that ignore CSS transforms; never toggle transform.
+    let w = img?.offsetWidth || 0;
+    let h = img?.offsetHeight || 0;
     if ((!w || !h) && img) {
         w = w || img.naturalWidth || img.width || 0;
         h = h || img.naturalHeight || img.height || 0;
@@ -873,7 +885,8 @@ function paintLightboxDoodles() {
         drawBrushStroke(ctx, {
             points: mapped,
             color: stroke.color,
-            width: Math.max(1.5, layout.w * LIGHTBOX_DOODLE_WIDTH),
+            // Width is image-layout px; scale with zoom so thickness tracks the photo.
+            width: Math.max(1, (Number(stroke.width) || lightboxDoodleWidth || LIGHTBOX_DOODLE_WIDTH_DEFAULT) * effZoom),
             style: 'pen'
         });
     }
@@ -919,11 +932,32 @@ function syncLightboxDoodleUI() {
         canvas.style.display = lightboxDoodleMode ? '' : 'none';
         canvas.style.pointerEvents = lightboxDoodleMode ? 'auto' : 'none';
     }
+    syncLightboxDoodleWidthUI();
     if (hint) {
         hint.textContent = lightboxDoodleMode
-            ? 'Draw to scribble (preview only) · Pick a color below'
+            ? 'Draw to scribble (preview only) · Scroll to zoom · Pick a color below'
             : 'Scroll to zoom · Drag to pan · Double-click to reset';
     }
+}
+
+function syncLightboxDoodleWidthUI() {
+    const width = clampLightboxDoodleWidth(lightboxDoodleWidth);
+    lightboxDoodleWidth = width;
+    const label = lightboxEl?.querySelector?.('[data-lightbox-doodle-width]') || null;
+    if (label) label.textContent = `${width}px`;
+    const smaller = lightboxEl?.querySelector?.('[data-lightbox-doodle-smaller]') || null;
+    const larger = lightboxEl?.querySelector?.('[data-lightbox-doodle-larger]') || null;
+    if (smaller) smaller.disabled = width <= LIGHTBOX_DOODLE_WIDTH_MIN;
+    if (larger) larger.disabled = width >= LIGHTBOX_DOODLE_WIDTH_MAX;
+}
+
+function setLightboxDoodleWidth(next) {
+    lightboxDoodleWidth = clampLightboxDoodleWidth(next);
+    syncLightboxDoodleWidthUI();
+}
+
+function adjustLightboxDoodleWidth(delta) {
+    setLightboxDoodleWidth(stepLightboxDoodleWidth(lightboxDoodleWidth, delta));
 }
 
 function setLightboxDoodleMode(on) {
@@ -1044,7 +1078,7 @@ function ensureLightbox() {
         <button type="button" class="media-lightbox__backdrop" data-lightbox-close aria-label="Close"></button>
         <div class="media-lightbox__frame" data-lightbox-frame>
             <div class="media-lightbox__tools">
-                <button type="button" class="card-act" data-lightbox-doodle-toggle title="Scribble (preview only)" aria-label="Scribble (preview only)" aria-pressed="false">${DRAWING_ICONS.pen}</button>
+                <button type="button" class="card-act" data-lightbox-doodle-toggle title="Scribble (preview only)" aria-label="Scribble (preview only)" aria-pressed="false">${CARD_ICONS.drawingPencil}</button>
                 <button type="button" class="card-act" data-lightbox-rotate-left title="Rotate left (preview only)" aria-label="Rotate left (preview only)">${CARD_ICONS.rotateLeft}</button>
                 <button type="button" class="card-act" data-lightbox-rotate-right title="Rotate right (preview only)" aria-label="Rotate right (preview only)">${CARD_ICONS.rotateRight}</button>
                 <button type="button" class="card-act media-lightbox__close" data-lightbox-close title="Close" aria-label="Close">${CARD_ICONS.close}</button>
@@ -1055,6 +1089,11 @@ function ensureLightbox() {
                 <button type="button" class="media-lightbox__doodle-dot is-active" data-lightbox-doodle-color="0" style="--doodle-color:#ff00ff" title="Pink" aria-label="Pink pen" aria-pressed="true"></button>
                 <button type="button" class="media-lightbox__doodle-dot" data-lightbox-doodle-color="1" style="--doodle-color:#00ffff" title="Cyan" aria-label="Cyan pen"></button>
                 <button type="button" class="media-lightbox__doodle-dot" data-lightbox-doodle-color="2" style="--doodle-color:#00ff00" title="Green" aria-label="Green pen"></button>
+                <span class="media-lightbox__doodle-size" aria-label="Pen size">
+                    <button type="button" class="media-lightbox__doodle-size-btn" data-lightbox-doodle-smaller title="Decrease pen size" aria-label="Decrease pen size">${ACTION_ICONS.minus}</button>
+                    <span class="media-lightbox__doodle-size-value" data-lightbox-doodle-width aria-live="polite">6px</span>
+                    <button type="button" class="media-lightbox__doodle-size-btn" data-lightbox-doodle-larger title="Increase pen size" aria-label="Increase pen size">${ACTION_ICONS.plus}</button>
+                </span>
                 <button type="button" class="media-lightbox__doodle-clear" data-lightbox-doodle-clear title="Clear scribbles" aria-label="Clear scribbles">Clear</button>
             </div>
             <div class="media-lightbox__zoom-badge" data-lightbox-zoom aria-hidden="true">100%</div>
@@ -1100,6 +1139,18 @@ function ensureLightbox() {
                 clearLightboxDoodles();
                 return;
             }
+            if (e.target.closest('[data-lightbox-doodle-smaller]')) {
+                e.preventDefault();
+                e.stopPropagation();
+                adjustLightboxDoodleWidth(-1);
+                return;
+            }
+            if (e.target.closest('[data-lightbox-doodle-larger]')) {
+                e.preventDefault();
+                e.stopPropagation();
+                adjustLightboxDoodleWidth(1);
+                return;
+            }
             if (e.target.closest('[data-lightbox-close]')) {
                 e.preventDefault();
                 closeMediaLightbox();
@@ -1108,15 +1159,10 @@ function ensureLightbox() {
         const frame = lightboxEl.querySelector('[data-lightbox-frame]');
         const zoomImg = lightboxEl.querySelector('[data-lightbox-img]');
         // Scroll over the image zooms in/out (page behind must not scroll).
+        // Pen mode still zooms — scribble coords are normalized so ink stays put.
         frame?.addEventListener('wheel', (e) => {
             if (!lightboxEl || lightboxEl.classList.contains('is-hidden')) return;
-            // Pen mode locks the view: wheel never zooms mid-stroke.
-            if (lightboxDoodleMode) {
-                e.preventDefault();
-                e.stopPropagation();
-                return;
-            }
-            if (e.target?.closest?.('[data-lightbox-close],[data-lightbox-rotate-left],[data-lightbox-rotate-right],[data-lightbox-doodle-toggle]')) return;
+            if (e.target?.closest?.('[data-lightbox-close],[data-lightbox-rotate-left],[data-lightbox-rotate-right],[data-lightbox-doodle-toggle],[data-lightbox-doodle-smaller],[data-lightbox-doodle-larger]')) return;
             e.preventDefault();
             e.stopPropagation();
             zoomLightboxAtPoint(e.clientX, e.clientY, nextLightboxZoom(lightboxZoom, e.deltaY, e.deltaMode));
@@ -1181,6 +1227,7 @@ function ensureLightbox() {
             }
             lightboxActiveStroke = {
                 color: LIGHTBOX_DOODLE_COLORS[normalizeLightboxDoodleColor(lightboxDoodleColorIndex)],
+                width: clampLightboxDoodleWidth(lightboxDoodleWidth),
                 points: []
             };
             try { doodleCanvas.setPointerCapture(e.pointerId); } catch { /* noop */ }
@@ -1210,10 +1257,13 @@ function ensureLightbox() {
         // Re-fit if the viewport resizes while rotated (e.g. window resize).
         window.addEventListener('resize', () => {
             if (!lightboxEl || lightboxEl.classList.contains('is-hidden')) return;
-            if (normalizeLightboxRotation(lightboxRotation) !== 90
-                && normalizeLightboxRotation(lightboxRotation) !== 270) return;
-            measureLightboxFit();
-            applyLightboxTransform();
+            const rot = normalizeLightboxRotation(lightboxRotation);
+            if (rot === 90 || rot === 270) {
+                measureLightboxFit();
+                applyLightboxTransform();
+            }
+            // Keep scribbles aligned after layout changes at any rotation.
+            paintLightboxDoodles();
         });
         document.addEventListener('keydown', (e) => {
             if (!lightboxEl || lightboxEl.classList.contains('is-hidden')) return;
@@ -1224,8 +1274,8 @@ function ensureLightbox() {
                 return;
             }
             if (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '0') {
-                // Pen mode locks the view: never zoom away mid-scribble.
-                if (lightboxDoodleMode) return;
+                // Reset (0) still clears scribbles — keep that out of pen mode.
+                if (lightboxDoodleMode && e.key === '0') return;
                 const img = lightboxImg();
                 if (!img) return;
                 const rect = img.getBoundingClientRect?.() || { left: 0, top: 0, width: 0, height: 0 };
