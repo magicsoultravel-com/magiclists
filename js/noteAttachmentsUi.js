@@ -436,6 +436,140 @@ function bindMediaSectionToggle(section, item) {
 
 let lightboxEl = null;
 let lightboxBound = false;
+export const LIGHTBOX_ZOOM_MIN = 1;
+export const LIGHTBOX_ZOOM_MAX = 5;
+let lightboxZoom = LIGHTBOX_ZOOM_MIN;
+let lightboxPanX = 0;
+let lightboxPanY = 0;
+let lightboxPanning = false;
+let lightboxPanStartX = 0;
+let lightboxPanStartY = 0;
+let lightboxPanBaseX = 0;
+let lightboxPanBaseY = 0;
+
+/**
+ * Clamp a lightbox zoom factor to the supported range.
+ * @param {unknown} value
+ * @returns {number}
+ */
+export function clampLightboxZoom(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return LIGHTBOX_ZOOM_MIN;
+    return Math.min(LIGHTBOX_ZOOM_MAX, Math.max(LIGHTBOX_ZOOM_MIN, Math.round(n * 100) / 100));
+}
+
+/**
+ * Next zoom factor for a wheel delta (scroll up zooms in).
+ * @param {unknown} current
+ * @param {unknown} deltaY
+ * @param {unknown} [deltaMode]
+ * @returns {number}
+ */
+export function nextLightboxZoom(current, deltaY, deltaMode = 0) {
+    const base = clampLightboxZoom(current);
+    let dy = Number(deltaY);
+    if (!Number.isFinite(dy) || dy === 0) return base;
+    if (Number(deltaMode) === 1) dy *= 16;
+    // Exponential factor feels smooth for both notched wheels (~100/detent)
+    // and high-frequency trackpads (small deltas).
+    const factor = Math.exp(-dy * 0.0018);
+    return clampLightboxZoom(base * factor);
+}
+
+/**
+ * Cursor-anchored pan adjustment so the point under the cursor stays put.
+ * @param {{ panX: number, panY: number, cursorX: number, cursorY: number, prevZoom: number, nextZoom: number }} args
+ * @returns {{ panX: number, panY: number }}
+ */
+export function anchorLightboxPan({ panX = 0, panY = 0, cursorX = 0, cursorY = 0, prevZoom = 1, nextZoom = 1 } = {}) {
+    const z0 = clampLightboxZoom(prevZoom);
+    const z1 = clampLightboxZoom(nextZoom);
+    if (z0 <= 0 || z1 === z0) return { panX: Number(panX) || 0, panY: Number(panY) || 0 };
+    const ratio = z1 / z0;
+    return {
+        panX: (Number(panX) || 0) + (Number(cursorX) || 0) * (1 - ratio),
+        panY: (Number(panY) || 0) + (Number(cursorY) || 0) * (1 - ratio)
+    };
+}
+
+function lightboxImg() {
+    return lightboxEl?.querySelector?.('[data-lightbox-img]') || null;
+}
+
+function lightboxFrame() {
+    return lightboxEl?.querySelector?.('[data-lightbox-frame]') || null;
+}
+
+function lightboxZoomBadge() {
+    return lightboxEl?.querySelector?.('[data-lightbox-zoom]') || null;
+}
+
+function applyLightboxTransform() {
+    const img = lightboxImg();
+    const frame = lightboxFrame();
+    const badge = lightboxZoomBadge();
+    if (!img || !frame) return;
+    if (lightboxZoom <= LIGHTBOX_ZOOM_MIN + 1e-9) {
+        img.style.transform = '';
+        img.style.transformOrigin = '';
+        img.style.cursor = '';
+    } else {
+        img.style.transformOrigin = '0 0';
+        img.style.transform = `translate(${lightboxPanX}px, ${lightboxPanY}px) scale(${lightboxZoom})`;
+        img.style.cursor = lightboxPanning ? 'grabbing' : 'grab';
+    }
+    frame.classList.toggle('is-zoomed', lightboxZoom > LIGHTBOX_ZOOM_MIN + 1e-9);
+    if (badge) {
+        const pct = Math.round(lightboxZoom * 100);
+        badge.textContent = `${pct}%`;
+        badge.classList.toggle('is-visible', lightboxZoom > LIGHTBOX_ZOOM_MIN + 1e-9);
+    }
+}
+
+function resetLightboxZoom() {
+    lightboxZoom = LIGHTBOX_ZOOM_MIN;
+    lightboxPanX = 0;
+    lightboxPanY = 0;
+    lightboxPanning = false;
+    applyLightboxTransform();
+}
+
+function zoomLightboxAtPoint(clientX, clientY, nextZoom) {
+    const img = lightboxImg();
+    if (!img) return;
+    const prevZoom = lightboxZoom;
+    const clamped = clampLightboxZoom(nextZoom);
+    if (clamped === prevZoom) {
+        // Still re-apply so hitting the min snaps back to unzoomed layout.
+        if (clamped <= LIGHTBOX_ZOOM_MIN + 1e-9) {
+            lightboxPanX = 0;
+            lightboxPanY = 0;
+            lightboxZoom = clamped;
+            applyLightboxTransform();
+        }
+        return;
+    }
+    const rect = img.getBoundingClientRect();
+    const cursorX = (Number(clientX) || 0) - (rect?.left || 0);
+    const cursorY = (Number(clientY) || 0) - (rect?.top || 0);
+    const anchored = anchorLightboxPan({
+        panX: lightboxPanX,
+        panY: lightboxPanY,
+        cursorX,
+        cursorY,
+        prevZoom,
+        nextZoom: clamped
+    });
+    lightboxZoom = clamped;
+    if (lightboxZoom <= LIGHTBOX_ZOOM_MIN + 1e-9) {
+        lightboxPanX = 0;
+        lightboxPanY = 0;
+    } else {
+        lightboxPanX = anchored.panX;
+        lightboxPanY = anchored.panY;
+    }
+    applyLightboxTransform();
+}
 
 function ensureLightbox() {
     if (lightboxEl) return lightboxEl;
@@ -447,9 +581,11 @@ function ensureLightbox() {
     lightboxEl.setAttribute('aria-label', 'Image preview');
     lightboxEl.innerHTML = `
         <button type="button" class="media-lightbox__backdrop" data-lightbox-close aria-label="Close"></button>
-        <div class="media-lightbox__frame">
+        <div class="media-lightbox__frame" data-lightbox-frame>
             <button type="button" class="card-act media-lightbox__close" data-lightbox-close title="Close" aria-label="Close">${CARD_ICONS.close}</button>
-            <img class="media-lightbox__img" data-lightbox-img alt="">
+            <img class="media-lightbox__img" data-lightbox-img alt="" draggable="false">
+            <div class="media-lightbox__zoom-badge" data-lightbox-zoom aria-hidden="true">100%</div>
+            <div class="media-lightbox__hint" aria-hidden="true">Scroll to zoom &middot; Drag to pan &middot; Double-click to reset</div>
         </div>
     `;
     document.body.appendChild(lightboxEl);
@@ -462,12 +598,64 @@ function ensureLightbox() {
                 closeMediaLightbox();
             }
         });
-        document.addEventListener('keydown', (e) => {
-            if (e.key !== 'Escape') return;
+        const frame = lightboxEl.querySelector('[data-lightbox-frame]');
+        const zoomImg = lightboxEl.querySelector('[data-lightbox-img]');
+        // Scroll over the image zooms in/out (page behind must not scroll).
+        frame?.addEventListener('wheel', (e) => {
             if (!lightboxEl || lightboxEl.classList.contains('is-hidden')) return;
+            if (e.target?.closest?.('[data-lightbox-close]')) return;
             e.preventDefault();
             e.stopPropagation();
-            closeMediaLightbox();
+            zoomLightboxAtPoint(e.clientX, e.clientY, nextLightboxZoom(lightboxZoom, e.deltaY, e.deltaMode));
+        }, { passive: false });
+        // Double-click resets; drag pans while zoomed.
+        zoomImg?.addEventListener('dblclick', (e) => {
+            e.preventDefault();
+            resetLightboxZoom();
+        });
+        zoomImg?.addEventListener('pointerdown', (e) => {
+            if (lightboxZoom <= LIGHTBOX_ZOOM_MIN + 1e-9) return;
+            if (e.button !== undefined && e.button !== 0) return;
+            lightboxPanning = true;
+            lightboxPanStartX = e.clientX;
+            lightboxPanStartY = e.clientY;
+            lightboxPanBaseX = lightboxPanX;
+            lightboxPanBaseY = lightboxPanY;
+            try { zoomImg.setPointerCapture(e.pointerId); } catch { /* noop */ }
+            applyLightboxTransform();
+            e.preventDefault();
+        });
+        zoomImg?.addEventListener('pointermove', (e) => {
+            if (!lightboxPanning) return;
+            lightboxPanX = lightboxPanBaseX + (e.clientX - lightboxPanStartX);
+            lightboxPanY = lightboxPanBaseY + (e.clientY - lightboxPanStartY);
+            applyLightboxTransform();
+        });
+        const endPan = () => {
+            if (!lightboxPanning) return;
+            lightboxPanning = false;
+            applyLightboxTransform();
+        };
+        zoomImg?.addEventListener('pointerup', endPan);
+        zoomImg?.addEventListener('pointercancel', endPan);
+        document.addEventListener('keydown', (e) => {
+            if (!lightboxEl || lightboxEl.classList.contains('is-hidden')) return;
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                closeMediaLightbox();
+                return;
+            }
+            if (e.key === '+' || e.key === '=' || e.key === '-' || e.key === '0') {
+                const img = lightboxImg();
+                if (!img) return;
+                const rect = img.getBoundingClientRect?.() || { left: 0, top: 0, width: 0, height: 0 };
+                const cx = (rect.left || 0) + (rect.width || 0) / 2;
+                const cy = (rect.top || 0) + (rect.height || 0) / 2;
+                if (e.key === '0') resetLightboxZoom();
+                else zoomLightboxAtPoint(cx, cy, clampLightboxZoom(lightboxZoom * (e.key === '-' ? 0.8 : 1.25)));
+                e.preventDefault();
+            }
         }, true);
     }
     return lightboxEl;
@@ -493,6 +681,7 @@ export async function openMediaLightbox(mediaId) {
     const el = ensureLightbox();
     el.dataset.claimedMediaId = mediaId;
     const img = el.querySelector('[data-lightbox-img]');
+    resetLightboxZoom();
     if (img) {
         img.src = url;
         img.alt = meta.title || meta.filename || 'Image';
@@ -505,6 +694,7 @@ export function closeMediaLightbox() {
     if (!lightboxEl) return;
     lightboxEl.classList.remove('is-open');
     lightboxEl.classList.add('is-hidden');
+    resetLightboxZoom();
     const img = lightboxEl.querySelector('[data-lightbox-img]');
     if (img) {
         img.removeAttribute('src');

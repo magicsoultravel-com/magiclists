@@ -2,7 +2,12 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     buildNoteAttachmentsSectionHtml,
-    sizeCanvasViewport
+    sizeCanvasViewport,
+    clampLightboxZoom,
+    nextLightboxZoom,
+    anchorLightboxPan,
+    LIGHTBOX_ZOOM_MIN,
+    LIGHTBOX_ZOOM_MAX
 } from '../js/noteAttachmentsUi.js';
 import { createDefaultNote } from '../js/noteModel.js';
 
@@ -129,5 +134,28 @@ describe('noteAttachmentsUi module loads and exports functions', () => {
         // refreshNoteCanvasPreview re-paints once layout settles.
         assert.equal(viewport.style.width, undefined);
         assert.equal(viewport.style.height, undefined);
+    });
+
+    it('clampLightboxZoom keeps zoom inside 1x..max', () => {
+        assert.equal(clampLightboxZoom(0.2), LIGHTBOX_ZOOM_MIN);
+        assert.equal(clampLightboxZoom(99), LIGHTBOX_ZOOM_MAX);
+        assert.equal(clampLightboxZoom('nope'), LIGHTBOX_ZOOM_MIN);
+        assert.equal(clampLightboxZoom(2.345), 2.35);
+    });
+
+    it('nextLightboxZoom scrolls up to zoom in and down to zoom out', () => {
+        assert.ok(nextLightboxZoom(1, -100) > 1);
+        assert.ok(nextLightboxZoom(2, 100) < 2);
+        assert.equal(nextLightboxZoom(1, 0), 1);
+        assert.equal(nextLightboxZoom(LIGHTBOX_ZOOM_MAX, -500), LIGHTBOX_ZOOM_MAX);
+        assert.equal(nextLightboxZoom(LIGHTBOX_ZOOM_MIN, 500), LIGHTBOX_ZOOM_MIN);
+        // Line-mode deltas (Firefox) behave like pixel deltas.
+        assert.ok(nextLightboxZoom(1, -3, 1) > 1);
+    });
+
+    it('anchorLightboxPan keeps the cursor point stable when zooming', () => {
+        const out = anchorLightboxPan({ panX: 0, panY: 0, cursorX: 100, cursorY: 50, prevZoom: 1, nextZoom: 2 });
+        assert.equal(out.panX, -100);
+        assert.equal(out.panY, -50);
     });
 });
