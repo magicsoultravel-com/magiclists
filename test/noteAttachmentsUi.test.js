@@ -6,9 +6,14 @@ import {
     clampLightboxZoom,
     nextLightboxZoom,
     anchorLightboxPan,
+    normalizeLightboxRotation,
+    rotateLightboxStep,
+    lightboxFitScaleForRotation,
+    lightboxCanPan,
     LIGHTBOX_ZOOM_MIN,
     LIGHTBOX_ZOOM_MAX
 } from '../js/noteAttachmentsUi.js';
+import { CARD_ICONS } from '../js/icons.js';
 import { createDefaultNote } from '../js/noteModel.js';
 
 describe('noteAttachmentsUi module loads and exports functions', () => {
@@ -157,5 +162,43 @@ describe('noteAttachmentsUi module loads and exports functions', () => {
         const out = anchorLightboxPan({ panX: 0, panY: 0, cursorX: 100, cursorY: 50, prevZoom: 1, nextZoom: 2 });
         assert.equal(out.panX, -100);
         assert.equal(out.panY, -50);
+    });
+
+    it('normalizeLightboxRotation snaps to 90-degree steps in [0, 360)', () => {
+        assert.equal(normalizeLightboxRotation(0), 0);
+        assert.equal(normalizeLightboxRotation(45), 90);
+        assert.equal(normalizeLightboxRotation(-90), 270);
+        assert.equal(normalizeLightboxRotation(360), 0);
+        assert.equal(normalizeLightboxRotation('nope'), 0);
+    });
+
+    it('rotateLightboxStep turns the preview left/right with wraparound', () => {
+        assert.equal(rotateLightboxStep(0, 1), 90);
+        assert.equal(rotateLightboxStep(0, -1), 270);
+        assert.equal(rotateLightboxStep(270, 1), 0);
+        assert.equal(rotateLightboxStep(90, -1), 0);
+    });
+
+    it('rotate icons exist for the lightbox toolbar', () => {
+        assert.ok(String(CARD_ICONS.rotateLeft || '').includes('<svg'));
+        assert.ok(String(CARD_ICONS.rotateRight || '').includes('<svg'));
+        assert.notEqual(CARD_ICONS.rotateLeft, CARD_ICONS.rotateRight);
+    });
+
+    it('lightboxFitScaleForRotation shrinks wide images at 90/270 so nothing clips', () => {
+        // 1600x900 panorama in a 1400x800 frame: rotated footprint 900x1600.
+        const fit = lightboxFitScaleForRotation(90, 1600, 900, 1400, 800);
+        assert.ok(fit < 1 && fit > 0);
+        assert.equal(lightboxFitScaleForRotation(0, 1600, 900, 1400, 800), 1);
+        assert.equal(lightboxFitScaleForRotation(180, 1600, 900, 1400, 800), 1);
+        assert.equal(lightboxFitScaleForRotation(90, 0, 0, 1400, 800), 1);
+        // Small image that already fits is never upscaled.
+        assert.equal(lightboxFitScaleForRotation(90, 400, 300, 1400, 800), 1);
+    });
+
+    it('lightboxCanPan allows grab-scroll when zoomed or rotated', () => {
+        assert.equal(lightboxCanPan(1, 0), false);
+        assert.equal(lightboxCanPan(2, 0), true);
+        assert.equal(lightboxCanPan(1, 90), true);
     });
 });

@@ -953,6 +953,7 @@
     border-radius: 4px;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
     will-change: transform;
+    transition: transform 120ms ease;
     user-select: none;
     -webkit-user-drag: none;
 }
@@ -961,6 +962,18 @@
     max-width: none;
     max-height: none;
     cursor: grab;
+}
+
+/* Rotated previews: swap the fit box so 90/270-degree images are framed
+   by the post-rotation footprint instead of clipping in overflow:hidden. */
+.media-lightbox__frame.is-rotated .media-lightbox__img {
+    max-width: 92vh;
+    max-height: 96vw;
+}
+
+.media-lightbox__frame.is-rotated.is-zoomed .media-lightbox__img {
+    max-width: none;
+    max-height: none;
 }
 
 .media-lightbox__zoom-badge {
@@ -1009,11 +1022,22 @@
     display: none;
 }
 
-.media-lightbox__close {
+.media-lightbox__tools {
     position: absolute;
     top: -0.35rem;
     right: -0.35rem;
     z-index: 2;
+    display: flex;
+    gap: 0.3rem;
+}
+
+.media-lightbox__tools .card-act {
+    background: var(--surface-elevated, #1a1a1e);
+    border-radius: 999px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.media-lightbox__close {
     background: var(--surface-elevated, #1a1a1e);
     border-radius: 999px;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
