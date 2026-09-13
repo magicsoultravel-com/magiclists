@@ -3,7 +3,7 @@ import { WeatherApi } from './weatherApi.js';
 import { escapeHtml } from './radioUtils.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { renderSidebarModuleHeaderHtml } from './sidebarModules.js';
-import { conditionLabel, weatherIconSvg, weatherIconSvgFromCode } from './weatherProviders/weatherIcons.js';
+import { conditionLabel, sunEventIconSvg, weatherIconSvg, weatherIconSvgFromCode } from './weatherProviders/weatherIcons.js';
 
 const REFRESH_ICON = ACTION_ICONS.resetCustomization;
 const SETTINGS_ICON = ACTION_ICONS.tools;
@@ -151,10 +151,23 @@ export const SidebarWeather = {
             const day = formatDayShort(d.date);
             const hi = d.tempMax != null ? `${Math.round(d.tempMax)}°` : '—';
             const lo = d.tempMin != null ? `${Math.round(d.tempMin)}°` : '—';
+            const sunriseRow = d.sunrise
+                ? `<span class="sidebar-weather__day-sun" title="Sunrise">
+                    <span class="sidebar-weather__day-sun-icon">${sunEventIconSvg('sunrise', { size: 11 })}</span>
+                    <span class="sidebar-weather__day-sun-time">${escapeHtml(formatHour(d.sunrise))}</span>
+                </span>`
+                : '';
+            const sunsetRow = d.sunset
+                ? `<span class="sidebar-weather__day-sun" title="Sunset">
+                    <span class="sidebar-weather__day-sun-icon">${sunEventIconSvg('sunset', { size: 11 })}</span>
+                    <span class="sidebar-weather__day-sun-time">${escapeHtml(formatHour(d.sunset))}</span>
+                </span>`
+                : '';
             return `<div class="sidebar-weather__day" title="${escapeHtml(conditionLabel(d.condition))}">
                 <span class="sidebar-weather__day-name">${escapeHtml(day)}</span>
                 <span class="sidebar-weather__day-icon">${weatherIconSvgFromCode(d.icon, d, { size: 22 })}</span>
                 <span class="sidebar-weather__day-temps"><span class="sidebar-weather__day-hi">${escapeHtml(hi)}</span><span class="sidebar-weather__day-lo">${escapeHtml(lo)}</span></span>
+                ${sunriseRow}${sunsetRow}
             </div>`;
         }).join('');
 

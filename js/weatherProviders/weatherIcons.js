@@ -80,6 +80,17 @@ export function weatherIconSvg(condition, { size = 16 } = {}) {
     return icons[condition] || icons.unknown;
 }
 
+/** Compact sunrise / sunset glyphs (sun over horizon). */
+export function sunEventIconSvg(event, { size = 12 } = {}) {
+    const s = size;
+    const rising = event === 'sunrise';
+    // Sunrise: disc above horizon with upward rays; sunset: disc dipping with downward rays
+    if (rising) {
+        return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" aria-hidden="true"><path d="M3 18h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="12" cy="13" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M12 5.5v2.2M5.8 9.2l1.5 1.5M18.2 9.2l-1.5 1.5"/></g></svg>`;
+    }
+    return `<svg viewBox="0 0 24 24" width="${s}" height="${s}" aria-hidden="true"><path d="M3 18h18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M8.8 18a3.2 3.2 0 0 1 6.4 0" fill="currentColor"/><g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M12 8.5v2.2M5.8 14.8l1.5-1.5M18.2 14.8l-1.5-1.5"/></g></svg>`;
+}
+
 export function weatherIconSvgFromCode(iconCode, metrics, { size = 16 } = {}) {
     const condition = iconCode
         ? conditionFromIcon(iconCode)

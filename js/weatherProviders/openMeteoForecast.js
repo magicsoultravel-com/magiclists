@@ -18,7 +18,7 @@ export const OpenMeteoForecastProvider = {
             forecast_days: '4',
             current: 'temperature_2m,apparent_temperature,relative_humidity_2m,weather_code',
             hourly: 'temperature_2m,weather_code',
-            daily: 'weather_code,temperature_2m_max,temperature_2m_min'
+            daily: 'weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset'
         });
         const res = await fetch(`${API_BASE}?${params}`, { signal, headers: { Accept: 'application/json' } });
         if (!res.ok) throw new Error(`Open-Meteo HTTP ${res.status}`);
@@ -42,6 +42,8 @@ export const OpenMeteoForecastProvider = {
         const dMax = raw.daily?.temperature_2m_max || [];
         const dMin = raw.daily?.temperature_2m_min || [];
         const dCodes = raw.daily?.weather_code || [];
+        const dSunrise = raw.daily?.sunrise || [];
+        const dSunset = raw.daily?.sunset || [];
         for (let i = 0; i < Math.min(dTimes.length, 4); i++) {
             const code = dCodes[i];
             daily.push({
@@ -49,7 +51,9 @@ export const OpenMeteoForecastProvider = {
                 tempMin: num(dMin[i]),
                 tempMax: num(dMax[i]),
                 icon: code,
-                condition: conditionFromWmoCode(code)
+                condition: conditionFromWmoCode(code),
+                sunrise: dSunrise[i] || null,
+                sunset: dSunset[i] || null
             });
         }
 

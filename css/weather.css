@@ -202,6 +202,27 @@
     color: var(--accent-color, #7eb8ff);
 }
 
+.sidebar-weather__day-sun {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.15rem;
+    font-size: 0.5rem;
+    line-height: 1.15;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+
+.sidebar-weather__day-sun-icon {
+    display: flex;
+    color: var(--accent-color, #7eb8ff);
+    opacity: 0.85;
+}
+
+.sidebar-weather__day-sun-time {
+    font-weight: 600;
+}
+
 .sidebar-weather__alerts {
     margin-top: 0.4rem;
     display: flex;
