@@ -1077,24 +1077,26 @@ function ensureLightbox() {
     lightboxEl.innerHTML = `
         <button type="button" class="media-lightbox__backdrop" data-lightbox-close aria-label="Close"></button>
         <div class="media-lightbox__frame" data-lightbox-frame>
-            <div class="media-lightbox__tools">
-                <button type="button" class="card-act" data-lightbox-doodle-toggle title="Scribble (preview only)" aria-label="Scribble (preview only)" aria-pressed="false">${CARD_ICONS.drawingPencil}</button>
-                <button type="button" class="card-act" data-lightbox-rotate-left title="Rotate left (preview only)" aria-label="Rotate left (preview only)">${CARD_ICONS.rotateLeft}</button>
-                <button type="button" class="card-act" data-lightbox-rotate-right title="Rotate right (preview only)" aria-label="Rotate right (preview only)">${CARD_ICONS.rotateRight}</button>
-                <button type="button" class="card-act media-lightbox__close" data-lightbox-close title="Close" aria-label="Close">${CARD_ICONS.close}</button>
-            </div>
             <img class="media-lightbox__img" data-lightbox-img alt="" draggable="false">
             <canvas class="media-lightbox__doodle" data-lightbox-doodle style="display:none"></canvas>
-            <div class="media-lightbox__doodle-bar" data-lightbox-doodle-bar hidden>
-                <button type="button" class="media-lightbox__doodle-dot is-active" data-lightbox-doodle-color="0" style="--doodle-color:#ff00ff" title="Pink" aria-label="Pink pen" aria-pressed="true"></button>
-                <button type="button" class="media-lightbox__doodle-dot" data-lightbox-doodle-color="1" style="--doodle-color:#00ffff" title="Cyan" aria-label="Cyan pen"></button>
-                <button type="button" class="media-lightbox__doodle-dot" data-lightbox-doodle-color="2" style="--doodle-color:#00ff00" title="Green" aria-label="Green pen"></button>
-                <span class="media-lightbox__doodle-size" aria-label="Pen size">
-                    <button type="button" class="media-lightbox__doodle-size-btn" data-lightbox-doodle-smaller title="Decrease pen size" aria-label="Decrease pen size">${ACTION_ICONS.minus}</button>
-                    <span class="media-lightbox__doodle-size-value" data-lightbox-doodle-width aria-live="polite">6px</span>
-                    <button type="button" class="media-lightbox__doodle-size-btn" data-lightbox-doodle-larger title="Increase pen size" aria-label="Increase pen size">${ACTION_ICONS.plus}</button>
-                </span>
-                <button type="button" class="media-lightbox__doodle-clear" data-lightbox-doodle-clear title="Clear scribbles" aria-label="Clear scribbles">Clear</button>
+            <div class="media-lightbox__chrome" data-lightbox-chrome>
+                <div class="media-lightbox__doodle-bar" data-lightbox-doodle-bar hidden>
+                    <button type="button" class="media-lightbox__doodle-dot is-active" data-lightbox-doodle-color="0" style="--doodle-color:#ff00ff" title="Pink" aria-label="Pink pen" aria-pressed="true"></button>
+                    <button type="button" class="media-lightbox__doodle-dot" data-lightbox-doodle-color="1" style="--doodle-color:#00ffff" title="Cyan" aria-label="Cyan pen"></button>
+                    <button type="button" class="media-lightbox__doodle-dot" data-lightbox-doodle-color="2" style="--doodle-color:#00ff00" title="Green" aria-label="Green pen"></button>
+                    <span class="media-lightbox__doodle-size" aria-label="Pen size">
+                        <button type="button" class="media-lightbox__doodle-size-btn" data-lightbox-doodle-smaller title="Decrease pen size" aria-label="Decrease pen size">${ACTION_ICONS.minus}</button>
+                        <span class="media-lightbox__doodle-size-value" data-lightbox-doodle-width aria-live="polite">6px</span>
+                        <button type="button" class="media-lightbox__doodle-size-btn" data-lightbox-doodle-larger title="Increase pen size" aria-label="Increase pen size">${ACTION_ICONS.plus}</button>
+                    </span>
+                    <button type="button" class="media-lightbox__doodle-clear" data-lightbox-doodle-clear title="Clear scribbles" aria-label="Clear scribbles">Clear</button>
+                </div>
+                <div class="media-lightbox__tools">
+                    <button type="button" class="card-act" data-lightbox-doodle-toggle title="Scribble (preview only)" aria-label="Scribble (preview only)" aria-pressed="false">${CARD_ICONS.drawingPencil}</button>
+                    <button type="button" class="card-act" data-lightbox-rotate-left title="Rotate left (preview only)" aria-label="Rotate left (preview only)">${CARD_ICONS.rotateLeft}</button>
+                    <button type="button" class="card-act" data-lightbox-rotate-right title="Rotate right (preview only)" aria-label="Rotate right (preview only)">${CARD_ICONS.rotateRight}</button>
+                    <button type="button" class="card-act media-lightbox__close" data-lightbox-close title="Close" aria-label="Close">${CARD_ICONS.close}</button>
+                </div>
             </div>
             <div class="media-lightbox__zoom-badge" data-lightbox-zoom aria-hidden="true">100%</div>
             <div class="media-lightbox__hint" data-lightbox-hint aria-hidden="true">Scroll to zoom &middot; Drag to pan &middot; Double-click to reset</div>
