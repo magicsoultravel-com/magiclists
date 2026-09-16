@@ -73,6 +73,47 @@ const LAYOUT_BACKUP_KEYS = [
 const PRESENTATION_CLEAR_KEYS = [...new Set(LAYOUT_BACKUP_KEYS)];
 const BACKUP_KEYS = [...LAYOUT_BACKUP_KEYS, ...SIDEBAR_BACKUP_KEYS];
 
+/**
+ * Board stream: where notes sit (grid/freeform geometry, pins, views) plus the
+ * small "where is the chrome" state (sidebar, file cabinet, hidden id lists).
+ * High-frequency but tiny — updated on every drag/resize/pin/sort.
+ */
+export const BOARD_LAYOUT_BACKUP_KEYS = [
+    GRID_LAYOUT_KEY,
+    GRID_PINS_KEY,
+    GRID_EXPANDED_KEY,
+    FREEFORM_POSITIONS_KEY,
+    FREEFORM_SIZES_KEY,
+    'matrix_column_positions',
+    'matrix_column_sizes',
+    'matrix_column_note_layout',
+    'matrix_columns_float_positions',
+    'matrix_columns_float_sizes',
+    'matrix_canvas_layout_order',
+    'matrix_view_sessions',
+    'matrix_hidden_board_ids',
+    'matrix_calendar_hidden_ids',
+    'matrix_collapsed_categories',
+    'matrix_hidden_categories',
+    'matrix_file_cabinet',
+    'matrix_file_cabinet_order',
+    'matrix_file_cabinet_filed_categories',
+    'matrix_file_cabinet_category_order',
+    'matrix_file_cabinet_height',
+    'matrix_file_cabinet_shut'
+];
+export const BOARD_BACKUP_KEYS = [...BOARD_LAYOUT_BACKUP_KEYS, ...SIDEBAR_BACKUP_KEYS];
+
+/**
+ * Canvas stream: the magicCanvas board document lives in drawingBoard.js, but
+ * the two small layout keys that also describe it ride along here so a brush
+ * stroke never re-downloads board geometry. Low-frequency, largest payload.
+ */
+export const CANVAS_LAYOUT_BACKUP_KEYS = [
+    LEGACY_EXPANDED_KEY,
+    'matrix_workspace_mode'
+];
+
 let quotaDialogOpen = false;
 
 function readJson(key, fallback) {
@@ -949,6 +990,25 @@ export function getLayoutBackupKeys() {
     return payload;
 }
 
+function collectBackupKeys(keys) {
+    const payload = {};
+    keys.forEach((key) => {
+        const raw = localStorage.getItem(key);
+        if (raw != null) payload[key] = raw;
+    });
+    return payload;
+}
+
+/** Board stream payload (positions + chrome). */
+export function getBoardBackupKeys() {
+    return collectBackupKeys(BOARD_BACKUP_KEYS);
+}
+
+/** Canvas stream payload (small drawing chrome; the document lives in the store). */
+export function getCanvasBackupKeys() {
+    return collectBackupKeys(CANVAS_LAYOUT_BACKUP_KEYS);
+}
+
 export function repairSpatialLayoutStorage({ items = [], categories = [] } = {}) {
     const context = buildContext(items, categories);
     const migrateState = { quotaExceeded: false, failedKey: null };
@@ -969,6 +1029,27 @@ export function applyLayoutBackupKeys(payload = {}) {
             console.warn('[layoutStorage] quota exceeded restoring', key);
         }
     });
+}
+
+function applyBackupKeysFromList(keys, payload) {
+    if (!payload || typeof payload !== 'object') return;
+    keys.forEach((key) => {
+        if (payload[key] == null) return;
+        const value = typeof payload[key] === 'string' ? payload[key] : JSON.stringify(payload[key]);
+        if (!safeSetItem(key, value)) {
+            console.warn('[layoutStorage] quota exceeded restoring', key);
+        }
+    });
+}
+
+/** Restore a board stream package onto its own keys only. */
+export function applyBoardBackupKeys(payload = {}) {
+    applyBackupKeysFromList(BOARD_BACKUP_KEYS, payload);
+}
+
+/** Restore a canvas stream package onto its own keys only. */
+export function applyCanvasBackupKeys(payload = {}) {
+    applyBackupKeysFromList(CANVAS_LAYOUT_BACKUP_KEYS, payload);
 }
 
 const MATRIX_DATABASE_KEY = 'matrix_database';

@@ -1036,12 +1036,14 @@ renderQuickActions() {
                     try {
                         const parsedBackup = parseBackupPackage(event.target.result);
                         await applyBackupToStorage(parsedBackup);
-                        const itemCount = parsedBackup.matrix_database?.items?.length ?? 0;
+                        const storedDb = JSON.parse(localStorage.getItem('matrix_database') || 'null');
+                        const itemCount = Array.isArray(storedDb?.items) ? storedDb.items.length : 0;
+                        const patchNote = parsedBackup.delta ? ' Applied an incremental patch.' : '';
                         const token = parsedBackup.matrix_database?.auth?.admin_token;
                         const tokenNote = token
                             ? ' Admin session restored from backup.'
                             : ' Log in with your admin token to see private notes.';
-                        alert(`Restore successful (${itemCount} items).${tokenNote}`);
+                        alert(`Restore successful (${itemCount} items).${tokenNote}${patchNote}`);
                         window.location.reload();
                     } catch (err) {
                         console.error('[Import]', err);

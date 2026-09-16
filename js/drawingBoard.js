@@ -2190,25 +2190,39 @@ export const DrawingBoard = {
 
 const TOOLBAR_STATE_KEY = 'matrix_drawing_toolbar';
 
-export async function getDrawingBackupKeys() {
+/**
+ * Canvas stream payload: the magicCanvas document plus its own prefs/toolbar.
+ * Kept in drawingBoard.js next to readDocument()/writeDocument() because the
+ * document is big — reading it eagerly on every export tick would re-download
+ * the canvas on each unrelated board move.
+ */
+export async function getCanvasDocumentBackupKeys() {
     // IndexedDB is the primary store; read the persisted document directly.
     let matrix_global_drawing = null;
+    let referencedMediaIds = [];
     try {
         const doc = await readDocument();
         matrix_global_drawing = JSON.stringify(doc);
+        // Which media files the drawing points at — lets a canvas-only restore
+        // warn about images that still need the media ZIP instead of failing
+        // silently with blank placeholders.
+        const { collectNoteCanvasMediaIds } = await import('./noteFieldOwnership.js');
+        referencedMediaIds = collectNoteCanvasMediaIds(doc);
     } catch (e) {
         matrix_global_drawing = localStorage.getItem(STORAGE_KEY);
     }
 
     return {
         matrix_global_drawing,
+        referencedMediaIds,
         matrix_drawing_prefs: localStorage.getItem(PREFS_KEY),
-        matrix_workspace_mode: localStorage.getItem('matrix_workspace_mode'),
         matrix_drawing_toolbar: localStorage.getItem(TOOLBAR_STATE_KEY)
     };
 }
 
 export async function applyDrawingBackupKeys(backup) {
+    const { applyCanvasBackupKeys } = await import('./layoutStorage.js');
+    await applyCanvasBackupKeys(backup);
     if (backup.matrix_global_drawing != null) {
         let doc = backup.matrix_global_drawing;
         if (typeof doc === 'string') {
@@ -2233,9 +2247,6 @@ export async function applyDrawingBackupKeys(backup) {
         const prefs = typeof backup.matrix_drawing_prefs === 'string'
             ? backup.matrix_drawing_prefs : JSON.stringify(backup.matrix_drawing_prefs);
         localStorage.setItem(PREFS_KEY, prefs);
-    }
-    if (backup.matrix_workspace_mode != null) {
-        localStorage.setItem('matrix_workspace_mode', backup.matrix_workspace_mode);
     }
     const toolbarState = backup.matrix_drawing_toolbar;
     if (toolbarState != null) {

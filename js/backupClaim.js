@@ -95,7 +95,7 @@ export function mayCommit(claim, latest, token = null) {
  *
  * @param {string} claimToken
  * @param {object} latest            fresh config re-read from storage
- * @param {{ notes?: object, media?: object }} results
+ * @param {{ notes?: object, media?: object, board?: object, canvas?: object }} results
  * @returns {object|null}
  */
 export function finalizeClaim(claimToken, latest, results = {}) {
@@ -110,6 +110,12 @@ export function finalizeClaim(claimToken, latest, results = {}) {
     }
     if (results?.media && latest.media) {
         merged.media = { ...latest.media, ...results.media };
+    }
+    if (results?.board && latest.board) {
+        merged.board = { ...latest.board, ...results.board };
+    }
+    if (results?.canvas && latest.canvas) {
+        merged.canvas = { ...latest.canvas, ...results.canvas };
     }
     return merged;
 }

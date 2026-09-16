@@ -42,6 +42,16 @@ function baseConfig(overrides = {}) {
             lastZipFingerprint: null,
             lastZipExportAt: null
         },
+        board: {
+            enabled: true,
+            lastFingerprint: 'b0',
+            lastExportAt: 50
+        },
+        canvas: {
+            enabled: true,
+            lastFingerprint: 'c0',
+            lastExportAt: 51
+        },
         ...overrides
     };
 }
@@ -117,16 +127,38 @@ describe('backup claim — two-tab single-writer simulation', () => {
         // Winner commits and merges its results onto the fresh config.
         const merged = finalizeClaim(winner.token, shared, {
             notes: { lastFingerprint: 'w1', lastExportAt: 1001 },
-            media: { zipSnapshot: { fileA: 7 } }
+            media: { zipSnapshot: { fileA: 7 } },
+            board: { lastFingerprint: 'b1', lastExportAt: 1002 },
+            canvas: { lastFingerprint: 'c1', lastExportAt: 1003 }
         });
         assert.ok(merged);
         assert.equal(merged.runningClaim, null);
         assert.equal(merged.notes.lastFingerprint, 'w1');
         assert.equal(merged.notes.lastExportAt, 1001);
         assert.deepEqual(merged.media.zipSnapshot, { fileA: 7 });
+        assert.equal(merged.board.lastFingerprint, 'b1');
+        assert.equal(merged.board.lastExportAt, 1002);
+        assert.equal(merged.canvas.lastFingerprint, 'c1');
+        assert.equal(merged.canvas.lastExportAt, 1003);
         // Unrelated fields survive untouched.
         assert.equal(merged.enabled, true);
         assert.equal(merged.notes.format, 'json');
+    });
+
+    it('ignores results for a section the config does not carry yet', () => {
+        const now = 20_000;
+        const claim = createClaim(now);
+        const shared = baseConfig({ runningClaim: claim });
+        delete shared.board;
+        delete shared.canvas;
+
+        const merged = finalizeClaim(claim.token, shared, {
+            board: { lastFingerprint: 'b1' },
+            canvas: { lastFingerprint: 'c1' }
+        });
+        assert.ok(merged);
+        assert.equal('board' in merged, false);
+        assert.equal('canvas' in merged, false);
     });
 
     it('a stale/expired claim does not block a new bid', () => {

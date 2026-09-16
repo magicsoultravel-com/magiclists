@@ -117,7 +117,14 @@ export async function readDocument() {
     } catch (e) {
         // Ignore parse errors and fall through to empty document
     }
-    return createEmptyDocument();
+
+    // Nothing stored yet. Persist the fresh document before returning it so the
+    // canvas keeps a stable identity (page ids, active page) across reads —
+    // callers such as the scheduled backup fingerprint the document, and a new
+    // random id per read made every fingerprint look "changed".
+    const doc = createEmptyDocument();
+    await writeDocument(doc);
+    return doc;
 }
 
 export async function writeDocument(doc) {

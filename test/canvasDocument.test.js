@@ -71,6 +71,15 @@ describe('canvasDocument', () => {
         assert.deepEqual(getActiveStrokes(loaded), strokes);
     });
 
+    it('readDocument keeps a stable identity across reads (fingerprint-safe)', async () => {
+        const first = await readDocument();
+        const second = await readDocument();
+        // Scheduled backup fingerprints this document; a fresh random page id per
+        // read made unchanged workspaces look modified on every export tick.
+        assert.equal(second.activePageId, first.activePageId);
+        assert.deepEqual(second, first);
+    });
+
     it('migrateDocument upgrades legacy v1 stroke data', () => {
         const legacy = {
             strokes: [{ id: 'old', tool: 'brush', points: [{ x: 5, y: 6 }] }]

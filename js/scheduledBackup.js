@@ -2,16 +2,15 @@
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { positionPopoverBelowAnchor } from './popoverPosition.js';
 import {
-    backupFilename,
-    buildBackupPackage,
+    buildBoardExportPayload,
+    buildCanvasExportPayload,
     buildFullBackupArchivePayload,
+    buildNotesExportPayload,
     hashExportFingerprint,
     readLastLocalExportAt,
     readLastLocalTxtExportAt,
     readLastMediaMetaExportAt,
     readLastMediaZipExportAt,
-    serializeBackupPackage,
-    stableBackupFingerprintText,
     txtExportFilename,
     writeLastLocalExportAt,
     writeLastLocalTxtExportAt,
@@ -22,6 +21,7 @@ import {
     buildMediaMetaExportPayload,
     buildMediaZipExportPayload
 } from './mediaBackup.js';
+import { normalizeNotesSnapshot } from './backupDelta.js';
 import { itemToTxtExportText, sortItemsForTxtExport } from './noteBodyConversion.js';
 import { SidebarStats } from './sidebarStats.js';
 import {
@@ -34,62 +34,14 @@ import {
     normalizeClaim,
     scheduleNextDue
 } from './backupClaim.js';
+import {
+    clampAmount,
+    normalizeConfig
+} from './scheduledBackupConfig.js';
 
 const STORAGE_KEY = 'matrix_scheduled_export';
 const DEFAULT_TITLE = 'Scheduled backup';
 const RING_CIRCUMFERENCE = 2 * Math.PI * 11;
-
-function clampAmount(value, { allowZero = false } = {}) {
-    const n = Math.round(Number(value));
-    if (!Number.isFinite(n)) return allowZero ? 0 : 1;
-    const min = allowZero ? 0 : 1;
-    return Math.min(99, Math.max(min, n));
-}
-
-function normalizeNotesSection(raw, legacy) {
-    const format = raw?.format === 'txt' ? 'txt' : 'json';
-    return {
-        enabled: raw?.enabled !== undefined ? !!raw.enabled : true,
-        format,
-        lastFingerprint: typeof raw?.lastFingerprint === 'string'
-            ? raw.lastFingerprint
-            : (typeof legacy?.lastFingerprint === 'string' ? legacy.lastFingerprint : null),
-        lastExportAt: Number.isFinite(Number(raw?.lastExportAt)) ? Number(raw.lastExportAt) : null
-    };
-}
-
-function normalizeMediaSection(raw) {
-    const zipSnapshot = raw?.zipSnapshot && typeof raw.zipSnapshot === 'object' ? raw.zipSnapshot : {};
-    return {
-        enabled: !!raw?.enabled,
-        incremental: !!raw?.incremental,
-        lastMetaFingerprint: typeof raw?.lastMetaFingerprint === 'string' ? raw.lastMetaFingerprint : null,
-        lastMetaExportAt: Number.isFinite(Number(raw?.lastMetaExportAt)) ? Number(raw.lastMetaExportAt) : null,
-        lastZipFingerprint: typeof raw?.lastZipFingerprint === 'string' ? raw.lastZipFingerprint : null,
-        lastZipExportAt: Number.isFinite(Number(raw?.lastZipExportAt)) ? Number(raw.lastZipExportAt) : null,
-        lastZipMode: raw?.lastZipMode === 'incremental' ? 'incremental' : (raw?.lastZipMode === 'full' ? 'full' : null),
-        zipSnapshot
-    };
-}
-
-function normalizeConfig(raw) {
-    const unit = raw?.unit === 'hours' ? 'hours' : 'minutes';
-    const legacyFormat = raw?.format;
-    const hasLegacyShape = legacyFormat != null && raw?.notes == null;
-    return {
-        enabled: !!raw?.enabled,
-        paused: !!raw?.paused,
-        amount: clampAmount(raw?.amount ?? 30, { allowZero: true }),
-        unit,
-        nextDueAt: Number.isFinite(Number(raw?.nextDueAt)) ? Number(raw.nextDueAt) : null,
-        remainingMsWhenPaused: Number.isFinite(Number(raw?.remainingMsWhenPaused))
-            ? Number(raw.remainingMsWhenPaused)
-            : null,
-        runningClaim: normalizeClaim(raw?.runningClaim),
-        notes: normalizeNotesSection(raw?.notes, hasLegacyShape ? raw : null),
-        media: normalizeMediaSection(raw?.media)
-    };
-}
 
 function readConfig() {
     try {
@@ -186,6 +138,14 @@ function readMediaEnabledFromUi() {
 
 function readMediaIncrementalFromUi() {
     return !!document.querySelector('[data-schedule-media-incremental]')?.checked;
+}
+
+function readBoardEnabledFromUi() {
+    return !!document.querySelector('[data-schedule-board-enabled]')?.checked;
+}
+
+function readCanvasEnabledFromUi() {
+    return !!document.querySelector('[data-schedule-canvas-enabled]')?.checked;
 }
 
 /** Notes JSON + Media both enabled → one full archive download. */
@@ -329,12 +289,27 @@ export const ScheduledBackup = {
         const zipModeLabel = config.media.lastZipMode === 'incremental' ? 'incr' : 'full';
         const combinedMode = isCombinedArchiveMode(config);
         const incrementalDisabled = !config.media.enabled || combinedMode;
+        const notesJson = config.notes.format === 'json';
+        const notesIncrementalDisabled = !config.notes.enabled || !notesJson || combinedMode;
+        const sessionDisabled = combinedMode;
         const restoreHint = combinedMode
             ? 'Restore: use Import all for the combined archive.'
             : 'Restore: import latest meta JSON, then ZIP files oldest → newest.';
         const incrementalLabel = combinedMode
             ? 'Incremental content (disabled — combined archive is always a full snapshot)'
             : 'Incremental content (meta always full)';
+        const notesModeLabel = config.notes.lastMode === 'incremental' ? 'incr' : 'full';
+        const notesRestoreHint = combinedMode
+            ? 'Restore: the combined archive carries notes, media and layout.'
+            : (config.notes.incremental && !notesJson
+                ? 'TXT export is always a full dump.'
+                : 'Restore: import the newest full notes file, then incr files oldest → newest.');
+        const boardHint = combinedMode
+            ? 'Included in the combined archive.'
+            : 'Positions + chrome are written only when they change.';
+        const canvasHint = combinedMode
+            ? 'Included in the combined archive.'
+            : 'The drawing is written only when it changes.';
 
         body.innerHTML = `
             <div class="schedule-export-popover__field">
@@ -362,7 +337,32 @@ export const ScheduledBackup = {
                             <button type="button" class="schedule-export-popover__seg-btn${config.notes.format === 'txt' ? ' is-active' : ''}" data-schedule-notes-format="txt">TXT</button>
                         </div>
                     </div>
-                    <p class="schedule-export-popover__meta">Last: JSON ${escapeAttr(formatRelativePast(jsonLast))} · TXT ${escapeAttr(formatRelativePast(txtLast))}</p>
+                    <p class="schedule-export-popover__meta">Last: JSON ${escapeAttr(formatRelativePast(jsonLast))}${notesJson && config.notes.lastMode ? ` (${escapeAttr(notesModeLabel)})` : ''} · TXT ${escapeAttr(formatRelativePast(txtLast))}</p>
+                    <label class="schedule-export-popover__check">
+                        <input type="checkbox" data-schedule-notes-incremental${config.notes.incremental && !notesIncrementalDisabled ? ' checked' : ''}${notesIncrementalDisabled ? ' disabled' : ''}>
+                        <span>Incremental content (only changed notes)</span>
+                    </label>
+                    <p class="schedule-export-popover__meta schedule-export-popover__hint">${escapeAttr(notesRestoreHint)}</p>
+                </div>
+            </div>
+            <div class="schedule-export-popover__section">
+                <label class="schedule-export-popover__section-head">
+                    <input type="checkbox" data-schedule-board-enabled${config.board.enabled && !sessionDisabled ? ' checked' : ''}${sessionDisabled ? ' disabled' : ''}>
+                    <span>BOARD</span>
+                </label>
+                <div class="schedule-export-popover__section-body">
+                    <p class="schedule-export-popover__meta">Last: ${escapeAttr(formatRelativePast(config.board.lastExportAt))}</p>
+                    <p class="schedule-export-popover__meta schedule-export-popover__hint">${escapeAttr(boardHint)}</p>
+                </div>
+            </div>
+            <div class="schedule-export-popover__section">
+                <label class="schedule-export-popover__section-head">
+                    <input type="checkbox" data-schedule-canvas-enabled${config.canvas.enabled && !sessionDisabled ? ' checked' : ''}${sessionDisabled ? ' disabled' : ''}>
+                    <span>CANVAS</span>
+                </label>
+                <div class="schedule-export-popover__section-body">
+                    <p class="schedule-export-popover__meta">Last: ${escapeAttr(formatRelativePast(config.canvas.lastExportAt))}</p>
+                    <p class="schedule-export-popover__meta schedule-export-popover__hint">${escapeAttr(canvasHint)}</p>
                 </div>
             </div>
             <div class="schedule-export-popover__section">
@@ -410,6 +410,24 @@ export const ScheduledBackup = {
             next.media.enabled = !!e.target.checked;
             writeConfig(next);
             this.renderBody();
+        });
+
+        body.querySelector('[data-schedule-notes-incremental]')?.addEventListener('change', (e) => {
+            const next = readConfig();
+            next.notes.incremental = !!e.target.checked;
+            writeConfig(next);
+        });
+
+        body.querySelector('[data-schedule-board-enabled]')?.addEventListener('change', (e) => {
+            const next = readConfig();
+            next.board.enabled = !!e.target.checked;
+            writeConfig(next);
+        });
+
+        body.querySelector('[data-schedule-canvas-enabled]')?.addEventListener('change', (e) => {
+            const next = readConfig();
+            next.canvas.enabled = !!e.target.checked;
+            writeConfig(next);
         });
 
         body.querySelector('[data-schedule-media-incremental]')?.addEventListener('change', (e) => {
@@ -463,6 +481,18 @@ export const ScheduledBackup = {
     persistUiTargets(config) {
         config.notes.enabled = readNotesEnabledFromUi();
         config.media.enabled = readMediaEnabledFromUi();
+        const boardEl = document.querySelector('[data-schedule-board-enabled]');
+        if (boardEl && !boardEl.disabled) {
+            config.board.enabled = !!boardEl.checked;
+        }
+        const canvasEl = document.querySelector('[data-schedule-canvas-enabled]');
+        if (canvasEl && !canvasEl.disabled) {
+            config.canvas.enabled = !!canvasEl.checked;
+        }
+        const notesIncrEl = document.querySelector('[data-schedule-notes-incremental]');
+        if (notesIncrEl && !notesIncrEl.disabled) {
+            config.notes.incremental = !!notesIncrEl.checked;
+        }
         const incrEl = document.querySelector('[data-schedule-media-incremental]');
         if (incrEl && !incrEl.disabled) {
             config.media.incremental = !!incrEl.checked;
@@ -472,7 +502,7 @@ export const ScheduledBackup = {
 
     start() {
         const config = this.persistUiTargets(readConfig());
-        if (!config.notes.enabled && !config.media.enabled) {
+        if (!config.notes.enabled && !config.media.enabled && !config.board.enabled && !config.canvas.enabled) {
             return;
         }
         config.enabled = true;
@@ -624,23 +654,28 @@ export const ScheduledBackup = {
         this.busy = true;
         let statsDirty = false;
         try {
-            const results = { notes: null, media: null };
+            const results = { notes: null, media: null, board: null, canvas: null };
             if (isCombinedArchiveMode(config)) {
                 const combined = await this.exportCombinedArchive(config);
                 statsDirty = combined.changed || statsDirty;
                 results.notes = combined.notesPatch;
                 results.media = combined.mediaPatch;
             } else {
-                if (config.notes.enabled) {
-                    const notesResult = await this.exportNotes(config);
-                    statsDirty = notesResult.changed || statsDirty;
-                    results.notes = notesResult.patch;
-                }
-                if (config.media.enabled) {
-                    const mediaResult = await this.exportMedia(config);
-                    statsDirty = mediaResult.changed || statsDirty;
-                    results.media = mediaResult.patch;
-                }
+                // Failure isolation: one stream throwing must not block the
+                // others, and whatever succeeded still commits to the config.
+                const runStream = async (name, exportFn) => {
+                    try {
+                        const result = await exportFn(config);
+                        statsDirty = result.changed || statsDirty;
+                        results[name] = result.patch;
+                    } catch (err) {
+                        console.warn(`[ScheduledBackup] ${name} export failed`, err);
+                    }
+                };
+                if (config.notes.enabled) await runStream('notes', (c) => this.exportNotes(c));
+                if (config.media.enabled) await runStream('media', (c) => this.exportMedia(c));
+                if (config.board.enabled) await runStream('board', (c) => this.exportBoard(c));
+                if (config.canvas.enabled) await runStream('canvas', (c) => this.exportCanvas(c));
             }
             this.finalizeExport(claimToken, results);
             if (statsDirty) SidebarStats.update();
@@ -687,7 +722,7 @@ export const ScheduledBackup = {
 
         return {
             changed: true,
-            notesPatch: { lastFingerprint: fingerprint, lastExportAt: ts },
+            notesPatch: { lastFingerprint: fingerprint, lastExportAt: ts, lastMode: 'full' },
             mediaPatch: {
                 lastZipFingerprint: fingerprint,
                 lastZipExportAt: ts,
@@ -700,24 +735,70 @@ export const ScheduledBackup = {
     /**
      * Build + download a notes payload. Returns a { changed, patch } pair so the
      * caller can merge the result without touching the shared config directly.
+     * JSON honours the incremental setting (baseline first, then changed notes
+     * only); TXT is always a full dump and leaves the JSON patch chain alone.
      */
     async exportNotes(config) {
-        const payload = await this.buildNotesPayload(config.notes.format);
+        const payload = await this.buildNotesPayload(config.notes);
+        if (payload.skipped) return { changed: false, patch: null };
+
         const fingerprint = hashExportFingerprint(payload.textForFingerprint || payload.text);
-        if (fingerprint === config.notes.lastFingerprint) {
+        // Full/baseline payloads are deduped by fingerprint; patches are already
+        // gated by the revision snapshot, so never skip them by fingerprint.
+        if (!payload.isIncremental && fingerprint === config.notes.lastFingerprint) {
             return { changed: false, patch: null };
         }
 
         downloadBlob(payload.blob, payload.filename);
         const ts = payload.timestamp || Math.floor(Date.now() / 1000);
+        const patch = { lastFingerprint: fingerprint, lastExportAt: ts };
+
         if (config.notes.format === 'txt') {
             writeLastLocalTxtExportAt(ts);
         } else {
             writeLastLocalExportAt(ts);
+            if (payload.nextSnapshot) {
+                patch.patchSnapshot = payload.nextSnapshot;
+                patch.lastMode = payload.isIncremental ? 'incremental' : 'full';
+            }
         }
+
+        return { changed: true, patch };
+    },
+
+    /**
+     * Board stream: positions + chrome. Tiny file, own fingerprint, so dragging
+     * a card never rewrites notes or the canvas — and drawing never rewrites it.
+     */
+    async exportBoard(config) {
+        const payload = await buildBoardExportPayload();
+        const fingerprint = hashExportFingerprint(payload.textForFingerprint || payload.text);
+        if (fingerprint === config.board.lastFingerprint) {
+            return { changed: false, patch: null };
+        }
+
+        downloadBlob(payload.blob, payload.filename);
         return {
             changed: true,
-            patch: { lastFingerprint: fingerprint, lastExportAt: ts }
+            patch: { lastFingerprint: fingerprint, lastExportAt: payload.timestamp }
+        };
+    },
+
+    /**
+     * Canvas stream: the magicCanvas document on its own fingerprint, so a
+     * brush stroke never rewrites notes or board positions.
+     */
+    async exportCanvas(config) {
+        const payload = await buildCanvasExportPayload();
+        const fingerprint = hashExportFingerprint(payload.textForFingerprint || payload.text);
+        if (fingerprint === config.canvas.lastFingerprint) {
+            return { changed: false, patch: null };
+        }
+
+        downloadBlob(payload.blob, payload.filename);
+        return {
+            changed: true,
+            patch: { lastFingerprint: fingerprint, lastExportAt: payload.timestamp }
         };
     },
 
@@ -761,26 +842,29 @@ export const ScheduledBackup = {
         return { changed, patch: changed ? mediaPatch : null };
     },
 
-    async buildNotesPayload(format) {
+    /**
+     * @param {{ format?: string, incremental?: boolean, patchSnapshot?: object }} notesConfig
+     */
+    async buildNotesPayload(notesConfig = {}) {
+        const format = notesConfig.format === 'txt' ? 'txt' : 'json';
         if (format === 'txt') {
             const text = buildTxtContent(this.getItems());
             return {
+                skipped: false,
+                isIncremental: false,
+                nextSnapshot: null,
                 text,
+                textForFingerprint: text,
                 blob: new Blob([text], { type: 'text/plain' }),
                 filename: txtExportFilename(),
                 timestamp: Math.floor(Date.now() / 1000)
             };
         }
-        const backupPackage = await buildBackupPackage();
-        const text = serializeBackupPackage(backupPackage);
-        const textForFingerprint = stableBackupFingerprintText(backupPackage);
-        return {
-            text,
-            textForFingerprint,
-            blob: new Blob([text], { type: 'application/json' }),
-            filename: backupFilename(backupPackage.timestamp),
-            timestamp: backupPackage.timestamp
-        };
+
+        return buildNotesExportPayload({
+            incremental: !!notesConfig.incremental,
+            snapshot: notesConfig.patchSnapshot
+        });
     },
 
     syncButton() {

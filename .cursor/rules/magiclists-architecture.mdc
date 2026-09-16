@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-09-12T21:01:57.198Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-09-16T13:42:09.203Z
 
 ## CSS load order
 
@@ -49,8 +49,9 @@ alwaysApply: true
 | js/api.js | item CRUD and matrix_database localStorage persistence | noteModel.js, layoutStorage.js, sync.js | — | — |
 | js/app.js | application orchestration, event bus listeners, workspace init | api.js, ui.js, layoutStorage.js | item:mutation_requested, item:selected_for_edit, board:visibility_changed, calendar:add_note | — |
 | js/appDocuments.js | multi-document element lookup for module popouts | sidebarModulePopout.js, sidebarModules.js | — | — |
-| js/backup.js | local backup export/import, encrypted packages | cloudBackup.js, api.js | — | — |
+| js/backup.js | local backup export/import, encrypted packages, notes content/layout streams | cloudBackup.js, api.js, backupDelta.js | — | — |
 | js/backupClaim.js | cross-tab scheduled-backup claim/lease coordination | scheduledBackup.js, backup.js, mediaBackup.js | — | — |
+| js/backupDelta.js | pure incremental-backup helpers (export fingerprint hash, note revision snapshots, notes patch build/merge) | backup.js, scheduledBackup.js | — | — |
 | js/board/gridEngine.js | grid board layout engine, push resolution | board/noteGeometry.js, layoutStorage.js, gridDensity.js | — | — |
 | js/board/noteGeometry.js | grid note geometry, push layout, tile bounds | board/gridEngine.js, tileGeometry.js | — | — |
 | js/boardOperations.js | item visibility, archiving, calendar integration, card actions | noteSurface.js, noteQuickActions.js, desktopManager.js | — | — |
@@ -98,6 +99,7 @@ alwaysApply: true
 | js/popoutWindows.js | shared popout window helpers (PiP, browser popup, styles) | notePopoutBridge.js, sidebarModulePopout.js | — | — |
 | js/richText.js | rich text sanitize, linkify, strip markup | noteSurface.js, noteModel.js | — | — |
 | js/scheduledBackup.js | scheduled local JSON/TXT/media auto-export timer and popover | backup.js, mediaBackup.js, app.js, noteQuickActions.js | — | — |
+| js/scheduledBackupConfig.js | pure scheduled-backup config shape + old-session migration | scheduledBackup.js, backupClaim.js, backupDelta.js | — | — |
 | js/searchBar.js | sidebar search bar and results panel | searchFilter.js, hamburger.js | — | — |
 | js/sheet.js | sheet-grid note template model and table interactions | noteSurface.js, editor.js | — | — |
 | js/sidebarHistory.js | sidebar undo history module | undo.js, popoverPosition.js, sidebarModules.js | — | — |

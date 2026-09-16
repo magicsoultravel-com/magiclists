@@ -1,4 +1,4 @@
-/** @module {"owns":"local backup export/import, encrypted packages", "related":["cloudBackup.js","api.js"]} */
+/** @module {"owns":"local backup export/import, encrypted packages, notes content/layout streams", "related":["cloudBackup.js","api.js","backupDelta.js"]} */
 import { repairDatabase } from './api.js';
 import {
     ensureUncategorizedCategory,
@@ -6,10 +6,20 @@ import {
     readStoredCategories,
     writeStoredCategories
 } from './categories.js';
-import { applyLayoutBackupKeys, getLayoutBackupKeys, repairSpatialLayoutStorage } from './layoutStorage.js';
-import { applyDrawingBackupKeys, getDrawingBackupKeys } from './drawingBoard.js';
+import { applyBoardBackupKeys, applyCanvasBackupKeys, applyLayoutBackupKeys, getBoardBackupKeys, getCanvasBackupKeys, getLayoutBackupKeys, repairSpatialLayoutStorage } from './layoutStorage.js';
+import { applyDrawingBackupKeys, getCanvasDocumentBackupKeys } from './drawingBoard.js';
 import { getCreatedTimestamp, getUpdatedTimestamp } from './noteModel.js';
 import { applyMediaLibraryBackupSection, buildMediaLibraryBackupSection, applyMediaFromZipMap, collectMediaZipEntries, buildZipStore, readZip } from './mediaBackup.js';
+import {
+    NOTES_PATCH_KIND,
+    diffNotesAgainstSnapshot,
+    hashExportFingerprint,
+    isNotesPatchPackage,
+    mergeNotesPatchDatabase,
+    normalizeNotesSnapshot
+} from './backupDelta.js';
+
+export { hashExportFingerprint } from './backupDelta.js';
 
 export const BACKUP_FILE_PREFIX = 'magicnotes_backup_';
 export const LEGACY_BACKUP_FILE_PREFIX = 'matrix_workspace_backup_';
@@ -20,6 +30,16 @@ export const LAST_LOCAL_TXT_EXPORT_KEY = 'matrix_last_local_txt_export_at';
 export const LAST_MEDIA_META_EXPORT_KEY = 'matrix_last_media_meta_export_at';
 export const LAST_MEDIA_ZIP_EXPORT_KEY = 'matrix_last_media_zip_export_at';
 const CLOUD_CONFIG_KEY = 'matrix_cloud_config';
+
+/** Scheduled notes content streams (baseline full + incremental patches). */
+export const NOTES_BASELINE_FILE_PREFIX = 'magicnotes_notes_backup_';
+export const NOTES_PATCH_FILE_PREFIX = 'magicnotes_notes_incr_';
+/** Board stream: note positions + board/sidebar chrome (tiny, high-frequency). */
+export const BOARD_FILE_PREFIX = 'magicnotes_board_';
+export const BOARD_PACKAGE_KIND = 'magicnotes_board';
+/** Canvas stream: the magicCanvas document + its own prefs (large, low-frequency). */
+export const CANVAS_FILE_PREFIX = 'magicnotes_canvas_';
+export const CANVAS_PACKAGE_KIND = 'magicnotes_canvas';
 
 export function formatExportTimestamp(timestamp) {
     if (!timestamp) return 'Never';
@@ -82,16 +102,6 @@ export function writeLastMediaZipExportAt(timestamp) {
     localStorage.setItem(LAST_MEDIA_ZIP_EXPORT_KEY, String(timestamp));
 }
 
-/** Stable sync fingerprint for skip-if-unchanged scheduled exports. */
-export function hashExportFingerprint(text) {
-    const str = String(text ?? '');
-    let hash = 5381;
-    for (let i = 0; i < str.length; i++) {
-        hash = ((hash << 5) + hash) ^ str.charCodeAt(i);
-    }
-    return (hash >>> 0).toString(16);
-}
-
 export function readLastCloudExportAt() {
     try {
         const config = JSON.parse(localStorage.getItem(CLOUD_CONFIG_KEY) || 'null');
@@ -115,79 +125,145 @@ export function txtExportFilename(date = new Date()) {
     return `${TXT_FILE_PREFIX}${day.toISOString().split('T')[0]}.txt`;
 }
 
+export function notesBaselineFilename(timestamp = Math.floor(Date.now() / 1000)) {
+    return `${NOTES_BASELINE_FILE_PREFIX}${timestamp}.json`;
+}
+
+export function notesPatchFilename(timestamp = Math.floor(Date.now() / 1000)) {
+    return `${NOTES_PATCH_FILE_PREFIX}${timestamp}.json`;
+}
+
+export function boardFilename(timestamp = Math.floor(Date.now() / 1000)) {
+    return `${BOARD_FILE_PREFIX}${timestamp}.json`;
+}
+
+export function canvasFilename(timestamp = Math.floor(Date.now() / 1000)) {
+    return `${CANVAS_FILE_PREFIX}${timestamp}.json`;
+}
+
+/** Parse a raw localStorage value into JSON, falling back to the raw string. */
+function parseStoredValue(raw) {
+    if (raw == null) return null;
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return raw;
+    }
+}
+
+/** Turn a `{ key: rawString }` map into a `{ key: parsedValue }` map. */
+function parseKeyMap(keyMap) {
+    return Object.fromEntries(
+        Object.entries(keyMap).map(([key, raw]) => [key, parseStoredValue(raw)])
+    );
+}
+
+function readDesktopsConfig() {
+    const raw = localStorage.getItem('magicnotes_desktops_config');
+    if (!raw) return null;
+    try {
+        return JSON.parse(raw);
+    } catch {
+        return null;
+    }
+}
+
+/** Notes content + categories + desktop config. No media, no layout/canvas. */
+export async function buildContentBackupPackage() {
+    return buildBackupPackage({ include: 'content' });
+}
+
+/** Board stream: note positions + board/sidebar chrome only. No canvas document. */
+export async function buildBoardBackupPackage() {
+    return buildBackupPackage({ include: 'board' });
+}
+
+/** Canvas stream: magicCanvas document + its own prefs only. No board geometry. */
+export async function buildCanvasBackupPackage() {
+    return buildBackupPackage({ include: 'canvas' });
+}
+
 /**
- * @param {{ embed?: boolean }} [opts]
+ * Build a backup package.
+ *
+ * `include` keeps the export concerns separate so the frequent (scheduled)
+ * notes file never carries binaries, layout or canvas state:
+ *   - `all`     (default, legacy) — notes + media_library + layout + canvas
+ *   - `content` — notes db + categories + desktops only
+ *   - `board`   — note positions + board/sidebar chrome only
+ *   - `canvas`  — magicCanvas document + its own prefs only
+ *
+ * @param {{ embed?: boolean, include?: 'all'|'content'|'board'|'canvas' }} [opts]
  */
 export async function buildBackupPackage(opts = {}) {
     const embed = opts.embed !== false;
-    const categories = readStoredCategories({ keepEmpty: true });
-    writeStoredCategories(categories, { keepEmpty: true });
+    const includeRaw = opts.include;
+    const include = includeRaw === 'content'
+        || includeRaw === 'board'
+        || includeRaw === 'canvas'
+        ? includeRaw : 'all';
+    const timestamp = Math.floor(Date.now() / 1000);
+    const pkg = { timestamp };
 
-    const databasePayload = localStorage.getItem('matrix_database');
-    let matrix_database = databasePayload ? JSON.parse(databasePayload) : null;
-    if (matrix_database) {
-        // Run the shared non-destructive repair so exports are always clean:
-        // drops id-less structural-twin duplicates and backfills missing
-        // id/schema metadata. This prevents a malformed local state (e.g. an
-        // id-less snapshot pushed as a new item) from being serialized as
-        // authoritative.
-        matrix_database = repairDatabase(matrix_database);
-        matrix_database = {
-            ...matrix_database,
-            settings: {
-                ...(matrix_database.settings || {}),
-                categories: categories.map((cat) => cat.name)
+    // Notes content only rides the content + all streams. Board/canvas/session
+    // packages must never carry the whole note database next to a few keys.
+    if (include === 'content' || include === 'all') {
+        const categories = readStoredCategories({ keepEmpty: true });
+        writeStoredCategories(categories, { keepEmpty: true });
+
+        const databasePayload = localStorage.getItem('matrix_database');
+        let matrix_database = parseStoredValue(databasePayload);
+        if (matrix_database) {
+            // Run the shared non-destructive repair so exports are always clean:
+            // drops id-less structural-twin duplicates and backfills missing
+            // id/schema metadata. This prevents a malformed local state (e.g. an
+            // id-less snapshot pushed as a new item) from being serialized as
+            // authoritative.
+            matrix_database = repairDatabase(matrix_database);
+            matrix_database = {
+                ...matrix_database,
+                settings: {
+                    ...(matrix_database.settings || {}),
+                    categories: categories.map((cat) => cat.name)
+                }
+            };
+        }
+
+        pkg.matrix_database = matrix_database;
+        pkg.matrix_custom_categories = categories;
+        pkg.desktopsConfig = readDesktopsConfig();
+
+        // Media binaries belong to the media stream (meta JSON + ZIP), never to
+        // the notes content file — embedding them here duplicated the library.
+        if (include === 'all') {
+            try {
+                pkg.media_library = await buildMediaLibraryBackupSection({ embed });
+            } catch (err) {
+                console.warn('[Backup] media_library section skipped', err);
+                pkg.media_library = { version: 1, exportedAt: timestamp, items: [] };
             }
-        };
-    }
-
-    const layoutKeys = getLayoutBackupKeys();
-    const drawingKeys = await getDrawingBackupKeys();
-
-    // Include desktop configuration in backup
-    const desktopConfig = localStorage.getItem('magicnotes_desktops_config');
-    let desktopsConfig = null;
-    if (desktopConfig) {
-        try {
-            desktopsConfig = JSON.parse(desktopConfig);
-        } catch {
-            // Ignore parse errors
         }
     }
 
-    let media_library = null;
-    try {
-        media_library = await buildMediaLibraryBackupSection({ embed });
-    } catch (err) {
-        console.warn('[Backup] media_library section skipped', err);
-        media_library = { version: 1, exportedAt: Math.floor(Date.now() / 1000), items: [] };
+    if (include === 'board') {
+        pkg.kind = BOARD_PACKAGE_KIND;
+        Object.assign(pkg, parseKeyMap(getBoardBackupKeys()));
     }
-    
-    return {
-        timestamp: Math.floor(Date.now() / 1000),
-        matrix_database,
-        matrix_custom_categories: categories,
-        desktopsConfig,
-        media_library,
-        ...Object.fromEntries(
-            Object.entries(layoutKeys).map(([key, raw]) => {
-                try {
-                    return [key, JSON.parse(raw)];
-                } catch {
-                    return [key, raw];
-                }
-            })
-        ),
-        ...Object.fromEntries(
-            Object.entries(drawingKeys).map(([key, raw]) => {
-                try {
-                    return [key, JSON.parse(raw)];
-                } catch {
-                    return [key, raw];
-                }
-            })
-        )
-    };
+
+    if (include === 'canvas') {
+        pkg.kind = CANVAS_PACKAGE_KIND;
+        Object.assign(pkg, parseKeyMap(getCanvasBackupKeys()));
+        Object.assign(pkg, parseKeyMap(await getCanvasDocumentBackupKeys()));
+    }
+
+    if (include === 'all') {
+        // Manual / cloud / combined-archive shape: everything except binaries.
+        Object.assign(pkg, parseKeyMap(getLayoutBackupKeys()));
+        Object.assign(pkg, parseKeyMap(getCanvasBackupKeys()));
+        Object.assign(pkg, parseKeyMap(await getCanvasDocumentBackupKeys()));
+    }
+
+    return pkg;
 }
 
 /** Stable fingerprint text for a backup package (strips wall-clock fields). */
@@ -245,6 +321,131 @@ export async function buildFullBackupArchivePayload() {
 }
 
 /**
+ * Build the scheduled notes export payload — a full content baseline the first
+ * time (and whenever incremental is off), otherwise a patch with just the notes
+ * that changed since the stored snapshot. Mirrors the media ZIP stream:
+ * `skipped` means there is nothing to write, and `nextSnapshot` is persisted by
+ * the caller so the next patch stays relative to the previous one.
+ *
+ * @param {{ incremental?: boolean, snapshot?: object }} [opts]
+ * @returns {Promise<{
+ *   skipped: boolean,
+ *   isIncremental: boolean,
+ *   nextSnapshot: object,
+ *   text: string|null,
+ *   textForFingerprint: string|null,
+ *   blob: Blob|null,
+ *   filename: string|null,
+ *   timestamp: number
+ * }>}
+ */
+export async function buildNotesExportPayload(opts = {}) {
+    const incremental = !!opts.incremental;
+    const snapshot = normalizeNotesSnapshot(opts.snapshot);
+    const hasBaseline = snapshot.baseAt != null;
+    const timestamp = Math.floor(Date.now() / 1000);
+
+    const pkg = await buildContentBackupPackage();
+    pkg.timestamp = timestamp;
+
+    const items = Array.isArray(pkg.matrix_database?.items) ? pkg.matrix_database.items : [];
+    const { changed, removed, revisions } = diffNotesAgainstSnapshot(items, snapshot);
+    const categoriesFp = hashExportFingerprint(JSON.stringify(pkg.matrix_custom_categories || []));
+    const desktopsFp = hashExportFingerprint(JSON.stringify(pkg.desktopsConfig ?? null));
+    const headerChanged = categoriesFp !== snapshot.categories || desktopsFp !== snapshot.desktops;
+
+    if (!incremental || !hasBaseline) {
+        const text = serializeBackupPackage(pkg);
+        return {
+            skipped: false,
+            isIncremental: false,
+            nextSnapshot: {
+                baseAt: timestamp,
+                items: revisions,
+                categories: categoriesFp,
+                desktops: desktopsFp
+            },
+            text,
+            textForFingerprint: stableBackupFingerprintText(pkg),
+            blob: new Blob([text], { type: 'application/json' }),
+            filename: notesBaselineFilename(timestamp),
+            timestamp
+        };
+    }
+
+    if (!changed.length && !removed.length && !headerChanged) {
+        return {
+            skipped: true,
+            isIncremental: true,
+            nextSnapshot: { ...snapshot, items: revisions },
+            text: null,
+            textForFingerprint: null,
+            blob: null,
+            filename: null,
+            timestamp
+        };
+    }
+
+    const patch = {
+        kind: NOTES_PATCH_KIND,
+        version: 1,
+        timestamp,
+        baseAt: snapshot.baseAt,
+        matrix_custom_categories: pkg.matrix_custom_categories,
+        desktopsConfig: pkg.desktopsConfig,
+        matrix_database: { ...(pkg.matrix_database || {}), items: changed },
+        delta: {
+            upserted: changed.map((item) => item?.id).filter(Boolean),
+            removed,
+            itemCount: items.length
+        }
+    };
+    const text = serializeBackupPackage(patch);
+
+    return {
+        skipped: false,
+        isIncremental: true,
+        nextSnapshot: {
+            baseAt: snapshot.baseAt,
+            items: revisions,
+            categories: categoriesFp,
+            desktops: desktopsFp
+        },
+        text,
+        textForFingerprint: stableBackupFingerprintText(patch),
+        blob: new Blob([text], { type: 'application/json' }),
+        filename: notesPatchFilename(timestamp),
+        timestamp
+    };
+}
+
+/** Board stream payload: positions + chrome, no canvas document. */
+export async function buildBoardExportPayload() {
+    const pkg = await buildBoardBackupPackage();
+    const text = serializeBackupPackage(pkg);
+    return {
+        text,
+        textForFingerprint: stableBackupFingerprintText(pkg),
+        blob: new Blob([text], { type: 'application/json' }),
+        filename: boardFilename(pkg.timestamp),
+        timestamp: pkg.timestamp
+    };
+}
+
+/** Canvas stream payload: the drawing document on its own fingerprint. */
+export async function buildCanvasExportPayload() {
+    const pkg = await buildCanvasBackupPackage();
+    const text = serializeBackupPackage(pkg);
+    return {
+        text,
+        textForFingerprint: stableBackupFingerprintText(pkg),
+        blob: new Blob([text], { type: 'application/json' }),
+        filename: canvasFilename(pkg.timestamp),
+        timestamp: pkg.timestamp
+    };
+}
+
+/**
  * Restore a full archive ZIP (workspace.json + media/).
  * @param {File|Blob} file
  */
@@ -270,6 +471,16 @@ export function serializeBackupPackage(pkg) {
     return JSON.stringify(pkg, null, 2);
 }
 
+/** Any package this app produced (full, legacy, content, patch or session). */
+export function isRecognizedBackupPackage(parsed) {
+    if (!parsed || typeof parsed !== 'object') return false;
+    if (parsed.matrix_database || parsed.matrix_custom_categories) return true;
+    if (parsed.desktopsConfig || parsed.media_library) return true;
+    if (parsed.kind === BOARD_PACKAGE_KIND || parsed.kind === CANVAS_PACKAGE_KIND || isNotesPatchPackage(parsed)) return true;
+    // Layout/canvas-only payloads are just a set of `matrix_*` keys.
+    return Object.keys(parsed).some((key) => key.startsWith('matrix_'));
+}
+
 export function parseBackupPackage(text) {
     const parsed = typeof text === 'string' ? JSON.parse(text) : text;
     if (!parsed || typeof parsed !== 'object') {
@@ -278,7 +489,7 @@ export function parseBackupPackage(text) {
     if (parsed[ENCRYPTED_BACKUP_MARKER]) {
         throw new Error('Encrypted backup — passphrase required.');
     }
-    if (!parsed.matrix_database && !parsed.matrix_custom_categories) {
+    if (!isRecognizedBackupPackage(parsed)) {
         throw new Error('Not a Magic Lists backup file (missing matrix_database).');
     }
     return parsed;
@@ -444,16 +655,71 @@ export function migrateImportedDatabase(db, categories = []) {
     };
 }
 
+/**
+ * Turn an imported package into the replace-style snapshot the rest of this
+ * module expects. Notes patches are merged onto the current local database
+ * (upsert changed notes, drop removed ones) so incremental files compose.
+ *
+ * @param {object} parsedBackup
+ * @returns {object}
+ */
+export function resolveImportedPackage(parsedBackup) {
+    if (!isNotesPatchPackage(parsedBackup)) return parsedBackup;
+
+    let currentDb = null;
+    try {
+        const raw = localStorage.getItem('matrix_database');
+        currentDb = raw ? JSON.parse(raw) : null;
+    } catch {
+        currentDb = null;
+    }
+
+    const merged = mergeNotesPatchDatabase(currentDb, parsedBackup);
+    return { ...parsedBackup, kind: undefined, matrix_database: merged };
+}
+
+/**
+ * Canvas-only restores can reference media files that live in the media
+ * library, not in the canvas package. Surface that honestly instead of leaving
+ * the user with silent blank images. Best-effort: never blocks the restore.
+ *
+ * @param {object} pkg parsed canvas package
+ */
+async function warnCanvasMediaGaps(pkg) {
+    const referenced = Array.isArray(pkg?.referencedMediaIds) ? pkg.referencedMediaIds : [];
+    if (!referenced.length) return;
+    try {
+        const { getMediaMeta } = await import('./mediaLibrary.js');
+        const missing = [];
+        for (const mediaId of referenced) {
+            try {
+                const meta = await getMediaMeta(mediaId);
+                if (!meta || meta.blobPresent === false) missing.push(mediaId);
+            } catch {
+                missing.push(mediaId);
+            }
+        }
+        if (!missing.length) return;
+        const message = `Canvas restored, but ${missing.length} image${missing.length === 1 ? '' : 's'} need their media files. Import the media ZIP (magicnotes_media_backup_*) to fill them in.`;
+        console.warn('[Backup] canvas media gaps:', missing);
+        const { showAppToast } = await import('./toast.js');
+        showAppToast(message);
+    } catch {
+        // Headless / offline restore — the console warn above still fired.
+    }
+}
+
 export async function applyBackupToStorage(parsedBackup) {
-    const categories = parsedBackup.matrix_custom_categories
-        ? ensureUncategorizedCategory(normalizeCategories(parsedBackup.matrix_custom_categories, { keepEmpty: true }))
+    const incoming = resolveImportedPackage(parsedBackup);
+    const categories = incoming.matrix_custom_categories
+        ? ensureUncategorizedCategory(normalizeCategories(incoming.matrix_custom_categories, { keepEmpty: true }))
         : [];
 
     if (categories.length) {
         writeStoredCategories(categories, { keepEmpty: true });
     }
 
-    if (parsedBackup.matrix_database) {
+    if (incoming.matrix_database) {
         let existingDb = null;
         try {
             const raw = localStorage.getItem('matrix_database');
@@ -462,8 +728,8 @@ export async function applyBackupToStorage(parsedBackup) {
             /* ignore */
         }
 
-        const db = migrateImportedDatabase(parsedBackup.matrix_database, categories);
-        if (!Array.isArray(parsedBackup.matrix_database.items) && Array.isArray(existingDb?.items)) {
+        const db = migrateImportedDatabase(incoming.matrix_database, categories);
+        if (!Array.isArray(incoming.matrix_database.items) && Array.isArray(existingDb?.items)) {
             db.items = existingDb.items.map(migrateImportedItem);
         }
 
@@ -477,9 +743,9 @@ export async function applyBackupToStorage(parsedBackup) {
     }
 
     // Restore desktop configuration if present in backup
-    if (parsedBackup.desktopsConfig) {
+    if (incoming.desktopsConfig) {
         try {
-            localStorage.setItem('magicnotes_desktops_config', JSON.stringify(parsedBackup.desktopsConfig));
+            localStorage.setItem('magicnotes_desktops_config', JSON.stringify(incoming.desktopsConfig));
         } catch {
             // Ignore errors
         }
@@ -489,17 +755,31 @@ export async function applyBackupToStorage(parsedBackup) {
     localStorage.removeItem('matrix_hidden_board_ids');
     localStorage.removeItem('matrix_calendar_hidden_ids');
 
-    applyLayoutBackupKeys(parsedBackup);
+    if (incoming.kind === BOARD_PACKAGE_KIND) {
+        applyBoardBackupKeys(incoming);
+        return;
+    }
+    if (incoming.kind === CANVAS_PACKAGE_KIND) {
+        applyCanvasBackupKeys(incoming);
+        try {
+            await applyDrawingBackupKeys(incoming);
+        } catch (err) {
+            console.warn('[Backup] canvas section restore failed', err);
+        }
+        await warnCanvasMediaGaps(incoming);
+        return;
+    }
+    applyLayoutBackupKeys(incoming);
 
     try {
-        await applyDrawingBackupKeys(parsedBackup);
+        await applyDrawingBackupKeys(incoming);
     } catch (err) {
         console.warn('[Backup] drawing section restore failed', err);
     }
 
-    if (parsedBackup.media_library) {
+    if (incoming.media_library) {
         try {
-            await applyMediaLibraryBackupSection(parsedBackup.media_library);
+            await applyMediaLibraryBackupSection(incoming.media_library);
         } catch (err) {
             console.warn('[Backup] media_library restore failed', err);
         }

@@ -1112,8 +1112,10 @@ export const CloudBackup = {
                 parsed = parseBackupPackage(text);
             }
             await applyBackupToStorage(parsed);
-            const itemCount = parsed.matrix_database?.items?.length ?? 0;
-            alert(`Restore successful (${itemCount} items). Reloading…`);
+            const storedDb = JSON.parse(localStorage.getItem('matrix_database') || 'null');
+            const itemCount = Array.isArray(storedDb?.items) ? storedDb.items.length : 0;
+            const patchNote = parsed.delta ? ' Applied an incremental patch.' : '';
+            alert(`Restore successful (${itemCount} items).${patchNote} Reloading…`);
             window.location.reload();
         } catch (err) {
             showAppToast(formatCloudError(err));
