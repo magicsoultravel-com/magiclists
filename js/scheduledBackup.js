@@ -1,10 +1,9 @@
-/** @module {"owns":"scheduled local JSON/TXT/media auto-export timer and popover", "related":["backup.js","mediaBackup.js","app.js","noteQuickActions.js"]} */
+/** @module {"owns":"scheduled JSON/TXT/board/canvas/media auto-export timer and popover", "related":["backup.js","mediaBackup.js","app.js","noteQuickActions.js"]} */
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { positionPopoverBelowAnchor } from './popoverPosition.js';
 import {
     buildBoardExportPayload,
     buildCanvasExportPayload,
-    buildFullBackupArchivePayload,
     buildNotesExportPayload,
     hashExportFingerprint,
     readLastLocalExportAt,
@@ -148,11 +147,6 @@ function readCanvasEnabledFromUi() {
     return !!document.querySelector('[data-schedule-canvas-enabled]')?.checked;
 }
 
-/** Notes JSON + Media both enabled → one full archive download. */
-function isCombinedArchiveMode(config) {
-    return !!(config?.notes?.enabled && config?.media?.enabled && config?.notes?.format === 'json');
-}
-
 export const ScheduledBackup = {
     getItems: () => [],
     getLoggedIn: () => true,
@@ -287,29 +281,17 @@ export const ScheduledBackup = {
         const metaLast = readLastMediaMetaExportAt();
         const zipLast = readLastMediaZipExportAt();
         const zipModeLabel = config.media.lastZipMode === 'incremental' ? 'incr' : 'full';
-        const combinedMode = isCombinedArchiveMode(config);
-        const incrementalDisabled = !config.media.enabled || combinedMode;
+        const incrementalDisabled = !config.media.enabled;
         const notesJson = config.notes.format === 'json';
-        const notesIncrementalDisabled = !config.notes.enabled || !notesJson || combinedMode;
-        const sessionDisabled = combinedMode;
-        const restoreHint = combinedMode
-            ? 'Restore: use Import all for the combined archive.'
-            : 'Restore: import latest meta JSON, then ZIP files oldest → newest.';
-        const incrementalLabel = combinedMode
-            ? 'Incremental content (disabled — combined archive is always a full snapshot)'
-            : 'Incremental content (meta always full)';
+        const notesIncrementalDisabled = !config.notes.enabled || !notesJson;
+        const incrementalLabel = 'Incremental content (meta always full)';
         const notesModeLabel = config.notes.lastMode === 'incremental' ? 'incr' : 'full';
-        const notesRestoreHint = combinedMode
-            ? 'Restore: the combined archive carries notes, media and layout.'
-            : (config.notes.incremental && !notesJson
-                ? 'TXT export is always a full dump.'
-                : 'Restore: import the newest full notes file, then incr files oldest → newest.');
-        const boardHint = combinedMode
-            ? 'Included in the combined archive.'
-            : 'Positions + chrome are written only when they change.';
-        const canvasHint = combinedMode
-            ? 'Included in the combined archive.'
-            : 'The drawing is written only when it changes.';
+        const notesRestoreHint = !notesJson
+            ? 'TXT export is always a full dump.'
+            : 'Restore: import the newest full notes file, then incr files oldest → newest.';
+        const boardHint = 'Positions + chrome are written only when they change.';
+        const canvasHint = 'The drawing is written only when it changes.';
+        const restoreHint = 'ZIPs: newest full = baseline, then incr oldest → newest. Untick incremental once to re-anchor the chain.';
 
         body.innerHTML = `
             <div class="schedule-export-popover__field">
@@ -347,7 +329,7 @@ export const ScheduledBackup = {
             </div>
             <div class="schedule-export-popover__section">
                 <label class="schedule-export-popover__section-head">
-                    <input type="checkbox" data-schedule-board-enabled${config.board.enabled && !sessionDisabled ? ' checked' : ''}${sessionDisabled ? ' disabled' : ''}>
+                    <input type="checkbox" data-schedule-board-enabled${config.board.enabled ? ' checked' : ''}>
                     <span>BOARD</span>
                 </label>
                 <div class="schedule-export-popover__section-body">
@@ -357,7 +339,7 @@ export const ScheduledBackup = {
             </div>
             <div class="schedule-export-popover__section">
                 <label class="schedule-export-popover__section-head">
-                    <input type="checkbox" data-schedule-canvas-enabled${config.canvas.enabled && !sessionDisabled ? ' checked' : ''}${sessionDisabled ? ' disabled' : ''}>
+                    <input type="checkbox" data-schedule-canvas-enabled${config.canvas.enabled ? ' checked' : ''}>
                     <span>CANVAS</span>
                 </label>
                 <div class="schedule-export-popover__section-body">
@@ -372,11 +354,11 @@ export const ScheduledBackup = {
                 </label>
                 <div class="schedule-export-popover__section-body">
                     <label class="schedule-export-popover__check">
-                        <input type="checkbox" data-schedule-media-incremental${config.media.incremental && !combinedMode ? ' checked' : ''}${incrementalDisabled ? ' disabled' : ''}>
+                        <input type="checkbox" data-schedule-media-incremental${config.media.incremental && !incrementalDisabled ? ' checked' : ''}${incrementalDisabled ? ' disabled' : ''}>
                         <span>${escapeAttr(incrementalLabel)}</span>
                     </label>
                     <p class="schedule-export-popover__meta schedule-export-popover__hint">${escapeAttr(restoreHint)}</p>
-                    <p class="schedule-export-popover__meta">Last: Meta ${escapeAttr(formatRelativePast(metaLast))} · ZIP ${escapeAttr(zipLast ? `${formatRelativePast(zipLast)} (${combinedMode ? 'archive' : zipModeLabel})` : 'Never')}</p>
+                    <p class="schedule-export-popover__meta">Last: Meta ${escapeAttr(formatRelativePast(metaLast))} · ZIP ${escapeAttr(zipLast ? `${formatRelativePast(zipLast)} (${zipModeLabel})` : 'Never')}</p>
                 </div>
             </div>
             <div class="schedule-export-popover__actions">
@@ -655,28 +637,21 @@ export const ScheduledBackup = {
         let statsDirty = false;
         try {
             const results = { notes: null, media: null, board: null, canvas: null };
-            if (isCombinedArchiveMode(config)) {
-                const combined = await this.exportCombinedArchive(config);
-                statsDirty = combined.changed || statsDirty;
-                results.notes = combined.notesPatch;
-                results.media = combined.mediaPatch;
-            } else {
-                // Failure isolation: one stream throwing must not block the
-                // others, and whatever succeeded still commits to the config.
-                const runStream = async (name, exportFn) => {
-                    try {
-                        const result = await exportFn(config);
-                        statsDirty = result.changed || statsDirty;
-                        results[name] = result.patch;
-                    } catch (err) {
-                        console.warn(`[ScheduledBackup] ${name} export failed`, err);
-                    }
-                };
-                if (config.notes.enabled) await runStream('notes', (c) => this.exportNotes(c));
-                if (config.media.enabled) await runStream('media', (c) => this.exportMedia(c));
-                if (config.board.enabled) await runStream('board', (c) => this.exportBoard(c));
-                if (config.canvas.enabled) await runStream('canvas', (c) => this.exportCanvas(c));
-            }
+            // Failure isolation: one stream throwing must not block the
+            // others, and whatever succeeded still commits to the config.
+            const runStream = async (name, exportFn) => {
+                try {
+                    const result = await exportFn(config);
+                    statsDirty = result.changed || statsDirty;
+                    results[name] = result.patch;
+                } catch (err) {
+                    console.warn(`[ScheduledBackup] ${name} export failed`, err);
+                }
+            };
+            if (config.notes.enabled) await runStream('notes', (c) => this.exportNotes(c));
+            if (config.media.enabled) await runStream('media', (c) => this.exportMedia(c));
+            if (config.board.enabled) await runStream('board', (c) => this.exportBoard(c));
+            if (config.canvas.enabled) await runStream('canvas', (c) => this.exportCanvas(c));
             this.finalizeExport(claimToken, results);
             if (statsDirty) SidebarStats.update();
         } catch (err) {
@@ -702,34 +677,6 @@ export const ScheduledBackup = {
         const merged = finalizeClaim(claimToken, readConfig(), results || {});
         if (!merged) return; // claim lost/expired — another window owns the slot.
         writeConfig(scheduleNextDue(merged, intervalMs(merged)));
-    },
-
-    /**
-     * Combined Notes(JSON)+Media → one magicnotes_backup_*.zip.
-     * Incremental is ignored; always a full media snapshot inside the archive.
-     */
-    async exportCombinedArchive(config) {
-        const payload = await buildFullBackupArchivePayload();
-        const fingerprint = hashExportFingerprint(payload.textForFingerprint);
-        if (fingerprint === config.notes.lastFingerprint) {
-            return { changed: false, notesPatch: null, mediaPatch: null };
-        }
-
-        downloadBlob(payload.blob, payload.filename);
-        const ts = payload.timestamp || Math.floor(Date.now() / 1000);
-        writeLastLocalExportAt(ts);
-        writeLastMediaZipExportAt(ts);
-
-        return {
-            changed: true,
-            notesPatch: { lastFingerprint: fingerprint, lastExportAt: ts, lastMode: 'full' },
-            mediaPatch: {
-                lastZipFingerprint: fingerprint,
-                lastZipExportAt: ts,
-                lastZipMode: 'full',
-                zipSnapshot: payload.nextSnapshot || {}
-            }
-        };
     },
 
     /**

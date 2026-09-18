@@ -243,6 +243,7 @@
     "test/indexedDbStore.test.js",
     "test/lassoGeometry.test.js",
     "test/mediaBrowserButton.test.js",
+    "test/mediaIncremental.test.js",
     "test/noteAttachmentsUi.test.js",
     "test/noteCanvas.test.js",
     "test/noteFieldOwnership.test.js",

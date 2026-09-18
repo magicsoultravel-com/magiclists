@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-09-16T13:42:09.203Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-09-18T16:06:45.499Z
 
 ## CSS load order
 
@@ -98,7 +98,7 @@ alwaysApply: true
 | js/popoutNote.js | standalone note popout window boot, edit, flush, undo | notePopoutBridge.js, noteSurface.js, api.js, undo.js | — | — |
 | js/popoutWindows.js | shared popout window helpers (PiP, browser popup, styles) | notePopoutBridge.js, sidebarModulePopout.js | — | — |
 | js/richText.js | rich text sanitize, linkify, strip markup | noteSurface.js, noteModel.js | — | — |
-| js/scheduledBackup.js | scheduled local JSON/TXT/media auto-export timer and popover | backup.js, mediaBackup.js, app.js, noteQuickActions.js | — | — |
+| js/scheduledBackup.js | scheduled JSON/TXT/board/canvas/media auto-export timer and popover | backup.js, mediaBackup.js, app.js, noteQuickActions.js | — | — |
 | js/scheduledBackupConfig.js | pure scheduled-backup config shape + old-session migration | scheduledBackup.js, backupClaim.js, backupDelta.js | — | — |
 | js/searchBar.js | sidebar search bar and results panel | searchFilter.js, hamburger.js | — | — |
 | js/sheet.js | sheet-grid note template model and table interactions | noteSurface.js, editor.js | — | — |
