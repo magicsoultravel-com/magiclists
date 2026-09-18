@@ -1071,8 +1071,22 @@ renderQuickActions() {
                 LoadingManager.show(archivePicker, 'Importing all...');
                 try {
                     const parsedBackup = await importFullBackupArchive(file);
-                    const itemCount = parsedBackup.matrix_database?.items?.length ?? 0;
-                    alert(`Restore successful (${itemCount} items). Reloading…`);
+                    // Two shapes come back: a checkpoint bundle ({ manifest, applied })
+                    // and a legacy full archive (a package with matrix_database).
+                    const isCheckpoint = parsedBackup?.manifest?.kind === 'magicnotes_checkpoint';
+                    let itemCount = parsedBackup?.matrix_database?.items?.length ?? 0;
+                    if (isCheckpoint) {
+                        // Delta bundles may carry no notes part, so report what the
+                        // library holds after the restore instead of the payload.
+                        try {
+                            itemCount = JSON.parse(localStorage.getItem('matrix_database') || '{}').items?.length ?? 0;
+                        } catch {
+                            itemCount = 0;
+                        }
+                    }
+                    alert(isCheckpoint
+                        ? `Checkpoint restored (${itemCount} notes). Reloading…`
+                        : `Restore successful (${itemCount} items). Reloading…`);
                     window.location.reload();
                 } catch (err) {
                     console.error('[Import all]', err);

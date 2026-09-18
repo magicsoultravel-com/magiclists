@@ -446,12 +446,77 @@ export async function buildCanvasExportPayload() {
 }
 
 /**
- * Restore a full archive ZIP (workspace.json + media/).
+ * Restore a checkpoint bundle (one ZIP per scheduled tick: manifest + whichever
+ * incremental parts were inside). Parts are applied in a safe order; each part
+ * type routes through the appliers that already exist. Missing parts are
+ * simply skipped — bundles only carry what changed.
+ *
+ * The media store is allowed to be unavailable (private mode, unsupported
+ * platform): blobs that cannot persist still decode, and the meta section
+ * lands as blobMissing entries that a later full ZIP fills in.
+ * @param {Map<string, Uint8Array>} files
+ */
+export async function importCheckpointBundleFiles(files) {
+    const manifestBytes = files.get('checkpoint.json');
+    if (!manifestBytes) {
+        throw new Error('Not a Magic Lists checkpoint (missing checkpoint.json)');
+    }
+    const manifest = JSON.parse(new TextDecoder().decode(manifestBytes));
+    const applied = {};
+
+    if (manifest.parts?.notes) {
+        const bytes = files.get(manifest.parts.notes);
+        if (bytes) {
+            const parsed = parseBackupPackage(new TextDecoder().decode(bytes));
+            await applyBackupToStorage(parsed);
+            applied.notes = true;
+        }
+    }
+    if (manifest.parts?.board) {
+        const bytes = files.get(manifest.parts.board);
+        if (bytes) {
+            await applyBackupToStorage(parseBackupPackage(new TextDecoder().decode(bytes)));
+            applied.board = true;
+        }
+    }
+    if (manifest.parts?.canvas) {
+        const bytes = files.get(manifest.parts.canvas);
+        if (bytes) {
+            await applyBackupToStorage(parseBackupPackage(new TextDecoder().decode(bytes)));
+            applied.canvas = true;
+        }
+    }
+    if (manifest.parts?.mediaMeta) {
+        const bytes = files.get(manifest.parts.mediaMeta);
+        if (bytes) {
+            const section = JSON.parse(new TextDecoder().decode(bytes));
+            await applyMediaLibraryBackupSection(section);
+            applied.mediaMeta = true;
+        }
+    }
+    if (manifest.parts?.mediaZip && files.has('media/manifest.json')) {
+        await applyMediaFromZipMap(files, {
+            manifestPath: 'media/manifest.json',
+            filesPrefix: 'media/'
+        });
+        applied.mediaZip = true;
+    }
+
+    return { manifest, applied };
+}
+
+/**
+ * Restore an exported ZIP. Routes to the checkpoint-bundle importer when the
+ * archive carries a checkpoint manifest, otherwise treats it as a legacy full
+ * backup archive (workspace.json + media/).
  * @param {File|Blob} file
  */
 export async function importFullBackupArchive(file) {
     const buffer = await file.arrayBuffer();
     const files = await readZip(buffer);
+    if (files.has('checkpoint.json')) {
+        return importCheckpointBundleFiles(files);
+    }
     const workspaceBytes = files.get('workspace.json');
     if (!workspaceBytes) {
         throw new Error('Not a Magic Notes full backup (missing workspace.json)');

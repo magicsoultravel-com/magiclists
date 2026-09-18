@@ -472,7 +472,16 @@ export async function applyMediaFromZipMap(files, opts = {}) {
             const data = files.get(path);
             blob = new Blob([data], { type: entry.mime || 'application/octet-stream' });
         }
-        const thumbBlob = blob ? await generateThumbnail(blob, 240, entry.orientation) : null;
+        // Thumbnails are a browser-only nicety: generate when possible, skip
+        // silently otherwise. Never let a thumb failure lose the blob itself.
+        let thumbBlob = null;
+        if (blob) {
+            try {
+                thumbBlob = await generateThumbnail(blob, 240, entry.orientation);
+            } catch {
+                thumbBlob = null;
+            }
+        }
         records.push({
             id,
             filename: entry.filename || 'file',

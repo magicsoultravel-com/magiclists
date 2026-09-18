@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-09-18T16:06:45.499Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-09-18T20:35:15.628Z
 
 ## CSS load order
 
@@ -58,6 +58,7 @@ alwaysApply: true
 | js/boardRulers.js | board px rulers chrome | displayOptions.js, desktopZoom.js, fileCabinet.js | — | — |
 | js/canvasImages.js | magicCanvas image cache and draw helpers | mediaLibrary.js, drawingBoard.js, canvasDocument.js | — | — |
 | js/checklistSteps.js | checklist tree logic, step reorder, indent/outdent | noteSurface.js, noteBodyConversion.js | — | — |
+| js/checkpointBundle.js | checkpoint bundle export — one ZIP per scheduled tick with the incremental parts inside | backup.js, mediaBackup.js, scheduledBackupConfig.js, scheduledBackup.js | — | — |
 | js/cloud/cloudProvider.js | cloud provider registry and factory dispatch | cloudBackup.js, cloud/megaProvider.js, cloud/localFolderProvider.js | — | — |
 | js/cloudBackup.js | cloud backup UI, MEGA and local-folder sync | backup.js, cloud/cloudProvider.js, cloud/megaProvider.js, cloud/localFolderProvider.js | — | — |
 | js/desktopCardManager.js | desktop card creation, updating, finalization, freeform dimensions | noteSurface.js, noteQuickActions.js | — | — |

@@ -2,10 +2,6 @@
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { positionPopoverBelowAnchor } from './popoverPosition.js';
 import {
-    buildBoardExportPayload,
-    buildCanvasExportPayload,
-    buildNotesExportPayload,
-    hashExportFingerprint,
     readLastLocalExportAt,
     readLastLocalTxtExportAt,
     readLastMediaMetaExportAt,
@@ -16,11 +12,7 @@ import {
     writeLastMediaMetaExportAt,
     writeLastMediaZipExportAt
 } from './backup.js';
-import {
-    buildMediaMetaExportPayload,
-    buildMediaZipExportPayload
-} from './mediaBackup.js';
-import { normalizeNotesSnapshot } from './backupDelta.js';
+import { buildCheckpointExportPayload } from './checkpointBundle.js';
 import { itemToTxtExportText, sortItemsForTxtExport } from './noteBodyConversion.js';
 import { SidebarStats } from './sidebarStats.js';
 import {
@@ -35,7 +27,8 @@ import {
 } from './backupClaim.js';
 import {
     clampAmount,
-    normalizeConfig
+    normalizeConfig,
+    sanitizeFilenameTag
 } from './scheduledBackupConfig.js';
 
 const STORAGE_KEY = 'matrix_scheduled_export';
@@ -106,6 +99,24 @@ function buildTxtContent(items) {
     });
 
     return sections.join('\n\n');
+}
+
+/** Persist the per-stream "last export" markers after a bundle download. */
+function applyCheckpointMarkers(config, patches) {
+    if (!patches) return;
+    if (patches.notes) {
+        if (config.notes.format === 'txt') {
+            writeLastLocalTxtExportAt(patches.notes.lastExportAt);
+        } else {
+            writeLastLocalExportAt(patches.notes.lastExportAt);
+        }
+    }
+    if (patches.media?.lastMetaExportAt != null) {
+        writeLastMediaMetaExportAt(patches.media.lastMetaExportAt);
+    }
+    if (patches.media?.lastZipExportAt != null) {
+        writeLastMediaZipExportAt(patches.media.lastZipExportAt);
+    }
 }
 
 function downloadBlob(blob, filename) {
@@ -291,7 +302,8 @@ export const ScheduledBackup = {
             : 'Restore: import the newest full notes file, then incr files oldest → newest.';
         const boardHint = 'Positions + chrome are written only when they change.';
         const canvasHint = 'The drawing is written only when it changes.';
-        const restoreHint = 'ZIPs: newest full = baseline, then incr oldest → newest. Untick incremental once to re-anchor the chain.';
+        const checkpointHint = 'One ZIP per checkpoint, carrying only what changed. Restore: import checkpoints oldest → newest.';
+        const mediaHint = 'Only changed media files ride along. Untick incremental once to re-anchor a full ZIP.';
 
         body.innerHTML = `
             <div class="schedule-export-popover__field">
@@ -305,7 +317,17 @@ export const ScheduledBackup = {
                     </select>
                 </div>
             </div>
+            <div class="schedule-export-popover__field">
+                <span class="schedule-export-popover__label">Personal tag</span>
+                <input type="text" class="schedule-export-popover__unit" data-schedule-tag maxlength="8"
+                    placeholder="e.g. luna" autocomplete="off" spellcheck="false"
+                    value="${escapeAttr(config.tag)}" aria-label="Personal filename tag">
+                <p class="schedule-export-popover__meta schedule-export-popover__hint">
+                    Letters, numbers, - and _ (max 8). Files: <span data-schedule-tag-preview></span>
+                </p>
+            </div>
             <p class="schedule-export-popover__meta" data-schedule-status>${escapeAttr(statusLine)}</p>
+            <p class="schedule-export-popover__meta schedule-export-popover__hint" data-schedule-checkpoint-hint>${escapeAttr(checkpointHint)}</p>
             <div class="schedule-export-popover__section">
                 <label class="schedule-export-popover__section-head">
                     <input type="checkbox" data-schedule-notes-enabled${config.notes.enabled ? ' checked' : ''}>
@@ -357,7 +379,7 @@ export const ScheduledBackup = {
                         <input type="checkbox" data-schedule-media-incremental${config.media.incremental && !incrementalDisabled ? ' checked' : ''}${incrementalDisabled ? ' disabled' : ''}>
                         <span>${escapeAttr(incrementalLabel)}</span>
                     </label>
-                    <p class="schedule-export-popover__meta schedule-export-popover__hint">${escapeAttr(restoreHint)}</p>
+                    <p class="schedule-export-popover__meta schedule-export-popover__hint">${escapeAttr(mediaHint)}</p>
                     <p class="schedule-export-popover__meta">Last: Meta ${escapeAttr(formatRelativePast(metaLast))} · ZIP ${escapeAttr(zipLast ? `${formatRelativePast(zipLast)} (${zipModeLabel})` : 'Never')}</p>
                 </div>
             </div>
@@ -393,6 +415,24 @@ export const ScheduledBackup = {
             writeConfig(next);
             this.renderBody();
         });
+
+        const tagInput = body.querySelector('[data-schedule-tag]');
+        const tagPreview = body.querySelector('[data-schedule-tag-preview]');
+        const updateTagPreview = () => {
+            const clean = sanitizeFilenameTag(tagInput?.value);
+            if (tagPreview) {
+                tagPreview.textContent = `magicnotes_${clean ? `${clean}_` : ''}export_*.zip`;
+            }
+        };
+        tagInput?.addEventListener('input', () => {
+            const clean = sanitizeFilenameTag(tagInput.value);
+            if (tagInput.value !== clean) tagInput.value = clean;
+            updateTagPreview();
+            const next = readConfig();
+            next.tag = clean;
+            writeConfig(next);
+        });
+        updateTagPreview();
 
         body.querySelector('[data-schedule-notes-incremental]')?.addEventListener('change', (e) => {
             const next = readConfig();
@@ -478,6 +518,10 @@ export const ScheduledBackup = {
         const incrEl = document.querySelector('[data-schedule-media-incremental]');
         if (incrEl && !incrEl.disabled) {
             config.media.incremental = !!incrEl.checked;
+        }
+        const tagInput = document.querySelector('[data-schedule-tag]');
+        if (tagInput) {
+            config.tag = sanitizeFilenameTag(tagInput.value);
         }
         return config;
     },
@@ -636,23 +680,14 @@ export const ScheduledBackup = {
         this.busy = true;
         let statsDirty = false;
         try {
-            const results = { notes: null, media: null, board: null, canvas: null };
-            // Failure isolation: one stream throwing must not block the
-            // others, and whatever succeeded still commits to the config.
-            const runStream = async (name, exportFn) => {
-                try {
-                    const result = await exportFn(config);
-                    statsDirty = result.changed || statsDirty;
-                    results[name] = result.patch;
-                } catch (err) {
-                    console.warn(`[ScheduledBackup] ${name} export failed`, err);
-                }
-            };
-            if (config.notes.enabled) await runStream('notes', (c) => this.exportNotes(c));
-            if (config.media.enabled) await runStream('media', (c) => this.exportMedia(c));
-            if (config.board.enabled) await runStream('board', (c) => this.exportBoard(c));
-            if (config.canvas.enabled) await runStream('canvas', (c) => this.exportCanvas(c));
-            this.finalizeExport(claimToken, results);
+            // One bundle per tick. The builder still gates every part by its
+            // own fingerprint/snapshot, so a quiet tick downloads nothing and
+            // a note-only tick ships a tiny ZIP with just the notes part.
+            const result = await this.exportCheckpoint(config);
+            statsDirty = result.changed || statsDirty;
+            this.finalizeExport(claimToken, result.patches || {
+                notes: null, media: null, board: null, canvas: null
+            });
             if (statsDirty) SidebarStats.update();
         } catch (err) {
             console.warn('[ScheduledBackup] export failed', err);
@@ -680,113 +715,22 @@ export const ScheduledBackup = {
     },
 
     /**
-     * Build + download a notes payload. Returns a { changed, patch } pair so the
-     * caller can merge the result without touching the shared config directly.
-     * JSON honours the incremental setting (baseline first, then changed notes
-     * only); TXT is always a full dump and leaves the JSON patch chain alone.
+     * Build + download ONE checkpoint bundle ZIP carrying whatever changed
+     * since the last checkpoint (notes part, board, canvas, media meta and/or
+     * only-the-changed media files). Nothing changed → no download.
+     * Returns the per-stream patches for finalizeClaim.
      */
-    async exportNotes(config) {
-        const payload = await this.buildNotesPayload(config.notes);
-        if (payload.skipped) return { changed: false, patch: null };
-
-        const fingerprint = hashExportFingerprint(payload.textForFingerprint || payload.text);
-        // Full/baseline payloads are deduped by fingerprint; patches are already
-        // gated by the revision snapshot, so never skip them by fingerprint.
-        if (!payload.isIncremental && fingerprint === config.notes.lastFingerprint) {
-            return { changed: false, patch: null };
+    async exportCheckpoint(config) {
+        const extras = {};
+        if (config.notes.enabled && config.notes.format === 'txt') {
+            extras.notesTxtPayload = await this.buildNotesPayload(config.notes);
         }
+        const payload = await buildCheckpointExportPayload(config, extras);
+        if (payload.skipped) return { changed: false, patches: null };
 
         downloadBlob(payload.blob, payload.filename);
-        const ts = payload.timestamp || Math.floor(Date.now() / 1000);
-        const patch = { lastFingerprint: fingerprint, lastExportAt: ts };
-
-        if (config.notes.format === 'txt') {
-            writeLastLocalTxtExportAt(ts);
-        } else {
-            writeLastLocalExportAt(ts);
-            if (payload.nextSnapshot) {
-                patch.patchSnapshot = payload.nextSnapshot;
-                patch.lastMode = payload.isIncremental ? 'incremental' : 'full';
-            }
-        }
-
-        return { changed: true, patch };
-    },
-
-    /**
-     * Board stream: positions + chrome. Tiny file, own fingerprint, so dragging
-     * a card never rewrites notes or the canvas — and drawing never rewrites it.
-     */
-    async exportBoard(config) {
-        const payload = await buildBoardExportPayload();
-        const fingerprint = hashExportFingerprint(payload.textForFingerprint || payload.text);
-        if (fingerprint === config.board.lastFingerprint) {
-            return { changed: false, patch: null };
-        }
-
-        downloadBlob(payload.blob, payload.filename);
-        return {
-            changed: true,
-            patch: { lastFingerprint: fingerprint, lastExportAt: payload.timestamp }
-        };
-    },
-
-    /**
-     * Canvas stream: the magicCanvas document on its own fingerprint, so a
-     * brush stroke never rewrites notes or board positions.
-     */
-    async exportCanvas(config) {
-        const payload = await buildCanvasExportPayload();
-        const fingerprint = hashExportFingerprint(payload.textForFingerprint || payload.text);
-        if (fingerprint === config.canvas.lastFingerprint) {
-            return { changed: false, patch: null };
-        }
-
-        downloadBlob(payload.blob, payload.filename);
-        return {
-            changed: true,
-            patch: { lastFingerprint: fingerprint, lastExportAt: payload.timestamp }
-        };
-    },
-
-    /**
-     * Build + download media meta / zip payloads. Returns a { changed, patch }
-     * pair (see exportNotes). Only the confirmed claim winner's patch is ever
-     * written to the shared config, keeping the incremental ZIP chain linear.
-     */
-    async exportMedia(config) {
-        const mediaPatch = {};
-        let changed = false;
-
-        const metaPayload = await buildMediaMetaExportPayload();
-        const metaFp = hashExportFingerprint(metaPayload.textForFingerprint || metaPayload.text);
-        if (metaFp !== config.media.lastMetaFingerprint) {
-            downloadBlob(metaPayload.blob, metaPayload.filename);
-            mediaPatch.lastMetaFingerprint = metaFp;
-            mediaPatch.lastMetaExportAt = metaPayload.timestamp;
-            writeLastMediaMetaExportAt(metaPayload.timestamp);
-            changed = true;
-        }
-
-        const zipPayload = await buildMediaZipExportPayload({
-            incremental: config.media.incremental,
-            zipSnapshot: config.media.zipSnapshot
-        });
-
-        if (!zipPayload.skipped && zipPayload.textForFingerprint) {
-            const zipFp = hashExportFingerprint(zipPayload.textForFingerprint);
-            if (zipFp !== config.media.lastZipFingerprint) {
-                downloadBlob(zipPayload.blob, zipPayload.filename);
-                mediaPatch.lastZipFingerprint = zipFp;
-                mediaPatch.lastZipExportAt = zipPayload.timestamp;
-                mediaPatch.lastZipMode = zipPayload.isIncremental ? 'incremental' : 'full';
-                mediaPatch.zipSnapshot = zipPayload.nextSnapshot;
-                writeLastMediaZipExportAt(zipPayload.timestamp);
-                changed = true;
-            }
-        }
-
-        return { changed, patch: changed ? mediaPatch : null };
+        applyCheckpointMarkers(config, payload.patches);
+        return { changed: true, patches: payload.patches };
     },
 
     /**

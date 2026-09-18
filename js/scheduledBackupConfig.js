@@ -7,6 +7,35 @@
 import { normalizeClaim } from './backupClaim.js';
 import { normalizeNotesSnapshot } from './backupDelta.js';
 
+/** Max characters for the personal filename tag. */
+export const FILENAME_TAG_MAX = 8;
+
+/**
+ * Personal tag that lands inside scheduled filenames —
+ * `magicnotes_<tag>_export_<ts>.zip`. Kept boring on purpose: lowercase
+ * letters, digits, dash and underscore only, capped at 8 chars, everything
+ * else stripped (never rejected), so a user can paste anything safely.
+ * Empty result → no tag, files fall back to `magicnotes_export_<ts>.zip`.
+ * @param {unknown} raw
+ * @returns {string}
+ */
+export function sanitizeFilenameTag(raw) {
+    return String(raw ?? '')
+        .toLowerCase()
+        .replace(/[^a-z0-9_-]+/g, '')
+        .slice(0, FILENAME_TAG_MAX);
+}
+
+/**
+ * Scheduled checkpoint bundle filename.
+ * @param {string} tag sanitized personal tag (may be empty)
+ * @param {number} [timestamp] unix seconds
+ */
+export function checkpointFilename(tag, timestamp = Math.floor(Date.now() / 1000)) {
+    const clean = sanitizeFilenameTag(tag);
+    return `magicnotes_${clean ? `${clean}_` : ''}export_${timestamp}.zip`;
+}
+
 export function clampAmount(value, { allowZero = false } = {}) {
     const n = Math.round(Number(value));
     if (!Number.isFinite(n)) return allowZero ? 0 : 1;
@@ -83,6 +112,9 @@ export function normalizeConfig(raw) {
             ? Number(raw.remainingMsWhenPaused)
             : null,
         runningClaim: normalizeClaim(raw?.runningClaim),
+        // Personal filename tag for the checkpoint bundle (sanitized on every
+        // read so a hand-edited config can never poison a filename).
+        tag: sanitizeFilenameTag(raw?.tag),
         notes: normalizeNotesSection(raw?.notes, hasLegacyShape ? raw : null),
         media: normalizeMediaSection(raw?.media),
         // One-way migration from the old single LAYOUT & CANVAS toggle. If the
