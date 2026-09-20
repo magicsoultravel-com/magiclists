@@ -249,6 +249,10 @@ class DrawingHistory {
         trimDrawingStack(this.undoStack);
         return JSON.parse(this.redoStack.pop());
     }
+    clear() {
+        this.undoStack = [];
+        this.redoStack = [];
+    }
     get canUndo() { return this.undoStack.length > 0; }
     get canRedo() { return this.redoStack.length > 0; }
 }
@@ -305,6 +309,8 @@ export const DrawingBoard = {
     activeNoteId: null,
     isNoteCanvasMode: false,
     noteCanvasItem: null,
+    /** Session owner for flush routing: 'workspace' | 'note' | null when idle. */
+    docOwner: null,
 
     init(app) {
         this.app = app;
@@ -358,7 +364,9 @@ export const DrawingBoard = {
     },
 
     async activate() {
+        this.history.clear();
         this.active = true;
+        this.docOwner = 'workspace';
         DrawingToolbarChrome.show();
         this.toolbarEl = DrawingToolbarChrome.getToolbarMount();
         this.doc = await readDocument();
@@ -390,7 +398,9 @@ export const DrawingBoard = {
         if (!item?.id) return;
         const { normalizeNoteCanvas } = await import('./noteModel.js');
         migrateNoteCanvasTextFlags(item);
+        this.history.clear();
         this.active = true;
+        this.docOwner = 'note';
         this.isNoteCanvasMode = true;
         this.activeNoteId = item.id;
         this.noteCanvasItem = item;
@@ -423,18 +433,23 @@ export const DrawingBoard = {
         this.redraw();
     },
 
-    async exitNoteCanvas() {
+    /**
+     * Request exit from note-canvas. App owns deactivate via note:canvas_draw_exited
+     * so we never double-flush (which used to write the note doc into workspace storage).
+     */
+    exitNoteCanvas() {
         if (!this.isNoteCanvasMode) return;
         const item = this.noteCanvasItem;
-        await this.deactivate();
         if (!item) return;
-        // Notify the app to return focus to the board and re-render the note card.
         window.dispatchEvent(new CustomEvent('note:canvas_draw_exited', { detail: { item } }));
     },
 
     async deactivate() {
+        if (!this.active && !this.docOwner) return;
         this.active = false;
         await this.flushSave();
+        clearTimeout(this.saveTimer);
+        this.saveTimer = null;
         ColorPicker.close();
         DrawingToolbarMenu.close();
         this.colorRolloutOpen = false;
@@ -443,7 +458,7 @@ export const DrawingBoard = {
         this.boardEl?.classList.add('is-hidden');
         this.boardEl?.setAttribute('aria-hidden', 'true');
         DrawingToolbarChrome.hide();
-        this.textLayer.innerHTML = '';
+        if (this.textLayer) this.textLayer.innerHTML = '';
         this.toolbarEl = null;
         this.draftStroke = null;
         this.shapePreview = null;
@@ -451,11 +466,15 @@ export const DrawingBoard = {
         this.resizeStart = null;
         this.cropState = null;
         this.hoverHandle = null;
+        this.selectedStrokes.clear();
         CanvasViewport.setHandMode(false);
         clearImageCache();
         this.isNoteCanvasMode = false;
         this.activeNoteId = null;
         this.noteCanvasItem = null;
+        this.doc = null;
+        this.docOwner = null;
+        this.history.clear();
         this.updateNoteToolbarChrome();
     },
 
@@ -647,7 +666,7 @@ export const DrawingBoard = {
     },
 
     persistViewport() {
-        if (!this.doc) return;
+        if (!this.active || !this.doc || !this.docOwner) return;
         this.doc.viewport = CanvasViewport.toDoc();
         this.scheduleSave();
     },
@@ -1439,15 +1458,19 @@ export const DrawingBoard = {
     },
 
     scheduleSave() {
+        if (!this.active || !this.doc || !this.docOwner) return;
         clearTimeout(this.saveTimer);
         this.saveTimer = setTimeout(() => this.flushSave(), SAVE_DEBOUNCE_MS);
     },
 
     async flushSave() {
         clearTimeout(this.saveTimer);
+        this.saveTimer = null;
+        if (!this.doc || !this.docOwner) return;
         this.doc.viewport = CanvasViewport.toDoc();
-        if (this.isNoteCanvasMode && this.noteCanvasItem) {
+        if (this.docOwner === 'note') {
             const item = this.noteCanvasItem;
+            if (!item) return;
             const doc = JSON.parse(JSON.stringify(this.doc));
             const { mutateItem } = await import('./noteSurfaceMutations.js');
             mutateItem(item, (it) => {
@@ -1460,7 +1483,9 @@ export const DrawingBoard = {
             }).catch(() => {});
             return;
         }
-        await writeDocument(this.doc);
+        if (this.docOwner === 'workspace') {
+            await writeDocument(this.doc);
+        }
     },
 
     setCanvasMode(mode) {

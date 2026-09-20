@@ -884,7 +884,11 @@ renderQuickActions() {
     }
 
     async exitNoteCanvasMode(item) {
-        await DrawingBoard.deactivate();
+        // Sole owner of DrawingBoard.deactivate for note-canvas exit (exitNoteCanvas
+        // only dispatches). Skip if already torn down.
+        if (DrawingBoard.active || DrawingBoard.isNoteCanvasMode || DrawingBoard.docOwner) {
+            await DrawingBoard.deactivate();
+        }
         AppState.workspaceMode = 'notes';
         localStorage.setItem('matrix_workspace_mode', 'notes');
         DesktopDock.setSuppressed(false);
