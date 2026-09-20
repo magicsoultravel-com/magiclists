@@ -182,51 +182,144 @@ export function imageDrawArgs(item, img) {
 }
 
 /**
- * Crop an image item to a world/bitmap-space rectangle.
+ * World-space metrics mapping an item's source window to the canvas.
  *
- * The item's displayed rect stays the visible window: we intersect the drag
- * rect with the current rect, then map that intersection back through the
- * item's existing source window — so cropping an already-cropped image
- * composes instead of resetting. The media file itself is never touched.
+ * `originX/originY` is where the item's *full original bitmap* starts in world
+ * coordinates and `sx/sy` are world-px per source-px. Both are invariant while
+ * an item is re-cropped consistently (display rect and source window change by
+ * the same factor), which is what lets a crop frame grow back out to un-crop.
  *
  * @param {{ x?: number, y?: number, width?: number, height?: number, crop?: object, naturalWidth?: number, naturalHeight?: number }} item
- * @param {{minX:number,minY:number,maxX:number,maxY:number}} rect
- * @param {{ minSide?: number }} [opts]
- * @returns {{ x: number, y: number, width: number, height: number, crop: {x:number,y:number,width:number,height:number} }|null}
- *   null when the rect misses the image or the result would be smaller than `minSide`.
+ * @returns {{ src: {x:number,y:number,width:number,height:number}, sx: number, sy: number, naturalWidth: number, naturalHeight: number, originX: number, originY: number }}
  */
-export function computeImageCrop(item, rect, { minSide = MIN_IMAGE_SIDE } = {}) {
-    if (!item || !rect) return null;
-
-    const curX = item.x ?? 0;
-    const curY = item.y ?? 0;
-    const curW = Math.max(1, item.width ?? 1);
-    const curH = Math.max(1, item.height ?? 1);
-
-    const ix0 = Math.max(curX, Math.min(rect.minX, rect.maxX));
-    const iy0 = Math.max(curY, Math.min(rect.minY, rect.maxY));
-    const ix1 = Math.min(curX + curW, Math.max(rect.minX, rect.maxX));
-    const iy1 = Math.min(curY + curH, Math.max(rect.minY, rect.maxY));
-
-    const width = ix1 - ix0;
-    const height = iy1 - iy0;
-    if (!(width > 0) || !(height > 0)) return null;
-    if (width < minSide || height < minSide) return null;
-
+export function cropMetrics(item) {
     const src = getImageSourceWindow(item);
-    const scaleX = src.width / curW;
-    const scaleY = src.height / curH;
-
+    const width = Math.max(1, item?.width ?? 1);
+    const height = Math.max(1, item?.height ?? 1);
+    const sx = src.width > 0 ? width / src.width : 1;
+    const sy = src.height > 0 ? height / src.height : 1;
     return {
-        x: ix0,
-        y: iy0,
+        src,
+        sx,
+        sy,
+        naturalWidth: Math.max(src.width, Number(item?.naturalWidth) || src.width),
+        naturalHeight: Math.max(src.height, Number(item?.naturalHeight) || src.height),
+        originX: (item?.x ?? 0) - src.x * sx,
+        originY: (item?.y ?? 0) - src.y * sy
+    };
+}
+
+/**
+ * The full original frame in world space — the region a crop box may cover.
+ * Equals the item's display rect when nothing has been cropped yet.
+ * @param {ReturnType<typeof cropMetrics>} metrics
+ * @returns {{x:number,y:number,width:number,height:number}|null}
+ */
+export function cropLimitRect(metrics) {
+    if (!metrics) return null;
+    return {
+        x: metrics.originX,
+        y: metrics.originY,
+        width: metrics.naturalWidth * metrics.sx,
+        height: metrics.naturalHeight * metrics.sy
+    };
+}
+
+function clampValue(value, min, max) {
+    return Math.min(Math.max(value, min), max);
+}
+
+/**
+ * Clamp a crop box into the frame and never below the minimum side, so a live
+ * crop frame can never collapse to a degenerate rect.
+ * @param {{x:number,y:number,width:number,height:number}} box
+ * @param {{x:number,y:number,width:number,height:number}} limitRect
+ * @param {number} [minSide]
+ */
+export function normalizeCropBox(box, limitRect, minSide = MIN_IMAGE_SIDE) {
+    if (!box || !limitRect) return null;
+    const minWidth = Math.min(minSide, limitRect.width);
+    const minHeight = Math.min(minSide, limitRect.height);
+    const width = clampValue(Number(box.width) || 0, minWidth, limitRect.width);
+    const height = clampValue(Number(box.height) || 0, minHeight, limitRect.height);
+    return {
+        x: clampValue(Number(box.x) || 0, limitRect.x, limitRect.x + limitRect.width - width),
+        y: clampValue(Number(box.y) || 0, limitRect.y, limitRect.y + limitRect.height - height),
+        width,
+        height
+    };
+}
+
+/**
+ * Move one edge/corner of a crop box to the pointer, clamped to the frame.
+ * `handle` uses the same ids as getResizeHandles(): nw/n/ne/e/se/s/sw/w.
+ * @param {{x:number,y:number,width:number,height:number}} box
+ * @param {string} handle
+ * @param {number} x pointer world x
+ * @param {number} y pointer world y
+ * @param {{x:number,y:number,width:number,height:number}} limitRect
+ * @param {number} [minSide]
+ */
+export function resizeCropBox(box, handle, x, y, limitRect, minSide = MIN_IMAGE_SIDE) {
+    if (!box || !handle || !limitRect) return box;
+    const minWidth = Math.min(minSide, limitRect.width);
+    const minHeight = Math.min(minSide, limitRect.height);
+    let minX = box.x;
+    let minY = box.y;
+    let maxX = box.x + box.width;
+    let maxY = box.y + box.height;
+
+    if (handle.includes('w')) minX = clampValue(x, limitRect.x, maxX - minWidth);
+    if (handle.includes('e')) maxX = clampValue(x, minX + minWidth, limitRect.x + limitRect.width);
+    if (handle.includes('n')) minY = clampValue(y, limitRect.y, maxY - minHeight);
+    if (handle.includes('s')) maxY = clampValue(y, minY + minHeight, limitRect.y + limitRect.height);
+
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+}
+
+/**
+ * Slide a crop box by a delta, keeping it inside the frame.
+ * @param {{x:number,y:number,width:number,height:number}} box
+ * @param {number} dx
+ * @param {number} dy
+ * @param {{x:number,y:number,width:number,height:number}} limitRect
+ */
+export function moveCropBox(box, dx, dy, limitRect) {
+    if (!box || !limitRect) return box;
+    return {
+        x: clampValue(box.x + dx, limitRect.x, limitRect.x + limitRect.width - box.width),
+        y: clampValue(box.y + dy, limitRect.y, limitRect.y + limitRect.height - box.height),
+        width: box.width,
+        height: box.height
+    };
+}
+
+/**
+ * Map a world-space crop box back to item geometry: the display rect plus the
+ * source window. Normalize the box against cropLimitRect() first — that keeps
+ * the inverse exact and lets a box cover previously discarded pixels again.
+ *
+ * @param {ReturnType<typeof cropMetrics>} metrics
+ * @param {{x:number,y:number,width:number,height:number}} box
+ * @returns {{ x:number, y:number, width:number, height:number, crop:{x:number,y:number,width:number,height:number} }|null}
+ */
+export function boxToCropPatch(metrics, box) {
+    if (!metrics || !box) return null;
+    const { sx, sy, naturalWidth, naturalHeight } = metrics;
+    const width = Math.max(1, box.width);
+    const height = Math.max(1, box.height);
+    const cropWidth = Math.min(width / sx, naturalWidth);
+    const cropHeight = Math.min(height / sy, naturalHeight);
+    return {
+        x: box.x,
+        y: box.y,
         width,
         height,
         crop: {
-            x: src.x + (ix0 - curX) * scaleX,
-            y: src.y + (iy0 - curY) * scaleY,
-            width: width * scaleX,
-            height: height * scaleY
+            x: clampValue((box.x - metrics.originX) / sx, 0, Math.max(0, naturalWidth - cropWidth)),
+            y: clampValue((box.y - metrics.originY) / sy, 0, Math.max(0, naturalHeight - cropHeight)),
+            width: cropWidth,
+            height: cropHeight
         }
     };
 }
@@ -263,6 +356,48 @@ export function drawImageObject(ctx, item, img = null) {
         drawMissingPlaceholder(ctx, x, y, w, h);
     }
     ctx.restore();
+}
+
+/**
+ * Ghost of the *discarded* pixels: paints the whole original bitmap, dimmed,
+ * inside its full frame so a crop frame can be dragged back out to un-crop.
+ * Draw it immediately before the item's own (cropped) pass.
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {object} item image item
+ * @param {{ alpha?: number, limitRect?: {x:number,y:number,width:number,height:number}|null, img?: object|null }} [opts]
+ * @returns {boolean} true when a ghost was painted
+ */
+export function drawImageGhost(ctx, item, { alpha = 0.35, limitRect = null, img = null } = {}) {
+    if (!ctx || !item) return false;
+    const bitmap = img || (item.mediaId ? getCachedImage(item.mediaId) : null);
+    if (!bitmap) return false;
+
+    const metrics = cropMetrics(item);
+    const src = metrics.src;
+    // Nothing discarded yet → nothing to ghost.
+    if (src.x <= 0 && src.y <= 0
+        && src.width >= metrics.naturalWidth && src.height >= metrics.naturalHeight) {
+        return false;
+    }
+
+    const frame = limitRect || cropLimitRect(metrics);
+    if (!frame) return false;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    try {
+        ctx.drawImage(
+            bitmap,
+            0, 0, metrics.naturalWidth, metrics.naturalHeight,
+            frame.x, frame.y, frame.width, frame.height
+        );
+    } catch {
+        ctx.restore();
+        return false;
+    }
+    ctx.restore();
+    return true;
 }
 
 function drawMissingPlaceholder(ctx, x, y, w, h) {

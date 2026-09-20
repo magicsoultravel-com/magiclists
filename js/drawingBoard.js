@@ -35,8 +35,15 @@ import {
     clearImageCache,
     ensureImagesLoaded,
     initialImageSize,
-    computeImageCrop,
+    cropMetrics,
+    cropLimitRect,
+    normalizeCropBox,
+    resizeCropBox,
+    moveCropBox,
+    boxToCropPatch,
     drawImageObject,
+    drawImageGhost,
+    getImageSourceWindow,
     MIN_IMAGE_SIDE
 } from './canvasImages.js';
 import { listMedia } from './mediaLibrary.js';
@@ -777,9 +784,9 @@ export const DrawingBoard = {
 
         this.canvas.setPointerCapture(e.pointerId);
 
-        // Crop tool: drag a box over the image under the pointer
+        // Crop tool: drag the live frame edges/corners, or slide its window
         if (this.activeTool === 'crop') {
-            this.startCrop(x, y);
+            this.onCropPointerDown(x, y);
             return;
         }
 
@@ -856,10 +863,10 @@ export const DrawingBoard = {
             return;
         }
 
-        // Crop box drag
-        if (this.cropState) {
+        // Live crop frame drag
+        if (this.cropState?.mode) {
             const cropPt = this.clientToCanvas(e.clientX, e.clientY);
-            this.updateCrop(cropPt.x, cropPt.y);
+            this.moveCropGesture(cropPt.x, cropPt.y);
             return;
         }
 
@@ -873,9 +880,9 @@ export const DrawingBoard = {
             return;
         }
 
-        // Hover cursor affordances for pointer/select when idle
-        if (!this.isBoxSelecting && !this.draftStroke && !this.shapePreview
-            && (this.activeTool === 'pointer' || this.isLassoActive || this.selectedStrokes.size > 0)) {
+        // Hover cursor: crop session has priority while the crop tool is active
+        if (!this.isBoxSelecting && !this.draftStroke && !this.shapePreview && !this.cropState?.mode
+            && (this.activeTool === 'pointer' || this.activeTool === 'crop' || this.isLassoActive || this.selectedStrokes.size > 0)) {
             const pt = this.clientToCanvas(e.clientX, e.clientY);
             this.updateHoverCursor(pt.x, pt.y);
         }
@@ -923,10 +930,9 @@ export const DrawingBoard = {
         if (e.pointerType === 'pen') this.penPointerActive = false;
         try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
 
-        // Commit or cancel the crop box
-        if (this.cropState) {
-            this.finishCrop();
-            this.redraw();
+        // End a live crop gesture (persisted only when the frame moved)
+        if (this.cropState?.mode) {
+            this.endCropGesture();
             return;
         }
 
@@ -1199,93 +1205,206 @@ export const DrawingBoard = {
         return null;
     },
 
-    /**
-     * Begin a crop drag on the image under the pointer. Escape cancels;
-     * pointer-up applies. The image's media file is never modified — only the
-     * item's source window (`item.crop`) and display rect change.
-     */
-    startCrop(x, y) {
-        const target = this.findTopmostImageAt(x, y);
-        if (!target) {
-            showAppToast('Crop: click on an image');
-            return;
+    cropBoxBounds(box) {
+        if (!box) return null;
+        return { minX: box.x, minY: box.y, maxX: box.x + box.width, maxY: box.y + box.height };
+    },
+
+    isPointInCropBox(x, y) {
+        const state = this.cropState;
+        if (!state?.box) return false;
+        const { x: bx, y: by, width, height } = state.box;
+        return x >= bx && x <= bx + width && y >= by && y <= by + height;
+    },
+
+    hitCropHandle(x, y) {
+        const box = this.cropState?.box;
+        if (!box) return null;
+        const handles = this.getResizeHandles(this.cropBoxBounds(box));
+        for (const h of handles) {
+            if (Math.abs(x - h.x) <= RESIZE_HANDLE_HIT / 2 && Math.abs(y - h.y) <= RESIZE_HANDLE_HIT / 2) {
+                return h;
+            }
         }
+        return null;
+    },
+
+    startCropSession(target) {
         this.selectedStrokes.clear();
         this.cropState = {
             target,
-            rect: { x0: x, y0: y, x1: x, y1: y }
+            metrics: cropMetrics(target),
+            box: {
+                x: target.x ?? 0,
+                y: target.y ?? 0,
+                width: Math.max(1, target.width ?? 1),
+                height: Math.max(1, target.height ?? 1)
+            },
+            adjusted: false,
+            mode: null,
+            handle: null,
+            start: null
         };
-        this.requestRedraw();
     },
 
-    /** Grow the crop box toward the pointer, clamped to the target image. */
-    updateCrop(x, y) {
+    beginCropGesture(mode, x, y, extra = {}) {
         const state = this.cropState;
         if (!state) return;
         const target = state.target;
-        const minX = target.x ?? 0;
-        const minY = target.y ?? 0;
-        const maxX = minX + Math.max(1, target.width ?? 1);
-        const maxY = minY + Math.max(1, target.height ?? 1);
-        state.rect.x1 = Math.min(Math.max(x, minX), maxX);
-        state.rect.y1 = Math.min(Math.max(y, minY), maxY);
-        this.requestRedraw();
+        state.mode = mode;
+        state.handle = extra.handle || null;
+        state.start = {
+            x,
+            y,
+            box: { ...state.box },
+            images: JSON.parse(JSON.stringify(this.images())),
+            geometry: {
+                x: target.x,
+                y: target.y,
+                width: target.width,
+                height: target.height,
+                crop: target.crop ? { ...target.crop } : null
+            }
+        };
     },
 
-    /** Drop the in-progress crop box (nothing has been mutated yet). */
-    cancelCrop() {
-        if (!this.cropState) return false;
-        this.cropState = null;
-        this.requestRedraw();
-        return true;
-    },
-
-    /** Apply the crop box to the target image as one undoable step. */
-    finishCrop() {
+    /**
+     * Pointer entry for the crop tool. Handles resize the live frame, inner
+     * drags slide the window over the original image, and drags outside the
+     * frame start a fresh box. Nothing persists until the gesture completes.
+     */
+    onCropPointerDown(x, y) {
         const state = this.cropState;
-        this.cropState = null;
-        if (!state) return;
-
-        const rect = state.rect;
-        const threshold = boxSelectThresholdWorld(
-            BOX_SELECT_CLICK_THRESHOLD,
-            CanvasViewport.scale,
-            window.devicePixelRatio || 1
-        );
-
-        // A click (no real drag) just targets the image — no toast, no crop.
-        if (Math.abs(rect.x1 - rect.x0) < threshold && Math.abs(rect.y1 - rect.y0) < threshold) {
-            this.selectedStrokes.clear();
-            this.selectedStrokes.add(state.target);
+        if (state?.target) {
+            const handle = this.hitCropHandle(x, y);
+            if (handle) {
+                this.beginCropGesture('resize', x, y, { handle: handle.id });
+                return;
+            }
+            if (this.isPointInCropBox(x, y)) {
+                this.beginCropGesture(state.adjusted ? 'move' : 'new', x, y);
+                return;
+            }
+        }
+        const target = this.findTopmostImageAt(x, y);
+        if (!target) {
+            if (!state) showAppToast('Crop: click on an image');
             return;
         }
+        if (!state || state.target !== target) this.startCropSession(target);
+        this.beginCropGesture('new', x, y);
+    },
 
-        const patch = computeImageCrop(state.target, {
-            minX: Math.min(rect.x0, rect.x1),
-            minY: Math.min(rect.y0, rect.y1),
-            maxX: Math.max(rect.x0, rect.x1),
-            maxY: Math.max(rect.y0, rect.y1)
-        });
-
-        if (!patch) {
-            showAppToast('Crop area too small');
+    /** Live crop: rewrite the item rect + source window on every move. */
+    moveCropGesture(x, y) {
+        const state = this.cropState;
+        if (!state?.mode || !state.start) return;
+        const limit = cropLimitRect(state.metrics);
+        let next = state.box;
+        if (state.mode === 'resize') {
+            next = resizeCropBox(state.start.box, state.handle, x, y, limit, MIN_IMAGE_SIDE);
+        } else if (state.mode === 'move') {
+            next = moveCropBox(state.start.box, x - state.start.x, y - state.start.y, limit);
+        } else {
+            next = normalizeCropBox({
+                x: Math.min(state.start.x, x),
+                y: Math.min(state.start.y, y),
+                width: Math.abs(x - state.start.x),
+                height: Math.abs(y - state.start.y)
+            }, limit, MIN_IMAGE_SIDE);
+        }
+        if (next.x === state.box.x && next.y === state.box.y
+            && next.width === state.box.width && next.height === state.box.height) {
             return;
         }
-
-        this.pushLayerHistory();
+        state.box = next;
+        state.adjusted = true;
+        state.start.changed = true;
+        const patch = boxToCropPatch(state.metrics, next);
+        if (!patch) return;
         const target = state.target;
         target.x = patch.x;
         target.y = patch.y;
         target.width = patch.width;
         target.height = patch.height;
         target.crop = patch.crop;
+        this.requestRedraw();
+    },
 
-        // Hand the cropped image back selected and ready to move/resize.
-        this.selectedStrokes.clear();
-        this.selectedStrokes.add(target);
+    /** End the gesture; push one undo entry and persist only when it moved. */
+    endCropGesture() {
+        const state = this.cropState;
+        if (!state?.mode) return;
+        const changed = !!state.start?.changed;
+        const geometry = state.start?.images || null;
+        const target = state.target;
+        state.mode = null;
+        state.handle = null;
+        state.start = null;
+        if (!changed) {
+            this.requestRedraw();
+            return;
+        }
+        if (target) {
+            const src = getImageSourceWindow(target);
+            const naturalW = Number(target.naturalWidth) || src.width;
+            const naturalH = Number(target.naturalHeight) || src.height;
+            if (src.x <= 0 && src.y <= 0 && src.width >= naturalW && src.height >= naturalH) {
+                delete target.crop;
+            }
+        }
+        if (geometry) this.pushCropHistory(geometry);
         this.scheduleSave();
-        this.setTool('pointer');
-        showAppToast('Image cropped');
+        this.redraw();
+    },
+
+    /**
+     * Undoable layer snapshot with a stale images array, so a completed crop
+     * gesture records exactly the pre-gesture layout as its undo entry.
+     */
+    pushCropHistory(imagesSnapshot) {
+        this.history.push({
+            kind: 'layer',
+            canvasMode: this.doc.canvasMode,
+            activePageId: this.doc.activePageId,
+            strokes: JSON.parse(JSON.stringify(getActiveStrokes(this.doc))),
+            texts: JSON.parse(JSON.stringify(getActiveTexts(this.doc))),
+            images: JSON.parse(JSON.stringify(imagesSnapshot || []))
+        });
+        this.updateToolbarState();
+    },
+
+    /** Escape during a crop drag: restore the gesture start, keep the session. */
+    revertCropGesture() {
+        const state = this.cropState;
+        const start = state?.start;
+        if (!state?.mode) return false;
+        if (start) {
+            const target = state.target;
+            const geometry = start.geometry;
+            target.x = geometry.x;
+            target.y = geometry.y;
+            target.width = geometry.width;
+            target.height = geometry.height;
+            if (geometry.crop) target.crop = { ...geometry.crop };
+            else delete target.crop;
+            state.box = { ...start.box };
+            state.adjusted = true;
+        }
+        state.mode = null;
+        state.handle = null;
+        state.start = null;
+        this.scheduleSave();
+        this.requestRedraw();
+        return true;
+    },
+
+    /** Escape with no in-flight crop drag: drop the session entirely. */
+    clearCropSession() {
+        if (!this.cropState) return false;
+        this.cropState = null;
+        this.requestRedraw();
+        return true;
     },
 
     requestRedraw() {
@@ -1308,7 +1427,16 @@ export const DrawingBoard = {
 
         const images = this.images();
         ensureImagesLoaded(images, () => { if (this.active) this.requestRedraw(); });
-        images.forEach((img) => drawImageObject(this.ctx, img));
+        const cropTarget = this.cropState?.target;
+        images.forEach((img) => {
+            // Dimmed full-frame ghost under the live crop target only.
+            if (img === cropTarget && this.cropState) {
+                drawImageGhost(this.ctx, img, {
+                    limitRect: cropLimitRect(this.cropState.metrics)
+                });
+            }
+            drawImageObject(this.ctx, img);
+        });
 
         this.strokes().forEach((stroke) => {
             if (stroke.tool === 'brush') drawBrushStroke(this.ctx, stroke);
@@ -1328,11 +1456,13 @@ export const DrawingBoard = {
     },
 
     undo() {
+        this.clearCropSession();
         const prev = this.history.undo(this.getSnapshot());
         if (prev) { this.applySnapshot(prev); this.renderToolbar(); }
     },
 
     redo() {
+        this.clearCropSession();
         const next = this.history.redo(this.getSnapshot());
         if (next) { this.applySnapshot(next); this.renderToolbar(); }
     },
@@ -1767,7 +1897,7 @@ export const DrawingBoard = {
                     <span class="drawing-dropdown-chevron">${CHEVRON}</span>
                 </button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-insert-image" title="Insert image" aria-label="Insert image" aria-haspopup="menu">${DRAWING_ICONS.image}</button>
-                <button type="button" class="btn btn--compact btn--icon ${isCropActive ? 'active' : ''}" id="draw-crop" title="Crop image — drag a box over an image" aria-label="Crop image" aria-pressed="${isCropActive ? 'true' : 'false'}">${DRAWING_ICONS.crop}</button>
+                <button type="button" class="btn btn--compact btn--icon ${isCropActive ? 'active' : ''}" id="draw-crop" title="Crop image — drag the frame edges, drag back out to restore" aria-label="Crop image" aria-pressed="${isCropActive ? 'true' : 'false'}">${DRAWING_ICONS.crop}</button>
                 <button type="button" class="btn btn--compact btn--icon ${this.isLassoActive ? 'active' : ''}" id="draw-lasso" title="Rectangle select" aria-label="Rectangle select" aria-pressed="${this.isLassoActive ? 'true' : 'false'}">${DRAWING_ICONS.lasso}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-fullscreen" title="Full screen" aria-label="Full screen" aria-pressed="false">${ACTION_ICONS.fullscreenEnter}</button>
                 <span class="format-toolbar-sep" aria-hidden="true"></span>
@@ -1892,8 +2022,13 @@ export const DrawingBoard = {
 
         q('#draw-crop')?.addEventListener('click', (e) => {
             e.stopPropagation();
-            if (this.activeTool === 'crop') this.setTool('pointer');
-            else this.setTool('crop');
+            if (this.activeTool === 'crop') {
+                this.setTool('pointer');
+            } else {
+                this.selectedStrokes.clear();
+                this.setTool('crop');
+                showAppToast('Crop: drag the frame edges — the dimmed area gets discarded');
+            }
         });
 
         q('#draw-menu-format')?.addEventListener('click', (e) => {
@@ -1945,9 +2080,10 @@ export const DrawingBoard = {
             if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); this.redo(); return true; }
         }
 
-        // Escape to clear selection or exit rectangle-select mode
+        // Escape: revert an in-flight crop drag first, else drop the crop session
         if (e.key === 'Escape') {
-            if (this.cancelCrop()) return true;
+            if (this.revertCropGesture()) return true;
+            if (this.clearCropSession()) { this.redraw(); return true; }
             if (this.resizeHandle) {
                 this.finishResize();
                 this.redraw();
@@ -2130,35 +2266,53 @@ export const DrawingBoard = {
         }
     },
 
-    /** Crop tool overlay: dim the discarded area and outline the kept box. */
+    /** Crop frame overlay: veil over the discarded band, thirds, edge handles. */
     renderCropOverlay() {
         if (!this.ctx || !this.canvas || !this.cropState) return;
-        const target = this.cropState.target;
-        const { x0, y0, x1, y1 } = this.cropState.rect;
+        const { box, metrics } = this.cropState;
+        if (!box || !metrics) return;
 
-        const imgMinX = target.x ?? 0;
-        const imgMinY = target.y ?? 0;
-        const imgMaxX = imgMinX + Math.max(1, target.width ?? 1);
-        const imgMaxY = imgMinY + Math.max(1, target.height ?? 1);
-
-        const rx = Math.min(x0, x1);
-        const ry = Math.min(y0, y1);
-        const rw = Math.max(1, Math.abs(x1 - x0));
-        const rh = Math.max(1, Math.abs(y1 - y0));
+        const limit = cropLimitRect(metrics);
+        const rx = box.x;
+        const ry = box.y;
+        const rw = box.width;
+        const rh = box.height;
 
         this.ctx.save();
-        // Dim above / below / left / right of the kept box (within the image).
+        // Dim above / below / left / right of the kept frame (within the full frame).
         this.ctx.fillStyle = 'rgba(2, 6, 23, 0.5)';
-        this.ctx.fillRect(imgMinX, imgMinY, imgMaxX - imgMinX, Math.max(0, ry - imgMinY));
-        this.ctx.fillRect(imgMinX, ry + rh, imgMaxX - imgMinX, Math.max(0, imgMaxY - (ry + rh)));
-        this.ctx.fillRect(imgMinX, ry, Math.max(0, rx - imgMinX), rh);
-        this.ctx.fillRect(rx + rw, ry, Math.max(0, imgMaxX - (rx + rw)), rh);
+        this.ctx.fillRect(limit.x, limit.y, limit.width, Math.max(0, ry - limit.y));
+        this.ctx.fillRect(limit.x, ry + rh, limit.width, Math.max(0, limit.y + limit.height - (ry + rh)));
+        this.ctx.fillRect(limit.x, ry, Math.max(0, rx - limit.x), rh);
+        this.ctx.fillRect(rx + rw, ry, Math.max(0, limit.x + limit.width - (rx + rw)), rh);
 
+        // Kept-frame border
         this.ctx.strokeStyle = '#38bdf8';
         this.ctx.lineWidth = 1.5;
-        this.ctx.setLineDash([6, 4]);
         this.ctx.strokeRect(rx, ry, rw, rh);
-        this.ctx.setLineDash([]);
+
+        // Rule-of-thirds guides
+        this.ctx.strokeStyle = 'rgba(56, 189, 248, 0.35)';
+        this.ctx.lineWidth = 1;
+        this.ctx.beginPath();
+        this.ctx.moveTo(rx + rw / 3, ry);
+        this.ctx.lineTo(rx + rw / 3, ry + rh);
+        this.ctx.moveTo(rx + (rw * 2) / 3, ry);
+        this.ctx.lineTo(rx + (rw * 2) / 3, ry + rh);
+        this.ctx.moveTo(rx, ry + rh / 3);
+        this.ctx.lineTo(rx + rw, ry + rh / 3);
+        this.ctx.moveTo(rx, ry + (rh * 2) / 3);
+        this.ctx.lineTo(rx + rw, ry + (rh * 2) / 3);
+        this.ctx.stroke();
+
+        // Draggable edge/corner handles (same chrome as selection handles)
+        this.getResizeHandles(this.cropBoxBounds(box)).forEach((h) => {
+            this.ctx.fillStyle = '#ffffff';
+            this.ctx.strokeStyle = '#38bdf8';
+            this.ctx.lineWidth = 1.5;
+            this.ctx.fillRect(h.x - RESIZE_HANDLE_SIZE / 2, h.y - RESIZE_HANDLE_SIZE / 2, RESIZE_HANDLE_SIZE, RESIZE_HANDLE_SIZE);
+            this.ctx.strokeRect(h.x - RESIZE_HANDLE_SIZE / 2, h.y - RESIZE_HANDLE_SIZE / 2, RESIZE_HANDLE_SIZE, RESIZE_HANDLE_SIZE);
+        });
         this.ctx.restore();
     },
 
@@ -2294,7 +2448,20 @@ export const DrawingBoard = {
     updateHoverCursor(x, y) {
         if (!this.canvas) return;
         let next = '';
-        if (this.selectedStrokes.size > 0) {
+        const cropBox = this.cropState?.box;
+        if (cropBox && (this.activeTool === 'crop' || !this.selectedStrokes.size)) {
+            const handle = this.hitCropHandle(x, y);
+            if (handle) {
+                this.hoverHandle = null;
+                next = handle.cursor;
+            } else if (this.isPointInCropBox(x, y)) {
+                this.hoverHandle = null;
+                next = 'move';
+            } else {
+                this.hoverHandle = null;
+                next = '';
+            }
+        } else if (this.selectedStrokes.size > 0) {
             const handle = this.hitResizeHandle(x, y);
             if (handle) {
                 this.hoverHandle = handle.id;
