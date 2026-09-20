@@ -1,5 +1,11 @@
 export const BRUSH_STYLES = ['pen', 'marker', 'highlighter', 'pencil', 'spray', 'calligraphy', 'brush'];
 
+/** Drag-to-place geometric tools shared by the drawing board and note-canvas preview. */
+export const DRAG_SHAPE_TOOLS = [
+    'line', 'arrow', 'rect', 'rounded_rect', 'ellipse', 'triangle', 'diamond',
+    'star', 'chevron', 'trapezoid', 'parallelogram', 'cube', 'pyramid', 'cylinder', 'sphere'
+];
+
 export const STYLE_CONFIG = {
     pen: { alpha: 1, widthMul: 1, pressureMin: 0.08, pressureRange: 1.22, pressureAlpha: true, alphaMin: 0.4, alphaRange: 0.6 },
     marker: { alpha: 0.85, widthMul: 1, pressureMin: 0.15, pressureRange: 1.0, pressureAlpha: true, alphaMin: 0.5, alphaRange: 0.45 },

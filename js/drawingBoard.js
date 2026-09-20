@@ -11,13 +11,11 @@ import {
     expandInfiniteBounds, shrinkInfiniteBounds, STORAGE_KEY, createId, CANVAS_MODES, BACKGROUNDS,
     PAGE_FORMATS
 } from './canvasDocument.js';
-import { BRUSH_STYLES, drawBrushStroke, drawShapeStroke, drawTextObject } from './canvasBrushes.js';
+import { BRUSH_STYLES, DRAG_SHAPE_TOOLS, drawBrushStroke, drawShapeStroke, drawTextObject } from './canvasBrushes.js';
 import { renderBackground } from './canvasBackgrounds.js';
 import { CanvasViewport } from './canvasViewport.js';
-// import { exportCanvasPng, exportCanvasPdf } from './canvasExport.js'; // Disabled until export renderer is unified.
 import { DrawingToolbarChrome } from './drawingToolbarChrome.js';
 import {
-    strokeHasPointInPolygon,
     itemIntersectsRect,
     getStrokesBounds,
     clampStrokesToBounds,
@@ -95,11 +93,6 @@ const POINTER_ITEMS = [
     { id: 'spray', label: 'Spray' },
     { id: 'calligraphy', label: 'Broad nib' },
     { id: 'brush', label: 'Ink brush' }
-];
-
-const DRAG_SHAPE_TOOLS = [
-    'line', 'arrow', 'rect', 'rounded_rect', 'ellipse', 'triangle', 'diamond',
-    'star', 'chevron', 'trapezoid', 'parallelogram', 'cube', 'pyramid', 'cylinder', 'sphere'
 ];
 
 const SHAPE_ITEMS = [
@@ -468,11 +461,6 @@ export const DrawingBoard = {
 
     hideToolbar() {
         DrawingToolbarChrome.collapse();
-    },
-
-    showToolbar(render = true) {
-        DrawingToolbarChrome.expand();
-        if (render) this.renderToolbar();
     },
 
     getSnapshot() {
@@ -1023,14 +1011,10 @@ export const DrawingBoard = {
         // its own layer without disturbing the paint order between layers.
         if (result.kind === 'click') {
             this.selectAndRaiseAtPoint(x0, y0, threshold / 2);
-        } else {
+        } else if (result.rect) {
             // Commit selection in one shot (replaces any prior selection)
             this.selectedStrokes.clear();
-            if (result.rect) {
-                this.selectStrokesInRect(result.rect);
-            } else {
-                this.selectStrokesInPolygon(result.polygon);
-            }
+            this.selectStrokesInRect(result.rect);
         }
 
         this.isBoxSelecting = false;
@@ -1093,32 +1077,6 @@ export const DrawingBoard = {
         }
         for (const image of images) {
             if (itemIntersectsRect(image, rect)) {
-                this.selectedStrokes.add(image);
-            }
-        }
-        // Select-only must not push undo history
-    },
-
-    selectStrokesInPolygon(polygon) {
-        if (polygon.length < 3) return;
-
-        const strokes = this.strokes();
-        const texts = getActiveTexts(this.doc);
-        const images = this.images();
-        this.selectedStrokes.clear();
-
-        for (const stroke of strokes) {
-            if (strokeHasPointInPolygon(stroke, polygon)) {
-                this.selectedStrokes.add(stroke);
-            }
-        }
-        for (const text of texts) {
-            if (strokeHasPointInPolygon(text, polygon)) {
-                this.selectedStrokes.add(text);
-            }
-        }
-        for (const image of images) {
-            if (strokeHasPointInPolygon(image, polygon)) {
                 this.selectedStrokes.add(image);
             }
         }
@@ -2056,8 +2014,6 @@ export const DrawingBoard = {
         q('#draw-page-prev')?.addEventListener('click', () => this.goToPrevPage());
         q('#draw-page-next')?.addEventListener('click', () => this.goToNextPage());
         q('#draw-page-add')?.addEventListener('click', () => this.addCanvasPage());
-
-        // Export menu disabled until canvasExport.js is unified with live renderer.
 
         // Lasso button click handler
         q('#draw-lasso')?.addEventListener('click', (e) => {

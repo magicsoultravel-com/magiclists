@@ -365,48 +365,6 @@ export function clampStrokesToBounds(items, pageBounds) {
 }
 
 /**
- * Calculate the centroid of a polygon.
- * 
- * @param {Array} polygon - Array of {x, y} points
- * @returns {Object} {x, y} centroid coordinates
- */
-export function getPolygonCentroid(polygon) {
-    if (!polygon || polygon.length === 0) {
-        return { x: 0, y: 0 };
-    }
-    
-    let sumX = 0;
-    let sumY = 0;
-    
-    for (const point of polygon) {
-        sumX += point.x;
-        sumY += point.y;
-    }
-    
-    const count = polygon.length;
-    return {
-        x: sumX / count,
-        y: sumY / count
-    };
-}
-
-/**
- * Translate all points in a polygon by a delta.
- * 
- * @param {Array} polygon - Array of {x, y} points
- * @param {number} dx - X translation
- * @param {number} dy - Y translation
- */
-export function translatePolygon(polygon, dx, dy) {
-    if (!polygon) return;
-    
-    for (const point of polygon) {
-        point.x += dx;
-        point.y += dy;
-    }
-}
-
-/**
  * Translate all drawing items by a delta.
  *
  * @param {Array} items - Array of stroke/shape/text objects

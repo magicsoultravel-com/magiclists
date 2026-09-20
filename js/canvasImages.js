@@ -9,7 +9,7 @@ const MIN_IMAGE_SIDE = 24;
 
 /**
  * Load (or return cached) HTMLImageElement for a media library id.
- * Claims a getObjectUrl ref on first load; release via releaseImage / clearImageCache.
+ * Claims a getObjectUrl ref on first load; release via clearImageCache.
  * @param {string} mediaId
  * @returns {Promise<HTMLImageElement|null>}
  */
@@ -68,20 +68,6 @@ export function getCachedImage(mediaId) {
     const entry = cache.get(mediaId);
     if (entry?.img?.complete && entry.img.naturalWidth > 0) return entry.img;
     return null;
-}
-
-/**
- * Release one claim on a cached image. Revokes the object URL when refs hit 0.
- * @param {string} mediaId
- */
-export function releaseImage(mediaId) {
-    const entry = cache.get(mediaId);
-    if (!entry) return;
-    entry.refs = Math.max(0, entry.refs - 1);
-    if (entry.refs === 0) {
-        if (entry.url) releaseObjectUrl(mediaId, 'blob');
-        cache.delete(mediaId);
-    }
 }
 
 /** Drop every cached image and release object URLs. */

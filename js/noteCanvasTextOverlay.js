@@ -43,13 +43,6 @@ export function overlayFontSizeToPercent(fontSize) {
     return Math.round((size / OVERLAY_FONT_DEFAULT) * 100);
 }
 
-/** Map a percent of default height back to a clamped font size. */
-export function percentToOverlayFontSize(percent) {
-    const n = Number(percent);
-    const raw = Number.isFinite(n) ? (n / 100) * OVERLAY_FONT_DEFAULT : OVERLAY_FONT_DEFAULT;
-    return resolveOverlayFontSize({ canvasOverlayFontSize: raw });
-}
-
 function overlayFont(fontSize) {
     return `${fontSize}px ${FONT_FAMILY}`;
 }

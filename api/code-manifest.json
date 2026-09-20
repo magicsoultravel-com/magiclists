@@ -61,7 +61,6 @@
     "js/canvasBackgrounds.js",
     "js/canvasBrushes.js",
     "js/canvasDocument.js",
-    "js/canvasExport.js",
     "js/canvasImages.js",
     "js/canvasViewport.js",
     "js/cardTheme.js",

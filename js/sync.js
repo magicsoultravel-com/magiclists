@@ -234,8 +234,8 @@ function flushRefresh() {
 
 /**
  * True while a full re-render would interrupt the user: actively editing a card
- * inline, dragging a card, or dragging a checklist step. DOM-signal based so no
- * state plumbing is needed across the app.
+ * inline, dragging a card, dragging a checklist step, or in drawing/note-canvas
+ * mode. DOM-signal based so no state plumbing is needed across the app.
  */
 function isBusy() {
     if (typeof document === 'undefined') return false;
@@ -244,5 +244,7 @@ function isBusy() {
     const canvas = document.getElementById('app-canvas');
     if (canvas?.querySelector?.('.is-grid-dragging, .is-freeform-dragging')) return true;
     if (document.body?.classList?.contains('is-checklist-dragging')) return true;
+    // Note-canvas and workspace magicCanvas both set data-drawing-mode on the shell.
+    if (document.getElementById('workspace-shell')?.hasAttribute('data-drawing-mode')) return true;
     return false;
 }

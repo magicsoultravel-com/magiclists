@@ -1,6 +1,6 @@
 /** @module {"owns":"inline note canvas rendering from item.canvas", "related":["noteAttachmentsUi.js","drawingBoard.js","canvasDocument.js"]} */
 import { renderBackground } from './canvasBackgrounds.js';
-import { drawBrushStroke, drawShapeStroke, drawTextObject } from './canvasBrushes.js';
+import { drawBrushStroke, drawShapeStroke, drawTextObject, DRAG_SHAPE_TOOLS } from './canvasBrushes.js';
 import { ensureImagesLoaded, drawImageObject } from './canvasImages.js';
 import { getActivePage } from './canvasDocument.js';
 import {
@@ -12,10 +12,7 @@ import {
 } from './noteCanvasTextOverlay.js';
 import { resolveNoteColor } from './colorPicker.js';
 
-const IS_DRAG_SHAPE = new Set([
-    'line', 'arrow', 'rect', 'rounded_rect', 'ellipse', 'triangle', 'diamond',
-    'star', 'chevron', 'trapezoid', 'parallelogram', 'cube', 'pyramid', 'cylinder', 'sphere'
-]);
+const IS_DRAG_SHAPE = new Set(DRAG_SHAPE_TOOLS);
 
 function getActiveLayer(doc) {
     if (!doc || typeof doc !== 'object') return null;

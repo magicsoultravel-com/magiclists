@@ -390,7 +390,13 @@ DrawingBoard.init(this);
 
         // If another tab changed the workspace mode, apply it before doing any
         // notes-board work (and skip the notes re-render while in drawing mode).
-        if (remoteWorkspaceMode !== AppState.workspaceMode) {
+        // Note-canvas is a local-only session: it sets memory workspaceMode to
+        // 'drawing' without persisting matrix_workspace_mode, so localStorage
+        // still says 'notes'. Do not treat that mismatch as a remote switch.
+        if (
+            !DrawingBoard.isNoteCanvasMode
+            && remoteWorkspaceMode !== AppState.workspaceMode
+        ) {
             AppState.workspaceMode = remoteWorkspaceMode;
             await this.applyWorkspaceMode(remoteWorkspaceMode, { skipPersist: true });
         }
