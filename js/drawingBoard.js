@@ -26,6 +26,8 @@ import {
     getImageBounds,
     resolveBoxSelection,
     boxSelectThresholdWorld,
+    findTopmostItemAt,
+    raiseItemInLayer,
     BOX_SELECT_CLICK_THRESHOLD
 } from './lassoGeometry.js';
 import {
@@ -33,6 +35,7 @@ import {
     clearImageCache,
     ensureImagesLoaded,
     initialImageSize,
+    computeImageCrop,
     drawImageObject,
     MIN_IMAGE_SIDE
 } from './canvasImages.js';
@@ -206,7 +209,7 @@ function readPrefs() {
         });
         return {
             activeStyle: BRUSH_STYLES.includes(raw?.activeStyle) ? raw.activeStyle : 'pen',
-            activeTool: ['pointer', 'brush', 'eraser', 'pan', 'text', ...DRAG_SHAPE_TOOLS].includes(raw?.activeTool) ? raw.activeTool : 'pointer',
+            activeTool: ['pointer', 'brush', 'eraser', 'pan', 'text', 'crop', ...DRAG_SHAPE_TOOLS].includes(raw?.activeTool) ? raw.activeTool : 'pointer',
             styles
         };
     } catch {
@@ -295,6 +298,9 @@ export const DrawingBoard = {
     hoverHandle: null,
     lastHoverCursor: null,
 
+    // Crop tool state ({ target, rect: {x0,y0,x1,y1} }) while dragging a crop box
+    cropState: null,
+
     // Note-canvas mode state
     activeNoteId: null,
     isNoteCanvasMode: false,
@@ -362,6 +368,7 @@ export const DrawingBoard = {
         this.isNoteCanvasMode = false;
         this.activeNoteId = null;
         this.noteCanvasItem = null;
+        this.cropState = null;
 
         if (this.brandEl) this.brandEl.textContent = 'magicCanvas';
         this.updateNoteToolbarChrome();
@@ -387,6 +394,7 @@ export const DrawingBoard = {
         this.isNoteCanvasMode = true;
         this.activeNoteId = item.id;
         this.noteCanvasItem = item;
+        this.cropState = null;
         this.doc = normalizeNoteCanvas(item.canvas);
         this.prefs = readPrefs();
         this.activeTool = this.prefs.activeTool;
@@ -441,6 +449,7 @@ export const DrawingBoard = {
         this.shapePreview = null;
         this.resizeHandle = null;
         this.resizeStart = null;
+        this.cropState = null;
         this.hoverHandle = null;
         CanvasViewport.setHandMode(false);
         clearImageCache();
@@ -629,6 +638,7 @@ export const DrawingBoard = {
     setTool(tool) {
         this.activeTool = tool;
         this.prefs.activeTool = tool;
+        this.cropState = null;
         CanvasViewport.setHandMode(tool === 'pan');
         // setTool is used by V / shapes / eraser / pan — leave dedicated marquee mode
         if (this.isLassoActive) this.isLassoActive = false;
@@ -767,6 +777,12 @@ export const DrawingBoard = {
 
         this.canvas.setPointerCapture(e.pointerId);
 
+        // Crop tool: drag a box over the image under the pointer
+        if (this.activeTool === 'crop') {
+            this.startCrop(x, y);
+            return;
+        }
+
         // Resize handles take priority when something is selected
         if (this.selectedStrokes.size > 0) {
             const handle = this.hitResizeHandle(x, y);
@@ -840,6 +856,13 @@ export const DrawingBoard = {
             return;
         }
 
+        // Crop box drag
+        if (this.cropState) {
+            const cropPt = this.clientToCanvas(e.clientX, e.clientY);
+            this.updateCrop(cropPt.x, cropPt.y);
+            return;
+        }
+
         // Drag selected items (used by both pointer and lasso modes)
         if (this.isDraggingLasso && this.lassoDragStart) {
             const pt = this.clientToCanvas(e.clientX, e.clientY);
@@ -899,6 +922,13 @@ export const DrawingBoard = {
     onPointerUp(e) {
         if (e.pointerType === 'pen') this.penPointerActive = false;
         try { this.canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+
+        // Commit or cancel the crop box
+        if (this.cropState) {
+            this.finishCrop();
+            this.redraw();
+            return;
+        }
 
         // Finish resize
         if (this.resizeHandle) {
@@ -981,17 +1011,60 @@ export const DrawingBoard = {
         );
         const result = resolveBoxSelection(x0, y0, x1, y1, threshold);
 
-        // Commit selection in one shot (replaces any prior selection)
-        this.selectedStrokes.clear();
-        if (result.rect) {
-            this.selectStrokesInRect(result.rect);
+        // Single click (no drag): select + raise the topmost object under the
+        // cursor. Raising is per-layer — images over images, strokes over
+        // strokes, texts over texts — so the last clicked object is on top of
+        // its own layer without disturbing the paint order between layers.
+        if (result.kind === 'click') {
+            this.selectAndRaiseAtPoint(x0, y0, threshold / 2);
         } else {
-            this.selectStrokesInPolygon(result.polygon);
+            // Commit selection in one shot (replaces any prior selection)
+            this.selectedStrokes.clear();
+            if (result.rect) {
+                this.selectStrokesInRect(result.rect);
+            } else {
+                this.selectStrokesInPolygon(result.polygon);
+            }
         }
 
         this.isBoxSelecting = false;
         this.boxSelectStart = null;
         this.boxSelectCurrent = null;
+    },
+
+    /**
+     * Click-select: pick the visually topmost item at the point and raise it to
+     * the top of its own layer (undoable). Misses clear the selection.
+     * @param {number} x
+     * @param {number} y
+     * @param {number} [radius=0]
+     */
+    selectAndRaiseAtPoint(x, y, radius = 0) {
+        const item = findTopmostItemAt(x, y, {
+            texts: getActiveTexts(this.doc),
+            strokes: this.strokes(),
+            images: this.images()
+        }, radius);
+
+        this.selectedStrokes.clear();
+        if (!item) return;
+
+        const raised = raiseItemInLayer(item, {
+            strokes: this.strokes(),
+            texts: getActiveTexts(this.doc),
+            images: this.images()
+        });
+
+        if (raised) {
+            // Snapshot before assigning so Ctrl+Z restores the previous order.
+            this.pushLayerHistory();
+            if (raised.kind === 'images') this.setImages(raised.items);
+            else if (raised.kind === 'texts') setActiveTexts(this.doc, raised.items);
+            else this.setStrokes(raised.items);
+            this.scheduleSave();
+        }
+
+        this.selectedStrokes.add(item);
     },
 
     selectStrokesInRect(rect) {
@@ -1117,6 +1190,104 @@ export const DrawingBoard = {
         return x >= x0 - radius && x <= x1 + radius && y >= y0 - radius && y <= y1 + radius;
     },
 
+    /** Topmost image (last painted) under the pointer, or null. */
+    findTopmostImageAt(x, y) {
+        const images = this.images();
+        for (let i = images.length - 1; i >= 0; i -= 1) {
+            if (this.hitImage(images[i], x, y, 0)) return images[i];
+        }
+        return null;
+    },
+
+    /**
+     * Begin a crop drag on the image under the pointer. Escape cancels;
+     * pointer-up applies. The image's media file is never modified — only the
+     * item's source window (`item.crop`) and display rect change.
+     */
+    startCrop(x, y) {
+        const target = this.findTopmostImageAt(x, y);
+        if (!target) {
+            showAppToast('Crop: click on an image');
+            return;
+        }
+        this.selectedStrokes.clear();
+        this.cropState = {
+            target,
+            rect: { x0: x, y0: y, x1: x, y1: y }
+        };
+        this.requestRedraw();
+    },
+
+    /** Grow the crop box toward the pointer, clamped to the target image. */
+    updateCrop(x, y) {
+        const state = this.cropState;
+        if (!state) return;
+        const target = state.target;
+        const minX = target.x ?? 0;
+        const minY = target.y ?? 0;
+        const maxX = minX + Math.max(1, target.width ?? 1);
+        const maxY = minY + Math.max(1, target.height ?? 1);
+        state.rect.x1 = Math.min(Math.max(x, minX), maxX);
+        state.rect.y1 = Math.min(Math.max(y, minY), maxY);
+        this.requestRedraw();
+    },
+
+    /** Drop the in-progress crop box (nothing has been mutated yet). */
+    cancelCrop() {
+        if (!this.cropState) return false;
+        this.cropState = null;
+        this.requestRedraw();
+        return true;
+    },
+
+    /** Apply the crop box to the target image as one undoable step. */
+    finishCrop() {
+        const state = this.cropState;
+        this.cropState = null;
+        if (!state) return;
+
+        const rect = state.rect;
+        const threshold = boxSelectThresholdWorld(
+            BOX_SELECT_CLICK_THRESHOLD,
+            CanvasViewport.scale,
+            window.devicePixelRatio || 1
+        );
+
+        // A click (no real drag) just targets the image — no toast, no crop.
+        if (Math.abs(rect.x1 - rect.x0) < threshold && Math.abs(rect.y1 - rect.y0) < threshold) {
+            this.selectedStrokes.clear();
+            this.selectedStrokes.add(state.target);
+            return;
+        }
+
+        const patch = computeImageCrop(state.target, {
+            minX: Math.min(rect.x0, rect.x1),
+            minY: Math.min(rect.y0, rect.y1),
+            maxX: Math.max(rect.x0, rect.x1),
+            maxY: Math.max(rect.y0, rect.y1)
+        });
+
+        if (!patch) {
+            showAppToast('Crop area too small');
+            return;
+        }
+
+        this.pushLayerHistory();
+        const target = state.target;
+        target.x = patch.x;
+        target.y = patch.y;
+        target.width = patch.width;
+        target.height = patch.height;
+        target.crop = patch.crop;
+
+        // Hand the cropped image back selected and ready to move/resize.
+        this.selectedStrokes.clear();
+        this.selectedStrokes.add(target);
+        this.scheduleSave();
+        this.setTool('pointer');
+        showAppToast('Image cropped');
+    },
+
     requestRedraw() {
         if (this.rafId) return;
         this.rafId = requestAnimationFrame(() => { this.rafId = null; this.redraw(); });
@@ -1151,6 +1322,9 @@ export const DrawingBoard = {
         if (this.isLassoActive || this.selectedStrokes.size > 0 || this.isBoxSelecting) {
             this.renderLassoOverlay();
         }
+
+        // Crop tool overlay (active drag box)
+        if (this.cropState) this.renderCropOverlay();
     },
 
     undo() {
@@ -1251,6 +1425,9 @@ export const DrawingBoard = {
         }
         if (tool === 'text') {
             return { id: 'text', label: 'Text', icon: DRAWING_ICONS.text };
+        }
+        if (tool === 'crop') {
+            return { id: 'crop', label: 'Crop', icon: DRAWING_ICONS.crop };
         }
         if (isDragShape(tool)) {
             const shape = SHAPE_ITEMS.find((item) => item.id === tool);
@@ -1557,6 +1734,7 @@ export const DrawingBoard = {
         const isPointerActive = this.activeTool === 'pointer' || this.activeTool === 'brush';
         const isEraserActive = this.activeTool === 'eraser';
         const isPanActive = this.activeTool === 'pan';
+        const isCropActive = this.activeTool === 'crop';
         const pageIdx = this.doc.pages.findIndex((p) => p.id === this.doc.activePageId);
         const pageCount = this.doc.pages.length;
         const canPrev = pageIdx > 0;
@@ -1589,6 +1767,7 @@ export const DrawingBoard = {
                     <span class="drawing-dropdown-chevron">${CHEVRON}</span>
                 </button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-insert-image" title="Insert image" aria-label="Insert image" aria-haspopup="menu">${DRAWING_ICONS.image}</button>
+                <button type="button" class="btn btn--compact btn--icon ${isCropActive ? 'active' : ''}" id="draw-crop" title="Crop image — drag a box over an image" aria-label="Crop image" aria-pressed="${isCropActive ? 'true' : 'false'}">${DRAWING_ICONS.crop}</button>
                 <button type="button" class="btn btn--compact btn--icon ${this.isLassoActive ? 'active' : ''}" id="draw-lasso" title="Rectangle select" aria-label="Rectangle select" aria-pressed="${this.isLassoActive ? 'true' : 'false'}">${DRAWING_ICONS.lasso}</button>
                 <button type="button" class="btn btn--compact btn--icon" id="draw-fullscreen" title="Full screen" aria-label="Full screen" aria-pressed="false">${ACTION_ICONS.fullscreenEnter}</button>
                 <span class="format-toolbar-sep" aria-hidden="true"></span>
@@ -1711,6 +1890,12 @@ export const DrawingBoard = {
             this.openImageInsertMenu(e.currentTarget);
         });
 
+        q('#draw-crop')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (this.activeTool === 'crop') this.setTool('pointer');
+            else this.setTool('crop');
+        });
+
         q('#draw-menu-format')?.addEventListener('click', (e) => {
             e.stopPropagation();
             DrawingToolbarMenu.toggle({
@@ -1762,6 +1947,7 @@ export const DrawingBoard = {
 
         // Escape to clear selection or exit rectangle-select mode
         if (e.key === 'Escape') {
+            if (this.cancelCrop()) return true;
             if (this.resizeHandle) {
                 this.finishResize();
                 this.redraw();
@@ -1942,6 +2128,38 @@ export const DrawingBoard = {
                 this.ctx.restore();
             });
         }
+    },
+
+    /** Crop tool overlay: dim the discarded area and outline the kept box. */
+    renderCropOverlay() {
+        if (!this.ctx || !this.canvas || !this.cropState) return;
+        const target = this.cropState.target;
+        const { x0, y0, x1, y1 } = this.cropState.rect;
+
+        const imgMinX = target.x ?? 0;
+        const imgMinY = target.y ?? 0;
+        const imgMaxX = imgMinX + Math.max(1, target.width ?? 1);
+        const imgMaxY = imgMinY + Math.max(1, target.height ?? 1);
+
+        const rx = Math.min(x0, x1);
+        const ry = Math.min(y0, y1);
+        const rw = Math.max(1, Math.abs(x1 - x0));
+        const rh = Math.max(1, Math.abs(y1 - y0));
+
+        this.ctx.save();
+        // Dim above / below / left / right of the kept box (within the image).
+        this.ctx.fillStyle = 'rgba(2, 6, 23, 0.5)';
+        this.ctx.fillRect(imgMinX, imgMinY, imgMaxX - imgMinX, Math.max(0, ry - imgMinY));
+        this.ctx.fillRect(imgMinX, ry + rh, imgMaxX - imgMinX, Math.max(0, imgMaxY - (ry + rh)));
+        this.ctx.fillRect(imgMinX, ry, Math.max(0, rx - imgMinX), rh);
+        this.ctx.fillRect(rx + rw, ry, Math.max(0, imgMaxX - (rx + rw)), rh);
+
+        this.ctx.strokeStyle = '#38bdf8';
+        this.ctx.lineWidth = 1.5;
+        this.ctx.setLineDash([6, 4]);
+        this.ctx.strokeRect(rx, ry, rw, rh);
+        this.ctx.setLineDash([]);
+        this.ctx.restore();
     },
 
     getResizeHandles(bounds) {

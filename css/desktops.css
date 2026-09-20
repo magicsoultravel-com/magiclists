@@ -23,6 +23,12 @@
     display: none !important;
 }
 
+/* magicCanvas mode: desktops only switch the notes board, so DesktopDock
+   suppresses the switcher while the drawing board is active. */
+.desktop-dock.is-suppressed {
+    display: none !important;
+}
+
 .desktop-dock-toggle {
     position: absolute;
     left: 0;

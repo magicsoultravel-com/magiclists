@@ -537,3 +537,115 @@ export function getPageBounds(doc, pageDimensions) {
         maxY: pageDimensions.height
     };
 }
+
+/* ==========================================================================
+   CLICK HIT-TESTING + PER-LAYER Z-ORDER
+   The board paints images, then strokes, then texts (last painted = on top).
+   These helpers let a click resolve the visually topmost object and raise it
+   to the top of its own layer.
+   ========================================================================== */
+
+/**
+ * Point-in-rect test with an optional tolerance radius.
+ * @param {{minX:number,minY:number,maxX:number,maxY:number}} rect
+ * @param {number} x
+ * @param {number} y
+ * @param {number} [radius=0]
+ * @returns {boolean}
+ */
+function rectContainsPoint(rect, x, y, radius = 0) {
+    if (!rect) return false;
+    return x >= rect.minX - radius && x <= rect.maxX + radius
+        && y >= rect.minY - radius && y <= rect.maxY + radius;
+}
+
+/**
+ * Hit-test a single canvas item (image, brush stroke, shape or text).
+ * Mirrors the tolerance rules used by the board's eraser/selection so a click
+ * and a marquee agree on what is "under" the pointer.
+ *
+ * @param {Object} item - stroke/shape/text/image object
+ * @param {number} x
+ * @param {number} y
+ * @param {number} [radius=0] extra world-space tolerance
+ * @returns {boolean}
+ */
+export function itemContainsPoint(item, x, y, radius = 0) {
+    if (!item) return false;
+
+    if (item.tool === 'image' || (item.mediaId && item.width != null && item.height != null)) {
+        return rectContainsPoint(getImageBounds(item), x, y, radius);
+    }
+
+    if (Array.isArray(item.points) && item.points.length) {
+        const pad = radius + (item.width || 0) / 2;
+        return item.points.some((pt) => pt && Math.hypot(pt.x - x, pt.y - y) <= pad);
+    }
+
+    if (item.tool === 'text') {
+        return rectContainsPoint(getTextBounds(item), x, y, radius);
+    }
+
+    if (item.x0 != null && item.y0 != null && item.x1 != null && item.y1 != null) {
+        return rectContainsPoint(getShapeBounds(item), x, y, radius);
+    }
+
+    return false;
+}
+
+/**
+ * Topmost item at a point, in paint order: texts over strokes over images, and
+ * within a layer the last entry (painted last) wins.
+ *
+ * @param {number} x
+ * @param {number} y
+ * @param {{ strokes?: Array, texts?: Array, images?: Array }} [layers]
+ * @param {number} [radius=0]
+ * @returns {Object|null}
+ */
+export function findTopmostItemAt(x, y, layers = {}, radius = 0) {
+    const groups = [
+        Array.isArray(layers.texts) ? layers.texts : [],
+        Array.isArray(layers.strokes) ? layers.strokes : [],
+        Array.isArray(layers.images) ? layers.images : []
+    ];
+
+    for (const group of groups) {
+        for (let i = group.length - 1; i >= 0; i -= 1) {
+            if (itemContainsPoint(group[i], x, y, radius)) return group[i];
+        }
+    }
+    return null;
+}
+
+/**
+ * Move an item to the top of its own layer (last painted).
+ * Returns the layer key plus a NEW array — the source array is never mutated,
+ * so callers can snapshot undo history before assigning.
+ *
+ * @param {Object} item
+ * @param {{ strokes?: Array, texts?: Array, images?: Array }} [layers]
+ * @returns {{ kind: 'images'|'strokes'|'texts', items: Array }|null} null when
+ *   the item is missing or already last in its layer.
+ */
+export function raiseItemInLayer(item, layers = {}) {
+    if (!item) return null;
+
+    const groups = [
+        ['images', layers.images],
+        ['strokes', layers.strokes],
+        ['texts', layers.texts]
+    ];
+
+    for (const [kind, list] of groups) {
+        if (!Array.isArray(list)) continue;
+        const index = list.indexOf(item);
+        if (index < 0) continue;
+        if (index === list.length - 1) return null;
+        const items = list.filter((entry) => entry !== item);
+        items.push(item);
+        return { kind, items };
+    }
+
+    return null;
+}

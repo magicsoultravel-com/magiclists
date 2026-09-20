@@ -8,6 +8,15 @@
     flex-direction: column;
 }
 
+/* magicCanvas mode: the board's file cabinet lives outside #app-canvas, so it
+   would otherwise float above the drawing board (z-index 30 vs 2). Hide the
+   whole cabinet chrome while drawing; the preference itself is untouched. */
+#workspace-shell[data-drawing-mode] #file-cabinet,
+#workspace-shell[data-drawing-mode] #shell-splitter-h,
+#workspace-shell[data-drawing-mode] #file-cabinet-toggle-fab {
+    display: none !important;
+}
+
 /* File cabinet container - base styles for board integration */
 .file-cabinet {
     position: relative;

@@ -127,22 +127,135 @@ export function initialImageSize(naturalW, naturalH) {
 }
 
 /**
- * Draw a canvas image item. Missing/unloaded media renders a dashed placeholder.
- * @param {CanvasRenderingContext2D} ctx
- * @param {{ x: number, y: number, width: number, height: number, mediaId?: string }} item
+ * Source-pixel window of an image item. Uncropped items use the full natural
+ * bitmap; a cropped item stores its window in `item.crop` (natural pixels).
+ * Values are clamped so a stale/partial crop can never point outside the bitmap.
+ *
+ * @param {{ crop?: {x?:number,y?:number,width?:number,height?:number}, naturalWidth?: number, naturalHeight?: number, width?: number, height?: number }} item
+ * @returns {{ x: number, y: number, width: number, height: number }}
  */
-export function drawImageObject(ctx, item) {
+export function getImageSourceWindow(item) {
+    const naturalW = Math.max(1, Number(item?.naturalWidth) || Number(item?.width) || 1);
+    const naturalH = Math.max(1, Number(item?.naturalHeight) || Number(item?.height) || 1);
+    const crop = item?.crop;
+    const cropW = Number(crop?.width);
+    const cropH = Number(crop?.height);
+    if (!crop || !Number.isFinite(cropW) || !Number.isFinite(cropH) || cropW <= 0 || cropH <= 0) {
+        return { x: 0, y: 0, width: naturalW, height: naturalH };
+    }
+    const width = Math.min(cropW, naturalW);
+    const height = Math.min(cropH, naturalH);
+    const x = Math.min(Math.max(Number(crop.x) || 0, 0), naturalW - width);
+    const y = Math.min(Math.max(Number(crop.y) || 0, 0), naturalH - height);
+    return { x, y, width, height };
+}
+
+/**
+ * drawImage arguments for an image item: the plain 5-arg form when the item
+ * shows the whole bitmap, or a 9-arg source window when it is cropped.
+ * `cropped` lets callers keep the simple path (and is what tests assert on).
+ *
+ * @param {{ x?: number, y?: number, width?: number, height?: number, crop?: object, naturalWidth?: number, naturalHeight?: number }} item
+ * @param {{ naturalWidth?: number, naturalHeight?: number }} [img]
+ * @returns {{ sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number, cropped: boolean }}
+ */
+export function imageDrawArgs(item, img) {
+    const dw = Math.max(1, item?.width ?? 1);
+    const dh = Math.max(1, item?.height ?? 1);
+    // Prefer the live bitmap's dimensions so a stale naturalWidth can't make
+    // drawImage throw on an out-of-bounds source rect.
+    const naturalW = Math.max(1, Number(img?.naturalWidth) || Number(item?.naturalWidth) || dw);
+    const naturalH = Math.max(1, Number(img?.naturalHeight) || Number(item?.naturalHeight) || dh);
+    const src = getImageSourceWindow({ ...item, naturalWidth: naturalW, naturalHeight: naturalH });
+    const cropped = src.x > 0 || src.y > 0 || src.width < naturalW || src.height < naturalH;
+    return {
+        sx: src.x,
+        sy: src.y,
+        sw: src.width,
+        sh: src.height,
+        dx: item?.x ?? 0,
+        dy: item?.y ?? 0,
+        dw,
+        dh,
+        cropped
+    };
+}
+
+/**
+ * Crop an image item to a world/bitmap-space rectangle.
+ *
+ * The item's displayed rect stays the visible window: we intersect the drag
+ * rect with the current rect, then map that intersection back through the
+ * item's existing source window — so cropping an already-cropped image
+ * composes instead of resetting. The media file itself is never touched.
+ *
+ * @param {{ x?: number, y?: number, width?: number, height?: number, crop?: object, naturalWidth?: number, naturalHeight?: number }} item
+ * @param {{minX:number,minY:number,maxX:number,maxY:number}} rect
+ * @param {{ minSide?: number }} [opts]
+ * @returns {{ x: number, y: number, width: number, height: number, crop: {x:number,y:number,width:number,height:number} }|null}
+ *   null when the rect misses the image or the result would be smaller than `minSide`.
+ */
+export function computeImageCrop(item, rect, { minSide = MIN_IMAGE_SIDE } = {}) {
+    if (!item || !rect) return null;
+
+    const curX = item.x ?? 0;
+    const curY = item.y ?? 0;
+    const curW = Math.max(1, item.width ?? 1);
+    const curH = Math.max(1, item.height ?? 1);
+
+    const ix0 = Math.max(curX, Math.min(rect.minX, rect.maxX));
+    const iy0 = Math.max(curY, Math.min(rect.minY, rect.maxY));
+    const ix1 = Math.min(curX + curW, Math.max(rect.minX, rect.maxX));
+    const iy1 = Math.min(curY + curH, Math.max(rect.minY, rect.maxY));
+
+    const width = ix1 - ix0;
+    const height = iy1 - iy0;
+    if (!(width > 0) || !(height > 0)) return null;
+    if (width < minSide || height < minSide) return null;
+
+    const src = getImageSourceWindow(item);
+    const scaleX = src.width / curW;
+    const scaleY = src.height / curH;
+
+    return {
+        x: ix0,
+        y: iy0,
+        width,
+        height,
+        crop: {
+            x: src.x + (ix0 - curX) * scaleX,
+            y: src.y + (iy0 - curY) * scaleY,
+            width: width * scaleX,
+            height: height * scaleY
+        }
+    };
+}
+
+/**
+ * Draw a canvas image item. Missing/unloaded media renders a dashed placeholder.
+ * Cropped items sample their source window; everything else draws full-frame.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {{ x: number, y: number, width: number, height: number, mediaId?: string, crop?: object }} item
+ * @param {HTMLImageElement|{naturalWidth?: number, naturalHeight?: number}} [img] pre-resolved
+ *   bitmap; defaults to the media cache. Injectable so the crop path is testable.
+ */
+export function drawImageObject(ctx, item, img = null) {
     if (!item || !ctx) return;
     const x = item.x ?? 0;
     const y = item.y ?? 0;
     const w = Math.max(1, item.width ?? 1);
     const h = Math.max(1, item.height ?? 1);
-    const img = item.mediaId ? getCachedImage(item.mediaId) : null;
+    const bitmap = img || (item.mediaId ? getCachedImage(item.mediaId) : null);
 
     ctx.save();
-    if (img) {
+    if (bitmap) {
         try {
-            ctx.drawImage(img, x, y, w, h);
+            const args = imageDrawArgs(item, bitmap);
+            if (args.cropped) {
+                ctx.drawImage(bitmap, args.sx, args.sy, args.sw, args.sh, args.dx, args.dy, args.dw, args.dh);
+            } else {
+                ctx.drawImage(bitmap, x, y, w, h);
+            }
         } catch {
             drawMissingPlaceholder(ctx, x, y, w, h);
         }

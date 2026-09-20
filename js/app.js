@@ -827,6 +827,8 @@ renderQuickActions() {
         if (!skipPersist) {
             localStorage.setItem('matrix_workspace_mode', mode);
         }
+        // Desktops only switch the notes board — hide the switcher on canvas.
+        DesktopDock.setSuppressed(mode === 'drawing');
 
         const shell = document.getElementById('workspace-shell');
         const canvas = document.getElementById('app-canvas');
@@ -863,6 +865,7 @@ renderQuickActions() {
         // Always bind DrawingBoard to the live AppState note (Shared SoT for canvas).
         const live = AppState.items.find((i) => i.id === item.id) || item;
         AppState.workspaceMode = 'drawing';
+        DesktopDock.setSuppressed(true);
         const shell = document.getElementById('workspace-shell');
         const canvas = document.getElementById('app-canvas');
         const drawBtn = document.getElementById('btn-drawing-mode');
@@ -878,6 +881,7 @@ renderQuickActions() {
         await DrawingBoard.deactivate();
         AppState.workspaceMode = 'notes';
         localStorage.setItem('matrix_workspace_mode', 'notes');
+        DesktopDock.setSuppressed(false);
 
         const shell = document.getElementById('workspace-shell');
         const canvas = document.getElementById('app-canvas');

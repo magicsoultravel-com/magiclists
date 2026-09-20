@@ -11,6 +11,9 @@ import {
     rectToPolygon,
     resolveBoxSelection,
     boxSelectThresholdWorld,
+    itemContainsPoint,
+    findTopmostItemAt,
+    raiseItemInLayer,
     BOX_SELECT_CLICK_THRESHOLD
 } from '../js/lassoGeometry.js';
 
@@ -159,3 +162,81 @@ describe('lassoGeometry', () => {
         assert.equal(strokeHasPointInPolygon(miss, click.polygon), false);
     });
 });
+
+// Click hit-testing + per-layer z-order (click-to-front).
+// Paint order is images → strokes → texts; within a layer, the last entry is on
+// top. A click picks the topmost object and raises it within its own layer.
+describe('lassoGeometry click hit-testing and z-order', () => {
+    const image = { id: 'img1', tool: 'image', mediaId: 'm1', x: 0, y: 0, width: 100, height: 100 };
+    const stroke = { id: 's1', tool: 'brush', width: 4, points: [{ x: 50, y: 50 }] };
+    const shape = { id: 'sh1', tool: 'rect', x0: 0, y0: 0, x1: 100, y1: 100 };
+    const text = { id: 't1', tool: 'text', x: 10, y: 10, text: 'hi', fontSize: 16, width: 40, height: 20 };
+
+    it('itemContainsPoint hits images, brush points, shapes and text boxes', () => {
+        assert.equal(itemContainsPoint(image, 50, 50), true);
+        assert.equal(itemContainsPoint(image, 150, 50), false);
+
+        assert.equal(itemContainsPoint(stroke, 51, 50), true);
+        assert.equal(itemContainsPoint(stroke, 60, 50), false);
+        assert.equal(itemContainsPoint(stroke, 60, 50, 12), true);
+
+        assert.equal(itemContainsPoint(shape, 90, 10), true);
+        assert.equal(itemContainsPoint(shape, 110, 10), false);
+
+        assert.equal(itemContainsPoint(text, 20, 15), true);
+        assert.equal(itemContainsPoint(text, 20, 60), false);
+
+        assert.equal(itemContainsPoint(null, 0, 0), false);
+    });
+
+    it('findTopmostItemAt walks texts, then strokes, then images', () => {
+        const layers = { images: [image], strokes: [stroke], texts: [text] };
+        // Inside the text box (and the image) → text wins.
+        assert.equal(findTopmostItemAt(30, 20, layers), text);
+        // On the brush point, outside the text box → stroke beats image.
+        assert.equal(findTopmostItemAt(50, 50, layers), stroke);
+        // Image only.
+        assert.equal(findTopmostItemAt(95, 95, layers), image);
+        // Nothing.
+        assert.equal(findTopmostItemAt(500, 500, layers), null);
+    });
+
+    it('findTopmostItemAt prefers the last painted item inside a layer', () => {
+        const under = { ...image, id: 'under' };
+        const over = { ...image, id: 'over' };
+        assert.equal(findTopmostItemAt(50, 50, { images: [under, over] }), over);
+        assert.equal(findTopmostItemAt(50, 50, { images: [over, under] }), under);
+    });
+
+    it('raiseItemInLayer moves an item to the end of its own layer', () => {
+        const a = { id: 'a' };
+        const b = { id: 'b' };
+        const c = { id: 'c' };
+        const images = [a, b, c];
+        const strokes = [{ id: 'x' }];
+
+        const raised = raiseItemInLayer(a, { images, strokes, texts: [] });
+        assert.equal(raised.kind, 'images');
+        assert.deepEqual(raised.items.map((i) => i.id), ['b', 'c', 'a']);
+        // Source array is untouched so callers can snapshot history first.
+        assert.deepEqual(images.map((i) => i.id), ['a', 'b', 'c']);
+    });
+
+    it('raiseItemInLayer targets the layer that owns the item', () => {
+        const img = { id: 'i1' };
+        const st1 = { id: 's1' };
+        const st2 = { id: 's2' };
+        const raised = raiseItemInLayer(st1, { images: [img], strokes: [st1, st2], texts: [] });
+        assert.equal(raised.kind, 'strokes');
+        assert.deepEqual(raised.items.map((i) => i.id), ['s2', 's1']);
+    });
+
+    it('raiseItemInLayer is a no-op for top items and unknown items', () => {
+        const a = { id: 'a' };
+        const b = { id: 'b' };
+        assert.equal(raiseItemInLayer(b, { images: [a, b] }), null);
+        assert.equal(raiseItemInLayer({ id: 'nope' }, { images: [a, b] }), null);
+        assert.equal(raiseItemInLayer(null, { images: [a, b] }), null);
+    });
+});
+

@@ -727,6 +727,11 @@
     cursor: default;
 }
 
+/* Crop: drag a box like the marquee, so keep the crosshair affordance. */
+.drawing-canvas[data-tool="crop"] {
+    cursor: crosshair;
+}
+
 .drawing-canvas[data-tool="eraser"] {
     cursor: cell;
 }

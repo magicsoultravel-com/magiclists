@@ -17,6 +17,8 @@ let _isDrawerOpen = false;
 let _isExpanded = false;
 let _isPinned = false;
 let _items = [];
+/** magicCanvas suppresses the dock — desktops only switch the notes board. */
+let _suppressed = false;
 
 function createTogglePill() {
     const pill = document.createElement('button');
@@ -143,6 +145,13 @@ function updateActiveButton() {
 
 function updateDockVisibility() {
     if (!_containerEl) return;
+    if (_suppressed) {
+        _containerEl.classList.add('is-suppressed');
+        _isExpanded = false;
+        closeDrawer();
+        return;
+    }
+    _containerEl.classList.remove('is-suppressed');
     const single = DesktopManager.getDesktopCount() <= 1;
     _containerEl.classList.toggle('is-single-desktop', single);
     if (single) {
@@ -301,6 +310,20 @@ export const DesktopDock = {
 
     isPinned() {
         return _isPinned;
+    },
+
+    isSuppressed() {
+        return _suppressed;
+    },
+
+    /**
+     * Hide/show the whole dock regardless of desktop count. Safe to call before
+     * init(): the flag is applied by init()'s first updateDockVisibility().
+     * @param {boolean} suppressed
+     */
+    setSuppressed(suppressed) {
+        _suppressed = !!suppressed;
+        updateDockVisibility();
     },
 
     open() {
