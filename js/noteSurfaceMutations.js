@@ -1,6 +1,7 @@
 /** @module {"owns":"note item mutation functions", "related":["noteSurface.js","noteSurfaceEditing.js","noteSurfaceChecklist.js","noteModel.js","sheet.js","undo.js"], "events":["item:mutation_requested"]} */
-import { normalizeItemForSave } from './noteModel.js';
+import { normalizeItemForSave, combineDateTime } from './noteModel.js';
 import { syncSheetFromDom } from './sheet.js';
+import { setCellValue } from './planner.js';
 import { UndoManager } from './undo.js';
 import { sanitizeRichHtml, linkifyPlainUrls } from './richText.js';
 import { insertTextAtCaret, handleInlineEditArrowNav } from './noteSurfaceEditing.js';
@@ -102,6 +103,35 @@ function mutateItem(item, mutator, { preserveView = false, skipRerender = false,
 }
 
 /**
+ * Sync planner typed cells from the DOM into item.planner.sheet.
+ * Kept here (not plannerUi) to avoid a static import cycle with mutations.
+ * @param {HTMLElement} root
+ * @param {object} item
+ */
+function syncPlannerSheetFromDom(root, item) {
+    if (!item?.planner?.sheet) return;
+    const section = root?.querySelector?.('[data-note-planner]') || root?.closest?.('[data-note-planner]');
+    if (!section) return;
+    const sheet = item.planner.sheet;
+
+    section.querySelectorAll('[data-planner-datetime]').forEach((wrap) => {
+        const row = Number(wrap.dataset.row);
+        const col = Number(wrap.dataset.col);
+        if (!Number.isFinite(row) || !Number.isFinite(col)) return;
+        const date = wrap.querySelector('[data-planner-date]')?.value || '';
+        const time = wrap.querySelector('[data-planner-time]')?.value || '';
+        setCellValue(sheet, row, col, combineDateTime(date, time));
+    });
+
+    section.querySelectorAll('[data-planner-cell]').forEach((el) => {
+        const row = Number(el.dataset.row);
+        const col = Number(el.dataset.col);
+        if (!Number.isFinite(row) || !Number.isFinite(col)) return;
+        setCellValue(sheet, row, col, el.value);
+    });
+}
+
+/**
  * Sync all inline-editable fields and sheet cells from the DOM back to the item object.
  * @param {HTMLElement} root - The editor shell/root element
  * @param {object} item - The note item to update
@@ -114,6 +144,7 @@ function syncItemBodyFromDom(root, item) {
         }
     });
     syncSheetFromDom(root, item);
+    syncPlannerSheetFromDom(root, item);
 }
 
 /**

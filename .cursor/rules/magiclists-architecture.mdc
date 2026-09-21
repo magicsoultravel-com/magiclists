@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-09-20T16:51:07.173Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-09-21T18:50:40.621Z
 
 ## CSS load order
 
@@ -38,9 +38,10 @@ alwaysApply: true
 | css/tv.css | sidebar TV player, now playing, popover browser | sidebarTv.js, tvPlayer.js, tvPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell-sidebar.css | 25 |
 | css/weather.css | sidebar weather glance + expanded forecast panel | sidebarWeather.js, weatherApi.js | — | 26 |
 | css/sheet.css | sheet-grid note template body and table chrome | sheet.js, noteSurface.js, editor.js | — | 27 |
-| css/desktops.css | desktop switcher dock styling, dock pin lock | desktopDockComponent.js | — | 28 |
-| css/popout.css | (unknown) | — | — | 29 |
-| css/media-library.css | media staging dialogue, gallery floating panel, media FAB, note attachment section, media lightbox | mediaLibraryOverlay.js, mediaStagingDialog.js, mediaPasteCatcher.js, noteAttachmentsUi.js | — | 30 |
+| css/planner.css | magicPlanner note subsection — typed schedule sheet and Gantt chart | plannerUi.js, planner.js, plannerGantt.js | — | 28 |
+| css/desktops.css | desktop switcher dock styling, dock pin lock | desktopDockComponent.js | — | 29 |
+| css/popout.css | (unknown) | — | — | 30 |
+| css/media-library.css | media staging dialogue, gallery floating panel, media FAB, note attachment section, media lightbox | mediaLibraryOverlay.js, mediaStagingDialog.js, mediaPasteCatcher.js, noteAttachmentsUi.js | — | 31 |
 
 ## JS domains (@module)
 
@@ -95,6 +96,9 @@ alwaysApply: true
 | js/noteSurfaceEditing.js | note inline editing, emoji, text operations, zoom controls | noteSurface.js, noteSurfaceHtml.js, richText.js, emojiPicker.js, domEscape.js | — | — |
 | js/noteSurfaceHtml.js | note HTML building and rendering | noteSurface.js, noteModel.js, sheet.js, checklistSteps.js | — | — |
 | js/noteSurfaceMutations.js | note item mutation functions | noteSurface.js, noteSurfaceEditing.js, noteSurfaceChecklist.js, noteModel.js, sheet.js, undo.js | item:mutation_requested | — |
+| js/planner.js | magicPlanner model — schema-bound schedule sheet + zoom prefs | plannerUi.js, plannerGantt.js, sheet.js, noteModel.js | — | — |
+| js/plannerGantt.js | magicPlanner Gantt layout math (display-only) | planner.js, plannerUi.js | — | — |
+| js/plannerUi.js | magicPlanner note subsection UI — typed sheet + Gantt | planner.js, plannerGantt.js, noteSurfaceMutations.js, noteQuickActions.js | — | — |
 | js/popoutLockRefresh.js | popout lock board refresh filter | app.js, notePopoutBridge.js | — | — |
 | js/popoutNote.js | standalone note popout window boot, edit, flush, undo | notePopoutBridge.js, noteSurface.js, api.js, undo.js | — | — |
 | js/popoutWindows.js | shared popout window helpers (PiP, browser popup, styles) | notePopoutBridge.js, sidebarModulePopout.js | — | — |

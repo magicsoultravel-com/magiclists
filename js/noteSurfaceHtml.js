@@ -19,6 +19,7 @@ import { getCardRenderContext } from './categories.js';
 import { DesktopManager } from './desktopManager.js';
 import { flushDesktopAutoSave } from './noteSurfaceMutations.js';
 import { buildNoteAttachmentsSectionHtml } from './noteAttachmentsUi.js';
+import { buildNotePlannerSectionHtml } from './plannerUi.js';
 import { normalizeAttachments } from './mediaAttachments.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
@@ -121,6 +122,11 @@ export function buildNoteQuickActionsHtml(item, {
     const drawBtn = isPopout
         ? ''
         : `<button type="button" class="card-act card-act--draw${canvasActive ? ' is-active' : ''}" data-note-id="${escapeAttr(item?.id || '')}" title="${escapeAttr(drawTitle)}" aria-label="${escapeAttr(drawTitle)}" aria-pressed="${canvasActive ? 'true' : 'false'}">${CARD_ICONS.drawingPencil}</button>`;
+    const plannerActive = !!(item?.planner && !item?.plannerHidden);
+    const plannerTitle = plannerActive ? 'Hide planner' : 'Show planner';
+    const plannerBtn = isPopout
+        ? ''
+        : `<button type="button" class="card-act card-act--planner${plannerActive ? ' is-active' : ''}" data-note-id="${escapeAttr(item?.id || '')}" title="${escapeAttr(plannerTitle)}" aria-label="${escapeAttr(plannerTitle)}" aria-pressed="${plannerActive ? 'true' : 'false'}">${CARD_ICONS.planner}</button>`;
     // Board/modal: while a popout owns the note, offer a recall action that
     // returns it to the board (closes the popout after saving).
     const popinTitle = 'Pop in (return note to board)';
@@ -155,7 +161,7 @@ export function buildNoteQuickActionsHtml(item, {
     const attachBtn = `<button type="button" class="card-act card-act--attach${attachCount ? ' is-active' : ''}" title="${escapeAttr(attachTitle)}" aria-label="${escapeAttr(attachTitle)}" aria-pressed="${attachCount ? 'true' : 'false'}">${CARD_ICONS.attach}</button>`;
     // Board: popout, cal, popin (popped only), emoji, copy, [pin], color, attach, hide, edit, [drag], toggle
     // Popout: cal, close (pop in), emoji, copy, color, attach, window-size
-    let actionCount = isPopout ? 7 : 11;
+    let actionCount = isPopout ? 7 : 12;
     if (!isModal && !isPopout && showDragIcon) actionCount += 1;
     if (!isPopout && poppedOut) actionCount += 1; // popin
 
@@ -169,6 +175,7 @@ export function buildNoteQuickActionsHtml(item, {
     const actionsHtml = `<div class="card-actions${(isModal || isPopout) ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
             ${popBtn}
             ${drawBtn}
+            ${plannerBtn}
             ${calBtn}
             ${closeBtn}
             ${popinBtn}
@@ -233,18 +240,30 @@ function mediaSectionStartCollapsed(item) {
     return !(hasAttachments || hasVisibleCanvas);
 }
 
+function plannerSectionStartCollapsed(item) {
+    return !(item?.planner && !item?.plannerHidden);
+}
+
+function appendPlannerAndMediaSections(item, html, { canEdit = false } = {}) {
+    let out = html;
+    out += buildNotePlannerSectionHtml(item, {
+        canEdit,
+        startCollapsed: plannerSectionStartCollapsed(item)
+    });
+    out += buildNoteAttachmentsSectionHtml(item, {
+        canEdit,
+        startCollapsed: mediaSectionStartCollapsed(item)
+    });
+    return out;
+}
+
 export function buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false, richEdit = false } = {}) {
     const template = resolveNoteTemplate(item);
-    const attachmentsCollapsed = mediaSectionStartCollapsed(item);
 
     if (template === 'sheet') {
         ensureItemSheet(item, defaultSheetDimsForTemplate('sheet'));
         let sheetHtml = renderSheetHtml(item.sheet, { canEdit, inModalEditor });
-        sheetHtml += buildNoteAttachmentsSectionHtml(item, {
-            canEdit,
-            startCollapsed: attachmentsCollapsed
-        });
-        return sheetHtml;
+        return appendPlannerAndMediaSections(item, sheetHtml, { canEdit });
     }
 
     if (template === 'meeting') {
@@ -272,11 +291,7 @@ export function buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false
         if (!item.steps) item.steps = [];
         html += buildExpandedChecklistHtml(item, canEdit, { richEdit });
     }
-    html += buildNoteAttachmentsSectionHtml(item, {
-        canEdit,
-        startCollapsed: attachmentsCollapsed
-    });
-    return html;
+    return appendPlannerAndMediaSections(item, html, { canEdit });
 }
 
 function renderRichHtml(str) {
@@ -314,8 +329,8 @@ function bindNoteBodySections(root) {
     root.dataset.noteSectionsBound = '1';
     root.querySelectorAll('.note-body-section .note-section-header').forEach((header) => {
         // Media/canvas section collapse is owned by noteAttachmentsUi.bindMediaSectionToggle
-        // so expand can re-paint the canvas preview.
-        if (header.closest('[data-note-attachments]')) return;
+        // so expand can re-paint the canvas preview. Planner owns its own toggle too.
+        if (header.closest('[data-note-attachments], [data-note-planner]')) return;
         header.addEventListener('click', (e) => {
             e.stopPropagation();
             const body = header.nextElementSibling;
@@ -367,6 +382,10 @@ function buildMeetingBodyHtml(item, { canEdit = false, inModalEditor = false, ri
         actionHtml += `<p class="meeting-datetime meeting-datetime--body">${escapeHTML(meetingWhen)}</p>`;
     }
     html += buildNoteBodySection('Action items', actionHtml);
+    html += buildNotePlannerSectionHtml(item, {
+        canEdit,
+        startCollapsed: plannerSectionStartCollapsed(item)
+    });
     html += buildNoteAttachmentsSectionHtml(item, {
         canEdit,
         startCollapsed: mediaSectionStartCollapsed(item)

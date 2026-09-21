@@ -11,6 +11,7 @@ import {
     ensureCanvasVisibleIfContent
 } from './noteFieldOwnership.js';
 import { normalizeAttachments } from './mediaAttachments.js';
+import { normalizePlanner, plannerHasContent, ensurePlannerVisibleIfContent } from './planner.js';
 
 function normalizeItemTileSize(tileSize) {
     return normalizeTileSize(tileSize);
@@ -18,6 +19,56 @@ function normalizeItemTileSize(tileSize) {
 
 function nowSeconds() {
     return Math.floor(Date.now() / 1000);
+}
+
+/**
+ * Force-adapt stale note planner state:
+ * - keep null planner as null
+ * - normalize real planner docs; drop empty shells
+ * - coerce plannerHidden; ensure content forces visible
+ * @param {object} item
+ * @returns {boolean} whether the item was mutated
+ */
+export function reconcileItemPlanner(item) {
+    if (!item || typeof item !== 'object') return false;
+    let changed = false;
+
+    if (item.planner == null) {
+        if (item.plannerHidden != null) {
+            delete item.plannerHidden;
+            changed = true;
+        }
+        return changed;
+    }
+
+    if (typeof item.planner !== 'object') {
+        item.planner = null;
+        delete item.plannerHidden;
+        return true;
+    }
+
+    const normalized = normalizePlanner(item.planner);
+    if (!normalized) {
+        item.planner = null;
+        delete item.plannerHidden;
+        return true;
+    }
+
+    if (JSON.stringify(normalized) !== JSON.stringify(item.planner)) {
+        item.planner = normalized;
+        changed = true;
+    } else {
+        item.planner = normalized;
+    }
+
+    if (!plannerHasContent(item.planner)) {
+        item.planner = null;
+        if (item.plannerHidden != null) delete item.plannerHidden;
+        return true;
+    }
+
+    if (ensurePlannerVisibleIfContent(item)) changed = true;
+    return changed;
 }
 
 /**
@@ -125,7 +176,8 @@ const SCHEMA_CORE_DEFAULTS = {
     hideFromCalendar: false,
     hiddenFromBoard: false,
     attachments: [],
-    canvas: null
+    canvas: null,
+    planner: null
 };
 
 function itemStepIdSet(item) {
@@ -346,12 +398,15 @@ function runDatabaseRepair(db) {
         if (nextSteps !== base.steps) canvasItem.steps = nextSteps;
         const mediaCanvasChanged = reconcileItemMediaCanvas(canvasItem);
         if (mediaCanvasChanged) itemChanged = true;
+        const plannerChanged = reconcileItemPlanner(canvasItem);
+        if (plannerChanged) itemChanged = true;
 
         if (!itemChanged
             && base.tileSize === tileSize
             && base.created_at === createdAt
             && base.updated_at === updatedAt
-            && !mediaCanvasChanged) {
+            && !mediaCanvasChanged
+            && !plannerChanged) {
             return base;
         }
 
@@ -368,6 +423,11 @@ function runDatabaseRepair(db) {
             if ('canvasHidden' in canvasItem) next.canvasHidden = canvasItem.canvasHidden;
             else delete next.canvasHidden;
             mediaCanvasReconciled += 1;
+        }
+        if (plannerChanged) {
+            next.planner = canvasItem.planner ?? null;
+            if ('plannerHidden' in canvasItem) next.plannerHidden = canvasItem.plannerHidden;
+            else delete next.plannerHidden;
         }
         if (base.tileSize !== tileSize) next.tileSize = tileSize;
         if (base.created_at !== createdAt) next.created_at = createdAt;

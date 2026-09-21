@@ -6,6 +6,7 @@ import { stepsToParentOrder } from './checklistSteps.js';
 import { DesktopManager } from './desktopManager.js';
 import { createEmptyDocument, migrateDocument } from './canvasDocument.js';
 import { noteCanvasHasContent } from './noteFieldOwnership.js';
+import { plannerHasContent } from './planner.js';
 
 export function deriveNoteTitle({ title = '', content = '', steps = [], sheet = null, noteTemplate = '' } = {}) {
     const trimmedTitle = stripRichText(title).trim();
@@ -143,6 +144,7 @@ export function createDefaultNote({ startDateTime, ...overrides } = {}) {
         hiddenFromBoard: false,
         attachments: [],
         canvas: null,
+        planner: null,
         steps: [],
         editorBodyLayout: 'both',
         tileSize: 'large',
@@ -160,7 +162,8 @@ export function noteHasSavableContent({
     sheet = null,
     noteTemplate = '',
     attachments = [],
-    canvas = null
+    canvas = null,
+    planner = null
 } = {}) {
     if (stripRichText(title).trim()) return true;
     if (stripRichText(content).trim()) return true;
@@ -168,6 +171,7 @@ export function noteHasSavableContent({
     if ((steps || []).some((step) => stripRichText(step?.text || '').trim())) return true;
     if (Array.isArray(attachments) && attachments.length > 0) return true;
     if (noteCanvasHasContent(canvas)) return true;
+    if (plannerHasContent(planner)) return true;
     return false;
 }
 

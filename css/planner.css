@@ -1,0 +1,323 @@
+/** @css {"owns":"magicPlanner note subsection — typed schedule sheet and Gantt chart", "js":["plannerUi.js","planner.js","plannerGantt.js"]} */
+
+/* ==========================================================================
+   PLANNER — note subsection
+   ========================================================================== */
+
+.note-body-section--planner {
+    margin-top: 0.28rem;
+    min-width: 0;
+}
+
+.note-body-section--planner.is-hidden,
+.note-body-section--planner[hidden] {
+    display: none !important;
+}
+
+.planner-sheet-block {
+    margin-bottom: 0.28rem;
+}
+
+/* Match header labels to cell type scale (sheet heads are letter-sized). */
+.planner-grid {
+    font-size: calc(0.5rem * var(--note-font-scale, 1));
+}
+
+.planner-grid .sheet-grid__corner,
+.planner-grid .sheet-grid__col-head,
+.planner-grid .sheet-grid__row-head {
+    font-size: calc(0.42rem * var(--note-font-scale, 1));
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    padding: 0.12rem 0.14rem;
+}
+
+.planner-grid .sheet-grid__cell {
+    padding: 0.04rem 0.06rem;
+    vertical-align: middle;
+}
+
+.planner-grid .planner-cell-input,
+.planner-grid .sheet-cell-read {
+    font-size: inherit;
+    line-height: 1.25;
+    min-height: 1.15em;
+    padding: 0.06rem 0.1rem;
+}
+
+.planner-cell--datetime {
+    vertical-align: middle;
+}
+
+.planner-datetime {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.08rem;
+    min-width: 0;
+    padding: 0.02rem 0.04rem;
+}
+
+.planner-datetime__value {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: inherit;
+    line-height: 1.25;
+    padding: 0.04rem 0.06rem;
+}
+
+.planner-datetime__value.is-empty {
+    color: var(--text-muted);
+    opacity: 0.65;
+}
+
+.planner-datetime__pick {
+    flex: 0 0 auto;
+    width: 1.05rem;
+    height: 1.05rem;
+    padding: 0;
+    opacity: 0.55;
+}
+
+.planner-datetime__pick:hover,
+.planner-datetime:focus-within .planner-datetime__pick {
+    opacity: 1;
+}
+
+.planner-datetime__pick svg {
+    width: 0.72rem;
+    height: 0.72rem;
+}
+
+/* Keep natives in the DOM for showPicker; do not layout as fields. */
+.planner-datetime__native {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    border: 0;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.planner-grid__actions-row .planner-grid__actions {
+    padding: 0.08rem 0.12rem;
+    border: 1px solid var(--sheet-head-border, color-mix(in srgb, var(--border-color) 28%, transparent));
+    background: transparent;
+}
+
+.planner-grid__actions .sheet-struct-actions {
+    opacity: 0.55;
+}
+
+.planner-grid__actions:hover .sheet-struct-actions,
+.planner-grid__actions:focus-within .sheet-struct-actions {
+    opacity: 1;
+}
+
+.planner-gantt {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+}
+
+.planner-gantt__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+}
+
+.planner-gantt__title {
+    font-size: calc(0.5rem * var(--note-font-scale, 1));
+    color: var(--text-muted);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.planner-gantt__zoom {
+    display: inline-flex;
+    gap: 0.12rem;
+    flex-wrap: wrap;
+}
+
+.planner-gantt__zoom .planner-zoom-btn {
+    padding: 0.08rem 0.28rem;
+    font-size: calc(0.45rem * var(--note-font-scale, 1));
+    line-height: 1.2;
+}
+
+.planner-zoom-btn.is-active {
+    font-weight: 600;
+}
+
+.planner-gantt__board {
+    display: flex;
+    align-items: stretch;
+    min-width: 0;
+    max-width: 100%;
+    border: 1px solid var(--sheet-grid-border, color-mix(in srgb, var(--border-color) 45%, transparent));
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+}
+
+.planner-gantt__rail {
+    flex: 0 0 auto;
+    border-right: 1px solid var(--sheet-grid-border, color-mix(in srgb, var(--border-color) 40%, transparent));
+    background: color-mix(in srgb, var(--border-color) 8%, transparent);
+    z-index: 1;
+}
+
+.planner-gantt__rail-head {
+    box-sizing: border-box;
+    border-bottom: 1px solid var(--sheet-grid-border, color-mix(in srgb, var(--border-color) 28%, transparent));
+}
+
+.planner-gantt__rail-row {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    padding: 0 0.28rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color) 14%, transparent);
+}
+
+.planner-gantt__rail-label {
+    display: block;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: calc(0.48rem * var(--note-font-scale, 1));
+    line-height: 1.2;
+}
+
+.planner-gantt__rail-label.is-muted {
+    color: var(--text-muted);
+    opacity: 0.7;
+}
+
+.planner-gantt__viewport {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: auto;
+    cursor: grab;
+    touch-action: none;
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE/legacy */
+}
+
+.planner-gantt__viewport::-webkit-scrollbar {
+    display: none; /* Chromium/WebKit */
+}
+
+.planner-gantt__viewport.is-panning {
+    cursor: grabbing;
+    user-select: none;
+}
+
+.planner-gantt__svg {
+    display: block;
+    font-size: 10px;
+    max-width: none;
+}
+
+.planner-gantt__bg {
+    fill: color-mix(in srgb, var(--border-color) 6%, transparent);
+}
+
+.planner-gantt__axis-bg {
+    fill: color-mix(in srgb, var(--border-color) 10%, transparent);
+}
+
+.planner-gantt__major-label {
+    fill: var(--text-muted);
+    font-size: 9px;
+    font-weight: 600;
+}
+
+.planner-gantt__major-rule {
+    stroke: color-mix(in srgb, var(--border-color) 35%, transparent);
+    stroke-width: 1;
+}
+
+.planner-gantt__tick {
+    stroke: color-mix(in srgb, var(--border-color) 22%, transparent);
+    stroke-width: 1;
+}
+
+.planner-gantt__tick--major {
+    stroke: color-mix(in srgb, var(--border-color) 55%, transparent);
+}
+
+.planner-gantt__tick--emphasis {
+    stroke: color-mix(in srgb, var(--border-color) 40%, transparent);
+}
+
+.planner-gantt__tick-label {
+    fill: var(--text-muted);
+    font-size: 8px;
+}
+
+.planner-gantt__row-label {
+    fill: var(--text-color, currentColor);
+    font-size: 9px;
+}
+
+.planner-gantt__bar {
+    fill: color-mix(in srgb, var(--accent, #5b8def) 72%, transparent);
+    stroke: color-mix(in srgb, var(--accent, #5b8def) 90%, #000 10%);
+    stroke-width: 0.75;
+}
+
+.planner-gantt__edge {
+    stroke: color-mix(in srgb, var(--text-muted) 65%, transparent);
+    stroke-width: 1.1;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    opacity: 0.85;
+}
+
+.planner-gantt__today {
+    stroke: color-mix(in srgb, #e11d48 80%, transparent);
+    stroke-width: 1.25;
+    stroke-dasharray: 3 2;
+}
+
+.planner-gantt__empty {
+    fill: var(--text-muted);
+    font-size: 10px;
+}
+
+.has-custom-bg .planner-gantt__board {
+    border-color: var(--card-border-subtle);
+    background: color-mix(in srgb, var(--card-border-subtle) 18%, transparent);
+}
+
+.has-custom-bg .planner-gantt__rail {
+    border-right-color: var(--card-border-subtle);
+    background: color-mix(in srgb, var(--card-border-subtle) 22%, transparent);
+}
+
+.has-custom-bg .planner-gantt__title,
+.has-custom-bg .planner-gantt__tick-label,
+.has-custom-bg .planner-gantt__empty,
+.has-custom-bg .planner-datetime__value.is-empty {
+    color: var(--card-muted);
+    fill: var(--card-muted);
+}
+
+.has-custom-bg .planner-gantt__row-label {
+    fill: var(--card-fg, currentColor);
+}

@@ -19,7 +19,10 @@ describe('noteFieldOwnership contract', () => {
         assert.ok(MODAL_OWNED_FIELDS.includes('content'));
         assert.ok(SHARED_FIELDS.includes('attachments'));
         assert.ok(SHARED_FIELDS.includes('canvas'));
+        assert.ok(SHARED_FIELDS.includes('planner'));
+        assert.ok(SHARED_FIELDS.includes('plannerHidden'));
         assert.ok(!MODAL_OWNED_FIELDS.includes('canvas'));
+        assert.ok(!MODAL_OWNED_FIELDS.includes('planner'));
         assert.ok(!SHARED_FIELDS.includes('title'));
     });
 

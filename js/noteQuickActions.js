@@ -20,6 +20,7 @@ import { showAppToast } from './toast.js';
 import { MediaLibraryOverlay } from './mediaLibraryOverlay.js';
 import { attachmentCount } from './mediaAttachments.js';
 import { createEmptyNoteCanvas } from './noteModel.js';
+import { createEmptyPlanner } from './planner.js';
 
 /**
  * Attach a quick-action button using a "commit then act" pattern.
@@ -104,6 +105,7 @@ function queryActionButtons(root) {
         calBtn: actions.querySelector('.card-act--cal'),
         popoutBtn: actions.querySelector('.card-act--popout'),
         drawBtn: actions.querySelector('.card-act--draw'),
+        plannerBtn: actions.querySelector('.card-act--planner'),
         popinBtn: actions.querySelector('.card-act--popin'),
         closeBtn: actions.querySelector('.card-act--close'),
         windowSizeBtn: actions.querySelector('.card-act--window-size')
@@ -112,7 +114,7 @@ function queryActionButtons(root) {
 
 
 function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
-    const { copyBtn, pinBtn, dragBtn, colorBtn, attachBtn, iconBtn, hideBtn, calBtn, popoutBtn, popinBtn, drawBtn } = buttons;
+    const { copyBtn, pinBtn, dragBtn, colorBtn, attachBtn, iconBtn, hideBtn, calBtn, popoutBtn, popinBtn, drawBtn, plannerBtn } = buttons;
     const iconRoot = surface === 'board'
         ? (card?.querySelector('.editor-note-shell') || card)
         : (editor?.mountZone?.querySelector('.editor-note-shell') || editor?.mountZone || editor?.popoutRoot);
@@ -272,6 +274,28 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
             // cannot reveal the preview (looks like a "locked" toggle).
             import('./noteAttachmentsUi.js').then(({ syncNoteAttachmentsDom }) => {
                 syncNoteAttachmentsDom(item);
+            }).catch(() => {});
+        }, { commit: boardCommit || modalCommit });
+    }
+
+    if (plannerBtn) {
+        attachCardActionButton(plannerBtn, () => {
+            const hadPlanner = !!item.planner;
+            const nextHidden = hadPlanner ? !item.plannerHidden : false;
+            NoteSurface.mutateItem(item, (it) => {
+                if (!hadPlanner) {
+                    it.planner = createEmptyPlanner();
+                    it.plannerHidden = false;
+                } else {
+                    it.plannerHidden = nextHidden;
+                }
+            }, { preserveView: true, skipRerender: true });
+            plannerBtn.classList.toggle('is-active', !nextHidden);
+            plannerBtn.setAttribute('aria-pressed', !nextHidden ? 'true' : 'false');
+            plannerBtn.setAttribute('title', nextHidden ? 'Show planner' : 'Hide planner');
+            plannerBtn.setAttribute('aria-label', nextHidden ? 'Show planner' : 'Hide planner');
+            import('./plannerUi.js').then(({ syncNotePlannerDom }) => {
+                syncNotePlannerDom(item);
             }).catch(() => {});
         }, { commit: boardCommit || modalCommit });
     }

@@ -684,6 +684,7 @@ export function migrateImportedItem(item) {
         backgroundColor: item.backgroundColor || '',
         isRecurring: item.isRecurring === true,
         attachments: item.attachments || [],
+        planner: item.planner || null,
         created_at: createdAt,
         updated_at: updatedAt,
         // Ensure desktopId defaults to 1 for backward compatibility

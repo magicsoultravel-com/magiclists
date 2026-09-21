@@ -14,6 +14,7 @@ import { normalizeItemForSave } from './noteModel.js';
 import { createBlankChecklistStep } from './noteSurfaceMutations.js';
 import { contentHasConvertibleText, stepsHaveConvertibleText, convertContentToChecklist, convertChecklistToContent } from './noteBodyConversion.js';
 import { attachSheetInteractions } from './sheet.js';
+import { attachPlannerInteractions } from './plannerUi.js';
 import { bindChecklistInteractions, attachChecklistDrag } from './noteSurfaceChecklist.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
@@ -543,6 +544,13 @@ export function bindNoteEditorShell(root, item, {
             onChange,
             refresh
         }));
+        attachPlannerInteractions(body, item, {
+            localOnly,
+            onChange,
+            refresh: () => {
+                import('./plannerUi.js').then(({ syncNotePlannerDom }) => syncNotePlannerDom(item)).catch(() => {});
+            }
+        });
         bindChecklistInteractions(body, item, {
             refresh,
             localOnly,
