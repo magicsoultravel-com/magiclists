@@ -17,14 +17,14 @@ import { parsePlannerDateTime } from './plannerGantt.js';
 
 export const PLANNER_VERSION = 2;
 export const PLANNER_DEFAULT_ROWS = 3;
-export const PLANNER_ZOOM_LEVELS = Object.freeze(['day', 'week', 'quarter', 'month', 'year']);
+export const PLANNER_ZOOM_LEVELS = Object.freeze(['day', 'week', 'month', 'quarter', 'year']);
 export const PLANNER_DEFAULT_ZOOM = 'week';
-/** One-letter zoom button labels (D W Q M Y). */
+/** One-letter zoom button labels (D W M Q Y). */
 export const PLANNER_ZOOM_LABELS = Object.freeze({
     day: 'D',
     week: 'W',
-    quarter: 'Q',
     month: 'M',
+    quarter: 'Q',
     year: 'Y'
 });
 

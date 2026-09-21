@@ -2,12 +2,13 @@
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Pixels per calendar day at each zoom (keeps bars and ticks on the same scale). */
+/** Pixels per calendar day at each zoom (keeps bars and ticks on the same scale).
+ *  Coarser zoom → fewer px/day: D > W > M > Q > Y. */
 const PX_PER_DAY = Object.freeze({
     day: 28,
     week: 10,
-    quarter: 5.2,
-    month: 3.4,
+    month: 5.2,
+    quarter: 3.4,
     year: 0.6
 });
 

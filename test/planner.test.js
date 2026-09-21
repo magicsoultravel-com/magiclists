@@ -216,9 +216,9 @@ describe('planner Gantt layout', () => {
 
     it('uses fewer pixels-per-day at coarser zoom', () => {
         assert.ok(zoomPxPerDay('day') > zoomPxPerDay('week'));
-        assert.ok(zoomPxPerDay('week') > zoomPxPerDay('quarter'));
-        assert.ok(zoomPxPerDay('quarter') > zoomPxPerDay('month'));
-        assert.ok(zoomPxPerDay('month') > zoomPxPerDay('year'));
+        assert.ok(zoomPxPerDay('week') > zoomPxPerDay('month'));
+        assert.ok(zoomPxPerDay('month') > zoomPxPerDay('quarter'));
+        assert.ok(zoomPxPerDay('quarter') > zoomPxPerDay('year'));
     });
 
     it('builds alternating interval bands per zoom', () => {

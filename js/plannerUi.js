@@ -2,7 +2,7 @@
 import { escapeHTML, escapeAttr } from './domEscape.js';
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { parseStoredDateTime, combineDateTime } from './noteModel.js';
-import { mutateItem } from './noteSurfaceMutations.js';
+import { mutateItem, emitItemMutation } from './noteSurfaceMutations.js';
 import {
     PLANNER_COLUMNS,
     PLANNER_COL_COUNT,
@@ -105,7 +105,7 @@ function renderCategoryCell(value, row, col, canEdit, planner, datalistId) {
     return `<td class="sheet-grid__cell planner-cell planner-cell--category">
         <div class="planner-category" data-planner-category data-row="${row}" data-col="${col}">
             <button type="button" class="planner-category__swatch-btn" data-planner-category-color title="Category color" aria-label="Category color"${swatchStyle}></button>
-            <input type="text" class="form-input planner-cell-input planner-category__input" data-planner-cell data-row="${row}" data-col="${col}" data-col-key="category" value="${escapeAttr(value)}" spellcheck="false"${listAttr}>
+            <input type="text" class="form-input sheet-cell-input planner-cell-input planner-category__input" data-planner-cell data-row="${row}" data-col="${col}" data-col-key="category" value="${escapeAttr(value)}" spellcheck="false"${listAttr}>
         </div>
     </td>`;
 }
@@ -587,12 +587,19 @@ function refreshPlannerSummaryInSection(section, item) {
 function growPlannerTextareas(section) {
     const canvasScroll = captureCanvasScroll();
     section?.querySelectorAll('.planner-cell-input').forEach((el) => {
-        el.style.height = '0';
-        el.style.height = `${Math.max(el.scrollHeight, 18)}px`;
+        growPlannerCell(el);
     });
     restoreCanvasScroll(canvasScroll);
 }
 
+/** Auto-size a single planner cell — cheap enough for per-keystroke use. */
+function growPlannerCell(el) {
+    if (!el || !el.style) return;
+    el.style.height = '0';
+    el.style.height = `${Math.max(el.scrollHeight, 18)}px`;
+}
+
+const PLANNER_COMMIT_MS = 380;
 const PLANNER_START_COL = PLANNER_COLUMNS.findIndex((c) => c.key === 'start');
 const PLANNER_STOP_COL = PLANNER_COLUMNS.findIndex((c) => c.key === 'stop');
 
@@ -709,7 +716,44 @@ export function attachPlannerInteractions(root, item, {
         restoreCanvasScroll(canvasScroll);
     }
 
+    // Debounced persist + Gantt: patch sheet on every keystroke, emit/refresh once.
+    let commitTimer = null;
+    let pendingBefore = null;
+    let pendingNeedGantt = false;
+
+    const flushPlannerCommit = () => {
+        if (commitTimer) {
+            clearTimeout(commitTimer);
+            commitTimer = null;
+        }
+        if (!pendingBefore) return;
+        const beforeItem = pendingBefore;
+        pendingBefore = null;
+        const needGantt = pendingNeedGantt;
+        pendingNeedGantt = false;
+        if (!localOnly) {
+            emitItemMutation(item, {
+                preserveView: true,
+                beforeItem,
+                skipRerender: true
+            });
+        }
+        if (needGantt) refreshGanttInSection(section, item);
+        onChange();
+    };
+
+    const schedulePlannerCommit = ({ refreshGantt = true } = {}) => {
+        if (!pendingBefore) {
+            pendingBefore = JSON.parse(JSON.stringify(item));
+        }
+        if (refreshGantt) pendingNeedGantt = true;
+        if (commitTimer) clearTimeout(commitTimer);
+        commitTimer = setTimeout(flushPlannerCommit, PLANNER_COMMIT_MS);
+    };
+
     const mutate = (fn, { skipRerender = true, refreshGantt = true } = {}) => {
+        // Persist any in-flight text edits before structural / date mutations.
+        flushPlannerCommit();
         mutateItem(item, (it) => {
             if (!it.planner) it.planner = createEmptyPlanner();
             fn(it);
@@ -741,23 +785,22 @@ export function attachPlannerInteractions(root, item, {
         if (cell) {
             const row = Number(cell.dataset.row);
             const col = Number(cell.dataset.col);
+            if (!Number.isFinite(row) || !Number.isFinite(col)) return;
             const key = cell.dataset.colKey || '';
-            mutate((it) => {
-                setCellValue(it.planner.sheet, row, col, cell.value);
-                if (key === 'category') {
-                    const known = getCategoryColor(it.planner, cell.value);
-                    const wrap = cell.closest('[data-planner-category]');
-                    const swatch = wrap?.querySelector?.('[data-planner-category-color]');
-                    if (swatch) swatch.style.background = known || '';
-                }
-            });
-            growPlannerTextareas(section);
+            // Snapshot before first patch in this debounce window, then cheap in-place write.
+            schedulePlannerCommit({ refreshGantt: true });
+            if (!item.planner) item.planner = createEmptyPlanner();
+            setCellValue(item.planner.sheet, row, col, cell.value);
+            if (key === 'category') {
+                const known = getCategoryColor(item.planner, cell.value);
+                const wrap = cell.closest('[data-planner-category]');
+                const swatch = wrap?.querySelector?.('[data-planner-category-color]');
+                if (swatch) swatch.style.background = known || '';
+            }
+            growPlannerCell(cell);
             return;
         }
-        if (e.target.matches('[data-planner-date], [data-planner-time]')) {
-            const wrap = e.target.closest('[data-planner-datetime]');
-            commitDatetimeWrap(wrap);
-        }
+        // Date/time: ignore input — picker fires change; avoid per-keystroke Gantt + double emit.
     });
 
     section.addEventListener('change', (e) => {
@@ -765,6 +808,13 @@ export function attachPlannerInteractions(root, item, {
             const wrap = e.target.closest('[data-planner-datetime]');
             commitDatetimeWrap(wrap);
         }
+    });
+
+    // Flush pending text persist + chart when leaving a planner cell / datetime control.
+    section.addEventListener('focusout', (e) => {
+        const leaving = e.target.closest('[data-planner-cell], [data-planner-datetime]');
+        if (!leaving || !section.contains(leaving)) return;
+        flushPlannerCommit();
     });
 
     section.addEventListener('click', (e) => {
