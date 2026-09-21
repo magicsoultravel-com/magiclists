@@ -9,10 +9,14 @@ import {
     PLANNER_ZOOM_LEVELS,
     createEmptyPlanner,
     normalizePlanner,
-    ensurePlannerVisibleIfContent,
     addPlannerRow,
     removePlannerRow,
+    movePlannerRow,
     derivePlannerTasks,
+    summarizePlannerSchedule,
+    listPlannerCategories,
+    getCategoryColor,
+    setCategoryColor,
     getCellValue,
     setCellValue,
     getColWidth,
@@ -24,6 +28,7 @@ import {
     plannerHasContent
 } from './planner.js';
 import { layoutPlannerGantt } from './plannerGantt.js';
+import { ColorPicker, PALETTE_NOTE, resolveNoteColor } from './colorPicker.js';
 
 function noteBodiesForItem(itemId) {
     if (!itemId) return [];
@@ -82,19 +87,45 @@ function renderTextCell(value, row, col, canEdit, { key = '' } = {}) {
     </td>`;
 }
 
+function renderCategoryCell(value, row, col, canEdit, planner, datalistId) {
+    const color = getCategoryColor(planner, value) || '';
+    const swatchStyle = color ? ` style="background:${escapeAttr(color)}"` : '';
+    if (!canEdit) {
+        return `<td class="sheet-grid__cell planner-cell planner-cell--category">
+            <div class="planner-category">
+                <span class="planner-category__swatch"${swatchStyle} aria-hidden="true"></span>
+                <span class="sheet-cell-read">${escapeHTML(value)}</span>
+            </div>
+        </td>`;
+    }
+    const listAttr = datalistId ? ` list="${escapeAttr(datalistId)}"` : '';
+    return `<td class="sheet-grid__cell planner-cell planner-cell--category">
+        <div class="planner-category" data-planner-category data-row="${row}" data-col="${col}">
+            <button type="button" class="planner-category__swatch-btn" data-planner-category-color title="Category color" aria-label="Category color"${swatchStyle}></button>
+            <input type="text" class="form-input planner-cell-input planner-category__input" data-planner-cell data-row="${row}" data-col="${col}" data-col-key="category" value="${escapeAttr(value)}" spellcheck="false"${listAttr}>
+        </div>
+    </td>`;
+}
+
 /**
- * @param {object} sheet
+ * @param {object} planner
  * @param {{ canEdit?: boolean }} [opts]
  * @returns {string}
  */
-export function renderPlannerSheetHtml(sheet, { canEdit = false } = {}) {
+export function renderPlannerSheetHtml(planner, { canEdit = false } = {}) {
+    const sheet = planner?.sheet;
     if (!sheet) return '';
     ensurePlannerColWidths(sheet);
     const rows = sheet.rows || SHEET_MIN_ROWS;
     const canRemoveRow = rows > SHEET_MIN_ROWS;
     const totalW = sheetGridTotalWidthPx(sheet, { includeStructCol: false });
+    const datalistId = `planner-cat-list-${Math.random().toString(36).slice(2, 9)}`;
+    const categories = listPlannerCategories(planner);
+    const datalist = canEdit
+        ? `<datalist id="${escapeAttr(datalistId)}">${categories.map((c) => `<option value="${escapeAttr(c)}"></option>`).join('')}</datalist>`
+        : '';
 
-    let colgroup = `<col class="sheet-grid__row-head-col" style="width:${SHEET_ROW_HEAD_WIDTH_PX}px">`;
+    let colgroup = `<col class="sheet-grid__row-head-col" style="width:${Math.max(SHEET_ROW_HEAD_WIDTH_PX, 22)}px">`;
     for (let c = 0; c < PLANNER_COL_COUNT; c++) {
         colgroup += `<col data-col="${c}" style="width:${getColWidth(sheet, c)}px">`;
     }
@@ -111,12 +142,17 @@ export function renderPlannerSheetHtml(sheet, { canEdit = false } = {}) {
 
     let body = '';
     for (let r = 0; r < rows; r++) {
-        body += `<tr><th class="sheet-grid__row-head" scope="row">${r + 1}</th>`;
+        const rowHead = canEdit
+            ? `<th class="sheet-grid__row-head planner-row-head" scope="row" draggable="true" data-planner-row="${r}" title="Drag to reorder">${r + 1}</th>`
+            : `<th class="sheet-grid__row-head" scope="row">${r + 1}</th>`;
+        body += `<tr data-planner-row-index="${r}">${rowHead}`;
         for (let c = 0; c < PLANNER_COL_COUNT; c++) {
             const colDef = PLANNER_COLUMNS[c];
             const value = getCellValue(sheet, r, c);
             if (colDef.type === 'datetime') {
                 body += renderDatetimeCell(value, r, c, canEdit);
+            } else if (colDef.type === 'category') {
+                body += renderCategoryCell(value, r, c, canEdit, planner, datalistId);
             } else {
                 body += renderTextCell(value, r, c, canEdit, { key: colDef.key });
             }
@@ -129,6 +165,7 @@ export function renderPlannerSheetHtml(sheet, { canEdit = false } = {}) {
     }
 
     return `<div class="sheet-block planner-sheet-block" data-planner-sheet-block>
+        ${datalist}
         <div class="sheet-grid-wrap">
             <table class="sheet-grid planner-grid" style="width:${totalW}px">
                 <colgroup>${colgroup}</colgroup>
@@ -178,9 +215,12 @@ function renderGanttSvg(layout) {
 
     const barEls = bars.map((b) => {
         const title = escapeHTML(b.name || b.id || 'Task');
+        const fill = b.categoryColor
+            ? ` style="fill:${escapeAttr(b.categoryColor)}"`
+            : '';
         return `<g class="planner-gantt__bar-group" data-task-id="${escapeAttr(b.id)}">
             <title>${title}</title>
-            <rect class="planner-gantt__bar" x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" rx="2"/>
+            <rect class="planner-gantt__bar" x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" rx="2"${fill}/>
         </g>`;
     }).join('');
 
@@ -196,7 +236,7 @@ function renderGanttSvg(layout) {
         ? `<rect class="planner-gantt__axis-bg" x="0" y="0" width="${chartWidth}" height="${headerHeight}"/>`
         : '';
 
-    return `<svg class="planner-gantt__svg" width="${chartWidth}" height="${height}" viewBox="0 0 ${chartWidth} ${height}" role="img" aria-label="Planner Gantt chart">
+    return `<svg class="planner-gantt__svg" width="${chartWidth}" height="${height}" viewBox="0 0 ${chartWidth} ${height}" role="img" aria-label="Planner chart">
         ${axisBg}
         <rect class="planner-gantt__bg" x="0" y="${headerHeight}" width="${chartWidth}" height="${Math.max(0, height - headerHeight)}"/>
         ${majorBandEls}
@@ -302,11 +342,38 @@ function bindGanttPan(viewport) {
 }
 
 /**
+ * One-line schedule span under the table: earliest Start, latest Stop, durations.
+ * @param {object} planner
+ * @returns {string}
+ */
+export function renderPlannerSummaryHtml(planner) {
+    const summary = summarizePlannerSchedule(planner);
+    if (!summary) {
+        return `<div class="planner-summary" data-planner-summary>
+            <span class="planner-summary__muted">Add Start / Stop dates to see schedule span</span>
+        </div>`;
+    }
+    const start = summary.startLabel || '—';
+    const stop = summary.stopLabel || '—';
+    const duration = (summary.calendarDays != null && summary.workingDays != null)
+        ? `${summary.calendarDays} cd / ${summary.workingDays} wd`
+        : '—';
+    return `<div class="planner-summary" data-planner-summary>
+        <span class="planner-summary__part"><span class="planner-summary__label">Start</span> ${escapeHTML(start)}</span>
+        <span class="planner-summary__sep" aria-hidden="true">·</span>
+        <span class="planner-summary__part"><span class="planner-summary__label">Stop</span> ${escapeHTML(stop)}</span>
+        <span class="planner-summary__sep" aria-hidden="true">·</span>
+        <span class="planner-summary__part"><span class="planner-summary__label">Duration</span> ${escapeHTML(duration)}</span>
+    </div>`;
+}
+
+/**
  * @param {object} planner
  * @returns {{ html: string, layout: object }}
  */
 export function renderPlannerGanttHtml(planner) {
     const zoom = planner?.zoom || 'week';
+    const chartCollapsed = !!planner?.chartCollapsed;
     const tasks = derivePlannerTasks(planner);
     const layout = layoutPlannerGantt(tasks, { zoom });
     const zoomBtns = PLANNER_ZOOM_LEVELS.map((z) => {
@@ -314,13 +381,17 @@ export function renderPlannerGanttHtml(planner) {
         const label = z.charAt(0).toUpperCase() + z.slice(1);
         return `<button type="button" class="btn btn--compact planner-zoom-btn${active}" data-planner-zoom="${z}" aria-pressed="${z === zoom ? 'true' : 'false'}">${label}</button>`;
     }).join('');
+    const toggleCollapsed = chartCollapsed ? ' collapsed' : '';
+    const boardCollapsed = chartCollapsed ? ' is-collapsed' : '';
 
-    const html = `<div class="planner-gantt" data-planner-gantt data-planner-zoom-current="${escapeAttr(zoom)}">
+    const html = `<div class="planner-gantt" data-planner-gantt data-planner-zoom-current="${escapeAttr(zoom)}" data-chart-collapsed="${chartCollapsed ? '1' : '0'}">
         <div class="planner-gantt__toolbar">
-            <span class="planner-gantt__title">Gantt</span>
-            <div class="planner-gantt__zoom" role="group" aria-label="Gantt zoom">${zoomBtns}</div>
+            <button type="button" class="planner-gantt__title" data-planner-chart-toggle aria-expanded="${chartCollapsed ? 'false' : 'true'}">
+                <span class="collapsable-toggle${toggleCollapsed}" aria-hidden="true">▼</span>Chart
+            </button>
+            <div class="planner-gantt__zoom" role="group" aria-label="Chart zoom">${zoomBtns}</div>
         </div>
-        <div class="planner-gantt__board">
+        <div class="planner-gantt__board${boardCollapsed}" data-planner-chart-board>
             ${renderGanttRailHtml(layout)}
             <div class="planner-gantt__viewport" data-planner-gantt-viewport title="Drag to pan">${renderGanttSvg(layout)}</div>
         </div>
@@ -335,24 +406,26 @@ export function renderPlannerGanttHtml(planner) {
  * @returns {string}
  */
 export function buildNotePlannerSectionHtml(item, { canEdit = false, startCollapsed = false } = {}) {
-    ensurePlannerVisibleIfContent(item);
     if (!item?.planner) return '';
+    // Sticky hide: keep data, emit no DOM (no blank spacer).
+    if (item.plannerHidden) return '';
 
-    const visible = !item.plannerHidden;
     const planner = normalizePlanner(item.planner) || item.planner;
-    const hiddenClass = visible ? '' : ' is-hidden';
+    item.planner = planner;
     const collapsedClass = startCollapsed ? ' collapsed' : '';
     const toggleCollapsed = startCollapsed ? ' collapsed' : '';
-    const sheetHtml = renderPlannerSheetHtml(planner.sheet, { canEdit });
+    const sheetHtml = renderPlannerSheetHtml(planner, { canEdit });
+    const summaryHtml = renderPlannerSummaryHtml(planner);
     const { html: ganttHtml } = renderPlannerGanttHtml(planner);
 
     return `
-            <div class="note-body-section note-body-section--planner${hiddenClass}" data-note-planner ${visible ? '' : 'hidden'}>
+            <div class="note-body-section note-body-section--planner" data-note-planner>
                 <div class="note-section-header collapsable-header">
                     <span class="collapsable-heading"><span class="collapsable-toggle${toggleCollapsed}">▼</span>Planner</span>
                 </div>
                 <div class="note-section-body collapsable-section${collapsedClass}">
                     ${sheetHtml}
+                    ${summaryHtml}
                     ${ganttHtml}
                 </div>
             </div>`;
@@ -423,6 +496,16 @@ function refreshGanttInSection(section, item, { refocus = false } = {}) {
         preserveScrollLeft,
         refocus: refocus || zoomChanged
     });
+    refreshPlannerSummaryInSection(section, item);
+}
+
+function refreshPlannerSummaryInSection(section, item) {
+    const host = section?.querySelector('[data-planner-summary]');
+    if (!host || !item?.planner) return;
+    const tmp = document.createElement('div');
+    tmp.innerHTML = renderPlannerSummaryHtml(item.planner).trim();
+    const next = tmp.firstElementChild;
+    if (next) host.replaceWith(next);
 }
 
 function growPlannerTextareas(section) {
@@ -431,6 +514,9 @@ function growPlannerTextareas(section) {
         el.style.height = `${Math.max(el.scrollHeight, 18)}px`;
     });
 }
+
+const PLANNER_START_COL = PLANNER_COLUMNS.findIndex((c) => c.key === 'start');
+const PLANNER_STOP_COL = PLANNER_COLUMNS.findIndex((c) => c.key === 'stop');
 
 function todayLocalDate() {
     const d = new Date();
@@ -447,6 +533,22 @@ function updateDatetimeValueDisplay(wrap) {
     if (!valueEl) return;
     valueEl.textContent = label || '—';
     valueEl.classList.toggle('is-empty', !label);
+}
+
+/**
+ * When Stop's date is empty, seed from the same row's Start so the native
+ * calendar opens on that month instead of today / far away.
+ * @param {HTMLElement} section
+ * @param {HTMLElement} wrap
+ * @returns {string}
+ */
+function siblingStartDate(section, wrap) {
+    const row = Number(wrap?.dataset?.row);
+    if (!Number.isFinite(row) || PLANNER_START_COL < 0) return '';
+    const startWrap = section.querySelector(
+        `[data-planner-datetime][data-row="${row}"][data-col="${PLANNER_START_COL}"]`
+    );
+    return startWrap?.querySelector?.('[data-planner-date]')?.value || '';
 }
 
 function openPlannerNativePicker(input) {
@@ -516,8 +618,15 @@ export function attachPlannerInteractions(root, item, {
         if (cell) {
             const row = Number(cell.dataset.row);
             const col = Number(cell.dataset.col);
+            const key = cell.dataset.colKey || '';
             mutate((it) => {
                 setCellValue(it.planner.sheet, row, col, cell.value);
+                if (key === 'category') {
+                    const known = getCategoryColor(it.planner, cell.value);
+                    const wrap = cell.closest('[data-planner-category]');
+                    const swatch = wrap?.querySelector?.('[data-planner-category-color]');
+                    if (swatch) swatch.style.background = known || '';
+                }
             });
             growPlannerTextareas(section);
             return;
@@ -536,6 +645,33 @@ export function attachPlannerInteractions(root, item, {
     });
 
     section.addEventListener('click', (e) => {
+        const colorBtn = e.target.closest('[data-planner-category-color]');
+        if (colorBtn && section.contains(colorBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const wrap = colorBtn.closest('[data-planner-category]');
+            const row = Number(wrap?.dataset?.row);
+            const nameInput = wrap?.querySelector?.('[data-col-key="category"]');
+            const catName = (nameInput?.value || '').trim();
+            if (!Number.isFinite(row)) return;
+            ColorPicker.open({
+                anchor: colorBtn,
+                presets: PALETTE_NOTE,
+                value: resolveNoteColor(getCategoryColor(item.planner, catName) || colorBtn.style.background),
+                onSelect: (color) => {
+                    const hex = resolveNoteColor(color);
+                    const name = catName || `Category ${row + 1}`;
+                    mutate((it) => {
+                        if (nameInput && !nameInput.value.trim()) nameInput.value = name;
+                        setCellValue(it.planner.sheet, row, 1, name);
+                        setCategoryColor(it.planner, name, hex);
+                    }, { refreshGantt: true });
+                    refresh();
+                }
+            });
+            return;
+        }
+
         const pickBtn = e.target.closest('[data-planner-pick]');
         if (pickBtn && section.contains(pickBtn)) {
             e.preventDefault();
@@ -545,10 +681,42 @@ export function attachPlannerInteractions(root, item, {
             const kind = pickBtn.dataset.plannerPick;
             const dateInput = wrap.querySelector('[data-planner-date]');
             const timeInput = wrap.querySelector('[data-planner-time]');
+            const col = Number(wrap.dataset.col);
+            // Empty Stop date: open calendar on Start so you don't scroll from today.
+            if (dateInput && !dateInput.value && col === PLANNER_STOP_COL) {
+                const fromStart = siblingStartDate(section, wrap);
+                if (fromStart) {
+                    dateInput.value = fromStart;
+                    commitDatetimeWrap(wrap);
+                }
+            }
             if (kind === 'time' && dateInput && !dateInput.value) {
                 dateInput.value = todayLocalDate();
+                commitDatetimeWrap(wrap);
             }
             openPlannerNativePicker(kind === 'time' ? timeInput : dateInput);
+            return;
+        }
+
+        const chartToggle = e.target.closest('[data-planner-chart-toggle]');
+        if (chartToggle && section.contains(chartToggle)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const wasCollapsed = !!item.planner?.chartCollapsed;
+            mutate((it) => {
+                it.planner.chartCollapsed = !it.planner.chartCollapsed;
+            }, { skipRerender: true, refreshGantt: true });
+            if (wasCollapsed) {
+                // Expanding: re-center the chart viewport.
+                const host = section.querySelector('[data-planner-gantt]');
+                if (host) {
+                    const layout = layoutPlannerGantt(
+                        derivePlannerTasks(item.planner),
+                        { zoom: item.planner.zoom || 'week' }
+                    );
+                    mountGanttViewport(host, layout, { refocus: true });
+                }
+            }
             return;
         }
 
@@ -560,7 +728,6 @@ export function attachPlannerInteractions(root, item, {
             mutate((it) => {
                 it.planner.zoom = zoom;
             }, { refreshGantt: true });
-            // Zoom change is handled inside refreshGanttInSection (refocus).
             return;
         }
 
@@ -580,6 +747,47 @@ export function attachPlannerInteractions(root, item, {
             mutate((it) => removePlannerRow(it.planner), { skipRerender: true, refreshGantt: false });
             refresh();
         }
+    });
+
+    // Row drag-reorder via row-number handle
+    let dragFrom = null;
+    section.addEventListener('dragstart', (e) => {
+        const head = e.target.closest('.planner-row-head[data-planner-row]');
+        if (!head || !section.contains(head)) return;
+        dragFrom = Number(head.dataset.plannerRow);
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(dragFrom));
+        head.closest('tr')?.classList.add('is-dragging');
+    });
+    section.addEventListener('dragover', (e) => {
+        const row = e.target.closest('tr[data-planner-row-index]');
+        if (!row || !section.contains(row) || dragFrom == null) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        section.querySelectorAll('tr.is-drag-over').forEach((el) => el.classList.remove('is-drag-over'));
+        row.classList.add('is-drag-over');
+    });
+    section.addEventListener('drop', (e) => {
+        const row = e.target.closest('tr[data-planner-row-index]');
+        if (!row || !section.contains(row) || dragFrom == null) return;
+        e.preventDefault();
+        const toIndex = Number(row.dataset.plannerRowIndex);
+        section.querySelectorAll('tr.is-drag-over, tr.is-dragging').forEach((el) => {
+            el.classList.remove('is-drag-over', 'is-dragging');
+        });
+        if (!Number.isFinite(toIndex) || toIndex === dragFrom) {
+            dragFrom = null;
+            return;
+        }
+        mutate((it) => movePlannerRow(it.planner, dragFrom, toIndex), { skipRerender: true, refreshGantt: false });
+        dragFrom = null;
+        refresh();
+    });
+    section.addEventListener('dragend', () => {
+        dragFrom = null;
+        section.querySelectorAll('tr.is-drag-over, tr.is-dragging').forEach((el) => {
+            el.classList.remove('is-drag-over', 'is-dragging');
+        });
     });
 
     // Column resize
@@ -623,7 +831,6 @@ export function attachPlannerInteractions(root, item, {
  */
 export function syncNotePlannerDom(item) {
     if (!item?.id) return;
-    ensurePlannerVisibleIfContent(item);
 
     for (const body of noteBodiesForItem(item.id)) {
         const canEdit = bodyCanEdit(body);
@@ -644,7 +851,6 @@ export function syncNotePlannerDom(item) {
         if (existing) {
             existing.replaceWith(next);
         } else {
-            // Insert before media section if present, else append.
             const media = body.querySelector('[data-note-attachments]');
             if (media) body.insertBefore(next, media);
             else body.appendChild(next);

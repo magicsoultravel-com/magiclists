@@ -190,16 +190,12 @@ export function noteCanvasHasContent(canvas) {
 }
 
 /**
- * If a note canvas has strokes/images/text, ensure it is not left hidden.
- * Mutates the item in place. Returns true when canvasHidden was cleared.
- * @param {object|null|undefined} item
+ * @deprecated Hide-with-data is intentional; do not force-unhide on content.
+ * Kept as a no-op so older call sites stay safe.
  * @returns {boolean}
  */
-export function ensureCanvasVisibleIfContent(item) {
-    if (!item || !noteCanvasHasContent(item.canvas)) return false;
-    if (item.canvasHidden === false) return false;
-    item.canvasHidden = false;
-    return true;
+export function ensureCanvasVisibleIfContent() {
+    return false;
 }
 
 /**

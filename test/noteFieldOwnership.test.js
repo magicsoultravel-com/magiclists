@@ -154,17 +154,17 @@ describe('reconcileItemMediaCanvas', () => {
         assert.equal('canvasHidden' in item, false);
     });
 
-    it('attaches canvas image mediaIds and unhides stuck hidden canvases', () => {
+    it('attaches canvas image mediaIds and keeps canvasHidden sticky', () => {
         const canvas = createEmptyNoteCanvas();
         canvas.pages[0].images.push({ mediaId: 'm9', tool: 'image' });
         const item = {
             id: 'n1',
             canvas,
             canvasHidden: true,
-            attachments: [{ mediaId: 'm9', attachedAt: 1, expanded: true, scale: 1, x: null, y: null }]
+            attachments: []
         };
         assert.equal(reconcileItemMediaCanvas(item), true);
-        assert.equal(item.canvasHidden, false);
+        assert.equal(item.canvasHidden, true);
         assert.equal(item.attachments.length, 1);
         assert.equal(item.attachments[0].mediaId, 'm9');
     });

@@ -51,17 +51,16 @@ describe('noteAttachmentsUi module loads and exports functions', () => {
         assert.ok(html.includes('data-note-canvas-preview'));
     });
 
-    it('buildNoteAttachmentsSectionHtml renders media list and hides canvas when no canvas', () => {
+    it('buildNoteAttachmentsSectionHtml renders media list without canvas when no canvas', () => {
         const item = createDefaultNote();
         item.attachments = [{ mediaId: 'm1', attachedAt: 1, expanded: false, scale: 1, x: null, y: null }];
         const html = buildNoteAttachmentsSectionHtml(item);
         assert.ok(html.includes('Media (1)'));
         assert.ok(html.includes('data-expand-media="m1"'));
-        // Canvas area should be hidden when item.canvas is absent.
-        assert.ok(html.includes('note-media-canvas is-hidden'));
+        assert.ok(!html.includes('data-note-media-canvas'));
     });
 
-    it('buildNoteAttachmentsSectionHtml keeps section when canvas exists but is hidden', () => {
+    it('buildNoteAttachmentsSectionHtml omits section when canvas is hidden and there are no attachments', () => {
         const item = createDefaultNote();
         item.canvas = {
             version: 2,
@@ -73,13 +72,10 @@ describe('noteAttachmentsUi module loads and exports functions', () => {
         };
         item.canvasHidden = true;
         const html = buildNoteAttachmentsSectionHtml(item);
-        assert.ok(html.includes('data-note-attachments'));
-        // An EMPTY canvas shell stays hidden so the draw toggle can reveal it later
-        // (only canvases with real content are force-visible by the render choke point).
-        assert.ok(html.includes('note-media-canvas is-hidden'));
+        assert.equal(html, '');
     });
 
-    it('buildNoteAttachmentsSectionHtml self-heals a canvas stuck hidden with content', () => {
+    it('buildNoteAttachmentsSectionHtml keeps canvas hidden sticky when it has content', () => {
         const item = createDefaultNote();
         item.canvas = {
             version: 2,
@@ -89,13 +85,11 @@ describe('noteAttachmentsUi module loads and exports functions', () => {
             infinite: { strokes: [], texts: [], images: [], background: 'blank', backgroundColor: '', bounds: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 } },
             viewport: { scale: 1, offsetX: 0, offsetY: 0 }
         };
-        item.canvasHidden = true; // stale flag with real content (drawn, then a full-board rebuild)
+        item.canvasHidden = true;
         const html = buildNoteAttachmentsSectionHtml(item, { canEdit: true, startCollapsed: false });
-        assert.ok(html.includes('data-note-canvas-preview'));
-        assert.ok(!html.includes('note-media-canvas is-hidden'));
-        assert.ok(!/data-note-media-canvas[^>]*\shidden/.test(html));
-        // The render choke point also fixes the in-memory flag so later renders agree.
-        assert.equal(item.canvasHidden, false);
+        // Sticky hide: no media section at all when canvas is hidden and there are no attachments.
+        assert.equal(html, '');
+        assert.equal(item.canvasHidden, true);
     });
 
     it('sizeCanvasViewport sets explicit width and height from the host card', () => {

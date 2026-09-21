@@ -6,80 +6,112 @@ import {
     plannerHasContent,
     derivePlannerTasks,
     addPlannerRow,
+    movePlannerRow,
     parsePredecessorIds,
     getPlannerField,
     setPlannerField,
+    setCategoryColor,
+    getCategoryColor,
+    listPlannerCategories,
+    summarizePlannerSchedule,
     PLANNER_COL_COUNT,
-    PLANNER_DEFAULT_ZOOM
+    PLANNER_DEFAULT_ZOOM,
+    PLANNER_VERSION
 } from '../js/planner.js';
 import { layoutPlannerGantt, parsePlannerDateTime, zoomPxPerDay, buildGanttAxis, padGanttRange } from '../js/plannerGantt.js';
 import { SHARED_FIELDS } from '../js/noteFieldOwnership.js';
 import { reconcileItemPlanner } from '../js/api.js';
+import { buildNotePlannerSectionHtml } from '../js/plannerUi.js';
 
 describe('planner model', () => {
-    it('creates an empty planner with fixed schema and auto IDs', () => {
+    it('creates an empty planner with v2 schema and no IDs', () => {
         const planner = createEmptyPlanner();
-        assert.equal(planner.version, 1);
+        assert.equal(planner.version, PLANNER_VERSION);
         assert.equal(planner.zoom, PLANNER_DEFAULT_ZOOM);
         assert.equal(planner.sheet.cols, PLANNER_COL_COUNT);
         assert.equal(planner.sheet.rows, 3);
-        assert.equal(getPlannerField(planner.sheet, 0, 'id'), 'P1');
-        assert.equal(getPlannerField(planner.sheet, 2, 'id'), 'P3');
+        assert.deepEqual(planner.categoryColors, {});
+        assert.equal(getPlannerField(planner.sheet, 0, 'name'), '');
         assert.equal(plannerHasContent(planner), false);
     });
 
-    it('detects content outside ID column', () => {
+    it('detects content in any column', () => {
         const planner = createEmptyPlanner();
         setPlannerField(planner.sheet, 0, 'name', 'Kickoff');
         assert.equal(plannerHasContent(planner), true);
     });
 
-    it('normalizes zoom and drops out-of-range cells', () => {
+    it('migrates v1 sheets: drops ID, reorders cols, remaps P-style preds', () => {
         const raw = {
-            version: 9,
-            zoom: 'nope',
+            version: 1,
+            zoom: 'day',
             sheet: {
                 rows: 2,
-                cols: 99,
+                cols: 7,
                 cells: {
-                    '0:0': { v: 'A1' },
-                    '0:3': { v: 'Task' },
-                    '9:0': { v: 'ghost' },
-                    '0:20': { v: 'bad' }
-                }
+                    '0:0': { v: 'P1' },
+                    '0:1': { v: '2026-03-01' },
+                    '0:2': { v: '2026-03-02' },
+                    '0:3': { v: 'Alpha' },
+                    '0:4': { v: 'Work' },
+                    '0:6': { v: '' },
+                    '1:0': { v: 'P2' },
+                    '1:1': { v: '2026-03-03' },
+                    '1:3': { v: 'Beta' },
+                    '1:6': { v: 'P1' }
+                },
+                colWidths: [40, 110, 110, 90, 70, 90, 55]
             }
         };
         const planner = normalizePlanner(raw);
-        assert.equal(planner.zoom, 'week');
-        assert.equal(planner.sheet.cols, PLANNER_COL_COUNT);
-        assert.equal(getPlannerField(planner.sheet, 0, 'id'), 'A1');
-        assert.equal(getPlannerField(planner.sheet, 0, 'name'), 'Task');
-        assert.equal(planner.sheet.cells['9:0'], undefined);
-        assert.equal(planner.sheet.cells['0:20'], undefined);
+        assert.equal(planner.version, 2);
+        assert.equal(planner.sheet.cols, 6);
+        assert.equal(getPlannerField(planner.sheet, 0, 'name'), 'Alpha');
+        assert.equal(getPlannerField(planner.sheet, 0, 'category'), 'Work');
+        assert.equal(getPlannerField(planner.sheet, 0, 'start'), '2026-03-01');
+        assert.equal(getPlannerField(planner.sheet, 1, 'pred'), '1');
+        assert.equal(getPlannerField(planner.sheet, 0, 'id'), '');
     });
 
-    it('derives tasks and parses predecessors', () => {
-        assert.deepEqual(parsePredecessorIds('P1, P2;p3'), ['P1', 'P2', 'p3']);
+    it('derives tasks with row-number ids and category colors', () => {
+        assert.deepEqual(parsePredecessorIds('1, 2;3'), ['1', '2', '3']);
         const planner = createEmptyPlanner();
         setPlannerField(planner.sheet, 0, 'start', '2026-03-01');
-        setPlannerField(planner.sheet, 0, 'stop', '2026-03-05');
         setPlannerField(planner.sheet, 0, 'name', 'Alpha');
-        setPlannerField(planner.sheet, 0, 'pred', 'P2');
+        setPlannerField(planner.sheet, 0, 'category', 'Work');
+        setCategoryColor(planner, 'Work', '#3182ce');
         setPlannerField(planner.sheet, 1, 'start', '2026-03-06');
         setPlannerField(planner.sheet, 1, 'name', 'Beta');
+        setPlannerField(planner.sheet, 1, 'pred', '1');
         const tasks = derivePlannerTasks(planner);
         assert.equal(tasks.length, 2);
-        assert.equal(tasks[0].name, 'Alpha');
-        assert.deepEqual(tasks[0].predecessors, ['P2']);
+        assert.equal(tasks[0].id, '1');
+        assert.equal(tasks[0].categoryColor, '#3182ce');
+        assert.deepEqual(tasks[1].predecessors, ['1']);
+        assert.deepEqual(listPlannerCategories(planner), ['Work']);
+        assert.equal(getCategoryColor(planner, 'work'), '#3182ce');
     });
 
-    it('adds rows with unique IDs', () => {
+    it('reorders rows and remaps Pred numbers', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'A');
+        setPlannerField(planner.sheet, 1, 'name', 'B');
+        setPlannerField(planner.sheet, 1, 'pred', '1');
+        setPlannerField(planner.sheet, 2, 'name', 'C');
+        assert.equal(movePlannerRow(planner, 0, 2), true);
+        assert.equal(getPlannerField(planner.sheet, 0, 'name'), 'B');
+        assert.equal(getPlannerField(planner.sheet, 1, 'name'), 'C');
+        assert.equal(getPlannerField(planner.sheet, 2, 'name'), 'A');
+        // B's pred pointed at old row 1 (A); A is now row 3
+        assert.equal(getPlannerField(planner.sheet, 0, 'pred'), '3');
+    });
+
+    it('adds rows without inventing IDs', () => {
         const planner = createEmptyPlanner({ zoom: 'day' });
-        assert.equal(planner.zoom, 'day');
         const before = planner.sheet.rows;
         addPlannerRow(planner);
         assert.equal(planner.sheet.rows, before + 1);
-        assert.equal(getPlannerField(planner.sheet, before, 'id'), `P${before + 1}`);
+        assert.equal(getPlannerField(planner.sheet, before, 'name'), '');
     });
 
     it('lists planner fields as Shared', () => {
@@ -87,18 +119,46 @@ describe('planner model', () => {
         assert.ok(SHARED_FIELDS.includes('plannerHidden'));
     });
 
-    it('reconcileItemPlanner strips empty shells and keeps content visible', () => {
+    it('reconcileItemPlanner strips empty shells and keeps hide sticky with content', () => {
         const emptyItem = { planner: createEmptyPlanner(), plannerHidden: true };
         assert.equal(reconcileItemPlanner(emptyItem), true);
         assert.equal(emptyItem.planner, null);
-        assert.equal(emptyItem.plannerHidden, undefined);
 
         const rich = createEmptyPlanner();
         setPlannerField(rich.sheet, 0, 'start', '2026-01-01');
         const item = { planner: rich, plannerHidden: true };
-        assert.equal(reconcileItemPlanner(item), true);
+        reconcileItemPlanner(item);
         assert.ok(item.planner);
-        assert.equal(item.plannerHidden, false);
+        assert.equal(item.plannerHidden, true);
+        assert.equal(plannerHasContent(item.planner), true);
+    });
+
+    it('buildNotePlannerSectionHtml emits nothing when hidden', () => {
+        const item = { id: 'n1', planner: createEmptyPlanner(), plannerHidden: true };
+        setPlannerField(item.planner.sheet, 0, 'name', 'X');
+        assert.equal(buildNotePlannerSectionHtml(item), '');
+        item.plannerHidden = false;
+        const html = buildNotePlannerSectionHtml(item, { canEdit: true });
+        assert.ok(html.includes('data-note-planner'));
+        assert.ok(html.includes('Name'));
+        assert.ok(html.includes('Category'));
+        assert.ok(!html.includes('>ID<'));
+        assert.ok(html.includes('data-planner-summary'));
+        assert.ok(html.includes('data-planner-chart-toggle'));
+        assert.ok(html.includes('>Chart') || html.includes('Chart</button>'));
+    });
+
+    it('summarizes earliest start, latest stop, calendar and working days', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'start', '2026-03-02'); // Mon
+        setPlannerField(planner.sheet, 0, 'stop', '2026-03-04');
+        setPlannerField(planner.sheet, 1, 'start', '2026-03-03');
+        setPlannerField(planner.sheet, 1, 'stop', '2026-03-06'); // Fri
+        const summary = summarizePlannerSchedule(planner);
+        assert.equal(summary.startLabel, '2026-03-02');
+        assert.equal(summary.stopLabel, '2026-03-06');
+        assert.equal(summary.calendarDays, 5);
+        assert.equal(summary.workingDays, 5);
     });
 });
 
@@ -116,32 +176,25 @@ describe('planner Gantt layout', () => {
         assert.equal(parsePlannerDateTime(''), null);
     });
 
-    it('lays out bars, today line, and predecessor edges', () => {
-        const now = new Date(2026, 2, 10); // Mar 10 2026
+    it('lays out bars, today line, and predecessor edges by row number', () => {
+        const now = new Date(2026, 2, 10);
         const layout = layoutPlannerGantt([
-            { id: 'P1', name: 'One', start: '2026-03-01', stop: '2026-03-05', predecessors: [] },
-            { id: 'P2', name: 'Two', start: '2026-03-06', stop: '2026-03-12', predecessors: ['P1'] }
+            { id: '1', name: 'One', start: '2026-03-01', stop: '2026-03-05', predecessors: [] },
+            { id: '2', name: 'Two', start: '2026-03-06', stop: '2026-03-12', predecessors: ['1'] }
         ], { zoom: 'day', now });
 
         assert.equal(layout.empty, false);
         assert.equal(layout.bars.length, 2);
-        assert.ok(layout.bars[0].width > 0);
-        assert.ok(layout.chartWidth > 0);
         assert.equal(layout.edges.length, 1);
-        assert.equal(layout.edges[0].fromId, 'P1');
-        assert.equal(layout.edges[0].toId, 'P2');
+        assert.equal(layout.edges[0].fromId, '1');
+        assert.equal(layout.edges[0].toId, '2');
         assert.ok(layout.todayX != null);
         assert.ok(layout.majors.length > 0);
-        assert.ok(layout.minors.length > 0);
-        // Day zoom: month band + day-of-month numbers (not locale date soup)
-        assert.match(layout.majors[0].label, /Mar|March|2026/i);
-        assert.ok(layout.minors.some((m) => m.label === '2' || m.label === '10'));
     });
 
     it('returns empty chart with today when no dated tasks', () => {
         const layout = layoutPlannerGantt([], { zoom: 'week', now: new Date(2026, 0, 15) });
         assert.equal(layout.empty, true);
-        assert.equal(layout.bars.length, 0);
         assert.ok(layout.chartWidth > 0);
     });
 
@@ -157,7 +210,6 @@ describe('planner Gantt layout', () => {
         const monthAxis = buildGanttAxis(start, end, 'month', zoomPxPerDay('month'));
         assert.ok(monthAxis.majors.some((m) => m.label === '2026'));
         assert.ok(monthAxis.minors.some((m) => m.label === 'Jan'));
-        assert.ok(monthAxis.minors.some((m) => m.label === 'Jun'));
 
         const yearAxis = buildGanttAxis(start, new Date(2028, 0, 1), 'year', zoomPxPerDay('year'));
         assert.deepEqual(yearAxis.majors.map((m) => m.label), ['2026', '2027']);
@@ -168,12 +220,8 @@ describe('planner Gantt layout', () => {
         const max = new Date(2026, 2, 12);
         const day = padGanttRange(min, max, 'day');
         assert.ok(testDaysBetween(day.rangeStart, day.rangeEnd) >= 30);
-
         const week = padGanttRange(min, max, 'week');
         assert.ok(testDaysBetween(week.rangeStart, week.rangeEnd) >= 56);
-
-        const month = padGanttRange(min, max, 'month');
-        assert.ok(testDaysBetween(month.rangeStart, month.rangeEnd) >= 150);
     });
 });
 

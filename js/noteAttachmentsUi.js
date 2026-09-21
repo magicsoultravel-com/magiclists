@@ -10,7 +10,6 @@ import {
 import { buildMediaQuickActionsHtml, bindMediaQuickActions, viewMediaFullSize } from './mediaQuickActions.js';
 import { showAppToast } from './toast.js';
 import { createEmptyNoteCanvas } from './noteModel.js';
-import { ensureCanvasVisibleIfContent } from './noteFieldOwnership.js';
 import { renderNoteCanvas, refreshNoteCanvasPreview } from './noteCanvasRenderer.js';
 import { initialImageSize } from './canvasImages.js';
 import { mutateItem } from './noteSurfaceMutations.js';
@@ -261,23 +260,18 @@ function clearCanvasDom(section) {
 }
 
 /**
- * Collapsible Media + Canvas section.
- * Renders when the note has attachments or a canvas document (even if hidden),
- * so the draw toggle can reveal the preview without rebuilding from scratch.
+ * Collapsible Media + optional Canvas section.
+ * Renders when the note has attachments, or a *visible* canvas document.
+ * Hidden canvas with data is sticky: omit the block (and the whole section if
+ * there are no attachments) so no blank spacer remains.
  * @param {object} item
  * @param {{ canEdit?: boolean, startCollapsed?: boolean }} [opts]
  */
 export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCollapsed = true } = {}) {
-    // Render choke point: a canvas with real content must never be emitted hidden,
-    // otherwise every full-board rebuild (File Cabinet toggle, category change,
-    // desktop switch, …) can make it disappear until another sync re-fixes state.
-    // Mirrors the repair-on-read/write behavior in api.js (reconcileItemMediaCanvas)
-    // and syncNoteAttachmentsDom, so all render paths agree with the persisted item.
-    ensureCanvasVisibleIfContent(item);
     const list = normalizeAttachments(item?.attachments);
     const hasCanvasDoc = !!item?.canvas;
     const hasVisibleCanvas = hasCanvasDoc && !item?.canvasHidden;
-    if (!list.length && !hasCanvasDoc) return '';
+    if (!list.length && !hasVisibleCanvas) return '';
 
     const count = list.length;
     const title = count > 0
@@ -285,7 +279,6 @@ export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCo
         : 'Note canvas';
     const collapsedClass = startCollapsed ? ' collapsed' : '';
     const toggleCollapsed = startCollapsed ? ' collapsed' : '';
-    const canvasHiddenClass = hasVisibleCanvas ? '' : ' is-hidden';
 
     const rows = list.map((entry) => {
         const id = escapeAttr(entry.mediaId);
@@ -309,14 +302,8 @@ export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCo
             </div>`;
     }).join('');
 
-    return `
-            <div class="note-body-section note-body-section--media" data-note-attachments>
-                <div class="note-section-header collapsable-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle${toggleCollapsed}">▼</span>${escapeHTML(title)}</span>
-                </div>
-                <div class="note-section-body collapsable-section${collapsedClass}">
-                    <div class="note-attachments__list">${rows}</div>
-                    <div class="note-media-canvas${canvasHiddenClass}" data-note-media-canvas ${hasVisibleCanvas ? '' : 'hidden'}>
+    const canvasBlock = hasVisibleCanvas
+        ? `<div class="note-media-canvas" data-note-media-canvas>
                         <div class="note-media-canvas__toolbar">
                             <span class="note-media-canvas__title">Note canvas</span>
                             <button type="button" class="card-act note-media-canvas__enter-drawing" data-enter-drawing title="Draw in magicCanvas" aria-label="Draw in magicCanvas">${CARD_ICONS.drawingPencil}</button>
@@ -325,7 +312,17 @@ export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCo
                         <div class="note-media-canvas__viewport" data-note-media-viewport>
                             <canvas class="note-media-canvas__preview" data-note-canvas-preview></canvas>
                         </div>
-                    </div>
+                    </div>`
+        : '';
+
+    return `
+            <div class="note-body-section note-body-section--media" data-note-attachments>
+                <div class="note-section-header collapsable-header">
+                    <span class="collapsable-heading"><span class="collapsable-toggle${toggleCollapsed}">▼</span>${escapeHTML(title)}</span>
+                </div>
+                <div class="note-section-body collapsable-section${collapsedClass}">
+                    <div class="note-attachments__list">${rows}</div>
+                    ${canvasBlock}
                 </div>
             </div>`;
 }
@@ -356,9 +353,6 @@ function bodyInModal(body) {
  */
 export function syncNoteAttachmentsDom(item) {
     if (!item?.id) return;
-    // If drawings exist but canvasHidden is stuck true, unhide before rebuild so
-    // board and modal both get a visible Note canvas block.
-    ensureCanvasVisibleIfContent(item);
 
     for (const body of noteBodiesForItem(item.id)) {
         const canEdit = bodyCanEdit(body);

@@ -7,11 +7,10 @@ import { createNoteId, ensureStepIds, ensureStepLevels, getCreatedTimestamp, get
 import { ensureStepsParentOrder } from './checklistSteps.js';
 import {
     collectNoteCanvasMediaIds,
-    noteCanvasHasContent,
-    ensureCanvasVisibleIfContent
+    noteCanvasHasContent
 } from './noteFieldOwnership.js';
 import { normalizeAttachments } from './mediaAttachments.js';
-import { normalizePlanner, plannerHasContent, ensurePlannerVisibleIfContent } from './planner.js';
+import { normalizePlanner, plannerHasContent } from './planner.js';
 
 function normalizeItemTileSize(tileSize) {
     return normalizeTileSize(tileSize);
@@ -67,7 +66,7 @@ export function reconcileItemPlanner(item) {
         return true;
     }
 
-    if (ensurePlannerVisibleIfContent(item)) changed = true;
+    // Keep plannerHidden sticky even when content exists.
     return changed;
 }
 
@@ -105,13 +104,8 @@ export function reconcileItemMediaCanvas(item) {
             item.canvas = null;
             if (item.canvasHidden != null) delete item.canvasHidden;
             changed = true;
-        } else {
-            // Canvas has real content: always show it. Stale pre-fix notes often
-            // kept canvasHidden=true while attachments existed, so the board Media
-            // list showed but the Note canvas block stayed hidden (modal could still
-            // look fine after a draft refresh). Force-visible on every repair load.
-            if (ensureCanvasVisibleIfContent(item)) changed = true;
         }
+        // Keep canvasHidden sticky even when content exists.
     }
 
     if (item.canvas && noteCanvasHasContent(item.canvas)) {

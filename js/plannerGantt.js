@@ -278,6 +278,7 @@ export function layoutPlannerGantt(tasks, opts = {}) {
             row: task.row,
             start,
             stop,
+            categoryColor: task.categoryColor || '',
             predecessors: Array.isArray(task.predecessors) ? task.predecessors : []
         });
     }
@@ -317,6 +318,7 @@ export function layoutPlannerGantt(tasks, opts = {}) {
             height: rowHeight - barPadY * 2,
             startMs: t.start.getTime(),
             stopMs: t.stop.getTime(),
+            categoryColor: t.categoryColor || '',
             predecessors: t.predecessors
         };
     });
