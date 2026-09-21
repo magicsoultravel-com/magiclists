@@ -204,6 +204,26 @@ describe('planner Gantt layout', () => {
         assert.ok(zoomPxPerDay('month') > zoomPxPerDay('year'));
     });
 
+    it('builds alternating interval bands per zoom', () => {
+        const start = new Date(2026, 0, 1);
+        const end = new Date(2026, 1, 1);
+        const day = buildGanttAxis(start, end, 'day', zoomPxPerDay('day'));
+        assert.ok(day.bands.length >= 28);
+        assert.equal(day.bands[0].alt, false);
+        assert.equal(day.bands[1].alt, true);
+
+        const week = buildGanttAxis(start, end, 'week', zoomPxPerDay('week'));
+        assert.ok(week.bands.length >= 4);
+        assert.ok(week.bands.some((b) => b.alt));
+
+        const month = buildGanttAxis(start, new Date(2026, 6, 1), 'month', zoomPxPerDay('month'));
+        assert.ok(month.bands.length >= 6);
+
+        const year = buildGanttAxis(start, new Date(2029, 0, 1), 'year', zoomPxPerDay('year'));
+        assert.ok(year.bands.length >= 3);
+        assert.equal(year.bands.filter((b) => b.alt).length >= 1, true);
+    });
+
     it('builds readable month/year axis labels', () => {
         const start = new Date(2026, 0, 1);
         const end = new Date(2027, 0, 1);

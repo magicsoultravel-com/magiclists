@@ -183,11 +183,18 @@ export function renderPlannerSheetHtml(planner, { canEdit = false } = {}) {
 function renderGanttSvg(layout) {
     const {
         chartWidth, height, headerHeight, majorBandH = 0, minorBandH = 14,
-        majors = [], minors = [], ticks, bars, edges, todayX, empty
+        majors = [], minors = [], bands = [], ticks, bars, edges, todayX, empty
     } = layout;
     const minorTicks = minors.length ? minors : (ticks || []);
     const majorY = majorBandH > 0 ? majorBandH - 3 : 0;
     const minorY = headerHeight - 4;
+    const bodyH = Math.max(0, height - headerHeight);
+
+    const bandEls = (bands || []).map((b) => {
+        if (!(b.width > 0)) return '';
+        const cls = b.alt ? 'planner-gantt__band planner-gantt__band--alt' : 'planner-gantt__band';
+        return `<rect class="${cls}" x="${b.x}" y="${headerHeight}" width="${b.width}" height="${bodyH}"/>`;
+    }).join('');
 
     const majorBandEls = (majors || []).map((m) => {
         if (m.width < 8) return '';
@@ -238,7 +245,8 @@ function renderGanttSvg(layout) {
 
     return `<svg class="planner-gantt__svg" width="${chartWidth}" height="${height}" viewBox="0 0 ${chartWidth} ${height}" role="img" aria-label="Planner chart">
         ${axisBg}
-        <rect class="planner-gantt__bg" x="0" y="${headerHeight}" width="${chartWidth}" height="${Math.max(0, height - headerHeight)}"/>
+        <rect class="planner-gantt__bg" x="0" y="${headerHeight}" width="${chartWidth}" height="${bodyH}"/>
+        ${bandEls}
         ${majorBandEls}
         ${minorEls}
         ${edgePaths}

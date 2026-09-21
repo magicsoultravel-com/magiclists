@@ -123,20 +123,19 @@ export function padGanttRange(min, max, zoom) {
 }
 
 /**
- * Build a readable two-tier axis: major bands (month/year) + minor ticks.
- * Positioning is always calendar-day accurate.
- *
  * @param {Date} rangeStart
  * @param {Date} rangeEnd
  * @param {'day'|'week'|'month'|'year'} zoom
  * @param {number} pxPerDay
- * @returns {{ majors: Array<{x:number,width:number,label:string}>, minors: Array<{x:number,label:string,major:boolean}> }}
+ * @returns {{ majors: Array<{x:number,width:number,label:string}>, minors: Array<{x:number,label:string,major:boolean}>, bands: Array<{x:number,width:number,alt:boolean}>, chartWidth: number }}
  */
 export function buildGanttAxis(rangeStart, rangeEnd, zoom, pxPerDay) {
     const totalDays = Math.max(1, daysBetween(rangeStart, rangeEnd));
     const chartWidth = totalDays * pxPerDay;
     const majors = [];
     const minors = [];
+    /** Interval start x positions for alternating body bands (day/week/month/year). */
+    const bandStarts = [];
 
     const xAt = (date) => daysBetween(rangeStart, date) * pxPerDay;
 
@@ -159,6 +158,7 @@ export function buildGanttAxis(rangeStart, rangeEnd, zoom, pxPerDay) {
         let d = new Date(rangeStart.getTime());
         while (d < rangeEnd) {
             const x = xAt(d);
+            bandStarts.push(x);
             const isMonthStart = d.getDate() === 1;
             // Skip day "1" label under the month name to reduce clutter
             minors.push({
@@ -187,9 +187,13 @@ export function buildGanttAxis(rangeStart, rangeEnd, zoom, pxPerDay) {
         // Align to Monday
         const dow = d.getDay();
         if (dow !== 1) d = addDays(d, (8 - dow) % 7);
+        // Cover partial first week before the first Monday
+        if (d > rangeStart) bandStarts.push(0);
         while (d < rangeEnd) {
+            const x = xAt(d);
+            bandStarts.push(x);
             minors.push({
-                x: xAt(d),
+                x,
                 label: String(d.getDate()),
                 major: d.getDate() <= 7
             });
@@ -208,8 +212,10 @@ export function buildGanttAxis(rangeStart, rangeEnd, zoom, pxPerDay) {
         }
         let d = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
         while (d < rangeEnd) {
+            const x = xAt(d);
+            bandStarts.push(Math.max(0, x));
             minors.push({
-                x: xAt(d),
+                x,
                 label: MONTH_SHORT[d.getMonth()],
                 major: d.getMonth() === 0
             });
@@ -226,12 +232,22 @@ export function buildGanttAxis(rangeStart, rangeEnd, zoom, pxPerDay) {
             if (x1 > x0) {
                 majors.push({ x: x0, width: x1 - x0, label: String(y) });
                 minors.push({ x: x0, label: '', major: true });
+                bandStarts.push(x0);
             }
             y += 1;
         }
     }
 
-    return { majors, minors, chartWidth };
+    const bands = [];
+    const starts = bandStarts.length ? [...bandStarts] : [0];
+    if (starts[0] > 0) starts.unshift(0);
+    for (let i = 0; i < starts.length; i++) {
+        const x = starts[i];
+        const x1 = i + 1 < starts.length ? starts[i + 1] : chartWidth;
+        if (x1 > x) bands.push({ x, width: x1 - x, alt: i % 2 === 1 });
+    }
+
+    return { majors, minors, bands, chartWidth };
 }
 
 /** @deprecated use buildGanttAxis */
@@ -363,6 +379,7 @@ export function layoutPlannerGantt(tasks, opts = {}) {
         rangeEnd,
         majors: axis.majors,
         minors: axis.minors,
+        bands: axis.bands || [],
         // back-compat for older render/tests
         ticks: axis.minors.map((m) => ({ x: m.x, label: m.label, major: m.major })),
         bars,

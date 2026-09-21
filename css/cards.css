@@ -222,8 +222,9 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
     pointer-events: auto;
 }
 
-/* When note canvas is active, keep the action strip readable so the draw toggle stays visible. */
-.mini-card .note-editor-toolbar .card-actions:has(.card-act--draw.is-active) {
+/* When note canvas or planner is active, keep the action strip readable so the toggle stays visible. */
+.mini-card .note-editor-toolbar .card-actions:has(.card-act--draw.is-active),
+.mini-card .note-editor-toolbar .card-actions:has(.card-act--planner.is-active) {
     opacity: 1;
     pointer-events: auto;
 }

@@ -336,6 +336,15 @@
     fill: color-mix(in srgb, var(--border-color) 6%, transparent);
 }
 
+.planner-gantt__band {
+    fill: transparent;
+    pointer-events: none;
+}
+
+.planner-gantt__band--alt {
+    fill: color-mix(in srgb, var(--border-color) 12%, transparent);
+}
+
 .planner-gantt__axis-bg {
     fill: color-mix(in srgb, var(--border-color) 10%, transparent);
 }
@@ -403,6 +412,10 @@
 .has-custom-bg .planner-gantt__board {
     border-color: var(--card-border-subtle);
     background: color-mix(in srgb, var(--card-border-subtle) 18%, transparent);
+}
+
+.has-custom-bg .planner-gantt__band--alt {
+    fill: color-mix(in srgb, var(--card-border-subtle) 22%, transparent);
 }
 
 .has-custom-bg .planner-gantt__rail {
