@@ -152,6 +152,51 @@
     font-style: italic;
 }
 
+.planner-sub {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+}
+
+.planner-sub__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+}
+
+.planner-sub__title {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    font: inherit;
+    font-size: calc(0.5rem * var(--note-font-scale, 1));
+    color: var(--text-muted);
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.planner-sub__title:hover {
+    color: var(--text-color);
+}
+
+.planner-sub__title .collapsable-toggle {
+    width: 0.7rem;
+    height: 0.7rem;
+    font-size: 0.45rem;
+}
+
+.planner-sub__body.is-collapsed {
+    display: none;
+}
+
 .planner-gantt {
     display: flex;
     flex-direction: column;
@@ -194,6 +239,11 @@
 }
 
 .planner-gantt__board.is-collapsed {
+    display: none;
+}
+
+.planner-gantt__zoom.is-collapsed,
+.planner-gantt__zoom[hidden] {
     display: none;
 }
 
@@ -378,15 +428,18 @@
     font-size: 8px;
 }
 
+.planner-gantt__tick-label--weekend {
+    fill: color-mix(in srgb, #b54a4a 72%, var(--text-muted));
+}
+
 .planner-gantt__row-label {
     fill: var(--text-color, currentColor);
     font-size: 9px;
 }
 
 .planner-gantt__bar {
-    fill: color-mix(in srgb, var(--accent, #5b8def) 72%, transparent);
-    stroke: color-mix(in srgb, var(--accent, #5b8def) 90%, #000 10%);
-    stroke-width: 0.75;
+    fill: color-mix(in srgb, var(--accent, #5b8def) 78%, transparent);
+    stroke: none;
 }
 
 .planner-gantt__edge {
@@ -424,6 +477,7 @@
 }
 
 .has-custom-bg .planner-gantt__title,
+.has-custom-bg .planner-sub__title,
 .has-custom-bg .planner-gantt__tick-label,
 .has-custom-bg .planner-gantt__empty,
 .has-custom-bg .planner-datetime__value.is-empty,
@@ -431,6 +485,10 @@
 .has-custom-bg .planner-summary__muted {
     color: var(--card-muted);
     fill: var(--card-muted);
+}
+
+.has-custom-bg .planner-gantt__tick-label--weekend {
+    fill: color-mix(in srgb, #b54a4a 78%, var(--card-muted));
 }
 
 .has-custom-bg .planner-gantt__row-label {

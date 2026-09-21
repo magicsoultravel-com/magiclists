@@ -7,6 +7,7 @@ import {
     PLANNER_COLUMNS,
     PLANNER_COL_COUNT,
     PLANNER_ZOOM_LEVELS,
+    PLANNER_ZOOM_LABELS,
     createEmptyPlanner,
     normalizePlanner,
     addPlannerRow,
@@ -212,8 +213,11 @@ function renderGanttSvg(layout) {
 
     const minorEls = minorTicks.map((t) => {
         const cls = t.major ? 'planner-gantt__tick planner-gantt__tick--emphasis' : 'planner-gantt__tick';
+        const labelCls = t.weekend
+            ? 'planner-gantt__tick-label planner-gantt__tick-label--weekend'
+            : 'planner-gantt__tick-label';
         const label = t.label
-            ? `<text class="planner-gantt__tick-label" x="${t.x + 2}" y="${minorY}">${escapeHTML(t.label)}</text>`
+            ? `<text class="${labelCls}" x="${t.x + 2}" y="${minorY}">${escapeHTML(t.label)}</text>`
             : '';
         return `<line class="${cls}" x1="${t.x}" y1="${majorBandH}" x2="${t.x}" y2="${height}"/>${label}`;
     }).join('');
@@ -403,6 +407,31 @@ export function renderPlannerSummaryHtml(planner) {
 }
 
 /**
+ * Table subsection: schedule sheet + one-line span stats.
+ * @param {object} planner
+ * @param {{ canEdit?: boolean }} [opts]
+ * @returns {string}
+ */
+export function renderPlannerTableHtml(planner, { canEdit = false } = {}) {
+    const tableCollapsed = !!planner?.tableCollapsed;
+    const toggleCollapsed = tableCollapsed ? ' collapsed' : '';
+    const bodyCollapsed = tableCollapsed ? ' is-collapsed' : '';
+    const sheetHtml = renderPlannerSheetHtml(planner, { canEdit });
+    const summaryHtml = renderPlannerSummaryHtml(planner);
+    return `<div class="planner-sub" data-planner-table data-table-collapsed="${tableCollapsed ? '1' : '0'}">
+        <div class="planner-sub__toolbar">
+            <button type="button" class="planner-sub__title" data-planner-table-toggle aria-expanded="${tableCollapsed ? 'false' : 'true'}">
+                <span class="collapsable-toggle${toggleCollapsed}" aria-hidden="true">▼</span>Table
+            </button>
+        </div>
+        <div class="planner-sub__body${bodyCollapsed}" data-planner-table-body>
+            ${sheetHtml}
+            ${summaryHtml}
+        </div>
+    </div>`;
+}
+
+/**
  * @param {object} planner
  * @returns {{ html: string, layout: object }}
  */
@@ -413,18 +442,18 @@ export function renderPlannerGanttHtml(planner) {
     const layout = layoutPlannerGantt(tasks, { zoom });
     const zoomBtns = PLANNER_ZOOM_LEVELS.map((z) => {
         const active = z === zoom ? ' is-active' : '';
-        const label = z.charAt(0).toUpperCase() + z.slice(1);
-        return `<button type="button" class="btn btn--compact planner-zoom-btn${active}" data-planner-zoom="${z}" aria-pressed="${z === zoom ? 'true' : 'false'}">${label}</button>`;
+        const label = PLANNER_ZOOM_LABELS[z] || z.charAt(0).toUpperCase();
+        return `<button type="button" class="btn btn--compact planner-zoom-btn${active}" data-planner-zoom="${z}" title="${escapeAttr(z)}" aria-label="${escapeAttr(z)}" aria-pressed="${z === zoom ? 'true' : 'false'}">${label}</button>`;
     }).join('');
     const toggleCollapsed = chartCollapsed ? ' collapsed' : '';
     const boardCollapsed = chartCollapsed ? ' is-collapsed' : '';
 
-    const html = `<div class="planner-gantt" data-planner-gantt data-planner-zoom-current="${escapeAttr(zoom)}" data-chart-collapsed="${chartCollapsed ? '1' : '0'}">
-        <div class="planner-gantt__toolbar">
-            <button type="button" class="planner-gantt__title" data-planner-chart-toggle aria-expanded="${chartCollapsed ? 'false' : 'true'}">
+    const html = `<div class="planner-gantt planner-sub" data-planner-gantt data-planner-zoom-current="${escapeAttr(zoom)}" data-chart-collapsed="${chartCollapsed ? '1' : '0'}">
+        <div class="planner-gantt__toolbar planner-sub__toolbar">
+            <button type="button" class="planner-gantt__title planner-sub__title" data-planner-chart-toggle aria-expanded="${chartCollapsed ? 'false' : 'true'}">
                 <span class="collapsable-toggle${toggleCollapsed}" aria-hidden="true">▼</span>Chart
             </button>
-            <div class="planner-gantt__zoom" role="group" aria-label="Chart zoom">${zoomBtns}</div>
+            <div class="planner-gantt__zoom${chartCollapsed ? ' is-collapsed' : ''}" role="group" aria-label="Chart zoom"${chartCollapsed ? ' hidden' : ''}>${zoomBtns}</div>
         </div>
         <div class="planner-gantt__board${boardCollapsed}" data-planner-chart-board>
             ${renderGanttRailHtml(layout)}
@@ -449,18 +478,16 @@ export function buildNotePlannerSectionHtml(item, { canEdit = false, startCollap
     item.planner = planner;
     const collapsedClass = startCollapsed ? ' collapsed' : '';
     const toggleCollapsed = startCollapsed ? ' collapsed' : '';
-    const sheetHtml = renderPlannerSheetHtml(planner, { canEdit });
-    const summaryHtml = renderPlannerSummaryHtml(planner);
+    const tableHtml = renderPlannerTableHtml(planner, { canEdit });
     const { html: ganttHtml } = renderPlannerGanttHtml(planner);
 
     return `
             <div class="note-body-section note-body-section--planner" data-note-planner>
                 <div class="note-section-header collapsable-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle${toggleCollapsed}">▼</span>Planner</span>
+                    <span class="collapsable-heading"><span class="collapsable-toggle${toggleCollapsed}">▼</span>Plan</span>
                 </div>
                 <div class="note-section-body collapsable-section${collapsedClass}">
-                    ${sheetHtml}
-                    ${summaryHtml}
+                    ${tableHtml}
                     ${ganttHtml}
                 </div>
             </div>`;
@@ -822,6 +849,24 @@ export function attachPlannerInteractions(root, item, {
                     restoreCanvasScroll(canvasScroll);
                 }
             }
+            return;
+        }
+
+        const tableToggle = e.target.closest('[data-planner-table-toggle]');
+        if (tableToggle && section.contains(tableToggle)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const nextCollapsed = !item.planner?.tableCollapsed;
+            mutate((it) => {
+                it.planner.tableCollapsed = nextCollapsed;
+            }, { skipRerender: true, refreshGantt: false });
+            const block = section.querySelector('[data-planner-table]');
+            const bodyEl = block?.querySelector('[data-planner-table-body]');
+            const toggle = tableToggle.querySelector('.collapsable-toggle');
+            bodyEl?.classList.toggle('is-collapsed', nextCollapsed);
+            toggle?.classList.toggle('collapsed', nextCollapsed);
+            tableToggle.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
+            if (block) block.dataset.tableCollapsed = nextCollapsed ? '1' : '0';
             return;
         }
 

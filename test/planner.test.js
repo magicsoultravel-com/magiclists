@@ -145,8 +145,10 @@ describe('planner model', () => {
         assert.ok(html.includes('Category'));
         assert.ok(!html.includes('>ID<'));
         assert.ok(html.includes('data-planner-summary'));
+        assert.ok(html.includes('data-planner-table-toggle'));
         assert.ok(html.includes('data-planner-chart-toggle'));
-        assert.ok(html.includes('>Chart') || html.includes('Chart</button>'));
+        assert.ok(html.includes('Table</button>') || html.includes('>Table'));
+        assert.ok(html.includes('Chart</button>') || html.includes('>Chart'));
     });
 
     it('summarizes earliest start, latest stop, calendar and working days', () => {
@@ -214,7 +216,8 @@ describe('planner Gantt layout', () => {
 
     it('uses fewer pixels-per-day at coarser zoom', () => {
         assert.ok(zoomPxPerDay('day') > zoomPxPerDay('week'));
-        assert.ok(zoomPxPerDay('week') > zoomPxPerDay('month'));
+        assert.ok(zoomPxPerDay('week') > zoomPxPerDay('quarter'));
+        assert.ok(zoomPxPerDay('quarter') > zoomPxPerDay('month'));
         assert.ok(zoomPxPerDay('month') > zoomPxPerDay('year'));
     });
 
@@ -225,10 +228,18 @@ describe('planner Gantt layout', () => {
         assert.ok(day.bands.length >= 28);
         assert.equal(day.bands[0].alt, false);
         assert.equal(day.bands[1].alt, true);
+        assert.ok(day.minors.some((m) => m.label === '1'));
+        assert.ok(day.minors.some((m) => m.weekend && (m.label === '1' || Number(m.label) >= 1)));
+        const satSun = day.minors.filter((m) => m.weekend);
+        assert.ok(satSun.length >= 8);
 
         const week = buildGanttAxis(start, end, 'week', zoomPxPerDay('week'));
         assert.ok(week.bands.length >= 4);
         assert.ok(week.bands.some((b) => b.alt));
+
+        const quarter = buildGanttAxis(start, new Date(2027, 0, 1), 'quarter', zoomPxPerDay('quarter'));
+        assert.ok(quarter.bands.length >= 4);
+        assert.ok(quarter.minors.some((m) => m.label === 'Q1'));
 
         const month = buildGanttAxis(start, new Date(2026, 6, 1), 'month', zoomPxPerDay('month'));
         assert.ok(month.bands.length >= 6);

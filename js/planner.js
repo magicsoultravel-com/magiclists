@@ -17,8 +17,16 @@ import { parsePlannerDateTime } from './plannerGantt.js';
 
 export const PLANNER_VERSION = 2;
 export const PLANNER_DEFAULT_ROWS = 3;
-export const PLANNER_ZOOM_LEVELS = Object.freeze(['day', 'week', 'month', 'year']);
+export const PLANNER_ZOOM_LEVELS = Object.freeze(['day', 'week', 'quarter', 'month', 'year']);
 export const PLANNER_DEFAULT_ZOOM = 'week';
+/** One-letter zoom button labels (D W Q M Y). */
+export const PLANNER_ZOOM_LABELS = Object.freeze({
+    day: 'D',
+    week: 'W',
+    quarter: 'Q',
+    month: 'M',
+    year: 'Y'
+});
 
 /** Fixed column schema v2 (locked — no add/remove cols). Row numbers replace ID. */
 export const PLANNER_COLUMNS = Object.freeze([
@@ -79,6 +87,7 @@ export function createEmptyPlanner(opts = {}) {
         version: PLANNER_VERSION,
         zoom: normalizePlannerZoom(opts.zoom),
         chartCollapsed: false,
+        tableCollapsed: false,
         categoryColors: {},
         sheet: createPlannerSheet()
     };
@@ -210,6 +219,7 @@ export function normalizePlanner(raw) {
         version: PLANNER_VERSION,
         zoom: normalizePlannerZoom(raw.zoom),
         chartCollapsed: !!raw.chartCollapsed,
+        tableCollapsed: !!raw.tableCollapsed,
         categoryColors: normalizeCategoryColors(raw.categoryColors),
         sheet
     };

@@ -6,6 +6,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const PX_PER_DAY = Object.freeze({
     day: 28,
     week: 10,
+    quarter: 5.2,
     month: 3.4,
     year: 0.6
 });
@@ -64,6 +65,7 @@ export function zoomPxPerDay(zoom) {
 /** @deprecated use zoomPxPerDay — kept for older tests */
 export function zoomUnitMs(zoom) {
     if (zoom === 'week') return 7 * DAY_MS;
+    if (zoom === 'quarter') return 91 * DAY_MS;
     if (zoom === 'month') return 30 * DAY_MS;
     if (zoom === 'year') return 365 * DAY_MS;
     return DAY_MS;
@@ -74,12 +76,21 @@ export function zoomPxPerUnit(zoom) {
     return zoomPxPerDay(zoom);
 }
 
+function startOfQuarter(date) {
+    const qMonth = Math.floor(date.getMonth() / 3) * 3;
+    return new Date(date.getFullYear(), qMonth, 1);
+}
+
+function addQuarters(date, n) {
+    return new Date(date.getFullYear(), date.getMonth() + (n * 3), 1);
+}
+
 /**
  * Snap range start/end to zoom-friendly boundaries with generous surrounding context
  * so the axis shows neighboring days/weeks/months/years, not only the task span.
  * @param {Date} min
  * @param {Date} max
- * @param {'day'|'week'|'month'|'year'} zoom
+ * @param {'day'|'week'|'quarter'|'month'|'year'} zoom
  * @returns {{ rangeStart: Date, rangeEnd: Date }}
  */
 export function padGanttRange(min, max, zoom) {
@@ -95,6 +106,13 @@ export function padGanttRange(min, max, zoom) {
         const dowE = rangeEnd.getDay();
         rangeEnd = addDays(rangeEnd, (7 - ((dowE + 6) % 7)) % 7 || 7);
         if (daysBetween(rangeStart, rangeEnd) < 70) rangeEnd = addDays(rangeStart, 70);
+    } else if (zoom === 'quarter') {
+        // Full quarters with ±1 quarter context
+        rangeStart = addQuarters(startOfQuarter(rangeStart), -1);
+        rangeEnd = addQuarters(startOfQuarter(rangeEnd), 3);
+        if (daysBetween(rangeStart, rangeEnd) < 365) {
+            rangeEnd = addQuarters(rangeStart, 5);
+        }
     } else if (zoom === 'month') {
         // Full months with ~3 months context each side
         rangeStart = new Date(rangeStart.getFullYear(), rangeStart.getMonth() - 3, 1);
@@ -134,8 +152,10 @@ export function buildGanttAxis(rangeStart, rangeEnd, zoom, pxPerDay) {
     const chartWidth = totalDays * pxPerDay;
     const majors = [];
     const minors = [];
-    /** Interval start x positions for alternating body bands (day/week/month/year). */
+    /** Interval start x positions for alternating body bands (week/quarter/month/year). */
     const bandStarts = [];
+    /** Day zoom builds bands directly (weekend + weekday alt). */
+    let dayBands = null;
 
     const xAt = (date) => daysBetween(rangeStart, date) * pxPerDay;
 
@@ -155,18 +175,28 @@ export function buildGanttAxis(rangeStart, rangeEnd, zoom, pxPerDay) {
             }
             cursor = next;
         }
+        dayBands = [];
         let d = new Date(rangeStart.getTime());
+        let dayIndex = 0;
         while (d < rangeEnd) {
             const x = xAt(d);
-            bandStarts.push(x);
-            const isMonthStart = d.getDate() === 1;
-            // Skip day "1" label under the month name to reduce clutter
+            const next = addDays(d, 1);
+            const x1 = Math.min(chartWidth, xAt(next));
+            const dow = d.getDay();
+            const weekend = dow === 0 || dow === 6;
+            dayBands.push({
+                x,
+                width: Math.max(0, x1 - x),
+                alt: dayIndex % 2 === 1
+            });
             minors.push({
                 x,
-                label: isMonthStart ? '' : String(d.getDate()),
-                major: isMonthStart || d.getDay() === 1
+                label: String(d.getDate()),
+                major: dow === 1,
+                weekend
             });
-            d = addDays(d, 1);
+            d = next;
+            dayIndex += 1;
         }
     } else if (zoom === 'week') {
         // Major: month bands. Minor: Mondays → "3" or "3 Mar" at month change.
@@ -198,6 +228,29 @@ export function buildGanttAxis(rangeStart, rangeEnd, zoom, pxPerDay) {
                 major: d.getDate() <= 7
             });
             d = addDays(d, 7);
+        }
+    } else if (zoom === 'quarter') {
+        // Major: year bands. Minor: quarters → Q1 … Q4.
+        let y = rangeStart.getFullYear();
+        while (y <= rangeEnd.getFullYear()) {
+            const start = new Date(y, 0, 1);
+            const next = new Date(y + 1, 0, 1);
+            const x0 = Math.max(0, xAt(start));
+            const x1 = Math.min(chartWidth, xAt(next));
+            if (x1 > x0) majors.push({ x: x0, width: x1 - x0, label: String(y) });
+            y += 1;
+        }
+        let d = startOfQuarter(rangeStart);
+        while (d < rangeEnd) {
+            const x = Math.max(0, xAt(d));
+            bandStarts.push(x);
+            const q = Math.floor(d.getMonth() / 3) + 1;
+            minors.push({
+                x,
+                label: `Q${q}`,
+                major: d.getMonth() === 0
+            });
+            d = addQuarters(d, 1);
         }
     } else if (zoom === 'month') {
         // Major: year bands. Minor: months → "Jan" … "Dec".
@@ -238,13 +291,15 @@ export function buildGanttAxis(rangeStart, rangeEnd, zoom, pxPerDay) {
         }
     }
 
-    const bands = [];
-    const starts = bandStarts.length ? [...bandStarts] : [0];
-    if (starts[0] > 0) starts.unshift(0);
-    for (let i = 0; i < starts.length; i++) {
-        const x = starts[i];
-        const x1 = i + 1 < starts.length ? starts[i + 1] : chartWidth;
-        if (x1 > x) bands.push({ x, width: x1 - x, alt: i % 2 === 1 });
+    const bands = dayBands || [];
+    if (!dayBands) {
+        const starts = bandStarts.length ? [...bandStarts] : [0];
+        if (starts[0] > 0) starts.unshift(0);
+        for (let i = 0; i < starts.length; i++) {
+            const x = starts[i];
+            const x1 = i + 1 < starts.length ? starts[i + 1] : chartWidth;
+            if (x1 > x) bands.push({ x, width: x1 - x, alt: i % 2 === 1 });
+        }
     }
 
     return { majors, minors, bands, chartWidth };
@@ -252,7 +307,7 @@ export function buildGanttAxis(rangeStart, rangeEnd, zoom, pxPerDay) {
 
 /** @deprecated use buildGanttAxis */
 export function buildGanttTicks(rangeStart, rangeEnd, zoom, pxPerUnit) {
-    const pxPerDay = zoom === 'day' || zoom === 'week' || zoom === 'month' || zoom === 'year'
+    const pxPerDay = zoom === 'day' || zoom === 'week' || zoom === 'quarter' || zoom === 'month' || zoom === 'year'
         ? (PX_PER_DAY[zoom] || pxPerUnit)
         : pxPerUnit;
     const { minors } = buildGanttAxis(rangeStart, rangeEnd, zoom, pxPerDay);
