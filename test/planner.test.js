@@ -75,6 +75,7 @@ describe('planner model', () => {
 
     it('derives tasks with row-number ids and category colors', () => {
         assert.deepEqual(parsePredecessorIds('1, 2;3'), ['1', '2', '3']);
+        assert.deepEqual(parsePredecessorIds('1, 3, x, 5'), ['1', '3', '5']);
         const planner = createEmptyPlanner();
         setPlannerField(planner.sheet, 0, 'start', '2026-03-01');
         setPlannerField(planner.sheet, 0, 'name', 'Alpha');
@@ -190,6 +191,19 @@ describe('planner Gantt layout', () => {
         assert.equal(layout.edges[0].toId, '2');
         assert.ok(layout.todayX != null);
         assert.ok(layout.majors.length > 0);
+    });
+
+    it('builds multiple predecessor edges from comma-separated row preds', () => {
+        const layout = layoutPlannerGantt([
+            { id: '1', name: 'A', start: '2026-03-01', stop: '2026-03-03', predecessors: [] },
+            { id: '2', name: 'B', start: '2026-03-02', stop: '2026-03-04', predecessors: [] },
+            { id: '3', name: 'C', start: '2026-03-05', stop: '2026-03-08', predecessors: ['1', '3', '2'] }
+        ], { zoom: 'day', now: new Date(2026, 2, 6) });
+        // Self-pred "3" is skipped; edges from 1 and 2 remain.
+        assert.equal(layout.edges.length, 2);
+        const fromIds = layout.edges.map((e) => e.fromId).sort();
+        assert.deepEqual(fromIds, ['1', '2']);
+        assert.ok(layout.edges.every((e) => e.toId === '3' && e.path));
     });
 
     it('returns empty chart with today when no dated tasks', () => {

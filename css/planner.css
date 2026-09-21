@@ -390,12 +390,12 @@
 }
 
 .planner-gantt__edge {
-    stroke: color-mix(in srgb, var(--text-muted) 65%, transparent);
-    stroke-width: 1.1;
+    stroke: color-mix(in srgb, var(--text-muted) 45%, transparent);
+    stroke-width: 0.85;
     stroke-linecap: round;
     stroke-linejoin: round;
     fill: none;
-    opacity: 0.85;
+    opacity: 0.55;
 }
 
 .planner-gantt__today {

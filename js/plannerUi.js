@@ -19,6 +19,7 @@ import {
     setCategoryColor,
     getCellValue,
     setCellValue,
+    getPlannerField,
     getColWidth,
     setColWidth,
     sheetGridTotalWidthPx,
@@ -60,19 +61,20 @@ function formatPlannerDatetimeLabel(value) {
     return parts.time ? `${parts.date} ${parts.time}` : parts.date;
 }
 
-function renderDatetimeCell(value, row, col, canEdit) {
+function renderDatetimeCell(value, row, col, canEdit, { minDate = '' } = {}) {
     const parts = parseStoredDateTime(value);
     const label = formatPlannerDatetimeLabel(value);
     const display = label || '—';
     if (!canEdit) {
         return `<td class="sheet-grid__cell planner-cell planner-cell--datetime"><span class="sheet-cell-read">${escapeHTML(label)}</span></td>`;
     }
+    const minAttr = minDate ? ` min="${escapeAttr(minDate)}"` : '';
     return `<td class="sheet-grid__cell planner-cell planner-cell--datetime">
         <div class="planner-datetime" data-planner-datetime data-row="${row}" data-col="${col}">
             <span class="planner-datetime__value${label ? '' : ' is-empty'}" data-planner-datetime-value>${escapeHTML(display)}</span>
             <button type="button" class="card-act planner-datetime__pick" data-planner-pick="date" title="Set date" aria-label="Set date">${CARD_ICONS.calendar}</button>
             <button type="button" class="card-act planner-datetime__pick" data-planner-pick="time" title="Set time" aria-label="Set time">${CARD_ICONS.clock}</button>
-            <input type="date" class="planner-datetime__native" data-planner-date tabindex="-1" value="${escapeAttr(parts.date || '')}" aria-hidden="true">
+            <input type="date" class="planner-datetime__native" data-planner-date tabindex="-1" value="${escapeAttr(parts.date || '')}"${minAttr} aria-hidden="true">
             <input type="time" class="planner-datetime__native" data-planner-time tabindex="-1" value="${escapeAttr(parts.time || '')}" step="60" aria-hidden="true">
         </div>
     </td>`;
@@ -146,11 +148,14 @@ export function renderPlannerSheetHtml(planner, { canEdit = false } = {}) {
             ? `<th class="sheet-grid__row-head planner-row-head" scope="row" draggable="true" data-planner-row="${r}" title="Drag to reorder">${r + 1}</th>`
             : `<th class="sheet-grid__row-head" scope="row">${r + 1}</th>`;
         body += `<tr data-planner-row-index="${r}">${rowHead}`;
+        const rowStartDate = parseStoredDateTime(getPlannerField(sheet, r, 'start')).date || '';
         for (let c = 0; c < PLANNER_COL_COUNT; c++) {
             const colDef = PLANNER_COLUMNS[c];
             const value = getCellValue(sheet, r, c);
             if (colDef.type === 'datetime') {
-                body += renderDatetimeCell(value, r, c, canEdit);
+                // Stop is constrained by this row's Start only (not project-wide earliest).
+                const minDate = colDef.key === 'stop' ? rowStartDate : '';
+                body += renderDatetimeCell(value, r, c, canEdit, { minDate });
             } else if (colDef.type === 'category') {
                 body += renderCategoryCell(value, r, c, canEdit, planner, datalistId);
             } else {
@@ -214,10 +219,8 @@ function renderGanttSvg(layout) {
     }).join('');
 
     const edgePaths = edges.map((e) => {
-        const parts = e.path.match(/-?\d+(?:\.\d+)?/g) || [];
-        if (parts.length < 6) return '';
-        const [x1, y1, midX, y2, , x2] = parts.map(Number);
-        return `<path class="planner-gantt__edge" d="M${x1},${y1} H${midX} V${y2} H${x2}" fill="none"/>`;
+        if (!e?.path) return '';
+        return `<path class="planner-gantt__edge" d="${escapeAttr(e.path)}" fill="none"/>`;
     }).join('');
 
     const barEls = bars.map((b) => {
@@ -544,19 +547,43 @@ function updateDatetimeValueDisplay(wrap) {
 }
 
 /**
- * When Stop's date is empty, seed from the same row's Start so the native
- * calendar opens on that month instead of today / far away.
+ * Same-row Start date (YYYY-MM-DD) — drives Stop min / seeding only.
+ * Not the project-wide earliest Start from the summary line.
  * @param {HTMLElement} section
- * @param {HTMLElement} wrap
+ * @param {number} row
  * @returns {string}
  */
-function siblingStartDate(section, wrap) {
-    const row = Number(wrap?.dataset?.row);
+function rowStartDate(section, row) {
     if (!Number.isFinite(row) || PLANNER_START_COL < 0) return '';
     const startWrap = section.querySelector(
         `[data-planner-datetime][data-row="${row}"][data-col="${PLANNER_START_COL}"]`
     );
     return startWrap?.querySelector?.('[data-planner-date]')?.value || '';
+}
+
+/**
+ * Keep Stop's native date `min` (and value) aligned to this row's Start.
+ * @param {HTMLElement} section
+ * @param {number} row
+ * @param {{ clampValue?: boolean }} [opts]
+ * @returns {HTMLElement|null} stop wrap if value was clamped
+ */
+function syncStopMinFromRowStart(section, row, { clampValue = true } = {}) {
+    if (!Number.isFinite(row) || PLANNER_STOP_COL < 0) return null;
+    const stopWrap = section.querySelector(
+        `[data-planner-datetime][data-row="${row}"][data-col="${PLANNER_STOP_COL}"]`
+    );
+    const stopDate = stopWrap?.querySelector?.('[data-planner-date]');
+    if (!stopDate) return null;
+    const start = rowStartDate(section, row);
+    if (start) stopDate.min = start;
+    else stopDate.removeAttribute('min');
+    if (clampValue && start && stopDate.value && stopDate.value < start) {
+        stopDate.value = start;
+        updateDatetimeValueDisplay(stopWrap);
+        return stopWrap;
+    }
+    return null;
 }
 
 function openPlannerNativePicker(input) {
@@ -619,6 +646,11 @@ export function attachPlannerInteractions(root, item, {
         mutate((it) => {
             setCellValue(it.planner.sheet, row, col, combineDateTime(date, time));
         });
+        // After Start changes, Stop for this row cannot be earlier than Start.
+        if (col === PLANNER_START_COL) {
+            const clampedStop = syncStopMinFromRowStart(section, row, { clampValue: true });
+            if (clampedStop) commitDatetimeWrap(clampedStop);
+        }
     };
 
     section.addEventListener('input', (e) => {
@@ -690,16 +722,23 @@ export function attachPlannerInteractions(root, item, {
             const dateInput = wrap.querySelector('[data-planner-date]');
             const timeInput = wrap.querySelector('[data-planner-time]');
             const col = Number(wrap.dataset.col);
-            // Empty Stop date: open calendar on Start so you don't scroll from today.
-            if (dateInput && !dateInput.value && col === PLANNER_STOP_COL) {
-                const fromStart = siblingStartDate(section, wrap);
+            const row = Number(wrap.dataset.row);
+            // Stop is driven by this row's Start only (open ≥ Start, never project-wide earliest).
+            if (dateInput && col === PLANNER_STOP_COL) {
+                const fromStart = rowStartDate(section, row);
                 if (fromStart) {
-                    dateInput.value = fromStart;
-                    commitDatetimeWrap(wrap);
+                    dateInput.min = fromStart;
+                    if (!dateInput.value || dateInput.value < fromStart) {
+                        dateInput.value = fromStart;
+                        commitDatetimeWrap(wrap);
+                    }
+                } else {
+                    dateInput.removeAttribute('min');
                 }
             }
             if (kind === 'time' && dateInput && !dateInput.value) {
-                dateInput.value = todayLocalDate();
+                dateInput.value = (col === PLANNER_STOP_COL && rowStartDate(section, row))
+                    || todayLocalDate();
                 commitDatetimeWrap(wrap);
             }
             openPlannerNativePicker(kind === 'time' ? timeInput : dateInput);

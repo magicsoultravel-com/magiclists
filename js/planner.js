@@ -138,12 +138,16 @@ function migrateV1Sheet(sheetIn) {
             if (oldCol < 0) continue;
             let val = getRawCell(oldCells, r, oldCol);
             if (key === 'pred' && val) {
-                val = parsePredecessorIds(val)
+                val = String(val)
+                    .split(/[,;\s]+/)
+                    .map((s) => s.trim())
+                    .filter(Boolean)
                     .map((tok) => {
                         const asNum = Number(tok);
                         if (Number.isFinite(asNum) && asNum >= 1) return String(Math.floor(asNum));
-                        return idToRow.get(tok.toLowerCase()) || tok;
+                        return idToRow.get(tok.toLowerCase()) || '';
                     })
+                    .filter(Boolean)
                     .join(', ');
             }
             if (val) cells[`${r}:${newCol}`] = { v: val };
@@ -347,7 +351,7 @@ export function parsePredecessorIds(raw) {
     return String(raw || '')
         .split(/[,;\s]+/)
         .map((s) => s.trim())
-        .filter(Boolean);
+        .filter((s) => /^\d+$/.test(s));
 }
 
 /**
