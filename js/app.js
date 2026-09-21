@@ -1540,9 +1540,20 @@ renderQuickActions() {
                     // while the save was in flight (File Cabinet toggle, category change) — leaving the
                     // media/canvas section stale, e.g. an invisible note canvas. Sync just that section
                     // so the board card always agrees with the persisted item.
+                    // Capture board scroll: section remount must not yank #app-canvas to top.
+                    const canvas = document.getElementById('app-canvas');
+                    const canvasScroll = {
+                        scrollTop: canvas?.scrollTop ?? 0,
+                        scrollLeft: canvas?.scrollLeft ?? 0
+                    };
                     import('./noteAttachmentsUi.js').then(({ syncNoteAttachmentsDom }) => {
                         const current = AppState.items.find((i) => i.id === liveItem?.id) || liveItem;
                         syncNoteAttachmentsDom(current);
+                        const c = document.getElementById('app-canvas');
+                        if (c) {
+                            c.scrollTop = canvasScroll.scrollTop;
+                            c.scrollLeft = canvasScroll.scrollLeft;
+                        }
                     }).catch(() => {});
                 }
                 this.updateWorkspaceCounter();

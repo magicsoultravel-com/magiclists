@@ -273,27 +273,51 @@ function renderGanttRailHtml(layout) {
     </div>`;
 }
 
+/** Same pattern as checklist: keep #app-canvas from jumping on DOM surgery. */
+function captureCanvasScroll() {
+    const canvas = document.getElementById('app-canvas');
+    return {
+        scrollTop: canvas?.scrollTop ?? 0,
+        scrollLeft: canvas?.scrollLeft ?? 0
+    };
+}
+
+function restoreCanvasScroll(scrollPos) {
+    const canvas = document.getElementById('app-canvas');
+    if (!canvas || !scrollPos) return;
+    canvas.scrollTop = scrollPos.scrollTop;
+    canvas.scrollLeft = scrollPos.scrollLeft;
+}
+
 /**
  * Focus the viewport on today (if in range) or the midpoint of task bars.
+ * When not refocusing, restore prior Gantt scrollLeft/Top.
  * @param {HTMLElement} viewport
  * @param {object} layout
- * @param {number|null} [preserveScrollLeft]
+ * @param {{ preserveScrollLeft?: number|null, preserveScrollTop?: number|null, refocus?: boolean }} [opts]
  */
-function focusGanttViewport(viewport, layout, preserveScrollLeft = null) {
+function focusGanttViewport(viewport, layout, {
+    preserveScrollLeft = null,
+    preserveScrollTop = null,
+    refocus = false
+} = {}) {
     if (!viewport || !layout) return;
-    if (preserveScrollLeft != null && Number.isFinite(preserveScrollLeft)) {
+    if (!refocus && preserveScrollLeft != null && Number.isFinite(preserveScrollLeft)) {
         viewport.scrollLeft = Math.max(0, Math.min(preserveScrollLeft, viewport.scrollWidth - viewport.clientWidth));
-        return;
+    } else if (refocus) {
+        const viewW = viewport.clientWidth || 0;
+        let focusX = layout.todayX;
+        if (focusX == null && layout.bars?.length) {
+            const minX = Math.min(...layout.bars.map((b) => b.x));
+            const maxX = Math.max(...layout.bars.map((b) => b.x + b.width));
+            focusX = (minX + maxX) / 2;
+        }
+        if (focusX == null) focusX = (layout.chartWidth || 0) / 2;
+        viewport.scrollLeft = Math.max(0, focusX - viewW / 2);
     }
-    const viewW = viewport.clientWidth || 0;
-    let focusX = layout.todayX;
-    if (focusX == null && layout.bars?.length) {
-        const minX = Math.min(...layout.bars.map((b) => b.x));
-        const maxX = Math.max(...layout.bars.map((b) => b.x + b.width));
-        focusX = (minX + maxX) / 2;
+    if (preserveScrollTop != null && Number.isFinite(preserveScrollTop)) {
+        viewport.scrollTop = Math.max(0, Math.min(preserveScrollTop, viewport.scrollHeight - viewport.clientHeight));
     }
-    if (focusX == null) focusX = (layout.chartWidth || 0) / 2;
-    viewport.scrollLeft = Math.max(0, focusX - viewW / 2);
 }
 
 /**
@@ -481,21 +505,30 @@ export function syncPlannerFromDom(section, item) {
     });
 }
 
-function mountGanttViewport(host, layout, { preserveScrollLeft = null, refocus = false } = {}) {
+function mountGanttViewport(host, layout, {
+    preserveScrollLeft = null,
+    preserveScrollTop = null,
+    refocus = false,
+    canvasScroll = null
+} = {}) {
     const viewport = host?.querySelector?.('[data-planner-gantt-viewport]');
     if (!viewport) return;
     bindGanttPan(viewport);
     requestAnimationFrame(() => {
-        focusGanttViewport(viewport, layout, refocus ? null : preserveScrollLeft);
+        focusGanttViewport(viewport, layout, { preserveScrollLeft, preserveScrollTop, refocus });
+        // Re-assert board scroll after rAF layout (Gantt focus can yank anchoring).
+        if (canvasScroll) restoreCanvasScroll(canvasScroll);
     });
 }
 
 function refreshGanttInSection(section, item, { refocus = false } = {}) {
     const host = section?.querySelector('[data-planner-gantt]');
     if (!host || !item?.planner) return;
+    const canvasScroll = captureCanvasScroll();
     const prevZoom = host.dataset.plannerZoomCurrent || '';
     const prevViewport = host.querySelector('[data-planner-gantt-viewport]');
     const preserveScrollLeft = prevViewport ? prevViewport.scrollLeft : null;
+    const preserveScrollTop = prevViewport ? prevViewport.scrollTop : null;
     const { html, layout } = renderPlannerGanttHtml(item.planner);
     const tmp = document.createElement('div');
     tmp.innerHTML = html.trim();
@@ -505,25 +538,32 @@ function refreshGanttInSection(section, item, { refocus = false } = {}) {
     const zoomChanged = (layout.zoom || '') !== prevZoom;
     mountGanttViewport(next, layout, {
         preserveScrollLeft,
-        refocus: refocus || zoomChanged
+        preserveScrollTop,
+        refocus: refocus || zoomChanged,
+        canvasScroll
     });
     refreshPlannerSummaryInSection(section, item);
+    restoreCanvasScroll(canvasScroll);
 }
 
 function refreshPlannerSummaryInSection(section, item) {
     const host = section?.querySelector('[data-planner-summary]');
     if (!host || !item?.planner) return;
+    const canvasScroll = captureCanvasScroll();
     const tmp = document.createElement('div');
     tmp.innerHTML = renderPlannerSummaryHtml(item.planner).trim();
     const next = tmp.firstElementChild;
     if (next) host.replaceWith(next);
+    restoreCanvasScroll(canvasScroll);
 }
 
 function growPlannerTextareas(section) {
+    const canvasScroll = captureCanvasScroll();
     section?.querySelectorAll('.planner-cell-input').forEach((el) => {
         el.style.height = '0';
         el.style.height = `${Math.max(el.scrollHeight, 18)}px`;
     });
+    restoreCanvasScroll(canvasScroll);
 }
 
 const PLANNER_START_COL = PLANNER_COLUMNS.findIndex((c) => c.key === 'start');
@@ -608,22 +648,38 @@ function openPlannerNativePicker(input) {
 export function attachPlannerInteractions(root, item, {
     localOnly = false,
     onChange = () => {},
-    refresh = () => {}
+    refresh = () => {},
+    refocusGantt = undefined,
+    preserveGanttScroll = null
 } = {}) {
     const section = root?.querySelector?.('[data-note-planner]') || root?.closest?.('[data-note-planner]');
     if (!section || !item?.planner) return;
 
     bindPlannerSectionToggle(section);
-    growPlannerTextareas(section);
 
-    if (section.dataset.plannerBound === '1') return;
+    const alreadyBound = section.dataset.plannerBound === '1';
+    // Height thrash (0 → auto) only on first bind — rebind must not yank board scroll.
+    if (!alreadyBound) growPlannerTextareas(section);
+
+    if (alreadyBound) return;
     section.dataset.plannerBound = '1';
 
-    // First bind: enable drag-pan and center on today / tasks.
+    // First bind: pan wiring. Re-center only when explicitly requested or never focused.
     const ganttHost = section.querySelector('[data-planner-gantt]');
     if (ganttHost && item.planner) {
         const layout = layoutPlannerGantt(derivePlannerTasks(item.planner), { zoom: item.planner.zoom || 'week' });
-        mountGanttViewport(ganttHost, layout, { refocus: true });
+        const shouldRefocus = refocusGantt != null
+            ? !!refocusGantt
+            : section.dataset.plannerFocused !== '1';
+        const canvasScroll = captureCanvasScroll();
+        mountGanttViewport(ganttHost, layout, {
+            refocus: shouldRefocus,
+            preserveScrollLeft: preserveGanttScroll?.left ?? null,
+            preserveScrollTop: preserveGanttScroll?.top ?? null,
+            canvasScroll
+        });
+        section.dataset.plannerFocused = '1';
+        restoreCanvasScroll(canvasScroll);
     }
 
     const mutate = (fn, { skipRerender = true, refreshGantt = true } = {}) => {
@@ -754,14 +810,16 @@ export function attachPlannerInteractions(root, item, {
                 it.planner.chartCollapsed = !it.planner.chartCollapsed;
             }, { skipRerender: true, refreshGantt: true });
             if (wasCollapsed) {
-                // Expanding: re-center the chart viewport.
+                // Expanding: re-center the chart viewport (board scroll must stay put).
                 const host = section.querySelector('[data-planner-gantt]');
                 if (host) {
+                    const canvasScroll = captureCanvasScroll();
                     const layout = layoutPlannerGantt(
                         derivePlannerTasks(item.planner),
                         { zoom: item.planner.zoom || 'week' }
                     );
-                    mountGanttViewport(host, layout, { refocus: true });
+                    mountGanttViewport(host, layout, { refocus: true, canvasScroll });
+                    restoreCanvasScroll(canvasScroll);
                 }
             }
             return;
@@ -890,6 +948,13 @@ export function syncNotePlannerDom(item) {
             continue;
         }
 
+        const canvasScroll = captureCanvasScroll();
+        const prevViewport = existing?.querySelector?.('[data-planner-gantt-viewport]');
+        const preserveGanttScroll = prevViewport
+            ? { left: prevViewport.scrollLeft, top: prevViewport.scrollTop }
+            : null;
+        const hadExisting = !!existing;
+
         const tmp = document.createElement('div');
         tmp.innerHTML = html.trim();
         const next = tmp.firstElementChild;
@@ -904,8 +969,12 @@ export function syncNotePlannerDom(item) {
         }
 
         attachPlannerInteractions(body, item, {
-            refresh: () => syncNotePlannerDom(item)
+            refresh: () => syncNotePlannerDom(item),
+            // Replacing an existing section: keep prior Gantt pan; don't yank to today.
+            refocusGantt: hadExisting ? false : true,
+            preserveGanttScroll
         });
+        restoreCanvasScroll(canvasScroll);
     }
 }
 
