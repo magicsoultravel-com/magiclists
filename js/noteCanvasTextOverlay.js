@@ -1,4 +1,4 @@
-/** @module {"owns":"non-editable note text overlay for note-canvas bg / preview", "related":["drawingBoard.js","noteCanvasRenderer.js","noteBodyConversion.js"]} */
+/** @module {"owns":"non-editable note text overlay for note-canvas bg / preview", "related":["drawingBoard.js","noteCanvasRenderer.js","noteBodyConversion.js","noteCanvasPlannerOverlay.js"]} */
 import {
     PAGE_FORMATS,
     addPage,
@@ -13,6 +13,15 @@ import {
     itemToActiveChecklistRows,
     migrateNoteCanvasTextFlags
 } from './noteBodyConversion.js';
+import {
+    measurePlannerTableOverlay,
+    measurePlannerChartOverlay,
+    paintPlannerTableOverlay,
+    paintPlannerChartOverlay,
+    plannerOverlayBlockGap,
+    noteShowsPlannerTableOverlay,
+    noteShowsPlannerChartOverlay
+} from './noteCanvasPlannerOverlay.js';
 
 export { migrateNoteCanvasTextFlags };
 
@@ -130,10 +139,13 @@ export function noteTextColumnWidth() {
     return Math.max(80, PAGE_FORMATS.a4.width - PAD * 2);
 }
 
-/** Whether either copy-paper layer is enabled on the note. */
+/** Whether any note-derived overlay layer is enabled on the note. */
 export function noteHasTextOverlayEnabled(item) {
     migrateNoteCanvasTextFlags(item);
-    return !!(item?.canvasShowNoteContent || item?.canvasShowNoteChecklist);
+    return !!(item?.canvasShowNoteContent
+        || item?.canvasShowNoteChecklist
+        || noteShowsPlannerTableOverlay(item)
+        || noteShowsPlannerChartOverlay(item));
 }
 
 /**
@@ -229,36 +241,106 @@ function buildOverlayLines(item, ctx, fontSize, columnWidth) {
 }
 
 /**
- * Measure wrapped overlay lines for the note.
+ * Build ordered overlay blocks: content → checklist → planner table → planner chart.
  * @param {object} item
- * @param {CanvasRenderingContext2D} [ctx]
+ * @param {CanvasRenderingContext2D|null} ctx
+ * @returns {{ blocks: object[], fontSize: number, lineStep: number, pad: number, columnWidth: number, contentWidth: number, textHeight: number, isPlaceholder: boolean }}
  */
-export function measureNoteTextOverlay(item, ctx = null) {
-    const measureCtx = ctx || makeMeasureCtx();
+export function buildNoteOverlayBlocks(item, ctx = null) {
+    migrateNoteCanvasTextFlags(item);
     const columnWidth = noteTextColumnWidth();
     const fontSize = resolveOverlayFontSize(item);
     const lineStep = lineStepFor(fontSize);
-    if (!measureCtx) {
-        return {
-            lines: [],
-            fontSize,
-            lineStep,
-            pad: PAD,
-            columnWidth,
-            textHeight: 0,
-            isPlaceholder: false
-        };
-    }
-    measureCtx.font = overlayFont(fontSize);
-    const { lines, isPlaceholder } = buildOverlayLines(item, measureCtx, fontSize, columnWidth);
-    return {
-        lines,
+    const empty = {
+        blocks: [],
         fontSize,
         lineStep,
         pad: PAD,
         columnWidth,
-        textHeight: lines.length ? PAD * 2 + lines.length * lineStep : 0,
-        isPlaceholder
+        contentWidth: 0,
+        textHeight: 0,
+        isPlaceholder: false
+    };
+    if (!noteHasTextOverlayEnabled(item)) return empty;
+
+    const measureCtx = ctx || makeMeasureCtx();
+    const blocks = [];
+    let textPlaceholder = false;
+
+    if (measureCtx && (item?.canvasShowNoteContent || item?.canvasShowNoteChecklist)) {
+        measureCtx.font = overlayFont(fontSize);
+        const { lines, isPlaceholder } = buildOverlayLines(item, measureCtx, fontSize, columnWidth);
+        if (lines.length) {
+            textPlaceholder = !!isPlaceholder;
+            blocks.push({
+                kind: 'lines',
+                lines,
+                isPlaceholder,
+                height: lines.length * lineStep,
+                width: columnWidth
+            });
+        }
+    }
+
+    const table = measurePlannerTableOverlay(item, fontSize, columnWidth);
+    if (table) {
+        blocks.push({
+            kind: 'plannerTable',
+            measured: table,
+            height: table.height,
+            width: table.width,
+            isPlaceholder: !!table.isPlaceholder
+        });
+    }
+
+    const chart = measurePlannerChartOverlay(item, fontSize);
+    if (chart) {
+        blocks.push({
+            kind: 'plannerChart',
+            measured: chart,
+            height: chart.height,
+            width: chart.width,
+            isPlaceholder: !!chart.isPlaceholder
+        });
+    }
+
+    if (!blocks.length) return empty;
+
+    const gap = plannerOverlayBlockGap();
+    let contentHeight = 0;
+    let contentWidth = 0;
+    for (let i = 0; i < blocks.length; i++) {
+        if (i > 0) contentHeight += gap;
+        contentHeight += blocks[i].height;
+        contentWidth = Math.max(contentWidth, blocks[i].width || 0);
+    }
+
+    return {
+        blocks,
+        fontSize,
+        lineStep,
+        pad: PAD,
+        columnWidth,
+        contentWidth,
+        textHeight: PAD * 2 + contentHeight,
+        isPlaceholder: textPlaceholder && blocks.length === 1 && blocks[0].kind === 'lines'
+    };
+}
+
+/**
+ * Measure wrapped overlay lines / planner blocks for the note.
+ * @param {object} item
+ * @param {CanvasRenderingContext2D} [ctx]
+ */
+export function measureNoteTextOverlay(item, ctx = null) {
+    const built = buildNoteOverlayBlocks(item, ctx);
+    const lines = [];
+    for (const block of built.blocks) {
+        if (block.kind === 'lines') lines.push(...block.lines);
+    }
+    return {
+        ...built,
+        lines
     };
 }
 
@@ -267,12 +349,8 @@ function pageContentHeight(doc, fontSize) {
     return Math.max(lineStepFor(fontSize), dims.height - PAD * 2);
 }
 
-function linesPerPage(doc, fontSize) {
-    return Math.max(1, Math.floor(pageContentHeight(doc, fontSize) / lineStepFor(fontSize)));
-}
-
 /**
- * Grow infinite bounds or add pages so overlay text fits.
+ * Grow infinite bounds or add pages so overlay content fits.
  * @param {object} doc
  * @param {object} item
  * @returns {boolean}
@@ -280,10 +358,10 @@ function linesPerPage(doc, fontSize) {
 export function ensureCanvasFitsNoteText(doc, item) {
     if (!doc || !noteHasTextOverlayEnabled(item)) return false;
     const measured = measureNoteTextOverlay(item);
-    if (!measured.lines.length) return false;
+    if (!measured.blocks.length) return false;
 
     let changed = false;
-    const needX = PAGE_FORMATS.a4.width + GROW_MARGIN;
+    const needX = Math.max(PAGE_FORMATS.a4.width, PAD * 2 + measured.contentWidth) + GROW_MARGIN;
     const needY = measured.textHeight + GROW_MARGIN;
 
     if (doc.canvasMode === 'infinite') {
@@ -307,8 +385,8 @@ export function ensureCanvasFitsNoteText(doc, item) {
         return changed;
     }
 
-    const perPage = linesPerPage(doc, measured.fontSize);
-    const pagesNeeded = Math.max(1, Math.ceil(measured.lines.length / perPage));
+    const pageH = pageContentHeight(doc, measured.fontSize) + PAD * 2;
+    const pagesNeeded = Math.max(1, Math.ceil(measured.textHeight / Math.max(1, pageH)));
     while ((doc.pages?.length || 0) < pagesNeeded) {
         addPage(doc);
         changed = true;
@@ -323,16 +401,18 @@ export function ensureCanvasFitsNoteText(doc, item) {
 export function estimateNoteTextOverlayBounds(item) {
     if (!noteHasTextOverlayEnabled(item)) return null;
     const measured = measureNoteTextOverlay(item);
-    if (!measured.lines.length) return null;
+    if (!measured.blocks.length) return null;
     return {
         minX: 0,
         minY: 0,
-        maxX: PAGE_FORMATS.a4.width,
+        maxX: Math.max(PAGE_FORMATS.a4.width, PAD * 2 + measured.contentWidth),
         maxY: measured.textHeight
     };
 }
 
-function paintOverlayLines(ctx, lines, { fillColor, isPlaceholder, fontSize, lineStep } = {}) {
+function paintOverlayLinesAt(ctx, lines, {
+    fillColor, isPlaceholder, fontSize, lineStep, startY = PAD
+} = {}) {
     const box = fontSize * 0.85;
     const gap = fontSize * 0.35;
     const indentUnit = fontSize * 0.9;
@@ -346,7 +426,7 @@ function paintOverlayLines(ctx, lines, { fillColor, isPlaceholder, fontSize, lin
     ctx.lineWidth = Math.max(1, fontSize * 0.08);
     if (isPlaceholder) ctx.globalAlpha = 0.42;
 
-    let y = PAD;
+    let y = startY;
     for (const line of lines) {
         if (line.kind === 'check') {
             const indentPx = (line.indentLevel || 0) * indentUnit;
@@ -362,10 +442,11 @@ function paintOverlayLines(ctx, lines, { fillColor, isPlaceholder, fontSize, lin
         y += lineStep;
     }
     ctx.restore();
+    return y - startY;
 }
 
 /**
- * Paint non-editable note text as copy-paper on a canvas context.
+ * Paint non-editable note overlay (text + optional planner table/chart) on a canvas context.
  * @param {CanvasRenderingContext2D} ctx
  * @param {object} item
  * @param {{ fillColor?: string, doc?: object, pageIndex?: number }} [opts]
@@ -373,21 +454,60 @@ function paintOverlayLines(ctx, lines, { fillColor, isPlaceholder, fontSize, lin
 export function paintNoteTextOverlay(ctx, item, { fillColor = '', doc = null, pageIndex = 0 } = {}) {
     if (!ctx || !item || !noteHasTextOverlayEnabled(item)) return;
     const measured = measureNoteTextOverlay(item, ctx);
-    if (!measured.lines.length) return;
+    if (!measured.blocks.length) return;
 
-    let lines = measured.lines;
-    if (doc && doc.canvasMode !== 'infinite') {
-        const perPage = linesPerPage(doc, measured.fontSize);
-        const start = Math.max(0, pageIndex) * perPage;
-        lines = measured.lines.slice(start, start + perPage);
+    const ink = contrastInkForBackground(fillColor);
+    const gap = plannerOverlayBlockGap();
+    const pageH = doc && doc.canvasMode !== 'infinite'
+        ? (getPageDimensions(doc).height || measured.textHeight)
+        : null;
+    const pageOffsetY = pageH ? Math.max(0, pageIndex) * pageH : 0;
+
+    ctx.save();
+    if (pageH) {
+        ctx.beginPath();
+        ctx.rect(0, 0, Math.max(PAGE_FORMATS.a4.width, PAD * 2 + measured.contentWidth) + GROW_MARGIN, pageH);
+        ctx.clip();
+        ctx.translate(0, -pageOffsetY);
     }
-    if (!lines.length) return;
-    paintOverlayLines(ctx, lines, {
-        fillColor,
-        isPlaceholder: measured.isPlaceholder,
-        fontSize: measured.fontSize,
-        lineStep: measured.lineStep
-    });
+
+    let y = PAD;
+    for (let i = 0; i < measured.blocks.length; i++) {
+        if (i > 0) y += gap;
+        const block = measured.blocks[i];
+        if (block.kind === 'lines') {
+            paintOverlayLinesAt(ctx, block.lines, {
+                fillColor,
+                isPlaceholder: block.isPlaceholder,
+                fontSize: measured.fontSize,
+                lineStep: measured.lineStep,
+                startY: y
+            });
+            y += block.height;
+        } else if (block.kind === 'plannerTable') {
+            paintPlannerTableOverlay(ctx, item, {
+                x: PAD,
+                y,
+                fontSize: measured.fontSize,
+                ink,
+                fontFamily: FONT_FAMILY,
+                measured: block.measured
+            });
+            y += block.height;
+        } else if (block.kind === 'plannerChart') {
+            paintPlannerChartOverlay(ctx, item, {
+                x: PAD,
+                y,
+                fontSize: measured.fontSize,
+                ink,
+                fontFamily: FONT_FAMILY,
+                measured: block.measured
+            });
+            y += block.height;
+        }
+    }
+
+    ctx.restore();
 }
 
 /** Active page index for paged overlay painting. */

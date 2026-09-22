@@ -40,6 +40,7 @@ const DISPLAY_DEFAULTS = {
     noteFontId: 'default',
     brandIconId: 'clipboard',
     undockedModuleOpacity: 1,
+    desktopDockOpacity: 1,
     popoutMode: 'pip',
     fileCabinetBg: 'smooth'
 };

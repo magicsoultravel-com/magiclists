@@ -33,6 +33,8 @@ export const SHARED_FIELDS = Object.freeze([
     'canvasHidden',
     'canvasShowNoteContent',
     'canvasShowNoteChecklist',
+    'canvasShowNotePlannerTable',
+    'canvasShowNotePlannerChart',
     'canvasOverlayFontSize',
     'planner',
     'plannerHidden'

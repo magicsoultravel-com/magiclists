@@ -1,5 +1,5 @@
 /** @module {"owns":"magicCanvas drawing board, workspace drawing mode", "related":["canvasDocument.js","drawingToolbarMenu.js","layoutStorage.js"]} */
-import { ACTION_ICONS, DRAWING_ICONS, FORMAT_ICONS } from './icons.js';
+import { ACTION_ICONS, CARD_ICONS, DRAWING_ICONS, FORMAT_ICONS } from './icons.js';
 import { ColorPicker, PALETTE_UNIFIED, resolveNoteColor } from './colorPicker.js';
 import { DrawingToolbarMenu, CHEVRON } from './drawingToolbarMenu.js';
 import { Fullscreen } from './fullscreen.js';
@@ -1582,11 +1582,14 @@ export const DrawingBoard = {
         const titleEl = document.getElementById('draw-note-title');
         const contentBtn = document.getElementById('draw-note-show-content');
         const checklistBtn = document.getElementById('draw-note-show-checklist');
+        const plannerTableBtn = document.getElementById('draw-note-show-planner-table');
+        const plannerChartBtn = document.getElementById('draw-note-show-planner-chart');
         const sizeGroup = document.getElementById('draw-note-overlay-size-group');
         const sizeLabel = document.getElementById('draw-note-overlay-size');
         const smallerBtn = document.getElementById('draw-note-overlay-smaller');
         const largerBtn = document.getElementById('draw-note-overlay-larger');
         const noteMode = !!(this.isNoteCanvasMode && this.noteCanvasItem);
+        const plannerActive = !!(this.noteCanvasItem?.planner && !this.noteCanvasItem?.plannerHidden);
         if (this.noteCanvasItem) migrateNoteCanvasTextFlags(this.noteCanvasItem);
 
         if (titleEl) {
@@ -1606,9 +1609,9 @@ export const DrawingBoard = {
             }
         }
 
-        const bindToggle = (btn, { on, titleOn, titleOff, icon, flag }) => {
+        const bindToggle = (btn, { on, titleOn, titleOff, icon, flag, visible = noteMode }) => {
             if (!btn) return;
-            if (noteMode) {
+            if (visible) {
                 btn.hidden = false;
                 btn.classList.remove('is-hidden');
                 btn.classList.toggle('active', on);
@@ -1644,6 +1647,22 @@ export const DrawingBoard = {
             titleOff: 'Show checklist',
             icon: FORMAT_ICONS.toChecklist,
             flag: 'checklist'
+        });
+        bindToggle(plannerTableBtn, {
+            on: !!this.noteCanvasItem?.canvasShowNotePlannerTable,
+            titleOn: 'Hide planner table',
+            titleOff: 'Show planner table',
+            icon: CARD_ICONS.plannerTable,
+            flag: 'plannerTable',
+            visible: noteMode && plannerActive
+        });
+        bindToggle(plannerChartBtn, {
+            on: !!this.noteCanvasItem?.canvasShowNotePlannerChart,
+            titleOn: 'Hide planner chart',
+            titleOff: 'Show planner chart',
+            icon: CARD_ICONS.plannerChart,
+            flag: 'plannerChart',
+            visible: noteMode && plannerActive
         });
 
         if (sizeGroup) {
@@ -1718,7 +1737,17 @@ export const DrawingBoard = {
         const item = this.noteCanvasItem;
         if (!item || !this.isNoteCanvasMode) return;
         migrateNoteCanvasTextFlags(item);
-        const key = flag === 'checklist' ? 'canvasShowNoteChecklist' : 'canvasShowNoteContent';
+        const keyByFlag = {
+            checklist: 'canvasShowNoteChecklist',
+            content: 'canvasShowNoteContent',
+            plannerTable: 'canvasShowNotePlannerTable',
+            plannerChart: 'canvasShowNotePlannerChart'
+        };
+        const key = keyByFlag[flag] || 'canvasShowNoteContent';
+        if ((flag === 'plannerTable' || flag === 'plannerChart')
+            && !(item.planner && !item.plannerHidden)) {
+            return;
+        }
         const next = !item[key];
         // Flip immediately so UI + paint don't wait on the dynamic import.
         item[key] = next;

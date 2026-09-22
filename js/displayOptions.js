@@ -55,6 +55,7 @@ const DEFAULTS = {
     brandIconId: 'clipboard',
     useCategoryColors: true,
     undockedModuleOpacity: 1,
+    desktopDockOpacity: 1,
     popoutMode: 'pip',
     fileCabinetBg: 'smooth'
 };
@@ -79,6 +80,7 @@ export function readDisplayOptions() {
             brandIconId: resolveBrandIconId(raw.brandIconId),
             useCategoryColors: raw.useCategoryColors !== false,
             undockedModuleOpacity: Math.min(1, Math.max(0.1, Number(raw.undockedModuleOpacity) || 1)),
+            desktopDockOpacity: Math.min(1, Math.max(0.1, Number(raw.desktopDockOpacity) || 1)),
             popoutMode: raw.popoutMode === 'window' ? 'window' : 'pip',
             fileCabinetBg: FILE_CABINET_BG_OPTIONS.includes(raw.fileCabinetBg) ? raw.fileCabinetBg : 'smooth'
         };
@@ -109,6 +111,7 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     root.dataset.useCategoryColors = options.useCategoryColors ? '1' : '0';
     root.dataset.fileCabinetBg = root.dataset.themeSkin === '1' ? 'none' : (options.fileCabinetBg || 'smooth');
     root.style.setProperty('--sidebar-undock-opacity', String(options.undockedModuleOpacity ?? 1));
+    root.style.setProperty('--desktop-dock-opacity', String(options.desktopDockOpacity ?? 1));
     applyNoteFont(options.noteFontId);
     applyBrandIcon(options.brandIconId);
 
@@ -129,6 +132,7 @@ function isCustomized(options) {
         || options.showRulerVertical
         || !options.useCategoryColors
         || Math.abs((options.undockedModuleOpacity ?? 1) - 1) > 0.001
+        || Math.abs((options.desktopDockOpacity ?? 1) - 1) > 0.001
         || options.popoutMode !== 'pip'
         || options.fileCabinetBg !== 'smooth'
         || isNoteFontCustomized(options.noteFontId)
@@ -393,6 +397,15 @@ export const DisplayOptions = {
             const undockOpacityLabel = root.querySelector('#display-opt-undock-opacity-value');
             if (undockOpacityLabel) {
                 undockOpacityLabel.textContent = `${Math.round((this.options.undockedModuleOpacity ?? 1) * 100)}%`;
+            }
+        }
+
+        const dockOpacityInput = root.querySelector('#display-opt-dock-opacity');
+        if (dockOpacityInput) {
+            dockOpacityInput.value = String(this.options.desktopDockOpacity ?? 1);
+            const dockOpacityLabel = root.querySelector('#display-opt-dock-opacity-value');
+            if (dockOpacityLabel) {
+                dockOpacityLabel.textContent = `${Math.round((this.options.desktopDockOpacity ?? 1) * 100)}%`;
             }
         }
 
@@ -669,6 +682,14 @@ export const DisplayOptions = {
                                 max: 1,
                                 step: 0.05
                             })}
+                            ${this.sliderRow({
+                                id: 'display-opt-dock-opacity',
+                                label: 'Desktop switcher opacity',
+                                valuePercent: `${Math.round((opts.desktopDockOpacity ?? 1) * 100)}%`,
+                                min: 0.1,
+                                max: 1,
+                                step: 0.05
+                            })}
                         </div>
                     </div>
                 </div>
@@ -727,6 +748,19 @@ export const DisplayOptions = {
             };
             undockOpacityInput.addEventListener('input', updateOpacity);
             undockOpacityInput.addEventListener('change', updateOpacity);
+        }
+
+        const dockOpacityInput = root.querySelector('#display-opt-dock-opacity');
+        if (dockOpacityInput) {
+            const updateDockOpacity = () => {
+                const value = parseFloat(dockOpacityInput.value);
+                if (!Number.isFinite(value)) return;
+                this.setOptions({ desktopDockOpacity: value });
+                const label = root.querySelector('#display-opt-dock-opacity-value');
+                if (label) label.textContent = `${Math.round(value * 100)}%`;
+            };
+            dockOpacityInput.addEventListener('input', updateDockOpacity);
+            dockOpacityInput.addEventListener('change', updateDockOpacity);
         }
 
         root.querySelectorAll('.app-theme-option').forEach((btn) => {

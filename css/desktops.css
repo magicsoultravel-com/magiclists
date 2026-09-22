@@ -13,6 +13,7 @@
     transform: translateX(-50%);
     z-index: 500;
     pointer-events: none;
+    opacity: var(--desktop-dock-opacity, 1);
 }
 
 .desktop-dock > * {
