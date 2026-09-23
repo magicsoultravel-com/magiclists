@@ -597,31 +597,34 @@ async function deriveKey(passphrase, salt) {
     );
 }
 
-export async function encryptBackupPackage(jsonString, passphrase) {
+export async function encryptBackupBytes(bytes, passphrase) {
     const clean = String(passphrase || '').trim();
     if (!clean) throw new Error('Passphrase is required for encryption.');
+    const input = bytes instanceof Uint8Array
+        ? bytes
+        : new Uint8Array(bytes instanceof ArrayBuffer ? bytes : await new Blob([bytes]).arrayBuffer());
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const key = await deriveKey(clean, salt);
-    const enc = new TextEncoder();
     const cipher = await crypto.subtle.encrypt(
         { name: 'AES-GCM', iv },
         key,
-        enc.encode(jsonString)
+        input
     );
     return JSON.stringify({
         [ENCRYPTED_BACKUP_MARKER]: true,
-        v: 1,
+        v: 2,
+        encoding: 'bytes',
         salt: bytesToBase64(salt),
         iv: bytesToBase64(iv),
         data: bytesToBase64(new Uint8Array(cipher))
     });
 }
 
-export async function decryptBackupPackage(text, passphrase) {
+export async function decryptBackupToBytes(text, passphrase) {
     const parsed = typeof text === 'string' ? JSON.parse(text) : text;
     if (!isEncryptedBackupPackage(parsed)) {
-        return parseBackupPackage(parsed);
+        throw new Error('Not an encrypted backup package.');
     }
     const clean = String(passphrase || '').trim();
     if (!clean) throw new Error('Passphrase required for encrypted backup.');
@@ -629,24 +632,65 @@ export async function decryptBackupPackage(text, passphrase) {
     const iv = base64ToBytes(parsed.iv);
     const data = base64ToBytes(parsed.data);
     const key = await deriveKey(clean, salt);
-    const dec = new TextDecoder();
     const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data);
-    return parseBackupPackage(dec.decode(plain));
+    return new Uint8Array(plain);
 }
 
+export async function encryptBackupPackage(jsonString, passphrase) {
+    const enc = new TextEncoder();
+    const envelope = JSON.parse(await encryptBackupBytes(enc.encode(String(jsonString ?? '')), passphrase));
+    // v1 consumers expect UTF-8 JSON plaintext; keep marker compatible.
+    envelope.v = 1;
+    envelope.encoding = 'utf8';
+    return JSON.stringify(envelope);
+}
+
+export async function decryptBackupPackage(text, passphrase) {
+    const parsed = typeof text === 'string' ? JSON.parse(text) : text;
+    if (!isEncryptedBackupPackage(parsed)) {
+        return parseBackupPackage(parsed);
+    }
+    const bytes = await decryptBackupToBytes(parsed, passphrase);
+    const dec = new TextDecoder();
+    return parseBackupPackage(dec.decode(bytes));
+}
+
+/** Checkpoint ZIP filename: magicnotes_export_<ts>.zip or magicnotes_<tag>_export_<ts>.zip */
+const CHECKPOINT_ZIP_RE = /^magicnotes_(?:[a-z0-9_-]{1,8}_)?export_\d+\.zip$/i;
+
 export function isBackupFilename(name) {
-    if (typeof name !== 'string' || !name.endsWith('.json')) return false;
-    return name.startsWith(BACKUP_FILE_PREFIX) || name.startsWith(LEGACY_BACKUP_FILE_PREFIX);
+    if (typeof name !== 'string') return false;
+    if (name.endsWith('.json')) {
+        return name.startsWith(BACKUP_FILE_PREFIX) || name.startsWith(LEGACY_BACKUP_FILE_PREFIX);
+    }
+    if (name.endsWith('.zip')) {
+        if (name.startsWith(BACKUP_FILE_PREFIX)) return true;
+        return CHECKPOINT_ZIP_RE.test(name);
+    }
+    return false;
 }
 
 export function timestampFromBackupFilename(name) {
     if (!isBackupFilename(name)) return null;
-    const prefix = name.startsWith(BACKUP_FILE_PREFIX)
-        ? BACKUP_FILE_PREFIX
-        : LEGACY_BACKUP_FILE_PREFIX;
-    const raw = name.slice(prefix.length, -'.json'.length);
-    const ts = Number(raw);
-    return Number.isFinite(ts) ? ts : null;
+    if (name.endsWith('.json')) {
+        const prefix = name.startsWith(BACKUP_FILE_PREFIX)
+            ? BACKUP_FILE_PREFIX
+            : LEGACY_BACKUP_FILE_PREFIX;
+        const raw = name.slice(prefix.length, -'.json'.length);
+        const ts = Number(raw);
+        return Number.isFinite(ts) ? ts : null;
+    }
+    if (name.startsWith(BACKUP_FILE_PREFIX) && name.endsWith('.zip')) {
+        const raw = name.slice(BACKUP_FILE_PREFIX.length, -'.zip'.length);
+        const ts = Number(raw);
+        return Number.isFinite(ts) ? ts : null;
+    }
+    const match = name.match(/_export_(\d+)\.zip$/i);
+    if (match) {
+        const ts = Number(match[1]);
+        return Number.isFinite(ts) ? ts : null;
+    }
+    return null;
 }
 
 function migrateImportedStep(step) {

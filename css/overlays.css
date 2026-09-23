@@ -452,7 +452,7 @@ textarea.form-input {
 .cloud-popover {
     position: fixed;
     z-index: 343;
-    width: min(300px, calc(100% - 16px));
+    width: min(320px, calc(100% - 16px));
     padding: 0;
     overflow: hidden;
     font-size: 0.66rem;
@@ -516,6 +516,21 @@ textarea.form-input {
     flex-direction: column;
     gap: 0.45rem;
     padding: 0.45rem;
+    max-height: min(70vh, 560px);
+    overflow-y: auto;
+}
+
+.cloud-popover__parts {
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+
+.cloud-popover__backup-name {
+    display: block;
+    font-size: 0.58rem;
+    opacity: 0.7;
+    word-break: break-all;
 }
 
 .cloud-popover__hint {

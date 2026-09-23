@@ -200,7 +200,10 @@ BootProgress.set(85, 'Workspace…');
             DesktopZoom.init();
             this.setupSearchBar();
             this.setupBackupInterface();
-            CloudBackup.init({ getLoggedIn: () => AppState.user.isLoggedIn });
+            CloudBackup.init({
+                getLoggedIn: () => AppState.user.isLoggedIn,
+                getItems: () => AppState.items
+            });
             CloudBackup.ensureConnected().finally(() => CloudBackup.updateButtons());
             ScheduledBackup.init({
                 getItems: () => AppState.items,

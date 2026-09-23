@@ -27,9 +27,13 @@ import {
 } from './backupClaim.js';
 import {
     clampAmount,
-    normalizeConfig,
-    sanitizeFilenameTag
+    normalizeConfig
 } from './scheduledBackupConfig.js';
+import {
+    bindCheckpointPartsUi,
+    readCheckpointPartsFromUi,
+    renderCheckpointPartsHtml
+} from './checkpointPartsUi.js';
 
 const STORAGE_KEY = 'matrix_scheduled_export';
 const DEFAULT_TITLE = 'Scheduled backup';
@@ -64,20 +68,6 @@ function formatRemaining(ms) {
         return `${minutes}m ${String(seconds).padStart(2, '0')}s`;
     }
     return `${seconds}s`;
-}
-
-function formatRelativePast(unixSeconds) {
-    if (!unixSeconds) return 'Never';
-    const ms = Date.now() - unixSeconds * 1000;
-    if (ms < 0) return 'just now';
-    const sec = Math.floor(ms / 1000);
-    if (sec < 60) return `${sec}s ago`;
-    const min = Math.floor(sec / 60);
-    if (min < 60) return `${min}m ago`;
-    const hr = Math.floor(min / 60);
-    if (hr < 48) return `${hr}h ago`;
-    const days = Math.floor(hr / 24);
-    return `${days}d ago`;
 }
 
 function buildTxtContent(items) {
@@ -136,26 +126,6 @@ function escapeAttr(value) {
         .replace(/&/g, '&amp;')
         .replace(/"/g, '&quot;')
         .replace(/</g, '&lt;');
-}
-
-function readNotesEnabledFromUi() {
-    return !!document.querySelector('[data-schedule-notes-enabled]')?.checked;
-}
-
-function readMediaEnabledFromUi() {
-    return !!document.querySelector('[data-schedule-media-enabled]')?.checked;
-}
-
-function readMediaIncrementalFromUi() {
-    return !!document.querySelector('[data-schedule-media-incremental]')?.checked;
-}
-
-function readBoardEnabledFromUi() {
-    return !!document.querySelector('[data-schedule-board-enabled]')?.checked;
-}
-
-function readCanvasEnabledFromUi() {
-    return !!document.querySelector('[data-schedule-canvas-enabled]')?.checked;
 }
 
 export const ScheduledBackup = {
@@ -291,19 +261,6 @@ export const ScheduledBackup = {
         const txtLast = readLastLocalTxtExportAt();
         const metaLast = readLastMediaMetaExportAt();
         const zipLast = readLastMediaZipExportAt();
-        const zipModeLabel = config.media.lastZipMode === 'incremental' ? 'incr' : 'full';
-        const incrementalDisabled = !config.media.enabled;
-        const notesJson = config.notes.format === 'json';
-        const notesIncrementalDisabled = !config.notes.enabled || !notesJson;
-        const incrementalLabel = 'Incremental content (meta always full)';
-        const notesModeLabel = config.notes.lastMode === 'incremental' ? 'incr' : 'full';
-        const notesRestoreHint = !notesJson
-            ? 'TXT export is always a full dump.'
-            : 'Restore: import the newest full notes file, then incr files oldest → newest.';
-        const boardHint = 'Positions + chrome are written only when they change.';
-        const canvasHint = 'The drawing is written only when it changes.';
-        const checkpointHint = 'One ZIP per checkpoint, carrying only what changed. Restore: import checkpoints oldest → newest.';
-        const mediaHint = 'Only changed media files ride along. Untick incremental once to re-anchor a full ZIP.';
 
         body.innerHTML = `
             <div class="schedule-export-popover__field">
@@ -317,72 +274,14 @@ export const ScheduledBackup = {
                     </select>
                 </div>
             </div>
-            <div class="schedule-export-popover__field">
-                <span class="schedule-export-popover__label">Personal tag</span>
-                <input type="text" class="schedule-export-popover__unit" data-schedule-tag maxlength="8"
-                    placeholder="e.g. luna" autocomplete="off" spellcheck="false"
-                    value="${escapeAttr(config.tag)}" aria-label="Personal filename tag">
-                <p class="schedule-export-popover__meta schedule-export-popover__hint">
-                    Letters, numbers, - and _ (max 8). Files: <span data-schedule-tag-preview></span>
-                </p>
-            </div>
             <p class="schedule-export-popover__meta" data-schedule-status>${escapeAttr(statusLine)}</p>
-            <p class="schedule-export-popover__meta schedule-export-popover__hint" data-schedule-checkpoint-hint>${escapeAttr(checkpointHint)}</p>
-            <div class="schedule-export-popover__section">
-                <label class="schedule-export-popover__section-head">
-                    <input type="checkbox" data-schedule-notes-enabled${config.notes.enabled ? ' checked' : ''}>
-                    <span>NOTES</span>
-                </label>
-                <div class="schedule-export-popover__section-body">
-                    <div class="schedule-export-popover__field">
-                        <span class="schedule-export-popover__label">Export type</span>
-                        <div class="schedule-export-popover__seg" role="group" aria-label="Notes export type">
-                            <button type="button" class="schedule-export-popover__seg-btn${config.notes.format === 'json' ? ' is-active' : ''}" data-schedule-notes-format="json">JSON</button>
-                            <button type="button" class="schedule-export-popover__seg-btn${config.notes.format === 'txt' ? ' is-active' : ''}" data-schedule-notes-format="txt">TXT</button>
-                        </div>
-                    </div>
-                    <p class="schedule-export-popover__meta">Last: JSON ${escapeAttr(formatRelativePast(jsonLast))}${notesJson && config.notes.lastMode ? ` (${escapeAttr(notesModeLabel)})` : ''} · TXT ${escapeAttr(formatRelativePast(txtLast))}</p>
-                    <label class="schedule-export-popover__check">
-                        <input type="checkbox" data-schedule-notes-incremental${config.notes.incremental && !notesIncrementalDisabled ? ' checked' : ''}${notesIncrementalDisabled ? ' disabled' : ''}>
-                        <span>Incremental content (only changed notes)</span>
-                    </label>
-                    <p class="schedule-export-popover__meta schedule-export-popover__hint">${escapeAttr(notesRestoreHint)}</p>
-                </div>
-            </div>
-            <div class="schedule-export-popover__section">
-                <label class="schedule-export-popover__section-head">
-                    <input type="checkbox" data-schedule-board-enabled${config.board.enabled ? ' checked' : ''}>
-                    <span>BOARD</span>
-                </label>
-                <div class="schedule-export-popover__section-body">
-                    <p class="schedule-export-popover__meta">Last: ${escapeAttr(formatRelativePast(config.board.lastExportAt))}</p>
-                    <p class="schedule-export-popover__meta schedule-export-popover__hint">${escapeAttr(boardHint)}</p>
-                </div>
-            </div>
-            <div class="schedule-export-popover__section">
-                <label class="schedule-export-popover__section-head">
-                    <input type="checkbox" data-schedule-canvas-enabled${config.canvas.enabled ? ' checked' : ''}>
-                    <span>CANVAS</span>
-                </label>
-                <div class="schedule-export-popover__section-body">
-                    <p class="schedule-export-popover__meta">Last: ${escapeAttr(formatRelativePast(config.canvas.lastExportAt))}</p>
-                    <p class="schedule-export-popover__meta schedule-export-popover__hint">${escapeAttr(canvasHint)}</p>
-                </div>
-            </div>
-            <div class="schedule-export-popover__section">
-                <label class="schedule-export-popover__section-head">
-                    <input type="checkbox" data-schedule-media-enabled${config.media.enabled ? ' checked' : ''}>
-                    <span>MEDIA</span>
-                </label>
-                <div class="schedule-export-popover__section-body">
-                    <label class="schedule-export-popover__check">
-                        <input type="checkbox" data-schedule-media-incremental${config.media.incremental && !incrementalDisabled ? ' checked' : ''}${incrementalDisabled ? ' disabled' : ''}>
-                        <span>${escapeAttr(incrementalLabel)}</span>
-                    </label>
-                    <p class="schedule-export-popover__meta schedule-export-popover__hint">${escapeAttr(mediaHint)}</p>
-                    <p class="schedule-export-popover__meta">Last: Meta ${escapeAttr(formatRelativePast(metaLast))} · ZIP ${escapeAttr(zipLast ? `${formatRelativePast(zipLast)} (${zipModeLabel})` : 'Never')}</p>
-                </div>
-            </div>
+            ${renderCheckpointPartsHtml(config, {
+                jsonLast,
+                txtLast,
+                metaLast,
+                zipLast,
+                includeTag: true
+            })}
             <div class="schedule-export-popover__actions">
                 ${config.enabled
                     ? `
@@ -393,69 +292,11 @@ export const ScheduledBackup = {
             </div>
         `;
 
-        body.querySelectorAll('[data-schedule-notes-format]').forEach((btn) => {
-            btn.addEventListener('click', () => {
-                const next = readConfig();
-                next.notes.format = btn.getAttribute('data-schedule-notes-format') === 'txt' ? 'txt' : 'json';
-                writeConfig(next);
-                this.renderBody();
-            });
-        });
-
-        body.querySelector('[data-schedule-notes-enabled]')?.addEventListener('change', (e) => {
-            const next = readConfig();
-            next.notes.enabled = !!e.target.checked;
-            writeConfig(next);
-            this.renderBody();
-        });
-
-        body.querySelector('[data-schedule-media-enabled]')?.addEventListener('change', (e) => {
-            const next = readConfig();
-            next.media.enabled = !!e.target.checked;
-            writeConfig(next);
-            this.renderBody();
-        });
-
-        const tagInput = body.querySelector('[data-schedule-tag]');
-        const tagPreview = body.querySelector('[data-schedule-tag-preview]');
-        const updateTagPreview = () => {
-            const clean = sanitizeFilenameTag(tagInput?.value);
-            if (tagPreview) {
-                tagPreview.textContent = `magicnotes_${clean ? `${clean}_` : ''}export_*.zip`;
-            }
-        };
-        tagInput?.addEventListener('input', () => {
-            const clean = sanitizeFilenameTag(tagInput.value);
-            if (tagInput.value !== clean) tagInput.value = clean;
-            updateTagPreview();
-            const next = readConfig();
-            next.tag = clean;
-            writeConfig(next);
-        });
-        updateTagPreview();
-
-        body.querySelector('[data-schedule-notes-incremental]')?.addEventListener('change', (e) => {
-            const next = readConfig();
-            next.notes.incremental = !!e.target.checked;
-            writeConfig(next);
-        });
-
-        body.querySelector('[data-schedule-board-enabled]')?.addEventListener('change', (e) => {
-            const next = readConfig();
-            next.board.enabled = !!e.target.checked;
-            writeConfig(next);
-        });
-
-        body.querySelector('[data-schedule-canvas-enabled]')?.addEventListener('change', (e) => {
-            const next = readConfig();
-            next.canvas.enabled = !!e.target.checked;
-            writeConfig(next);
-        });
-
-        body.querySelector('[data-schedule-media-incremental]')?.addEventListener('change', (e) => {
-            const next = readConfig();
-            next.media.incremental = !!e.target.checked;
-            writeConfig(next);
+        bindCheckpointPartsUi(body, {
+            readConfig,
+            writeConfig,
+            onRerender: () => this.renderBody(),
+            includeTag: true
         });
 
         const amountInput = body.querySelector('[data-schedule-amount]');
@@ -501,29 +342,7 @@ export const ScheduledBackup = {
     },
 
     persistUiTargets(config) {
-        config.notes.enabled = readNotesEnabledFromUi();
-        config.media.enabled = readMediaEnabledFromUi();
-        const boardEl = document.querySelector('[data-schedule-board-enabled]');
-        if (boardEl && !boardEl.disabled) {
-            config.board.enabled = !!boardEl.checked;
-        }
-        const canvasEl = document.querySelector('[data-schedule-canvas-enabled]');
-        if (canvasEl && !canvasEl.disabled) {
-            config.canvas.enabled = !!canvasEl.checked;
-        }
-        const notesIncrEl = document.querySelector('[data-schedule-notes-incremental]');
-        if (notesIncrEl && !notesIncrEl.disabled) {
-            config.notes.incremental = !!notesIncrEl.checked;
-        }
-        const incrEl = document.querySelector('[data-schedule-media-incremental]');
-        if (incrEl && !incrEl.disabled) {
-            config.media.incremental = !!incrEl.checked;
-        }
-        const tagInput = document.querySelector('[data-schedule-tag]');
-        if (tagInput) {
-            config.tag = sanitizeFilenameTag(tagInput.value);
-        }
-        return config;
+        return readCheckpointPartsFromUi(this.panel || document, config);
     },
 
     start() {

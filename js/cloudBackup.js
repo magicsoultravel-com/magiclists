@@ -2,17 +2,32 @@
 import {
     applyBackupToStorage,
     backupFilename,
-    buildBackupPackage,
     decryptBackupPackage,
-    encryptBackupPackage,
+    decryptBackupToBytes,
+    encryptBackupBytes,
     formatExportTimestamp,
+    importFullBackupArchive,
     isEncryptedBackupPackage,
-    parseBackupPackage,
-    serializeBackupPackage
+    parseBackupPackage
 } from './backup.js';
+import { buildCheckpointExportPayload } from './checkpointBundle.js';
+import {
+    bindCheckpointPartsUi,
+    mergeCheckpointPatches,
+    readCheckpointPartsFromUi,
+    renderCheckpointPartsHtml
+} from './checkpointPartsUi.js';
 import { formatCloudError, getCloudProvider } from './cloud/cloudProvider.js';
 import './cloud/localFolderProvider.js';
 import './cloud/megaProvider.js';
+import { itemToTxtExportText, sortItemsForTxtExport } from './noteBodyConversion.js';
+import {
+    normalizeBoardSection,
+    normalizeCanvasSection,
+    normalizeMediaSection,
+    normalizeNotesSection,
+    sanitizeFilenameTag
+} from './scheduledBackupConfig.js';
 import { SidebarStats } from './sidebarStats.js';
 import { clampPanelToViewport, positionPopoverBelowAnchor } from './popoverPosition.js';
 import { showAppToast } from './toast.js';
@@ -23,9 +38,28 @@ const POPOVER_POS_KEY = 'matrix_cloud_popover_pos';
 const PASSPHRASE_KEY = 'matrix_cloud_passphrase';
 const HAS_LOCAL_FOLDER = typeof window.showDirectoryPicker === 'function';
 
+function normalizeCloudConfig(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    return {
+        provider: raw.provider === 'local' || raw.provider === 'mega' ? raw.provider : (raw.provider || null),
+        folderId: raw.folderId || null,
+        folderPath: raw.folderPath || null,
+        email: typeof raw.email === 'string' ? raw.email : '',
+        lastCheckpointAt: Number.isFinite(Number(raw.lastCheckpointAt)) ? Number(raw.lastCheckpointAt) : null,
+        autoEnabled: !!raw.autoEnabled,
+        autoIntervalMinutes: Math.max(5, Number(raw.autoIntervalMinutes) || 60),
+        encryptCheckpoints: !!raw.encryptCheckpoints,
+        tag: sanitizeFilenameTag(raw.tag),
+        notes: normalizeNotesSection(raw.notes),
+        board: normalizeBoardSection(raw.board),
+        canvas: normalizeCanvasSection(raw.canvas),
+        media: normalizeMediaSection(raw.media)
+    };
+}
+
 function readConfig() {
     try {
-        return JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
+        return normalizeCloudConfig(JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null'));
     } catch {
         return null;
     }
@@ -36,7 +70,12 @@ function writeConfig(config) {
         localStorage.removeItem(CONFIG_KEY);
         return;
     }
-    localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+    const normalized = normalizeCloudConfig(config);
+    if (!normalized) {
+        localStorage.removeItem(CONFIG_KEY);
+        return;
+    }
+    localStorage.setItem(CONFIG_KEY, JSON.stringify(normalized));
 }
 
 function readPopoverPos() {
@@ -97,6 +136,33 @@ function formatFileDate(timestamp) {
     });
 }
 
+function buildTxtContent(items) {
+    const sortedItems = sortItemsForTxtExport([...(items || [])]);
+    const sections = [];
+    let currentCategory = null;
+
+    sortedItems.forEach((item) => {
+        const categories = Array.isArray(item?.categories) ? item.categories.filter(Boolean) : [];
+        const itemCategory = categories.length > 0 ? categories[0] : 'Uncategorized';
+
+        if (itemCategory !== currentCategory) {
+            if (currentCategory !== null) sections.push('\n\n---\n\n');
+            currentCategory = itemCategory;
+        }
+
+        const itemText = itemToTxtExportText(item);
+        if (itemText) sections.push(itemText);
+    });
+
+    return sections.join('\n\n');
+}
+
+async function blobLooksLikeZip(blob) {
+    if (!(blob instanceof Blob) || blob.size < 4) return false;
+    const head = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+    return head[0] === 0x50 && head[1] === 0x4b;
+}
+
 function buildFolderNavHtml({ parentId, folders, listClass = 'cloud-popover__folder-list' }) {
     const upRow = parentId ? `
         <button type="button" class="cloud-popover__folder-row" data-cloud-folder-up>
@@ -132,11 +198,13 @@ export const CloudBackup = {
     floatingPosition: false,
     autoTimerId: null,
     getLoggedIn: () => false,
+    getItems: () => [],
     outsideHandler: null,
     keyHandler: null,
 
-    init({ getLoggedIn } = {}) {
+    init({ getLoggedIn, getItems } = {}) {
         this.getLoggedIn = getLoggedIn || (() => false);
+        if (typeof getItems === 'function') this.getItems = getItems;
         this.startAutoTimer();
     },
 
@@ -483,15 +551,17 @@ export const CloudBackup = {
             return;
         }
         const folder = provider.setBackupFolder('.');
+        const prev = readConfig() || {};
         writeConfig({
+            ...prev,
             provider: 'local',
             folderId: folder.id,
             folderPath: folder.path,
             email: '',
-            lastCheckpointAt: readConfig()?.lastCheckpointAt || null,
-            autoEnabled: readConfig()?.autoEnabled || false,
-            autoIntervalMinutes: readConfig()?.autoIntervalMinutes || 60,
-            encryptCheckpoints: readConfig()?.encryptCheckpoints || false
+            lastCheckpointAt: prev.lastCheckpointAt || null,
+            autoEnabled: prev.autoEnabled || false,
+            autoIntervalMinutes: prev.autoIntervalMinutes || 60,
+            encryptCheckpoints: prev.encryptCheckpoints || false
         });
         this.updateButtons();
         this.startAutoTimer();
@@ -508,7 +578,7 @@ export const CloudBackup = {
         const show2fa = this.show2fa;
 
         this.setBody(`
-            <p class="cloud-popover__hint">Uses the unofficial megajs API. Your MEGA password is kept in this browser tab only (sessionStorage). Backup files are JSON and include workspace secrets unless you enable encryption below.</p>
+            <p class="cloud-popover__hint">Uses the unofficial megajs API. Your MEGA password is kept in this browser tab only (sessionStorage). Checkpoints are ZIP bundles (notes/board/canvas/media parts) unless you enable encryption below.</p>
             <p class="cloud-popover__hint">Enter your MEGA email and password, then click Connect.</p>
             <p class="cloud-popover__hint">No authenticator app? You don't need a 2FA code unless two-factor is enabled on your MEGA account.</p>
             <form class="cloud-popover__login-form" data-cloud-login-form>
@@ -742,6 +812,7 @@ export const CloudBackup = {
         const prev = readConfig() || {};
 
         writeConfig({
+            ...prev,
             provider: 'mega',
             folderId: folder.id,
             folderPath: folderPathOverride || folder.path,
@@ -801,6 +872,9 @@ export const CloudBackup = {
                 <input type="number" class="cloud-popover__input" data-cloud-auto-interval min="5" max="1440" step="5" value="${Number(config?.autoIntervalMinutes) || 60}">
                 <span class="cloud-popover__hint">min</span>
             </div>
+            <div class="cloud-popover__parts" data-cloud-parts>
+                ${renderCheckpointPartsHtml(config || normalizeCloudConfig({}), { includeTag: true })}
+            </div>
             <label class="cloud-popover__field cloud-popover__field--inline">
                 <input type="checkbox" data-cloud-encrypt ${config?.encryptCheckpoints ? 'checked' : ''}>
                 <span>Encrypt checkpoints</span>
@@ -823,7 +897,8 @@ export const CloudBackup = {
         if (passInput && passSession.passphrase) passInput.value = passSession.passphrase;
 
         const saveSettings = () => {
-            const next = readConfig() || {};
+            const next = readConfig() || normalizeCloudConfig({});
+            readCheckpointPartsFromUi(this.panel.querySelector('[data-cloud-parts]') || this.panel, next);
             next.autoEnabled = !!this.panel.querySelector('[data-cloud-auto]')?.checked;
             next.autoIntervalMinutes = Math.max(5, Number(this.panel.querySelector('[data-cloud-auto-interval]')?.value) || 60);
             next.encryptCheckpoints = !!this.panel.querySelector('[data-cloud-encrypt]')?.checked;
@@ -834,6 +909,28 @@ export const CloudBackup = {
             });
             this.startAutoTimer();
         };
+
+        const partsRoot = this.panel.querySelector('[data-cloud-parts]');
+        bindCheckpointPartsUi(partsRoot, {
+            readConfig: () => readConfig() || normalizeCloudConfig({}),
+            writeConfig: (next) => {
+                const cur = readConfig() || normalizeCloudConfig({});
+                writeConfig({
+                    ...cur,
+                    ...next,
+                    notes: next.notes,
+                    board: next.board,
+                    canvas: next.canvas,
+                    media: next.media,
+                    tag: next.tag
+                });
+            },
+            onRerender: () => {
+                this.renderStatusStep();
+                this.finishRenderStep();
+            },
+            includeTag: true
+        });
 
         this.panel.querySelector('[data-cloud-auto]')?.addEventListener('change', saveSettings);
         this.panel.querySelector('[data-cloud-auto-interval]')?.addEventListener('change', saveSettings);
@@ -958,7 +1055,7 @@ export const CloudBackup = {
             }
 
             this.setBody(`
-                <p class="cloud-popover__hint">Restore replaces your local workspace.</p>
+                <p class="cloud-popover__hint">Restore replaces your local workspace. For incremental ZIP chains, restore oldest → newest.</p>
                 <div class="cloud-popover__backup-list">
                     ${backups.map((entry) => `
                         <div class="cloud-popover__backup-row">
@@ -966,9 +1063,10 @@ export const CloudBackup = {
                             <div class="cloud-popover__backup-meta">
                                 <span class="cloud-popover__backup-date">${formatCheckpointDate(entry.timestamp)}</span>
                                 <span class="cloud-popover__backup-size">${formatBytes(entry.size)}</span>
+                                <span class="cloud-popover__backup-name">${escapeHtml(entry.name || '')}</span>
                             </div>
                             <div class="cloud-popover__backup-actions">
-                                <button type="button" class="btn btn--compact" data-cloud-restore-id="${escapeHtml(entry.id)}">Restore</button>
+                                <button type="button" class="btn btn--compact" data-cloud-restore-id="${escapeHtml(entry.id)}" data-cloud-restore-name="${escapeHtml(entry.name || '')}">Restore</button>
                                 <button type="button" class="btn btn--compact btn--icon-danger" data-cloud-delete-id="${escapeHtml(entry.id)}">Delete</button>
                             </div>
                         </div>
@@ -982,7 +1080,10 @@ export const CloudBackup = {
 
             this.panel.querySelectorAll('[data-cloud-restore-id]').forEach((btn) => {
                 btn.addEventListener('click', () => {
-                    this.restoreCheckpoint(btn.getAttribute('data-cloud-restore-id'));
+                    this.restoreCheckpoint(
+                        btn.getAttribute('data-cloud-restore-id'),
+                        btn.getAttribute('data-cloud-restore-name')
+                    );
                 });
             });
 
@@ -1053,7 +1154,7 @@ export const CloudBackup = {
             return;
         }
 
-        const config = readConfig() || {};
+        const config = readConfig() || normalizeCloudConfig({});
         const passSession = readPassphraseSession();
         if (config.encryptCheckpoints && !passSession.passphrase) {
             if (!silent) showAppToast('Set a passphrase in Cloud settings first');
@@ -1061,18 +1162,48 @@ export const CloudBackup = {
             return;
         }
 
+        if (!config.notes.enabled && !config.media.enabled && !config.board.enabled && !config.canvas.enabled) {
+            if (!silent) showAppToast('Enable at least one checkpoint part');
+            if (anchor) this.open(anchor);
+            return;
+        }
+
         this.busy = true;
         try {
-            const pkg = await buildBackupPackage();
-            const filename = backupFilename(pkg.timestamp);
-            let json = serializeBackupPackage(pkg);
-            if (config.encryptCheckpoints) {
-                json = await encryptBackupPackage(json, passSession.passphrase);
+            const extras = {};
+            if (config.notes.enabled && config.notes.format === 'txt') {
+                const text = buildTxtContent(this.getItems());
+                extras.notesTxtPayload = {
+                    skipped: false,
+                    isIncremental: false,
+                    nextSnapshot: null,
+                    text,
+                    textForFingerprint: text,
+                    blob: new Blob([text], { type: 'text/plain' }),
+                    filename: 'notes.txt',
+                    timestamp: Math.floor(Date.now() / 1000)
+                };
             }
-            const provider = this.getProvider();
-            await provider.uploadBackup(json, filename);
 
-            config.lastCheckpointAt = pkg.timestamp;
+            const payload = await buildCheckpointExportPayload(config, extras);
+            if (payload.skipped) {
+                if (!silent) showAppToast('Nothing changed');
+                return;
+            }
+
+            let uploadData = payload.blob;
+            let filename = payload.filename;
+            if (config.encryptCheckpoints) {
+                const bytes = new Uint8Array(await payload.blob.arrayBuffer());
+                uploadData = await encryptBackupBytes(bytes, passSession.passphrase);
+                filename = backupFilename(payload.timestamp);
+            }
+
+            const provider = this.getProvider();
+            await provider.uploadBackup(uploadData, filename);
+
+            config.lastCheckpointAt = payload.timestamp;
+            mergeCheckpointPatches(config, payload.patches);
             writeConfig(config);
 
             this.updateButtons();
@@ -1085,7 +1216,7 @@ export const CloudBackup = {
         }
     },
 
-    async restoreCheckpoint(id) {
+    async restoreCheckpoint(id, nameHint = '') {
         if (!id || this.busy) return;
         const confirmed = confirm('Restore this checkpoint? Your current workspace will be replaced.');
         if (!confirmed) return;
@@ -1093,29 +1224,53 @@ export const CloudBackup = {
         this.busy = true;
         try {
             const provider = this.getProvider();
-            const text = await provider.downloadBackup(id);
-            let parsed;
-            let raw;
-            try {
-                raw = JSON.parse(text);
-            } catch {
-                throw new Error('Invalid backup file');
+            const downloaded = await provider.downloadBackup(id);
+            const blob = downloaded instanceof Blob
+                ? downloaded
+                : new Blob([typeof downloaded === 'string' ? downloaded : String(downloaded ?? '')]);
+
+            let name = nameHint || '';
+            if (!name) {
+                try {
+                    const backups = await Promise.resolve(provider.listBackups());
+                    name = backups?.find((entry) => entry.id === id)?.name || '';
+                } catch { /* ignore */ }
             }
-            if (isEncryptedBackupPackage(raw)) {
-                const passSession = readPassphraseSession();
-                let passphrase = passSession.passphrase;
-                if (!passphrase) {
-                    passphrase = prompt('Passphrase for encrypted checkpoint:') || '';
-                }
-                parsed = await decryptBackupPackage(text, passphrase);
+
+            const isZipName = typeof name === 'string' && name.toLowerCase().endsWith('.zip');
+            const looksZip = isZipName || await blobLooksLikeZip(blob);
+
+            if (looksZip) {
+                await importFullBackupArchive(blob);
             } else {
-                parsed = parseBackupPackage(text);
+                const text = await blob.text();
+                let raw;
+                try {
+                    raw = JSON.parse(text);
+                } catch {
+                    throw new Error('Invalid backup file');
+                }
+                if (isEncryptedBackupPackage(raw)) {
+                    const passSession = readPassphraseSession();
+                    let passphrase = passSession.passphrase;
+                    if (!passphrase) {
+                        passphrase = prompt('Passphrase for encrypted checkpoint:') || '';
+                    }
+                    if (raw.encoding === 'bytes' || Number(raw.v) >= 2) {
+                        const bytes = await decryptBackupToBytes(raw, passphrase);
+                        await importFullBackupArchive(new Blob([bytes], { type: 'application/zip' }));
+                    } else {
+                        const parsed = await decryptBackupPackage(text, passphrase);
+                        await applyBackupToStorage(parsed);
+                    }
+                } else {
+                    await applyBackupToStorage(parseBackupPackage(text));
+                }
             }
-            await applyBackupToStorage(parsed);
+
             const storedDb = JSON.parse(localStorage.getItem('matrix_database') || 'null');
             const itemCount = Array.isArray(storedDb?.items) ? storedDb.items.length : 0;
-            const patchNote = parsed.delta ? ' Applied an incremental patch.' : '';
-            alert(`Restore successful (${itemCount} items).${patchNote} Reloading…`);
+            alert(`Restore successful (${itemCount} items). Reloading…`);
             window.location.reload();
         } catch (err) {
             showAppToast(formatCloudError(err));

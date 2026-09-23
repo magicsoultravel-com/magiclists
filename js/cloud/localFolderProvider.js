@@ -160,11 +160,19 @@ export const LocalFolderProvider = {
         return scanBackupFiles();
     },
 
-    async uploadBackup(jsonString, filename) {
+    async uploadBackup(data, filename) {
         if (!dirHandle) throw new Error('Backup folder not configured');
         const fileHandle = await dirHandle.getFileHandle(filename, { create: true });
         const writable = await fileHandle.createWritable();
-        await writable.write(jsonString);
+        if (typeof data === 'string') {
+            await writable.write(data);
+        } else if (data instanceof Blob) {
+            await writable.write(data);
+        } else if (data instanceof ArrayBuffer || ArrayBuffer.isView(data)) {
+            await writable.write(data);
+        } else {
+            await writable.write(String(data ?? ''));
+        }
         await writable.close();
         return { id: filename, name: filename };
     },
@@ -173,7 +181,7 @@ export const LocalFolderProvider = {
         if (!dirHandle) throw new Error('Backup folder not configured');
         const fileHandle = await dirHandle.getFileHandle(id);
         const file = await fileHandle.getFile();
-        return file.text();
+        return file;
     },
 
     async deleteBackup(id) {

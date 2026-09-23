@@ -10,7 +10,6 @@ import {
 const SESSION_KEY = 'matrix_cloud_mega_session';
 const DEFAULT_FOLDER_PATH = ['magicnotes', 'backups'];
 const DOWNLOAD_OPTIONS = { maxConnections: 1 };
-const UTF8_DECODER = new TextDecoder('utf-8');
 
 let megajsModule = null;
 let storage = null;
@@ -181,6 +180,18 @@ function utf8UploadBytes(jsonString) {
     return new TextEncoder().encode(String(jsonString ?? ''));
 }
 
+async function toUploadBytes(data) {
+    if (data instanceof Uint8Array) return data;
+    if (data instanceof ArrayBuffer) return new Uint8Array(data);
+    if (ArrayBuffer.isView(data)) {
+        return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    }
+    if (data instanceof Blob) {
+        return new Uint8Array(await data.arrayBuffer());
+    }
+    return utf8UploadBytes(data);
+}
+
 async function resolveBackupFile(id) {
     const file = storage?.files?.[id];
     if (!file || file.directory) {
@@ -322,9 +333,9 @@ export const MegaProvider = {
         return backupEntries(backupFolder);
     },
 
-    async uploadBackup(jsonString, filename) {
+    async uploadBackup(data, filename) {
         if (!backupFolder) throw new Error('Backup folder not configured');
-        const bytes = utf8UploadBytes(jsonString);
+        const bytes = await toUploadBytes(data);
         const upload = backupFolder.upload({ name: filename, size: bytes.length }, bytes);
         await upload.complete;
         const created = backupFolder.children?.find((entry) => !entry.directory && entry.name === filename);
@@ -340,7 +351,7 @@ export const MegaProvider = {
         for (let attempt = 0; attempt < 2; attempt += 1) {
             try {
                 const buffer = await downloadFileBuffer(file);
-                return UTF8_DECODER.decode(buffer);
+                return new Blob([buffer]);
             } catch (err) {
                 lastErr = err;
                 if (!isMacVerificationError(err) || attempt > 0) break;
