@@ -1549,9 +1549,10 @@ renderQuickActions() {
                         scrollTop: canvas?.scrollTop ?? 0,
                         scrollLeft: canvas?.scrollLeft ?? 0
                     };
-                    import('./noteAttachmentsUi.js').then(({ syncNoteAttachmentsDom }) => {
+                    import('./noteAttachmentsUi.js').then(({ syncNoteAttachmentsDom, syncNoteCanvasDom }) => {
                         const current = AppState.items.find((i) => i.id === liveItem?.id) || liveItem;
                         syncNoteAttachmentsDom(current);
+                        syncNoteCanvasDom(current);
                         const c = document.getElementById('app-canvas');
                         if (c) {
                             c.scrollTop = canvasScroll.scrollTop;

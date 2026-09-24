@@ -82,9 +82,10 @@ export const Editor = {
         const unhid = ensureCanvasVisibleIfContent(live);
         const changed = patchSharedFieldsOntoDraft(this.activeItem, live) || unhid;
         if (!changed) return false;
-        import('./noteAttachmentsUi.js').then(({ syncNoteAttachmentsDom }) => {
+        import('./noteAttachmentsUi.js').then(({ syncNoteAttachmentsDom, syncNoteCanvasDom }) => {
             if (this.activeItem?.id === live.id && !this.overlay?.classList.contains('is-hidden')) {
                 syncNoteAttachmentsDom(this.activeItem);
+                syncNoteCanvasDom(this.activeItem);
             }
         }).catch(() => {});
         return true;
@@ -213,9 +214,9 @@ export const Editor = {
                 NoteSurface.emitItemMutation(live, { preserveView: true, skipRerender: true });
             }
             if (liveUnhid || draftUnhid) {
-                import('./noteAttachmentsUi.js').then(({ syncNoteAttachmentsDom }) => {
+                import('./noteAttachmentsUi.js').then(({ syncNoteCanvasDom }) => {
                     const target = (item?.id && this.resolveLiveItem(item.id)) || this.activeItem;
-                    if (target) syncNoteAttachmentsDom(target);
+                    if (target) syncNoteCanvasDom(target);
                 }).catch(() => {});
             }
         }

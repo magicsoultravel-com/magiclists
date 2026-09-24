@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
     buildNoteAttachmentsSectionHtml,
+    buildNoteCanvasSectionHtml,
     sizeCanvasViewport,
     clampLightboxZoom,
     nextLightboxZoom,
@@ -27,69 +28,75 @@ import {
 import { CARD_ICONS, ACTION_ICONS } from '../js/icons.js';
 import { createDefaultNote } from '../js/noteModel.js';
 
+function sampleCanvas() {
+    return {
+        version: 2,
+        canvasMode: 'infinite',
+        activePageId: 'p1',
+        pages: [{ id: 'p1', format: 'a4', background: 'blank', backgroundColor: '', strokes: [], texts: [], images: [] }],
+        infinite: { strokes: [], texts: [], images: [], background: 'blank', backgroundColor: '', bounds: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 } },
+        viewport: { scale: 1, offsetX: 0, offsetY: 0 }
+    };
+}
+
 describe('noteAttachmentsUi module loads and exports functions', () => {
-    it('buildNoteAttachmentsSectionHtml returns empty for note without attachments or canvas', () => {
+    it('buildNoteAttachmentsSectionHtml returns empty for note without attachments', () => {
         const item = createDefaultNote();
+        item.canvas = sampleCanvas();
         const html = buildNoteAttachmentsSectionHtml(item);
         assert.equal(html, '');
     });
 
-    it('buildNoteAttachmentsSectionHtml renders canvas section for note with canvas', () => {
+    it('buildNoteCanvasSectionHtml renders Canvas section for note with visible canvas', () => {
         const item = createDefaultNote();
-        item.canvas = {
-            version: 2,
-            canvasMode: 'infinite',
-            activePageId: 'p1',
-            pages: [{ id: 'p1', format: 'a4', background: 'blank', backgroundColor: '', strokes: [], texts: [], images: [] }],
-            infinite: { strokes: [], texts: [], images: [], background: 'blank', backgroundColor: '', bounds: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 } },
-            viewport: { scale: 1, offsetX: 0, offsetY: 0 }
-        };
-        const html = buildNoteAttachmentsSectionHtml(item);
-        assert.ok(html.includes('Note canvas'));
+        item.canvas = sampleCanvas();
+        const html = buildNoteCanvasSectionHtml(item);
+        assert.ok(html.includes('data-note-canvas'));
+        assert.ok(html.includes('>Canvas</span>') || html.includes('▼</span>Canvas'));
         assert.ok(html.includes('data-enter-drawing'));
         assert.ok(html.includes('data-reset-media-canvas'));
         assert.ok(html.includes('data-note-canvas-preview'));
+        assert.ok(!html.includes('Note canvas'));
     });
 
-    it('buildNoteAttachmentsSectionHtml renders media list without canvas when no canvas', () => {
+    it('buildNoteAttachmentsSectionHtml renders media list without canvas markup', () => {
         const item = createDefaultNote();
         item.attachments = [{ mediaId: 'm1', attachedAt: 1, expanded: false, scale: 1, x: null, y: null }];
         const html = buildNoteAttachmentsSectionHtml(item);
         assert.ok(html.includes('Media (1)'));
         assert.ok(html.includes('data-expand-media="m1"'));
         assert.ok(!html.includes('data-note-media-canvas'));
+        assert.ok(!html.includes('data-note-canvas'));
     });
 
-    it('buildNoteAttachmentsSectionHtml omits section when canvas is hidden and there are no attachments', () => {
+    it('buildNoteCanvasSectionHtml omits section when canvas is hidden', () => {
         const item = createDefaultNote();
-        item.canvas = {
-            version: 2,
-            canvasMode: 'infinite',
-            activePageId: 'p1',
-            pages: [{ id: 'p1', format: 'a4', background: 'blank', backgroundColor: '', strokes: [], texts: [], images: [] }],
-            infinite: { strokes: [], texts: [], images: [], background: 'blank', backgroundColor: '', bounds: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 } },
-            viewport: { scale: 1, offsetX: 0, offsetY: 0 }
-        };
+        item.canvas = sampleCanvas();
         item.canvasHidden = true;
-        const html = buildNoteAttachmentsSectionHtml(item);
+        const html = buildNoteCanvasSectionHtml(item);
         assert.equal(html, '');
     });
 
-    it('buildNoteAttachmentsSectionHtml keeps canvas hidden sticky when it has content', () => {
+    it('buildNoteCanvasSectionHtml keeps canvas hidden sticky when it has content', () => {
         const item = createDefaultNote();
-        item.canvas = {
-            version: 2,
-            canvasMode: 'infinite',
-            activePageId: 'p1',
-            pages: [{ id: 'p1', format: 'a4', background: 'blank', backgroundColor: '', strokes: [{ id: 's1' }], texts: [], images: [] }],
-            infinite: { strokes: [], texts: [], images: [], background: 'blank', backgroundColor: '', bounds: { minX: 0, minY: 0, maxX: 3000, maxY: 3000 } },
-            viewport: { scale: 1, offsetX: 0, offsetY: 0 }
-        };
+        item.canvas = sampleCanvas();
+        item.canvas.pages[0].strokes = [{ id: 's1' }];
         item.canvasHidden = true;
-        const html = buildNoteAttachmentsSectionHtml(item, { canEdit: true, startCollapsed: false });
-        // Sticky hide: no media section at all when canvas is hidden and there are no attachments.
+        const html = buildNoteCanvasSectionHtml(item, { startCollapsed: false });
         assert.equal(html, '');
         assert.equal(item.canvasHidden, true);
+    });
+
+    it('media and canvas builders are independent for a note with both', () => {
+        const item = createDefaultNote();
+        item.attachments = [{ mediaId: 'm1', attachedAt: 1, expanded: false, scale: 1, x: null, y: null }];
+        item.canvas = sampleCanvas();
+        const media = buildNoteAttachmentsSectionHtml(item);
+        const canvas = buildNoteCanvasSectionHtml(item);
+        assert.ok(media.includes('data-note-attachments'));
+        assert.ok(!media.includes('data-note-canvas'));
+        assert.ok(canvas.includes('data-note-canvas'));
+        assert.ok(!canvas.includes('data-note-attachments'));
     });
 
     it('sizeCanvasViewport sets explicit width and height from the host card', () => {

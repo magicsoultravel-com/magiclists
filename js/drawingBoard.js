@@ -1478,8 +1478,8 @@ export const DrawingBoard = {
                 // Drawing implies the note canvas should be visible on board/modal.
                 it.canvasHidden = false;
             }, { preserveView: true, skipRerender: true });
-            import('./noteAttachmentsUi.js').then(({ syncNoteAttachmentsDom }) => {
-                syncNoteAttachmentsDom(item);
+            import('./noteAttachmentsUi.js').then(({ syncNoteCanvasDom }) => {
+                syncNoteCanvasDom(item);
             }).catch(() => {});
             return;
         }

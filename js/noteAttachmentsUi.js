@@ -140,20 +140,6 @@ function releaseSectionUrls(section) {
     });
 }
 
-function showNoteMediaCanvas(section) {
-    const root = canvasRoot(section);
-    if (!root) return;
-    root.classList.remove('is-hidden');
-    root.hidden = false;
-}
-
-function hideNoteMediaCanvas(section) {
-    const root = canvasRoot(section);
-    if (!root) return;
-    root.classList.add('is-hidden');
-    root.hidden = true;
-}
-
 /**
  * Size the inline note-canvas viewport from the host card box.
  * Sets both width and height so board-grid cards do not collapse to ~2px
@@ -287,14 +273,14 @@ function beginAttachmentTitleEdit(row, mediaId) {
 }
 
 /**
- * @param {HTMLElement} section
+ * @param {HTMLElement} mediaSection
  * @param {HTMLElement} row
  * @param {object} item
  * @param {string} mediaId
  */
-async function expandAttachmentOnCanvas(section, row, item, mediaId) {
+async function expandAttachmentOnCanvas(mediaSection, row, item, mediaId) {
     const expandBtn = row.querySelector('[data-expand-media]');
-    if (!section) return;
+    if (!mediaSection) return;
 
     const added = await addMediaImageToNoteCanvas(item, mediaId);
     if (!added) {
@@ -304,16 +290,16 @@ async function expandAttachmentOnCanvas(section, row, item, mediaId) {
 
     row.classList.add('is-expanded');
     setExpandButtonState(expandBtn, true);
-    showNoteMediaCanvas(section);
-    refreshNoteCanvasPreview(section, item);
+    syncNoteCanvasDom(item);
 }
 
 /**
- * @param {HTMLElement} section
+ * @param {HTMLElement} mediaSection
  * @param {HTMLElement} row
+ * @param {object} item
  * @param {string} mediaId
  */
-function collapseAttachmentFromCanvas(section, row, item, mediaId) {
+function collapseAttachmentFromCanvas(mediaSection, row, item, mediaId) {
     const expandBtn = row.querySelector('[data-expand-media]');
     mutateItem(item, (it) => {
         removeMediaImageFromNoteCanvas(it, mediaId);
@@ -321,12 +307,18 @@ function collapseAttachmentFromCanvas(section, row, item, mediaId) {
     row.classList.remove('is-expanded');
     delete row.dataset.attachScale;
     setExpandButtonState(expandBtn, false);
-    refreshNoteCanvasPreview(section, item);
+    const body = mediaSection?.closest?.('.editor-note-body') || mediaSection?.parentElement;
+    const canvasSection = canvasSectionForBody(body);
+    if (canvasSection) {
+        refreshNoteCanvasPreview(canvasSection, item);
+    } else {
+        syncNoteCanvasDom(item);
+    }
 }
 
-function clearCanvasDom(section) {
-    if (!section) return;
-    section.querySelectorAll('.note-attachment.is-expanded').forEach((row) => {
+function clearExpandedAttachmentRows(mediaSection) {
+    if (!mediaSection) return;
+    mediaSection.querySelectorAll('.note-attachment.is-expanded').forEach((row) => {
         row.classList.remove('is-expanded');
         delete row.dataset.attachScale;
         setExpandButtonState(row.querySelector('[data-expand-media]'), false);
@@ -334,23 +326,16 @@ function clearCanvasDom(section) {
 }
 
 /**
- * Collapsible Media + optional Canvas section.
- * Renders when the note has attachments, or a *visible* canvas document.
- * Hidden canvas with data is sticky: omit the block (and the whole section if
- * there are no attachments) so no blank spacer remains.
+ * Collapsible Media section (attachments list only).
  * @param {object} item
  * @param {{ canEdit?: boolean, startCollapsed?: boolean }} [opts]
  */
 export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCollapsed = true } = {}) {
     const list = normalizeAttachments(item?.attachments);
-    const hasCanvasDoc = !!item?.canvas;
-    const hasVisibleCanvas = hasCanvasDoc && !item?.canvasHidden;
-    if (!list.length && !hasVisibleCanvas) return '';
+    if (!list.length) return '';
 
     const count = list.length;
-    const title = count > 0
-        ? (count === 1 ? 'Media (1)' : `Media (${count})`)
-        : 'Note canvas';
+    const title = count === 1 ? 'Media (1)' : `Media (${count})`;
     const collapsedClass = startCollapsed ? ' collapsed' : '';
     const toggleCollapsed = startCollapsed ? ' collapsed' : '';
 
@@ -377,19 +362,6 @@ export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCo
             </div>`;
     }).join('');
 
-    const canvasBlock = hasVisibleCanvas
-        ? `<div class="note-media-canvas" data-note-media-canvas>
-                        <div class="note-media-canvas__toolbar">
-                            <span class="note-media-canvas__title">Note canvas</span>
-                            <button type="button" class="card-act note-media-canvas__enter-drawing" data-enter-drawing title="Draw in magicCanvas" aria-label="Draw in magicCanvas">${CARD_ICONS.drawingPencil}</button>
-                            <button type="button" class="card-act note-media-canvas__reset" data-reset-media-canvas title="Reset canvas" aria-label="Reset canvas">${CARD_ICONS.zoomReset}</button>
-                        </div>
-                        <div class="note-media-canvas__viewport" data-note-media-viewport>
-                            <canvas class="note-media-canvas__preview" data-note-canvas-preview></canvas>
-                        </div>
-                    </div>`
-        : '';
-
     return `
             <div class="note-body-section note-body-section--media" data-note-attachments>
                 <div class="note-section-header collapsable-header">
@@ -397,7 +369,37 @@ export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCo
                 </div>
                 <div class="note-section-body collapsable-section${collapsedClass}">
                     <div class="note-attachments__list">${rows}</div>
-                    ${canvasBlock}
+                </div>
+            </div>`;
+}
+
+/**
+ * Collapsible Canvas section (preview + draw/reset). Independent from Media.
+ * Hidden canvas with data is sticky: omit the DOM so no blank spacer remains.
+ * @param {object} item
+ * @param {{ startCollapsed?: boolean }} [opts]
+ */
+export function buildNoteCanvasSectionHtml(item, { startCollapsed = true } = {}) {
+    if (!noteHasVisibleCanvas(item)) return '';
+
+    const collapsedClass = startCollapsed ? ' collapsed' : '';
+    const toggleCollapsed = startCollapsed ? ' collapsed' : '';
+
+    return `
+            <div class="note-body-section note-body-section--canvas" data-note-canvas>
+                <div class="note-section-header collapsable-header">
+                    <span class="collapsable-heading"><span class="collapsable-toggle${toggleCollapsed}">▼</span>Canvas</span>
+                </div>
+                <div class="note-section-body collapsable-section${collapsedClass}">
+                    <div class="note-media-canvas" data-note-media-canvas>
+                        <div class="note-media-canvas__toolbar">
+                            <button type="button" class="card-act note-media-canvas__enter-drawing" data-enter-drawing title="Draw in magicCanvas" aria-label="Draw in magicCanvas">${CARD_ICONS.drawingPencil}</button>
+                            <button type="button" class="card-act note-media-canvas__reset" data-reset-media-canvas title="Reset canvas" aria-label="Reset canvas">${CARD_ICONS.zoomReset}</button>
+                        </div>
+                        <div class="note-media-canvas__viewport" data-note-media-viewport>
+                            <canvas class="note-media-canvas__preview" data-note-canvas-preview></canvas>
+                        </div>
+                    </div>
                 </div>
             </div>`;
 }
@@ -418,12 +420,35 @@ function bodyCanEdit(body) {
     return !!(body?.querySelector?.('.card-inline-edit, .sheet-cell-input, .expanded-checklist-add-btn'));
 }
 
-function bodyInModal(body) {
-    return !!(body?.closest?.('#editor-overlay') || body?.id === 'editor-note-body');
+function canvasSectionForBody(body) {
+    return body?.querySelector?.('[data-note-canvas]') || null;
+}
+
+function mediaSectionForBody(body) {
+    return body?.querySelector?.('[data-note-attachments]') || null;
+}
+
+function insertCanvasHtml(body, html) {
+    const media = mediaSectionForBody(body);
+    if (media) media.insertAdjacentHTML('afterend', html);
+    else body.insertAdjacentHTML('beforeend', html);
+}
+
+function restoreSectionCollapse(section, wasCollapsed) {
+    if (!section || wasCollapsed === undefined) return;
+    const sectionBody = section.querySelector('.note-section-body');
+    const toggle = section.querySelector('.collapsable-toggle');
+    if (wasCollapsed) {
+        sectionBody?.classList.add('collapsed');
+        toggle?.classList.add('collapsed');
+    } else {
+        sectionBody?.classList.remove('collapsed');
+        toggle?.classList.remove('collapsed');
+    }
 }
 
 /**
- * Rebuild Media + Canvas section(s) for a note in the live DOM (board + modal).
+ * Rebuild Media section for a note in the live DOM (board + modal).
  * @param {object} item
  */
 export function syncNoteAttachmentsDom(item) {
@@ -432,9 +457,9 @@ export function syncNoteAttachmentsDom(item) {
     for (const body of noteBodiesForItem(item.id)) {
         const canEdit = bodyCanEdit(body);
         const hasAttachments = normalizeAttachments(item?.attachments).length > 0;
-        const startCollapsed = !(hasAttachments || noteHasVisibleCanvas(item));
+        const startCollapsed = !hasAttachments;
         const html = buildNoteAttachmentsSectionHtml(item, { canEdit, startCollapsed });
-        const existing = body.querySelector('[data-note-attachments]');
+        const existing = mediaSectionForBody(body);
         if (!html) {
             releaseSectionUrls(existing);
             existing?.remove();
@@ -444,51 +469,66 @@ export function syncNoteAttachmentsDom(item) {
             releaseSectionUrls(existing);
             const wasCollapsed = existing.querySelector('.note-section-body')?.classList.contains('collapsed');
             existing.outerHTML = html;
-            const next = body.querySelector('[data-note-attachments]');
-            // Keep prior collapse only when there is no visible canvas to show.
-            if (next && wasCollapsed !== undefined && !noteHasVisibleCanvas(item)) {
-                const sectionBody = next.querySelector('.note-section-body');
-                const toggle = next.querySelector('.collapsable-toggle');
-                if (wasCollapsed) {
-                    sectionBody?.classList.add('collapsed');
-                    toggle?.classList.add('collapsed');
-                } else {
-                    sectionBody?.classList.remove('collapsed');
-                    toggle?.classList.remove('collapsed');
-                }
-            }
+            const next = mediaSectionForBody(body);
+            restoreSectionCollapse(next, wasCollapsed);
         } else {
-            body.insertAdjacentHTML('beforeend', html);
+            const canvas = canvasSectionForBody(body);
+            if (canvas) canvas.insertAdjacentHTML('beforebegin', html);
+            else body.insertAdjacentHTML('beforeend', html);
         }
-        const nextSection = body.querySelector('[data-note-attachments]');
         bindNoteAttachments(body, item);
-        if (noteHasVisibleCanvas(item)) {
-            sizeCanvasViewport(nextSection);
-            paintNoteCanvasPreview(nextSection, item);
-        }
     }
 }
 
 /**
- * Sync only the note canvas preview(s) for an item without rebuilding the whole section.
+ * Upsert/remove the independent Canvas section and paint when visible.
  * @param {object} item
  */
 export function syncNoteCanvasDom(item) {
     if (!item?.id) return;
+
     for (const body of noteBodiesForItem(item.id)) {
-        const section = body.querySelector('[data-note-attachments]');
-        if (!section) continue;
-        if (item.canvas && !item.canvasHidden) {
-            showNoteMediaCanvas(section);
+        const startCollapsed = !noteHasVisibleCanvas(item);
+        const html = buildNoteCanvasSectionHtml(item, { startCollapsed });
+        const existing = canvasSectionForBody(body);
+
+        if (!html) {
+            existing?.remove();
+            continue;
+        }
+
+        if (existing) {
+            const wasCollapsed = existing.querySelector('.note-section-body')?.classList.contains('collapsed');
+            existing.outerHTML = html;
+            const next = canvasSectionForBody(body);
+            restoreSectionCollapse(next, wasCollapsed);
+        } else {
+            insertCanvasHtml(body, html);
+        }
+
+        const section = canvasSectionForBody(body);
+        bindNoteCanvas(body, item);
+        if (section && noteHasVisibleCanvas(item)) {
             sizeCanvasViewport(section);
             paintNoteCanvasPreview(section, item);
-        } else {
-            hideNoteMediaCanvas(section);
         }
     }
 }
 
-function bindMediaSectionToggle(section, item) {
+function bindMediaSectionToggle(section) {
+    const header = section?.querySelector('.note-section-header');
+    if (!header || header.dataset.bound === '1') return;
+    header.dataset.bound = '1';
+    header.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const bodyEl = header.nextElementSibling;
+        const toggle = header.querySelector('.collapsable-toggle');
+        bodyEl?.classList.toggle('collapsed');
+        toggle?.classList.toggle('collapsed');
+    });
+}
+
+function bindCanvasSectionToggle(section, item) {
     const header = section?.querySelector('.note-section-header');
     if (!header || header.dataset.bound === '1') return;
     header.dataset.bound = '1';
@@ -499,6 +539,7 @@ function bindMediaSectionToggle(section, item) {
         const collapsed = bodyEl?.classList.toggle('collapsed');
         toggle?.classList.toggle('collapsed');
         if (!collapsed) {
+            sizeCanvasViewport(section);
             paintNoteCanvasPreview(section, item);
         }
     });
@@ -1535,8 +1576,7 @@ export function bindNoteAttachments(root, item) {
     const section = root.querySelector('[data-note-attachments]');
     if (!section) return;
 
-    bindMediaSectionToggle(section, item);
-    paintNoteCanvasPreview(section, item);
+    bindMediaSectionToggle(section);
     bindAttachmentListReorder(section, item);
 
     section.querySelectorAll('.note-attachment[data-media-id]').forEach((row) => {
@@ -1601,41 +1641,54 @@ export function bindNoteAttachments(root, item) {
         });
     });
 
-    if (section.dataset.canvasControlsBound !== '1') {
-        section.dataset.canvasControlsBound = '1';
-        section.addEventListener('click', (e) => {
-            const resetBtn = e.target.closest('[data-reset-media-canvas]');
-            if (resetBtn) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (!confirm('Reset note canvas? This clears media positions and drawings.')) return;
-                mutateItem(item, (it) => {
-                    it.canvas = createEmptyNoteCanvas();
-                    const list = normalizeAttachments(it.attachments);
-                    for (const entry of list) entry.expanded = false;
-                    it.attachments = list;
-                }, { preserveView: true, skipRerender: true });
-                clearCanvasDom(section);
-                refreshNoteCanvasPreview(section, item);
-                return;
-            }
-
-            const drawBtn = e.target.closest('[data-enter-drawing]');
-            if (drawBtn) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (window.opener) {
-                    window.opener.dispatchEvent(new CustomEvent('note:canvas_draw_requested', { detail: { item } }));
-                    showAppToast('Opened drawing workspace in main window');
-                } else {
-                    window.dispatchEvent(new CustomEvent('note:canvas_draw_requested', { detail: { item } }));
-                }
-                return;
-            }
-        });
-    }
-
     hydrateAttachmentRows(section, item).catch(() => {});
+}
+
+/**
+ * Wire Canvas section toggle + draw/reset controls and paint preview.
+ * @param {HTMLElement} root
+ * @param {object} item
+ */
+export function bindNoteCanvas(root, item) {
+    if (!root || !item) return;
+    const section = root.querySelector('[data-note-canvas]');
+    if (!section) return;
+
+    bindCanvasSectionToggle(section, item);
+    paintNoteCanvasPreview(section, item);
+
+    if (section.dataset.canvasControlsBound === '1') return;
+    section.dataset.canvasControlsBound = '1';
+    section.addEventListener('click', (e) => {
+        const resetBtn = e.target.closest('[data-reset-media-canvas]');
+        if (resetBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!confirm('Reset note canvas? This clears media positions and drawings.')) return;
+            mutateItem(item, (it) => {
+                it.canvas = createEmptyNoteCanvas();
+                const list = normalizeAttachments(it.attachments);
+                for (const entry of list) entry.expanded = false;
+                it.attachments = list;
+            }, { preserveView: true, skipRerender: true });
+            const body = section.closest('.editor-note-body') || root;
+            clearExpandedAttachmentRows(mediaSectionForBody(body));
+            refreshNoteCanvasPreview(section, item);
+            return;
+        }
+
+        const drawBtn = e.target.closest('[data-enter-drawing]');
+        if (drawBtn) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (window.opener) {
+                window.opener.dispatchEvent(new CustomEvent('note:canvas_draw_requested', { detail: { item } }));
+                showAppToast('Opened drawing workspace in main window');
+            } else {
+                window.dispatchEvent(new CustomEvent('note:canvas_draw_requested', { detail: { item } }));
+            }
+        }
+    });
 }
 
 async function hydrateAttachmentRows(section, item) {
@@ -1707,7 +1760,7 @@ async function hydrateAttachmentRows(section, item) {
 export function dumpNoteCanvasState() {
     const rows = [];
     document.querySelectorAll('.mini-card[data-id]').forEach((card) => {
-        const section = card.querySelector('[data-note-attachments]');
+        const section = card.querySelector('[data-note-canvas]');
         if (!section) return;
         const block = section.querySelector('[data-note-media-canvas]');
         const viewport = block?.querySelector('[data-note-media-viewport]') || null;

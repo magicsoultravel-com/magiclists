@@ -8,7 +8,7 @@ import { copyPlainTextToClipboard } from './clipboard.js';
 import { stepToPlainCopyLine } from './noteBodyConversion.js';
 import { UndoManager } from './undo.js';
 import { bindNoteBodySections, updateConvertButtons, bindCollapsable } from './noteSurfaceHtml.js';
-import { bindNoteAttachments } from './noteAttachmentsUi.js';
+import { bindNoteAttachments, bindNoteCanvas } from './noteAttachmentsUi.js';
 import { syncItemBodyFromDom, mutateItem, attachNoteBodyInteractions, updateNoteMetaStats, syncInlineFieldToItem, buildSheetInteractionOptions } from './noteSurfaceMutations.js';
 import { normalizeItemForSave } from './noteModel.js';
 import { createBlankChecklistStep } from './noteSurfaceMutations.js';
@@ -539,6 +539,7 @@ export function bindNoteEditorShell(root, item, {
         attachNoteBodyInteractions(body, item, interactionOptions);
         bindNoteBodySections(body);
         bindNoteAttachments(body, item);
+        bindNoteCanvas(body, item);
         attachSheetInteractions(body, item, buildSheetInteractionOptions(shell, item, {
             localOnly,
             onChange,

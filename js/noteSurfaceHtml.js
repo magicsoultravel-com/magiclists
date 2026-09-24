@@ -18,7 +18,7 @@ import { NotePopoutBridge } from './notePopoutBridge.js';
 import { getCardRenderContext } from './categories.js';
 import { DesktopManager } from './desktopManager.js';
 import { flushDesktopAutoSave } from './noteSurfaceMutations.js';
-import { buildNoteAttachmentsSectionHtml } from './noteAttachmentsUi.js';
+import { buildNoteAttachmentsSectionHtml, buildNoteCanvasSectionHtml } from './noteAttachmentsUi.js';
 import { buildNotePlannerSectionHtml } from './plannerUi.js';
 import { normalizeAttachments } from './mediaAttachments.js';
 
@@ -235,9 +235,11 @@ export function resolveNoteBodyVisibility(item, { canEdit = false, inModalEditor
 }
 
 function mediaSectionStartCollapsed(item) {
-    const hasAttachments = normalizeAttachments(item?.attachments).length > 0;
-    const hasVisibleCanvas = !!(item?.canvas && !item?.canvasHidden);
-    return !(hasAttachments || hasVisibleCanvas);
+    return normalizeAttachments(item?.attachments).length === 0;
+}
+
+function canvasSectionStartCollapsed(item) {
+    return !(item?.canvas && !item?.canvasHidden);
 }
 
 function plannerSectionStartCollapsed(item) {
@@ -253,6 +255,9 @@ function appendPlannerAndMediaSections(item, html, { canEdit = false } = {}) {
     out += buildNoteAttachmentsSectionHtml(item, {
         canEdit,
         startCollapsed: mediaSectionStartCollapsed(item)
+    });
+    out += buildNoteCanvasSectionHtml(item, {
+        startCollapsed: canvasSectionStartCollapsed(item)
     });
     return out;
 }
@@ -330,7 +335,7 @@ function bindNoteBodySections(root) {
     root.querySelectorAll('.note-body-section .note-section-header').forEach((header) => {
         // Media/canvas section collapse is owned by noteAttachmentsUi.bindMediaSectionToggle
         // so expand can re-paint the canvas preview. Planner owns its own toggle too.
-        if (header.closest('[data-note-attachments], [data-note-planner]')) return;
+        if (header.closest('[data-note-attachments], [data-note-planner], [data-note-canvas]')) return;
         header.addEventListener('click', (e) => {
             e.stopPropagation();
             const body = header.nextElementSibling;
@@ -389,6 +394,9 @@ function buildMeetingBodyHtml(item, { canEdit = false, inModalEditor = false, ri
     html += buildNoteAttachmentsSectionHtml(item, {
         canEdit,
         startCollapsed: mediaSectionStartCollapsed(item)
+    });
+    html += buildNoteCanvasSectionHtml(item, {
+        startCollapsed: canvasSectionStartCollapsed(item)
     });
     return html;
 }

@@ -269,11 +269,9 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
             drawBtn.setAttribute('aria-pressed', !nextHidden ? 'true' : 'false');
             drawBtn.setAttribute('title', nextHidden ? 'Show note canvas' : 'Hide note canvas');
             drawBtn.setAttribute('aria-label', nextHidden ? 'Show note canvas' : 'Hide note canvas');
-            // Always rebuild the Media section: when canvas was hidden with no
-            // attachments the section may be missing, so syncNoteCanvasDom alone
-            // cannot reveal the preview (looks like a "locked" toggle).
-            import('./noteAttachmentsUi.js').then(({ syncNoteAttachmentsDom }) => {
-                syncNoteAttachmentsDom(item);
+            // Rebuild Canvas section independently (was nested under Media before).
+            import('./noteAttachmentsUi.js').then(({ syncNoteCanvasDom }) => {
+                syncNoteCanvasDom(item);
             }).catch(() => {});
         }, { commit: boardCommit || modalCommit });
     }
