@@ -681,11 +681,17 @@
     overflow: visible;
     pointer-events: auto;
     cursor: grab;
-    color: var(--text-muted);
 }
 
 .note-attachment__actions .note-attachment__grab.grab-handle--step:hover {
     color: var(--text-main);
+    background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+}
+
+.has-custom-bg .note-attachment__compact:hover .note-attachment__grab,
+.has-custom-bg .note-attachment__compact:focus-within .note-attachment__grab,
+.has-custom-bg .note-attachment.is-dragging .note-attachment__grab {
+    color: var(--card-fg);
 }
 
 .note-attachment.is-dragging {
@@ -693,6 +699,7 @@
 }
 
 .note-attachment.is-dragging .note-attachment__grab {
+    opacity: 1;
     cursor: grabbing;
 }
 

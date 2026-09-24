@@ -16,7 +16,7 @@ import { bindFloatResize, mountFloatChrome } from './desktopFloatChrome.js';
 import { raiseDesktopElement } from './desktopStack.js';
 
 const PANEL_STORAGE_KEY = 'matrix_categories_panel';
-const DEFAULT_W = 420;
+const DEFAULT_W = 480;
 const DEFAULT_H = 520;
 const MIN_W = 320;
 const MIN_H = 280;
@@ -199,7 +199,7 @@ function uncategorizedCount(items) {
     return notesForCategory(items, UNCATEGORIZED_CATEGORY).length;
 }
 
-function buildDrawerHtml(cat, { section, notes, expanded }) {
+function buildTileHtml(cat, { section, notes, expanded }) {
     const catName = cat.name;
     const color = isUncategorizedCategory(catName)
         ? UNCATEGORIZED_COLOR
@@ -217,8 +217,8 @@ function buildDrawerHtml(cat, { section, notes, expanded }) {
         ? `<button type="button" class="card-act card-act--color" data-cat-color title="Category color" aria-label="Category color">${CARD_ICONS.color}</button>`
         : '';
     const nameAttrs = canManage
-        ? ' class="categories-panel__drawer-name u-truncate card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Category…"'
-        : ' class="categories-panel__drawer-name u-truncate"';
+        ? ' class="categories-panel__tile-name u-truncate card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Category…"'
+        : ' class="categories-panel__tile-name u-truncate"';
 
     const notesHtml = count
         ? `<ul class="categories-panel__note-list">${notes.map((item) => `
@@ -230,29 +230,30 @@ function buildDrawerHtml(cat, { section, notes, expanded }) {
         : `<p class="categories-panel__note-empty">No notes</p>`;
 
     return `
-    <div class="categories-panel__drawer${expanded ? ' is-expanded' : ''}"
+    <div class="categories-panel__tile${expanded ? ' is-expanded' : ''}"
          data-category="${escapeAttr(catName)}"
          data-section="${escapeAttr(section)}"
-         style="--card-category-color:${escapeAttr(color)}">
-        <div class="categories-panel__drawer-header">
-            <span class="categories-panel__drawer-dot" aria-hidden="true"></span>
-            <span${nameAttrs}>${escapeHTML(catName)}</span>
-            <span class="categories-panel__drawer-count">(${count})</span>
-            <div class="categories-panel__drawer-actions">
+         style="--card-category-color:${escapeAttr(color)}"
+         role="group"
+         aria-label="${escapeAttr(catName)}">
+        <div class="categories-panel__tile-face" data-cat-face title="${expandTitle}">
+            <div class="categories-panel__tile-actions">
                 ${colorBtn}
                 ${hideOrShow}
                 <button type="button" class="card-act" data-cat-toggle title="${expandTitle}" aria-label="${expandTitle}" aria-expanded="${expanded ? 'true' : 'false'}">${expandIcon}</button>
             </div>
+            <span${nameAttrs}>${escapeHTML(catName)}</span>
+            <span class="categories-panel__tile-count">${count} note${count === 1 ? '' : 's'}</span>
         </div>
-        <div class="categories-panel__drawer-body">${notesHtml}</div>
+        <div class="categories-panel__tile-body">${notesHtml}</div>
     </div>`;
 }
 
 function buildGroupHtml(title, section, cats, items) {
-    const drawers = cats.map((cat) => {
+    const tiles = cats.map((cat) => {
         const key = drawerKey(section, cat.name);
         const notes = notesForCategory(items, cat.name);
-        return buildDrawerHtml(cat, {
+        return buildTileHtml(cat, {
             section,
             notes,
             expanded: expandedKeys.has(key)
@@ -265,7 +266,9 @@ function buildGroupHtml(title, section, cats, items) {
             ${escapeHTML(title)}
             <span class="categories-panel__group-count">${cats.length}</span>
         </h3>
-        ${cats.length ? drawers : `<p class="categories-panel__empty">No ${section} categories</p>`}
+        ${cats.length
+            ? `<div class="categories-panel__tile-grid">${tiles}</div>`
+            : `<p class="categories-panel__empty">No ${section} categories</p>`}
     </section>`;
 }
 
@@ -322,7 +325,7 @@ export const CategoriesOverlay = {
         document.addEventListener('keydown', (e) => {
             if (e.key !== 'Escape') return;
             if (!this.isOpen()) return;
-            if (document.activeElement?.closest?.('.categories-panel__drawer-name.card-inline-edit')) return;
+            if (document.activeElement?.closest?.('.categories-panel__tile-name.card-inline-edit')) return;
             e.preventDefault();
             this.close();
         });
@@ -374,11 +377,15 @@ export const CategoriesOverlay = {
 
         panel.addEventListener('click', (e) => {
             const toggleBtn = e.target.closest('[data-cat-toggle]');
-            if (toggleBtn) {
+            const face = !toggleBtn && e.target.closest('[data-cat-face]');
+            if (toggleBtn || face) {
+                if (face && e.target.closest('.categories-panel__tile-name, .categories-panel__tile-actions, .card-act')) {
+                    return;
+                }
                 e.preventDefault();
-                const drawer = toggleBtn.closest('.categories-panel__drawer');
-                const name = drawer?.dataset.category;
-                const section = drawer?.dataset.section;
+                const tile = (toggleBtn || face).closest('.categories-panel__tile');
+                const name = tile?.dataset.category;
+                const section = tile?.dataset.section;
                 if (!name || !section) return;
                 const key = drawerKey(section, name);
                 if (expandedKeys.has(key)) expandedKeys.delete(key);
@@ -390,8 +397,8 @@ export const CategoriesOverlay = {
             const colorBtn = e.target.closest('[data-cat-color]');
             if (colorBtn) {
                 e.preventDefault();
-                const drawer = colorBtn.closest('.categories-panel__drawer');
-                const cat = drawer?.dataset.category;
+                const tile = colorBtn.closest('.categories-panel__tile');
+                const cat = tile?.dataset.category;
                 if (!cat || isUncategorizedCategory(cat)) return;
                 const state = getState?.() || {};
                 ColorPicker.open({
@@ -411,8 +418,8 @@ export const CategoriesOverlay = {
             const hideBtn = e.target.closest('[data-cat-hide]');
             if (hideBtn) {
                 e.preventDefault();
-                const drawer = hideBtn.closest('.categories-panel__drawer');
-                const cat = drawer?.dataset.category;
+                const tile = hideBtn.closest('.categories-panel__tile');
+                const cat = tile?.dataset.category;
                 if (!cat || isUncategorizedCategory(cat)) return;
                 window.dispatchEvent(new CustomEvent('category:hide_requested', { detail: { name: cat } }));
                 return;
@@ -421,8 +428,8 @@ export const CategoriesOverlay = {
             const showBtn = e.target.closest('[data-cat-show]');
             if (showBtn) {
                 e.preventDefault();
-                const drawer = showBtn.closest('.categories-panel__drawer');
-                const cat = drawer?.dataset.category;
+                const tile = showBtn.closest('.categories-panel__tile');
+                const cat = tile?.dataset.category;
                 if (!cat) return;
                 window.dispatchEvent(new CustomEvent('category:show_requested', { detail: { name: cat } }));
                 return;
@@ -440,12 +447,12 @@ export const CategoriesOverlay = {
             }
         });
 
-        const nameSelector = '.categories-panel__drawer-name.card-inline-edit';
+        const nameSelector = '.categories-panel__tile-name.card-inline-edit';
         panel.addEventListener('focusin', (e) => {
             const nameEl = e.target.closest?.(nameSelector);
             if (!nameEl || !panel.contains(nameEl) || nameEl.dataset.renaming === '1') return;
-            const drawer = nameEl.closest('.categories-panel__drawer');
-            const cat = drawer?.dataset.category;
+            const tile = nameEl.closest('.categories-panel__tile');
+            const cat = tile?.dataset.category;
             if (!cat || isUncategorizedCategory(cat)) return;
             nameEl.dataset.renaming = '1';
             nameEl.dataset.renameFrom = cat;

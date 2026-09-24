@@ -76,21 +76,62 @@ function buildFileCabinetCategoryNames(byCategory, activeCategories = []) {
 }
 
 /**
- * Empty active categories default onto the folded rail.
- * If a name is already in order but not filed, the user expanded it — leave open.
+ * Count non-archived notes per category name.
+ * @param {object[]} items
+ * @param {{ desktopId?: number|null }} [opts] — when set, only that desktop
+ * @returns {Map<string, number>}
  */
-export function ensureEmptyCategoriesStartFiled(allCategoryNames, byCategory) {
+function countNotesByCategory(items, { desktopId = null } = {}) {
+    const map = new Map();
+    (Array.isArray(items) ? items : []).forEach((item) => {
+        if (!item || item.status === 'archived') return;
+        if (desktopId != null && (item.desktopId || 1) !== desktopId) return;
+        const cat = getItemCategoryName(item);
+        if (!cat) return;
+        map.set(cat, (map.get(cat) || 0) + 1);
+    });
+    return map;
+}
+
+/**
+ * Empty / off-desktop categories default onto the folded rail.
+ * - Notes only on other desktops → always collapsed (even if the drawer was open).
+ * - Truly empty → seed collapsed; if already in order but not filed, user expanded it — leave open.
+ */
+export function ensureEmptyCategoriesStartFiled(allCategoryNames, byCategory, { allItems = null } = {}) {
     const names = Array.isArray(allCategoryNames) ? allCategoryNames : [];
     if (!names.length) return;
     const filed = getFileCabinetFiledCategories();
     const order = getFileCabinetCategoryOrder();
     let nextFiled = [...filed];
     let changed = false;
+
+    const activeDesktop = DesktopManager.getActiveDesktop();
+    const onActive = allItems ? countNotesByCategory(allItems, { desktopId: activeDesktop }) : null;
+    const global = allItems ? countNotesByCategory(allItems) : null;
+
     names.forEach((name) => {
         const cat = String(name || '').trim();
         if (!cat) return;
-        const count = byCategory?.get?.(cat)?.length || 0;
-        if (count > 0) return;
+        const filedCount = byCategory?.get?.(cat)?.length || 0;
+        if (filedCount > 0) return;
+
+        const notesOnlyOnOtherDesktops = !!(
+            global
+            && onActive
+            && (global.get(cat) || 0) > 0
+            && (onActive.get(cat) || 0) === 0
+        );
+
+        if (notesOnlyOnOtherDesktops) {
+            if (!nextFiled.includes(cat)) {
+                nextFiled.push(cat);
+                changed = true;
+                appendFileCabinetCategoryOrder(cat);
+            }
+            return;
+        }
+
         if (nextFiled.includes(cat)) return;
         if (order.includes(cat)) return; // user expanded empty drawer — keep open
         nextFiled.push(cat);
@@ -1814,7 +1855,7 @@ export function initFileCabinetFoldedHoverPreview(mount, getPreviewContext, sign
     };
 }
 
-export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
+export function renderFileCabinet(mount, filedItems, activeCategories, UI, { allItems = null } = {}) {
     if (!mount) return;
     mount.innerHTML = '';
 
@@ -1828,7 +1869,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
     });
 
     const allCategories = buildFileCabinetCategoryNames(byCategory, activeCategories);
-    ensureEmptyCategoriesStartFiled(allCategories, byCategory);
+    ensureEmptyCategoriesStartFiled(allCategories, byCategory, { allItems });
 
     if (!safeFiledItems.length && !allCategories.length) {
         mount.innerHTML = '<div class="file-cabinet-empty">No filed notes — use File away on a note to add tabs here.</div>';
@@ -2832,7 +2873,7 @@ export function resetFileCabinetLayout(sortBy, items, UI) {
  * @param {Object} UI - The UI object (for passing to partitionItemsForFileCabinet)
  * @returns {Object} Object with boardItems and fileCabinetMount
  */
-export function prepareBoardItems(visibleItems, fileCabinetActive, resolvedMode, activeCategories, UI) {
+export function prepareBoardItems(visibleItems, fileCabinetActive, resolvedMode, activeCategories, UI, allItems = null) {
     let boardItems = visibleItems;
     let fileCabinetMount = null;
     
@@ -2840,7 +2881,9 @@ export function prepareBoardItems(visibleItems, fileCabinetActive, resolvedMode,
         const { filed, expanded } = partitionItemsForFileCabinet(visibleItems, resolvedMode, UI);
         seedFileCabinetOrderFromItems(filed);
         fileCabinetMount = ensureFileCabinetMount(true);
-        renderFileCabinet(fileCabinetMount, filed, activeCategories, UI);
+        renderFileCabinet(fileCabinetMount, filed, activeCategories, UI, {
+            allItems: allItems || visibleItems
+        });
         syncCabinetSplitter();
         boardItems = expanded;
     } else {

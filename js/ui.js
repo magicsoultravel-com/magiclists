@@ -721,7 +721,13 @@ reapplySmallFootprintOnBoard() {
 
         // Always refresh FC for the active desktop before empty-state.
         // FC lives outside #app-canvas; skipping this left the previous desktop's tabs.
-        const { boardItems } = this.prepareBoardItems(visibleItems, fileCabinetActive, resolvedMode, activeCategories);
+        const { boardItems } = this.prepareBoardItems(
+            visibleItems,
+            fileCabinetActive,
+            resolvedMode,
+            activeCategories,
+            safeItems
+        );
 
         if (boardItems.length === 0) {
             this.renderEmptyState(canvas, fileCabinetActive, visibleItems, safeItems);
@@ -769,7 +775,7 @@ reapplySmallFootprintOnBoard() {
         delete canvas.dataset.focusActive;
     },
 
-    prepareBoardItems(visibleItems, fileCabinetActive, resolvedMode, activeCategories) {
+    prepareBoardItems(visibleItems, fileCabinetActive, resolvedMode, activeCategories, allItems = null) {
         let boardItems = visibleItems;
         let fileCabinetMount = null;
          
@@ -777,7 +783,9 @@ reapplySmallFootprintOnBoard() {
             const { filed, expanded } = partitionItemsForFileCabinet(visibleItems, resolvedMode, this);
             seedFileCabinetOrderFromItems(filed);
             fileCabinetMount = ensureFileCabinetMount(true);
-            renderFileCabinet(fileCabinetMount, filed, activeCategories, this);
+            renderFileCabinet(fileCabinetMount, filed, activeCategories, this, {
+                allItems: allItems || visibleItems
+            });
             syncCabinetSplitter();
             boardItems = expanded;
         } else {
