@@ -13,6 +13,7 @@ import { showAppToast } from './toast.js';
  *   blobMissing?: boolean,
  *   showSave?: boolean,
  *   showRemove?: boolean,
+ *   showReorder?: boolean,
  *   saveHidden?: boolean,
  *   layout?: 'overlay' | 'inline-row'
  * }} opts
@@ -26,6 +27,7 @@ export function buildMediaQuickActionsHtml(opts) {
         blobMissing = false,
         showSave = false,
         showRemove = true,
+        showReorder = false,
         saveHidden = false,
         layout = context === 'note-attachment' ? 'inline-row' : 'overlay'
     } = opts;
@@ -39,6 +41,9 @@ export function buildMediaQuickActionsHtml(opts) {
     const removeClass = isNote ? '' : ' card-act--danger';
     const removeAttr = isNote ? 'data-media-action-detach' : 'data-media-action-delete';
 
+    const reorderBtn = (isNote && showReorder)
+        ? '<span class="grab-handle grab-handle--step note-attachment__grab card-act" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>'
+        : '';
     const viewBtn = `<button type="button" class="card-act" data-media-action-view data-media-id="${mediaId}" title="View full size" aria-label="View full size">${CARD_ICONS.show}</button>`;
     const expandInNoteBtn = isNote
         ? `<button type="button" class="card-act note-attachment__expand is-hidden" data-expand-media="${mediaId}" title="Expand in note" aria-label="Expand in note" aria-pressed="false">${CARD_ICONS.expandMedia}</button>`
@@ -55,7 +60,7 @@ export function buildMediaQuickActionsHtml(opts) {
         : '';
 
     if (layout === 'inline-row') {
-        return `<div class="step-row-actions note-attachment__actions">${expandInNoteBtn}${viewBtn}${downloadBtn}${attachBtn}${saveBtn}${removeBtn}</div>`;
+        return `<div class="step-row-actions note-attachment__actions">${reorderBtn}${expandInNoteBtn}${viewBtn}${downloadBtn}${attachBtn}${saveBtn}${removeBtn}</div>`;
     }
 
     const removeBlock = showRemove

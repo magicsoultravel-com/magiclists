@@ -345,16 +345,17 @@ export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCo
             mediaId: entry.mediaId,
             context: 'note-attachment',
             blobMissing: false,
-            showRemove: canEdit
+            showRemove: canEdit,
+            showReorder: canEdit
         });
+        const labelEditable = canEdit ? ' note-attachment__label-btn--editable' : '';
         return `
             <div class="note-attachment" data-media-id="${id}">
                 <div class="note-attachment__compact">
-                    ${canEdit ? '<span class="grab-handle grab-handle--step note-attachment__grab" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>' : ''}
                     <button type="button" class="note-attachment__thumb-btn" data-thumb-media="${id}" title="View full size" aria-label="View full size">
                         <span class="note-attachment__thumb" data-attach-thumb aria-hidden="true"></span>
                     </button>
-                    <button type="button" class="note-attachment__label-btn" data-rename-media="${id}" title="Rename" aria-label="Rename">
+                    <button type="button" class="note-attachment__label-btn${labelEditable}" data-rename-media="${id}" title="Rename" aria-label="Rename">
                         <span class="note-attachment__label" data-attach-label>Loading…</span>
                     </button>
                     ${actions}
