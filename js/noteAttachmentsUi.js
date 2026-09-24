@@ -1408,6 +1408,124 @@ export function closeMediaLightbox() {
 }
 
 /**
+ * Flat-list drag reorder for media attachment rows.
+ * @param {HTMLElement} section
+ * @param {object} item
+ */
+function bindAttachmentListReorder(section, item) {
+    if (!section || !item || section.dataset.attachReorderBound === '1') return;
+    if (!section.querySelector('.note-attachment__grab')) return;
+    section.dataset.attachReorderBound = '1';
+
+    const listEl = () => section.querySelector('.note-attachments__list');
+
+    const hideDropIndicator = () => {
+        section.querySelectorAll('.note-attachment-drop-indicator').forEach((el) => el.remove());
+    };
+
+    const showDropIndicator = (ref, position) => {
+        hideDropIndicator();
+        if (!ref) return;
+        const indicator = document.createElement('div');
+        indicator.className = 'note-attachment-drop-indicator is-visible';
+        indicator.setAttribute('aria-hidden', 'true');
+        if (position === 'after') {
+            ref.insertAdjacentElement('afterend', indicator);
+        } else {
+            ref.insertAdjacentElement('beforebegin', indicator);
+        }
+    };
+
+    const getRows = () => {
+        const list = listEl();
+        if (!list) return [];
+        return [...list.querySelectorAll(':scope > .note-attachment[data-media-id]')];
+    };
+
+    let activeDrag = null;
+
+    const finishDrag = () => {
+        if (!activeDrag) return;
+        const { row, moved } = activeDrag;
+        document.removeEventListener('pointermove', onMove);
+        document.removeEventListener('pointerup', onUp);
+        document.removeEventListener('pointercancel', onUp);
+        document.body.classList.remove('is-checklist-dragging');
+        hideDropIndicator();
+        row?.classList.remove('is-dragging');
+        activeDrag = null;
+
+        if (!moved) return;
+        const orderedIds = getRows().map((r) => r.dataset.mediaId).filter(Boolean);
+        reorderAttachments(item, orderedIds, { syncUi: false });
+    };
+
+    const onMove = (e) => {
+        if (!activeDrag) return;
+        const dy = Math.abs(e.clientY - activeDrag.startY);
+        const dx = Math.abs(e.clientX - activeDrag.startX);
+        if (!activeDrag.moved && dy < 4 && dx < 4) return;
+
+        if (!activeDrag.moved) {
+            activeDrag.moved = true;
+            activeDrag.row.classList.add('is-dragging');
+            document.body.classList.add('is-checklist-dragging');
+        }
+
+        const rows = getRows().filter((r) => r !== activeDrag.row);
+        const list = listEl();
+        if (!list || !rows.length) {
+            hideDropIndicator();
+            return;
+        }
+
+        let insertBefore = null;
+        for (const other of rows) {
+            const rect = other.getBoundingClientRect();
+            const mid = rect.top + rect.height / 2;
+            if (e.clientY < mid) {
+                insertBefore = other;
+                break;
+            }
+        }
+
+        if (insertBefore) {
+            list.insertBefore(activeDrag.row, insertBefore);
+            showDropIndicator(insertBefore, 'before');
+        } else {
+            const last = rows[rows.length - 1];
+            list.appendChild(activeDrag.row);
+            if (last) showDropIndicator(last, 'after');
+            else hideDropIndicator();
+        }
+    };
+
+    const onUp = () => finishDrag();
+
+    section.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return;
+        const handle = e.target.closest('.note-attachment__grab');
+        if (!handle || !section.contains(handle)) return;
+        const row = handle.closest('.note-attachment[data-media-id]');
+        if (!row || !listEl()?.contains(row)) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        activeDrag = {
+            row,
+            startX: e.clientX,
+            startY: e.clientY,
+            moved: false
+        };
+
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+        document.addEventListener('pointercancel', onUp);
+    }, true);
+}
+
+/**
  * Fill titles/thumbs and wire open/detach/expand/zoom/lightbox.
  * @param {HTMLElement} root
  * @param {object} item
@@ -1419,6 +1537,7 @@ export function bindNoteAttachments(root, item) {
 
     bindMediaSectionToggle(section, item);
     paintNoteCanvasPreview(section, item);
+    bindAttachmentListReorder(section, item);
 
     section.querySelectorAll('.note-attachment[data-media-id]').forEach((row) => {
         const mediaId = row.dataset.mediaId;
