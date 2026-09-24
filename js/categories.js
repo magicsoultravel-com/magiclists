@@ -14,13 +14,32 @@ export function createCategoryId() {
     return `cat_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/** Resolve createdAt from explicit field or id timestamp (`cat_<ms>_…`). */
+export function resolveCategoryCreatedAt(cat) {
+    const raw = cat?.createdAt;
+    if (raw != null && Number.isFinite(Number(raw))) return Number(raw);
+    const id = typeof cat?.id === 'string' ? cat.id : '';
+    const match = /^cat_(\d+)_/.exec(id);
+    if (match) return Number(match[1]);
+    if (id === UNCATEGORIZED_CATEGORY_ID || isUncategorizedCategory(cat?.name)) return 0;
+    return 0;
+}
+
 function assignCategoryId(cat) {
     if (!cat || typeof cat !== 'object') return cat;
     if (isUncategorizedCategory(cat.name)) {
-        return { ...cat, id: UNCATEGORIZED_CATEGORY_ID, color: cat.color || UNCATEGORIZED_COLOR };
+        return {
+            ...cat,
+            id: UNCATEGORIZED_CATEGORY_ID,
+            color: cat.color || UNCATEGORIZED_COLOR,
+            createdAt: resolveCategoryCreatedAt({ ...cat, id: UNCATEGORIZED_CATEGORY_ID })
+        };
     }
-    if (typeof cat.id === 'string' && cat.id.trim()) return cat;
-    return { ...cat, id: createCategoryId() };
+    const withId = (typeof cat.id === 'string' && cat.id.trim())
+        ? cat
+        : { ...cat, id: createCategoryId() };
+    const createdAt = resolveCategoryCreatedAt(withId) || Date.now();
+    return { ...withId, createdAt };
 }
 
 export function normalizeCategories(categories, { keepEmpty = false } = {}) {
@@ -375,7 +394,7 @@ export function addCategoryToRegistry(name, color, existingCategories = []) {
     const cleanColor = color && String(color).trim() ? String(color).trim() : UNCATEGORIZED_COLOR;
     return writeStoredCategories([
         ...(existingCategories || []),
-        { name: validation.cleanName, color: cleanColor }
+        { name: validation.cleanName, color: cleanColor, createdAt: Date.now() }
     ], { keepEmpty: true });
 }
 

@@ -7,6 +7,7 @@ import {
     isUncategorizedCategory,
     renameCategory,
     resolveCategoryColor,
+    resolveCategoryCreatedAt,
     validateNewCategoryName
 } from './categories.js';
 import { getItemCategoryName } from './focusFilter.js';
@@ -14,23 +15,88 @@ import { ColorPicker, PALETTE_NOTE } from './colorPicker.js';
 import { noteDisplayTitle } from './mediaAttachments.js';
 import { bindFloatResize, mountFloatChrome } from './desktopFloatChrome.js';
 import { raiseDesktopElement } from './desktopStack.js';
+import { buildFileCabinetRolloutStack } from './fileCabinet.js';
 
 const PANEL_STORAGE_KEY = 'matrix_categories_panel';
+const SORT_STORAGE_KEY = 'matrix_categories_panel_sort';
 const DEFAULT_W = 480;
 const DEFAULT_H = 520;
 const MIN_W = 320;
 const MIN_H = 280;
 
+const SORT_OPTIONS = [
+    { value: 'name-asc', label: 'Name A–Z' },
+    { value: 'name-desc', label: 'Name Z–A' },
+    { value: 'date-desc', label: 'Newest' },
+    { value: 'date-asc', label: 'Oldest' },
+    { value: 'notes-desc', label: 'Most notes' },
+    { value: 'notes-asc', label: 'Fewest notes' }
+];
+
 let panel = null;
 /** @type {null | (() => { categories: Array, hiddenCategories: string[], items: object[] })} */
 let getState = null;
+/** @type {null | (() => object|null)} */
+let getUI = null;
 /** @type {Set<string>} session-local expanded drawer keys (`active:Name` / `hidden:Name`) */
 const expandedKeys = new Set();
 let floatChromeBound = false;
 let focusAddOnOpen = false;
+/** @type {HTMLElement|null} */
+let previewTile = null;
+let currentSort = 'name-asc';
 
 function clamp(n, min, max) {
     return Math.min(max, Math.max(min, n));
+}
+
+function loadSort() {
+    try {
+        const raw = localStorage.getItem(SORT_STORAGE_KEY) || 'name-asc';
+        return SORT_OPTIONS.some((o) => o.value === raw) ? raw : 'name-asc';
+    } catch {
+        return 'name-asc';
+    }
+}
+
+function saveSort(value) {
+    currentSort = value;
+    try {
+        localStorage.setItem(SORT_STORAGE_KEY, value);
+    } catch {
+        /* ignore */
+    }
+}
+
+function formatCreatedDate(ts) {
+    const n = Number(ts);
+    if (!Number.isFinite(n) || n <= 0) return '—';
+    try {
+        return new Date(n).toLocaleDateString(undefined, {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+        });
+    } catch {
+        return '—';
+    }
+}
+
+function sortCategories(cats, items) {
+    const [field, dir] = String(currentSort || 'name-asc').split('-');
+    const factor = dir === 'desc' ? -1 : 1;
+    return [...cats].sort((a, b) => {
+        if (field === 'notes') {
+            const na = notesForCategory(items, a.name).length;
+            const nb = notesForCategory(items, b.name).length;
+            if (na !== nb) return (na - nb) * factor;
+        } else if (field === 'date') {
+            const da = resolveCategoryCreatedAt(a);
+            const db = resolveCategoryCreatedAt(b);
+            if (da !== db) return (da - db) * factor;
+        }
+        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) * (field === 'name' ? factor : 1);
+    });
 }
 
 function loadPanelGeom() {
@@ -206,6 +272,7 @@ function buildTileHtml(cat, { section, notes, expanded }) {
         : (cat.color || resolveCategoryColor(catName, [cat]) || UNCATEGORIZED_COLOR);
     const canManage = !isUncategorizedCategory(catName);
     const count = notes.length;
+    const createdLabel = formatCreatedDate(resolveCategoryCreatedAt(cat));
     const expandIcon = expanded ? CARD_ICONS.collapse : CARD_ICONS.expand;
     const expandTitle = expanded ? 'Collapse' : 'Expand';
     const hideOrShow = section === 'hidden'
@@ -244,13 +311,15 @@ function buildTileHtml(cat, { section, notes, expanded }) {
             </div>
             <span${nameAttrs}>${escapeHTML(catName)}</span>
             <span class="categories-panel__tile-count">${count} note${count === 1 ? '' : 's'}</span>
+            <span class="categories-panel__tile-date" title="Created">${escapeHTML(createdLabel)}</span>
         </div>
         <div class="categories-panel__tile-body">${notesHtml}</div>
     </div>`;
 }
 
 function buildGroupHtml(title, section, cats, items) {
-    const tiles = cats.map((cat) => {
+    const sorted = sortCategories(cats, items);
+    const tiles = sorted.map((cat) => {
         const key = drawerKey(section, cat.name);
         const notes = notesForCategory(items, cat.name);
         return buildTileHtml(cat, {
@@ -270,6 +339,68 @@ function buildGroupHtml(title, section, cats, items) {
             ? `<div class="categories-panel__tile-grid">${tiles}</div>`
             : `<p class="categories-panel__empty">No ${section} categories</p>`}
     </section>`;
+}
+
+function hideTilePreview() {
+    if (!panel) return;
+    panel.querySelectorAll('.categories-panel__tile.is-fold-preview').forEach((tile) => {
+        tile.classList.remove('is-fold-preview');
+    });
+    const host = panel.querySelector('[data-categories-preview-host]');
+    if (host) {
+        host.innerHTML = '';
+        host.classList.add('is-hidden');
+        host.setAttribute('aria-hidden', 'true');
+    }
+    previewTile = null;
+}
+
+function showTilePreview(tile) {
+    if (!panel || !tile || !tile.isConnected) return;
+    if (tile.classList.contains('is-expanded')) return;
+    const catName = tile.dataset.category;
+    if (!catName) return;
+
+    const state = getState?.() || {};
+    const notes = notesForCategory(state.items || [], catName);
+    if (!notes.length) return;
+
+    const UI = getUI?.();
+    if (!UI) return;
+
+    let host = panel.querySelector('[data-categories-preview-host]');
+    if (!host) {
+        host = document.createElement('div');
+        host.className = 'categories-panel__preview-host';
+        host.dataset.categoriesPreviewHost = '';
+        panel.appendChild(host);
+    }
+
+    if (previewTile && previewTile !== tile) {
+        previewTile.classList.remove('is-fold-preview');
+    }
+    previewTile = tile;
+    tile.classList.add('is-fold-preview');
+
+    const rect = tile.getBoundingClientRect();
+    const color = tile.style.getPropertyValue('--card-category-color') || UNCATEGORIZED_COLOR;
+    host.style.setProperty('--card-category-color', color);
+    host.style.left = `${Math.round(rect.left)}px`;
+    host.style.top = `${Math.round(rect.bottom - 2)}px`;
+    host.style.minWidth = `${Math.round(rect.width)}px`;
+    host.classList.remove('is-hidden');
+    host.setAttribute('aria-hidden', 'false');
+
+    if (!host.querySelector('.file-cabinet-tab-stack') || host.dataset.previewCategory !== catName) {
+        host.dataset.previewCategory = catName;
+        host.innerHTML = '';
+        host.appendChild(buildFileCabinetRolloutStack({
+            catName,
+            items: notes,
+            activeCategories: state.categories || [],
+            UI
+        }));
+    }
 }
 
 function commitNameEdit(nameEl, { revert = false } = {}) {
@@ -316,6 +447,8 @@ export const CategoriesOverlay = {
             hiddenCategories: [],
             items: []
         });
+        getUI = typeof opts.getUI === 'function' ? opts.getUI : () => null;
+        currentSort = loadSort();
 
         applySavedGeometry();
         this.renderChrome();
@@ -341,12 +474,26 @@ export const CategoriesOverlay = {
     renderChrome() {
         if (!panel) return;
         const header = panel.querySelector('[data-categories-header]');
-        if (header && !header.querySelector('.categories-panel__title')) {
-            header.innerHTML = `
-                <h2 class="categories-panel__title">Categories</h2>
-                <p class="categories-panel__summary" data-categories-summary></p>
-            `;
+        if (header) {
+            if (!header.querySelector('.categories-panel__title')) {
+                header.innerHTML = `
+                    <h2 class="categories-panel__title">Categories</h2>
+                    <p class="categories-panel__summary" data-categories-summary></p>
+                `;
+            }
+            if (!header.querySelector('[data-categories-sort]')) {
+                header.insertAdjacentHTML('beforeend', `
+                    <label class="categories-panel__sort">
+                        <span class="categories-panel__sort-label">Sort</span>
+                        <select class="categories-panel__sort-select" data-categories-sort aria-label="Sort categories">
+                            ${SORT_OPTIONS.map((o) => `<option value="${escapeAttr(o.value)}">${escapeHTML(o.label)}</option>`).join('')}
+                        </select>
+                    </label>
+                `);
+            }
         }
+        const sortSelect = panel.querySelector('[data-categories-sort]');
+        if (sortSelect) sortSelect.value = currentSort;
         const drag = panel.querySelector('[data-categories-drag]');
         if (drag) drag.innerHTML = CARD_ICONS.drag;
         const closeBtn = panel.querySelector('[data-categories-close]');
@@ -375,6 +522,32 @@ export const CategoriesOverlay = {
             this.submitAdd();
         });
 
+        panel.querySelector('[data-categories-sort]')?.addEventListener('change', (e) => {
+            const value = e.target?.value;
+            if (!SORT_OPTIONS.some((o) => o.value === value)) return;
+            saveSort(value);
+            this.refresh();
+        });
+
+        panel.addEventListener('pointerover', (e) => {
+            const tile = e.target.closest('.categories-panel__tile');
+            const host = e.target.closest('[data-categories-preview-host]');
+            if (host) return;
+            if (!tile || !panel.contains(tile)) return;
+            if (e.relatedTarget && tile.contains(e.relatedTarget)) return;
+            showTilePreview(tile);
+        });
+
+        panel.addEventListener('pointerout', (e) => {
+            const tile = e.target.closest('.categories-panel__tile');
+            const host = e.target.closest('[data-categories-preview-host]');
+            const related = e.relatedTarget;
+            if (related?.closest?.('[data-categories-preview-host], .categories-panel__tile.is-fold-preview')) {
+                return;
+            }
+            if (host || tile) hideTilePreview();
+        });
+
         panel.addEventListener('click', (e) => {
             const toggleBtn = e.target.closest('[data-cat-toggle]');
             const face = !toggleBtn && e.target.closest('[data-cat-face]');
@@ -390,6 +563,7 @@ export const CategoriesOverlay = {
                 const key = drawerKey(section, name);
                 if (expandedKeys.has(key)) expandedKeys.delete(key);
                 else expandedKeys.add(key);
+                hideTilePreview();
                 this.refresh();
                 return;
             }
@@ -506,6 +680,7 @@ export const CategoriesOverlay = {
 
     close() {
         if (!panel) return;
+        hideTilePreview();
         savePanelGeom();
         panel.classList.remove('is-open');
         panel.classList.add('is-hidden');
@@ -559,6 +734,7 @@ export const CategoriesOverlay = {
 
     refresh() {
         if (!panel) return;
+        hideTilePreview();
         const state = getState?.() || {};
         const categories = Array.isArray(state.categories) ? state.categories : [];
         const hiddenSet = Array.isArray(state.hiddenCategories) ? state.hiddenCategories : [];
@@ -578,6 +754,8 @@ export const CategoriesOverlay = {
         if (summaryEl) {
             summaryEl.textContent = `${active.length} active · ${hidden.length} hidden · ${uncat} uncategorized`;
         }
+        const sortSelect = panel.querySelector('[data-categories-sort]');
+        if (sortSelect && sortSelect.value !== currentSort) sortSelect.value = currentSort;
 
         const body = panel.querySelector('[data-categories-body]');
         if (body) {

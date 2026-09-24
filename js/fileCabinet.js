@@ -1692,7 +1692,7 @@ function buildFileCabinetCategoryColumn({
     return col;
 }
 
-function buildFileCabinetRolloutStack({ catName, items, activeCategories, UI }) {
+export function buildFileCabinetRolloutStack({ catName, items, activeCategories, UI }) {
     const label = getLabelRect();
 
     const stack = document.createElement('div');

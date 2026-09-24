@@ -64,7 +64,7 @@
 .categories-panel__header {
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.25rem;
     flex-shrink: 0;
     cursor: grab;
     padding-right: 3.5rem;
@@ -72,6 +72,32 @@
 
 .categories-panel__header:active {
     cursor: grabbing;
+}
+
+.categories-panel__sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.15rem;
+    cursor: default;
+    align-self: flex-start;
+}
+
+.categories-panel__sort-label {
+    font-size: calc(0.55rem * var(--note-font-scale, 1));
+    opacity: 0.7;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.categories-panel__sort-select {
+    padding: 0.2rem 0.4rem;
+    border-radius: 5px;
+    border: 1px solid color-mix(in srgb, var(--text-primary) 18%, transparent);
+    background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+    color: var(--text-primary);
+    font-size: calc(0.58rem * var(--note-font-scale, 1));
+    cursor: pointer;
 }
 
 .categories-panel__drag {
@@ -187,12 +213,13 @@
     font-size: calc(0.58rem * var(--note-font-scale, 1));
 }
 
-/* Adaptive equal-width square tiles */
+/* Adaptive equal-width square tiles (~33% smaller) */
 .categories-panel__tile-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 5.75rem), 1fr));
-    gap: 0.45rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 3.85rem), 1fr));
+    gap: 0.4rem;
     align-items: start;
+    overflow: visible;
 }
 
 .categories-panel__tile {
@@ -202,13 +229,14 @@
     flex-direction: column;
     min-width: 0;
     aspect-ratio: 1;
-    border-radius: 10px;
+    border-radius: 8px;
     border: 1px solid color-mix(in srgb, #000 18%, var(--card-category-color, #64748b));
     background: var(--card-category-color, #64748b);
     color: var(--cat-tile-fg);
     box-shadow: 0 2px 8px color-mix(in srgb, #000 22%, transparent);
-    overflow: hidden;
+    overflow: visible;
     transition: transform 0.12s ease, box-shadow 0.12s ease;
+    z-index: 1;
 }
 
 .categories-panel__tile[data-section="hidden"] {
@@ -216,15 +244,19 @@
     filter: saturate(0.85);
 }
 
-.categories-panel__tile:hover {
+.categories-panel__tile:hover,
+.categories-panel__tile.is-fold-preview {
     transform: translateY(-1px);
     box-shadow: 0 4px 14px color-mix(in srgb, #000 28%, transparent);
+    z-index: 20;
 }
 
 .categories-panel__tile.is-expanded {
     aspect-ratio: auto;
     grid-column: 1 / -1;
-    min-height: 5.75rem;
+    min-height: 3.85rem;
+    overflow: hidden;
+    z-index: 1;
 }
 
 .categories-panel__tile-face {
@@ -233,28 +265,31 @@
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
-    gap: 0.15rem;
-    padding: 0.55rem 0.55rem 0.5rem;
+    gap: 0.1rem;
+    padding: 0.4rem 0.4rem 0.35rem;
     min-height: 0;
     cursor: pointer;
+    border-radius: 8px;
+    overflow: hidden;
     background:
         linear-gradient(
             180deg,
-            transparent 35%,
-            color-mix(in srgb, #000 42%, transparent) 100%
+            transparent 28%,
+            color-mix(in srgb, #000 48%, transparent) 100%
         );
 }
 
 .categories-panel__tile.is-expanded .categories-panel__tile-face {
     flex: 0 0 auto;
-    min-height: 3.25rem;
+    min-height: 2.4rem;
     cursor: default;
+    border-radius: 8px 8px 0 0;
 }
 
 .categories-panel__tile-name {
     font-weight: 700;
-    font-size: calc(0.72rem * var(--note-font-scale, 1));
-    line-height: 1.2;
+    font-size: calc(0.58rem * var(--note-font-scale, 1));
+    line-height: 1.15;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -274,15 +309,24 @@
 }
 
 .categories-panel__tile-count {
-    font-size: calc(0.58rem * var(--note-font-scale, 1));
+    font-size: calc(0.48rem * var(--note-font-scale, 1));
     opacity: 0.9;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
+.categories-panel__tile-date {
+    font-size: calc(0.44rem * var(--note-font-scale, 1));
+    opacity: 0.8;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .categories-panel__tile-actions {
     position: absolute;
-    top: 0.3rem;
-    right: 0.3rem;
+    top: 0.2rem;
+    right: 0.2rem;
     display: inline-flex;
     align-items: center;
     gap: 0.05rem;
@@ -299,8 +343,8 @@
 }
 
 .categories-panel__tile-actions .card-act {
-    width: 1.4rem;
-    height: 1.4rem;
+    width: 1.2rem;
+    height: 1.2rem;
     color: #fff;
     background: color-mix(in srgb, #000 35%, transparent);
     border-radius: 999px;
@@ -312,12 +356,40 @@
 
 .categories-panel__tile-body {
     display: none;
-    padding: 0 0.55rem 0.55rem;
+    padding: 0 0.4rem 0.4rem;
     background: color-mix(in srgb, #000 28%, transparent);
 }
 
 .categories-panel__tile.is-expanded .categories-panel__tile-body {
     display: block;
+}
+
+/* FC-style folded drawer preview (fixed host escapes scroll clip) */
+.categories-panel__preview-host {
+    position: fixed;
+    z-index: 80;
+    overflow: visible;
+    pointer-events: auto;
+    border-radius: 0 0 0.3rem 0.3rem;
+    background-color: color-mix(
+        in srgb,
+        var(--card-category-color, var(--accent-color)) 16%,
+        color-mix(in srgb, var(--bg-surface, var(--surface-elevated)) 90%, var(--bg-primary, #121214))
+    );
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+    padding: 0.25rem;
+}
+
+.categories-panel__preview-host.is-hidden {
+    display: none !important;
+}
+
+.categories-panel__preview-host .file-cabinet-tab-stack {
+    position: relative;
+}
+
+.categories-panel__tile.is-expanded {
+    overflow: hidden;
 }
 
 .categories-panel__note-list {
@@ -360,22 +432,22 @@
 /* Wider panel → larger equal tiles (follows panel width, not viewport) */
 @container categories-body (min-width: 360px) {
     .categories-panel__tile-grid {
-        grid-template-columns: repeat(auto-fill, minmax(min(100%, 6.5rem), 1fr));
-        gap: 0.55rem;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 4.35rem), 1fr));
+        gap: 0.45rem;
     }
 }
 
 @container categories-body (min-width: 520px) {
     .categories-panel__tile-grid {
-        grid-template-columns: repeat(auto-fill, minmax(min(100%, 7.25rem), 1fr));
-        gap: 0.65rem;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 4.85rem), 1fr));
+        gap: 0.5rem;
     }
 }
 
 @container categories-body (min-width: 680px) {
     .categories-panel__tile-grid {
-        grid-template-columns: repeat(auto-fill, minmax(min(100%, 8rem), 1fr));
-        gap: 0.75rem;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 5.35rem), 1fr));
+        gap: 0.55rem;
     }
 }
 

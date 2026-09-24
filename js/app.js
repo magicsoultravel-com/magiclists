@@ -192,7 +192,8 @@ BootProgress.set(85, 'Workspace…');
                     categories: AppState.categories,
                     hiddenCategories: AppState.hiddenCategories,
                     items: AppState.items
-                })
+                }),
+                getUI: () => UI
             });
             MediaPasteCatcher.init();
             bindMediaFilePickers();
