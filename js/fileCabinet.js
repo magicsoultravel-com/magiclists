@@ -76,72 +76,6 @@ function buildFileCabinetCategoryNames(byCategory, activeCategories = []) {
     return applyFileCabinetCategoryOrder(list);
 }
 
-/**
- * Count non-archived notes per category name.
- * @param {object[]} items
- * @param {{ desktopId?: number|null }} [opts] — when set, only that desktop
- * @returns {Map<string, number>}
- */
-function countNotesByCategory(items, { desktopId = null } = {}) {
-    const map = new Map();
-    (Array.isArray(items) ? items : []).forEach((item) => {
-        if (!item || item.status === 'archived') return;
-        if (desktopId != null && (item.desktopId || 1) !== desktopId) return;
-        const cat = getItemCategoryName(item);
-        if (!cat) return;
-        map.set(cat, (map.get(cat) || 0) + 1);
-    });
-    return map;
-}
-
-/**
- * Empty / off-desktop categories default onto the folded rail.
- * - Notes only on other desktops → always collapsed (even if the drawer was open).
- * - Truly empty → seed collapsed; if already in order but not filed, user expanded it — leave open.
- */
-export function ensureEmptyCategoriesStartFiled(allCategoryNames, byCategory, { allItems = null } = {}) {
-    const names = Array.isArray(allCategoryNames) ? allCategoryNames : [];
-    if (!names.length) return;
-    const filed = getFileCabinetFiledCategories();
-    const order = getFileCabinetCategoryOrder();
-    let nextFiled = [...filed];
-    let changed = false;
-
-    const activeDesktop = DesktopManager.getActiveDesktop();
-    const onActive = allItems ? countNotesByCategory(allItems, { desktopId: activeDesktop }) : null;
-    const global = allItems ? countNotesByCategory(allItems) : null;
-
-    names.forEach((name) => {
-        const cat = String(name || '').trim();
-        if (!cat) return;
-        const filedCount = byCategory?.get?.(cat)?.length || 0;
-        if (filedCount > 0) return;
-
-        const notesOnlyOnOtherDesktops = !!(
-            global
-            && onActive
-            && (global.get(cat) || 0) > 0
-            && (onActive.get(cat) || 0) === 0
-        );
-
-        if (notesOnlyOnOtherDesktops) {
-            if (!nextFiled.includes(cat)) {
-                nextFiled.push(cat);
-                changed = true;
-                appendFileCabinetCategoryOrder(cat);
-            }
-            return;
-        }
-
-        if (nextFiled.includes(cat)) return;
-        if (order.includes(cat)) return; // user expanded empty drawer — keep open
-        nextFiled.push(cat);
-        changed = true;
-        appendFileCabinetCategoryOrder(cat);
-    });
-    if (changed) saveFileCabinetFiledCategories(nextFiled);
-}
-
 /** Mark a category as filed (collapsed) on the rail; used when adding empty cats. */
 export function seedCategoryAsFiled(name) {
     const cat = String(name || '').trim();
@@ -1894,7 +1828,6 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI, { all
     });
 
     const allCategories = buildFileCabinetCategoryNames(byCategory, activeCategories);
-    ensureEmptyCategoriesStartFiled(allCategories, byCategory, { allItems });
 
     if (!safeFiledItems.length && !allCategories.length) {
         mount.innerHTML = '<div class="file-cabinet-empty">No filed notes — use File away on a note to add tabs here.</div>';
@@ -1987,14 +1920,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI, { all
     emptyBody.className = 'file-cabinet-empty-shelves__body';
     emptyBody.hidden = emptyShelvesCollapsed;
 
-    // Keep empty shelves filed so they stay in this group (not open empty columns)
-    const filedSet = new Set(getFileCabinetFiledCategories());
-    const toSeed = emptyShelfNames.filter((name) => !filedSet.has(name));
-    if (toSeed.length) {
-        toSeed.forEach((name) => appendFileCabinetCategoryOrder(name));
-        saveFileCabinetFiledCategories([...filedSet, ...toSeed]);
-    }
-
+    // EMPTY is display-only from emptyShelfNames — do not write fold state here.
     emptyShelfNames.forEach((catName) => appendFiledSlot(catName, emptyBody, { emptyShelf: true }));
     if (!emptyShelfNames.length) {
         const emptyMsg = document.createElement('div');
