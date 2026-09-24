@@ -139,6 +139,11 @@
     gap: 0.3rem;
 }
 
+.file-cabinet-empty-shelves.is-collapsed .file-cabinet-empty-shelves__body,
+.file-cabinet-empty-shelves__body[hidden] {
+    display: none !important;
+}
+
 .file-cabinet-empty-shelves__none {
     padding: 0.2rem 0.25rem 0.35rem;
     font-size: 0.58rem;

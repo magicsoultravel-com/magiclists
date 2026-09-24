@@ -381,7 +381,7 @@ function buildActiveGroupsHtml(activeCats, items) {
             groupId: 'active',
             emptyLabel: 'No categories with notes'
         }),
-        buildGroupHtml('Empty shelves', 'active', empty, items, {
+        buildGroupHtml('EMPTY', 'active', empty, items, {
             collapsible: true,
             collapsed: emptyShelvesCollapsed,
             groupId: 'empty',

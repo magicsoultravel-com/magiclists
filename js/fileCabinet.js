@@ -1979,8 +1979,8 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI, { all
     emptyHeader.type = 'button';
     emptyHeader.className = 'file-cabinet-empty-shelves__toggle';
     emptyHeader.setAttribute('aria-expanded', emptyShelvesCollapsed ? 'false' : 'true');
-    emptyHeader.title = emptyShelvesCollapsed ? 'Show empty shelves' : 'Hide empty shelves';
-    emptyHeader.innerHTML = `<span class="file-cabinet-empty-shelves__chevron" aria-hidden="true">${CARD_ICONS.chevronDown}</span><span class="file-cabinet-empty-shelves__label">Empty shelves</span><span class="file-cabinet-empty-shelves__count">${emptyShelfNames.length}</span>`;
+    emptyHeader.title = emptyShelvesCollapsed ? 'Show empty' : 'Hide empty';
+    emptyHeader.innerHTML = `<span class="file-cabinet-empty-shelves__chevron" aria-hidden="true">${CARD_ICONS.chevronDown}</span><span class="file-cabinet-empty-shelves__label">EMPTY</span><span class="file-cabinet-empty-shelves__count">${emptyShelfNames.length}</span>`;
     emptyGroup.appendChild(emptyHeader);
 
     const emptyBody = document.createElement('div');
