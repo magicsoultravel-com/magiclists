@@ -33,6 +33,7 @@ export const FILE_CABINET_FILED_CATEGORIES_KEY = 'matrix_file_cabinet_filed_cate
 export const FILE_CABINET_CATEGORY_ORDER_KEY = 'matrix_file_cabinet_category_order';
 export const FILE_CABINET_HEIGHT_KEY = 'matrix_file_cabinet_height';
 export const FILE_CABINET_SHUT_KEY = 'matrix_file_cabinet_shut';
+export const FILE_CABINET_EMPTY_SHELVES_COLLAPSED_KEY = 'matrix_file_cabinet_empty_shelves_collapsed';
 
 export const FILE_CABINET_MIN_HEIGHT = 96;
 export const FILE_CABINET_BOARD_MIN_HEIGHT = 200;
@@ -446,6 +447,30 @@ export function saveFileCabinetFiledCategories(categories) {
     } catch {
         /* ignore */
     }
+}
+
+export function isFileCabinetEmptyShelvesCollapsed() {
+    try {
+        const raw = localStorage.getItem(FILE_CABINET_EMPTY_SHELVES_COLLAPSED_KEY);
+        if (raw == null) return true; // default collapsed
+        return raw === 'true';
+    } catch {
+        return true;
+    }
+}
+
+export function setFileCabinetEmptyShelvesCollapsed(collapsed) {
+    try {
+        localStorage.setItem(FILE_CABINET_EMPTY_SHELVES_COLLAPSED_KEY, collapsed ? 'true' : 'false');
+    } catch {
+        /* ignore */
+    }
+}
+
+export function toggleFileCabinetEmptyShelvesCollapsed() {
+    const next = !isFileCabinetEmptyShelvesCollapsed();
+    setFileCabinetEmptyShelvesCollapsed(next);
+    return next;
 }
 
 export function isFileCabinetCategoryFiled(categoryName) {
@@ -1886,6 +1911,15 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI, { all
     );
     const visibleCategories = allCategories.filter((c) => !isFileCabinetCategoryFiled(c));
 
+    const isEmptyShelf = (name) => !(byCategory.get(name)?.length);
+    // Empty shelves (0 filed notes on this desktop) group together — not open columns.
+    const emptyShelfNames = applyFileCabinetCategoryOrder(
+        allCategories.filter((c) => isEmptyShelf(c))
+    );
+    const filedWithNotes = filedCategoryNames.filter((c) => !isEmptyShelf(c));
+    const visibleWithNotes = visibleCategories.filter((c) => !isEmptyShelf(c));
+    const emptyShelvesCollapsed = isFileCabinetEmptyShelvesCollapsed();
+
     mount.__fcPreviewContext = {
         byCategory,
         activeCategories,
@@ -1900,13 +1934,14 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI, { all
     rail.className = 'file-cabinet-filed-rail';
     rail.setAttribute('aria-label', 'Folded categories');
 
-    filedCategoryNames.forEach((catName) => {
+    const appendFiledSlot = (catName, parent, { emptyShelf = false } = {}) => {
         const items = byCategory.get(catName) || [];
         const color = resolveCategoryColor(catName, activeCategories);
 
         const slot = document.createElement('div');
         slot.className = 'file-cabinet-filed-slot';
         slot.dataset.category = catName;
+        if (emptyShelf) slot.dataset.emptyShelf = '1';
         slot.style.setProperty('--card-category-color', color);
         slot.style.setProperty('--file-cabinet-category-color', color);
 
@@ -1919,7 +1954,10 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI, { all
             ? ' class="file-cabinet-filed-chip-name u-truncate card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Category…"'
             : ' class="file-cabinet-filed-chip-name u-truncate"';
         const manageBtnsHtml = buildFileCabinetCategoryActionButtons({ canManage: canRename });
-        const chipActionsHtml = wrapFileCabinetCategoryActions(`<button type="button" class="card-act file-cabinet-filed-chip-grab grab-handle grab-handle--col" title="Drag to reorder category" aria-label="Drag to reorder category">${CARD_ICONS.drag}</button>${manageBtnsHtml}<button type="button" class="card-act file-cabinet-category-open-all-btn" title="Open all below" aria-label="Open all below">${ACTION_ICONS.expandAll}</button><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`);
+        const expandBtns = emptyShelf
+            ? ''
+            : `<button type="button" class="card-act file-cabinet-category-open-all-btn" title="Open all below" aria-label="Open all below">${ACTION_ICONS.expandAll}</button><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`;
+        const chipActionsHtml = wrapFileCabinetCategoryActions(`<button type="button" class="card-act file-cabinet-filed-chip-grab grab-handle grab-handle--col" title="Drag to reorder category" aria-label="Drag to reorder category">${CARD_ICONS.drag}</button>${manageBtnsHtml}${expandBtns}`);
         chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span${chipNameAttrs}>${escapeHTML(catName)} (${items.length})</span>${chipActionsHtml}`;
 
         const rollout = document.createElement('div');
@@ -1928,8 +1966,44 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI, { all
 
         slot.appendChild(chip);
         slot.appendChild(rollout);
-        rail.appendChild(slot);
-    });
+        parent.appendChild(slot);
+    };
+
+    filedWithNotes.forEach((catName) => appendFiledSlot(catName, rail));
+
+    const emptyGroup = document.createElement('div');
+    emptyGroup.className = `file-cabinet-empty-shelves${emptyShelvesCollapsed ? ' is-collapsed' : ''}`;
+    emptyGroup.dataset.emptyShelves = '1';
+
+    const emptyHeader = document.createElement('button');
+    emptyHeader.type = 'button';
+    emptyHeader.className = 'file-cabinet-empty-shelves__toggle';
+    emptyHeader.setAttribute('aria-expanded', emptyShelvesCollapsed ? 'false' : 'true');
+    emptyHeader.title = emptyShelvesCollapsed ? 'Show empty shelves' : 'Hide empty shelves';
+    emptyHeader.innerHTML = `<span class="file-cabinet-empty-shelves__chevron" aria-hidden="true">${CARD_ICONS.chevronDown}</span><span class="file-cabinet-empty-shelves__label">Empty shelves</span><span class="file-cabinet-empty-shelves__count">${emptyShelfNames.length}</span>`;
+    emptyGroup.appendChild(emptyHeader);
+
+    const emptyBody = document.createElement('div');
+    emptyBody.className = 'file-cabinet-empty-shelves__body';
+    emptyBody.hidden = emptyShelvesCollapsed;
+
+    // Keep empty shelves filed so they stay in this group (not open empty columns)
+    const filedSet = new Set(getFileCabinetFiledCategories());
+    const toSeed = emptyShelfNames.filter((name) => !filedSet.has(name));
+    if (toSeed.length) {
+        toSeed.forEach((name) => appendFileCabinetCategoryOrder(name));
+        saveFileCabinetFiledCategories([...filedSet, ...toSeed]);
+    }
+
+    emptyShelfNames.forEach((catName) => appendFiledSlot(catName, emptyBody, { emptyShelf: true }));
+    if (!emptyShelfNames.length) {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.className = 'file-cabinet-empty-shelves__none';
+        emptyMsg.textContent = 'No empty shelves';
+        emptyBody.appendChild(emptyMsg);
+    }
+    emptyGroup.appendChild(emptyBody);
+    rail.appendChild(emptyGroup);
 
     const addBtn = document.createElement('button');
     addBtn.type = 'button';
@@ -1944,7 +2018,7 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI, { all
     const row = document.createElement('div');
     row.className = 'file-cabinet-row';
 
-    visibleCategories.forEach((catName) => {
+    visibleWithNotes.forEach((catName) => {
         const items = sortItemsByFileCabinetOrder(byCategory.get(catName) || [], catName, order);
         row.appendChild(buildFileCabinetCategoryColumn({
             catName,
@@ -2043,6 +2117,15 @@ export function initFileCabinetCategoryActions(mount, signal, UI = null) {
     }, { signal });
 
     mount.addEventListener('click', (e) => {
+        const emptyToggle = e.target.closest('.file-cabinet-empty-shelves__toggle');
+        if (emptyToggle) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleFileCabinetEmptyShelvesCollapsed();
+            window.dispatchEvent(new CustomEvent('filecabinet:layout_changed', { detail: { flushLayout: false } }));
+            return;
+        }
+
         const addBtn = e.target.closest('.file-cabinet-add-category-btn');
         if (addBtn) {
             e.preventDefault();
