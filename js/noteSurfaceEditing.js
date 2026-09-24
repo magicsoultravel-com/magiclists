@@ -171,17 +171,21 @@ export function splitInlineEditAtCaret(el) {
     const readFull = () => (rich
         ? sanitizeRichHtml(linkifyPlainUrls(el.innerHTML))
         : (el.textContent || ''));
+    const pack = (before, after) => ({
+        before: trimSoftBreaks(before, rich),
+        after: trimSoftBreaks(after, rich)
+    });
 
     const sel = window.getSelection();
     if (!sel?.rangeCount) {
         const full = readFull();
-        return { before: full, after: '' };
+        return pack(full, '');
     }
 
     const range = sel.getRangeAt(0);
     if (!el.contains(range.startContainer)) {
         const full = readFull();
-        return { before: full, after: '' };
+        return pack(full, '');
     }
 
     const measureRange = range.cloneRange();
@@ -191,19 +195,16 @@ export function splitInlineEditAtCaret(el) {
 
     if (!rich) {
         const full = el.textContent || '';
-        return {
-            before: full.slice(0, plainOffset),
-            after: full.slice(plainOffset)
-        };
+        return pack(full.slice(0, plainOffset), full.slice(plainOffset));
     }
 
     const fullHtml = readFull();
     const fullPlain = stripRichText(fullHtml);
     if (plainOffset <= 0) {
-        return { before: '', after: fullHtml };
+        return pack('', fullHtml);
     }
     if (plainOffset >= fullPlain.length) {
-        return { before: fullHtml, after: '' };
+        return pack(fullHtml, '');
     }
 
     const beforeRange = range.cloneRange();
@@ -219,16 +220,70 @@ export function splitInlineEditAtCaret(el) {
         div.appendChild(frag);
         return div.innerHTML;
     };
-    return {
-        before: sanitizeRichHtml(linkifyPlainUrls(htmlFromFragment(beforeRange.cloneContents()))),
-        after: sanitizeRichHtml(linkifyPlainUrls(htmlFromFragment(afterRange.cloneContents())))
+    return pack(
+        sanitizeRichHtml(linkifyPlainUrls(htmlFromFragment(beforeRange.cloneContents()))),
+        sanitizeRichHtml(linkifyPlainUrls(htmlFromFragment(afterRange.cloneContents())))
+    );
+}
+
+/**
+ * Trim leading/trailing soft breaks from a split chunk.
+ * Plain: leading/trailing \n (and \u2028). Rich: leading/trailing <br>.
+ * Mid-content soft breaks between real text are kept.
+ */
+function trimSoftBreaks(chunk, rich) {
+    if (chunk == null || chunk === '') return '';
+    const s = String(chunk);
+    if (rich) {
+        return s.replace(/^(?:\s*<br>)+/i, '').replace(/(?:<br>\s*)+$/i, '');
+    }
+    return s.replace(/^[\n\u2028]+/, '').replace(/[\n\u2028]+$/, '');
+}
+
+/**
+ * A pre-/post-caret range is "only soft breaks" (and does not block absolute
+ * start/end) iff, walking nodes in document order within the range:
+ * 1. Skip text nodes that are entirely whitespace (including \n)
+ * 2. Skip <br> elements
+ * 3. Stop / fail at the first non-whitespace character or any non-break element
+ *
+ * Empty fields with a placeholder <br>, and soft-break-only fields, therefore
+ * count as both at-start and at-end. Caret mid-way through text<br>more does not.
+ */
+function rangeIsOnlySoftBreaks(range) {
+    if (!range) return true;
+    const frag = range.cloneContents();
+    const walk = (node) => {
+        if (node.nodeType === Node.TEXT_NODE) {
+            return !/[^\s]/.test(node.textContent || '');
+        }
+        if (node.nodeType !== Node.ELEMENT_NODE) return true;
+        if (node.tagName === 'BR') return true;
+        for (const child of node.childNodes) {
+            if (!walk(child)) return false;
+        }
+        // Non-break element with only soft-break children still blocks start/end
+        // if it is something other than a wrapper we unwrap — treat unknown
+        // elements with no children as blocking; with only soft kids as ok unwrap.
+        return true;
     };
+    for (const child of frag.childNodes) {
+        if (child.nodeType === Node.ELEMENT_NODE && child.tagName !== 'BR') {
+            // Non-br element: only allow if its entire subtree is soft breaks
+            // AND it is a formatting wrapper we would otherwise ignore for nav.
+            // Any media / block content blocks absolute edge.
+            if (/^(IMG|TABLE|IFRAME|VIDEO|AUDIO|HR)$/i.test(child.tagName)) return false;
+            if (!walk(child)) return false;
+            continue;
+        }
+        if (!walk(child)) return false;
+    }
+    return true;
 }
 
 /**
  * Check if the caret is at the absolute start of an element.
- * Uses cloned range to detect if there is zero text/elements preceding the cursor.
- * This handles multi-line content with soft breaks correctly.
+ * Leading soft breaks (<br> / whitespace) do not block "at start".
  * @param {HTMLElement} element - The element to check
  * @returns {boolean} - True if caret is at the absolute start
  */
@@ -236,18 +291,16 @@ export function isAtAbsoluteStart(element) {
     const selection = window.getSelection();
     if (!selection.rangeCount) return false;
     const range = selection.getRangeAt(0);
+    if (!element.contains(range.startContainer)) return false;
     const preCaretRange = range.cloneRange();
     preCaretRange.selectNodeContents(element);
     preCaretRange.setEnd(range.startContainer, range.startOffset);
-    // Returns true only if there is zero text or elements preceding the cursor
-    // Use toString() without trim to handle all content including whitespace
-    return preCaretRange.toString() === "" && preCaretRange.cloneContents().querySelectorAll('img, table, iframe, br').length === 0;
+    return rangeIsOnlySoftBreaks(preCaretRange);
 }
 
 /**
  * Check if the caret is at the absolute end of an element.
- * Uses cloned range to detect if there is zero text/elements following the cursor.
- * This handles multi-line content with soft breaks correctly.
+ * Trailing soft breaks (<br> / whitespace) do not block "at end".
  * @param {HTMLElement} element - The element to check
  * @returns {boolean} - True if caret is at the absolute end
  */
@@ -255,12 +308,11 @@ export function isAtAbsoluteEnd(element) {
     const selection = window.getSelection();
     if (!selection.rangeCount) return false;
     const range = selection.getRangeAt(0);
+    if (!element.contains(range.endContainer)) return false;
     const postCaretRange = range.cloneRange();
     postCaretRange.selectNodeContents(element);
     postCaretRange.setStart(range.endContainer, range.endOffset);
-    // Returns true only if there is zero text or elements following the cursor
-    // Use toString() without trim to handle all content including whitespace
-    return postCaretRange.toString() === "" && postCaretRange.cloneContents().querySelectorAll('img, table, iframe, br').length === 0;
+    return rangeIsOnlySoftBreaks(postCaretRange);
 }
 
 export function focusInlineEdit(el, edge = 'end') {

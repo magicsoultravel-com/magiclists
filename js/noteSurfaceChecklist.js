@@ -1,10 +1,10 @@
 /** @module {"owns":"checklist operations, drag/drop, state management", "related":["noteSurface.js","checklistSteps.js","noteBodyConversion.js","richText.js"], "events":[]} */
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { escapeHTML, escapeAttr } from './domEscape.js';
-import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, canIndentStep, computeVisibleInsertBounds, resolvePointerDropTarget, buildVisibleChecklistSteps, annotateChecklistTreeGuides, addChecklistStep, splitChecklistStep, deleteChecklistStep, mergeChecklistStepIntoPrev, indentChecklistSteps, outdentChecklistSteps, moveChecklistStepBlock, toggleStepCompletion, toggleGroupCompletion, getGroupStepIds, buildCompletedChecklistRows } from './checklistSteps.js';
+import { getStepLevel, partitionChecklistSteps, checklistHasIndentations, stepHasDescendants, canIndentStep, computeVisibleInsertBounds, resolvePointerDropTarget, buildVisibleChecklistSteps, annotateChecklistTreeGuides, addChecklistStep, insertChecklistStepBefore, splitChecklistStep, deleteChecklistStep, mergeChecklistStepIntoPrev, indentChecklistSteps, outdentChecklistSteps, moveChecklistStepBlock, toggleStepCompletion, toggleGroupCompletion, getGroupStepIds, buildCompletedChecklistRows } from './checklistSteps.js';
 import { stripRichText, sanitizeRichHtml, hasRichMarkup, linkifyPlainUrls } from './richText.js';
 import { mutateItem, syncItemBodyFromDom, syncInlineFieldToItem, commitInlineChecklistOp, flushDesktopAutoSave } from './noteSurfaceMutations.js';
-import { focusInlineEdit, canInlineEditText, splitInlineEditAtCaret, insertTextAtCaret, handleInlineEditArrowNav } from './noteSurfaceEditing.js';
+import { focusInlineEdit, canInlineEditText, splitInlineEditAtCaret, insertTextAtCaret, handleInlineEditArrowNav, isAtAbsoluteStart } from './noteSurfaceEditing.js';
 import { copyPlainTextToClipboard } from './clipboard.js';
 
 
@@ -378,7 +378,7 @@ function invalidateChecklistCache() {
 }
 
 // Surgical DOM update: insert a new step row into the DOM
-function insertStepRowInDom(root, newStep, item, { afterStepId = null, richEdit = false } = {}) {
+function insertStepRowInDom(root, newStep, item, { afterStepId = null, beforeStepId = null, richEdit = false } = {}) {
     if (!root || !newStep || !item) return null;
     
     const { active } = partitionChecklistSteps(item.steps || []);
@@ -410,12 +410,15 @@ function insertStepRowInDom(root, newStep, item, { afterStepId = null, richEdit 
     temp.innerHTML = rowHtml.trim();
     const newRow = temp.firstElementChild;
     
-    // Find insertion point: after specified step or at end
+    // Find insertion point: before/after specified step or at end
+    const beforeRow = beforeStepId ? root.querySelector(`.step-row--display[data-step-id="${beforeStepId}"]`) : null;
     const afterRow = afterStepId ? root.querySelector(`.step-row--display[data-step-id="${afterStepId}"]`) : null;
     const addBtn = root.querySelector('.expanded-checklist-add-btn');
     const doneToggle = root.querySelector('.checklist-done-toggle');
     
-    if (afterRow) {
+    if (beforeRow) {
+        beforeRow.insertAdjacentElement('beforebegin', newRow);
+    } else if (afterRow) {
         afterRow.insertAdjacentElement('afterend', newRow);
     } else if (addBtn) {
         addBtn.parentNode.insertBefore(newRow, addBtn);
@@ -1101,13 +1104,11 @@ export function handleChecklistEnter(root, item, e, { localOnly = false, onChang
     // Do NOT sync before split - that would save the full unbroken string
     // Instead, let splitInlineEditAtCaret run on the live DOM to calculate chunks
 
-    const step = item.steps[stepIdx];
     // Flush any pending text autosave before the split so the structural entry
     // captures all typed text and no stale autosave fires after the split.
     // This runs synchronously before commitInlineChecklistOp, so the deferred
     // DOM re-sync can't clobber the split lines (see the CRITICAL below).
     flushDesktopAutoSave(root, item);
-    const { before, after } = splitInlineEditAtCaret(active);
 
     if (e.shiftKey) {
         const rich = active.classList.contains('rich-text--edit');
@@ -1123,6 +1124,40 @@ export function handleChecklistEnter(root, item, e, { localOnly = false, onChang
         onChange();
         return 'stay';
     }
+
+    // Enter at absolute start: insert empty sibling above; keep this item/group intact.
+    if (isAtAbsoluteStart(active)) {
+        const beforeItem = prepareInlineOpSnapshot(root, item, localOnly);
+        const result = insertChecklistStepBefore(item.steps, stepId, {
+            text: '',
+            newId: createStepId()
+        });
+        item.steps = result.steps;
+        const newStep = result.step;
+        if (!newStep) return false;
+
+        const scrollPos = captureCanvasScroll();
+        const richEdit = active.classList.contains('rich-text--edit');
+        const newRow = insertStepRowInDom(root, newStep, item, { beforeStepId: stepId, richEdit });
+        if (newRow) {
+            const stepTextEl = newRow.querySelector('.step-text.card-inline-edit');
+            if (stepTextEl) {
+                stepTextEl.focus({ preventScroll: true });
+                const range = document.createRange();
+                range.selectNodeContents(stepTextEl);
+                range.collapse(true);
+                const sel = window.getSelection();
+                sel?.removeAllRanges();
+                sel?.addRange(range);
+            }
+        }
+        restoreCanvasScroll(scrollPos);
+        if (beforeItem) commitInlineChecklistOp(item, beforeItem, { localOnly: false });
+        onChange();
+        return newStep.id;
+    }
+
+    const { before, after } = splitInlineEditAtCaret(active);
 
     // Enter: split text at caret position and create a new step with the "after" text.
     // When the group is collapsed the new row lands after the whole subtree so it

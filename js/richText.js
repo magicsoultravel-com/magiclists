@@ -1,6 +1,6 @@
 /** @module {"owns":"rich text sanitize, linkify, strip markup", "related":["noteSurface.js","noteModel.js"]} */
-const ALLOWED_TAGS = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'S', 'STRIKE', 'DEL', 'BR']);
-const MARKUP_RE = /<(?:\/?)(?:a|b|strong|i|em|s|strike|del|br)\b/i;
+const ALLOWED_TAGS = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'S', 'STRIKE', 'DEL', 'U', 'BR']);
+const MARKUP_RE = /<(?:\/?)(?:a|b|strong|i|em|s|strike|del|u|br)\b/i;
 const URL_RE = /(?:https?:\/\/|www\.)[^\s<>"']+/gi;
 
 function escapeHtmlAttr(str) {
@@ -98,6 +98,16 @@ function walkNodes(node) {
         return `<${tag.toLowerCase()}>${inner}</${tag.toLowerCase()}>`;
     }
 
+    // Chrome sometimes emits decoration via styled spans instead of <u>/<s>.
+    if (tag === 'SPAN') {
+        const deco = String(node.style?.textDecoration || node.getAttribute('style') || '').toLowerCase();
+        const inner = Array.from(node.childNodes).map(walkNodes).join('');
+        if (!inner) return '';
+        if (/\bunderline\b/.test(deco)) return `<u>${inner}</u>`;
+        if (/\bline-through\b/.test(deco)) return `<s>${inner}</s>`;
+        return inner;
+    }
+
     if (tag === 'DIV' || tag === 'P') {
         const parts = Array.from(node.childNodes).map(walkNodes).filter(Boolean);
         if (!parts.length) return '';
@@ -116,7 +126,9 @@ export function sanitizeRichHtml(html) {
     const tpl = document.createElement('template');
     tpl.innerHTML = raw;
     let out = Array.from(tpl.content.childNodes).map(walkNodes).join('');
-    out = out.replace(/(?:<br>\s*)+$/i, '');
+    // Strip leading/trailing <br> only (contenteditable placeholders / pasted blanks).
+    // Mid-content soft breaks between real text are preserved.
+    out = out.replace(/^(?:\s*<br>)+/i, '').replace(/(?:<br>\s*)+$/i, '');
     return linkifyPlainUrls(out);
 }
 

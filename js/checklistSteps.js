@@ -580,6 +580,29 @@ export function addChecklistStep(steps, { afterStepId = null, text = '', complet
 }
 
 /**
+ * Insert an empty sibling before stepId (same level). Anchor text and subtree
+ * stay intact — children keep the original parent after refreshStepsPosition.
+ * @returns {{ steps: Array, step: Object|null }}
+ */
+export function insertChecklistStepBefore(steps, stepId, { text = '', newId = null } = {}) {
+    const list = Array.isArray(steps) ? steps.map((s) => s) : [];
+    const idx = list.findIndex((s) => s?.id === stepId);
+    if (idx < 0) return { steps: list, step: null };
+    const anchor = list[idx];
+    if (!newId) newId = `step_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const step = {
+        id: newId,
+        text: String(text ?? ''),
+        completed: false,
+        level: getStepLevel(anchor),
+        parentId: null,
+        order: idx
+    };
+    list.splice(idx, 0, step);
+    return { steps: refreshStepsPosition(list), step };
+}
+
+/**
  * Split a step at Enter: the original keeps beforeText (as a sibling), a new
  * step with afterText is inserted after it (or after its whole subtree when the
  * group is collapsed). Position metadata is refreshed.

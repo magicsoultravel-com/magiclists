@@ -30,7 +30,8 @@ import {
     partitionChecklistSteps,
     buildVisibleChecklistSteps,
     buildCompletedChecklistRows,
-    annotateChecklistTreeGuides
+    annotateChecklistTreeGuides,
+    insertChecklistStepBefore
 } from '../js/checklistSteps.js';
 
 function step(id, level, completed = false) {
@@ -213,6 +214,30 @@ describe('mutation ops keep the position model intact', () => {
         const base = stepsToParentOrder([pstep('a', 0)]);
         const { steps } = addChecklistStep(base, { text: 'X', newId: 'x' });
         assert.deepEqual(steps.map((s) => s.id), ['a', 'x']);
+        assert.deepEqual(assertStepsInvariants(steps), []);
+    });
+
+    it('insertChecklistStepBefore keeps parent subtree contiguous with kids still on parent', () => {
+        const base = stepsToParentOrder([
+            pstep('parent', 0),
+            pstep('c1', 1),
+            pstep('c2', 1),
+            pstep('c3', 1),
+            pstep('next', 0)
+        ]);
+        const { steps, step } = insertChecklistStepBefore(base, 'parent', {
+            text: '',
+            newId: 'empty'
+        });
+        assert.equal(step.id, 'empty');
+        assert.equal(step.text, '');
+        assert.deepEqual(steps.map((s) => s.id), ['empty', 'parent', 'c1', 'c2', 'c3', 'next']);
+        assert.equal(steps.find((s) => s.id === 'empty').level, 0);
+        assert.equal(steps.find((s) => s.id === 'empty').parentId, null);
+        assert.equal(steps.find((s) => s.id === 'parent').text, 'parent');
+        for (const id of ['c1', 'c2', 'c3']) {
+            assert.equal(steps.find((s) => s.id === id).parentId, 'parent');
+        }
         assert.deepEqual(assertStepsInvariants(steps), []);
     });
 

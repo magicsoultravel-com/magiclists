@@ -440,6 +440,7 @@ function buildNoteFormatPanelHtml(item = null) {
                     <div class="format-toolbar">
                         <button type="button" class="format-btn card-act" data-format-cmd="bold" title="Bold (Ctrl+B)" aria-label="Bold">${FORMAT_ICONS.bold}</button>
                         <button type="button" class="format-btn card-act" data-format-cmd="italic" title="Italic (Ctrl+I)" aria-label="Italic">${FORMAT_ICONS.italic}</button>
+                        <button type="button" class="format-btn card-act" data-format-cmd="underline" title="Underline (Ctrl+U)" aria-label="Underline">${FORMAT_ICONS.underline}</button>
                         <button type="button" class="format-btn card-act" data-format-cmd="strikeThrough" title="Strikethrough (Ctrl+Shift+S)" aria-label="Strikethrough">${FORMAT_ICONS.strike}</button>
                         <span class="format-toolbar-sep" aria-hidden="true"></span>
                         <button type="button" class="format-btn card-act" data-zoom="down" title="Smaller text" aria-label="Smaller text">${FORMAT_ICONS.smaller}</button>
