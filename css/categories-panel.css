@@ -191,6 +191,36 @@
     gap: 0.35rem;
 }
 
+.categories-panel__group-title--toggle {
+    cursor: pointer;
+    user-select: none;
+    border-radius: 4px;
+    padding: 0.15rem 0.1rem;
+}
+
+.categories-panel__group-title--toggle:hover {
+    opacity: 1;
+    background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+}
+
+.categories-panel__group-title .collapsable-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 0.9rem;
+    height: 0.9rem;
+    opacity: 0.85;
+    transition: transform 0.12s ease;
+}
+
+.categories-panel__group-title .collapsable-toggle.collapsed {
+    transform: rotate(-90deg);
+}
+
+.categories-panel__group-body.is-collapsed {
+    display: none;
+}
+
 .categories-panel__group-count {
     display: inline-flex;
     align-items: center;

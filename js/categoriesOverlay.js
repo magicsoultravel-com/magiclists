@@ -45,6 +45,8 @@ let focusAddOnOpen = false;
 /** @type {HTMLElement|null} */
 let previewTile = null;
 let currentSort = 'name-asc';
+/** Empty-shelves subsection starts collapsed */
+let emptyShelvesCollapsed = true;
 
 function clamp(n, min, max) {
     return Math.min(max, Math.max(min, n));
@@ -317,9 +319,9 @@ function buildTileHtml(cat, { section, notes, expanded }) {
     </div>`;
 }
 
-function buildGroupHtml(title, section, cats, items) {
+function buildTileGridHtml(section, cats, items) {
     const sorted = sortCategories(cats, items);
-    const tiles = sorted.map((cat) => {
+    return sorted.map((cat) => {
         const key = drawerKey(section, cat.name);
         const notes = notesForCategory(items, cat.name);
         return buildTileHtml(cat, {
@@ -328,17 +330,64 @@ function buildGroupHtml(title, section, cats, items) {
             expanded: expandedKeys.has(key)
         });
     }).join('');
+}
+
+function buildGroupHtml(title, section, cats, items, {
+    collapsible = false,
+    collapsed = false,
+    groupId = '',
+    emptyLabel = null
+} = {}) {
+    const tiles = cats.length ? buildTileGridHtml(section, cats, items) : '';
+    const toggle = collapsible
+        ? `<span class="collapsable-toggle${collapsed ? ' collapsed' : ''}" aria-hidden="true">${CARD_ICONS.chevronDown}</span>`
+        : '';
+    const headingClass = collapsible
+        ? 'categories-panel__group-title categories-panel__group-title--toggle'
+        : 'categories-panel__group-title';
+    const bodyClass = collapsible && collapsed
+        ? 'categories-panel__group-body is-collapsed'
+        : 'categories-panel__group-body';
+    const toggleAttrs = collapsible
+        ? ` data-categories-group-toggle role="button" tabindex="0" aria-expanded="${collapsed ? 'false' : 'true'}"`
+        : '';
+    const emptyText = emptyLabel || `No ${title.toLowerCase()}`;
 
     return `
-    <section class="categories-panel__group" data-section="${escapeAttr(section)}">
-        <h3 class="categories-panel__group-title">
+    <section class="categories-panel__group" data-section="${escapeAttr(section)}"${groupId ? ` data-group-id="${escapeAttr(groupId)}"` : ''}>
+        <h3 class="${headingClass}"${toggleAttrs}>
+            ${toggle}
             ${escapeHTML(title)}
             <span class="categories-panel__group-count">${cats.length}</span>
         </h3>
-        ${cats.length
-            ? `<div class="categories-panel__tile-grid">${tiles}</div>`
-            : `<p class="categories-panel__empty">No ${section} categories</p>`}
+        <div class="${bodyClass}">
+            ${cats.length
+                ? `<div class="categories-panel__tile-grid">${tiles}</div>`
+                : `<p class="categories-panel__empty">${escapeHTML(emptyText)}</p>`}
+        </div>
     </section>`;
+}
+
+function buildActiveGroupsHtml(activeCats, items) {
+    const withNotes = [];
+    const empty = [];
+    activeCats.forEach((cat) => {
+        if (notesForCategory(items, cat.name).length > 0) withNotes.push(cat);
+        else empty.push(cat);
+    });
+
+    return [
+        buildGroupHtml('Active', 'active', withNotes, items, {
+            groupId: 'active',
+            emptyLabel: 'No categories with notes'
+        }),
+        buildGroupHtml('Empty shelves', 'active', empty, items, {
+            collapsible: true,
+            collapsed: emptyShelvesCollapsed,
+            groupId: 'empty',
+            emptyLabel: 'No empty shelves'
+        })
+    ].join('');
 }
 
 function hideTilePreview() {
@@ -549,6 +598,17 @@ export const CategoriesOverlay = {
         });
 
         panel.addEventListener('click', (e) => {
+            const groupToggle = e.target.closest('[data-categories-group-toggle]');
+            if (groupToggle) {
+                e.preventDefault();
+                const group = groupToggle.closest('.categories-panel__group');
+                if (group?.dataset.groupId === 'empty') {
+                    emptyShelvesCollapsed = !emptyShelvesCollapsed;
+                    this.refresh();
+                }
+                return;
+            }
+
             const toggleBtn = e.target.closest('[data-cat-toggle]');
             const face = !toggleBtn && e.target.closest('[data-cat-face]');
             if (toggleBtn || face) {
@@ -639,6 +699,12 @@ export const CategoriesOverlay = {
         });
 
         panel.addEventListener('keydown', (e) => {
+            const groupToggle = e.target.closest?.('[data-categories-group-toggle]');
+            if (groupToggle && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                groupToggle.click();
+                return;
+            }
             const nameEl = e.target.closest?.(nameSelector);
             if (!nameEl || !panel.contains(nameEl)) return;
             if (e.key === 'Enter') {
@@ -701,6 +767,7 @@ export const CategoriesOverlay = {
             return;
         }
         expandedKeys.add(drawerKey('active', validation.cleanName));
+        emptyShelvesCollapsed = false;
         window.dispatchEvent(new CustomEvent('category:add_requested', {
             detail: { name: validation.cleanName, color: UNCATEGORIZED_COLOR, anchor: input }
         }));
@@ -715,6 +782,7 @@ export const CategoriesOverlay = {
     afterCategoryAdded(name, colorAnchor = null) {
         if (!name) return;
         expandedKeys.add(drawerKey('active', name));
+        emptyShelvesCollapsed = false;
         if (this.isOpen()) this.refresh();
         if (colorAnchor) {
             const state = getState?.() || {};
@@ -760,8 +828,8 @@ export const CategoriesOverlay = {
         const body = panel.querySelector('[data-categories-body]');
         if (body) {
             body.innerHTML = [
-                buildGroupHtml('Active', 'active', active, items),
-                buildGroupHtml('Hidden', 'hidden', hidden, items)
+                buildActiveGroupsHtml(active, items),
+                buildGroupHtml('Hidden', 'hidden', hidden, items, { groupId: 'hidden' })
             ].join('');
         }
     }
