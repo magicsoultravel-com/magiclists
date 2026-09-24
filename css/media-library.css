@@ -673,29 +673,35 @@
     flex-shrink: 0;
     margin-left: auto;
     padding-left: 0.2rem;
-    background: color-mix(in srgb, var(--bg-card, var(--surface-elevated, #1a1a1e)) 88%, transparent);
-    border-radius: 4px;
 }
 
-.note-attachment:hover .note-attachment__actions,
-.note-attachment:focus-within .note-attachment__actions,
-.note-attachment.is-expanded .note-attachment__actions {
+.note-attachment__compact:hover .note-attachment__actions,
+.note-attachment__compact:focus-within .note-attachment__actions {
     opacity: 1;
     pointer-events: auto;
 }
 
-.note-attachment.is-expanded .note-attachment__compact {
-    outline: 1px solid color-mix(in srgb, var(--accent, #6ea8fe) 45%, transparent);
-    outline-offset: 1px;
-    border-radius: 6px;
+.note-attachment__compact:hover .note-attachment__actions .card-act,
+.note-attachment__compact:focus-within .note-attachment__actions .card-act {
+    pointer-events: auto;
+}
+
+/* Keep expand toggle readable when active (same pattern as draw/planner card-acts). */
+.note-attachment__actions:has(.note-attachment__expand.is-active) {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.note-attachment__actions:has(.note-attachment__expand.is-active) .card-act {
+    pointer-events: auto;
 }
 
 .note-attachment__expand {
     flex-shrink: 0;
-    opacity: 0.7;
 }
 
-.note-attachment__expand:hover {
+.note-attachment__expand.is-active {
+    color: var(--accent, #60a5fa);
     opacity: 1;
 }
 

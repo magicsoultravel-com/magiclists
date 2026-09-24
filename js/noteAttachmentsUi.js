@@ -203,6 +203,7 @@ function setExpandButtonState(expandBtn, expanded) {
         expandBtn.title = 'Collapse in note';
         expandBtn.setAttribute('aria-label', 'Collapse in note');
         expandBtn.setAttribute('aria-pressed', 'true');
+        expandBtn.classList.add('is-active');
         expandBtn.classList.remove('is-hidden');
         return;
     }
@@ -210,6 +211,7 @@ function setExpandButtonState(expandBtn, expanded) {
     expandBtn.title = 'Expand in note';
     expandBtn.setAttribute('aria-label', 'Expand in note');
     expandBtn.setAttribute('aria-pressed', 'false');
+    expandBtn.classList.remove('is-active');
 }
 
 /**
