@@ -480,7 +480,7 @@ function bindModalQuickActions(toolbarMount, item, ui, editor) {
  * @param {function} handlers.onToggleOverlay - Toggle overlay click handler
  * @param {function} handlers.onToggleFileCabinet - Toggle file cabinet click handler
  * @param {function} handlers.onToggleDrawing - Toggle drawing mode click handler
- * @param {function} handlers.onAddCategory - Add category click handler
+ * @param {function} handlers.onAddCategory - Manage categories click handler
  * @param {function} handlers.onCloudClick - Cloud button click handler
  * @param {function} handlers.onCloudExport - Cloud export click handler
  * @param {function} handlers.onCloudImport - Cloud import click handler
@@ -515,7 +515,7 @@ export function renderQuickActions({
         <button class="btn btn--compact btn--icon ${overlayActive ? 'active' : ''}" id="btn-freeform-toggle" title="${viewTitle}" aria-label="${viewTitle}" aria-pressed="${overlayActive ? 'true' : 'false'}">${viewIcon}</button>
         <button class="btn btn--compact btn--icon ${fileCabinetActive ? 'active' : ''}" id="btn-file-cabinet-toggle" title="${fileCabinetTitle}" aria-label="${fileCabinetTitle}" aria-pressed="${fileCabinetActive ? 'true' : 'false'}">${ACTION_ICONS.viewFileCabinet}</button>
         <button class="btn btn--compact btn--icon ${drawingActive ? 'active' : ''}" id="btn-drawing-mode" title="magicCanvas" aria-label="magicCanvas">${ACTION_ICONS.drawingPencil}</button>
-        <button type="button" class="btn btn--compact btn--icon" id="btn-add-category" title="Add category" aria-label="Add category"></button>
+        <button type="button" class="btn btn--compact btn--icon" id="btn-manage-categories" title="Manage categories" aria-label="Manage categories"></button>
     `;
 
     const historyGroup = `
@@ -597,13 +597,13 @@ function bindQuickActionHandlers(handlers = {}) {
     BoardSort.rebindTrigger();
     Fullscreen.rebindMainButton();
 
-    const addCategoryBtn = document.getElementById('btn-add-category');
-    if (addCategoryBtn) addCategoryBtn.innerHTML = ACTION_ICONS.category;
+    const manageCategoriesBtn = document.getElementById('btn-manage-categories');
+    if (manageCategoriesBtn) manageCategoriesBtn.innerHTML = ACTION_ICONS.category;
 
     document.getElementById('btn-freeform-toggle')?.addEventListener('click', onToggleOverlay);
     document.getElementById('btn-file-cabinet-toggle')?.addEventListener('click', onToggleFileCabinet);
     document.getElementById('btn-drawing-mode')?.addEventListener('click', onToggleDrawing);
-    document.getElementById('btn-add-category')?.addEventListener('click', onAddCategory);
+    document.getElementById('btn-manage-categories')?.addEventListener('click', onAddCategory);
     document.getElementById('btn-media-library')?.addEventListener('click', () => {
         MediaLibraryOverlay.open();
     });

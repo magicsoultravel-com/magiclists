@@ -1,8 +1,8 @@
-/** @module {"owns":"side panel shell, notes list, category drawer, sort", "related":["searchBar.js","ui.js","sidebarHistory.js","sidebarStats.js"], "events":["category:show_requested","category:order_changed"]} */
+/** @module {"owns":"side panel shell, notes list, category summary, sort", "related":["searchBar.js","ui.js","sidebarHistory.js","sidebarStats.js","categoriesOverlay.js"], "events":["categories:manage_requested","category:order_changed"]} */
 import { UI } from './ui.js';
 import { BoardOperations } from './boardOperations.js';
 import { escapeAttr, escapeHTML } from './domEscape.js';
-import { UNCATEGORIZED_CATEGORY, UNCATEGORIZED_COLOR } from './categories.js';
+import { UNCATEGORIZED_CATEGORY } from './categories.js';
 import { itemHasCategory } from './focusFilter.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import {
@@ -112,12 +112,20 @@ setCollapsed(collapsed, { persist = true } = {}) {
     setupStatusClickHandlers() {
         this.bindCollapsable('lists-notes-header', 'lists-notes-section', false);
         this.bindCollapsable('lists-categories-header', 'lists-categories-section', true);
-        this.bindCollapsable('categories-list-active-header', 'categories-list-active-section', true);
-        this.bindCollapsable('categories-list-hidden-header', 'categories-list-hidden-section', true);
         this.bindCollapsable('notes-list-active-header', 'notes-list-active-section', false, '.sidebar-notes-list-sort');
         this.bindCollapsable('notes-list-hidden-header', 'notes-list-hidden-section', true);
         this.bindCollapsable('notes-list-archived-header', 'notes-list-archived-section', true);
         this.setupNotesListSortControls();
+        this.setupCategoriesManagerButton();
+    },
+
+    setupCategoriesManagerButton() {
+        const btn = getAppElementById('btn-open-categories-manager');
+        if (!btn || btn.dataset.bound === '1') return;
+        btn.dataset.bound = '1';
+        btn.addEventListener('click', () => {
+            window.dispatchEvent(new CustomEvent('categories:manage_requested'));
+        });
     },
 
     bindCollapsable(headerId, sectionId, startCollapsed = false, ignoreSelector = null, toggleSelector = null) {
@@ -290,62 +298,6 @@ setCollapsed(collapsed, { persist = true } = {}) {
         this.renderNotesListZone('notes-list-archived-zone', archivedItems, allItems, { variant: 'archived' });
     },
 
-    renderCategoryListZone(zoneId, names, categories, hiddenCategories, { hidden = false, uncatCount = 0 } = {}) {
-        const zone = getAppElementById(zoneId);
-        if (!zone) return;
-
-        if (!names?.length) {
-            zone.innerHTML = `<div class="sidebar-notes-list-empty">${hidden ? 'No hidden categories' : 'No active categories'}</div>`;
-            return;
-        }
-
-        const sorted = [...names].sort((a, b) => a.localeCompare(b));
-        zone.innerHTML = sorted.map((catName) => {
-            const cat = categories.find((entry) => entry.name === catName);
-            const color = catName === UNCATEGORIZED_CATEGORY
-                ? UNCATEGORIZED_COLOR
-                : (cat?.color || UNCATEGORIZED_COLOR);
-            const accentStyle = ` style="--note-accent:${escapeAttr(color)}"`;
-            const title = catName === UNCATEGORIZED_CATEGORY && uncatCount > 0
-                ? escapeHTML(`${UNCATEGORIZED_CATEGORY} (${uncatCount})`)
-                : escapeHTML(catName);
-
-            if (hidden) {
-                return `
-                <div class="sidebar-notes-list-item sidebar-notes-list-item--category sidebar-notes-list-item--with-act has-note-color"${accentStyle}>
-                    <span class="sidebar-notes-list-item-title">${title}</span>
-                    <button type="button" class="card-act card-act--show show-category-btn" data-category="${escapeAttr(catName)}" title="Show" aria-label="Show">${CARD_ICONS.show}</button>
-                </div>`;
-            }
-
-            if (catName === UNCATEGORIZED_CATEGORY) {
-                return `
-                <div class="sidebar-notes-list-item sidebar-notes-list-item--category sidebar-notes-list-item--label has-note-color"${accentStyle}>
-                    <span class="sidebar-notes-list-item-title">${title}</span>
-                </div>`;
-            }
-
-            return `
-            <div class="sidebar-notes-list-item sidebar-notes-list-item--category sidebar-notes-list-item--with-act has-note-color"${accentStyle}>
-                <span class="sidebar-notes-list-item-title">${title}</span>
-                <button type="button" class="card-act card-act--hide hide-category-btn" data-category="${escapeAttr(catName)}" title="Hide" aria-label="Hide">${CARD_ICONS.hide}</button>
-            </div>`;
-        }).join('');
-
-        zone.querySelectorAll('.show-category-btn').forEach((btn) => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                window.dispatchEvent(new CustomEvent('category:show_requested', { detail: { name: btn.dataset.category } }));
-            });
-        });
-        zone.querySelectorAll('.hide-category-btn').forEach((btn) => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                window.dispatchEvent(new CustomEvent('category:hide_requested', { detail: { name: btn.dataset.category } }));
-            });
-        });
-    },
-
     updateCategories(categories, hiddenCategories, items = []) {
         const allCategories = categories || [];
         const hiddenSet = hiddenCategories || [];
@@ -360,13 +312,14 @@ setCollapsed(collapsed, { persist = true } = {}) {
         }
         const hiddenNames = hiddenSet.filter((name) => allCategories.some((cat) => cat.name === name));
 
-        const activeCountEl = getAppElementById('categories-active-count');
-        const hiddenCountEl = getAppElementById('categories-hidden-count');
-        if (activeCountEl) activeCountEl.textContent = String(activeNames.length);
-        if (hiddenCountEl) hiddenCountEl.textContent = String(hiddenNames.length);
+        const summaryCountEl = getAppElementById('categories-summary-count');
+        if (summaryCountEl) summaryCountEl.textContent = String(allCategories.length);
 
-        this.renderCategoryListZone('categories-list-active-zone', activeNames, allCategories, hiddenSet, { uncatCount });
-        this.renderCategoryListZone('categories-list-hidden-zone', hiddenNames, allCategories, hiddenSet, { hidden: true });
+        const summaryTextEl = getAppElementById('categories-summary-text');
+        if (summaryTextEl) {
+            summaryTextEl.textContent = `${activeNames.length} active · ${hiddenNames.length} hidden`
+                + (uncatCount ? ` · ${uncatCount} uncategorized` : '');
+        }
     },
 
     /** @deprecated use updateCategories */

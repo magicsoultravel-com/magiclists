@@ -33,7 +33,7 @@ import { shouldRefreshPopoutLockedCard } from './popoutLockRefresh.js';
 import { DesktopBackground } from './desktopBackground.js';
 import { ChromeBackground } from './chromeBackground.js';
 import { ClockStyle } from './clockStyle.js';
-import { ColorPicker, PALETTE_NOTE, randomNoteColor } from './colorPicker.js';
+import { randomNoteColor } from './colorPicker.js';
 import { DisplayOptions } from './displayOptions.js';
 import { applyTileSmallFootprint } from './tileFootprint.js';
 import {
@@ -55,6 +55,7 @@ import { SidebarRadio } from './sidebarRadio.js';
 import { SidebarTv } from './sidebarTv.js';
 import { SidebarWeather } from './sidebarWeather.js';
 import { MediaLibraryOverlay, bindMediaFilePickers } from './mediaLibraryOverlay.js';
+import { CategoriesOverlay } from './categoriesOverlay.js';
 import { MediaStagingDialog } from './mediaStagingDialog.js';
 import { MediaPasteCatcher, readClipboardIntoStaging } from './mediaPasteCatcher.js';
 import { registerLiveNoteSource, setModalEditorNoteIdResolver } from './notePasteContext.js';
@@ -77,9 +78,9 @@ import {
     migrateItemsToFileCabinet,
     pruneFileCabinetOrderByLayout,
     setFileCabinetActive,
-    appendFileCabinetCategoryOrder,
     removeCategoryFromFileCabinetLayout,
-    applyCategoryColorLive
+    applyCategoryColorLive,
+    seedCategoryAsFiled
 } from './fileCabinet.js';
 import { getItemCategoryName } from './focusFilter.js';
 import { initShellResize } from './shellResize.js';
@@ -185,6 +186,13 @@ BootProgress.set(85, 'Workspace…');
             Editor.setLiveItemResolver((noteId) => AppState.items.find((i) => i.id === noteId) || null);
             MediaLibraryOverlay.init({
                 getItems: () => AppState.items
+            });
+            CategoriesOverlay.init({
+                getState: () => ({
+                    categories: AppState.categories,
+                    hiddenCategories: AppState.hiddenCategories,
+                    items: AppState.items
+                })
             });
             MediaPasteCatcher.init();
             bindMediaFilePickers();
@@ -689,7 +697,7 @@ renderQuickActions() {
                     if (AppState.workspaceMode === 'drawing') await this.switchWorkspaceMode('notes');
                     else await this.switchWorkspaceMode('drawing');
                 },
-                onAddCategory: (e) => this.executeAddCategoryPrompt(e?.currentTarget),
+                onAddCategory: () => CategoriesOverlay.open({ focusAdd: true }),
                 onCloudClick: (e) => CloudBackup.handleCloudClick(e.currentTarget),
                 onCloudExport: (e) => CloudBackup.exportCheckpoint(e.currentTarget),
                 onCloudImport: (e) => CloudBackup.handleImportClick(e.currentTarget),
@@ -1116,35 +1124,46 @@ renderQuickActions() {
         }
     }
 
-    executeAddCategoryPrompt(anchorEl = null) {
-        const anchor = anchorEl || document.getElementById('btn-add-category');
-        const nameInput = prompt('Enter Unique New Category Label Name:');
-        if (!nameInput || !nameInput.trim()) return;
-        const validation = validateNewCategoryName(nameInput, AppState.categories);
+    /**
+     * Shared add-category flow: persist immediately with a default (or given) color.
+     * Optionally opens ColorPicker afterward to refine.
+     * @param {{ name?: string, color?: string, anchor?: HTMLElement|null, openPicker?: boolean }} [opts]
+     */
+    executeAddCategory(opts = {}) {
+        let cleanName = String(opts.name || '').trim();
+        if (!cleanName) {
+            const nameInput = prompt('Enter Unique New Category Label Name:');
+            if (!nameInput || !nameInput.trim()) return null;
+            cleanName = nameInput.trim();
+        }
+        const validation = validateNewCategoryName(cleanName, AppState.categories);
         if (!validation.ok) {
             alert(`Conflict: ${validation.error}`);
-            return;
+            return null;
         }
-        if (!anchor) return;
-        ColorPicker.open({
-            anchor,
-            presets: PALETTE_NOTE,
-            value: UNCATEGORIZED_COLOR,
-            align: 'end',
-            onSelect: (color) => {
-                const next = addCategoryToRegistry(validation.cleanName, color, AppState.categories);
-                if (!next) return;
-                AppState.categories = next;
-                appendFileCabinetCategoryOrder(validation.cleanName);
-                window.dispatchEvent(new CustomEvent('categories:toggled'));
-                window.dispatchEvent(new CustomEvent('filecabinet:layout_changed', { detail: { flushLayout: false } }));
-                this.updateWorkspaceCounter();
-                const canvas = document.getElementById('app-canvas');
-                if (canvas && AppState.workspaceMode !== 'drawing') {
-                    UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories);
-                }
-            }
-        });
+        const color = (opts.color && String(opts.color).trim()) || UNCATEGORIZED_COLOR;
+        const next = addCategoryToRegistry(validation.cleanName, color, AppState.categories);
+        if (!next) return null;
+        AppState.categories = next;
+        seedCategoryAsFiled(validation.cleanName);
+        window.dispatchEvent(new CustomEvent('categories:toggled'));
+        window.dispatchEvent(new CustomEvent('filecabinet:layout_changed', { detail: { flushLayout: false } }));
+        this.updateWorkspaceCounter();
+        const canvas = document.getElementById('app-canvas');
+        if (canvas && AppState.workspaceMode !== 'drawing') {
+            UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories);
+        }
+        SidePanel.updateCategories(AppState.categories, AppState.hiddenCategories, AppState.items);
+        CategoriesOverlay.afterCategoryAdded(
+            validation.cleanName,
+            opts.openPicker === false ? null : (opts.anchor || document.getElementById('btn-manage-categories'))
+        );
+        return validation.cleanName;
+    }
+
+    /** @deprecated use executeAddCategory */
+    executeAddCategoryPrompt(anchorEl = null) {
+        this.executeAddCategory({ anchor: anchorEl || document.getElementById('btn-manage-categories') });
     }
 
     executeLoginPrompt() {
@@ -1630,6 +1649,15 @@ renderQuickActions() {
             if (!catName || isUncategorizedCategory(catName)) return;
             if (AppState.hiddenCategories.includes(catName)) return;
 
+            const noteCount = (AppState.items || []).filter((item) => {
+                if (item.status === 'archived') return false;
+                return getItemCategoryName(item) === catName;
+            }).length;
+            const warn = noteCount > 0
+                ? `Hide "${catName}"? ${noteCount} note${noteCount === 1 ? '' : 's'} in this category will become Uncategorized.`
+                : `Hide "${catName}"? Notes assigned to it later will not use this category until it is shown again.`;
+            if (!confirm(warn)) return;
+
             AppState.hiddenCategories = [...AppState.hiddenCategories, catName];
             localStorage.setItem('matrix_hidden_categories', JSON.stringify(AppState.hiddenCategories));
             removeCategoryFromFileCabinetLayout(catName);
@@ -1652,6 +1680,25 @@ renderQuickActions() {
             this.syncDataStore();
         });
 
+        window.addEventListener('category:add_requested', (e) => {
+            const { name, color, anchor } = e.detail || {};
+            this.executeAddCategory({
+                name,
+                color,
+                anchor: anchor || null,
+                openPicker: !!anchor
+            });
+        });
+
+        window.addEventListener('categories:manage_requested', () => {
+            CategoriesOverlay.open();
+        });
+
+        window.addEventListener('category:add_prompt', () => {
+            // FC Add opens the manager with the add field focused
+            CategoriesOverlay.open({ focusAdd: true });
+        });
+
         window.addEventListener('category:color_changed', (e) => {
             const { name, color } = e.detail || {};
             if (!name) return;
@@ -1660,10 +1707,7 @@ renderQuickActions() {
             AppState.categories = next;
             applyCategoryColorLive(name, color, AppState.items);
             SidePanel.updateCategories(AppState.categories, AppState.hiddenCategories, AppState.items);
-        });
-
-        window.addEventListener('category:add_prompt', (e) => {
-            this.executeAddCategoryPrompt(e.detail?.anchor || null);
+            if (CategoriesOverlay.isOpen()) CategoriesOverlay.refresh();
         });
 
         window.addEventListener('categories:toggled', () => {
@@ -1674,7 +1718,7 @@ renderQuickActions() {
             SidePanel.updateCategories(AppState.categories, AppState.hiddenCategories, AppState.items);
         });
 
-window.addEventListener('category:order_changed', (e) => {
+        window.addEventListener('category:order_changed', (e) => {
             AppState.categories = writeStoredCategories(e.detail || AppState.categories, { keepEmpty: true });
             this.syncDataStore();
         });

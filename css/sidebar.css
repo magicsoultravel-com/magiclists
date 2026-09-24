@@ -430,6 +430,20 @@ html[data-desktop-gradient="1"] #app-canvas.view-grid {
     letter-spacing: 0.01em;
 }
 
+.sidebar-categories-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.35rem 0.2rem 0.5rem;
+}
+
+.sidebar-categories-summary__text {
+    margin: 0;
+    font-size: 0.62rem;
+    opacity: 0.75;
+    line-height: 1.35;
+}
+
 .sidebar-notes-group {
     display: flex;
     flex-direction: column;

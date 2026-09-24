@@ -46,6 +46,7 @@
     <link rel="stylesheet" href="./css/desktops.css?v=dev_1.0.1">
     <link rel="stylesheet" href="./css/popout.css?v=dev_1.0.0">
     <link rel="stylesheet" href="./css/media-library.css?v=dev_1.0.0">
+    <link rel="stylesheet" href="./css/categories-panel.css?v=dev_1.0.0">
     <style>
         #app-boot {
             position: fixed;
@@ -222,25 +223,12 @@
                     <div class="sidebar-lists-branch">
                         <div class="collapsable-header list-row--header sidebar-lists-branch-header" id="lists-categories-header">
                             <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Categories</span>
+                            <span id="categories-summary-count" class="status-badge">0</span>
                         </div>
                         <div class="collapsable-section collapsed" id="lists-categories-section">
-                            <div class="sidebar-notes-group">
-                                <div class="collapsable-header list-row--header sidebar-notes-subheader" id="categories-list-active-header">
-                                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Active</span>
-                                    <span id="categories-active-count" class="status-badge">0</span>
-                                </div>
-                                <div class="collapsable-section collapsed" id="categories-list-active-section">
-                                    <div id="categories-list-active-zone" class="sidebar-notes-list"></div>
-                                </div>
-                            </div>
-                            <div class="sidebar-notes-group">
-                                <div class="collapsable-header list-row--header sidebar-notes-subheader" id="categories-list-hidden-header">
-                                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed">▼</span>Hidden</span>
-                                    <span id="categories-hidden-count" class="status-badge">0</span>
-                                </div>
-                                <div class="collapsable-section collapsed" id="categories-list-hidden-section">
-                                    <div id="categories-list-hidden-zone" class="sidebar-notes-list"></div>
-                                </div>
+                            <div class="sidebar-categories-summary" id="categories-summary-zone">
+                                <p class="sidebar-categories-summary__text" id="categories-summary-text">0 active · 0 hidden</p>
+                                <button type="button" class="btn btn--compact" id="btn-open-categories-manager" title="Open categories manager" aria-label="Open categories manager">Manage categories</button>
                             </div>
                         </div>
                     </div>
@@ -407,6 +395,16 @@
             <div class="media-lib-detail" data-media-lib-detail></div>
         </div>
         <div class="media-lib-panel__footer" data-media-lib-footer></div>
+    </div>
+
+    <div id="categories-panel" class="categories-panel is-hidden" role="dialog" aria-label="Categories">
+        <div class="categories-panel__top-actions">
+            <span class="categories-panel__drag card-act card-act--drag" data-categories-drag title="Drag to move" aria-label="Drag to move"></span>
+            <button type="button" class="card-act categories-panel__close" data-categories-close title="Close" aria-label="Close"></button>
+        </div>
+        <div class="categories-panel__header" data-categories-header></div>
+        <div class="categories-panel__body" data-categories-body></div>
+        <div class="categories-panel__footer" data-categories-footer></div>
     </div>
 
     <div id="template-picker-overlay" class="overlay template-picker-overlay is-hidden" role="dialog" aria-modal="true" aria-label="Choose note template">

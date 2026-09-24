@@ -58,9 +58,13 @@ function wrapFileCabinetCategoryActions(buttonsHtml) {
     return `<div class="file-cabinet-category-actions">${buttonsHtml}</div>`;
 }
 
-/** Categories to render — only those with filed notes on the active desktop. */
-function buildFileCabinetCategoryNames(byCategory) {
-    const list = [...byCategory.keys()];
+/** Categories to render — filed-note categories plus active registry (empty ones included). */
+function buildFileCabinetCategoryNames(byCategory, activeCategories = []) {
+    const fromNotes = [...byCategory.keys()];
+    const fromRegistry = (Array.isArray(activeCategories) ? activeCategories : [])
+        .map((cat) => (typeof cat === 'string' ? cat : cat?.name))
+        .filter((name) => typeof name === 'string' && name.trim());
+    const list = [...new Set([...fromNotes, ...fromRegistry])];
     const boardSort = readBoardSort();
     if (boardSort.field === 'category') {
         const dir = boardSort.dir === 'asc' ? 1 : -1;
@@ -69,6 +73,41 @@ function buildFileCabinetCategoryNames(byCategory) {
         list.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
     }
     return applyFileCabinetCategoryOrder(list);
+}
+
+/**
+ * Empty active categories default onto the folded rail.
+ * If a name is already in order but not filed, the user expanded it — leave open.
+ */
+export function ensureEmptyCategoriesStartFiled(allCategoryNames, byCategory) {
+    const names = Array.isArray(allCategoryNames) ? allCategoryNames : [];
+    if (!names.length) return;
+    const filed = getFileCabinetFiledCategories();
+    const order = getFileCabinetCategoryOrder();
+    let nextFiled = [...filed];
+    let changed = false;
+    names.forEach((name) => {
+        const cat = String(name || '').trim();
+        if (!cat) return;
+        const count = byCategory?.get?.(cat)?.length || 0;
+        if (count > 0) return;
+        if (nextFiled.includes(cat)) return;
+        if (order.includes(cat)) return; // user expanded empty drawer — keep open
+        nextFiled.push(cat);
+        changed = true;
+        appendFileCabinetCategoryOrder(cat);
+    });
+    if (changed) saveFileCabinetFiledCategories(nextFiled);
+}
+
+/** Mark a category as filed (collapsed) on the rail; used when adding empty cats. */
+export function seedCategoryAsFiled(name) {
+    const cat = String(name || '').trim();
+    if (!cat) return;
+    appendFileCabinetCategoryOrder(cat);
+    const filed = getFileCabinetFiledCategories();
+    if (filed.includes(cat)) return;
+    saveFileCabinetFiledCategories([...filed, cat]);
 }
 
 /** Patch category color in place — avoids full board/FC re-render. */
@@ -1780,15 +1819,6 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
     mount.innerHTML = '';
 
     const safeFiledItems = Array.isArray(filedItems) ? filedItems : [];
-    if (!safeFiledItems.length) {
-        mount.innerHTML = '<div class="file-cabinet-empty">No filed notes — use File away on a note to add tabs here.</div>';
-        mount.style.minHeight = '';
-        mount.style.maxHeight = '';
-        delete mount.__fcPreviewContext;
-        refreshFileCabinetUiScale(mount);
-        return;
-    }
-
     const order = getFileCabinetOrder();
     const byCategory = new Map();
     safeFiledItems.forEach((item) => {
@@ -1797,13 +1827,23 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
         byCategory.get(cat).push(item);
     });
 
-    const allCategories = buildFileCabinetCategoryNames(byCategory);
+    const allCategories = buildFileCabinetCategoryNames(byCategory, activeCategories);
+    ensureEmptyCategoriesStartFiled(allCategories, byCategory);
+
+    if (!safeFiledItems.length && !allCategories.length) {
+        mount.innerHTML = '<div class="file-cabinet-empty">No filed notes — use File away on a note to add tabs here.</div>';
+        mount.style.minHeight = '';
+        mount.style.maxHeight = '';
+        delete mount.__fcPreviewContext;
+        refreshFileCabinetUiScale(mount);
+        return;
+    }
+
     const allCategorySet = new Set(allCategories);
     const filedCategoryNames = applyFileCabinetCategoryOrder(
         getFileCabinetFiledCategories().filter((c) => allCategorySet.has(c))
     );
     const visibleCategories = allCategories.filter((c) => !isFileCabinetCategoryFiled(c));
-    const hasRail = filedCategoryNames.length > 0;
 
     mount.__fcPreviewContext = {
         byCategory,
@@ -1815,52 +1855,50 @@ export function renderFileCabinet(mount, filedItems, activeCategories, UI) {
     const inner = document.createElement('div');
     inner.className = 'file-cabinet-inner';
 
-    if (hasRail) {
-        const rail = document.createElement('aside');
-        rail.className = 'file-cabinet-filed-rail';
-        rail.setAttribute('aria-label', 'Folded categories');
+    const rail = document.createElement('aside');
+    rail.className = 'file-cabinet-filed-rail';
+    rail.setAttribute('aria-label', 'Folded categories');
 
-        filedCategoryNames.forEach((catName) => {
-            const items = byCategory.get(catName) || [];
-            const color = resolveCategoryColor(catName, activeCategories);
+    filedCategoryNames.forEach((catName) => {
+        const items = byCategory.get(catName) || [];
+        const color = resolveCategoryColor(catName, activeCategories);
 
-            const slot = document.createElement('div');
-            slot.className = 'file-cabinet-filed-slot';
-            slot.dataset.category = catName;
-            slot.style.setProperty('--card-category-color', color);
-            slot.style.setProperty('--file-cabinet-category-color', color);
+        const slot = document.createElement('div');
+        slot.className = 'file-cabinet-filed-slot';
+        slot.dataset.category = catName;
+        slot.style.setProperty('--card-category-color', color);
+        slot.style.setProperty('--file-cabinet-category-color', color);
 
-            const chip = document.createElement('div');
-            chip.className = 'file-cabinet-filed-chip';
-            chip.dataset.category = catName;
+        const chip = document.createElement('div');
+        chip.className = 'file-cabinet-filed-chip';
+        chip.dataset.category = catName;
 
-            const canRename = !isUncategorizedCategory(catName);
-            const chipNameAttrs = canRename
-                ? ' class="file-cabinet-filed-chip-name u-truncate card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Category…"'
-                : ' class="file-cabinet-filed-chip-name u-truncate"';
-            const manageBtnsHtml = buildFileCabinetCategoryActionButtons({ canManage: canRename });
-            const chipActionsHtml = wrapFileCabinetCategoryActions(`<button type="button" class="card-act file-cabinet-filed-chip-grab grab-handle grab-handle--col" title="Drag to reorder category" aria-label="Drag to reorder category">${CARD_ICONS.drag}</button>${manageBtnsHtml}<button type="button" class="card-act file-cabinet-category-open-all-btn" title="Open all below" aria-label="Open all below">${ACTION_ICONS.expandAll}</button><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`);
-            chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span${chipNameAttrs}>${escapeHTML(catName)} (${items.length})</span>${chipActionsHtml}`;
+        const canRename = !isUncategorizedCategory(catName);
+        const chipNameAttrs = canRename
+            ? ' class="file-cabinet-filed-chip-name u-truncate card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-placeholder="Category…"'
+            : ' class="file-cabinet-filed-chip-name u-truncate"';
+        const manageBtnsHtml = buildFileCabinetCategoryActionButtons({ canManage: canRename });
+        const chipActionsHtml = wrapFileCabinetCategoryActions(`<button type="button" class="card-act file-cabinet-filed-chip-grab grab-handle grab-handle--col" title="Drag to reorder category" aria-label="Drag to reorder category">${CARD_ICONS.drag}</button>${manageBtnsHtml}<button type="button" class="card-act file-cabinet-category-open-all-btn" title="Open all below" aria-label="Open all below">${ACTION_ICONS.expandAll}</button><button type="button" class="card-act file-cabinet-filed-chip-expand" title="Expand category" aria-label="Expand category">${EXPAND_ICON}</button>`);
+        chip.innerHTML = `<span class="file-cabinet-category-dot" style="background:${escapeAttr(color)}"></span><span${chipNameAttrs}>${escapeHTML(catName)} (${items.length})</span>${chipActionsHtml}`;
 
-            const rollout = document.createElement('div');
-            rollout.className = 'file-cabinet-filed-rollout';
-            rollout.setAttribute('aria-hidden', 'true');
+        const rollout = document.createElement('div');
+        rollout.className = 'file-cabinet-filed-rollout';
+        rollout.setAttribute('aria-hidden', 'true');
 
-            slot.appendChild(chip);
-            slot.appendChild(rollout);
-            rail.appendChild(slot);
-        });
+        slot.appendChild(chip);
+        slot.appendChild(rollout);
+        rail.appendChild(slot);
+    });
 
-        const addBtn = document.createElement('button');
-        addBtn.type = 'button';
-        addBtn.className = 'file-cabinet-add-category-btn';
-        addBtn.title = 'Add category';
-        addBtn.setAttribute('aria-label', 'Add category');
-        addBtn.innerHTML = '<svg viewBox="0 0 16 16" width="18" height="18" focusable="false" aria-hidden="true"><path d="M8 2.5v11M2.5 8h11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
-        rail.appendChild(addBtn);
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'file-cabinet-add-category-btn';
+    addBtn.title = 'Add category';
+    addBtn.setAttribute('aria-label', 'Add category');
+    addBtn.innerHTML = '<svg viewBox="0 0 16 16" width="18" height="18" focusable="false" aria-hidden="true"><path d="M8 2.5v11M2.5 8h11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+    rail.appendChild(addBtn);
 
-        inner.appendChild(rail);
-    }
+    inner.appendChild(rail);
 
     const row = document.createElement('div');
     row.className = 'file-cabinet-row';
