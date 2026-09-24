@@ -184,6 +184,42 @@ export function updateAttachmentView(item, mediaId, patch = {}, { syncUi = true 
 }
 
 /**
+ * Reorder note attachments to match orderedMediaIds (unknown ids skipped; missing appended).
+ * @param {object} item
+ * @param {string[]} orderedMediaIds
+ * @param {{ syncUi?: boolean }} [opts]
+ * @returns {boolean}
+ */
+export function reorderAttachments(item, orderedMediaIds, { syncUi = false } = {}) {
+    if (!item?.id || !Array.isArray(orderedMediaIds)) return false;
+    let changed = false;
+    NoteSurface.mutateItem(item, (it) => {
+        const list = normalizeAttachments(it.attachments);
+        if (!list.length) return;
+        const byId = new Map(list.map((entry) => [entry.mediaId, entry]));
+        const next = [];
+        const seen = new Set();
+        for (const id of orderedMediaIds) {
+            if (!id || seen.has(id)) continue;
+            const entry = byId.get(id);
+            if (!entry) continue;
+            next.push(entry);
+            seen.add(id);
+        }
+        for (const entry of list) {
+            if (!seen.has(entry.mediaId)) next.push(entry);
+        }
+        if (next.length === list.length && next.every((entry, i) => entry.mediaId === list[i].mediaId)) {
+            return;
+        }
+        it.attachments = next;
+        changed = true;
+    }, { preserveView: true, skipRerender: true });
+    if (changed && syncUi) syncAttachmentsUi(item);
+    return changed;
+}
+
+/**
  * Collapse all canvas tiles and clear saved positions for a note.
  * @param {object} item
  * @param {{ syncUi?: boolean }} [opts]

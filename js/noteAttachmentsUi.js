@@ -1,11 +1,12 @@
 /** @module {"owns":"note card attached-media section HTML and hydrate", "related":["mediaAttachments.js","mediaLibrary.js","noteSurfaceHtml.js","mediaLibraryOverlay.js","mediaQuickActions.js"]} */
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
-import { getMediaMeta, getObjectUrl, releaseObjectUrl } from './mediaLibrary.js';
+import { getMediaMeta, getObjectUrl, releaseObjectUrl, updateMediaMeta } from './mediaLibrary.js';
 import { drawBrushStroke } from './canvasBrushes.js';
 import {
     detachMediaFromNote,
-    normalizeAttachments
+    normalizeAttachments,
+    reorderAttachments
 } from './mediaAttachments.js';
 import { buildMediaQuickActionsHtml, bindMediaQuickActions, viewMediaFullSize } from './mediaQuickActions.js';
 import { showAppToast } from './toast.js';
@@ -25,11 +26,6 @@ function paintNoteCanvasPreview(section, item) {
     if (!section || !noteHasVisibleCanvas(item)) return;
     sizeCanvasViewport(section);
     refreshNoteCanvasPreview(section, item);
-}
-
-async function openMediaLibrary(opts) {
-    const { MediaLibraryOverlay } = await import('./mediaLibraryOverlay.js');
-    return MediaLibraryOverlay.open(opts);
 }
 
 function canvasRoot(section) {
@@ -215,6 +211,82 @@ function setExpandButtonState(expandBtn, expanded) {
 }
 
 /**
+ * Inline-rename a media attachment title; persists via updateMediaMeta.
+ * @param {HTMLElement} row
+ * @param {string} mediaId
+ */
+function beginAttachmentTitleEdit(row, mediaId) {
+    if (!row || !mediaId) return;
+    if (row.querySelector('.note-attachment__title-input')) return;
+
+    const labelBtn = row.querySelector('[data-rename-media]');
+    const labelEl = row.querySelector('[data-attach-label]');
+    if (!labelBtn || !labelEl) return;
+
+    const previous = labelEl.textContent || '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'note-attachment__title-input';
+    input.value = previous === 'Loading…' ? '' : previous;
+    input.setAttribute('aria-label', 'Rename media');
+
+    let finished = false;
+    const restoreLabel = (text) => {
+        labelEl.textContent = text;
+        labelBtn.replaceChildren(labelEl);
+    };
+
+    const finish = async (save) => {
+        if (finished) return;
+        finished = true;
+        const raw = input.value;
+        input.removeEventListener('blur', onBlur);
+        if (!save) {
+            restoreLabel(previous);
+            return;
+        }
+        try {
+            const meta = await updateMediaMeta(mediaId, { title: raw });
+            const next = (meta?.title || meta?.filename || raw.trim() || previous || 'Untitled');
+            restoreLabel(next);
+            row.title = next;
+        } catch {
+            restoreLabel(previous);
+            showAppToast('Rename failed');
+        }
+    };
+
+    const onBlur = () => {
+        finish(true).catch(() => {});
+    };
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            e.stopPropagation();
+            input.blur();
+            return;
+        }
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            finished = true;
+            input.removeEventListener('blur', onBlur);
+            restoreLabel(previous);
+            return;
+        }
+        e.stopPropagation();
+    });
+    input.addEventListener('click', (e) => e.stopPropagation());
+    input.addEventListener('mousedown', (e) => e.stopPropagation());
+    input.addEventListener('blur', onBlur);
+
+    labelBtn.replaceChildren(input);
+    input.focus();
+    input.select();
+}
+
+/**
  * @param {HTMLElement} section
  * @param {HTMLElement} row
  * @param {object} item
@@ -293,10 +365,11 @@ export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCo
         return `
             <div class="note-attachment" data-media-id="${id}">
                 <div class="note-attachment__compact">
+                    ${canEdit ? '<span class="grab-handle grab-handle--step note-attachment__grab" title="Drag to reorder" aria-label="Drag to reorder">⋮⋮</span>' : ''}
                     <button type="button" class="note-attachment__thumb-btn" data-thumb-media="${id}" title="View full size" aria-label="View full size">
                         <span class="note-attachment__thumb" data-attach-thumb aria-hidden="true"></span>
                     </button>
-                    <button type="button" class="note-attachment__label-btn" data-open-media="${id}" title="Open in media library">
+                    <button type="button" class="note-attachment__label-btn" data-rename-media="${id}" title="Rename" aria-label="Rename">
                         <span class="note-attachment__label" data-attach-label>Loading…</span>
                     </button>
                     ${actions}
@@ -1379,17 +1452,16 @@ export function bindNoteAttachments(root, item) {
         });
     });
 
-    section.querySelectorAll('[data-open-media]').forEach((btn) => {
+    section.querySelectorAll('[data-rename-media]').forEach((btn) => {
         if (btn.dataset.bound === '1') return;
         btn.dataset.bound = '1';
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            const mediaId = btn.dataset.openMedia;
-            openMediaLibrary({
-                attachNoteId: item.id,
-                selectMediaId: mediaId
-            });
+            if (btn.querySelector('.note-attachment__title-input')) return;
+            const mediaId = btn.dataset.renameMedia;
+            const row = btn.closest('.note-attachment');
+            beginAttachmentTitleEdit(row, mediaId);
         });
     });
 
