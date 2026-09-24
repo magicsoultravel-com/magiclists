@@ -1,6 +1,6 @@
 ﻿/** @module {"owns":"application orchestration, event bus listeners, workspace init", "related":["api.js","ui.js","layoutStorage.js"], "events":["item:mutation_requested","item:selected_for_edit","board:visibility_changed","calendar:add_note"]} */
 import { API } from './api.js';
-import { ACTION_ICONS } from './icons.js';
+import { ACTION_ICONS, CARD_ICONS } from './icons.js';
 import { createDefaultNote } from './noteModel.js';
 import { NoteSurface } from './noteSurface.js';
 import { UI } from './ui.js';
@@ -58,6 +58,7 @@ import { MediaLibraryOverlay, bindMediaFilePickers } from './mediaLibraryOverlay
 import { CategoriesOverlay } from './categoriesOverlay.js';
 import { MediaStagingDialog } from './mediaStagingDialog.js';
 import { MediaPasteCatcher, readClipboardIntoStaging } from './mediaPasteCatcher.js';
+import { QuickScribble } from './quickScribble.js';
 import { registerLiveNoteSource, setModalEditorNoteIdResolver } from './notePasteContext.js';
 import { initAllSidebarModules } from './sidebarModules.js';
 import { SidebarStats } from './sidebarStats.js';
@@ -198,6 +199,7 @@ BootProgress.set(85, 'Workspace…');
             MediaPasteCatcher.init();
             bindMediaFilePickers();
             this.setupMediaFab();
+            this.setupScribbleFab();
             SidePanel.setupStatusClickHandlers(); /* after radio/tv/weather shells exist */
             this.renderQuickActionsHeaderIcons();
             SidebarHistory.init(AppState);
@@ -805,6 +807,7 @@ renderQuickActions() {
     updateFabVisibility() {
         const fab = document.getElementById('fab-create');
         const mediaFab = document.getElementById('fab-media');
+        const scribbleFab = document.getElementById('fab-scribble');
         const inDrawing = AppState.workspaceMode === 'drawing';
         if (fab) {
             fab.classList.toggle('is-hidden', inDrawing);
@@ -817,6 +820,9 @@ renderQuickActions() {
         if (mediaFab) {
             mediaFab.classList.toggle('is-hidden', inDrawing);
         }
+        if (scribbleFab) {
+            scribbleFab.classList.toggle('is-hidden', inDrawing);
+        }
     }
 
     setupMediaFab() {
@@ -825,6 +831,16 @@ renderQuickActions() {
         mediaFab.innerHTML = ACTION_ICONS.mediaPaste;
         mediaFab.addEventListener('click', () => {
             readClipboardIntoStaging();
+        });
+    }
+
+    setupScribbleFab() {
+        QuickScribble.init();
+        const scribbleFab = document.getElementById('fab-scribble');
+        if (!scribbleFab) return;
+        scribbleFab.innerHTML = CARD_ICONS.drawingPencil;
+        scribbleFab.addEventListener('click', () => {
+            QuickScribble.toggleFromFab();
         });
     }
 

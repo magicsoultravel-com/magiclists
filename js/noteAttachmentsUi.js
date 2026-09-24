@@ -1,6 +1,6 @@
-/** @module {"owns":"note card attached-media section HTML and hydrate", "related":["mediaAttachments.js","mediaLibrary.js","noteSurfaceHtml.js","mediaLibraryOverlay.js","mediaQuickActions.js"]} */
+/** @module {"owns":"note card attached-media section HTML and hydrate", "related":["mediaAttachments.js","mediaLibrary.js","noteSurfaceHtml.js","mediaLibraryOverlay.js","mediaQuickActions.js","scribbleInk.js"]} */
 import { escapeAttr, escapeHTML } from './domEscape.js';
-import { CARD_ICONS, ACTION_ICONS } from './icons.js';
+import { CARD_ICONS, ACTION_ICONS, DRAWING_ICONS } from './icons.js';
 import { getMediaMeta, getObjectUrl, releaseObjectUrl, updateMediaMeta } from './mediaLibrary.js';
 import { drawBrushStroke } from './canvasBrushes.js';
 import {
@@ -14,6 +14,20 @@ import { createEmptyNoteCanvas } from './noteModel.js';
 import { renderNoteCanvas, refreshNoteCanvasPreview } from './noteCanvasRenderer.js';
 import { initialImageSize } from './canvasImages.js';
 import { mutateItem } from './noteSurfaceMutations.js';
+import { ColorPicker, PALETTE_UNIFIED } from './colorPicker.js';
+import {
+    SCRIBBLE_COLORS,
+    SCRIBBLE_COLOR_CUSTOM_INDEX,
+    SCRIBBLE_WIDTH_MIN,
+    SCRIBBLE_WIDTH_MAX,
+    SCRIBBLE_WIDTH_DEFAULT,
+    normalizeScribbleColorIndex,
+    getScribbleColor,
+    setScribbleCustomColor,
+    clampScribbleWidth,
+    stepScribbleWidth,
+    eraseScribbleStrokesAt
+} from './scribbleInk.js';
 
 const CASCADE_STEP = 18;
 const CANVAS_PAD = 24;
@@ -568,8 +582,10 @@ let lightboxFitScale = 1;
 /** Preview-only scribble state. Strokes live in memory; never persisted. */
 let lightboxDoodleMode = false;
 let lightboxDoodleColorIndex = 0;
+/** @type {'pen'|'eraser'} */
+let lightboxDoodleTool = 'pen';
 /** Pen width in image-layout CSS px (same idea as magicCanvas brush width). */
-let lightboxDoodleWidth = 6;
+let lightboxDoodleWidth = SCRIBBLE_WIDTH_DEFAULT;
 let lightboxDoodles = [];
 let lightboxActiveStroke = null;
 /** Cached untransformed image layout box ({w,h} in CSS px). */
@@ -682,12 +698,14 @@ export function lightboxCanPan(zoom, rotation) {
         || normalizeLightboxRotation(rotation) !== 0;
 }
 
-export const LIGHTBOX_DOODLE_COLORS = ['#ff00ff', '#00ffff', '#00ff00'];
+/** Shared scribble palette (3 neon + mutable custom). */
+export const LIGHTBOX_DOODLE_COLORS = SCRIBBLE_COLORS;
+export const LIGHTBOX_DOODLE_CUSTOM_INDEX = SCRIBBLE_COLOR_CUSTOM_INDEX;
 /** @deprecated Prefer LIGHTBOX_DOODLE_WIDTH_DEFAULT; kept for callers that used relative width. */
 export const LIGHTBOX_DOODLE_WIDTH = 0.006;
-export const LIGHTBOX_DOODLE_WIDTH_MIN = 1;
-export const LIGHTBOX_DOODLE_WIDTH_MAX = 48;
-export const LIGHTBOX_DOODLE_WIDTH_DEFAULT = 6;
+export const LIGHTBOX_DOODLE_WIDTH_MIN = SCRIBBLE_WIDTH_MIN;
+export const LIGHTBOX_DOODLE_WIDTH_MAX = SCRIBBLE_WIDTH_MAX;
+export const LIGHTBOX_DOODLE_WIDTH_DEFAULT = SCRIBBLE_WIDTH_DEFAULT;
 
 /**
  * Clamp a lightbox doodle pen width (px) to the supported range.
@@ -695,9 +713,7 @@ export const LIGHTBOX_DOODLE_WIDTH_DEFAULT = 6;
  * @returns {number}
  */
 export function clampLightboxDoodleWidth(value) {
-    const n = Number(value);
-    if (!Number.isFinite(n)) return LIGHTBOX_DOODLE_WIDTH_DEFAULT;
-    return Math.min(LIGHTBOX_DOODLE_WIDTH_MAX, Math.max(LIGHTBOX_DOODLE_WIDTH_MIN, Math.round(n)));
+    return clampScribbleWidth(value);
 }
 
 /**
@@ -707,23 +723,28 @@ export function clampLightboxDoodleWidth(value) {
  * @returns {number}
  */
 export function stepLightboxDoodleWidth(current, delta) {
-    const step = Number(delta);
-    return clampLightboxDoodleWidth(
-        clampLightboxDoodleWidth(current) + (Number.isFinite(step) ? step : 0)
-    );
+    return stepScribbleWidth(current, delta);
 }
 
 /**
- * Pick a doodle color index, wrapping around the neon trio.
+ * Pick a doodle color index, wrapping around the scribble palette.
  * @param {unknown} index
  * @returns {number}
  */
 export function normalizeLightboxDoodleColor(index) {
-    const n = Number(index);
-    if (!LIGHTBOX_DOODLE_COLORS.length) return 0;
-    if (!Number.isFinite(n)) return 0;
-    const len = LIGHTBOX_DOODLE_COLORS.length;
-    return ((Math.round(n) % len) + len) % len;
+    return normalizeScribbleColorIndex(index);
+}
+
+/**
+ * Re-export stroke-hit erase for tests / site-wide scribble.
+ * @param {Array<{ points?: Array<{x?: number, y?: number}>, width?: number }>} strokes
+ * @param {number} x
+ * @param {number} y
+ * @param {number} radius
+ * @param {{ scaleX?: number, scaleY?: number }} [opts]
+ */
+export function eraseLightboxDoodlesAt(strokes, x, y, radius, opts = {}) {
+    return eraseScribbleStrokesAt(strokes, x, y, radius, opts);
 }
 
 /**
@@ -1034,6 +1055,7 @@ function syncLightboxDoodleUI() {
     const canvas = lightboxDoodleCanvas();
     const hint = lightboxEl?.querySelector?.('[data-lightbox-hint]') || null;
     frame?.classList.toggle('is-doodling', !!lightboxDoodleMode);
+    frame?.classList.toggle('is-erasing', !!lightboxDoodleMode && lightboxDoodleTool === 'eraser');
     if (penBtn) {
         penBtn.classList.toggle('is-active', !!lightboxDoodleMode);
         penBtn.setAttribute('aria-pressed', lightboxDoodleMode ? 'true' : 'false');
@@ -1044,9 +1066,13 @@ function syncLightboxDoodleUI() {
         canvas.style.pointerEvents = lightboxDoodleMode ? 'auto' : 'none';
     }
     syncLightboxDoodleWidthUI();
+    syncLightboxDoodleToolUI();
+    syncLightboxDoodleColorUI();
     if (hint) {
         hint.textContent = lightboxDoodleMode
-            ? 'Draw to scribble (preview only) · Scroll to zoom · Pick a color below'
+            ? (lightboxDoodleTool === 'eraser'
+                ? 'Erase scribbles · Scroll to zoom'
+                : 'Draw to scribble (preview only) · Scroll to zoom · Pick a color below')
             : 'Scroll to zoom · Drag to pan · Double-click to reset';
     }
 }
@@ -1060,6 +1086,32 @@ function syncLightboxDoodleWidthUI() {
     const larger = lightboxEl?.querySelector?.('[data-lightbox-doodle-larger]') || null;
     if (smaller) smaller.disabled = width <= LIGHTBOX_DOODLE_WIDTH_MIN;
     if (larger) larger.disabled = width >= LIGHTBOX_DOODLE_WIDTH_MAX;
+}
+
+function syncLightboxDoodleToolUI() {
+    const bar = lightboxDoodleBar();
+    const eraser = bar?.querySelector?.('[data-lightbox-doodle-eraser]') || null;
+    if (eraser) {
+        const on = lightboxDoodleTool === 'eraser';
+        eraser.classList.toggle('is-active', on);
+        eraser.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+}
+
+function syncLightboxDoodleColorUI() {
+    const bar = lightboxDoodleBar();
+    bar?.querySelectorAll?.('[data-lightbox-doodle-color]')?.forEach?.((btn) => {
+        const idx = Number(btn?.dataset?.lightboxDoodleColor);
+        const active = idx === lightboxDoodleColorIndex && lightboxDoodleTool === 'pen';
+        btn.classList.toggle('is-active', active);
+        if (active) btn.setAttribute('aria-pressed', 'true');
+        else btn.removeAttribute('aria-pressed');
+        if (idx === LIGHTBOX_DOODLE_CUSTOM_INDEX) {
+            btn.style.setProperty('--doodle-color', getScribbleColor(LIGHTBOX_DOODLE_CUSTOM_INDEX));
+            btn.title = 'Custom color';
+            btn.setAttribute('aria-label', 'Custom pen color');
+        }
+    });
 }
 
 function setLightboxDoodleWidth(next) {
@@ -1078,20 +1130,71 @@ function setLightboxDoodleMode(on) {
             lightboxDoodles.push(lightboxActiveStroke);
         }
         lightboxActiveStroke = null;
+        ColorPicker.close();
     }
     syncLightboxDoodleUI();
     paintLightboxDoodles();
 }
 
-function setLightboxDoodleColor(index) {
-    lightboxDoodleColorIndex = normalizeLightboxDoodleColor(index);
+function setLightboxDoodleTool(tool) {
+    lightboxDoodleTool = tool === 'eraser' ? 'eraser' : 'pen';
+    if (lightboxDoodleTool === 'pen') ColorPicker.close();
+    syncLightboxDoodleUI();
+}
+
+/**
+ * @param {unknown} index
+ * @param {{ openPicker?: boolean }} [opts]
+ */
+function setLightboxDoodleColor(index, opts = {}) {
+    const next = normalizeLightboxDoodleColor(index);
+    const wasActive = next === lightboxDoodleColorIndex && lightboxDoodleTool === 'pen';
+    lightboxDoodleColorIndex = next;
+    lightboxDoodleTool = 'pen';
+    syncLightboxDoodleUI();
+    const wantPicker = !!opts.openPicker
+        || (wasActive && next === LIGHTBOX_DOODLE_CUSTOM_INDEX);
+    if (wantPicker && next === LIGHTBOX_DOODLE_CUSTOM_INDEX) {
+        openLightboxCustomColorPicker();
+    } else if (next !== LIGHTBOX_DOODLE_CUSTOM_INDEX) {
+        ColorPicker.close();
+    }
+}
+
+function openLightboxCustomColorPicker() {
     const bar = lightboxDoodleBar();
-    bar?.querySelectorAll?.('[data-lightbox-doodle-color]')?.forEach?.((btn) => {
-        const active = Number(btn?.dataset?.lightboxDoodleColor) === lightboxDoodleColorIndex;
-        btn.classList.toggle('is-active', active);
-        if (active) btn.setAttribute('aria-pressed', 'true');
-        else btn.removeAttribute('aria-pressed');
+    const chip = bar?.querySelector?.(`[data-lightbox-doodle-color="${LIGHTBOX_DOODLE_CUSTOM_INDEX}"]`) || null;
+    if (!chip) return;
+    ColorPicker.open({
+        anchor: chip,
+        presets: PALETTE_UNIFIED,
+        value: getScribbleColor(LIGHTBOX_DOODLE_CUSTOM_INDEX),
+        align: 'center',
+        onSelect: (hex) => {
+            setScribbleCustomColor(hex);
+            syncLightboxDoodleColorUI();
+        }
     });
+}
+
+function eraseLightboxAtEvent(e) {
+    const pt = lightboxDoodlePointFromEvent(e);
+    if (!pt) return;
+    const layout = (lightboxLayoutCache.w > 0 && lightboxLayoutCache.h > 0)
+        ? lightboxLayoutCache
+        : measureLightboxLayout();
+    if (!layout.w || !layout.h) return;
+    const lx = pt.x * layout.w;
+    const ly = pt.y * layout.h;
+    const radius = clampLightboxDoodleWidth(lightboxDoodleWidth);
+    const next = eraseLightboxDoodlesAt(lightboxDoodles, lx, ly, radius, {
+        scaleX: layout.w,
+        scaleY: layout.h
+    });
+    if (next.length !== lightboxDoodles.length) {
+        lightboxDoodles = next;
+        paintLightboxDoodles();
+    }
 }
 
 function clearLightboxDoodles() {
@@ -1109,9 +1212,11 @@ function resetLightboxZoom() {
     lightboxFitScale = 1;
     // Preview-only scribbles never survive open/close.
     lightboxDoodleMode = false;
+    lightboxDoodleTool = 'pen';
     lightboxDoodles = [];
     lightboxActiveStroke = null;
     lightboxLayoutCache = { w: 0, h: 0 };
+    ColorPicker.close();
     applyLightboxTransform();
     syncLightboxDoodleUI();
     paintLightboxDoodles();
@@ -1195,6 +1300,8 @@ function ensureLightbox() {
                     <button type="button" class="media-lightbox__doodle-dot is-active" data-lightbox-doodle-color="0" style="--doodle-color:#ff00ff" title="Pink" aria-label="Pink pen" aria-pressed="true"></button>
                     <button type="button" class="media-lightbox__doodle-dot" data-lightbox-doodle-color="1" style="--doodle-color:#00ffff" title="Cyan" aria-label="Cyan pen"></button>
                     <button type="button" class="media-lightbox__doodle-dot" data-lightbox-doodle-color="2" style="--doodle-color:#00ff00" title="Green" aria-label="Green pen"></button>
+                    <button type="button" class="media-lightbox__doodle-dot" data-lightbox-doodle-color="3" style="--doodle-color:#ffaa00" title="Custom color" aria-label="Custom pen color"></button>
+                    <button type="button" class="media-lightbox__doodle-tool" data-lightbox-doodle-eraser title="Eraser" aria-label="Eraser" aria-pressed="false">${DRAWING_ICONS.eraser}</button>
                     <span class="media-lightbox__doodle-size" aria-label="Pen size">
                         <button type="button" class="media-lightbox__doodle-size-btn" data-lightbox-doodle-smaller title="Decrease pen size" aria-label="Decrease pen size">${ACTION_ICONS.minus}</button>
                         <span class="media-lightbox__doodle-size-value" data-lightbox-doodle-width aria-live="polite">6px</span>
@@ -1243,7 +1350,17 @@ function ensureLightbox() {
             if (doodleColor) {
                 e.preventDefault();
                 e.stopPropagation();
-                setLightboxDoodleColor(doodleColor.dataset?.lightboxDoodleColor);
+                const idx = Number(doodleColor.dataset?.lightboxDoodleColor);
+                const already = idx === lightboxDoodleColorIndex && lightboxDoodleTool === 'pen';
+                setLightboxDoodleColor(idx, {
+                    openPicker: already && idx === LIGHTBOX_DOODLE_CUSTOM_INDEX
+                });
+                return;
+            }
+            if (e.target.closest('[data-lightbox-doodle-eraser]')) {
+                e.preventDefault();
+                e.stopPropagation();
+                setLightboxDoodleTool(lightboxDoodleTool === 'eraser' ? 'pen' : 'eraser');
                 return;
             }
             if (e.target.closest('[data-lightbox-doodle-clear]')) {
@@ -1315,8 +1432,9 @@ function ensureLightbox() {
         };
         zoomImg?.addEventListener('pointerup', endPan);
         zoomImg?.addEventListener('pointercancel', endPan);
-        // Preview-only scribble strokes (magic-canvas pen, neon trio).
+        // Preview-only scribble strokes (magic-canvas pen, neon + custom).
         const doodleCanvas = lightboxEl.querySelector('[data-lightbox-doodle]');
+        let doodleErasing = false;
         const doodlePressure = (e) => {
             const raw = Number(e?.pressure);
             if (Number.isFinite(raw) && raw > 0) return Math.min(1, raw);
@@ -1335,21 +1453,38 @@ function ensureLightbox() {
         doodleCanvas?.addEventListener('pointerdown', (e) => {
             if (!lightboxDoodleMode) return;
             if (e.button !== undefined && e.button !== 0) return;
+            try { doodleCanvas.setPointerCapture(e.pointerId); } catch { /* noop */ }
+            if (lightboxDoodleTool === 'eraser') {
+                doodleErasing = true;
+                lightboxActiveStroke = null;
+                eraseLightboxAtEvent(e);
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
             if (lightboxActiveStroke?.points?.length) {
                 lightboxDoodles.push(lightboxActiveStroke);
             }
             lightboxActiveStroke = {
-                color: LIGHTBOX_DOODLE_COLORS[normalizeLightboxDoodleColor(lightboxDoodleColorIndex)],
+                color: getScribbleColor(lightboxDoodleColorIndex),
                 width: clampLightboxDoodleWidth(lightboxDoodleWidth),
                 points: []
             };
-            try { doodleCanvas.setPointerCapture(e.pointerId); } catch { /* noop */ }
             doodleAppendPoint(e);
             e.preventDefault();
             e.stopPropagation();
         });
         doodleCanvas?.addEventListener('pointermove', (e) => {
-            if (!lightboxDoodleMode || !lightboxActiveStroke) return;
+            if (!lightboxDoodleMode) return;
+            if (lightboxDoodleTool === 'eraser' && doodleErasing) {
+                const events = typeof e.getCoalescedEvents === 'function'
+                    ? e.getCoalescedEvents()
+                    : [e];
+                for (const sub of events.length ? events : [e]) eraseLightboxAtEvent(sub);
+                e.preventDefault();
+                return;
+            }
+            if (!lightboxActiveStroke) return;
             // coalesced events smooth fast strokes on high-Hz pointers.
             const events = typeof e.getCoalescedEvents === 'function'
                 ? e.getCoalescedEvents()
@@ -1358,6 +1493,7 @@ function ensureLightbox() {
             e.preventDefault();
         });
         const endDoodleStroke = () => {
+            doodleErasing = false;
             if (!lightboxActiveStroke) return;
             if (lightboxActiveStroke.points.length) {
                 lightboxDoodles.push(lightboxActiveStroke);

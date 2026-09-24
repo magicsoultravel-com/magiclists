@@ -1,4 +1,4 @@
-/** @css {"owns":"media staging dialogue, gallery floating panel, media FAB, note attachment section, media lightbox", "js":["mediaLibraryOverlay.js","mediaStagingDialog.js","mediaPasteCatcher.js","noteAttachmentsUi.js"]} */
+/** @css {"owns":"media staging dialogue, gallery floating panel, media FAB, scribble FAB, note attachment section, media lightbox, site-wide quick scribble", "js":["mediaLibraryOverlay.js","mediaStagingDialog.js","mediaPasteCatcher.js","noteAttachmentsUi.js","quickScribble.js"]} */
 
 /* Staging count chip (also used in staging dialogue header) */
 .sidebar-media-lib__compact {
@@ -41,6 +41,39 @@
 
 .fab-media.is-hidden {
     display: none;
+}
+
+/* Scribble FAB — stacked above clipboard FAB */
+.fab-scribble {
+    position: fixed;
+    right: 1.25rem;
+    bottom: 9.65rem;
+    z-index: 910;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--text-primary) 18%, transparent);
+    background: var(--surface-elevated, #1e1e22);
+    color: var(--text-primary, #eee);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    line-height: 1;
+}
+
+.fab-scribble:hover {
+    filter: brightness(1.08);
+}
+
+.fab-scribble.is-hidden {
+    display: none;
+}
+
+.fab-scribble.is-active {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-primary) 35%, transparent), 0 6px 18px rgba(0, 0, 0, 0.28);
 }
 
 /* Floating media library panel — no backdrop; board stays interactive */
@@ -1158,6 +1191,10 @@
     cursor: crosshair;
 }
 
+.media-lightbox__frame.is-doodling.is-erasing {
+    cursor: cell;
+}
+
 .media-lightbox__frame.is-doodling .media-lightbox__hint {
     display: none;
 }
@@ -1191,6 +1228,30 @@
 .media-lightbox__doodle-dot.is-active {
     border-color: #fff;
     box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35), inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.media-lightbox__doodle-tool {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.55rem;
+    height: 1.55rem;
+    padding: 0;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.88);
+    cursor: pointer;
+}
+
+.media-lightbox__doodle-tool:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.media-lightbox__doodle-tool.is-active {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
 }
 
 .media-lightbox__doodle-size {
@@ -1252,6 +1313,95 @@
 
 .media-lightbox__doodle-clear:hover {
     background: rgba(255, 255, 255, 0.1);
+}
+
+/* Site-wide quick scribble overlay */
+.quick-scribble {
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    pointer-events: none;
+}
+
+.quick-scribble.is-off {
+    display: none !important;
+}
+
+.quick-scribble__canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    touch-action: none;
+    pointer-events: none;
+}
+
+.quick-scribble.is-drawing .quick-scribble__canvas {
+    pointer-events: auto;
+    cursor: crosshair;
+}
+
+.quick-scribble.is-drawing.is-erasing .quick-scribble__canvas {
+    cursor: cell;
+}
+
+.quick-scribble__chrome {
+    position: absolute;
+    left: 50%;
+    bottom: 0.85rem;
+    transform: translateX(-50%);
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+}
+
+.quick-scribble__chrome > * {
+    pointer-events: auto;
+}
+
+.quick-scribble__bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.28rem 0.45rem;
+    border-radius: 999px;
+    background: rgba(8, 8, 10, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+    max-width: calc(100vw - 2rem);
+}
+
+.quick-scribble__bar[hidden] {
+    display: none !important;
+}
+
+.quick-scribble__done,
+.quick-scribble__exit {
+    margin: 0;
+    margin-left: 0.1rem;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 0.68rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.quick-scribble__done:hover,
+.quick-scribble__exit:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.quick-scribble__done {
+    border-color: rgba(52, 211, 153, 0.45);
+    color: #a7f3d0;
 }
 
 .btn--danger {

@@ -18,14 +18,22 @@ import {
     lightboxDoodleToVisual,
     clampLightboxDoodleWidth,
     stepLightboxDoodleWidth,
+    eraseLightboxDoodlesAt,
     LIGHTBOX_ZOOM_MIN,
     LIGHTBOX_ZOOM_MAX,
     LIGHTBOX_DOODLE_COLORS,
+    LIGHTBOX_DOODLE_CUSTOM_INDEX,
     LIGHTBOX_DOODLE_WIDTH_MIN,
     LIGHTBOX_DOODLE_WIDTH_MAX,
     LIGHTBOX_DOODLE_WIDTH_DEFAULT
 } from '../js/noteAttachmentsUi.js';
-import { CARD_ICONS, ACTION_ICONS } from '../js/icons.js';
+import { CARD_ICONS, ACTION_ICONS, DRAWING_ICONS } from '../js/icons.js';
+import {
+    scribbleStrokeHitsPoint,
+    eraseScribbleStrokesAt,
+    setScribbleCustomColor,
+    SCRIBBLE_COLOR_CUSTOM_DEFAULT
+} from '../js/scribbleInk.js';
 import { createDefaultNote } from '../js/noteModel.js';
 
 function sampleCanvas() {
@@ -214,13 +222,35 @@ describe('noteAttachmentsUi module loads and exports functions', () => {
         assert.equal(lightboxCanPan(1, 90), true);
     });
 
-    it('normalizeLightboxDoodleColor wraps the neon trio', () => {
+    it('normalizeLightboxDoodleColor wraps the scribble palette (3 neon + custom)', () => {
         assert.equal(normalizeLightboxDoodleColor(0), 0);
         assert.equal(normalizeLightboxDoodleColor(2), 2);
-        assert.equal(normalizeLightboxDoodleColor(3), 0);
+        assert.equal(normalizeLightboxDoodleColor(3), LIGHTBOX_DOODLE_CUSTOM_INDEX);
+        assert.equal(normalizeLightboxDoodleColor(4), 0);
         assert.equal(normalizeLightboxDoodleColor(-1), LIGHTBOX_DOODLE_COLORS.length - 1);
         assert.equal(normalizeLightboxDoodleColor('nope'), 0);
-        assert.equal(LIGHTBOX_DOODLE_COLORS.length, 3);
+        assert.equal(LIGHTBOX_DOODLE_COLORS.length, 4);
+        assert.equal(LIGHTBOX_DOODLE_CUSTOM_INDEX, 3);
+    });
+
+    it('custom scribble color slot is mutable', () => {
+        const prev = LIGHTBOX_DOODLE_COLORS[LIGHTBOX_DOODLE_CUSTOM_INDEX];
+        assert.equal(setScribbleCustomColor('#112233'), '#112233');
+        assert.equal(LIGHTBOX_DOODLE_COLORS[LIGHTBOX_DOODLE_CUSTOM_INDEX], '#112233');
+        setScribbleCustomColor(prev || SCRIBBLE_COLOR_CUSTOM_DEFAULT);
+    });
+
+    it('eraseLightboxDoodlesAt removes strokes under the eraser tip', () => {
+        const strokes = [
+            { color: '#ff00ff', width: 6, points: [{ x: 0.1, y: 0.1, p: 0.5 }, { x: 0.2, y: 0.2, p: 0.5 }] },
+            { color: '#00ffff', width: 6, points: [{ x: 0.8, y: 0.8, p: 0.5 }] }
+        ];
+        const kept = eraseLightboxDoodlesAt(strokes, 20, 20, 8, { scaleX: 100, scaleY: 100 });
+        assert.equal(kept.length, 1);
+        assert.equal(kept[0].color, '#00ffff');
+        assert.equal(eraseScribbleStrokesAt(strokes, 80, 80, 8, { scaleX: 100, scaleY: 100 }).length, 1);
+        assert.equal(scribbleStrokeHitsPoint(strokes[0], 15, 15, 8, { scaleX: 100, scaleY: 100 }), true);
+        assert.equal(scribbleStrokeHitsPoint(strokes[0], 90, 90, 8, { scaleX: 100, scaleY: 100 }), false);
     });
 
     it('normalizeLightboxDoodlePoint clamps to 0..1', () => {
@@ -266,6 +296,10 @@ describe('noteAttachmentsUi module loads and exports functions', () => {
 
     it('scribble toolbar uses the note-canvas pencil icon', () => {
         assert.ok(String(CARD_ICONS.drawingPencil || '').includes('<svg'));
+    });
+
+    it('eraser icon exists for the scribble toolbar', () => {
+        assert.ok(String(DRAWING_ICONS.eraser || '').includes('<svg'));
     });
 
     it('clampLightboxDoodleWidth keeps pen size in the magicCanvas-like range', () => {
