@@ -105,16 +105,30 @@ function loadState() {
 }
 
 function saveState(patch) {
-    const current = loadState();
-    const next = { ...current, ...patch };
-    if (next.recentsMeta) {
-        next.recents = next.recentsMeta.map((e) => e.key);
+    let raw = {};
+    try {
+        const parsed = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            raw = parsed;
+        }
+    } catch {
+        raw = {};
     }
+    const current = loadState();
+    const nextKnown = { ...current, ...patch };
+    if (nextKnown.recentsMeta) {
+        nextKnown.recents = nextKnown.recentsMeta.map((e) => e.key);
+    }
+    delete nextKnown.miniPlayerDocked;
+    delete nextKnown.miniPlayerX;
+    delete nextKnown.miniPlayerY;
+    // Merge known fields onto the raw blob so unknown/foreign keys survive.
+    const next = { ...raw, ...nextKnown };
     delete next.miniPlayerDocked;
     delete next.miniPlayerX;
     delete next.miniPlayerY;
     localStorage.setItem(STATE_KEY, JSON.stringify(next));
-    return next;
+    return nextKnown;
 }
 
 function dispatchState(detail) {

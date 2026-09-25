@@ -23,7 +23,15 @@ function loadSettings() {
 }
 
 function saveSettings(patch) {
-    const current = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
+    let current = {};
+    try {
+        const parsed = JSON.parse(localStorage.getItem(STATE_KEY) || '{}');
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            current = parsed;
+        }
+    } catch {
+        current = {};
+    }
     const next = { ...current, ...patch };
     localStorage.setItem(STATE_KEY, JSON.stringify(next));
     return next;
