@@ -424,8 +424,13 @@ function bindNoteBodySections(root) {
  * @param {object} item
  */
 function bindNoteContentSubToggles(root, item) {
-    const section = root?.querySelector?.('[data-note-content]') || root?.closest?.('[data-note-content]');
-    if (!section || !item || section.dataset.contentSubsBound === '1') return;
+    if (!root || !item) return;
+    // Board wraps subs in [data-note-content]; Focus hosts the same toggles
+    // directly in a pane body — accept either host.
+    const section = root.querySelector?.('[data-note-content]')
+        || root.closest?.('[data-note-content]')
+        || (root.querySelector?.('[data-note-text-toggle], [data-note-checklist-toggle]') ? root : null);
+    if (!section || section.dataset.contentSubsBound === '1') return;
     section.dataset.contentSubsBound = '1';
 
     section.addEventListener('click', (e) => {
@@ -437,7 +442,8 @@ function bindNoteContentSubToggles(root, item) {
             mutateItem(item, (it) => {
                 it.textCollapsed = nextCollapsed;
             }, { preserveView: true, skipRerender: true });
-            const block = section.querySelector('[data-note-text]');
+            const block = textToggle.closest('[data-note-text]')
+                || section.querySelector('[data-note-text]');
             const body = block?.querySelector?.('[data-note-text-body]');
             const icon = textToggle.querySelector('.collapsable-toggle');
             textToggle.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
@@ -455,7 +461,8 @@ function bindNoteContentSubToggles(root, item) {
             mutateItem(item, (it) => {
                 it.checklistCollapsed = nextCollapsed;
             }, { preserveView: true, skipRerender: true });
-            const block = section.querySelector('[data-note-checklist-sub]');
+            const block = checklistToggle.closest('[data-note-checklist-sub]')
+                || section.querySelector('[data-note-checklist-sub]');
             const body = block?.querySelector?.('[data-note-checklist-body]');
             const icon = checklistToggle.querySelector('.collapsable-toggle');
             checklistToggle.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
