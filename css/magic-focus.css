@@ -99,7 +99,7 @@
 
 .magic-focus__header .card-act {
     opacity: 1;
-    color: var(--text-main);
+    color: var(--text-muted);
 }
 
 .magic-focus__header .card-act--focus.is-active,
