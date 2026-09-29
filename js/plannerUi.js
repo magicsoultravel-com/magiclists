@@ -560,28 +560,48 @@ function mountGanttViewport(host, layout, {
 }
 
 function refreshGanttInSection(section, item, { refocus = false } = {}) {
-    const host = section?.querySelector('[data-planner-gantt]');
-    if (!host || !item?.planner) return;
-    const canvasScroll = captureCanvasScroll();
-    const prevZoom = host.dataset.plannerZoomCurrent || '';
-    const prevViewport = host.querySelector('[data-planner-gantt-viewport]');
-    const preserveScrollLeft = prevViewport ? prevViewport.scrollLeft : null;
-    const preserveScrollTop = prevViewport ? prevViewport.scrollTop : null;
-    const { html, layout } = renderPlannerGanttHtml(item.planner);
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html.trim();
-    const next = tmp.firstElementChild;
-    if (!next) return;
-    host.replaceWith(next);
-    const zoomChanged = (layout.zoom || '') !== prevZoom;
-    mountGanttViewport(next, layout, {
-        preserveScrollLeft,
-        preserveScrollTop,
-        refocus: refocus || zoomChanged,
-        canvasScroll
-    });
+    if (!section || !item?.planner) return;
+    const host = section.querySelector('[data-planner-gantt]');
+    if (host) {
+        const canvasScroll = captureCanvasScroll();
+        const prevZoom = host.dataset.plannerZoomCurrent || '';
+        const prevViewport = host.querySelector('[data-planner-gantt-viewport]');
+        const preserveScrollLeft = prevViewport ? prevViewport.scrollLeft : null;
+        const preserveScrollTop = prevViewport ? prevViewport.scrollTop : null;
+        const { html, layout } = renderPlannerGanttHtml(item.planner);
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html.trim();
+        const next = tmp.firstElementChild;
+        if (next) {
+            host.replaceWith(next);
+            const zoomChanged = (layout.zoom || '') !== prevZoom;
+            mountGanttViewport(next, layout, {
+                preserveScrollLeft,
+                preserveScrollTop,
+                refocus: refocus || zoomChanged,
+                canvasScroll
+            });
+        }
+        restoreCanvasScroll(canvasScroll);
+    }
+    // Summary lives under the table host — refresh even when this section has no gantt
+    // (Focus splits table/chart into separate [data-note-planner] panes).
     refreshPlannerSummaryInSection(section, item);
-    restoreCanvasScroll(canvasScroll);
+}
+
+/**
+ * Refresh derived planner UI (gantt + summary) across all live hosts for an item.
+ * Used so Focus table edits update sibling chart panes without remounting the table.
+ * @param {object} item
+ * @param {{ refocus?: boolean }} [opts]
+ */
+function refreshPlannerDerivedViews(item, { refocus = false } = {}) {
+    if (!item?.id || !item?.planner) return;
+    for (const body of noteBodiesForItem(item.id)) {
+        body.querySelectorAll?.('[data-note-planner]').forEach((sec) => {
+            refreshGanttInSection(sec, item, { refocus });
+        });
+    }
 }
 
 function refreshPlannerSummaryInSection(section, item) {
@@ -876,7 +896,7 @@ export function attachPlannerInteractions(root, item, {
                 skipRerender: true
             });
         }
-        if (needGantt) refreshGanttInSection(section, item);
+        if (needGantt) refreshPlannerDerivedViews(item);
         onChange();
     };
 
@@ -896,7 +916,7 @@ export function attachPlannerInteractions(root, item, {
             if (!it.planner) it.planner = createEmptyPlanner();
             fn(it);
         }, { preserveView: true, skipRerender, localOnly });
-        if (refreshGantt) refreshGanttInSection(section, item);
+        if (refreshGantt) refreshPlannerDerivedViews(item);
         onChange();
     };
 
