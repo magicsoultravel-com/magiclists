@@ -11,7 +11,7 @@ import {
 } from './mediaLibrary.js';
 import { formatByteSize, humanMetaRows, formatMediaDetailDates } from './mediaMetadata.js';
 import { isMediaStagingOpen, openMediaStaging } from './mediaStagingDialog.js';
-import { filesFromDataTransfer } from './mediaPasteCatcher.js';
+import { filesFromDataTransfer, readClipboardIntoStaging } from './mediaPasteCatcher.js';
 import { showAppToast } from './toast.js';
 import {
     downloadMediaMetaJson,
@@ -325,6 +325,7 @@ export const MediaLibraryOverlay = {
         if (footer) {
             footer.innerHTML = `
                 <button type="button" class="btn btn--compact btn--icon" data-media-lib-upload title="Upload files" aria-label="Upload files">${ACTION_ICONS.upload}</button>
+                <button type="button" class="btn btn--compact btn--icon" data-media-lib-clipboard title="Add from clipboard" aria-label="Add from clipboard">${ACTION_ICONS.mediaPaste}</button>
                 <button type="button" class="btn btn--compact btn--icon" data-media-lib-select-note title="Select note to attach" aria-label="Select note to attach">${ACTION_ICONS.selectNote}</button>
                 <button type="button" class="btn btn--compact btn--icon is-hidden" data-media-lib-attach title="Attach selected media to note" aria-label="Attach to note" disabled>${CARD_ICONS.attach}</button>
                 <button type="button" class="btn btn--compact btn--icon" data-media-export-meta title="Export media metadata" aria-label="Export media metadata">${ACTION_ICONS.export}</button>
@@ -343,6 +344,9 @@ export const MediaLibraryOverlay = {
         panel.querySelector('[data-media-lib-close]')?.addEventListener('click', () => this.close());
         panel.querySelector('[data-media-lib-upload]')?.addEventListener('click', () => {
             document.getElementById('media-library-file-picker')?.click();
+        });
+        panel.querySelector('[data-media-lib-clipboard]')?.addEventListener('click', () => {
+            readClipboardIntoStaging();
         });
         panel.querySelector('[data-media-lib-select-note]')?.addEventListener('click', () => {
             this.toggleNotePicker();

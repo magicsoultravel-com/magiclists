@@ -601,8 +601,8 @@
 /* Exit Focus FAB — stacked above scribble FAB */
 .fab-focus-exit {
     position: fixed;
-    right: 1.25rem;
-    bottom: 14.05rem;
+    right: 0.85rem;
+    bottom: 9.65rem;
     z-index: 910;
     width: 2.75rem;
     height: 2.75rem;

@@ -1,4 +1,4 @@
-/** @css {"owns":"media staging dialogue, gallery floating panel, media FAB, scribble FAB, note attachment section, media lightbox, site-wide quick scribble", "js":["mediaLibraryOverlay.js","mediaStagingDialog.js","mediaPasteCatcher.js","noteAttachmentsUi.js","quickScribble.js","viewportCapture.js"]} */
+/** @css {"owns":"media staging dialogue, gallery floating panel, scribble FAB, note attachment section, media lightbox, site-wide quick scribble", "js":["mediaLibraryOverlay.js","mediaStagingDialog.js","mediaPasteCatcher.js","noteAttachmentsUi.js","quickScribble.js","viewportCapture.js"]} */
 
 /* Staging count chip (also used in staging dialogue header) */
 .sidebar-media-lib__compact {
@@ -14,40 +14,11 @@
     color: var(--text-secondary, var(--text-primary));
 }
 
-/* Media FAB */
-.fab-media {
-    position: fixed;
-    right: 1.25rem;
-    bottom: 5.25rem;
-    z-index: 40;
-    width: 2.75rem;
-    height: 2.75rem;
-    border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--text-primary) 18%, transparent);
-    background: var(--surface-elevated, #1e1e22);
-    color: var(--text-primary, #eee);
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.1rem;
-    line-height: 1;
-}
-
-.fab-media:hover {
-    filter: brightness(1.08);
-}
-
-.fab-media.is-hidden {
-    display: none;
-}
-
-/* Scribble FAB — stacked above clipboard FAB */
+/* Scribble FAB — stacked above create FAB */
 .fab-scribble {
     position: fixed;
-    right: 1.25rem;
-    bottom: 9.65rem;
+    right: 0.85rem;
+    bottom: 5.25rem;
     z-index: 910;
     width: 2.75rem;
     height: 2.75rem;

@@ -58,7 +58,7 @@ import { SidebarWeather } from './sidebarWeather.js';
 import { MediaLibraryOverlay, bindMediaFilePickers } from './mediaLibraryOverlay.js';
 import { CategoriesOverlay } from './categoriesOverlay.js';
 import { MediaStagingDialog } from './mediaStagingDialog.js';
-import { MediaPasteCatcher, readClipboardIntoStaging } from './mediaPasteCatcher.js';
+import { MediaPasteCatcher } from './mediaPasteCatcher.js';
 import { QuickScribble } from './quickScribble.js';
 import { registerLiveNoteSource, setModalEditorNoteIdResolver } from './notePasteContext.js';
 import { initAllSidebarModules } from './sidebarModules.js';
@@ -199,7 +199,6 @@ BootProgress.set(85, 'Workspace…');
             });
             MediaPasteCatcher.init();
             bindMediaFilePickers();
-            this.setupMediaFab();
             this.setupScribbleFab();
             SidePanel.setupStatusClickHandlers(); /* after radio/tv/weather shells exist */
             this.renderQuickActionsHeaderIcons();
@@ -810,7 +809,6 @@ renderQuickActions() {
 
     updateFabVisibility() {
         const fab = document.getElementById('fab-create');
-        const mediaFab = document.getElementById('fab-media');
         const scribbleFab = document.getElementById('fab-scribble');
         const inDrawing = AppState.workspaceMode === 'drawing';
         const inFocus = MagicFocus.isOpen();
@@ -822,9 +820,6 @@ renderQuickActions() {
                 fab.title = needsLogin ? 'New note (login required)' : 'New note';
                 fab.setAttribute('aria-label', fab.title);
             }
-        }
-        if (mediaFab) {
-            mediaFab.classList.toggle('is-hidden', hideBoardFabs);
         }
         if (scribbleFab) {
             // Keep scribble available in Focus; only hide during workspace drawing.
@@ -868,15 +863,6 @@ renderQuickActions() {
 
     stateWorkspaceMode() {
         return AppState.workspaceMode;
-    }
-
-    setupMediaFab() {
-        const mediaFab = document.getElementById('fab-media');
-        if (!mediaFab) return;
-        mediaFab.innerHTML = ACTION_ICONS.mediaPaste;
-        mediaFab.addEventListener('click', () => {
-            readClipboardIntoStaging();
-        });
     }
 
     setupScribbleFab() {
