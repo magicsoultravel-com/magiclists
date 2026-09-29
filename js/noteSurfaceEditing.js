@@ -7,7 +7,7 @@ import { CARD_ICONS } from './icons.js';
 import { copyPlainTextToClipboard } from './clipboard.js';
 import { stepToPlainCopyLine } from './noteBodyConversion.js';
 import { UndoManager } from './undo.js';
-import { bindNoteBodySections, updateConvertButtons, bindCollapsable } from './noteSurfaceHtml.js';
+import { bindNoteBodySections, bindNoteContentSubToggles, updateConvertButtons, bindCollapsable } from './noteSurfaceHtml.js';
 import { bindNoteAttachments, bindNoteCanvas } from './noteAttachmentsUi.js';
 import { syncItemBodyFromDom, mutateItem, attachNoteBodyInteractions, updateNoteMetaStats, syncInlineFieldToItem, buildSheetInteractionOptions } from './noteSurfaceMutations.js';
 import { normalizeItemForSave } from './noteModel.js';
@@ -590,6 +590,7 @@ export function bindNoteEditorShell(root, item, {
     if (body) {
         attachNoteBodyInteractions(body, item, interactionOptions);
         bindNoteBodySections(body);
+        bindNoteContentSubToggles(body, item);
         bindNoteAttachments(body, item);
         bindNoteCanvas(body, item);
         attachSheetInteractions(body, item, buildSheetInteractionOptions(shell, item, {

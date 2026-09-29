@@ -14,7 +14,46 @@ import {
 } from './sheet.js';
 
 const CELL_PAD_X = 4;
+const CELL_PAD_Y = 3;
 const BLOCK_GAP = 16;
+/** Note body rem stand-in for overlay fontSize (shell-editor 0.65rem). */
+const NOTE_BODY_REM = 0.65;
+/** Match css/planner.css rem sizes relative to note body. */
+const TABLE_BODY_RATIO = 0.5 / NOTE_BODY_REM;
+const TABLE_HEADER_RATIO = 0.42 / NOTE_BODY_REM;
+const GANTT_RAIL_RATIO = 0.48 / NOTE_BODY_REM;
+const CELL_LINE_HEIGHT = 1.25;
+
+function wrapLine(ctx, text, maxWidth) {
+    const words = String(text || '').split(/\s+/).filter(Boolean);
+    if (!words.length) return [''];
+    const lines = [];
+    let current = words[0];
+    for (let i = 1; i < words.length; i++) {
+        const next = `${current} ${words[i]}`;
+        if (ctx.measureText(next).width <= maxWidth) {
+            current = next;
+        } else {
+            lines.push(current);
+            current = words[i];
+        }
+    }
+    lines.push(current);
+    return lines;
+}
+
+function wrapPlainText(ctx, text, maxWidth) {
+    const out = [];
+    const paragraphs = String(text || '').replace(/\r\n/g, '\n').split('\n');
+    for (const para of paragraphs) {
+        if (!para.trim()) {
+            out.push('');
+            continue;
+        }
+        out.push(...wrapLine(ctx, para, maxWidth));
+    }
+    return out;
+}
 
 /**
  * @param {object} [item]
@@ -40,12 +79,41 @@ export function noteShowsPlannerChartOverlay(item) {
     return notePlannerIsActive(item) && !!item?.canvasShowNotePlannerChart;
 }
 
+function tableBodyFontPx(fontSize) {
+    return Math.max(10, Math.round(fontSize * TABLE_BODY_RATIO));
+}
+
+function tableHeaderFontPx(fontSize) {
+    return Math.max(10, Math.round(fontSize * TABLE_HEADER_RATIO));
+}
+
+function ganttRailFontPx(fontSize) {
+    return Math.max(9, Math.round(fontSize * GANTT_RAIL_RATIO));
+}
+
+function makeMeasureCtx() {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    return canvas.getContext('2d');
+}
+
+/**
+ * First display line for Gantt rail (UI is nowrap + ellipsis).
+ * @param {string} name
+ * @returns {string}
+ */
+function firstRailLabelLine(name) {
+    const raw = String(name || '').replace(/\r\n/g, '\n');
+    const first = raw.split('\n')[0] || '';
+    return first.trim() || '—';
+}
+
 /**
  * Scale sheet column widths so the table fits a target content width when needed.
  * @param {object} sheet
  * @param {number} fontSize
  * @param {number} [maxContentWidth]
- * @returns {{ widths: number[], rowHead: number, scale: number, totalWidth: number, rowHeight: number }}
+ * @returns {{ widths: number[], rowHead: number, scale: number, totalWidth: number, rowHeight: number, bodyFont: number, headerFont: number, lineStep: number }}
  */
 function resolveTableGeometry(sheet, fontSize, maxContentWidth = Infinity) {
     const natural = sheetGridTotalWidthPx(sheet, { includeStructCol: false });
@@ -58,8 +126,44 @@ function resolveTableGeometry(sheet, fontSize, maxContentWidth = Infinity) {
         widths.push(Math.max(28, Math.round(getColWidth(sheet, c) * scale * Math.max(1, fontSize / 14))));
     }
     const totalWidth = rowHead + widths.reduce((s, w) => s + w, 0);
-    const rowHeight = Math.max(18, Math.round(fontSize * 1.45));
-    return { widths, rowHead, scale, totalWidth, rowHeight };
+    const bodyFont = tableBodyFontPx(fontSize);
+    const headerFont = tableHeaderFontPx(fontSize);
+    const lineStep = Math.max(12, Math.round(bodyFont * CELL_LINE_HEIGHT));
+    const rowHeight = Math.max(18, Math.round(bodyFont * 1.45));
+    return { widths, rowHead, scale, totalWidth, rowHeight, bodyFont, headerFont, lineStep };
+}
+
+/**
+ * @param {CanvasRenderingContext2D|null} ctx
+ * @param {object} sheet
+ * @param {{ widths: number[], rowHeight: number, bodyFont: number, lineStep: number }} geometry
+ * @param {string} fontFamily
+ * @param {number} rows
+ * @returns {number[]}
+ */
+function measureBodyRowHeights(ctx, sheet, geometry, fontFamily, rows) {
+    const { widths, rowHeight: baseH, bodyFont, lineStep } = geometry;
+    const heights = [];
+    if (ctx) {
+        ctx.font = `${bodyFont}px ${fontFamily}`;
+    }
+    for (let r = 0; r < rows; r++) {
+        let maxLines = 1;
+        for (let c = 0; c < PLANNER_COL_COUNT; c++) {
+            const col = PLANNER_COLUMNS[c];
+            if (col.type !== 'text') continue;
+            const value = getPlannerField(sheet, r, col.key);
+            if (!value) continue;
+            const maxW = Math.max(8, widths[c] - CELL_PAD_X * 2);
+            const lines = ctx
+                ? wrapPlainText(ctx, value, maxW)
+                : String(value).replace(/\r\n/g, '\n').split('\n');
+            maxLines = Math.max(maxLines, Math.max(1, lines.length));
+        }
+        heights.push(Math.max(baseH, maxLines * lineStep + CELL_PAD_Y * 2));
+    }
+    if (!heights.length) heights.push(baseH);
+    return heights;
 }
 
 /**
@@ -67,9 +171,10 @@ function resolveTableGeometry(sheet, fontSize, maxContentWidth = Infinity) {
  * @param {object} item
  * @param {number} fontSize
  * @param {number} [maxContentWidth]
- * @returns {{ width: number, height: number, geometry: object, rows: number, isPlaceholder: boolean, hasData: boolean }|null}
+ * @param {{ fontFamily?: string }} [opts]
+ * @returns {{ width: number, height: number, geometry: object, rows: number, rowHeights: number[], isPlaceholder: boolean, hasData: boolean }|null}
  */
-export function measurePlannerTableOverlay(item, fontSize, maxContentWidth = Infinity) {
+export function measurePlannerTableOverlay(item, fontSize, maxContentWidth = Infinity, opts = {}) {
     if (!noteShowsPlannerTableOverlay(item)) return null;
     const sheet = item.planner?.sheet;
     if (!sheet) {
@@ -78,15 +183,24 @@ export function measurePlannerTableOverlay(item, fontSize, maxContentWidth = Inf
             height: Math.max(28, fontSize * 1.6),
             geometry: null,
             rows: 0,
+            rowHeights: [],
             isPlaceholder: true,
             hasData: false
         };
     }
+    const fontFamily = opts.fontFamily
+        || (typeof document !== 'undefined'
+            ? (getComputedStyle(document.documentElement).getPropertyValue('--note-font-family').trim()
+                || getComputedStyle(document.documentElement).fontFamily
+                || 'system-ui, sans-serif')
+            : 'system-ui, sans-serif');
     const geometry = resolveTableGeometry(sheet, fontSize, maxContentWidth);
     const rows = Math.max(0, sheet.rows | 0);
     const hasData = plannerHasContent(item.planner);
+    const measureCtx = makeMeasureCtx();
+    const rowHeights = measureBodyRowHeights(measureCtx, sheet, geometry, fontFamily, rows);
     const headerH = geometry.rowHeight;
-    const bodyH = Math.max(1, rows) * geometry.rowHeight;
+    const bodyH = rowHeights.reduce((s, h) => s + h, 0);
     const height = hasData || rows
         ? headerH + bodyH
         : Math.max(28, fontSize * 1.6);
@@ -95,6 +209,7 @@ export function measurePlannerTableOverlay(item, fontSize, maxContentWidth = Inf
         height,
         geometry,
         rows,
+        rowHeights,
         isPlaceholder: !hasData,
         hasData
     };
@@ -139,12 +254,16 @@ export function plannerOverlayBlockGap() {
 export function paintPlannerTableOverlay(ctx, item, opts) {
     const {
         x, y, fontSize, ink, fontFamily,
-        measured = measurePlannerTableOverlay(item, fontSize)
+        measured = measurePlannerTableOverlay(item, fontSize, Infinity, { fontFamily })
     } = opts;
     if (!measured) return 0;
 
+    const bodyFont = measured.geometry?.bodyFont || tableBodyFontPx(fontSize);
+    const headerFont = measured.geometry?.headerFont || tableHeaderFontPx(fontSize);
+    const lineStep = measured.geometry?.lineStep || Math.max(12, Math.round(bodyFont * CELL_LINE_HEIGHT));
+
     ctx.save();
-    ctx.font = `${Math.max(10, Math.round(fontSize * 0.85))}px ${fontFamily}`;
+    ctx.font = `${bodyFont}px ${fontFamily}`;
     ctx.textBaseline = 'middle';
     ctx.fillStyle = ink;
     ctx.strokeStyle = ink;
@@ -160,7 +279,11 @@ export function paintPlannerTableOverlay(ctx, item, opts) {
     const sheet = item.planner.sheet;
     const { widths, rowHead, rowHeight, totalWidth } = measured.geometry;
     const headerH = rowHeight;
-    const tableH = headerH + Math.max(1, measured.rows) * rowHeight;
+    const rowHeights = measured.rowHeights?.length
+        ? measured.rowHeights
+        : measureBodyRowHeights(ctx, sheet, measured.geometry, fontFamily, measured.rows);
+    const bodyH = rowHeights.reduce((s, h) => s + h, 0);
+    const tableH = headerH + bodyH;
 
     // Outer frame + header fill wash
     ctx.globalAlpha = 0.12;
@@ -185,50 +308,81 @@ export function paintPlannerTableOverlay(ctx, item, opts) {
     ctx.stroke();
 
     // Horizontal grid
-    for (let r = 0; r <= measured.rows; r++) {
-        const ly = y + headerH + r * rowHeight;
+    let ly = y + headerH;
+    ctx.beginPath();
+    ctx.moveTo(x, y + 0.5);
+    ctx.lineTo(x + totalWidth, y + 0.5);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, y + headerH + 0.5);
+    ctx.lineTo(x + totalWidth, y + headerH + 0.5);
+    ctx.stroke();
+    for (let r = 0; r < rowHeights.length; r++) {
+        ly += rowHeights[r];
         ctx.beginPath();
         ctx.moveTo(x, ly + 0.5);
         ctx.lineTo(x + totalWidth, ly + 0.5);
         ctx.stroke();
     }
-    // Header bottom
-    ctx.beginPath();
-    ctx.moveTo(x, y + headerH + 0.5);
-    ctx.lineTo(x + totalWidth, y + headerH + 0.5);
-    ctx.stroke();
 
-    const clipAndFill = (tx, ty, tw, th, text, bold = false) => {
+    const clipAndFillSingle = (tx, ty, tw, th, text, bold = false) => {
         const label = String(text || '');
         if (!label) return;
         ctx.save();
         ctx.beginPath();
         ctx.rect(tx, ty, tw, th);
         ctx.clip();
-        if (bold) ctx.font = `600 ${Math.max(10, Math.round(fontSize * 0.8))}px ${fontFamily}`;
-        else ctx.font = `${Math.max(10, Math.round(fontSize * 0.85))}px ${fontFamily}`;
+        ctx.font = bold
+            ? `600 ${headerFont}px ${fontFamily}`
+            : `${bodyFont}px ${fontFamily}`;
+        ctx.textBaseline = 'middle';
         ctx.fillText(label, tx + CELL_PAD_X, ty + th / 2);
+        ctx.restore();
+    };
+
+    const clipAndFillWrapped = (tx, ty, tw, th, text) => {
+        const label = String(text || '');
+        if (!label) return;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(tx, ty, tw, th);
+        ctx.clip();
+        ctx.font = `${bodyFont}px ${fontFamily}`;
+        ctx.textBaseline = 'top';
+        const maxW = Math.max(8, tw - CELL_PAD_X * 2);
+        const lines = wrapPlainText(ctx, label, maxW);
+        let tyLine = ty + CELL_PAD_Y;
+        for (const line of lines) {
+            ctx.fillText(line, tx + CELL_PAD_X, tyLine);
+            tyLine += lineStep;
+        }
         ctx.restore();
     };
 
     // Header labels
     cx = x + rowHead;
     for (let c = 0; c < PLANNER_COL_COUNT; c++) {
-        clipAndFill(cx, y, widths[c], headerH, PLANNER_COLUMNS[c].label, true);
+        clipAndFillSingle(cx, y, widths[c], headerH, PLANNER_COLUMNS[c].label, true);
         cx += widths[c];
     }
 
     // Body cells
+    let ry = y + headerH;
     for (let r = 0; r < measured.rows; r++) {
-        const ry = y + headerH + r * rowHeight;
-        clipAndFill(x, ry, rowHead, rowHeight, String(r + 1), true);
+        const rh = rowHeights[r] || rowHeight;
+        clipAndFillSingle(x, ry, rowHead, rh, String(r + 1), true);
         cx = x + rowHead;
         for (let c = 0; c < PLANNER_COL_COUNT; c++) {
-            const key = PLANNER_COLUMNS[c].key;
-            const value = getPlannerField(sheet, r, key);
-            clipAndFill(cx, ry, widths[c], rowHeight, value);
+            const col = PLANNER_COLUMNS[c];
+            const value = getPlannerField(sheet, r, col.key);
+            if (col.type === 'text') {
+                clipAndFillWrapped(cx, ry, widths[c], rh, value);
+            } else {
+                clipAndFillSingle(cx, ry, widths[c], rh, value);
+            }
             cx += widths[c];
         }
+        ry += rh;
     }
 
     ctx.restore();
@@ -288,10 +442,11 @@ export function paintPlannerChartOverlay(ctx, item, opts) {
     } = layout;
     const minorTicks = minors.length ? minors : (layout.ticks || []);
     const bodyH = Math.max(0, height - headerHeight);
+    const railFont = ganttRailFontPx(fontSize);
 
     ctx.save();
     ctx.translate(x, y);
-    ctx.font = `${Math.max(9, Math.round(fontSize * 0.7))}px ${fontFamily}`;
+    ctx.font = `${railFont}px ${fontFamily}`;
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = ink;
     ctx.strokeStyle = ink;
@@ -305,7 +460,7 @@ export function paintPlannerChartOverlay(ctx, item, opts) {
 
     const railLabels = empty
         ? [{ name: '—', y: headerHeight + (layout.rowHeight || 22) / 2 }]
-        : bars.map((b) => ({ name: b.name || b.id || '—', y: b.y + b.height / 2 }));
+        : bars.map((b) => ({ name: firstRailLabelLine(b.name || b.id || '—'), y: b.y + b.height / 2 }));
     for (const row of railLabels) {
         ctx.save();
         ctx.beginPath();

@@ -17,7 +17,7 @@ import { bindNoteQuickActions } from './noteQuickActions.js';
 import { NotePopoutBridge } from './notePopoutBridge.js';
 import { getCardRenderContext } from './categories.js';
 import { DesktopManager } from './desktopManager.js';
-import { flushDesktopAutoSave } from './noteSurfaceMutations.js';
+import { flushDesktopAutoSave, mutateItem } from './noteSurfaceMutations.js';
 import { buildNoteAttachmentsSectionHtml, buildNoteCanvasSectionHtml } from './noteAttachmentsUi.js';
 import { buildNotePlannerSectionHtml } from './plannerUi.js';
 import { normalizeAttachments } from './mediaAttachments.js';
@@ -277,26 +277,83 @@ export function buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false
 
     let html = '';
     const { showContent, showChecklist } = resolveNoteBodyVisibility(item, { canEdit, inModalEditor });
+    const plannerActive = !!(item?.planner && !item?.plannerHidden);
 
-    if (showContent) {
-        const content = item.content || '';
-        const rich = hasRichMarkup(content) || content.includes('\u2028');
-        if (canEdit && (richEdit || canInlineEditText(content, { richEdit }))) {
-            const inner = richEdit ? sanitizeRichHtml(content) : escapeHTML(content.replace(/\u2028/g, '\n'));
-            const ce = richEdit ? 'true' : 'plaintext-only';
-            const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
-            html += `<div class="card-content-preview card-inline-edit${richClasses}" contenteditable="${ce}" spellcheck="false" data-field="content" data-placeholder="Add note…">${inner}</div>`;
-        } else {
-            const richClass = rich ? ' rich-text' : '';
-            html += `<div class="card-content-preview${richClass}">${renderRichHtml(content)}</div>`;
+    if (plannerActive && (showContent || showChecklist)) {
+        html += buildNoteContentSectionHtml(item, {
+            canEdit,
+            richEdit,
+            showContent,
+            showChecklist
+        });
+    } else {
+        if (showContent) {
+            html += buildNoteContentFieldHtml(item, { canEdit, richEdit });
+        }
+        if (showChecklist) {
+            if (!item.steps) item.steps = [];
+            html += buildExpandedChecklistHtml(item, canEdit, { richEdit });
         }
     }
+    return appendPlannerAndMediaSections(item, html, { canEdit });
+}
 
+function buildNoteContentFieldHtml(item, { canEdit = false, richEdit = false } = {}) {
+    const content = item.content || '';
+    const rich = hasRichMarkup(content) || content.includes('\u2028');
+    if (canEdit && (richEdit || canInlineEditText(content, { richEdit }))) {
+        const inner = richEdit ? sanitizeRichHtml(content) : escapeHTML(content.replace(/\u2028/g, '\n'));
+        const ce = richEdit ? 'true' : 'plaintext-only';
+        const richClasses = richEdit ? ' rich-text rich-text--edit' : '';
+        return `<div class="card-content-preview card-inline-edit${richClasses}" contenteditable="${ce}" spellcheck="false" data-field="content" data-placeholder="Add note…">${inner}</div>`;
+    }
+    const richClass = rich ? ' rich-text' : '';
+    return `<div class="card-content-preview${richClass}">${renderRichHtml(content)}</div>`;
+}
+
+function buildNoteContentSectionHtml(item, {
+    canEdit = false,
+    richEdit = false,
+    showContent = false,
+    showChecklist = false
+} = {}) {
+    const textCollapsed = !!item.textCollapsed;
+    const checklistCollapsed = !!item.checklistCollapsed;
+    let inner = '';
+    if (showContent) {
+        inner += `<div class="planner-sub" data-note-text data-text-collapsed="${textCollapsed ? '1' : '0'}">
+            <div class="planner-sub__toolbar">
+                <button type="button" class="planner-sub__title" data-note-text-toggle aria-expanded="${textCollapsed ? 'false' : 'true'}">
+                    <span class="collapsable-toggle${textCollapsed ? ' collapsed' : ''}" aria-hidden="true">▼</span>Text
+                </button>
+            </div>
+            <div class="planner-sub__body${textCollapsed ? ' is-collapsed' : ''}" data-note-text-body>
+                ${buildNoteContentFieldHtml(item, { canEdit, richEdit })}
+            </div>
+        </div>`;
+    }
     if (showChecklist) {
         if (!item.steps) item.steps = [];
-        html += buildExpandedChecklistHtml(item, canEdit, { richEdit });
+        inner += `<div class="planner-sub" data-note-checklist-sub data-checklist-collapsed="${checklistCollapsed ? '1' : '0'}">
+            <div class="planner-sub__toolbar">
+                <button type="button" class="planner-sub__title" data-note-checklist-toggle aria-expanded="${checklistCollapsed ? 'false' : 'true'}">
+                    <span class="collapsable-toggle${checklistCollapsed ? ' collapsed' : ''}" aria-hidden="true">▼</span>Checklist
+                </button>
+            </div>
+            <div class="planner-sub__body${checklistCollapsed ? ' is-collapsed' : ''}" data-note-checklist-body>
+                ${buildExpandedChecklistHtml(item, canEdit, { richEdit })}
+            </div>
+        </div>`;
     }
-    return appendPlannerAndMediaSections(item, html, { canEdit });
+    return `
+            <div class="note-body-section note-body-section--content" data-note-content>
+                <div class="note-section-header collapsable-header">
+                    <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Content</span>
+                </div>
+                <div class="note-section-body collapsable-section">
+                    ${inner}
+                </div>
+            </div>`;
 }
 
 function renderRichHtml(str) {
@@ -346,6 +403,54 @@ function bindNoteBodySections(root) {
                 body?.querySelectorAll('[data-sheet-block]').forEach((block) => growSheetCells(block));
             }
         });
+    });
+}
+
+/**
+ * Persist Text / Checklist subsection collapse when Plan is active.
+ * @param {HTMLElement} root
+ * @param {object} item
+ */
+function bindNoteContentSubToggles(root, item) {
+    const section = root?.querySelector?.('[data-note-content]') || root?.closest?.('[data-note-content]');
+    if (!section || !item || section.dataset.contentSubsBound === '1') return;
+    section.dataset.contentSubsBound = '1';
+
+    section.addEventListener('click', (e) => {
+        const textToggle = e.target.closest('[data-note-text-toggle]');
+        if (textToggle && section.contains(textToggle)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const nextCollapsed = !item.textCollapsed;
+            mutateItem(item, (it) => {
+                it.textCollapsed = nextCollapsed;
+            }, { preserveView: true, skipRerender: true });
+            const block = section.querySelector('[data-note-text]');
+            const body = block?.querySelector?.('[data-note-text-body]');
+            const icon = textToggle.querySelector('.collapsable-toggle');
+            textToggle.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
+            icon?.classList.toggle('collapsed', nextCollapsed);
+            body?.classList.toggle('is-collapsed', nextCollapsed);
+            if (block) block.dataset.textCollapsed = nextCollapsed ? '1' : '0';
+            return;
+        }
+
+        const checklistToggle = e.target.closest('[data-note-checklist-toggle]');
+        if (checklistToggle && section.contains(checklistToggle)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const nextCollapsed = !item.checklistCollapsed;
+            mutateItem(item, (it) => {
+                it.checklistCollapsed = nextCollapsed;
+            }, { preserveView: true, skipRerender: true });
+            const block = section.querySelector('[data-note-checklist-sub]');
+            const body = block?.querySelector?.('[data-note-checklist-body]');
+            const icon = checklistToggle.querySelector('.collapsable-toggle');
+            checklistToggle.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
+            icon?.classList.toggle('collapsed', nextCollapsed);
+            body?.classList.toggle('is-collapsed', nextCollapsed);
+            if (block) block.dataset.checklistCollapsed = nextCollapsed ? '1' : '0';
+        }
     });
 }
 
@@ -1061,6 +1166,7 @@ export {
     prepareContentForEdit,
     buildNoteBodySection,
     bindNoteBodySections,
+    bindNoteContentSubToggles,
     buildMeetingBodyHtml,
     buildNoteTitleHtml,
     buildNoteFormatPanelHtml,

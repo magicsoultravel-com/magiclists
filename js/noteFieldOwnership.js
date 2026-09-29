@@ -37,7 +37,9 @@ export const SHARED_FIELDS = Object.freeze([
     'canvasShowNotePlannerChart',
     'canvasOverlayFontSize',
     'planner',
-    'plannerHidden'
+    'plannerHidden',
+    'textCollapsed',
+    'checklistCollapsed'
 ]);
 
 /**

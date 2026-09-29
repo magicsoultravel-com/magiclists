@@ -32,7 +32,25 @@ export const OVERLAY_FONT_MAX = 48;
 export const OVERLAY_FONT_STEP = 2;
 const LINE_HEIGHT = 1.35;
 const GROW_MARGIN = 80;
-const FONT_FAMILY = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+const FONT_FAMILY_FALLBACK = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+
+/**
+ * Live note font for canvas overlay (matches interactive planner / note chrome).
+ * @returns {string}
+ */
+export function resolveOverlayFontFamily() {
+    if (typeof document === 'undefined') return FONT_FAMILY_FALLBACK;
+    try {
+        const css = getComputedStyle(document.documentElement);
+        const note = css.getPropertyValue('--note-font-family').trim();
+        if (note) return note;
+        const body = css.fontFamily?.trim();
+        if (body) return body;
+    } catch {
+        // ignore
+    }
+    return FONT_FAMILY_FALLBACK;
+}
 
 /**
  * Clamp / snap overlay font size for a note.
@@ -52,8 +70,8 @@ export function overlayFontSizeToPercent(fontSize) {
     return Math.round((size / OVERLAY_FONT_DEFAULT) * 100);
 }
 
-function overlayFont(fontSize) {
-    return `${fontSize}px ${FONT_FAMILY}`;
+function overlayFont(fontSize, fontFamily = resolveOverlayFontFamily()) {
+    return `${fontSize}px ${fontFamily}`;
 }
 
 function lineStepFor(fontSize) {
@@ -115,7 +133,14 @@ function wrapLine(ctx, text, maxWidth) {
     return lines;
 }
 
-function wrapPlainText(ctx, text, maxWidth) {
+/**
+ * Split on newlines then word-wrap to maxWidth.
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {string} text
+ * @param {number} maxWidth
+ * @returns {string[]}
+ */
+export function wrapPlainText(ctx, text, maxWidth) {
     const out = [];
     const paragraphs = String(text || '').replace(/\r\n/g, '\n').split('\n');
     for (const para of paragraphs) {
@@ -472,6 +497,7 @@ export function paintNoteTextOverlay(ctx, item, { fillColor = '', doc = null, pa
     }
 
     let y = PAD;
+    const fontFamily = resolveOverlayFontFamily();
     for (let i = 0; i < measured.blocks.length; i++) {
         if (i > 0) y += gap;
         const block = measured.blocks[i];
@@ -490,7 +516,7 @@ export function paintNoteTextOverlay(ctx, item, { fillColor = '', doc = null, pa
                 y,
                 fontSize: measured.fontSize,
                 ink,
-                fontFamily: FONT_FAMILY,
+                fontFamily,
                 measured: block.measured
             });
             y += block.height;
@@ -500,7 +526,7 @@ export function paintNoteTextOverlay(ctx, item, { fillColor = '', doc = null, pa
                 y,
                 fontSize: measured.fontSize,
                 ink,
-                fontFamily: FONT_FAMILY,
+                fontFamily,
                 measured: block.measured
             });
             y += block.height;

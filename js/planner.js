@@ -365,7 +365,7 @@ export function parsePredecessorIds(raw) {
 }
 
 /**
- * Unique category names used in this planner (for datalist reuse).
+ * Unique category names used in this planner (for picker reuse).
  * @param {object|null|undefined} planner
  * @returns {string[]}
  */
@@ -381,6 +381,32 @@ export function listPlannerCategories(planner) {
         if (seen.has(key)) continue;
         seen.add(key);
         out.push(name);
+    }
+    return out;
+}
+
+/**
+ * App categories first, then planner-only names (case-insensitive dedupe).
+ * @param {object|null|undefined} planner
+ * @param {Array<{name?: string}|string>} [appCategories]
+ * @returns {string[]}
+ */
+export function listMergedPlannerCategories(planner, appCategories = []) {
+    const seen = new Set();
+    const out = [];
+    const push = (raw) => {
+        const name = String(raw || '').trim();
+        if (!name) return;
+        const key = name.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push(name);
+    };
+    for (const cat of appCategories || []) {
+        push(typeof cat === 'string' ? cat : cat?.name);
+    }
+    for (const name of listPlannerCategories(planner)) {
+        push(name);
     }
     return out;
 }
