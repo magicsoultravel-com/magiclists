@@ -1,7 +1,10 @@
-/** @module {"owns":"site-wide freeze scribble overlay — draw / ink-visible / off", "related":["scribbleInk.js","noteAttachmentsUi.js","canvasBrushes.js","app.js"]} */
+/** @module {"owns":"site-wide freeze scribble overlay — draw / ink-visible / off", "related":["scribbleInk.js","noteAttachmentsUi.js","canvasBrushes.js","app.js","viewportCapture.js"]} */
 import { drawBrushStroke } from './canvasBrushes.js';
 import { ColorPicker, PALETTE_UNIFIED } from './colorPicker.js';
-import { ACTION_ICONS, DRAWING_ICONS } from './icons.js';
+import { copyImageBlobToClipboard } from './clipboard.js';
+import { ACTION_ICONS, CARD_ICONS, DRAWING_ICONS } from './icons.js';
+import { showAppToast } from './toast.js';
+import { captureViewportPngBlob } from './viewportCapture.js';
 import {
     SCRIBBLE_COLORS,
     SCRIBBLE_COLOR_CUSTOM_INDEX,
@@ -18,6 +21,9 @@ import {
 
 /** @typedef {'off'|'drawing'|'ink'} QuickScribbleMode */
 
+const HISTORY_MAX = 80;
+const DRAG_MARGIN = 8;
+
 /** @type {QuickScribbleMode} */
 let mode = 'off';
 /** @type {'pen'|'eraser'} */
@@ -29,11 +35,65 @@ let strokes = [];
 /** @type {{ color: string, width: number, points: Array<{x:number,y:number,p:number}> }|null} */
 let activeStroke = null;
 let erasing = false;
+/** Snapshot of strokes at erase-gesture start (null when not erasing). */
+let eraseBaseline = null;
 let rootEl = null;
 let canvasEl = null;
 let barEl = null;
+let chromeEl = null;
 let bound = false;
 let resizeBound = false;
+let copying = false;
+
+/** @type {string[]} */
+let undoStack = [];
+/** @type {string[]} */
+let redoStack = [];
+
+let draggingBar = false;
+let barDragOrigin = null;
+let barDragPointerId = null;
+
+function cloneStrokes(list) {
+    return JSON.parse(JSON.stringify(Array.isArray(list) ? list : []));
+}
+
+function trimHistory(stack) {
+    while (stack.length > HISTORY_MAX) stack.shift();
+}
+
+function pushHistory() {
+    undoStack.push(JSON.stringify(strokes));
+    trimHistory(undoStack);
+    redoStack = [];
+    syncHistoryUI();
+}
+
+function clearHistory() {
+    undoStack = [];
+    redoStack = [];
+    syncHistoryUI();
+}
+
+function undoStrokes() {
+    if (!undoStack.length) return;
+    redoStack.push(JSON.stringify(strokes));
+    trimHistory(redoStack);
+    strokes = JSON.parse(undoStack.pop());
+    activeStroke = null;
+    paint();
+    syncHistoryUI();
+}
+
+function redoStrokes() {
+    if (!redoStack.length) return;
+    undoStack.push(JSON.stringify(strokes));
+    trimHistory(undoStack);
+    strokes = JSON.parse(redoStack.pop());
+    activeStroke = null;
+    paint();
+    syncHistoryUI();
+}
 
 function pressureOf(e) {
     const raw = Number(e?.pressure);
@@ -152,6 +212,13 @@ function syncColorUI() {
     });
 }
 
+function syncHistoryUI() {
+    const undoBtn = barEl?.querySelector?.('[data-qs-undo]') || null;
+    const redoBtn = barEl?.querySelector?.('[data-qs-redo]') || null;
+    if (undoBtn) undoBtn.disabled = undoStack.length === 0;
+    if (redoBtn) redoBtn.disabled = redoStack.length === 0;
+}
+
 function syncUI() {
     if (!rootEl) return;
     rootEl.dataset.mode = mode;
@@ -168,6 +235,7 @@ function syncUI() {
     syncWidthUI();
     syncToolUI();
     syncColorUI();
+    syncHistoryUI();
     syncFab();
 }
 
@@ -230,9 +298,48 @@ function setColor(index, opts = {}) {
 }
 
 function clearInk() {
+    if (!strokes.length && !activeStroke) return;
+    pushHistory();
     strokes = [];
     activeStroke = null;
     paint();
+}
+
+function resetBarPosition() {
+    const chrome = chromeEl;
+    if (!chrome) return;
+    chrome.classList.remove('is-dragged');
+    chrome.style.left = '';
+    chrome.style.top = '';
+    chrome.style.right = '';
+    chrome.style.bottom = '';
+    chrome.style.transform = '';
+}
+
+function clampBarPosition(x, y) {
+    const chrome = chromeEl;
+    if (!chrome) return { x, y };
+    const rect = chrome.getBoundingClientRect();
+    const w = rect.width || chrome.offsetWidth || 1;
+    const h = rect.height || chrome.offsetHeight || 1;
+    const vw = window.innerWidth || 1;
+    const vh = window.innerHeight || 1;
+    return {
+        x: Math.max(DRAG_MARGIN, Math.min(x, vw - w - DRAG_MARGIN)),
+        y: Math.max(DRAG_MARGIN, Math.min(y, vh - h - DRAG_MARGIN))
+    };
+}
+
+function applyBarPosition(x, y) {
+    const chrome = chromeEl;
+    if (!chrome) return;
+    const pos = clampBarPosition(x, y);
+    chrome.classList.add('is-dragged');
+    chrome.style.left = `${pos.x}px`;
+    chrome.style.top = `${pos.y}px`;
+    chrome.style.right = 'auto';
+    chrome.style.bottom = 'auto';
+    chrome.style.transform = 'none';
 }
 
 function setMode(next) {
@@ -246,9 +353,19 @@ function setMode(next) {
     }
     activeStroke = null;
     erasing = false;
+    eraseBaseline = null;
     mode = next;
     if (mode === 'off') {
         strokes = [];
+        clearHistory();
+        ColorPicker.close();
+        resetBarPosition();
+    }
+    if (mode === 'drawing') {
+        resetBarPosition();
+    }
+    if (mode === 'ink') {
+        resetBarPosition();
         ColorPicker.close();
     }
     if (mode !== 'off') paint();
@@ -257,6 +374,36 @@ function setMode(next) {
         ctx?.clearRect(0, 0, canvasEl.width, canvasEl.height);
     }
     syncUI();
+}
+
+async function copyViewportSnapshot() {
+    if (copying || mode !== 'drawing') return;
+    copying = true;
+    const copyBtn = barEl?.querySelector?.('[data-qs-copy]') || null;
+    if (copyBtn) copyBtn.disabled = true;
+    try {
+        if (activeStroke?.points?.length) {
+            strokes.push(activeStroke);
+            activeStroke = null;
+            paint();
+        }
+        const blob = await captureViewportPngBlob({
+            exclude: rootEl,
+            overlayCanvas: canvasEl,
+            hideDuringCapture: chromeEl
+        });
+        if (!blob) {
+            showAppToast('Could not capture viewport');
+            return;
+        }
+        const ok = await copyImageBlobToClipboard(blob);
+        showAppToast(ok ? 'Snapshot copied to clipboard' : 'Could not copy snapshot');
+    } catch {
+        showAppToast('Could not copy snapshot');
+    } finally {
+        copying = false;
+        if (copyBtn) copyBtn.disabled = false;
+    }
 }
 
 function ensureDom() {
@@ -270,33 +417,90 @@ function ensureDom() {
         <canvas class="quick-scribble__canvas" data-qs-canvas></canvas>
         <div class="quick-scribble__chrome" data-qs-chrome>
             <div class="quick-scribble__bar" data-qs-bar hidden>
+                <button type="button" class="media-lightbox__doodle-tool quick-scribble__grab" data-qs-grab title="Drag toolbar" aria-label="Drag toolbar">${CARD_ICONS.drag}</button>
                 <button type="button" class="media-lightbox__doodle-dot is-active" data-qs-color="0" style="--doodle-color:#ff00ff" title="Pink" aria-label="Pink pen" aria-pressed="true"></button>
-                <button type="button" class="media-lightbox__doodle-dot" data-qs-color="1" style="--doodle-color:#00ffff" title="Cyan" aria-label="Cyan pen"></button>
-                <button type="button" class="media-lightbox__doodle-dot" data-qs-color="2" style="--doodle-color:#00ff00" title="Green" aria-label="Green pen"></button>
-                <button type="button" class="media-lightbox__doodle-dot" data-qs-color="3" style="--doodle-color:#ffaa00" title="Custom color" aria-label="Custom pen color"></button>
+                <button type="button" class="media-lightbox__doodle-dot" data-qs-color="1" style="--doodle-color:#00ff00" title="Green" aria-label="Green pen"></button>
+                <button type="button" class="media-lightbox__doodle-dot" data-qs-color="2" style="--doodle-color:#00ffff" title="Cyan" aria-label="Cyan pen"></button>
+                <button type="button" class="media-lightbox__doodle-dot media-lightbox__doodle-dot--custom" data-qs-color="3" style="--doodle-color:#ffaa00" title="Custom color" aria-label="Custom pen color">${CARD_ICONS.cog}</button>
                 <button type="button" class="media-lightbox__doodle-tool" data-qs-eraser title="Eraser" aria-label="Eraser" aria-pressed="false">${DRAWING_ICONS.eraser}</button>
                 <span class="media-lightbox__doodle-size" aria-label="Pen size">
                     <button type="button" class="media-lightbox__doodle-size-btn" data-qs-smaller title="Decrease pen size" aria-label="Decrease pen size">${ACTION_ICONS.minus}</button>
                     <span class="media-lightbox__doodle-size-value" data-qs-width aria-live="polite">6px</span>
                     <button type="button" class="media-lightbox__doodle-size-btn" data-qs-larger title="Increase pen size" aria-label="Increase pen size">${ACTION_ICONS.plus}</button>
                 </span>
-                <button type="button" class="media-lightbox__doodle-clear" data-qs-clear title="Clear scribbles" aria-label="Clear scribbles">Clear</button>
-                <button type="button" class="quick-scribble__done" data-qs-done title="Done — keep ink, unfreeze" aria-label="Done — keep ink, unfreeze">Done</button>
-                <button type="button" class="quick-scribble__exit" data-qs-exit title="Exit and flush scribbles" aria-label="Exit and flush scribbles">Exit</button>
+                <button type="button" class="media-lightbox__doodle-tool" data-qs-undo title="Undo scribble" aria-label="Undo scribble" disabled>${ACTION_ICONS.undo}</button>
+                <button type="button" class="media-lightbox__doodle-tool" data-qs-redo title="Redo scribble" aria-label="Redo scribble" disabled>${ACTION_ICONS.redo}</button>
+                <button type="button" class="media-lightbox__doodle-tool" data-qs-copy title="Copy viewport snapshot" aria-label="Copy viewport snapshot">${CARD_ICONS.copy}</button>
+                <button type="button" class="media-lightbox__doodle-tool" data-qs-clear title="Clear scribbles" aria-label="Clear scribbles">${CARD_ICONS.delete}</button>
+                <button type="button" class="media-lightbox__doodle-tool quick-scribble__done" data-qs-done title="Done — keep ink, unfreeze" aria-label="Done — keep ink, unfreeze">${CARD_ICONS.save}</button>
+                <button type="button" class="media-lightbox__doodle-tool quick-scribble__exit" data-qs-exit title="Exit and flush scribbles" aria-label="Exit and flush scribbles">${ACTION_ICONS.drawingExit}</button>
             </div>
         </div>
     `;
     document.body.appendChild(rootEl);
     canvasEl = rootEl.querySelector('[data-qs-canvas]');
     barEl = rootEl.querySelector('[data-qs-bar]');
+    chromeEl = rootEl.querySelector('[data-qs-chrome]');
     return rootEl;
+}
+
+function bindBarDrag() {
+    const grab = barEl?.querySelector?.('[data-qs-grab]');
+    if (!grab || !chromeEl) return;
+
+    grab.addEventListener('pointerdown', (e) => {
+        if (mode !== 'drawing') return;
+        if (e.button !== undefined && e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = chromeEl.getBoundingClientRect();
+        draggingBar = true;
+        barDragPointerId = e.pointerId;
+        barDragOrigin = {
+            px: e.clientX,
+            py: e.clientY,
+            left: rect.left,
+            top: rect.top
+        };
+        chromeEl.classList.add('is-dragging');
+        grab.classList.add('is-dragging');
+        try { grab.setPointerCapture(e.pointerId); } catch { /* noop */ }
+        applyBarPosition(rect.left, rect.top);
+    });
+
+    grab.addEventListener('pointermove', (e) => {
+        if (!draggingBar || e.pointerId !== barDragPointerId || !barDragOrigin) return;
+        e.preventDefault();
+        const dx = e.clientX - barDragOrigin.px;
+        const dy = e.clientY - barDragOrigin.py;
+        applyBarPosition(barDragOrigin.left + dx, barDragOrigin.top + dy);
+    });
+
+    const endDrag = (e) => {
+        if (!draggingBar) return;
+        if (e && barDragPointerId != null && e.pointerId !== barDragPointerId) return;
+        draggingBar = false;
+        barDragOrigin = null;
+        barDragPointerId = null;
+        chromeEl?.classList.remove('is-dragging');
+        grab.classList.remove('is-dragging');
+    };
+    grab.addEventListener('pointerup', endDrag);
+    grab.addEventListener('pointercancel', endDrag);
 }
 
 function bindEvents() {
     if (bound || !rootEl) return;
     bound = true;
 
+    bindBarDrag();
+
     rootEl.addEventListener('click', (e) => {
+        if (e.target.closest('[data-qs-grab]')) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
         const colorBtn = e.target.closest('[data-qs-color]');
         if (colorBtn) {
             e.preventDefault();
@@ -326,6 +530,24 @@ function bindEvents() {
             syncWidthUI();
             return;
         }
+        if (e.target.closest('[data-qs-undo]')) {
+            e.preventDefault();
+            e.stopPropagation();
+            undoStrokes();
+            return;
+        }
+        if (e.target.closest('[data-qs-redo]')) {
+            e.preventDefault();
+            e.stopPropagation();
+            redoStrokes();
+            return;
+        }
+        if (e.target.closest('[data-qs-copy]')) {
+            e.preventDefault();
+            e.stopPropagation();
+            void copyViewportSnapshot();
+            return;
+        }
         if (e.target.closest('[data-qs-clear]')) {
             e.preventDefault();
             e.stopPropagation();
@@ -353,11 +575,13 @@ function bindEvents() {
         if (tool === 'eraser') {
             erasing = true;
             activeStroke = null;
+            eraseBaseline = cloneStrokes(strokes);
             eraseAtEvent(e);
             e.preventDefault();
             return;
         }
         if (activeStroke?.points?.length) strokes.push(activeStroke);
+        pushHistory();
         activeStroke = {
             color: getScribbleColor(colorIndex),
             width: clampScribbleWidth(width),
@@ -382,9 +606,27 @@ function bindEvents() {
     });
 
     const endStroke = () => {
-        erasing = false;
+        if (erasing) {
+            erasing = false;
+            if (eraseBaseline != null) {
+                const before = eraseBaseline;
+                eraseBaseline = null;
+                if (JSON.stringify(before) !== JSON.stringify(strokes)) {
+                    undoStack.push(JSON.stringify(before));
+                    trimHistory(undoStack);
+                    redoStack = [];
+                    syncHistoryUI();
+                }
+            }
+            return;
+        }
         if (!activeStroke) return;
         if (activeStroke.points.length) strokes.push(activeStroke);
+        else if (undoStack.length) {
+            // Empty stroke — drop the history push from pointerdown.
+            undoStack.pop();
+            syncHistoryUI();
+        }
         activeStroke = null;
         paint();
     };
@@ -395,10 +637,36 @@ function bindEvents() {
         resizeBound = true;
         window.addEventListener('resize', () => {
             if (mode === 'off') return;
+            if (chromeEl?.classList.contains('is-dragged')) {
+                const rect = chromeEl.getBoundingClientRect();
+                applyBarPosition(rect.left, rect.top);
+            }
             paint();
         });
         document.addEventListener('keydown', (e) => {
             if (mode !== 'drawing') return;
+            const mod = e.ctrlKey || e.metaKey;
+            if (mod && !e.altKey) {
+                const key = String(e.key || '').toLowerCase();
+                if (key === 'z' && e.shiftKey) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    redoStrokes();
+                    return;
+                }
+                if (key === 'y') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    redoStrokes();
+                    return;
+                }
+                if (key === 'z') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    undoStrokes();
+                    return;
+                }
+            }
             if (e.key !== 'Escape') return;
             e.preventDefault();
             e.stopPropagation();

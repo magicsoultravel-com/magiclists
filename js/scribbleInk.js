@@ -2,8 +2,8 @@
 
 export const SCRIBBLE_COLOR_CUSTOM_DEFAULT = '#ffaa00';
 export const SCRIBBLE_COLOR_CUSTOM_INDEX = 3;
-/** Mutable palette: three neon slots + one custom (index 3). */
-export const SCRIBBLE_COLORS = ['#ff00ff', '#00ffff', '#00ff00', SCRIBBLE_COLOR_CUSTOM_DEFAULT];
+/** Mutable palette: pink → green → cyan + one custom (index 3). */
+export const SCRIBBLE_COLORS = ['#ff00ff', '#00ff00', '#00ffff', SCRIBBLE_COLOR_CUSTOM_DEFAULT];
 
 export const SCRIBBLE_WIDTH_MIN = 1;
 export const SCRIBBLE_WIDTH_MAX = 48;

@@ -22,3 +22,20 @@ export async function copyPlainTextToClipboard(text) {
         return false;
     }
 }
+
+/**
+ * @param {Blob} blob
+ * @returns {Promise<boolean>}
+ */
+export async function copyImageBlobToClipboard(blob) {
+    if (!blob || typeof ClipboardItem === 'undefined' || !navigator.clipboard?.write) {
+        return false;
+    }
+    try {
+        const type = blob.type || 'image/png';
+        await navigator.clipboard.write([new ClipboardItem({ [type]: blob })]);
+        return true;
+    } catch {
+        return false;
+    }
+}

@@ -1,4 +1,4 @@
-/** @css {"owns":"media staging dialogue, gallery floating panel, media FAB, scribble FAB, note attachment section, media lightbox, site-wide quick scribble", "js":["mediaLibraryOverlay.js","mediaStagingDialog.js","mediaPasteCatcher.js","noteAttachmentsUi.js","quickScribble.js"]} */
+/** @css {"owns":"media staging dialogue, gallery floating panel, media FAB, scribble FAB, note attachment section, media lightbox, site-wide quick scribble", "js":["mediaLibraryOverlay.js","mediaStagingDialog.js","mediaPasteCatcher.js","noteAttachmentsUi.js","quickScribble.js","viewportCapture.js"]} */
 
 /* Staging count chip (also used in staging dialogue header) */
 .sidebar-media-lib__compact {
@@ -1215,6 +1215,7 @@
 }
 
 .media-lightbox__doodle-dot {
+    position: relative;
     width: 1.05rem;
     height: 1.05rem;
     padding: 0;
@@ -1223,11 +1224,25 @@
     background: var(--doodle-color, #ff00ff);
     cursor: pointer;
     box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+    color: rgba(255, 255, 255, 0.95);
 }
 
 .media-lightbox__doodle-dot.is-active {
     border-color: #fff;
     box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35), inset 0 0 0 1px rgba(0, 0, 0, 0.25);
+}
+
+.media-lightbox__doodle-dot--custom {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.media-lightbox__doodle-dot--custom svg {
+    width: 0.62rem;
+    height: 0.62rem;
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.85));
+    pointer-events: none;
 }
 
 .media-lightbox__doodle-tool {
@@ -1244,7 +1259,7 @@
     cursor: pointer;
 }
 
-.media-lightbox__doodle-tool:hover {
+.media-lightbox__doodle-tool:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.1);
 }
 
@@ -1252,6 +1267,11 @@
     background: rgba(255, 255, 255, 0.18);
     color: #fff;
     box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.media-lightbox__doodle-tool:disabled {
+    opacity: 0.35;
+    cursor: default;
 }
 
 .media-lightbox__doodle-size {
@@ -1358,6 +1378,16 @@
     pointer-events: none;
 }
 
+.quick-scribble__chrome.is-dragged {
+    left: 0;
+    bottom: auto;
+    transform: none;
+}
+
+.quick-scribble__chrome.is-dragging {
+    cursor: grabbing;
+}
+
 .quick-scribble__chrome > * {
     pointer-events: auto;
 }
@@ -1380,28 +1410,35 @@
     display: none !important;
 }
 
-.quick-scribble__done,
-.quick-scribble__exit {
-    margin: 0;
-    margin-left: 0.1rem;
-    padding: 0.15rem 0.5rem;
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    border-radius: 999px;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.92);
-    font-size: 0.68rem;
-    font-weight: 600;
-    cursor: pointer;
+.quick-scribble__grab {
+    cursor: grab;
+    color: rgba(255, 255, 255, 0.7);
+    margin-right: 0.05rem;
 }
 
-.quick-scribble__done:hover,
-.quick-scribble__exit:hover {
-    background: rgba(255, 255, 255, 0.1);
+.quick-scribble__grab:hover:not(:disabled) {
+    color: #fff;
+}
+
+.quick-scribble__grab.is-dragging,
+.quick-scribble__grab:active {
+    cursor: grabbing;
 }
 
 .quick-scribble__done {
-    border-color: rgba(52, 211, 153, 0.45);
     color: #a7f3d0;
+}
+
+.quick-scribble__done:hover:not(:disabled) {
+    background: rgba(52, 211, 153, 0.18);
+}
+
+.quick-scribble__exit {
+    color: rgba(254, 202, 202, 0.95);
+}
+
+.quick-scribble__exit:hover:not(:disabled) {
+    background: rgba(248, 113, 113, 0.16);
 }
 
 .btn--danger {
