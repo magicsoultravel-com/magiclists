@@ -553,11 +553,22 @@ export function paintPlannerChartOverlay(ctx, item, opts) {
         const fill = b.categoryColor || ink;
         ctx.fillStyle = fill;
         ctx.globalAlpha = b.categoryColor ? 0.85 : 0.55;
-        const rx = 2;
         const bw = Math.max(2, b.width);
         const bh = Math.max(2, b.height);
-        roundRect(ctx, b.x, b.y, bw, bh, rx);
-        ctx.fill();
+        if (b.milestone) {
+            const cx = b.x + bw / 2;
+            const cy = b.y + bh / 2;
+            ctx.beginPath();
+            ctx.moveTo(cx, b.y);
+            ctx.lineTo(b.x + bw, cy);
+            ctx.lineTo(cx, b.y + bh);
+            ctx.lineTo(b.x, cy);
+            ctx.closePath();
+            ctx.fill();
+        } else {
+            roundRect(ctx, b.x, b.y, bw, bh, 2);
+            ctx.fill();
+        }
     }
     ctx.fillStyle = ink;
     ctx.globalAlpha = 1;

@@ -337,10 +337,13 @@ export function layoutPlannerGantt(tasks, opts = {}) {
     for (const task of tasks || []) {
         const start = parsePlannerDateTime(task.start);
         if (!start) continue;
+        const milestone = !String(task.stop || '').trim();
         let stop = parsePlannerDateTime(task.stop) || start;
         if (stop.getTime() < start.getTime()) stop = start;
         // Date-only stop: treat as inclusive end-of-day for bar width.
-        if (/^\d{4}-\d{2}-\d{2}$/.test(String(task.stop || task.start).trim())
+        // Milestones stay point-in-time (no +1 day expansion).
+        if (!milestone
+            && /^\d{4}-\d{2}-\d{2}$/.test(String(task.stop || task.start).trim())
             && stop.getTime() === startOfLocalDay(stop).getTime()) {
             stop = addDays(startOfLocalDay(stop), 1);
         }
@@ -350,6 +353,7 @@ export function layoutPlannerGantt(tasks, opts = {}) {
             row: task.row,
             start,
             stop,
+            milestone,
             categoryColor: task.categoryColor || '',
             predecessors: Array.isArray(task.predecessors) ? task.predecessors : []
         });
@@ -376,10 +380,29 @@ export function layoutPlannerGantt(tasks, opts = {}) {
     const toX = (date) => daysBetween(rangeStart, date) * pxPerDay;
 
     const bars = dated.map((t, index) => {
+        const height = rowHeight - barPadY * 2;
+        const y = headerHeight + index * rowHeight + barPadY;
+        if (t.milestone) {
+            const size = height;
+            const cx = toX(t.start);
+            return {
+                id: t.id,
+                name: t.name,
+                row: t.row,
+                x: cx - size / 2,
+                y,
+                width: size,
+                height,
+                milestone: true,
+                startMs: t.start.getTime(),
+                stopMs: t.stop.getTime(),
+                categoryColor: t.categoryColor || '',
+                predecessors: t.predecessors
+            };
+        }
         const x = toX(t.start);
         const x2 = toX(t.stop);
         const width = Math.max(4, x2 - x);
-        const y = headerHeight + index * rowHeight + barPadY;
         return {
             id: t.id,
             name: t.name,
@@ -387,7 +410,8 @@ export function layoutPlannerGantt(tasks, opts = {}) {
             x,
             y,
             width,
-            height: rowHeight - barPadY * 2,
+            height,
+            milestone: false,
             startMs: t.start.getTime(),
             stopMs: t.stop.getTime(),
             categoryColor: t.categoryColor || '',

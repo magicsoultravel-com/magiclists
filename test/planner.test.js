@@ -208,6 +208,21 @@ describe('planner Gantt layout', () => {
         assert.ok(layout.edges.every((e) => e.toId === '3' && e.path));
     });
 
+    it('treats start-only tasks as square milestone diamonds', () => {
+        const layout = layoutPlannerGantt([
+            { id: '1', name: 'Gate', start: '2026-03-10', stop: '', predecessors: [] },
+            { id: '2', name: 'Span', start: '2026-03-10', stop: '2026-03-12', predecessors: [] }
+        ], { zoom: 'day', now: new Date(2026, 2, 10) });
+
+        assert.equal(layout.bars.length, 2);
+        const milestone = layout.bars[0];
+        const bar = layout.bars[1];
+        assert.equal(milestone.milestone, true);
+        assert.equal(milestone.width, milestone.height);
+        assert.equal(bar.milestone, false);
+        assert.ok(bar.width > bar.height);
+    });
+
     it('returns empty chart with today when no dated tasks', () => {
         const layout = layoutPlannerGantt([], { zoom: 'week', now: new Date(2026, 0, 15) });
         assert.equal(layout.empty, true);

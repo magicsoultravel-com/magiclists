@@ -234,9 +234,18 @@ function renderGanttSvg(layout) {
         const fill = b.categoryColor
             ? ` style="fill:${escapeAttr(b.categoryColor)}"`
             : '';
+        let shape;
+        if (b.milestone) {
+            const cx = b.x + b.width / 2;
+            const cy = b.y + b.height / 2;
+            const d = `M${cx},${b.y} L${b.x + b.width},${cy} L${cx},${b.y + b.height} L${b.x},${cy} Z`;
+            shape = `<path class="planner-gantt__milestone" d="${d}"${fill}/>`;
+        } else {
+            shape = `<rect class="planner-gantt__bar" x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" rx="2"${fill}/>`;
+        }
         return `<g class="planner-gantt__bar-group" data-task-id="${escapeAttr(b.id)}">
             <title>${title}</title>
-            <rect class="planner-gantt__bar" x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" rx="2"${fill}/>
+            ${shape}
         </g>`;
     }).join('');
 

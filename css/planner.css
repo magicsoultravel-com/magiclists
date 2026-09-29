@@ -534,6 +534,11 @@
     stroke: none;
 }
 
+.planner-gantt__milestone {
+    fill: color-mix(in srgb, var(--accent, #5b8def) 78%, transparent);
+    stroke: none;
+}
+
 .planner-gantt__edge {
     stroke: color-mix(in srgb, var(--text-muted) 78%, var(--accent, #5b8def) 22%);
     stroke-width: 1.25;
