@@ -229,10 +229,18 @@
 
 .note-body-section .note-section-header {
     margin: 0;
-    padding: 0.12rem 0.05rem;
+    padding: 0.12rem 0.28rem;
     font-size: calc(0.68rem * var(--note-font-scale, 1));
     font-weight: 600;
     color: var(--text-muted);
+}
+
+.note-body-section .note-section-header.collapsable-header:hover {
+    color: var(--accent);
+}
+
+.has-custom-bg .note-body-section .note-section-header.collapsable-header:hover {
+    color: var(--accent);
 }
 
 .note-body-section .note-section-body {

@@ -668,13 +668,44 @@ function openPlannerNativePicker(input) {
     input.click();
 }
 
-function closePlannerCategoryMenus(root = document) {
-    root.querySelectorAll?.('[data-planner-category-panel]')?.forEach?.((panel) => {
+function closePlannerCategoryMenus() {
+    document.querySelectorAll('[data-planner-category-panel]').forEach((panel) => {
         panel.remove();
     });
-    root.querySelectorAll?.('[data-planner-category-menu][aria-expanded="true"]')?.forEach?.((btn) => {
+    document.querySelectorAll('[data-planner-category-menu][aria-expanded="true"]').forEach((btn) => {
         btn.setAttribute('aria-expanded', 'false');
     });
+    if (closePlannerCategoryMenus._onPointer) {
+        document.removeEventListener('pointerdown', closePlannerCategoryMenus._onPointer, true);
+        closePlannerCategoryMenus._onPointer = null;
+    }
+    if (closePlannerCategoryMenus._onReposition) {
+        window.removeEventListener('scroll', closePlannerCategoryMenus._onReposition, true);
+        window.removeEventListener('resize', closePlannerCategoryMenus._onReposition);
+        closePlannerCategoryMenus._onReposition = null;
+    }
+}
+
+function positionPlannerCategoryMenu(panel, wrap) {
+    if (!panel || !wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const minW = Math.max(rect.width, 112);
+    let left = rect.left;
+    let top = rect.bottom + 2;
+    // Keep inside viewport.
+    const maxLeft = Math.max(8, window.innerWidth - minW - 8);
+    left = Math.min(Math.max(8, left), maxLeft);
+    panel.style.position = 'fixed';
+    panel.style.left = `${Math.round(left)}px`;
+    panel.style.top = `${Math.round(top)}px`;
+    panel.style.minWidth = `${Math.round(minW)}px`;
+    panel.style.right = 'auto';
+    panel.style.zIndex = '10050';
+    // Flip above if not enough room below.
+    const panelH = panel.offsetHeight || 160;
+    if (top + panelH > window.innerHeight - 8 && rect.top > panelH + 8) {
+        panel.style.top = `${Math.round(rect.top - panelH - 2)}px`;
+    }
 }
 
 function seedPlannerCategoryColor(planner, catName) {
@@ -686,18 +717,29 @@ function seedPlannerCategoryColor(planner, catName) {
     }
 }
 
-function openPlannerCategoryMenu(wrap, item, { mutate, refresh } = {}) {
+function openPlannerCategoryMenu(wrap, item, { mutate } = {}) {
     if (!wrap) return;
-    closePlannerCategoryMenus(wrap.closest('[data-note-planner]') || document);
     const input = wrap.querySelector('[data-col-key="category"]');
     const chevron = wrap.querySelector('[data-planner-category-menu]');
     if (!input) return;
+
+    // Toggle closed if this wrap already owns the open panel.
+    const existing = document.querySelector('[data-planner-category-panel]');
+    if (existing && existing.dataset.ownerRow === String(wrap.dataset.row)
+        && existing.dataset.ownerCol === String(wrap.dataset.col)) {
+        closePlannerCategoryMenus();
+        return;
+    }
+
+    closePlannerCategoryMenus();
 
     const names = listMergedPlannerCategories(item?.planner, readStoredCategories({ keepEmpty: true }));
     const panel = document.createElement('div');
     panel.className = 'planner-category__menu';
     panel.setAttribute('data-planner-category-panel', '1');
     panel.setAttribute('role', 'listbox');
+    panel.dataset.ownerRow = String(wrap.dataset.row ?? '');
+    panel.dataset.ownerCol = String(wrap.dataset.col ?? '');
     if (!names.length) {
         panel.innerHTML = '<div class="planner-category__menu-empty">No categories yet</div>';
     } else {
@@ -706,8 +748,27 @@ function openPlannerCategoryMenu(wrap, item, { mutate, refresh } = {}) {
             return `<button type="button" class="planner-category__option${selected ? ' is-selected' : ''}" role="option" data-planner-category-option="${escapeAttr(name)}" aria-selected="${selected ? 'true' : 'false'}">${escapeHTML(name)}</button>`;
         }).join('');
     }
-    wrap.appendChild(panel);
+    document.body.appendChild(panel);
     chevron?.setAttribute('aria-expanded', 'true');
+    positionPlannerCategoryMenu(panel, wrap);
+
+    const onReposition = () => {
+        if (!document.body.contains(panel) || !document.body.contains(wrap)) {
+            closePlannerCategoryMenus();
+            return;
+        }
+        positionPlannerCategoryMenu(panel, wrap);
+    };
+    closePlannerCategoryMenus._onReposition = onReposition;
+    window.addEventListener('scroll', onReposition, true);
+    window.addEventListener('resize', onReposition);
+
+    const onPointer = (e) => {
+        if (panel.contains(e.target) || wrap.contains(e.target)) return;
+        closePlannerCategoryMenus();
+    };
+    closePlannerCategoryMenus._onPointer = onPointer;
+    document.addEventListener('pointerdown', onPointer, true);
 
     panel.addEventListener('mousedown', (e) => {
         const opt = e.target.closest('[data-planner-category-option]');
@@ -728,9 +789,9 @@ function openPlannerCategoryMenu(wrap, item, { mutate, refresh } = {}) {
         const known = getCategoryColor(item.planner, name);
         const swatch = wrap.querySelector('[data-planner-category-color]');
         if (swatch) swatch.style.background = known || '';
-        closePlannerCategoryMenus(wrap.closest('[data-note-planner]') || document);
+        closePlannerCategoryMenus();
         input.focus();
-        refresh?.();
+        // Do not call syncNotePlannerDom — mutate already refreshes Gantt.
     });
 }
 
@@ -902,8 +963,12 @@ export function attachPlannerInteractions(root, item, {
         const catInput = e.target.closest?.('.planner-category__input');
         if (catInput && section.contains(catInput)) {
             const wrap = catInput.closest('[data-planner-category]');
-            if (!wrap?.querySelector?.('[data-planner-category-panel]')) {
-                openPlannerCategoryMenu(wrap, item, { mutate, refresh });
+            const openPanel = document.querySelector('[data-planner-category-panel]');
+            const ownsOpen = openPanel
+                && openPanel.dataset.ownerRow === String(wrap?.dataset?.row ?? '')
+                && openPanel.dataset.ownerCol === String(wrap?.dataset?.col ?? '');
+            if (!ownsOpen) {
+                openPlannerCategoryMenu(wrap, item, { mutate });
             }
         }
     });
@@ -912,13 +977,7 @@ export function attachPlannerInteractions(root, item, {
         const leaving = e.target.closest('[data-planner-cell], [data-planner-datetime]');
         if (!leaving || !section.contains(leaving)) return;
         flushPlannerCommit();
-        // Close category menu when focus leaves the category cell (not into its panel).
-        const related = e.relatedTarget;
-        if (!related || !leaving.closest('[data-planner-category]')?.contains(related)) {
-            if (leaving.closest('[data-planner-category]')) {
-                closePlannerCategoryMenus(section);
-            }
-        }
+        // Category menu closes via document pointerdown — not focusout (relatedTarget is often null).
     });
 
     section.addEventListener('click', (e) => {
@@ -927,25 +986,15 @@ export function attachPlannerInteractions(root, item, {
             e.preventDefault();
             e.stopPropagation();
             const wrap = catMenuBtn.closest('[data-planner-category]');
-            const alreadyOpen = !!wrap?.querySelector?.('[data-planner-category-panel]');
-            if (alreadyOpen) {
-                closePlannerCategoryMenus(section);
-                return;
-            }
-            openPlannerCategoryMenu(wrap, item, { mutate, refresh });
+            openPlannerCategoryMenu(wrap, item, { mutate });
             return;
-        }
-
-        // Close category menus when clicking elsewhere in the planner.
-        if (!e.target.closest('[data-planner-category-panel], [data-planner-category]')) {
-            closePlannerCategoryMenus(section);
         }
 
         const colorBtn = e.target.closest('[data-planner-category-color]');
         if (colorBtn && section.contains(colorBtn)) {
             e.preventDefault();
             e.stopPropagation();
-            closePlannerCategoryMenus(section);
+            closePlannerCategoryMenus();
             const wrap = colorBtn.closest('[data-planner-category]');
             const row = Number(wrap?.dataset?.row);
             const nameInput = wrap?.querySelector?.('[data-col-key="category"]');
@@ -963,7 +1012,8 @@ export function attachPlannerInteractions(root, item, {
                         setCellValue(it.planner.sheet, row, 1, name);
                         setCategoryColor(it.planner, name, hex);
                     }, { refreshGantt: true });
-                    refresh();
+                    if (nameInput) nameInput.value = name;
+                    colorBtn.style.background = hex;
                 }
             });
             return;

@@ -204,6 +204,17 @@ textarea.form-input {
     color: var(--accent);
 }
 
+.note-section-header.collapsable-header {
+    cursor: pointer;
+    border-radius: 4px;
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.note-section-header.collapsable-header:hover {
+    background: color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 12%, transparent);
+    color: var(--accent);
+}
+
 .collapsable-toggle {
     display: inline-flex;
     align-items: center;

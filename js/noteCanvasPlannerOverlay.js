@@ -23,6 +23,23 @@ const TABLE_BODY_RATIO = 0.5 / NOTE_BODY_REM;
 const TABLE_HEADER_RATIO = 0.42 / NOTE_BODY_REM;
 const GANTT_RAIL_RATIO = 0.48 / NOTE_BODY_REM;
 const CELL_LINE_HEIGHT = 1.25;
+const FONT_FAMILY_FALLBACK = 'system-ui, -apple-system, "Segoe UI", sans-serif';
+
+/** Live note font for chart rail task names (matches interactive planner). */
+function resolveRailFontFamily(explicit) {
+    if (explicit) return explicit;
+    if (typeof document === 'undefined') return FONT_FAMILY_FALLBACK;
+    try {
+        const css = getComputedStyle(document.documentElement);
+        const note = css.getPropertyValue('--note-font-family').trim();
+        if (note) return note;
+        const body = css.fontFamily?.trim();
+        if (body) return body;
+    } catch {
+        // ignore
+    }
+    return FONT_FAMILY_FALLBACK;
+}
 
 function wrapLine(ctx, text, maxWidth) {
     const words = String(text || '').split(/\s+/).filter(Boolean);
@@ -430,10 +447,13 @@ function strokeGanttEdge(ctx, path) {
  */
 export function paintPlannerChartOverlay(ctx, item, opts) {
     const {
-        x, y, fontSize, ink, fontFamily,
+        x, y, fontSize, ink,
         measured = measurePlannerChartOverlay(item, fontSize)
     } = opts;
     if (!measured?.layout) return 0;
+
+    // Task names follow live note font (primary chart-overlay ask); fall back if caller omitted it.
+    const fontFamily = resolveRailFontFamily(opts.fontFamily);
 
     const layout = measured.layout;
     const {
@@ -443,10 +463,11 @@ export function paintPlannerChartOverlay(ctx, item, opts) {
     const minorTicks = minors.length ? minors : (layout.ticks || []);
     const bodyH = Math.max(0, height - headerHeight);
     const railFont = ganttRailFontPx(fontSize);
+    const railFontCss = `${railFont}px ${fontFamily}`;
 
     ctx.save();
     ctx.translate(x, y);
-    ctx.font = `${railFont}px ${fontFamily}`;
+    ctx.font = railFontCss;
     ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = ink;
     ctx.strokeStyle = ink;
@@ -466,8 +487,10 @@ export function paintPlannerChartOverlay(ctx, item, opts) {
         ctx.beginPath();
         ctx.rect(2, row.y - (layout.rowHeight || 22) / 2, labelWidth - 4, layout.rowHeight || 22);
         ctx.clip();
+        ctx.font = railFontCss;
+        ctx.textBaseline = 'middle';
         ctx.globalAlpha = empty ? 0.42 : 0.85;
-        ctx.fillText(String(row.name), 6, row.y + 3);
+        ctx.fillText(String(row.name), 6, row.y);
         ctx.restore();
     }
 
