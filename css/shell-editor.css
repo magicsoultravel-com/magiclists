@@ -382,7 +382,8 @@ body.is-checklist-dragging {
 }
 
 .card-act--draw.is-active,
-.card-act--planner.is-active {
+.card-act--planner.is-active,
+.card-act--focus.is-active {
     color: var(--accent, #60a5fa);
     opacity: 1;
 }
@@ -391,7 +392,9 @@ body.is-checklist-dragging {
 .mini-card .card-act--draw.is-active,
 .editor-note-shell .card-act--draw.is-active,
 .mini-card .card-act--planner.is-active,
-.editor-note-shell .card-act--planner.is-active {
+.editor-note-shell .card-act--planner.is-active,
+.mini-card .card-act--focus.is-active,
+.editor-note-shell .card-act--focus.is-active {
     opacity: 1;
     color: var(--accent, #60a5fa);
 }

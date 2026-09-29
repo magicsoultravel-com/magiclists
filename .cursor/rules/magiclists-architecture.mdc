@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-09-24T22:09:38.661Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-09-29T21:01:18.557Z
 
 ## CSS load order
 
@@ -23,26 +23,27 @@ alwaysApply: true
 | css/board.css | grid/freeform board, clock, drag/resize, desktop inline card spatial overrides, file cabinet mode | dragdrop.js, clockStyle.js, desktopZoom.js, boardSort.js, fileCabinet.js | note footer spatial overrides cross-cut shell-editor.css; file cabinet drawer mode integration | 10 |
 | css/themes.css | html[data-app-theme] overrides, theme picker swatches | appTheme.js, themePicker.js, themeSkins.js | — | 11 |
 | css/drawing.css | magicCanvas toolbar and drawing board surface | drawingBoard.js, drawingToolbarMenu.js, drawingToolbarChrome.js | — | 12 |
-| css/tools.css | floating tool panels, chips, shared tool layout utilities, toolbox menu | toolsManager.js, toolPanelChrome.js, sidebarModules.js | — | 13 |
-| css/tool-timezone.css | timezone tool body | js/tools/timezone.js | — | 14 |
-| css/tool-timer.css | timer tool body | js/tools/timer.js | — | 15 |
-| css/tool-calculator.css | calculator tool body | js/tools/calculator.js | — | 16 |
-| css/tool-converter.css | unit converter tool body | js/tools/converter.js | — | 17 |
-| css/tool-map.css | map tool body | js/tools/map.js | — | 18 |
-| css/tool-globe.css | globe tool body | js/tools/globe.js | — | 19 |
-| css/tool-alphabets.css | alphabets/cards tool body | js/tools/alphabets.js | — | 20 |
-| css/calendar.css | calendar tool panel month grid and hour notes | js/tools/calendar.js, calendar.js | — | 21 |
-| css/cosmos.css | cosmos tool viewport and star map chrome | js/tools/cosmos.js | — | 22 |
-| css/sidebar-media.css | shared sidebar radio/tv player and popover chrome | sidebarRadio.js, sidebarTv.js, radioPopover.js, tvPopover.js | domain-specific rules stay in radio.css and tv.css | 23 |
-| css/radio.css | (unknown) | — | — | 24 |
-| css/tv.css | sidebar TV player, now playing, popover browser | sidebarTv.js, tvPlayer.js, tvPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell-sidebar.css | 25 |
-| css/weather.css | sidebar weather glance + expanded forecast panel | sidebarWeather.js, weatherApi.js | — | 26 |
-| css/sheet.css | sheet-grid note template body and table chrome | sheet.js, noteSurface.js, editor.js | — | 27 |
-| css/planner.css | magicPlanner note subsection — typed schedule sheet and Gantt chart | plannerUi.js, planner.js, plannerGantt.js | — | 28 |
-| css/desktops.css | desktop switcher dock styling, dock pin lock | desktopDockComponent.js | — | 29 |
-| css/popout.css | (unknown) | — | — | 30 |
-| css/media-library.css | media staging dialogue, gallery floating panel, media FAB, scribble FAB, note attachment section, media lightbox, site-wide quick scribble | mediaLibraryOverlay.js, mediaStagingDialog.js, mediaPasteCatcher.js, noteAttachmentsUi.js, quickScribble.js | — | 31 |
-| css/categories-panel.css | categories manager floating panel with adaptive square category tiles | categoriesOverlay.js | — | 32 |
+| css/magic-focus.css | magic focus workspace takeover, split panes, setup DnD, in-zone drawing host | magicFocus.js | — | 13 |
+| css/tools.css | floating tool panels, chips, shared tool layout utilities, toolbox menu | toolsManager.js, toolPanelChrome.js, sidebarModules.js | — | 14 |
+| css/tool-timezone.css | timezone tool body | js/tools/timezone.js | — | 15 |
+| css/tool-timer.css | timer tool body | js/tools/timer.js | — | 16 |
+| css/tool-calculator.css | calculator tool body | js/tools/calculator.js | — | 17 |
+| css/tool-converter.css | unit converter tool body | js/tools/converter.js | — | 18 |
+| css/tool-map.css | map tool body | js/tools/map.js | — | 19 |
+| css/tool-globe.css | globe tool body | js/tools/globe.js | — | 20 |
+| css/tool-alphabets.css | alphabets/cards tool body | js/tools/alphabets.js | — | 21 |
+| css/calendar.css | calendar tool panel month grid and hour notes | js/tools/calendar.js, calendar.js | — | 22 |
+| css/cosmos.css | cosmos tool viewport and star map chrome | js/tools/cosmos.js | — | 23 |
+| css/sidebar-media.css | shared sidebar radio/tv player and popover chrome | sidebarRadio.js, sidebarTv.js, radioPopover.js, tvPopover.js | domain-specific rules stay in radio.css and tv.css | 24 |
+| css/radio.css | (unknown) | — | — | 25 |
+| css/tv.css | sidebar TV player, now playing, popover browser | sidebarTv.js, tvPlayer.js, tvPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell-sidebar.css | 26 |
+| css/weather.css | sidebar weather glance + expanded forecast panel | sidebarWeather.js, weatherApi.js | — | 27 |
+| css/sheet.css | sheet-grid note template body and table chrome | sheet.js, noteSurface.js, editor.js | — | 28 |
+| css/planner.css | magicPlanner note subsection — typed schedule sheet and Gantt chart | plannerUi.js, planner.js, plannerGantt.js | — | 29 |
+| css/desktops.css | desktop switcher dock styling, dock pin lock | desktopDockComponent.js | — | 30 |
+| css/popout.css | (unknown) | — | — | 31 |
+| css/media-library.css | media staging dialogue, gallery floating panel, media FAB, scribble FAB, note attachment section, media lightbox, site-wide quick scribble | mediaLibraryOverlay.js, mediaStagingDialog.js, mediaPasteCatcher.js, noteAttachmentsUi.js, quickScribble.js | — | 32 |
+| css/categories-panel.css | categories manager floating panel with adaptive square category tiles | categoriesOverlay.js | — | 33 |
 
 ## JS domains (@module)
 
@@ -77,6 +78,7 @@ alwaysApply: true
 | js/itemMerge.js | shared merge helper for undo/redo restore (preserves note metadata) | undo.js, app.js | — | — |
 | js/lassoGeometry.js | lasso geometry utilities - ray casting, bounding boxes | drawingBoard.js | — | — |
 | js/layoutStorage.js | board layout persistence, grid/freeform positions, storage migrations | dragdrop.js, ui.js, fileCabinet.js, board/gridEngine.js, sync.js | — | — |
+| js/magicFocus.js | magic focus workspace mode — split panes, setup DnD, planner block hosting | app.js, noteQuickActions.js, drawingBoard.js, plannerUi.js, noteSurface.js | — | — |
 | js/mediaAttachments.js | note↔media attachment helpers | mediaLibrary.js, noteSurface.js, mediaLibraryOverlay.js | — | — |
 | js/mediaBackup.js | media library backup export/import (meta JSON, embeds, ZIP) | mediaLibrary.js, backup.js | — | — |
 | js/mediaLibrary.js | media library CRUD, thumbs, size limits | storage/indexedDbMediaStore.js, mediaMetadata.js, mediaBackup.js | — | — |

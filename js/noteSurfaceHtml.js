@@ -127,6 +127,16 @@ export function buildNoteQuickActionsHtml(item, {
     const plannerBtn = isPopout
         ? ''
         : `<button type="button" class="card-act card-act--planner${plannerActive ? ' is-active' : ''}" data-note-id="${escapeAttr(item?.id || '')}" title="${escapeAttr(plannerTitle)}" aria-label="${escapeAttr(plannerTitle)}" aria-pressed="${plannerActive ? 'true' : 'false'}">${CARD_ICONS.planner}</button>`;
+    const isFocusSurface = surface === 'focus';
+    let focusActive = false;
+    try {
+        // Lazy: MagicFocus may not be loaded yet during first paint
+        focusActive = !!(typeof window !== 'undefined' && window.__MagicFocusIsOpenFor?.(item?.id));
+    } catch { /* ignore */ }
+    const focusTitle = focusActive ? 'Exit magicFocus' : 'Open magicFocus';
+    const focusBtn = (!isPopout && plannerActive)
+        ? `<button type="button" class="card-act card-act--focus${focusActive || isFocusSurface ? ' is-active' : ''}" data-note-id="${escapeAttr(item?.id || '')}" title="${escapeAttr(focusTitle)}" aria-label="${escapeAttr(focusTitle)}" aria-pressed="${focusActive || isFocusSurface ? 'true' : 'false'}">${CARD_ICONS.focus}</button>`
+        : '';
     // Board/modal: while a popout owns the note, offer a recall action that
     // returns it to the board (closes the popout after saving).
     const popinTitle = 'Pop in (return note to board)';
@@ -159,11 +169,12 @@ export function buildNoteQuickActionsHtml(item, {
         ? `Attach media (${attachCount})`
         : 'Attach media';
     const attachBtn = `<button type="button" class="card-act card-act--attach${attachCount ? ' is-active' : ''}" title="${escapeAttr(attachTitle)}" aria-label="${escapeAttr(attachTitle)}" aria-pressed="${attachCount ? 'true' : 'false'}">${CARD_ICONS.attach}</button>`;
-    // Board: popout, cal, popin (popped only), emoji, copy, [pin], color, attach, hide, edit, [drag], toggle
+    // Board: popout, draw, planner, [focus], cal, popin (popped only), emoji, copy, [pin], color, attach, hide, edit, [drag], toggle
     // Popout: cal, close (pop in), emoji, copy, color, attach, window-size
     let actionCount = isPopout ? 7 : 12;
     if (!isModal && !isPopout && showDragIcon) actionCount += 1;
     if (!isPopout && poppedOut) actionCount += 1; // popin
+    if (focusBtn) actionCount += 1;
 
     if (showArchive) actionCount += 1;
     const archiveBtn = showArchive
@@ -172,10 +183,11 @@ export function buildNoteQuickActionsHtml(item, {
     const lastBtn = isPopout
         ? windowSizeBtn
         : `<button type="button" class="card-act ${lastClass}"${lastId} title="${escapeHTML(expandTitle).replace(/"/g, "")}" aria-label="${escapeHTML(expandTitle).replace(/"/g, "")}">${lastIcon}</button>`;
-    const actionsHtml = `<div class="card-actions${(isModal || isPopout) ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
+    const actionsHtml = `<div class="card-actions${(isModal || isPopout || isFocusSurface) ? ' modal-card-actions' : ''}" data-action-count="${actionCount}" data-surface="${surface}">
             ${popBtn}
             ${drawBtn}
             ${plannerBtn}
+            ${focusBtn}
             ${calBtn}
             ${closeBtn}
             ${popinBtn}
@@ -190,7 +202,7 @@ export function buildNoteQuickActionsHtml(item, {
 
             ${lastBtn}
         </div>`;
-    return (isModal || isPopout) ? `${archiveBtn}${actionsHtml}` : actionsHtml;
+    return (isModal || isPopout || isFocusSurface) ? `${archiveBtn}${actionsHtml}` : actionsHtml;
 }
 
 export function buildNoteBodyConvertButtonsHtml(item) {

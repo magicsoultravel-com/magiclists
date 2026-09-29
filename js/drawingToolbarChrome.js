@@ -1,10 +1,13 @@
 import { CARD_ICONS } from './icons.js';
 
-const STORAGE_KEY = 'matrix_drawing_toolbar';
+const STORAGE_KEY_DEFAULT = 'matrix_drawing_toolbar';
+
+let activeStorageKey = STORAGE_KEY_DEFAULT;
+let hostBoundsEl = null;
 
 function loadState() {
     try {
-        return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        return JSON.parse(localStorage.getItem(activeStorageKey) || '{}');
     } catch {
         return {};
     }
@@ -12,7 +15,7 @@ function loadState() {
 
 function saveState(patch) {
     const next = { ...loadState(), ...patch };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    localStorage.setItem(activeStorageKey, JSON.stringify(next));
 }
 
 function clamp(value, min, max) {
@@ -20,6 +23,8 @@ function clamp(value, min, max) {
 }
 
 function getDesktopZoom() {
+    // Focus-hosted toolbar is never under desktop zoom.
+    if (hostBoundsEl) return 1;
     const surface = document.getElementById('desktop-surface');
     const canvas = document.getElementById('app-canvas');
     const raw = parseFloat(surface?.dataset?.desktopZoom ?? canvas?.dataset?.desktopZoom);
@@ -35,6 +40,14 @@ function pointerDelta(clientX, clientY, startX, startY) {
 }
 
 function getDesktopBounds() {
+    if (hostBoundsEl) {
+        return {
+            left: 0,
+            top: 0,
+            right: hostBoundsEl.clientWidth || 0,
+            bottom: hostBoundsEl.clientHeight || 0
+        };
+    }
     const surface = document.getElementById('desktop-surface');
     if (surface) {
         return { left: 0, top: 0, right: surface.clientWidth, bottom: surface.clientHeight };
@@ -144,7 +157,12 @@ export const DrawingToolbarChrome = {
     show() {
         if (!this.panel || !this.chip) return;
         const saved = loadState();
-        this.collapsed = saved.collapsed === true;
+        // Focus host: default collapsed unless user has expanded before in this storage key.
+        if (hostBoundsEl && saved.collapsed == null && this._forceDefaultCollapsed) {
+            this.collapsed = true;
+        } else {
+            this.collapsed = saved.collapsed === true;
+        }
 
         const bounds = getDesktopBounds();
         const defaultX = bounds.left + 12;
@@ -232,5 +250,23 @@ export const DrawingToolbarChrome = {
 
     getToolbarMount() {
         return this.bodyEl;
+    },
+
+    /**
+     * Clamp/drag relative to a host element (Focus canvas zone). Positions are
+     * offset-parent coordinates inside the host.
+     * @param {HTMLElement|null} el
+     * @param {{ storageKey?: string, defaultCollapsed?: boolean }} [opts]
+     */
+    setHostBounds(el, { storageKey = 'matrix_focus_drawing_toolbar', defaultCollapsed = true } = {}) {
+        hostBoundsEl = el || null;
+        activeStorageKey = storageKey || STORAGE_KEY_DEFAULT;
+        this._forceDefaultCollapsed = !!defaultCollapsed;
+    },
+
+    clearHostBounds() {
+        hostBoundsEl = null;
+        activeStorageKey = STORAGE_KEY_DEFAULT;
+        this._forceDefaultCollapsed = false;
     }
 };

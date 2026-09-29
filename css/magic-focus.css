@@ -1,0 +1,530 @@
+/** @css {"owns":"magic focus workspace takeover, split panes, setup DnD, in-zone drawing host", "js":["magicFocus.js"]} */
+
+#workspace-shell[data-magic-focus] #app-canvas {
+    display: none !important;
+}
+
+#workspace-shell[data-magic-focus] #drawing-board:not(.magic-focus-canvas-board) {
+    display: none !important;
+}
+
+#magic-focus {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+    background: var(--desktop-bg, var(--bg-primary));
+    color: var(--text-main);
+    min-height: 0;
+    min-width: 0;
+}
+
+#magic-focus.is-hidden {
+    display: none !important;
+}
+
+.magic-focus__header {
+    flex: 0 0 auto;
+    display: block;
+    padding: 0.28rem 0.45rem;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--chrome-bg, var(--bg-surface));
+    min-height: 0;
+}
+
+.magic-focus__note-shell {
+    width: 100%;
+    min-width: 0;
+}
+
+.magic-focus__header .editor-note-topline {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    position: relative;
+    min-width: 0;
+}
+
+.magic-focus__header .editor-note-header {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* Match board/surface note title size */
+.magic-focus__header .mini-card-title,
+.magic-focus__header .mini-card-title.card-inline-edit {
+    font-size: calc(0.68rem * var(--note-font-scale, 1));
+    font-weight: 600;
+    color: var(--text-main);
+    line-height: 1.3;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    max-height: none;
+}
+
+.magic-focus__header .note-editor-toolbar {
+    flex: 0 0 auto;
+    position: relative;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+/* Always show the full quick-action suite in Focus (same idea as modal). */
+.magic-focus__header .card-actions,
+.magic-focus__header .note-editor-toolbar .card-actions,
+.magic-focus__header .modal-card-actions {
+    position: static !important;
+    top: auto !important;
+    right: auto !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
+    display: inline-flex !important;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1px;
+    width: max-content;
+    max-width: none;
+    margin: 0;
+    padding: 1px 2px;
+    background: none;
+    z-index: 2;
+}
+
+.magic-focus__header .card-act {
+    opacity: 1;
+    color: var(--text-main);
+}
+
+.magic-focus__header .card-act--focus.is-active,
+.magic-focus__header .card-act--focus-settings,
+.magic-focus__header .card-act--planner.is-active,
+.magic-focus__header .card-act--draw.is-active {
+    color: var(--accent, #60a5fa);
+    opacity: 1;
+}
+
+.magic-focus__body {
+    flex: 1 1 0%;
+    min-height: 0;
+    min-width: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.magic-focus__setup {
+    flex: 1 1 0%;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.25rem 1.5rem 1rem;
+    overflow: auto;
+    box-sizing: border-box;
+}
+
+.magic-focus__setup--layout {
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+}
+
+.magic-focus__setup--assign {
+    position: absolute;
+    inset: 0;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+    width: auto;
+    height: auto;
+}
+
+.magic-focus__assign-chrome {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
+    padding: 0.45rem 0.55rem;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--chrome-bg, var(--bg-surface));
+    z-index: 1;
+}
+
+.magic-focus__assign-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-left: auto;
+    flex-wrap: wrap;
+}
+
+.magic-focus__palette--row {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 0.4rem;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+}
+
+.magic-focus__layout-preview {
+    flex: 1 1 0%;
+    min-height: 0;
+    min-width: 0;
+    width: 100%;
+    height: 100%;
+    display: grid;
+    gap: 4px;
+    padding: 4px;
+    background: var(--border-color);
+    box-sizing: border-box;
+}
+
+.magic-focus__zone-slot {
+    border: none;
+    border-radius: 0;
+    background: var(--bg-card, var(--bg-surface));
+    min-height: 0;
+    min-width: 0;
+    width: auto;
+    height: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.75rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    transition: background 0.12s ease, outline-color 0.12s ease;
+    outline: 2px solid transparent;
+    outline-offset: -2px;
+}
+
+.magic-focus__zone-slot.has-block {
+    border-style: none;
+    border-color: transparent;
+}
+
+.magic-focus__zone-slot.is-dragover {
+    background: color-mix(in srgb, var(--accent) 16%, var(--bg-card, var(--bg-surface)));
+    outline-color: var(--accent);
+}
+
+.magic-focus__zone-placeholder {
+    opacity: 0.35;
+    font-size: 1.4rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    color: var(--text-main);
+    user-select: none;
+    pointer-events: none;
+}
+
+.magic-focus__zone-slot .magic-focus__tile {
+    pointer-events: auto;
+    opacity: 1;
+}
+
+.magic-focus__tile--in-zone {
+    min-width: 7rem;
+    padding: 0.65rem 1rem;
+    font-size: 0.85rem;
+}
+
+.magic-focus__setup-hero {
+    text-align: center;
+}
+
+.magic-focus__setup-hero--compact {
+    text-align: left;
+}
+
+.magic-focus__setup-heading {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    color: var(--text-main);
+}
+
+.magic-focus__setup-topbar {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.magic-focus__change-layout {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.35rem 0.45rem;
+    color: var(--text-main);
+}
+
+.magic-focus__change-layout .magic-focus__preset-glyph {
+    width: 1.85rem;
+    height: 1.3rem;
+    display: block;
+}
+
+.magic-focus__presets {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.75rem;
+    max-width: 44rem;
+}
+
+.magic-focus__preset {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.65rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--bg-card, var(--bg-surface));
+    color: var(--text-main);
+    cursor: pointer;
+    width: 5.5rem;
+    height: 4rem;
+    box-sizing: border-box;
+    transition: border-color 0.12s ease, color 0.12s ease, transform 0.12s ease;
+}
+
+.magic-focus__preset:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: translateY(-1px);
+}
+
+.magic-focus__preset.is-active {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.magic-focus__preset-glyph {
+    width: 2.6rem;
+    height: 1.85rem;
+    display: block;
+    flex: 0 0 auto;
+    color: inherit;
+}
+
+.magic-focus__tile {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-card, var(--bg-surface));
+    color: var(--text-main);
+    font-size: 0.75rem;
+    font-weight: 550;
+    cursor: grab;
+    user-select: none;
+    transition: opacity 0.12s ease, border-color 0.12s ease;
+}
+
+.magic-focus__tile:active,
+.magic-focus__tile.is-dragging {
+    cursor: grabbing;
+    opacity: 0.7;
+}
+
+.magic-focus__tile.is-placed {
+    opacity: 0.38;
+    pointer-events: none;
+    cursor: default;
+}
+
+.magic-focus__tile-icon {
+    display: inline-flex;
+    color: var(--text-main);
+    flex: 0 0 auto;
+}
+
+.magic-focus__tile-icon svg {
+    display: block;
+}
+
+.magic-focus__tile:hover .magic-focus__tile-icon,
+.magic-focus__tile--in-zone .magic-focus__tile-icon {
+    color: var(--accent);
+}
+
+.magic-focus__tile-label {
+    line-height: 1;
+}
+
+.magic-focus__setup-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: auto;
+    padding-top: 0.35rem;
+}
+
+.magic-focus__setup--layout .magic-focus__setup-actions {
+    width: 100%;
+    max-width: 42rem;
+}
+
+.magic-focus__btn-apply {
+    border-color: color-mix(in srgb, var(--accent) 45%, var(--border-color));
+    color: var(--accent);
+}
+
+.magic-focus__work {
+    position: absolute;
+    inset: 0;
+    min-height: 0;
+    min-width: 0;
+    display: grid;
+    gap: 4px;
+    padding: 4px;
+    box-sizing: border-box;
+    background: var(--border-color);
+}
+
+.magic-focus__pane {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-card, var(--bg-surface));
+    border: 1px solid var(--border-color);
+}
+
+.magic-focus__pane-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.35rem;
+    position: relative;
+}
+
+.magic-focus__pane-body.editor-note-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.magic-focus__pane--empty .magic-focus__pane-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 0.75rem;
+}
+
+.magic-focus__pane-empty-msg {
+    opacity: 0.45;
+}
+
+.magic-focus__canvas-sub {
+    flex: 1 1 auto;
+    min-height: 8rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.magic-focus__canvas-sub .planner-sub__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    position: relative;
+}
+
+.magic-focus__pane--canvas {
+    overflow: hidden;
+}
+
+.magic-focus__pane--canvas .magic-focus__pane-body {
+    padding: 0.25rem;
+    overflow: hidden;
+}
+
+.magic-focus__canvas-host {
+    position: absolute;
+    inset: 0;
+    min-height: 0;
+    min-width: 0;
+}
+
+.magic-focus__canvas-host .drawing-board,
+.drawing-board.magic-focus-canvas-board {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+}
+
+.magic-focus__splitter {
+    position: absolute;
+    z-index: 5;
+    background: transparent;
+}
+
+.magic-focus__splitter::after {
+    content: '';
+    position: absolute;
+    background: color-mix(in srgb, var(--border-color) 80%, var(--accent) 20%);
+    border-radius: 2px;
+    opacity: 0.7;
+}
+
+.magic-focus__splitter--col {
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    margin-left: -4px;
+    cursor: col-resize;
+}
+
+.magic-focus__splitter--col::after {
+    top: 12%;
+    bottom: 12%;
+    left: 3px;
+    width: 2px;
+}
+
+.magic-focus__splitter--row {
+    left: 0;
+    right: 0;
+    height: 8px;
+    margin-top: -4px;
+    cursor: row-resize;
+}
+
+.magic-focus__splitter--row::after {
+    left: 12%;
+    right: 12%;
+    top: 3px;
+    height: 2px;
+}
+
+.magic-focus__splitter:hover::after,
+.magic-focus__splitter.is-dragging::after {
+    opacity: 1;
+    background: var(--accent, #60a5fa);
+}

@@ -145,6 +145,7 @@ export function createDefaultNote({ startDateTime, ...overrides } = {}) {
         attachments: [],
         canvas: null,
         planner: null,
+        focus: null,
         steps: [],
         editorBodyLayout: 'both',
         tileSize: 'large',

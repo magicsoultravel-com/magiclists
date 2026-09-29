@@ -106,6 +106,7 @@ function queryActionButtons(root) {
         popoutBtn: actions.querySelector('.card-act--popout'),
         drawBtn: actions.querySelector('.card-act--draw'),
         plannerBtn: actions.querySelector('.card-act--planner'),
+        focusBtn: actions.querySelector('.card-act--focus'),
         popinBtn: actions.querySelector('.card-act--popin'),
         closeBtn: actions.querySelector('.card-act--close'),
         windowSizeBtn: actions.querySelector('.card-act--window-size')
@@ -114,14 +115,16 @@ function queryActionButtons(root) {
 
 
 function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
-    const { copyBtn, pinBtn, dragBtn, colorBtn, attachBtn, iconBtn, hideBtn, calBtn, popoutBtn, popinBtn, drawBtn, plannerBtn } = buttons;
+    const { copyBtn, pinBtn, dragBtn, colorBtn, attachBtn, iconBtn, hideBtn, calBtn, popoutBtn, popinBtn, drawBtn, plannerBtn, focusBtn } = buttons;
     const iconRoot = surface === 'board'
         ? (card?.querySelector('.editor-note-shell') || card)
-        : (editor?.mountZone?.querySelector('.editor-note-shell') || editor?.mountZone || editor?.popoutRoot);
+        : surface === 'focus'
+            ? (document.querySelector('#magic-focus .magic-focus__body') || document.getElementById('magic-focus'))
+            : (editor?.mountZone?.querySelector('.editor-note-shell') || editor?.mountZone || editor?.popoutRoot);
 
     // Synchronous commit used before the button steals focus from the active inline edit.
     const boardCommit = surface === 'board' ? () => NoteSurface.commitFocusedInlineField(card, item) : null;
-    const modalCommit = (surface === 'modal' || surface === 'popout')
+    const modalCommit = (surface === 'modal' || surface === 'popout' || surface === 'focus')
         ? () => editor?.syncActiveItemFromDom?.()
         : null;
 
@@ -191,6 +194,11 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
             const ok = await copyPlainTextToClipboard(itemToPlainCopyText(item));
             if (ok) NoteSurface.flashCopyFeedback(copyBtn);
             else NoteSurface.flashCopyFeedback(copyBtn, 'Copy failed', { failed: true });
+        } else if (surface === 'focus') {
+            editor?.syncActiveItemFromDom?.();
+            const ok = await copyPlainTextToClipboard(itemToPlainCopyText(item));
+            if (ok) NoteSurface.flashCopyFeedback(copyBtn);
+            else NoteSurface.flashCopyFeedback(copyBtn, 'Copy failed', { failed: true });
         } else {
             editor.syncActiveItemFromDom();
             const data = editor.collectFormData ? editor.collectFormData() : item;
@@ -207,8 +215,8 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
     });
 
     attachCardActionButton(colorBtn, () => {
-        if (surface === 'board') {
-            if (isDesktopCard(card)) ui.raiseDesktopCard(card);
+        if (surface === 'board' || surface === 'focus') {
+            if (surface === 'board' && isDesktopCard(card)) ui.raiseDesktopCard(card);
             if (!localStorage.getItem('admin_token')) return;
             ColorPicker.open({
                 anchor: colorBtn,
@@ -219,9 +227,11 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
                     NoteSurface.mutateItem(item, (it) => {
                         it.backgroundColor = color || THEME_DEFAULT_COLOR;
                     }, { preserveView: true, skipRerender: true });
-                    applyItemCardTheme(card, item);
-                    const { categoryColor } = getCardRenderContext(item, readStoredCategories());
-                    applyCardCategoryBand(card, categoryColor);
+                    if (surface === 'board' && card) {
+                        applyItemCardTheme(card, item);
+                        const { categoryColor } = getCardRenderContext(item, readStoredCategories());
+                        applyCardCategoryBand(card, categoryColor);
+                    }
                 }
             });
         } else if (surface === 'popout') {
@@ -295,12 +305,34 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
             import('./plannerUi.js').then(({ syncNotePlannerDom }) => {
                 syncNotePlannerDom(item);
             }).catch(() => {});
+            // Focus button appears only when planner is visible — refresh card actions if needed
+            if (nextHidden) {
+                import('./magicFocus.js').then(({ MagicFocus }) => {
+                    if (MagicFocus.isOpen() && MagicFocus.getActiveItemId() === item.id) {
+                        MagicFocus.close();
+                    }
+                }).catch(() => {});
+            }
         }, { commit: boardCommit || modalCommit });
     }
 
+    if (focusBtn) {
+        attachCardActionButton(focusBtn, () => {
+            import('./magicFocus.js').then(({ MagicFocus }) => {
+                MagicFocus.toggle(item).then(() => {
+                    const active = MagicFocus.isOpen() && MagicFocus.getActiveItemId() === item.id;
+                    focusBtn.classList.toggle('is-active', active);
+                    focusBtn.setAttribute('aria-pressed', active ? 'true' : 'false');
+                    focusBtn.setAttribute('title', active ? 'Exit magicFocus' : 'Open magicFocus');
+                    focusBtn.setAttribute('aria-label', active ? 'Exit magicFocus' : 'Open magicFocus');
+                });
+            }).catch(() => {});
+        }, { commit: boardCommit || modalCommit, defer: false });
+    }
+
     attachCardActionButton(iconBtn, () => {
-        if (surface === 'board') {
-            if (isDesktopCard(card)) ui.raiseDesktopCard(card);
+        if (surface === 'board' || surface === 'focus') {
+            if (surface === 'board' && isDesktopCard(card)) ui.raiseDesktopCard(card);
             if (!localStorage.getItem('admin_token')) return;
             NoteSurface.openEmojiPickerForNote(iconRoot, iconBtn, item);
         } else if (surface === 'popout') {
@@ -313,6 +345,10 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
     attachCardActionButton(hideBtn, () => {
         if (surface === 'board') {
             BoardOperations.hideFromBoard(item);
+        } else if (surface === 'focus') {
+            editor?.syncActiveItemFromDom?.();
+            import('./magicFocus.js').then(({ MagicFocus }) => MagicFocus.close()).catch(() => {});
+            BoardOperations.hideFromBoard(item);
         } else {
             editor.syncActiveItemFromDom();
             Object.assign(item, editor.collectFormData());
@@ -323,7 +359,7 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
     if (calBtn) {
         BoardOperations.syncCalendarButtonUI(item, calBtn);
         attachCardActionButton(calBtn, () => {
-            if (surface === 'board') {
+            if (surface === 'board' || surface === 'focus') {
                 BoardOperations.toggleCardCalendar(item, calBtn);
             } else if (surface === 'popout') {
                 editor.syncActiveItemFromDom?.();
@@ -345,7 +381,7 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
 /**
  * @param {HTMLElement} mount — board card or modal toolbar mount
  * @param {object} item
- * @param {{ surface: 'board'|'modal'|'popout', ui: object, card?: HTMLElement, ctx?: object, editor?: object }} opts
+ * @param {{ surface: 'board'|'modal'|'popout'|'focus', ui: object, card?: HTMLElement, ctx?: object, editor?: object }} opts
  */
 export function bindNoteQuickActions(mount, item, { surface, ui, card, ctx, editor } = {}) {
     if (!mount || !item || !ui) return;
@@ -357,6 +393,11 @@ export function bindNoteQuickActions(mount, item, { surface, ui, card, ctx, edit
 
     if (surface === 'popout') {
         bindPopoutQuickActions(mount, item, ui, editor);
+        return;
+    }
+
+    if (surface === 'focus') {
+        bindFocusQuickActions(mount, item, ui, editor);
         return;
     }
 
@@ -401,6 +442,29 @@ export function bindNoteQuickActions(mount, item, { surface, ui, card, ctx, edit
         }
         window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: { item } }));
     }, { commit: () => NoteSurface.commitFocusedInlineField(card, item) });
+}
+
+function bindFocusQuickActions(toolbarMount, item, ui, editor) {
+    const buttons = queryActionButtons(toolbarMount);
+    if (!buttons.actions) return;
+
+    wireSharedActions(buttons, item, { ui, surface: 'focus', editor });
+
+    // Collapse / close in Focus chrome exits Focus.
+    const exitFocus = () => {
+        import('./magicFocus.js').then(({ MagicFocus }) => MagicFocus.close()).catch(() => {});
+    };
+    attachCardActionButton(buttons.toggleBtn, exitFocus, {
+        commit: () => editor?.syncActiveItemFromDom?.(),
+        defer: false
+    });
+    attachCardActionButton(buttons.editBtn, () => {
+        exitFocus();
+        window.dispatchEvent(new CustomEvent('item:selected_for_edit', { detail: { item } }));
+    }, {
+        commit: () => editor?.syncActiveItemFromDom?.(),
+        defer: false
+    });
 }
 
 function bindPopoutQuickActions(toolbarMount, item, ui, editor) {

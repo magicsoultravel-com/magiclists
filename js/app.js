@@ -49,6 +49,7 @@ import { NoteFontScale } from './noteFontScale.js';
 import { BoardOverlay } from './boardOverlay.js';
 import { readViewSessions, restoreViewSession, normalizeViewMode } from './viewSession.js';
 import { DrawingBoard } from './drawingBoard.js';
+import { MagicFocus } from './magicFocus.js';
 import { SearchBar } from './searchBar.js';
 import { Fullscreen } from './fullscreen.js';
 import { SidebarRadio } from './sidebarRadio.js';
@@ -226,7 +227,10 @@ BootProgress.set(85, 'Workspace…');
             this.setupCrossTabSync();
             this.setupDrawingMode();
             Fullscreen.init();
-DrawingBoard.init(this);
+            DrawingBoard.init(this);
+            MagicFocus.init(this, UI);
+            MagicFocus.setItemResolver((id) => AppState.items.find((i) => i.id === id) || null);
+            window.__MagicFocusIsOpenFor = (id) => MagicFocus.isOpen() && MagicFocus.getActiveItemId() === id;
             if (AppState.workspaceMode === 'drawing') {
                 await this.applyWorkspaceMode('drawing', { skipPersist: true });
             }
@@ -809,20 +813,60 @@ renderQuickActions() {
         const mediaFab = document.getElementById('fab-media');
         const scribbleFab = document.getElementById('fab-scribble');
         const inDrawing = AppState.workspaceMode === 'drawing';
+        const inFocus = MagicFocus.isOpen();
+        const hideBoardFabs = inDrawing || inFocus;
         if (fab) {
-            fab.classList.toggle('is-hidden', inDrawing);
-            if (!inDrawing) {
+            fab.classList.toggle('is-hidden', hideBoardFabs);
+            if (!hideBoardFabs) {
                 const needsLogin = !AppState.user.isLoggedIn;
                 fab.title = needsLogin ? 'New note (login required)' : 'New note';
                 fab.setAttribute('aria-label', fab.title);
             }
         }
         if (mediaFab) {
-            mediaFab.classList.toggle('is-hidden', inDrawing);
+            mediaFab.classList.toggle('is-hidden', hideBoardFabs);
         }
         if (scribbleFab) {
+            // Keep scribble available in Focus; only hide during workspace drawing.
             scribbleFab.classList.toggle('is-hidden', inDrawing);
         }
+    }
+
+    onMagicFocusEnter() {
+        AppState.workspaceMode = 'focus';
+        DesktopDock.setSuppressed(true);
+        DesktopZoom.apply({ enabled: false });
+        this.updateFabVisibility();
+        this.updateLayoutResetVisibility();
+        this.updateViewToggleState();
+    }
+
+    async onMagicFocusLeave() {
+        AppState.workspaceMode = 'notes';
+        DesktopDock.setSuppressed(false);
+        this.updateDesktopZoomVisibility();
+        if (AppState.items.length) {
+            const canvas = document.getElementById('app-canvas');
+            UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories);
+            DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+        }
+        this.updateFabVisibility();
+        this.updateLayoutResetVisibility();
+        this.updateViewToggleState();
+    }
+
+    async exitDrawingForFocus() {
+        if (AppState.workspaceMode === 'drawing') {
+            await this.switchWorkspaceMode('notes');
+        }
+    }
+
+    isDrawingMode() {
+        return AppState.workspaceMode === 'drawing';
+    }
+
+    stateWorkspaceMode() {
+        return AppState.workspaceMode;
     }
 
     setupMediaFab() {
@@ -852,6 +896,9 @@ renderQuickActions() {
 
     async switchWorkspaceMode(mode) {
         if (mode !== 'notes' && mode !== 'drawing') return;
+        if (MagicFocus.isOpen()) {
+            await MagicFocus.close();
+        }
         if (AppState.workspaceMode === mode) return;
         await this.applyWorkspaceMode(mode);
     }
@@ -912,6 +959,14 @@ renderQuickActions() {
     }
 
     async exitNoteCanvasMode(item) {
+        // Focus hosts note-canvas in-pane — don't tear down the Focus shell.
+        if (MagicFocus.isOpen()) {
+            if (DrawingBoard.active || DrawingBoard.isNoteCanvasMode || DrawingBoard.docOwner) {
+                await DrawingBoard.flushSave?.();
+            }
+            DrawingBoard.hideToolbar?.();
+            return;
+        }
         // Sole owner of DrawingBoard.deactivate for note-canvas exit (exitNoteCanvas
         // only dispatches). Skip if already torn down.
         if (DrawingBoard.active || DrawingBoard.isNoteCanvasMode || DrawingBoard.docOwner) {
@@ -1348,7 +1403,7 @@ renderQuickActions() {
     }
 
     updateDesktopZoomVisibility() {
-        if (AppState.workspaceMode === 'drawing') {
+        if (AppState.workspaceMode === 'drawing' || MagicFocus.isOpen()) {
             DesktopZoom.apply({ enabled: false });
             return;
         }

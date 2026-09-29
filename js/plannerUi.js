@@ -42,6 +42,13 @@ function noteBodiesForItem(itemId) {
     if (modalBody && modal && !modal.classList.contains('is-hidden') && !out.includes(modalBody)) {
         out.push(modalBody);
     }
+    const focusRoot = document.getElementById('magic-focus');
+    const focusOpen = focusRoot && !focusRoot.classList.contains('is-hidden');
+    if (focusOpen && typeof window.__MagicFocusIsOpenFor === 'function' && window.__MagicFocusIsOpenFor(itemId)) {
+        focusRoot.querySelectorAll('.magic-focus__pane-body.editor-note-body').forEach((el) => {
+            if (!out.includes(el)) out.push(el);
+        });
+    }
     return out;
 }
 
@@ -1206,7 +1213,13 @@ export function attachPlannerInteractions(root, item, {
 export function syncNotePlannerDom(item) {
     if (!item?.id) return;
 
+    let needsFocusRefresh = false;
     for (const body of noteBodiesForItem(item.id)) {
+        // Focus panes host table/chart alone — full Plan section rebuild would clobber them.
+        if (body.closest?.('#magic-focus')) {
+            needsFocusRefresh = true;
+            continue;
+        }
         const canEdit = bodyCanEdit(body);
         const startCollapsed = false;
         const html = buildNotePlannerSectionHtml(item, { canEdit, startCollapsed });
@@ -1244,6 +1257,13 @@ export function syncNotePlannerDom(item) {
             preserveGanttScroll
         });
         restoreCanvasScroll(canvasScroll);
+    }
+    if (needsFocusRefresh) {
+        import('./magicFocus.js').then(({ MagicFocus }) => {
+            if (MagicFocus.isOpen() && MagicFocus.getActiveItemId() === item.id) {
+                MagicFocus.refreshPlannerPanes?.(item);
+            }
+        }).catch(() => {});
     }
 }
 

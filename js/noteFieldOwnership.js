@@ -38,6 +38,7 @@ export const SHARED_FIELDS = Object.freeze([
     'canvasOverlayFontSize',
     'planner',
     'plannerHidden',
+    'focus',
     'textCollapsed',
     'checklistCollapsed'
 ]);

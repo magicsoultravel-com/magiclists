@@ -428,6 +428,13 @@ function noteBodiesForItem(itemId) {
     if (modalBody && modal && !modal.classList.contains('is-hidden') && !out.includes(modalBody)) {
         out.push(modalBody);
     }
+    const focusRoot = document.getElementById('magic-focus');
+    const focusOpen = focusRoot && !focusRoot.classList.contains('is-hidden');
+    if (focusOpen && typeof window.__MagicFocusIsOpenFor === 'function' && window.__MagicFocusIsOpenFor(itemId)) {
+        focusRoot.querySelectorAll('.magic-focus__pane-body.editor-note-body').forEach((el) => {
+            if (!out.includes(el)) out.push(el);
+        });
+    }
     return out;
 }
 
@@ -503,6 +510,8 @@ export function syncNoteCanvasDom(item) {
     if (!item?.id) return;
 
     for (const body of noteBodiesForItem(item.id)) {
+        // Focus canvas panes host live DrawingBoard — don't inject preview sections.
+        if (body.closest?.('#magic-focus')) continue;
         const startCollapsed = !noteHasVisibleCanvas(item);
         const html = buildNoteCanvasSectionHtml(item, { startCollapsed });
         const existing = canvasSectionForBody(body);
