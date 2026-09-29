@@ -8,6 +8,8 @@ import { escapeAttr, escapeHTML } from './domEscape.js';
 import { createEmptyNoteCanvas } from './noteModel.js';
 import { hasRichMarkup } from './richText.js';
 import { canInlineEditText } from './noteSurfaceEditing.js';
+import { applyCardTheme } from './cardTheme.js';
+import { resolveNoteColor } from './colorPicker.js';
 
 const BLOCKS = [
     { id: 'text', label: 'Text' },
@@ -268,9 +270,11 @@ export const MagicFocus = {
     setupDraft: null,
     setupStep: 'layout', // 'layout' | 'assign'
     showingSetup: false,
+    expandedPaneId: null,
     drawingHomeParent: null,
     drawingHosted: false,
     _escHandler: null,
+    _exitFab: null,
     _ui: null,
     _app: null,
 
@@ -283,6 +287,25 @@ export const MagicFocus = {
         this.bodyEl = this.root.querySelector('[data-magic-focus-body]');
         this.root.classList.add('is-hidden');
         this.root.setAttribute('aria-hidden', 'true');
+        this._wireExitFab();
+    },
+
+    _wireExitFab() {
+        this._exitFab = document.getElementById('fab-focus-exit');
+        if (!this._exitFab || this._exitFab.dataset.focusExitWired === '1') return;
+        this._exitFab.dataset.focusExitWired = '1';
+        this._exitFab.innerHTML = CARD_ICONS.focus;
+        this._exitFab.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (this.isOpen()) this.close();
+        });
+    },
+
+    syncExitFabVisibility({ inDrawing = false } = {}) {
+        const fab = this._exitFab || document.getElementById('fab-focus-exit');
+        if (!fab) return;
+        fab.classList.toggle('is-hidden', inDrawing || !this.isOpen());
     },
 
     isOpen() {
@@ -334,6 +357,7 @@ export const MagicFocus = {
         const configured = focusIsConfigured(live.focus);
 
         await this._enterShell();
+        this.applyNoteTheme(live);
         this.renderHeader(live);
 
         if (forceSetup || !configured) {
@@ -354,6 +378,7 @@ export const MagicFocus = {
     async openSettings() {
         const item = this.resolveItem();
         if (!item) return;
+        this.clearExpandedPane();
         this.showingSetup = true;
         const existing = normalizeFocus(item.focus);
         if (existing) {
@@ -374,13 +399,16 @@ export const MagicFocus = {
         this.setupDraft = null;
         this.setupStep = 'layout';
         this.showingSetup = false;
+        this.expandedPaneId = null;
         if (this.bodyEl) this.bodyEl.innerHTML = '';
         if (this.headerEl) this.headerEl.innerHTML = '';
+        this.applyNoteTheme(null);
         this.root?.classList.add('is-hidden');
         this.root?.setAttribute('aria-hidden', 'true');
         await this._leaveShell();
         this._unbindEsc();
         this._syncFocusButtons();
+        this.syncExitFabVisibility();
     },
 
     async toggle(item) {
@@ -399,6 +427,7 @@ export const MagicFocus = {
         this.root.classList.remove('is-hidden');
         this.root.setAttribute('aria-hidden', 'false');
         this._app?.onMagicFocusEnter?.();
+        this.syncExitFabVisibility();
     },
 
     async _leaveShell() {
@@ -407,6 +436,7 @@ export const MagicFocus = {
         shell?.removeAttribute('data-magic-focus');
         canvas?.classList.remove('is-hidden');
         await this._app?.onMagicFocusLeave?.();
+        this.syncExitFabVisibility();
     },
 
     _bindEsc() {
@@ -428,6 +458,11 @@ export const MagicFocus = {
                 this.close();
                 return;
             }
+            if (this.expandedPaneId) {
+                e.preventDefault();
+                this.clearExpandedPane();
+                return;
+            }
             e.preventDefault();
             this.close();
         };
@@ -441,8 +476,15 @@ export const MagicFocus = {
         }
     },
 
+    applyNoteTheme(item) {
+        if (!this.root) return;
+        const color = item ? resolveNoteColor(item.backgroundColor) : '';
+        applyCardTheme(this.root, color, { paintBackground: true });
+    },
+
     renderHeader(item) {
         if (!this.headerEl) return;
+        this.applyNoteTheme(item);
         const actions = buildNoteQuickActionsHtml(item, {
             surface: 'focus',
             isExpanded: true,
@@ -509,7 +551,10 @@ export const MagicFocus = {
                 collectFormData: () => this.resolveItem() || item,
                 persistNote: () => {},
                 close: () => this.close(),
-                applySharedFromLive: () => {}
+                applySharedFromLive: () => {},
+                applyNoteTheme: () => {
+                    this.applyNoteTheme(this.resolveItem() || item);
+                }
             }
         });
     },
@@ -759,6 +804,7 @@ export const MagicFocus = {
 
     async renderWork(item) {
         if (!this.bodyEl || !item) return;
+        this.expandedPaneId = null;
         await this._unhostDrawingBoard();
         const focus = normalizeFocus(item.focus) || createDefaultFocus();
         const layout = layoutForFocus(focus);
@@ -772,6 +818,8 @@ export const MagicFocus = {
             const hasCanvas = blocks.includes('canvas');
             panes.push(`
                 <section class="magic-focus__pane${empty ? ' magic-focus__pane--empty' : ''}${hasCanvas ? ' magic-focus__pane--canvas' : ''}" data-focus-pane="${zid}" style="grid-area:${zid}">
+                    <button type="button" class="card-act magic-focus__pane-expand" data-focus-pane-expand
+                        title="Expand pane" aria-label="Expand pane" aria-pressed="false">${CARD_ICONS.expandMedia}</button>
                     <div class="magic-focus__pane-body editor-note-body" data-focus-pane-body="${zid}"></div>
                 </section>
             `);
@@ -802,7 +850,73 @@ export const MagicFocus = {
         }
 
         this._mountSplitters(focus, layout);
+        this._bindPaneExpandControls();
         this.renderHeader(item);
+    },
+
+    _bindPaneExpandControls() {
+        const work = this.bodyEl?.querySelector('[data-magic-focus-work]');
+        if (!work) return;
+        work.querySelectorAll('[data-focus-pane-expand]').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const pane = btn.closest('[data-focus-pane]');
+                const zid = pane?.getAttribute('data-focus-pane');
+                if (!zid) return;
+                if (this.expandedPaneId === zid) this.clearExpandedPane();
+                else this.setExpandedPane(zid);
+            });
+        });
+    },
+
+    setExpandedPane(zoneId) {
+        const work = this.bodyEl?.querySelector('[data-magic-focus-work]');
+        if (!work || !zoneId) return;
+        this.expandedPaneId = zoneId;
+        work.classList.add('is-pane-expanded');
+        work.querySelectorAll('[data-focus-pane]').forEach((pane) => {
+            const id = pane.getAttribute('data-focus-pane');
+            pane.classList.toggle('is-expanded', id === zoneId);
+        });
+        this._syncPaneExpandButtons();
+        this._refitHostedCanvas();
+    },
+
+    clearExpandedPane() {
+        const work = this.bodyEl?.querySelector('[data-magic-focus-work]');
+        this.expandedPaneId = null;
+        if (work) {
+            work.classList.remove('is-pane-expanded');
+            work.querySelectorAll('[data-focus-pane].is-expanded').forEach((pane) => {
+                pane.classList.remove('is-expanded');
+            });
+        }
+        this._syncPaneExpandButtons();
+        this._refitHostedCanvas();
+    },
+
+    _syncPaneExpandButtons() {
+        const work = this.bodyEl?.querySelector('[data-magic-focus-work]');
+        if (!work) return;
+        work.querySelectorAll('[data-focus-pane]').forEach((pane) => {
+            const btn = pane.querySelector('[data-focus-pane-expand]');
+            if (!btn) return;
+            const zid = pane.getAttribute('data-focus-pane');
+            const expanded = this.expandedPaneId === zid;
+            btn.innerHTML = expanded ? CARD_ICONS.collapseMedia : CARD_ICONS.expandMedia;
+            const label = expanded ? 'Restore pane' : 'Expand pane';
+            btn.title = label;
+            btn.setAttribute('aria-label', label);
+            btn.setAttribute('aria-pressed', expanded ? 'true' : 'false');
+        });
+    },
+
+    _refitHostedCanvas() {
+        if (!this.drawingHosted) return;
+        import('./drawingBoard.js').then(({ DrawingBoard }) => {
+            if (DrawingBoard.active) DrawingBoard.resize?.();
+        }).catch(() => {});
     },
 
     async _blockHtml(item, block, zoneId) {

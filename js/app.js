@@ -830,6 +830,7 @@ renderQuickActions() {
             // Keep scribble available in Focus; only hide during workspace drawing.
             scribbleFab.classList.toggle('is-hidden', inDrawing);
         }
+        MagicFocus.syncExitFabVisibility({ inDrawing });
     }
 
     onMagicFocusEnter() {

@@ -8,16 +8,28 @@
     display: none !important;
 }
 
+/* File cabinet sits at z-index 30 (+ fab 45) inside #desktop-surface; keep Focus
+   above it, and hide cabinet chrome while Focus is open (same idea as drawing). */
+#workspace-shell[data-magic-focus] #file-cabinet,
+#workspace-shell[data-magic-focus] #shell-splitter-h,
+#workspace-shell[data-magic-focus] #file-cabinet-toggle-fab {
+    display: none !important;
+}
+
 #magic-focus {
     position: absolute;
     inset: 0;
-    z-index: 3;
+    z-index: 50;
     display: flex;
     flex-direction: column;
     background: var(--desktop-bg, var(--bg-primary));
     color: var(--text-main);
     min-height: 0;
     min-width: 0;
+}
+
+#magic-focus.has-custom-bg {
+    color: var(--card-fg, var(--text-main));
 }
 
 #magic-focus.is-hidden {
@@ -31,6 +43,11 @@
     border-bottom: 1px solid var(--border-color);
     background: var(--chrome-bg, var(--bg-surface));
     min-height: 0;
+}
+
+#magic-focus.has-custom-bg .magic-focus__header {
+    background: var(--card-toolbar-bg, var(--chrome-bg, var(--bg-surface)));
+    border-bottom-color: var(--card-border-subtle, var(--border-color));
 }
 
 .magic-focus__note-shell {
@@ -66,13 +83,25 @@
     max-height: none;
 }
 
+#magic-focus.has-custom-bg .magic-focus__header .mini-card-title,
+#magic-focus.has-custom-bg .magic-focus__header .mini-card-title.card-inline-edit {
+    color: var(--card-fg, var(--text-main));
+}
+
 .magic-focus__header .note-editor-toolbar {
     flex: 0 0 auto;
-    position: relative;
+    position: relative !important;
+    top: auto !important;
+    right: auto !important;
     min-width: 0;
+    min-height: unset;
     display: flex;
     align-items: center;
     justify-content: flex-end;
+    /* Board hides .editor-note-topline .note-editor-toolbar until .mini-card:hover;
+       Focus is not a mini-card — keep the suite visible and clickable. */
+    opacity: 1 !important;
+    pointer-events: auto !important;
 }
 
 /* Always show the full quick-action suite in Focus (same idea as modal). */
@@ -98,8 +127,24 @@
 }
 
 .magic-focus__header .card-act {
-    opacity: 1;
+    opacity: 1 !important;
     color: var(--text-muted);
+    background: transparent;
+}
+
+.magic-focus__header .card-act:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+#magic-focus.has-custom-bg .magic-focus__header .card-act {
+    color: var(--card-action-fg, var(--card-muted, var(--text-muted)));
+    background: transparent;
+}
+
+#magic-focus.has-custom-bg .magic-focus__header .card-act:hover {
+    color: var(--card-fg, var(--text-main));
+    background: color-mix(in srgb, var(--card-action-bg, transparent) 82%, #fff 18%);
 }
 
 .magic-focus__header .card-act--focus.is-active,
@@ -107,7 +152,7 @@
 .magic-focus__header .card-act--planner.is-active,
 .magic-focus__header .card-act--draw.is-active {
     color: var(--accent, #60a5fa);
-    opacity: 1;
+    opacity: 1 !important;
 }
 
 .magic-focus__body {
@@ -417,6 +462,78 @@
     border: 1px solid var(--border-color);
 }
 
+.magic-focus__pane-expand {
+    position: absolute;
+    top: 0.28rem;
+    right: 0.28rem;
+    z-index: 6;
+    opacity: 0;
+    pointer-events: none;
+    /* Match surface .card-act chrome — no chip/backdrop */
+    width: 16px;
+    height: 16px;
+    border-radius: 2px;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text-muted);
+    transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+
+.magic-focus__pane:hover .magic-focus__pane-expand,
+.magic-focus__pane:focus-within .magic-focus__pane-expand,
+.magic-focus__pane.is-expanded .magic-focus__pane-expand {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.magic-focus__pane-expand:hover {
+    color: var(--text-main);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+#magic-focus.has-custom-bg .magic-focus__pane-expand {
+    color: var(--card-action-fg, var(--card-muted, var(--text-muted)));
+    background: transparent;
+    box-shadow: none;
+}
+
+#magic-focus.has-custom-bg .magic-focus__pane-expand:hover {
+    color: var(--card-fg, var(--text-main));
+    background: color-mix(in srgb, var(--card-action-bg, transparent) 82%, #fff 18%);
+}
+
+.magic-focus__work.is-pane-expanded .magic-focus__pane:not(.is-expanded),
+.magic-focus__work.is-pane-expanded .magic-focus__splitter {
+    display: none !important;
+}
+
+.magic-focus__work.is-pane-expanded .magic-focus__pane.is-expanded {
+    grid-area: 1 / 1 / -1 / -1 !important;
+    width: auto;
+    height: auto;
+    min-width: 0;
+    min-height: 0;
+}
+
+#magic-focus.has-custom-bg .magic-focus__work,
+#magic-focus.has-custom-bg .magic-focus__layout-preview {
+    background: var(--card-border-subtle, var(--border-color));
+}
+
+#magic-focus.has-custom-bg .magic-focus__pane,
+#magic-focus.has-custom-bg .magic-focus__zone-slot {
+    background: var(--card-panel-bg, var(--bg-card, var(--bg-surface)));
+    border-color: var(--card-border-subtle, var(--border-color));
+    color: var(--card-muted, var(--text-muted));
+}
+
+#magic-focus.has-custom-bg .magic-focus__setup-heading,
+#magic-focus.has-custom-bg .magic-focus__zone-placeholder,
+#magic-focus.has-custom-bg .magic-focus__change-layout {
+    color: var(--card-fg, var(--text-main));
+}
+
 .magic-focus__pane-body {
     flex: 1 1 auto;
     min-height: 0;
@@ -527,4 +644,40 @@
 .magic-focus__splitter.is-dragging::after {
     opacity: 1;
     background: var(--accent, #60a5fa);
+}
+
+/* Exit Focus FAB — stacked above scribble FAB */
+.fab-focus-exit {
+    position: fixed;
+    right: 1.25rem;
+    bottom: 14.05rem;
+    z-index: 910;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--text-primary) 18%, transparent);
+    background: var(--surface-elevated, #1e1e22);
+    color: var(--text-primary, #eee);
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.1rem;
+    line-height: 1;
+    padding: 0;
+}
+
+.fab-focus-exit:hover {
+    filter: brightness(1.08);
+}
+
+.fab-focus-exit.is-hidden {
+    display: none;
+}
+
+.fab-focus-exit svg {
+    display: block;
+    width: 1.15rem;
+    height: 1.15rem;
 }

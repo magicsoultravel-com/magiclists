@@ -232,6 +232,9 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
                         const { categoryColor } = getCardRenderContext(item, readStoredCategories());
                         applyCardCategoryBand(card, categoryColor);
                     }
+                    if (surface === 'focus') {
+                        editor?.applyNoteTheme?.();
+                    }
                 }
             });
         } else if (surface === 'popout') {
