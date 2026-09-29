@@ -516,6 +516,31 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
     color: var(--card-fg);
 }
 
+/* Active / semantic tints must beat the generic custom-bg fg above. */
+.has-custom-bg .card-act--pin.is-active {
+    color: #fbbf24;
+}
+
+.has-custom-bg .card-act--draw.is-active,
+.has-custom-bg .card-act--planner.is-active,
+.has-custom-bg .card-act--focus.is-active,
+.has-custom-bg .card-act--focus-settings {
+    color: var(--accent, #60a5fa);
+}
+
+.has-custom-bg .card-act--popout.is-active {
+    color: #93c5fd;
+}
+
+.has-custom-bg .card-act--cal.is-on {
+    color: #6ee7b7;
+}
+
+.has-custom-bg .card-act--cal.is-off {
+    color: var(--card-action-fg);
+    opacity: 0.45;
+}
+
 .has-custom-bg .grab-handle--step {
     color: var(--card-action-fg);
 }

@@ -88,32 +88,32 @@
     color: var(--card-fg, var(--text-main));
 }
 
-.magic-focus__header .note-editor-toolbar {
+/*
+ * Board hides .editor-note-topline .note-editor-toolbar until .mini-card:hover.
+ * Focus is not a mini-card — unhide layout only; colors come from shared .card-act.
+ */
+.magic-focus__header .editor-note-topline .note-editor-toolbar {
+    position: relative;
+    top: auto;
+    right: auto;
     flex: 0 0 auto;
-    position: relative !important;
-    top: auto !important;
-    right: auto !important;
     min-width: 0;
     min-height: unset;
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    /* Board hides .editor-note-topline .note-editor-toolbar until .mini-card:hover;
-       Focus is not a mini-card — keep the suite visible and clickable. */
-    opacity: 1 !important;
-    pointer-events: auto !important;
+    opacity: 1;
+    pointer-events: auto;
 }
 
-/* Always show the full quick-action suite in Focus (same idea as modal). */
 .magic-focus__header .card-actions,
-.magic-focus__header .note-editor-toolbar .card-actions,
 .magic-focus__header .modal-card-actions {
-    position: static !important;
-    top: auto !important;
-    right: auto !important;
-    opacity: 1 !important;
-    pointer-events: auto !important;
-    display: inline-flex !important;
+    position: static;
+    top: auto;
+    right: auto;
+    opacity: 1;
+    pointer-events: auto;
+    display: inline-flex;
     flex-direction: row;
     align-items: center;
     justify-content: flex-end;
@@ -126,33 +126,9 @@
     z-index: 2;
 }
 
-.magic-focus__header .card-act {
-    opacity: 1 !important;
-    color: var(--text-muted);
-    background: transparent;
-}
-
-.magic-focus__header .card-act:hover {
-    color: var(--text-main);
-    background: rgba(255, 255, 255, 0.06);
-}
-
-#magic-focus.has-custom-bg .magic-focus__header .card-act {
-    color: var(--card-action-fg, var(--card-muted, var(--text-muted)));
-    background: transparent;
-}
-
-#magic-focus.has-custom-bg .magic-focus__header .card-act:hover {
-    color: var(--card-fg, var(--text-main));
-    background: color-mix(in srgb, var(--card-action-bg, transparent) 82%, #fff 18%);
-}
-
-.magic-focus__header .card-act--focus.is-active,
-.magic-focus__header .card-act--focus-settings,
-.magic-focus__header .card-act--planner.is-active,
-.magic-focus__header .card-act--draw.is-active {
+/* Focus-only settings cog — same accent language as active Focus/Planner/Draw. */
+.magic-focus__header .card-act--focus-settings {
     color: var(--accent, #60a5fa);
-    opacity: 1 !important;
 }
 
 .magic-focus__body {
@@ -462,6 +438,7 @@
     border: 1px solid var(--border-color);
 }
 
+/* Pane expand: surface .card-act look; only position + hover reveal. */
 .magic-focus__pane-expand {
     position: absolute;
     top: 0.28rem;
@@ -469,15 +446,6 @@
     z-index: 6;
     opacity: 0;
     pointer-events: none;
-    /* Match surface .card-act chrome — no chip/backdrop */
-    width: 16px;
-    height: 16px;
-    border-radius: 2px;
-    border: none;
-    background: transparent;
-    box-shadow: none;
-    color: var(--text-muted);
-    transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
 }
 
 .magic-focus__pane:hover .magic-focus__pane-expand,
@@ -485,22 +453,6 @@
 .magic-focus__pane.is-expanded .magic-focus__pane-expand {
     opacity: 1;
     pointer-events: auto;
-}
-
-.magic-focus__pane-expand:hover {
-    color: var(--text-main);
-    background: rgba(255, 255, 255, 0.06);
-}
-
-#magic-focus.has-custom-bg .magic-focus__pane-expand {
-    color: var(--card-action-fg, var(--card-muted, var(--text-muted)));
-    background: transparent;
-    box-shadow: none;
-}
-
-#magic-focus.has-custom-bg .magic-focus__pane-expand:hover {
-    color: var(--card-fg, var(--text-main));
-    background: color-mix(in srgb, var(--card-action-bg, transparent) 82%, #fff 18%);
 }
 
 .magic-focus__work.is-pane-expanded .magic-focus__pane:not(.is-expanded),
