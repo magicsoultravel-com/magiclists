@@ -637,9 +637,13 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
     height: 10px;
 }
 
+/* Only the width lives here. The chevron color must stay in the base
+   `.step-collapse-btn` rule and the `.has-custom-bg .step-collapse-btn`
+   override in the custom-background block above — re-declaring `color` here
+   (same specificity as that override, but later in the cascade) would clobber
+   the per-card contrast `--card-fg` on expanded groups. */
 .expanded-checklist .step-collapse-btn {
     width: 12px;
-    color: var(--text-main);
 }
 
 .expanded-checklist .step-collapse-spacer {
@@ -743,6 +747,21 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
 
 .checklist-done-section.is-hidden {
     display: none;
+}
+
+/* The completed-items toggle keeps the per-card contrast tokens so its chevron
+   and label stay legible on custom-background notes (mirrors the group chevron
+   `.has-custom-bg` handling above). */
+.has-custom-bg .checklist-done-toggle {
+    color: var(--card-muted);
+}
+
+.has-custom-bg .checklist-done-toggle:hover {
+    color: var(--card-fg);
+}
+
+.has-custom-bg .checklist-done-toggle-icon {
+    color: var(--card-muted);
 }
 
 /* Unified color picker */

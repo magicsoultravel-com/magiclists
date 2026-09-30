@@ -818,9 +818,10 @@ body.is-checklist-dragging {
     height: 10px;
 }
 
+/* Width only — color is owned by `.step-collapse-btn` below and the
+   `.has-custom-bg .step-collapse-btn` override in cards.css. */
 .expanded-checklist .step-collapse-btn {
     width: 12px;
-    color: var(--text-main);
 }
 
 .expanded-checklist .step-collapse-spacer {
