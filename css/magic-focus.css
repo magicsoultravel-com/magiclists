@@ -438,21 +438,56 @@
     border: 1px solid var(--border-color);
 }
 
-/* Pane expand: surface .card-act look; only position + hover reveal. */
-.magic-focus__pane-expand {
+/* Pane chrome: zoom −/%/+ and expand; surface .card-act look; hover reveal. */
+.magic-focus__pane-chrome {
     position: absolute;
     top: 0.28rem;
     right: 0.28rem;
     z-index: 6;
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
     opacity: 0;
     pointer-events: none;
 }
 
-.magic-focus__pane:hover .magic-focus__pane-expand,
-.magic-focus__pane:focus-within .magic-focus__pane-expand,
-.magic-focus__pane.is-expanded .magic-focus__pane-expand {
+.magic-focus__pane:hover .magic-focus__pane-chrome,
+.magic-focus__pane:focus-within .magic-focus__pane-chrome,
+.magic-focus__pane.is-expanded .magic-focus__pane-chrome {
     opacity: 1;
     pointer-events: auto;
+}
+
+.magic-focus__pane-zoom-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.4rem;
+    padding: 0 0.1rem;
+    font-size: 0.55rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    color: var(--text-muted);
+    user-select: none;
+    pointer-events: none;
+}
+
+#magic-focus.has-custom-bg .magic-focus__pane-zoom-label {
+    color: var(--card-action-fg, var(--card-muted, var(--text-muted)));
+}
+
+.magic-focus__pane-chrome .card-act:disabled {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+.magic-focus__pane-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    padding: 0.35rem;
+    position: relative;
+    zoom: var(--focus-pane-zoom, 1);
 }
 
 .magic-focus__work.is-pane-expanded .magic-focus__pane:not(.is-expanded),
@@ -484,14 +519,6 @@
 #magic-focus.has-custom-bg .magic-focus__zone-placeholder,
 #magic-focus.has-custom-bg .magic-focus__change-layout {
     color: var(--card-fg, var(--text-main));
-}
-
-.magic-focus__pane-body {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: auto;
-    padding: 0.35rem;
-    position: relative;
 }
 
 .magic-focus__pane-body.editor-note-body {

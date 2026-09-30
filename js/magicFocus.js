@@ -1,6 +1,6 @@
 /** @module {"owns":"magic focus workspace mode — split panes, setup DnD, planner block hosting", "related":["app.js","noteQuickActions.js","drawingBoard.js","plannerUi.js","noteSurface.js"]} */
 
-import { CARD_ICONS } from './icons.js';
+import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { buildNoteQuickActionsHtml, buildExpandedChecklistHtml, buildNoteTitleHtml, buildNoteContentFieldHtml } from './noteSurfaceHtml.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
 import { NoteSurface, clearDesktopAutoSaveTimer } from './noteSurface.js';
@@ -45,6 +45,28 @@ const PRESET_ZONE_COUNTS = {
     'split3-2over1': 3,
     'split4-grid': 4
 };
+
+const FOCUS_ZOOM_MIN = 50;
+const FOCUS_ZOOM_MAX = 200;
+const FOCUS_ZOOM_STEP = 10;
+const FOCUS_ZOOM_DEFAULT = 100;
+
+function clampFocusZoom(n) {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return FOCUS_ZOOM_DEFAULT;
+    const clamped = Math.min(FOCUS_ZOOM_MAX, Math.max(FOCUS_ZOOM_MIN, v));
+    return Math.round(clamped / FOCUS_ZOOM_STEP) * FOCUS_ZOOM_STEP;
+}
+
+function emptyZoom(count, rawZoom = null) {
+    const zoom = {};
+    const src = rawZoom && typeof rawZoom === 'object' ? rawZoom : null;
+    for (let i = 0; i < count; i += 1) {
+        const key = `z${i}`;
+        zoom[key] = clampFocusZoom(src?.[key] ?? FOCUS_ZOOM_DEFAULT);
+    }
+    return zoom;
+}
 
 function defaultRatios(preset) {
     switch (preset) {
@@ -98,7 +120,8 @@ export function createDefaultFocus(preset = 'split2-v') {
         version: 1,
         preset,
         ratios: defaultRatios(preset),
-        zones: emptyZones(count)
+        zones: emptyZones(count),
+        zoom: emptyZoom(count)
     };
 }
 
@@ -124,7 +147,13 @@ export function normalizeFocus(raw) {
             });
         }
     }
-    return { version: 1, preset, ratios, zones };
+    return {
+        version: 1,
+        preset,
+        ratios,
+        zones,
+        zoom: emptyZoom(count, raw.zoom)
+    };
 }
 
 export function focusIsConfigured(focus) {
@@ -676,7 +705,9 @@ export const MagicFocus = {
             btn.addEventListener('click', () => {
                 const preset = btn.getAttribute('data-focus-preset');
                 const prevZones = this.setupDraft?.zones || {};
+                const prevZoom = this.setupDraft?.zoom || item?.focus?.zoom;
                 const next = createDefaultFocus(preset);
+                next.zoom = emptyZoom(PRESET_ZONE_COUNTS[preset], prevZoom);
                 const seen = new Set();
                 for (let i = 0; i < PRESET_ZONE_COUNTS[preset]; i += 1) {
                     const key = `z${i}`;
@@ -816,10 +847,22 @@ export const MagicFocus = {
             const blocks = asBlockList(focus.zones[zid]);
             const empty = blocks.length === 0;
             const hasCanvas = blocks.includes('canvas');
+            const zoomPct = clampFocusZoom(focus.zoom?.[zid] ?? FOCUS_ZOOM_DEFAULT);
+            const zoomFactor = zoomPct / 100;
+            const zoomOutDisabled = zoomPct <= FOCUS_ZOOM_MIN ? ' disabled' : '';
+            const zoomInDisabled = zoomPct >= FOCUS_ZOOM_MAX ? ' disabled' : '';
             panes.push(`
-                <section class="magic-focus__pane${empty ? ' magic-focus__pane--empty' : ''}${hasCanvas ? ' magic-focus__pane--canvas' : ''}" data-focus-pane="${zid}" style="grid-area:${zid}">
-                    <button type="button" class="card-act magic-focus__pane-expand" data-focus-pane-expand
-                        title="Expand pane" aria-label="Expand pane" aria-pressed="false">${CARD_ICONS.expandMedia}</button>
+                <section class="magic-focus__pane${empty ? ' magic-focus__pane--empty' : ''}${hasCanvas ? ' magic-focus__pane--canvas' : ''}"
+                    data-focus-pane="${zid}" style="grid-area:${zid}; --focus-pane-zoom: ${zoomFactor}">
+                    <div class="magic-focus__pane-chrome">
+                        <button type="button" class="card-act" data-focus-pane-zoom-out
+                            title="Zoom out" aria-label="Zoom out"${zoomOutDisabled}>${ACTION_ICONS.minus}</button>
+                        <span class="magic-focus__pane-zoom-label" data-focus-pane-zoom-label>${zoomPct}%</span>
+                        <button type="button" class="card-act" data-focus-pane-zoom-in
+                            title="Zoom in" aria-label="Zoom in"${zoomInDisabled}>${ACTION_ICONS.plus}</button>
+                        <button type="button" class="card-act magic-focus__pane-expand" data-focus-pane-expand
+                            title="Expand pane" aria-label="Expand pane" aria-pressed="false">${CARD_ICONS.expandMedia}</button>
+                    </div>
                     <div class="magic-focus__pane-body editor-note-body" data-focus-pane-body="${zid}"></div>
                 </section>
             `);
@@ -850,11 +893,11 @@ export const MagicFocus = {
         }
 
         this._mountSplitters(focus, layout);
-        this._bindPaneExpandControls();
+        this._bindPaneChromeControls();
         this.renderHeader(item);
     },
 
-    _bindPaneExpandControls() {
+    _bindPaneChromeControls() {
         const work = this.bodyEl?.querySelector('[data-magic-focus-work]');
         if (!work) return;
         work.querySelectorAll('[data-focus-pane-expand]').forEach((btn) => {
@@ -868,6 +911,59 @@ export const MagicFocus = {
                 else this.setExpandedPane(zid);
             });
         });
+        work.querySelectorAll('[data-focus-pane-zoom-out]').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const pane = btn.closest('[data-focus-pane]');
+                const zid = pane?.getAttribute('data-focus-pane');
+                if (!zid) return;
+                this._nudgePaneZoom(zid, -FOCUS_ZOOM_STEP);
+            });
+        });
+        work.querySelectorAll('[data-focus-pane-zoom-in]').forEach((btn) => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const pane = btn.closest('[data-focus-pane]');
+                const zid = pane?.getAttribute('data-focus-pane');
+                if (!zid) return;
+                this._nudgePaneZoom(zid, FOCUS_ZOOM_STEP);
+            });
+        });
+    },
+
+    _nudgePaneZoom(zoneId, delta) {
+        const item = this.resolveItem();
+        if (!item || !zoneId) return;
+        const focus = normalizeFocus(item.focus) || createDefaultFocus();
+        const next = clampFocusZoom((focus.zoom?.[zoneId] ?? FOCUS_ZOOM_DEFAULT) + delta);
+        const zoom = { ...focus.zoom, [zoneId]: next };
+        NoteSurface.mutateItem(item, (it) => {
+            if (!it.focus) it.focus = createDefaultFocus(focus.preset);
+            it.focus = normalizeFocus({
+                ...it.focus,
+                ratios: focus.ratios,
+                preset: focus.preset,
+                zones: focus.zones,
+                zoom
+            });
+        }, { preserveView: true, skipRerender: true });
+        this._applyPaneZoom(zoneId, next);
+        this._refitHostedCanvas();
+    },
+
+    _applyPaneZoom(zoneId, zoomPct) {
+        const pane = this.bodyEl?.querySelector(`[data-focus-pane="${CSS.escape(zoneId)}"]`);
+        if (!pane) return;
+        const pct = clampFocusZoom(zoomPct);
+        pane.style.setProperty('--focus-pane-zoom', String(pct / 100));
+        const label = pane.querySelector('[data-focus-pane-zoom-label]');
+        if (label) label.textContent = `${pct}%`;
+        const outBtn = pane.querySelector('[data-focus-pane-zoom-out]');
+        const inBtn = pane.querySelector('[data-focus-pane-zoom-in]');
+        if (outBtn) outBtn.disabled = pct <= FOCUS_ZOOM_MIN;
+        if (inBtn) inBtn.disabled = pct >= FOCUS_ZOOM_MAX;
     },
 
     setExpandedPane(zoneId) {
@@ -1157,7 +1253,13 @@ export const MagicFocus = {
                 if (!item) return;
                 NoteSurface.mutateItem(item, (it) => {
                     if (!it.focus) it.focus = createDefaultFocus(focus.preset);
-                    it.focus = normalizeFocus({ ...it.focus, ratios: focus.ratios, preset: focus.preset, zones: focus.zones });
+                    it.focus = normalizeFocus({
+                        ...it.focus,
+                        ratios: focus.ratios,
+                        preset: focus.preset,
+                        zones: focus.zones,
+                        zoom: focus.zoom
+                    });
                 }, { preserveView: true, skipRerender: true });
                 import('./drawingBoard.js').then(({ DrawingBoard }) => {
                     if (DrawingBoard.active) DrawingBoard.resize?.();
