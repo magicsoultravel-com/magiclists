@@ -33,9 +33,15 @@ import {
     resolveBrandIconId
 } from './brandIcon.js';
 import { DesktopManager, MAX_DESKTOP_COUNT, DEFAULT_DESKTOP_COUNT } from './desktopManager.js';
-import { ColorPicker, PALETTE_DESKTOP } from './colorPicker.js';
+import { ColorPicker, PALETTE_DESKTOP, PALETTE_NOTE, resolveNoteColor } from './colorPicker.js';
 import { createThemePicker } from './themePicker.js';
 import { broadcastStateChange } from './sync.js';
+import {
+    normalizeTodayLine,
+    PLANNER_DEFAULT_TODAY_LINE,
+    PLANNER_TODAY_LINE_STYLES,
+    PLANNER_TODAY_LINE_THICKNESSES
+} from './planner.js';
 
 const STORAGE_KEY = 'matrix_display_options';
 
@@ -57,7 +63,8 @@ const DEFAULTS = {
     undockedModuleOpacity: 1,
     desktopDockOpacity: 1,
     popoutMode: 'pip',
-    fileCabinetBg: 'smooth'
+    fileCabinetBg: 'smooth',
+    plannerTodayLine: { ...PLANNER_DEFAULT_TODAY_LINE }
 };
 
 export function readDisplayOptions() {
@@ -82,10 +89,11 @@ export function readDisplayOptions() {
             undockedModuleOpacity: Math.min(1, Math.max(0.1, Number(raw.undockedModuleOpacity) || 1)),
             desktopDockOpacity: Math.min(1, Math.max(0.1, Number(raw.desktopDockOpacity) || 1)),
             popoutMode: raw.popoutMode === 'window' ? 'window' : 'pip',
-            fileCabinetBg: FILE_CABINET_BG_OPTIONS.includes(raw.fileCabinetBg) ? raw.fileCabinetBg : 'smooth'
+            fileCabinetBg: FILE_CABINET_BG_OPTIONS.includes(raw.fileCabinetBg) ? raw.fileCabinetBg : 'smooth',
+            plannerTodayLine: normalizeTodayLine(raw.plannerTodayLine)
         };
     } catch {
-        return { ...DEFAULTS, noteFontId: readNoteFont() };
+        return { ...DEFAULTS, noteFontId: readNoteFont(), plannerTodayLine: { ...PLANNER_DEFAULT_TODAY_LINE } };
     }
 }
 
@@ -121,6 +129,11 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
 }
 
 function isCustomized(options) {
+    const today = normalizeTodayLine(options.plannerTodayLine);
+    const todayDefault = PLANNER_DEFAULT_TODAY_LINE;
+    const todayCustom = today.color !== todayDefault.color
+        || today.style !== todayDefault.style
+        || today.thickness !== todayDefault.thickness;
     return !options.showCategoryBand
         || !options.showCategoryName
         || !options.showCreatedDate
@@ -135,6 +148,7 @@ function isCustomized(options) {
         || Math.abs((options.desktopDockOpacity ?? 1) - 1) > 0.001
         || options.popoutMode !== 'pip'
         || options.fileCabinetBg !== 'smooth'
+        || todayCustom
         || isNoteFontCustomized(options.noteFontId)
         || isAppThemeCustomized()
         || NoteFontScale.isCustomized()
@@ -209,7 +223,14 @@ export const DisplayOptions = {
     },
 
     setOptions(partial) {
-        this.options = { ...this.options, ...partial };
+        const nextPartial = { ...partial };
+        if (partial.plannerTodayLine != null) {
+            nextPartial.plannerTodayLine = normalizeTodayLine({
+                ...normalizeTodayLine(this.options.plannerTodayLine),
+                ...partial.plannerTodayLine
+            });
+        }
+        this.options = { ...this.options, ...nextPartial };
         writeDisplayOptions(this.options);
         if (partial.noteFontId != null) {
             writeNoteFont(partial.noteFontId);
@@ -217,6 +238,11 @@ export const DisplayOptions = {
         applyDisplayOptions(this.options);
         this.syncButtonState();
         this.onChange?.(this.options);
+        if (partial.plannerTodayLine != null) {
+            import('./plannerUi.js').then(({ refreshAllPlannerCharts }) => {
+                refreshAllPlannerCharts(this.getItems?.() || []);
+            }).catch(() => {});
+        }
     },
 
     setNoteFont(fontId) {
@@ -409,6 +435,15 @@ export const DisplayOptions = {
             }
         }
 
+        const today = normalizeTodayLine(this.options.plannerTodayLine);
+        const todayColorBtn = root.querySelector('#display-opt-planner-today-color');
+        if (todayColorBtn) {
+            const swatch = todayColorBtn.querySelector('.display-options-swatch');
+            if (swatch) swatch.style.background = today.color;
+        }
+        this.setSelectSelection(root, '#display-opt-planner-today-style', today.style);
+        this.setSelectSelection(root, '#display-opt-planner-today-thickness', String(today.thickness));
+
         /* File cabinet drawer background — locked to None under fancy themes */
         const fancySkin = document.documentElement.dataset.themeSkin === '1';
         const fcBgSelect = root.querySelector('#display-opt-fc-bg');
@@ -572,6 +607,37 @@ export const DisplayOptions = {
         `;
     },
 
+    plannerTodayLineRowHtml(todayLine) {
+        const tl = normalizeTodayLine(todayLine);
+        const styleOpts = PLANNER_TODAY_LINE_STYLES.map((s) => {
+            const sel = s === tl.style ? ' selected' : '';
+            const label = s.charAt(0).toUpperCase() + s.slice(1);
+            return `<option value="${s}"${sel}>${label}</option>`;
+        }).join('');
+        const thickOpts = PLANNER_TODAY_LINE_THICKNESSES.map((t) => {
+            const sel = t === tl.thickness ? ' selected' : '';
+            return `<option value="${t}"${sel}>${t}px</option>`;
+        }).join('');
+        return `
+            <div class="display-options-planner-today">
+                <label class="display-options-planner-today-row">
+                    <span class="display-options-row-label">Color</span>
+                    <button type="button" class="display-options-swatch-btn" id="display-opt-planner-today-color" title="Today line color" aria-label="Today line color">
+                        <span class="display-options-swatch" style="background:${escapeHtml(tl.color)}" aria-hidden="true"></span>
+                    </button>
+                </label>
+                <label class="display-options-planner-today-row" for="display-opt-planner-today-style">
+                    <span class="display-options-row-label">Style</span>
+                    <select id="display-opt-planner-today-style" class="form-input display-options-select">${styleOpts}</select>
+                </label>
+                <label class="display-options-planner-today-row" for="display-opt-planner-today-thickness">
+                    <span class="display-options-row-label">Thickness</span>
+                    <select id="display-opt-planner-today-thickness" class="form-input display-options-select">${thickOpts}</select>
+                </label>
+            </div>
+        `;
+    },
+
     bindStepper(root, { idPrefix, onOut, onIn, disabled = false }) {
         if (disabled) return;
         root.querySelector(`#${idPrefix}-out`)?.addEventListener('click', (e) => {
@@ -657,6 +723,11 @@ export const DisplayOptions = {
                             ${this.desktopsTilesHtml()}
                         </div>
                         ${this.fileCabinetBgRowHtml()}
+                        <div class="display-options-section display-options-section--planner">
+                            <h3 class="display-options-heading">Planner</h3>
+                            <p class="display-options-subheading">Today line (chart)</p>
+                            ${this.plannerTodayLineRowHtml(opts.plannerTodayLine)}
+                        </div>
                         <div class="display-options-section display-options-section--popout">
                             <h3 class="display-options-heading">Pop-out windows</h3>
                             <p class="display-options-subheading">Window style</p>
@@ -762,6 +833,37 @@ export const DisplayOptions = {
             dockOpacityInput.addEventListener('input', updateDockOpacity);
             dockOpacityInput.addEventListener('change', updateDockOpacity);
         }
+
+        const todayStyle = root.querySelector('#display-opt-planner-today-style');
+        if (todayStyle) {
+            todayStyle.addEventListener('change', (e) => {
+                e.stopPropagation();
+                this.setOptions({ plannerTodayLine: { style: e.target.value } });
+            });
+        }
+        const todayThickness = root.querySelector('#display-opt-planner-today-thickness');
+        if (todayThickness) {
+            todayThickness.addEventListener('change', (e) => {
+                e.stopPropagation();
+                this.setOptions({ plannerTodayLine: { thickness: Number(e.target.value) } });
+            });
+        }
+        root.querySelector('#display-opt-planner-today-color')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const btn = e.currentTarget;
+            const current = normalizeTodayLine(this.options.plannerTodayLine);
+            ColorPicker.open({
+                anchor: btn,
+                presets: PALETTE_NOTE,
+                value: resolveNoteColor(current.color),
+                onSelect: (color) => {
+                    const hex = resolveNoteColor(color);
+                    this.setOptions({ plannerTodayLine: { color: hex } });
+                    const swatch = btn.querySelector('.display-options-swatch');
+                    if (swatch) swatch.style.background = hex;
+                }
+            });
+        });
 
         root.querySelectorAll('.app-theme-option').forEach((btn) => {
             btn.addEventListener('click', (e) => {

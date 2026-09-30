@@ -42,7 +42,8 @@ const DISPLAY_DEFAULTS = {
     undockedModuleOpacity: 1,
     desktopDockOpacity: 1,
     popoutMode: 'pip',
-    fileCabinetBg: 'smooth'
+    fileCabinetBg: 'smooth',
+    plannerTodayLine: { color: '#e11d48', style: 'dashed', thickness: 1.25 }
 };
 
 export function resetCustomizationToDefaults() {

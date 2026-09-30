@@ -8,8 +8,6 @@ import {
     PLANNER_COL_COUNT,
     PLANNER_ZOOM_LEVELS,
     PLANNER_ZOOM_LABELS,
-    PLANNER_TODAY_LINE_STYLES,
-    PLANNER_TODAY_LINE_THICKNESSES,
     createEmptyPlanner,
     normalizePlanner,
     normalizePlannerLabelWidth,
@@ -36,6 +34,7 @@ import {
 import { layoutPlannerGantt, parsePlannerDateTime } from './plannerGantt.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor } from './colorPicker.js';
 import { refreshNoteCanvasPreview } from './noteCanvasRenderer.js';
+import { readDisplayOptions } from './displayOptions.js';
 
 function refreshItemNoteCanvas(item) {
     if (!item?.id || !item?.canvas) return;
@@ -112,7 +111,7 @@ function invalidateRailHeightCache() {
  * @returns {string} SVG attribute string
  */
 function todayLineSvgAttrs(todayLine) {
-    const tl = normalizeTodayLine(todayLine);
+    const tl = normalizeTodayLine(todayLine ?? readDisplayOptions().plannerTodayLine);
     const dash = tl.style === 'solid'
         ? 'none'
         : tl.style === 'dotted'
@@ -124,7 +123,7 @@ function todayLineSvgAttrs(todayLine) {
 /**
  * Layout opts derived from planner (label width + DOM-measured row height).
  * @param {object} planner
- * @returns {{ zoom: string, labelWidth: number, rowHeight: number, todayLine: object }}
+ * @returns {{ zoom: string, labelWidth: number, rowHeight: number }}
  */
 function ganttLayoutOpts(planner) {
     const zoom = planner?.zoom || 'week';
@@ -139,8 +138,7 @@ function ganttLayoutOpts(planner) {
     return {
         zoom,
         labelWidth,
-        rowHeight,
-        todayLine: normalizeTodayLine(planner?.todayLine)
+        rowHeight
     };
 }
 
@@ -297,10 +295,9 @@ export function renderPlannerSheetHtml(planner, { canEdit = false } = {}) {
 
 /**
  * @param {object} layout
- * @param {{ todayLine?: object }} [opts]
  * @returns {string}
  */
-function renderGanttSvg(layout, { todayLine } = {}) {
+function renderGanttSvg(layout) {
     const {
         chartWidth, height, headerHeight, majorBandH = 0, minorBandH = 14,
         majors = [], minors = [], bands = [], ticks, bars, edges, todayX, empty
@@ -362,7 +359,7 @@ function renderGanttSvg(layout, { todayLine } = {}) {
     }).join('');
 
     const todayLineEl = todayX != null
-        ? `<line class="planner-gantt__today" x1="${todayX}" y1="0" x2="${todayX}" y2="${height}" ${todayLineSvgAttrs(todayLine)}/>`
+        ? `<line class="planner-gantt__today" x1="${todayX}" y1="0" x2="${todayX}" y2="${height}" ${todayLineSvgAttrs()}/>`
         : '';
 
     const emptyMsg = empty
@@ -401,36 +398,6 @@ function renderGanttRailHtml(layout, { canEdit = false } = {}) {
         <div class="planner-gantt__rail-head" style="height:${headerHeight}px"></div>
         ${rows}
         ${resize}
-    </div>`;
-}
-
-function renderTodayLineSettingsHtml(todayLine, { hidden = false } = {}) {
-    const tl = normalizeTodayLine(todayLine);
-    const styleOpts = PLANNER_TODAY_LINE_STYLES.map((s) => {
-        const sel = s === tl.style ? ' selected' : '';
-        const label = s.charAt(0).toUpperCase() + s.slice(1);
-        return `<option value="${s}"${sel}>${label}</option>`;
-    }).join('');
-    const thickOpts = PLANNER_TODAY_LINE_THICKNESSES.map((t) => {
-        const sel = t === tl.thickness ? ' selected' : '';
-        return `<option value="${t}"${sel}>${t}px</option>`;
-    }).join('');
-    return `<div class="planner-gantt__settings${hidden ? ' is-collapsed' : ''}"${hidden ? ' hidden' : ''}>
-        <button type="button" class="btn btn--compact btn-icon planner-gantt__settings-toggle" data-planner-today-settings-toggle aria-expanded="false" title="Today line settings" aria-label="Today line settings">${CARD_ICONS.cog}</button>
-        <div class="planner-gantt__settings-panel is-hidden" data-planner-today-settings role="dialog" aria-label="Today line">
-            <label class="planner-gantt__settings-row">
-                <span class="planner-gantt__settings-label">Color</span>
-                <button type="button" class="planner-gantt__today-swatch" data-planner-today-color title="Today line color" aria-label="Today line color" style="background:${escapeAttr(tl.color)}"></button>
-            </label>
-            <label class="planner-gantt__settings-row">
-                <span class="planner-gantt__settings-label">Style</span>
-                <select class="form-input planner-gantt__settings-select" data-planner-today-style>${styleOpts}</select>
-            </label>
-            <label class="planner-gantt__settings-row">
-                <span class="planner-gantt__settings-label">Thickness</span>
-                <select class="form-input planner-gantt__settings-select" data-planner-today-thickness>${thickOpts}</select>
-            </label>
-        </div>
     </div>`;
 }
 
@@ -609,23 +576,17 @@ export function renderPlannerGanttHtml(planner, { canEdit = false } = {}) {
     }).join('');
     const toggleCollapsed = chartCollapsed ? ' collapsed' : '';
     const boardCollapsed = chartCollapsed ? ' is-collapsed' : '';
-    const settingsHtml = canEdit
-        ? renderTodayLineSettingsHtml(opts.todayLine, { hidden: chartCollapsed })
-        : '';
 
     const html = `<div class="planner-gantt planner-sub" data-planner-gantt data-planner-zoom-current="${escapeAttr(opts.zoom)}" data-chart-collapsed="${chartCollapsed ? '1' : '0'}">
         <div class="planner-gantt__toolbar planner-sub__toolbar">
             <button type="button" class="planner-gantt__title planner-sub__title" data-planner-chart-toggle aria-expanded="${chartCollapsed ? 'false' : 'true'}">
                 <span class="collapsable-toggle${toggleCollapsed}" aria-hidden="true">▼</span>Chart
             </button>
-            <div class="planner-gantt__toolbar-end${chartCollapsed ? ' is-collapsed' : ''}"${chartCollapsed ? ' hidden' : ''}>
-                <div class="planner-gantt__zoom" role="group" aria-label="Chart zoom">${zoomBtns}</div>
-                ${settingsHtml}
-            </div>
+            <div class="planner-gantt__zoom${chartCollapsed ? ' is-collapsed' : ''}" role="group" aria-label="Chart zoom"${chartCollapsed ? ' hidden' : ''}>${zoomBtns}</div>
         </div>
         <div class="planner-gantt__board${boardCollapsed}" data-planner-chart-board>
             ${renderGanttRailHtml(layout, { canEdit })}
-            <div class="planner-gantt__viewport" data-planner-gantt-viewport title="Drag to pan">${renderGanttSvg(layout, { todayLine: opts.todayLine })}</div>
+            <div class="planner-gantt__viewport" data-planner-gantt-viewport title="Drag to pan">${renderGanttSvg(layout)}</div>
         </div>
     </div>`;
     return { html, layout };
@@ -726,7 +687,7 @@ function refreshGanttInSection(section, item, { refocus = false } = {}) {
         const preserveScrollLeft = prevViewport ? prevViewport.scrollLeft : null;
         const preserveScrollTop = prevViewport ? prevViewport.scrollTop : null;
         const { html, layout } = renderPlannerGanttHtml(item.planner, {
-            canEdit: !!section.querySelector('.planner-cell-input, [data-planner-rail-resize], [data-planner-today-settings-toggle]')
+            canEdit: !!section.querySelector('.planner-cell-input, [data-planner-rail-resize]')
                 || bodyCanEdit(section.closest('.editor-note-body') || section)
         });
         const tmp = document.createElement('div');
@@ -763,6 +724,17 @@ export function refreshPlannerDerivedViews(item, { refocus = false } = {}) {
         });
     }
     refreshItemNoteCanvas(item);
+}
+
+/**
+ * Re-render every open planner chart (e.g. after Display Options today-line change).
+ * @param {object[]} [items]
+ */
+export function refreshAllPlannerCharts(items = []) {
+    const list = Array.isArray(items) ? items : [];
+    for (const item of list) {
+        if (item?.id && item?.planner) refreshPlannerDerivedViews(item);
+    }
 }
 
 function refreshPlannerSummaryInSection(section, item) {
@@ -1147,24 +1119,6 @@ export function attachPlannerInteractions(root, item, {
             const wrap = e.target.closest('[data-planner-datetime]');
             const isDate = e.target.matches('[data-planner-date]');
             commitDatetimeWrap(wrap, { openStopAfter: isDate });
-            return;
-        }
-        const styleSel = e.target.closest('[data-planner-today-style]');
-        if (styleSel && section.contains(styleSel)) {
-            const style = String(styleSel.value || '').toLowerCase();
-            mutate((it) => {
-                const tl = normalizeTodayLine(it.planner.todayLine);
-                it.planner.todayLine = { ...tl, style };
-            }, { refreshGantt: true });
-            return;
-        }
-        const thickSel = e.target.closest('[data-planner-today-thickness]');
-        if (thickSel && section.contains(thickSel)) {
-            const thickness = Number(thickSel.value);
-            mutate((it) => {
-                const tl = normalizeTodayLine(it.planner.todayLine);
-                it.planner.todayLine = { ...tl, thickness };
-            }, { refreshGantt: true });
         }
     });
 
@@ -1288,40 +1242,6 @@ export function attachPlannerInteractions(root, item, {
                     restoreCanvasScroll(canvasScroll);
                 }
             }
-            return;
-        }
-
-        const todaySettingsToggle = e.target.closest('[data-planner-today-settings-toggle]');
-        if (todaySettingsToggle && section.contains(todaySettingsToggle)) {
-            e.preventDefault();
-            e.stopPropagation();
-            const wrap = todaySettingsToggle.closest('.planner-gantt__settings');
-            const panel = wrap?.querySelector('[data-planner-today-settings]');
-            if (!panel) return;
-            const open = panel.classList.contains('is-hidden');
-            panel.classList.toggle('is-hidden', !open);
-            todaySettingsToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-            return;
-        }
-
-        const todayColorBtn = e.target.closest('[data-planner-today-color]');
-        if (todayColorBtn && section.contains(todayColorBtn)) {
-            e.preventDefault();
-            e.stopPropagation();
-            const current = normalizeTodayLine(item.planner?.todayLine);
-            ColorPicker.open({
-                anchor: todayColorBtn,
-                presets: PALETTE_NOTE,
-                value: resolveNoteColor(current.color),
-                onSelect: (color) => {
-                    const hex = resolveNoteColor(color);
-                    mutate((it) => {
-                        const tl = normalizeTodayLine(it.planner.todayLine);
-                        it.planner.todayLine = { ...tl, color: hex };
-                    }, { refreshGantt: true });
-                    todayColorBtn.style.background = hex;
-                }
-            });
             return;
         }
 

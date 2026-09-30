@@ -6,7 +6,7 @@
     .has-custom-bg remaps to --card-border-subtle / --card-muted; cells transparent; no zebra.
   Chart (this file): board rgba(0,0,0,0.06); rail / SVG bg / alt bands / axis via --border-color mixes;
     .has-custom-bg remaps board/rail/alt bands only (not __bg / __axis-bg);
-    today line rose dashed by default (overridable via planner.todayLine); weekend = label tint only.
+    today line rose dashed by default (overridable via Display Options → Planner today line); weekend = label tint only.
 */
 
 /* ==========================================================================
@@ -266,19 +266,8 @@
 }
 
 .planner-gantt__zoom.is-collapsed,
-.planner-gantt__zoom[hidden],
-.planner-gantt__toolbar-end.is-collapsed,
-.planner-gantt__toolbar-end[hidden],
-.planner-gantt__settings.is-collapsed,
-.planner-gantt__settings[hidden] {
+.planner-gantt__zoom[hidden] {
     display: none;
-}
-
-.planner-gantt__toolbar-end {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.28rem;
-    flex-wrap: wrap;
 }
 
 .planner-gantt__zoom {
@@ -295,74 +284,6 @@
 
 .planner-zoom-btn.is-active {
     font-weight: 600;
-}
-
-.planner-gantt__settings {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-}
-
-.planner-gantt__settings-toggle {
-    padding: 0.08rem;
-    opacity: 0.7;
-}
-
-.planner-gantt__settings-toggle:hover,
-.planner-gantt__settings-toggle[aria-expanded="true"] {
-    opacity: 1;
-}
-
-.planner-gantt__settings-panel {
-    position: absolute;
-    top: calc(100% + 4px);
-    right: 0;
-    z-index: 40;
-    min-width: 9.5rem;
-    padding: 0.35rem 0.4rem;
-    border: 1px solid var(--border-color);
-    border-radius: 4px;
-    background: var(--bg-card, #fff);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
-    display: flex;
-    flex-direction: column;
-    gap: 0.28rem;
-}
-
-.planner-gantt__settings-panel.is-hidden {
-    display: none;
-}
-
-.planner-gantt__settings-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.4rem;
-    margin: 0;
-    font-size: calc(0.5rem * var(--note-font-scale, 1));
-    color: var(--text-main);
-}
-
-.planner-gantt__settings-label {
-    color: var(--text-muted);
-    font-weight: 600;
-}
-
-.planner-gantt__settings-select {
-    max-width: 5.2rem;
-    padding: 0.1rem 0.2rem;
-    font-size: inherit;
-    min-height: 0;
-    height: auto;
-}
-
-.planner-gantt__today-swatch {
-    width: 0.9rem;
-    height: 0.9rem;
-    padding: 0;
-    border-radius: 2px;
-    border: 1px solid color-mix(in srgb, var(--border-color) 45%, transparent);
-    cursor: pointer;
 }
 
 .planner-category {
@@ -652,7 +573,7 @@
 }
 
 .planner-gantt__today {
-    /* Defaults; interactive SVG sets stroke/width/dash inline from planner.todayLine */
+    /* Defaults; interactive SVG sets stroke/width/dash inline from Display Options plannerTodayLine */
     stroke: color-mix(in srgb, #e11d48 80%, transparent);
     stroke-width: 1.25;
     stroke-dasharray: 3 2;

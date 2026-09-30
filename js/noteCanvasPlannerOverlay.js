@@ -14,6 +14,7 @@ import {
     SHEET_ROW_HEAD_WIDTH_PX,
     sheetGridTotalWidthPx
 } from './sheet.js';
+import { readDisplayOptions } from './displayOptions.js';
 
 const CELL_PAD_X = 4;
 const CELL_PAD_Y = 3;
@@ -578,7 +579,7 @@ export function paintPlannerChartOverlay(ctx, item, opts) {
     ctx.globalAlpha = 1;
 
     if (todayX != null) {
-        const tl = normalizeTodayLine(item.planner?.todayLine);
+        const tl = normalizeTodayLine(readDisplayOptions().plannerTodayLine);
         ctx.strokeStyle = tl.color || ink;
         ctx.globalAlpha = 0.85;
         ctx.lineWidth = Math.max(1, tl.thickness);

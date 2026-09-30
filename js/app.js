@@ -478,6 +478,9 @@ BootProgress.set(85, 'Workspace…');
             applyDisplayOptions(readDisplayOptions());
             DesktopZoom.apply();
             BoardRulers.sync?.();
+            import('./plannerUi.js').then(({ refreshAllPlannerCharts }) => {
+                refreshAllPlannerCharts(AppState.items || []);
+            }).catch(() => {});
         }
     }
 

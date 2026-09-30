@@ -130,7 +130,6 @@ export function createEmptyPlanner(opts = {}) {
         chartCollapsed: false,
         tableCollapsed: false,
         labelWidth: PLANNER_DEFAULT_LABEL_WIDTH,
-        todayLine: { ...PLANNER_DEFAULT_TODAY_LINE },
         categoryColors: {},
         sheet: createPlannerSheet()
     };
@@ -264,7 +263,6 @@ export function normalizePlanner(raw) {
         chartCollapsed: !!raw.chartCollapsed,
         tableCollapsed: !!raw.tableCollapsed,
         labelWidth: normalizePlannerLabelWidth(raw.labelWidth),
-        todayLine: normalizeTodayLine(raw.todayLine),
         categoryColors: normalizeCategoryColors(raw.categoryColors),
         sheet
     };

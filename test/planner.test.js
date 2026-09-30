@@ -26,6 +26,7 @@ import { layoutPlannerGantt, parsePlannerDateTime, zoomPxPerDay, buildGanttAxis,
 import { SHARED_FIELDS } from '../js/noteFieldOwnership.js';
 import { reconcileItemPlanner } from '../js/api.js';
 import { buildNotePlannerSectionHtml } from '../js/plannerUi.js';
+import { readDisplayOptions } from '../js/displayOptions.js';
 
 describe('planner model', () => {
     it('creates an empty planner with v2 schema and no IDs', () => {
@@ -33,7 +34,7 @@ describe('planner model', () => {
         assert.equal(planner.version, PLANNER_VERSION);
         assert.equal(planner.zoom, PLANNER_DEFAULT_ZOOM);
         assert.equal(planner.labelWidth, PLANNER_DEFAULT_LABEL_WIDTH);
-        assert.deepEqual(planner.todayLine, { ...PLANNER_DEFAULT_TODAY_LINE });
+        assert.equal(planner.todayLine, undefined);
         assert.equal(planner.sheet.cols, PLANNER_COL_COUNT);
         assert.equal(planner.sheet.rows, 3);
         assert.deepEqual(planner.categoryColors, {});
@@ -41,7 +42,7 @@ describe('planner model', () => {
         assert.equal(plannerHasContent(planner), false);
     });
 
-    it('normalizes labelWidth and todayLine prefs', () => {
+    it('normalizes labelWidth; todayLine lives in Display Options', () => {
         assert.equal(normalizePlannerLabelWidth(10), 48);
         assert.equal(normalizePlannerLabelWidth(999), 280);
         assert.equal(normalizePlannerLabelWidth('bad'), PLANNER_DEFAULT_LABEL_WIDTH);
@@ -57,7 +58,10 @@ describe('planner model', () => {
             sheet: { rows: 3, cols: 6, cells: {}, colWidths: [90, 72, 108, 108, 44, 80] }
         });
         assert.equal(planner.labelWidth, 200);
-        assert.deepEqual(planner.todayLine, { color: '#00ff00', style: 'solid', thickness: 2 });
+        assert.equal(planner.todayLine, undefined);
+        const opts = readDisplayOptions();
+        assert.ok(opts.plannerTodayLine);
+        assert.equal(typeof opts.plannerTodayLine.color, 'string');
     });
 
     it('detects content in any column', () => {
@@ -175,8 +179,8 @@ describe('planner model', () => {
         assert.ok(html.includes('Table</button>') || html.includes('>Table'));
         assert.ok(html.includes('Chart</button>') || html.includes('>Chart'));
         assert.ok(html.includes('data-planner-rail-resize'));
-        assert.ok(html.includes('data-planner-today-settings-toggle'));
-        assert.ok(html.includes('data-planner-today-style'));
+        assert.ok(!html.includes('data-planner-today-settings-toggle'));
+        assert.ok(html.includes('planner-gantt__today') || html.includes('data-planner-gantt'));
     });
 
     it('summarizes earliest start, latest stop, calendar and working days', () => {
