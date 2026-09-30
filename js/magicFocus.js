@@ -243,7 +243,7 @@ async function buildChartPaneHtml(item) {
     item.planner = normalizePlanner(item.planner) || item.planner;
     // Force chart visible in focus pane
     const planner = { ...item.planner, chartCollapsed: false };
-    const { html } = renderPlannerGanttHtml(planner);
+    const { html } = renderPlannerGanttHtml(planner, { canEdit: true });
     return `<div data-note-planner data-focus-chart-only="1">${html}</div>`;
 }
 

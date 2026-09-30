@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
     createEmptyPlanner,
     normalizePlanner,
+    normalizePlannerLabelWidth,
+    normalizeTodayLine,
     plannerHasContent,
     derivePlannerTasks,
     addPlannerRow,
@@ -16,9 +18,11 @@ import {
     summarizePlannerSchedule,
     PLANNER_COL_COUNT,
     PLANNER_DEFAULT_ZOOM,
+    PLANNER_DEFAULT_LABEL_WIDTH,
+    PLANNER_DEFAULT_TODAY_LINE,
     PLANNER_VERSION
 } from '../js/planner.js';
-import { layoutPlannerGantt, parsePlannerDateTime, zoomPxPerDay, buildGanttAxis, padGanttRange } from '../js/plannerGantt.js';
+import { layoutPlannerGantt, parsePlannerDateTime, zoomPxPerDay, buildGanttAxis, padGanttRange, isoWeekNumber } from '../js/plannerGantt.js';
 import { SHARED_FIELDS } from '../js/noteFieldOwnership.js';
 import { reconcileItemPlanner } from '../js/api.js';
 import { buildNotePlannerSectionHtml } from '../js/plannerUi.js';
@@ -28,11 +32,32 @@ describe('planner model', () => {
         const planner = createEmptyPlanner();
         assert.equal(planner.version, PLANNER_VERSION);
         assert.equal(planner.zoom, PLANNER_DEFAULT_ZOOM);
+        assert.equal(planner.labelWidth, PLANNER_DEFAULT_LABEL_WIDTH);
+        assert.deepEqual(planner.todayLine, { ...PLANNER_DEFAULT_TODAY_LINE });
         assert.equal(planner.sheet.cols, PLANNER_COL_COUNT);
         assert.equal(planner.sheet.rows, 3);
         assert.deepEqual(planner.categoryColors, {});
         assert.equal(getPlannerField(planner.sheet, 0, 'name'), '');
         assert.equal(plannerHasContent(planner), false);
+    });
+
+    it('normalizes labelWidth and todayLine prefs', () => {
+        assert.equal(normalizePlannerLabelWidth(10), 48);
+        assert.equal(normalizePlannerLabelWidth(999), 280);
+        assert.equal(normalizePlannerLabelWidth('bad'), PLANNER_DEFAULT_LABEL_WIDTH);
+        const tl = normalizeTodayLine({ color: '#112233', style: 'dotted', thickness: 3 });
+        assert.deepEqual(tl, { color: '#112233', style: 'dotted', thickness: 3 });
+        assert.deepEqual(normalizeTodayLine({ color: 'nope', style: 'zigzag', thickness: 9 }), {
+            ...PLANNER_DEFAULT_TODAY_LINE
+        });
+        const planner = normalizePlanner({
+            version: 2,
+            labelWidth: 200,
+            todayLine: { color: '#00ff00', style: 'solid', thickness: 2 },
+            sheet: { rows: 3, cols: 6, cells: {}, colWidths: [90, 72, 108, 108, 44, 80] }
+        });
+        assert.equal(planner.labelWidth, 200);
+        assert.deepEqual(planner.todayLine, { color: '#00ff00', style: 'solid', thickness: 2 });
     });
 
     it('detects content in any column', () => {
@@ -149,6 +174,9 @@ describe('planner model', () => {
         assert.ok(html.includes('data-planner-chart-toggle'));
         assert.ok(html.includes('Table</button>') || html.includes('>Table'));
         assert.ok(html.includes('Chart</button>') || html.includes('>Chart'));
+        assert.ok(html.includes('data-planner-rail-resize'));
+        assert.ok(html.includes('data-planner-today-settings-toggle'));
+        assert.ok(html.includes('data-planner-today-style'));
     });
 
     it('summarizes earliest start, latest stop, calendar and working days', () => {
@@ -251,6 +279,8 @@ describe('planner Gantt layout', () => {
         const week = buildGanttAxis(start, end, 'week', zoomPxPerDay('week'));
         assert.ok(week.bands.length >= 4);
         assert.ok(week.bands.some((b) => b.alt));
+        assert.ok(week.minors.every((m) => /^W\d+$/.test(m.label)));
+        assert.ok(week.minors.some((m) => m.label === 'W1' || m.label === 'W2'));
 
         const quarter = buildGanttAxis(start, new Date(2027, 0, 1), 'quarter', zoomPxPerDay('quarter'));
         assert.ok(quarter.bands.length >= 4);
@@ -262,6 +292,28 @@ describe('planner Gantt layout', () => {
         const year = buildGanttAxis(start, new Date(2029, 0, 1), 'year', zoomPxPerDay('year'));
         assert.ok(year.bands.length >= 3);
         assert.equal(year.bands.filter((b) => b.alt).length >= 1, true);
+    });
+
+    it('computes ISO week numbers across year boundaries and leap years', () => {
+        // 2026-01-01 is Thursday → ISO week 1 of 2026
+        assert.equal(isoWeekNumber(new Date(2026, 0, 1)), 1);
+        // 2021-01-01 is Friday → belongs to ISO week 53 of 2020
+        assert.equal(isoWeekNumber(new Date(2021, 0, 1)), 53);
+        // 2020-12-31 is Thursday → ISO week 53 of 2020
+        assert.equal(isoWeekNumber(new Date(2020, 11, 31)), 53);
+        // 2024-12-30 is Monday → ISO week 1 of 2025
+        assert.equal(isoWeekNumber(new Date(2024, 11, 30)), 1);
+        // Leap year: 2024-02-29 is Thursday → ISO week 9
+        assert.equal(isoWeekNumber(new Date(2024, 1, 29)), 9);
+
+        const axis = buildGanttAxis(
+            new Date(2020, 11, 21),
+            new Date(2021, 0, 18),
+            'week',
+            zoomPxPerDay('week')
+        );
+        assert.ok(axis.minors.some((m) => m.label === 'W53'));
+        assert.ok(axis.minors.some((m) => m.label === 'W1'));
     });
 
     it('builds readable month/year axis labels', () => {

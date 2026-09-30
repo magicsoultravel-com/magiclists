@@ -8,14 +8,18 @@ import {
     PLANNER_COL_COUNT,
     PLANNER_ZOOM_LEVELS,
     PLANNER_ZOOM_LABELS,
+    PLANNER_TODAY_LINE_STYLES,
+    PLANNER_TODAY_LINE_THICKNESSES,
     createEmptyPlanner,
     normalizePlanner,
+    normalizePlannerLabelWidth,
+    normalizeTodayLine,
     addPlannerRow,
     removePlannerRow,
     movePlannerRow,
     derivePlannerTasks,
     summarizePlannerSchedule,
-    listMergedPlannerCategories,
+    listPlannerCategories,
     getCategoryColor,
     setCategoryColor,
     getCellValue,
@@ -29,9 +33,116 @@ import {
     SHEET_ROW_HEAD_WIDTH_PX,
     plannerHasContent
 } from './planner.js';
-import { layoutPlannerGantt } from './plannerGantt.js';
+import { layoutPlannerGantt, parsePlannerDateTime } from './plannerGantt.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor } from './colorPicker.js';
-import { readStoredCategories, resolveCategoryColor } from './categories.js';
+import { refreshNoteCanvasPreview } from './noteCanvasRenderer.js';
+
+function refreshItemNoteCanvas(item) {
+    if (!item?.id || !item?.canvas) return;
+    for (const body of noteBodiesForItem(item.id)) {
+        const section = body.querySelector('[data-note-attachments]');
+        if (section) refreshNoteCanvasPreview(section, item);
+    }
+}
+
+const GANTT_RAIL_MIN_ROW_H = 22;
+/** @type {HTMLElement|null} */
+let _railMeasureEl = null;
+/** @type {Map<string, number>} */
+const _railHeightCache = new Map();
+
+function getRailMeasureEl() {
+    if (typeof document === 'undefined') return null;
+    if (_railMeasureEl && document.body.contains(_railMeasureEl)) return _railMeasureEl;
+    const el = document.createElement('div');
+    el.className = 'planner-gantt__rail-label planner-gantt__rail-label--measure';
+    el.setAttribute('aria-hidden', 'true');
+    Object.assign(el.style, {
+        position: 'absolute',
+        left: '-9999px',
+        top: '0',
+        visibility: 'hidden',
+        pointerEvents: 'none',
+        height: 'auto',
+        maxHeight: 'none',
+        overflow: 'visible'
+    });
+    document.body.appendChild(el);
+    _railMeasureEl = el;
+    return el;
+}
+
+/**
+ * DOM-measure tallest wrapped rail label for a given label column width.
+ * @param {string[]} names
+ * @param {number} labelWidth
+ * @returns {number}
+ */
+export function measureGanttRailRowHeight(names, labelWidth) {
+    const w = normalizePlannerLabelWidth(labelWidth);
+    const list = (names && names.length) ? names : ['—'];
+    const el = getRailMeasureEl();
+    if (!el) return GANTT_RAIL_MIN_ROW_H;
+    // Match .planner-gantt__rail-row horizontal padding (~0.28rem × 2).
+    const contentW = Math.max(20, w - 10);
+    el.style.width = `${contentW}px`;
+    let maxH = GANTT_RAIL_MIN_ROW_H;
+    for (const raw of list) {
+        const name = String(raw || '—');
+        const key = `${w}\0${name}`;
+        const cached = _railHeightCache.get(key);
+        if (cached != null) {
+            maxH = Math.max(maxH, cached);
+            continue;
+        }
+        el.textContent = name;
+        const h = Math.max(GANTT_RAIL_MIN_ROW_H, el.offsetHeight || GANTT_RAIL_MIN_ROW_H);
+        _railHeightCache.set(key, h);
+        maxH = Math.max(maxH, h);
+    }
+    return maxH;
+}
+
+function invalidateRailHeightCache() {
+    _railHeightCache.clear();
+}
+
+/**
+ * @param {object|null|undefined} todayLine
+ * @returns {string} SVG attribute string
+ */
+function todayLineSvgAttrs(todayLine) {
+    const tl = normalizeTodayLine(todayLine);
+    const dash = tl.style === 'solid'
+        ? 'none'
+        : tl.style === 'dotted'
+            ? '1 2'
+            : '3 2';
+    return `style="stroke:${escapeAttr(tl.color)};stroke-width:${tl.thickness};stroke-dasharray:${dash}"`;
+}
+
+/**
+ * Layout opts derived from planner (label width + DOM-measured row height).
+ * @param {object} planner
+ * @returns {{ zoom: string, labelWidth: number, rowHeight: number, todayLine: object }}
+ */
+function ganttLayoutOpts(planner) {
+    const zoom = planner?.zoom || 'week';
+    const labelWidth = normalizePlannerLabelWidth(planner?.labelWidth);
+    const tasks = derivePlannerTasks(planner);
+    const datedNames = [];
+    for (const t of tasks) {
+        if (!parsePlannerDateTime(t.start)) continue;
+        datedNames.push(t.name || t.id || '—');
+    }
+    const rowHeight = measureGanttRailRowHeight(datedNames, labelWidth);
+    return {
+        zoom,
+        labelWidth,
+        rowHeight,
+        todayLine: normalizeTodayLine(planner?.todayLine)
+    };
+}
 
 function noteBodiesForItem(itemId) {
     if (!itemId) return [];
@@ -186,9 +297,10 @@ export function renderPlannerSheetHtml(planner, { canEdit = false } = {}) {
 
 /**
  * @param {object} layout
+ * @param {{ todayLine?: object }} [opts]
  * @returns {string}
  */
-function renderGanttSvg(layout) {
+function renderGanttSvg(layout, { todayLine } = {}) {
     const {
         chartWidth, height, headerHeight, majorBandH = 0, minorBandH = 14,
         majors = [], minors = [], bands = [], ticks, bars, edges, todayX, empty
@@ -249,8 +361,8 @@ function renderGanttSvg(layout) {
         </g>`;
     }).join('');
 
-    const todayLine = todayX != null
-        ? `<line class="planner-gantt__today" x1="${todayX}" y1="0" x2="${todayX}" y2="${height}"/>`
+    const todayLineEl = todayX != null
+        ? `<line class="planner-gantt__today" x1="${todayX}" y1="0" x2="${todayX}" y2="${height}" ${todayLineSvgAttrs(todayLine)}/>`
         : '';
 
     const emptyMsg = empty
@@ -269,12 +381,12 @@ function renderGanttSvg(layout) {
         ${minorEls}
         ${edgePaths}
         ${barEls}
-        ${todayLine}
+        ${todayLineEl}
         ${emptyMsg}
     </svg>`;
 }
 
-function renderGanttRailHtml(layout) {
+function renderGanttRailHtml(layout, { canEdit = false } = {}) {
     const { headerHeight, rowHeight, bars, empty } = layout;
     const rows = empty
         ? `<div class="planner-gantt__rail-row" style="height:${rowHeight}px"><span class="planner-gantt__rail-label is-muted">—</span></div>`
@@ -282,9 +394,43 @@ function renderGanttRailHtml(layout) {
             const label = escapeHTML(b.name || b.id || '—');
             return `<div class="planner-gantt__rail-row" style="height:${rowHeight}px"><span class="planner-gantt__rail-label" title="${label}">${label}</span></div>`;
         }).join('');
-    return `<div class="planner-gantt__rail" style="width:${layout.labelWidth}px">
+    const resize = canEdit
+        ? '<span class="planner-gantt__rail-resize" data-planner-rail-resize title="Drag to resize"></span>'
+        : '';
+    return `<div class="planner-gantt__rail" style="width:${layout.labelWidth}px" data-planner-gantt-rail>
         <div class="planner-gantt__rail-head" style="height:${headerHeight}px"></div>
         ${rows}
+        ${resize}
+    </div>`;
+}
+
+function renderTodayLineSettingsHtml(todayLine, { hidden = false } = {}) {
+    const tl = normalizeTodayLine(todayLine);
+    const styleOpts = PLANNER_TODAY_LINE_STYLES.map((s) => {
+        const sel = s === tl.style ? ' selected' : '';
+        const label = s.charAt(0).toUpperCase() + s.slice(1);
+        return `<option value="${s}"${sel}>${label}</option>`;
+    }).join('');
+    const thickOpts = PLANNER_TODAY_LINE_THICKNESSES.map((t) => {
+        const sel = t === tl.thickness ? ' selected' : '';
+        return `<option value="${t}"${sel}>${t}px</option>`;
+    }).join('');
+    return `<div class="planner-gantt__settings${hidden ? ' is-collapsed' : ''}"${hidden ? ' hidden' : ''}>
+        <button type="button" class="btn btn--compact btn-icon planner-gantt__settings-toggle" data-planner-today-settings-toggle aria-expanded="false" title="Today line settings" aria-label="Today line settings">${CARD_ICONS.cog}</button>
+        <div class="planner-gantt__settings-panel is-hidden" data-planner-today-settings role="dialog" aria-label="Today line">
+            <label class="planner-gantt__settings-row">
+                <span class="planner-gantt__settings-label">Color</span>
+                <button type="button" class="planner-gantt__today-swatch" data-planner-today-color title="Today line color" aria-label="Today line color" style="background:${escapeAttr(tl.color)}"></button>
+            </label>
+            <label class="planner-gantt__settings-row">
+                <span class="planner-gantt__settings-label">Style</span>
+                <select class="form-input planner-gantt__settings-select" data-planner-today-style>${styleOpts}</select>
+            </label>
+            <label class="planner-gantt__settings-row">
+                <span class="planner-gantt__settings-label">Thickness</span>
+                <select class="form-input planner-gantt__settings-select" data-planner-today-thickness>${thickOpts}</select>
+            </label>
+        </div>
     </div>`;
 }
 
@@ -444,31 +590,42 @@ export function renderPlannerTableHtml(planner, { canEdit = false } = {}) {
 
 /**
  * @param {object} planner
+ * @param {{ canEdit?: boolean }} [opts]
  * @returns {{ html: string, layout: object }}
  */
-export function renderPlannerGanttHtml(planner) {
-    const zoom = planner?.zoom || 'week';
+export function renderPlannerGanttHtml(planner, { canEdit = false } = {}) {
+    const opts = ganttLayoutOpts(planner);
     const chartCollapsed = !!planner?.chartCollapsed;
     const tasks = derivePlannerTasks(planner);
-    const layout = layoutPlannerGantt(tasks, { zoom });
+    const layout = layoutPlannerGantt(tasks, {
+        zoom: opts.zoom,
+        labelWidth: opts.labelWidth,
+        rowHeight: opts.rowHeight
+    });
     const zoomBtns = PLANNER_ZOOM_LEVELS.map((z) => {
-        const active = z === zoom ? ' is-active' : '';
+        const active = z === opts.zoom ? ' is-active' : '';
         const label = PLANNER_ZOOM_LABELS[z] || z.charAt(0).toUpperCase();
-        return `<button type="button" class="btn btn--compact planner-zoom-btn${active}" data-planner-zoom="${z}" title="${escapeAttr(z)}" aria-label="${escapeAttr(z)}" aria-pressed="${z === zoom ? 'true' : 'false'}">${label}</button>`;
+        return `<button type="button" class="btn btn--compact planner-zoom-btn${active}" data-planner-zoom="${z}" title="${escapeAttr(z)}" aria-label="${escapeAttr(z)}" aria-pressed="${z === opts.zoom ? 'true' : 'false'}">${label}</button>`;
     }).join('');
     const toggleCollapsed = chartCollapsed ? ' collapsed' : '';
     const boardCollapsed = chartCollapsed ? ' is-collapsed' : '';
+    const settingsHtml = canEdit
+        ? renderTodayLineSettingsHtml(opts.todayLine, { hidden: chartCollapsed })
+        : '';
 
-    const html = `<div class="planner-gantt planner-sub" data-planner-gantt data-planner-zoom-current="${escapeAttr(zoom)}" data-chart-collapsed="${chartCollapsed ? '1' : '0'}">
+    const html = `<div class="planner-gantt planner-sub" data-planner-gantt data-planner-zoom-current="${escapeAttr(opts.zoom)}" data-chart-collapsed="${chartCollapsed ? '1' : '0'}">
         <div class="planner-gantt__toolbar planner-sub__toolbar">
             <button type="button" class="planner-gantt__title planner-sub__title" data-planner-chart-toggle aria-expanded="${chartCollapsed ? 'false' : 'true'}">
                 <span class="collapsable-toggle${toggleCollapsed}" aria-hidden="true">▼</span>Chart
             </button>
-            <div class="planner-gantt__zoom${chartCollapsed ? ' is-collapsed' : ''}" role="group" aria-label="Chart zoom"${chartCollapsed ? ' hidden' : ''}>${zoomBtns}</div>
+            <div class="planner-gantt__toolbar-end${chartCollapsed ? ' is-collapsed' : ''}"${chartCollapsed ? ' hidden' : ''}>
+                <div class="planner-gantt__zoom" role="group" aria-label="Chart zoom">${zoomBtns}</div>
+                ${settingsHtml}
+            </div>
         </div>
         <div class="planner-gantt__board${boardCollapsed}" data-planner-chart-board>
-            ${renderGanttRailHtml(layout)}
-            <div class="planner-gantt__viewport" data-planner-gantt-viewport title="Drag to pan">${renderGanttSvg(layout)}</div>
+            ${renderGanttRailHtml(layout, { canEdit })}
+            <div class="planner-gantt__viewport" data-planner-gantt-viewport title="Drag to pan">${renderGanttSvg(layout, { todayLine: opts.todayLine })}</div>
         </div>
     </div>`;
     return { html, layout };
@@ -490,7 +647,7 @@ export function buildNotePlannerSectionHtml(item, { canEdit = false, startCollap
     const collapsedClass = startCollapsed ? ' collapsed' : '';
     const toggleCollapsed = startCollapsed ? ' collapsed' : '';
     const tableHtml = renderPlannerTableHtml(planner, { canEdit });
-    const { html: ganttHtml } = renderPlannerGanttHtml(planner);
+    const { html: ganttHtml } = renderPlannerGanttHtml(planner, { canEdit });
 
     return `
             <div class="note-body-section note-body-section--planner" data-note-planner>
@@ -568,7 +725,10 @@ function refreshGanttInSection(section, item, { refocus = false } = {}) {
         const prevViewport = host.querySelector('[data-planner-gantt-viewport]');
         const preserveScrollLeft = prevViewport ? prevViewport.scrollLeft : null;
         const preserveScrollTop = prevViewport ? prevViewport.scrollTop : null;
-        const { html, layout } = renderPlannerGanttHtml(item.planner);
+        const { html, layout } = renderPlannerGanttHtml(item.planner, {
+            canEdit: !!section.querySelector('.planner-cell-input, [data-planner-rail-resize], [data-planner-today-settings-toggle]')
+                || bodyCanEdit(section.closest('.editor-note-body') || section)
+        });
         const tmp = document.createElement('div');
         tmp.innerHTML = html.trim();
         const next = tmp.firstElementChild;
@@ -602,6 +762,7 @@ export function refreshPlannerDerivedViews(item, { refocus = false } = {}) {
             refreshGanttInSection(sec, item, { refocus });
         });
     }
+    refreshItemNoteCanvas(item);
 }
 
 function refreshPlannerSummaryInSection(section, item) {
@@ -744,15 +905,6 @@ function positionPlannerCategoryMenu(panel, wrap) {
     }
 }
 
-function seedPlannerCategoryColor(planner, catName) {
-    if (!planner || !catName || getCategoryColor(planner, catName)) return;
-    const appCats = readStoredCategories({ keepEmpty: true });
-    const color = resolveCategoryColor(catName, appCats, { fallback: '' });
-    if (color && /^#[0-9a-fA-F]{6}$/.test(color)) {
-        setCategoryColor(planner, catName, color);
-    }
-}
-
 function openPlannerCategoryMenu(wrap, item, { mutate } = {}) {
     if (!wrap) return;
     const input = wrap.querySelector('[data-col-key="category"]');
@@ -769,7 +921,7 @@ function openPlannerCategoryMenu(wrap, item, { mutate } = {}) {
 
     closePlannerCategoryMenus();
 
-    const names = listMergedPlannerCategories(item?.planner, readStoredCategories({ keepEmpty: true }));
+    const names = listPlannerCategories(item?.planner);
     const panel = document.createElement('div');
     panel.className = 'planner-category__menu';
     panel.setAttribute('data-planner-category-panel', '1');
@@ -820,7 +972,6 @@ function openPlannerCategoryMenu(wrap, item, { mutate } = {}) {
             if (Number.isFinite(row) && Number.isFinite(col)) {
                 setCellValue(it.planner.sheet, row, col, name);
             }
-            seedPlannerCategoryColor(it.planner, name);
         }, { refreshGantt: true });
         const known = getCategoryColor(item.planner, name);
         const swatch = wrap.querySelector('[data-planner-category-color]');
@@ -859,7 +1010,12 @@ export function attachPlannerInteractions(root, item, {
     // First bind: pan wiring. Re-center only when explicitly requested or never focused.
     const ganttHost = section.querySelector('[data-planner-gantt]');
     if (ganttHost && item.planner) {
-        const layout = layoutPlannerGantt(derivePlannerTasks(item.planner), { zoom: item.planner.zoom || 'week' });
+        const layoutOpts = ganttLayoutOpts(item.planner);
+        const layout = layoutPlannerGantt(derivePlannerTasks(item.planner), {
+            zoom: layoutOpts.zoom,
+            labelWidth: layoutOpts.labelWidth,
+            rowHeight: layoutOpts.rowHeight
+        });
         const shouldRefocus = refocusGantt != null
             ? !!refocusGantt
             : section.dataset.plannerFocused !== '1';
@@ -974,7 +1130,6 @@ export function attachPlannerInteractions(root, item, {
             if (!item.planner) item.planner = createEmptyPlanner();
             setCellValue(item.planner.sheet, row, col, cell.value);
             if (key === 'category') {
-                seedPlannerCategoryColor(item.planner, cell.value);
                 const known = getCategoryColor(item.planner, cell.value);
                 const wrap = cell.closest('[data-planner-category]');
                 const swatch = wrap?.querySelector?.('[data-planner-category-color]');
@@ -986,11 +1141,30 @@ export function attachPlannerInteractions(root, item, {
         // Date/time: ignore input — picker fires change; avoid per-keystroke Gantt + double emit.
     });
 
+    // Flush pending text persist + chart when leaving a planner cell / datetime control.
     section.addEventListener('change', (e) => {
         if (e.target.matches('[data-planner-date], [data-planner-time]')) {
             const wrap = e.target.closest('[data-planner-datetime]');
             const isDate = e.target.matches('[data-planner-date]');
             commitDatetimeWrap(wrap, { openStopAfter: isDate });
+            return;
+        }
+        const styleSel = e.target.closest('[data-planner-today-style]');
+        if (styleSel && section.contains(styleSel)) {
+            const style = String(styleSel.value || '').toLowerCase();
+            mutate((it) => {
+                const tl = normalizeTodayLine(it.planner.todayLine);
+                it.planner.todayLine = { ...tl, style };
+            }, { refreshGantt: true });
+            return;
+        }
+        const thickSel = e.target.closest('[data-planner-today-thickness]');
+        if (thickSel && section.contains(thickSel)) {
+            const thickness = Number(thickSel.value);
+            mutate((it) => {
+                const tl = normalizeTodayLine(it.planner.todayLine);
+                it.planner.todayLine = { ...tl, thickness };
+            }, { refreshGantt: true });
         }
     });
 
@@ -1101,14 +1275,53 @@ export function attachPlannerInteractions(root, item, {
                 const host = section.querySelector('[data-planner-gantt]');
                 if (host) {
                     const canvasScroll = captureCanvasScroll();
+                    const layoutOpts = ganttLayoutOpts(item.planner);
                     const layout = layoutPlannerGantt(
                         derivePlannerTasks(item.planner),
-                        { zoom: item.planner.zoom || 'week' }
+                        {
+                            zoom: layoutOpts.zoom,
+                            labelWidth: layoutOpts.labelWidth,
+                            rowHeight: layoutOpts.rowHeight
+                        }
                     );
                     mountGanttViewport(host, layout, { refocus: true, canvasScroll });
                     restoreCanvasScroll(canvasScroll);
                 }
             }
+            return;
+        }
+
+        const todaySettingsToggle = e.target.closest('[data-planner-today-settings-toggle]');
+        if (todaySettingsToggle && section.contains(todaySettingsToggle)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const wrap = todaySettingsToggle.closest('.planner-gantt__settings');
+            const panel = wrap?.querySelector('[data-planner-today-settings]');
+            if (!panel) return;
+            const open = panel.classList.contains('is-hidden');
+            panel.classList.toggle('is-hidden', !open);
+            todaySettingsToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+            return;
+        }
+
+        const todayColorBtn = e.target.closest('[data-planner-today-color]');
+        if (todayColorBtn && section.contains(todayColorBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const current = normalizeTodayLine(item.planner?.todayLine);
+            ColorPicker.open({
+                anchor: todayColorBtn,
+                presets: PALETTE_NOTE,
+                value: resolveNoteColor(current.color),
+                onSelect: (color) => {
+                    const hex = resolveNoteColor(color);
+                    mutate((it) => {
+                        const tl = normalizeTodayLine(it.planner.todayLine);
+                        it.planner.todayLine = { ...tl, color: hex };
+                    }, { refreshGantt: true });
+                    todayColorBtn.style.background = hex;
+                }
+            });
             return;
         }
 
@@ -1200,11 +1413,40 @@ export function attachPlannerInteractions(root, item, {
         });
     });
 
-    // Column resize
+    // Column resize (table) + rail label width resize (chart)
     let resizeCol = null;
     let resizeStartX = 0;
     let resizeStartW = 0;
+    let railResizing = false;
     section.addEventListener('mousedown', (e) => {
+        const railHandle = e.target.closest('[data-planner-rail-resize]');
+        if (railHandle && section.contains(railHandle)) {
+            e.preventDefault();
+            e.stopPropagation();
+            railResizing = true;
+            resizeStartX = e.clientX;
+            resizeStartW = normalizePlannerLabelWidth(item.planner?.labelWidth);
+            const onMove = (ev) => {
+                if (!railResizing) return;
+                const next = normalizePlannerLabelWidth(resizeStartW + (ev.clientX - resizeStartX));
+                const rail = section.querySelector('[data-planner-gantt-rail]');
+                if (rail) rail.style.width = `${next}px`;
+                if (item.planner) item.planner.labelWidth = next;
+            };
+            const onUp = () => {
+                railResizing = false;
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+                invalidateRailHeightCache();
+                mutate((it) => {
+                    it.planner.labelWidth = normalizePlannerLabelWidth(it.planner.labelWidth);
+                }, { refreshGantt: true });
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+            return;
+        }
+
         const handle = e.target.closest('.sheet-col-resize');
         if (!handle || !section.contains(handle)) return;
         e.preventDefault();

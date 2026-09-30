@@ -4,6 +4,8 @@ import {
     PLANNER_COL_COUNT,
     derivePlannerTasks,
     getPlannerField,
+    normalizePlannerLabelWidth,
+    normalizeTodayLine,
     plannerHasContent
 } from './planner.js';
 import { layoutPlannerGantt } from './plannerGantt.js';
@@ -243,7 +245,9 @@ export function measurePlannerChartOverlay(item, fontSize) {
     const planner = item.planner;
     const tasks = derivePlannerTasks(planner);
     const rowHeight = Math.max(18, Math.round(fontSize * 1.15));
-    const labelWidth = Math.max(48, Math.round(fontSize * 3.2));
+    const labelWidth = normalizePlannerLabelWidth(
+        planner?.labelWidth ?? Math.max(48, Math.round(fontSize * 3.2))
+    );
     const layout = layoutPlannerGantt(tasks, {
         zoom: planner?.zoom || 'week',
         rowHeight,
@@ -574,13 +578,18 @@ export function paintPlannerChartOverlay(ctx, item, opts) {
     ctx.globalAlpha = 1;
 
     if (todayX != null) {
-        ctx.strokeStyle = ink;
-        ctx.globalAlpha = 0.7;
-        ctx.lineWidth = Math.max(1.5, fontSize * 0.08);
+        const tl = normalizeTodayLine(item.planner?.todayLine);
+        ctx.strokeStyle = tl.color || ink;
+        ctx.globalAlpha = 0.85;
+        ctx.lineWidth = Math.max(1, tl.thickness);
+        if (tl.style === 'dashed') ctx.setLineDash([3, 2]);
+        else if (tl.style === 'dotted') ctx.setLineDash([1, 2]);
+        else ctx.setLineDash([]);
         ctx.beginPath();
         ctx.moveTo(todayX + 0.5, 0);
         ctx.lineTo(todayX + 0.5, height);
         ctx.stroke();
+        ctx.setLineDash([]);
         ctx.lineWidth = Math.max(1, fontSize * 0.05);
         ctx.globalAlpha = 1;
     }

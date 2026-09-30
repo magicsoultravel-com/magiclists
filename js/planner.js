@@ -28,6 +28,18 @@ export const PLANNER_ZOOM_LABELS = Object.freeze({
     year: 'Y'
 });
 
+export const PLANNER_DEFAULT_LABEL_WIDTH = 120;
+export const PLANNER_MIN_LABEL_WIDTH = 48;
+export const PLANNER_MAX_LABEL_WIDTH = 280;
+
+export const PLANNER_TODAY_LINE_STYLES = Object.freeze(['solid', 'dashed', 'dotted']);
+export const PLANNER_TODAY_LINE_THICKNESSES = Object.freeze([1, 1.25, 2, 3]);
+export const PLANNER_DEFAULT_TODAY_LINE = Object.freeze({
+    color: '#e11d48',
+    style: 'dashed',
+    thickness: 1.25
+});
+
 /** Fixed column schema v2 (locked — no add/remove cols). Row numbers replace ID. */
 export const PLANNER_COLUMNS = Object.freeze([
     { key: 'name', label: 'Name', type: 'text' },
@@ -79,6 +91,35 @@ export function createPlannerSheet(rows = PLANNER_DEFAULT_ROWS) {
 }
 
 /**
+ * @param {unknown} raw
+ * @returns {number}
+ */
+export function normalizePlannerLabelWidth(raw) {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return PLANNER_DEFAULT_LABEL_WIDTH;
+    return Math.min(PLANNER_MAX_LABEL_WIDTH, Math.max(PLANNER_MIN_LABEL_WIDTH, Math.round(n)));
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {{ color: string, style: string, thickness: number }}
+ */
+export function normalizeTodayLine(raw) {
+    const src = raw && typeof raw === 'object' ? raw : {};
+    let color = String(src.color || '').trim();
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) color = PLANNER_DEFAULT_TODAY_LINE.color;
+    const styleRaw = String(src.style || '').toLowerCase();
+    const style = PLANNER_TODAY_LINE_STYLES.includes(styleRaw)
+        ? styleRaw
+        : PLANNER_DEFAULT_TODAY_LINE.style;
+    const thicknessN = Number(src.thickness);
+    const thickness = PLANNER_TODAY_LINE_THICKNESSES.includes(thicknessN)
+        ? thicknessN
+        : PLANNER_DEFAULT_TODAY_LINE.thickness;
+    return { color, style, thickness };
+}
+
+/**
  * @param {{ zoom?: string }} [opts]
  * @returns {object}
  */
@@ -88,6 +129,8 @@ export function createEmptyPlanner(opts = {}) {
         zoom: normalizePlannerZoom(opts.zoom),
         chartCollapsed: false,
         tableCollapsed: false,
+        labelWidth: PLANNER_DEFAULT_LABEL_WIDTH,
+        todayLine: { ...PLANNER_DEFAULT_TODAY_LINE },
         categoryColors: {},
         sheet: createPlannerSheet()
     };
@@ -220,6 +263,8 @@ export function normalizePlanner(raw) {
         zoom: normalizePlannerZoom(raw.zoom),
         chartCollapsed: !!raw.chartCollapsed,
         tableCollapsed: !!raw.tableCollapsed,
+        labelWidth: normalizePlannerLabelWidth(raw.labelWidth),
+        todayLine: normalizeTodayLine(raw.todayLine),
         categoryColors: normalizeCategoryColors(raw.categoryColors),
         sheet
     };
@@ -381,32 +426,6 @@ export function listPlannerCategories(planner) {
         if (seen.has(key)) continue;
         seen.add(key);
         out.push(name);
-    }
-    return out;
-}
-
-/**
- * App categories first, then planner-only names (case-insensitive dedupe).
- * @param {object|null|undefined} planner
- * @param {Array<{name?: string}|string>} [appCategories]
- * @returns {string[]}
- */
-export function listMergedPlannerCategories(planner, appCategories = []) {
-    const seen = new Set();
-    const out = [];
-    const push = (raw) => {
-        const name = String(raw || '').trim();
-        if (!name) return;
-        const key = name.toLowerCase();
-        if (seen.has(key)) return;
-        seen.add(key);
-        out.push(name);
-    };
-    for (const cat of appCategories || []) {
-        push(typeof cat === 'string' ? cat : cat?.name);
-    }
-    for (const name of listPlannerCategories(planner)) {
-        push(name);
     }
     return out;
 }

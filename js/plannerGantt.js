@@ -87,6 +87,20 @@ function addQuarters(date, n) {
 }
 
 /**
+ * ISO-8601 week number (Monday-based; week 1 contains the year's first Thursday).
+ * @param {Date} date
+ * @returns {number}
+ */
+export function isoWeekNumber(date) {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    // Thursday in current week decides the year.
+    d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+    const week1 = new Date(d.getFullYear(), 0, 4);
+    return 1 + Math.round(((d.getTime() - week1.getTime()) / DAY_MS
+        - 3 + ((week1.getDay() + 6) % 7)) / 7);
+}
+
+/**
  * Snap range start/end to zoom-friendly boundaries with generous surrounding context
  * so the axis shows neighboring days/weeks/months/years, not only the task span.
  * @param {Date} min
@@ -200,7 +214,7 @@ export function buildGanttAxis(rangeStart, rangeEnd, zoom, pxPerDay) {
             dayIndex += 1;
         }
     } else if (zoom === 'week') {
-        // Major: month bands. Minor: Mondays → "3" or "3 Mar" at month change.
+        // Major: month bands. Minor: Mondays → ISO week "W12".
         let cursor = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), 1);
         while (cursor < rangeEnd) {
             const next = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1);
@@ -225,7 +239,7 @@ export function buildGanttAxis(rangeStart, rangeEnd, zoom, pxPerDay) {
             bandStarts.push(x);
             minors.push({
                 x,
-                label: String(d.getDate()),
+                label: `W${isoWeekNumber(d)}`,
                 major: d.getDate() <= 7
             });
             d = addDays(d, 7);
