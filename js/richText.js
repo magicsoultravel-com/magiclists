@@ -1,7 +1,12 @@
 /** @module {"owns":"rich text sanitize, linkify, strip markup", "related":["noteSurface.js","noteModel.js"]} */
 const ALLOWED_TAGS = new Set(['A', 'B', 'STRONG', 'I', 'EM', 'S', 'STRIKE', 'DEL', 'U', 'BR']);
 const MARKUP_RE = /<(?:\/?)(?:a|b|strong|i|em|s|strike|del|u|br)\b/i;
+// `URL_RE` is global for replace(); boolean tests use a non-global twin.
+// `RegExp.test` on a /g pattern advances lastIndex, so reusing URL_RE inside
+// hasRichMarkup made it alternate true/false across calls and flip note text
+// and checklist rows between editable and read-only.
 const URL_RE = /(?:https?:\/\/|www\.)[^\s<>"']+/gi;
+const URL_TEST_RE = /(?:https?:\/\/|www\.)[^\s<>"']+/i;
 
 function escapeHtmlAttr(str) {
     return String(str)
@@ -30,7 +35,7 @@ export function sanitizeHref(href) {
 
 export function hasRichMarkup(str) {
     if (!str || typeof str !== 'string') return false;
-    return MARKUP_RE.test(str) || URL_RE.test(str);
+    return MARKUP_RE.test(str) || URL_TEST_RE.test(str);
 }
 
 export function stripRichText(html) {

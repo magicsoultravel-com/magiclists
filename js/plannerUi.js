@@ -595,7 +595,7 @@ function refreshGanttInSection(section, item, { refocus = false } = {}) {
  * @param {object} item
  * @param {{ refocus?: boolean }} [opts]
  */
-function refreshPlannerDerivedViews(item, { refocus = false } = {}) {
+export function refreshPlannerDerivedViews(item, { refocus = false } = {}) {
     if (!item?.id || !item?.planner) return;
     for (const body of noteBodiesForItem(item.id)) {
         body.querySelectorAll?.('[data-note-planner]').forEach((sec) => {

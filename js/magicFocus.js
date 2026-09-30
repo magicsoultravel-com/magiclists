@@ -1,13 +1,12 @@
 /** @module {"owns":"magic focus workspace mode — split panes, setup DnD, planner block hosting", "related":["app.js","noteQuickActions.js","drawingBoard.js","plannerUi.js","noteSurface.js"]} */
 
 import { CARD_ICONS } from './icons.js';
-import { buildNoteQuickActionsHtml, buildExpandedChecklistHtml, renderRichHtml, buildNoteTitleHtml } from './noteSurfaceHtml.js';
+import { buildNoteQuickActionsHtml, buildExpandedChecklistHtml, buildNoteTitleHtml, buildNoteContentFieldHtml } from './noteSurfaceHtml.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
-import { NoteSurface } from './noteSurface.js';
+import { NoteSurface, clearDesktopAutoSaveTimer } from './noteSurface.js';
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import { createEmptyNoteCanvas } from './noteModel.js';
-import { hasRichMarkup } from './richText.js';
-import { canInlineEditText } from './noteSurfaceEditing.js';
+import { focusInlineEdit } from './noteSurfaceEditing.js';
 import { applyCardTheme } from './cardTheme.js';
 import { resolveNoteColor } from './colorPicker.js';
 
@@ -226,7 +225,7 @@ function blockLabel(id) {
 
 function buildChecklistPaneHtml(item) {
     if (!item.steps) item.steps = [];
-    return buildExpandedChecklistHtml(item, true, { richEdit: false });
+    return buildExpandedChecklistHtml(item, true, { richEdit: true });
 }
 
 async function buildTablePaneHtml(item) {
@@ -492,7 +491,7 @@ export const MagicFocus = {
             calHidden: !!item.hideFromCalendar,
             poppedOut: false
         });
-        const titleHtml = buildNoteTitleHtml(item, true, { richEdit: false });
+        const titleHtml = buildNoteTitleHtml(item, true, { richEdit: true });
         this.headerEl.innerHTML = `
             <div class="editor-note-shell magic-focus__note-shell" data-magic-focus-shell>
                 <div class="editor-note-topline">
@@ -526,9 +525,10 @@ export const MagicFocus = {
 
         if (shell) {
             NoteSurface.bindNoteEditorShell(shell, item, {
-                richEdit: false,
+                richEdit: true,
                 localOnly: false,
                 stopMousedownPropagation: true,
+                refresh: () => this.refreshChecklistPane(shell),
                 onChange: () => {}
             });
         }
@@ -921,12 +921,10 @@ export const MagicFocus = {
 
     async _blockHtml(item, block, zoneId) {
         if (block === 'text') {
-            const content = item.content || '';
-            const rich = hasRichMarkup(content);
             const textCollapsed = !!item.textCollapsed;
-            const field = canInlineEditText(content, { richEdit: false })
-                ? `<div class="card-content-preview card-inline-edit" contenteditable="plaintext-only" spellcheck="false" data-field="content" data-placeholder="Add note…">${escapeHTML(content.replace(/\u2028/g, '\n'))}</div>`
-                : `<div class="card-content-preview${rich ? ' rich-text' : ''}">${renderRichHtml(content)}</div>`;
+            // Reuse the canonical content-field builder so Focus renders text
+            // exactly like the board/modal (rich edit, links, <br> line breaks).
+            const field = buildNoteContentFieldHtml(item, { canEdit: true, richEdit: true });
             return `<div class="planner-sub" data-note-text data-text-collapsed="${textCollapsed ? '1' : '0'}">
                 <div class="planner-sub__toolbar">
                     <button type="button" class="planner-sub__title" data-note-text-toggle aria-expanded="${textCollapsed ? 'false' : 'true'}">
@@ -975,12 +973,27 @@ export const MagicFocus = {
 
     async _fillPane(body, item, blocks, zoneId) {
         const list = Array.isArray(blocks) ? blocks : asBlockList(blocks);
+        // Drop any debounced autosave aimed at the DOM we are about to replace:
+        // flushing the now-detached nodes afterwards would save stale content.
+        clearDesktopAutoSaveTimer();
+        // Checklist structural ops (indent/outdent/delete/drag) stash the step to
+        // refocus; re-apply it once the fresh rows exist.
+        const pendingStepId = body.dataset.pendingFocusStepId || '';
+        const pendingEdge = body.dataset.pendingFocusEdge || 'end';
+        if (pendingStepId) {
+            delete body.dataset.pendingFocusStepId;
+            delete body.dataset.pendingFocusEdge;
+        }
         const parts = [];
         for (const block of list) {
             parts.push(await this._blockHtml(item, block, zoneId));
         }
         body.innerHTML = parts.join('');
         this._bindPaneInteractions(body, item);
+        if (pendingStepId) {
+            const stepTextEl = body.querySelector(`.step-text.card-inline-edit[data-step-id="${CSS.escape(pendingStepId)}"]`);
+            if (stepTextEl) focusInlineEdit(stepTextEl, pendingEdge === 'start' ? 'start' : 'end');
+        }
 
         const canvasHost = body.querySelector('[data-focus-canvas-host]');
         if (canvasHost) {
@@ -1008,9 +1021,12 @@ export const MagicFocus = {
         }
         try {
             bindNoteEditorShell(pane, item, {
-                richEdit: false,
+                richEdit: true,
                 localOnly: false,
                 stopMousedownPropagation: true,
+                // Checklist structural ops call refresh() (delete/indent/outdent/
+                // collapse/done). Focus owns the pane, so rebuild it in place.
+                refresh: () => this.refreshChecklistPane(body),
                 onChange: () => {}
             });
         } catch { /* ignore */ }
@@ -1027,6 +1043,27 @@ export const MagicFocus = {
                 });
             });
         }).catch(() => {});
+    },
+
+    /**
+     * Rebuild a Focus pane after a checklist structural mutation.
+     * `bindChecklistInteractions` calls refresh() for delete / indent / outdent /
+     * group-collapse / done-toggle / expand-all; the board and modal re-render
+     * their checklist in response, so Focus must do the same or the rows go stale.
+     * Every caller is click-initiated (fields already blurred), and _fillPane
+     * clears any pending autosave, so a full pane rebuild is safe here.
+     * @param {HTMLElement} body - the pane's .editor-note-body element
+     */
+    async refreshChecklistPane(body) {
+        if (!this.isOpen() || this.showingSetup || !body?.isConnected) return;
+        const zoneId = body.getAttribute('data-focus-pane-body');
+        const item = this.resolveItem();
+        if (!zoneId || !item) return;
+        const focus = normalizeFocus(item.focus);
+        if (!focus) return;
+        const blocks = asBlockList(focus.zones[zoneId]);
+        if (!blocks.length) return;
+        await this._fillPane(body, item, blocks, zoneId);
     },
 
     _mountSplitters(focus, layout) {
@@ -1196,18 +1233,42 @@ export const MagicFocus = {
         return Array.from(this.bodyEl.querySelectorAll('.magic-focus__pane-body.editor-note-body'));
     },
 
+    /**
+     * Refresh only the planner sections of Focus panes.
+     * Previously this re-filled whole panes, which destroyed sibling text /
+     * checklist DOM (and any caret in it) whenever a table/chart shared a zone.
+     * Now table markup is rebuilt in place and gantt/summary are refreshed via
+     * plannerUi's in-place refresh, so text/checklist are never clobbered.
+     * @param {object} item
+     */
     async refreshPlannerPanes(item) {
         if (!this.isOpen() || !item || this.showingSetup) return;
-        const focus = normalizeFocus(item.focus);
+        const live = this.resolveItem() || item;
+        const focus = normalizeFocus(live.focus);
         if (!focus) return;
         const count = PRESET_ZONE_COUNTS[focus.preset] || 2;
+        const { renderPlannerTableHtml, refreshPlannerDerivedViews } = await import('./plannerUi.js');
+        const { normalizePlanner } = await import('./planner.js');
+        if (live.planner) live.planner = normalizePlanner(live.planner) || live.planner;
+
         for (let i = 0; i < count; i += 1) {
             const zid = `z${i}`;
             const blocks = asBlockList(focus.zones[zid]);
             if (!blocks.includes('table') && !blocks.includes('chart')) continue;
             const body = this.bodyEl.querySelector(`[data-focus-pane-body="${zid}"]`);
             if (!body) continue;
-            await this._fillPane(body, item, blocks, zid);
+            const tableSec = body.querySelector('[data-note-planner][data-focus-table-only]');
+            const chartSec = body.querySelector('[data-note-planner][data-focus-chart-only]');
+            if (!tableSec && !chartSec) {
+                // Planner section not mounted yet — render the pane from scratch.
+                await this._fillPane(body, live, blocks, zid);
+                continue;
+            }
+            if (tableSec && live.planner) {
+                tableSec.innerHTML = renderPlannerTableHtml(live.planner, { canEdit: true });
+            }
         }
+        // Gantt + summary refresh, in place across every host (board/modal/focus).
+        refreshPlannerDerivedViews(live);
     }
 };

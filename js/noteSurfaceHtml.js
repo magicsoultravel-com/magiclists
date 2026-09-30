@@ -310,7 +310,7 @@ export function buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false
     return appendPlannerAndMediaSections(item, html, { canEdit });
 }
 
-function buildNoteContentFieldHtml(item, { canEdit = false, richEdit = false } = {}) {
+export function buildNoteContentFieldHtml(item, { canEdit = false, richEdit = false } = {}) {
     const content = item.content || '';
     const rich = hasRichMarkup(content) || content.includes('\u2028');
     if (canEdit && (richEdit || canInlineEditText(content, { richEdit }))) {
