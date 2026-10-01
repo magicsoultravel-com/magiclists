@@ -244,7 +244,10 @@ function isBusy() {
     const canvas = document.getElementById('app-canvas');
     if (canvas?.querySelector?.('.is-grid-dragging, .is-freeform-dragging')) return true;
     if (document.body?.classList?.contains('is-checklist-dragging')) return true;
+    const shell = document.getElementById('workspace-shell');
     // Note-canvas and workspace magicCanvas both set data-drawing-mode on the shell.
-    if (document.getElementById('workspace-shell')?.hasAttribute('data-drawing-mode')) return true;
+    if (shell?.hasAttribute('data-drawing-mode')) return true;
+    // Magic Focus owns note editing while open — park full board refresh (like drawing).
+    if (shell?.hasAttribute('data-magic-focus')) return true;
     return false;
 }

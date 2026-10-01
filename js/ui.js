@@ -208,16 +208,22 @@ export function isDesktopCard(card) {
 }
 
 export const UI = {
-    flushAllInlineEditsFromCanvas(canvas, items, { forceFlush = false, skipItemId = null } = {}) {
+    flushAllInlineEditsFromCanvas(canvas, items, { forceFlush = false, skipItemId = null, skipItemIds = null } = {}) {
         if (!canvas || !Array.isArray(items)) return;
         const byId = new Map(items.map((item) => [item.id, item]));
+        const skip = new Set();
+        if (skipItemId) skip.add(skipItemId);
+        if (skipItemIds) {
+            for (const id of skipItemIds) {
+                if (id) skip.add(id);
+            }
+        }
         const activeDesktop = DesktopManager.getActiveDesktop();
         canvas.querySelectorAll(`.mini-card[data-desktop="${activeDesktop}"]`).forEach((card) => {
             const item = byId.get(card.dataset.id);
             if (!item) return;
-            // While the modal editor owns this note, its board card DOM is stale.
-            // Flushing it would overwrite the modal's saved content with old HTML.
-            if (skipItemId && item.id === skipItemId) return;
+            // While modal / Focus / popout owns this note, board card DOM is stale.
+            if (skip.has(item.id)) return;
             NoteSurface.commitFocusedInlineField(card, item);
             // During view reset, force flush to ensure all pending changes are saved
             // even if there's a pending focus state that would otherwise skip

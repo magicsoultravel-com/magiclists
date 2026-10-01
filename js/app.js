@@ -450,11 +450,57 @@ BootProgress.set(85, 'Workspace…');
         this.refreshSidebarAfterSync();
     }
 
+    /**
+     * Note ids whose board mini-card DOM is stale because another host owns them.
+     * Used to skip board flush so we do not clobber Focus / modal / popout saves.
+     */
+    resolveStaleBoardFlushSkipIds() {
+        const ids = new Set();
+        const modalOpen = Editor.activeItem
+            && Editor.overlay
+            && (Editor.overlay.classList.contains('is-open') || !Editor.overlay.classList.contains('is-hidden'));
+        if (modalOpen && Editor.activeItem?.id) ids.add(Editor.activeItem.id);
+        if (MagicFocus.isOpen() && MagicFocus.getActiveItemId()) {
+            ids.add(MagicFocus.getActiveItemId());
+        }
+        for (const id of NotePopoutBridge.listPoppedOutNoteIds()) {
+            if (id) ids.add(id);
+        }
+        return [...ids];
+    }
+
+    /**
+     * Persist active non-board hosts, then flush board cards with skip set.
+     * Order: Focus → modal → board (matching plan lifecycle).
+     */
+    flushPendingNoteHostsForLifecycle() {
+        if (MagicFocus.isOpen()) {
+            MagicFocus.flushPendingEdits();
+        }
+        const modalOpen = Editor.activeItem
+            && Editor.overlay
+            && (Editor.overlay.classList.contains('is-open') || !Editor.overlay.classList.contains('is-hidden'));
+        if (modalOpen) {
+            Editor.persistNote({ force: true, normalize: true });
+        }
+        const canvas = document.getElementById('app-canvas');
+        if (canvas) {
+            UI.flushAllInlineEditsFromCanvas(canvas, AppState.items, {
+                skipItemIds: this.resolveStaleBoardFlushSkipIds()
+            });
+        }
+    }
+
     /** True if this tab is actively editing the given card — don't clobber it. */
     isUserBusyOnCard(noteId) {
         if (!noteId) return false;
+        if (MagicFocus.isOpen() && MagicFocus.getActiveItemId() === noteId) return true;
         const active = document.activeElement?.closest?.('.card-inline-edit');
         if (!active) return false;
+        if (active.closest?.('#magic-focus')) {
+            // Focus pane edit for this note (or any Focus edit while that note is active).
+            return MagicFocus.getActiveItemId() === noteId;
+        }
         const card = active.closest?.('.mini-card');
         return !!card && card.dataset?.id === noteId;
     }
@@ -1307,7 +1353,10 @@ renderQuickActions() {
         try {
             const canvas = document.getElementById('app-canvas');
             const wasEnabled = BoardOverlay.isEnabled();
-            UI.flushAllInlineEditsFromCanvas(canvas, AppState.items);
+            if (MagicFocus.isOpen()) MagicFocus.flushPendingEdits();
+            UI.flushAllInlineEditsFromCanvas(canvas, AppState.items, {
+                skipItemIds: this.resolveStaleBoardFlushSkipIds()
+            });
             if (canvas) {
                 UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
             }
@@ -1340,7 +1389,10 @@ renderQuickActions() {
             }
             const next = !AppState.viewSettings.fileCabinet;
             const canvas = document.getElementById('app-canvas');
-            UI.flushAllInlineEditsFromCanvas(canvas, AppState.items);
+            if (MagicFocus.isOpen()) MagicFocus.flushPendingEdits();
+            UI.flushAllInlineEditsFromCanvas(canvas, AppState.items, {
+                skipItemIds: this.resolveStaleBoardFlushSkipIds()
+            });
             AppState.viewSettings.fileCabinet = next;
             setFileCabinetActive(next);
             if (next) {
@@ -1452,38 +1504,15 @@ renderQuickActions() {
             }
         });
 
-        // Beforeunload handler: flush all pending autosaves before page refresh
-        // This ensures data is saved when user refreshes the browser
+        // Beforeunload: Focus → modal → board (skip hosts that own the note).
         window.addEventListener('beforeunload', () => {
-            // Flush modal editor if open
-            const modalOpen = Editor.activeItem && Editor.overlay?.classList.contains('is-open');
-            if (modalOpen) {
-                Editor.persistNote({ force: true, normalize: true });
-            }
-            const canvas = document.getElementById('app-canvas');
-            if (canvas) {
-                // Skip the open modal note — its board card DOM is stale and would
-                // clobber the modal persist we just wrote.
-                UI.flushAllInlineEditsFromCanvas(canvas, AppState.items, {
-                    skipItemId: modalOpen ? Editor.activeItem.id : null
-                });
-            }
+            this.flushPendingNoteHostsForLifecycle();
         });
 
-        // Visibilitychange handler: flush pending autosaves when tab becomes hidden
-        // This prevents data loss when user switches tabs or minimizes window
+        // Visibilitychange: same flush order when tab hides (switch / minimize).
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
-                const modalOpen = Editor.activeItem && Editor.overlay?.classList.contains('is-open');
-                if (modalOpen) {
-                    Editor.persistNote({ force: true, normalize: true });
-                }
-                const canvas = document.getElementById('app-canvas');
-                if (canvas) {
-                    UI.flushAllInlineEditsFromCanvas(canvas, AppState.items, {
-                        skipItemId: modalOpen ? Editor.activeItem.id : null
-                    });
-                }
+                this.flushPendingNoteHostsForLifecycle();
             }
         });
 
@@ -1494,6 +1523,10 @@ renderQuickActions() {
             }
             const detail = e.detail;
             const item = detail?.item ?? detail;
+            // Mutex: modal and Focus cannot co-edit the same note.
+            if (item?.id && MagicFocus.isOpen() && MagicFocus.getActiveItemId() === item.id) {
+                MagicFocus.close();
+            }
             Editor.open(item, AppState.categories);
         });
 

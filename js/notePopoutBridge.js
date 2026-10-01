@@ -288,6 +288,12 @@ export const NotePopoutBridge = {
         return !!(claim && claim.role === 'popout');
     },
 
+    /** Note ids currently claimed as popout role (for stale board-flush skip). */
+    listPoppedOutNoteIds() {
+        const claims = pruneExpiredClaims();
+        return Object.keys(claims).filter((id) => claims[id]?.role === 'popout');
+    },
+
     claim(noteId, { role = this.role } = {}) {
         if (!noteId) return false;
         const claims = pruneExpiredClaims();

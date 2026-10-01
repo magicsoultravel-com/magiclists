@@ -3,12 +3,13 @@
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { buildNoteQuickActionsHtml, buildExpandedChecklistHtml, buildNoteTitleHtml, buildNoteContentFieldHtml } from './noteSurfaceHtml.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
-import { NoteSurface, clearDesktopAutoSaveTimer } from './noteSurface.js';
+import { NoteSurface, clearDesktopAutoSaveTimer, flushDesktopAutoSave } from './noteSurface.js';
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import { createEmptyNoteCanvas } from './noteModel.js';
 import { focusInlineEdit } from './noteSurfaceEditing.js';
 import { applyCardTheme } from './cardTheme.js';
 import { resolveNoteColor } from './colorPicker.js';
+import { Editor } from './editor.js';
 
 const BLOCKS = [
     { id: 'text', label: 'Text' },
@@ -380,6 +381,15 @@ export const MagicFocus = {
             await this._app.exitDrawingForFocus?.();
         }
 
+        // Mutex: same note cannot be edited in modal and Focus at once.
+        const modalOpen = Editor.activeItem?.id === item.id
+            && Editor.overlay
+            && !Editor.overlay.classList.contains('is-hidden');
+        if (modalOpen) {
+            Editor.persistNote({ force: true, normalize: true });
+            Editor.close();
+        }
+
         this.activeItemId = item.id;
         const live = this.resolveItem() || item;
         const configured = focusIsConfigured(live.focus);
@@ -421,18 +431,45 @@ export const MagicFocus = {
         this.renderSetup(item);
     },
 
+    /**
+     * Flush Focus header + pane shells into the shared item (final write).
+     * Clears the desktop autosave timer via flushDesktopAutoSave.
+     */
+    flushPendingEdits() {
+        if (!this.activeItemId || !this.root || this.root.classList.contains('is-hidden')) return;
+        const item = this.resolveItem();
+        if (!item) return;
+        const shells = [];
+        const headerShell = this.headerEl?.querySelector?.('[data-magic-focus-shell]');
+        if (headerShell) shells.push(headerShell);
+        this.bodyEl?.querySelectorAll?.('.magic-focus__pane.editor-note-shell').forEach((pane) => {
+            shells.push(pane);
+        });
+        // Deduplicate if header somehow nested (should not happen).
+        const seen = new Set();
+        for (const shell of shells) {
+            if (!shell || seen.has(shell)) continue;
+            seen.add(shell);
+            flushDesktopAutoSave(shell, item, { mergeWindow: false });
+        }
+    },
+
     async close() {
-        await this._unhostDrawingBoard();
+        this.flushPendingEdits();
+        // Release host ownership synchronously so modal open / busy guards /
+        // skip lists see Focus as closed without awaiting unhost/teardown.
         this.activeItemId = null;
         this.setupDraft = null;
         this.setupStep = 'layout';
         this.showingSetup = false;
         this.expandedPaneId = null;
+        this.root?.classList.add('is-hidden');
+        this.root?.setAttribute('aria-hidden', 'true');
+        document.getElementById('workspace-shell')?.removeAttribute('data-magic-focus');
+        await this._unhostDrawingBoard();
         if (this.bodyEl) this.bodyEl.innerHTML = '';
         if (this.headerEl) this.headerEl.innerHTML = '';
         this.applyNoteTheme(null);
-        this.root?.classList.add('is-hidden');
-        this.root?.setAttribute('aria-hidden', 'true');
         await this._leaveShell();
         this._unbindEsc();
         this._syncFocusButtons();
@@ -1069,9 +1106,16 @@ export const MagicFocus = {
 
     async _fillPane(body, item, blocks, zoneId) {
         const list = Array.isArray(blocks) ? blocks : asBlockList(blocks);
-        // Drop any debounced autosave aimed at the DOM we are about to replace:
-        // flushing the now-detached nodes afterwards would save stale content.
-        clearDesktopAutoSaveTimer();
+        // Board checklist refresh syncs before rebuild; match that so collapse/
+        // expand paths do not drop in-flight step/text edits.
+        const pane = body.closest?.('.magic-focus__pane');
+        const live = this.resolveItem() || item;
+        if (pane && live && pane.querySelector('.card-inline-edit, .expanded-checklist, [data-note-text]')) {
+            flushDesktopAutoSave(pane, live, { mergeWindow: false });
+        } else {
+            // No editable DOM yet (first mount) — still cancel any orphan timer.
+            clearDesktopAutoSaveTimer();
+        }
         // Checklist structural ops (indent/outdent/delete/drag) stash the step to
         // refocus; re-apply it once the fresh rows exist.
         const pendingStepId = body.dataset.pendingFocusStepId || '';
@@ -1082,10 +1126,10 @@ export const MagicFocus = {
         }
         const parts = [];
         for (const block of list) {
-            parts.push(await this._blockHtml(item, block, zoneId));
+            parts.push(await this._blockHtml(live || item, block, zoneId));
         }
         body.innerHTML = parts.join('');
-        this._bindPaneInteractions(body, item);
+        this._bindPaneInteractions(body, live || item);
         if (pendingStepId) {
             const stepTextEl = body.querySelector(`.step-text.card-inline-edit[data-step-id="${CSS.escape(pendingStepId)}"]`);
             if (stepTextEl) focusInlineEdit(stepTextEl, pendingEdge === 'start' ? 'start' : 'end');
