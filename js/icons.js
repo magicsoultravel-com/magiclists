@@ -6,6 +6,15 @@ function paletteIconSvg(size) {
   return `<svg viewBox="0 0 12 12" width="${size}" height="${size}" focusable="false">${body}</svg>`;
 }
 
+function gearIconSvg(size, holeR = 1.6) {
+  // Proper 6-tooth cogwheel: chunky rectangular teeth survive 10-11px without
+  // mushifying into a sun (the old circle + straight-rays look). Stroke-first,
+  // currentColor, fill="none" to match the ACTION_ICONS trope.
+  const teeth = 'M8.82 4.97L10.35 5.07L10.35 6.93L8.82 7.03L8.30 7.93L8.98 9.31L7.38 10.23L6.52 8.95L5.48 8.95L4.62 10.23L3.02 9.31L3.70 7.93L3.18 7.03L1.65 6.93L1.65 5.07L3.18 4.97L3.70 4.07L3.02 2.69L4.62 1.77L5.48 3.05L6.52 3.05L7.38 1.77L8.98 2.69L8.30 4.07Z';
+  const body = `<path d="${teeth}" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><circle cx="6" cy="6" r="${holeR}" fill="none" stroke="currentColor" stroke-width="0.95"/>`;
+  return `<svg viewBox="0 0 12 12" width="${size}" height="${size}" focusable="false">${body}</svg>`;
+}
+
 export const CARD_ICONS = {
     calendar: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.5" y="2.5" width="9" height="8" rx="0.8" fill="none" stroke="currentColor" stroke-width="1"/><path d="M1.5 5.2h9M4 1.5v1.6M8 1.5v1.6" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>',
     clock: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><circle cx="6" cy="6" r="4.4" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M6 3.4V6l1.7 1.1" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -34,7 +43,7 @@ export const CARD_ICONS = {
     unpin: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><circle cx="6" cy="3.4" r="2.1" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M6 5.4v4.8M4.6 10.2h2.8M2.2 2.2l7.6 7.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg>',
     resize: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M8.2 8.2 10.6 10.6M8.2 8.2V5.8M8.2 8.2H5.8M3.4 3.4 1 1M3.4 3.4V5.8M3.4 3.4H5.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     copy: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="3.5" y="3.8" width="5.8" height="6.4" rx="0.6" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M5.2 2.6h4.2a0.8 0.8 0 0 1 0.8 0.8v4.2" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
-    cog: '<svg viewBox="0 0 12 12" width="10" height="10" focusable="false"><circle cx="6" cy="6" r="1.55" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M6 1.5v1.15M6 9.35V10.5M1.5 6h1.15M9.35 6H10.5M2.75 2.75l.82.82M8.43 8.43l.82.82M9.25 2.75l-.82.82M3.57 8.43l-.82.82" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg>',
+    cog: gearIconSvg(10, 1.55),
     drag: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><circle cx="4.4" cy="3.1" r="0.85" fill="currentColor"/><circle cx="7.6" cy="3.1" r="0.85" fill="currentColor"/><circle cx="4.4" cy="6" r="0.85" fill="currentColor"/><circle cx="7.6" cy="6" r="0.85" fill="currentColor"/><circle cx="4.4" cy="8.9" r="0.85" fill="currentColor"/><circle cx="7.6" cy="8.9" r="0.85" fill="currentColor"/></svg>',
     star: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M6 1.8 7.4 4.6 10.5 5l-2.2 2.1.5 3.1L6 9.4 3.2 10.2l.5-3.1L1.5 5 4.6 4.6 6 1.8z" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round"/></svg>',
     starFilled: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M6 1.8 7.4 4.6 10.5 5l-2.2 2.1.5 3.1L6 9.4 3.2 10.2l.5-3.1L1.5 5 4.6 4.6 6 1.8z" fill="currentColor" stroke="currentColor" stroke-width="0.35" stroke-linejoin="round"/></svg>',
@@ -55,7 +64,7 @@ export const CARD_ICONS = {
     plannerTable: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><rect x="1.4" y="2.2" width="9.2" height="7.6" rx="0.6" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M1.4 4.4h9.2M1.4 6.6h9.2M4.2 2.2v7.6M7.8 2.2v7.6" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
     plannerChart: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><path d="M2 9.4V2.6M2 9.4h8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/><rect x="3.2" y="5.4" width="1.6" height="2.8" rx="0.3" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="5.6" y="3.6" width="1.6" height="4.6" rx="0.3" fill="none" stroke="currentColor" stroke-width="0.85"/><rect x="8" y="4.6" width="1.6" height="3.6" rx="0.3" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',
     focus: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><circle cx="6" cy="6" r="2.1" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M6 1.6v1.4M6 9v1.4M1.6 6H3M9 6h1.4M3.2 3.2l1 1M7.8 7.8l1 1M8.8 3.2l-1 1M4.2 7.8l-1 1" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg>',
-    focusSettings: '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false"><circle cx="6" cy="6" r="2" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M6 1.5v1.2M6 9.3v1.2M1.5 6h1.2M9.3 6h1.2M2.8 2.8l.85.85M8.35 8.35l.85.85M9.2 2.8l-.85.85M3.65 8.35l-.85.85" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>'
+    focusSettings: gearIconSvg(11, 1.9)
 };
 
 export const FORMAT_ICONS = {
@@ -107,7 +116,7 @@ export const ACTION_ICONS = {
     radioPauseWave: '<span class="sidebar-media-action-wave" aria-hidden="true"><svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M3.8 2.6v6.8M8.2 2.6v6.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg><svg class="sidebar-media-action-wave__svg" viewBox="0 0 12 12" width="12" height="12" focusable="false"><path class="sidebar-media-action-wave__path" d="M -12 6 Q -9 2, -6 6 T 0 6 T 6 6 T 12 6 T 18 6 T 24 6" fill="none" stroke="#34d399" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="0.11 0.14" pathLength="3"/></svg></span>',
     mediaStop: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><rect x="3.2" y="3.2" width="5.6" height="5.6" rx="0.4" fill="currentColor"/></svg>',
     radioLoading: '<svg class="sidebar-media__spin-icon" viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M6 1.4a4.6 4.6 0 0 1 4.6 4.6" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>',
-    radioSpecial: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><circle cx="6" cy="6" r="2.2" fill="none" stroke="currentColor" stroke-width="0.9"/><path d="M6 3.5V2.2M6 9.8v-1.3M3.5 6H2.2M9.8 6H8.5M4.2 4.2 3.2 3.2M8.8 8.8l-1-1M7.8 4.2l1-1M4.2 7.8l-1 1" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linecap="round"/></svg>',
+    radioSpecial: gearIconSvg(12, 2.0),
     radioVisualizer: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2 8.4V6.2M5 8.4V3.7M8 8.4V5.6M10 8.4V2.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/><circle cx="9.1" cy="2.8" r="0.9" fill="none" stroke="currentColor" stroke-width="0.75"/><path d="M1.4 9.2h9.2" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round"/></svg>',
     drawingPencil: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M8.4 1.4 10.6 3.6 4.8 9.4 2.2 9.8l.4-2.6 5.8-5.8z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M7.2 2.6 9.4 4.8" fill="none" stroke="currentColor" stroke-width="0.75" stroke-linecap="round"/></svg>',
     drawingExit: '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M2.4 6h6.8M5.2 3.2 2.4 6l2.8 2.8" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round" stroke-linejoin="round"/><rect x="7.6" y="2.4" width="2" height="7.2" rx="0.4" fill="none" stroke="currentColor" stroke-width="0.85"/></svg>',

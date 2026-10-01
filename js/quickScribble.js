@@ -421,7 +421,7 @@ function ensureDom() {
                 <button type="button" class="media-lightbox__doodle-dot is-active" data-qs-color="0" style="--doodle-color:#ff00ff" title="Pink" aria-label="Pink pen" aria-pressed="true"></button>
                 <button type="button" class="media-lightbox__doodle-dot" data-qs-color="1" style="--doodle-color:#00ff00" title="Green" aria-label="Green pen"></button>
                 <button type="button" class="media-lightbox__doodle-dot" data-qs-color="2" style="--doodle-color:#00ffff" title="Cyan" aria-label="Cyan pen"></button>
-                <button type="button" class="media-lightbox__doodle-dot media-lightbox__doodle-dot--custom" data-qs-color="3" style="--doodle-color:#ffaa00" title="Custom color" aria-label="Custom pen color">${CARD_ICONS.cog}</button>
+                <button type="button" class="media-lightbox__doodle-dot media-lightbox__doodle-dot--custom" data-qs-color="3" style="--doodle-color:#ffaa00" title="Custom color" aria-label="Custom pen color">${CARD_ICONS.color}</button>
                 <button type="button" class="media-lightbox__doodle-tool" data-qs-eraser title="Eraser" aria-label="Eraser" aria-pressed="false">${DRAWING_ICONS.eraser}</button>
                 <span class="media-lightbox__doodle-size" aria-label="Pen size">
                     <button type="button" class="media-lightbox__doodle-size-btn" data-qs-smaller title="Decrease pen size" aria-label="Decrease pen size">${ACTION_ICONS.minus}</button>

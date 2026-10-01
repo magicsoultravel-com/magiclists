@@ -837,12 +837,14 @@ html[data-tile-small-footprint="card"] .mini-card[data-desktop="1"].spatial-at-s
 }
 
 .color-picker-tile--user::after {
-    content: '⚙';
+    content: '';
     position: absolute;
-    top: -1px;
+    top: 1px;
     right: 1px;
-    font-size: 8px;
-    opacity: 0.65;
+    width: 8px;
+    height: 8px;
+    background: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M8.82 4.97L10.35 5.07L10.35 6.93L8.82 7.03L8.30 7.93L8.98 9.31L7.38 10.23L6.52 8.95L5.48 8.95L4.62 10.23L3.02 9.31L3.70 7.93L3.18 7.03L1.65 6.93L1.65 5.07L3.18 4.97L3.70 4.07L3.02 2.69L4.62 1.77L5.48 3.05L6.52 3.05L7.38 1.77L8.98 2.69L8.30 4.07Z' fill='none' stroke='%23fff' stroke-width='1' stroke-linejoin='round'/%3E%3Ccircle cx='6' cy='6' r='1.7' fill='none' stroke='%23fff' stroke-width='1'/%3E%3C/svg%3E");
+    opacity: 0.8;
     pointer-events: none;
 }
 
