@@ -267,9 +267,12 @@ describe('planner model', () => {
         assert.ok(/rows="3"/.test(editable));
         // No size-changing hover flyout — content stays in the stable slot.
         assert.ok(!editable.includes('planner-kanban__card-flyout'));
-        // One action suite on the article.
+        // One action suite on the article; overflow tray behind more + grab.
         assert.equal((editable.match(/data-planner-kanban-density/g) || []).length, 1);
         assert.equal((editable.match(/class="planner-kanban__card-actions"/g) || []).length, 1);
+        assert.ok(editable.includes('planner-kanban__card-actions-tray'));
+        assert.ok(editable.includes('data-planner-kanban-more'));
+        assert.ok(editable.includes('planner-kanban__card-grab'));
 
         const readonly = renderPlannerKanbanHtml(planner, { canEdit: false });
         assert.ok(!readonly.includes('data-planner-kanban-field='));

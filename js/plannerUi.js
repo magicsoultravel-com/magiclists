@@ -875,11 +875,14 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
                 const densityIcon = collapsed ? CARD_ICONS.expand : CARD_ICONS.collapse;
                 const actionsHtml = canEdit
                     ? `<span class="planner-kanban__card-actions">
-                        <button type="button" class="planner-kanban__card-density" data-planner-kanban-density title="${escapeAttr(densityTitle)}" aria-label="${escapeAttr(densityTitle)}" aria-pressed="${collapsed ? 'true' : 'false'}">${densityIcon}</button>
-                        <button type="button" class="planner-kanban__card-emphasis${urgentActive}" data-planner-kanban-emphasis="urgent" title="Mark urgent" aria-label="Mark urgent" aria-pressed="${emphasis === 'urgent' ? 'true' : 'false'}">${KANBAN_URGENT_ICON}</button>
-                        <button type="button" class="planner-kanban__card-emphasis${mutedActive}" data-planner-kanban-emphasis="muted" title="Mark non-urgent" aria-label="Mark non-urgent" aria-pressed="${emphasis === 'muted' ? 'true' : 'false'}">${KANBAN_MUTED_ICON}</button>
-                        <button type="button" class="planner-kanban__card-color" data-planner-kanban-color title="Card color" aria-label="Card color">${CARD_ICONS.color}</button>
-                        <button type="button" class="planner-kanban__card-reset" data-planner-kanban-reset-card title="Reset card styles" aria-label="Reset card styles">${ACTION_ICONS.resetCustomization}</button>
+                        <span class="planner-kanban__card-actions-tray">
+                            <button type="button" class="planner-kanban__card-density" data-planner-kanban-density title="${escapeAttr(densityTitle)}" aria-label="${escapeAttr(densityTitle)}" aria-pressed="${collapsed ? 'true' : 'false'}">${densityIcon}</button>
+                            <button type="button" class="planner-kanban__card-emphasis${urgentActive}" data-planner-kanban-emphasis="urgent" title="Mark urgent" aria-label="Mark urgent" aria-pressed="${emphasis === 'urgent' ? 'true' : 'false'}">${KANBAN_URGENT_ICON}</button>
+                            <button type="button" class="planner-kanban__card-emphasis${mutedActive}" data-planner-kanban-emphasis="muted" title="Mark non-urgent" aria-label="Mark non-urgent" aria-pressed="${emphasis === 'muted' ? 'true' : 'false'}">${KANBAN_MUTED_ICON}</button>
+                            <button type="button" class="planner-kanban__card-color" data-planner-kanban-color title="Card color" aria-label="Card color">${CARD_ICONS.color}</button>
+                            <button type="button" class="planner-kanban__card-reset" data-planner-kanban-reset-card title="Reset card styles" aria-label="Reset card styles">${ACTION_ICONS.resetCustomization}</button>
+                        </span>
+                        <button type="button" class="planner-kanban__card-more" data-planner-kanban-more title="More actions" aria-label="More actions" aria-expanded="false">${CARD_ICONS.more}</button>
                         <span class="planner-kanban__card-grab" title="Drag to move" aria-hidden="true">${CARD_ICONS.drag}</span>
                     </span>`
                     : '';
@@ -1639,7 +1642,24 @@ export function attachPlannerInteractions(root, item, {
         // Category menu closes via document pointerdown — not focusout (relatedTarget is often null).
     });
 
+    const closeOpenKanbanCardActions = (except = null) => {
+        section.querySelectorAll('.planner-kanban__card-actions.is-actions-open').forEach((el) => {
+            if (except && el === except) return;
+            el.classList.remove('is-actions-open');
+            const more = el.querySelector('[data-planner-kanban-more]');
+            if (more) more.setAttribute('aria-expanded', 'false');
+        });
+    };
+
     section.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const open = section.querySelector('.planner-kanban__card-actions.is-actions-open');
+            if (open) {
+                e.preventDefault();
+                closeOpenKanbanCardActions();
+                return;
+            }
+        }
         const nameField = e.target.closest?.('[data-planner-kanban-field="name"]');
         if (!nameField || !section.contains(nameField)) return;
         if (e.key === 'Enter') {
@@ -1647,6 +1667,14 @@ export function attachPlannerInteractions(root, item, {
             nameField.blur();
         }
     });
+
+    document.addEventListener('pointerdown', (e) => {
+        if (!section.isConnected) return;
+        const open = section.querySelector('.planner-kanban__card-actions.is-actions-open');
+        if (!open) return;
+        if (open.contains(e.target)) return;
+        closeOpenKanbanCardActions();
+    }, true);
 
     section.addEventListener('click', (e) => {
         const catMenuBtn = e.target.closest('[data-planner-category-menu]');
@@ -1850,6 +1878,19 @@ export function attachPlannerInteractions(root, item, {
             mutate((it) => {
                 resetKanbanArrangement(it.planner);
             }, { skipRerender: true, refreshGantt: true });
+            return;
+        }
+
+        const kanbanMoreBtn = e.target.closest('[data-planner-kanban-more]');
+        if (kanbanMoreBtn && section.contains(kanbanMoreBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const actions = kanbanMoreBtn.closest('.planner-kanban__card-actions');
+            if (!actions) return;
+            const willOpen = !actions.classList.contains('is-actions-open');
+            closeOpenKanbanCardActions(willOpen ? actions : null);
+            actions.classList.toggle('is-actions-open', willOpen);
+            kanbanMoreBtn.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
             return;
         }
 
@@ -2157,7 +2198,7 @@ export function attachPlannerInteractions(root, item, {
 
     section.addEventListener('pointerdown', (e) => {
         if (e.button != null && e.button !== 0) return;
-        if (e.target.closest?.('[data-planner-kanban-color], [data-planner-kanban-emphasis], [data-planner-kanban-reset-card], [data-planner-kanban-density], [data-planner-kanban-field], textarea, [contenteditable]')) return;
+        if (e.target.closest?.('[data-planner-kanban-color], [data-planner-kanban-emphasis], [data-planner-kanban-reset-card], [data-planner-kanban-density], [data-planner-kanban-more], [data-planner-kanban-field], textarea, [contenteditable]')) return;
         const card = e.target.closest('[data-planner-kanban-card]');
         if (!card || !section.contains(card) || !card.classList.contains('is-editable')) return;
         const row = Number(card.dataset.plannerRow);

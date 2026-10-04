@@ -1196,7 +1196,8 @@ textarea.planner-kanban__card-comment:focus {
     max-height: none;
 }
 
-/* Quick actions above title/content; footer grip stays below. */
+/* Quick actions above title/content; footer grip stays below.
+   Default chrome: more + grab. FC-style backdrop always hugs the visible strip. */
 .planner-kanban__card-actions {
     position: absolute;
     top: 0.12rem;
@@ -1205,6 +1206,7 @@ textarea.planner-kanban__card-comment:focus {
     display: inline-flex;
     align-items: center;
     gap: 0.05rem;
+    border-radius: 4px;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.12s ease;
@@ -1212,15 +1214,46 @@ textarea.planner-kanban__card-comment:focus {
 
 .planner-kanban__card:hover .planner-kanban__card-actions,
 .planner-kanban__card:focus-within .planner-kanban__card-actions,
-.planner-kanban__card.is-kanban-editing .planner-kanban__card-actions {
+.planner-kanban__card.is-kanban-editing .planner-kanban__card-actions,
+.planner-kanban__card-actions.is-actions-open {
     opacity: 0.95;
     pointer-events: auto;
+}
+
+.planner-kanban__card-actions-tray {
+    display: none;
+    align-items: center;
+    gap: 0.05rem;
+}
+
+.planner-kanban__card-actions.is-actions-open .planner-kanban__card-actions-tray {
+    display: inline-flex;
+}
+
+.planner-kanban__card-actions::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    bottom: -1px;
+    left: -1px;
+    z-index: -1;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--bg-card) 96%, #0a0a0c);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-color) 80%, transparent);
+    pointer-events: none;
+}
+
+.planner-kanban__card.has-custom-bg .planner-kanban__card-actions::before {
+    background: var(--card-action-bg);
+    box-shadow: 0 0 0 1px var(--card-border-subtle);
 }
 
 .planner-kanban__card-color,
 .planner-kanban__card-emphasis,
 .planner-kanban__card-reset,
 .planner-kanban__card-density,
+.planner-kanban__card-more,
 .planner-kanban__card-grab {
     display: inline-flex;
     align-items: center;
@@ -1237,7 +1270,8 @@ textarea.planner-kanban__card-comment:focus {
 .planner-kanban__card-color,
 .planner-kanban__card-emphasis,
 .planner-kanban__card-reset,
-.planner-kanban__card-density {
+.planner-kanban__card-density,
+.planner-kanban__card-more {
     cursor: pointer;
 }
 
@@ -1249,6 +1283,7 @@ textarea.planner-kanban__card-comment:focus {
 .planner-kanban__card-emphasis:hover,
 .planner-kanban__card-reset:hover,
 .planner-kanban__card-density:hover,
+.planner-kanban__card-more:hover,
 .planner-kanban__card-grab:hover {
     color: var(--accent, var(--text-color));
     background: color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 14%, transparent);
