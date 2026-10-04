@@ -684,13 +684,15 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
                         <span class="planner-kanban__card-grab" title="Drag to move" aria-hidden="true">${CARD_ICONS.drag}</span>
                     </span>`
                     : '';
-                return `<article class="planner-kanban__card${card.cardColor ? ' has-color' : ''}${dateClass}${editClass}" data-planner-kanban-card data-planner-row="${card.row}"${cardSurfaceStyle(card.cardColor)}>
-                    ${dateHtml}
+                const bodyInner = `${dateHtml}
                     <div class="planner-kanban__card-top">
                         <span class="planner-kanban__card-name">${escapeHTML(card.name)}</span>
                         ${actionsHtml}
                     </div>
-                    ${commentHtml}
+                    ${commentHtml}`;
+                return `<article class="planner-kanban__card${card.cardColor ? ' has-color' : ''}${dateClass}${editClass}" data-planner-kanban-card data-planner-row="${card.row}"${cardSurfaceStyle(card.cardColor)}>
+                    <div class="planner-kanban__card-slot">${bodyInner}</div>
+                    <div class="planner-kanban__card-flyout" aria-hidden="true">${bodyInner}</div>
                 </article>`;
             }).join('')
             : '<div class="planner-kanban__empty-col" aria-hidden="true"></div>';
