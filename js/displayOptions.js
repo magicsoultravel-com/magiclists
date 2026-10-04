@@ -42,6 +42,11 @@ import {
     PLANNER_TODAY_LINE_STYLES,
     PLANNER_TODAY_LINE_THICKNESSES
 } from './planner.js';
+import {
+    normalizeKanbanFlavour,
+    KANBAN_DEFAULT_FLAVOUR,
+    KANBAN_FLAVOURS
+} from './plannerKanban.js';
 
 const STORAGE_KEY = 'matrix_display_options';
 
@@ -64,7 +69,8 @@ const DEFAULTS = {
     desktopDockOpacity: 1,
     popoutMode: 'pip',
     fileCabinetBg: 'smooth',
-    plannerTodayLine: { ...PLANNER_DEFAULT_TODAY_LINE }
+    plannerTodayLine: { ...PLANNER_DEFAULT_TODAY_LINE },
+    plannerKanbanFlavour: KANBAN_DEFAULT_FLAVOUR
 };
 
 export function readDisplayOptions() {
@@ -90,10 +96,16 @@ export function readDisplayOptions() {
             desktopDockOpacity: Math.min(1, Math.max(0.1, Number(raw.desktopDockOpacity) || 1)),
             popoutMode: raw.popoutMode === 'window' ? 'window' : 'pip',
             fileCabinetBg: FILE_CABINET_BG_OPTIONS.includes(raw.fileCabinetBg) ? raw.fileCabinetBg : 'smooth',
-            plannerTodayLine: normalizeTodayLine(raw.plannerTodayLine)
+            plannerTodayLine: normalizeTodayLine(raw.plannerTodayLine),
+            plannerKanbanFlavour: normalizeKanbanFlavour(raw.plannerKanbanFlavour)
         };
     } catch {
-        return { ...DEFAULTS, noteFontId: readNoteFont(), plannerTodayLine: { ...PLANNER_DEFAULT_TODAY_LINE } };
+        return {
+            ...DEFAULTS,
+            noteFontId: readNoteFont(),
+            plannerTodayLine: { ...PLANNER_DEFAULT_TODAY_LINE },
+            plannerKanbanFlavour: KANBAN_DEFAULT_FLAVOUR
+        };
     }
 }
 
@@ -149,6 +161,7 @@ function isCustomized(options) {
         || options.popoutMode !== 'pip'
         || options.fileCabinetBg !== 'smooth'
         || todayCustom
+        || normalizeKanbanFlavour(options.plannerKanbanFlavour) !== KANBAN_DEFAULT_FLAVOUR
         || isNoteFontCustomized(options.noteFontId)
         || isAppThemeCustomized()
         || NoteFontScale.isCustomized()
@@ -241,6 +254,11 @@ export const DisplayOptions = {
         if (partial.plannerTodayLine != null) {
             import('./plannerUi.js').then(({ refreshAllPlannerCharts }) => {
                 refreshAllPlannerCharts(this.getItems?.() || []);
+            }).catch(() => {});
+        }
+        if (partial.plannerKanbanFlavour != null) {
+            import('./plannerUi.js').then(({ refreshAllPlannerKanbans }) => {
+                refreshAllPlannerKanbans(this.getItems?.() || []);
             }).catch(() => {});
         }
     },
@@ -444,6 +462,11 @@ export const DisplayOptions = {
         this.setSelectSelection(root, '#display-opt-planner-today-style', today.style);
         this.setSelectSelection(root, '#display-opt-planner-today-thickness', String(today.thickness));
 
+        const flavour = normalizeKanbanFlavour(this.options.plannerKanbanFlavour);
+        root.querySelectorAll('input[name="display-opt-kanban-flavour"]').forEach((input) => {
+            input.checked = input.value === flavour;
+        });
+
         /* File cabinet drawer background — locked to None under fancy themes */
         const fancySkin = document.documentElement.dataset.themeSkin === '1';
         const fcBgSelect = root.querySelector('#display-opt-fc-bg');
@@ -638,6 +661,23 @@ export const DisplayOptions = {
         `;
     },
 
+    plannerKanbanFlavourRowHtml(flavourId) {
+        const active = normalizeKanbanFlavour(flavourId);
+        const options = [
+            { id: 'release', label: 'Release', titles: KANBAN_FLAVOURS.release.join(' · ') },
+            { id: 'workflow', label: 'Workflow', titles: KANBAN_FLAVOURS.workflow.join(' · ') }
+        ];
+        const rows = options.map((o) => {
+            const checked = o.id === active ? ' checked' : '';
+            return `<label class="display-options-row" for="display-opt-kanban-${o.id}">
+                <input type="radio" class="display-options-radio" id="display-opt-kanban-${o.id}" name="display-opt-kanban-flavour" value="${o.id}"${checked}>
+                <span class="display-options-row-label">${escapeHtml(o.label)}</span>
+                <span class="display-options-row-hint">${escapeHtml(o.titles)}</span>
+            </label>`;
+        }).join('');
+        return `<div class="display-options-check-row" role="radiogroup" aria-label="Kanban column titles">${rows}</div>`;
+    },
+
     bindStepper(root, { idPrefix, onOut, onIn, disabled = false }) {
         if (disabled) return;
         root.querySelector(`#${idPrefix}-out`)?.addEventListener('click', (e) => {
@@ -727,6 +767,8 @@ export const DisplayOptions = {
                             <h3 class="display-options-heading">Planner</h3>
                             <p class="display-options-subheading">Today line (chart)</p>
                             ${this.plannerTodayLineRowHtml(opts.plannerTodayLine)}
+                            <p class="display-options-subheading">Kanban columns</p>
+                            ${this.plannerKanbanFlavourRowHtml(opts.plannerKanbanFlavour)}
                         </div>
                         <div class="display-options-section display-options-section--popout">
                             <h3 class="display-options-heading">Pop-out windows</h3>
@@ -862,6 +904,14 @@ export const DisplayOptions = {
                     const swatch = btn.querySelector('.display-options-swatch');
                     if (swatch) swatch.style.background = hex;
                 }
+            });
+        });
+
+        root.querySelectorAll('input[name="display-opt-kanban-flavour"]').forEach((input) => {
+            input.addEventListener('change', (e) => {
+                e.stopPropagation();
+                if (!input.checked) return;
+                this.setOptions({ plannerKanbanFlavour: normalizeKanbanFlavour(input.value) });
             });
         });
 

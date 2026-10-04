@@ -1,4 +1,4 @@
-/** @module {"owns":"magicPlanner model — schema-bound schedule sheet + zoom prefs", "related":["plannerUi.js","plannerGantt.js","sheet.js","noteModel.js"]} */
+/** @module {"owns":"magicPlanner model — schema-bound schedule sheet + zoom prefs", "related":["plannerUi.js","plannerGantt.js","plannerKanban.js","sheet.js","noteModel.js"]} */
 import {
     cellKey,
     getCellValue,
@@ -14,6 +14,13 @@ import {
     SHEET_STRUCT_COL_WIDTH_PX
 } from './sheet.js';
 import { parsePlannerDateTime } from './plannerGantt.js';
+import {
+    normalizeKanbanSort,
+    normalizeKanbanStageByRow,
+    normalizeKanbanOrderByStage,
+    remapKanbanAfterRowMove,
+    pruneKanbanAfterRowRemove
+} from './plannerKanban.js';
 
 export const PLANNER_VERSION = 2;
 export const PLANNER_DEFAULT_ROWS = 3;
@@ -129,6 +136,10 @@ export function createEmptyPlanner(opts = {}) {
         zoom: normalizePlannerZoom(opts.zoom),
         chartCollapsed: false,
         tableCollapsed: false,
+        kanbanCollapsed: false,
+        kanbanSort: 'row',
+        kanbanStageByRow: {},
+        kanbanOrderByStage: {},
         labelWidth: PLANNER_DEFAULT_LABEL_WIDTH,
         categoryColors: {},
         sheet: createPlannerSheet()
@@ -257,11 +268,23 @@ export function normalizePlanner(raw) {
         else sheet.cells[key] = { v: String(v) };
     }
 
+    const stageByRow = normalizeKanbanStageByRow(raw.kanbanStageByRow, sheet.rows);
+    // Drop stages for rows with no name (those cards are hidden on the board).
+    const nameCol = PLANNER_COLUMNS.findIndex((c) => c.key === 'name');
+    for (const key of Object.keys(stageByRow)) {
+        const r = Number(key);
+        if (!getRawCell(sheet.cells, r, nameCol)) delete stageByRow[key];
+    }
+
     return {
         version: PLANNER_VERSION,
         zoom: normalizePlannerZoom(raw.zoom),
         chartCollapsed: !!raw.chartCollapsed,
         tableCollapsed: !!raw.tableCollapsed,
+        kanbanCollapsed: !!raw.kanbanCollapsed,
+        kanbanSort: normalizeKanbanSort(raw.kanbanSort),
+        kanbanStageByRow: stageByRow,
+        kanbanOrderByStage: normalizeKanbanOrderByStage(raw.kanbanOrderByStage, sheet.rows),
         labelWidth: normalizePlannerLabelWidth(raw.labelWidth),
         categoryColors: normalizeCategoryColors(raw.categoryColors),
         sheet
@@ -322,6 +345,7 @@ export function removePlannerRow(planner) {
             .join(', ');
         setCellValue(sheet, r, predCol, next);
     }
+    pruneKanbanAfterRowRemove(planner, last);
     sheet.rows -= 1;
     return true;
 }
@@ -368,6 +392,7 @@ export function movePlannerRow(planner, fromIndex, toIndex) {
         }
     }
     sheet.cells = nextCells;
+    remapKanbanAfterRowMove(planner, order);
     return true;
 }
 

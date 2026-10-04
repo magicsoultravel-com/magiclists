@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-09-29T21:01:18.557Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-04T12:20:56.064Z
 
 ## CSS load order
 
@@ -39,10 +39,10 @@ alwaysApply: true
 | css/tv.css | sidebar TV player, now playing, popover browser | sidebarTv.js, tvPlayer.js, tvPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell-sidebar.css | 26 |
 | css/weather.css | sidebar weather glance + expanded forecast panel | sidebarWeather.js, weatherApi.js | — | 27 |
 | css/sheet.css | sheet-grid note template body and table chrome | sheet.js, noteSurface.js, editor.js | — | 28 |
-| css/planner.css | magicPlanner note subsection — typed schedule sheet and Gantt chart | plannerUi.js, planner.js, plannerGantt.js | — | 29 |
+| css/planner.css | magicPlanner note subsection — typed schedule sheet, Gantt chart, and Kanban | plannerUi.js, planner.js, plannerGantt.js, plannerKanban.js | — | 29 |
 | css/desktops.css | desktop switcher dock styling, dock pin lock | desktopDockComponent.js | — | 30 |
 | css/popout.css | (unknown) | — | — | 31 |
-| css/media-library.css | media staging dialogue, gallery floating panel, media FAB, scribble FAB, note attachment section, media lightbox, site-wide quick scribble | mediaLibraryOverlay.js, mediaStagingDialog.js, mediaPasteCatcher.js, noteAttachmentsUi.js, quickScribble.js | — | 32 |
+| css/media-library.css | media staging dialogue, gallery floating panel, scribble FAB, note attachment section, media lightbox, site-wide quick scribble | mediaLibraryOverlay.js, mediaStagingDialog.js, mediaPasteCatcher.js, noteAttachmentsUi.js, quickScribble.js, viewportCapture.js | — | 32 |
 | css/categories-panel.css | categories manager floating panel with adaptive square category tiles | categoriesOverlay.js | — | 33 |
 
 ## JS domains (@module)
@@ -78,7 +78,7 @@ alwaysApply: true
 | js/itemMerge.js | shared merge helper for undo/redo restore (preserves note metadata) | undo.js, app.js | — | — |
 | js/lassoGeometry.js | lasso geometry utilities - ray casting, bounding boxes | drawingBoard.js | — | — |
 | js/layoutStorage.js | board layout persistence, grid/freeform positions, storage migrations | dragdrop.js, ui.js, fileCabinet.js, board/gridEngine.js, sync.js | — | — |
-| js/magicFocus.js | magic focus workspace mode — split panes, setup DnD, planner block hosting | app.js, noteQuickActions.js, drawingBoard.js, plannerUi.js, noteSurface.js | — | — |
+| js/magicFocus.js | magic focus workspace mode — split panes, setup DnD, planner block hosting (table/chart/kanban) | app.js, noteQuickActions.js, drawingBoard.js, plannerUi.js, noteSurface.js | — | — |
 | js/mediaAttachments.js | note↔media attachment helpers | mediaLibrary.js, noteSurface.js, mediaLibraryOverlay.js | — | — |
 | js/mediaBackup.js | media library backup export/import (meta JSON, embeds, ZIP) | mediaLibrary.js, backup.js | — | — |
 | js/mediaLibrary.js | media library CRUD, thumbs, size limits | storage/indexedDbMediaStore.js, mediaMetadata.js, mediaBackup.js | — | — |
@@ -102,13 +102,14 @@ alwaysApply: true
 | js/noteSurfaceEditing.js | note inline editing, emoji, text operations, zoom controls | noteSurface.js, noteSurfaceHtml.js, richText.js, emojiPicker.js, domEscape.js | — | — |
 | js/noteSurfaceHtml.js | note HTML building and rendering | noteSurface.js, noteModel.js, sheet.js, checklistSteps.js | — | — |
 | js/noteSurfaceMutations.js | note item mutation functions | noteSurface.js, noteSurfaceEditing.js, noteSurfaceChecklist.js, noteModel.js, sheet.js, undo.js | item:mutation_requested | — |
-| js/planner.js | magicPlanner model — schema-bound schedule sheet + zoom prefs | plannerUi.js, plannerGantt.js, sheet.js, noteModel.js | — | — |
+| js/planner.js | magicPlanner model — schema-bound schedule sheet + zoom prefs | plannerUi.js, plannerGantt.js, plannerKanban.js, sheet.js, noteModel.js | — | — |
 | js/plannerGantt.js | magicPlanner Gantt layout math (display-only) | planner.js, plannerUi.js | — | — |
-| js/plannerUi.js | magicPlanner note subsection UI — typed sheet + Gantt | planner.js, plannerGantt.js, noteSurfaceMutations.js, noteQuickActions.js | — | — |
+| js/plannerKanban.js | magicPlanner Kanban layout — stages, sort, column flavours (display + drag meta) | planner.js, plannerUi.js, displayOptions.js | — | — |
+| js/plannerUi.js | magicPlanner note subsection UI — typed sheet + Gantt + Kanban | planner.js, plannerGantt.js, plannerKanban.js, noteSurfaceMutations.js, noteQuickActions.js | — | — |
 | js/popoutLockRefresh.js | popout lock board refresh filter | app.js, notePopoutBridge.js | — | — |
 | js/popoutNote.js | standalone note popout window boot, edit, flush, undo | notePopoutBridge.js, noteSurface.js, api.js, undo.js | — | — |
 | js/popoutWindows.js | shared popout window helpers (PiP, browser popup, styles) | notePopoutBridge.js, sidebarModulePopout.js | — | — |
-| js/quickScribble.js | site-wide freeze scribble overlay — draw / ink-visible / off | scribbleInk.js, noteAttachmentsUi.js, canvasBrushes.js, app.js | — | — |
+| js/quickScribble.js | site-wide freeze scribble overlay — draw / ink-visible / off | scribbleInk.js, noteAttachmentsUi.js, canvasBrushes.js, app.js, viewportCapture.js | — | — |
 | js/richText.js | rich text sanitize, linkify, strip markup | noteSurface.js, noteModel.js | — | — |
 | js/scheduledBackup.js | scheduled JSON/TXT/board/canvas/media auto-export timer and popover | backup.js, mediaBackup.js, app.js, noteQuickActions.js | — | — |
 | js/scheduledBackupConfig.js | pure scheduled-backup config shape + old-session migration | scheduledBackup.js, backupClaim.js, backupDelta.js | — | — |
@@ -127,6 +128,7 @@ alwaysApply: true
 | js/sidebarWeather.js | sidebar weather glance and forecast panel | weatherApi.js, weatherProviders/registry.js, sidebarModules.js | — | — |
 | js/sync.js | cross-tab state sync — BroadcastChannel primary, storage-event insurance | app.js, api.js, layoutStorage.js, displayOptions.js, appTheme.js, popoutNote.js | — | — |
 | js/toolPanelPopout.js | tool panel popout open/focus/pop-in, DOM portal | toolPanelChrome.js, toolsManager.js, popoutWindows.js, appDocuments.js | — | — |
+| js/viewportCapture.js | best-effort viewport PNG capture for scribble copy | quickScribble.js, clipboard.js | — | — |
 
 ## Tools (@tool)
 

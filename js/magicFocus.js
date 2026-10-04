@@ -1,4 +1,4 @@
-/** @module {"owns":"magic focus workspace mode — split panes, setup DnD, planner block hosting", "related":["app.js","noteQuickActions.js","drawingBoard.js","plannerUi.js","noteSurface.js"]} */
+/** @module {"owns":"magic focus workspace mode — split panes, setup DnD, planner block hosting (table/chart/kanban)", "related":["app.js","noteQuickActions.js","drawingBoard.js","plannerUi.js","noteSurface.js"]} */
 
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { buildNoteQuickActionsHtml, buildExpandedChecklistHtml, buildNoteTitleHtml, buildNoteContentFieldHtml } from './noteSurfaceHtml.js';
@@ -16,6 +16,7 @@ const BLOCKS = [
     { id: 'checklist', label: 'Checklist' },
     { id: 'table', label: 'Table' },
     { id: 'chart', label: 'Chart' },
+    { id: 'kanban', label: 'Kanban' },
     { id: 'canvas', label: 'Canvas' }
 ];
 
@@ -34,6 +35,7 @@ const BLOCK_ICONS = {
     checklist: '<svg viewBox="0 0 16 16" width="16" height="16" focusable="false"><rect x="2.5" y="3" width="3" height="3" rx="0.5" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M3.2 4.5l.8.8 1.4-1.6M7.5 4.5h6M2.5 8.5h3v3h-3zM7.5 10h6" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     table: '<svg viewBox="0 0 16 16" width="16" height="16" focusable="false"><rect x="2" y="3" width="12" height="10" rx="1" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M2 6h12M2 9.5h12M6 3v10M10 3v10" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>',
     chart: '<svg viewBox="0 0 16 16" width="16" height="16" focusable="false"><path d="M2.5 13V3M2.5 13h11" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><rect x="4.2" y="7" width="2" height="4.5" rx="0.3" fill="none" stroke="currentColor" stroke-width="1.1"/><rect x="7.2" y="4.5" width="2" height="7" rx="0.3" fill="none" stroke="currentColor" stroke-width="1.1"/><rect x="10.2" y="6" width="2" height="5.5" rx="0.3" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>',
+    kanban: '<svg viewBox="0 0 16 16" width="16" height="16" focusable="false"><rect x="2" y="2.5" width="3.2" height="11" rx="0.6" fill="none" stroke="currentColor" stroke-width="1.15"/><rect x="6.4" y="2.5" width="3.2" height="11" rx="0.6" fill="none" stroke="currentColor" stroke-width="1.15"/><rect x="10.8" y="2.5" width="3.2" height="11" rx="0.6" fill="none" stroke="currentColor" stroke-width="1.15"/><path d="M2.7 5.2h1.8M6.1 5.2h1.8M11.5 5.2h1.8M2.7 8h1.8M6.1 8h1.8" fill="none" stroke="currentColor" stroke-width="1.05" stroke-linecap="round"/></svg>',
     canvas: '<svg viewBox="0 0 16 16" width="16" height="16" focusable="false"><path d="M10.5 2.5 13.5 5.5 6 13H3v-3L10.5 2.5z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M9 4l3 3" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>'
 };
 
@@ -275,6 +277,16 @@ async function buildChartPaneHtml(item) {
     const planner = { ...item.planner, chartCollapsed: false };
     const { html } = renderPlannerGanttHtml(planner, { canEdit: true });
     return `<div data-note-planner data-focus-chart-only="1">${html}</div>`;
+}
+
+async function buildKanbanPaneHtml(item) {
+    const { normalizePlanner } = await import('./planner.js');
+    const { renderPlannerKanbanHtml } = await import('./plannerUi.js');
+    if (!item.planner) return '<p class="magic-focus__empty">No planner kanban</p>';
+    item.planner = normalizePlanner(item.planner) || item.planner;
+    const planner = { ...item.planner, kanbanCollapsed: false };
+    const html = renderPlannerKanbanHtml(planner, { canEdit: true });
+    return `<div data-note-planner data-focus-kanban-only="1">${html}</div>`;
 }
 
 function presetGlyphHtml(presetId) {
@@ -1083,6 +1095,7 @@ export const MagicFocus = {
         }
         if (block === 'table') return buildTablePaneHtml(item);
         if (block === 'chart') return buildChartPaneHtml(item);
+        if (block === 'kanban') return buildKanbanPaneHtml(item);
         if (block === 'canvas') {
             if (!item.canvas) {
                 NoteSurface.mutateItem(item, (it) => {
@@ -1171,7 +1184,7 @@ export const MagicFocus = {
             });
         } catch { /* ignore */ }
 
-        // Each table/chart block is its own [data-note-planner] — bind every one.
+        // Each table/chart/kanban block is its own [data-note-planner] — bind every one.
         import('./plannerUi.js').then(({ attachPlannerInteractions }) => {
             body.querySelectorAll('[data-note-planner]').forEach((sec) => {
                 attachPlannerInteractions(sec, item, {
@@ -1383,7 +1396,7 @@ export const MagicFocus = {
      * Refresh only the planner sections of Focus panes.
      * Previously this re-filled whole panes, which destroyed sibling text /
      * checklist DOM (and any caret in it) whenever a table/chart shared a zone.
-     * Now table markup is rebuilt in place and gantt/summary are refreshed via
+     * Now table markup is rebuilt in place and gantt/kanban/summary are refreshed via
      * plannerUi's in-place refresh, so text/checklist are never clobbered.
      * @param {object} item
      */
@@ -1400,12 +1413,13 @@ export const MagicFocus = {
         for (let i = 0; i < count; i += 1) {
             const zid = `z${i}`;
             const blocks = asBlockList(focus.zones[zid]);
-            if (!blocks.includes('table') && !blocks.includes('chart')) continue;
+            if (!blocks.includes('table') && !blocks.includes('chart') && !blocks.includes('kanban')) continue;
             const body = this.bodyEl.querySelector(`[data-focus-pane-body="${zid}"]`);
             if (!body) continue;
             const tableSec = body.querySelector('[data-note-planner][data-focus-table-only]');
             const chartSec = body.querySelector('[data-note-planner][data-focus-chart-only]');
-            if (!tableSec && !chartSec) {
+            const kanbanSec = body.querySelector('[data-note-planner][data-focus-kanban-only]');
+            if (!tableSec && !chartSec && !kanbanSec) {
                 // Planner section not mounted yet — render the pane from scratch.
                 await this._fillPane(body, live, blocks, zid);
                 continue;
@@ -1414,7 +1428,7 @@ export const MagicFocus = {
                 tableSec.innerHTML = renderPlannerTableHtml(live.planner, { canEdit: true });
             }
         }
-        // Gantt + summary refresh, in place across every host (board/modal/focus).
+        // Gantt + kanban + summary refresh, in place across every host (board/modal/focus).
         refreshPlannerDerivedViews(live);
     }
 };

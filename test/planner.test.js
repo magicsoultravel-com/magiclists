@@ -8,6 +8,7 @@ import {
     plannerHasContent,
     derivePlannerTasks,
     addPlannerRow,
+    removePlannerRow,
     movePlannerRow,
     parsePredecessorIds,
     getPlannerField,
@@ -23,6 +24,15 @@ import {
     PLANNER_VERSION
 } from '../js/planner.js';
 import { layoutPlannerGantt, parsePlannerDateTime, zoomPxPerDay, buildGanttAxis, padGanttRange, isoWeekNumber } from '../js/plannerGantt.js';
+import {
+    derivePlannerKanbanCards,
+    layoutPlannerKanban,
+    moveKanbanCard,
+    normalizeKanbanFlavour,
+    kanbanLabelsForFlavour,
+    KANBAN_DEFAULT_FLAVOUR,
+    KANBAN_FLAVOURS
+} from '../js/plannerKanban.js';
 import { SHARED_FIELDS } from '../js/noteFieldOwnership.js';
 import { reconcileItemPlanner } from '../js/api.js';
 import { buildNotePlannerSectionHtml } from '../js/plannerUi.js';
@@ -38,6 +48,10 @@ describe('planner model', () => {
         assert.equal(planner.sheet.cols, PLANNER_COL_COUNT);
         assert.equal(planner.sheet.rows, 3);
         assert.deepEqual(planner.categoryColors, {});
+        assert.equal(planner.kanbanCollapsed, false);
+        assert.equal(planner.kanbanSort, 'row');
+        assert.deepEqual(planner.kanbanStageByRow, {});
+        assert.deepEqual(planner.kanbanOrderByStage, {});
         assert.equal(getPlannerField(planner.sheet, 0, 'name'), '');
         assert.equal(plannerHasContent(planner), false);
     });
@@ -176,11 +190,14 @@ describe('planner model', () => {
         assert.ok(html.includes('data-planner-summary'));
         assert.ok(html.includes('data-planner-table-toggle'));
         assert.ok(html.includes('data-planner-chart-toggle'));
+        assert.ok(html.includes('data-planner-kanban-toggle'));
         assert.ok(html.includes('Table</button>') || html.includes('>Table'));
         assert.ok(html.includes('Chart</button>') || html.includes('>Chart'));
+        assert.ok(html.includes('Kanban</button>') || html.includes('>Kanban'));
         assert.ok(html.includes('data-planner-rail-resize'));
         assert.ok(!html.includes('data-planner-today-settings-toggle'));
         assert.ok(html.includes('planner-gantt__today') || html.includes('data-planner-gantt'));
+        assert.ok(html.includes('data-planner-kanban'));
     });
 
     it('summarizes earliest start, latest stop, calendar and working days', () => {
@@ -338,6 +355,88 @@ describe('planner Gantt layout', () => {
         assert.ok(testDaysBetween(day.rangeStart, day.rangeEnd) >= 30);
         const week = padGanttRange(min, max, 'week');
         assert.ok(testDaysBetween(week.rangeStart, week.rangeEnd) >= 56);
+    });
+});
+
+describe('planner Kanban', () => {
+    it('normalizes flavour labels and defaults', () => {
+        assert.equal(normalizeKanbanFlavour('workflow'), 'workflow');
+        assert.equal(normalizeKanbanFlavour('nope'), KANBAN_DEFAULT_FLAVOUR);
+        assert.deepEqual(kanbanLabelsForFlavour('release'), [...KANBAN_FLAVOURS.release]);
+        assert.deepEqual(kanbanLabelsForFlavour('workflow'), [...KANBAN_FLAVOURS.workflow]);
+        const opts = readDisplayOptions();
+        assert.ok(['release', 'workflow'].includes(opts.plannerKanbanFlavour));
+    });
+
+    it('hides empty-name rows and defaults missing stage to column 0', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'Alpha');
+        setPlannerField(planner.sheet, 1, 'start', '2026-03-01'); // no name → hidden
+        setPlannerField(planner.sheet, 2, 'name', 'Beta');
+        planner.kanbanStageByRow = { '2': 3 };
+        const cards = derivePlannerKanbanCards(planner);
+        assert.equal(cards.length, 2);
+        assert.deepEqual(cards.map((c) => c.name), ['Alpha', 'Beta']);
+        const layout = layoutPlannerKanban(planner, { flavour: 'release' });
+        assert.equal(layout.columns[0].cards.map((c) => c.name).join(','), 'Alpha');
+        assert.equal(layout.columns[3].cards.map((c) => c.name).join(','), 'Beta');
+        assert.equal(layout.labels[0], 'Preparation');
+    });
+
+    it('sorts by date and manual order', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'Late');
+        setPlannerField(planner.sheet, 0, 'start', '2026-03-10');
+        setPlannerField(planner.sheet, 1, 'name', 'Early');
+        setPlannerField(planner.sheet, 1, 'start', '2026-03-01');
+        planner.kanbanStageByRow = { '0': 1, '1': 1 };
+
+        planner.kanbanSort = 'date';
+        let layout = layoutPlannerKanban(planner, { flavour: 'workflow' });
+        assert.deepEqual(layout.columns[1].cards.map((c) => c.name), ['Early', 'Late']);
+        assert.equal(layout.labels[1], 'Planning');
+
+        planner.kanbanSort = 'manual';
+        planner.kanbanOrderByStage = { '1': [0, 1] };
+        layout = layoutPlannerKanban(planner, { flavour: 'workflow' });
+        assert.deepEqual(layout.columns[1].cards.map((c) => c.name), ['Late', 'Early']);
+    });
+
+    it('moveKanbanCard updates stage and remaps on row move/remove', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'A');
+        setPlannerField(planner.sheet, 1, 'name', 'B');
+        setPlannerField(planner.sheet, 2, 'name', 'C');
+        moveKanbanCard(planner, 0, 2);
+        moveKanbanCard(planner, 1, 4);
+        assert.equal(planner.kanbanStageByRow['0'], 2);
+        assert.equal(planner.kanbanStageByRow['1'], 4);
+
+        movePlannerRow(planner, 0, 2);
+        // old 0→2, old 1→0, old 2→1
+        assert.equal(planner.kanbanStageByRow['2'], 2);
+        assert.equal(planner.kanbanStageByRow['0'], 4);
+
+        addPlannerRow(planner);
+        setPlannerField(planner.sheet, 3, 'name', 'D');
+        moveKanbanCard(planner, 3, 1);
+        assert.equal(planner.kanbanStageByRow['3'], 1);
+        removePlannerRow(planner);
+        assert.equal(planner.kanbanStageByRow['3'], undefined);
+    });
+
+    it('normalizePlanner keeps kanban meta and drops orphan stages', () => {
+        const raw = createEmptyPlanner();
+        setPlannerField(raw.sheet, 0, 'name', 'Keep');
+        raw.kanbanCollapsed = true;
+        raw.kanbanSort = 'manual';
+        raw.kanbanStageByRow = { '0': 2, '9': 1, '1': 4 };
+        raw.kanbanOrderByStage = { '2': [0, 9] };
+        const planner = normalizePlanner(raw);
+        assert.equal(planner.kanbanCollapsed, true);
+        assert.equal(planner.kanbanSort, 'manual');
+        assert.deepEqual(planner.kanbanStageByRow, { '0': 2 });
+        assert.deepEqual(planner.kanbanOrderByStage, { '2': [0] });
     });
 });
 

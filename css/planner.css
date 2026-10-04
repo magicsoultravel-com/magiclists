@@ -1,4 +1,4 @@
-/** @css {"owns":"magicPlanner note subsection — typed schedule sheet and Gantt chart", "js":["plannerUi.js","planner.js","plannerGantt.js"]} */
+/** @css {"owns":"magicPlanner note subsection — typed schedule sheet, Gantt chart, and Kanban", "js":["plannerUi.js","planner.js","plannerGantt.js","plannerKanban.js"]} */
 
 /*
   Background map (Table vs Chart)
@@ -615,4 +615,145 @@
 
 .has-custom-bg .planner-gantt__row-label {
     fill: var(--card-fg, currentColor);
+}
+
+/* —— Kanban —— */
+.planner-kanban {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.planner-kanban__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+}
+
+.planner-kanban__sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.15rem;
+}
+
+.planner-kanban__sort.is-collapsed {
+    display: none;
+}
+
+.planner-kanban-sort-btn.is-active {
+    font-weight: 700;
+}
+
+.planner-kanban__board {
+    display: flex;
+    gap: 0.35rem;
+    overflow-x: auto;
+    min-height: 4.5rem;
+    padding-bottom: 0.15rem;
+}
+
+.planner-kanban__board.is-collapsed {
+    display: none;
+}
+
+.planner-kanban__column {
+    flex: 1 1 0;
+    min-width: 5.5rem;
+    max-width: 9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    border: 1px solid color-mix(in srgb, var(--border-color, #ccc) 70%, transparent);
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--surface-2, var(--bg-color, #fff)) 88%, transparent);
+    min-height: 4rem;
+}
+
+.planner-kanban__column-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.25rem;
+    padding: 0.28rem 0.35rem 0.15rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color, #ccc) 55%, transparent);
+}
+
+.planner-kanban__column-title {
+    font-size: calc(0.55rem * var(--note-font-scale, 1));
+    font-weight: 650;
+    color: var(--text-muted);
+    line-height: 1.2;
+}
+
+.planner-kanban__column-count {
+    font-size: calc(0.5rem * var(--note-font-scale, 1));
+    color: var(--text-muted);
+    opacity: 0.85;
+}
+
+.planner-kanban__column-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    flex: 1;
+    min-height: 2.5rem;
+}
+
+.planner-kanban__column-body.is-drag-over {
+    background: color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 10%, transparent);
+}
+
+.planner-kanban__card {
+    padding: 0.3rem 0.35rem;
+    border-radius: 3px;
+    border: 1px solid color-mix(in srgb, var(--border-color, #ccc) 65%, transparent);
+    background: var(--surface, var(--bg-color, #fff));
+    font-size: calc(0.62rem * var(--note-font-scale, 1));
+    line-height: 1.25;
+    cursor: grab;
+    user-select: none;
+}
+
+.planner-kanban__card[draggable="true"]:active {
+    cursor: grabbing;
+}
+
+.planner-kanban__card.is-dragging {
+    opacity: 0.45;
+}
+
+.planner-kanban__card.is-drag-over {
+    box-shadow: inset 0 0 0 1px var(--accent-color, var(--accent, #6366f1));
+}
+
+.planner-kanban__card-name {
+    display: block;
+    word-break: break-word;
+}
+
+.planner-kanban__empty-col {
+    min-height: 1.25rem;
+}
+
+.has-custom-bg .planner-kanban__column {
+    border-color: var(--card-border-subtle);
+    background: color-mix(in srgb, var(--card-border-subtle) 18%, transparent);
+}
+
+.has-custom-bg .planner-kanban__column-head {
+    border-bottom-color: var(--card-border-subtle);
+}
+
+.has-custom-bg .planner-kanban__column-title,
+.has-custom-bg .planner-kanban__column-count {
+    color: var(--card-muted);
+}
+
+.has-custom-bg .planner-kanban__card {
+    border-color: var(--card-border-subtle);
+    background: color-mix(in srgb, var(--card-border-subtle) 12%, transparent);
+    color: var(--card-fg, currentColor);
 }

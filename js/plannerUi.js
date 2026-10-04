@@ -1,4 +1,4 @@
-/** @module {"owns":"magicPlanner note subsection UI — typed sheet + Gantt", "related":["planner.js","plannerGantt.js","noteSurfaceMutations.js","noteQuickActions.js"]} */
+/** @module {"owns":"magicPlanner note subsection UI — typed sheet + Gantt + Kanban", "related":["planner.js","plannerGantt.js","plannerKanban.js","noteSurfaceMutations.js","noteQuickActions.js"]} */
 import { escapeHTML, escapeAttr } from './domEscape.js';
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { parseStoredDateTime, combineDateTime } from './noteModel.js';
@@ -32,9 +32,22 @@ import {
     plannerHasContent
 } from './planner.js';
 import { layoutPlannerGantt, parsePlannerDateTime } from './plannerGantt.js';
+import {
+    KANBAN_SORT_MODES,
+    layoutPlannerKanban,
+    moveKanbanCard,
+    normalizeKanbanFlavour,
+    normalizeKanbanSort
+} from './plannerKanban.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor } from './colorPicker.js';
 import { refreshNoteCanvasPreview } from './noteCanvasRenderer.js';
 import { readDisplayOptions } from './displayOptions.js';
+
+const KANBAN_SORT_LABELS = Object.freeze({
+    row: 'Row',
+    date: 'Date',
+    manual: 'Manual'
+});
 
 function refreshItemNoteCanvas(item) {
     if (!item?.id || !item?.canvas) return;
@@ -163,6 +176,16 @@ function noteBodiesForItem(itemId) {
 
 function bodyCanEdit(body) {
     return !!(body?.querySelector?.('.card-inline-edit, .sheet-cell-input, .planner-cell-input, .expanded-checklist-add-btn'));
+}
+
+function plannerSectionCanEdit(section) {
+    if (!section) return false;
+    if (section.closest?.('.magic-focus__pane')) return true;
+    if (section.matches?.('[data-focus-table-only], [data-focus-chart-only], [data-focus-kanban-only]')) return true;
+    if (section.querySelector?.('.planner-cell-input, [data-planner-rail-resize], [data-planner-kanban-card][draggable="true"]')) {
+        return true;
+    }
+    return bodyCanEdit(section.closest('.editor-note-body') || section);
 }
 
 function renderStructActions({ canRemove }) {
@@ -593,6 +616,59 @@ export function renderPlannerGanttHtml(planner, { canEdit = false } = {}) {
 }
 
 /**
+ * @param {object} planner
+ * @param {{ canEdit?: boolean, flavour?: string }} [opts]
+ * @returns {string}
+ */
+export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = {}) {
+    const flavourId = normalizeKanbanFlavour(
+        flavour ?? readDisplayOptions().plannerKanbanFlavour
+    );
+    const kanbanCollapsed = !!planner?.kanbanCollapsed;
+    const layout = layoutPlannerKanban(planner, { flavour: flavourId });
+    const sort = layout.sort;
+    const sortBtns = KANBAN_SORT_MODES.map((mode) => {
+        const active = mode === sort ? ' is-active' : '';
+        const label = KANBAN_SORT_LABELS[mode] || mode;
+        return `<button type="button" class="btn btn--compact planner-kanban-sort-btn${active}" data-planner-kanban-sort="${mode}" title="${escapeAttr(label)}" aria-label="${escapeAttr(label)}" aria-pressed="${mode === sort ? 'true' : 'false'}">${escapeHTML(label)}</button>`;
+    }).join('');
+    const toggleCollapsed = kanbanCollapsed ? ' collapsed' : '';
+    const boardCollapsed = kanbanCollapsed ? ' is-collapsed' : '';
+
+    const columnsHtml = layout.columns.map((col) => {
+        const cardsHtml = col.cards.length
+            ? col.cards.map((card) => {
+                const drag = canEdit ? ' draggable="true"' : '';
+                return `<article class="planner-kanban__card" data-planner-kanban-card data-planner-row="${card.row}"${drag}>
+                    <span class="planner-kanban__card-name">${escapeHTML(card.name)}</span>
+                </article>`;
+            }).join('')
+            : '<div class="planner-kanban__empty-col" aria-hidden="true"></div>';
+        return `<div class="planner-kanban__column" data-planner-kanban-stage="${col.stage}">
+            <div class="planner-kanban__column-head">
+                <span class="planner-kanban__column-title">${escapeHTML(col.label)}</span>
+                <span class="planner-kanban__column-count">${col.cards.length}</span>
+            </div>
+            <div class="planner-kanban__column-body" data-planner-kanban-drop="${col.stage}">
+                ${cardsHtml}
+            </div>
+        </div>`;
+    }).join('');
+
+    return `<div class="planner-kanban planner-sub" data-planner-kanban data-kanban-collapsed="${kanbanCollapsed ? '1' : '0'}" data-kanban-sort="${escapeAttr(sort)}" data-kanban-flavour="${escapeAttr(flavourId)}">
+        <div class="planner-kanban__toolbar planner-sub__toolbar">
+            <button type="button" class="planner-kanban__title planner-sub__title" data-planner-kanban-toggle aria-expanded="${kanbanCollapsed ? 'false' : 'true'}">
+                <span class="collapsable-toggle${toggleCollapsed}" aria-hidden="true">▼</span>Kanban
+            </button>
+            <div class="planner-kanban__sort${kanbanCollapsed ? ' is-collapsed' : ''}" role="group" aria-label="Kanban sort"${kanbanCollapsed ? ' hidden' : ''}>${sortBtns}</div>
+        </div>
+        <div class="planner-kanban__board${boardCollapsed}" data-planner-kanban-board>
+            ${columnsHtml}
+        </div>
+    </div>`;
+}
+
+/**
  * Build the full Planner note subsection HTML.
  * @param {object} item
  * @param {{ canEdit?: boolean, startCollapsed?: boolean }} [opts]
@@ -609,6 +685,7 @@ export function buildNotePlannerSectionHtml(item, { canEdit = false, startCollap
     const toggleCollapsed = startCollapsed ? ' collapsed' : '';
     const tableHtml = renderPlannerTableHtml(planner, { canEdit });
     const { html: ganttHtml } = renderPlannerGanttHtml(planner, { canEdit });
+    const kanbanHtml = renderPlannerKanbanHtml(planner, { canEdit });
 
     return `
             <div class="note-body-section note-body-section--planner" data-note-planner>
@@ -618,6 +695,7 @@ export function buildNotePlannerSectionHtml(item, { canEdit = false, startCollap
                 <div class="note-section-body collapsable-section${collapsedClass}">
                     ${tableHtml}
                     ${ganttHtml}
+                    ${kanbanHtml}
                 </div>
             </div>`;
 }
@@ -687,8 +765,7 @@ function refreshGanttInSection(section, item, { refocus = false } = {}) {
         const preserveScrollLeft = prevViewport ? prevViewport.scrollLeft : null;
         const preserveScrollTop = prevViewport ? prevViewport.scrollTop : null;
         const { html, layout } = renderPlannerGanttHtml(item.planner, {
-            canEdit: !!section.querySelector('.planner-cell-input, [data-planner-rail-resize]')
-                || bodyCanEdit(section.closest('.editor-note-body') || section)
+            canEdit: plannerSectionCanEdit(section)
         });
         const tmp = document.createElement('div');
         tmp.innerHTML = html.trim();
@@ -710,9 +787,28 @@ function refreshGanttInSection(section, item, { refocus = false } = {}) {
     refreshPlannerSummaryInSection(section, item);
 }
 
+function refreshKanbanInSection(section, item) {
+    if (!section || !item?.planner) return;
+    const host = section.querySelector('[data-planner-kanban]');
+    if (!host) return;
+    const board = host.querySelector('[data-planner-kanban-board]');
+    const preserveScrollLeft = board ? board.scrollLeft : null;
+    const html = renderPlannerKanbanHtml(item.planner, {
+        canEdit: plannerSectionCanEdit(section),
+        flavour: readDisplayOptions().plannerKanbanFlavour
+    });
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html.trim();
+    const next = tmp.firstElementChild;
+    if (!next) return;
+    host.replaceWith(next);
+    const nextBoard = next.querySelector('[data-planner-kanban-board]');
+    if (nextBoard && preserveScrollLeft != null) nextBoard.scrollLeft = preserveScrollLeft;
+}
+
 /**
- * Refresh derived planner UI (gantt + summary) across all live hosts for an item.
- * Used so Focus table edits update sibling chart panes without remounting the table.
+ * Refresh derived planner UI (gantt + kanban + summary) across all live hosts for an item.
+ * Used so Focus table edits update sibling chart/kanban panes without remounting the table.
  * @param {object} item
  * @param {{ refocus?: boolean }} [opts]
  */
@@ -721,6 +817,7 @@ export function refreshPlannerDerivedViews(item, { refocus = false } = {}) {
     for (const body of noteBodiesForItem(item.id)) {
         body.querySelectorAll?.('[data-note-planner]').forEach((sec) => {
             refreshGanttInSection(sec, item, { refocus });
+            refreshKanbanInSection(sec, item);
         });
     }
     refreshItemNoteCanvas(item);
@@ -734,6 +831,22 @@ export function refreshAllPlannerCharts(items = []) {
     const list = Array.isArray(items) ? items : [];
     for (const item of list) {
         if (item?.id && item?.planner) refreshPlannerDerivedViews(item);
+    }
+}
+
+/**
+ * Re-render every open planner kanban (e.g. after Display Options flavour change).
+ * @param {object[]} [items]
+ */
+export function refreshAllPlannerKanbans(items = []) {
+    const list = Array.isArray(items) ? items : [];
+    for (const item of list) {
+        if (!item?.id || !item?.planner) continue;
+        for (const body of noteBodiesForItem(item.id)) {
+            body.querySelectorAll?.('[data-note-planner]').forEach((sec) => {
+                refreshKanbanInSection(sec, item);
+            });
+        }
     }
 }
 
@@ -1263,6 +1376,38 @@ export function attachPlannerInteractions(root, item, {
             return;
         }
 
+        const kanbanToggle = e.target.closest('[data-planner-kanban-toggle]');
+        if (kanbanToggle && section.contains(kanbanToggle)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const nextCollapsed = !item.planner?.kanbanCollapsed;
+            mutate((it) => {
+                it.planner.kanbanCollapsed = nextCollapsed;
+            }, { skipRerender: true, refreshGantt: false });
+            const block = section.querySelector('[data-planner-kanban]');
+            const boardEl = block?.querySelector('[data-planner-kanban-board]');
+            const sortEl = block?.querySelector('.planner-kanban__sort');
+            const toggle = kanbanToggle.querySelector('.collapsable-toggle');
+            boardEl?.classList.toggle('is-collapsed', nextCollapsed);
+            sortEl?.classList.toggle('is-collapsed', nextCollapsed);
+            if (sortEl) sortEl.hidden = nextCollapsed;
+            toggle?.classList.toggle('collapsed', nextCollapsed);
+            kanbanToggle.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
+            if (block) block.dataset.kanbanCollapsed = nextCollapsed ? '1' : '0';
+            return;
+        }
+
+        const kanbanSortBtn = e.target.closest('[data-planner-kanban-sort]');
+        if (kanbanSortBtn && section.contains(kanbanSortBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const mode = normalizeKanbanSort(kanbanSortBtn.dataset.plannerKanbanSort);
+            mutate((it) => {
+                it.planner.kanbanSort = mode;
+            }, { skipRerender: true, refreshGantt: true });
+            return;
+        }
+
         const zoomBtn = e.target.closest('[data-planner-zoom]');
         if (zoomBtn && section.contains(zoomBtn)) {
             e.preventDefault();
@@ -1294,7 +1439,16 @@ export function attachPlannerInteractions(root, item, {
 
     // Row drag-reorder via row-number handle
     let dragFrom = null;
+    let kanbanDragRow = null;
     section.addEventListener('dragstart', (e) => {
+        const kanbanCard = e.target.closest('[data-planner-kanban-card]');
+        if (kanbanCard && section.contains(kanbanCard)) {
+            kanbanDragRow = Number(kanbanCard.dataset.plannerRow);
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', `kanban:${kanbanDragRow}`);
+            kanbanCard.classList.add('is-dragging');
+            return;
+        }
         const head = e.target.closest('.planner-row-head[data-planner-row]');
         if (!head || !section.contains(head)) return;
         dragFrom = Number(head.dataset.plannerRow);
@@ -1303,6 +1457,22 @@ export function attachPlannerInteractions(root, item, {
         head.closest('tr')?.classList.add('is-dragging');
     });
     section.addEventListener('dragover', (e) => {
+        if (kanbanDragRow != null) {
+            const dropCol = e.target.closest('[data-planner-kanban-drop]');
+            const overCard = e.target.closest('[data-planner-kanban-card]');
+            if ((!dropCol && !overCard) || !section.contains(dropCol || overCard)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            section.querySelectorAll('.planner-kanban__column-body.is-drag-over, .planner-kanban__card.is-drag-over').forEach((el) => {
+                el.classList.remove('is-drag-over');
+            });
+            if (overCard && Number(overCard.dataset.plannerRow) !== kanbanDragRow) {
+                overCard.classList.add('is-drag-over');
+            } else if (dropCol) {
+                dropCol.classList.add('is-drag-over');
+            }
+            return;
+        }
         const row = e.target.closest('tr[data-planner-row-index]');
         if (!row || !section.contains(row) || dragFrom == null) return;
         e.preventDefault();
@@ -1311,6 +1481,34 @@ export function attachPlannerInteractions(root, item, {
         row.classList.add('is-drag-over');
     });
     section.addEventListener('drop', (e) => {
+        if (kanbanDragRow != null) {
+            const overCard = e.target.closest('[data-planner-kanban-card]');
+            const dropCol = e.target.closest('[data-planner-kanban-drop]');
+            const stageEl = dropCol || overCard?.closest('[data-planner-kanban-drop]');
+            if (!stageEl || !section.contains(stageEl)) {
+                kanbanDragRow = null;
+                return;
+            }
+            e.preventDefault();
+            const toStage = Number(stageEl.dataset.plannerKanbanDrop);
+            const beforeRow = overCard && Number(overCard.dataset.plannerRow) !== kanbanDragRow
+                ? Number(overCard.dataset.plannerRow)
+                : null;
+            section.querySelectorAll('.planner-kanban__column-body.is-drag-over, .planner-kanban__card.is-drag-over, .planner-kanban__card.is-dragging').forEach((el) => {
+                el.classList.remove('is-drag-over', 'is-dragging');
+            });
+            const row = kanbanDragRow;
+            kanbanDragRow = null;
+            if (!Number.isFinite(toStage)) return;
+            mutate((it) => {
+                const sort = normalizeKanbanSort(it.planner.kanbanSort);
+                // Card-before insert only applies in manual sort; other modes just change stage.
+                moveKanbanCard(it.planner, row, toStage, {
+                    beforeRow: sort === 'manual' ? beforeRow : null
+                });
+            }, { skipRerender: true, refreshGantt: true });
+            return;
+        }
         const row = e.target.closest('tr[data-planner-row-index]');
         if (!row || !section.contains(row) || dragFrom == null) return;
         e.preventDefault();
@@ -1328,7 +1526,11 @@ export function attachPlannerInteractions(root, item, {
     });
     section.addEventListener('dragend', () => {
         dragFrom = null;
+        kanbanDragRow = null;
         section.querySelectorAll('tr.is-drag-over, tr.is-dragging').forEach((el) => {
+            el.classList.remove('is-drag-over', 'is-dragging');
+        });
+        section.querySelectorAll('.planner-kanban__column-body.is-drag-over, .planner-kanban__card.is-drag-over, .planner-kanban__card.is-dragging').forEach((el) => {
             el.classList.remove('is-drag-over', 'is-dragging');
         });
     });
