@@ -824,7 +824,7 @@ export function renderPlannerGanttHtml(planner, { canEdit = false } = {}) {
         : `${renderGanttRailHtml(layout, { canEdit })}
             <div class="planner-gantt__viewport" data-planner-gantt-viewport title="Drag to pan">${renderGanttSvg(layout)}</div>`;
 
-    const html = `<div class="planner-gantt planner-sub" data-planner-gantt data-planner-zoom-current="${escapeAttr(opts.zoom)}" data-planner-chart-view="${escapeAttr(chartView)}" data-chart-collapsed="${chartCollapsed ? '1' : '0'}">
+    const html = `<div class="planner-gantt planner-sub" data-planner-gantt data-planner-zoom-current="${escapeAttr(opts.zoom)}" data-planner-chart-view-current="${escapeAttr(chartView)}" data-chart-collapsed="${chartCollapsed ? '1' : '0'}">
         <div class="planner-gantt__toolbar planner-sub__toolbar">
             <button type="button" class="planner-gantt__title planner-sub__title" data-planner-chart-toggle aria-expanded="${chartCollapsed ? 'false' : 'true'}">
                 <span class="collapsable-toggle${toggleCollapsed}" aria-hidden="true">▼</span>Chart
@@ -1092,7 +1092,7 @@ function refreshGanttInSection(section, item, { refocus = false } = {}) {
     if (host) {
         const canvasScroll = captureCanvasScroll();
         const prevZoom = host.dataset.plannerZoomCurrent || '';
-        const prevView = host.dataset.plannerChartView || PLANNER_DEFAULT_CHART_VIEW;
+        const prevView = host.dataset.plannerChartViewCurrent || PLANNER_DEFAULT_CHART_VIEW;
         const prevGanttViewport = host.querySelector('[data-planner-gantt-viewport]');
         const prevCalViewport = host.querySelector('[data-planner-calendar-viewport]');
         const prevViewport = prevGanttViewport || prevCalViewport;
@@ -1106,7 +1106,7 @@ function refreshGanttInSection(section, item, { refocus = false } = {}) {
         const next = tmp.firstElementChild;
         if (next) {
             host.replaceWith(next);
-            const nextView = next.dataset.plannerChartView || PLANNER_DEFAULT_CHART_VIEW;
+            const nextView = next.dataset.plannerChartViewCurrent || PLANNER_DEFAULT_CHART_VIEW;
             const zoomChanged = (layout?.zoom || '') !== prevZoom;
             const viewChanged = nextView !== prevView;
             mountGanttViewport(next, layout, {
@@ -2049,7 +2049,7 @@ export function attachPlannerInteractions(root, item, {
             return;
         }
 
-        const chartViewBtn = e.target.closest('[data-planner-chart-view]');
+        const chartViewBtn = e.target.closest('button[data-planner-chart-view]');
         if (chartViewBtn && section.contains(chartViewBtn)) {
             e.preventDefault();
             e.stopPropagation();

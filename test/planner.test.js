@@ -57,7 +57,7 @@ import {
 } from '../js/plannerKanban.js';
 import { SHARED_FIELDS } from '../js/noteFieldOwnership.js';
 import { reconcileItemPlanner } from '../js/api.js';
-import { buildNotePlannerSectionHtml, renderPlannerKanbanHtml } from '../js/plannerUi.js';
+import { buildNotePlannerSectionHtml, renderPlannerGanttHtml, renderPlannerKanbanHtml } from '../js/plannerUi.js';
 import { readDisplayOptions } from '../js/displayOptions.js';
 
 describe('planner model', () => {
@@ -191,6 +191,17 @@ describe('planner model', () => {
         assert.equal(normalizePlannerChartView('nope'), PLANNER_DEFAULT_CHART_VIEW);
         assert.equal(normalizePlanner({ ...createEmptyPlanner(), chartView: 'calendar' }).chartView, 'calendar');
         assert.equal(normalizePlanner(createEmptyPlanner()).chartView, PLANNER_DEFAULT_CHART_VIEW);
+    });
+
+    it('keeps chart-view host state attr separate from calendar action button', () => {
+        const planner = createEmptyPlanner();
+        planner.chartView = 'calendar';
+        const { html } = renderPlannerGanttHtml(planner, { canEdit: true });
+        assert.ok(html.includes('data-planner-chart-view-current="calendar"'));
+        // Host must not reuse the action attribute (that locked zoom clicks in calendar).
+        assert.ok(!/data-planner-gantt[^>]*data-planner-chart-view="/.test(html));
+        assert.equal((html.match(/data-planner-chart-view="calendar"/g) || []).length, 1);
+        assert.ok(/button[^>]*data-planner-chart-view="calendar"/.test(html));
     });
 
     it('lists planner fields as Shared', () => {
