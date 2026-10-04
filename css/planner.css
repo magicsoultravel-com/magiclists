@@ -1117,6 +1117,20 @@
     visibility: hidden;
 }
 
+/*
+ * Editable cards: keep the slot hit-testable under the peek so editors
+ * remain reachable once is-kanban-editing swaps the flyout away.
+ */
+.planner-kanban__card.is-editable:hover .planner-kanban__card-slot,
+.planner-kanban__card.is-editable:focus-within .planner-kanban__card-slot {
+    visibility: visible;
+}
+
+/* Peek is visual-only on editable cards — clicks pass through to editors. */
+.planner-kanban__card.is-editable .planner-kanban__card-flyout {
+    pointer-events: none;
+}
+
 /* Inline edit: keep the editable slot visible; suppress flyout swap. */
 .planner-kanban__card.is-kanban-editing .planner-kanban__card-flyout {
     display: none !important;
@@ -1508,6 +1522,11 @@ textarea.planner-kanban__card-comment:focus {
 /* Title-only density: hide comments in the resting slot only (flyout peeks them). */
 .planner-kanban__card.is-collapsed .planner-kanban__card-slot .planner-kanban__card-comment {
     display: none;
+}
+
+/* While editing a collapsed card, reveal the comment textarea. */
+.planner-kanban__card.is-collapsed.is-kanban-editing .planner-kanban__card-slot .planner-kanban__card-comment {
+    display: block;
 }
 
 .planner-kanban__card.is-collapsed .planner-kanban__card-slot {

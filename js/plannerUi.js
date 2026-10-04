@@ -2611,11 +2611,49 @@ export function attachPlannerInteractions(root, item, {
         endKanbanPointerDrag({ commit: state.lifted });
     };
 
+    /**
+     * Flyout is pointer-events:none on editable cards (peek only). Detect
+     * name/comment under the cursor via elementsFromPoint (includes pe:none)
+     * so collapsed / overflow peeks can still enter inline edit.
+     * @returns {{ card: HTMLElement, fieldKey: 'name'|'comments' } | null}
+     */
+    const kanbanFlyoutEditAt = (clientX, clientY) => {
+        const stack = typeof document.elementsFromPoint === 'function'
+            ? document.elementsFromPoint(clientX, clientY)
+            : [];
+        for (const el of stack) {
+            if (!(el instanceof Element)) continue;
+            const flyout = el.closest?.('.planner-kanban__card-flyout');
+            if (!flyout) continue;
+            const card = flyout.closest('[data-planner-kanban-card]');
+            if (!card || !section.contains(card) || !card.classList.contains('is-editable')) continue;
+            if (el.closest?.('.planner-kanban__card-name')) return { card, fieldKey: 'name' };
+            if (el.closest?.('.planner-kanban__card-comment')) return { card, fieldKey: 'comments' };
+        }
+        return null;
+    };
+
+    section.addEventListener('pointerdown', (e) => {
+        if (e.button != null && e.button !== 0) return;
+        if (e.target.closest?.('[data-planner-kanban-field], textarea, [contenteditable]')) return;
+        if (e.target.closest?.('[data-planner-kanban-color], [data-planner-kanban-emphasis], [data-planner-kanban-reset-card], [data-planner-kanban-density], [data-planner-kanban-more]')) return;
+        const hit = kanbanFlyoutEditAt(e.clientX, e.clientY);
+        if (!hit) return;
+        hit.card.classList.add('is-kanban-editing');
+        const field = hit.card.querySelector(`[data-planner-kanban-field="${hit.fieldKey}"]`);
+        requestAnimationFrame(() => {
+            field?.focus?.();
+            if (hit.fieldKey === 'comments' && field) growPlannerCell(field);
+        });
+    }, true);
+
     section.addEventListener('pointerdown', (e) => {
         if (e.button != null && e.button !== 0) return;
         if (e.target.closest?.('[data-planner-kanban-color], [data-planner-kanban-emphasis], [data-planner-kanban-reset-card], [data-planner-kanban-density], [data-planner-kanban-more], [data-planner-kanban-field], textarea, [contenteditable]')) return;
         const card = e.target.closest('[data-planner-kanban-card]');
         if (!card || !section.contains(card) || !card.classList.contains('is-editable')) return;
+        // Flyout peek name/body → edit, not drag.
+        if (kanbanFlyoutEditAt(e.clientX, e.clientY)) return;
         const row = Number(card.dataset.plannerRow);
         if (!Number.isFinite(row)) return;
         // Abort any prior incomplete drag
