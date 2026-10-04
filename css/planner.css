@@ -737,14 +737,43 @@ body.is-planner-kanban-drag-active {
     box-shadow: 0 8px 22px color-mix(in srgb, #000 24%, transparent);
 }
 
-.planner-kanban__card.is-planner-kanban-dragging .planner-kanban__card-color {
+.planner-kanban__card.is-planner-kanban-dragging .planner-kanban__card-actions {
     display: none !important;
+}
+
+.planner-kanban__card-date {
+    position: absolute;
+    top: 0.18rem;
+    right: 0.28rem;
+    z-index: 1;
+    max-width: 55%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: calc(0.48rem * var(--note-font-scale, 1));
+    line-height: 1;
+    letter-spacing: 0.01em;
+    color: var(--text-muted);
+    opacity: 0.5;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+.planner-kanban__card:hover .planner-kanban__card-date,
+.planner-kanban__card:focus-within .planner-kanban__card-date {
+    opacity: 0.18;
+}
+
+.planner-kanban__card.has-date .planner-kanban__card-name {
+    padding-right: 0.15rem;
 }
 
 .planner-kanban__card-top {
     display: flex;
     align-items: flex-start;
-    gap: 0.25rem;
+    gap: 0.2rem;
+    position: relative;
+    z-index: 2;
 }
 
 .planner-kanban__card-name {
@@ -756,7 +785,11 @@ body.is-planner-kanban-drag-active {
 }
 
 .planner-kanban__card-comment {
-    display: block;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow: hidden;
     margin-top: 0.22rem;
     font-size: calc(0.58rem * var(--note-font-scale, 1));
     line-height: 1.25;
@@ -764,32 +797,47 @@ body.is-planner-kanban-drag-active {
     word-break: break-word;
 }
 
-.planner-kanban__card-color {
+.planner-kanban__card-actions {
     flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.05rem;
+    margin: -0.1rem -0.1rem 0 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+.planner-kanban__card:hover .planner-kanban__card-actions,
+.planner-kanban__card:focus-within .planner-kanban__card-actions {
+    opacity: 0.95;
+    pointer-events: auto;
+}
+
+.planner-kanban__card-color,
+.planner-kanban__card-grab {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 1.05rem;
     height: 1.05rem;
-    margin: -0.1rem -0.15rem 0 0;
     padding: 0;
     border: 0;
     border-radius: 3px;
     background: transparent;
     color: var(--text-muted);
+}
+
+.planner-kanban__card-color {
     cursor: pointer;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.12s ease, background-color 0.12s ease, color 0.12s ease;
 }
 
-.planner-kanban__card:hover .planner-kanban__card-color,
-.planner-kanban__card:focus-within .planner-kanban__card-color {
-    opacity: 0.9;
-    pointer-events: auto;
+.planner-kanban__card-grab {
+    cursor: grab;
 }
 
-.planner-kanban__card-color:hover {
+.planner-kanban__card-color:hover,
+.planner-kanban__card-grab:hover {
     color: var(--accent, var(--text-color));
     background: color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 14%, transparent);
 }
@@ -818,7 +866,8 @@ body.is-planner-kanban-drag-active {
 
 .has-custom-bg .planner-kanban__column-title,
 .has-custom-bg .planner-kanban__column-count,
-.has-custom-bg .planner-kanban__card-comment {
+.has-custom-bg .planner-kanban__card-comment,
+.has-custom-bg .planner-kanban__card-date {
     color: var(--card-muted);
 }
 

@@ -34,7 +34,6 @@ import {
 import { layoutPlannerGantt, parsePlannerDateTime } from './plannerGantt.js';
 import {
     KANBAN_SORT_CHIP_MODES,
-    clipKanbanComment,
     layoutPlannerKanban,
     moveKanbanCard,
     normalizeKanbanFlavour,
@@ -64,6 +63,14 @@ const KANBAN_SORT_TITLES = Object.freeze({
 function cardSurfaceStyle(hex) {
     if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return '';
     return ` style="--kanban-card-color:${escapeAttr(hex)};background:color-mix(in srgb, ${escapeAttr(hex)} 28%, var(--surface, var(--bg-color, #fff)));border-color:color-mix(in srgb, ${escapeAttr(hex)} 55%, var(--border-color, #ccc))"`;
+}
+
+/** Compact date for kanban corner overlay (start, else stop). */
+function formatKanbanCardDate(start, stop) {
+    const raw = String(start || stop || '').trim();
+    if (!raw) return '';
+    const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
+    return m ? m[1] : '';
 }
 
 function refreshItemNoteCanvas(item) {
@@ -662,17 +669,26 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
         const cardsHtml = col.cards.length
             ? col.cards.map((card) => {
                 const editClass = canEdit ? ' is-editable' : '';
-                const comment = clipKanbanComment(card.comments);
+                const dateLabel = formatKanbanCardDate(card.start, card.stop);
+                const dateClass = dateLabel ? ' has-date' : '';
+                const dateHtml = dateLabel
+                    ? `<span class="planner-kanban__card-date" title="${escapeAttr(dateLabel)}">${escapeHTML(dateLabel)}</span>`
+                    : '';
+                const comment = String(card.comments || '').trim();
                 const commentHtml = comment
                     ? `<span class="planner-kanban__card-comment">${escapeHTML(comment)}</span>`
                     : '';
-                const colorBtn = canEdit
-                    ? `<button type="button" class="planner-kanban__card-color" data-planner-kanban-color title="Card color" aria-label="Card color">${CARD_ICONS.color}</button>`
+                const actionsHtml = canEdit
+                    ? `<span class="planner-kanban__card-actions">
+                        <button type="button" class="planner-kanban__card-color" data-planner-kanban-color title="Card color" aria-label="Card color">${CARD_ICONS.color}</button>
+                        <span class="planner-kanban__card-grab" title="Drag to move" aria-hidden="true">${CARD_ICONS.drag}</span>
+                    </span>`
                     : '';
-                return `<article class="planner-kanban__card${card.cardColor ? ' has-color' : ''}${editClass}" data-planner-kanban-card data-planner-row="${card.row}"${cardSurfaceStyle(card.cardColor)}>
+                return `<article class="planner-kanban__card${card.cardColor ? ' has-color' : ''}${dateClass}${editClass}" data-planner-kanban-card data-planner-row="${card.row}"${cardSurfaceStyle(card.cardColor)}>
+                    ${dateHtml}
                     <div class="planner-kanban__card-top">
                         <span class="planner-kanban__card-name">${escapeHTML(card.name)}</span>
-                        ${colorBtn}
+                        ${actionsHtml}
                     </div>
                     ${commentHtml}
                 </article>`;

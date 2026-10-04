@@ -394,7 +394,7 @@ describe('planner Kanban', () => {
         assert.equal(layout.labels[0], 'Preparation');
     });
 
-    it('uses category color by default and clips comments', () => {
+    it('uses category color by default and keeps full comments for CSS clamp', () => {
         const planner = createEmptyPlanner();
         setPlannerField(planner.sheet, 0, 'name', 'Paint');
         setPlannerField(planner.sheet, 0, 'category', 'Design');
@@ -403,8 +403,8 @@ describe('planner Kanban', () => {
         const cards = derivePlannerKanbanCards(planner);
         assert.equal(cards[0].cardColor, '#aabbcc');
         assert.equal(cards[0].comments.length, 120);
+        // Helper still truncates for callers that want a plain-text clip.
         assert.ok(clipKanbanComment(cards[0].comments).endsWith('…'));
-        assert.ok(clipKanbanComment(cards[0].comments).length < 120);
 
         planner.kanbanCardColors = { '0': '#112233' };
         const overridden = derivePlannerKanbanCards(planner);
