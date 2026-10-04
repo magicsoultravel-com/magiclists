@@ -250,16 +250,27 @@
     display: inline-flex;
     gap: 0.12rem;
     flex-wrap: wrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
 }
 
-.planner-gantt__zoom .planner-zoom-btn {
-    padding: 0.08rem 0.28rem;
-    font-size: calc(0.45rem * var(--note-font-scale, 1));
-    line-height: 1.2;
+.planner-gantt:hover .planner-gantt__zoom:not(.is-collapsed):not([hidden]),
+.planner-gantt:focus-within .planner-gantt__zoom:not(.is-collapsed):not([hidden]) {
+    opacity: 1;
+    pointer-events: auto;
 }
 
-.planner-zoom-btn.is-active {
-    font-weight: 600;
+.planner-zoom-btn.card-act {
+    width: 16px;
+    height: 16px;
+    opacity: 0.75;
+}
+
+.planner-zoom-btn.card-act.is-active {
+    opacity: 1;
+    color: var(--text-main, var(--text-color));
+    background: rgba(255, 255, 255, 0.06);
 }
 
 .planner-category {

@@ -7,7 +7,6 @@ import {
     PLANNER_COLUMNS,
     PLANNER_COL_COUNT,
     PLANNER_ZOOM_LEVELS,
-    PLANNER_ZOOM_LABELS,
     createEmptyPlanner,
     normalizePlanner,
     normalizePlannerLabelWidth,
@@ -629,10 +628,17 @@ export function renderPlannerGanttHtml(planner, { canEdit = false } = {}) {
         labelWidth: opts.labelWidth,
         rowHeight: opts.rowHeight
     });
+    const zoomIcons = {
+        day: CARD_ICONS.zoomDay,
+        week: CARD_ICONS.zoomWeek,
+        month: CARD_ICONS.zoomMonth,
+        quarter: CARD_ICONS.zoomQuarter,
+        year: CARD_ICONS.zoomYear
+    };
     const zoomBtns = PLANNER_ZOOM_LEVELS.map((z) => {
         const active = z === opts.zoom ? ' is-active' : '';
-        const label = PLANNER_ZOOM_LABELS[z] || z.charAt(0).toUpperCase();
-        return `<button type="button" class="btn btn--compact planner-zoom-btn${active}" data-planner-zoom="${z}" title="${escapeAttr(z)}" aria-label="${escapeAttr(z)}" aria-pressed="${z === opts.zoom ? 'true' : 'false'}">${label}</button>`;
+        const icon = zoomIcons[z] || '';
+        return `<button type="button" class="card-act planner-zoom-btn${active}" data-planner-zoom="${z}" title="${escapeAttr(z)}" aria-label="${escapeAttr(z)}" aria-pressed="${z === opts.zoom ? 'true' : 'false'}">${icon}</button>`;
     }).join('');
     const toggleCollapsed = chartCollapsed ? ' collapsed' : '';
     const boardCollapsed = chartCollapsed ? ' is-collapsed' : '';
