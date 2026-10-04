@@ -702,6 +702,7 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
                         <button type="button" class="planner-kanban__card-emphasis${urgentActive}" data-planner-kanban-emphasis="urgent" title="Mark urgent" aria-label="Mark urgent" aria-pressed="${emphasis === 'urgent' ? 'true' : 'false'}">${KANBAN_URGENT_ICON}</button>
                         <button type="button" class="planner-kanban__card-emphasis${mutedActive}" data-planner-kanban-emphasis="muted" title="Mark non-urgent" aria-label="Mark non-urgent" aria-pressed="${emphasis === 'muted' ? 'true' : 'false'}">${KANBAN_MUTED_ICON}</button>
                         <button type="button" class="planner-kanban__card-color" data-planner-kanban-color title="Card color" aria-label="Card color">${CARD_ICONS.color}</button>
+                        <button type="button" class="planner-kanban__card-reset" data-planner-kanban-reset-card title="Reset card styles" aria-label="Reset card styles">${ACTION_ICONS.resetCustomization}</button>
                         <span class="planner-kanban__card-grab" title="Drag to move" aria-hidden="true">${CARD_ICONS.drag}</span>
                     </span>`
                     : '';
@@ -728,12 +729,21 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
         </div>`;
     }).join('');
 
+    const moduleResetHtml = canEdit
+        ? `<span class="planner-kanban__module-sep" aria-hidden="true"></span>
+            <button type="button" class="card-act planner-kanban-module-btn" data-planner-kanban-reset-styles title="Reset all card styles" aria-label="Reset all card styles">${ACTION_ICONS.resetCustomization}</button>
+            <button type="button" class="card-act planner-kanban-module-btn" data-planner-kanban-reset-arrangement title="Reset arrangement" aria-label="Reset arrangement">${ACTION_ICONS.layoutReset}</button>`
+        : '';
+
     return `<div class="planner-kanban planner-sub" data-planner-kanban data-kanban-collapsed="${kanbanCollapsed ? '1' : '0'}" data-kanban-sort="${escapeAttr(sort)}" data-kanban-sort-dir="${escapeAttr(sortDir)}" data-kanban-flavour="${escapeAttr(flavourId)}">
         <div class="planner-kanban__toolbar planner-sub__toolbar">
             <button type="button" class="planner-kanban__title planner-sub__title" data-planner-kanban-toggle aria-expanded="${kanbanCollapsed ? 'false' : 'true'}">
                 <span class="collapsable-toggle${toggleCollapsed}" aria-hidden="true">▼</span>Kanban
             </button>
-            <div class="planner-kanban__sort${kanbanCollapsed ? ' is-collapsed' : ''}" role="group" aria-label="Kanban sort"${kanbanCollapsed ? ' hidden' : ''}>${sortBtns}</div>
+            <div class="planner-kanban__tools${kanbanCollapsed ? ' is-collapsed' : ''}" role="group" aria-label="Kanban tools"${kanbanCollapsed ? ' hidden' : ''}>
+                <span class="planner-kanban__sort" role="group" aria-label="Kanban sort">${sortBtns}</span>
+                ${moduleResetHtml}
+            </div>
         </div>
         <div class="planner-kanban__board${boardCollapsed}" data-planner-kanban-board>
             ${columnsHtml}
@@ -1459,11 +1469,11 @@ export function attachPlannerInteractions(root, item, {
             }, { skipRerender: true, refreshGantt: false });
             const block = section.querySelector('[data-planner-kanban]');
             const boardEl = block?.querySelector('[data-planner-kanban-board]');
-            const sortEl = block?.querySelector('.planner-kanban__sort');
+            const toolsEl = block?.querySelector('.planner-kanban__tools');
             const toggle = kanbanToggle.querySelector('.collapsable-toggle');
             boardEl?.classList.toggle('is-collapsed', nextCollapsed);
-            sortEl?.classList.toggle('is-collapsed', nextCollapsed);
-            if (sortEl) sortEl.hidden = nextCollapsed;
+            toolsEl?.classList.toggle('is-collapsed', nextCollapsed);
+            if (toolsEl) toolsEl.hidden = nextCollapsed;
             toggle?.classList.toggle('collapsed', nextCollapsed);
             kanbanToggle.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
             if (block) block.dataset.kanbanCollapsed = nextCollapsed ? '1' : '0';
@@ -1489,6 +1499,26 @@ export function attachPlannerInteractions(root, item, {
             return;
         }
 
+        const kanbanResetStylesBtn = e.target.closest('[data-planner-kanban-reset-styles]');
+        if (kanbanResetStylesBtn && section.contains(kanbanResetStylesBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            mutate((it) => {
+                resetAllKanbanCardStyles(it.planner);
+            }, { skipRerender: true, refreshGantt: true });
+            return;
+        }
+
+        const kanbanResetArrangementBtn = e.target.closest('[data-planner-kanban-reset-arrangement]');
+        if (kanbanResetArrangementBtn && section.contains(kanbanResetArrangementBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            mutate((it) => {
+                resetKanbanArrangement(it.planner);
+            }, { skipRerender: true, refreshGantt: true });
+            return;
+        }
+
         const kanbanEmphasisBtn = e.target.closest('[data-planner-kanban-emphasis]');
         if (kanbanEmphasisBtn && section.contains(kanbanEmphasisBtn)) {
             e.preventDefault();
@@ -1499,6 +1529,19 @@ export function attachPlannerInteractions(root, item, {
             if (!Number.isFinite(row) || (mode !== 'urgent' && mode !== 'muted')) return;
             mutate((it) => {
                 setKanbanCardEmphasis(it.planner, row, mode);
+            }, { skipRerender: true, refreshGantt: true });
+            return;
+        }
+
+        const kanbanResetCardBtn = e.target.closest('[data-planner-kanban-reset-card]');
+        if (kanbanResetCardBtn && section.contains(kanbanResetCardBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const card = kanbanResetCardBtn.closest('[data-planner-kanban-card]');
+            const row = Number(card?.dataset?.plannerRow);
+            if (!Number.isFinite(row)) return;
+            mutate((it) => {
+                resetKanbanCardStyles(it.planner, row);
             }, { skipRerender: true, refreshGantt: true });
             return;
         }
@@ -1751,7 +1794,7 @@ export function attachPlannerInteractions(root, item, {
 
     section.addEventListener('pointerdown', (e) => {
         if (e.button != null && e.button !== 0) return;
-        if (e.target.closest?.('[data-planner-kanban-color], [data-planner-kanban-emphasis]')) return;
+        if (e.target.closest?.('[data-planner-kanban-color], [data-planner-kanban-emphasis], [data-planner-kanban-reset-card]')) return;
         const card = e.target.closest('[data-planner-kanban-card]');
         if (!card || !section.contains(card) || !card.classList.contains('is-editable')) return;
         const row = Number(card.dataset.plannerRow);

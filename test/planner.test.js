@@ -32,6 +32,9 @@ import {
     kanbanLabelsForFlavour,
     clipKanbanComment,
     setKanbanCardEmphasis,
+    resetKanbanCardStyles,
+    resetAllKanbanCardStyles,
+    resetKanbanArrangement,
     KANBAN_DEFAULT_FLAVOUR,
     KANBAN_FLAVOURS
 } from '../js/plannerKanban.js';
@@ -209,6 +212,10 @@ describe('planner model', () => {
         assert.ok(html.includes('data-planner-kanban-color'));
         assert.ok(html.includes('data-planner-kanban-emphasis="urgent"'));
         assert.ok(html.includes('data-planner-kanban-emphasis="muted"'));
+        assert.ok(html.includes('data-planner-kanban-reset-card'));
+        assert.ok(html.includes('data-planner-kanban-reset-styles'));
+        assert.ok(html.includes('data-planner-kanban-reset-arrangement'));
+        assert.ok(html.includes('planner-kanban__tools'));
         assert.ok(html.includes('data-planner-rail-resize'));
         assert.ok(!html.includes('data-planner-today-settings-toggle'));
         assert.ok(html.includes('planner-gantt__today') || html.includes('data-planner-gantt'));
@@ -421,6 +428,39 @@ describe('planner Kanban', () => {
         setKanbanCardEmphasis(planner, 0, 'muted');
         assert.equal(derivePlannerKanbanCards(planner)[0].emphasis, '');
         assert.equal(planner.kanbanEmphasisByRow['0'], undefined);
+
+        planner.kanbanCardColors = { '0': '#112233' };
+        setKanbanCardEmphasis(planner, 0, 'urgent');
+        resetKanbanCardStyles(planner, 0);
+        assert.equal(planner.kanbanCardColors['0'], undefined);
+        assert.equal(planner.kanbanEmphasisByRow['0'], undefined);
+        // Category color still applies after clearing the override.
+        assert.equal(derivePlannerKanbanCards(planner)[0].cardColor, '#aabbcc');
+    });
+
+    it('resets all card styles and arrangement', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'A');
+        setPlannerField(planner.sheet, 1, 'name', 'B');
+        planner.kanbanCardColors = { '0': '#112233', '1': '#abcdef' };
+        planner.kanbanEmphasisByRow = { '0': 'urgent', '1': 'muted' };
+        moveKanbanCard(planner, 0, 3);
+        moveKanbanCard(planner, 1, 4);
+        planner.kanbanSort = 'manual';
+        planner.kanbanSortDir = 'desc';
+
+        resetAllKanbanCardStyles(planner);
+        assert.deepEqual(planner.kanbanCardColors, {});
+        assert.deepEqual(planner.kanbanEmphasisByRow, {});
+        assert.equal(planner.kanbanStageByRow['0'], 3);
+
+        resetKanbanArrangement(planner);
+        assert.deepEqual(planner.kanbanStageByRow, {});
+        assert.deepEqual(planner.kanbanOrderByStage, {});
+        assert.equal(planner.kanbanSort, 'row');
+        assert.equal(planner.kanbanSortDir, 'asc');
+        const layout = layoutPlannerKanban(planner);
+        assert.deepEqual(layout.columns[0].cards.map((c) => c.name), ['A', 'B']);
     });
 
     it('sorts by date/row/alpha with asc/desc and manual order', () => {
