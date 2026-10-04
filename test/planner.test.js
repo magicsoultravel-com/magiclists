@@ -19,11 +19,16 @@ import {
     listPlannerCategories,
     summarizePlannerSchedule,
     togglePlannerWorkPack,
+    addPlannerPackChild,
+    removePlannerPackChild,
     buildPlannerOutlineLabels,
     isPlannerUnsupportedNewer,
     isPlannerRowPack,
     isPlannerRowHidden,
+    isPlannerPackCollapsed,
+    setPlannerPackCollapsed,
     getPlannerRowId,
+    getPlannerRowLevel,
     PLANNER_COL_COUNT,
     PLANNER_DEFAULT_ZOOM,
     PLANNER_DEFAULT_CHART_VIEW,
@@ -37,6 +42,11 @@ import {
     moveWbsCard,
     resetWbsArrangement,
     resetWbsLabels,
+    setWbsCardColor,
+    setWbsCardEmphasis,
+    setWbsCardCollapsed,
+    resetWbsCardStyles,
+    pruneWbsAfterRowRemove,
     WBS_DEFAULT_PHASE_LABELS,
     WBS_DEFAULT_DELIVERABLE_LABELS
 } from '../js/plannerWbs.js';
@@ -74,7 +84,7 @@ import {
 } from '../js/plannerKanban.js';
 import { SHARED_FIELDS } from '../js/noteFieldOwnership.js';
 import { reconcileItemPlanner } from '../js/api.js';
-import { buildNotePlannerSectionHtml, renderPlannerGanttHtml, renderPlannerKanbanHtml } from '../js/plannerUi.js';
+import { buildNotePlannerSectionHtml, renderPlannerGanttHtml, renderPlannerKanbanHtml, renderPlannerWbsHtml } from '../js/plannerUi.js';
 import { readDisplayOptions } from '../js/displayOptions.js';
 
 describe('planner model', () => {
@@ -871,20 +881,81 @@ describe('planner Kanban', () => {
 });
 
 describe('planner WBS and work packs', () => {
-    it('pack toggle inserts blank child and parks it when parent has data', () => {
+    it('pack toggle marks parent only (no parked-hidden child)', () => {
         const planner = createEmptyPlanner();
         setPlannerField(planner.sheet, 0, 'name', 'PackMe');
         setPlannerField(planner.sheet, 1, 'name', 'Neighbor');
         const neighborId = planner.rowIds[1];
+        const rowsBefore = planner.sheet.rows;
         assert.equal(togglePlannerWorkPack(planner, 0), true);
         assert.equal(isPlannerRowPack(planner, 0), true);
-        assert.equal(planner.sheet.rows, 4);
-        assert.equal(planner.rowIds[2], neighborId); // neighbor shifted, still a root
-        assert.equal(getPlannerField(planner.sheet, 2, 'name'), 'Neighbor');
-        assert.equal(isPlannerRowHidden(planner, 1), true); // parked first child
-        assert.deepEqual(buildPlannerOutlineLabels(planner).slice(0, 3), ['1', '1a', '2']);
+        assert.equal(planner.sheet.rows, rowsBefore);
+        assert.equal(planner.rowIds[1], neighborId);
+        assert.equal(getPlannerField(planner.sheet, 1, 'name'), 'Neighbor');
+        assert.equal(isPlannerRowHidden(planner, 1), false);
         const leafCards = derivePlannerWbsCards(planner);
-        assert.deepEqual(leafCards.map((c) => c.name), ['Neighbor']);
+        assert.deepEqual(leafCards.map((c) => c.name).sort(), ['Neighbor']);
+    });
+
+    it('pack-scoped +/− adds and removes child lines under parent', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'Pack');
+        togglePlannerWorkPack(planner, 0);
+        const id0 = addPlannerPackChild(planner, 0);
+        assert.ok(id0);
+        assert.equal(getPlannerRowLevel(planner, 1), 1);
+        setPlannerField(planner.sheet, 1, 'name', 'Line1');
+        const id1 = addPlannerPackChild(planner, 0);
+        assert.ok(id1);
+        setPlannerField(planner.sheet, 2, 'name', 'Line2');
+        assert.deepEqual(buildPlannerOutlineLabels(planner).slice(0, 3), ['1', '1a', '1b']);
+        assert.equal(removePlannerPackChild(planner, 0), true);
+        assert.equal(getPlannerField(planner.sheet, 1, 'name'), 'Line1');
+        assert.ok(!planner.rowIds.includes(id1));
+        assert.equal(removePlannerPackChild(planner, 0), true);
+        assert.equal(removePlannerPackChild(planner, 0), false);
+        assert.equal(isPlannerRowPack(planner, 0), true);
+    });
+
+    it('pack collapse hides children in sheet derive path; WBS leaves only', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'Pack');
+        togglePlannerWorkPack(planner, 0);
+        addPlannerPackChild(planner, 0);
+        setPlannerField(planner.sheet, 1, 'name', 'Child');
+        setPlannerPackCollapsed(planner, 0, true);
+        assert.equal(isPlannerPackCollapsed(planner, 0), true);
+        const html = buildNotePlannerSectionHtml({ id: 'n', planner }, { canEdit: true });
+        assert.ok(html.includes('data-planner-pack-head="1"'));
+        assert.ok(!html.includes('data-planner-row-index="1"')); // sheet omits collapsed children
+        assert.ok(html.includes('data-planner-pack-add'));
+        const leaves = derivePlannerWbsCards(planner);
+        assert.deepEqual(leaves.map((c) => c.name), ['Child']);
+    });
+
+    it('WBS card styles set/prune and editable HTML', () => {
+        const planner = createEmptyPlanner();
+        const id0 = planner.rowIds[0];
+        setPlannerField(planner.sheet, 0, 'name', 'Styled');
+        setWbsCardColor(planner, id0, '#aabbcc');
+        setWbsCardEmphasis(planner, id0, 'urgent');
+        setWbsCardCollapsed(planner, id0, true);
+        const cards = derivePlannerWbsCards(planner);
+        assert.equal(cards[0].cardColor, '#aabbcc');
+        assert.equal(cards[0].emphasis, 'urgent');
+        assert.equal(cards[0].collapsed, true);
+        const html = renderPlannerWbsHtml(planner, { canEdit: true });
+        assert.ok(html.includes('data-planner-wbs-field="name"'));
+        assert.ok(html.includes('data-planner-wbs-field="comments"'));
+        assert.ok(html.includes('planner-wbs__card-flyout'));
+        assert.ok(html.includes('data-planner-wbs-density'));
+        assert.ok(html.includes('is-editable'));
+        assert.ok(html.includes('is-collapsed'));
+        resetWbsCardStyles(planner, id0);
+        assert.equal(planner.wbsCardColors[id0], undefined);
+        assert.equal(planner.wbsEmphasisById[id0], undefined);
+        pruneWbsAfterRowRemove(planner, [id0]);
+        assert.equal(planner.wbsCollapsedById?.[id0], undefined);
     });
 
     it('WBS mode maps are independent; reset labels vs arrangement', () => {
@@ -932,8 +1003,7 @@ describe('planner WBS and work packs', () => {
         const planner = createEmptyPlanner();
         setPlannerField(planner.sheet, 0, 'name', 'Parent');
         togglePlannerWorkPack(planner, 0);
-        // unhide child and date it
-        delete planner.rowHiddenById[planner.rowIds[1]];
+        addPlannerPackChild(planner, 0);
         setPlannerField(planner.sheet, 1, 'name', 'Child');
         setPlannerField(planner.sheet, 1, 'start', '2026-03-01');
         setPlannerField(planner.sheet, 1, 'stop', '2026-03-10');
@@ -955,6 +1025,7 @@ describe('planner WBS and work packs', () => {
         assert.ok(html.includes('data-planner-pack-toggle'));
         assert.ok(html.includes('Initiation'));
         assert.ok(!html.includes('Unmapped'));
+        assert.equal(item.planner.wbsCardColors && typeof item.planner.wbsCardColors, 'object');
     });
 });
 

@@ -182,7 +182,10 @@ function emptyWbsFields() {
         wbsPhaseOrderByBucket: {},
         wbsDeliverableOrderByBucket: {},
         wbsCollapsed: false,
-        wbsCollapsedByBucket: {}
+        wbsCollapsedByBucket: {},
+        wbsCardColors: {},
+        wbsEmphasisById: {},
+        wbsCollapsedById: {}
     };
 }
 
@@ -567,16 +570,6 @@ export function getPlannerRowBlock(planner, row) {
     return { start: row, end };
 }
 
-function rowHasLeafContent(sheet, row) {
-    const name = getPlannerField(sheet, row, 'name').trim();
-    const start = getPlannerField(sheet, row, 'start').trim();
-    const stop = getPlannerField(sheet, row, 'stop').trim();
-    const category = getPlannerField(sheet, row, 'category').trim();
-    const comments = getPlannerField(sheet, row, 'comments').trim();
-    const pred = getPlannerField(sheet, row, 'pred').trim();
-    return !!(name || start || stop || category || comments || pred);
-}
-
 /**
  * Insert a blank row at index, shifting later rows down. Returns new row id.
  * @param {object} planner
@@ -610,6 +603,7 @@ export function insertPlannerRowAt(planner, index) {
 
 /**
  * Toggle single ↔ work pack at row.
+ * Parent-only; convert creates an empty pack (no parked-hidden child).
  * @param {object} planner
  * @param {number} row
  * @returns {boolean}
@@ -641,14 +635,82 @@ export function togglePlannerWorkPack(planner, row) {
         return true;
     }
 
-    // Single → pack: insert blank child at r+1
-    const hadContent = rowHasLeafContent(planner.sheet, row);
+    // Single → pack: mark parent only (children added via pack +/−).
     planner.rowPackById[id] = true;
-    const childId = insertPlannerRowAt(planner, row + 1);
-    if (childId) {
-        planner.rowLevelById[childId] = 1;
-        if (hadContent) planner.rowHiddenById[childId] = true;
+    assertPlannerRowIdInvariant(planner);
+    return true;
+}
+
+/**
+ * Insert a blank child line under a pack parent.
+ * @param {object} planner
+ * @param {number} packRow - pack parent row index
+ * @returns {string} new child row id or ''
+ */
+export function addPlannerPackChild(planner, packRow) {
+    if (!isPlannerWritable(planner)) return '';
+    if (!isPlannerRowPack(planner, packRow)) return '';
+    if (getPlannerRowLevel(planner, packRow) === 1) return '';
+    const { end } = getPlannerRowBlock(planner, packRow);
+    const childId = insertPlannerRowAt(planner, end);
+    if (!childId) return '';
+    if (!planner.rowLevelById) planner.rowLevelById = {};
+    planner.rowLevelById[childId] = 1;
+    // Expanding to add a line — clear pack collapse so the new child is visible.
+    delete planner.rowCollapsedById?.[getPlannerRowId(planner, packRow)];
+    assertPlannerRowIdInvariant(planner);
+    return childId;
+}
+
+/**
+ * Remove the last child of a pack (pack-scoped −).
+ * @param {object} planner
+ * @param {number} packRow
+ * @returns {boolean}
+ */
+export function removePlannerPackChild(planner, packRow) {
+    if (!isPlannerWritable(planner)) return false;
+    if (!isPlannerRowPack(planner, packRow)) return false;
+    const { start, end } = getPlannerRowBlock(planner, packRow);
+    if (end <= start + 1) return false; // no children
+    const childRow = end - 1;
+    const removedId = getPlannerRowId(planner, childRow);
+    const sheet = planner.sheet;
+    if (!sheet) return false;
+
+    const removedOutline = getPlannerOutlineLabel(planner, childRow);
+    const predCol = PLANNER_COLUMNS.findIndex((c) => c.key === 'pred');
+    for (let r = 0; r < sheet.rows; r++) {
+        if (r === childRow) continue;
+        const raw = getCellValue(sheet, r, predCol);
+        if (!raw) continue;
+        const next = parsePredecessorIds(raw)
+            .filter((tok) => String(tok).toLowerCase() !== String(removedOutline).toLowerCase())
+            .join(', ');
+        setCellValue(sheet, r, predCol, next);
     }
+
+    const nextCells = {};
+    for (const key of Object.keys(sheet.cells || {})) {
+        const [rs, cs] = String(key).split(':');
+        const r = Number(rs);
+        const c = Number(cs);
+        if (!Number.isFinite(r) || !Number.isFinite(c)) continue;
+        if (r === childRow) continue;
+        const newR = r > childRow ? r - 1 : r;
+        nextCells[`${newR}:${c}`] = sheet.cells[key];
+    }
+    sheet.cells = nextCells;
+
+    if (removedId) {
+        pruneKanbanAfterRowRemove(planner, [removedId]);
+        pruneWbsAfterRowRemove(planner, [removedId]);
+        for (const map of [planner.rowLevelById, planner.rowPackById, planner.rowHiddenById, planner.rowCollapsedById]) {
+            if (map) delete map[removedId];
+        }
+    }
+    if (Array.isArray(planner.rowIds)) planner.rowIds.splice(childRow, 1);
+    sheet.rows = Array.isArray(planner.rowIds) ? planner.rowIds.length : Math.max(SHEET_MIN_ROWS, (sheet.rows || 1) - 1);
     assertPlannerRowIdInvariant(planner);
     return true;
 }
@@ -827,6 +889,13 @@ export function normalizePlanner(raw) {
     const rowHiddenById = normalizeTruthyIdMap(raw.rowHiddenById, rowIds);
     const rowCollapsedById = normalizeTruthyIdMap(raw.rowCollapsedById, rowIds);
 
+    const wbsCardColors = normalizeKanbanCardColors(raw.wbsCardColors, rowIds, mapOpts);
+    const wbsEmphasisById = normalizeKanbanEmphasisById(raw.wbsEmphasisById, rowIds, mapOpts);
+    const wbsCollapsedById = normalizeKanbanCollapsedById(raw.wbsCollapsedById, rowIds, mapOpts);
+    pruneEmptyNameKeys(wbsCardColors);
+    pruneEmptyNameKeys(wbsEmphasisById);
+    pruneEmptyNameKeys(wbsCollapsedById);
+
     const planner = {
         version: PLANNER_VERSION,
         zoom: normalizePlannerZoom(raw.zoom),
@@ -861,6 +930,9 @@ export function normalizePlanner(raw) {
         wbsDeliverableOrderByBucket: normalizeWbsOrderByBucket(raw.wbsDeliverableOrderByBucket, idSet),
         wbsCollapsed: !!raw.wbsCollapsed,
         wbsCollapsedByBucket: normalizeWbsCollapsedByBucket(raw.wbsCollapsedByBucket),
+        wbsCardColors,
+        wbsEmphasisById,
+        wbsCollapsedById,
         sheet
     };
 

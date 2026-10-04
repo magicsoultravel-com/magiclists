@@ -1674,6 +1674,56 @@ textarea.planner-kanban__card-comment:focus {
     background: color-mix(in srgb, var(--border-color) 35%, transparent);
 }
 
+.planner-pack-lines {
+    position: absolute;
+    top: 0.1rem;
+    right: 1.25rem;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.05rem;
+    opacity: 0;
+}
+
+.planner-grid__row.is-pack:hover .planner-pack-lines,
+.planner-cell--name:focus-within .planner-pack-lines {
+    opacity: 1;
+}
+
+.planner-pack-line-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.05rem;
+    height: 1.05rem;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-muted, #888);
+    cursor: pointer;
+}
+
+.planner-pack-line-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--border-color) 35%, transparent);
+    color: var(--accent, #5b8def);
+}
+
+.planner-pack-line-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.planner-grid__row.is-pack {
+    background: color-mix(in srgb, var(--border-color, #ccc) 8%, transparent);
+}
+
+.planner-grid__row.is-child {
+    background: color-mix(in srgb, var(--border-color, #ccc) 4%, transparent);
+}
+
+
+
 .planner-grid__row.is-child .planner-row-head,
 .planner-grid__row.is-child .sheet-grid__row-head {
     padding-left: 0.55rem;
@@ -1927,39 +1977,170 @@ textarea.planner-kanban__card-comment:focus {
     background: color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 10%, transparent);
 }
 
+/* WBS card chrome — 1:1 Kanban port */
+.planner-wbs__board:has(.planner-wbs__card:is(:hover, :focus-within):not(.is-wbs-editing)) {
+    overflow: visible;
+}
+
+.note-body-section--planner:has(.planner-wbs__card:is(:hover, :focus-within):not(.is-wbs-editing)) {
+    position: relative;
+    z-index: 20;
+}
+
+.note-body-section--planner:has(.planner-wbs__card:is(:hover, :focus-within):not(.is-wbs-editing)) > .note-section-body.collapsable-section {
+    overflow: visible;
+}
+
 .planner-wbs__card {
     position: relative;
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    padding: 0.45rem 0.5rem 0.72rem;
     border-radius: 4px;
-    border: 1px solid color-mix(in srgb, var(--border-color, #ccc) 65%, transparent);
-    background: var(--surface, var(--bg-color, #fff));
-    box-shadow: 0 1px 0 color-mix(in srgb, var(--border-color, #000) 8%, transparent);
+    /* Cap at note-surface title size (.mini-card-title = 0.68rem). */
     font-size: calc(0.68rem * var(--note-font-scale, 1));
     line-height: 1.3;
     user-select: none;
 }
 
-.planner-wbs__card.has-color.has-custom-bg {
+.planner-wbs__card-slot,
+.planner-wbs__card-flyout {
+    padding: 0.45rem 0.5rem 0.72rem;
+    border-radius: 4px;
+    border: 1px solid color-mix(in srgb, var(--border-color, #ccc) 65%, transparent);
+    background: var(--surface, var(--bg-color, #fff));
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--border-color, #000) 8%, transparent);
+}
+
+.planner-wbs__card-slot {
+    position: relative;
+    z-index: 2;
+}
+
+.planner-wbs__card.has-color .planner-wbs__card-slot,
+.planner-wbs__card.has-color .planner-wbs__card-flyout {
     background: inherit;
     border-color: inherit;
+    color: inherit;
+}
+
+.planner-wbs__card-flyout {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    z-index: 40;
+    display: none;
+    box-shadow: 0 8px 20px color-mix(in srgb, #000 20%, transparent);
+}
+
+.planner-wbs__card:hover .planner-wbs__card-flyout,
+.planner-wbs__card:focus-within .planner-wbs__card-flyout {
+    display: block;
+}
+
+.planner-wbs__card:hover .planner-wbs__card-slot,
+.planner-wbs__card:focus-within .planner-wbs__card-slot {
+    /* Keep layout height; hide visuals under the flyout. */
+    visibility: hidden;
+}
+
+/*
+ * Editable cards: keep the slot hit-testable under the peek so editors
+ * remain reachable once is-wbs-editing swaps the flyout away.
+ */
+.planner-wbs__card.is-editable:hover .planner-wbs__card-slot,
+.planner-wbs__card.is-editable:focus-within .planner-wbs__card-slot {
+    visibility: visible;
+}
+
+/* Peek is visual-only on editable cards — clicks pass through to editors. */
+.planner-wbs__card.is-editable .planner-wbs__card-flyout {
+    pointer-events: none;
+}
+
+/* Inline edit: keep the editable slot visible; suppress flyout swap. */
+.planner-wbs__card.is-wbs-editing .planner-wbs__card-flyout {
+    display: none !important;
+}
+
+.planner-wbs__card.is-wbs-editing .planner-wbs__card-slot {
+    visibility: visible !important;
+}
+
+/*
+ * Subtle 2×N grip strip on the slot footer — hover only, no layout push.
+ * Soft grey (not text color) so it stays quiet on light cards.
+ */
+.planner-wbs__card.is-editable .planner-wbs__card-slot::after {
+    content: '';
+    position: absolute;
+    left: 0.28rem;
+    right: 0.28rem;
+    bottom: 0.1rem;
+    height: 0.4rem;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0;
+    border-radius: 1px;
+    background-image:
+        radial-gradient(circle at 25% 25%, currentColor 0.95px, transparent 1.1px),
+        radial-gradient(circle at 75% 25%, currentColor 0.95px, transparent 1.1px),
+        radial-gradient(circle at 25% 75%, currentColor 0.95px, transparent 1.1px),
+        radial-gradient(circle at 75% 75%, currentColor 0.95px, transparent 1.1px);
+    background-size: 5px 5px;
+    background-repeat: repeat-x;
+    background-position: center;
+    color: color-mix(in srgb, var(--text-muted, #6b7280) 55%, transparent);
+    transition: opacity 0.12s ease;
+}
+
+.planner-wbs__card.is-editable:hover .planner-wbs__card-slot::after,
+.planner-wbs__card.is-editable:focus-within .planner-wbs__card-slot::after {
+    opacity: 0.32;
+}
+
+.planner-wbs__card.is-wbs-editing .planner-wbs__card-slot::after {
+    opacity: 0 !important;
+}
+
+/*
+ * Per-card contrast (same tokens as note applyCardTheme).
+ * Skip when urgent/muted fills replace the category color.
+ */
+.planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) {
     color: var(--card-fg, inherit);
 }
 
-.planner-wbs__card.has-color.has-custom-bg .planner-wbs__card-name {
+.planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-wbs__card-name,
+.planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-wbs__card-comment,
+.planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) textarea.planner-wbs__card-comment {
     color: var(--card-fg, inherit);
 }
 
-.planner-wbs__card.has-color.has-custom-bg .planner-wbs__card-row,
-.planner-wbs__card.has-color.has-custom-bg .planner-wbs__card-date {
+.planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-wbs__card-row,
+.planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-wbs__card-date {
     color: var(--card-muted, var(--card-fg, inherit));
     opacity: 0.9;
 }
 
-.planner-wbs__card.has-color.has-custom-bg .planner-wbs__card-grab {
+.planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-wbs__card-color,
+.planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-wbs__card-emphasis,
+.planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-wbs__card-reset,
+.planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-wbs__card-density,
+.planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-wbs__card-grab {
     color: var(--card-action-fg, var(--card-muted, inherit));
+}
+
+.planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-wbs__card-color:hover,
+.planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-wbs__card-emphasis:hover,
+.planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-wbs__card-reset:hover,
+.planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-wbs__card-density:hover,
+.planner-wbs__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-wbs__card-grab:hover {
+    color: var(--card-fg, inherit);
+    background: color-mix(in srgb, var(--card-fg, #000) 12%, transparent);
+}
+
+.planner-wbs__card:hover,
+.planner-wbs__card:focus-within {
+    z-index: 35;
 }
 
 .planner-wbs__card.is-editable {
@@ -1970,13 +2151,85 @@ textarea.planner-kanban__card-comment:focus {
     cursor: grabbing;
 }
 
+.planner-wbs__card.is-wbs-editing,
+.planner-wbs__card.is-wbs-editing:active {
+    cursor: text;
+}
+
+body.is-planner-wbs-drag-active {
+    user-select: none;
+    cursor: grabbing;
+}
+
+body.is-planner-wbs-drag-active .planner-wbs__card-flyout {
+    display: none !important;
+}
+
+body.is-planner-wbs-drag-active .planner-wbs__card-slot {
+    visibility: visible !important;
+}
+
+.planner-wbs__card.is-planner-kanban-dragging {
+    cursor: grabbing;
+    opacity: var(--desktop-drag-opacity, 0.88);
+    z-index: 9999 !important;
+    box-shadow: none;
+}
+
+.planner-wbs__card.is-planner-kanban-dragging .planner-wbs__card-slot {
+    visibility: visible;
+    box-shadow: 0 8px 22px color-mix(in srgb, #000 24%, transparent);
+}
+
+.planner-wbs__card.is-planner-kanban-dragging .planner-wbs__card-flyout,
+.planner-wbs__card.is-planner-kanban-dragging .planner-wbs__card-actions,
+.planner-wbs__card.is-planner-kanban-dragging .planner-wbs__card-slot::after {
+    display: none !important;
+}
+
 .planner-wbs__card-row,
 .planner-wbs__card-date {
+    position: absolute;
+    z-index: 3;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: calc(0.48rem * var(--note-font-scale, 1));
     line-height: 1;
     letter-spacing: 0.01em;
     color: var(--card-muted, var(--text-muted));
     opacity: 0.7;
+    pointer-events: none;
+}
+
+.planner-wbs__card-row {
+    top: 0.18rem;
+    left: 0.28rem;
+    max-width: 20%;
+}
+
+.planner-wbs__card-date--start {
+    top: 0.18rem;
+    right: 0.28rem;
+    max-width: 55%;
+}
+
+.planner-wbs__card-date--stop {
+    bottom: 0.18rem;
+    right: 0.28rem;
+    max-width: 55%;
+}
+
+.planner-wbs__card-flyout .planner-wbs__card-row,
+.planner-wbs__card-flyout .planner-wbs__card-date {
+    opacity: 0.18;
+}
+
+.planner-wbs__card-top {
+    display: block;
+    position: relative;
+    z-index: 3;
+    min-width: 0;
 }
 
 .planner-wbs__card-name {
@@ -1984,22 +2237,330 @@ textarea.planner-kanban__card-comment:focus {
     min-width: 0;
     font-size: calc(0.68rem * var(--note-font-scale, 1));
     font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.planner-wbs__card-name[contenteditable],
+.planner-wbs__card-comment[data-planner-wbs-field] {
+    user-select: text;
+    cursor: text;
+    outline: none;
+}
+
+.planner-wbs__card-name[contenteditable]:focus {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
     word-break: break-word;
 }
 
-.planner-wbs__card-dates {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.25rem;
+.planner-wbs__card-flyout .planner-wbs__card-name {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    word-break: break-word;
+}
+
+.planner-wbs__card-comment {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow: hidden;
+    position: relative;
+    z-index: 3;
+    margin-top: 0.22rem;
+    font-size: calc(0.58rem * var(--note-font-scale, 1));
+    line-height: 1.25;
+    color: var(--text-muted);
+    word-break: break-word;
+}
+
+/* Expanded large format: ~3 comment lines at rest; grow on focus. */
+textarea.planner-wbs__card-comment {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-top: 0.22rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: calc(0.58rem * var(--note-font-scale, 1));
+    line-height: 1.25;
+    resize: none;
+    overflow: hidden;
+    max-height: calc(0.58rem * var(--note-font-scale, 1) * 1.25 * 3);
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+}
+
+textarea.planner-wbs__card-comment:focus {
+    max-height: none;
+}
+
+.planner-wbs__card-flyout .planner-wbs__card-comment {
+    display: block !important;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+    overflow: visible;
+}
+
+/* Quick actions above title/content; footer grip stays below.
+   Default chrome: more + grab. FC-style backdrop always hugs the visible strip. */
+.planner-wbs__card-actions {
+    position: absolute;
+    top: 0.12rem;
+    right: 0.12rem;
+    z-index: 50;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.05rem;
+    border-radius: 4px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+.planner-wbs__card:hover .planner-wbs__card-actions,
+.planner-wbs__card:focus-within .planner-wbs__card-actions,
+.planner-wbs__card.is-wbs-editing .planner-wbs__card-actions,
+.planner-wbs__card-actions.is-actions-open {
+    opacity: 0.95;
+    pointer-events: auto;
+}
+
+.planner-wbs__card-actions-tray {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.05rem;
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition:
+        max-width 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 0.16s ease;
+}
+
+.planner-wbs__card-actions.is-actions-open .planner-wbs__card-actions-tray {
+    max-width: 7rem;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.planner-wbs__card-actions-tray > * {
+    flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .planner-wbs__card-actions-tray {
+        transition: none;
+    }
+}
+
+.planner-wbs__card-actions::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    right: -1px;
+    bottom: -1px;
+    left: -1px;
+    z-index: -1;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--bg-card) 96%, #0a0a0c);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-color) 80%, transparent);
+    pointer-events: none;
+}
+
+.planner-wbs__card.has-custom-bg .planner-wbs__card-actions::before {
+    background: var(--card-action-bg);
+    box-shadow: 0 0 0 1px var(--card-border-subtle);
+}
+
+.planner-wbs__card-color,
+.planner-wbs__card-emphasis,
+.planner-wbs__card-reset,
+.planner-wbs__card-density,
+.planner-wbs__card-more,
+.planner-wbs__card-grab {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.05rem;
+    height: 1.05rem;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--card-action-fg, var(--text-muted));
+}
+
+.planner-wbs__card-color,
+.planner-wbs__card-emphasis,
+.planner-wbs__card-reset,
+.planner-wbs__card-density,
+.planner-wbs__card-more {
+    cursor: pointer;
 }
 
 .planner-wbs__card-grab {
-    position: absolute;
-    top: 0.2rem;
-    right: 0.2rem;
-    opacity: 0.35;
-    color: var(--text-muted, #888);
+    cursor: grab;
 }
+
+.planner-wbs__card-color:hover,
+.planner-wbs__card-emphasis:hover,
+.planner-wbs__card-reset:hover,
+.planner-wbs__card-density:hover,
+.planner-wbs__card-more:hover,
+.planner-wbs__card-grab:hover {
+    color: var(--accent, var(--text-color));
+    background: color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 14%, transparent);
+}
+
+/* Same focus chrome as site-wide .card-inline-edit (shell-editor / cards). */
+.planner-wbs__card-name.card-inline-edit,
+.planner-wbs__card-comment.card-inline-edit {
+    border-radius: 3px;
+}
+
+.planner-wbs__card-name.card-inline-edit:focus,
+.planner-wbs__card-comment.card-inline-edit:focus {
+    outline: 2px solid transparent !important;
+    background: rgba(79, 70, 229, 0.08) !important;
+    box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.35) !important;
+    -webkit-font-smoothing: antialiased !important;
+    -moz-osx-font-smoothing: grayscale !important;
+}
+
+.planner-wbs__card.has-custom-bg .planner-wbs__card-name.card-inline-edit:focus,
+.planner-wbs__card.has-custom-bg .planner-wbs__card-comment.card-inline-edit:focus {
+    background: var(--card-focus-bg, rgba(79, 70, 229, 0.08)) !important;
+    box-shadow: 0 0 0 1px var(--card-focus-ring, rgba(79, 70, 229, 0.35)) !important;
+}
+
+/* Title-only density: hide comments in the resting slot only (flyout peeks them). */
+.planner-wbs__card.is-collapsed .planner-wbs__card-slot .planner-wbs__card-comment {
+    display: none;
+}
+
+/* While editing a collapsed card, reveal the comment textarea. */
+.planner-wbs__card.is-collapsed.is-wbs-editing .planner-wbs__card-slot .planner-wbs__card-comment {
+    display: block;
+}
+
+.planner-wbs__card.is-collapsed .planner-wbs__card-slot {
+    padding: 0.78rem 0.45rem;
+}
+
+.planner-wbs__card-emphasis[data-planner-wbs-emphasis="urgent"].is-active {
+    color: var(--kanban-urgent-fg, #a16207);
+    background: color-mix(in srgb, var(--kanban-urgent-bg, #fde68a) 55%, transparent);
+}
+
+.planner-wbs__card-emphasis[data-planner-wbs-emphasis="muted"].is-active {
+    color: var(--kanban-muted-fg, #4b5563);
+    background: color-mix(in srgb, var(--kanban-muted-bg, #d1d5db) 55%, transparent);
+}
+
+/*
+ * Emphasis fills are fixed and fully replace card/category color
+ * (inline --kanban-card-color backgrounds included).
+ */
+.planner-wbs__card.is-urgent,
+.planner-wbs__card.is-urgent .planner-wbs__card-slot,
+.planner-wbs__card.is-urgent .planner-wbs__card-flyout {
+    background: var(--kanban-urgent-bg, #fde68a) !important;
+    border-color: var(--kanban-urgent-border, #ca8a04) !important;
+    color: var(--kanban-urgent-fg, #422006);
+    box-shadow: none;
+    opacity: 1;
+    filter: none;
+}
+
+.planner-wbs__card.is-muted,
+.planner-wbs__card.is-muted .planner-wbs__card-slot,
+.planner-wbs__card.is-muted .planner-wbs__card-flyout {
+    background: var(--kanban-muted-bg, #d1d5db) !important;
+    border-color: var(--kanban-muted-border, #9ca3af) !important;
+    color: var(--kanban-muted-fg, #374151);
+    box-shadow: none;
+    opacity: 1;
+    filter: none;
+}
+
+.planner-wbs__card.is-urgent .planner-wbs__card-comment,
+.planner-wbs__card.is-urgent .planner-wbs__card-row,
+.planner-wbs__card.is-urgent .planner-wbs__card-date {
+    color: color-mix(in srgb, var(--kanban-urgent-fg, #422006) 72%, transparent);
+    opacity: 0.9;
+}
+
+.planner-wbs__card.is-muted .planner-wbs__card-comment,
+.planner-wbs__card.is-muted .planner-wbs__card-row,
+.planner-wbs__card.is-muted .planner-wbs__card-date {
+    color: color-mix(in srgb, var(--kanban-muted-fg, #374151) 72%, transparent);
+    opacity: 0.9;
+}
+
+.planner-wbs__card.is-urgent .planner-wbs__card-color,
+.planner-wbs__card.is-urgent .planner-wbs__card-emphasis,
+.planner-wbs__card.is-urgent .planner-wbs__card-reset,
+.planner-wbs__card.is-urgent .planner-wbs__card-density,
+.planner-wbs__card.is-urgent .planner-wbs__card-grab {
+    color: var(--kanban-urgent-fg, #422006);
+}
+
+.planner-wbs__card.is-muted .planner-wbs__card-color,
+.planner-wbs__card.is-muted .planner-wbs__card-emphasis,
+.planner-wbs__card.is-muted .planner-wbs__card-reset,
+.planner-wbs__card.is-muted .planner-wbs__card-density,
+.planner-wbs__card.is-muted .planner-wbs__card-grab {
+    color: var(--kanban-muted-fg, #374151);
+}
+
+.planner-wbs__placeholder {
+    flex: 0 0 auto;
+    min-height: 2.4rem;
+    border-radius: 4px;
+    border: 1.5px dashed color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 65%, transparent);
+    background: color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 10%, transparent);
+    pointer-events: none;
+}
+
+.planner-wbs__empty-col {
+    min-height: 1.25rem;
+}
+
+.has-custom-bg .planner-wbs__column {
+    border-color: var(--card-border-subtle);
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.has-custom-bg .planner-wbs__column-head {
+    border-bottom-color: var(--card-border-subtle);
+}
+
+.has-custom-bg .planner-wbs__column-title,
+.has-custom-bg .planner-wbs__column-count,
+.has-custom-bg .planner-wbs__card-comment,
+.has-custom-bg .planner-wbs__card-row,
+.has-custom-bg .planner-wbs__card-date {
+    color: var(--card-muted);
+}
+
+.has-custom-bg .planner-wbs__card:not(.has-color) .planner-wbs__card-slot,
+.has-custom-bg .planner-wbs__card:not(.has-color) .planner-wbs__card-flyout {
+    border-color: var(--card-border-subtle);
+    background: color-mix(in srgb, var(--card-border-subtle) 12%, transparent);
+    color: var(--card-fg, currentColor);
+}
+
 
 .planner-wbs__placeholder {
     flex: 0 0 auto;

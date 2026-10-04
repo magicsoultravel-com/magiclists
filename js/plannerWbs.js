@@ -218,7 +218,7 @@ function isHiddenId(planner, rowId) {
 /**
  * Leaf cards only: named, non-hidden, non-pack.
  * @param {object|null|undefined} planner
- * @returns {Array<{ row: number, rowId: string, id: string, name: string, start: string, stop: string, category: string, comments: string, categoryColor: string }>}
+ * @returns {Array<{ row: number, rowId: string, id: string, name: string, start: string, stop: string, category: string, comments: string, categoryColor: string, cardColor: string, emphasis: string, collapsed: boolean }>}
  */
 export function derivePlannerWbsCards(planner) {
     const sheet = planner?.sheet;
@@ -232,6 +232,9 @@ export function derivePlannerWbsCards(planner) {
         const name = cellTrim(sheet, r, NAME_COL);
         if (!name) continue;
         const category = cellTrim(sheet, r, CATEGORY_COL);
+        const categoryColor = categoryColorLookup(planner, category);
+        const override = planner?.wbsCardColors?.[rowId] || '';
+        const cardColor = /^#[0-9a-fA-F]{6}$/.test(override) ? override : categoryColor;
         cards.push({
             row: r,
             rowId,
@@ -241,7 +244,10 @@ export function derivePlannerWbsCards(planner) {
             stop: cellTrim(sheet, r, STOP_COL),
             category,
             comments: cellTrim(sheet, r, COMMENTS_COL),
-            categoryColor: categoryColorLookup(planner, category)
+            categoryColor,
+            cardColor,
+            emphasis: getWbsEmphasisForRow(planner, rowId),
+            collapsed: isWbsCardCollapsed(planner, rowId)
         });
     }
     return cards;
@@ -410,7 +416,13 @@ export function pruneWbsAfterRowRemove(planner, removedIds) {
     if (!planner || !removedIds) return;
     const gone = new Set([...removedIds].map(String));
     if (!gone.size) return;
-    for (const mapKey of ['wbsPhaseById', 'wbsDeliverableById']) {
+    for (const mapKey of [
+        'wbsPhaseById',
+        'wbsDeliverableById',
+        'wbsCardColors',
+        'wbsEmphasisById',
+        'wbsCollapsedById'
+    ]) {
         const map = planner[mapKey];
         if (!map || typeof map !== 'object') continue;
         for (const id of gone) delete map[id];
@@ -426,4 +438,143 @@ export function pruneWbsAfterRowRemove(planner, removedIds) {
             else delete order[key];
         }
     }
+}
+
+export const WBS_EMPHASIS_MODES = Object.freeze(['urgent', 'muted']);
+
+/**
+ * @param {object|null|undefined} planner
+ * @param {number|string} rowOrId
+ * @returns {string}
+ */
+function resolveWbsRowOrId(planner, rowOrId) {
+    if (typeof rowOrId === 'string' && rowOrId && !/^\d+$/.test(rowOrId)) return rowOrId;
+    if (typeof rowOrId === 'string' && planner?.rowIds?.includes(rowOrId)) return rowOrId;
+    const row = Number(rowOrId);
+    if (Number.isFinite(row) && Array.isArray(planner?.rowIds) && row >= 0 && row < planner.rowIds.length) {
+        return String(planner.rowIds[row] || '');
+    }
+    if (typeof rowOrId === 'string' && planner?.rowIds?.includes(rowOrId)) return rowOrId;
+    return String(rowOrId ?? '');
+}
+
+/**
+ * @param {object|null|undefined} planner
+ * @param {number|string} rowOrId
+ * @returns {''|'urgent'|'muted'}
+ */
+export function getWbsEmphasisForRow(planner, rowOrId) {
+    const id = resolveWbsRowOrId(planner, rowOrId);
+    const raw = planner?.wbsEmphasisById?.[id];
+    const mode = String(raw || '').toLowerCase();
+    return WBS_EMPHASIS_MODES.includes(mode) ? /** @type {'urgent'|'muted'} */ (mode) : '';
+}
+
+/**
+ * @param {object|null|undefined} planner
+ * @param {number|string} rowOrId
+ * @returns {boolean}
+ */
+export function isWbsCardCollapsed(planner, rowOrId) {
+    const id = resolveWbsRowOrId(planner, rowOrId);
+    return !!(planner?.wbsCollapsedById?.[id]);
+}
+
+/**
+ * @param {object} planner
+ * @param {number|string} rowOrId
+ * @param {string} hex
+ */
+export function setWbsCardColor(planner, rowOrId, hex) {
+    if (!planner) return;
+    const id = resolveWbsRowOrId(planner, rowOrId);
+    if (!id) return;
+    const color = String(hex || '').trim();
+    if (!planner.wbsCardColors || typeof planner.wbsCardColors !== 'object') {
+        planner.wbsCardColors = {};
+    }
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
+        delete planner.wbsCardColors[id];
+        return;
+    }
+    planner.wbsCardColors[id] = color.toLowerCase();
+}
+
+/**
+ * @param {object} planner
+ * @param {number|string} rowOrId
+ * @param {'urgent'|'muted'|''} mode
+ */
+export function setWbsCardEmphasis(planner, rowOrId, mode) {
+    if (!planner) return;
+    const id = resolveWbsRowOrId(planner, rowOrId);
+    if (!id) return;
+    if (!planner.wbsEmphasisById || typeof planner.wbsEmphasisById !== 'object') {
+        planner.wbsEmphasisById = {};
+    }
+    const next = String(mode || '').toLowerCase();
+    if (!WBS_EMPHASIS_MODES.includes(next)) {
+        delete planner.wbsEmphasisById[id];
+        return;
+    }
+    if (planner.wbsEmphasisById[id] === next) {
+        delete planner.wbsEmphasisById[id];
+        return;
+    }
+    planner.wbsEmphasisById[id] = next;
+}
+
+/**
+ * @param {object} planner
+ * @param {number|string} rowOrId
+ */
+export function resetWbsCardStyles(planner, rowOrId) {
+    if (!planner) return;
+    setWbsCardColor(planner, rowOrId, '');
+    setWbsCardEmphasis(planner, rowOrId, '');
+}
+
+/**
+ * @param {object} planner
+ */
+export function resetAllWbsCardStyles(planner) {
+    if (!planner) return;
+    planner.wbsCardColors = {};
+    planner.wbsEmphasisById = {};
+}
+
+/**
+ * @param {object} planner
+ * @param {number|string} rowOrId
+ * @param {boolean} collapsed
+ */
+export function setWbsCardCollapsed(planner, rowOrId, collapsed) {
+    if (!planner) return;
+    const id = resolveWbsRowOrId(planner, rowOrId);
+    if (!id) return;
+    if (!planner.wbsCollapsedById || typeof planner.wbsCollapsedById !== 'object') {
+        planner.wbsCollapsedById = {};
+    }
+    if (collapsed) planner.wbsCollapsedById[id] = true;
+    else delete planner.wbsCollapsedById[id];
+}
+
+/**
+ * @param {object} planner
+ */
+export function expandAllWbsCards(planner) {
+    if (!planner) return;
+    planner.wbsCollapsedById = {};
+}
+
+/**
+ * @param {object} planner
+ */
+export function collapseAllWbsCards(planner) {
+    if (!planner) return;
+    const next = {};
+    for (const card of derivePlannerWbsCards(planner)) {
+        next[card.rowId] = true;
+    }
+    planner.wbsCollapsedById = next;
 }

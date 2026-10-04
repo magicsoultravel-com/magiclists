@@ -136,10 +136,10 @@ function syncPlannerSheetFromDom(root, item) {
         setCellValue(sheet, row, col, el.value);
     });
 
-    // Kanban name/comments after table cells so live kanban edits win over stale inputs.
-    section.querySelectorAll('[data-planner-kanban-field]').forEach((el) => {
+    // Kanban/WBS name/comments after table cells so live board edits win over stale inputs.
+    section.querySelectorAll('[data-planner-kanban-field], [data-planner-wbs-field]').forEach((el) => {
         const row = Number(el.dataset.plannerRow);
-        const key = String(el.dataset.plannerKanbanField || '');
+        const key = String(el.dataset.plannerKanbanField || el.dataset.plannerWbsField || '');
         if (!Number.isFinite(row) || (key !== 'name' && key !== 'comments')) return;
         const value = key === 'name'
             ? String(el.textContent || '')
