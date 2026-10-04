@@ -981,34 +981,35 @@
 }
 
 /*
- * Subtle 2×2 grip strip on the slot footer — hover only, no layout push.
- * Painted inside the slot (so it isn’t covered by the opaque fill), below title/comment.
+ * Subtle 2×N grip strip on the slot footer — hover only, no layout push.
+ * Soft grey (not text color) so it stays quiet on light cards.
  */
 .planner-kanban__card.is-editable .planner-kanban__card-slot::after {
     content: '';
     position: absolute;
     left: 0.28rem;
     right: 0.28rem;
-    bottom: 0.12rem;
-    height: 0.5rem;
+    bottom: 0.1rem;
+    height: 0.4rem;
     z-index: 1;
     pointer-events: none;
     opacity: 0;
     border-radius: 1px;
     background-image:
-        radial-gradient(circle at 25% 25%, currentColor 1.05px, transparent 1.2px),
-        radial-gradient(circle at 75% 25%, currentColor 1.05px, transparent 1.2px),
-        radial-gradient(circle at 25% 75%, currentColor 1.05px, transparent 1.2px),
-        radial-gradient(circle at 75% 75%, currentColor 1.05px, transparent 1.2px);
+        radial-gradient(circle at 25% 25%, currentColor 0.95px, transparent 1.1px),
+        radial-gradient(circle at 75% 25%, currentColor 0.95px, transparent 1.1px),
+        radial-gradient(circle at 25% 75%, currentColor 0.95px, transparent 1.1px),
+        radial-gradient(circle at 75% 75%, currentColor 0.95px, transparent 1.1px);
     background-size: 5px 5px;
-    background-repeat: repeat;
-    color: var(--card-action-fg, var(--text-muted));
+    background-repeat: repeat-x;
+    background-position: center;
+    color: color-mix(in srgb, var(--text-muted, #6b7280) 55%, transparent);
     transition: opacity 0.12s ease;
 }
 
 .planner-kanban__card.is-editable:hover .planner-kanban__card-slot::after,
 .planner-kanban__card.is-editable:focus-within .planner-kanban__card-slot::after {
-    opacity: 0.45;
+    opacity: 0.32;
 }
 
 .planner-kanban__card.is-kanban-editing .planner-kanban__card-slot::after {

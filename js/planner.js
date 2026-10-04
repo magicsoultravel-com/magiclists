@@ -281,11 +281,27 @@ export function normalizePlanner(raw) {
     }
 
     const stageByRow = normalizeKanbanStageByRow(raw.kanbanStageByRow, sheet.rows);
-    // Drop stages for rows with no name (those cards are hidden on the board).
+    const orderByStage = normalizeKanbanOrderByStage(raw.kanbanOrderByStage, sheet.rows);
+    const cardColors = normalizeKanbanCardColors(raw.kanbanCardColors, sheet.rows);
+    const emphasisByRow = normalizeKanbanEmphasisByRow(raw.kanbanEmphasisByRow, sheet.rows);
+    const collapsedByRow = normalizeKanbanCollapsedByRow(raw.kanbanCollapsedByRow, sheet.rows);
+    // Drop kanban meta for rows with no name (those cards are hidden on the board).
     const nameCol = PLANNER_COLUMNS.findIndex((c) => c.key === 'name');
-    for (const key of Object.keys(stageByRow)) {
-        const r = Number(key);
-        if (!getRawCell(sheet.cells, r, nameCol)) delete stageByRow[key];
+    const pruneEmptyNameKeys = (map) => {
+        for (const key of Object.keys(map)) {
+            const r = Number(key);
+            if (!getRawCell(sheet.cells, r, nameCol)) delete map[key];
+        }
+        return map;
+    };
+    pruneEmptyNameKeys(stageByRow);
+    pruneEmptyNameKeys(cardColors);
+    pruneEmptyNameKeys(emphasisByRow);
+    pruneEmptyNameKeys(collapsedByRow);
+    for (const key of Object.keys(orderByStage)) {
+        const next = orderByStage[key].filter((r) => getRawCell(sheet.cells, r, nameCol));
+        if (next.length) orderByStage[key] = next;
+        else delete orderByStage[key];
     }
 
     return {
@@ -294,14 +310,17 @@ export function normalizePlanner(raw) {
         chartView: normalizePlannerChartView(raw.chartView),
         chartCollapsed: !!raw.chartCollapsed,
         tableCollapsed: !!raw.tableCollapsed,
-        kanbanCollapsed: !!raw.kanbanCollapsed,
+        // First upgrade: inherit chart collapse when kanban flag was never saved.
+        kanbanCollapsed: Object.prototype.hasOwnProperty.call(raw, 'kanbanCollapsed')
+            ? !!raw.kanbanCollapsed
+            : !!raw.chartCollapsed,
         kanbanSort: normalizeKanbanSort(raw.kanbanSort),
         kanbanSortDir: normalizeKanbanSortDir(raw.kanbanSortDir),
         kanbanStageByRow: stageByRow,
-        kanbanOrderByStage: normalizeKanbanOrderByStage(raw.kanbanOrderByStage, sheet.rows),
-        kanbanCardColors: normalizeKanbanCardColors(raw.kanbanCardColors, sheet.rows),
-        kanbanEmphasisByRow: normalizeKanbanEmphasisByRow(raw.kanbanEmphasisByRow, sheet.rows),
-        kanbanCollapsedByRow: normalizeKanbanCollapsedByRow(raw.kanbanCollapsedByRow, sheet.rows),
+        kanbanOrderByStage: orderByStage,
+        kanbanCardColors: cardColors,
+        kanbanEmphasisByRow: emphasisByRow,
+        kanbanCollapsedByRow: collapsedByRow,
         labelWidth: normalizePlannerLabelWidth(raw.labelWidth),
         categoryColors: normalizeCategoryColors(raw.categoryColors),
         sheet

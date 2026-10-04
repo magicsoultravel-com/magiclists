@@ -1,7 +1,7 @@
 /** @module {"owns":"note item mutation functions", "related":["noteSurface.js","noteSurfaceEditing.js","noteSurfaceChecklist.js","noteModel.js","sheet.js","undo.js"], "events":["item:mutation_requested"]} */
 import { normalizeItemForSave, combineDateTime } from './noteModel.js';
 import { syncSheetFromDom } from './sheet.js';
-import { setCellValue } from './planner.js';
+import { setCellValue, setPlannerField } from './planner.js';
 import { UndoManager } from './undo.js';
 import { sanitizeRichHtml, linkifyPlainUrls } from './richText.js';
 import { insertTextAtCaret, handleInlineEditArrowNav } from './noteSurfaceEditing.js';
@@ -94,11 +94,17 @@ function emitItemMutation(item, { preserveView = false, beforeItem = null, skipR
  * @param {boolean} [opts.skipRerender=false] - If true, skips re-rendering the note surface
  * @param {boolean} [opts.localOnly=false] - If true, only mutates locally without emitting event
  */
-function mutateItem(item, mutator, { preserveView = false, skipRerender = false, localOnly = false } = {}) {
+function mutateItem(item, mutator, {
+    preserveView = false,
+    skipRerender = false,
+    localOnly = false,
+    mergeKey = null,
+    mergeWindow = true
+} = {}) {
     const beforeItem = JSON.parse(JSON.stringify(item));
     mutator(item);
     if (!localOnly) {
-        emitItemMutation(item, { preserveView, beforeItem, skipRerender });
+        emitItemMutation(item, { preserveView, beforeItem, skipRerender, mergeKey, mergeWindow });
     }
 }
 
@@ -128,6 +134,17 @@ function syncPlannerSheetFromDom(root, item) {
         const col = Number(el.dataset.col);
         if (!Number.isFinite(row) || !Number.isFinite(col)) return;
         setCellValue(sheet, row, col, el.value);
+    });
+
+    // Kanban name/comments after table cells so live kanban edits win over stale inputs.
+    section.querySelectorAll('[data-planner-kanban-field]').forEach((el) => {
+        const row = Number(el.dataset.plannerRow);
+        const key = String(el.dataset.plannerKanbanField || '');
+        if (!Number.isFinite(row) || (key !== 'name' && key !== 'comments')) return;
+        const value = key === 'name'
+            ? String(el.textContent || '')
+            : String(el.value ?? '');
+        setPlannerField(sheet, row, key, value);
     });
 }
 

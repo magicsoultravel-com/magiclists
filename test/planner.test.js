@@ -264,7 +264,7 @@ describe('planner model', () => {
         assert.ok(editable.includes('data-planner-kanban-field="comments"'));
         assert.ok(editable.includes('contenteditable="plaintext-only"'));
         assert.ok(/<textarea[^>]*data-planner-kanban-field="comments"/.test(editable));
-        assert.ok(/rows="3"/.test(editable));
+        assert.ok(/rows="1"/.test(editable));
         // No size-changing hover flyout — content stays in the stable slot.
         assert.ok(!editable.includes('planner-kanban__card-flyout'));
         // One action suite on the article; overflow tray behind more + grab.
@@ -752,6 +752,26 @@ describe('planner Kanban', () => {
         assert.equal(planner.kanbanSort, 'manual');
         assert.deepEqual(planner.kanbanStageByRow, { '0': 2 });
         assert.deepEqual(planner.kanbanOrderByStage, { '2': [0] });
+    });
+
+    it('normalizePlanner prunes empty-name kanban maps and inherits chart collapse', () => {
+        const raw = createEmptyPlanner();
+        setPlannerField(raw.sheet, 0, 'name', 'Keep');
+        // Row 1 has no name — meta for it must not survive.
+        raw.kanbanStageByRow = { '0': 1, '1': 2 };
+        raw.kanbanOrderByStage = { '1': [0, 1], '2': [1] };
+        raw.kanbanCardColors = { '0': '#112233', '1': '#abcdef' };
+        raw.kanbanEmphasisByRow = { '0': 'urgent', '1': 'muted' };
+        raw.kanbanCollapsedByRow = { '0': true, '1': true };
+        raw.chartCollapsed = true;
+        delete raw.kanbanCollapsed;
+        const planner = normalizePlanner(raw);
+        assert.equal(planner.kanbanCollapsed, true);
+        assert.deepEqual(planner.kanbanStageByRow, { '0': 1 });
+        assert.deepEqual(planner.kanbanOrderByStage, { '1': [0] });
+        assert.deepEqual(planner.kanbanCardColors, { '0': '#112233' });
+        assert.deepEqual(planner.kanbanEmphasisByRow, { '0': 'urgent' });
+        assert.deepEqual(planner.kanbanCollapsedByRow, { '0': true });
     });
 });
 

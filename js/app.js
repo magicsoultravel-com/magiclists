@@ -247,6 +247,9 @@ BootProgress.set(85, 'Workspace…');
             isEnabled: () => AppState.user.isLoggedIn,
             onRestore: (item, { preserveView = false } = {}) => this.restoreItem(item, preserveView),
             onRemove: (itemId) => this.removeItemFromWorkspace(itemId),
+            onBeforeUndoRedo: () => import('./plannerUi.js')
+                .then(({ flushOpenPlannerCommits }) => flushOpenPlannerCommits())
+                .catch(() => {}),
             onStackChange: () => {
                 SidebarHistory.renderPanel();
                 this.renderQuickActionsHeaderIcons();
@@ -561,6 +564,7 @@ BootProgress.set(85, 'Workspace…');
                 DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
             }
             this.updateWorkspaceCounter();
+            await this.refreshPlannerHostsAfterRestore(merged);
             return;
         }
         
@@ -574,6 +578,7 @@ BootProgress.set(85, 'Workspace…');
         }
         
         await this.syncDataStore();
+        await this.refreshPlannerHostsAfterRestore(merged);
         
         // After sync, highlight and scroll to the card
         requestAnimationFrame(() => {
@@ -595,6 +600,23 @@ BootProgress.set(85, 'Workspace…');
                 card.classList.remove('card-highlighted');
             }, { once: true });
         });
+    }
+
+    async refreshPlannerHostsAfterRestore(item) {
+        if (!item?.id || !item?.planner) return;
+        try {
+            const { syncNotePlannerDom } = await import('./plannerUi.js');
+            syncNotePlannerDom(item);
+        } catch (err) {
+            console.warn('[Undo] syncNotePlannerDom failed:', err);
+        }
+        if (MagicFocus.isOpen() && MagicFocus.getActiveItemId() === item.id) {
+            try {
+                await MagicFocus.refreshPlannerPanes?.(item);
+            } catch (err) {
+                console.warn('[Undo] refreshPlannerPanes failed:', err);
+            }
+        }
     }
 
     checkAuthSession() {

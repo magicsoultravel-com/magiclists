@@ -3,6 +3,21 @@ import { escapeHTML, escapeAttr } from './domEscape.js';
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { parseStoredDateTime, combineDateTime } from './noteModel.js';
 import { mutateItem, emitItemMutation } from './noteSurfaceMutations.js';
+import { UndoManager } from './undo.js';
+
+/** @type {Set<() => void>} */
+const plannerCommitFlushers = new Set();
+
+/** Flush any in-flight debounced planner text commits before undo/redo. */
+export function flushOpenPlannerCommits() {
+    for (const flush of [...plannerCommitFlushers]) {
+        try {
+            flush();
+        } catch {
+            /* ignore stale flushers */
+        }
+    }
+}
 import {
     PLANNER_COLUMNS,
     PLANNER_COL_COUNT,
@@ -345,7 +360,8 @@ function plannerSectionCanEdit(section) {
     if (!section) return false;
     if (section.closest?.('.magic-focus__pane')) return true;
     if (section.matches?.('[data-focus-table-only], [data-focus-chart-only], [data-focus-kanban-only]')) return true;
-    if (section.querySelector?.('.planner-cell-input, [data-planner-rail-resize], [data-planner-kanban-card]')) {
+    // Require editable chrome — readonly cards also carry [data-planner-kanban-card].
+    if (section.querySelector?.('.planner-cell-input, [data-planner-rail-resize], .planner-kanban__card.is-editable, [data-planner-kanban-field]')) {
         return true;
     }
     return bodyCanEdit(section.closest('.editor-note-body') || section);
@@ -891,7 +907,7 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
                     ? `<div class="planner-kanban__card-name card-inline-edit" contenteditable="plaintext-only" data-planner-kanban-field="name" data-planner-row="${card.row}" spellcheck="false" role="textbox" aria-label="Name">${escapeHTML(nameText)}</div>`
                     : `<span class="planner-kanban__card-name">${escapeHTML(nameText)}</span>`;
                 const slotCommentHtml = canEdit
-                    ? `<textarea class="planner-kanban__card-comment card-inline-edit" data-planner-kanban-field="comments" data-planner-row="${card.row}" rows="3" spellcheck="false" aria-label="Comments">${escapeHTML(commentRaw)}</textarea>`
+                    ? `<textarea class="planner-kanban__card-comment card-inline-edit" data-planner-kanban-field="comments" data-planner-row="${card.row}" rows="1" spellcheck="false" aria-label="Comments">${escapeHTML(commentRaw)}</textarea>`
                     : (comment ? `<span class="planner-kanban__card-comment">${escapeHTML(comment)}</span>` : '');
                 const metaHtml = `${rowHtml}${startHtml}${stopHtml}`;
                 const slotBody = `${metaHtml}
@@ -1010,6 +1026,7 @@ export function syncPlannerFromDom(section, item) {
         setCellValue(sheet, row, col, el.value);
     });
 
+    // After table cells so live kanban edits win over stale sheet inputs.
     section.querySelectorAll('[data-planner-kanban-field]').forEach((el) => {
         const row = Number(el.dataset.plannerRow);
         const key = String(el.dataset.plannerKanbanField || '');
@@ -1019,6 +1036,26 @@ export function syncPlannerFromDom(section, item) {
             : String(el.value ?? '');
         setPlannerField(sheet, row, key, value);
     });
+}
+
+/**
+ * Keep table name/comments inputs aligned with a kanban field edit (same note hosts).
+ * Prevents stale table DOM from overwriting the sheet on the next body sync.
+ * @param {string} itemId
+ * @param {number} row
+ * @param {'name'|'comments'} key
+ * @param {string} value
+ */
+function mirrorKanbanFieldToTableDom(itemId, row, key, value) {
+    if (!itemId || !Number.isFinite(row) || (key !== 'name' && key !== 'comments')) return;
+    const next = String(value ?? '');
+    for (const body of noteBodiesForItem(itemId)) {
+        body.querySelectorAll?.(`[data-planner-cell][data-row="${row}"][data-col-key="${key}"]`).forEach((cell) => {
+            if (cell.value === next) return;
+            cell.value = next;
+            growPlannerCell(cell);
+        });
+    }
 }
 
 function mountGanttViewport(host, layout, {
@@ -1097,6 +1134,8 @@ function refreshKanbanInSection(section, item) {
     if (active && host.contains(active) && active.closest?.('[data-planner-kanban-field]')) return;
     const board = host.querySelector('[data-planner-kanban-board]');
     const preserveScrollLeft = board ? board.scrollLeft : null;
+    const normalized = normalizePlanner(item.planner);
+    if (normalized) item.planner = normalized;
     const html = renderPlannerKanbanHtml(item.planner, {
         canEdit: plannerSectionCanEdit(section),
         flavour: readDisplayOptions().plannerKanbanFlavour
@@ -1108,6 +1147,8 @@ function refreshKanbanInSection(section, item) {
     host.replaceWith(next);
     const nextBoard = next.querySelector('[data-planner-kanban-board]');
     if (nextBoard && preserveScrollLeft != null) nextBoard.scrollLeft = preserveScrollLeft;
+    // Host swap skips re-bind; re-measure comments now that nodes are connected.
+    growPlannerTextareas(next);
 }
 
 /**
@@ -1178,10 +1219,11 @@ function growPlannerCell(el) {
     if (!el || !el.style) return;
     el.style.height = '0';
     const next = Math.max(el.scrollHeight, 18);
-    // Kanban comments: keep ~3-line resting height unless focused.
+    // Kanban comments: empty stays 1 line; content caps at ~3 unless focused.
     if (el.matches?.('textarea.planner-kanban__card-comment') && document.activeElement !== el) {
         const lh = Number.parseFloat(getComputedStyle(el).lineHeight) || 14;
-        el.style.height = `${Math.min(next, Math.round(lh * 3))}px`;
+        const hasText = String(el.value || '').trim().length > 0;
+        el.style.height = `${Math.min(next, Math.round(lh * (hasText ? 3 : 1)))}px`;
         return;
     }
     el.style.height = `${next}px`;
@@ -1398,7 +1440,13 @@ export function attachPlannerInteractions(root, item, {
 
     const alreadyBound = section.dataset.plannerBound === '1';
     // Height thrash (0 → auto) only on first bind — rebind must not yank board scroll.
-    if (!alreadyBound) growPlannerTextareas(section);
+    // Board cards often bind before appendChild; re-grow next frame once connected.
+    if (!alreadyBound) {
+        growPlannerTextareas(section);
+        requestAnimationFrame(() => {
+            if (section.isConnected) growPlannerTextareas(section);
+        });
+    }
 
     if (alreadyBound) return;
     section.dataset.plannerBound = '1';
@@ -1444,8 +1492,13 @@ export function attachPlannerInteractions(root, item, {
     let commitTimer = null;
     let pendingBefore = null;
     let pendingNeedGantt = false;
+    const plannerMergeKey = () => `${item.id}:planner`;
 
     const flushPlannerCommit = () => {
+        if (!section.isConnected) {
+            plannerCommitFlushers.delete(flushPlannerCommit);
+            return;
+        }
         if (commitTimer) {
             clearTimeout(commitTimer);
             commitTimer = null;
@@ -1459,12 +1512,15 @@ export function attachPlannerInteractions(root, item, {
             emitItemMutation(item, {
                 preserveView: true,
                 beforeItem,
-                skipRerender: true
+                skipRerender: true,
+                mergeKey: plannerMergeKey(),
+                mergeWindow: true
             });
         }
         if (needGantt) refreshPlannerDerivedViews(item);
         onChange();
     };
+    plannerCommitFlushers.add(flushPlannerCommit);
 
     const schedulePlannerCommit = ({ refreshGantt = true } = {}) => {
         if (!pendingBefore) {
@@ -1481,7 +1537,13 @@ export function attachPlannerInteractions(root, item, {
         mutateItem(item, (it) => {
             if (!it.planner) it.planner = createEmptyPlanner();
             fn(it);
-        }, { preserveView: true, skipRerender, localOnly });
+        }, {
+            preserveView: true,
+            skipRerender,
+            localOnly,
+            mergeKey: plannerMergeKey(),
+            mergeWindow: true
+        });
         if (refreshGantt) refreshPlannerDerivedViews(item);
         onChange();
     };
@@ -1560,6 +1622,7 @@ export function attachPlannerInteractions(root, item, {
                 ? String(kanbanField.textContent || '')
                 : String(kanbanField.value ?? '');
             setPlannerField(item.planner.sheet, row, key, value);
+            mirrorKanbanFieldToTableDom(item.id, row, key, value);
             if (key === 'comments') growPlannerCell(kanbanField);
             return;
         }
@@ -1619,16 +1682,24 @@ export function attachPlannerInteractions(root, item, {
                     kanbanField.textContent = prev;
                     if (Number.isFinite(row) && item.planner?.sheet) {
                         setPlannerField(item.planner.sheet, row, 'name', prev);
+                        mirrorKanbanFieldToTableDom(item.id, row, 'name', prev);
                     }
                 } else if (String(kanbanField.textContent || '') !== trimmed) {
                     kanbanField.textContent = trimmed;
                     const rowNum = Number(kanbanField.dataset.plannerRow);
                     if (Number.isFinite(rowNum) && item.planner?.sheet) {
                         setPlannerField(item.planner.sheet, rowNum, 'name', trimmed);
+                        mirrorKanbanFieldToTableDom(item.id, rowNum, 'name', trimmed);
                     }
+                } else if (Number.isFinite(row)) {
+                    mirrorKanbanFieldToTableDom(item.id, row, 'name', trimmed);
                 }
             }
             if (kanbanField.dataset.plannerKanbanField === 'comments') {
+                const row = Number(kanbanField.dataset.plannerRow);
+                if (Number.isFinite(row)) {
+                    mirrorKanbanFieldToTableDom(item.id, row, 'comments', String(kanbanField.value ?? ''));
+                }
                 // Re-clamp to ~3 lines after edit.
                 requestAnimationFrame(() => growPlannerCell(kanbanField));
             }
@@ -1657,6 +1728,23 @@ export function attachPlannerInteractions(root, item, {
             if (open) {
                 e.preventDefault();
                 closeOpenKanbanCardActions();
+                return;
+            }
+        }
+        // Planner fields skip the global UndoManager chord (contenteditable/input).
+        // Flush pending debounce, then use app undo so table + kanban stay aligned.
+        const mod = e.ctrlKey || e.metaKey;
+        if (mod && (e.key === 'z' || e.key === 'Z' || e.key === 'y' || e.key === 'Y')) {
+            const inPlannerEdit = e.target.closest?.(
+                '[data-planner-cell], [data-planner-kanban-field], [data-planner-date], [data-planner-time], [data-planner-datetime]'
+            );
+            if (inPlannerEdit && section.contains(inPlannerEdit)) {
+                e.preventDefault();
+                e.stopPropagation();
+                flushPlannerCommit();
+                const redo = e.key === 'y' || e.key === 'Y' || ((e.key === 'z' || e.key === 'Z') && e.shiftKey);
+                if (redo) UndoManager.redo();
+                else UndoManager.undo();
                 return;
             }
         }

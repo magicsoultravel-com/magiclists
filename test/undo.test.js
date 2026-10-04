@@ -29,8 +29,10 @@ import {
 import { normalizeItemForSave } from '../js/noteModel.js';
 
 import { mergeItemOntoExisting } from '../js/itemMerge.js';
+import { UndoManager, describeHistoryEntry } from '../js/undo.js';
+import { createEmptyPlanner, setPlannerField } from '../js/planner.js';
 
-const CONTENT_FIELDS = new Set(['title', 'content', 'steps', 'sheet']);
+const CONTENT_FIELDS = new Set(['title', 'content', 'steps', 'sheet', 'planner']);
 
 function cloneItemDeep(item) {
     return JSON.parse(JSON.stringify(item));
@@ -918,6 +920,96 @@ describe('Undo restore preserves note metadata (theme/color regression)', () => 
     it('returns the existing item when the partial snapshot is empty', () => {
         const full = { id: 'n', title: 'x', color: '#123456' };
         assert.equal(mergeItemOntoExisting(full, null), full);
+    });
+});
+
+describe('UndoManager planner history', () => {
+    beforeEach(() => {
+        // Node test env has no DOM; init only needs a keydown host stub.
+        globalThis.document = globalThis.document || {
+            addEventListener() {},
+            getElementById() { return null; }
+        };
+        globalThis.localStorage = globalThis.localStorage || {
+            getItem() { return null; },
+            setItem() {},
+            removeItem() {}
+        };
+        UndoManager._keydownBound = true; // skip rebinding document listeners
+        UndoManager.init({
+            getToken: () => 'test-token',
+            isEnabled: () => true,
+            onRestore: async () => true,
+            onRemove: async () => {},
+            onBeforeUndoRedo: () => {}
+        });
+        UndoManager.clear({ persist: false });
+    });
+
+    afterEach(() => {
+        UndoManager.clear({ persist: false });
+    });
+
+    it('records planner-only changes into the undo stack', () => {
+        const before = { id: 'note-p1', title: 'Plan', planner: createEmptyPlanner() };
+        const after = cloneItemDeep(before);
+        setPlannerField(after.planner.sheet, 0, 'name', 'Task A');
+
+        UndoManager.recordItemChange(before, after, {
+            mergeKey: 'note-p1:planner',
+            preserveView: true
+        });
+
+        assert.equal(UndoManager.undoStack.length, 1);
+        const entry = UndoManager.undoStack[0];
+        assert.equal(entry.mergeKey, 'note-p1:planner');
+        assert.ok(entry.forwardDelta?.planner);
+        const detail = describeHistoryEntry(entry);
+        assert.ok(detail.lines.some((line) => /Planner/i.test(line)));
+    });
+
+    it('merges successive planner edits with the same mergeKey', () => {
+        const base = { id: 'note-p2', title: 'Plan', planner: createEmptyPlanner() };
+        const mid = cloneItemDeep(base);
+        setPlannerField(mid.planner.sheet, 0, 'name', 'Task');
+        const end = cloneItemDeep(mid);
+        setPlannerField(end.planner.sheet, 0, 'comments', 'Hello');
+
+        UndoManager.recordItemChange(base, mid, {
+            mergeKey: 'note-p2:planner',
+            mergeWindow: true
+        });
+        UndoManager.recordItemChange(mid, end, {
+            mergeKey: 'note-p2:planner',
+            mergeWindow: true
+        });
+
+        assert.equal(UndoManager.undoStack.length, 1);
+        const entry = UndoManager.undoStack[0];
+        // Merged after-state should include both name and comments from the burst.
+        const afterPlanner = applyForwardDelta(entry.before, entry.forwardDelta).planner;
+        assert.equal(afterPlanner.sheet.cells['0:0']?.v, 'Task');
+        assert.equal(afterPlanner.sheet.cells['0:5']?.v, 'Hello');
+    });
+
+    it('does not merge planner edits into a content mergeKey lane', () => {
+        const before = { id: 'note-p3', title: 'Old', planner: createEmptyPlanner() };
+        const titled = { ...cloneItemDeep(before), title: 'New' };
+        const planned = cloneItemDeep(before);
+        setPlannerField(planned.planner.sheet, 0, 'name', 'Row');
+
+        UndoManager.recordItemChange(before, titled, {
+            mergeKey: 'note-p3:content',
+            mergeWindow: true
+        });
+        UndoManager.recordItemChange(before, planned, {
+            mergeKey: 'note-p3:planner',
+            mergeWindow: true
+        });
+
+        assert.equal(UndoManager.undoStack.length, 2);
+        assert.equal(UndoManager.undoStack[0].mergeKey, 'note-p3:content');
+        assert.equal(UndoManager.undoStack[1].mergeKey, 'note-p3:planner');
     });
 });
 

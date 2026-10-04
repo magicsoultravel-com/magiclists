@@ -15,7 +15,8 @@ let handlers = {
     isEnabled: () => false,
     onRestore: async () => {},
     onRemove: async () => {},
-    onStackChange: () => {}
+    onStackChange: () => {},
+    onBeforeUndoRedo: () => {}
 };
 
 function cloneItem(item) {
@@ -71,8 +72,8 @@ const DETAIL_TEXT_PREVIEW = 280;
 const DETAIL_MAX_STEP_CHANGES = 5;
 
 // Only track content-related fields for undo/redo
-// These are the fields that represent note content (title, content, checklist steps, sheet data)
-const CONTENT_FIELDS = new Set(['title', 'content', 'steps', 'sheet']);
+// These are the fields that represent note content (title, content, checklist steps, sheet, planner)
+const CONTENT_FIELDS = new Set(['title', 'content', 'steps', 'sheet', 'planner']);
 
 const DETAIL_SKIP_KEYS = new Set(['id', 'owner_id', 'created_at', 'updated_at']);
 
@@ -80,7 +81,8 @@ const DETAIL_FIELD_LABELS = {
     title: 'Title',
     content: 'Content',
     steps: 'Checklist',
-    sheet: 'Sheet'
+    sheet: 'Sheet',
+    planner: 'Planner'
 };
 
 function truncateDetailText(text, max = DETAIL_MAX_LINE_CHARS) {
@@ -200,6 +202,17 @@ function describeSheetChange(beforeSheet, afterSheet) {
     return changes.join(', ');
 }
 
+function describePlannerChange(beforePlanner, afterPlanner) {
+    if (!beforePlanner && !afterPlanner) return null;
+    if (!beforePlanner || !afterPlanner) return 'Planner updated';
+    const beforeRows = beforePlanner?.sheet?.rows || 0;
+    const afterRows = afterPlanner?.sheet?.rows || 0;
+    if (beforeRows !== afterRows) {
+        return `Planner rows: ${beforeRows} → ${afterRows}`;
+    }
+    return 'Planner updated';
+}
+
 function describeChangeEntry(entry) {
     const before = entry.before;
     const delta = entry.forwardDelta || {};
@@ -234,6 +247,11 @@ function describeChangeEntry(entry) {
         }
         if (key === 'sheet') {
             const line = describeSheetChange(beforeVal, afterVal);
+            if (line) pushLine(line);
+            return;
+        }
+        if (key === 'planner') {
+            const line = describePlannerChange(beforeVal, afterVal);
             if (line) pushLine(line);
             return;
         }
@@ -568,6 +586,12 @@ export const UndoManager = {
 
     async undo() {
         if (this.busy || !this.undoStack.length || !handlers.isEnabled()) return;
+        try {
+            await handlers.onBeforeUndoRedo?.();
+        } catch (err) {
+            console.warn('[Undo] onBeforeUndoRedo failed:', err);
+        }
+        if (!this.undoStack.length) return;
         const entry = this.undoStack.pop();
         if (!entry) return;
 
@@ -597,6 +621,12 @@ export const UndoManager = {
 
     async redo() {
         if (this.busy || !this.redoStack.length || !handlers.isEnabled()) return;
+        try {
+            await handlers.onBeforeUndoRedo?.();
+        } catch (err) {
+            console.warn('[Redo] onBeforeUndoRedo failed:', err);
+        }
+        if (!this.redoStack.length) return;
         const entry = this.redoStack.pop();
         if (!entry) return;
 
