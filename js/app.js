@@ -68,7 +68,7 @@ import { CloudBackup } from './cloudBackup.js';
 import { ScheduledBackup } from './scheduledBackup.js';
 import { BoardSort } from './boardSort.js';
 import { BootProgress } from './bootProgress.js';
-import { renderQuickActions } from './noteQuickActions.js';
+import { renderQuickActions, importNotePackageFromPicker } from './noteQuickActions.js';
 import { DesktopDock } from './desktopDockComponent.js';
 import { DesktopManager } from './desktopManager.js';
 import { TemplatePicker } from './templatePicker.js';
@@ -784,6 +784,12 @@ renderQuickActions() {
                 onScheduleExport: (e) => ScheduledBackup.handleClick(e.currentTarget),
                 onImportDb: () => document.getElementById('system-import-file-picker').click(),
                 onImportAll: () => document.getElementById('system-import-all-picker').click(),
+                onImportNote: async () => {
+                    const result = await importNotePackageFromPicker();
+                    if (result?.status && result.status !== 'cancelled') {
+                        await this.syncDataStore();
+                    }
+                },
                 onLogout: () => this.executeLogout(),
                 onLogin: () => this.executeLoginPrompt(),
                 onLayoutReset: async () => {
@@ -1218,14 +1224,35 @@ renderQuickActions() {
             archivePicker.addEventListener('change', async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                const confirmed = confirm('Restore this full backup archive? Your current workspace and media library will be replaced.');
-                if (!confirmed) {
-                    archivePicker.value = '';
-                    return;
-                }
-                LoadingManager.show(archivePicker, 'Importing all...');
+                LoadingManager.show(archivePicker, 'Importing…');
                 try {
-                    const parsedBackup = await importFullBackupArchive(file);
+                    const buffer = await file.arrayBuffer();
+                    const { readZip } = await import('./mediaBackup.js');
+                    const zipFiles = await readZip(buffer);
+
+                    // Single-note packages: merge/replace one note — never wipe the workspace.
+                    if (zipFiles.has('note.json')) {
+                        const { importNotePackageFromZipMap, parseNotePackageFromZipMap } = await import('./notePackage.js');
+                        try {
+                            parseNotePackageFromZipMap(zipFiles);
+                            LoadingManager.show(archivePicker, 'Importing note…');
+                            const result = await importNotePackageFromZipMap(zipFiles);
+                            if (result?.status !== 'cancelled') await this.syncDataStore();
+                            return;
+                        } catch (noteErr) {
+                            if (!String(noteErr?.message || '').includes('Not a Magic Lists note package')) {
+                                throw noteErr;
+                            }
+                            // note.json present but not our kind — fall through.
+                        }
+                    }
+
+                    const confirmed = confirm('Restore this full backup archive? Your current workspace and media library will be replaced.');
+                    if (!confirmed) return;
+
+                    LoadingManager.show(archivePicker, 'Importing all…');
+                    const archiveBlob = new Blob([buffer], { type: file.type || 'application/zip' });
+                    const parsedBackup = await importFullBackupArchive(archiveBlob);
                     // Two shapes come back: a checkpoint bundle ({ manifest, applied })
                     // and a legacy full archive (a package with matrix_database).
                     const isCheckpoint = parsedBackup?.manifest?.kind === 'magicnotes_checkpoint';

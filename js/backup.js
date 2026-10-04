@@ -507,13 +507,26 @@ export async function importCheckpointBundleFiles(files) {
 
 /**
  * Restore an exported ZIP. Routes to the checkpoint-bundle importer when the
- * archive carries a checkpoint manifest, otherwise treats it as a legacy full
- * backup archive (workspace.json + media/).
+ * archive carries a checkpoint manifest, a single-note package when note.json
+ * is present, otherwise treats it as a legacy full backup archive
+ * (workspace.json + media/).
  * @param {File|Blob} file
  */
 export async function importFullBackupArchive(file) {
     const buffer = await file.arrayBuffer();
     const files = await readZip(buffer);
+    if (files.has('note.json')) {
+        const { importNotePackageFromZipMap, NOTE_PACKAGE_KIND } = await import('./notePackage.js');
+        try {
+            const result = await importNotePackageFromZipMap(files);
+            return { kind: NOTE_PACKAGE_KIND, notePackage: result };
+        } catch (err) {
+            // Fall through only when note.json is not a note package marker.
+            if (!String(err?.message || '').includes('Not a Magic Lists note package')) {
+                throw err;
+            }
+        }
+    }
     if (files.has('checkpoint.json')) {
         return importCheckpointBundleFiles(files);
     }

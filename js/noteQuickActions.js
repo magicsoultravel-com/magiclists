@@ -21,6 +21,11 @@ import { MediaLibraryOverlay } from './mediaLibraryOverlay.js';
 import { attachmentCount } from './mediaAttachments.js';
 import { createEmptyNoteCanvas } from './noteModel.js';
 import { createEmptyPlanner } from './planner.js';
+import {
+    buildNotePackageZip,
+    downloadNotePackageBlob,
+    importNotePackage
+} from './notePackage.js';
 
 /**
  * Attach a quick-action button using a "commit then act" pattern.
@@ -94,6 +99,7 @@ function queryActionButtons(root) {
         actions,
         archiveBtn: root.querySelector?.('.card-act--archive'),
         copyBtn: actions.querySelector('.card-act--copy'),
+        notePackageBtn: actions.querySelector('.card-act--note-package'),
         pinBtn: actions.querySelector('.card-act--pin'),
         dragBtn: actions.querySelector('.card-act--drag'),
         toggleBtn: actions.querySelector('.card-act--toggle'),
@@ -113,9 +119,71 @@ function queryActionButtons(root) {
     };
 }
 
+function resolveLiveNoteForPackage(item, { surface, card, editor } = {}) {
+    if (surface === 'board') {
+        const shell = card?.querySelector?.('.editor-note-shell');
+        if (shell) NoteSurface.syncItemBodyFromDom(shell, item);
+        return item;
+    }
+    if (surface === 'focus') {
+        editor?.syncActiveItemFromDom?.();
+        return item;
+    }
+    editor?.syncActiveItemFromDom?.();
+    return editor?.collectFormData ? editor.collectFormData() : item;
+}
+
+async function exportNotePackageForItem(item, { surface, card, editor } = {}) {
+    const live = resolveLiveNoteForPackage(item, { surface, card, editor });
+    if (!live?.id) {
+        showAppToast('Nothing to export');
+        return;
+    }
+    try {
+        const payload = await buildNotePackageZip(live);
+        downloadNotePackageBlob(payload.blob, payload.filename);
+        showAppToast(`Exported note “${live.title || live.id}”`);
+    } catch (err) {
+        console.error('[NotePackage] export failed', err);
+        showAppToast('Note export failed');
+    }
+}
+
+/**
+ * Sidebar / workspace entry: pick a single-note ZIP and import it.
+ * @returns {Promise<{ status: string, item: object|null }|null>}
+ */
+export async function importNotePackageFromPicker() {
+    const file = await new Promise((resolve) => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.zip,application/zip';
+        input.className = 'is-hidden';
+        const cleanup = () => input.remove();
+        input.addEventListener('change', () => {
+            const picked = input.files?.[0] || null;
+            cleanup();
+            resolve(picked);
+        }, { once: true });
+        input.addEventListener('cancel', () => {
+            cleanup();
+            resolve(null);
+        }, { once: true });
+        document.body.appendChild(input);
+        input.click();
+    });
+    if (!file) return null;
+    try {
+        return await importNotePackage(file);
+    } catch (err) {
+        console.error('[NotePackage] import failed', err);
+        showAppToast('Note import failed');
+        return null;
+    }
+}
 
 function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
-    const { copyBtn, pinBtn, dragBtn, colorBtn, attachBtn, iconBtn, hideBtn, calBtn, popoutBtn, popinBtn, drawBtn, plannerBtn, focusBtn } = buttons;
+    const { copyBtn, notePackageBtn, pinBtn, dragBtn, colorBtn, attachBtn, iconBtn, hideBtn, calBtn, popoutBtn, popinBtn, drawBtn, plannerBtn, focusBtn } = buttons;
     const iconRoot = surface === 'board'
         ? (card?.querySelector('.editor-note-shell') || card)
         : surface === 'focus'
@@ -173,7 +241,7 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
 
     // Content ownership is in the popout — leave drag, pin, popout on the board card.
     if (lockedByPopout) {
-        [colorBtn, attachBtn, iconBtn, hideBtn, calBtn, copyBtn].forEach((btn) => {
+        [colorBtn, attachBtn, iconBtn, hideBtn, calBtn, copyBtn, notePackageBtn].forEach((btn) => {
             if (!btn) return;
             btn.disabled = true;
             btn.setAttribute('aria-disabled', 'true');
@@ -206,6 +274,10 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
             if (ok) NoteSurface.flashCopyFeedback(copyBtn);
             else NoteSurface.flashCopyFeedback(copyBtn, 'Copy failed', { failed: true });
         }
+    }, { commit: boardCommit || modalCommit });
+
+    attachCardActionButton(notePackageBtn, () => {
+        exportNotePackageForItem(item, { surface, card, editor });
     }, { commit: boardCommit || modalCommit });
 
     attachCardActionButton(pinBtn, () => {
@@ -556,6 +628,7 @@ function bindModalQuickActions(toolbarMount, item, ui, editor) {
  * @param {function} handlers.onExportAllTxt - Export all as TXT click handler
  * @param {function} handlers.onImportDb - Import DB click handler
  * @param {function} handlers.onImportAll - Import all archive click handler
+ * @param {function} handlers.onImportNote - Import single-note package click handler
  * @param {function} handlers.onLogout - Logout click handler
  * @param {function} handlers.onLogin - Login click handler
  */
@@ -617,8 +690,9 @@ export function renderQuickActions({
             <button type="button" class="btn btn--compact btn--icon" id="btn-export-all" title="Export all" aria-label="Export all">${ACTION_ICONS.export}</button>
             <button type="button" class="btn btn--compact btn--icon" id="btn-export-txt" title="Export all as TXT" aria-label="Export all as TXT">${ACTION_ICONS.exportTxt}</button>
             <button type="button" class="btn btn--compact btn--icon schedule-export-btn" id="btn-schedule-export" title="Scheduled backup" aria-label="Scheduled backup">${ACTION_ICONS.scheduleExport}</button>
-            <button type="button" class="btn btn--compact btn--icon" id="btn-import-db" title="Import backup" aria-label="Import backup">${ACTION_ICONS.import}</button>
-            <button type="button" class="btn btn--compact btn--icon" id="btn-import-all" title="Import all" aria-label="Import all">${ACTION_ICONS.import}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="btn-import-db" title="Import backup" aria-label="Import backup">${ACTION_ICONS.importBackup}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="btn-import-all" title="Import all" aria-label="Import all">${ACTION_ICONS.importAll}</button>
+            <button type="button" class="btn btn--compact btn--icon" id="btn-import-note" title="Import note" aria-label="Import note">${ACTION_ICONS.importNote}</button>
             <button type="button" class="btn btn--compact btn--icon btn--icon-danger" id="btn-auth-logout" title="Logout" aria-label="Logout">${ACTION_ICONS.logout}</button>
         `;
         zone.innerHTML = `${workspaceGroup}${historyGroup}${displayGroup}${layoutGroup}${shellGroup}${accountGroup}`;
@@ -642,6 +716,7 @@ function bindQuickActionHandlers(handlers = {}) {
         onScheduleExport,
         onImportDb,
         onImportAll,
+        onImportNote,
         onLogout,
         onLogin,
         onLayoutReset
@@ -683,6 +758,7 @@ function bindQuickActionHandlers(handlers = {}) {
     document.getElementById('btn-schedule-export')?.addEventListener('click', onScheduleExport);
     document.getElementById('btn-import-db')?.addEventListener('click', onImportDb);
     document.getElementById('btn-import-all')?.addEventListener('click', onImportAll);
+    document.getElementById('btn-import-note')?.addEventListener('click', onImportNote);
     document.getElementById('btn-auth-logout')?.addEventListener('click', onLogout);
     document.getElementById('btn-auth-login')?.addEventListener('click', onLogin);
     document.getElementById('btn-layout-reset')?.addEventListener('click', onLayoutReset);

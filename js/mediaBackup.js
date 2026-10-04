@@ -179,7 +179,12 @@ export async function downloadMediaMetaJson() {
 
 /**
  * Collect media ZIP entries (manifest + files) for a standalone or nested archive.
- * @param {{ incremental?: boolean, zipSnapshot?: Record<string, number>, pathPrefix?: string }} [opts]
+ * @param {{
+ *   incremental?: boolean,
+ *   zipSnapshot?: Record<string, number>,
+ *   pathPrefix?: string,
+ *   mediaIds?: Iterable<string>|Set<string>|string[]
+ * }} [opts]
  * @returns {Promise<{
  *   skipped: boolean,
  *   isIncremental: boolean,
@@ -194,6 +199,11 @@ export async function collectMediaZipEntries(opts = {}) {
     const pathPrefix = typeof opts.pathPrefix === 'string' ? opts.pathPrefix : '';
     const snapshot = opts.zipSnapshot && typeof opts.zipSnapshot === 'object' ? opts.zipSnapshot : {};
     const hasSnapshot = Object.keys(snapshot).length > 0;
+    const allowSet = opts.mediaIds != null
+        ? new Set(Array.isArray(opts.mediaIds) || opts.mediaIds instanceof Set
+            ? opts.mediaIds
+            : [...opts.mediaIds])
+        : null;
     const records = await IndexedDBMediaStore.getAll();
     const encoder = new TextEncoder();
     const manifestItems = [];
@@ -201,6 +211,7 @@ export async function collectMediaZipEntries(opts = {}) {
     const nextSnapshot = {};
 
     for (const record of records) {
+        if (allowSet && !allowSet.has(record.id)) continue;
         const meta = toPublicMeta(record);
         if (!meta) continue;
         const updatedAt = Number(record.updatedAt) || Number(meta.updatedAt) || 0;
@@ -515,7 +526,7 @@ export async function importMediaZipFile(file) {
     return applyMediaFromZipMap(files);
 }
 
-function triggerDownload(blob, filename) {
+export function triggerDownload(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

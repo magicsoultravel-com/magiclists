@@ -169,9 +169,9 @@ export function buildNoteQuickActionsHtml(item, {
         ? `Attach media (${attachCount})`
         : 'Attach media';
     const attachBtn = `<button type="button" class="card-act card-act--attach${attachCount ? ' is-active' : ''}" title="${escapeAttr(attachTitle)}" aria-label="${escapeAttr(attachTitle)}" aria-pressed="${attachCount ? 'true' : 'false'}">${CARD_ICONS.attach}</button>`;
-    // Board: popout, draw, planner, [focus], cal, popin (popped only), emoji, copy, [pin], color, attach, hide, edit, [drag], toggle
-    // Popout: cal, close (pop in), emoji, copy, color, attach, window-size
-    let actionCount = isPopout ? 7 : 12;
+    // Board: popout, draw, planner, [focus], cal, popin (popped only), emoji, copy, note-package, [pin], color, attach, hide, edit, [drag], toggle
+    // Popout: cal, close (pop in), emoji, copy, note-package, color, attach, window-size
+    let actionCount = isPopout ? 8 : 13;
     if (!isModal && !isPopout && showDragIcon) actionCount += 1;
     if (!isPopout && poppedOut) actionCount += 1; // popin
     if (focusBtn) actionCount += 1;
@@ -193,6 +193,7 @@ export function buildNoteQuickActionsHtml(item, {
             ${popinBtn}
             <button type="button" class="card-act card-act--emoji" title="Insert emoji" aria-label="Insert emoji" aria-haspopup="dialog" aria-expanded="false">${CARD_ICONS.insertEmoji}</button>
             <button type="button" class="card-act card-act--copy" title="Copy note as text" aria-label="Copy note as text">${CARD_ICONS.copy}</button>
+            <button type="button" class="card-act card-act--note-package" title="Export note" aria-label="Export note">${CARD_ICONS.download}</button>
             ${pinBtn}
             <button type="button" class="card-act card-act--color" title="Note color" aria-label="Note color" aria-haspopup="dialog">${CARD_ICONS.color}</button>
             ${attachBtn}
