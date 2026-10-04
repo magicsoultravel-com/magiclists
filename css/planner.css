@@ -1221,13 +1221,32 @@ textarea.planner-kanban__card-comment:focus {
 }
 
 .planner-kanban__card-actions-tray {
-    display: none;
+    display: inline-flex;
     align-items: center;
     gap: 0.05rem;
+    max-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition:
+        max-width 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 0.16s ease;
 }
 
 .planner-kanban__card-actions.is-actions-open .planner-kanban__card-actions-tray {
-    display: inline-flex;
+    max-width: 7rem;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.planner-kanban__card-actions-tray > * {
+    flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .planner-kanban__card-actions-tray {
+        transition: none;
+    }
 }
 
 .planner-kanban__card-actions::before {
