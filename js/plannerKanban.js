@@ -515,3 +515,36 @@ export function setKanbanCardEmphasis(planner, row, mode) {
     }
     planner.kanbanEmphasisByRow[key] = next;
 }
+
+/**
+ * Clear custom color override + emphasis for one card (category color remains).
+ * @param {object} planner
+ * @param {number} row
+ */
+export function resetKanbanCardStyles(planner, row) {
+    if (!planner || !Number.isFinite(row)) return;
+    setKanbanCardColor(planner, row, '');
+    setKanbanCardEmphasis(planner, row, '');
+}
+
+/**
+ * Clear custom color overrides + emphasis for every card.
+ * @param {object} planner
+ */
+export function resetAllKanbanCardStyles(planner) {
+    if (!planner) return;
+    planner.kanbanCardColors = {};
+    planner.kanbanEmphasisByRow = {};
+}
+
+/**
+ * Put every card back in column 0, clear manual order, restore default row sort.
+ * @param {object} planner
+ */
+export function resetKanbanArrangement(planner) {
+    if (!planner) return;
+    planner.kanbanStageByRow = {};
+    planner.kanbanOrderByStage = {};
+    planner.kanbanSort = KANBAN_DEFAULT_SORT;
+    planner.kanbanSortDir = KANBAN_DEFAULT_SORT_DIR;
+}

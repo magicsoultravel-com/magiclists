@@ -929,42 +929,51 @@ body.is-planner-kanban-drag-active .planner-kanban__card-slot {
 }
 
 .planner-kanban__card-emphasis[data-planner-kanban-emphasis="urgent"].is-active {
-    color: #ca8a04;
-    background: color-mix(in srgb, #eab308 22%, transparent);
+    color: var(--kanban-urgent-fg, #a16207);
+    background: color-mix(in srgb, var(--kanban-urgent-bg, #fde68a) 55%, transparent);
 }
 
 .planner-kanban__card-emphasis[data-planner-kanban-emphasis="muted"].is-active {
-    color: #6b7280;
-    background: color-mix(in srgb, #9ca3af 22%, transparent);
+    color: var(--kanban-muted-fg, #4b5563);
+    background: color-mix(in srgb, var(--kanban-muted-bg, #d1d5db) 55%, transparent);
 }
 
-/* Urgent: standard yellow highlight (category/custom color still shows underneath). */
+/*
+ * Emphasis fills are fixed and fully replace card/category color
+ * (inline --kanban-card-color backgrounds included).
+ */
+.planner-kanban__card.is-urgent,
 .planner-kanban__card.is-urgent .planner-kanban__card-slot,
 .planner-kanban__card.is-urgent .planner-kanban__card-flyout {
-    background: color-mix(in srgb, #eab308 34%, var(--surface, var(--bg-color, #fff)));
-    border-color: color-mix(in srgb, #ca8a04 70%, var(--border-color, #ccc));
-    box-shadow: 0 0 0 1px color-mix(in srgb, #eab308 45%, transparent);
+    background: var(--kanban-urgent-bg, #fde68a) !important;
+    border-color: var(--kanban-urgent-border, #ca8a04) !important;
+    color: var(--kanban-urgent-fg, #422006);
+    box-shadow: none;
+    opacity: 1;
+    filter: none;
 }
 
-.planner-kanban__card.is-urgent.has-color .planner-kanban__card-slot,
-.planner-kanban__card.is-urgent.has-color .planner-kanban__card-flyout {
-    background: color-mix(in srgb, #eab308 40%, var(--kanban-card-color, var(--surface, #fff)));
-    border-color: color-mix(in srgb, #ca8a04 55%, var(--kanban-card-color, #ccc));
-}
-
-/* Non-urgent: greyed / de-emphasized. */
+.planner-kanban__card.is-muted,
 .planner-kanban__card.is-muted .planner-kanban__card-slot,
 .planner-kanban__card.is-muted .planner-kanban__card-flyout {
-    opacity: 0.55;
-    filter: grayscale(0.55);
-    background: color-mix(in srgb, #9ca3af 16%, var(--surface, var(--bg-color, #fff)));
-    border-color: color-mix(in srgb, #9ca3af 45%, var(--border-color, #ccc));
+    background: var(--kanban-muted-bg, #d1d5db) !important;
+    border-color: var(--kanban-muted-border, #9ca3af) !important;
+    color: var(--kanban-muted-fg, #374151);
+    box-shadow: none;
+    opacity: 1;
+    filter: none;
 }
 
-.planner-kanban__card.is-muted.has-color .planner-kanban__card-slot,
-.planner-kanban__card.is-muted.has-color .planner-kanban__card-flyout {
-    background: color-mix(in srgb, #9ca3af 28%, var(--kanban-card-color, var(--surface, #fff)));
-    border-color: color-mix(in srgb, #9ca3af 40%, var(--kanban-card-color, #ccc));
+.planner-kanban__card.is-urgent .planner-kanban__card-comment,
+.planner-kanban__card.is-urgent .planner-kanban__card-row,
+.planner-kanban__card.is-urgent .planner-kanban__card-date {
+    color: color-mix(in srgb, var(--kanban-urgent-fg, #422006) 72%, transparent);
+}
+
+.planner-kanban__card.is-muted .planner-kanban__card-comment,
+.planner-kanban__card.is-muted .planner-kanban__card-row,
+.planner-kanban__card.is-muted .planner-kanban__card-date {
+    color: color-mix(in srgb, var(--kanban-muted-fg, #374151) 72%, transparent);
 }
 
 .planner-kanban__placeholder {

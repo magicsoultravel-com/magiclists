@@ -40,7 +40,10 @@ import {
     normalizeKanbanSort,
     normalizeKanbanSortDir,
     setKanbanCardColor,
-    setKanbanCardEmphasis
+    setKanbanCardEmphasis,
+    resetKanbanCardStyles,
+    resetAllKanbanCardStyles,
+    resetKanbanArrangement
 } from './plannerKanban.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor } from './colorPicker.js';
 import { refreshNoteCanvasPreview } from './noteCanvasRenderer.js';
