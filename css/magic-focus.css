@@ -551,15 +551,32 @@
     flex: 1 1 auto;
     min-height: 0;
     position: relative;
+    overflow: hidden;
+}
+
+/* Checklist fills the pane and scrolls its body when steps overflow. */
+.magic-focus__pane-body.editor-note-body > .planner-sub[data-note-checklist-sub] {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.magic-focus__pane-body.editor-note-body > .planner-sub[data-note-checklist-sub] > .planner-sub__body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
 }
 
 .magic-focus__pane--canvas {
     overflow: hidden;
 }
 
+/* Keep pane-body scrollable so checklist/other blocks aren't clipped when
+   sharing a zone with canvas; clip only the canvas host surface. */
 .magic-focus__pane--canvas .magic-focus__pane-body {
     padding: 0.25rem;
-    overflow: hidden;
+    overflow: auto;
 }
 
 .magic-focus__canvas-host {
@@ -567,6 +584,7 @@
     inset: 0;
     min-height: 0;
     min-width: 0;
+    overflow: hidden;
 }
 
 .magic-focus__canvas-host .drawing-board,
