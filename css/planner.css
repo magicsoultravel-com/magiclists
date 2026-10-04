@@ -1,4 +1,4 @@
-/** @css {"owns":"magicPlanner note subsection — typed schedule sheet, Gantt chart, Kanban, and calendar chart view", "js":["plannerUi.js","planner.js","plannerGantt.js","plannerKanban.js","plannerCalendar.js"]} */
+/** @css {"owns":"magicPlanner note subsection — typed schedule sheet, Gantt chart, Kanban, WBS, and calendar chart view", "js":["plannerUi.js","planner.js","plannerGantt.js","plannerKanban.js","plannerWbs.js","plannerCalendar.js"]} */
 
 /*
   Background map (Table vs Chart)
@@ -930,9 +930,9 @@
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
-    border: 1px solid color-mix(in srgb, var(--border-color, #ccc) 70%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border-color, #ccc) 55%, transparent);
     border-radius: 5px;
-    background: color-mix(in srgb, var(--surface-2, var(--bg-color, #fff)) 88%, transparent);
+    background: color-mix(in srgb, var(--border-color) 8%, transparent);
     min-height: 5.5rem;
     overflow: visible;
 }
@@ -1594,7 +1594,7 @@ textarea.planner-kanban__card-comment:focus {
 
 .has-custom-bg .planner-kanban__column {
     border-color: var(--card-border-subtle);
-    background: color-mix(in srgb, var(--card-border-subtle) 18%, transparent);
+    background: color-mix(in srgb, var(--card-border-subtle) 8%, transparent);
 }
 
 .has-custom-bg .planner-kanban__column-head {
@@ -1611,6 +1611,367 @@ textarea.planner-kanban__card-comment:focus {
 
 .has-custom-bg .planner-kanban__card:not(.has-color) .planner-kanban__card-slot,
 .has-custom-bg .planner-kanban__card:not(.has-color) .planner-kanban__card-flyout {
+    border-color: var(--card-border-subtle);
+    background: color-mix(in srgb, var(--card-border-subtle) 12%, transparent);
+    color: var(--card-fg, currentColor);
+}
+
+/* —— Sheet work packs —— */
+.planner-cell--name {
+    position: relative;
+}
+
+.planner-pack-toggle {
+    position: absolute;
+    top: 0.1rem;
+    right: 0.1rem;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.1rem;
+    height: 1.1rem;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-muted, #888);
+    opacity: 0;
+    cursor: pointer;
+}
+
+.planner-grid__row:hover .planner-pack-toggle,
+.planner-cell--name:focus-within .planner-pack-toggle,
+.planner-pack-toggle[aria-pressed="true"] {
+    opacity: 1;
+}
+
+.planner-pack-toggle[aria-pressed="true"] {
+    color: var(--accent, #5b8def);
+}
+
+.planner-pack-toggle:hover {
+    background: color-mix(in srgb, var(--border-color) 35%, transparent);
+}
+
+.planner-grid__row.is-child .planner-row-head,
+.planner-grid__row.is-child .sheet-grid__row-head {
+    padding-left: 0.55rem;
+    font-style: italic;
+    color: var(--text-muted, #888);
+}
+
+.planner-grid__row.is-pack .planner-row-head {
+    font-weight: 600;
+}
+
+.planner-grid__row.is-row-hidden {
+    opacity: 0.55;
+}
+
+.planner-gantt__bar--summary {
+    fill: color-mix(in srgb, var(--accent, #5b8def) 42%, transparent);
+    stroke: color-mix(in srgb, var(--accent, #5b8def) 70%, transparent);
+    stroke-width: 1;
+}
+
+.planner-gantt__rail-outline {
+    flex: 0 0 auto;
+    min-width: 1.1rem;
+    margin-right: 0.25rem;
+    font-size: 0.68rem;
+    color: var(--text-muted, #888);
+}
+
+.planner-gantt__rail-row {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+.planner-gantt__rail-row.is-child .planner-gantt__rail-label {
+    padding-left: 0.35rem;
+}
+
+.planner-gantt__rail-row.is-pack .planner-gantt__rail-label {
+    font-weight: 600;
+}
+
+.planner-version-banner {
+    padding: 0.55rem 0.65rem;
+    margin: 0.25rem 0;
+    border-radius: 4px;
+    border: 1px solid color-mix(in srgb, #b45309 35%, var(--border-color));
+    background: color-mix(in srgb, #f59e0b 12%, transparent);
+    color: var(--text-color, inherit);
+    font-size: 0.85rem;
+}
+
+/* —— WBS (orthogonal to Kanban) —— */
+.planner-wbs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.planner-wbs__toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+}
+
+.planner-wbs__tools {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.12rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+.planner-wbs:hover .planner-wbs__tools:not(.is-collapsed):not([hidden]),
+.planner-wbs:focus-within .planner-wbs__tools:not(.is-collapsed):not([hidden]) {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.planner-wbs__tools.is-collapsed {
+    display: none;
+}
+
+.planner-wbs__mode-tag {
+    margin-left: 0.35rem;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text-muted, #888);
+}
+
+.planner-wbs__board {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding-bottom: 0.2rem;
+    min-height: 6rem;
+}
+
+.planner-wbs__board.is-collapsed {
+    display: none;
+}
+
+.planner-wbs__column {
+    flex: 1 1 0;
+    min-width: 6.75rem;
+    max-width: 11rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    border: 1px solid color-mix(in srgb, var(--border-color, #ccc) 55%, transparent);
+    border-radius: 5px;
+    background: color-mix(in srgb, var(--border-color) 8%, transparent);
+    min-height: 5.5rem;
+}
+
+.planner-wbs__column.is-collapsed {
+    flex: 0 0 2rem;
+    max-width: 2rem;
+    min-width: 2rem;
+}
+
+.planner-wbs__column.is-collapsed .planner-wbs__column-title,
+.planner-wbs__column.is-collapsed .planner-wbs__column-title-input,
+.planner-wbs__column.is-collapsed .planner-wbs__column-count,
+.planner-wbs__column.is-collapsed .planner-wbs__column-body {
+    display: none;
+}
+
+.planner-wbs__column-head {
+    position: relative;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.25rem;
+    padding: 0.32rem 1.15rem 0.18rem 0.4rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-color, #ccc) 55%, transparent);
+}
+
+.planner-wbs__column-title,
+.planner-wbs__column-title-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    font-size: calc(0.55rem * var(--note-font-scale, 1));
+    font-weight: 650;
+    color: var(--text-muted);
+    line-height: 1.2;
+    border: 0;
+    background: transparent;
+}
+
+.planner-wbs__column-title-input {
+    padding: 0.05rem 0.1rem;
+    border-radius: 2px;
+    color: inherit;
+}
+
+.planner-wbs__column-title-input:focus {
+    outline: 1px solid color-mix(in srgb, var(--accent, #5b8def) 55%, transparent);
+}
+
+.planner-wbs__column-count {
+    flex: 0 0 auto;
+    font-size: calc(0.5rem * var(--note-font-scale, 1));
+    color: var(--text-muted);
+    opacity: 0.85;
+}
+
+.planner-wbs__column-collapse {
+    position: absolute;
+    top: 0.12rem;
+    right: 0.12rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 0.95rem;
+    height: 0.95rem;
+    border: 0;
+    background: transparent;
+    color: var(--text-muted, #888);
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    opacity: 0;
+}
+
+.planner-wbs__column:hover .planner-wbs__column-collapse,
+.planner-wbs__column:focus-within .planner-wbs__column-collapse {
+    opacity: 1;
+}
+
+.planner-wbs__column-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.28rem;
+    padding: 0.35rem;
+    min-height: 2.5rem;
+}
+
+.planner-wbs__column-body.is-drag-over {
+    background: color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 10%, transparent);
+}
+
+.planner-wbs__card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.45rem 0.5rem 0.72rem;
+    border-radius: 4px;
+    border: 1px solid color-mix(in srgb, var(--border-color, #ccc) 65%, transparent);
+    background: var(--surface, var(--bg-color, #fff));
+    box-shadow: 0 1px 0 color-mix(in srgb, var(--border-color, #000) 8%, transparent);
+    font-size: calc(0.68rem * var(--note-font-scale, 1));
+    line-height: 1.3;
+    user-select: none;
+}
+
+.planner-wbs__card.has-color.has-custom-bg {
+    background: inherit;
+    border-color: inherit;
+    color: var(--card-fg, inherit);
+}
+
+.planner-wbs__card.has-color.has-custom-bg .planner-wbs__card-name {
+    color: var(--card-fg, inherit);
+}
+
+.planner-wbs__card.has-color.has-custom-bg .planner-wbs__card-row,
+.planner-wbs__card.has-color.has-custom-bg .planner-wbs__card-date {
+    color: var(--card-muted, var(--card-fg, inherit));
+    opacity: 0.9;
+}
+
+.planner-wbs__card.has-color.has-custom-bg .planner-wbs__card-grab {
+    color: var(--card-action-fg, var(--card-muted, inherit));
+}
+
+.planner-wbs__card.is-editable {
+    cursor: grab;
+}
+
+.planner-wbs__card.is-editable:active {
+    cursor: grabbing;
+}
+
+.planner-wbs__card-row,
+.planner-wbs__card-date {
+    font-size: calc(0.48rem * var(--note-font-scale, 1));
+    line-height: 1;
+    letter-spacing: 0.01em;
+    color: var(--card-muted, var(--text-muted));
+    opacity: 0.7;
+}
+
+.planner-wbs__card-name {
+    display: block;
+    min-width: 0;
+    font-size: calc(0.68rem * var(--note-font-scale, 1));
+    font-weight: 600;
+    word-break: break-word;
+}
+
+.planner-wbs__card-dates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.planner-wbs__card-grab {
+    position: absolute;
+    top: 0.2rem;
+    right: 0.2rem;
+    opacity: 0.35;
+    color: var(--text-muted, #888);
+}
+
+.planner-wbs__placeholder {
+    flex: 0 0 auto;
+    min-height: 2.4rem;
+    border-radius: 4px;
+    border: 1.5px dashed color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 65%, transparent);
+    background: color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 10%, transparent);
+    pointer-events: none;
+}
+
+body.is-planner-wbs-drag-active {
+    cursor: grabbing;
+    user-select: none;
+}
+
+.planner-wbs__card.is-planner-wbs-dragging {
+    box-shadow: 0 6px 18px color-mix(in srgb, #000 22%, transparent);
+    opacity: 0.95;
+}
+
+.has-custom-bg .planner-wbs__column {
+    border-color: var(--card-border-subtle);
+    background: color-mix(in srgb, var(--card-border-subtle) 8%, transparent);
+}
+
+.has-custom-bg .planner-wbs__column-head {
+    border-bottom-color: var(--card-border-subtle);
+}
+
+.has-custom-bg .planner-wbs__column-title,
+.has-custom-bg .planner-wbs__column-title-input,
+.has-custom-bg .planner-wbs__column-count,
+.has-custom-bg .planner-wbs__card-row,
+.has-custom-bg .planner-wbs__card-date {
+    color: var(--card-muted);
+}
+
+.has-custom-bg .planner-wbs__card:not(.has-color) {
     border-color: var(--card-border-subtle);
     background: color-mix(in srgb, var(--card-border-subtle) 12%, transparent);
     color: var(--card-fg, currentColor);

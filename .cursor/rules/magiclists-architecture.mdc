@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-04T19:35:12.111Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-04T21:44:49.325Z
 
 ## CSS load order
 
@@ -39,10 +39,10 @@ alwaysApply: true
 | css/tv.css | sidebar TV player, now playing, popover browser | sidebarTv.js, tvPlayer.js, tvPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell-sidebar.css | 26 |
 | css/weather.css | sidebar weather glance + expanded forecast panel | sidebarWeather.js, weatherApi.js | — | 27 |
 | css/sheet.css | sheet-grid note template body and table chrome | sheet.js, noteSurface.js, editor.js | — | 28 |
-| css/planner.css | magicPlanner note subsection — typed schedule sheet, Gantt chart, Kanban, and calendar chart view | plannerUi.js, planner.js, plannerGantt.js, plannerKanban.js, plannerCalendar.js | — | 29 |
+| css/planner.css | magicPlanner note subsection — typed schedule sheet, Gantt chart, Kanban, WBS, and calendar chart view | plannerUi.js, planner.js, plannerGantt.js, plannerKanban.js, plannerWbs.js, plannerCalendar.js | — | 29 |
 | css/desktops.css | desktop switcher dock styling, dock pin lock | desktopDockComponent.js | — | 30 |
 | css/popout.css | (unknown) | — | — | 31 |
-| css/media-library.css | media staging dialogue, gallery floating panel, scribble FAB, note attachment section, media lightbox, site-wide quick scribble | mediaLibraryOverlay.js, mediaStagingDialog.js, mediaPasteCatcher.js, noteAttachmentsUi.js, quickScribble.js, viewportCapture.js | — | 32 |
+| css/media-library.css | media staging dialogue, gallery floating panel, scribble FAB, note attachment section, media lightbox, site-wide quick scribble, transform popover | mediaLibraryOverlay.js, mediaStagingDialog.js, mediaPasteCatcher.js, noteAttachmentsUi.js, quickScribble.js, viewportCapture.js, mediaTransformUi.js | — | 32 |
 | css/categories-panel.css | categories manager floating panel with adaptive square category tiles | categoriesOverlay.js | — | 33 |
 
 ## JS domains (@module)
@@ -85,8 +85,10 @@ alwaysApply: true
 | js/mediaLibraryOverlay.js | media library overlay gallery browser | mediaLibrary.js, mediaStagingDialog.js, noteQuickActions.js, mediaAttachments.js | — | — |
 | js/mediaMetadata.js | media file metadata and EXIF extraction | mediaLibrary.js | — | — |
 | js/mediaPasteCatcher.js | global clipboard paste catcher for media staging | mediaStagingDialog.js, notePasteContext.js | — | — |
-| js/mediaQuickActions.js | shared media hover quick actions | mediaLibrary.js, noteAttachmentsUi.js, mediaLibraryOverlay.js | — | — |
+| js/mediaQuickActions.js | shared media hover quick actions | mediaLibrary.js, noteAttachmentsUi.js, mediaLibraryOverlay.js, mediaTransformUi.js | — | — |
 | js/mediaStagingDialog.js | media staging upload dialogue before library commit | mediaLibrary.js, mediaPasteCatcher.js, mediaLibraryOverlay.js, notePasteContext.js, mediaAttachments.js | — | — |
+| js/mediaTransform.js | image optimize/resample helpers for media library | mediaMetadata.js, mediaLibrary.js, mediaTransformUi.js | — | — |
+| js/mediaTransformUi.js | media library optimize/scale confirm popover | mediaTransform.js, mediaLibrary.js, mediaQuickActions.js, popoverPosition.js | — | — |
 | js/noteAttachmentsUi.js | note card attached-media section HTML and hydrate | mediaAttachments.js, mediaLibrary.js, noteSurfaceHtml.js, mediaLibraryOverlay.js, mediaQuickActions.js, scribbleInk.js | — | — |
 | js/noteBodyConversion.js | checklist/content conversion, plain copy text | noteSurface.js, checklistSteps.js, richText.js | — | — |
 | js/noteCanvasPlannerOverlay.js | planner table/chart paint + measure for note-canvas overlay | noteCanvasTextOverlay.js, planner.js, plannerGantt.js | — | — |
@@ -103,11 +105,12 @@ alwaysApply: true
 | js/noteSurfaceEditing.js | note inline editing, emoji, text operations, zoom controls | noteSurface.js, noteSurfaceHtml.js, richText.js, emojiPicker.js, domEscape.js | — | — |
 | js/noteSurfaceHtml.js | note HTML building and rendering | noteSurface.js, noteModel.js, sheet.js, checklistSteps.js | — | — |
 | js/noteSurfaceMutations.js | note item mutation functions | noteSurface.js, noteSurfaceEditing.js, noteSurfaceChecklist.js, noteModel.js, sheet.js, undo.js | item:mutation_requested | — |
-| js/planner.js | magicPlanner model — schema-bound schedule sheet + zoom prefs | plannerUi.js, plannerGantt.js, plannerKanban.js, plannerCalendar.js, sheet.js, noteModel.js | — | — |
+| js/planner.js | magicPlanner model — schema-bound schedule sheet + zoom prefs | plannerUi.js, plannerGantt.js, plannerKanban.js, plannerWbs.js, plannerCalendar.js, sheet.js, noteModel.js | — | — |
 | js/plannerCalendar.js | magicPlanner calendar chart view — month-strip layout + task bars | planner.js, plannerGantt.js, plannerUi.js | — | — |
 | js/plannerGantt.js | magicPlanner Gantt layout math (display-only) | planner.js, plannerUi.js | — | — |
 | js/plannerKanban.js | magicPlanner Kanban layout — stages, sort, column flavours (display + drag meta) | planner.js, plannerUi.js, displayOptions.js | — | — |
-| js/plannerUi.js | magicPlanner note subsection UI — typed sheet + Gantt + Kanban + calendar chart view | planner.js, plannerGantt.js, plannerKanban.js, plannerCalendar.js, noteSurfaceMutations.js, noteQuickActions.js | — | — |
+| js/plannerUi.js | magicPlanner note subsection UI — typed sheet + Gantt + Kanban + WBS + calendar chart view | planner.js, plannerGantt.js, plannerKanban.js, plannerWbs.js, plannerCalendar.js, noteSurfaceMutations.js, noteQuickActions.js | — | — |
+| js/plannerWbs.js | magicPlanner WBS layout — phase/deliverable buckets, unmapped column, drag meta | planner.js, plannerUi.js, plannerKanban.js | — | — |
 | js/popoutLockRefresh.js | popout lock board refresh filter | app.js, notePopoutBridge.js | — | — |
 | js/popoutNote.js | standalone note popout window boot, edit, flush, undo | notePopoutBridge.js, noteSurface.js, api.js, undo.js | — | — |
 | js/popoutWindows.js | shared popout window helpers (PiP, browser popup, styles) | notePopoutBridge.js, sidebarModulePopout.js | — | — |

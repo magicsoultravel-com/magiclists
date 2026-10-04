@@ -1,4 +1,4 @@
-/** @module {"owns":"magicPlanner note subsection UI — typed sheet + Gantt + Kanban + calendar chart view", "related":["planner.js","plannerGantt.js","plannerKanban.js","plannerCalendar.js","noteSurfaceMutations.js","noteQuickActions.js"]} */
+/** @module {"owns":"magicPlanner note subsection UI — typed sheet + Gantt + Kanban + WBS + calendar chart view", "related":["planner.js","plannerGantt.js","plannerKanban.js","plannerWbs.js","plannerCalendar.js","noteSurfaceMutations.js","noteQuickActions.js"]} */
 import { escapeHTML, escapeAttr } from './domEscape.js';
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { parseStoredDateTime, combineDateTime } from './noteModel.js';
@@ -46,7 +46,18 @@ import {
     ensurePlannerColWidths,
     SHEET_MIN_ROWS,
     SHEET_ROW_HEAD_WIDTH_PX,
-    plannerHasContent
+    plannerHasContent,
+    isPlannerUnsupportedNewer,
+    isPlannerWritable,
+    getPlannerOutlineLabel,
+    getPlannerRowLevel,
+    isPlannerRowPack,
+    isPlannerRowHidden,
+    isPlannerPackCollapsed,
+    setPlannerPackCollapsed,
+    togglePlannerWorkPack,
+    unhidePlannerRow,
+    getPlannerRowId
 } from './planner.js';
 import { layoutPlannerGantt, parsePlannerDateTime } from './plannerGantt.js';
 import { renderPlannerCalendarBoardHtml } from './plannerCalendar.js';
@@ -67,6 +78,17 @@ import {
     resetAllKanbanCardStyles,
     resetKanbanArrangement
 } from './plannerKanban.js';
+import {
+    WBS_UNMAPPED,
+    layoutPlannerWbs,
+    moveWbsCard,
+    normalizeWbsMode,
+    resetWbsArrangement,
+    resetWbsLabels,
+    setWbsBucketCollapsed,
+    setWbsBucketLabel,
+    getWbsMode
+} from './plannerWbs.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor } from './colorPicker.js';
 import { surfaceThemeInline } from './cardTheme.js';
 import { refreshNoteCanvasPreview } from './noteCanvasRenderer.js';
@@ -92,6 +114,12 @@ const KANBAN_URGENT_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focu
 
 /** Soft circle — non-urgent / muted. */
 const KANBAN_MUTED_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false" aria-hidden="true"><circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M3.6 6h4.8" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>';
+
+/** Work-pack toggle — nested lines. */
+const PLANNER_PACK_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false" aria-hidden="true"><path d="M2 3.2h8M2 6h8M4.2 8.8H10" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>';
+
+/** Phase/deliverable mode swap. */
+const WBS_MODE_ICON = '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false" aria-hidden="true"><path d="M2.4 3.2h7.2M2.4 6h7.2M2.4 8.8h4.4" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/><path d="M8.2 7.4l1.6 1.6 1.6-1.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 /** Compact date for kanban corner overlays. */
 function formatKanbanCardDate(value) {
@@ -401,12 +429,14 @@ function renderDatetimeCell(value, row, col, canEdit, { minDate = '' } = {}) {
     </td>`;
 }
 
-function renderTextCell(value, row, col, canEdit, { key = '' } = {}) {
+function renderTextCell(value, row, col, canEdit, { key = '', packToggle = '' } = {}) {
     if (!canEdit) {
-        return `<td class="sheet-grid__cell planner-cell"><span class="sheet-cell-read">${escapeHTML(value)}</span></td>`;
+        return `<td class="sheet-grid__cell planner-cell${key === 'name' ? ' planner-cell--name' : ''}">
+            ${packToggle}<span class="sheet-cell-read">${escapeHTML(value)}</span>
+        </td>`;
     }
-    return `<td class="sheet-grid__cell planner-cell">
-        <textarea class="sheet-cell-input form-input planner-cell-input" data-planner-cell data-row="${row}" data-col="${col}" data-col-key="${escapeAttr(key)}" rows="1" spellcheck="false">${escapeHTML(value)}</textarea>
+    return `<td class="sheet-grid__cell planner-cell${key === 'name' ? ' planner-cell--name' : ''}">
+        ${packToggle}<textarea class="sheet-cell-input form-input planner-cell-input" data-planner-cell data-row="${row}" data-col="${col}" data-col-key="${escapeAttr(key)}" rows="1" spellcheck="false">${escapeHTML(value)}</textarea>
     </td>`;
 }
 
@@ -460,20 +490,42 @@ export function renderPlannerSheetHtml(planner, { canEdit = false } = {}) {
 
     let body = '';
     for (let r = 0; r < rows; r++) {
+        const outline = getPlannerOutlineLabel(planner, r);
+        const level = getPlannerRowLevel(planner, r);
+        const isPack = isPlannerRowPack(planner, r);
+        const hidden = isPlannerRowHidden(planner, r);
+        const collapsed = isPack && isPlannerPackCollapsed(planner, r);
+        // Hide collapsed children from the sheet body
+        if (level === 1) {
+            let packRow = r - 1;
+            while (packRow >= 0 && getPlannerRowLevel(planner, packRow) === 1) packRow -= 1;
+            if (packRow >= 0 && isPlannerPackCollapsed(planner, packRow)) continue;
+        }
+        const levelClass = level === 1 ? ' is-child' : (isPack ? ' is-pack' : '');
+        const hiddenClass = hidden ? ' is-row-hidden' : '';
+        const packHeadAttr = isPack
+            ? ` data-planner-pack-head="${collapsed ? '1' : '0'}"`
+            : '';
+        const headTitle = isPack
+            ? (collapsed ? 'Expand work pack' : 'Collapse work pack / drag to reorder')
+            : 'Drag to reorder';
         const rowHead = canEdit
-            ? `<th class="sheet-grid__row-head planner-row-head" scope="row" draggable="true" data-planner-row="${r}" title="Drag to reorder">${r + 1}</th>`
-            : `<th class="sheet-grid__row-head" scope="row">${r + 1}</th>`;
-        body += `<tr data-planner-row-index="${r}">${rowHead}`;
+            ? `<th class="sheet-grid__row-head planner-row-head${levelClass}" scope="row" draggable="true" data-planner-row="${r}" title="${escapeAttr(headTitle)}"${packHeadAttr}>${escapeHTML(outline)}</th>`
+            : `<th class="sheet-grid__row-head${levelClass}" scope="row">${escapeHTML(outline)}</th>`;
+        body += `<tr class="planner-grid__row${levelClass}${hiddenClass}" data-planner-row-index="${r}" data-planner-row-id="${escapeAttr(getPlannerRowId(planner, r))}">${rowHead}`;
         const rowStartDate = parseStoredDateTime(getPlannerField(sheet, r, 'start')).date || '';
         for (let c = 0; c < PLANNER_COL_COUNT; c++) {
             const colDef = PLANNER_COLUMNS[c];
             const value = getCellValue(sheet, r, c);
             if (colDef.type === 'datetime') {
-                // Stop is constrained by this row's Start only (not project-wide earliest).
                 const minDate = colDef.key === 'stop' ? rowStartDate : '';
                 body += renderDatetimeCell(value, r, c, canEdit, { minDate });
             } else if (colDef.type === 'category') {
                 body += renderCategoryCell(value, r, c, canEdit, planner);
+            } else if (colDef.key === 'name' && canEdit && level === 0) {
+                const pressed = isPack ? 'true' : 'false';
+                const packToggle = `<button type="button" class="planner-pack-toggle" data-planner-pack-toggle data-row="${r}" title="${isPack ? 'Convert to single task' : 'Convert to work pack'}" aria-label="${isPack ? 'Convert to single task' : 'Convert to work pack'}" aria-pressed="${pressed}">${PLANNER_PACK_ICON}</button>`;
+                body += renderTextCell(value, r, c, canEdit, { key: colDef.key, packToggle });
             } else {
                 body += renderTextCell(value, r, c, canEdit, { key: colDef.key });
             }
@@ -553,9 +605,10 @@ function renderGanttSvg(layout) {
             const d = `M${cx},${b.y} L${b.x + b.width},${cy} L${cx},${b.y + b.height} L${b.x},${cy} Z`;
             shape = `<path class="planner-gantt__milestone" d="${d}"${fill}/>`;
         } else {
-            shape = `<rect class="planner-gantt__bar" x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" rx="2"${fill}/>`;
+            const barCls = b.isSummary ? 'planner-gantt__bar planner-gantt__bar--summary' : 'planner-gantt__bar';
+            shape = `<rect class="${barCls}" x="${b.x}" y="${b.y}" width="${b.width}" height="${b.height}" rx="2"${fill}/>`;
         }
-        return `<g class="planner-gantt__bar-group" data-task-id="${escapeAttr(b.id)}">
+        return `<g class="planner-gantt__bar-group${b.isSummary ? ' is-summary' : ''}${b.level === 1 ? ' is-child' : ''}" data-task-id="${escapeAttr(b.id)}">
             <title>${title}</title>
             ${shape}
         </g>`;
@@ -591,8 +644,10 @@ function renderGanttRailHtml(layout, { canEdit = false } = {}) {
     const rows = empty
         ? `<div class="planner-gantt__rail-row" style="height:${rowHeight}px"><span class="planner-gantt__rail-label is-muted">—</span></div>`
         : bars.map((b) => {
-            const label = escapeHTML(b.name || b.id || '—');
-            return `<div class="planner-gantt__rail-row" style="height:${rowHeight}px"><span class="planner-gantt__rail-label" title="${label}">${label}</span></div>`;
+            const outline = escapeHTML(b.outlineId || b.id || '');
+            const name = escapeHTML(b.name || '—');
+            const pad = b.level === 1 ? ' is-child' : (b.isPack || b.isSummary ? ' is-pack' : '');
+            return `<div class="planner-gantt__rail-row${pad}" style="height:${rowHeight}px"><span class="planner-gantt__rail-outline">${outline}</span><span class="planner-gantt__rail-label" title="${name}">${name}</span></div>`;
         }).join('');
     const resize = canEdit
         ? '<span class="planner-gantt__rail-resize" data-planner-rail-resize title="Drag to resize"></span>'
@@ -978,6 +1033,77 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
 }
 
 /**
+ * WBS board (orthogonal to Kanban — same leaves, phase/deliverable buckets).
+ * @param {object} planner
+ * @param {{ canEdit?: boolean }} [opts]
+ * @returns {string}
+ */
+export function renderPlannerWbsHtml(planner, { canEdit = false } = {}) {
+    const wbsCollapsed = !!planner?.wbsCollapsed;
+    const mode = getWbsMode(planner);
+    const layout = layoutPlannerWbs(planner, { mode });
+    const modeLabel = mode === 'deliverable' ? 'Deliverables' : 'Phases';
+    const otherMode = mode === 'deliverable' ? 'phase' : 'deliverable';
+    const otherLabel = otherMode === 'deliverable' ? 'Deliverables' : 'Phases';
+
+    const columnsHtml = layout.columns.map((col) => {
+        const collapsed = !!col.collapsed;
+        const colClass = collapsed ? ' planner-wbs__column is-collapsed' : ' planner-wbs__column';
+        const cards = col.cards.map((card) => {
+            const rowLabel = getPlannerOutlineLabel(planner, card.row);
+            const startLabel = formatKanbanCardDate(card.start);
+            const stopLabel = formatKanbanCardDate(card.stop);
+            const dates = [
+                startLabel ? `<span class="planner-wbs__card-date" title="Start ${escapeAttr(startLabel)}">${escapeHTML(startLabel)}</span>` : '',
+                stopLabel ? `<span class="planner-wbs__card-date" title="Stop ${escapeAttr(stopLabel)}">${escapeHTML(stopLabel)}</span>` : ''
+            ].filter(Boolean).join('');
+            const editClass = canEdit ? ' is-editable' : '';
+            const surface = surfaceThemeInline(card.categoryColor || '');
+            const colorClass = card.categoryColor ? ` has-color${surface.className}` : '';
+            return `<article class="planner-wbs__card${editClass}${colorClass}" data-planner-wbs-card data-planner-row="${card.row}" data-planner-row-id="${escapeAttr(card.rowId)}"${surface.style}>
+                <span class="planner-wbs__card-row" title="Row ${escapeAttr(rowLabel)}">${escapeHTML(rowLabel)}</span>
+                <span class="planner-wbs__card-name">${escapeHTML(card.name)}</span>
+                ${dates ? `<span class="planner-wbs__card-dates">${dates}</span>` : ''}
+                ${canEdit ? `<span class="planner-wbs__card-grab" title="Drag to move" aria-hidden="true">${CARD_ICONS.drag}</span>` : ''}
+            </article>`;
+        }).join('');
+        const labelEditable = canEdit && col.bucket != null
+            ? `<input type="text" class="planner-wbs__column-title-input" data-planner-wbs-label data-bucket="${col.bucket}" value="${escapeAttr(col.label)}" spellcheck="false" aria-label="Bucket label">`
+            : `<span class="planner-wbs__column-title">${escapeHTML(col.label)}</span>`;
+        return `<section class="${colClass.trim()}" data-planner-wbs-column data-planner-wbs-bucket="${escapeAttr(col.key)}" data-wbs-bucket-collapsed="${collapsed ? '1' : '0'}">
+            <header class="planner-wbs__column-head">
+                ${labelEditable}
+                <span class="planner-wbs__column-count">${col.cards.length}</span>
+                <button type="button" class="planner-wbs__column-collapse" data-planner-wbs-bucket-collapse title="${collapsed ? 'Expand column' : 'Collapse column'}" aria-label="${collapsed ? 'Expand column' : 'Collapse column'}">${collapsed ? '›' : '‹'}</button>
+            </header>
+            <div class="planner-wbs__column-body" data-planner-wbs-drop="${escapeAttr(col.key)}">${cards}</div>
+        </section>`;
+    }).join('');
+
+    const tools = canEdit
+        ? `<button type="button" class="card-act planner-wbs-module-btn" data-planner-wbs-mode title="Switch to ${escapeAttr(otherLabel)}" aria-label="Switch to ${escapeAttr(otherLabel)}">${WBS_MODE_ICON}</button>
+            <button type="button" class="card-act planner-wbs-module-btn" data-planner-wbs-reset-labels title="Reset ${escapeAttr(modeLabel)} labels" aria-label="Reset labels">${ACTION_ICONS.resetCustomization}</button>
+            <button type="button" class="card-act planner-wbs-module-btn" data-planner-wbs-reset-arrangement title="Reset ${escapeAttr(modeLabel)} arrangement" aria-label="Reset arrangement">${ACTION_ICONS.layoutReset}</button>`
+        : '';
+
+    const toggleCollapsed = wbsCollapsed ? ' collapsed' : '';
+    const boardCollapsed = wbsCollapsed ? ' is-collapsed' : '';
+    return `<div class="planner-wbs planner-sub" data-planner-wbs data-wbs-collapsed="${wbsCollapsed ? '1' : '0'}" data-wbs-mode="${escapeAttr(mode)}">
+        <div class="planner-wbs__toolbar planner-sub__toolbar">
+            <button type="button" class="planner-wbs__title planner-sub__title" data-planner-wbs-toggle aria-expanded="${wbsCollapsed ? 'false' : 'true'}">
+                <span class="collapsable-toggle${toggleCollapsed}" aria-hidden="true">▼</span>WBS <span class="planner-wbs__mode-tag" title="Independent of Kanban stages">${escapeHTML(modeLabel)}</span>
+            </button>
+            <div class="planner-wbs__tools${wbsCollapsed ? ' is-collapsed' : ''}" role="group" aria-label="WBS tools"${wbsCollapsed ? ' hidden' : ''}>
+                ${tools}
+            </div>
+        </div>
+        <div class="planner-wbs__board${boardCollapsed}" data-planner-wbs-board>
+            ${columnsHtml}
+        </div>
+    </div>`;
+}
+
+/**
  * Build the full Planner note subsection HTML.
  * @param {object} item
  * @param {{ canEdit?: boolean, startCollapsed?: boolean }} [opts]
@@ -992,9 +1118,24 @@ export function buildNotePlannerSectionHtml(item, { canEdit = false, startCollap
     item.planner = planner;
     const collapsedClass = startCollapsed ? ' collapsed' : '';
     const toggleCollapsed = startCollapsed ? ' collapsed' : '';
-    const tableHtml = renderPlannerTableHtml(planner, { canEdit });
-    const { html: ganttHtml } = renderPlannerGanttHtml(planner, { canEdit });
-    const kanbanHtml = renderPlannerKanbanHtml(planner, { canEdit });
+    if (isPlannerUnsupportedNewer(planner)) {
+        return `
+            <div class="note-body-section note-body-section--planner" data-note-planner data-planner-readonly="1">
+                <div class="note-section-header collapsable-header">
+                    <span class="collapsable-heading"><span class="collapsable-toggle${toggleCollapsed}">▼</span>Plan</span>
+                </div>
+                <div class="note-section-body collapsable-section${collapsedClass}">
+                    <div class="planner-version-banner" role="status">
+                        This plan was saved with a newer app version. Reload the page to edit.
+                    </div>
+                </div>
+            </div>`;
+    }
+    const edit = canEdit && isPlannerWritable(planner);
+    const tableHtml = renderPlannerTableHtml(planner, { canEdit: edit });
+    const { html: ganttHtml } = renderPlannerGanttHtml(planner, { canEdit: edit });
+    const kanbanHtml = renderPlannerKanbanHtml(planner, { canEdit: edit });
+    const wbsHtml = renderPlannerWbsHtml(planner, { canEdit: edit });
 
     return `
             <div class="note-body-section note-body-section--planner" data-note-planner>
@@ -1005,6 +1146,7 @@ export function buildNotePlannerSectionHtml(item, { canEdit = false, startCollap
                     ${tableHtml}
                     ${ganttHtml}
                     ${kanbanHtml}
+                    ${wbsHtml}
                 </div>
             </div>`;
 }
@@ -1157,6 +1299,7 @@ function refreshKanbanInSection(section, item) {
     const preserveScrollLeft = board ? board.scrollLeft : null;
     const normalized = normalizePlanner(item.planner);
     if (normalized) item.planner = normalized;
+    if (isPlannerUnsupportedNewer(item.planner)) return;
     const html = renderPlannerKanbanHtml(item.planner, {
         canEdit: plannerSectionCanEdit(section),
         flavour: readDisplayOptions().plannerKanbanFlavour
@@ -1172,9 +1315,31 @@ function refreshKanbanInSection(section, item) {
     growPlannerTextareas(next);
 }
 
+function refreshWbsInSection(section, item) {
+    if (!section || !item?.planner) return;
+    const host = section.querySelector('[data-planner-wbs]');
+    if (!host) return;
+    const active = section.ownerDocument?.activeElement;
+    if (active && host.contains(active) && active.closest?.('[data-planner-wbs-label]')) return;
+    const board = host.querySelector('[data-planner-wbs-board]');
+    const preserveScrollLeft = board ? board.scrollLeft : null;
+    const normalized = normalizePlanner(item.planner);
+    if (normalized) item.planner = normalized;
+    if (isPlannerUnsupportedNewer(item.planner)) return;
+    const html = renderPlannerWbsHtml(item.planner, {
+        canEdit: plannerSectionCanEdit(section)
+    });
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html.trim();
+    const next = tmp.firstElementChild;
+    if (!next) return;
+    host.replaceWith(next);
+    const nextBoard = next.querySelector('[data-planner-wbs-board]');
+    if (nextBoard && preserveScrollLeft != null) nextBoard.scrollLeft = preserveScrollLeft;
+}
+
 /**
- * Refresh derived planner UI (gantt + kanban + summary) across all live hosts for an item.
- * Used so Focus table edits update sibling chart/kanban panes without remounting the table.
+ * Refresh derived planner UI (gantt + kanban + wbs + summary) across all live hosts for an item.
  * @param {object} item
  * @param {{ refocus?: boolean }} [opts]
  */
@@ -1184,6 +1349,7 @@ export function refreshPlannerDerivedViews(item, { refocus = false } = {}) {
         body.querySelectorAll?.('[data-note-planner]').forEach((sec) => {
             refreshGanttInSection(sec, item, { refocus });
             refreshKanbanInSection(sec, item);
+            refreshWbsInSection(sec, item);
         });
     }
     refreshItemNoteCanvas(item);
@@ -1555,8 +1721,13 @@ export function attachPlannerInteractions(root, item, {
     const mutate = (fn, { skipRerender = true, refreshGantt = true } = {}) => {
         // Persist any in-flight text edits before structural / date mutations.
         flushPlannerCommit();
+        if (item.planner && isPlannerUnsupportedNewer(item.planner)) {
+            window.alert?.('This plan was saved with a newer app version. Reload the page to edit.');
+            return;
+        }
         mutateItem(item, (it) => {
             if (!it.planner) it.planner = createEmptyPlanner();
+            if (isPlannerUnsupportedNewer(it.planner)) return;
             fn(it);
         }, {
             preserveView: true,
@@ -1617,6 +1788,9 @@ export function attachPlannerInteractions(root, item, {
             const row = Number(cell.dataset.row);
             const col = Number(cell.dataset.col);
             if (!Number.isFinite(row) || !Number.isFinite(col)) return;
+            if (cell.dataset.colKey === 'name' && item.planner && isPlannerRowHidden(item.planner, row)) {
+                unhidePlannerRow(item.planner, row);
+            }
             const key = cell.dataset.colKey || '';
             // Snapshot before first patch in this debounce window, then cheap in-place write.
             schedulePlannerCommit({ refreshGantt: true });
@@ -2065,8 +2239,9 @@ export function attachPlannerInteractions(root, item, {
             const card = kanbanColorBtn.closest('[data-planner-kanban-card]');
             const row = Number(card?.dataset?.plannerRow);
             if (!Number.isFinite(row)) return;
+            const rowId = getPlannerRowId(item.planner, row);
             const current = resolveNoteColor(
-                item.planner?.kanbanCardColors?.[String(row)]
+                (rowId && item.planner?.kanbanCardColors?.[rowId])
                 || getCategoryColor(item.planner, getPlannerField(item.planner.sheet, row, 'category'))
                 || ''
             );
@@ -2110,6 +2285,96 @@ export function attachPlannerInteractions(root, item, {
             return;
         }
 
+        const packToggle = e.target.closest('[data-planner-pack-toggle]');
+        if (packToggle && section.contains(packToggle)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const row = Number(packToggle.dataset.row);
+            if (!Number.isFinite(row)) return;
+            mutate((it) => {
+                togglePlannerWorkPack(it.planner, row);
+            }, { skipRerender: true, refreshGantt: true });
+            refresh();
+            return;
+        }
+
+        const packHead = e.target.closest('.planner-row-head[data-planner-pack-head]');
+        if (packHead && section.contains(packHead) && !e.target.closest('[data-planner-pack-toggle]')) {
+            if (suppressPackHeadClick) {
+                suppressPackHeadClick = false;
+                return;
+            }
+            const row = Number(packHead.dataset.plannerRow);
+            if (!Number.isFinite(row)) return;
+            const collapsed = packHead.dataset.plannerPackHead === '1';
+            mutate((it) => {
+                setPlannerPackCollapsed(it.planner, row, !collapsed);
+            }, { skipRerender: true, refreshGantt: true });
+            refresh();
+            return;
+        }
+
+        const wbsToggle = e.target.closest('[data-planner-wbs-toggle]');
+        if (wbsToggle && section.contains(wbsToggle)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const nextCollapsed = !item.planner?.wbsCollapsed;
+            mutate((it) => {
+                it.planner.wbsCollapsed = nextCollapsed;
+            }, { skipRerender: true, refreshGantt: true });
+            const block = section.querySelector('[data-planner-wbs]');
+            if (block) {
+                block.dataset.wbsCollapsed = nextCollapsed ? '1' : '0';
+                block.querySelector('[data-planner-wbs-board]')?.classList.toggle('is-collapsed', nextCollapsed);
+                const tools = block.querySelector('.planner-wbs__tools');
+                tools?.classList.toggle('is-collapsed', nextCollapsed);
+                if (tools) tools.hidden = nextCollapsed;
+                const title = block.querySelector('[data-planner-wbs-toggle]');
+                title?.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
+                title?.querySelector('.collapsable-toggle')?.classList.toggle('collapsed', nextCollapsed);
+            }
+            return;
+        }
+
+        const wbsModeBtn = e.target.closest('[data-planner-wbs-mode]');
+        if (wbsModeBtn && section.contains(wbsModeBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            mutate((it) => {
+                const cur = normalizeWbsMode(it.planner.wbsMode);
+                it.planner.wbsMode = cur === 'deliverable' ? 'phase' : 'deliverable';
+            }, { skipRerender: true, refreshGantt: true });
+            return;
+        }
+
+        const wbsResetLabels = e.target.closest('[data-planner-wbs-reset-labels]');
+        if (wbsResetLabels && section.contains(wbsResetLabels)) {
+            e.preventDefault();
+            e.stopPropagation();
+            mutate((it) => resetWbsLabels(it.planner), { skipRerender: true, refreshGantt: true });
+            return;
+        }
+
+        const wbsResetArr = e.target.closest('[data-planner-wbs-reset-arrangement]');
+        if (wbsResetArr && section.contains(wbsResetArr)) {
+            e.preventDefault();
+            e.stopPropagation();
+            mutate((it) => resetWbsArrangement(it.planner), { skipRerender: true, refreshGantt: true });
+            return;
+        }
+
+        const wbsBucketCollapse = e.target.closest('[data-planner-wbs-bucket-collapse]');
+        if (wbsBucketCollapse && section.contains(wbsBucketCollapse)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const col = wbsBucketCollapse.closest('[data-planner-wbs-column]');
+            const key = String(col?.dataset?.plannerWbsBucket || '');
+            if (!key) return;
+            const next = col?.dataset?.wbsBucketCollapsed !== '1';
+            mutate((it) => setWbsBucketCollapsed(it.planner, key, next), { skipRerender: true, refreshGantt: true });
+            return;
+        }
+
         const addBtn = e.target.closest('.planner-add-row-btn');
         if (addBtn && section.contains(addBtn)) {
             e.preventDefault();
@@ -2128,8 +2393,20 @@ export function attachPlannerInteractions(root, item, {
         }
     });
 
-    // Table row HTML5 reorder + FC-style pointer drag for kanban cards
+    section.addEventListener('change', (e) => {
+        const labelInput = e.target.closest('[data-planner-wbs-label]');
+        if (labelInput && section.contains(labelInput)) {
+            const bucket = Number(labelInput.dataset.bucket);
+            if (!Number.isFinite(bucket)) return;
+            mutate((it) => {
+                setWbsBucketLabel(it.planner, bucket, labelInput.value);
+            }, { skipRerender: true, refreshGantt: true });
+        }
+    });
+
+    // Table row HTML5 reorder + FC-style pointer drag for kanban/WBS cards
     let dragFrom = null;
+    let suppressPackHeadClick = false;
     const KANBAN_DRAG_THRESHOLD = 4;
     /** @type {{
      *   card: HTMLElement,
@@ -2353,14 +2630,217 @@ export function attachPlannerInteractions(root, item, {
         document.addEventListener('pointercancel', onKanbanDocPointerUp);
     });
 
+    /** @type {{
+     *   card: HTMLElement,
+     *   rowId: string,
+     *   slot: HTMLElement|null,
+     *   offsetX: number,
+     *   offsetY: number,
+     *   lifted: boolean,
+     *   startX: number,
+     *   startY: number,
+     *   pointerId: number
+     * } | null} */
+    let wbsPtr = null;
+
+    const clearWbsColumnOver = () => {
+        section.querySelectorAll('.planner-wbs__column-body.is-drag-over').forEach((el) => {
+            el.classList.remove('is-drag-over');
+        });
+    };
+
+    const endWbsPointerDrag = ({ commit = false } = {}) => {
+        const state = wbsPtr;
+        wbsPtr = null;
+        document.body.classList.remove('is-planner-wbs-drag-active');
+        clearWbsColumnOver();
+        if (!state) return;
+        const { card, slot, rowId } = state;
+        let target = null;
+        if (commit && slot?.isConnected) {
+            const body = slot.closest('[data-planner-wbs-drop]');
+            const bucketKey = body?.dataset?.plannerWbsDrop;
+            let beforeId = null;
+            let el = slot.nextElementSibling;
+            while (el) {
+                if (el.matches?.('[data-planner-wbs-card]')) {
+                    const id = el.dataset.plannerRowId;
+                    if (id && id !== rowId) {
+                        beforeId = id;
+                        break;
+                    }
+                }
+                el = el.nextElementSibling;
+            }
+            let toBucket = null;
+            if (bucketKey && bucketKey !== WBS_UNMAPPED) {
+                const n = Number(bucketKey);
+                if (Number.isFinite(n)) toBucket = n;
+            } else if (bucketKey === WBS_UNMAPPED) {
+                toBucket = null;
+            }
+            if (bucketKey != null) target = { toBucket, beforeId };
+        }
+        if (slot?.parentNode) {
+            slot.parentNode.insertBefore(card, slot);
+            slot.remove();
+        } else if (card && !card.isConnected) {
+            section.querySelector('[data-planner-wbs-drop]')?.appendChild(card);
+        }
+        if (card) {
+            card.classList.remove('is-planner-wbs-dragging');
+            card.style.position = '';
+            card.style.left = '';
+            card.style.top = '';
+            card.style.width = '';
+            card.style.height = '';
+            card.style.zIndex = '';
+            card.style.pointerEvents = '';
+            card.style.margin = '';
+        }
+        if (commit && target) {
+            mutate((it) => {
+                moveWbsCard(it.planner, rowId, target.toBucket, { beforeId: target.beforeId });
+            }, { skipRerender: true, refreshGantt: true });
+        }
+    };
+
+    const placeWbsSlot = (clientX, clientY, slot, draggedId) => {
+        if (!slot) return;
+        const board = section.querySelector('[data-planner-wbs-board]');
+        if (!board) return;
+        const columns = [...board.querySelectorAll('.planner-wbs__column[data-planner-wbs-bucket]')];
+        let column = null;
+        for (const col of columns) {
+            const rect = col.getBoundingClientRect();
+            if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+                column = col;
+                break;
+            }
+        }
+        if (!column) {
+            let best = null;
+            let bestDist = Infinity;
+            for (const col of columns) {
+                const rect = col.getBoundingClientRect();
+                const cx = (rect.left + rect.right) / 2;
+                const dist = Math.abs(clientX - cx);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    best = col;
+                }
+            }
+            column = best;
+        }
+        const body = column?.querySelector('[data-planner-wbs-drop]') || null;
+        if (!body) return;
+        clearWbsColumnOver();
+        body.classList.add('is-drag-over');
+        if (column.classList.contains('is-collapsed')) {
+            body.appendChild(slot);
+            return;
+        }
+        const cards = [...body.querySelectorAll('[data-planner-wbs-card]')]
+            .filter((c) => c.dataset.plannerRowId !== draggedId);
+        if (!cards.length) {
+            body.appendChild(slot);
+            return;
+        }
+        for (const card of cards) {
+            const rect = card.getBoundingClientRect();
+            if (clientY < rect.top + rect.height / 2) {
+                body.insertBefore(slot, card);
+                return;
+            }
+        }
+        body.appendChild(slot);
+    };
+
+    const liftWbsCard = (state, clientX, clientY) => {
+        if (state.lifted) return;
+        const { card } = state;
+        const rect = card.getBoundingClientRect();
+        state.offsetX = clientX - rect.left;
+        state.offsetY = clientY - rect.top;
+        const slot = document.createElement('div');
+        slot.className = 'planner-wbs__placeholder';
+        slot.setAttribute('aria-hidden', 'true');
+        slot.style.height = `${rect.height}px`;
+        card.parentNode?.insertBefore(slot, card);
+        state.slot = slot;
+        document.body.appendChild(card);
+        card.classList.add('is-planner-wbs-dragging');
+        card.style.position = 'fixed';
+        card.style.width = `${rect.width}px`;
+        card.style.height = `${rect.height}px`;
+        card.style.left = `${rect.left}px`;
+        card.style.top = `${rect.top}px`;
+        card.style.zIndex = '9999';
+        card.style.pointerEvents = 'none';
+        card.style.margin = '0';
+        document.body.classList.add('is-planner-wbs-drag-active');
+        state.lifted = true;
+    };
+
+    const onWbsDocPointerMove = (e) => {
+        const state = wbsPtr;
+        if (!state || state.pointerId !== e.pointerId) return;
+        const dx = e.clientX - state.startX;
+        const dy = e.clientY - state.startY;
+        if (!state.lifted) {
+            if ((dx * dx + dy * dy) < KANBAN_DRAG_THRESHOLD * KANBAN_DRAG_THRESHOLD) return;
+            e.preventDefault();
+            liftWbsCard(state, e.clientX, e.clientY);
+        }
+        if (!state.lifted) return;
+        e.preventDefault();
+        state.card.style.left = `${e.clientX - state.offsetX}px`;
+        state.card.style.top = `${e.clientY - state.offsetY}px`;
+        placeWbsSlot(e.clientX, e.clientY, state.slot, state.rowId);
+    };
+
+    const onWbsDocPointerUp = (e) => {
+        const state = wbsPtr;
+        if (!state || (e.pointerId != null && state.pointerId !== e.pointerId)) return;
+        document.removeEventListener('pointermove', onWbsDocPointerMove);
+        document.removeEventListener('pointerup', onWbsDocPointerUp);
+        document.removeEventListener('pointercancel', onWbsDocPointerUp);
+        endWbsPointerDrag({ commit: state.lifted });
+    };
+
+    section.addEventListener('pointerdown', (e) => {
+        if (e.button != null && e.button !== 0) return;
+        if (e.target.closest?.('textarea, input, [contenteditable]')) return;
+        const card = e.target.closest('[data-planner-wbs-card]');
+        if (!card || !section.contains(card) || !card.classList.contains('is-editable')) return;
+        const rowId = String(card.dataset.plannerRowId || '');
+        if (!rowId) return;
+        if (wbsPtr) endWbsPointerDrag({ commit: false });
+        wbsPtr = {
+            card,
+            rowId,
+            slot: null,
+            offsetX: 0,
+            offsetY: 0,
+            lifted: false,
+            startX: e.clientX,
+            startY: e.clientY,
+            pointerId: e.pointerId
+        };
+        document.addEventListener('pointermove', onWbsDocPointerMove, { passive: false });
+        document.addEventListener('pointerup', onWbsDocPointerUp);
+        document.addEventListener('pointercancel', onWbsDocPointerUp);
+    });
+
     section.addEventListener('dragstart', (e) => {
-        // Kanban uses pointer drag; block native HTML5 drag from cards.
-        if (e.target.closest?.('[data-planner-kanban-card]')) {
+        // Kanban/WBS use pointer drag; block native HTML5 drag from cards.
+        if (e.target.closest?.('[data-planner-kanban-card], [data-planner-wbs-card]')) {
             e.preventDefault();
             return;
         }
         const head = e.target.closest('.planner-row-head[data-planner-row]');
         if (!head || !section.contains(head)) return;
+        if (head.hasAttribute('data-planner-pack-head')) suppressPackHeadClick = true;
         dragFrom = Number(head.dataset.plannerRow);
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', String(dragFrom));
@@ -2386,7 +2866,7 @@ export function attachPlannerInteractions(root, item, {
             dragFrom = null;
             return;
         }
-        mutate((it) => movePlannerRow(it.planner, dragFrom, toIndex), { skipRerender: true, refreshGantt: false });
+        mutate((it) => movePlannerRow(it.planner, dragFrom, toIndex), { skipRerender: true, refreshGantt: true });
         dragFrom = null;
         refresh();
     });

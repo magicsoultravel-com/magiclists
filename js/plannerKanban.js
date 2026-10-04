@@ -69,45 +69,72 @@ export function normalizeKanbanSortDir(raw) {
 }
 
 /**
- * @param {unknown} raw
- * @param {number} rowCount
- * @returns {Record<string, number>}
+ * Resolve a stored map key to a row id (supports legacy index keys).
+ * @param {string} key
+ * @param {string[]} rowIds
+ * @param {{ keysAreIndexes?: boolean }} [opts]
+ * @returns {string}
  */
-export function normalizeKanbanStageByRow(raw, rowCount = 0) {
-    if (!raw || typeof raw !== 'object') return {};
-    const out = {};
-    const max = Math.max(0, Number(rowCount) || 0);
-    for (const [k, v] of Object.entries(raw)) {
-        const row = Number(k);
-        const stage = Number(v);
-        if (!Number.isFinite(row) || row < 0 || row >= max) continue;
-        if (!Number.isFinite(stage) || stage < 0 || stage >= KANBAN_STAGE_COUNT) continue;
-        out[String(Math.floor(row))] = Math.floor(stage);
+function resolveMapKeyToId(key, rowIds, { keysAreIndexes = false } = {}) {
+    const k = String(key || '');
+    if (!k) return '';
+    const asIndex = Number(k);
+    const isIndexToken = Number.isFinite(asIndex) && asIndex >= 0 && asIndex < rowIds.length
+        && String(Math.floor(asIndex)) === k;
+    if (keysAreIndexes) {
+        return isIndexToken ? String(rowIds[Math.floor(asIndex)] || '') : '';
     }
-    return out;
+    if (rowIds.includes(k)) return k;
+    if (isIndexToken) return String(rowIds[Math.floor(asIndex)] || '');
+    return '';
 }
 
 /**
  * @param {unknown} raw
- * @param {number} rowCount
- * @returns {Record<string, number[]>}
+ * @param {string[]} rowIds
+ * @param {{ keysAreIndexes?: boolean }} [opts]
+ * @returns {Record<string, number>}
  */
-export function normalizeKanbanOrderByStage(raw, rowCount = 0) {
+export function normalizeKanbanStageById(raw, rowIds = [], opts = {}) {
     if (!raw || typeof raw !== 'object') return {};
+    const ids = Array.isArray(rowIds) ? rowIds : [];
     const out = {};
-    const max = Math.max(0, Number(rowCount) || 0);
+    for (const [k, v] of Object.entries(raw)) {
+        const id = resolveMapKeyToId(k, ids, opts);
+        const stage = Number(v);
+        if (!id) continue;
+        if (!Number.isFinite(stage) || stage < 0 || stage >= KANBAN_STAGE_COUNT) continue;
+        out[id] = Math.floor(stage);
+    }
+    return out;
+}
+
+/** @deprecated use normalizeKanbanStageById */
+export function normalizeKanbanStageByRow(raw, rowCount = 0) {
+    const rowIds = Array.from({ length: Math.max(0, Number(rowCount) || 0) }, (_, i) => String(i));
+    return normalizeKanbanStageById(raw, rowIds);
+}
+
+/**
+ * @param {unknown} raw
+ * @param {string[]} rowIds
+ * @param {{ keysAreIndexes?: boolean }} [opts]
+ * @returns {Record<string, string[]>}
+ */
+export function normalizeKanbanOrderByStage(raw, rowIds = [], opts = {}) {
+    if (!raw || typeof raw !== 'object') return {};
+    const ids = Array.isArray(rowIds) ? rowIds : [];
+    const out = {};
     for (let stage = 0; stage < KANBAN_STAGE_COUNT; stage++) {
         const list = raw[String(stage)] ?? raw[stage];
         if (!Array.isArray(list)) continue;
         const seen = new Set();
         const next = [];
         for (const item of list) {
-            const row = Number(item);
-            if (!Number.isFinite(row) || row < 0 || row >= max) continue;
-            const r = Math.floor(row);
-            if (seen.has(r)) continue;
-            seen.add(r);
-            next.push(r);
+            const id = resolveMapKeyToId(String(item), ids, opts);
+            if (!id || seen.has(id)) continue;
+            seen.add(id);
+            next.push(id);
         }
         if (next.length) out[String(stage)] = next;
     }
@@ -115,87 +142,98 @@ export function normalizeKanbanOrderByStage(raw, rowCount = 0) {
 }
 
 /**
- * Per-card color overrides (hex). Empty / invalid dropped.
  * @param {unknown} raw
- * @param {number} rowCount
+ * @param {string[]} rowIds
+ * @param {{ keysAreIndexes?: boolean }} [opts]
  * @returns {Record<string, string>}
  */
-export function normalizeKanbanCardColors(raw, rowCount = 0) {
+export function normalizeKanbanCardColors(raw, rowIds = [], opts = {}) {
     if (!raw || typeof raw !== 'object') return {};
+    const ids = Array.isArray(rowIds) ? rowIds : [];
     const out = {};
-    const max = Math.max(0, Number(rowCount) || 0);
     for (const [k, v] of Object.entries(raw)) {
-        const row = Number(k);
+        const id = resolveMapKeyToId(k, ids, opts);
         const hex = String(v || '').trim();
-        if (!Number.isFinite(row) || row < 0 || row >= max) continue;
+        if (!id) continue;
         if (!/^#[0-9a-fA-F]{6}$/.test(hex)) continue;
-        out[String(Math.floor(row))] = hex.toLowerCase();
+        out[id] = hex.toLowerCase();
     }
     return out;
 }
 
 /**
- * Per-card emphasis: urgent | muted.
  * @param {unknown} raw
- * @param {number} rowCount
+ * @param {string[]} rowIds
+ * @param {{ keysAreIndexes?: boolean }} [opts]
  * @returns {Record<string, 'urgent'|'muted'>}
  */
-export function normalizeKanbanEmphasisByRow(raw, rowCount = 0) {
+export function normalizeKanbanEmphasisById(raw, rowIds = [], opts = {}) {
     if (!raw || typeof raw !== 'object') return {};
+    const ids = Array.isArray(rowIds) ? rowIds : [];
     const out = {};
-    const max = Math.max(0, Number(rowCount) || 0);
     for (const [k, v] of Object.entries(raw)) {
-        const row = Number(k);
+        const id = resolveMapKeyToId(k, ids, opts);
         const mode = String(v || '').toLowerCase();
-        if (!Number.isFinite(row) || row < 0 || row >= max) continue;
+        if (!id) continue;
         if (!KANBAN_EMPHASIS_MODES.includes(mode)) continue;
-        out[String(Math.floor(row))] = /** @type {'urgent'|'muted'} */ (mode);
+        out[id] = /** @type {'urgent'|'muted'} */ (mode);
     }
     return out;
+}
+
+/** @deprecated use normalizeKanbanEmphasisById */
+export function normalizeKanbanEmphasisByRow(raw, rowCount = 0) {
+    const rowIds = Array.from({ length: Math.max(0, Number(rowCount) || 0) }, (_, i) => String(i));
+    return normalizeKanbanEmphasisById(raw, rowIds);
 }
 
 /**
  * @param {object|null|undefined} planner
- * @param {number} row
+ * @param {number|string} rowOrId
  * @returns {''|'urgent'|'muted'}
  */
-export function getKanbanEmphasisForRow(planner, row) {
-    const raw = planner?.kanbanEmphasisByRow?.[String(row)] ?? planner?.kanbanEmphasisByRow?.[row];
+export function getKanbanEmphasisForRow(planner, rowOrId) {
+    const id = resolveRowOrId(planner, rowOrId);
+    const raw = planner?.kanbanEmphasisById?.[id];
     const mode = String(raw || '').toLowerCase();
     return KANBAN_EMPHASIS_MODES.includes(mode) ? /** @type {'urgent'|'muted'} */ (mode) : '';
 }
 
 /**
- * Per-card collapsed density (title-only). Sparse map of truthy flags.
  * @param {unknown} raw
- * @param {number} rowCount
+ * @param {string[]} rowIds
+ * @param {{ keysAreIndexes?: boolean }} [opts]
  * @returns {Record<string, true>}
  */
-export function normalizeKanbanCollapsedByRow(raw, rowCount = 0) {
+export function normalizeKanbanCollapsedById(raw, rowIds = [], opts = {}) {
     if (!raw || typeof raw !== 'object') return {};
+    const ids = Array.isArray(rowIds) ? rowIds : [];
     const out = {};
-    const max = Math.max(0, Number(rowCount) || 0);
     for (const [k, v] of Object.entries(raw)) {
-        const row = Number(k);
-        if (!Number.isFinite(row) || row < 0 || row >= max) continue;
-        if (!v) continue;
-        out[String(Math.floor(row))] = true;
+        const id = resolveMapKeyToId(k, ids, opts);
+        if (!id || !v) continue;
+        out[id] = true;
     }
     return out;
 }
 
-/**
- * @param {object|null|undefined} planner
- * @param {number} row
- * @returns {boolean}
- */
-export function isKanbanCardCollapsed(planner, row) {
-    const raw = planner?.kanbanCollapsedByRow?.[String(row)] ?? planner?.kanbanCollapsedByRow?.[row];
-    return !!raw;
+/** @deprecated use normalizeKanbanCollapsedById */
+export function normalizeKanbanCollapsedByRow(raw, rowCount = 0) {
+    const rowIds = Array.from({ length: Math.max(0, Number(rowCount) || 0) }, (_, i) => String(i));
+    return normalizeKanbanCollapsedById(raw, rowIds);
 }
 
 /**
- * Per-stage column collapse. Sparse map of truthy flags keyed by stage 0..4.
+ * @param {object|null|undefined} planner
+ * @param {number|string} rowOrId
+ * @returns {boolean}
+ */
+export function isKanbanCardCollapsed(planner, rowOrId) {
+    const id = resolveRowOrId(planner, rowOrId);
+    return !!(planner?.kanbanCollapsedById?.[id]);
+}
+
+/**
  * @param {unknown} raw
  * @returns {Record<string, true>}
  */
@@ -279,24 +317,53 @@ function categoryColorLookup(planner, categoryName) {
 }
 
 /**
- * Cards with a non-empty name (empty-name rows stay off the board).
  * @param {object|null|undefined} planner
- * @returns {Array<{ row: number, id: string, name: string, start: string, stop: string, category: string, comments: string, categoryColor: string, cardColor: string, emphasis: string, collapsed: boolean }>}
+ * @param {number|string} rowOrId
+ * @returns {string}
+ */
+function resolveRowOrId(planner, rowOrId) {
+    if (typeof rowOrId === 'string' && rowOrId && !/^\d+$/.test(rowOrId)) return rowOrId;
+    if (typeof rowOrId === 'string' && planner?.rowIds?.includes(rowOrId)) return rowOrId;
+    const row = Number(rowOrId);
+    if (Number.isFinite(row) && Array.isArray(planner?.rowIds) && row >= 0 && row < planner.rowIds.length) {
+        return String(planner.rowIds[row] || '');
+    }
+    // Legacy: treat bare numeric string as id if present
+    if (typeof rowOrId === 'string' && planner?.rowIds?.includes(rowOrId)) return rowOrId;
+    return String(rowOrId ?? '');
+}
+
+function isPackId(planner, rowId) {
+    return !!(planner?.rowPackById?.[String(rowId)]);
+}
+
+function isHiddenId(planner, rowId) {
+    return !!(planner?.rowHiddenById?.[String(rowId)]);
+}
+
+/**
+ * Cards with a non-empty name (empty-name / pack / hidden rows stay off the board).
+ * @param {object|null|undefined} planner
+ * @returns {Array<{ row: number, rowId: string, id: string, name: string, start: string, stop: string, category: string, comments: string, categoryColor: string, cardColor: string, emphasis: string, collapsed: boolean }>}
  */
 export function derivePlannerKanbanCards(planner) {
     const sheet = planner?.sheet;
+    const rowIds = Array.isArray(planner?.rowIds) ? planner.rowIds : [];
     if (!sheet) return [];
     const cards = [];
     for (let r = 0; r < (sheet.rows || 0); r++) {
+        const rowId = String(rowIds[r] || r);
+        if (isPackId(planner, rowId) || isHiddenId(planner, rowId)) continue;
         const name = cellTrim(sheet, r, NAME_COL);
         if (!name) continue;
         const category = cellTrim(sheet, r, CATEGORY_COL);
         const categoryColor = categoryColorLookup(planner, category);
-        const override = planner?.kanbanCardColors?.[String(r)] || planner?.kanbanCardColors?.[r] || '';
+        const override = planner?.kanbanCardColors?.[rowId] || '';
         const cardColor = /^#[0-9a-fA-F]{6}$/.test(override) ? override : categoryColor;
         cards.push({
             row: r,
-            id: String(r + 1),
+            rowId,
+            id: rowId,
             name,
             start: cellTrim(sheet, r, START_COL),
             stop: cellTrim(sheet, r, STOP_COL),
@@ -304,8 +371,8 @@ export function derivePlannerKanbanCards(planner) {
             comments: cellTrim(sheet, r, COMMENTS_COL),
             categoryColor,
             cardColor,
-            emphasis: getKanbanEmphasisForRow(planner, r),
-            collapsed: isKanbanCardCollapsed(planner, r)
+            emphasis: getKanbanEmphasisForRow(planner, rowId),
+            collapsed: isKanbanCardCollapsed(planner, rowId)
         });
     }
     return cards;
@@ -313,11 +380,12 @@ export function derivePlannerKanbanCards(planner) {
 
 /**
  * @param {object|null|undefined} planner
- * @param {number} row
+ * @param {number|string} rowOrId
  * @returns {number}
  */
-export function getKanbanStageForRow(planner, row) {
-    const raw = planner?.kanbanStageByRow?.[String(row)] ?? planner?.kanbanStageByRow?.[row];
+export function getKanbanStageForRow(planner, rowOrId) {
+    const id = resolveRowOrId(planner, rowOrId);
+    const raw = planner?.kanbanStageById?.[id];
     const stage = Number(raw);
     if (!Number.isFinite(stage) || stage < 0 || stage >= KANBAN_STAGE_COUNT) return 0;
     return Math.floor(stage);
@@ -338,7 +406,7 @@ export function layoutPlannerKanban(planner, { flavour } = {}) {
     const byStage = Array.from({ length: KANBAN_STAGE_COUNT }, () => []);
 
     for (const card of cards) {
-        byStage[getKanbanStageForRow(planner, card.row)].push(card);
+        byStage[getKanbanStageForRow(planner, card.rowId)].push(card);
     }
 
     for (let stage = 0; stage < KANBAN_STAGE_COUNT; stage++) {
@@ -350,7 +418,7 @@ export function layoutPlannerKanban(planner, { flavour } = {}) {
                 if (da && db) {
                     const diff = da.getTime() - db.getTime();
                     if (diff !== 0) return diff * dirMul;
-                } else if (da && !db) return -1; // undated always last
+                } else if (da && !db) return -1;
                 else if (!da && db) return 1;
                 return (a.row - b.row) * dirMul;
             });
@@ -365,10 +433,10 @@ export function layoutPlannerKanban(planner, { flavour } = {}) {
             });
         } else if (sort === 'manual') {
             const order = planner?.kanbanOrderByStage?.[String(stage)] || [];
-            const rank = new Map(order.map((row, i) => [row, i]));
+            const rank = new Map(order.map((id, i) => [String(id), i]));
             list.sort((a, b) => {
-                const ra = rank.has(a.row) ? rank.get(a.row) : Number.POSITIVE_INFINITY;
-                const rb = rank.has(b.row) ? rank.get(b.row) : Number.POSITIVE_INFINITY;
+                const ra = rank.has(a.rowId) ? rank.get(a.rowId) : Number.POSITIVE_INFINITY;
+                const rb = rank.has(b.rowId) ? rank.get(b.rowId) : Number.POSITIVE_INFINITY;
                 if (ra !== rb) return ra - rb;
                 return a.row - b.row;
             });
@@ -392,147 +460,95 @@ export function layoutPlannerKanban(planner, { flavour } = {}) {
 }
 
 /**
- * Remap kanban stage/order/color maps after a row reorder (oldRow → newRow via order[]).
+ * Id-keyed maps do not remap on row reorder — only prune orphans.
+ * Kept for call-site compatibility.
  * @param {object} planner
- * @param {number[]} order - order[newRow] = oldRow
+ * @param {number[]} [_order]
  */
-export function remapKanbanAfterRowMove(planner, order) {
-    if (!planner || !Array.isArray(order)) return;
-    const oldToNew = new Map();
-    order.forEach((oldRow, newRow) => oldToNew.set(oldRow, newRow));
-
-    const nextStage = {};
-    const srcStage = planner.kanbanStageByRow && typeof planner.kanbanStageByRow === 'object'
-        ? planner.kanbanStageByRow
-        : {};
-    for (const [k, v] of Object.entries(srcStage)) {
-        const oldRow = Number(k);
-        if (!oldToNew.has(oldRow)) continue;
-        const stage = Number(v);
-        if (!Number.isFinite(stage) || stage < 0 || stage >= KANBAN_STAGE_COUNT) continue;
-        nextStage[String(oldToNew.get(oldRow))] = Math.floor(stage);
-    }
-    planner.kanbanStageByRow = nextStage;
-
-    const nextOrder = {};
-    const srcOrder = planner.kanbanOrderByStage && typeof planner.kanbanOrderByStage === 'object'
-        ? planner.kanbanOrderByStage
-        : {};
-    for (let stage = 0; stage < KANBAN_STAGE_COUNT; stage++) {
-        const list = srcOrder[String(stage)] ?? srcOrder[stage];
-        if (!Array.isArray(list)) continue;
-        const mapped = [];
-        const seen = new Set();
-        for (const item of list) {
-            const oldRow = Number(item);
-            if (!oldToNew.has(oldRow)) continue;
-            const newRow = oldToNew.get(oldRow);
-            if (seen.has(newRow)) continue;
-            seen.add(newRow);
-            mapped.push(newRow);
-        }
-        if (mapped.length) nextOrder[String(stage)] = mapped;
-    }
-    planner.kanbanOrderByStage = nextOrder;
-
-    const nextColors = {};
-    const srcColors = planner.kanbanCardColors && typeof planner.kanbanCardColors === 'object'
-        ? planner.kanbanCardColors
-        : {};
-    for (const [k, v] of Object.entries(srcColors)) {
-        const oldRow = Number(k);
-        if (!oldToNew.has(oldRow)) continue;
-        const hex = String(v || '').trim();
-        if (!/^#[0-9a-fA-F]{6}$/.test(hex)) continue;
-        nextColors[String(oldToNew.get(oldRow))] = hex.toLowerCase();
-    }
-    planner.kanbanCardColors = nextColors;
-
-    const nextEmphasis = {};
-    const srcEmphasis = planner.kanbanEmphasisByRow && typeof planner.kanbanEmphasisByRow === 'object'
-        ? planner.kanbanEmphasisByRow
-        : {};
-    for (const [k, v] of Object.entries(srcEmphasis)) {
-        const oldRow = Number(k);
-        if (!oldToNew.has(oldRow)) continue;
-        const mode = String(v || '').toLowerCase();
-        if (!KANBAN_EMPHASIS_MODES.includes(mode)) continue;
-        nextEmphasis[String(oldToNew.get(oldRow))] = mode;
-    }
-    planner.kanbanEmphasisByRow = nextEmphasis;
-
-    const nextCollapsed = {};
-    const srcCollapsed = planner.kanbanCollapsedByRow && typeof planner.kanbanCollapsedByRow === 'object'
-        ? planner.kanbanCollapsedByRow
-        : {};
-    for (const [k, v] of Object.entries(srcCollapsed)) {
-        const oldRow = Number(k);
-        if (!oldToNew.has(oldRow) || !v) continue;
-        nextCollapsed[String(oldToNew.get(oldRow))] = true;
-    }
-    planner.kanbanCollapsedByRow = nextCollapsed;
+export function remapKanbanAfterRowMove(planner, _order) {
+    pruneKanbanOrphanKeys(planner);
 }
 
 /**
- * Drop stage/order/color/emphasis/collapsed entries for a removed last row.
  * @param {object} planner
- * @param {number} removedRow
  */
-export function pruneKanbanAfterRowRemove(planner, removedRow) {
-    if (!planner || !Number.isFinite(removedRow)) return;
-    const stageMap = planner.kanbanStageByRow;
-    if (stageMap && typeof stageMap === 'object') {
-        delete stageMap[String(removedRow)];
-        delete stageMap[removedRow];
-    }
+export function pruneKanbanOrphanKeys(planner) {
+    if (!planner) return;
+    const idSet = new Set(Array.isArray(planner.rowIds) ? planner.rowIds.map(String) : []);
+    const pruneMap = (map) => {
+        if (!map || typeof map !== 'object') return;
+        for (const key of Object.keys(map)) {
+            if (!idSet.has(String(key))) delete map[key];
+        }
+    };
+    pruneMap(planner.kanbanStageById);
+    pruneMap(planner.kanbanCardColors);
+    pruneMap(planner.kanbanEmphasisById);
+    pruneMap(planner.kanbanCollapsedById);
     const orderMap = planner.kanbanOrderByStage;
     if (orderMap && typeof orderMap === 'object') {
         for (let stage = 0; stage < KANBAN_STAGE_COUNT; stage++) {
             const key = String(stage);
-            const list = orderMap[key] ?? orderMap[stage];
+            const list = orderMap[key];
             if (!Array.isArray(list)) continue;
-            const next = list.filter((r) => Number(r) !== removedRow);
+            const next = list.filter((id) => idSet.has(String(id)));
             if (next.length) orderMap[key] = next;
-            else {
-                delete orderMap[key];
-                delete orderMap[stage];
-            }
+            else delete orderMap[key];
         }
     }
-    const colorMap = planner.kanbanCardColors;
-    if (colorMap && typeof colorMap === 'object') {
-        delete colorMap[String(removedRow)];
-        delete colorMap[removedRow];
+}
+
+/**
+ * Drop stage/order/color/emphasis/collapsed entries for removed row ids.
+ * @param {object} planner
+ * @param {number|string|Iterable<string>} removedRowOrIds
+ */
+export function pruneKanbanAfterRowRemove(planner, removedRowOrIds) {
+    if (!planner) return;
+    let ids = [];
+    if (removedRowOrIds && typeof removedRowOrIds === 'object' && Symbol.iterator in removedRowOrIds
+        && typeof removedRowOrIds !== 'string') {
+        ids = [...removedRowOrIds].map(String);
+    } else {
+        ids = [resolveRowOrId(planner, /** @type {any} */ (removedRowOrIds))].filter(Boolean);
     }
-    const emphasisMap = planner.kanbanEmphasisByRow;
-    if (emphasisMap && typeof emphasisMap === 'object') {
-        delete emphasisMap[String(removedRow)];
-        delete emphasisMap[removedRow];
-    }
-    const collapsedMap = planner.kanbanCollapsedByRow;
-    if (collapsedMap && typeof collapsedMap === 'object') {
-        delete collapsedMap[String(removedRow)];
-        delete collapsedMap[removedRow];
+    for (const id of ids) {
+        if (planner.kanbanStageById) delete planner.kanbanStageById[id];
+        if (planner.kanbanCardColors) delete planner.kanbanCardColors[id];
+        if (planner.kanbanEmphasisById) delete planner.kanbanEmphasisById[id];
+        if (planner.kanbanCollapsedById) delete planner.kanbanCollapsedById[id];
+        const orderMap = planner.kanbanOrderByStage;
+        if (orderMap && typeof orderMap === 'object') {
+            for (let stage = 0; stage < KANBAN_STAGE_COUNT; stage++) {
+                const key = String(stage);
+                const list = orderMap[key];
+                if (!Array.isArray(list)) continue;
+                const next = list.filter((x) => String(x) !== id);
+                if (next.length) orderMap[key] = next;
+                else delete orderMap[key];
+            }
+        }
     }
 }
 
 /**
  * Move a card to a stage; optionally insert before a target row (always updates order).
  * @param {object} planner
- * @param {number} row
+ * @param {number|string} rowOrId
  * @param {number} toStage
- * @param {{ beforeRow?: number|null }} [opts]
+ * @param {{ beforeRow?: number|string|null, beforeId?: string|null }} [opts]
  */
-export function moveKanbanCard(planner, row, toStage, { beforeRow = null } = {}) {
-    if (!planner || !Number.isFinite(row) || !Number.isFinite(toStage)) return;
+export function moveKanbanCard(planner, rowOrId, toStage, { beforeRow = null, beforeId = null } = {}) {
+    if (!planner || !Number.isFinite(toStage)) return;
     const stage = Math.floor(toStage);
     if (stage < 0 || stage >= KANBAN_STAGE_COUNT) return;
-    const r = Math.floor(row);
+    const id = resolveRowOrId(planner, rowOrId);
+    if (!id) return;
 
-    if (!planner.kanbanStageByRow || typeof planner.kanbanStageByRow !== 'object') {
-        planner.kanbanStageByRow = {};
+    if (!planner.kanbanStageById || typeof planner.kanbanStageById !== 'object') {
+        planner.kanbanStageById = {};
     }
-    planner.kanbanStageByRow[String(r)] = stage;
+    planner.kanbanStageById[id] = stage;
 
     if (!planner.kanbanOrderByStage || typeof planner.kanbanOrderByStage !== 'object') {
         planner.kanbanOrderByStage = {};
@@ -543,101 +559,105 @@ export function moveKanbanCard(planner, row, toStage, { beforeRow = null } = {})
         const key = String(s);
         const list = order[key];
         if (!Array.isArray(list)) continue;
-        const next = list.filter((x) => x !== r);
+        const next = list.filter((x) => String(x) !== id);
         if (next.length) order[key] = next;
         else delete order[key];
     }
 
     const key = String(stage);
-    let list = Array.isArray(order[key]) ? order[key].filter((x) => x !== r) : [];
+    let list = Array.isArray(order[key]) ? order[key].filter((x) => String(x) !== id) : [];
 
     if (!list.length) {
         const peers = derivePlannerKanbanCards(planner)
-            .filter((c) => c.row !== r && getKanbanStageForRow(planner, c.row) === stage)
-            .map((c) => c.row)
-            .sort((a, b) => a - b);
+            .filter((c) => c.rowId !== id && getKanbanStageForRow(planner, c.rowId) === stage)
+            .map((c) => c.rowId)
+            .sort((a, b) => {
+                const ra = planner.rowIds?.indexOf(a) ?? 0;
+                const rb = planner.rowIds?.indexOf(b) ?? 0;
+                return ra - rb;
+            });
         list = peers;
     }
 
-    const before = beforeRow != null && Number.isFinite(beforeRow) ? Math.floor(beforeRow) : null;
-    if (before != null && list.includes(before)) {
-        list.splice(list.indexOf(before), 0, r);
+    let before = beforeId != null ? String(beforeId) : null;
+    if (!before && beforeRow != null) before = resolveRowOrId(planner, beforeRow) || null;
+    if (before && list.includes(before)) {
+        list.splice(list.indexOf(before), 0, id);
     } else {
-        list.push(r);
+        list.push(id);
     }
     order[key] = list;
 }
 
 /**
  * @param {object} planner
- * @param {number} row
+ * @param {number|string} rowOrId
  * @param {string} hex
  */
-export function setKanbanCardColor(planner, row, hex) {
-    if (!planner || !Number.isFinite(row)) return;
+export function setKanbanCardColor(planner, rowOrId, hex) {
+    if (!planner) return;
+    const id = resolveRowOrId(planner, rowOrId);
+    if (!id) return;
     const color = String(hex || '').trim();
     if (!planner.kanbanCardColors || typeof planner.kanbanCardColors !== 'object') {
         planner.kanbanCardColors = {};
     }
     if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
-        delete planner.kanbanCardColors[String(Math.floor(row))];
+        delete planner.kanbanCardColors[id];
         return;
     }
-    planner.kanbanCardColors[String(Math.floor(row))] = color.toLowerCase();
+    planner.kanbanCardColors[id] = color.toLowerCase();
 }
 
 /**
- * Toggle or clear card emphasis. Passing the active mode clears it; modes are mutually exclusive.
  * @param {object} planner
- * @param {number} row
+ * @param {number|string} rowOrId
  * @param {'urgent'|'muted'|''} mode
  */
-export function setKanbanCardEmphasis(planner, row, mode) {
-    if (!planner || !Number.isFinite(row)) return;
-    if (!planner.kanbanEmphasisByRow || typeof planner.kanbanEmphasisByRow !== 'object') {
-        planner.kanbanEmphasisByRow = {};
+export function setKanbanCardEmphasis(planner, rowOrId, mode) {
+    if (!planner) return;
+    const id = resolveRowOrId(planner, rowOrId);
+    if (!id) return;
+    if (!planner.kanbanEmphasisById || typeof planner.kanbanEmphasisById !== 'object') {
+        planner.kanbanEmphasisById = {};
     }
-    const key = String(Math.floor(row));
     const next = String(mode || '').toLowerCase();
     if (!KANBAN_EMPHASIS_MODES.includes(next)) {
-        delete planner.kanbanEmphasisByRow[key];
+        delete planner.kanbanEmphasisById[id];
         return;
     }
-    if (planner.kanbanEmphasisByRow[key] === next) {
-        delete planner.kanbanEmphasisByRow[key];
+    if (planner.kanbanEmphasisById[id] === next) {
+        delete planner.kanbanEmphasisById[id];
         return;
     }
-    planner.kanbanEmphasisByRow[key] = next;
+    planner.kanbanEmphasisById[id] = next;
 }
 
 /**
- * Clear custom color override + emphasis for one card (category color remains).
  * @param {object} planner
- * @param {number} row
+ * @param {number|string} rowOrId
  */
-export function resetKanbanCardStyles(planner, row) {
-    if (!planner || !Number.isFinite(row)) return;
-    setKanbanCardColor(planner, row, '');
-    setKanbanCardEmphasis(planner, row, '');
+export function resetKanbanCardStyles(planner, rowOrId) {
+    if (!planner) return;
+    setKanbanCardColor(planner, rowOrId, '');
+    setKanbanCardEmphasis(planner, rowOrId, '');
 }
 
 /**
- * Clear custom color overrides + emphasis for every card.
  * @param {object} planner
  */
 export function resetAllKanbanCardStyles(planner) {
     if (!planner) return;
     planner.kanbanCardColors = {};
-    planner.kanbanEmphasisByRow = {};
+    planner.kanbanEmphasisById = {};
 }
 
 /**
- * Put every card back in column 0, clear manual order, restore default row sort.
  * @param {object} planner
  */
 export function resetKanbanArrangement(planner) {
     if (!planner) return;
-    planner.kanbanStageByRow = {};
+    planner.kanbanStageById = {};
     planner.kanbanOrderByStage = {};
     planner.kanbanSort = KANBAN_DEFAULT_SORT;
     planner.kanbanSortDir = KANBAN_DEFAULT_SORT_DIR;
@@ -645,37 +665,36 @@ export function resetKanbanArrangement(planner) {
 
 /**
  * @param {object} planner
- * @param {number} row
+ * @param {number|string} rowOrId
  * @param {boolean} collapsed
  */
-export function setKanbanCardCollapsed(planner, row, collapsed) {
-    if (!planner || !Number.isFinite(row)) return;
-    if (!planner.kanbanCollapsedByRow || typeof planner.kanbanCollapsedByRow !== 'object') {
-        planner.kanbanCollapsedByRow = {};
+export function setKanbanCardCollapsed(planner, rowOrId, collapsed) {
+    if (!planner) return;
+    const id = resolveRowOrId(planner, rowOrId);
+    if (!id) return;
+    if (!planner.kanbanCollapsedById || typeof planner.kanbanCollapsedById !== 'object') {
+        planner.kanbanCollapsedById = {};
     }
-    const key = String(Math.floor(row));
-    if (collapsed) planner.kanbanCollapsedByRow[key] = true;
-    else delete planner.kanbanCollapsedByRow[key];
+    if (collapsed) planner.kanbanCollapsedById[id] = true;
+    else delete planner.kanbanCollapsedById[id];
 }
 
 /**
- * Expand every card (clear collapsed map).
  * @param {object} planner
  */
 export function expandAllKanbanCards(planner) {
     if (!planner) return;
-    planner.kanbanCollapsedByRow = {};
+    planner.kanbanCollapsedById = {};
 }
 
 /**
- * Collapse every named card on the board.
  * @param {object} planner
  */
 export function collapseAllKanbanCards(planner) {
     if (!planner) return;
     const next = {};
     for (const card of derivePlannerKanbanCards(planner)) {
-        next[String(card.row)] = true;
+        next[card.rowId] = true;
     }
-    planner.kanbanCollapsedByRow = next;
+    planner.kanbanCollapsedById = next;
 }

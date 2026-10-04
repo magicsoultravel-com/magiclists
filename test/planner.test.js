@@ -18,6 +18,12 @@ import {
     getCategoryColor,
     listPlannerCategories,
     summarizePlannerSchedule,
+    togglePlannerWorkPack,
+    buildPlannerOutlineLabels,
+    isPlannerUnsupportedNewer,
+    isPlannerRowPack,
+    isPlannerRowHidden,
+    getPlannerRowId,
     PLANNER_COL_COUNT,
     PLANNER_DEFAULT_ZOOM,
     PLANNER_DEFAULT_CHART_VIEW,
@@ -25,6 +31,15 @@ import {
     PLANNER_DEFAULT_TODAY_LINE,
     PLANNER_VERSION
 } from '../js/planner.js';
+import {
+    derivePlannerWbsCards,
+    layoutPlannerWbs,
+    moveWbsCard,
+    resetWbsArrangement,
+    resetWbsLabels,
+    WBS_DEFAULT_PHASE_LABELS,
+    WBS_DEFAULT_DELIVERABLE_LABELS
+} from '../js/plannerWbs.js';
 import { layoutPlannerGantt, parsePlannerDateTime, zoomPxPerDay, buildGanttAxis, padGanttRange, isoWeekNumber } from '../js/plannerGantt.js';
 import {
     buildPlannerCalendarDayCoverage,
@@ -63,7 +78,7 @@ import { buildNotePlannerSectionHtml, renderPlannerGanttHtml, renderPlannerKanba
 import { readDisplayOptions } from '../js/displayOptions.js';
 
 describe('planner model', () => {
-    it('creates an empty planner with v2 schema and no IDs', () => {
+    it('creates an empty planner with v3 schema and stable rowIds', () => {
         const planner = createEmptyPlanner();
         assert.equal(planner.version, PLANNER_VERSION);
         assert.equal(planner.zoom, PLANNER_DEFAULT_ZOOM);
@@ -76,12 +91,16 @@ describe('planner model', () => {
         assert.equal(planner.kanbanCollapsed, false);
         assert.equal(planner.kanbanSort, 'row');
         assert.equal(planner.kanbanSortDir, 'asc');
-        assert.deepEqual(planner.kanbanStageByRow, {});
+        assert.deepEqual(planner.kanbanStageById, {});
         assert.deepEqual(planner.kanbanOrderByStage, {});
         assert.deepEqual(planner.kanbanCardColors, {});
-        assert.deepEqual(planner.kanbanEmphasisByRow, {});
-        assert.deepEqual(planner.kanbanCollapsedByRow, {});
+        assert.deepEqual(planner.kanbanEmphasisById, {});
+        assert.deepEqual(planner.kanbanCollapsedById, {});
         assert.deepEqual(planner.kanbanCollapsedByStage, {});
+        assert.equal(planner.rowIds.length, 3);
+        assert.equal(planner.nextRowId, 4);
+        assert.equal(planner.wbsMode, 'phase');
+        assert.deepEqual(planner.wbsPhaseLabels, [...WBS_DEFAULT_PHASE_LABELS]);
         assert.equal(getPlannerField(planner.sheet, 0, 'name'), '');
         assert.equal(plannerHasContent(planner), false);
     });
@@ -137,7 +156,7 @@ describe('planner model', () => {
             }
         };
         const planner = normalizePlanner(raw);
-        assert.equal(planner.version, 2);
+        assert.equal(planner.version, PLANNER_VERSION);
         assert.equal(planner.sheet.cols, 6);
         assert.equal(getPlannerField(planner.sheet, 0, 'name'), 'Alpha');
         assert.equal(getPlannerField(planner.sheet, 0, 'category'), 'Work');
@@ -315,7 +334,7 @@ describe('planner model', () => {
         assert.ok(html.includes('planner-kanban__card-flyout'));
 
         // Collapsed cards keep comments in DOM so the absolute flyout can peek them.
-        planner.kanbanCollapsedByRow = { '0': true };
+        planner.kanbanCollapsedById = { [planner.rowIds[0]]: true };
         const collapsed = renderPlannerKanbanHtml(planner, { canEdit: true });
         assert.ok(collapsed.includes('is-collapsed'));
         assert.ok(collapsed.includes('data-planner-kanban-field="comments"'));
@@ -593,10 +612,11 @@ describe('planner Kanban', () => {
 
     it('hides empty-name rows and defaults missing stage to column 0', () => {
         const planner = createEmptyPlanner();
+        const id2 = planner.rowIds[2];
         setPlannerField(planner.sheet, 0, 'name', 'Alpha');
         setPlannerField(planner.sheet, 1, 'start', '2026-03-01'); // no name → hidden
         setPlannerField(planner.sheet, 2, 'name', 'Beta');
-        planner.kanbanStageByRow = { '2': 3 };
+        planner.kanbanStageById = { [id2]: 3 };
         const cards = derivePlannerKanbanCards(planner);
         assert.equal(cards.length, 2);
         assert.deepEqual(cards.map((c) => c.name), ['Alpha', 'Beta']);
@@ -608,6 +628,7 @@ describe('planner Kanban', () => {
 
     it('uses category color by default and keeps full comments for CSS clamp', () => {
         const planner = createEmptyPlanner();
+        const id0 = planner.rowIds[0];
         setPlannerField(planner.sheet, 0, 'name', 'Paint');
         setPlannerField(planner.sheet, 0, 'category', 'Design');
         setPlannerField(planner.sheet, 0, 'comments', 'x'.repeat(120));
@@ -615,10 +636,9 @@ describe('planner Kanban', () => {
         const cards = derivePlannerKanbanCards(planner);
         assert.equal(cards[0].cardColor, '#aabbcc');
         assert.equal(cards[0].comments.length, 120);
-        // Helper still truncates for callers that want a plain-text clip.
         assert.ok(clipKanbanComment(cards[0].comments).endsWith('…'));
 
-        planner.kanbanCardColors = { '0': '#112233' };
+        planner.kanbanCardColors = { [id0]: '#112233' };
         const overridden = derivePlannerKanbanCards(planner);
         assert.equal(overridden[0].cardColor, '#112233');
 
@@ -628,23 +648,24 @@ describe('planner Kanban', () => {
         assert.equal(derivePlannerKanbanCards(planner)[0].emphasis, 'muted');
         setKanbanCardEmphasis(planner, 0, 'muted');
         assert.equal(derivePlannerKanbanCards(planner)[0].emphasis, '');
-        assert.equal(planner.kanbanEmphasisByRow['0'], undefined);
+        assert.equal(planner.kanbanEmphasisById[id0], undefined);
 
-        planner.kanbanCardColors = { '0': '#112233' };
+        planner.kanbanCardColors = { [id0]: '#112233' };
         setKanbanCardEmphasis(planner, 0, 'urgent');
         resetKanbanCardStyles(planner, 0);
-        assert.equal(planner.kanbanCardColors['0'], undefined);
-        assert.equal(planner.kanbanEmphasisByRow['0'], undefined);
-        // Category color still applies after clearing the override.
+        assert.equal(planner.kanbanCardColors[id0], undefined);
+        assert.equal(planner.kanbanEmphasisById[id0], undefined);
         assert.equal(derivePlannerKanbanCards(planner)[0].cardColor, '#aabbcc');
     });
 
     it('resets all card styles and arrangement', () => {
         const planner = createEmptyPlanner();
+        const id0 = planner.rowIds[0];
+        const id1 = planner.rowIds[1];
         setPlannerField(planner.sheet, 0, 'name', 'A');
         setPlannerField(planner.sheet, 1, 'name', 'B');
-        planner.kanbanCardColors = { '0': '#112233', '1': '#abcdef' };
-        planner.kanbanEmphasisByRow = { '0': 'urgent', '1': 'muted' };
+        planner.kanbanCardColors = { [id0]: '#112233', [id1]: '#abcdef' };
+        planner.kanbanEmphasisById = { [id0]: 'urgent', [id1]: 'muted' };
         moveKanbanCard(planner, 0, 3);
         moveKanbanCard(planner, 1, 4);
         planner.kanbanSort = 'manual';
@@ -652,11 +673,11 @@ describe('planner Kanban', () => {
 
         resetAllKanbanCardStyles(planner);
         assert.deepEqual(planner.kanbanCardColors, {});
-        assert.deepEqual(planner.kanbanEmphasisByRow, {});
-        assert.equal(planner.kanbanStageByRow['0'], 3);
+        assert.deepEqual(planner.kanbanEmphasisById, {});
+        assert.equal(planner.kanbanStageById[id0], 3);
 
         resetKanbanArrangement(planner);
-        assert.deepEqual(planner.kanbanStageByRow, {});
+        assert.deepEqual(planner.kanbanStageById, {});
         assert.deepEqual(planner.kanbanOrderByStage, {});
         assert.equal(planner.kanbanSort, 'row');
         assert.equal(planner.kanbanSortDir, 'asc');
@@ -664,8 +685,11 @@ describe('planner Kanban', () => {
         assert.deepEqual(layout.columns[0].cards.map((c) => c.name), ['A', 'B']);
     });
 
-    it('collapses and expands cards; remaps and prunes collapsed map', () => {
+    it('collapses and expands cards; id keys survive row moves', () => {
         const planner = createEmptyPlanner();
+        const id0 = planner.rowIds[0];
+        const id1 = planner.rowIds[1];
+        const id2 = planner.rowIds[2];
         setPlannerField(planner.sheet, 0, 'name', 'A');
         setPlannerField(planner.sheet, 1, 'name', 'B');
         setPlannerField(planner.sheet, 2, 'name', 'C');
@@ -673,31 +697,34 @@ describe('planner Kanban', () => {
         assert.equal(derivePlannerKanbanCards(planner)[0].collapsed, false);
         setKanbanCardCollapsed(planner, 0, true);
         assert.equal(derivePlannerKanbanCards(planner)[0].collapsed, true);
-        assert.deepEqual(planner.kanbanCollapsedByRow, { '0': true });
+        assert.deepEqual(planner.kanbanCollapsedById, { [id0]: true });
 
         collapseAllKanbanCards(planner);
-        assert.deepEqual(planner.kanbanCollapsedByRow, { '0': true, '1': true, '2': true });
+        assert.deepEqual(planner.kanbanCollapsedById, { [id0]: true, [id1]: true, [id2]: true });
         expandAllKanbanCards(planner);
-        assert.deepEqual(planner.kanbanCollapsedByRow, {});
+        assert.deepEqual(planner.kanbanCollapsedById, {});
 
         setKanbanCardCollapsed(planner, 0, true);
         setKanbanCardCollapsed(planner, 2, true);
         movePlannerRow(planner, 0, 2);
-        // old 0→2, old 1→0, old 2→1
-        assert.deepEqual(planner.kanbanCollapsedByRow, { '2': true, '1': true });
+        // Id-keyed maps do not remap — same ids stay collapsed.
+        assert.deepEqual(planner.kanbanCollapsedById, { [id0]: true, [id2]: true });
 
         addPlannerRow(planner);
+        const id3 = planner.rowIds[3];
         setPlannerField(planner.sheet, 3, 'name', 'D');
         setKanbanCardCollapsed(planner, 3, true);
         removePlannerRow(planner);
-        assert.equal(planner.kanbanCollapsedByRow['3'], undefined);
+        assert.equal(planner.kanbanCollapsedById[id3], undefined);
 
         const normalized = normalizePlanner({
             ...createEmptyPlanner(),
-            sheet: planner.sheet,
-            kanbanCollapsedByRow: { '0': true, '9': true, '1': 0 }
+            sheet: { rows: 3, cols: 6, cells: { '0:0': { v: 'Keep' } }, colWidths: [90, 72, 108, 108, 44, 80] },
+            rowIds: ['1', '2', '3'],
+            nextRowId: 4,
+            kanbanCollapsedById: { '1': true, '9': true, '2': 0 }
         });
-        assert.deepEqual(normalized.kanbanCollapsedByRow, { '0': true });
+        assert.deepEqual(normalized.kanbanCollapsedById, { '1': true });
     });
 
     it('collapses stages; layout flags and render order put collapsed left', () => {
@@ -717,7 +744,6 @@ describe('planner Kanban', () => {
         assert.equal(layout.columns[1].collapsed, true);
         assert.equal(layout.columns[3].collapsed, true);
 
-        // Arrangement reset does not clear stage collapse.
         resetKanbanArrangement(planner);
         assert.deepEqual(planner.kanbanCollapsedByStage, { '1': true, '3': true });
 
@@ -730,7 +756,6 @@ describe('planner Kanban', () => {
         assert.ok(html.includes('data-kanban-stage-collapsed="1"'));
         assert.ok(html.includes('planner-kanban__column is-collapsed'));
 
-        // Collapsed stages (1, then 3) appear before open stages in DOM order.
         const stageOrder = [...html.matchAll(/data-planner-kanban-stage="(\d)"/g)].map((m) => m[1]);
         assert.deepEqual(stageOrder, ['1', '3', '0', '2', '4']);
 
@@ -743,12 +768,13 @@ describe('planner Kanban', () => {
 
     it('sorts by date/row/alpha with asc/desc and manual order', () => {
         const planner = createEmptyPlanner();
+        const [id0, id1, id2] = planner.rowIds;
         setPlannerField(planner.sheet, 0, 'name', 'Late');
         setPlannerField(planner.sheet, 0, 'start', '2026-03-10');
         setPlannerField(planner.sheet, 1, 'name', 'Early');
         setPlannerField(planner.sheet, 1, 'start', '2026-03-01');
         setPlannerField(planner.sheet, 2, 'name', 'alpha');
-        planner.kanbanStageByRow = { '0': 1, '1': 1, '2': 1 };
+        planner.kanbanStageById = { [id0]: 1, [id1]: 1, [id2]: 1 };
 
         planner.kanbanSort = 'date';
         planner.kanbanSortDir = 'asc';
@@ -775,66 +801,155 @@ describe('planner Kanban', () => {
         assert.deepEqual(layout.columns[1].cards.map((c) => c.name), ['Late', 'Early', 'alpha']);
 
         planner.kanbanSort = 'manual';
-        planner.kanbanOrderByStage = { '1': [0, 1, 2] };
+        planner.kanbanOrderByStage = { '1': [id0, id1, id2] };
         layout = layoutPlannerKanban(planner, { flavour: 'workflow' });
         assert.deepEqual(layout.columns[1].cards.map((c) => c.name), ['Late', 'Early', 'alpha']);
     });
 
-    it('moveKanbanCard updates stage and remaps on row move/remove', () => {
+    it('moveKanbanCard keeps stage by stable id across row moves', () => {
         const planner = createEmptyPlanner();
+        const id0 = planner.rowIds[0];
+        const id1 = planner.rowIds[1];
         setPlannerField(planner.sheet, 0, 'name', 'A');
         setPlannerField(planner.sheet, 1, 'name', 'B');
         setPlannerField(planner.sheet, 2, 'name', 'C');
         moveKanbanCard(planner, 0, 2);
         moveKanbanCard(planner, 1, 4);
-        assert.equal(planner.kanbanStageByRow['0'], 2);
-        assert.equal(planner.kanbanStageByRow['1'], 4);
+        assert.equal(planner.kanbanStageById[id0], 2);
+        assert.equal(planner.kanbanStageById[id1], 4);
 
         movePlannerRow(planner, 0, 2);
-        // old 0→2, old 1→0, old 2→1
-        assert.equal(planner.kanbanStageByRow['2'], 2);
-        assert.equal(planner.kanbanStageByRow['0'], 4);
+        // Stages follow ids, not positions.
+        assert.equal(planner.kanbanStageById[id0], 2);
+        assert.equal(planner.kanbanStageById[id1], 4);
 
         addPlannerRow(planner);
+        const id3 = planner.rowIds[3];
         setPlannerField(planner.sheet, 3, 'name', 'D');
         moveKanbanCard(planner, 3, 1);
-        assert.equal(planner.kanbanStageByRow['3'], 1);
+        assert.equal(planner.kanbanStageById[id3], 1);
         removePlannerRow(planner);
-        assert.equal(planner.kanbanStageByRow['3'], undefined);
+        assert.equal(planner.kanbanStageById[id3], undefined);
     });
 
-    it('normalizePlanner keeps kanban meta and drops orphan stages', () => {
+    it('normalizePlanner migrates legacy index keys to ids and drops orphans', () => {
         const raw = createEmptyPlanner();
         setPlannerField(raw.sheet, 0, 'name', 'Keep');
         raw.kanbanCollapsed = true;
         raw.kanbanSort = 'manual';
+        // Legacy index-keyed maps
         raw.kanbanStageByRow = { '0': 2, '9': 1, '1': 4 };
         raw.kanbanOrderByStage = { '2': [0, 9] };
+        delete raw.kanbanStageById;
         const planner = normalizePlanner(raw);
         assert.equal(planner.kanbanCollapsed, true);
         assert.equal(planner.kanbanSort, 'manual');
-        assert.deepEqual(planner.kanbanStageByRow, { '0': 2 });
-        assert.deepEqual(planner.kanbanOrderByStage, { '2': [0] });
+        assert.deepEqual(planner.kanbanStageById, { [planner.rowIds[0]]: 2 });
+        assert.deepEqual(planner.kanbanOrderByStage, { '2': [planner.rowIds[0]] });
     });
 
     it('normalizePlanner prunes empty-name kanban maps and inherits chart collapse', () => {
         const raw = createEmptyPlanner();
+        const id0 = raw.rowIds[0];
+        const id1 = raw.rowIds[1];
         setPlannerField(raw.sheet, 0, 'name', 'Keep');
-        // Row 1 has no name — meta for it must not survive.
-        raw.kanbanStageByRow = { '0': 1, '1': 2 };
-        raw.kanbanOrderByStage = { '1': [0, 1], '2': [1] };
-        raw.kanbanCardColors = { '0': '#112233', '1': '#abcdef' };
-        raw.kanbanEmphasisByRow = { '0': 'urgent', '1': 'muted' };
-        raw.kanbanCollapsedByRow = { '0': true, '1': true };
+        raw.kanbanStageById = { [id0]: 1, [id1]: 2 };
+        raw.kanbanOrderByStage = { '1': [id0, id1], '2': [id1] };
+        raw.kanbanCardColors = { [id0]: '#112233', [id1]: '#abcdef' };
+        raw.kanbanEmphasisById = { [id0]: 'urgent', [id1]: 'muted' };
+        raw.kanbanCollapsedById = { [id0]: true, [id1]: true };
         raw.chartCollapsed = true;
         delete raw.kanbanCollapsed;
         const planner = normalizePlanner(raw);
         assert.equal(planner.kanbanCollapsed, true);
-        assert.deepEqual(planner.kanbanStageByRow, { '0': 1 });
-        assert.deepEqual(planner.kanbanOrderByStage, { '1': [0] });
-        assert.deepEqual(planner.kanbanCardColors, { '0': '#112233' });
-        assert.deepEqual(planner.kanbanEmphasisByRow, { '0': 'urgent' });
-        assert.deepEqual(planner.kanbanCollapsedByRow, { '0': true });
+        assert.deepEqual(planner.kanbanStageById, { [id0]: 1 });
+        assert.deepEqual(planner.kanbanOrderByStage, { '1': [id0] });
+        assert.deepEqual(planner.kanbanCardColors, { [id0]: '#112233' });
+        assert.deepEqual(planner.kanbanEmphasisById, { [id0]: 'urgent' });
+        assert.deepEqual(planner.kanbanCollapsedById, { [id0]: true });
+    });
+});
+
+describe('planner WBS and work packs', () => {
+    it('pack toggle inserts blank child and parks it when parent has data', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'PackMe');
+        setPlannerField(planner.sheet, 1, 'name', 'Neighbor');
+        const neighborId = planner.rowIds[1];
+        assert.equal(togglePlannerWorkPack(planner, 0), true);
+        assert.equal(isPlannerRowPack(planner, 0), true);
+        assert.equal(planner.sheet.rows, 4);
+        assert.equal(planner.rowIds[2], neighborId); // neighbor shifted, still a root
+        assert.equal(getPlannerField(planner.sheet, 2, 'name'), 'Neighbor');
+        assert.equal(isPlannerRowHidden(planner, 1), true); // parked first child
+        assert.deepEqual(buildPlannerOutlineLabels(planner).slice(0, 3), ['1', '1a', '2']);
+        const leafCards = derivePlannerWbsCards(planner);
+        assert.deepEqual(leafCards.map((c) => c.name), ['Neighbor']);
+    });
+
+    it('WBS mode maps are independent; reset labels vs arrangement', () => {
+        const planner = createEmptyPlanner();
+        const id0 = planner.rowIds[0];
+        setPlannerField(planner.sheet, 0, 'name', 'Task');
+        moveWbsCard(planner, id0, 2);
+        planner.wbsMode = 'deliverable';
+        moveWbsCard(planner, id0, 4);
+        assert.equal(planner.wbsPhaseById[id0], 2);
+        assert.equal(planner.wbsDeliverableById[id0], 4);
+
+        planner.wbsMode = 'phase';
+        resetWbsArrangement(planner);
+        assert.deepEqual(planner.wbsPhaseById, {});
+        assert.equal(planner.wbsDeliverableById[id0], 4);
+
+        planner.wbsPhaseLabels = ['A', 'B', 'C', 'D', 'E'];
+        resetWbsLabels(planner);
+        assert.deepEqual(planner.wbsPhaseLabels, [...WBS_DEFAULT_PHASE_LABELS]);
+        assert.deepEqual(planner.wbsDeliverableLabels, [...WBS_DEFAULT_DELIVERABLE_LABELS]);
+
+        const layout = layoutPlannerWbs(planner, { mode: 'deliverable' });
+        assert.equal(layout.columns[0].key, 'unmapped');
+        assert.equal(layout.columns[5].cards[0]?.name, 'Task');
+    });
+
+    it('refuses unsupported newer planner version', () => {
+        const newer = normalizePlanner({
+            version: PLANNER_VERSION + 1,
+            sheet: { rows: 3, cols: 6, cells: { '0:0': { v: 'X' } }, colWidths: [90, 72, 108, 108, 44, 80] },
+            rowIds: ['a', 'b', 'c'],
+            nextRowId: 9
+        });
+        assert.equal(isPlannerUnsupportedNewer(newer), true);
+        assert.equal(movePlannerRow(newer, 0, 1), false);
+        assert.equal(togglePlannerWorkPack(newer, 0), false);
+    });
+
+    it('gantt summary bar rolls up child dates', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'Parent');
+        togglePlannerWorkPack(planner, 0);
+        // unhide child and date it
+        delete planner.rowHiddenById[planner.rowIds[1]];
+        setPlannerField(planner.sheet, 1, 'name', 'Child');
+        setPlannerField(planner.sheet, 1, 'start', '2026-03-01');
+        setPlannerField(planner.sheet, 1, 'stop', '2026-03-10');
+        const tasks = derivePlannerTasks(planner);
+        const pack = tasks.find((t) => t.isPack);
+        assert.ok(pack);
+        assert.equal(pack.start, '2026-03-01');
+        assert.equal(pack.stop, '2026-03-10');
+        assert.equal(pack.isSummary, true);
+        const layout = layoutPlannerGantt(tasks, { zoom: 'week' });
+        assert.ok(layout.bars.some((b) => b.isSummary));
+    });
+
+    it('section html includes WBS board', () => {
+        const item = { id: 'n1', planner: createEmptyPlanner() };
+        setPlannerField(item.planner.sheet, 0, 'name', 'T');
+        const html = buildNotePlannerSectionHtml(item, { canEdit: true });
+        assert.ok(html.includes('data-planner-wbs'));
+        assert.ok(html.includes('data-planner-pack-toggle'));
+        assert.ok(html.includes('Unmapped'));
     });
 });
 

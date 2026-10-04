@@ -10,7 +10,7 @@ import {
     noteCanvasHasContent
 } from './noteFieldOwnership.js';
 import { normalizeAttachments } from './mediaAttachments.js';
-import { normalizePlanner, plannerHasContent } from './planner.js';
+import { normalizePlanner, plannerHasContent, isPlannerUnsupportedNewer } from './planner.js';
 
 function normalizeItemTileSize(tileSize) {
     return normalizeTileSize(tileSize);
@@ -51,6 +51,15 @@ export function reconcileItemPlanner(item) {
         item.planner = null;
         delete item.plannerHidden;
         return true;
+    }
+
+    // Newer schema from another tab/build — keep pass-through; do not strip or rewrite.
+    if (isPlannerUnsupportedNewer(normalized)) {
+        if (item.planner !== normalized) {
+            item.planner = normalized;
+            changed = true;
+        }
+        return changed;
     }
 
     if (JSON.stringify(normalized) !== JSON.stringify(item.planner)) {

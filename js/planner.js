@@ -1,4 +1,4 @@
-/** @module {"owns":"magicPlanner model — schema-bound schedule sheet + zoom prefs", "related":["plannerUi.js","plannerGantt.js","plannerKanban.js","plannerCalendar.js","sheet.js","noteModel.js"]} */
+/** @module {"owns":"magicPlanner model — schema-bound schedule sheet + zoom prefs", "related":["plannerUi.js","plannerGantt.js","plannerKanban.js","plannerWbs.js","plannerCalendar.js","sheet.js","noteModel.js"]} */
 import {
     cellKey,
     getCellValue,
@@ -17,17 +17,27 @@ import { parsePlannerDateTime } from './plannerGantt.js';
 import {
     normalizeKanbanSort,
     normalizeKanbanSortDir,
-    normalizeKanbanStageByRow,
+    normalizeKanbanStageById,
     normalizeKanbanOrderByStage,
     normalizeKanbanCardColors,
-    normalizeKanbanEmphasisByRow,
-    normalizeKanbanCollapsedByRow,
+    normalizeKanbanEmphasisById,
+    normalizeKanbanCollapsedById,
     normalizeKanbanCollapsedByStage,
-    remapKanbanAfterRowMove,
-    pruneKanbanAfterRowRemove
+    pruneKanbanAfterRowRemove,
+    pruneKanbanOrphanKeys
 } from './plannerKanban.js';
+import {
+    WBS_DEFAULT_PHASE_LABELS,
+    WBS_DEFAULT_DELIVERABLE_LABELS,
+    normalizeWbsMode,
+    normalizeWbsLabels,
+    normalizeWbsBucketById,
+    normalizeWbsOrderByBucket,
+    normalizeWbsCollapsedByBucket,
+    pruneWbsAfterRowRemove
+} from './plannerWbs.js';
 
-export const PLANNER_VERSION = 2;
+export const PLANNER_VERSION = 3;
 export const PLANNER_DEFAULT_ROWS = 3;
 export const PLANNER_ZOOM_LEVELS = Object.freeze(['day', 'week', 'month', 'quarter', 'year']);
 export const PLANNER_DEFAULT_ZOOM = 'week';
@@ -46,7 +56,7 @@ export const PLANNER_DEFAULT_TODAY_LINE = Object.freeze({
     thickness: 1.25
 });
 
-/** Fixed column schema v2 (locked — no add/remove cols). Row numbers replace ID. */
+/** Fixed column schema v2+ (locked — no add/remove cols). Stable rowIds replace positional identity. */
 export const PLANNER_COLUMNS = Object.freeze([
     { key: 'name', label: 'Name', type: 'text' },
     { key: 'category', label: 'Category', type: 'category' },
@@ -97,6 +107,34 @@ export function createPlannerSheet(rows = PLANNER_DEFAULT_ROWS) {
 }
 
 /**
+ * @param {number} count
+ * @param {number} [startAt=1]
+ * @returns {{ rowIds: string[], nextRowId: number }}
+ */
+export function allocatePlannerRowIds(count, startAt = 1) {
+    const n = Math.max(0, Number(count) || 0);
+    let next = Math.max(1, Math.floor(Number(startAt) || 1));
+    const rowIds = [];
+    for (let i = 0; i < n; i++) {
+        rowIds.push(String(next));
+        next += 1;
+    }
+    return { rowIds, nextRowId: next };
+}
+
+/**
+ * @param {object} planner
+ * @returns {string}
+ */
+export function allocPlannerRowId(planner) {
+    if (!planner) return '1';
+    let next = Math.max(1, Math.floor(Number(planner.nextRowId) || 1));
+    const id = String(next);
+    planner.nextRowId = next + 1;
+    return id;
+}
+
+/**
  * @param {unknown} raw
  * @returns {number}
  */
@@ -125,11 +163,38 @@ export function normalizeTodayLine(raw) {
     return { color, style, thickness };
 }
 
+function emptyHierarchyMaps() {
+    return {
+        rowLevelById: {},
+        rowPackById: {},
+        rowHiddenById: {},
+        rowCollapsedById: {}
+    };
+}
+
+function emptyWbsFields() {
+    return {
+        wbsMode: WBS_DEFAULT_MODE_SAFE,
+        wbsPhaseLabels: [...WBS_DEFAULT_PHASE_LABELS],
+        wbsDeliverableLabels: [...WBS_DEFAULT_DELIVERABLE_LABELS],
+        wbsPhaseById: {},
+        wbsDeliverableById: {},
+        wbsPhaseOrderByBucket: {},
+        wbsDeliverableOrderByBucket: {},
+        wbsCollapsed: false,
+        wbsCollapsedByBucket: {}
+    };
+}
+
+const WBS_DEFAULT_MODE_SAFE = 'phase';
+
 /**
  * @param {{ zoom?: string }} [opts]
  * @returns {object}
  */
 export function createEmptyPlanner(opts = {}) {
+    const sheet = createPlannerSheet();
+    const { rowIds, nextRowId } = allocatePlannerRowIds(sheet.rows);
     return {
         version: PLANNER_VERSION,
         zoom: normalizePlannerZoom(opts.zoom),
@@ -139,15 +204,19 @@ export function createEmptyPlanner(opts = {}) {
         kanbanCollapsed: false,
         kanbanSort: 'row',
         kanbanSortDir: 'asc',
-        kanbanStageByRow: {},
+        kanbanStageById: {},
         kanbanOrderByStage: {},
         kanbanCardColors: {},
-        kanbanEmphasisByRow: {},
-        kanbanCollapsedByRow: {},
+        kanbanEmphasisById: {},
+        kanbanCollapsedById: {},
         kanbanCollapsedByStage: {},
         labelWidth: PLANNER_DEFAULT_LABEL_WIDTH,
         categoryColors: {},
-        sheet: createPlannerSheet()
+        rowIds,
+        nextRowId,
+        ...emptyHierarchyMaps(),
+        ...emptyWbsFields(),
+        sheet
     };
 }
 
@@ -183,6 +252,23 @@ export function normalizeCategoryColors(raw) {
         out[name] = hex;
     }
     return out;
+}
+
+/**
+ * True when planner was written by a newer app build and must not be mutated.
+ * @param {object|null|undefined} planner
+ * @returns {boolean}
+ */
+export function isPlannerUnsupportedNewer(planner) {
+    return !!(planner && planner.unsupportedNewer);
+}
+
+/**
+ * @param {object|null|undefined} planner
+ * @returns {boolean}
+ */
+export function isPlannerWritable(planner) {
+    return !!(planner?.sheet) && !isPlannerUnsupportedNewer(planner);
 }
 
 function getRawCell(cells, row, col) {
@@ -233,6 +319,376 @@ function migrateV1Sheet(sheetIn) {
 }
 
 /**
+ * @param {unknown} raw
+ * @param {string[]} rowIds
+ * @returns {Record<string, number>}
+ */
+function normalizeRowLevelById(raw, rowIds) {
+    if (!raw || typeof raw !== 'object') return {};
+    const idSet = new Set(rowIds);
+    const out = {};
+    for (const [k, v] of Object.entries(raw)) {
+        const id = String(k || '');
+        if (!idSet.has(id)) continue;
+        const level = Number(v);
+        if (!Number.isFinite(level)) continue;
+        out[id] = Math.min(1, Math.max(0, Math.floor(level)));
+    }
+    return out;
+}
+
+/**
+ * @param {unknown} raw
+ * @param {string[]} rowIds
+ * @returns {Record<string, true>}
+ */
+function normalizeTruthyIdMap(raw, rowIds) {
+    if (!raw || typeof raw !== 'object') return {};
+    const idSet = new Set(rowIds);
+    const out = {};
+    for (const [k, v] of Object.entries(raw)) {
+        const id = String(k || '');
+        if (!idSet.has(id) || !v) continue;
+        out[id] = true;
+    }
+    return out;
+}
+
+/**
+ * Ensure child contiguity under packs; promote orphans.
+ * @param {object} planner
+ */
+export function repairPlannerHierarchy(planner) {
+    if (!planner?.sheet || !Array.isArray(planner.rowIds)) return;
+    const rows = planner.sheet.rows || 0;
+    const rowIds = planner.rowIds;
+    if (!planner.rowLevelById) planner.rowLevelById = {};
+    if (!planner.rowPackById) planner.rowPackById = {};
+    if (!planner.rowHiddenById) planner.rowHiddenById = {};
+    if (!planner.rowCollapsedById) planner.rowCollapsedById = {};
+
+    for (let r = 0; r < rows; r++) {
+        const id = String(rowIds[r] || '');
+        if (!id) continue;
+        let level = Number(planner.rowLevelById[id]) || 0;
+        if (level > 1) level = 1;
+        if (level < 0) level = 0;
+        if (level === 1) {
+            const prevId = r > 0 ? String(rowIds[r - 1] || '') : '';
+            const prevLevel = prevId ? (Number(planner.rowLevelById[prevId]) || 0) : 0;
+            const prevPack = prevId && planner.rowPackById[prevId];
+            const prevIsChild = prevLevel === 1;
+            // Valid if previous is pack root, or previous is a sibling child under a pack.
+            let ok = false;
+            if (prevPack && prevLevel === 0) ok = true;
+            else if (prevIsChild) {
+                // Walk back to pack
+                for (let i = r - 1; i >= 0; i--) {
+                    const pid = String(rowIds[i] || '');
+                    const pl = Number(planner.rowLevelById[pid]) || 0;
+                    if (pl === 0) {
+                        ok = !!(planner.rowPackById[pid]);
+                        break;
+                    }
+                }
+            }
+            if (!ok) {
+                level = 0;
+                delete planner.rowPackById[id];
+            } else {
+                delete planner.rowPackById[id]; // children never packs
+            }
+        } else {
+            // root
+            if (!planner.rowPackById[id]) delete planner.rowPackById[id];
+        }
+        if (level === 0) {
+            if (planner.rowLevelById[id]) delete planner.rowLevelById[id];
+        } else {
+            planner.rowLevelById[id] = 1;
+        }
+    }
+}
+
+/**
+ * @param {object} planner
+ */
+export function assertPlannerRowIdInvariant(planner) {
+    if (!planner?.sheet || !Array.isArray(planner.rowIds)) return;
+    if (planner.rowIds.length !== (planner.sheet.rows || 0)) {
+        // Repair length mismatch by reallocating missing ids
+        while (planner.rowIds.length < planner.sheet.rows) {
+            planner.rowIds.push(allocPlannerRowId(planner));
+        }
+        if (planner.rowIds.length > planner.sheet.rows) {
+            planner.rowIds.length = planner.sheet.rows;
+        }
+    }
+    pruneKanbanOrphanKeys(planner);
+    pruneWbsAfterRowRemove(planner, []);
+    // prune hierarchy orphans
+    const idSet = new Set(planner.rowIds.map(String));
+    for (const map of [planner.rowLevelById, planner.rowPackById, planner.rowHiddenById, planner.rowCollapsedById]) {
+        if (!map || typeof map !== 'object') continue;
+        for (const key of Object.keys(map)) {
+            if (!idSet.has(key)) delete map[key];
+        }
+    }
+    // Also prune WBS orphans against current ids
+    const gone = [];
+    for (const mapKey of ['wbsPhaseById', 'wbsDeliverableById']) {
+        const map = planner[mapKey];
+        if (!map || typeof map !== 'object') continue;
+        for (const key of Object.keys(map)) {
+            if (!idSet.has(key)) gone.push(key);
+        }
+    }
+    if (gone.length) pruneWbsAfterRowRemove(planner, gone);
+    repairPlannerHierarchy(planner);
+}
+
+/**
+ * Outline labels: roots 1,2,3… children 1a,1b…
+ * @param {object|null|undefined} planner
+ * @returns {string[]}
+ */
+export function buildPlannerOutlineLabels(planner) {
+    const rows = planner?.sheet?.rows || 0;
+    const rowIds = Array.isArray(planner?.rowIds) ? planner.rowIds : [];
+    const labels = Array.from({ length: rows }, () => '');
+    let rootNum = 0;
+    let childOrd = 0;
+    for (let r = 0; r < rows; r++) {
+        const id = String(rowIds[r] || '');
+        const level = id ? (Number(planner?.rowLevelById?.[id]) || 0) : 0;
+        if (level === 0) {
+            rootNum += 1;
+            childOrd = 0;
+            labels[r] = String(rootNum);
+        } else {
+            childOrd += 1;
+            const letter = childOrd <= 26
+                ? String.fromCharCode(96 + childOrd)
+                : `z${childOrd}`;
+            labels[r] = `${rootNum}${letter}`;
+        }
+    }
+    return labels;
+}
+
+/**
+ * @param {object|null|undefined} planner
+ * @param {number} row
+ * @returns {string}
+ */
+export function getPlannerOutlineLabel(planner, row) {
+    return buildPlannerOutlineLabels(planner)[row] || String((Number(row) || 0) + 1);
+}
+
+/**
+ * Map outline token (1, 1a) → current 1-based display is the token itself for authorship.
+ * Resolve outline → row index.
+ * @param {object|null|undefined} planner
+ * @param {string} token
+ * @returns {number} row index or -1
+ */
+export function findPlannerRowByOutline(planner, token) {
+    const t = String(token || '').trim().toLowerCase();
+    if (!t) return -1;
+    const labels = buildPlannerOutlineLabels(planner);
+    return labels.findIndex((l) => String(l).toLowerCase() === t);
+}
+
+/**
+ * @param {object|null|undefined} planner
+ * @param {number} row
+ * @returns {string}
+ */
+export function getPlannerRowId(planner, row) {
+    const id = planner?.rowIds?.[row];
+    return id != null ? String(id) : '';
+}
+
+/**
+ * @param {object|null|undefined} planner
+ * @param {string} rowId
+ * @returns {number}
+ */
+export function findPlannerRowById(planner, rowId) {
+    if (!planner?.rowIds || !rowId) return -1;
+    return planner.rowIds.indexOf(String(rowId));
+}
+
+/**
+ * @param {object|null|undefined} planner
+ * @param {number} row
+ * @returns {boolean}
+ */
+export function isPlannerRowPack(planner, row) {
+    const id = getPlannerRowId(planner, row);
+    return !!(id && planner?.rowPackById?.[id]);
+}
+
+/**
+ * @param {object|null|undefined} planner
+ * @param {number} row
+ * @returns {number}
+ */
+export function getPlannerRowLevel(planner, row) {
+    const id = getPlannerRowId(planner, row);
+    if (!id) return 0;
+    return Math.min(1, Math.max(0, Number(planner?.rowLevelById?.[id]) || 0));
+}
+
+/**
+ * @param {object|null|undefined} planner
+ * @param {number} row
+ * @returns {boolean}
+ */
+export function isPlannerRowHidden(planner, row) {
+    const id = getPlannerRowId(planner, row);
+    return !!(id && planner?.rowHiddenById?.[id]);
+}
+
+/**
+ * Contiguous block starting at row (pack + children, or single row).
+ * @param {object} planner
+ * @param {number} row
+ * @returns {{ start: number, end: number }} end exclusive
+ */
+export function getPlannerRowBlock(planner, row) {
+    const rows = planner?.sheet?.rows || 0;
+    if (!Number.isFinite(row) || row < 0 || row >= rows) return { start: 0, end: 0 };
+    const level = getPlannerRowLevel(planner, row);
+    if (level === 1) return { start: row, end: row + 1 };
+    if (!isPlannerRowPack(planner, row)) return { start: row, end: row + 1 };
+    let end = row + 1;
+    while (end < rows && getPlannerRowLevel(planner, end) === 1) end += 1;
+    return { start: row, end };
+}
+
+function rowHasLeafContent(sheet, row) {
+    const name = getPlannerField(sheet, row, 'name').trim();
+    const start = getPlannerField(sheet, row, 'start').trim();
+    const stop = getPlannerField(sheet, row, 'stop').trim();
+    const category = getPlannerField(sheet, row, 'category').trim();
+    const comments = getPlannerField(sheet, row, 'comments').trim();
+    const pred = getPlannerField(sheet, row, 'pred').trim();
+    return !!(name || start || stop || category || comments || pred);
+}
+
+/**
+ * Insert a blank row at index, shifting later rows down. Returns new row id.
+ * @param {object} planner
+ * @param {number} index
+ * @returns {string}
+ */
+export function insertPlannerRowAt(planner, index) {
+    if (!planner?.sheet) return '';
+    const sheet = planner.sheet;
+    const rows = sheet.rows || 0;
+    const at = Math.max(0, Math.min(rows, Math.floor(Number(index) || 0)));
+    const newId = allocPlannerRowId(planner);
+
+    const nextCells = {};
+    for (const key of Object.keys(sheet.cells || {})) {
+        const [rs, cs] = String(key).split(':');
+        const r = Number(rs);
+        const c = Number(cs);
+        if (!Number.isFinite(r) || !Number.isFinite(c)) continue;
+        const newR = r >= at ? r + 1 : r;
+        nextCells[`${newR}:${c}`] = sheet.cells[key];
+    }
+    sheet.cells = nextCells;
+    sheet.rows = rows + 1;
+
+    if (!Array.isArray(planner.rowIds)) planner.rowIds = [];
+    planner.rowIds.splice(at, 0, newId);
+    assertPlannerRowIdInvariant(planner);
+    return newId;
+}
+
+/**
+ * Toggle single ↔ work pack at row.
+ * @param {object} planner
+ * @param {number} row
+ * @returns {boolean}
+ */
+export function togglePlannerWorkPack(planner, row) {
+    if (!isPlannerWritable(planner)) return false;
+    const rows = planner.sheet.rows || 0;
+    if (!Number.isFinite(row) || row < 0 || row >= rows) return false;
+    if (getPlannerRowLevel(planner, row) === 1) return false;
+
+    const id = getPlannerRowId(planner, row);
+    if (!id) return false;
+    if (!planner.rowPackById) planner.rowPackById = {};
+    if (!planner.rowLevelById) planner.rowLevelById = {};
+    if (!planner.rowHiddenById) planner.rowHiddenById = {};
+
+    if (planner.rowPackById[id]) {
+        // Pack → single: promote children
+        const { start, end } = getPlannerRowBlock(planner, row);
+        for (let r = start + 1; r < end; r++) {
+            const cid = getPlannerRowId(planner, r);
+            if (!cid) continue;
+            delete planner.rowLevelById[cid];
+            delete planner.rowHiddenById[cid];
+        }
+        delete planner.rowPackById[id];
+        delete planner.rowCollapsedById?.[id];
+        assertPlannerRowIdInvariant(planner);
+        return true;
+    }
+
+    // Single → pack: insert blank child at r+1
+    const hadContent = rowHasLeafContent(planner.sheet, row);
+    planner.rowPackById[id] = true;
+    const childId = insertPlannerRowAt(planner, row + 1);
+    if (childId) {
+        planner.rowLevelById[childId] = 1;
+        if (hadContent) planner.rowHiddenById[childId] = true;
+    }
+    assertPlannerRowIdInvariant(planner);
+    return true;
+}
+
+/**
+ * @param {object} planner
+ * @param {number} row
+ * @param {boolean} collapsed
+ */
+export function setPlannerPackCollapsed(planner, row, collapsed) {
+    if (!planner || !isPlannerRowPack(planner, row)) return;
+    const id = getPlannerRowId(planner, row);
+    if (!id) return;
+    if (!planner.rowCollapsedById) planner.rowCollapsedById = {};
+    if (collapsed) planner.rowCollapsedById[id] = true;
+    else delete planner.rowCollapsedById[id];
+}
+
+/**
+ * @param {object|null|undefined} planner
+ * @param {number} row
+ * @returns {boolean}
+ */
+export function isPlannerPackCollapsed(planner, row) {
+    const id = getPlannerRowId(planner, row);
+    return !!(id && planner?.rowCollapsedById?.[id]);
+}
+
+/**
+ * Unhide a row (e.g. after user edits name on a parked child).
+ * @param {object} planner
+ * @param {number} row
+ */
+export function unhidePlannerRow(planner, row) {
+    const id = getPlannerRowId(planner, row);
+    if (!id || !planner?.rowHiddenById) return;
+    delete planner.rowHiddenById[id];
+}
+
+/**
  * Normalize a planner payload. Returns null for missing/invalid shells.
  * @param {unknown} raw
  * @returns {object|null}
@@ -243,6 +699,16 @@ export function normalizePlanner(raw) {
     if (!sheetIn) return null;
 
     const version = Number(raw.version) || 1;
+    if (version > PLANNER_VERSION) {
+        return {
+            unsupportedNewer: true,
+            version,
+            sheet: sheetIn,
+            rowIds: Array.isArray(raw.rowIds) ? [...raw.rowIds] : [],
+            nextRowId: Number(raw.nextRowId) || 1
+        };
+    }
+
     let rows;
     let cells;
     let colWidths;
@@ -282,53 +748,125 @@ export function normalizePlanner(raw) {
         else sheet.cells[key] = { v: String(v) };
     }
 
-    const stageByRow = normalizeKanbanStageByRow(raw.kanbanStageByRow, sheet.rows);
-    const orderByStage = normalizeKanbanOrderByStage(raw.kanbanOrderByStage, sheet.rows);
-    const cardColors = normalizeKanbanCardColors(raw.kanbanCardColors, sheet.rows);
-    const emphasisByRow = normalizeKanbanEmphasisByRow(raw.kanbanEmphasisByRow, sheet.rows);
-    const collapsedByRow = normalizeKanbanCollapsedByRow(raw.kanbanCollapsedByRow, sheet.rows);
+    // Stable row ids
+    let rowIds = Array.isArray(raw.rowIds) ? raw.rowIds.map(String) : [];
+    let nextRowId = Math.max(1, Math.floor(Number(raw.nextRowId) || 1));
+    if (rowIds.length !== sheet.rows) {
+        const allocated = allocatePlannerRowIds(sheet.rows, nextRowId);
+        // Prefer existing ids where possible
+        const merged = [];
+        for (let i = 0; i < sheet.rows; i++) {
+            merged.push(rowIds[i] && String(rowIds[i]) ? String(rowIds[i]) : allocated.rowIds[i]);
+        }
+        // Ensure uniqueness
+        const seen = new Set();
+        for (let i = 0; i < merged.length; i++) {
+            let id = merged[i];
+            while (seen.has(id)) {
+                id = String(nextRowId++);
+            }
+            seen.add(id);
+            merged[i] = id;
+            const n = Number(id);
+            if (Number.isFinite(n) && n >= nextRowId) nextRowId = n + 1;
+        }
+        rowIds = merged;
+    } else {
+        for (const id of rowIds) {
+            const n = Number(id);
+            if (Number.isFinite(n) && n >= nextRowId) nextRowId = n + 1;
+        }
+    }
+
+    // Kanban: accept legacy *ByRow / index keys. When only index-era fields exist,
+    // force index→id (numeric rowIds would otherwise collide with index tokens).
+    const idMapFilled = (map) => !!(map && typeof map === 'object' && Object.keys(map).length);
+    const preferIndexKeys = version < 3
+        || (!idMapFilled(raw.kanbanStageById) && !!raw.kanbanStageByRow)
+        || (!idMapFilled(raw.kanbanEmphasisById) && !!raw.kanbanEmphasisByRow)
+        || (!idMapFilled(raw.kanbanCollapsedById) && !!raw.kanbanCollapsedByRow);
+    const mapOpts = preferIndexKeys ? { keysAreIndexes: true } : {};
+    const legacyStage = idMapFilled(raw.kanbanStageById) ? raw.kanbanStageById : (raw.kanbanStageByRow || raw.kanbanStageById);
+    const legacyEmphasis = idMapFilled(raw.kanbanEmphasisById)
+        ? raw.kanbanEmphasisById
+        : (raw.kanbanEmphasisByRow || raw.kanbanEmphasisById);
+    const legacyCollapsed = idMapFilled(raw.kanbanCollapsedById)
+        ? raw.kanbanCollapsedById
+        : (raw.kanbanCollapsedByRow || raw.kanbanCollapsedById);
+    const stageById = normalizeKanbanStageById(legacyStage, rowIds, mapOpts);
+    const orderByStage = normalizeKanbanOrderByStage(raw.kanbanOrderByStage, rowIds, mapOpts);
+    const cardColors = normalizeKanbanCardColors(raw.kanbanCardColors, rowIds, mapOpts);
+    const emphasisById = normalizeKanbanEmphasisById(legacyEmphasis, rowIds, mapOpts);
+    const collapsedById = normalizeKanbanCollapsedById(legacyCollapsed, rowIds, mapOpts);
     const collapsedByStage = normalizeKanbanCollapsedByStage(raw.kanbanCollapsedByStage);
-    // Drop kanban meta for rows with no name (those cards are hidden on the board).
+
     const nameCol = PLANNER_COLUMNS.findIndex((c) => c.key === 'name');
     const pruneEmptyNameKeys = (map) => {
         for (const key of Object.keys(map)) {
-            const r = Number(key);
-            if (!getRawCell(sheet.cells, r, nameCol)) delete map[key];
+            const r = rowIds.indexOf(key);
+            if (r < 0 || !getRawCell(sheet.cells, r, nameCol)) delete map[key];
         }
         return map;
     };
-    pruneEmptyNameKeys(stageByRow);
+    pruneEmptyNameKeys(stageById);
     pruneEmptyNameKeys(cardColors);
-    pruneEmptyNameKeys(emphasisByRow);
-    pruneEmptyNameKeys(collapsedByRow);
+    pruneEmptyNameKeys(emphasisById);
+    pruneEmptyNameKeys(collapsedById);
     for (const key of Object.keys(orderByStage)) {
-        const next = orderByStage[key].filter((r) => getRawCell(sheet.cells, r, nameCol));
+        const next = orderByStage[key].filter((id) => {
+            const r = rowIds.indexOf(String(id));
+            return r >= 0 && getRawCell(sheet.cells, r, nameCol);
+        });
         if (next.length) orderByStage[key] = next;
         else delete orderByStage[key];
     }
 
-    return {
+    const idSet = new Set(rowIds);
+    const rowLevelById = normalizeRowLevelById(raw.rowLevelById, rowIds);
+    const rowPackById = normalizeTruthyIdMap(raw.rowPackById, rowIds);
+    const rowHiddenById = normalizeTruthyIdMap(raw.rowHiddenById, rowIds);
+    const rowCollapsedById = normalizeTruthyIdMap(raw.rowCollapsedById, rowIds);
+
+    const planner = {
         version: PLANNER_VERSION,
         zoom: normalizePlannerZoom(raw.zoom),
         chartView: normalizePlannerChartView(raw.chartView),
         chartCollapsed: !!raw.chartCollapsed,
         tableCollapsed: !!raw.tableCollapsed,
-        // First upgrade: inherit chart collapse when kanban flag was never saved.
         kanbanCollapsed: Object.prototype.hasOwnProperty.call(raw, 'kanbanCollapsed')
             ? !!raw.kanbanCollapsed
             : !!raw.chartCollapsed,
         kanbanSort: normalizeKanbanSort(raw.kanbanSort),
         kanbanSortDir: normalizeKanbanSortDir(raw.kanbanSortDir),
-        kanbanStageByRow: stageByRow,
+        kanbanStageById: stageById,
         kanbanOrderByStage: orderByStage,
         kanbanCardColors: cardColors,
-        kanbanEmphasisByRow: emphasisByRow,
-        kanbanCollapsedByRow: collapsedByRow,
+        kanbanEmphasisById: emphasisById,
+        kanbanCollapsedById: collapsedById,
         kanbanCollapsedByStage: collapsedByStage,
         labelWidth: normalizePlannerLabelWidth(raw.labelWidth),
         categoryColors: normalizeCategoryColors(raw.categoryColors),
+        rowIds,
+        nextRowId,
+        rowLevelById,
+        rowPackById,
+        rowHiddenById,
+        rowCollapsedById,
+        wbsMode: normalizeWbsMode(raw.wbsMode),
+        wbsPhaseLabels: normalizeWbsLabels(raw.wbsPhaseLabels, WBS_DEFAULT_PHASE_LABELS),
+        wbsDeliverableLabels: normalizeWbsLabels(raw.wbsDeliverableLabels, WBS_DEFAULT_DELIVERABLE_LABELS),
+        wbsPhaseById: normalizeWbsBucketById(raw.wbsPhaseById, idSet),
+        wbsDeliverableById: normalizeWbsBucketById(raw.wbsDeliverableById, idSet),
+        wbsPhaseOrderByBucket: normalizeWbsOrderByBucket(raw.wbsPhaseOrderByBucket, idSet),
+        wbsDeliverableOrderByBucket: normalizeWbsOrderByBucket(raw.wbsDeliverableOrderByBucket, idSet),
+        wbsCollapsed: !!raw.wbsCollapsed,
+        wbsCollapsedByBucket: normalizeWbsCollapsedByBucket(raw.wbsCollapsedByBucket),
         sheet
     };
+
+    repairPlannerHierarchy(planner);
+    assertPlannerRowIdInvariant(planner);
+    return planner;
 }
 
 /**
@@ -337,6 +875,11 @@ export function normalizePlanner(raw) {
  * @returns {boolean}
  */
 export function plannerHasContent(planner) {
+    if (isPlannerUnsupportedNewer(planner)) {
+        const cells = planner?.sheet?.cells;
+        if (!cells) return true;
+        return Object.values(cells).some((cell) => String(cell?.v ?? '').trim());
+    }
     const sheet = planner?.sheet;
     if (!sheet?.cells) return false;
     return Object.values(sheet.cells).some((cell) => String(cell?.v ?? '').trim());
@@ -344,7 +887,6 @@ export function plannerHasContent(planner) {
 
 /**
  * @deprecated Hide-with-data is intentional; do not force-unhide on content.
- * Kept as a no-op so older call sites stay safe.
  * @returns {boolean}
  */
 export function ensurePlannerVisibleIfContent() {
@@ -355,8 +897,12 @@ export function ensurePlannerVisibleIfContent() {
  * @param {object} planner
  */
 export function addPlannerRow(planner) {
-    if (!planner?.sheet) return;
+    if (!isPlannerWritable(planner)) return;
+    const id = allocPlannerRowId(planner);
     planner.sheet.rows = (planner.sheet.rows || 0) + 1;
+    if (!Array.isArray(planner.rowIds)) planner.rowIds = [];
+    planner.rowIds.push(id);
+    assertPlannerRowIdInvariant(planner);
 }
 
 /**
@@ -364,75 +910,106 @@ export function addPlannerRow(planner) {
  * @returns {boolean}
  */
 export function removePlannerRow(planner) {
-    if (!planner?.sheet || (planner.sheet.rows || 1) <= SHEET_MIN_ROWS) return false;
+    if (!isPlannerWritable(planner) || (planner.sheet.rows || 1) <= SHEET_MIN_ROWS) return false;
     const sheet = planner.sheet;
     const last = sheet.rows - 1;
+    // If last is a child, just remove it; if last is a pack with only itself… packs at end without children ok
+    // If removing would orphan — last row only
+    const removedId = getPlannerRowId(planner, last);
     if (sheet.cells) {
         for (const key of Object.keys(sheet.cells)) {
             const r = Number(String(key).split(':')[0]);
             if (r === last) delete sheet.cells[key];
         }
     }
-    // Drop preds that pointed at the removed last row.
+    // Drop preds that pointed at the removed outline label
+    const removedOutline = getPlannerOutlineLabel(planner, last);
     const predCol = PLANNER_COLUMNS.findIndex((c) => c.key === 'pred');
     for (let r = 0; r < sheet.rows - 1; r++) {
         const raw = getCellValue(sheet, r, predCol);
         if (!raw) continue;
         const next = parsePredecessorIds(raw)
-            .map((tok) => Number(tok))
-            .filter((n) => Number.isFinite(n) && n >= 1 && n <= last)
-            .map(String)
+            .filter((tok) => String(tok).toLowerCase() !== String(removedOutline).toLowerCase())
             .join(', ');
         setCellValue(sheet, r, predCol, next);
     }
-    pruneKanbanAfterRowRemove(planner, last);
+    if (removedId) {
+        pruneKanbanAfterRowRemove(planner, [removedId]);
+        pruneWbsAfterRowRemove(planner, [removedId]);
+        for (const map of [planner.rowLevelById, planner.rowPackById, planner.rowHiddenById, planner.rowCollapsedById]) {
+            if (map) delete map[removedId];
+        }
+    }
     sheet.rows -= 1;
+    if (Array.isArray(planner.rowIds)) planner.rowIds.pop();
+    assertPlannerRowIdInvariant(planner);
     return true;
 }
 
 /**
- * Move a planner row from fromIndex to toIndex and remap Pred row numbers.
+ * Move a planner row (or pack block) from fromIndex to toIndex and remap Pred outline tokens.
  * @param {object} planner
  * @param {number} fromIndex
  * @param {number} toIndex
  * @returns {boolean}
  */
 export function movePlannerRow(planner, fromIndex, toIndex) {
-    const sheet = planner?.sheet;
-    if (!sheet) return false;
+    if (!isPlannerWritable(planner)) return false;
+    const sheet = planner.sheet;
     const rows = sheet.rows || 0;
     if (!Number.isFinite(fromIndex) || !Number.isFinite(toIndex)) return false;
     if (fromIndex < 0 || fromIndex >= rows || toIndex < 0 || toIndex >= rows) return false;
-    if (fromIndex === toIndex) return false;
 
+    const block = getPlannerRowBlock(planner, fromIndex);
+    const blockLen = block.end - block.start;
+    if (blockLen <= 0) return false;
+
+    const oldLabels = buildPlannerOutlineLabels(planner);
     const order = Array.from({ length: rows }, (_, i) => i);
-    const [moved] = order.splice(fromIndex, 1);
-    order.splice(toIndex, 0, moved);
+    const moved = order.splice(block.start, blockLen);
+    // Match legacy single-row splice(toIndex) semantics after removal.
+    let insertAt = Math.floor(toIndex);
+    if (insertAt > block.start) insertAt = insertAt - blockLen + 1;
+    insertAt = Math.max(0, Math.min(order.length, insertAt));
+    order.splice(insertAt, 0, ...moved);
 
-    // oldRow -> new 1-based number
-    const remap = new Map();
-    order.forEach((oldRow, newRow) => remap.set(oldRow + 1, newRow + 1));
+    if (order.every((v, i) => v === i)) return false;
+
+    const oldToNew = new Map();
+    order.forEach((oldRow, newRow) => oldToNew.set(oldRow, newRow));
 
     const nextCells = {};
     const predCol = PLANNER_COLUMNS.findIndex((c) => c.key === 'pred');
+    const nextRowIds = order.map((oldRow) => String(planner.rowIds[oldRow]));
+
     for (let newRow = 0; newRow < rows; newRow++) {
         const oldRow = order[newRow];
         for (let c = 0; c < PLANNER_COL_COUNT; c++) {
-            let val = getCellValue(sheet, oldRow, c);
-            if (c === predCol && val) {
-                val = parsePredecessorIds(val)
-                    .map((tok) => {
-                        const n = Number(tok);
-                        if (!Number.isFinite(n)) return tok;
-                        return String(remap.get(n) || n);
-                    })
-                    .join(', ');
-            }
+            const val = getCellValue(sheet, oldRow, c);
             if (String(val || '').trim()) nextCells[`${newRow}:${c}`] = { v: String(val) };
         }
     }
     sheet.cells = nextCells;
-    remapKanbanAfterRowMove(planner, order);
+    planner.rowIds = nextRowIds;
+
+    const newLabels = buildPlannerOutlineLabels(planner);
+    const oldLabelToNewLabel = new Map();
+    for (let oldRow = 0; oldRow < oldLabels.length; oldRow++) {
+        const newRow = oldToNew.get(oldRow);
+        if (newRow == null) continue;
+        oldLabelToNewLabel.set(String(oldLabels[oldRow]).toLowerCase(), newLabels[newRow]);
+    }
+    for (let r = 0; r < rows; r++) {
+        const raw = getCellValue(sheet, r, predCol);
+        if (!raw) continue;
+        const next = parsePredecessorIds(raw)
+            .map((tok) => oldLabelToNewLabel.get(String(tok).toLowerCase()) || tok)
+            .join(', ');
+        setCellValue(sheet, r, predCol, next);
+    }
+
+    pruneKanbanOrphanKeys(planner);
+    assertPlannerRowIdInvariant(planner);
     return true;
 }
 
@@ -461,7 +1038,7 @@ export function setPlannerField(sheet, row, key, value) {
 }
 
 /**
- * Parse predecessor cell into tokens (row numbers as strings).
+ * Parse predecessor cell into outline tokens (1, 1a, 2…).
  * @param {string} raw
  * @returns {string[]}
  */
@@ -469,11 +1046,10 @@ export function parsePredecessorIds(raw) {
     return String(raw || '')
         .split(/[,;\s]+/)
         .map((s) => s.trim())
-        .filter((s) => /^\d+$/.test(s));
+        .filter((s) => /^\d+[a-z]?$/i.test(s));
 }
 
 /**
- * Unique category names used in this planner (for picker reuse).
  * @param {object|null|undefined} planner
  * @returns {string[]}
  */
@@ -503,7 +1079,6 @@ export function getCategoryColor(planner, categoryName) {
     if (!name) return '';
     const map = planner?.categoryColors || {};
     if (map[name]) return map[name];
-    // Case-insensitive fallback
     const lower = name.toLowerCase();
     for (const [k, v] of Object.entries(map)) {
         if (k.toLowerCase() === lower) return v;
@@ -523,7 +1098,6 @@ export function setCategoryColor(planner, categoryName, hex) {
     if (!planner.categoryColors || typeof planner.categoryColors !== 'object') {
         planner.categoryColors = {};
     }
-    // Replace any prior case-variant key
     for (const k of Object.keys(planner.categoryColors)) {
         if (k.toLowerCase() === name.toLowerCase()) delete planner.categoryColors[k];
     }
@@ -531,33 +1105,80 @@ export function setCategoryColor(planner, categoryName, hex) {
 }
 
 /**
- * Derive Gantt tasks from planner sheet rows.
- * `id` is the 1-based row number (string) for pred edges.
+ * Derive tasks from planner sheet rows (includes packs for Gantt summary; skips hidden).
+ * `id` is the outline label for pred edges; `rowId` is the stable id.
  * @param {object|null|undefined} planner
- * @returns {Array<{ row: number, id: string, start: string, stop: string, name: string, category: string, categoryColor: string, comments: string, predecessors: string[] }>}
+ * @returns {Array<object>}
  */
 export function derivePlannerTasks(planner) {
     const sheet = planner?.sheet;
     if (!sheet) return [];
+    const outlines = buildPlannerOutlineLabels(planner);
     const tasks = [];
     for (let r = 0; r < (sheet.rows || 0); r++) {
+        if (isPlannerRowHidden(planner, r)) continue;
+        // Skip collapsed children
+        if (getPlannerRowLevel(planner, r) === 1) {
+            // find pack
+            let packRow = r - 1;
+            while (packRow >= 0 && getPlannerRowLevel(planner, packRow) === 1) packRow -= 1;
+            if (packRow >= 0 && isPlannerPackCollapsed(planner, packRow)) continue;
+        }
         const start = getPlannerField(sheet, r, 'start').trim();
         const stop = getPlannerField(sheet, r, 'stop').trim();
         const name = getPlannerField(sheet, r, 'name').trim();
         const category = getPlannerField(sheet, r, 'category').trim();
         const comments = getPlannerField(sheet, r, 'comments').trim();
         const predecessors = parsePredecessorIds(getPlannerField(sheet, r, 'pred'));
-        if (!start && !stop && !name && !category && !comments && !predecessors.length) continue;
+        const isPack = isPlannerRowPack(planner, r);
+        const level = getPlannerRowLevel(planner, r);
+        if (!start && !stop && !name && !category && !comments && !predecessors.length && !isPack) continue;
+
+        let taskStart = start;
+        let taskStop = stop;
+        let isSummary = false;
+        if (isPack) {
+            isSummary = true;
+            // Roll up from non-hidden children
+            let minStart = null;
+            let maxStop = null;
+            const { end } = getPlannerRowBlock(planner, r);
+            for (let c = r + 1; c < end; c++) {
+                if (isPlannerRowHidden(planner, c)) continue;
+                const cs = parsePlannerDateTime(getPlannerField(sheet, c, 'start'));
+                const ce = parsePlannerDateTime(getPlannerField(sheet, c, 'stop'))
+                    || parsePlannerDateTime(getPlannerField(sheet, c, 'start'));
+                if (cs && (!minStart || cs < minStart)) {
+                    minStart = cs;
+                    taskStart = getPlannerField(sheet, c, 'start').trim();
+                }
+                if (ce && (!maxStop || ce > maxStop)) {
+                    maxStop = ce;
+                    const childStop = getPlannerField(sheet, c, 'stop').trim();
+                    taskStop = childStop || getPlannerField(sheet, c, 'start').trim();
+                }
+            }
+            // Prefer explicit pack dates if set
+            if (start) taskStart = start;
+            if (stop) taskStop = stop;
+        }
+
         tasks.push({
             row: r,
-            id: String(r + 1),
-            start,
-            stop,
+            rowId: getPlannerRowId(planner, r),
+            id: outlines[r] || String(r + 1),
+            outlineId: outlines[r] || String(r + 1),
+            start: taskStart,
+            stop: taskStop,
             name,
             category,
             categoryColor: getCategoryColor(planner, category),
             comments,
-            predecessors
+            predecessors: isPack ? [] : predecessors,
+            level,
+            isPack,
+            isSummary,
+            hidden: false
         });
     }
     return tasks;
@@ -607,8 +1228,6 @@ function formatScheduleLabel(raw) {
 }
 
 /**
- * Overall schedule span across all planner rows: earliest Start, latest Stop,
- * plus inclusive calendar / Mon–Fri working duration.
  * @param {object|null|undefined} planner
  * @returns {{ startLabel: string, stopLabel: string, calendarDays: number|null, workingDays: number|null } | null}
  */
