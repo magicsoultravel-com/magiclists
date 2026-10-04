@@ -1055,9 +1055,8 @@
     user-select: none;
 }
 
-.planner-kanban__card-slot {
-    position: relative;
-    z-index: 2;
+.planner-kanban__card-slot,
+.planner-kanban__card-flyout {
     padding: 0.45rem 0.5rem 0.72rem;
     border-radius: 4px;
     border: 1px solid color-mix(in srgb, var(--border-color, #ccc) 65%, transparent);
@@ -1065,10 +1064,46 @@
     box-shadow: 0 1px 0 color-mix(in srgb, var(--border-color, #000) 8%, transparent);
 }
 
-.planner-kanban__card.has-color .planner-kanban__card-slot {
+.planner-kanban__card-slot {
+    position: relative;
+    z-index: 2;
+}
+
+.planner-kanban__card.has-color .planner-kanban__card-slot,
+.planner-kanban__card.has-color .planner-kanban__card-flyout {
     background: inherit;
     border-color: inherit;
     color: inherit;
+}
+
+.planner-kanban__card-flyout {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    z-index: 40;
+    display: none;
+    box-shadow: 0 8px 20px color-mix(in srgb, #000 20%, transparent);
+}
+
+.planner-kanban__card:hover .planner-kanban__card-flyout,
+.planner-kanban__card:focus-within .planner-kanban__card-flyout {
+    display: block;
+}
+
+.planner-kanban__card:hover .planner-kanban__card-slot,
+.planner-kanban__card:focus-within .planner-kanban__card-slot {
+    /* Keep layout height; hide visuals under the flyout. */
+    visibility: hidden;
+}
+
+/* Inline edit: keep the editable slot visible; suppress flyout swap. */
+.planner-kanban__card.is-kanban-editing .planner-kanban__card-flyout {
+    display: none !important;
+}
+
+.planner-kanban__card.is-kanban-editing .planner-kanban__card-slot {
+    visibility: visible !important;
 }
 
 /*
@@ -1167,17 +1202,27 @@ body.is-planner-kanban-drag-active {
     cursor: grabbing;
 }
 
+body.is-planner-kanban-drag-active .planner-kanban__card-flyout {
+    display: none !important;
+}
+
+body.is-planner-kanban-drag-active .planner-kanban__card-slot {
+    visibility: visible !important;
+}
+
 .planner-kanban__card.is-planner-kanban-dragging {
     cursor: grabbing;
     opacity: var(--desktop-drag-opacity, 0.88);
     z-index: 9999 !important;
-    box-shadow: 0 8px 22px color-mix(in srgb, #000 24%, transparent);
-}
-
-.planner-kanban__card.is-planner-kanban-dragging .planner-kanban__card-slot {
     box-shadow: none;
 }
 
+.planner-kanban__card.is-planner-kanban-dragging .planner-kanban__card-slot {
+    visibility: visible;
+    box-shadow: 0 8px 22px color-mix(in srgb, #000 24%, transparent);
+}
+
+.planner-kanban__card.is-planner-kanban-dragging .planner-kanban__card-flyout,
 .planner-kanban__card.is-planner-kanban-dragging .planner-kanban__card-actions,
 .planner-kanban__card.is-planner-kanban-dragging .planner-kanban__card-slot::after {
     display: none !important;
@@ -1216,6 +1261,11 @@ body.is-planner-kanban-drag-active {
     max-width: 55%;
 }
 
+.planner-kanban__card-flyout .planner-kanban__card-row,
+.planner-kanban__card-flyout .planner-kanban__card-date {
+    opacity: 0.18;
+}
+
 .planner-kanban__card-top {
     display: block;
     position: relative;
@@ -1241,6 +1291,13 @@ body.is-planner-kanban-drag-active {
 }
 
 .planner-kanban__card-name[contenteditable]:focus {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    word-break: break-word;
+}
+
+.planner-kanban__card-flyout .planner-kanban__card-name {
     white-space: normal;
     overflow: visible;
     text-overflow: unset;
@@ -1286,6 +1343,13 @@ textarea.planner-kanban__card-comment {
 
 textarea.planner-kanban__card-comment:focus {
     max-height: none;
+}
+
+.planner-kanban__card-flyout .planner-kanban__card-comment {
+    display: block !important;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+    overflow: visible;
 }
 
 /* Quick actions above title/content; footer grip stays below.
@@ -1421,9 +1485,9 @@ textarea.planner-kanban__card-comment:focus {
     box-shadow: 0 0 0 1px var(--card-focus-ring, rgba(79, 70, 229, 0.35)) !important;
 }
 
-/* Title-only density: no comments. */
-.planner-kanban__card.is-collapsed .planner-kanban__card-comment {
-    display: none !important;
+/* Title-only density: hide comments in the resting slot only (flyout peeks them). */
+.planner-kanban__card.is-collapsed .planner-kanban__card-slot .planner-kanban__card-comment {
+    display: none;
 }
 
 .planner-kanban__card.is-collapsed .planner-kanban__card-slot {
@@ -1445,7 +1509,8 @@ textarea.planner-kanban__card-comment:focus {
  * (inline --kanban-card-color backgrounds included).
  */
 .planner-kanban__card.is-urgent,
-.planner-kanban__card.is-urgent .planner-kanban__card-slot {
+.planner-kanban__card.is-urgent .planner-kanban__card-slot,
+.planner-kanban__card.is-urgent .planner-kanban__card-flyout {
     background: var(--kanban-urgent-bg, #fde68a) !important;
     border-color: var(--kanban-urgent-border, #ca8a04) !important;
     color: var(--kanban-urgent-fg, #422006);
@@ -1455,7 +1520,8 @@ textarea.planner-kanban__card-comment:focus {
 }
 
 .planner-kanban__card.is-muted,
-.planner-kanban__card.is-muted .planner-kanban__card-slot {
+.planner-kanban__card.is-muted .planner-kanban__card-slot,
+.planner-kanban__card.is-muted .planner-kanban__card-flyout {
     background: var(--kanban-muted-bg, #d1d5db) !important;
     border-color: var(--kanban-muted-border, #9ca3af) !important;
     color: var(--kanban-muted-fg, #374151);
@@ -1524,7 +1590,8 @@ textarea.planner-kanban__card-comment:focus {
     color: var(--card-muted);
 }
 
-.has-custom-bg .planner-kanban__card:not(.has-color) .planner-kanban__card-slot {
+.has-custom-bg .planner-kanban__card:not(.has-color) .planner-kanban__card-slot,
+.has-custom-bg .planner-kanban__card:not(.has-color) .planner-kanban__card-flyout {
     border-color: var(--card-border-subtle);
     background: color-mix(in srgb, var(--card-border-subtle) 12%, transparent);
     color: var(--card-fg, currentColor);

@@ -914,21 +914,29 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
                         <span class="planner-kanban__card-grab" title="Drag to move" aria-hidden="true">${CARD_ICONS.drag}</span>
                     </span>`
                     : '';
-                // Stable slot (no size-changing flyout). Actions + footer grip are chrome only.
+                // Slot: editable when canEdit. Flyout: read-only full-content overlay (no layout push).
                 const slotNameHtml = canEdit
                     ? `<div class="planner-kanban__card-name card-inline-edit" contenteditable="plaintext-only" data-planner-kanban-field="name" data-planner-row="${card.row}" spellcheck="false" role="textbox" aria-label="Name">${escapeHTML(nameText)}</div>`
                     : `<span class="planner-kanban__card-name">${escapeHTML(nameText)}</span>`;
                 const slotCommentHtml = canEdit
                     ? `<textarea class="planner-kanban__card-comment card-inline-edit" data-planner-kanban-field="comments" data-planner-row="${card.row}" rows="1" spellcheck="false" aria-label="Comments">${escapeHTML(commentRaw)}</textarea>`
                     : (comment ? `<span class="planner-kanban__card-comment">${escapeHTML(comment)}</span>` : '');
+                const flyoutNameHtml = `<span class="planner-kanban__card-name">${escapeHTML(nameText)}</span>`;
+                const flyoutCommentHtml = comment
+                    ? `<span class="planner-kanban__card-comment">${escapeHTML(comment)}</span>`
+                    : '';
                 const metaHtml = `${rowHtml}${startHtml}${stopHtml}`;
                 const slotBody = `${metaHtml}
                     <div class="planner-kanban__card-top">${slotNameHtml}</div>
                     ${slotCommentHtml}`;
+                const flyoutBody = `${metaHtml}
+                    <div class="planner-kanban__card-top">${flyoutNameHtml}</div>
+                    ${flyoutCommentHtml}`;
                 const surface = surfaceThemeInline(card.cardColor);
                 const colorClass = card.cardColor ? ` has-color${surface.className}` : '';
                 return `<article class="planner-kanban__card${colorClass}${emphasisClass}${collapsedClass}${editClass}" data-planner-kanban-card data-planner-row="${card.row}" data-kanban-emphasis="${escapeAttr(emphasis)}" data-kanban-collapsed="${collapsed ? '1' : '0'}"${surface.style}>
                     <div class="planner-kanban__card-slot">${slotBody}</div>
+                    <div class="planner-kanban__card-flyout" aria-hidden="true">${flyoutBody}</div>
                     ${actionsHtml}
                 </article>`;
             }).join('')

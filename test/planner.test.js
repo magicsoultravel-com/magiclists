@@ -270,7 +270,7 @@ describe('planner model', () => {
         assert.ok(html.includes('data-planner-kanban'));
     });
 
-    it('kanban inline fields only when canEdit; stable slot without flyout', () => {
+    it('kanban inline fields only when canEdit; flyout stays read-only spans', () => {
         const planner = createEmptyPlanner();
         setPlannerField(planner.sheet, 0, 'name', 'Task A');
         setPlannerField(planner.sheet, 0, 'comments', 'Hello');
@@ -280,8 +280,9 @@ describe('planner model', () => {
         assert.ok(editable.includes('contenteditable="plaintext-only"'));
         assert.ok(/<textarea[^>]*data-planner-kanban-field="comments"/.test(editable));
         assert.ok(/rows="1"/.test(editable));
-        // No size-changing hover flyout — content stays in the stable slot.
-        assert.ok(!editable.includes('planner-kanban__card-flyout'));
+        // Flyout mirrors are plain spans (no contenteditable inside flyout).
+        assert.ok(editable.includes('planner-kanban__card-flyout'));
+        assert.ok(!/<div class="planner-kanban__card-flyout"[^>]*>[\s\S]*?contenteditable/.test(editable));
         // One action suite on the article; overflow tray behind more + grab.
         assert.equal((editable.match(/data-planner-kanban-density/g) || []).length, 1);
         assert.equal((editable.match(/class="planner-kanban__card-actions"/g) || []).length, 1);
@@ -295,9 +296,10 @@ describe('planner model', () => {
         assert.ok(!readonly.includes('<textarea'));
         assert.ok(readonly.includes('planner-kanban__card-name'));
         assert.ok(readonly.includes('Hello'));
+        assert.ok(readonly.includes('planner-kanban__card-flyout'));
     });
 
-    it('colored kanban cards emit contrast tokens and collapsed hides density class', () => {
+    it('colored kanban cards emit contrast tokens and collapsed keeps comments for flyout', () => {
         const planner = createEmptyPlanner();
         setPlannerField(planner.sheet, 0, 'name', 'Paint');
         setPlannerField(planner.sheet, 0, 'category', 'Design');
@@ -310,11 +312,16 @@ describe('planner model', () => {
         assert.ok(html.includes('--card-muted:'));
         assert.ok(html.includes('--card-action-fg:'));
         assert.ok(html.includes('background:#112233'));
+        assert.ok(html.includes('planner-kanban__card-flyout'));
 
+        // Collapsed cards keep comments in DOM so the absolute flyout can peek them.
         planner.kanbanCollapsedByRow = { '0': true };
         const collapsed = renderPlannerKanbanHtml(planner, { canEdit: true });
         assert.ok(collapsed.includes('is-collapsed'));
         assert.ok(collapsed.includes('data-planner-kanban-field="comments"'));
+        assert.ok(collapsed.includes('notes'));
+        assert.ok(collapsed.includes('planner-kanban__card-flyout'));
+        assert.ok(/planner-kanban__card-flyout[\s\S]*?notes/.test(collapsed));
     });
 
     it('summarizes earliest start, latest stop, calendar and working days', () => {
