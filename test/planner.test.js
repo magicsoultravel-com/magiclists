@@ -264,8 +264,12 @@ describe('planner model', () => {
         assert.ok(editable.includes('data-planner-kanban-field="comments"'));
         assert.ok(editable.includes('contenteditable="plaintext-only"'));
         assert.ok(/<textarea[^>]*data-planner-kanban-field="comments"/.test(editable));
+        assert.ok(/rows="3"/.test(editable));
         // Flyout mirrors are plain spans (no contenteditable inside flyout).
         assert.ok(!/<div class="planner-kanban__card-flyout"[^>]*>[\s\S]*?contenteditable/.test(editable));
+        // One action suite on the article (not duplicated in slot + flyout).
+        assert.equal((editable.match(/data-planner-kanban-density/g) || []).length, 1);
+        assert.equal((editable.match(/class="planner-kanban__card-actions"/g) || []).length, 1);
 
         const readonly = renderPlannerKanbanHtml(planner, { canEdit: false });
         assert.ok(!readonly.includes('data-planner-kanban-field='));
@@ -273,6 +277,26 @@ describe('planner model', () => {
         assert.ok(!readonly.includes('<textarea'));
         assert.ok(readonly.includes('planner-kanban__card-name'));
         assert.ok(readonly.includes('Hello'));
+    });
+
+    it('colored kanban cards emit contrast tokens and collapsed hides density class', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'Paint');
+        setPlannerField(planner.sheet, 0, 'category', 'Design');
+        setPlannerField(planner.sheet, 0, 'comments', 'notes');
+        setCategoryColor(planner, 'Design', '#112233');
+        const html = renderPlannerKanbanHtml(planner, { canEdit: true });
+        assert.ok(html.includes('has-color'));
+        assert.ok(html.includes('has-custom-bg'));
+        assert.ok(html.includes('--card-fg:'));
+        assert.ok(html.includes('--card-muted:'));
+        assert.ok(html.includes('--card-action-fg:'));
+        assert.ok(html.includes('background:#112233'));
+
+        planner.kanbanCollapsedByRow = { '0': true };
+        const collapsed = renderPlannerKanbanHtml(planner, { canEdit: true });
+        assert.ok(collapsed.includes('is-collapsed'));
+        assert.ok(collapsed.includes('data-planner-kanban-field="comments"'));
     });
 
     it('summarizes earliest start, latest stop, calendar and working days', () => {

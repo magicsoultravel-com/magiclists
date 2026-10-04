@@ -52,7 +52,7 @@ import {
     resetKanbanArrangement
 } from './plannerKanban.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor } from './colorPicker.js';
-import { contrastTokensForBackground } from './cardTheme.js';
+import { surfaceThemeInline } from './cardTheme.js';
 import { refreshNoteCanvasPreview } from './noteCanvasRenderer.js';
 import { readDisplayOptions } from './displayOptions.js';
 
@@ -76,33 +76,6 @@ const KANBAN_URGENT_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focu
 
 /** Soft circle — non-urgent / muted. */
 const KANBAN_MUTED_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false" aria-hidden="true"><circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M3.6 6h4.8" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>';
-
-/**
- * Solid fill + site-standard luminance contrast tokens (--card-fg / --card-muted).
- * @param {string} hex
- * @returns {{ style: string, className: string }}
- */
-function cardSurfaceTheme(hex) {
-    if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return { style: '', className: '' };
-    const tokens = contrastTokensForBackground(hex);
-    const parts = [
-        `--kanban-card-color:${escapeAttr(hex)}`,
-        `background:${escapeAttr(hex)}`,
-        `border-color:${escapeAttr(hex)}`
-    ];
-    if (tokens?.props) {
-        for (const [prop, value] of Object.entries(tokens.props)) {
-            parts.push(`${prop}:${escapeAttr(value)}`);
-        }
-    }
-    const themeClass = tokens
-        ? ` has-custom-bg ${tokens.light ? 'card-theme-light' : 'card-theme-dark'}`
-        : ' has-custom-bg';
-    return {
-        style: ` style="${parts.join(';')}"`,
-        className: themeClass
-    };
-}
 
 /** Compact date for kanban corner overlays. */
 function formatKanbanCardDate(value) {
@@ -138,7 +111,7 @@ function buildCalendarTaskPreviewHtml(planner, row) {
     const cardHex = resolveNoteColor(
         planner.kanbanCardColors?.[String(row)] || task.categoryColor || ''
     );
-    const surface = cardSurfaceTheme(cardHex);
+    const surface = surfaceThemeInline(cardHex);
     const colorClass = cardHex ? ` has-color${surface.className}` : '';
     return `<article class="planner-kanban__card planner-calendar__task-preview-card${colorClass}" data-planner-row="${row}"${surface.style}>
         <div class="planner-kanban__card-slot">
@@ -910,12 +883,12 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
                         <span class="planner-kanban__card-grab" title="Drag to move" aria-hidden="true">${CARD_ICONS.drag}</span>
                     </span>`
                     : '';
-                // Slot: editable when canEdit. Flyout: read-only mirrors (no duplicate editors).
+                // Slot: editable when canEdit. Flyout: read-only mirrors. Actions: one article-level layer.
                 const slotNameHtml = canEdit
                     ? `<div class="planner-kanban__card-name" contenteditable="plaintext-only" data-planner-kanban-field="name" data-planner-row="${card.row}" spellcheck="false" role="textbox" aria-label="Name">${escapeHTML(nameText)}</div>`
                     : `<span class="planner-kanban__card-name">${escapeHTML(nameText)}</span>`;
                 const slotCommentHtml = canEdit
-                    ? `<textarea class="planner-kanban__card-comment" data-planner-kanban-field="comments" data-planner-row="${card.row}" rows="1" spellcheck="false" aria-label="Comments">${escapeHTML(commentRaw)}</textarea>`
+                    ? `<textarea class="planner-kanban__card-comment" data-planner-kanban-field="comments" data-planner-row="${card.row}" rows="3" spellcheck="false" aria-label="Comments">${escapeHTML(commentRaw)}</textarea>`
                     : (comment ? `<span class="planner-kanban__card-comment">${escapeHTML(comment)}</span>` : '');
                 const flyoutNameHtml = `<span class="planner-kanban__card-name">${escapeHTML(nameText)}</span>`;
                 const flyoutCommentHtml = comment
@@ -923,22 +896,17 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
                     : '';
                 const metaHtml = `${rowHtml}${startHtml}${stopHtml}`;
                 const slotBody = `${metaHtml}
-                    <div class="planner-kanban__card-top">
-                        ${slotNameHtml}
-                        ${actionsHtml}
-                    </div>
+                    <div class="planner-kanban__card-top">${slotNameHtml}</div>
                     ${slotCommentHtml}`;
                 const flyoutBody = `${metaHtml}
-                    <div class="planner-kanban__card-top">
-                        ${flyoutNameHtml}
-                        ${actionsHtml}
-                    </div>
+                    <div class="planner-kanban__card-top">${flyoutNameHtml}</div>
                     ${flyoutCommentHtml}`;
-                const surface = cardSurfaceTheme(card.cardColor);
+                const surface = surfaceThemeInline(card.cardColor);
                 const colorClass = card.cardColor ? ` has-color${surface.className}` : '';
                 return `<article class="planner-kanban__card${colorClass}${emphasisClass}${collapsedClass}${editClass}" data-planner-kanban-card data-planner-row="${card.row}" data-kanban-emphasis="${escapeAttr(emphasis)}" data-kanban-collapsed="${collapsed ? '1' : '0'}"${surface.style}>
                     <div class="planner-kanban__card-slot">${slotBody}</div>
                     <div class="planner-kanban__card-flyout" aria-hidden="true">${flyoutBody}</div>
+                    ${actionsHtml}
                 </article>`;
             }).join('')
             : '<div class="planner-kanban__empty-col" aria-hidden="true"></div>';
@@ -1214,7 +1182,14 @@ function growPlannerTextareas(section) {
 function growPlannerCell(el) {
     if (!el || !el.style) return;
     el.style.height = '0';
-    el.style.height = `${Math.max(el.scrollHeight, 18)}px`;
+    const next = Math.max(el.scrollHeight, 18);
+    // Kanban comments: keep ~3-line resting height unless focused.
+    if (el.matches?.('textarea.planner-kanban__card-comment') && document.activeElement !== el) {
+        const lh = Number.parseFloat(getComputedStyle(el).lineHeight) || 14;
+        el.style.height = `${Math.min(next, Math.round(lh * 3))}px`;
+        return;
+    }
+    el.style.height = `${next}px`;
 }
 
 const PLANNER_COMMIT_MS = 380;
@@ -1657,6 +1632,10 @@ export function attachPlannerInteractions(root, item, {
                         setPlannerField(item.planner.sheet, rowNum, 'name', trimmed);
                     }
                 }
+            }
+            if (kanbanField.dataset.plannerKanbanField === 'comments') {
+                // Re-clamp to ~3 lines after edit.
+                requestAnimationFrame(() => growPlannerCell(kanbanField));
             }
             flushPlannerCommit();
             return;

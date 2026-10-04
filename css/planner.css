@@ -980,8 +980,10 @@
     color: inherit;
 }
 
-/* Match note-surface custom-bg text contrast (--card-fg / --card-muted from cardTheme).
-   Skip when urgent/muted fills replace the category color. */
+/*
+ * Per-card contrast (same tokens as note applyCardTheme).
+ * Skip when urgent/muted fills replace the category color.
+ */
 .planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) {
     color: var(--card-fg, inherit);
 }
@@ -995,11 +997,24 @@
 .planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-row,
 .planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-date {
     color: var(--card-muted, var(--card-fg, inherit));
-    opacity: 0.85;
+    opacity: 0.9;
 }
 
-.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-actions {
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-color,
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-emphasis,
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-reset,
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-density,
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-grab {
     color: var(--card-action-fg, var(--card-muted, inherit));
+}
+
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-color:hover,
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-emphasis:hover,
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-reset:hover,
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-density:hover,
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-grab:hover {
+    color: var(--card-fg, inherit);
+    background: color-mix(in srgb, var(--card-fg, #000) 12%, transparent);
 }
 
 .planner-kanban__card-slot {
@@ -1094,8 +1109,8 @@ body.is-planner-kanban-drag-active .planner-kanban__card-slot {
     font-size: calc(0.48rem * var(--note-font-scale, 1));
     line-height: 1;
     letter-spacing: 0.01em;
-    color: var(--text-muted);
-    opacity: 0.55;
+    color: var(--card-muted, var(--text-muted));
+    opacity: 0.7;
     pointer-events: none;
 }
 
@@ -1173,6 +1188,7 @@ body.is-planner-kanban-drag-active .planner-kanban__card-slot {
     word-break: break-word;
 }
 
+/* Expanded large format: ~3 comment lines at rest; grow on focus. */
 textarea.planner-kanban__card-comment {
     display: block;
     width: 100%;
@@ -1189,8 +1205,13 @@ textarea.planner-kanban__card-comment {
     line-height: 1.25;
     resize: none;
     overflow: hidden;
+    max-height: calc(0.58rem * var(--note-font-scale, 1) * 1.25 * 3);
     -webkit-line-clamp: unset;
     line-clamp: unset;
+}
+
+textarea.planner-kanban__card-comment:focus {
+    max-height: none;
 }
 
 .planner-kanban__card-flyout .planner-kanban__card-comment {
@@ -1200,11 +1221,12 @@ textarea.planner-kanban__card-comment {
     overflow: visible;
 }
 
+/* Single article-level action suite (not inside slot/flyout). */
 .planner-kanban__card-actions {
     position: absolute;
-    top: -0.1rem;
-    right: -0.1rem;
-    z-index: 3;
+    top: 0.12rem;
+    right: 0.12rem;
+    z-index: 50;
     display: inline-flex;
     align-items: center;
     gap: 0.05rem;
@@ -1213,8 +1235,9 @@ textarea.planner-kanban__card-comment {
     transition: opacity 0.12s ease;
 }
 
-.planner-kanban__card:hover .planner-kanban__card-flyout .planner-kanban__card-actions,
-.planner-kanban__card:focus-within .planner-kanban__card-flyout .planner-kanban__card-actions {
+.planner-kanban__card:hover .planner-kanban__card-actions,
+.planner-kanban__card:focus-within .planner-kanban__card-actions,
+.planner-kanban__card.is-kanban-editing .planner-kanban__card-actions {
     opacity: 0.95;
     pointer-events: auto;
 }
@@ -1233,7 +1256,7 @@ textarea.planner-kanban__card-comment {
     border: 0;
     border-radius: 3px;
     background: transparent;
-    color: var(--text-muted);
+    color: var(--card-action-fg, var(--text-muted));
 }
 
 .planner-kanban__card-color,
@@ -1256,9 +1279,9 @@ textarea.planner-kanban__card-comment {
     background: color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 14%, transparent);
 }
 
-/* Title-only density: hide comments in the resting slot; flyout stays full. */
-.planner-kanban__card.is-collapsed .planner-kanban__card-slot .planner-kanban__card-comment {
-    display: none;
+/* Title-only density: no comments. */
+.planner-kanban__card.is-collapsed .planner-kanban__card-comment {
+    display: none !important;
 }
 
 .planner-kanban__card.is-collapsed .planner-kanban__card-slot {
@@ -1305,12 +1328,30 @@ textarea.planner-kanban__card-comment {
 .planner-kanban__card.is-urgent .planner-kanban__card-row,
 .planner-kanban__card.is-urgent .planner-kanban__card-date {
     color: color-mix(in srgb, var(--kanban-urgent-fg, #422006) 72%, transparent);
+    opacity: 0.9;
 }
 
 .planner-kanban__card.is-muted .planner-kanban__card-comment,
 .planner-kanban__card.is-muted .planner-kanban__card-row,
 .planner-kanban__card.is-muted .planner-kanban__card-date {
     color: color-mix(in srgb, var(--kanban-muted-fg, #374151) 72%, transparent);
+    opacity: 0.9;
+}
+
+.planner-kanban__card.is-urgent .planner-kanban__card-color,
+.planner-kanban__card.is-urgent .planner-kanban__card-emphasis,
+.planner-kanban__card.is-urgent .planner-kanban__card-reset,
+.planner-kanban__card.is-urgent .planner-kanban__card-density,
+.planner-kanban__card.is-urgent .planner-kanban__card-grab {
+    color: var(--kanban-urgent-fg, #422006);
+}
+
+.planner-kanban__card.is-muted .planner-kanban__card-color,
+.planner-kanban__card.is-muted .planner-kanban__card-emphasis,
+.planner-kanban__card.is-muted .planner-kanban__card-reset,
+.planner-kanban__card.is-muted .planner-kanban__card-density,
+.planner-kanban__card.is-muted .planner-kanban__card-grab {
+    color: var(--kanban-muted-fg, #374151);
 }
 
 .planner-kanban__placeholder {

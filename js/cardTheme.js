@@ -49,7 +49,42 @@ export const THEME_PROPS = [
 ];
 
 function isThemeSkinLocked() {
-    return document.documentElement.dataset.themeSkin === '1';
+    return typeof document !== 'undefined'
+        && document.documentElement?.dataset?.themeSkin === '1';
+}
+
+/**
+ * Inline solid fill + contrast tokens for surfaces outside note shells (e.g. kanban cards).
+ * @param {string} hex
+ * @returns {{ style: string, className: string }}
+ */
+export function surfaceThemeInline(hex) {
+    const color = String(hex || '').trim();
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) return { style: '', className: '' };
+    const parts = [
+        `--kanban-card-color:${color}`,
+        `background:${color}`,
+        `border-color:${color}`
+    ];
+    if (isThemeSkinLocked()) {
+        return {
+            style: ` style="${parts.join(';')}"`,
+            className: ' has-custom-bg'
+        };
+    }
+    const tokens = contrastTokensForBackground(color);
+    if (tokens?.props) {
+        for (const [prop, value] of Object.entries(tokens.props)) {
+            parts.push(`${prop}:${value}`);
+        }
+    }
+    const themeClass = tokens
+        ? ` has-custom-bg ${tokens.light ? 'card-theme-light' : 'card-theme-dark'}`
+        : ' has-custom-bg';
+    return {
+        style: ` style="${parts.join(';')}"`,
+        className: themeClass
+    };
 }
 
 /* The .has-custom-bg class lives on the .editor-note-shell, but several CSS
