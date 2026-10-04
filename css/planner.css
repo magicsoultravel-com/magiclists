@@ -958,7 +958,8 @@
 .planner-kanban__card {
     position: relative;
     border-radius: 4px;
-    font-size: calc(0.7rem * var(--note-font-scale, 1));
+    /* Cap at note-surface title size (.mini-card-title = 0.68rem). */
+    font-size: calc(0.68rem * var(--note-font-scale, 1));
     line-height: 1.3;
     user-select: none;
 }
@@ -976,6 +977,29 @@
 .planner-kanban__card.has-color .planner-kanban__card-flyout {
     background: inherit;
     border-color: inherit;
+    color: inherit;
+}
+
+/* Match note-surface custom-bg text contrast (--card-fg / --card-muted from cardTheme).
+   Skip when urgent/muted fills replace the category color. */
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) {
+    color: var(--card-fg, inherit);
+}
+
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-name,
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-comment,
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) textarea.planner-kanban__card-comment {
+    color: var(--card-fg, inherit);
+}
+
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-row,
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-date {
+    color: var(--card-muted, var(--card-fg, inherit));
+    opacity: 0.85;
+}
+
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-actions {
+    color: var(--card-action-fg, var(--card-muted, inherit));
 }
 
 .planner-kanban__card-slot {
@@ -1008,12 +1032,26 @@
     visibility: hidden;
 }
 
+/* Inline edit: keep the editable slot visible; suppress flyout swap. */
+.planner-kanban__card.is-kanban-editing .planner-kanban__card-flyout {
+    display: none !important;
+}
+
+.planner-kanban__card.is-kanban-editing .planner-kanban__card-slot {
+    visibility: visible !important;
+}
+
 .planner-kanban__card.is-editable {
     cursor: grab;
 }
 
 .planner-kanban__card.is-editable:active {
     cursor: grabbing;
+}
+
+.planner-kanban__card.is-kanban-editing,
+.planner-kanban__card.is-kanban-editing:active {
+    cursor: text;
 }
 
 body.is-planner-kanban-drag-active {
@@ -1094,10 +1132,25 @@ body.is-planner-kanban-drag-active .planner-kanban__card-slot {
 .planner-kanban__card-name {
     display: block;
     min-width: 0;
+    font-size: calc(0.68rem * var(--note-font-scale, 1));
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+}
+
+.planner-kanban__card-name[contenteditable],
+.planner-kanban__card-comment[data-planner-kanban-field] {
+    user-select: text;
+    cursor: text;
+    outline: none;
+}
+
+.planner-kanban__card-name[contenteditable]:focus {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    word-break: break-word;
 }
 
 .planner-kanban__card-flyout .planner-kanban__card-name {
@@ -1118,6 +1171,26 @@ body.is-planner-kanban-drag-active .planner-kanban__card-slot {
     line-height: 1.25;
     color: var(--text-muted);
     word-break: break-word;
+}
+
+textarea.planner-kanban__card-comment {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-top: 0.22rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-size: calc(0.58rem * var(--note-font-scale, 1));
+    line-height: 1.25;
+    resize: none;
+    overflow: hidden;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
 }
 
 .planner-kanban__card-flyout .planner-kanban__card-comment {

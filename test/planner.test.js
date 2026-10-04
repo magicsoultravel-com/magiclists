@@ -57,7 +57,7 @@ import {
 } from '../js/plannerKanban.js';
 import { SHARED_FIELDS } from '../js/noteFieldOwnership.js';
 import { reconcileItemPlanner } from '../js/api.js';
-import { buildNotePlannerSectionHtml } from '../js/plannerUi.js';
+import { buildNotePlannerSectionHtml, renderPlannerKanbanHtml } from '../js/plannerUi.js';
 import { readDisplayOptions } from '../js/displayOptions.js';
 
 describe('planner model', () => {
@@ -246,10 +246,33 @@ describe('planner model', () => {
         assert.ok(html.includes('data-planner-kanban-reset-styles'));
         assert.ok(html.includes('data-planner-kanban-reset-arrangement'));
         assert.ok(html.includes('planner-kanban__tools'));
+        assert.ok(html.includes('data-planner-kanban-field="name"'));
+        assert.ok(html.includes('data-planner-kanban-field="comments"'));
+        assert.ok(html.includes('contenteditable="plaintext-only"'));
         assert.ok(html.includes('data-planner-rail-resize'));
         assert.ok(!html.includes('data-planner-today-settings-toggle'));
         assert.ok(html.includes('planner-gantt__today') || html.includes('data-planner-gantt'));
         assert.ok(html.includes('data-planner-kanban'));
+    });
+
+    it('kanban inline fields only when canEdit; flyout stays read-only spans', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'Task A');
+        setPlannerField(planner.sheet, 0, 'comments', 'Hello');
+        const editable = renderPlannerKanbanHtml(planner, { canEdit: true });
+        assert.ok(editable.includes('data-planner-kanban-field="name"'));
+        assert.ok(editable.includes('data-planner-kanban-field="comments"'));
+        assert.ok(editable.includes('contenteditable="plaintext-only"'));
+        assert.ok(/<textarea[^>]*data-planner-kanban-field="comments"/.test(editable));
+        // Flyout mirrors are plain spans (no contenteditable inside flyout).
+        assert.ok(!/<div class="planner-kanban__card-flyout"[^>]*>[\s\S]*?contenteditable/.test(editable));
+
+        const readonly = renderPlannerKanbanHtml(planner, { canEdit: false });
+        assert.ok(!readonly.includes('data-planner-kanban-field='));
+        assert.ok(!readonly.includes('contenteditable='));
+        assert.ok(!readonly.includes('<textarea'));
+        assert.ok(readonly.includes('planner-kanban__card-name'));
+        assert.ok(readonly.includes('Hello'));
     });
 
     it('summarizes earliest start, latest stop, calendar and working days', () => {

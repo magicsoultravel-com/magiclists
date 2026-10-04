@@ -64,6 +64,36 @@ function syncCardAncestorClasses(el, { hasCustomBg, light }) {
     card.classList.toggle('card-theme-dark', hasCustomBg && !light);
 }
 
+/**
+ * Luminance contrast tokens for a solid background (same values applyCardTheme paints).
+ * @param {string} backgroundColor
+ * @returns {null|{ light: boolean, props: Record<string, string> }}
+ */
+export function contrastTokensForBackground(backgroundColor) {
+    const rgb = parseCssColor(backgroundColor);
+    if (!rgb) return null;
+    const light = relativeLuminance(rgb) > 0.55;
+    const black = { r: 0, g: 0, b: 0 };
+    const white = { r: 255, g: 255, b: 255 };
+    return {
+        light,
+        props: {
+            '--card-fg': light ? '#121218' : '#ececf1',
+            '--card-muted': light ? '#4b5563' : '#b0b0b8',
+            '--card-action-bg': light ? 'rgba(255,255,255,0.9)' : 'rgba(12,12,16,0.82)',
+            '--card-action-fg': light ? '#3f3f46' : '#d4d4d8',
+            '--card-border-subtle': light ? 'rgba(0,0,0,0.14)' : 'rgba(255,255,255,0.16)',
+            '--card-focus-bg': light ? 'rgba(79,70,229,0.1)' : 'rgba(129,140,248,0.14)',
+            '--card-focus-ring': light ? 'rgba(67,56,202,0.42)' : 'rgba(165,180,252,0.48)',
+            '--card-link': light ? '#4338ca' : '#a5b4fc',
+            '--card-placeholder': light ? '#6b7280' : '#9ca3af',
+            '--card-input-bg': light ? 'rgba(255,255,255,0.72)' : 'rgba(0,0,0,0.22)',
+            '--card-toolbar-bg': toRgb(mixRgb(rgb, black, light ? 0.06 : 0.22)),
+            '--card-panel-bg': toRgb(mixRgb(rgb, light ? white : black, light ? 0.35 : 0.12))
+        }
+    };
+}
+
 /** Strip luminance contrast overrides so fancy-skin --card-fg inherits from html. */
 export function clearCardThemeContrast(el) {
     if (!el) return;
@@ -77,9 +107,9 @@ export function applyCardTheme(el, backgroundColor, { paintBackground = false } 
     if (!el) return;
 
     const skinLocked = isThemeSkinLocked();
-    const rgb = parseCssColor(backgroundColor);
+    const tokens = contrastTokensForBackground(backgroundColor);
 
-    if (!rgb) {
+    if (!tokens) {
         el.classList.remove('has-custom-bg', 'card-theme-light', 'card-theme-dark');
         THEME_PROPS.forEach((prop) => el.style.removeProperty(prop));
         if (paintBackground) el.style.backgroundColor = '';
@@ -96,28 +126,15 @@ export function applyCardTheme(el, backgroundColor, { paintBackground = false } 
         return;
     }
 
-    const lum = relativeLuminance(rgb);
-    const light = lum > 0.55;
-    const black = { r: 0, g: 0, b: 0 };
-    const white = { r: 255, g: 255, b: 255 };
-
+    const { light, props } = tokens;
     el.classList.add('has-custom-bg');
     el.classList.toggle('card-theme-light', light);
     el.classList.toggle('card-theme-dark', !light);
     syncCardAncestorClasses(el, { hasCustomBg: true, light });
 
-    el.style.setProperty('--card-fg', light ? '#121218' : '#ececf1');
-    el.style.setProperty('--card-muted', light ? '#4b5563' : '#b0b0b8');
-    el.style.setProperty('--card-action-bg', light ? 'rgba(255,255,255,0.9)' : 'rgba(12,12,16,0.82)');
-    el.style.setProperty('--card-action-fg', light ? '#3f3f46' : '#d4d4d8');
-    el.style.setProperty('--card-border-subtle', light ? 'rgba(0,0,0,0.14)' : 'rgba(255,255,255,0.16)');
-    el.style.setProperty('--card-focus-bg', light ? 'rgba(79,70,229,0.1)' : 'rgba(129,140,248,0.14)');
-    el.style.setProperty('--card-focus-ring', light ? 'rgba(67,56,202,0.42)' : 'rgba(165,180,252,0.48)');
-    el.style.setProperty('--card-link', light ? '#4338ca' : '#a5b4fc');
-    el.style.setProperty('--card-placeholder', light ? '#6b7280' : '#9ca3af');
-    el.style.setProperty('--card-input-bg', light ? 'rgba(255,255,255,0.72)' : 'rgba(0,0,0,0.22)');
-    el.style.setProperty('--card-toolbar-bg', toRgb(mixRgb(rgb, light ? black : black, light ? 0.06 : 0.22)));
-    el.style.setProperty('--card-panel-bg', toRgb(mixRgb(rgb, light ? white : black, light ? 0.35 : 0.12)));
+    for (const [prop, value] of Object.entries(props)) {
+        el.style.setProperty(prop, value);
+    }
 
     if (paintBackground) el.style.backgroundColor = backgroundColor;
 }
