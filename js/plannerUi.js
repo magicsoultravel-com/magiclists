@@ -65,9 +65,9 @@ function cardSurfaceStyle(hex) {
     return ` style="--kanban-card-color:${escapeAttr(hex)};background:color-mix(in srgb, ${escapeAttr(hex)} 28%, var(--surface, var(--bg-color, #fff)));border-color:color-mix(in srgb, ${escapeAttr(hex)} 55%, var(--border-color, #ccc))"`;
 }
 
-/** Compact date for kanban corner overlay (start, else stop). */
-function formatKanbanCardDate(start, stop) {
-    const raw = String(start || stop || '').trim();
+/** Compact date for kanban corner overlays. */
+function formatKanbanCardDate(value) {
+    const raw = String(value || '').trim();
     if (!raw) return '';
     const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
     return m ? m[1] : '';
@@ -669,11 +669,16 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
         const cardsHtml = col.cards.length
             ? col.cards.map((card) => {
                 const editClass = canEdit ? ' is-editable' : '';
-                const dateLabel = formatKanbanCardDate(card.start, card.stop);
-                const dateClass = dateLabel ? ' has-date' : '';
-                const dateHtml = dateLabel
-                    ? `<span class="planner-kanban__card-date" title="${escapeAttr(dateLabel)}">${escapeHTML(dateLabel)}</span>`
+                const startLabel = formatKanbanCardDate(card.start);
+                const stopLabel = formatKanbanCardDate(card.stop);
+                const rowLabel = String(card.id || card.row + 1);
+                const startHtml = startLabel
+                    ? `<span class="planner-kanban__card-date planner-kanban__card-date--start" title="Start ${escapeAttr(startLabel)}">${escapeHTML(startLabel)}</span>`
                     : '';
+                const stopHtml = stopLabel
+                    ? `<span class="planner-kanban__card-date planner-kanban__card-date--stop" title="Stop ${escapeAttr(stopLabel)}">${escapeHTML(stopLabel)}</span>`
+                    : '';
+                const rowHtml = `<span class="planner-kanban__card-row" title="Row ${escapeAttr(rowLabel)}">${escapeHTML(rowLabel)}</span>`;
                 const comment = String(card.comments || '').trim();
                 const commentHtml = comment
                     ? `<span class="planner-kanban__card-comment">${escapeHTML(comment)}</span>`
@@ -684,13 +689,13 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
                         <span class="planner-kanban__card-grab" title="Drag to move" aria-hidden="true">${CARD_ICONS.drag}</span>
                     </span>`
                     : '';
-                const bodyInner = `${dateHtml}
+                const bodyInner = `${rowHtml}${startHtml}${stopHtml}
                     <div class="planner-kanban__card-top">
                         <span class="planner-kanban__card-name">${escapeHTML(card.name)}</span>
                         ${actionsHtml}
                     </div>
                     ${commentHtml}`;
-                return `<article class="planner-kanban__card${card.cardColor ? ' has-color' : ''}${dateClass}${editClass}" data-planner-kanban-card data-planner-row="${card.row}"${cardSurfaceStyle(card.cardColor)}>
+                return `<article class="planner-kanban__card${card.cardColor ? ' has-color' : ''}${editClass}" data-planner-kanban-card data-planner-row="${card.row}"${cardSurfaceStyle(card.cardColor)}>
                     <div class="planner-kanban__card-slot">${bodyInner}</div>
                     <div class="planner-kanban__card-flyout" aria-hidden="true">${bodyInner}</div>
                 </article>`;

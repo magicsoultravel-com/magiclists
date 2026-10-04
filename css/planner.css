@@ -797,12 +797,10 @@ body.is-planner-kanban-drag-active .planner-kanban__card-slot {
     display: none !important;
 }
 
+.planner-kanban__card-row,
 .planner-kanban__card-date {
     position: absolute;
-    top: 0.18rem;
-    right: 0.28rem;
-    z-index: 1;
-    max-width: 55%;
+    z-index: 4;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -810,29 +808,42 @@ body.is-planner-kanban-drag-active .planner-kanban__card-slot {
     line-height: 1;
     letter-spacing: 0.01em;
     color: var(--text-muted);
-    opacity: 0.5;
+    opacity: 0.55;
     pointer-events: none;
 }
 
+.planner-kanban__card-row {
+    top: 0.18rem;
+    left: 0.28rem;
+    max-width: 20%;
+}
+
+.planner-kanban__card-date--start {
+    top: 0.18rem;
+    right: 0.28rem;
+    max-width: 55%;
+}
+
+.planner-kanban__card-date--stop {
+    bottom: 0.18rem;
+    right: 0.28rem;
+    max-width: 55%;
+}
+
+.planner-kanban__card-flyout .planner-kanban__card-row,
 .planner-kanban__card-flyout .planner-kanban__card-date {
     opacity: 0.18;
 }
 
-.planner-kanban__card.has-date .planner-kanban__card-name {
-    padding-right: 0.15rem;
-}
-
 .planner-kanban__card-top {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.2rem;
+    display: block;
     position: relative;
     z-index: 2;
+    min-width: 0;
 }
 
 .planner-kanban__card-name {
     display: block;
-    flex: 1;
     min-width: 0;
     font-weight: 600;
     overflow: hidden;
@@ -868,11 +879,13 @@ body.is-planner-kanban-drag-active .planner-kanban__card-slot {
 }
 
 .planner-kanban__card-actions {
-    flex: 0 0 auto;
+    position: absolute;
+    top: -0.1rem;
+    right: -0.1rem;
+    z-index: 3;
     display: inline-flex;
     align-items: center;
     gap: 0.05rem;
-    margin: -0.1rem -0.1rem 0 0;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.12s ease;
@@ -937,6 +950,7 @@ body.is-planner-kanban-drag-active .planner-kanban__card-slot {
 .has-custom-bg .planner-kanban__column-title,
 .has-custom-bg .planner-kanban__column-count,
 .has-custom-bg .planner-kanban__card-comment,
+.has-custom-bg .planner-kanban__card-row,
 .has-custom-bg .planner-kanban__card-date {
     color: var(--card-muted);
 }
