@@ -60,6 +60,7 @@ import {
     setKanbanCardColor,
     setKanbanCardEmphasis,
     setKanbanCardCollapsed,
+    setKanbanStageCollapsed,
     expandAllKanbanCards,
     collapseAllKanbanCards,
     resetKanbanCardStyles,
@@ -864,7 +865,18 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
     const toggleCollapsed = kanbanCollapsed ? ' collapsed' : '';
     const boardCollapsed = kanbanCollapsed ? ' is-collapsed' : '';
 
-    const columnsHtml = layout.columns.map((col) => {
+    // Collapsed stages first (stage order), then open stages (stage order).
+    const orderedColumns = [
+        ...layout.columns.filter((c) => c.collapsed),
+        ...layout.columns.filter((c) => !c.collapsed)
+    ];
+
+    const columnsHtml = orderedColumns.map((col) => {
+        const stageCollapsed = !!col.collapsed;
+        const stageCollapsedClass = stageCollapsed ? ' is-collapsed' : '';
+        const stageCollapseTitle = stageCollapsed ? 'Expand column' : 'Collapse column';
+        // Collapse = chevron down; expand = chevron up (CARD_ICONS names are inverted for this chrome).
+        const stageCollapseIcon = stageCollapsed ? CARD_ICONS.collapse : CARD_ICONS.expand;
         const cardsHtml = col.cards.length
             ? col.cards.map((card) => {
                 const editClass = canEdit ? ' is-editable' : '';
@@ -921,10 +933,11 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
                 </article>`;
             }).join('')
             : '<div class="planner-kanban__empty-col" aria-hidden="true"></div>';
-        return `<div class="planner-kanban__column" data-planner-kanban-stage="${col.stage}">
+        return `<div class="planner-kanban__column${stageCollapsedClass}" data-planner-kanban-stage="${col.stage}" data-kanban-stage-collapsed="${stageCollapsed ? '1' : '0'}">
             <div class="planner-kanban__column-head">
                 <span class="planner-kanban__column-title">${escapeHTML(col.label)}</span>
                 <span class="planner-kanban__column-count">${col.cards.length}</span>
+                <button type="button" class="planner-kanban__column-collapse" data-planner-kanban-stage-collapse title="${escapeAttr(stageCollapseTitle)}" aria-label="${escapeAttr(stageCollapseTitle)}" aria-expanded="${stageCollapsed ? 'false' : 'true'}">${stageCollapseIcon}</button>
             </div>
             <div class="planner-kanban__column-body" data-planner-kanban-drop="${col.stage}">
                 ${cardsHtml}
@@ -1929,6 +1942,20 @@ export function attachPlannerInteractions(root, item, {
             return;
         }
 
+        const kanbanStageCollapseBtn = e.target.closest('[data-planner-kanban-stage-collapse]');
+        if (kanbanStageCollapseBtn && section.contains(kanbanStageCollapseBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const col = kanbanStageCollapseBtn.closest('[data-planner-kanban-stage]');
+            const stage = Number(col?.dataset?.plannerKanbanStage);
+            if (!Number.isFinite(stage)) return;
+            const nextCollapsed = col?.dataset?.kanbanStageCollapsed !== '1';
+            mutate((it) => {
+                setKanbanStageCollapsed(it.planner, stage, nextCollapsed);
+            }, { skipRerender: true, refreshGantt: true });
+            return;
+        }
+
         const kanbanExpandAllBtn = e.target.closest('[data-planner-kanban-expand-all]');
         if (kanbanExpandAllBtn && section.contains(kanbanExpandAllBtn)) {
             e.preventDefault();
@@ -2183,20 +2210,20 @@ export function attachPlannerInteractions(root, item, {
     const placeKanbanSlot = (clientX, clientY, slot, draggedRow) => {
         const board = section.querySelector('[data-planner-kanban-board]');
         if (!board) return;
-        const cols = [...board.querySelectorAll('[data-planner-kanban-drop]')];
-        let body = null;
-        for (const col of cols) {
+        const columns = [...board.querySelectorAll('.planner-kanban__column[data-planner-kanban-stage]')];
+        let column = null;
+        for (const col of columns) {
             const rect = col.getBoundingClientRect();
             if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
-                body = col;
+                column = col;
                 break;
             }
         }
-        if (!body) {
+        if (!column) {
             // Nearest column by horizontal distance when pointer is between/above columns
             let best = null;
             let bestDist = Infinity;
-            for (const col of cols) {
+            for (const col of columns) {
                 const rect = col.getBoundingClientRect();
                 const cx = (rect.left + rect.right) / 2;
                 const dist = Math.abs(clientX - cx);
@@ -2205,12 +2232,19 @@ export function attachPlannerInteractions(root, item, {
                     best = col;
                 }
             }
-            body = best;
+            column = best;
         }
+        const body = column?.querySelector('[data-planner-kanban-drop]') || null;
         if (!body) return;
 
         clearKanbanColumnOver();
         body.classList.add('is-drag-over');
+
+        // Collapsed columns: append at end (cards hidden; no mid-list insertion).
+        if (column.classList.contains('is-collapsed')) {
+            body.appendChild(slot);
+            return;
+        }
 
         const cards = [...body.querySelectorAll('[data-planner-kanban-card]')]
             .filter((c) => Number(c.dataset.plannerRow) !== draggedRow);

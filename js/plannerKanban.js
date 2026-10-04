@@ -195,6 +195,53 @@ export function isKanbanCardCollapsed(planner, row) {
 }
 
 /**
+ * Per-stage column collapse. Sparse map of truthy flags keyed by stage 0..4.
+ * @param {unknown} raw
+ * @returns {Record<string, true>}
+ */
+export function normalizeKanbanCollapsedByStage(raw) {
+    if (!raw || typeof raw !== 'object') return {};
+    const out = {};
+    for (const [k, v] of Object.entries(raw)) {
+        const stage = Number(k);
+        if (!Number.isFinite(stage) || stage < 0 || stage >= KANBAN_STAGE_COUNT) continue;
+        if (!v) continue;
+        out[String(Math.floor(stage))] = true;
+    }
+    return out;
+}
+
+/**
+ * @param {object|null|undefined} planner
+ * @param {number} stage
+ * @returns {boolean}
+ */
+export function isKanbanStageCollapsed(planner, stage) {
+    const s = Number(stage);
+    if (!Number.isFinite(s) || s < 0 || s >= KANBAN_STAGE_COUNT) return false;
+    const raw = planner?.kanbanCollapsedByStage?.[String(Math.floor(s))]
+        ?? planner?.kanbanCollapsedByStage?.[Math.floor(s)];
+    return !!raw;
+}
+
+/**
+ * @param {object} planner
+ * @param {number} stage
+ * @param {boolean} collapsed
+ */
+export function setKanbanStageCollapsed(planner, stage, collapsed) {
+    if (!planner) return;
+    const s = Number(stage);
+    if (!Number.isFinite(s) || s < 0 || s >= KANBAN_STAGE_COUNT) return;
+    if (!planner.kanbanCollapsedByStage || typeof planner.kanbanCollapsedByStage !== 'object') {
+        planner.kanbanCollapsedByStage = {};
+    }
+    const key = String(Math.floor(s));
+    if (collapsed) planner.kanbanCollapsedByStage[key] = true;
+    else delete planner.kanbanCollapsedByStage[key];
+}
+
+/**
  * @param {'release'|'workflow'|string} flavourId
  * @returns {readonly string[]}
  */
@@ -338,7 +385,8 @@ export function layoutPlannerKanban(planner, { flavour } = {}) {
         columns: byStage.map((cardsInCol, stage) => ({
             stage,
             label: labels[stage] || `Stage ${stage + 1}`,
-            cards: cardsInCol
+            cards: cardsInCol,
+            collapsed: isKanbanStageCollapsed(planner, stage)
         }))
     };
 }

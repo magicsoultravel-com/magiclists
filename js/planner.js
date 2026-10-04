@@ -22,6 +22,7 @@ import {
     normalizeKanbanCardColors,
     normalizeKanbanEmphasisByRow,
     normalizeKanbanCollapsedByRow,
+    normalizeKanbanCollapsedByStage,
     remapKanbanAfterRowMove,
     pruneKanbanAfterRowRemove
 } from './plannerKanban.js';
@@ -143,6 +144,7 @@ export function createEmptyPlanner(opts = {}) {
         kanbanCardColors: {},
         kanbanEmphasisByRow: {},
         kanbanCollapsedByRow: {},
+        kanbanCollapsedByStage: {},
         labelWidth: PLANNER_DEFAULT_LABEL_WIDTH,
         categoryColors: {},
         sheet: createPlannerSheet()
@@ -285,6 +287,7 @@ export function normalizePlanner(raw) {
     const cardColors = normalizeKanbanCardColors(raw.kanbanCardColors, sheet.rows);
     const emphasisByRow = normalizeKanbanEmphasisByRow(raw.kanbanEmphasisByRow, sheet.rows);
     const collapsedByRow = normalizeKanbanCollapsedByRow(raw.kanbanCollapsedByRow, sheet.rows);
+    const collapsedByStage = normalizeKanbanCollapsedByStage(raw.kanbanCollapsedByStage);
     // Drop kanban meta for rows with no name (those cards are hidden on the board).
     const nameCol = PLANNER_COLUMNS.findIndex((c) => c.key === 'name');
     const pruneEmptyNameKeys = (map) => {
@@ -321,6 +324,7 @@ export function normalizePlanner(raw) {
         kanbanCardColors: cardColors,
         kanbanEmphasisByRow: emphasisByRow,
         kanbanCollapsedByRow: collapsedByRow,
+        kanbanCollapsedByStage: collapsedByStage,
         labelWidth: normalizePlannerLabelWidth(raw.labelWidth),
         categoryColors: normalizeCategoryColors(raw.categoryColors),
         sheet

@@ -47,6 +47,8 @@ import {
     clipKanbanComment,
     setKanbanCardEmphasis,
     setKanbanCardCollapsed,
+    setKanbanStageCollapsed,
+    normalizeKanbanCollapsedByStage,
     expandAllKanbanCards,
     collapseAllKanbanCards,
     resetKanbanCardStyles,
@@ -79,6 +81,7 @@ describe('planner model', () => {
         assert.deepEqual(planner.kanbanCardColors, {});
         assert.deepEqual(planner.kanbanEmphasisByRow, {});
         assert.deepEqual(planner.kanbanCollapsedByRow, {});
+        assert.deepEqual(planner.kanbanCollapsedByStage, {});
         assert.equal(getPlannerField(planner.sheet, 0, 'name'), '');
         assert.equal(plannerHasContent(planner), false);
     });
@@ -252,6 +255,7 @@ describe('planner model', () => {
         assert.ok(html.includes('data-planner-kanban-emphasis="muted"'));
         assert.ok(html.includes('data-planner-kanban-reset-card'));
         assert.ok(html.includes('data-planner-kanban-density'));
+        assert.ok(html.includes('data-planner-kanban-stage-collapse'));
         assert.ok(html.includes('data-planner-kanban-expand-all'));
         assert.ok(html.includes('data-planner-kanban-collapse-all'));
         assert.ok(html.includes('data-planner-kanban-reset-styles'));
@@ -687,6 +691,47 @@ describe('planner Kanban', () => {
             kanbanCollapsedByRow: { '0': true, '9': true, '1': 0 }
         });
         assert.deepEqual(normalized.kanbanCollapsedByRow, { '0': true });
+    });
+
+    it('collapses stages; layout flags and render order put collapsed left', () => {
+        assert.deepEqual(normalizeKanbanCollapsedByStage({ '1': true, '9': true, '2': 0, foo: true }), {
+            '1': true
+        });
+        assert.deepEqual(normalizeKanbanCollapsedByStage(null), {});
+
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'A');
+        setKanbanStageCollapsed(planner, 1, true);
+        setKanbanStageCollapsed(planner, 3, true);
+        assert.deepEqual(planner.kanbanCollapsedByStage, { '1': true, '3': true });
+
+        const layout = layoutPlannerKanban(planner, { flavour: 'release' });
+        assert.equal(layout.columns[0].collapsed, false);
+        assert.equal(layout.columns[1].collapsed, true);
+        assert.equal(layout.columns[3].collapsed, true);
+
+        // Arrangement reset does not clear stage collapse.
+        resetKanbanArrangement(planner);
+        assert.deepEqual(planner.kanbanCollapsedByStage, { '1': true, '3': true });
+
+        setKanbanStageCollapsed(planner, 1, false);
+        assert.deepEqual(planner.kanbanCollapsedByStage, { '3': true });
+
+        planner.kanbanCollapsedByStage = { '1': true, '3': true };
+        const html = renderPlannerKanbanHtml(planner, { canEdit: true, flavour: 'release' });
+        assert.ok(html.includes('data-planner-kanban-stage-collapse'));
+        assert.ok(html.includes('data-kanban-stage-collapsed="1"'));
+        assert.ok(html.includes('planner-kanban__column is-collapsed'));
+
+        // Collapsed stages (1, then 3) appear before open stages in DOM order.
+        const stageOrder = [...html.matchAll(/data-planner-kanban-stage="(\d)"/g)].map((m) => m[1]);
+        assert.deepEqual(stageOrder, ['1', '3', '0', '2', '4']);
+
+        const normalized = normalizePlanner({
+            ...createEmptyPlanner(),
+            kanbanCollapsedByStage: { '0': true, '4': true, '7': true, '2': false }
+        });
+        assert.deepEqual(normalized.kanbanCollapsedByStage, { '0': true, '4': true });
     });
 
     it('sorts by date/row/alpha with asc/desc and manual order', () => {
