@@ -1,4 +1,4 @@
-/** @module {"owns":"magicPlanner calendar chart view — month-strip layout + task day coverage", "related":["planner.js","plannerGantt.js","plannerUi.js"]} */
+/** @module {"owns":"magicPlanner calendar chart view — month-strip layout + task bars", "related":["planner.js","plannerGantt.js","plannerUi.js"]} */
 import { parsePlannerDateTime, padGanttRange } from './plannerGantt.js';
 import { derivePlannerTasks } from './planner.js';
 import { escapeHTML, escapeAttr } from './domEscape.js';
@@ -8,6 +8,12 @@ const MONTH_SHORT = Object.freeze([
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
     'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
 ]);
+
+/**
+ * Top fraction of each day tile reserved for the day number.
+ * Task bars are laid out in the remaining body (underlay below the number).
+ */
+export const PLANNER_CAL_DAY_NUM_BAND_FRAC = 0.32;
 
 function startOfLocalDay(date) {
     return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
@@ -31,7 +37,187 @@ export function plannerCalendarDayKey(date) {
 }
 
 /**
- * Map each covered local day → unique category colors (for cell wash).
+ * Bar height as a fraction of one day tile when `n` tasks overlap.
+ * 1 → 1/2, 2 → 1/3, 3 → 1/4, …
+ * @param {number} n
+ * @returns {number}
+ */
+export function plannerCalendarBarHeightFraction(n) {
+    const count = Math.max(1, Math.floor(Number(n)) || 1);
+    return 1 / (count + 1);
+}
+
+/**
+ * Greedy lane packing: overlapping intervals get distinct lanes; non-overlap can share.
+ * @param {Array<{ id: string, dayStart: number, dayEnd: number }>} intervals
+ * @returns {Array<{ id: string, dayStart: number, dayEnd: number, lane: number }>}
+ */
+export function packPlannerCalendarLanes(intervals) {
+    const sorted = [...(intervals || [])].sort((a, b) => {
+        if (a.dayStart !== b.dayStart) return a.dayStart - b.dayStart;
+        if (a.dayEnd !== b.dayEnd) return a.dayEnd - b.dayEnd;
+        return String(a.id).localeCompare(String(b.id));
+    });
+    /** @type {Array<{ dayEnd: number }>} */
+    const laneEnds = [];
+    return sorted.map((iv) => {
+        let lane = 0;
+        while (lane < laneEnds.length && laneEnds[lane].dayEnd >= iv.dayStart) {
+            lane += 1;
+        }
+        if (lane === laneEnds.length) laneEnds.push({ dayEnd: iv.dayEnd });
+        else laneEnds[lane] = { dayEnd: iv.dayEnd };
+        return { ...iv, lane };
+    });
+}
+
+/**
+ * Split an inclusive day range into Sun–Sat week segments within a month grid.
+ * @param {number} dayStart 1-based day of month
+ * @param {number} dayEnd inclusive
+ * @param {number} firstDayIndex weekday index of day 1 (0=Sun)
+ * @returns {Array<{ weekRow: number, startCol: number, endCol: number, dayStart: number, dayEnd: number }>}
+ */
+export function splitPlannerCalendarWeekSegments(dayStart, dayEnd, firstDayIndex) {
+    const segs = [];
+    let d = dayStart;
+    while (d <= dayEnd) {
+        const cellIndex = firstDayIndex + (d - 1);
+        const col = cellIndex % 7;
+        const weekRow = Math.floor(cellIndex / 7);
+        const daysLeftInWeek = 6 - col;
+        const segEnd = Math.min(dayEnd, d + daysLeftInWeek);
+        const endCol = col + (segEnd - d);
+        segs.push({
+            weekRow,
+            startCol: col,
+            endCol,
+            dayStart: d,
+            dayEnd: segEnd
+        });
+        d = segEnd + 1;
+    }
+    return segs;
+}
+
+/**
+ * Peak number of intervals covering any single day in [1 .. daysInMonth].
+ * @param {Array<{ dayStart: number, dayEnd: number }>} intervals
+ * @param {number} daysInMonth
+ * @returns {number}
+ */
+export function peakPlannerCalendarConcurrency(intervals, daysInMonth) {
+    if (!intervals?.length) return 0;
+    let peak = 0;
+    for (let d = 1; d <= daysInMonth; d++) {
+        let n = 0;
+        for (const iv of intervals) {
+            if (iv.dayStart <= d && d <= iv.dayEnd) n += 1;
+        }
+        if (n > peak) peak = n;
+    }
+    return peak;
+}
+
+/**
+ * @param {Array<{ id?: string, name?: string, start: string, stop: string, categoryColor?: string }>} tasks
+ * @returns {Array<{ id: string, name: string, start: Date, stop: Date, color: string, milestone: boolean }>}
+ */
+export function parsePlannerCalendarTaskIntervals(tasks) {
+    const out = [];
+    for (const task of tasks || []) {
+        const start = parsePlannerDateTime(task.start);
+        if (!start) continue;
+        const milestone = !String(task.stop || '').trim();
+        let stop = parsePlannerDateTime(task.stop) || start;
+        if (stop.getTime() < start.getTime()) stop = start;
+        out.push({
+            id: String(task.id || task.name || out.length),
+            name: String(task.name || task.id || ''),
+            start: startOfLocalDay(start),
+            stop: startOfLocalDay(stop),
+            color: String(task.categoryColor || '').trim(),
+            milestone
+        });
+    }
+    return out;
+}
+
+/**
+ * Clip dated tasks into month-local day intervals + week bar segments.
+ * @param {number} year
+ * @param {number} month 0-based
+ * @param {Array<{ id: string, name: string, start: Date, stop: Date, color: string, milestone: boolean }>} datedTasks
+ * @returns {{
+ *   intervals: Array<{ id: string, name: string, color: string, dayStart: number, dayEnd: number, lane: number }>,
+ *   peak: number,
+ *   heightFraction: number,
+ *   weekRows: number,
+ *   firstDayIndex: number,
+ *   daysInMonth: number,
+ *   segments: Array<{ id: string, name: string, color: string, lane: number, weekRow: number, startCol: number, endCol: number }>
+ * }}
+ */
+export function layoutPlannerCalendarMonthBars(year, month, datedTasks) {
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const monthFirst = new Date(year, month, 1);
+    const monthLast = new Date(year, month, daysInMonth);
+
+    /** @type {Array<{ id: string, name: string, color: string, dayStart: number, dayEnd: number }>} */
+    const clipped = [];
+    for (const task of datedTasks || []) {
+        let from = task.start;
+        let to = task.stop;
+        if (task.milestone) to = from;
+        if (to.getTime() < monthFirst.getTime() || from.getTime() > monthLast.getTime()) continue;
+        if (from.getTime() < monthFirst.getTime()) from = monthFirst;
+        if (to.getTime() > monthLast.getTime()) to = monthLast;
+        clipped.push({
+            id: task.id,
+            name: task.name,
+            color: task.color,
+            dayStart: from.getDate(),
+            dayEnd: to.getDate()
+        });
+    }
+
+    const peak = peakPlannerCalendarConcurrency(clipped, daysInMonth);
+    const heightFraction = peak > 0 ? plannerCalendarBarHeightFraction(peak) : 0;
+    const packed = packPlannerCalendarLanes(clipped);
+    const totalCells = firstDayIndex + daysInMonth;
+    const weekRows = Math.max(1, Math.ceil(totalCells / 7));
+
+    /** @type {Array<{ id: string, name: string, color: string, lane: number, weekRow: number, startCol: number, endCol: number }>} */
+    const segments = [];
+    for (const iv of packed) {
+        const segs = splitPlannerCalendarWeekSegments(iv.dayStart, iv.dayEnd, firstDayIndex);
+        for (const seg of segs) {
+            segments.push({
+                id: iv.id,
+                name: iv.name,
+                color: iv.color,
+                lane: iv.lane,
+                weekRow: seg.weekRow,
+                startCol: seg.startCol,
+                endCol: seg.endCol
+            });
+        }
+    }
+
+    return {
+        intervals: packed,
+        peak,
+        heightFraction,
+        weekRows,
+        firstDayIndex,
+        daysInMonth,
+        segments
+    };
+}
+
+/**
+ * Map each covered local day → unique category colors (kept for coverage tests / tooling).
  * @param {Array<{ start: string, stop: string, categoryColor?: string }>} tasks
  * @returns {Map<string, string[]>}
  */
@@ -88,6 +274,7 @@ export function listPlannerCalendarMonths(rangeStart, rangeEnd) {
  *   rangeStart: Date,
  *   rangeEnd: Date,
  *   months: Array<{ year: number, month: number }>,
+ *   datedTasks: Array<{ id: string, name: string, start: Date, stop: Date, color: string, milestone: boolean }>,
  *   dayCoverage: Map<string, string[]>,
  *   todayKey: string,
  *   focusMonthIndex: number
@@ -97,23 +284,16 @@ export function layoutPlannerCalendar(planner, opts = {}) {
     const now = opts.now instanceof Date ? opts.now : new Date();
     const today = startOfLocalDay(now);
     const tasks = derivePlannerTasks(planner);
-    const dated = [];
-    for (const task of tasks) {
-        const start = parsePlannerDateTime(task.start);
-        if (!start) continue;
-        let stop = parsePlannerDateTime(task.stop) || start;
-        if (stop.getTime() < start.getTime()) stop = start;
-        dated.push({ start, stop });
-    }
+    const datedTasks = parsePlannerCalendarTaskIntervals(tasks);
 
     let rangeStart;
     let rangeEnd;
-    if (!dated.length) {
+    if (!datedTasks.length) {
         ({ rangeStart, rangeEnd } = padGanttRange(today, addDays(today, 7), 'month'));
     } else {
-        let min = dated[0].start;
-        let max = dated[0].stop;
-        for (const t of dated) {
+        let min = datedTasks[0].start;
+        let max = datedTasks[0].stop;
+        for (const t of datedTasks) {
             if (t.start < min) min = t.start;
             if (t.stop > max) max = t.stop;
         }
@@ -132,6 +312,7 @@ export function layoutPlannerCalendar(planner, opts = {}) {
         rangeStart,
         rangeEnd,
         months,
+        datedTasks,
         dayCoverage,
         todayKey,
         focusMonthIndex
@@ -139,60 +320,75 @@ export function layoutPlannerCalendar(planner, opts = {}) {
 }
 
 /**
- * @param {string[]} colors
- * @returns {string}
- */
-function dayBackgroundStyle(colors) {
-    if (!colors?.length) return '';
-    if (colors.length === 1) return `background:${escapeAttr(colors[0])};`;
-    const slice = 100 / colors.length;
-    const stops = colors.map((c, i) => {
-        const a = (i * slice).toFixed(2);
-        const b = ((i + 1) * slice).toFixed(2);
-        return `${escapeAttr(c)} ${a}% ${b}%`;
-    }).join(', ');
-    return `background:conic-gradient(from 0deg, ${stops});`;
-}
-
-/**
  * @param {{ year: number, month: number }} monthInfo
- * @param {Map<string, string[]>} dayCoverage
+ * @param {Array<{ id: string, name: string, start: Date, stop: Date, color: string, milestone: boolean }>} datedTasks
  * @param {string} todayKey
  * @returns {string}
  */
-function renderMonthCardHtml(monthInfo, dayCoverage, todayKey) {
+function renderMonthCardHtml(monthInfo, datedTasks, todayKey) {
     const { year, month } = monthInfo;
     const title = `${MONTH_SHORT[month] || ''} ${year}`;
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const firstDayIndex = new Date(year, month, 1).getDay();
-    let hasAny = false;
+    const barLayout = layoutPlannerCalendarMonthBars(year, month, datedTasks);
+    const {
+        firstDayIndex,
+        daysInMonth,
+        weekRows,
+        heightFraction,
+        segments,
+        peak
+    } = barLayout;
 
     let daysHtml = '';
+    let numsHtml = '';
     for (let i = 0; i < firstDayIndex; i++) {
         daysHtml += '<div class="planner-calendar__empty" aria-hidden="true"></div>';
+        numsHtml += '<div class="planner-calendar__num-cell" aria-hidden="true"></div>';
     }
     for (let d = 1; d <= daysInMonth; d++) {
         const key = plannerCalendarDayKey(new Date(year, month, d));
-        const colors = dayCoverage.get(key) || [];
-        const covered = dayCoverage.has(key);
-        if (covered) hasAny = true;
         const isToday = key === todayKey;
-        const style = dayBackgroundStyle(colors);
-        const textClass = colors.length ? ' is-filled' : '';
-        const weightClass = covered ? ' is-active' : '';
         const todayClass = isToday ? ' is-today' : '';
-        daysHtml += `<div class="planner-calendar__day${weightClass}${todayClass}${textClass}" data-day="${d}"${style ? ` style="${style}"` : ''}>
+        daysHtml += `<div class="planner-calendar__day${todayClass}" data-day="${d}"></div>`;
+        numsHtml += `<div class="planner-calendar__num-cell${todayClass}" data-day="${d}">
             <span class="planner-calendar__day-num">${d}</span>
         </div>`;
     }
+    const trailing = weekRows * 7 - (firstDayIndex + daysInMonth);
+    for (let i = 0; i < trailing; i++) {
+        daysHtml += '<div class="planner-calendar__empty" aria-hidden="true"></div>';
+        numsHtml += '<div class="planner-calendar__num-cell" aria-hidden="true"></div>';
+    }
 
-    const titleClass = hasAny ? ' is-busy' : '';
+    const rowH = 100 / weekRows;
+    // Planned day-number band; bars use only the body below (underlay).
+    const labelBand = rowH * PLANNER_CAL_DAY_NUM_BAND_FRAC;
+    const bodyH = rowH - labelBand;
+    const barH = heightFraction * bodyH;
+    let barsHtml = '';
+    if (peak > 0 && segments.length) {
+        barsHtml = segments.map((seg) => {
+            const top = seg.weekRow * rowH + labelBand + seg.lane * barH;
+            const left = (seg.startCol / 7) * 100;
+            const width = ((seg.endCol - seg.startCol + 1) / 7) * 100;
+            const color = seg.color
+                ? `background:${escapeAttr(seg.color)};`
+                : '';
+            const titleAttr = seg.name ? ` title="${escapeAttr(seg.name)}"` : '';
+            return `<div class="planner-calendar__bar" style="top:${top.toFixed(3)}%;left:${left.toFixed(3)}%;width:${width.toFixed(3)}%;height:${barH.toFixed(3)}%;${color}"${titleAttr}></div>`;
+        }).join('');
+    }
+
+    const titleClass = peak > 0 ? ' is-busy' : '';
     return `<div class="planner-calendar__month" data-planner-cal-year="${year}" data-planner-cal-month="${month}">
         <div class="planner-calendar__month-title${titleClass}">${escapeHTML(title)}</div>
         <div class="planner-calendar__weekdays">
             ${WEEKDAYS.map((w) => `<div class="planner-calendar__weekday">${w}</div>`).join('')}
         </div>
-        <div class="planner-calendar__days">${daysHtml}</div>
+        <div class="planner-calendar__days-wrap">
+            <div class="planner-calendar__days">${daysHtml}</div>
+            <div class="planner-calendar__bars" aria-hidden="true">${barsHtml}</div>
+            <div class="planner-calendar__nums" aria-hidden="true">${numsHtml}</div>
+        </div>
     </div>`;
 }
 
@@ -204,7 +400,7 @@ function renderMonthCardHtml(monthInfo, dayCoverage, todayKey) {
 export function renderPlannerCalendarBoardHtml(planner, opts = {}) {
     const layout = layoutPlannerCalendar(planner, opts);
     const monthsHtml = layout.months
-        .map((m) => renderMonthCardHtml(m, layout.dayCoverage, layout.todayKey))
+        .map((m) => renderMonthCardHtml(m, layout.datedTasks, layout.todayKey))
         .join('');
     const html = `<div class="planner-calendar" data-planner-calendar data-focus-month="${layout.focusMonthIndex}">
         <div class="planner-calendar__viewport" data-planner-calendar-viewport title="Drag to pan">

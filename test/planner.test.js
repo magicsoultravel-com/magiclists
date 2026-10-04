@@ -29,8 +29,14 @@ import { layoutPlannerGantt, parsePlannerDateTime, zoomPxPerDay, buildGanttAxis,
 import {
     buildPlannerCalendarDayCoverage,
     layoutPlannerCalendar,
+    layoutPlannerCalendarMonthBars,
     listPlannerCalendarMonths,
-    plannerCalendarDayKey
+    packPlannerCalendarLanes,
+    parsePlannerCalendarTaskIntervals,
+    plannerCalendarBarHeightFraction,
+    plannerCalendarDayKey,
+    splitPlannerCalendarWeekSegments,
+    PLANNER_CAL_DAY_NUM_BAND_FRAC
 } from '../js/plannerCalendar.js';
 import {
     derivePlannerKanbanCards,
@@ -445,6 +451,61 @@ describe('planner calendar layout', () => {
         assert.ok(layout.dayCoverage.has('2026-06-20'));
         assert.deepEqual(layout.dayCoverage.get('2026-06-12'), ['#aabbcc']);
         assert.ok(layout.focusMonthIndex >= 0);
+    });
+
+    it('uses 1/(n+1) bar height fractions', () => {
+        assert.equal(plannerCalendarBarHeightFraction(1), 0.5);
+        assert.equal(plannerCalendarBarHeightFraction(2), 1 / 3);
+        assert.equal(plannerCalendarBarHeightFraction(3), 0.25);
+        assert.equal(plannerCalendarBarHeightFraction(4), 0.2);
+        assert.equal(plannerCalendarBarHeightFraction(0), 0.5);
+    });
+
+    it('reserves a day-number band above bar body', () => {
+        assert.ok(PLANNER_CAL_DAY_NUM_BAND_FRAC > 0 && PLANNER_CAL_DAY_NUM_BAND_FRAC < 0.5);
+    });
+
+    it('packs overlapping intervals into distinct lanes', () => {
+        const packed = packPlannerCalendarLanes([
+            { id: 'a', dayStart: 1, dayEnd: 5 },
+            { id: 'b', dayStart: 3, dayEnd: 7 },
+            { id: 'c', dayStart: 8, dayEnd: 10 }
+        ]);
+        const byId = Object.fromEntries(packed.map((p) => [p.id, p.lane]));
+        assert.equal(byId.a, 0);
+        assert.equal(byId.b, 1);
+        assert.equal(byId.c, 0);
+    });
+
+    it('splits ranges across week boundaries', () => {
+        // March 2026: day 1 is Sunday → firstDayIndex 0
+        // Days 1–8 cross Sat(7) into next week
+        const segs = splitPlannerCalendarWeekSegments(1, 8, 0);
+        assert.equal(segs.length, 2);
+        assert.deepEqual(segs[0], {
+            weekRow: 0, startCol: 0, endCol: 6, dayStart: 1, dayEnd: 7
+        });
+        assert.deepEqual(segs[1], {
+            weekRow: 1, startCol: 0, endCol: 0, dayStart: 8, dayEnd: 8
+        });
+    });
+
+    it('lays out month bars with peak concurrency and week segments', () => {
+        const dated = parsePlannerCalendarTaskIntervals([
+            { id: '1', name: 'A', start: '2026-03-02', stop: '2026-03-10', categoryColor: '#111111' },
+            { id: '2', name: 'B', start: '2026-03-05', stop: '2026-03-07', categoryColor: '#222222' }
+        ]);
+        // March 2026 starts on Sunday
+        const layout = layoutPlannerCalendarMonthBars(2026, 2, dated);
+        assert.equal(layout.peak, 2);
+        assert.equal(layout.heightFraction, 1 / 3);
+        assert.equal(layout.intervals.length, 2);
+        const lanes = Object.fromEntries(layout.intervals.map((i) => [i.id, i.lane]));
+        assert.notEqual(lanes['1'], lanes['2']);
+        assert.ok(layout.segments.length >= 2);
+        // Task A spans past a Saturday → multiple segments
+        const aSegs = layout.segments.filter((s) => s.id === '1');
+        assert.ok(aSegs.length >= 2);
     });
 });
 

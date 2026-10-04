@@ -332,8 +332,8 @@
     margin-bottom: 0.2rem;
     padding: 0.12rem;
     border-radius: 3px;
-    font-size: calc(0.55rem * var(--note-font-scale, 1));
-    font-weight: 700;
+    font-size: calc(0.5rem * var(--note-font-scale, 1));
+    font-weight: 500;
     text-align: center;
     color: var(--text-muted, var(--text-color));
 }
@@ -344,16 +344,21 @@
 }
 
 .planner-calendar__weekdays,
-.planner-calendar__days {
+.planner-calendar__days,
+.planner-calendar__nums {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: 1px;
+    gap: 0;
+}
+
+.planner-calendar__days-wrap {
+    position: relative;
 }
 
 .planner-calendar__weekday {
     color: var(--text-muted);
-    font-size: calc(0.42rem * var(--note-font-scale, 1));
-    font-weight: 700;
+    font-size: calc(0.4rem * var(--note-font-scale, 1));
+    font-weight: 500;
     text-align: center;
     text-transform: uppercase;
     line-height: 1.2;
@@ -361,9 +366,10 @@
 }
 
 .planner-calendar__day,
-.planner-calendar__empty {
-    min-height: 1.05rem;
-    border-radius: 2px;
+.planner-calendar__empty,
+.planner-calendar__num-cell {
+    min-height: 1.85rem;
+    border-radius: 0;
 }
 
 .planner-calendar__empty {
@@ -372,32 +378,59 @@
 }
 
 .planner-calendar__day {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     color: var(--text-muted);
     background: color-mix(in srgb, var(--border-color) 6%, transparent);
-}
-
-.planner-calendar__day-num {
-    font-size: calc(0.48rem * var(--note-font-scale, 1));
-    font-weight: 600;
-    line-height: 1;
-}
-
-.planner-calendar__day.is-active .planner-calendar__day-num {
-    font-weight: 750;
-    color: var(--text-main, var(--text-color));
-}
-
-.planner-calendar__day.is-filled .planner-calendar__day-num {
-    color: #fff;
-    text-shadow: 0 0 2px rgba(0, 0, 0, 0.45);
+    box-sizing: border-box;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-color) 12%, transparent);
 }
 
 .planner-calendar__day.is-today {
     box-shadow: inset 0 0 0 1px var(--accent, #6366f1);
+}
+
+/* Stack: tile bg (days) → bars underlay → day numbers on top */
+.planner-calendar__bars {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+}
+
+.planner-calendar__bar {
+    position: absolute;
+    box-sizing: border-box;
+    border-radius: 2px;
+    background: var(--accent, #6366f1);
+    opacity: 0.9;
+    min-height: 2px;
+}
+
+.planner-calendar__nums {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.planner-calendar__num-cell {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-start;
+    padding: 0.06rem 0.1rem;
+    box-sizing: border-box;
+    background: transparent;
+}
+
+.planner-calendar__day-num {
+    font-size: calc(0.48rem * var(--note-font-scale, 1));
+    font-weight: 500;
+    line-height: 1;
+    color: var(--text-main, var(--text-color));
+}
+
+.planner-calendar__num-cell.is-today .planner-calendar__day-num {
+    color: var(--accent, var(--text-main));
+    font-weight: 600;
 }
 
 .has-custom-bg .planner-calendar__month {
@@ -407,9 +440,16 @@
 }
 
 .has-custom-bg .planner-calendar__month-title,
-.has-custom-bg .planner-calendar__weekday,
-.has-custom-bg .planner-calendar__day {
+.has-custom-bg .planner-calendar__weekday {
     color: var(--card-muted);
+}
+
+.has-custom-bg .planner-calendar__day-num {
+    color: var(--card-fg, currentColor);
+}
+
+.has-custom-bg .planner-calendar__num-cell.is-today .planner-calendar__day-num {
+    color: var(--accent, var(--card-fg, currentColor));
 }
 
 .has-custom-bg .planner-calendar__month-title.is-busy {
@@ -420,10 +460,6 @@
 .has-custom-bg .planner-calendar__day,
 .has-custom-bg .planner-calendar__empty {
     background: color-mix(in srgb, var(--card-border-subtle) 12%, transparent);
-}
-
-.has-custom-bg .planner-calendar__day.is-active .planner-calendar__day-num {
-    color: var(--card-fg, currentColor);
 }
 
 .has-custom-bg .planner-calendar__day.is-today {
