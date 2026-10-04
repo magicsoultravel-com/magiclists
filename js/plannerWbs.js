@@ -1,9 +1,14 @@
-/** @module {"owns":"magicPlanner WBS layout — phase/deliverable buckets, unmapped column, drag meta", "related":["planner.js","plannerUi.js","plannerKanban.js"]} */
+/** @module {"owns":"magicPlanner WBS layout — phase/deliverable buckets, drag meta", "related":["planner.js","plannerUi.js","plannerKanban.js"]} */
 
 export const WBS_BUCKET_COUNT = 5;
+/** @deprecated Missing assignment defaults to first column (0); kept for old order-map migration. */
 export const WBS_UNMAPPED = 'unmapped';
 export const WBS_MODES = Object.freeze(['phase', 'deliverable']);
 export const WBS_DEFAULT_MODE = 'phase';
+
+const WBS_BUCKET_KEYS = Object.freeze(
+    Array.from({ length: WBS_BUCKET_COUNT }, (_, i) => String(i))
+);
 
 export const WBS_DEFAULT_PHASE_LABELS = Object.freeze([
     'Initiation',
@@ -80,9 +85,11 @@ export function normalizeWbsOrderByBucket(raw, idSet) {
     if (!raw || typeof raw !== 'object') return {};
     const ids = idSet instanceof Set ? idSet : new Set(idSet || []);
     const out = {};
-    const keys = [WBS_UNMAPPED, ...Array.from({ length: WBS_BUCKET_COUNT }, (_, i) => String(i))];
-    for (const key of keys) {
-        const list = raw[key];
+    const mergeIntoZero = Array.isArray(raw[WBS_UNMAPPED]) ? raw[WBS_UNMAPPED] : [];
+    for (const key of WBS_BUCKET_KEYS) {
+        const list = key === '0'
+            ? [...(Array.isArray(raw['0']) ? raw['0'] : []), ...mergeIntoZero]
+            : raw[key];
         if (!Array.isArray(list)) continue;
         const seen = new Set();
         const next = [];
@@ -104,10 +111,11 @@ export function normalizeWbsOrderByBucket(raw, idSet) {
 export function normalizeWbsCollapsedByBucket(raw) {
     if (!raw || typeof raw !== 'object') return {};
     const out = {};
-    const keys = [WBS_UNMAPPED, ...Array.from({ length: WBS_BUCKET_COUNT }, (_, i) => String(i))];
-    for (const key of keys) {
+    for (const key of WBS_BUCKET_KEYS) {
         if (raw[key]) out[key] = true;
     }
+    // Old Unmapped collapse → first column.
+    if (raw[WBS_UNMAPPED]) out['0'] = true;
     return out;
 }
 
@@ -136,14 +144,14 @@ export function getWbsLabels(planner, mode) {
  * @param {object|null|undefined} planner
  * @param {string} rowId
  * @param {'phase'|'deliverable'} [mode]
- * @returns {number|null} bucket index or null for unmapped
+ * @returns {number} bucket index (missing → 0, first column)
  */
 export function getWbsBucketForId(planner, rowId, mode) {
     const m = mode || getWbsMode(planner);
     const map = m === 'deliverable' ? planner?.wbsDeliverableById : planner?.wbsPhaseById;
     const raw = map?.[String(rowId)];
     const bucket = Number(raw);
-    if (!Number.isFinite(bucket) || bucket < 0 || bucket >= WBS_BUCKET_COUNT) return null;
+    if (!Number.isFinite(bucket) || bucket < 0 || bucket >= WBS_BUCKET_COUNT) return 0;
     return Math.floor(bucket);
 }
 
@@ -152,9 +160,8 @@ export function getWbsBucketForId(planner, rowId, mode) {
  * @returns {string}
  */
 export function wbsBucketKey(bucket) {
-    if (bucket == null || !Number.isFinite(bucket)) return WBS_UNMAPPED;
     const n = Math.floor(Number(bucket));
-    if (n < 0 || n >= WBS_BUCKET_COUNT) return WBS_UNMAPPED;
+    if (!Number.isFinite(n) || n < 0 || n >= WBS_BUCKET_COUNT) return '0';
     return String(n);
 }
 
@@ -248,15 +255,12 @@ export function layoutPlannerWbs(planner, { mode } = {}) {
     const m = normalizeWbsMode(mode || planner?.wbsMode);
     const labels = getWbsLabels(planner, m);
     const cards = derivePlannerWbsCards(planner);
-    const columns = [
-        { key: WBS_UNMAPPED, bucket: null, label: 'Unmapped', cards: [] },
-        ...labels.map((label, bucket) => ({
-            key: String(bucket),
-            bucket,
-            label,
-            cards: []
-        }))
-    ];
+    const columns = labels.map((label, bucket) => ({
+        key: String(bucket),
+        bucket,
+        label,
+        cards: []
+    }));
     const byKey = new Map(columns.map((c) => [c.key, c]));
 
     for (const card of cards) {
@@ -287,17 +291,17 @@ export function layoutPlannerWbs(planner, { mode } = {}) {
 /**
  * @param {object} planner
  * @param {string} rowId
- * @param {number|null} toBucket - null = unmapped
+ * @param {number|null|undefined} toBucket - null/invalid → first column (0)
  * @param {{ beforeId?: string|null, mode?: string }} [opts]
  */
 export function moveWbsCard(planner, rowId, toBucket, { beforeId = null, mode } = {}) {
     if (!planner || !rowId) return;
     const m = normalizeWbsMode(mode || planner.wbsMode);
     const id = String(rowId);
-    const bucket = toBucket == null || !Number.isFinite(toBucket)
-        ? null
+    let bucket = toBucket == null || !Number.isFinite(toBucket)
+        ? 0
         : Math.floor(Number(toBucket));
-    if (bucket != null && (bucket < 0 || bucket >= WBS_BUCKET_COUNT)) return;
+    if (bucket < 0 || bucket >= WBS_BUCKET_COUNT) bucket = 0;
 
     const byKey = m === 'deliverable' ? 'wbsDeliverableById' : 'wbsPhaseById';
     const orderKey = m === 'deliverable' ? 'wbsDeliverableOrderByBucket' : 'wbsPhaseOrderByBucket';
@@ -305,12 +309,12 @@ export function moveWbsCard(planner, rowId, toBucket, { beforeId = null, mode } 
     if (!planner[byKey] || typeof planner[byKey] !== 'object') planner[byKey] = {};
     if (!planner[orderKey] || typeof planner[orderKey] !== 'object') planner[orderKey] = {};
 
-    if (bucket == null) delete planner[byKey][id];
+    // Sparse maps: omit explicit 0 (default first column), same spirit as Kanban stage 0.
+    if (bucket === 0) delete planner[byKey][id];
     else planner[byKey][id] = bucket;
 
     const order = planner[orderKey];
-    const allKeys = [WBS_UNMAPPED, ...Array.from({ length: WBS_BUCKET_COUNT }, (_, i) => String(i))];
-    for (const key of allKeys) {
+    for (const key of [...WBS_BUCKET_KEYS, WBS_UNMAPPED]) {
         const list = order[key];
         if (!Array.isArray(list)) continue;
         const next = list.filter((x) => String(x) !== id);
@@ -341,7 +345,7 @@ export function moveWbsCard(planner, rowId, toBucket, { beforeId = null, mode } 
 }
 
 /**
- * Clear active-mode assignments + order (all Unmapped).
+ * Clear active-mode assignments + order (everything back in first column).
  * @param {object} planner
  * @param {'phase'|'deliverable'} [mode]
  */

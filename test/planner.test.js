@@ -908,8 +908,12 @@ describe('planner WBS and work packs', () => {
         assert.deepEqual(planner.wbsDeliverableLabels, [...WBS_DEFAULT_DELIVERABLE_LABELS]);
 
         const layout = layoutPlannerWbs(planner, { mode: 'deliverable' });
-        assert.equal(layout.columns[0].key, 'unmapped');
-        assert.equal(layout.columns[5].cards[0]?.name, 'Task');
+        assert.equal(layout.columns.length, 5);
+        assert.equal(layout.columns[0].key, '0');
+        assert.equal(layout.columns[4].cards[0]?.name, 'Task');
+        // Missing assignment lands in first column.
+        const phaseLayout = layoutPlannerWbs(planner, { mode: 'phase' });
+        assert.equal(phaseLayout.columns[0].cards[0]?.name, 'Task');
     });
 
     it('refuses unsupported newer planner version', () => {
@@ -949,7 +953,8 @@ describe('planner WBS and work packs', () => {
         const html = buildNotePlannerSectionHtml(item, { canEdit: true });
         assert.ok(html.includes('data-planner-wbs'));
         assert.ok(html.includes('data-planner-pack-toggle'));
-        assert.ok(html.includes('Unmapped'));
+        assert.ok(html.includes('Initiation'));
+        assert.ok(!html.includes('Unmapped'));
     });
 });
 

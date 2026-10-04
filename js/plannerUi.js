@@ -79,7 +79,6 @@ import {
     resetKanbanArrangement
 } from './plannerKanban.js';
 import {
-    WBS_UNMAPPED,
     layoutPlannerWbs,
     moveWbsCard,
     normalizeWbsMode,
@@ -1046,9 +1045,17 @@ export function renderPlannerWbsHtml(planner, { canEdit = false } = {}) {
     const otherMode = mode === 'deliverable' ? 'phase' : 'deliverable';
     const otherLabel = otherMode === 'deliverable' ? 'Deliverables' : 'Phases';
 
-    const columnsHtml = layout.columns.map((col) => {
+    // Collapsed buckets first (bucket order), then open buckets — same as Kanban.
+    const orderedColumns = [
+        ...layout.columns.filter((c) => c.collapsed),
+        ...layout.columns.filter((c) => !c.collapsed)
+    ];
+
+    const columnsHtml = orderedColumns.map((col) => {
         const collapsed = !!col.collapsed;
-        const colClass = collapsed ? ' planner-wbs__column is-collapsed' : ' planner-wbs__column';
+        const colClass = collapsed ? ' is-collapsed' : '';
+        const collapseTitle = collapsed ? 'Expand column' : 'Collapse column';
+        const collapseIcon = collapsed ? CARD_ICONS.collapse : CARD_ICONS.expand;
         const cards = col.cards.map((card) => {
             const rowLabel = getPlannerOutlineLabel(planner, card.row);
             const startLabel = formatKanbanCardDate(card.start);
@@ -1067,14 +1074,15 @@ export function renderPlannerWbsHtml(planner, { canEdit = false } = {}) {
                 ${canEdit ? `<span class="planner-wbs__card-grab" title="Drag to move" aria-hidden="true">${CARD_ICONS.drag}</span>` : ''}
             </article>`;
         }).join('');
-        const labelEditable = canEdit && col.bucket != null
-            ? `<input type="text" class="planner-wbs__column-title-input" data-planner-wbs-label data-bucket="${col.bucket}" value="${escapeAttr(col.label)}" spellcheck="false" aria-label="Bucket label">`
+        // Collapsed strips need a plain title for sideways text; edit when open.
+        const labelHtml = canEdit && !collapsed && col.bucket != null
+            ? `<input type="text" class="planner-wbs__column-title planner-wbs__column-title-input" data-planner-wbs-label data-bucket="${col.bucket}" value="${escapeAttr(col.label)}" spellcheck="false" aria-label="Bucket label">`
             : `<span class="planner-wbs__column-title">${escapeHTML(col.label)}</span>`;
-        return `<section class="${colClass.trim()}" data-planner-wbs-column data-planner-wbs-bucket="${escapeAttr(col.key)}" data-wbs-bucket-collapsed="${collapsed ? '1' : '0'}">
+        return `<section class="planner-wbs__column${colClass}" data-planner-wbs-column data-planner-wbs-bucket="${escapeAttr(col.key)}" data-wbs-bucket-collapsed="${collapsed ? '1' : '0'}">
             <header class="planner-wbs__column-head">
-                ${labelEditable}
+                ${labelHtml}
                 <span class="planner-wbs__column-count">${col.cards.length}</span>
-                <button type="button" class="planner-wbs__column-collapse" data-planner-wbs-bucket-collapse title="${collapsed ? 'Expand column' : 'Collapse column'}" aria-label="${collapsed ? 'Expand column' : 'Collapse column'}">${collapsed ? '›' : '‹'}</button>
+                <button type="button" class="planner-wbs__column-collapse" data-planner-wbs-bucket-collapse title="${escapeAttr(collapseTitle)}" aria-label="${escapeAttr(collapseTitle)}" aria-expanded="${collapsed ? 'false' : 'true'}">${collapseIcon}</button>
             </header>
             <div class="planner-wbs__column-body" data-planner-wbs-drop="${escapeAttr(col.key)}">${cards}</div>
         </section>`;
@@ -1091,7 +1099,7 @@ export function renderPlannerWbsHtml(planner, { canEdit = false } = {}) {
     return `<div class="planner-wbs planner-sub" data-planner-wbs data-wbs-collapsed="${wbsCollapsed ? '1' : '0'}" data-wbs-mode="${escapeAttr(mode)}">
         <div class="planner-wbs__toolbar planner-sub__toolbar">
             <button type="button" class="planner-wbs__title planner-sub__title" data-planner-wbs-toggle aria-expanded="${wbsCollapsed ? 'false' : 'true'}">
-                <span class="collapsable-toggle${toggleCollapsed}" aria-hidden="true">▼</span>WBS <span class="planner-wbs__mode-tag" title="Independent of Kanban stages">${escapeHTML(modeLabel)}</span>
+                <span class="collapsable-toggle${toggleCollapsed}" aria-hidden="true">▼</span>WBS
             </button>
             <div class="planner-wbs__tools${wbsCollapsed ? ' is-collapsed' : ''}" role="group" aria-label="WBS tools"${wbsCollapsed ? ' hidden' : ''}>
                 ${tools}
@@ -2672,13 +2680,8 @@ export function attachPlannerInteractions(root, item, {
                 }
                 el = el.nextElementSibling;
             }
-            let toBucket = null;
-            if (bucketKey && bucketKey !== WBS_UNMAPPED) {
-                const n = Number(bucketKey);
-                if (Number.isFinite(n)) toBucket = n;
-            } else if (bucketKey === WBS_UNMAPPED) {
-                toBucket = null;
-            }
+            const n = Number(bucketKey);
+            const toBucket = Number.isFinite(n) ? n : 0;
             if (bucketKey != null) target = { toBucket, beforeId };
         }
         if (slot?.parentNode) {

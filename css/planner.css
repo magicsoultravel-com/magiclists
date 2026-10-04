@@ -930,9 +930,10 @@
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
-    border: 1px solid color-mix(in srgb, var(--border-color, #ccc) 55%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border-color, #ccc) 45%, transparent);
     border-radius: 5px;
-    background: color-mix(in srgb, var(--border-color) 8%, transparent);
+    /* Match planner table wrap (.sheet-grid-wrap). */
+    background: rgba(0, 0, 0, 0.08);
     min-height: 5.5rem;
     overflow: visible;
 }
@@ -1594,7 +1595,7 @@ textarea.planner-kanban__card-comment:focus {
 
 .has-custom-bg .planner-kanban__column {
     border-color: var(--card-border-subtle);
-    background: color-mix(in srgb, var(--card-border-subtle) 8%, transparent);
+    background: rgba(0, 0, 0, 0.08);
 }
 
 .has-custom-bg .planner-kanban__column-head {
@@ -1741,13 +1742,6 @@ textarea.planner-kanban__card-comment:focus {
     display: none;
 }
 
-.planner-wbs__mode-tag {
-    margin-left: 0.35rem;
-    font-size: 0.72rem;
-    font-weight: 500;
-    color: var(--text-muted, #888);
-}
-
 .planner-wbs__board {
     display: flex;
     gap: 0.4rem;
@@ -1768,23 +1762,63 @@ textarea.planner-kanban__card-comment:focus {
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
-    border: 1px solid color-mix(in srgb, var(--border-color, #ccc) 55%, transparent);
+    border: 1px solid color-mix(in srgb, var(--border-color, #ccc) 45%, transparent);
     border-radius: 5px;
-    background: color-mix(in srgb, var(--border-color) 8%, transparent);
+    /* Match planner table wrap (.sheet-grid-wrap). */
+    background: rgba(0, 0, 0, 0.08);
     min-height: 5.5rem;
+    overflow: visible;
 }
 
+/* Collapsed bucket: narrow vertical strip, grouped left of open columns (Kanban parity). */
 .planner-wbs__column.is-collapsed {
-    flex: 0 0 2rem;
-    max-width: 2rem;
-    min-width: 2rem;
+    flex: 0 0 1.55rem;
+    min-width: 1.55rem;
+    max-width: 1.55rem;
+    align-self: stretch;
+    gap: 0;
+}
+
+.planner-wbs__column.is-collapsed .planner-wbs__column-head {
+    flex: 1 1 auto;
+    flex-direction: column-reverse;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+    padding: 1.2rem 0.12rem 0.35rem;
+    border-bottom: none;
 }
 
 .planner-wbs__column.is-collapsed .planner-wbs__column-title,
-.planner-wbs__column.is-collapsed .planner-wbs__column-title-input,
-.planner-wbs__column.is-collapsed .planner-wbs__column-count,
+.planner-wbs__column.is-collapsed .planner-wbs__column-count {
+    flex: 0 0 auto;
+    writing-mode: sideways-lr;
+    white-space: nowrap;
+}
+
+.planner-wbs__column.is-collapsed .planner-wbs__column-collapse {
+    top: 0.1rem;
+    right: 50%;
+    transform: translateX(50%);
+}
+
 .planner-wbs__column.is-collapsed .planner-wbs__column-body {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+    min-height: 0;
+    flex: none;
+    pointer-events: none;
+}
+
+.planner-wbs__column.is-collapsed:has(.planner-wbs__column-body.is-drag-over) {
+    background: color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 12%, transparent);
+    outline: 1px solid color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 35%, transparent);
 }
 
 .planner-wbs__column-head {
@@ -1836,6 +1870,7 @@ textarea.planner-kanban__card-comment:focus {
     width: 0.95rem;
     height: 0.95rem;
     border: 0;
+    border-radius: 3px;
     background: transparent;
     color: var(--text-muted, #888);
     cursor: pointer;
@@ -1845,8 +1880,20 @@ textarea.planner-kanban__card-comment:focus {
 }
 
 .planner-wbs__column:hover .planner-wbs__column-collapse,
-.planner-wbs__column:focus-within .planner-wbs__column-collapse {
+.planner-wbs__column:focus-within .planner-wbs__column-collapse,
+.planner-wbs__column.is-collapsed .planner-wbs__column-collapse {
     opacity: 1;
+}
+
+.planner-wbs__column-collapse:hover,
+.planner-wbs__column-collapse:focus-visible {
+    background: color-mix(in srgb, var(--border-color) 22%, transparent);
+    color: var(--text-color, inherit);
+}
+
+.planner-wbs__column-collapse svg {
+    width: 0.7rem;
+    height: 0.7rem;
 }
 
 .planner-wbs__column-body {
@@ -1956,7 +2003,7 @@ body.is-planner-wbs-drag-active {
 
 .has-custom-bg .planner-wbs__column {
     border-color: var(--card-border-subtle);
-    background: color-mix(in srgb, var(--card-border-subtle) 8%, transparent);
+    background: rgba(0, 0, 0, 0.08);
 }
 
 .has-custom-bg .planner-wbs__column-head {
