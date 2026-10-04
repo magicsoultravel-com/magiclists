@@ -1,4 +1,4 @@
-/** @module {"owns":"shared media hover quick actions", "related":["mediaLibrary.js","noteAttachmentsUi.js","mediaLibraryOverlay.js"]} */
+/** @module {"owns":"shared media hover quick actions", "related":["mediaLibrary.js","noteAttachmentsUi.js","mediaLibraryOverlay.js","mediaTransformUi.js"]} */
 import { CARD_ICONS } from './icons.js';
 import { getMediaMeta, getMediaRecord } from './mediaLibrary.js';
 import { detachMediaFromNote } from './mediaAttachments.js';
@@ -11,6 +11,7 @@ import { showAppToast } from './toast.js';
  *   attachNoteId?: string|null,
  *   alreadyAttached?: boolean,
  *   blobMissing?: boolean,
+ *   isImage?: boolean,
  *   showSave?: boolean,
  *   showRemove?: boolean,
  *   showReorder?: boolean,
@@ -25,6 +26,7 @@ export function buildMediaQuickActionsHtml(opts) {
         attachNoteId = null,
         alreadyAttached = false,
         blobMissing = false,
+        isImage = false,
         showSave = false,
         showRemove = true,
         showReorder = false,
@@ -35,6 +37,8 @@ export function buildMediaQuickActionsHtml(opts) {
     const showAttach = (context === 'library-tile' || context === 'library-detail')
         && attachNoteId
         && !alreadyAttached;
+    const isLibrary = context === 'library-tile' || context === 'library-detail';
+    const showTransform = isLibrary && isImage && !blobMissing;
     const isNote = context === 'note-attachment';
     const removeIcon = isNote ? CARD_ICONS.close : CARD_ICONS.delete;
     const removeTitle = isNote ? 'Detach' : 'Delete from library';
@@ -49,6 +53,12 @@ export function buildMediaQuickActionsHtml(opts) {
         ? `<button type="button" class="card-act note-attachment__expand is-hidden" data-expand-media="${mediaId}" title="Expand in note" aria-label="Expand in note" aria-pressed="false">${CARD_ICONS.expandMedia}</button>`
         : '';
     const downloadBtn = `<button type="button" class="card-act" data-media-action-download data-media-id="${mediaId}" title="Download" aria-label="Download" ${blobMissing ? 'disabled' : ''}>${CARD_ICONS.download}</button>`;
+    const optimizeBtn = showTransform
+        ? `<button type="button" class="card-act" data-media-action-optimize data-media-id="${mediaId}" title="Optimize" aria-label="Optimize">${CARD_ICONS.optimize}</button>`
+        : '';
+    const scaleBtn = showTransform
+        ? `<button type="button" class="card-act" data-media-action-scale data-media-id="${mediaId}" title="Scale" aria-label="Scale">${CARD_ICONS.resize}</button>`
+        : '';
     const attachBtn = showAttach
         ? `<button type="button" class="card-act" data-media-action-attach data-media-id="${mediaId}" title="Attach to selected note" aria-label="Attach">${CARD_ICONS.attach}</button>`
         : '';
@@ -74,6 +84,8 @@ export function buildMediaQuickActionsHtml(opts) {
         <div class="media-quick-actions media-quick-actions--right">
             ${viewBtn}
             ${downloadBtn}
+            ${optimizeBtn}
+            ${scaleBtn}
             ${attachBtn}
             ${saveBtn}
         </div>`;
@@ -127,7 +139,8 @@ export async function viewMediaFullSize(mediaId, opts = {}) {
  *   noteItem?: object|null,
  *   onAttach?: (mediaId: string) => void,
  *   onRemove?: (mediaId: string) => void|Promise<void>,
- *   onSave?: () => void|Promise<void>
+ *   onSave?: () => void|Promise<void>,
+ *   onTransformCommitted?: (meta: object) => void
  * }} opts
  */
 export function bindMediaQuickActions(container, opts) {
@@ -137,6 +150,20 @@ export function bindMediaQuickActions(container, opts) {
     const stop = (e) => {
         e.preventDefault();
         e.stopPropagation();
+    };
+
+    const openTransform = (e, mode) => {
+        stop(e);
+        const mediaId = e.currentTarget.dataset.mediaId;
+        const anchor = e.currentTarget;
+        import('./mediaTransformUi.js').then(({ toggleMediaTransformPopover }) => {
+            toggleMediaTransformPopover({
+                mediaId,
+                mode,
+                anchor,
+                onCommitted: opts.onTransformCommitted
+            });
+        }).catch(() => showAppToast('Transform unavailable'));
     };
 
     container.querySelector('[data-media-action-view]')?.addEventListener('click', (e) => {
@@ -149,6 +176,14 @@ export function bindMediaQuickActions(container, opts) {
         stop(e);
         const mediaId = e.currentTarget.dataset.mediaId;
         downloadMediaFile(mediaId).catch(() => showAppToast('Download failed'));
+    });
+
+    container.querySelector('[data-media-action-optimize]')?.addEventListener('click', (e) => {
+        openTransform(e, 'optimize');
+    });
+
+    container.querySelector('[data-media-action-scale]')?.addEventListener('click', (e) => {
+        openTransform(e, 'scale');
     });
 
     container.querySelector('[data-media-action-attach]')?.addEventListener('click', (e) => {

@@ -1,4 +1,4 @@
-/** @css {"owns":"media staging dialogue, gallery floating panel, scribble FAB, note attachment section, media lightbox, site-wide quick scribble", "js":["mediaLibraryOverlay.js","mediaStagingDialog.js","mediaPasteCatcher.js","noteAttachmentsUi.js","quickScribble.js","viewportCapture.js"]} */
+/** @css {"owns":"media staging dialogue, gallery floating panel, scribble FAB, note attachment section, media lightbox, site-wide quick scribble, transform popover", "js":["mediaLibraryOverlay.js","mediaStagingDialog.js","mediaPasteCatcher.js","noteAttachmentsUi.js","quickScribble.js","viewportCapture.js","mediaTransformUi.js"]} */
 
 /* Staging count chip (also used in staging dialogue header) */
 .sidebar-media-lib__compact {
@@ -1534,4 +1534,100 @@
     justify-content: flex-end;
     gap: 0.45rem;
     flex-wrap: wrap;
+}
+
+/* Optimize / scale confirm popover */
+.media-transform-popover.clock-style-popover {
+    width: min(260px, calc(100% - 16px));
+    z-index: 360;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+
+.media-transform-popover__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+}
+
+.media-transform-popover__head strong {
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+.media-transform-popover__source,
+.media-transform-popover__estimate {
+    margin: 0;
+    font-size: 0.7rem;
+    color: var(--text-muted, #94a3b8);
+}
+
+.media-transform-popover__field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.68rem;
+    color: var(--text-secondary, var(--text-main));
+}
+
+.media-transform-popover__field select,
+.media-transform-popover__field input[type="range"] {
+    width: 100%;
+}
+
+.media-transform-popover__field select {
+    padding: 0.25rem 0.35rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: color-mix(in srgb, var(--bg-card, #1a1a1e) 90%, #000);
+    color: var(--text-main);
+    font-size: 0.72rem;
+}
+
+.media-transform-popover__quality-val {
+    align-self: flex-end;
+    font-size: 0.65rem;
+    opacity: 0.75;
+}
+
+.media-transform-popover__presets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
+
+.media-transform-popover__preset {
+    flex: 1 1 auto;
+    min-width: 2.6rem;
+    padding: 0.28rem 0.35rem;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: transparent;
+    color: var(--text-main);
+    font-size: 0.7rem;
+    cursor: pointer;
+}
+
+.media-transform-popover__preset:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.media-transform-popover__preset.is-selected {
+    border-color: color-mix(in srgb, var(--accent, #6ea8fe) 70%, transparent);
+    background: color-mix(in srgb, var(--accent, #6ea8fe) 18%, transparent);
+}
+
+.media-transform-popover__warn {
+    margin: 0;
+    font-size: 0.65rem;
+    color: #f0b4a0;
+}
+
+.media-transform-popover__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.35rem;
+    margin-top: 0.15rem;
 }

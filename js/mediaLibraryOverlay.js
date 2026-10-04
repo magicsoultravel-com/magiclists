@@ -583,7 +583,8 @@ export const MediaLibraryOverlay = {
                 context: 'library-tile',
                 attachNoteId,
                 alreadyAttached: !!alreadyOnTarget,
-                blobMissing: !!item.blobMissing
+                blobMissing: !!item.blobMissing,
+                isImage: String(item.mime || '').startsWith('image/')
             });
             return `
                 <div class="media-lib-tile${selected}${missing}" data-media-id="${escapeAttr(item.id)}" title="${escapeAttr(item.title || item.filename)}">
@@ -616,6 +617,10 @@ export const MediaLibraryOverlay = {
                 bindMediaQuickActions(wrap, {
                     context: 'library-tile',
                     attachNoteId,
+                    onTransformCommitted: (meta) => {
+                        if (meta?.id) selectedId = meta.id;
+                        this.refresh();
+                    },
                     onAttach: (id) => {
                         selectedId = id;
                         this.attachSelectedToNote();
@@ -682,6 +687,7 @@ export const MediaLibraryOverlay = {
             attachNoteId,
             alreadyAttached: !!alreadyOnTarget,
             blobMissing: !!item.blobMissing,
+            isImage: String(item.mime || '').startsWith('image/'),
             showSave: true,
             saveHidden: true
         });
@@ -725,6 +731,10 @@ export const MediaLibraryOverlay = {
         bindMediaQuickActions(previewActions, {
             context: 'library-detail',
             attachNoteId,
+            onTransformCommitted: (meta) => {
+                if (meta?.id) selectedId = meta.id;
+                this.refresh();
+            },
             onAttach: () => this.attachSelectedToNote(),
             onSave: async () => {
                 const title = detail.querySelector('[data-detail-title]')?.value || '';
