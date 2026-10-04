@@ -880,14 +880,15 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
                         <button type="button" class="planner-kanban__card-emphasis${mutedActive}" data-planner-kanban-emphasis="muted" title="Mark non-urgent" aria-label="Mark non-urgent" aria-pressed="${emphasis === 'muted' ? 'true' : 'false'}">${KANBAN_MUTED_ICON}</button>
                         <button type="button" class="planner-kanban__card-color" data-planner-kanban-color title="Card color" aria-label="Card color">${CARD_ICONS.color}</button>
                         <button type="button" class="planner-kanban__card-reset" data-planner-kanban-reset-card title="Reset card styles" aria-label="Reset card styles">${ACTION_ICONS.resetCustomization}</button>
+                        <span class="planner-kanban__card-grab" title="Drag to move" aria-hidden="true">${CARD_ICONS.drag}</span>
                     </span>`
                     : '';
                 // Stable slot (no size-changing flyout). Actions + footer grip are chrome only.
                 const slotNameHtml = canEdit
-                    ? `<div class="planner-kanban__card-name" contenteditable="plaintext-only" data-planner-kanban-field="name" data-planner-row="${card.row}" spellcheck="false" role="textbox" aria-label="Name">${escapeHTML(nameText)}</div>`
+                    ? `<div class="planner-kanban__card-name card-inline-edit" contenteditable="plaintext-only" data-planner-kanban-field="name" data-planner-row="${card.row}" spellcheck="false" role="textbox" aria-label="Name">${escapeHTML(nameText)}</div>`
                     : `<span class="planner-kanban__card-name">${escapeHTML(nameText)}</span>`;
                 const slotCommentHtml = canEdit
-                    ? `<textarea class="planner-kanban__card-comment" data-planner-kanban-field="comments" data-planner-row="${card.row}" rows="3" spellcheck="false" aria-label="Comments">${escapeHTML(commentRaw)}</textarea>`
+                    ? `<textarea class="planner-kanban__card-comment card-inline-edit" data-planner-kanban-field="comments" data-planner-row="${card.row}" rows="3" spellcheck="false" aria-label="Comments">${escapeHTML(commentRaw)}</textarea>`
                     : (comment ? `<span class="planner-kanban__card-comment">${escapeHTML(comment)}</span>` : '');
                 const metaHtml = `${rowHtml}${startHtml}${stopHtml}`;
                 const slotBody = `${metaHtml}

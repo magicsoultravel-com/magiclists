@@ -967,7 +967,7 @@
 .planner-kanban__card-slot {
     position: relative;
     z-index: 2;
-    padding: 0.45rem 0.5rem 0.7rem;
+    padding: 0.45rem 0.5rem 0.72rem;
     border-radius: 4px;
     border: 1px solid color-mix(in srgb, var(--border-color, #ccc) 65%, transparent);
     background: var(--surface, var(--bg-color, #fff));
@@ -981,37 +981,37 @@
 }
 
 /*
- * Subtle 2×2 grip strip along the footer — hover only, no layout push.
- * Behind title/content (z0), above card bg; dates sit in this band with pointer-events none.
+ * Subtle 2×2 grip strip on the slot footer — hover only, no layout push.
+ * Painted inside the slot (so it isn’t covered by the opaque fill), below title/comment.
  */
-.planner-kanban__card.is-editable::after {
+.planner-kanban__card.is-editable .planner-kanban__card-slot::after {
     content: '';
     position: absolute;
-    left: 0.35rem;
-    right: 0.35rem;
-    bottom: 0.14rem;
-    height: 0.42rem;
+    left: 0.28rem;
+    right: 0.28rem;
+    bottom: 0.12rem;
+    height: 0.5rem;
     z-index: 1;
     pointer-events: none;
     opacity: 0;
     border-radius: 1px;
     background-image:
-        radial-gradient(circle at 25% 25%, currentColor 0.9px, transparent 1.1px),
-        radial-gradient(circle at 75% 25%, currentColor 0.9px, transparent 1.1px),
-        radial-gradient(circle at 25% 75%, currentColor 0.9px, transparent 1.1px),
-        radial-gradient(circle at 75% 75%, currentColor 0.9px, transparent 1.1px);
-    background-size: 4px 4px;
+        radial-gradient(circle at 25% 25%, currentColor 1.05px, transparent 1.2px),
+        radial-gradient(circle at 75% 25%, currentColor 1.05px, transparent 1.2px),
+        radial-gradient(circle at 25% 75%, currentColor 1.05px, transparent 1.2px),
+        radial-gradient(circle at 75% 75%, currentColor 1.05px, transparent 1.2px);
+    background-size: 5px 5px;
     background-repeat: repeat;
     color: var(--card-action-fg, var(--text-muted));
     transition: opacity 0.12s ease;
 }
 
-.planner-kanban__card.is-editable:hover::after,
-.planner-kanban__card.is-editable:focus-within::after {
-    opacity: 0.28;
+.planner-kanban__card.is-editable:hover .planner-kanban__card-slot::after,
+.planner-kanban__card.is-editable:focus-within .planner-kanban__card-slot::after {
+    opacity: 0.45;
 }
 
-.planner-kanban__card.is-kanban-editing::after {
+.planner-kanban__card.is-kanban-editing .planner-kanban__card-slot::after {
     opacity: 0 !important;
 }
 
@@ -1038,14 +1038,16 @@
 .planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-color,
 .planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-emphasis,
 .planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-reset,
-.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-density {
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-density,
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-grab {
     color: var(--card-action-fg, var(--card-muted, inherit));
 }
 
 .planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-color:hover,
 .planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-emphasis:hover,
 .planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-reset:hover,
-.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-density:hover {
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-density:hover,
+.planner-kanban__card.has-color.has-custom-bg:not(.is-urgent):not(.is-muted) .planner-kanban__card-grab:hover {
     color: var(--card-fg, inherit);
     background: color-mix(in srgb, var(--card-fg, #000) 12%, transparent);
 }
@@ -1085,7 +1087,7 @@ body.is-planner-kanban-drag-active {
 }
 
 .planner-kanban__card.is-planner-kanban-dragging .planner-kanban__card-actions,
-.planner-kanban__card.is-planner-kanban-dragging::after {
+.planner-kanban__card.is-planner-kanban-dragging .planner-kanban__card-slot::after {
     display: none !important;
 }
 
@@ -1218,7 +1220,8 @@ textarea.planner-kanban__card-comment:focus {
 .planner-kanban__card-color,
 .planner-kanban__card-emphasis,
 .planner-kanban__card-reset,
-.planner-kanban__card-density {
+.planner-kanban__card-density,
+.planner-kanban__card-grab {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1229,15 +1232,47 @@ textarea.planner-kanban__card-comment:focus {
     border-radius: 3px;
     background: transparent;
     color: var(--card-action-fg, var(--text-muted));
+}
+
+.planner-kanban__card-color,
+.planner-kanban__card-emphasis,
+.planner-kanban__card-reset,
+.planner-kanban__card-density {
     cursor: pointer;
+}
+
+.planner-kanban__card-grab {
+    cursor: grab;
 }
 
 .planner-kanban__card-color:hover,
 .planner-kanban__card-emphasis:hover,
 .planner-kanban__card-reset:hover,
-.planner-kanban__card-density:hover {
+.planner-kanban__card-density:hover,
+.planner-kanban__card-grab:hover {
     color: var(--accent, var(--text-color));
     background: color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 14%, transparent);
+}
+
+/* Same focus chrome as site-wide .card-inline-edit (shell-editor / cards). */
+.planner-kanban__card-name.card-inline-edit,
+.planner-kanban__card-comment.card-inline-edit {
+    border-radius: 3px;
+}
+
+.planner-kanban__card-name.card-inline-edit:focus,
+.planner-kanban__card-comment.card-inline-edit:focus {
+    outline: 2px solid transparent !important;
+    background: rgba(79, 70, 229, 0.08) !important;
+    box-shadow: 0 0 0 1px rgba(79, 70, 229, 0.35) !important;
+    -webkit-font-smoothing: antialiased !important;
+    -moz-osx-font-smoothing: grayscale !important;
+}
+
+.planner-kanban__card.has-custom-bg .planner-kanban__card-name.card-inline-edit:focus,
+.planner-kanban__card.has-custom-bg .planner-kanban__card-comment.card-inline-edit:focus {
+    background: var(--card-focus-bg, rgba(79, 70, 229, 0.08)) !important;
+    box-shadow: 0 0 0 1px var(--card-focus-ring, rgba(79, 70, 229, 0.35)) !important;
 }
 
 /* Title-only density: no comments. */
@@ -1300,14 +1335,16 @@ textarea.planner-kanban__card-comment:focus {
 .planner-kanban__card.is-urgent .planner-kanban__card-color,
 .planner-kanban__card.is-urgent .planner-kanban__card-emphasis,
 .planner-kanban__card.is-urgent .planner-kanban__card-reset,
-.planner-kanban__card.is-urgent .planner-kanban__card-density {
+.planner-kanban__card.is-urgent .planner-kanban__card-density,
+.planner-kanban__card.is-urgent .planner-kanban__card-grab {
     color: var(--kanban-urgent-fg, #422006);
 }
 
 .planner-kanban__card.is-muted .planner-kanban__card-color,
 .planner-kanban__card.is-muted .planner-kanban__card-emphasis,
 .planner-kanban__card.is-muted .planner-kanban__card-reset,
-.planner-kanban__card.is-muted .planner-kanban__card-density {
+.planner-kanban__card.is-muted .planner-kanban__card-density,
+.planner-kanban__card.is-muted .planner-kanban__card-grab {
     color: var(--kanban-muted-fg, #374151);
 }
 
