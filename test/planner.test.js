@@ -32,6 +32,9 @@ import {
     kanbanLabelsForFlavour,
     clipKanbanComment,
     setKanbanCardEmphasis,
+    setKanbanCardCollapsed,
+    expandAllKanbanCards,
+    collapseAllKanbanCards,
     resetKanbanCardStyles,
     resetAllKanbanCardStyles,
     resetKanbanArrangement,
@@ -60,6 +63,7 @@ describe('planner model', () => {
         assert.deepEqual(planner.kanbanOrderByStage, {});
         assert.deepEqual(planner.kanbanCardColors, {});
         assert.deepEqual(planner.kanbanEmphasisByRow, {});
+        assert.deepEqual(planner.kanbanCollapsedByRow, {});
         assert.equal(getPlannerField(planner.sheet, 0, 'name'), '');
         assert.equal(plannerHasContent(planner), false);
     });
@@ -213,6 +217,9 @@ describe('planner model', () => {
         assert.ok(html.includes('data-planner-kanban-emphasis="urgent"'));
         assert.ok(html.includes('data-planner-kanban-emphasis="muted"'));
         assert.ok(html.includes('data-planner-kanban-reset-card'));
+        assert.ok(html.includes('data-planner-kanban-density'));
+        assert.ok(html.includes('data-planner-kanban-expand-all'));
+        assert.ok(html.includes('data-planner-kanban-collapse-all'));
         assert.ok(html.includes('data-planner-kanban-reset-styles'));
         assert.ok(html.includes('data-planner-kanban-reset-arrangement'));
         assert.ok(html.includes('planner-kanban__tools'));
@@ -461,6 +468,42 @@ describe('planner Kanban', () => {
         assert.equal(planner.kanbanSortDir, 'asc');
         const layout = layoutPlannerKanban(planner);
         assert.deepEqual(layout.columns[0].cards.map((c) => c.name), ['A', 'B']);
+    });
+
+    it('collapses and expands cards; remaps and prunes collapsed map', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'A');
+        setPlannerField(planner.sheet, 1, 'name', 'B');
+        setPlannerField(planner.sheet, 2, 'name', 'C');
+
+        assert.equal(derivePlannerKanbanCards(planner)[0].collapsed, false);
+        setKanbanCardCollapsed(planner, 0, true);
+        assert.equal(derivePlannerKanbanCards(planner)[0].collapsed, true);
+        assert.deepEqual(planner.kanbanCollapsedByRow, { '0': true });
+
+        collapseAllKanbanCards(planner);
+        assert.deepEqual(planner.kanbanCollapsedByRow, { '0': true, '1': true, '2': true });
+        expandAllKanbanCards(planner);
+        assert.deepEqual(planner.kanbanCollapsedByRow, {});
+
+        setKanbanCardCollapsed(planner, 0, true);
+        setKanbanCardCollapsed(planner, 2, true);
+        movePlannerRow(planner, 0, 2);
+        // old 0→2, old 1→0, old 2→1
+        assert.deepEqual(planner.kanbanCollapsedByRow, { '2': true, '1': true });
+
+        addPlannerRow(planner);
+        setPlannerField(planner.sheet, 3, 'name', 'D');
+        setKanbanCardCollapsed(planner, 3, true);
+        removePlannerRow(planner);
+        assert.equal(planner.kanbanCollapsedByRow['3'], undefined);
+
+        const normalized = normalizePlanner({
+            ...createEmptyPlanner(),
+            sheet: planner.sheet,
+            kanbanCollapsedByRow: { '0': true, '9': true, '1': 0 }
+        });
+        assert.deepEqual(normalized.kanbanCollapsedByRow, { '0': true });
     });
 
     it('sorts by date/row/alpha with asc/desc and manual order', () => {

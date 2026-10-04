@@ -21,6 +21,7 @@ import {
     normalizeKanbanOrderByStage,
     normalizeKanbanCardColors,
     normalizeKanbanEmphasisByRow,
+    normalizeKanbanCollapsedByRow,
     remapKanbanAfterRowMove,
     pruneKanbanAfterRowRemove
 } from './plannerKanban.js';
@@ -146,6 +147,7 @@ export function createEmptyPlanner(opts = {}) {
         kanbanOrderByStage: {},
         kanbanCardColors: {},
         kanbanEmphasisByRow: {},
+        kanbanCollapsedByRow: {},
         labelWidth: PLANNER_DEFAULT_LABEL_WIDTH,
         categoryColors: {},
         sheet: createPlannerSheet()
@@ -294,6 +296,7 @@ export function normalizePlanner(raw) {
         kanbanOrderByStage: normalizeKanbanOrderByStage(raw.kanbanOrderByStage, sheet.rows),
         kanbanCardColors: normalizeKanbanCardColors(raw.kanbanCardColors, sheet.rows),
         kanbanEmphasisByRow: normalizeKanbanEmphasisByRow(raw.kanbanEmphasisByRow, sheet.rows),
+        kanbanCollapsedByRow: normalizeKanbanCollapsedByRow(raw.kanbanCollapsedByRow, sheet.rows),
         labelWidth: normalizePlannerLabelWidth(raw.labelWidth),
         categoryColors: normalizeCategoryColors(raw.categoryColors),
         sheet

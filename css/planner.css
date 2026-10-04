@@ -918,6 +918,7 @@ body.is-planner-kanban-drag-active .planner-kanban__card-slot {
 .planner-kanban__card-color,
 .planner-kanban__card-emphasis,
 .planner-kanban__card-reset,
+.planner-kanban__card-density,
 .planner-kanban__card-grab {
     display: inline-flex;
     align-items: center;
@@ -933,7 +934,8 @@ body.is-planner-kanban-drag-active .planner-kanban__card-slot {
 
 .planner-kanban__card-color,
 .planner-kanban__card-emphasis,
-.planner-kanban__card-reset {
+.planner-kanban__card-reset,
+.planner-kanban__card-density {
     cursor: pointer;
 }
 
@@ -944,9 +946,19 @@ body.is-planner-kanban-drag-active .planner-kanban__card-slot {
 .planner-kanban__card-color:hover,
 .planner-kanban__card-emphasis:hover,
 .planner-kanban__card-reset:hover,
+.planner-kanban__card-density:hover,
 .planner-kanban__card-grab:hover {
     color: var(--accent, var(--text-color));
     background: color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 14%, transparent);
+}
+
+/* Title-only density: hide comments in the resting slot; flyout stays full. */
+.planner-kanban__card.is-collapsed .planner-kanban__card-slot .planner-kanban__card-comment {
+    display: none;
+}
+
+.planner-kanban__card.is-collapsed .planner-kanban__card-slot {
+    padding: 0.78rem 0.45rem;
 }
 
 .planner-kanban__card-emphasis[data-planner-kanban-emphasis="urgent"].is-active {

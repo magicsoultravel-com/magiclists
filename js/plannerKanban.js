@@ -166,6 +166,35 @@ export function getKanbanEmphasisForRow(planner, row) {
 }
 
 /**
+ * Per-card collapsed density (title-only). Sparse map of truthy flags.
+ * @param {unknown} raw
+ * @param {number} rowCount
+ * @returns {Record<string, true>}
+ */
+export function normalizeKanbanCollapsedByRow(raw, rowCount = 0) {
+    if (!raw || typeof raw !== 'object') return {};
+    const out = {};
+    const max = Math.max(0, Number(rowCount) || 0);
+    for (const [k, v] of Object.entries(raw)) {
+        const row = Number(k);
+        if (!Number.isFinite(row) || row < 0 || row >= max) continue;
+        if (!v) continue;
+        out[String(Math.floor(row))] = true;
+    }
+    return out;
+}
+
+/**
+ * @param {object|null|undefined} planner
+ * @param {number} row
+ * @returns {boolean}
+ */
+export function isKanbanCardCollapsed(planner, row) {
+    const raw = planner?.kanbanCollapsedByRow?.[String(row)] ?? planner?.kanbanCollapsedByRow?.[row];
+    return !!raw;
+}
+
+/**
  * @param {'release'|'workflow'|string} flavourId
  * @returns {readonly string[]}
  */
@@ -205,7 +234,7 @@ function categoryColorLookup(planner, categoryName) {
 /**
  * Cards with a non-empty name (empty-name rows stay off the board).
  * @param {object|null|undefined} planner
- * @returns {Array<{ row: number, id: string, name: string, start: string, stop: string, category: string, comments: string, categoryColor: string, cardColor: string }>}
+ * @returns {Array<{ row: number, id: string, name: string, start: string, stop: string, category: string, comments: string, categoryColor: string, cardColor: string, emphasis: string, collapsed: boolean }>}
  */
 export function derivePlannerKanbanCards(planner) {
     const sheet = planner?.sheet;
@@ -228,7 +257,8 @@ export function derivePlannerKanbanCards(planner) {
             comments: cellTrim(sheet, r, COMMENTS_COL),
             categoryColor,
             cardColor,
-            emphasis: getKanbanEmphasisForRow(planner, r)
+            emphasis: getKanbanEmphasisForRow(planner, r),
+            collapsed: isKanbanCardCollapsed(planner, r)
         });
     }
     return cards;
@@ -382,10 +412,21 @@ export function remapKanbanAfterRowMove(planner, order) {
         nextEmphasis[String(oldToNew.get(oldRow))] = mode;
     }
     planner.kanbanEmphasisByRow = nextEmphasis;
+
+    const nextCollapsed = {};
+    const srcCollapsed = planner.kanbanCollapsedByRow && typeof planner.kanbanCollapsedByRow === 'object'
+        ? planner.kanbanCollapsedByRow
+        : {};
+    for (const [k, v] of Object.entries(srcCollapsed)) {
+        const oldRow = Number(k);
+        if (!oldToNew.has(oldRow) || !v) continue;
+        nextCollapsed[String(oldToNew.get(oldRow))] = true;
+    }
+    planner.kanbanCollapsedByRow = nextCollapsed;
 }
 
 /**
- * Drop stage/order/color/emphasis entries for a removed last row.
+ * Drop stage/order/color/emphasis/collapsed entries for a removed last row.
  * @param {object} planner
  * @param {number} removedRow
  */
@@ -419,6 +460,11 @@ export function pruneKanbanAfterRowRemove(planner, removedRow) {
     if (emphasisMap && typeof emphasisMap === 'object') {
         delete emphasisMap[String(removedRow)];
         delete emphasisMap[removedRow];
+    }
+    const collapsedMap = planner.kanbanCollapsedByRow;
+    if (collapsedMap && typeof collapsedMap === 'object') {
+        delete collapsedMap[String(removedRow)];
+        delete collapsedMap[removedRow];
     }
 }
 
@@ -547,4 +593,41 @@ export function resetKanbanArrangement(planner) {
     planner.kanbanOrderByStage = {};
     planner.kanbanSort = KANBAN_DEFAULT_SORT;
     planner.kanbanSortDir = KANBAN_DEFAULT_SORT_DIR;
+}
+
+/**
+ * @param {object} planner
+ * @param {number} row
+ * @param {boolean} collapsed
+ */
+export function setKanbanCardCollapsed(planner, row, collapsed) {
+    if (!planner || !Number.isFinite(row)) return;
+    if (!planner.kanbanCollapsedByRow || typeof planner.kanbanCollapsedByRow !== 'object') {
+        planner.kanbanCollapsedByRow = {};
+    }
+    const key = String(Math.floor(row));
+    if (collapsed) planner.kanbanCollapsedByRow[key] = true;
+    else delete planner.kanbanCollapsedByRow[key];
+}
+
+/**
+ * Expand every card (clear collapsed map).
+ * @param {object} planner
+ */
+export function expandAllKanbanCards(planner) {
+    if (!planner) return;
+    planner.kanbanCollapsedByRow = {};
+}
+
+/**
+ * Collapse every named card on the board.
+ * @param {object} planner
+ */
+export function collapseAllKanbanCards(planner) {
+    if (!planner) return;
+    const next = {};
+    for (const card of derivePlannerKanbanCards(planner)) {
+        next[String(card.row)] = true;
+    }
+    planner.kanbanCollapsedByRow = next;
 }

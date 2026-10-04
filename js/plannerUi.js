@@ -41,6 +41,9 @@ import {
     normalizeKanbanSortDir,
     setKanbanCardColor,
     setKanbanCardEmphasis,
+    setKanbanCardCollapsed,
+    expandAllKanbanCards,
+    collapseAllKanbanCards,
     resetKanbanCardStyles,
     resetAllKanbanCardStyles,
     resetKanbanArrangement
@@ -695,10 +698,15 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
                     : '';
                 const emphasis = card.emphasis === 'urgent' || card.emphasis === 'muted' ? card.emphasis : '';
                 const emphasisClass = emphasis ? ` is-${emphasis}` : '';
+                const collapsed = !!card.collapsed;
+                const collapsedClass = collapsed ? ' is-collapsed' : '';
                 const urgentActive = emphasis === 'urgent' ? ' is-active' : '';
                 const mutedActive = emphasis === 'muted' ? ' is-active' : '';
+                const densityTitle = collapsed ? 'Expand card' : 'Collapse card';
+                const densityIcon = collapsed ? CARD_ICONS.expand : CARD_ICONS.collapse;
                 const actionsHtml = canEdit
                     ? `<span class="planner-kanban__card-actions">
+                        <button type="button" class="planner-kanban__card-density" data-planner-kanban-density title="${escapeAttr(densityTitle)}" aria-label="${escapeAttr(densityTitle)}" aria-pressed="${collapsed ? 'true' : 'false'}">${densityIcon}</button>
                         <button type="button" class="planner-kanban__card-emphasis${urgentActive}" data-planner-kanban-emphasis="urgent" title="Mark urgent" aria-label="Mark urgent" aria-pressed="${emphasis === 'urgent' ? 'true' : 'false'}">${KANBAN_URGENT_ICON}</button>
                         <button type="button" class="planner-kanban__card-emphasis${mutedActive}" data-planner-kanban-emphasis="muted" title="Mark non-urgent" aria-label="Mark non-urgent" aria-pressed="${emphasis === 'muted' ? 'true' : 'false'}">${KANBAN_MUTED_ICON}</button>
                         <button type="button" class="planner-kanban__card-color" data-planner-kanban-color title="Card color" aria-label="Card color">${CARD_ICONS.color}</button>
@@ -712,7 +720,7 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
                         ${actionsHtml}
                     </div>
                     ${commentHtml}`;
-                return `<article class="planner-kanban__card${card.cardColor ? ' has-color' : ''}${emphasisClass}${editClass}" data-planner-kanban-card data-planner-row="${card.row}" data-kanban-emphasis="${escapeAttr(emphasis)}"${cardSurfaceStyle(card.cardColor)}>
+                return `<article class="planner-kanban__card${card.cardColor ? ' has-color' : ''}${emphasisClass}${collapsedClass}${editClass}" data-planner-kanban-card data-planner-row="${card.row}" data-kanban-emphasis="${escapeAttr(emphasis)}" data-kanban-collapsed="${collapsed ? '1' : '0'}"${cardSurfaceStyle(card.cardColor)}>
                     <div class="planner-kanban__card-slot">${bodyInner}</div>
                     <div class="planner-kanban__card-flyout" aria-hidden="true">${bodyInner}</div>
                 </article>`;
@@ -731,6 +739,8 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
 
     const moduleResetHtml = canEdit
         ? `<span class="planner-kanban__module-sep" aria-hidden="true"></span>
+            <button type="button" class="card-act planner-kanban-module-btn" data-planner-kanban-expand-all title="Expand all cards" aria-label="Expand all cards">${ACTION_ICONS.expandAll}</button>
+            <button type="button" class="card-act planner-kanban-module-btn" data-planner-kanban-collapse-all title="Collapse all cards" aria-label="Collapse all cards">${ACTION_ICONS.collapseAll}</button>
             <button type="button" class="card-act planner-kanban-module-btn" data-planner-kanban-reset-styles title="Reset all card styles" aria-label="Reset all card styles">${ACTION_ICONS.resetCustomization}</button>
             <button type="button" class="card-act planner-kanban-module-btn" data-planner-kanban-reset-arrangement title="Reset arrangement" aria-label="Reset arrangement">${ACTION_ICONS.layoutReset}</button>`
         : '';
@@ -1499,6 +1509,26 @@ export function attachPlannerInteractions(root, item, {
             return;
         }
 
+        const kanbanExpandAllBtn = e.target.closest('[data-planner-kanban-expand-all]');
+        if (kanbanExpandAllBtn && section.contains(kanbanExpandAllBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            mutate((it) => {
+                expandAllKanbanCards(it.planner);
+            }, { skipRerender: true, refreshGantt: true });
+            return;
+        }
+
+        const kanbanCollapseAllBtn = e.target.closest('[data-planner-kanban-collapse-all]');
+        if (kanbanCollapseAllBtn && section.contains(kanbanCollapseAllBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            mutate((it) => {
+                collapseAllKanbanCards(it.planner);
+            }, { skipRerender: true, refreshGantt: true });
+            return;
+        }
+
         const kanbanResetStylesBtn = e.target.closest('[data-planner-kanban-reset-styles]');
         if (kanbanResetStylesBtn && section.contains(kanbanResetStylesBtn)) {
             e.preventDefault();
@@ -1515,6 +1545,20 @@ export function attachPlannerInteractions(root, item, {
             e.stopPropagation();
             mutate((it) => {
                 resetKanbanArrangement(it.planner);
+            }, { skipRerender: true, refreshGantt: true });
+            return;
+        }
+
+        const kanbanDensityBtn = e.target.closest('[data-planner-kanban-density]');
+        if (kanbanDensityBtn && section.contains(kanbanDensityBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const card = kanbanDensityBtn.closest('[data-planner-kanban-card]');
+            const row = Number(card?.dataset?.plannerRow);
+            if (!Number.isFinite(row)) return;
+            const nextCollapsed = card?.dataset?.kanbanCollapsed !== '1';
+            mutate((it) => {
+                setKanbanCardCollapsed(it.planner, row, nextCollapsed);
             }, { skipRerender: true, refreshGantt: true });
             return;
         }
@@ -1794,7 +1838,7 @@ export function attachPlannerInteractions(root, item, {
 
     section.addEventListener('pointerdown', (e) => {
         if (e.button != null && e.button !== 0) return;
-        if (e.target.closest?.('[data-planner-kanban-color], [data-planner-kanban-emphasis], [data-planner-kanban-reset-card]')) return;
+        if (e.target.closest?.('[data-planner-kanban-color], [data-planner-kanban-emphasis], [data-planner-kanban-reset-card], [data-planner-kanban-density]')) return;
         const card = e.target.closest('[data-planner-kanban-card]');
         if (!card || !section.contains(card) || !card.classList.contains('is-editable')) return;
         const row = Number(card.dataset.plannerRow);
