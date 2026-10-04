@@ -30,6 +30,7 @@ import {
     moveKanbanCard,
     normalizeKanbanFlavour,
     kanbanLabelsForFlavour,
+    clipKanbanComment,
     KANBAN_DEFAULT_FLAVOUR,
     KANBAN_FLAVOURS
 } from '../js/plannerKanban.js';
@@ -50,8 +51,10 @@ describe('planner model', () => {
         assert.deepEqual(planner.categoryColors, {});
         assert.equal(planner.kanbanCollapsed, false);
         assert.equal(planner.kanbanSort, 'row');
+        assert.equal(planner.kanbanSortDir, 'asc');
         assert.deepEqual(planner.kanbanStageByRow, {});
         assert.deepEqual(planner.kanbanOrderByStage, {});
+        assert.deepEqual(planner.kanbanCardColors, {});
         assert.equal(getPlannerField(planner.sheet, 0, 'name'), '');
         assert.equal(plannerHasContent(planner), false);
     });
@@ -194,6 +197,10 @@ describe('planner model', () => {
         assert.ok(html.includes('Table</button>') || html.includes('>Table'));
         assert.ok(html.includes('Chart</button>') || html.includes('>Chart'));
         assert.ok(html.includes('Kanban</button>') || html.includes('>Kanban'));
+        assert.ok(html.includes('data-planner-kanban-sort="row"'));
+        assert.ok(html.includes('data-planner-kanban-sort="date"'));
+        assert.ok(!html.includes('data-planner-kanban-sort="manual"'));
+        assert.ok(html.includes('data-planner-kanban-color'));
         assert.ok(html.includes('data-planner-rail-resize'));
         assert.ok(!html.includes('data-planner-today-settings-toggle'));
         assert.ok(html.includes('planner-gantt__today') || html.includes('data-planner-gantt'));
@@ -383,7 +390,24 @@ describe('planner Kanban', () => {
         assert.equal(layout.labels[0], 'Preparation');
     });
 
-    it('sorts by date and manual order', () => {
+    it('uses category color by default and clips comments', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'Paint');
+        setPlannerField(planner.sheet, 0, 'category', 'Design');
+        setPlannerField(planner.sheet, 0, 'comments', 'x'.repeat(120));
+        setCategoryColor(planner, 'Design', '#aabbcc');
+        const cards = derivePlannerKanbanCards(planner);
+        assert.equal(cards[0].cardColor, '#aabbcc');
+        assert.equal(cards[0].comments.length, 120);
+        assert.ok(clipKanbanComment(cards[0].comments).endsWith('…'));
+        assert.ok(clipKanbanComment(cards[0].comments).length < 120);
+
+        planner.kanbanCardColors = { '0': '#112233' };
+        const overridden = derivePlannerKanbanCards(planner);
+        assert.equal(overridden[0].cardColor, '#112233');
+    });
+
+    it('sorts by date/row with asc/desc and manual order', () => {
         const planner = createEmptyPlanner();
         setPlannerField(planner.sheet, 0, 'name', 'Late');
         setPlannerField(planner.sheet, 0, 'start', '2026-03-10');
@@ -392,9 +416,19 @@ describe('planner Kanban', () => {
         planner.kanbanStageByRow = { '0': 1, '1': 1 };
 
         planner.kanbanSort = 'date';
+        planner.kanbanSortDir = 'asc';
         let layout = layoutPlannerKanban(planner, { flavour: 'workflow' });
         assert.deepEqual(layout.columns[1].cards.map((c) => c.name), ['Early', 'Late']);
         assert.equal(layout.labels[1], 'Planning');
+
+        planner.kanbanSortDir = 'desc';
+        layout = layoutPlannerKanban(planner, { flavour: 'workflow' });
+        assert.deepEqual(layout.columns[1].cards.map((c) => c.name), ['Late', 'Early']);
+
+        planner.kanbanSort = 'row';
+        planner.kanbanSortDir = 'desc';
+        layout = layoutPlannerKanban(planner, { flavour: 'workflow' });
+        assert.deepEqual(layout.columns[1].cards.map((c) => c.name), ['Early', 'Late']);
 
         planner.kanbanSort = 'manual';
         planner.kanbanOrderByStage = { '1': [0, 1] };

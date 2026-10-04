@@ -16,8 +16,10 @@ import {
 import { parsePlannerDateTime } from './plannerGantt.js';
 import {
     normalizeKanbanSort,
+    normalizeKanbanSortDir,
     normalizeKanbanStageByRow,
     normalizeKanbanOrderByStage,
+    normalizeKanbanCardColors,
     remapKanbanAfterRowMove,
     pruneKanbanAfterRowRemove
 } from './plannerKanban.js';
@@ -138,8 +140,10 @@ export function createEmptyPlanner(opts = {}) {
         tableCollapsed: false,
         kanbanCollapsed: false,
         kanbanSort: 'row',
+        kanbanSortDir: 'asc',
         kanbanStageByRow: {},
         kanbanOrderByStage: {},
+        kanbanCardColors: {},
         labelWidth: PLANNER_DEFAULT_LABEL_WIDTH,
         categoryColors: {},
         sheet: createPlannerSheet()
@@ -283,8 +287,10 @@ export function normalizePlanner(raw) {
         tableCollapsed: !!raw.tableCollapsed,
         kanbanCollapsed: !!raw.kanbanCollapsed,
         kanbanSort: normalizeKanbanSort(raw.kanbanSort),
+        kanbanSortDir: normalizeKanbanSortDir(raw.kanbanSortDir),
         kanbanStageByRow: stageByRow,
         kanbanOrderByStage: normalizeKanbanOrderByStage(raw.kanbanOrderByStage, sheet.rows),
+        kanbanCardColors: normalizeKanbanCardColors(raw.kanbanCardColors, sheet.rows),
         labelWidth: normalizePlannerLabelWidth(raw.labelWidth),
         categoryColors: normalizeCategoryColors(raw.categoryColors),
         sheet

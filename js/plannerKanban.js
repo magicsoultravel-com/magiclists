@@ -3,8 +3,14 @@ import { parsePlannerDateTime } from './plannerGantt.js';
 
 export const KANBAN_STAGE_COUNT = 5;
 
+/** Display sort chips (manual is entered by dragging). */
+export const KANBAN_SORT_CHIP_MODES = Object.freeze(['row', 'date']);
 export const KANBAN_SORT_MODES = Object.freeze(['row', 'date', 'manual']);
 export const KANBAN_DEFAULT_SORT = 'row';
+export const KANBAN_SORT_DIRS = Object.freeze(['asc', 'desc']);
+export const KANBAN_DEFAULT_SORT_DIR = 'asc';
+
+export const KANBAN_COMMENT_CLIP = 90;
 
 export const KANBAN_FLAVOURS = Object.freeze({
     release: Object.freeze([
@@ -26,10 +32,12 @@ export const KANBAN_FLAVOURS = Object.freeze({
 export const KANBAN_DEFAULT_FLAVOUR = 'release';
 export const KANBAN_FLAVOUR_IDS = Object.freeze(Object.keys(KANBAN_FLAVOURS));
 
-/** Locked planner column indices (name / start / stop) — avoid importing planner.js. */
+/** Locked planner column indices — avoid importing planner.js. */
 const NAME_COL = 0;
+const CATEGORY_COL = 1;
 const START_COL = 2;
 const STOP_COL = 3;
+const COMMENTS_COL = 5;
 
 /**
  * @param {unknown} raw
@@ -47,6 +55,15 @@ export function normalizeKanbanFlavour(raw) {
 export function normalizeKanbanSort(raw) {
     const s = String(raw || '').toLowerCase();
     return KANBAN_SORT_MODES.includes(s) ? s : KANBAN_DEFAULT_SORT;
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {'asc'|'desc'}
+ */
+export function normalizeKanbanSortDir(raw) {
+    const d = String(raw || '').toLowerCase();
+    return KANBAN_SORT_DIRS.includes(d) ? d : KANBAN_DEFAULT_SORT_DIR;
 }
 
 /**
@@ -96,6 +113,26 @@ export function normalizeKanbanOrderByStage(raw, rowCount = 0) {
 }
 
 /**
+ * Per-card color overrides (hex). Empty / invalid dropped.
+ * @param {unknown} raw
+ * @param {number} rowCount
+ * @returns {Record<string, string>}
+ */
+export function normalizeKanbanCardColors(raw, rowCount = 0) {
+    if (!raw || typeof raw !== 'object') return {};
+    const out = {};
+    const max = Math.max(0, Number(rowCount) || 0);
+    for (const [k, v] of Object.entries(raw)) {
+        const row = Number(k);
+        const hex = String(v || '').trim();
+        if (!Number.isFinite(row) || row < 0 || row >= max) continue;
+        if (!/^#[0-9a-fA-F]{6}$/.test(hex)) continue;
+        out[String(Math.floor(row))] = hex.toLowerCase();
+    }
+    return out;
+}
+
+/**
  * @param {'release'|'workflow'|string} flavourId
  * @returns {readonly string[]}
  */
@@ -104,14 +141,38 @@ export function kanbanLabelsForFlavour(flavourId) {
     return KANBAN_FLAVOURS[id] || KANBAN_FLAVOURS[KANBAN_DEFAULT_FLAVOUR];
 }
 
+/**
+ * @param {string} text
+ * @param {number} [max]
+ * @returns {string}
+ */
+export function clipKanbanComment(text, max = KANBAN_COMMENT_CLIP) {
+    const s = String(text || '').replace(/\s+/g, ' ').trim();
+    if (!s) return '';
+    if (s.length <= max) return s;
+    return `${s.slice(0, Math.max(1, max - 1)).trimEnd()}…`;
+}
+
 function cellTrim(sheet, row, col) {
     return String(sheet?.cells?.[`${row}:${col}`]?.v ?? '').trim();
+}
+
+function categoryColorLookup(planner, categoryName) {
+    const name = String(categoryName || '').trim();
+    if (!name) return '';
+    const map = planner?.categoryColors || {};
+    if (map[name]) return map[name];
+    const lower = name.toLowerCase();
+    for (const [k, v] of Object.entries(map)) {
+        if (k.toLowerCase() === lower) return v;
+    }
+    return '';
 }
 
 /**
  * Cards with a non-empty name (empty-name rows stay off the board).
  * @param {object|null|undefined} planner
- * @returns {Array<{ row: number, id: string, name: string, start: string, stop: string }>}
+ * @returns {Array<{ row: number, id: string, name: string, start: string, stop: string, category: string, comments: string, categoryColor: string, cardColor: string }>}
  */
 export function derivePlannerKanbanCards(planner) {
     const sheet = planner?.sheet;
@@ -120,12 +181,20 @@ export function derivePlannerKanbanCards(planner) {
     for (let r = 0; r < (sheet.rows || 0); r++) {
         const name = cellTrim(sheet, r, NAME_COL);
         if (!name) continue;
+        const category = cellTrim(sheet, r, CATEGORY_COL);
+        const categoryColor = categoryColorLookup(planner, category);
+        const override = planner?.kanbanCardColors?.[String(r)] || planner?.kanbanCardColors?.[r] || '';
+        const cardColor = /^#[0-9a-fA-F]{6}$/.test(override) ? override : categoryColor;
         cards.push({
             row: r,
             id: String(r + 1),
             name,
             start: cellTrim(sheet, r, START_COL),
-            stop: cellTrim(sheet, r, STOP_COL)
+            stop: cellTrim(sheet, r, STOP_COL),
+            category,
+            comments: cellTrim(sheet, r, COMMENTS_COL),
+            categoryColor,
+            cardColor
         });
     }
     return cards;
@@ -147,17 +216,13 @@ export function getKanbanStageForRow(planner, row) {
  * Layout cards into 5 columns for the current sort mode + flavour labels.
  * @param {object|null|undefined} planner
  * @param {{ flavour?: string }} [opts]
- * @returns {{
- *   sort: string,
- *   flavour: string,
- *   labels: string[],
- *   columns: Array<{ stage: number, label: string, cards: Array<{ row: number, id: string, name: string, start: string, stop: string }> }>
- * }}
  */
 export function layoutPlannerKanban(planner, { flavour } = {}) {
     const flavourId = normalizeKanbanFlavour(flavour);
     const labels = [...kanbanLabelsForFlavour(flavourId)];
     const sort = normalizeKanbanSort(planner?.kanbanSort);
+    const sortDir = normalizeKanbanSortDir(planner?.kanbanSortDir);
+    const dirMul = sortDir === 'desc' ? -1 : 1;
     const cards = derivePlannerKanbanCards(planner);
     const byStage = Array.from({ length: KANBAN_STAGE_COUNT }, () => []);
 
@@ -173,10 +238,10 @@ export function layoutPlannerKanban(planner, { flavour } = {}) {
                 const db = parsePlannerDateTime(b.start);
                 if (da && db) {
                     const diff = da.getTime() - db.getTime();
-                    if (diff !== 0) return diff;
-                } else if (da && !db) return -1;
-                else if (!da && db) return 1;
-                return a.row - b.row;
+                    if (diff !== 0) return diff * dirMul;
+                } else if (da && !db) return -1 * dirMul;
+                else if (!da && db) return 1 * dirMul;
+                return (a.row - b.row) * dirMul;
             });
         } else if (sort === 'manual') {
             const order = planner?.kanbanOrderByStage?.[String(stage)] || [];
@@ -188,12 +253,13 @@ export function layoutPlannerKanban(planner, { flavour } = {}) {
                 return a.row - b.row;
             });
         } else {
-            list.sort((a, b) => a.row - b.row);
+            list.sort((a, b) => (a.row - b.row) * dirMul);
         }
     }
 
     return {
         sort,
+        sortDir,
         flavour: flavourId,
         labels,
         columns: byStage.map((cardsInCol, stage) => ({
@@ -205,7 +271,7 @@ export function layoutPlannerKanban(planner, { flavour } = {}) {
 }
 
 /**
- * Remap kanban stage/order maps after a row reorder (oldRow → newRow via order[]).
+ * Remap kanban stage/order/color maps after a row reorder (oldRow → newRow via order[]).
  * @param {object} planner
  * @param {number[]} order - order[newRow] = oldRow
  */
@@ -247,10 +313,23 @@ export function remapKanbanAfterRowMove(planner, order) {
         if (mapped.length) nextOrder[String(stage)] = mapped;
     }
     planner.kanbanOrderByStage = nextOrder;
+
+    const nextColors = {};
+    const srcColors = planner.kanbanCardColors && typeof planner.kanbanCardColors === 'object'
+        ? planner.kanbanCardColors
+        : {};
+    for (const [k, v] of Object.entries(srcColors)) {
+        const oldRow = Number(k);
+        if (!oldToNew.has(oldRow)) continue;
+        const hex = String(v || '').trim();
+        if (!/^#[0-9a-fA-F]{6}$/.test(hex)) continue;
+        nextColors[String(oldToNew.get(oldRow))] = hex.toLowerCase();
+    }
+    planner.kanbanCardColors = nextColors;
 }
 
 /**
- * Drop stage/order entries for a removed last row.
+ * Drop stage/order/color entries for a removed last row.
  * @param {object} planner
  * @param {number} removedRow
  */
@@ -275,10 +354,15 @@ export function pruneKanbanAfterRowRemove(planner, removedRow) {
             }
         }
     }
+    const colorMap = planner.kanbanCardColors;
+    if (colorMap && typeof colorMap === 'object') {
+        delete colorMap[String(removedRow)];
+        delete colorMap[removedRow];
+    }
 }
 
 /**
- * Move a card to a stage; optionally insert before a target row (manual order).
+ * Move a card to a stage; optionally insert before a target row (always updates order).
  * @param {object} planner
  * @param {number} row
  * @param {number} toStage
@@ -312,7 +396,6 @@ export function moveKanbanCard(planner, row, toStage, { beforeRow = null } = {})
     const key = String(stage);
     let list = Array.isArray(order[key]) ? order[key].filter((x) => x !== r) : [];
 
-    // Seed order from current visual column when switching into manual with a sparse map.
     if (!list.length) {
         const peers = derivePlannerKanbanCards(planner)
             .filter((c) => c.row !== r && getKanbanStageForRow(planner, c.row) === stage)
@@ -328,4 +411,22 @@ export function moveKanbanCard(planner, row, toStage, { beforeRow = null } = {})
         list.push(r);
     }
     order[key] = list;
+}
+
+/**
+ * @param {object} planner
+ * @param {number} row
+ * @param {string} hex
+ */
+export function setKanbanCardColor(planner, row, hex) {
+    if (!planner || !Number.isFinite(row)) return;
+    const color = String(hex || '').trim();
+    if (!planner.kanbanCardColors || typeof planner.kanbanCardColors !== 'object') {
+        planner.kanbanCardColors = {};
+    }
+    if (!/^#[0-9a-fA-F]{6}$/.test(color)) {
+        delete planner.kanbanCardColors[String(Math.floor(row))];
+        return;
+    }
+    planner.kanbanCardColors[String(Math.floor(row))] = color.toLowerCase();
 }
