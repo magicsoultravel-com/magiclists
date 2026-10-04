@@ -1,4 +1,4 @@
-/** @module {"owns":"magicPlanner model — schema-bound schedule sheet + zoom prefs", "related":["plannerUi.js","plannerGantt.js","plannerKanban.js","sheet.js","noteModel.js"]} */
+/** @module {"owns":"magicPlanner model — schema-bound schedule sheet + zoom prefs", "related":["plannerUi.js","plannerGantt.js","plannerKanban.js","plannerCalendar.js","sheet.js","noteModel.js"]} */
 import {
     cellKey,
     getCellValue,
@@ -30,6 +30,8 @@ export const PLANNER_VERSION = 2;
 export const PLANNER_DEFAULT_ROWS = 3;
 export const PLANNER_ZOOM_LEVELS = Object.freeze(['day', 'week', 'month', 'quarter', 'year']);
 export const PLANNER_DEFAULT_ZOOM = 'week';
+export const PLANNER_CHART_VIEWS = Object.freeze(['gantt', 'calendar']);
+export const PLANNER_DEFAULT_CHART_VIEW = 'gantt';
 
 export const PLANNER_DEFAULT_LABEL_WIDTH = 120;
 export const PLANNER_MIN_LABEL_WIDTH = 48;
@@ -130,6 +132,7 @@ export function createEmptyPlanner(opts = {}) {
     return {
         version: PLANNER_VERSION,
         zoom: normalizePlannerZoom(opts.zoom),
+        chartView: normalizePlannerChartView(opts.chartView),
         chartCollapsed: false,
         tableCollapsed: false,
         kanbanCollapsed: false,
@@ -153,6 +156,15 @@ export function createEmptyPlanner(opts = {}) {
 export function normalizePlannerZoom(raw) {
     const z = String(raw || '').toLowerCase();
     return PLANNER_ZOOM_LEVELS.includes(z) ? z : PLANNER_DEFAULT_ZOOM;
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {'gantt'|'calendar'}
+ */
+export function normalizePlannerChartView(raw) {
+    const v = String(raw || '').toLowerCase();
+    return PLANNER_CHART_VIEWS.includes(v) ? v : PLANNER_DEFAULT_CHART_VIEW;
 }
 
 /**
@@ -279,6 +291,7 @@ export function normalizePlanner(raw) {
     return {
         version: PLANNER_VERSION,
         zoom: normalizePlannerZoom(raw.zoom),
+        chartView: normalizePlannerChartView(raw.chartView),
         chartCollapsed: !!raw.chartCollapsed,
         tableCollapsed: !!raw.tableCollapsed,
         kanbanCollapsed: !!raw.kanbanCollapsed,

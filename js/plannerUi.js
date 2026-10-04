@@ -1,4 +1,4 @@
-/** @module {"owns":"magicPlanner note subsection UI — typed sheet + Gantt + Kanban", "related":["planner.js","plannerGantt.js","plannerKanban.js","noteSurfaceMutations.js","noteQuickActions.js"]} */
+/** @module {"owns":"magicPlanner note subsection UI — typed sheet + Gantt + Kanban + calendar chart view", "related":["planner.js","plannerGantt.js","plannerKanban.js","plannerCalendar.js","noteSurfaceMutations.js","noteQuickActions.js"]} */
 import { escapeHTML, escapeAttr } from './domEscape.js';
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { parseStoredDateTime, combineDateTime } from './noteModel.js';
@@ -7,10 +7,12 @@ import {
     PLANNER_COLUMNS,
     PLANNER_COL_COUNT,
     PLANNER_ZOOM_LEVELS,
+    PLANNER_DEFAULT_CHART_VIEW,
     createEmptyPlanner,
     normalizePlanner,
     normalizePlannerLabelWidth,
     normalizeTodayLine,
+    normalizePlannerChartView,
     addPlannerRow,
     removePlannerRow,
     movePlannerRow,
@@ -31,6 +33,7 @@ import {
     plannerHasContent
 } from './planner.js';
 import { layoutPlannerGantt, parsePlannerDateTime } from './plannerGantt.js';
+import { renderPlannerCalendarBoardHtml } from './plannerCalendar.js';
 import {
     KANBAN_SORT_CHIP_MODES,
     layoutPlannerKanban,
@@ -508,7 +511,30 @@ function focusGanttViewport(viewport, layout, {
 }
 
 /**
- * Drag-to-pan the Gantt timeline (no visible scrollbar / no arrow chrome).
+ * Focus calendar strip on the focus month (usually today), or restore scroll.
+ * @param {HTMLElement} viewport
+ * @param {object|null} calendarLayout
+ * @param {{ preserveScrollLeft?: number|null, refocus?: boolean }} [opts]
+ */
+function focusCalendarViewport(viewport, calendarLayout, {
+    preserveScrollLeft = null,
+    refocus = false
+} = {}) {
+    if (!viewport) return;
+    if (!refocus && preserveScrollLeft != null && Number.isFinite(preserveScrollLeft)) {
+        viewport.scrollLeft = Math.max(0, Math.min(preserveScrollLeft, viewport.scrollWidth - viewport.clientWidth));
+        return;
+    }
+    if (!refocus) return;
+    const months = viewport.querySelectorAll('.planner-calendar__month');
+    const idx = calendarLayout?.focusMonthIndex ?? 0;
+    const target = months[idx] || months[0];
+    if (!target) return;
+    viewport.scrollLeft = Math.max(0, target.offsetLeft - 8);
+}
+
+/**
+ * Drag-to-pan an overflow viewport (Gantt or calendar strip).
  * @param {HTMLElement} viewport
  */
 function bindGanttPan(viewport) {
@@ -617,17 +643,22 @@ export function renderPlannerTableHtml(planner, { canEdit = false } = {}) {
 /**
  * @param {object} planner
  * @param {{ canEdit?: boolean }} [opts]
- * @returns {{ html: string, layout: object }}
+ * @returns {{ html: string, layout: object|null, calendarLayout: object|null }}
  */
 export function renderPlannerGanttHtml(planner, { canEdit = false } = {}) {
     const opts = ganttLayoutOpts(planner);
     const chartCollapsed = !!planner?.chartCollapsed;
+    const chartView = normalizePlannerChartView(planner?.chartView);
+    const isCalendar = chartView === 'calendar';
     const tasks = derivePlannerTasks(planner);
-    const layout = layoutPlannerGantt(tasks, {
-        zoom: opts.zoom,
-        labelWidth: opts.labelWidth,
-        rowHeight: opts.rowHeight
-    });
+    const layout = isCalendar
+        ? null
+        : layoutPlannerGantt(tasks, {
+            zoom: opts.zoom,
+            labelWidth: opts.labelWidth,
+            rowHeight: opts.rowHeight
+        });
+    const calendarBoard = isCalendar ? renderPlannerCalendarBoardHtml(planner) : null;
     const zoomIcons = {
         day: CARD_ICONS.zoomDay,
         week: CARD_ICONS.zoomWeek,
@@ -636,26 +667,33 @@ export function renderPlannerGanttHtml(planner, { canEdit = false } = {}) {
         year: CARD_ICONS.zoomYear
     };
     const zoomBtns = PLANNER_ZOOM_LEVELS.map((z) => {
-        const active = z === opts.zoom ? ' is-active' : '';
+        const active = !isCalendar && z === opts.zoom ? ' is-active' : '';
         const icon = zoomIcons[z] || '';
-        return `<button type="button" class="card-act planner-zoom-btn${active}" data-planner-zoom="${z}" title="${escapeAttr(z)}" aria-label="${escapeAttr(z)}" aria-pressed="${z === opts.zoom ? 'true' : 'false'}">${icon}</button>`;
+        return `<button type="button" class="card-act planner-zoom-btn${active}" data-planner-zoom="${z}" title="${escapeAttr(z)}" aria-label="${escapeAttr(z)}" aria-pressed="${!isCalendar && z === opts.zoom ? 'true' : 'false'}"${isCalendar ? ' aria-disabled="true"' : ''}>${icon}</button>`;
     }).join('');
+    const calActive = isCalendar ? ' is-active' : '';
+    const calBtn = `<button type="button" class="card-act planner-chart-view-btn${calActive}" data-planner-chart-view="calendar" title="Calendar view" aria-label="Calendar view" aria-pressed="${isCalendar ? 'true' : 'false'}">${CARD_ICONS.calendar}</button>`;
     const toggleCollapsed = chartCollapsed ? ' collapsed' : '';
     const boardCollapsed = chartCollapsed ? ' is-collapsed' : '';
+    const toolsDimmed = isCalendar ? ' is-calendar-view' : '';
 
-    const html = `<div class="planner-gantt planner-sub" data-planner-gantt data-planner-zoom-current="${escapeAttr(opts.zoom)}" data-chart-collapsed="${chartCollapsed ? '1' : '0'}">
+    const boardInner = isCalendar
+        ? calendarBoard.html
+        : `${renderGanttRailHtml(layout, { canEdit })}
+            <div class="planner-gantt__viewport" data-planner-gantt-viewport title="Drag to pan">${renderGanttSvg(layout)}</div>`;
+
+    const html = `<div class="planner-gantt planner-sub" data-planner-gantt data-planner-zoom-current="${escapeAttr(opts.zoom)}" data-planner-chart-view="${escapeAttr(chartView)}" data-chart-collapsed="${chartCollapsed ? '1' : '0'}">
         <div class="planner-gantt__toolbar planner-sub__toolbar">
             <button type="button" class="planner-gantt__title planner-sub__title" data-planner-chart-toggle aria-expanded="${chartCollapsed ? 'false' : 'true'}">
                 <span class="collapsable-toggle${toggleCollapsed}" aria-hidden="true">▼</span>Chart
             </button>
-            <div class="planner-gantt__zoom${chartCollapsed ? ' is-collapsed' : ''}" role="group" aria-label="Chart zoom"${chartCollapsed ? ' hidden' : ''}>${zoomBtns}</div>
+            <div class="planner-gantt__zoom${toolsDimmed}${chartCollapsed ? ' is-collapsed' : ''}" role="group" aria-label="Chart view"${chartCollapsed ? ' hidden' : ''}>${zoomBtns}${calBtn}</div>
         </div>
         <div class="planner-gantt__board${boardCollapsed}" data-planner-chart-board>
-            ${renderGanttRailHtml(layout, { canEdit })}
-            <div class="planner-gantt__viewport" data-planner-gantt-viewport title="Drag to pan">${renderGanttSvg(layout)}</div>
+            ${boardInner}
         </div>
     </div>`;
-    return { html, layout };
+    return { html, layout, calendarLayout: calendarBoard?.layout || null };
 }
 
 /**
@@ -842,16 +880,26 @@ function mountGanttViewport(host, layout, {
     preserveScrollLeft = null,
     preserveScrollTop = null,
     refocus = false,
-    canvasScroll = null
+    canvasScroll = null,
+    calendarLayout = null
 } = {}) {
-    const viewport = host?.querySelector?.('[data-planner-gantt-viewport]');
-    if (!viewport) return;
-    bindGanttPan(viewport);
-    requestAnimationFrame(() => {
-        focusGanttViewport(viewport, layout, { preserveScrollLeft, preserveScrollTop, refocus });
-        // Re-assert board scroll after rAF layout (Gantt focus can yank anchoring).
-        if (canvasScroll) restoreCanvasScroll(canvasScroll);
-    });
+    const ganttViewport = host?.querySelector?.('[data-planner-gantt-viewport]');
+    const calViewport = host?.querySelector?.('[data-planner-calendar-viewport]');
+    if (ganttViewport && layout) {
+        bindGanttPan(ganttViewport);
+        requestAnimationFrame(() => {
+            focusGanttViewport(ganttViewport, layout, { preserveScrollLeft, preserveScrollTop, refocus });
+            if (canvasScroll) restoreCanvasScroll(canvasScroll);
+        });
+        return;
+    }
+    if (calViewport) {
+        bindGanttPan(calViewport);
+        requestAnimationFrame(() => {
+            focusCalendarViewport(calViewport, calendarLayout, { preserveScrollLeft, refocus });
+            if (canvasScroll) restoreCanvasScroll(canvasScroll);
+        });
+    }
 }
 
 function refreshGanttInSection(section, item, { refocus = false } = {}) {
@@ -860,10 +908,13 @@ function refreshGanttInSection(section, item, { refocus = false } = {}) {
     if (host) {
         const canvasScroll = captureCanvasScroll();
         const prevZoom = host.dataset.plannerZoomCurrent || '';
-        const prevViewport = host.querySelector('[data-planner-gantt-viewport]');
+        const prevView = host.dataset.plannerChartView || PLANNER_DEFAULT_CHART_VIEW;
+        const prevGanttViewport = host.querySelector('[data-planner-gantt-viewport]');
+        const prevCalViewport = host.querySelector('[data-planner-calendar-viewport]');
+        const prevViewport = prevGanttViewport || prevCalViewport;
         const preserveScrollLeft = prevViewport ? prevViewport.scrollLeft : null;
-        const preserveScrollTop = prevViewport ? prevViewport.scrollTop : null;
-        const { html, layout } = renderPlannerGanttHtml(item.planner, {
+        const preserveScrollTop = prevGanttViewport ? prevGanttViewport.scrollTop : null;
+        const { html, layout, calendarLayout } = renderPlannerGanttHtml(item.planner, {
             canEdit: plannerSectionCanEdit(section)
         });
         const tmp = document.createElement('div');
@@ -871,12 +922,15 @@ function refreshGanttInSection(section, item, { refocus = false } = {}) {
         const next = tmp.firstElementChild;
         if (next) {
             host.replaceWith(next);
-            const zoomChanged = (layout.zoom || '') !== prevZoom;
+            const nextView = next.dataset.plannerChartView || PLANNER_DEFAULT_CHART_VIEW;
+            const zoomChanged = (layout?.zoom || '') !== prevZoom;
+            const viewChanged = nextView !== prevView;
             mountGanttViewport(next, layout, {
                 preserveScrollLeft,
                 preserveScrollTop,
-                refocus: refocus || zoomChanged,
-                canvasScroll
+                refocus: refocus || zoomChanged || viewChanged,
+                canvasScroll,
+                calendarLayout
             });
         }
         restoreCanvasScroll(canvasScroll);
@@ -1194,22 +1248,34 @@ export function attachPlannerInteractions(root, item, {
     // First bind: pan wiring. Re-center only when explicitly requested or never focused.
     const ganttHost = section.querySelector('[data-planner-gantt]');
     if (ganttHost && item.planner) {
-        const layoutOpts = ganttLayoutOpts(item.planner);
-        const layout = layoutPlannerGantt(derivePlannerTasks(item.planner), {
-            zoom: layoutOpts.zoom,
-            labelWidth: layoutOpts.labelWidth,
-            rowHeight: layoutOpts.rowHeight
-        });
+        const chartView = normalizePlannerChartView(item.planner.chartView);
         const shouldRefocus = refocusGantt != null
             ? !!refocusGantt
             : section.dataset.plannerFocused !== '1';
         const canvasScroll = captureCanvasScroll();
-        mountGanttViewport(ganttHost, layout, {
-            refocus: shouldRefocus,
-            preserveScrollLeft: preserveGanttScroll?.left ?? null,
-            preserveScrollTop: preserveGanttScroll?.top ?? null,
-            canvasScroll
-        });
+        if (chartView === 'calendar') {
+            const { layout: calendarLayout } = renderPlannerCalendarBoardHtml(item.planner);
+            mountGanttViewport(ganttHost, null, {
+                refocus: shouldRefocus,
+                preserveScrollLeft: preserveGanttScroll?.left ?? null,
+                preserveScrollTop: preserveGanttScroll?.top ?? null,
+                canvasScroll,
+                calendarLayout
+            });
+        } else {
+            const layoutOpts = ganttLayoutOpts(item.planner);
+            const layout = layoutPlannerGantt(derivePlannerTasks(item.planner), {
+                zoom: layoutOpts.zoom,
+                labelWidth: layoutOpts.labelWidth,
+                rowHeight: layoutOpts.rowHeight
+            });
+            mountGanttViewport(ganttHost, layout, {
+                refocus: shouldRefocus,
+                preserveScrollLeft: preserveGanttScroll?.left ?? null,
+                preserveScrollTop: preserveGanttScroll?.top ?? null,
+                canvasScroll
+            });
+        }
         section.dataset.plannerFocused = '1';
         restoreCanvasScroll(canvasScroll);
     }
@@ -1441,16 +1507,22 @@ export function attachPlannerInteractions(root, item, {
                 const host = section.querySelector('[data-planner-gantt]');
                 if (host) {
                     const canvasScroll = captureCanvasScroll();
-                    const layoutOpts = ganttLayoutOpts(item.planner);
-                    const layout = layoutPlannerGantt(
-                        derivePlannerTasks(item.planner),
-                        {
-                            zoom: layoutOpts.zoom,
-                            labelWidth: layoutOpts.labelWidth,
-                            rowHeight: layoutOpts.rowHeight
-                        }
-                    );
-                    mountGanttViewport(host, layout, { refocus: true, canvasScroll });
+                    const chartView = normalizePlannerChartView(item.planner?.chartView);
+                    if (chartView === 'calendar') {
+                        const { layout: calendarLayout } = renderPlannerCalendarBoardHtml(item.planner);
+                        mountGanttViewport(host, null, { refocus: true, canvasScroll, calendarLayout });
+                    } else {
+                        const layoutOpts = ganttLayoutOpts(item.planner);
+                        const layout = layoutPlannerGantt(
+                            derivePlannerTasks(item.planner),
+                            {
+                                zoom: layoutOpts.zoom,
+                                labelWidth: layoutOpts.labelWidth,
+                                rowHeight: layoutOpts.rowHeight
+                            }
+                        );
+                        mountGanttViewport(host, layout, { refocus: true, canvasScroll });
+                    }
                     restoreCanvasScroll(canvasScroll);
                 }
             }
@@ -1622,6 +1694,20 @@ export function attachPlannerInteractions(root, item, {
             return;
         }
 
+        const chartViewBtn = e.target.closest('[data-planner-chart-view]');
+        if (chartViewBtn && section.contains(chartViewBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const nextView = String(chartViewBtn.dataset.plannerChartView || '').toLowerCase();
+            if (nextView !== 'calendar') return;
+            // Stay on calendar when already active; only zoom icons return to gantt.
+            if (normalizePlannerChartView(item.planner?.chartView) === 'calendar') return;
+            mutate((it) => {
+                it.planner.chartView = 'calendar';
+            }, { refreshGantt: true });
+            return;
+        }
+
         const zoomBtn = e.target.closest('[data-planner-zoom]');
         if (zoomBtn && section.contains(zoomBtn)) {
             e.preventDefault();
@@ -1629,6 +1715,7 @@ export function attachPlannerInteractions(root, item, {
             const zoom = zoomBtn.dataset.plannerZoom;
             mutate((it) => {
                 it.planner.zoom = zoom;
+                it.planner.chartView = 'gantt';
             }, { refreshGantt: true });
             return;
         }
@@ -2002,9 +2089,11 @@ export function syncNotePlannerDom(item) {
         }
 
         const canvasScroll = captureCanvasScroll();
-        const prevViewport = existing?.querySelector?.('[data-planner-gantt-viewport]');
+        const prevGanttViewport = existing?.querySelector?.('[data-planner-gantt-viewport]');
+        const prevCalViewport = existing?.querySelector?.('[data-planner-calendar-viewport]');
+        const prevViewport = prevGanttViewport || prevCalViewport;
         const preserveGanttScroll = prevViewport
-            ? { left: prevViewport.scrollLeft, top: prevViewport.scrollTop }
+            ? { left: prevViewport.scrollLeft, top: prevGanttViewport ? prevGanttViewport.scrollTop : 0 }
             : null;
         const hadExisting = !!existing;
 

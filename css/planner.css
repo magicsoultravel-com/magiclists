@@ -1,4 +1,4 @@
-/** @css {"owns":"magicPlanner note subsection — typed schedule sheet, Gantt chart, and Kanban", "js":["plannerUi.js","planner.js","plannerGantt.js","plannerKanban.js"]} */
+/** @css {"owns":"magicPlanner note subsection — typed schedule sheet, Gantt chart, Kanban, and calendar chart view", "js":["plannerUi.js","planner.js","plannerGantt.js","plannerKanban.js","plannerCalendar.js"]} */
 
 /*
   Background map (Table vs Chart)
@@ -250,6 +250,7 @@
     display: inline-flex;
     gap: 0.12rem;
     flex-wrap: wrap;
+    align-items: center;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.12s ease;
@@ -261,16 +262,172 @@
     pointer-events: auto;
 }
 
-.planner-zoom-btn.card-act {
+.planner-zoom-btn.card-act,
+.planner-chart-view-btn.card-act {
     width: 16px;
     height: 16px;
     opacity: 0.75;
 }
 
-.planner-zoom-btn.card-act.is-active {
+.planner-zoom-btn.card-act.is-active,
+.planner-chart-view-btn.card-act.is-active {
     opacity: 1;
     color: var(--text-main, var(--text-color));
     background: rgba(255, 255, 255, 0.06);
+}
+
+.planner-gantt__zoom.is-calendar-view .planner-zoom-btn {
+    opacity: 0.35;
+}
+
+.planner-gantt__zoom.is-calendar-view .planner-chart-view-btn {
+    opacity: 1;
+}
+
+/* Calendar chart view — horizontal month strip (~3 months visible) */
+.planner-calendar {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+}
+
+.planner-calendar__viewport {
+    overflow: auto;
+    cursor: grab;
+    touch-action: none;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.planner-calendar__viewport::-webkit-scrollbar {
+    display: none;
+}
+
+.planner-calendar__viewport.is-panning {
+    cursor: grabbing;
+    user-select: none;
+}
+
+.planner-calendar__strip {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+    padding: 0.2rem;
+    width: max-content;
+}
+
+.planner-calendar__month {
+    flex: 0 0 160px;
+    width: 160px;
+    padding: 0.28rem;
+    border: 1px solid var(--sheet-grid-border, color-mix(in srgb, var(--border-color) 45%, transparent));
+    border-radius: 4px;
+    background: color-mix(in srgb, var(--border-color) 10%, transparent);
+    box-sizing: border-box;
+    color: var(--text-main, var(--text-color));
+}
+
+.planner-calendar__month-title {
+    margin-bottom: 0.2rem;
+    padding: 0.12rem;
+    border-radius: 3px;
+    font-size: calc(0.55rem * var(--note-font-scale, 1));
+    font-weight: 700;
+    text-align: center;
+    color: var(--text-muted, var(--text-color));
+}
+
+.planner-calendar__month-title.is-busy {
+    color: var(--text-main, var(--text-color));
+    background: color-mix(in srgb, var(--border-color) 14%, transparent);
+}
+
+.planner-calendar__weekdays,
+.planner-calendar__days {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 1px;
+}
+
+.planner-calendar__weekday {
+    color: var(--text-muted);
+    font-size: calc(0.42rem * var(--note-font-scale, 1));
+    font-weight: 700;
+    text-align: center;
+    text-transform: uppercase;
+    line-height: 1.2;
+    padding: 0.05rem 0;
+}
+
+.planner-calendar__day,
+.planner-calendar__empty {
+    min-height: 1.05rem;
+    border-radius: 2px;
+}
+
+.planner-calendar__empty {
+    opacity: 0.18;
+    background: color-mix(in srgb, var(--border-color) 8%, transparent);
+}
+
+.planner-calendar__day {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    background: color-mix(in srgb, var(--border-color) 6%, transparent);
+}
+
+.planner-calendar__day-num {
+    font-size: calc(0.48rem * var(--note-font-scale, 1));
+    font-weight: 600;
+    line-height: 1;
+}
+
+.planner-calendar__day.is-active .planner-calendar__day-num {
+    font-weight: 750;
+    color: var(--text-main, var(--text-color));
+}
+
+.planner-calendar__day.is-filled .planner-calendar__day-num {
+    color: #fff;
+    text-shadow: 0 0 2px rgba(0, 0, 0, 0.45);
+}
+
+.planner-calendar__day.is-today {
+    box-shadow: inset 0 0 0 1px var(--accent, #6366f1);
+}
+
+.has-custom-bg .planner-calendar__month {
+    border-color: var(--card-border-subtle);
+    background: color-mix(in srgb, var(--card-border-subtle) 18%, transparent);
+    color: var(--card-fg, currentColor);
+}
+
+.has-custom-bg .planner-calendar__month-title,
+.has-custom-bg .planner-calendar__weekday,
+.has-custom-bg .planner-calendar__day {
+    color: var(--card-muted);
+}
+
+.has-custom-bg .planner-calendar__month-title.is-busy {
+    color: var(--card-fg, currentColor);
+    background: color-mix(in srgb, var(--card-border-subtle) 22%, transparent);
+}
+
+.has-custom-bg .planner-calendar__day,
+.has-custom-bg .planner-calendar__empty {
+    background: color-mix(in srgb, var(--card-border-subtle) 12%, transparent);
+}
+
+.has-custom-bg .planner-calendar__day.is-active .planner-calendar__day-num {
+    color: var(--card-fg, currentColor);
+}
+
+.has-custom-bg .planner-calendar__day.is-today {
+    box-shadow: inset 0 0 0 1px var(--accent, #6366f1);
 }
 
 .planner-category {

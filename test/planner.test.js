@@ -5,6 +5,7 @@ import {
     normalizePlanner,
     normalizePlannerLabelWidth,
     normalizeTodayLine,
+    normalizePlannerChartView,
     plannerHasContent,
     derivePlannerTasks,
     addPlannerRow,
@@ -19,11 +20,18 @@ import {
     summarizePlannerSchedule,
     PLANNER_COL_COUNT,
     PLANNER_DEFAULT_ZOOM,
+    PLANNER_DEFAULT_CHART_VIEW,
     PLANNER_DEFAULT_LABEL_WIDTH,
     PLANNER_DEFAULT_TODAY_LINE,
     PLANNER_VERSION
 } from '../js/planner.js';
 import { layoutPlannerGantt, parsePlannerDateTime, zoomPxPerDay, buildGanttAxis, padGanttRange, isoWeekNumber } from '../js/plannerGantt.js';
+import {
+    buildPlannerCalendarDayCoverage,
+    layoutPlannerCalendar,
+    listPlannerCalendarMonths,
+    plannerCalendarDayKey
+} from '../js/plannerCalendar.js';
 import {
     derivePlannerKanbanCards,
     layoutPlannerKanban,
@@ -51,6 +59,7 @@ describe('planner model', () => {
         const planner = createEmptyPlanner();
         assert.equal(planner.version, PLANNER_VERSION);
         assert.equal(planner.zoom, PLANNER_DEFAULT_ZOOM);
+        assert.equal(planner.chartView, PLANNER_DEFAULT_CHART_VIEW);
         assert.equal(planner.labelWidth, PLANNER_DEFAULT_LABEL_WIDTH);
         assert.equal(planner.todayLine, undefined);
         assert.equal(planner.sheet.cols, PLANNER_COL_COUNT);
@@ -168,6 +177,14 @@ describe('planner model', () => {
         addPlannerRow(planner);
         assert.equal(planner.sheet.rows, before + 1);
         assert.equal(getPlannerField(planner.sheet, before, 'name'), '');
+    });
+
+    it('normalizes chartView gantt|calendar', () => {
+        assert.equal(normalizePlannerChartView('calendar'), 'calendar');
+        assert.equal(normalizePlannerChartView('GANTT'), 'gantt');
+        assert.equal(normalizePlannerChartView('nope'), PLANNER_DEFAULT_CHART_VIEW);
+        assert.equal(normalizePlanner({ ...createEmptyPlanner(), chartView: 'calendar' }).chartView, 'calendar');
+        assert.equal(normalizePlanner(createEmptyPlanner()).chartView, PLANNER_DEFAULT_CHART_VIEW);
     });
 
     it('lists planner fields as Shared', () => {
@@ -384,6 +401,50 @@ describe('planner Gantt layout', () => {
         assert.ok(testDaysBetween(day.rangeStart, day.rangeEnd) >= 30);
         const week = padGanttRange(min, max, 'week');
         assert.ok(testDaysBetween(week.rangeStart, week.rangeEnd) >= 56);
+    });
+});
+
+describe('planner calendar layout', () => {
+    it('covers inclusive local days and milestones', () => {
+        const coverage = buildPlannerCalendarDayCoverage([
+            { start: '2026-03-01', stop: '2026-03-03', categoryColor: '#112233' },
+            { start: '2026-03-05', stop: '', categoryColor: '#445566' }
+        ]);
+        assert.deepEqual(coverage.get('2026-03-01'), ['#112233']);
+        assert.deepEqual(coverage.get('2026-03-02'), ['#112233']);
+        assert.deepEqual(coverage.get('2026-03-03'), ['#112233']);
+        assert.equal(coverage.has('2026-03-04'), false);
+        assert.deepEqual(coverage.get('2026-03-05'), ['#445566']);
+    });
+
+    it('lists consecutive months for a padded range', () => {
+        const months = listPlannerCalendarMonths(
+            new Date(2026, 0, 1),
+            new Date(2026, 4, 1)
+        );
+        assert.deepEqual(months, [
+            { year: 2026, month: 0 },
+            { year: 2026, month: 1 },
+            { year: 2026, month: 2 },
+            { year: 2026, month: 3 }
+        ]);
+    });
+
+    it('layouts a month-padded strip from planner tasks', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'Alpha');
+        setPlannerField(planner.sheet, 0, 'start', '2026-06-10');
+        setPlannerField(planner.sheet, 0, 'stop', '2026-06-20');
+        setCategoryColor(planner, 'Ops', '#aabbcc');
+        setPlannerField(planner.sheet, 0, 'category', 'Ops');
+
+        const layout = layoutPlannerCalendar(planner, { now: new Date(2026, 5, 15) });
+        assert.ok(layout.months.length >= 3);
+        assert.equal(plannerCalendarDayKey(new Date(2026, 5, 15)), '2026-06-15');
+        assert.ok(layout.dayCoverage.has('2026-06-10'));
+        assert.ok(layout.dayCoverage.has('2026-06-20'));
+        assert.deepEqual(layout.dayCoverage.get('2026-06-12'), ['#aabbcc']);
+        assert.ok(layout.focusMonthIndex >= 0);
     });
 });
 
