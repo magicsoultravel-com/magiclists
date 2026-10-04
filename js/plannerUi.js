@@ -88,6 +88,132 @@ function formatKanbanCardDate(value) {
     return m ? m[1] : '';
 }
 
+/**
+ * Read-only Kanban-like HTML for a calendar bar hover preview.
+ * @param {object} planner
+ * @param {number} row
+ * @returns {string}
+ */
+function buildCalendarTaskPreviewHtml(planner, row) {
+    if (!planner || !Number.isFinite(row)) return '';
+    const task = derivePlannerTasks(planner).find((t) => t.row === row);
+    if (!task) return '';
+    const startLabel = formatKanbanCardDate(task.start);
+    const stopLabel = formatKanbanCardDate(task.stop);
+    const rowLabel = String(task.id || row + 1);
+    const startHtml = startLabel
+        ? `<span class="planner-kanban__card-date planner-kanban__card-date--start" title="Start ${escapeAttr(startLabel)}">${escapeHTML(startLabel)}</span>`
+        : '';
+    const stopHtml = stopLabel
+        ? `<span class="planner-kanban__card-date planner-kanban__card-date--stop" title="Stop ${escapeAttr(stopLabel)}">${escapeHTML(stopLabel)}</span>`
+        : '';
+    const comment = String(task.comments || '').trim();
+    const commentHtml = comment
+        ? `<span class="planner-kanban__card-comment">${escapeHTML(comment)}</span>`
+        : '';
+    const cardHex = resolveNoteColor(
+        planner.kanbanCardColors?.[String(row)] || task.categoryColor || ''
+    );
+    const colorClass = cardHex ? ' has-color' : '';
+    return `<article class="planner-kanban__card planner-calendar__task-preview-card${colorClass}" data-planner-row="${row}"${cardSurfaceStyle(cardHex)}>
+        <div class="planner-kanban__card-slot">
+            <span class="planner-kanban__card-row" title="Row ${escapeAttr(rowLabel)}">${escapeHTML(rowLabel)}</span>
+            ${startHtml}${stopHtml}
+            <div class="planner-kanban__card-top">
+                <span class="planner-kanban__card-name">${escapeHTML(task.name || 'Untitled')}</span>
+            </div>
+            ${commentHtml}
+        </div>
+    </article>`;
+}
+
+/**
+ * Hover preview for calendar task bars (read-only kanban-like card).
+ * @param {HTMLElement} host - [data-planner-gantt] root
+ * @param {object} item
+ */
+function bindCalendarTaskPreview(host, item) {
+    const root = host?.querySelector?.('[data-planner-calendar]') || host;
+    if (!root || !item?.planner || root.dataset.calendarPreviewBound === '1') return;
+    root.dataset.calendarPreviewBound = '1';
+
+    /** @type {HTMLElement|null} */
+    let previewEl = null;
+    /** @type {ReturnType<typeof setTimeout>|null} */
+    let hideTimer = null;
+
+    const clearHide = () => {
+        if (hideTimer) {
+            clearTimeout(hideTimer);
+            hideTimer = null;
+        }
+    };
+
+    const removePreview = () => {
+        clearHide();
+        previewEl?.remove();
+        previewEl = null;
+    };
+
+    const scheduleHide = () => {
+        clearHide();
+        hideTimer = setTimeout(removePreview, 140);
+    };
+
+    const positionPreview = (bar) => {
+        if (!previewEl) return;
+        const rect = bar.getBoundingClientRect();
+        const pad = 8;
+        const pw = previewEl.offsetWidth || 160;
+        const ph = previewEl.offsetHeight || 80;
+        let left = rect.left;
+        let top = rect.bottom + 6;
+        left = Math.min(Math.max(pad, left), window.innerWidth - pw - pad);
+        if (top + ph > window.innerHeight - pad) {
+            top = Math.max(pad, rect.top - ph - 6);
+        }
+        previewEl.style.left = `${Math.round(left)}px`;
+        previewEl.style.top = `${Math.round(top)}px`;
+    };
+
+    const showForBar = (bar) => {
+        const viewport = bar.closest('[data-planner-calendar-viewport]');
+        if (viewport?.classList.contains('is-panning')) return;
+        const row = Number(bar.dataset.plannerRow);
+        if (!Number.isFinite(row)) return;
+        clearHide();
+        const inner = buildCalendarTaskPreviewHtml(item.planner, row);
+        if (!inner) {
+            removePreview();
+            return;
+        }
+        if (!previewEl) {
+            previewEl = document.createElement('div');
+            previewEl.className = 'planner-calendar__task-preview';
+            previewEl.addEventListener('pointerenter', clearHide);
+            previewEl.addEventListener('pointerleave', scheduleHide);
+            document.body.appendChild(previewEl);
+        }
+        previewEl.innerHTML = inner;
+        positionPreview(bar);
+        requestAnimationFrame(() => positionPreview(bar));
+    };
+
+    root.addEventListener('pointerover', (e) => {
+        const bar = e.target.closest?.('.planner-calendar__bar[data-planner-row]');
+        if (!bar || !root.contains(bar)) return;
+        showForBar(bar);
+    });
+
+    root.addEventListener('pointerout', (e) => {
+        const fromBar = e.target.closest?.('.planner-calendar__bar[data-planner-row]');
+        if (!fromBar || !root.contains(fromBar)) return;
+        const related = /** @type {Node|null} */ (e.relatedTarget);
+        if (related && (fromBar.contains(related) || previewEl?.contains(related))) return;
+        scheduleHide();
+    });
+}
+
 function refreshItemNoteCanvas(item) {
     if (!item?.id || !item?.canvas) return;
     for (const body of noteBodiesForItem(item.id)) {
@@ -550,6 +676,8 @@ function bindGanttPan(viewport) {
 
     viewport.addEventListener('pointerdown', (e) => {
         if (e.button !== 0) return;
+        // Drop calendar hover preview when starting a pan.
+        document.querySelectorAll('.planner-calendar__task-preview').forEach((el) => el.remove());
         e.stopPropagation();
         dragging = true;
         moved = false;
@@ -669,7 +797,7 @@ export function renderPlannerGanttHtml(planner, { canEdit = false } = {}) {
     const zoomBtns = PLANNER_ZOOM_LEVELS.map((z) => {
         const active = !isCalendar && z === opts.zoom ? ' is-active' : '';
         const icon = zoomIcons[z] || '';
-        return `<button type="button" class="card-act planner-zoom-btn${active}" data-planner-zoom="${z}" title="${escapeAttr(z)}" aria-label="${escapeAttr(z)}" aria-pressed="${!isCalendar && z === opts.zoom ? 'true' : 'false'}"${isCalendar ? ' aria-disabled="true"' : ''}>${icon}</button>`;
+        return `<button type="button" class="card-act planner-zoom-btn${active}" data-planner-zoom="${z}" title="${escapeAttr(z)}" aria-label="${escapeAttr(z)}" aria-pressed="${!isCalendar && z === opts.zoom ? 'true' : 'false'}">${icon}</button>`;
     }).join('');
     const calActive = isCalendar ? ' is-active' : '';
     const calBtn = `<button type="button" class="card-act planner-chart-view-btn${calActive}" data-planner-chart-view="calendar" title="Calendar view" aria-label="Calendar view" aria-pressed="${isCalendar ? 'true' : 'false'}">${CARD_ICONS.calendar}</button>`;
@@ -881,7 +1009,8 @@ function mountGanttViewport(host, layout, {
     preserveScrollTop = null,
     refocus = false,
     canvasScroll = null,
-    calendarLayout = null
+    calendarLayout = null,
+    item = null
 } = {}) {
     const ganttViewport = host?.querySelector?.('[data-planner-gantt-viewport]');
     const calViewport = host?.querySelector?.('[data-planner-calendar-viewport]');
@@ -895,6 +1024,7 @@ function mountGanttViewport(host, layout, {
     }
     if (calViewport) {
         bindGanttPan(calViewport);
+        if (item) bindCalendarTaskPreview(host, item);
         requestAnimationFrame(() => {
             focusCalendarViewport(calViewport, calendarLayout, { preserveScrollLeft, refocus });
             if (canvasScroll) restoreCanvasScroll(canvasScroll);
@@ -930,7 +1060,8 @@ function refreshGanttInSection(section, item, { refocus = false } = {}) {
                 preserveScrollTop,
                 refocus: refocus || zoomChanged || viewChanged,
                 canvasScroll,
-                calendarLayout
+                calendarLayout,
+                item
             });
         }
         restoreCanvasScroll(canvasScroll);
@@ -1260,7 +1391,8 @@ export function attachPlannerInteractions(root, item, {
                 preserveScrollLeft: preserveGanttScroll?.left ?? null,
                 preserveScrollTop: preserveGanttScroll?.top ?? null,
                 canvasScroll,
-                calendarLayout
+                calendarLayout,
+                item
             });
         } else {
             const layoutOpts = ganttLayoutOpts(item.planner);
@@ -1273,7 +1405,8 @@ export function attachPlannerInteractions(root, item, {
                 refocus: shouldRefocus,
                 preserveScrollLeft: preserveGanttScroll?.left ?? null,
                 preserveScrollTop: preserveGanttScroll?.top ?? null,
-                canvasScroll
+                canvasScroll,
+                item
             });
         }
         section.dataset.plannerFocused = '1';
@@ -1510,7 +1643,7 @@ export function attachPlannerInteractions(root, item, {
                     const chartView = normalizePlannerChartView(item.planner?.chartView);
                     if (chartView === 'calendar') {
                         const { layout: calendarLayout } = renderPlannerCalendarBoardHtml(item.planner);
-                        mountGanttViewport(host, null, { refocus: true, canvasScroll, calendarLayout });
+                        mountGanttViewport(host, null, { refocus: true, canvasScroll, calendarLayout, item });
                     } else {
                         const layoutOpts = ganttLayoutOpts(item.planner);
                         const layout = layoutPlannerGantt(
@@ -1521,7 +1654,7 @@ export function attachPlannerInteractions(root, item, {
                                 rowHeight: layoutOpts.rowHeight
                             }
                         );
-                        mountGanttViewport(host, layout, { refocus: true, canvasScroll });
+                        mountGanttViewport(host, layout, { refocus: true, canvasScroll, item });
                     }
                     restoreCanvasScroll(canvasScroll);
                 }

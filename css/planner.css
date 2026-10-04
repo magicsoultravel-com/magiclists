@@ -277,7 +277,7 @@
 }
 
 .planner-gantt__zoom.is-calendar-view .planner-zoom-btn {
-    opacity: 0.35;
+    opacity: 0.65;
 }
 
 .planner-gantt__zoom.is-calendar-view .planner-chart-view-btn {
@@ -403,6 +403,8 @@
     background: var(--accent, #6366f1);
     opacity: 0.9;
     min-height: 2px;
+    pointer-events: auto;
+    cursor: default;
 }
 
 .planner-calendar__nums {
@@ -431,6 +433,31 @@
 .planner-calendar__num-cell.is-today .planner-calendar__day-num {
     color: var(--accent, var(--text-main));
     font-weight: 600;
+}
+
+.planner-calendar__task-preview {
+    position: fixed;
+    z-index: 80;
+    width: min(11rem, calc(100vw - 1rem));
+    pointer-events: auto;
+    font-size: calc(0.5rem * var(--note-font-scale, 1));
+    line-height: 1.3;
+}
+
+.planner-calendar__task-preview .planner-kanban__card-slot {
+    padding: 0.35rem 0.4rem;
+    box-shadow: 0 8px 20px color-mix(in srgb, #000 22%, transparent);
+}
+
+.planner-calendar__task-preview .planner-kanban__card-name {
+    font-size: calc(0.55rem * var(--note-font-scale, 1));
+    font-weight: 600;
+}
+
+.planner-calendar__task-preview .planner-kanban__card-row,
+.planner-calendar__task-preview .planner-kanban__card-date,
+.planner-calendar__task-preview .planner-kanban__card-comment {
+    font-size: calc(0.45rem * var(--note-font-scale, 1));
 }
 
 .has-custom-bg .planner-calendar__month {

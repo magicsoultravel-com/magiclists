@@ -120,8 +120,8 @@ export function peakPlannerCalendarConcurrency(intervals, daysInMonth) {
 }
 
 /**
- * @param {Array<{ id?: string, name?: string, start: string, stop: string, categoryColor?: string }>} tasks
- * @returns {Array<{ id: string, name: string, start: Date, stop: Date, color: string, milestone: boolean }>}
+ * @param {Array<{ id?: string, row?: number, name?: string, start: string, stop: string, categoryColor?: string }>} tasks
+ * @returns {Array<{ id: string, row: number, name: string, start: Date, stop: Date, color: string, milestone: boolean }>}
  */
 export function parsePlannerCalendarTaskIntervals(tasks) {
     const out = [];
@@ -131,8 +131,10 @@ export function parsePlannerCalendarTaskIntervals(tasks) {
         const milestone = !String(task.stop || '').trim();
         let stop = parsePlannerDateTime(task.stop) || start;
         if (stop.getTime() < start.getTime()) stop = start;
+        const row = Number.isFinite(task.row) ? Number(task.row) : out.length;
         out.push({
             id: String(task.id || task.name || out.length),
+            row,
             name: String(task.name || task.id || ''),
             start: startOfLocalDay(start),
             stop: startOfLocalDay(stop),
@@ -164,7 +166,7 @@ export function layoutPlannerCalendarMonthBars(year, month, datedTasks) {
     const monthFirst = new Date(year, month, 1);
     const monthLast = new Date(year, month, daysInMonth);
 
-    /** @type {Array<{ id: string, name: string, color: string, dayStart: number, dayEnd: number }>} */
+    /** @type {Array<{ id: string, row: number, name: string, color: string, dayStart: number, dayEnd: number }>} */
     const clipped = [];
     for (const task of datedTasks || []) {
         let from = task.start;
@@ -175,6 +177,7 @@ export function layoutPlannerCalendarMonthBars(year, month, datedTasks) {
         if (to.getTime() > monthLast.getTime()) to = monthLast;
         clipped.push({
             id: task.id,
+            row: task.row,
             name: task.name,
             color: task.color,
             dayStart: from.getDate(),
@@ -188,13 +191,14 @@ export function layoutPlannerCalendarMonthBars(year, month, datedTasks) {
     const totalCells = firstDayIndex + daysInMonth;
     const weekRows = Math.max(1, Math.ceil(totalCells / 7));
 
-    /** @type {Array<{ id: string, name: string, color: string, lane: number, weekRow: number, startCol: number, endCol: number }>} */
+    /** @type {Array<{ id: string, row: number, name: string, color: string, lane: number, weekRow: number, startCol: number, endCol: number }>} */
     const segments = [];
     for (const iv of packed) {
         const segs = splitPlannerCalendarWeekSegments(iv.dayStart, iv.dayEnd, firstDayIndex);
         for (const seg of segs) {
             segments.push({
                 id: iv.id,
+                row: iv.row,
                 name: iv.name,
                 color: iv.color,
                 lane: iv.lane,
@@ -374,7 +378,8 @@ function renderMonthCardHtml(monthInfo, datedTasks, todayKey) {
                 ? `background:${escapeAttr(seg.color)};`
                 : '';
             const titleAttr = seg.name ? ` title="${escapeAttr(seg.name)}"` : '';
-            return `<div class="planner-calendar__bar" style="top:${top.toFixed(3)}%;left:${left.toFixed(3)}%;width:${width.toFixed(3)}%;height:${barH.toFixed(3)}%;${color}"${titleAttr}></div>`;
+            const rowAttr = Number.isFinite(seg.row) ? ` data-planner-row="${seg.row}"` : '';
+            return `<div class="planner-calendar__bar" style="top:${top.toFixed(3)}%;left:${left.toFixed(3)}%;width:${width.toFixed(3)}%;height:${barH.toFixed(3)}%;${color}"${rowAttr}${titleAttr}></div>`;
         }).join('');
     }
 
@@ -386,7 +391,7 @@ function renderMonthCardHtml(monthInfo, datedTasks, todayKey) {
         </div>
         <div class="planner-calendar__days-wrap">
             <div class="planner-calendar__days">${daysHtml}</div>
-            <div class="planner-calendar__bars" aria-hidden="true">${barsHtml}</div>
+            <div class="planner-calendar__bars">${barsHtml}</div>
             <div class="planner-calendar__nums" aria-hidden="true">${numsHtml}</div>
         </div>
     </div>`;
