@@ -540,32 +540,93 @@
     opacity: 0.45;
 }
 
-.magic-focus__canvas-sub {
+/* --- Single-section pane: section fills the viewport --- */
+.magic-focus__pane-body.editor-note-body:not(:has(> :nth-child(2))) > .planner-sub,
+.magic-focus__pane-body.editor-note-body:not(:has(> :nth-child(2))) > [data-note-planner] {
     flex: 1 1 auto;
-    min-height: 8rem;
+    min-height: 0;
     display: flex;
     flex-direction: column;
 }
 
-.magic-focus__canvas-sub .planner-sub__body {
+.magic-focus__pane-body.editor-note-body:not(:has(> :nth-child(2))) > [data-note-planner] > .planner-sub {
     flex: 1 1 auto;
     min-height: 0;
-    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.magic-focus__pane-body.editor-note-body:not(:has(> :nth-child(2))) > .planner-sub > .planner-sub__body,
+.magic-focus__pane-body.editor-note-body:not(:has(> :nth-child(2))) > [data-note-planner] .planner-sub > .planner-sub__body {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.magic-focus__pane-body.editor-note-body:not(:has(> :nth-child(2))) > .planner-sub[data-note-checklist-sub] > .planner-sub__body {
+    overflow: auto;
+}
+
+.magic-focus__pane-body.editor-note-body:not(:has(> :nth-child(2))) > .planner-sub.magic-focus__canvas-sub {
+    min-height: 8rem;
+}
+
+/* --- Multi-section pane: one continuous scroll; sticky chevron headers --- */
+.magic-focus__pane-body.editor-note-body:has(> :nth-child(2)) {
+    overflow: auto;
+}
+
+.magic-focus__pane-body.editor-note-body:has(> :nth-child(2)) > .planner-sub,
+.magic-focus__pane-body.editor-note-body:has(> :nth-child(2)) > [data-note-planner] {
+    flex: 0 0 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.magic-focus__pane-body.editor-note-body:has(> :nth-child(2)) > [data-note-planner] > .planner-sub {
+    flex: 0 0 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.magic-focus__pane-body.editor-note-body:has(> :nth-child(2)) > .planner-sub > .planner-sub__body,
+.magic-focus__pane-body.editor-note-body:has(> :nth-child(2)) > [data-note-planner] .planner-sub > .planner-sub__body {
+    flex: 0 0 auto;
+    min-height: 0;
+    overflow: visible;
+}
+
+.magic-focus__pane-body.editor-note-body:has(> :nth-child(2)) .planner-sub__toolbar,
+.magic-focus__pane-body.editor-note-body:has(> :nth-child(2)) .planner-gantt__toolbar,
+.magic-focus__pane-body.editor-note-body:has(> :nth-child(2)) .planner-kanban__toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--bg-card, var(--bg-surface));
+}
+
+#magic-focus.has-custom-bg .magic-focus__pane-body.editor-note-body:has(> :nth-child(2)) .planner-sub__toolbar,
+#magic-focus.has-custom-bg .magic-focus__pane-body.editor-note-body:has(> :nth-child(2)) .planner-gantt__toolbar,
+#magic-focus.has-custom-bg .magic-focus__pane-body.editor-note-body:has(> :nth-child(2)) .planner-kanban__toolbar {
+    background: var(--card-panel-bg, var(--bg-card, var(--bg-surface)));
+}
+
+/* Canvas / chart in a multi-section scroll: fixed slab so absolute/flex hosts size. */
+.magic-focus__pane-body.editor-note-body:has(> :nth-child(2)) > .planner-sub.magic-focus__canvas-sub > .planner-sub__body:not(.is-collapsed) {
+    flex: 0 0 auto;
+    height: min(28rem, 60vh);
+    min-height: 12rem;
     overflow: hidden;
 }
 
-/* Checklist fills the pane and scrolls its body when steps overflow. */
-.magic-focus__pane-body.editor-note-body > .planner-sub[data-note-checklist-sub] {
-    flex: 1 1 auto;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
+.magic-focus__pane-body.editor-note-body:has(> :nth-child(2)) .planner-gantt__board:not(.is-collapsed) {
+    min-height: min(22rem, 50vh);
 }
 
-.magic-focus__pane-body.editor-note-body > .planner-sub[data-note-checklist-sub] > .planner-sub__body {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow: auto;
+.magic-focus__canvas-sub .planner-sub__body {
+    position: relative;
+    overflow: hidden;
 }
 
 .magic-focus__pane--canvas {

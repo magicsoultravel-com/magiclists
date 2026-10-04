@@ -1161,8 +1161,24 @@ export const MagicFocus = {
                 const collapsed = subBody?.classList.toggle('is-collapsed');
                 chevron?.classList.toggle('collapsed', !!collapsed);
                 toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                if (!collapsed) this._relayoutFocusCanvas();
             });
         }
+    },
+
+    _relayoutFocusCanvas() {
+        if (!this.drawingHosted) return;
+        requestAnimationFrame(() => {
+            import('./drawingBoard.js').then(({ DrawingBoard }) => {
+                if (DrawingBoard.active) DrawingBoard.resize?.();
+            });
+            import('./drawingToolbarChrome.js').then(({ DrawingToolbarChrome }) => {
+                if (DrawingToolbarChrome.collapsed) {
+                    DrawingToolbarChrome.positionChip?.(false);
+                    DrawingToolbarChrome.chip?.classList.remove('is-hidden');
+                }
+            });
+        });
     },
 
     _bindPaneInteractions(body, item) {
@@ -1354,6 +1370,8 @@ export const MagicFocus = {
         if (!DrawingToolbarChrome.collapsed) {
             DrawingToolbarChrome.collapse?.();
         }
+        // Layout may still be settling (multi-section flex); resize + re-seat chip.
+        this._relayoutFocusCanvas();
     },
 
     async _unhostDrawingBoard() {
