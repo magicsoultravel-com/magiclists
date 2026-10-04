@@ -255,7 +255,7 @@ describe('planner model', () => {
         assert.ok(html.includes('data-planner-kanban'));
     });
 
-    it('kanban inline fields only when canEdit; flyout stays read-only spans', () => {
+    it('kanban inline fields only when canEdit; stable slot without flyout', () => {
         const planner = createEmptyPlanner();
         setPlannerField(planner.sheet, 0, 'name', 'Task A');
         setPlannerField(planner.sheet, 0, 'comments', 'Hello');
@@ -265,9 +265,9 @@ describe('planner model', () => {
         assert.ok(editable.includes('contenteditable="plaintext-only"'));
         assert.ok(/<textarea[^>]*data-planner-kanban-field="comments"/.test(editable));
         assert.ok(/rows="3"/.test(editable));
-        // Flyout mirrors are plain spans (no contenteditable inside flyout).
-        assert.ok(!/<div class="planner-kanban__card-flyout"[^>]*>[\s\S]*?contenteditable/.test(editable));
-        // One action suite on the article (not duplicated in slot + flyout).
+        // No size-changing hover flyout — content stays in the stable slot.
+        assert.ok(!editable.includes('planner-kanban__card-flyout'));
+        // One action suite on the article.
         assert.equal((editable.match(/data-planner-kanban-density/g) || []).length, 1);
         assert.equal((editable.match(/class="planner-kanban__card-actions"/g) || []).length, 1);
 
