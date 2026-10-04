@@ -895,9 +895,28 @@
 .planner-kanban__board {
     display: flex;
     gap: 0.4rem;
+    /* overflow-x:auto alone forces overflow-y to compute to auto and clips flyouts. */
     overflow-x: auto;
+    overflow-y: visible;
     min-height: 6rem;
     padding-bottom: 0.2rem;
+}
+
+/*
+ * Hover flyout must spill past the board / Plan section bottom (over content below).
+ * :has() temporarily drops clipping ancestors; horizontal scroll pauses while peeking.
+ */
+.planner-kanban__board:has(.planner-kanban__card:is(:hover, :focus-within):not(.is-kanban-editing)) {
+    overflow: visible;
+}
+
+.note-body-section--planner:has(.planner-kanban__card:is(:hover, :focus-within):not(.is-kanban-editing)) {
+    position: relative;
+    z-index: 20;
+}
+
+.note-body-section--planner:has(.planner-kanban__card:is(:hover, :focus-within):not(.is-kanban-editing)) > .note-section-body.collapsable-section {
+    overflow: visible;
 }
 
 .planner-kanban__board.is-collapsed {
