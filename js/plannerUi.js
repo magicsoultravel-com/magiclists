@@ -51,12 +51,14 @@ const KANBAN_SORT_ROW_ICON = '<svg viewBox="0 0 12 12" width="12" height="12" fo
 
 const KANBAN_SORT_ICONS = Object.freeze({
     row: KANBAN_SORT_ROW_ICON,
-    date: ACTION_ICONS.sortDate
+    date: ACTION_ICONS.sortDate,
+    alpha: ACTION_ICONS.sortAlpha
 });
 
 const KANBAN_SORT_TITLES = Object.freeze({
     row: 'Sort by row',
-    date: 'Sort by date'
+    date: 'Sort by date',
+    alpha: 'Sort alphabetically'
 });
 
 function cardSurfaceStyle(hex) {
@@ -197,7 +199,7 @@ function plannerSectionCanEdit(section) {
     if (!section) return false;
     if (section.closest?.('.magic-focus__pane')) return true;
     if (section.matches?.('[data-focus-table-only], [data-focus-chart-only], [data-focus-kanban-only]')) return true;
-    if (section.querySelector?.('.planner-cell-input, [data-planner-rail-resize], [data-planner-kanban-card][draggable="true"]')) {
+    if (section.querySelector?.('.planner-cell-input, [data-planner-rail-resize], [data-planner-kanban-card]')) {
         return true;
     }
     return bodyCanEdit(section.closest('.editor-note-body') || section);
@@ -651,7 +653,7 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
             ? `${KANBAN_SORT_TITLES[mode]} (${sortDir === 'desc' ? 'descending' : 'ascending'} — click to flip)`
             : KANBAN_SORT_TITLES[mode];
         const icon = KANBAN_SORT_ICONS[mode] || '';
-        return `<button type="button" class="btn btn--compact btn--icon planner-kanban-sort-btn${activeClass}${dirClass}" data-planner-kanban-sort="${mode}" title="${escapeAttr(title)}" aria-label="${escapeAttr(title)}" aria-pressed="${active ? 'true' : 'false'}">${icon}</button>`;
+        return `<button type="button" class="card-act planner-kanban-sort-btn${activeClass}${dirClass}" data-planner-kanban-sort="${mode}" title="${escapeAttr(title)}" aria-label="${escapeAttr(title)}" aria-pressed="${active ? 'true' : 'false'}">${icon}</button>`;
     }).join('');
     const toggleCollapsed = kanbanCollapsed ? ' collapsed' : '';
     const boardCollapsed = kanbanCollapsed ? ' is-collapsed' : '';
@@ -659,15 +661,15 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
     const columnsHtml = layout.columns.map((col) => {
         const cardsHtml = col.cards.length
             ? col.cards.map((card) => {
-                const drag = canEdit ? ' draggable="true"' : '';
+                const editClass = canEdit ? ' is-editable' : '';
                 const comment = clipKanbanComment(card.comments);
                 const commentHtml = comment
                     ? `<span class="planner-kanban__card-comment">${escapeHTML(comment)}</span>`
                     : '';
                 const colorBtn = canEdit
-                    ? `<button type="button" class="planner-kanban__card-color" data-planner-kanban-color draggable="false" title="Card color" aria-label="Card color">${CARD_ICONS.color}</button>`
+                    ? `<button type="button" class="planner-kanban__card-color" data-planner-kanban-color title="Card color" aria-label="Card color">${CARD_ICONS.color}</button>`
                     : '';
-                return `<article class="planner-kanban__card${card.cardColor ? ' has-color' : ''}" data-planner-kanban-card data-planner-row="${card.row}"${drag}${cardSurfaceStyle(card.cardColor)}>
+                return `<article class="planner-kanban__card${card.cardColor ? ' has-color' : ''}${editClass}" data-planner-kanban-card data-planner-row="${card.row}"${cardSurfaceStyle(card.cardColor)}>
                     <div class="planner-kanban__card-top">
                         <span class="planner-kanban__card-name">${escapeHTML(card.name)}</span>
                         ${colorBtn}
@@ -1434,7 +1436,7 @@ export function attachPlannerInteractions(root, item, {
             e.preventDefault();
             e.stopPropagation();
             const mode = normalizeKanbanSort(kanbanSortBtn.dataset.plannerKanbanSort);
-            if (mode !== 'row' && mode !== 'date') return;
+            if (mode !== 'row' && mode !== 'date' && mode !== 'alpha') return;
             mutate((it) => {
                 const cur = normalizeKanbanSort(it.planner.kanbanSort);
                 const curDir = normalizeKanbanSortDir(it.planner.kanbanSortDir);
@@ -1503,124 +1505,228 @@ export function attachPlannerInteractions(root, item, {
         }
     });
 
-    // Row drag-reorder via row-number handle + kanban card DnD with live ghost slot
+    // Table row HTML5 reorder + FC-style pointer drag for kanban cards
     let dragFrom = null;
-    let kanbanDragRow = null;
-    /** @type {HTMLElement|null} */
-    let kanbanPlaceholder = null;
-    /** @type {HTMLElement|null} */
-    let kanbanDragGhost = null;
+    const KANBAN_DRAG_THRESHOLD = 4;
+    /** @type {{
+     *   card: HTMLElement,
+     *   row: number,
+     *   slot: HTMLElement,
+     *   offsetX: number,
+     *   offsetY: number,
+     *   width: number,
+     *   height: number,
+     *   lifted: boolean,
+     *   startX: number,
+     *   startY: number,
+     *   pointerId: number
+     * } | null} */
+    let kanbanPtr = null;
 
-    const clearKanbanDragUi = () => {
-        section.querySelectorAll('.planner-kanban__column-body.is-drag-over, .planner-kanban__card.is-dragging').forEach((el) => {
-            el.classList.remove('is-drag-over', 'is-dragging');
-        });
-        if (kanbanPlaceholder?.isConnected) kanbanPlaceholder.remove();
-        kanbanPlaceholder = null;
-        if (kanbanDragGhost?.isConnected) kanbanDragGhost.remove();
-        kanbanDragGhost = null;
-    };
-
-    const ensureKanbanPlaceholder = () => {
-        if (!kanbanPlaceholder) {
-            kanbanPlaceholder = document.createElement('div');
-            kanbanPlaceholder.className = 'planner-kanban__placeholder';
-            kanbanPlaceholder.setAttribute('aria-hidden', 'true');
-        }
-        return kanbanPlaceholder;
-    };
-
-    const placeKanbanGhost = (clientY, dropCol, overCard) => {
-        const slot = ensureKanbanPlaceholder();
-        const body = dropCol || overCard?.closest?.('[data-planner-kanban-drop]');
-        if (!body || !section.contains(body)) return;
-        body.classList.add('is-drag-over');
+    const clearKanbanColumnOver = () => {
         section.querySelectorAll('.planner-kanban__column-body.is-drag-over').forEach((el) => {
-            if (el !== body) el.classList.remove('is-drag-over');
+            el.classList.remove('is-drag-over');
         });
+    };
 
-        if (overCard && body.contains(overCard) && Number(overCard.dataset.plannerRow) !== kanbanDragRow) {
-            const rect = overCard.getBoundingClientRect();
-            const before = clientY < rect.top + rect.height / 2;
-            if (before) body.insertBefore(slot, overCard);
-            else body.insertBefore(slot, overCard.nextSibling);
-            return;
+    const resetKanbanCardStyles = (card) => {
+        if (!card) return;
+        card.classList.remove('is-planner-kanban-dragging');
+        card.style.position = '';
+        card.style.left = '';
+        card.style.top = '';
+        card.style.width = '';
+        card.style.height = '';
+        card.style.zIndex = '';
+        card.style.pointerEvents = '';
+        card.style.margin = '';
+        card.style.transform = '';
+    };
+
+    const endKanbanPointerDrag = ({ commit = false } = {}) => {
+        const state = kanbanPtr;
+        kanbanPtr = null;
+        document.removeEventListener('pointermove', onKanbanDocPointerMove);
+        document.removeEventListener('pointerup', onKanbanDocPointerUp);
+        document.removeEventListener('pointercancel', onKanbanDocPointerUp);
+        document.body.classList.remove('is-planner-kanban-drag-active');
+        clearKanbanColumnOver();
+        if (!state) return;
+
+        const { card, row, slot } = state;
+        let target = null;
+        if (commit && slot?.isConnected) {
+            const body = slot.closest('[data-planner-kanban-drop]');
+            const toStage = Number(body?.dataset?.plannerKanbanDrop);
+            if (Number.isFinite(toStage)) {
+                let beforeRow = null;
+                let el = slot.nextElementSibling;
+                while (el) {
+                    if (el.matches?.('[data-planner-kanban-card]')) {
+                        const r = Number(el.dataset.plannerRow);
+                        if (Number.isFinite(r) && r !== row) {
+                            beforeRow = r;
+                            break;
+                        }
+                    }
+                    el = el.nextElementSibling;
+                }
+                target = { toStage, beforeRow };
+            }
         }
 
-        // Drop on empty space in column — append after last real card (skip dragging source).
+        if (slot?.parentNode) {
+            slot.parentNode.insertBefore(card, slot);
+            slot.remove();
+        } else if (!card.isConnected && section.isConnected) {
+            const fallback = section.querySelector('[data-planner-kanban-drop]');
+            fallback?.appendChild(card);
+        }
+        resetKanbanCardStyles(card);
+
+        if (commit && target) {
+            mutate((it) => {
+                it.planner.kanbanSort = 'manual';
+                moveKanbanCard(it.planner, row, target.toStage, { beforeRow: target.beforeRow });
+            }, { skipRerender: true, refreshGantt: true });
+        }
+    };
+
+    const placeKanbanSlot = (clientX, clientY, slot, draggedRow) => {
+        const board = section.querySelector('[data-planner-kanban-board]');
+        if (!board) return;
+        const cols = [...board.querySelectorAll('[data-planner-kanban-drop]')];
+        let body = null;
+        for (const col of cols) {
+            const rect = col.getBoundingClientRect();
+            if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+                body = col;
+                break;
+            }
+        }
+        if (!body) {
+            // Nearest column by horizontal distance when pointer is between/above columns
+            let best = null;
+            let bestDist = Infinity;
+            for (const col of cols) {
+                const rect = col.getBoundingClientRect();
+                const cx = (rect.left + rect.right) / 2;
+                const dist = Math.abs(clientX - cx);
+                if (dist < bestDist) {
+                    bestDist = dist;
+                    best = col;
+                }
+            }
+            body = best;
+        }
+        if (!body) return;
+
+        clearKanbanColumnOver();
+        body.classList.add('is-drag-over');
+
         const cards = [...body.querySelectorAll('[data-planner-kanban-card]')]
-            .filter((c) => Number(c.dataset.plannerRow) !== kanbanDragRow);
+            .filter((c) => Number(c.dataset.plannerRow) !== draggedRow);
         if (!cards.length) {
             body.appendChild(slot);
             return;
         }
-        let inserted = false;
         for (const card of cards) {
             const rect = card.getBoundingClientRect();
             if (clientY < rect.top + rect.height / 2) {
                 body.insertBefore(slot, card);
-                inserted = true;
-                break;
+                return;
             }
         }
-        if (!inserted) body.appendChild(slot);
+        body.appendChild(slot);
     };
 
-    const readKanbanDropTarget = () => {
-        const slot = kanbanPlaceholder;
-        if (!slot?.isConnected) return null;
-        const body = slot.closest('[data-planner-kanban-drop]');
-        if (!body) return null;
-        const toStage = Number(body.dataset.plannerKanbanDrop);
-        if (!Number.isFinite(toStage)) return null;
-        let beforeRow = null;
-        let el = slot.nextElementSibling;
-        while (el) {
-            if (el.matches?.('[data-planner-kanban-card]')) {
-                const r = Number(el.dataset.plannerRow);
-                if (Number.isFinite(r) && r !== kanbanDragRow) {
-                    beforeRow = r;
-                    break;
-                }
-            }
-            el = el.nextElementSibling;
-        }
-        return { toStage, beforeRow };
+    const liftKanbanCard = (state, clientX, clientY) => {
+        if (state.lifted) return;
+        const { card } = state;
+        const rect = card.getBoundingClientRect();
+        state.width = rect.width;
+        state.height = rect.height;
+        state.offsetX = clientX - rect.left;
+        state.offsetY = clientY - rect.top;
+
+        const slot = document.createElement('div');
+        slot.className = 'planner-kanban__placeholder';
+        slot.setAttribute('aria-hidden', 'true');
+        slot.style.height = `${rect.height}px`;
+        card.parentNode?.insertBefore(slot, card);
+        state.slot = slot;
+
+        document.body.appendChild(card);
+        card.classList.add('is-planner-kanban-dragging');
+        card.style.position = 'fixed';
+        card.style.width = `${rect.width}px`;
+        card.style.height = `${rect.height}px`;
+        card.style.left = `${rect.left}px`;
+        card.style.top = `${rect.top}px`;
+        card.style.zIndex = '9999';
+        card.style.pointerEvents = 'none';
+        card.style.margin = '0';
+        document.body.classList.add('is-planner-kanban-drag-active');
+        state.lifted = true;
     };
+
+    const onKanbanDocPointerMove = (e) => {
+        const state = kanbanPtr;
+        if (!state || state.pointerId !== e.pointerId) return;
+        const dx = e.clientX - state.startX;
+        const dy = e.clientY - state.startY;
+        if (!state.lifted) {
+            if ((dx * dx + dy * dy) < KANBAN_DRAG_THRESHOLD * KANBAN_DRAG_THRESHOLD) return;
+            e.preventDefault();
+            liftKanbanCard(state, e.clientX, e.clientY);
+        }
+        if (!state.lifted) return;
+        e.preventDefault();
+        state.card.style.left = `${e.clientX - state.offsetX}px`;
+        state.card.style.top = `${e.clientY - state.offsetY}px`;
+        placeKanbanSlot(e.clientX, e.clientY, state.slot, state.row);
+    };
+
+    const onKanbanDocPointerUp = (e) => {
+        const state = kanbanPtr;
+        if (!state || (e.pointerId != null && state.pointerId !== e.pointerId)) return;
+        document.removeEventListener('pointermove', onKanbanDocPointerMove);
+        document.removeEventListener('pointerup', onKanbanDocPointerUp);
+        document.removeEventListener('pointercancel', onKanbanDocPointerUp);
+        endKanbanPointerDrag({ commit: state.lifted });
+    };
+
+    section.addEventListener('pointerdown', (e) => {
+        if (e.button != null && e.button !== 0) return;
+        if (e.target.closest?.('[data-planner-kanban-color]')) return;
+        const card = e.target.closest('[data-planner-kanban-card]');
+        if (!card || !section.contains(card) || !card.classList.contains('is-editable')) return;
+        const row = Number(card.dataset.plannerRow);
+        if (!Number.isFinite(row)) return;
+        // Abort any prior incomplete drag
+        if (kanbanPtr) endKanbanPointerDrag({ commit: false });
+        kanbanPtr = {
+            card,
+            row,
+            slot: null,
+            offsetX: 0,
+            offsetY: 0,
+            width: 0,
+            height: 0,
+            lifted: false,
+            startX: e.clientX,
+            startY: e.clientY,
+            pointerId: e.pointerId
+        };
+        document.addEventListener('pointermove', onKanbanDocPointerMove, { passive: false });
+        document.addEventListener('pointerup', onKanbanDocPointerUp);
+        document.addEventListener('pointercancel', onKanbanDocPointerUp);
+    });
 
     section.addEventListener('dragstart', (e) => {
-        if (e.target.closest?.('[data-planner-kanban-color]')) {
+        // Kanban uses pointer drag; block native HTML5 drag from cards.
+        if (e.target.closest?.('[data-planner-kanban-card]')) {
             e.preventDefault();
-            return;
-        }
-        const kanbanCard = e.target.closest('[data-planner-kanban-card]');
-        if (kanbanCard && section.contains(kanbanCard)) {
-            kanbanDragRow = Number(kanbanCard.dataset.plannerRow);
-            e.dataTransfer.effectAllowed = 'move';
-            e.dataTransfer.setData('text/plain', `kanban:${kanbanDragRow}`);
-            kanbanCard.classList.add('is-dragging');
-
-            // Floating drag image clone ("ghost")
-            try {
-                const clone = kanbanCard.cloneNode(true);
-                clone.classList.add('planner-kanban__drag-ghost');
-                clone.classList.remove('is-dragging');
-                clone.querySelector('[data-planner-kanban-color]')?.remove();
-                clone.style.width = `${kanbanCard.getBoundingClientRect().width}px`;
-                clone.style.position = 'absolute';
-                clone.style.top = '-9999px';
-                clone.style.left = '-9999px';
-                clone.style.pointerEvents = 'none';
-                document.body.appendChild(clone);
-                kanbanDragGhost = clone;
-                e.dataTransfer.setDragImage(clone, 16, 12);
-            } catch { /* setDragImage optional */ }
-
-            const body = kanbanCard.closest('[data-planner-kanban-drop]');
-            if (body) {
-                const slot = ensureKanbanPlaceholder();
-                body.insertBefore(slot, kanbanCard.nextSibling);
-            }
             return;
         }
         const head = e.target.closest('.planner-row-head[data-planner-row]');
@@ -1631,16 +1737,6 @@ export function attachPlannerInteractions(root, item, {
         head.closest('tr')?.classList.add('is-dragging');
     });
     section.addEventListener('dragover', (e) => {
-        if (kanbanDragRow != null) {
-            const dropCol = e.target.closest('[data-planner-kanban-drop]');
-            const overCard = e.target.closest('[data-planner-kanban-card]');
-            const overSlot = e.target.closest('.planner-kanban__placeholder');
-            if ((!dropCol && !overCard && !overSlot) || !section.contains(dropCol || overCard || overSlot)) return;
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            placeKanbanGhost(e.clientY, dropCol || overSlot?.closest('[data-planner-kanban-drop]'), overCard);
-            return;
-        }
         const row = e.target.closest('tr[data-planner-row-index]');
         if (!row || !section.contains(row) || dragFrom == null) return;
         e.preventDefault();
@@ -1649,34 +1745,6 @@ export function attachPlannerInteractions(root, item, {
         row.classList.add('is-drag-over');
     });
     section.addEventListener('drop', (e) => {
-        if (kanbanDragRow != null) {
-            e.preventDefault();
-            // Final placeholder position from last dragover; if missing, fall back to drop target.
-            let target = readKanbanDropTarget();
-            if (!target) {
-                const overCard = e.target.closest('[data-planner-kanban-card]');
-                const dropCol = e.target.closest('[data-planner-kanban-drop]');
-                const stageEl = dropCol || overCard?.closest('[data-planner-kanban-drop]');
-                if (stageEl && section.contains(stageEl)) {
-                    target = {
-                        toStage: Number(stageEl.dataset.plannerKanbanDrop),
-                        beforeRow: overCard && Number(overCard.dataset.plannerRow) !== kanbanDragRow
-                            ? Number(overCard.dataset.plannerRow)
-                            : null
-                    };
-                }
-            }
-            const row = kanbanDragRow;
-            clearKanbanDragUi();
-            kanbanDragRow = null;
-            if (!target || !Number.isFinite(target.toStage)) return;
-            mutate((it) => {
-                // Drag always writes stage + order (manual order becomes the live sort).
-                it.planner.kanbanSort = 'manual';
-                moveKanbanCard(it.planner, row, target.toStage, { beforeRow: target.beforeRow });
-            }, { skipRerender: true, refreshGantt: true });
-            return;
-        }
         const row = e.target.closest('tr[data-planner-row-index]');
         if (!row || !section.contains(row) || dragFrom == null) return;
         e.preventDefault();
@@ -1694,11 +1762,9 @@ export function attachPlannerInteractions(root, item, {
     });
     section.addEventListener('dragend', () => {
         dragFrom = null;
-        kanbanDragRow = null;
         section.querySelectorAll('tr.is-drag-over, tr.is-dragging').forEach((el) => {
             el.classList.remove('is-drag-over', 'is-dragging');
         });
-        clearKanbanDragUi();
     });
 
     // Column resize (table) + rail label width resize (chart)

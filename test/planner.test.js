@@ -199,7 +199,11 @@ describe('planner model', () => {
         assert.ok(html.includes('Kanban</button>') || html.includes('>Kanban'));
         assert.ok(html.includes('data-planner-kanban-sort="row"'));
         assert.ok(html.includes('data-planner-kanban-sort="date"'));
+        assert.ok(html.includes('data-planner-kanban-sort="alpha"'));
         assert.ok(!html.includes('data-planner-kanban-sort="manual"'));
+        assert.ok(html.includes('card-act planner-kanban-sort-btn'));
+        assert.ok(html.includes('planner-kanban__card is-editable') || html.includes('is-editable"'));
+        assert.ok(!html.includes('data-planner-kanban-card') || !/data-planner-kanban-card[^>]*draggable="true"/.test(html));
         assert.ok(html.includes('data-planner-kanban-color'));
         assert.ok(html.includes('data-planner-rail-resize'));
         assert.ok(!html.includes('data-planner-today-settings-toggle'));
@@ -407,33 +411,43 @@ describe('planner Kanban', () => {
         assert.equal(overridden[0].cardColor, '#112233');
     });
 
-    it('sorts by date/row with asc/desc and manual order', () => {
+    it('sorts by date/row/alpha with asc/desc and manual order', () => {
         const planner = createEmptyPlanner();
         setPlannerField(planner.sheet, 0, 'name', 'Late');
         setPlannerField(planner.sheet, 0, 'start', '2026-03-10');
         setPlannerField(planner.sheet, 1, 'name', 'Early');
         setPlannerField(planner.sheet, 1, 'start', '2026-03-01');
-        planner.kanbanStageByRow = { '0': 1, '1': 1 };
+        setPlannerField(planner.sheet, 2, 'name', 'alpha');
+        planner.kanbanStageByRow = { '0': 1, '1': 1, '2': 1 };
 
         planner.kanbanSort = 'date';
         planner.kanbanSortDir = 'asc';
         let layout = layoutPlannerKanban(planner, { flavour: 'workflow' });
-        assert.deepEqual(layout.columns[1].cards.map((c) => c.name), ['Early', 'Late']);
+        assert.deepEqual(layout.columns[1].cards.map((c) => c.name), ['Early', 'Late', 'alpha']);
         assert.equal(layout.labels[1], 'Planning');
 
         planner.kanbanSortDir = 'desc';
         layout = layoutPlannerKanban(planner, { flavour: 'workflow' });
-        assert.deepEqual(layout.columns[1].cards.map((c) => c.name), ['Late', 'Early']);
+        assert.deepEqual(layout.columns[1].cards.map((c) => c.name), ['Late', 'Early', 'alpha']);
 
         planner.kanbanSort = 'row';
         planner.kanbanSortDir = 'desc';
         layout = layoutPlannerKanban(planner, { flavour: 'workflow' });
-        assert.deepEqual(layout.columns[1].cards.map((c) => c.name), ['Early', 'Late']);
+        assert.deepEqual(layout.columns[1].cards.map((c) => c.name), ['alpha', 'Early', 'Late']);
+
+        planner.kanbanSort = 'alpha';
+        planner.kanbanSortDir = 'asc';
+        layout = layoutPlannerKanban(planner, { flavour: 'workflow' });
+        assert.deepEqual(layout.columns[1].cards.map((c) => c.name), ['alpha', 'Early', 'Late']);
+
+        planner.kanbanSortDir = 'desc';
+        layout = layoutPlannerKanban(planner, { flavour: 'workflow' });
+        assert.deepEqual(layout.columns[1].cards.map((c) => c.name), ['Late', 'Early', 'alpha']);
 
         planner.kanbanSort = 'manual';
-        planner.kanbanOrderByStage = { '1': [0, 1] };
+        planner.kanbanOrderByStage = { '1': [0, 1, 2] };
         layout = layoutPlannerKanban(planner, { flavour: 'workflow' });
-        assert.deepEqual(layout.columns[1].cards.map((c) => c.name), ['Late', 'Early']);
+        assert.deepEqual(layout.columns[1].cards.map((c) => c.name), ['Late', 'Early', 'alpha']);
     });
 
     it('moveKanbanCard updates stage and remaps on row move/remove', () => {

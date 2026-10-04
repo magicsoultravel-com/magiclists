@@ -4,8 +4,8 @@ import { parsePlannerDateTime } from './plannerGantt.js';
 export const KANBAN_STAGE_COUNT = 5;
 
 /** Display sort chips (manual is entered by dragging). */
-export const KANBAN_SORT_CHIP_MODES = Object.freeze(['row', 'date']);
-export const KANBAN_SORT_MODES = Object.freeze(['row', 'date', 'manual']);
+export const KANBAN_SORT_CHIP_MODES = Object.freeze(['row', 'date', 'alpha']);
+export const KANBAN_SORT_MODES = Object.freeze(['row', 'date', 'alpha', 'manual']);
 export const KANBAN_DEFAULT_SORT = 'row';
 export const KANBAN_SORT_DIRS = Object.freeze(['asc', 'desc']);
 export const KANBAN_DEFAULT_SORT_DIR = 'asc';
@@ -50,7 +50,7 @@ export function normalizeKanbanFlavour(raw) {
 
 /**
  * @param {unknown} raw
- * @returns {'row'|'date'|'manual'}
+ * @returns {'row'|'date'|'alpha'|'manual'}
  */
 export function normalizeKanbanSort(raw) {
     const s = String(raw || '').toLowerCase();
@@ -239,8 +239,17 @@ export function layoutPlannerKanban(planner, { flavour } = {}) {
                 if (da && db) {
                     const diff = da.getTime() - db.getTime();
                     if (diff !== 0) return diff * dirMul;
-                } else if (da && !db) return -1 * dirMul;
-                else if (!da && db) return 1 * dirMul;
+                } else if (da && !db) return -1; // undated always last
+                else if (!da && db) return 1;
+                return (a.row - b.row) * dirMul;
+            });
+        } else if (sort === 'alpha') {
+            list.sort((a, b) => {
+                const cmp = String(a.name || '').localeCompare(String(b.name || ''), undefined, {
+                    sensitivity: 'base',
+                    numeric: true
+                });
+                if (cmp !== 0) return cmp * dirMul;
                 return (a.row - b.row) * dirMul;
             });
         } else if (sort === 'manual') {
