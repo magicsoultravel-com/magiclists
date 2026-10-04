@@ -39,7 +39,8 @@ import {
     normalizeKanbanFlavour,
     normalizeKanbanSort,
     normalizeKanbanSortDir,
-    setKanbanCardColor
+    setKanbanCardColor,
+    setKanbanCardEmphasis
 } from './plannerKanban.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor } from './colorPicker.js';
 import { refreshNoteCanvasPreview } from './noteCanvasRenderer.js';
@@ -59,6 +60,12 @@ const KANBAN_SORT_TITLES = Object.freeze({
     date: 'Sort by date',
     alpha: 'Sort alphabetically'
 });
+
+/** Warning triangle with exclamation — urgent / focus. */
+const KANBAN_URGENT_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false" aria-hidden="true"><path d="M6 1.8 10.6 10.2H1.4Z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M6 4.4v2.6" fill="none" stroke="currentColor" stroke-width="1.05" stroke-linecap="round"/><circle cx="6" cy="8.55" r="0.55" fill="currentColor"/></svg>';
+
+/** Soft circle — non-urgent / muted. */
+const KANBAN_MUTED_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false" aria-hidden="true"><circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M3.6 6h4.8" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>';
 
 function cardSurfaceStyle(hex) {
     if (!hex || !/^#[0-9a-fA-F]{6}$/.test(hex)) return '';
@@ -683,8 +690,14 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
                 const commentHtml = comment
                     ? `<span class="planner-kanban__card-comment">${escapeHTML(comment)}</span>`
                     : '';
+                const emphasis = card.emphasis === 'urgent' || card.emphasis === 'muted' ? card.emphasis : '';
+                const emphasisClass = emphasis ? ` is-${emphasis}` : '';
+                const urgentActive = emphasis === 'urgent' ? ' is-active' : '';
+                const mutedActive = emphasis === 'muted' ? ' is-active' : '';
                 const actionsHtml = canEdit
                     ? `<span class="planner-kanban__card-actions">
+                        <button type="button" class="planner-kanban__card-emphasis${urgentActive}" data-planner-kanban-emphasis="urgent" title="Mark urgent" aria-label="Mark urgent" aria-pressed="${emphasis === 'urgent' ? 'true' : 'false'}">${KANBAN_URGENT_ICON}</button>
+                        <button type="button" class="planner-kanban__card-emphasis${mutedActive}" data-planner-kanban-emphasis="muted" title="Mark non-urgent" aria-label="Mark non-urgent" aria-pressed="${emphasis === 'muted' ? 'true' : 'false'}">${KANBAN_MUTED_ICON}</button>
                         <button type="button" class="planner-kanban__card-color" data-planner-kanban-color title="Card color" aria-label="Card color">${CARD_ICONS.color}</button>
                         <span class="planner-kanban__card-grab" title="Drag to move" aria-hidden="true">${CARD_ICONS.drag}</span>
                     </span>`
@@ -695,7 +708,7 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
                         ${actionsHtml}
                     </div>
                     ${commentHtml}`;
-                return `<article class="planner-kanban__card${card.cardColor ? ' has-color' : ''}${editClass}" data-planner-kanban-card data-planner-row="${card.row}"${cardSurfaceStyle(card.cardColor)}>
+                return `<article class="planner-kanban__card${card.cardColor ? ' has-color' : ''}${emphasisClass}${editClass}" data-planner-kanban-card data-planner-row="${card.row}" data-kanban-emphasis="${escapeAttr(emphasis)}"${cardSurfaceStyle(card.cardColor)}>
                     <div class="planner-kanban__card-slot">${bodyInner}</div>
                     <div class="planner-kanban__card-flyout" aria-hidden="true">${bodyInner}</div>
                 </article>`;
@@ -1473,6 +1486,20 @@ export function attachPlannerInteractions(root, item, {
             return;
         }
 
+        const kanbanEmphasisBtn = e.target.closest('[data-planner-kanban-emphasis]');
+        if (kanbanEmphasisBtn && section.contains(kanbanEmphasisBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const card = kanbanEmphasisBtn.closest('[data-planner-kanban-card]');
+            const row = Number(card?.dataset?.plannerRow);
+            const mode = String(kanbanEmphasisBtn.dataset.plannerKanbanEmphasis || '');
+            if (!Number.isFinite(row) || (mode !== 'urgent' && mode !== 'muted')) return;
+            mutate((it) => {
+                setKanbanCardEmphasis(it.planner, row, mode);
+            }, { skipRerender: true, refreshGantt: true });
+            return;
+        }
+
         const kanbanColorBtn = e.target.closest('[data-planner-kanban-color]');
         if (kanbanColorBtn && section.contains(kanbanColorBtn)) {
             e.preventDefault();
@@ -1721,7 +1748,7 @@ export function attachPlannerInteractions(root, item, {
 
     section.addEventListener('pointerdown', (e) => {
         if (e.button != null && e.button !== 0) return;
-        if (e.target.closest?.('[data-planner-kanban-color]')) return;
+        if (e.target.closest?.('[data-planner-kanban-color], [data-planner-kanban-emphasis]')) return;
         const card = e.target.closest('[data-planner-kanban-card]');
         if (!card || !section.contains(card) || !card.classList.contains('is-editable')) return;
         const row = Number(card.dataset.plannerRow);

@@ -12,6 +12,8 @@ export const KANBAN_DEFAULT_SORT_DIR = 'asc';
 
 export const KANBAN_COMMENT_CLIP = 90;
 
+export const KANBAN_EMPHASIS_MODES = Object.freeze(['urgent', 'muted']);
+
 export const KANBAN_FLAVOURS = Object.freeze({
     release: Object.freeze([
         'Preparation',
@@ -133,6 +135,37 @@ export function normalizeKanbanCardColors(raw, rowCount = 0) {
 }
 
 /**
+ * Per-card emphasis: urgent | muted.
+ * @param {unknown} raw
+ * @param {number} rowCount
+ * @returns {Record<string, 'urgent'|'muted'>}
+ */
+export function normalizeKanbanEmphasisByRow(raw, rowCount = 0) {
+    if (!raw || typeof raw !== 'object') return {};
+    const out = {};
+    const max = Math.max(0, Number(rowCount) || 0);
+    for (const [k, v] of Object.entries(raw)) {
+        const row = Number(k);
+        const mode = String(v || '').toLowerCase();
+        if (!Number.isFinite(row) || row < 0 || row >= max) continue;
+        if (!KANBAN_EMPHASIS_MODES.includes(mode)) continue;
+        out[String(Math.floor(row))] = /** @type {'urgent'|'muted'} */ (mode);
+    }
+    return out;
+}
+
+/**
+ * @param {object|null|undefined} planner
+ * @param {number} row
+ * @returns {''|'urgent'|'muted'}
+ */
+export function getKanbanEmphasisForRow(planner, row) {
+    const raw = planner?.kanbanEmphasisByRow?.[String(row)] ?? planner?.kanbanEmphasisByRow?.[row];
+    const mode = String(raw || '').toLowerCase();
+    return KANBAN_EMPHASIS_MODES.includes(mode) ? /** @type {'urgent'|'muted'} */ (mode) : '';
+}
+
+/**
  * @param {'release'|'workflow'|string} flavourId
  * @returns {readonly string[]}
  */
@@ -194,7 +227,8 @@ export function derivePlannerKanbanCards(planner) {
             category,
             comments: cellTrim(sheet, r, COMMENTS_COL),
             categoryColor,
-            cardColor
+            cardColor,
+            emphasis: getKanbanEmphasisForRow(planner, r)
         });
     }
     return cards;
@@ -335,10 +369,23 @@ export function remapKanbanAfterRowMove(planner, order) {
         nextColors[String(oldToNew.get(oldRow))] = hex.toLowerCase();
     }
     planner.kanbanCardColors = nextColors;
+
+    const nextEmphasis = {};
+    const srcEmphasis = planner.kanbanEmphasisByRow && typeof planner.kanbanEmphasisByRow === 'object'
+        ? planner.kanbanEmphasisByRow
+        : {};
+    for (const [k, v] of Object.entries(srcEmphasis)) {
+        const oldRow = Number(k);
+        if (!oldToNew.has(oldRow)) continue;
+        const mode = String(v || '').toLowerCase();
+        if (!KANBAN_EMPHASIS_MODES.includes(mode)) continue;
+        nextEmphasis[String(oldToNew.get(oldRow))] = mode;
+    }
+    planner.kanbanEmphasisByRow = nextEmphasis;
 }
 
 /**
- * Drop stage/order/color entries for a removed last row.
+ * Drop stage/order/color/emphasis entries for a removed last row.
  * @param {object} planner
  * @param {number} removedRow
  */
@@ -367,6 +414,11 @@ export function pruneKanbanAfterRowRemove(planner, removedRow) {
     if (colorMap && typeof colorMap === 'object') {
         delete colorMap[String(removedRow)];
         delete colorMap[removedRow];
+    }
+    const emphasisMap = planner.kanbanEmphasisByRow;
+    if (emphasisMap && typeof emphasisMap === 'object') {
+        delete emphasisMap[String(removedRow)];
+        delete emphasisMap[removedRow];
     }
 }
 
@@ -438,4 +490,28 @@ export function setKanbanCardColor(planner, row, hex) {
         return;
     }
     planner.kanbanCardColors[String(Math.floor(row))] = color.toLowerCase();
+}
+
+/**
+ * Toggle or clear card emphasis. Passing the active mode clears it; modes are mutually exclusive.
+ * @param {object} planner
+ * @param {number} row
+ * @param {'urgent'|'muted'|''} mode
+ */
+export function setKanbanCardEmphasis(planner, row, mode) {
+    if (!planner || !Number.isFinite(row)) return;
+    if (!planner.kanbanEmphasisByRow || typeof planner.kanbanEmphasisByRow !== 'object') {
+        planner.kanbanEmphasisByRow = {};
+    }
+    const key = String(Math.floor(row));
+    const next = String(mode || '').toLowerCase();
+    if (!KANBAN_EMPHASIS_MODES.includes(next)) {
+        delete planner.kanbanEmphasisByRow[key];
+        return;
+    }
+    if (planner.kanbanEmphasisByRow[key] === next) {
+        delete planner.kanbanEmphasisByRow[key];
+        return;
+    }
+    planner.kanbanEmphasisByRow[key] = next;
 }

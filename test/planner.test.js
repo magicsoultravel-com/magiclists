@@ -31,6 +31,7 @@ import {
     normalizeKanbanFlavour,
     kanbanLabelsForFlavour,
     clipKanbanComment,
+    setKanbanCardEmphasis,
     KANBAN_DEFAULT_FLAVOUR,
     KANBAN_FLAVOURS
 } from '../js/plannerKanban.js';
@@ -55,6 +56,7 @@ describe('planner model', () => {
         assert.deepEqual(planner.kanbanStageByRow, {});
         assert.deepEqual(planner.kanbanOrderByStage, {});
         assert.deepEqual(planner.kanbanCardColors, {});
+        assert.deepEqual(planner.kanbanEmphasisByRow, {});
         assert.equal(getPlannerField(planner.sheet, 0, 'name'), '');
         assert.equal(plannerHasContent(planner), false);
     });
@@ -205,6 +207,8 @@ describe('planner model', () => {
         assert.ok(html.includes('planner-kanban__card is-editable') || html.includes('is-editable"'));
         assert.ok(!html.includes('data-planner-kanban-card') || !/data-planner-kanban-card[^>]*draggable="true"/.test(html));
         assert.ok(html.includes('data-planner-kanban-color'));
+        assert.ok(html.includes('data-planner-kanban-emphasis="urgent"'));
+        assert.ok(html.includes('data-planner-kanban-emphasis="muted"'));
         assert.ok(html.includes('data-planner-rail-resize'));
         assert.ok(!html.includes('data-planner-today-settings-toggle'));
         assert.ok(html.includes('planner-gantt__today') || html.includes('data-planner-gantt'));
@@ -409,6 +413,14 @@ describe('planner Kanban', () => {
         planner.kanbanCardColors = { '0': '#112233' };
         const overridden = derivePlannerKanbanCards(planner);
         assert.equal(overridden[0].cardColor, '#112233');
+
+        setKanbanCardEmphasis(planner, 0, 'urgent');
+        assert.equal(derivePlannerKanbanCards(planner)[0].emphasis, 'urgent');
+        setKanbanCardEmphasis(planner, 0, 'muted');
+        assert.equal(derivePlannerKanbanCards(planner)[0].emphasis, 'muted');
+        setKanbanCardEmphasis(planner, 0, 'muted');
+        assert.equal(derivePlannerKanbanCards(planner)[0].emphasis, '');
+        assert.equal(planner.kanbanEmphasisByRow['0'], undefined);
     });
 
     it('sorts by date/row/alpha with asc/desc and manual order', () => {
