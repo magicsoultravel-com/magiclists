@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-04T21:44:49.325Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-04T22:39:08.705Z
 
 ## CSS load order
 
@@ -39,7 +39,7 @@ alwaysApply: true
 | css/tv.css | sidebar TV player, now playing, popover browser | sidebarTv.js, tvPlayer.js, tvPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell-sidebar.css | 26 |
 | css/weather.css | sidebar weather glance + expanded forecast panel | sidebarWeather.js, weatherApi.js | — | 27 |
 | css/sheet.css | sheet-grid note template body and table chrome | sheet.js, noteSurface.js, editor.js | — | 28 |
-| css/planner.css | magicPlanner note subsection — typed schedule sheet, Gantt chart, Kanban, WBS, and calendar chart view | plannerUi.js, planner.js, plannerGantt.js, plannerKanban.js, plannerWbs.js, plannerCalendar.js | — | 29 |
+| css/planner.css | magicPlanner note subsection — typed schedule sheet, Gantt chart, Kanban, WBS, and calendar chart view | plannerUi.js, plannerSheetUi.js, plannerChartUi.js, plannerKanbanUi.js, plannerWbsUi.js, planner.js, plannerGantt.js, plannerKanban.js, plannerWbs.js, plannerCalendar.js | — | 29 |
 | css/desktops.css | desktop switcher dock styling, dock pin lock | desktopDockComponent.js | — | 30 |
 | css/popout.css | (unknown) | — | — | 31 |
 | css/media-library.css | media staging dialogue, gallery floating panel, scribble FAB, note attachment section, media lightbox, site-wide quick scribble, transform popover | mediaLibraryOverlay.js, mediaStagingDialog.js, mediaPasteCatcher.js, noteAttachmentsUi.js, quickScribble.js, viewportCapture.js, mediaTransformUi.js | — | 32 |
@@ -78,7 +78,7 @@ alwaysApply: true
 | js/itemMerge.js | shared merge helper for undo/redo restore (preserves note metadata) | undo.js, app.js | — | — |
 | js/lassoGeometry.js | lasso geometry utilities - ray casting, bounding boxes | drawingBoard.js | — | — |
 | js/layoutStorage.js | board layout persistence, grid/freeform positions, storage migrations | dragdrop.js, ui.js, fileCabinet.js, board/gridEngine.js, sync.js | — | — |
-| js/magicFocus.js | magic focus workspace mode — split panes, setup DnD, planner block hosting (table/chart/kanban) | app.js, noteQuickActions.js, drawingBoard.js, plannerUi.js, noteSurface.js | — | — |
+| js/magicFocus.js | magic focus workspace mode — split panes, setup DnD, planner block hosting (table/chart/kanban/wbs) | app.js, noteQuickActions.js, drawingBoard.js, plannerUi.js, noteSurface.js | — | — |
 | js/mediaAttachments.js | note↔media attachment helpers | mediaLibrary.js, noteSurface.js, mediaLibraryOverlay.js | — | — |
 | js/mediaBackup.js | media library backup export/import (meta JSON, embeds, ZIP) | mediaLibrary.js, backup.js | — | — |
 | js/mediaLibrary.js | media library CRUD, thumbs, size limits | storage/indexedDbMediaStore.js, mediaMetadata.js, mediaBackup.js | — | — |
@@ -107,10 +107,14 @@ alwaysApply: true
 | js/noteSurfaceMutations.js | note item mutation functions | noteSurface.js, noteSurfaceEditing.js, noteSurfaceChecklist.js, noteModel.js, sheet.js, undo.js | item:mutation_requested | — |
 | js/planner.js | magicPlanner model — schema-bound schedule sheet + zoom prefs | plannerUi.js, plannerGantt.js, plannerKanban.js, plannerWbs.js, plannerCalendar.js, sheet.js, noteModel.js | — | — |
 | js/plannerCalendar.js | magicPlanner calendar chart view — month-strip layout + task bars | planner.js, plannerGantt.js, plannerUi.js | — | — |
+| js/plannerChartUi.js | magicPlanner chart subsection UI — Gantt/calendar board, rail measure, pan, zoom, today line | plannerUi.js, plannerSheetUi.js, plannerKanbanUi.js, plannerWbsUi.js, planner.js, plannerGantt.js, plannerCalendar.js | — | — |
 | js/plannerGantt.js | magicPlanner Gantt layout math (display-only) | planner.js, plannerUi.js | — | — |
 | js/plannerKanban.js | magicPlanner Kanban layout — stages, sort, column flavours (display + drag meta) | planner.js, plannerUi.js, displayOptions.js | — | — |
-| js/plannerUi.js | magicPlanner note subsection UI — typed sheet + Gantt + Kanban + WBS + calendar chart view | planner.js, plannerGantt.js, plannerKanban.js, plannerWbs.js, plannerCalendar.js, noteSurfaceMutations.js, noteQuickActions.js | — | — |
-| js/plannerWbs.js | magicPlanner WBS layout — phase/deliverable buckets, unmapped column, drag meta | planner.js, plannerUi.js, plannerKanban.js | — | — |
+| js/plannerKanbanUi.js | magicPlanner Kanban subsection UI — board render, card chrome, pointer drag, field edit | plannerUi.js, plannerSheetUi.js, plannerChartUi.js, plannerWbsUi.js, planner.js, plannerKanban.js | — | — |
+| js/plannerSheetUi.js | magicPlanner sheet/table subsection UI — typed sheet, summary, datetime/category, row DnD, col resize, pack chrome | plannerUi.js, plannerChartUi.js, plannerKanbanUi.js, plannerWbsUi.js, planner.js | — | — |
+| js/plannerUi.js | magicPlanner note subsection UI facade — section HTML, commit flush, interaction orchestration across sheet/chart/kanban/wbs | plannerSheetUi.js, plannerChartUi.js, plannerKanbanUi.js, plannerWbsUi.js, planner.js, plannerGantt.js, plannerKanban.js, plannerWbs.js, plannerCalendar.js, noteSurfaceMutations.js, noteQuickActions.js | — | — |
+| js/plannerWbs.js | magicPlanner WBS layout — phase/deliverable buckets, drag meta | planner.js, plannerUi.js, plannerKanban.js | — | — |
+| js/plannerWbsUi.js | magicPlanner WBS subsection UI — board render, card chrome, pointer drag, field edit, bucket labels | plannerUi.js, plannerSheetUi.js, plannerChartUi.js, plannerKanbanUi.js, planner.js, plannerWbs.js | — | — |
 | js/popoutLockRefresh.js | popout lock board refresh filter | app.js, notePopoutBridge.js | — | — |
 | js/popoutNote.js | standalone note popout window boot, edit, flush, undo | notePopoutBridge.js, noteSurface.js, api.js, undo.js | — | — |
 | js/popoutWindows.js | shared popout window helpers (PiP, browser popup, styles) | notePopoutBridge.js, sidebarModulePopout.js | — | — |

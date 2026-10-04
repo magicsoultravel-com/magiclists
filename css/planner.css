@@ -1,4 +1,4 @@
-/** @css {"owns":"magicPlanner note subsection — typed schedule sheet, Gantt chart, Kanban, WBS, and calendar chart view", "js":["plannerUi.js","planner.js","plannerGantt.js","plannerKanban.js","plannerWbs.js","plannerCalendar.js"]} */
+/** @css {"owns":"magicPlanner note subsection — typed schedule sheet, Gantt chart, Kanban, WBS, and calendar chart view", "js":["plannerUi.js","plannerSheetUi.js","plannerChartUi.js","plannerKanbanUi.js","plannerWbsUi.js","planner.js","plannerGantt.js","plannerKanban.js","plannerWbs.js","plannerCalendar.js"]} */
 
 /*
   Background map (Table vs Chart)
