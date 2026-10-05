@@ -70,7 +70,7 @@ export function buildMediaQuickActionsHtml(opts) {
         : '';
 
     if (layout === 'inline-row') {
-        return `<div class="step-row-actions note-attachment__actions">${reorderBtn}${expandInNoteBtn}${viewBtn}${downloadBtn}${attachBtn}${saveBtn}${removeBtn}</div>`;
+        return `<div class="step-row-actions note-attachment__actions">${reorderBtn}${expandInNoteBtn}${downloadBtn}${viewBtn}${attachBtn}${saveBtn}${removeBtn}</div>`;
     }
 
     const removeBlock = showRemove
@@ -90,8 +90,8 @@ export function buildMediaQuickActionsHtml(opts) {
         ${removeBlock}
         ${transformBlock}
         <div class="media-quick-actions media-quick-actions--right">
-            ${viewBtn}
             ${downloadBtn}
+            ${viewBtn}
             ${attachBtn}
             ${saveBtn}
         </div>`;

@@ -27,16 +27,28 @@ import {
     notesForAttachPicker,
     normalizeAttachments
 } from './mediaAttachments.js';
-import { buildMediaQuickActionsHtml, bindMediaQuickActions } from './mediaQuickActions.js';
+import { buildMediaQuickActionsHtml, bindMediaQuickActions, viewMediaFullSize } from './mediaQuickActions.js';
 import { buildSidebarNoteListItemHtml } from './sidebarNoteListHtml.js';
 import { bindFloatResize, mountFloatChrome } from './desktopFloatChrome.js';
 import { raiseDesktopElement } from './desktopStack.js';
 
 const PANEL_STORAGE_KEY = 'matrix_media_lib_panel';
+const SORT_MODE_KEY = 'matrix_media_lib_sort';
+const SORT_DIR_KEY = 'matrix_media_lib_sort_dir';
 const DEFAULT_W = 720;
 const DEFAULT_H = 520;
 const MIN_W = 420;
 const MIN_H = 320;
+
+const SORT_ICONS = Object.freeze({
+    date: ACTION_ICONS.sortDate,
+    alpha: ACTION_ICONS.sortAlpha
+});
+
+const SORT_TITLES = Object.freeze({
+    date: 'Sort by date',
+    alpha: 'Sort alphabetically'
+});
 
 let panel = null;
 let notePickerOverlay = null;
@@ -48,6 +60,85 @@ let claimedUrlKeys = new Set();
 /** @type {null | (() => object[])} */
 let getItems = null;
 let floatChromeBound = false;
+
+function normalizeSortMode(value) {
+    return value === 'alpha' ? 'alpha' : 'date';
+}
+
+function normalizeSortDir(value) {
+    return value === 'asc' ? 'asc' : 'desc';
+}
+
+function defaultDirForMode(mode) {
+    return mode === 'alpha' ? 'asc' : 'desc';
+}
+
+function loadSortPrefs() {
+    let mode = 'date';
+    let dir = 'desc';
+    try {
+        mode = normalizeSortMode(localStorage.getItem(SORT_MODE_KEY));
+        const storedDir = localStorage.getItem(SORT_DIR_KEY);
+        dir = storedDir == null ? defaultDirForMode(mode) : normalizeSortDir(storedDir);
+    } catch {
+        /* ignore */
+    }
+    return { mode, dir };
+}
+
+function saveSortPrefs(mode, dir) {
+    try {
+        localStorage.setItem(SORT_MODE_KEY, normalizeSortMode(mode));
+        localStorage.setItem(SORT_DIR_KEY, normalizeSortDir(dir));
+    } catch {
+        /* ignore quota */
+    }
+}
+
+/**
+ * @param {object[]} items
+ * @param {'date'|'alpha'} mode
+ * @param {'asc'|'desc'} dir
+ */
+function sortMediaItems(items, mode, dir) {
+    const list = Array.isArray(items) ? items.slice() : [];
+    const mul = dir === 'desc' ? -1 : 1;
+    if (mode === 'alpha') {
+        list.sort((a, b) => {
+            const an = String(a?.title || a?.filename || '');
+            const bn = String(b?.title || b?.filename || '');
+            return an.localeCompare(bn, undefined, { sensitivity: 'base' }) * mul;
+        });
+        return list;
+    }
+    list.sort((a, b) => {
+        const at = Number(a?.createdAt || a?.updatedAt || 0);
+        const bt = Number(b?.createdAt || b?.updatedAt || 0);
+        return (at - bt) * mul;
+    });
+    return list;
+}
+
+function syncSortButtons() {
+    if (!panel) return;
+    const { mode, dir } = loadSortPrefs();
+    panel.querySelectorAll('[data-media-lib-sort]').forEach((btn) => {
+        const btnMode = normalizeSortMode(btn.dataset.mediaLibSort);
+        const active = btnMode === mode;
+        const baseTitle = SORT_TITLES[btnMode] || 'Sort';
+        const title = active
+            ? `${baseTitle} (${dir === 'desc' ? 'descending' : 'ascending'} — click to flip)`
+            : baseTitle;
+        btn.classList.toggle('is-active', active);
+        btn.classList.toggle('is-desc', active && dir === 'desc');
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        btn.title = title;
+        btn.setAttribute('aria-label', title);
+        if (!btn.innerHTML.trim()) {
+            btn.innerHTML = SORT_ICONS[btnMode] || '';
+        }
+    });
+}
 
 function liveItem(id) {
     if (!id || !getItems) return null;
@@ -322,6 +413,8 @@ export const MediaLibraryOverlay = {
             dragHandle.innerHTML = CARD_ICONS.drag;
         }
 
+        syncSortButtons();
+
         if (footer) {
             footer.innerHTML = `
                 <button type="button" class="btn btn--compact btn--icon" data-media-lib-upload title="Upload files" aria-label="Upload files">${ACTION_ICONS.upload}</button>
@@ -342,6 +435,21 @@ export const MediaLibraryOverlay = {
 
     bindChrome() {
         panel.querySelector('[data-media-lib-close]')?.addEventListener('click', () => this.close());
+        panel.querySelector('[data-media-lib-sort-group]')?.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-media-lib-sort]');
+            if (!btn || !panel.contains(btn)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const nextMode = normalizeSortMode(btn.dataset.mediaLibSort);
+            const { mode, dir } = loadSortPrefs();
+            if (nextMode === mode) {
+                saveSortPrefs(mode, dir === 'asc' ? 'desc' : 'asc');
+            } else {
+                saveSortPrefs(nextMode, defaultDirForMode(nextMode));
+            }
+            syncSortButtons();
+            this.refresh();
+        });
         panel.querySelector('[data-media-lib-upload]')?.addEventListener('click', () => {
             document.getElementById('media-library-file-picker')?.click();
         });
@@ -541,7 +649,8 @@ export const MediaLibraryOverlay = {
     async refresh() {
         if (!panel) return;
         this.syncAttachControls();
-        const items = await listMedia();
+        const { mode, dir } = loadSortPrefs();
+        const items = sortMediaItems(await listMedia(), mode, dir);
         const grid = panel.querySelector('[data-media-lib-grid]');
         const empty = panel.querySelector('[data-media-lib-empty]');
         const titleEl = panel.querySelector('[data-media-lib-title]');
@@ -550,6 +659,7 @@ export const MediaLibraryOverlay = {
                 ? `Media library (${items.length})`
                 : 'Media library';
         }
+        syncSortButtons();
 
         if (!items.length) {
             if (grid) grid.innerHTML = '';
@@ -760,6 +870,16 @@ export const MediaLibraryOverlay = {
                 this.refresh();
             }
         });
+
+        const previewEl = detail.querySelector('[data-media-detail-preview]');
+        if (previewEl && !item.blobMissing && String(item.mime || '').startsWith('image/')) {
+            previewEl.classList.add('is-clickable');
+            previewEl.title = 'View full size';
+            previewEl.addEventListener('click', (e) => {
+                if (e.target.closest('.card-act, .media-quick-actions')) return;
+                viewMediaFullSize(item.id, { attachNoteId }).catch(() => {});
+            });
+        }
 
         detail.querySelector('[data-detail-title]')?.addEventListener('input', syncSaveBtn);
         detail.querySelector('[data-detail-desc]')?.addEventListener('input', syncSaveBtn);
