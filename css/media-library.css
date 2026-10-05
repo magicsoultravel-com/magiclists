@@ -128,6 +128,41 @@
     font-size: calc(0.65rem * var(--note-font-scale, 1));
     pointer-events: auto;
     overflow: hidden;
+    cursor: grab;
+}
+
+.media-lib-panel.is-dragging {
+    cursor: grabbing;
+}
+
+.media-lib-panel button,
+.media-lib-panel .btn,
+.media-lib-panel .card-act,
+.media-lib-panel .media-lib-tile,
+.media-lib-panel .media-lib-list-row,
+.media-lib-panel .media-lib-detail__preview,
+.media-lib-panel .media-lib-detail__save,
+.media-lib-panel .media-quick-actions,
+.media-lib-panel .media-lib-list-actions,
+.media-lib-panel .sidebar-notes-list-item,
+.media-lib-panel .ff-resize,
+.media-lib-panel .ff-resize-layer {
+    cursor: pointer;
+}
+
+.media-lib-panel input,
+.media-lib-panel textarea,
+.media-lib-panel select {
+    cursor: text;
+}
+
+.media-lib-panel .media-lib-panel__drag {
+    cursor: grab;
+}
+
+.media-lib-panel .media-lib-panel__drag:active,
+.media-lib-panel.is-dragging .media-lib-panel__drag {
+    cursor: grabbing;
 }
 
 .media-lib-panel__top-actions {

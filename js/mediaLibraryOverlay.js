@@ -342,31 +342,56 @@ function pointerDelta(clientX, clientY, startX, startY) {
     return { dx: clientX - startX, dy: clientY - startY };
 }
 
+const PANEL_DRAG_BLOCK_SEL = [
+    'button',
+    'input',
+    'textarea',
+    'select',
+    'a',
+    'label',
+    '.btn',
+    '.media-lib-tile',
+    '.media-lib-list-row',
+    '.media-lib-detail__preview',
+    '[data-media-detail-save]',
+    '.media-quick-actions',
+    '.media-lib-list-actions',
+    '.sidebar-notes-list-item',
+    '.ff-resize',
+    '.ff-resize-layer'
+].join(', ');
+
+function isPanelDragBlocked(target) {
+    if (!target?.closest) return true;
+    if (target.closest('.media-lib-panel__drag')) return false;
+    if (target.closest('.card-act')) return true;
+    return !!target.closest(PANEL_DRAG_BLOCK_SEL);
+}
+
 function bindPanelDrag() {
-    const header = panel.querySelector('[data-media-lib-header]');
-    const dragHandle = panel.querySelector('[data-media-lib-drag]');
-    const dragTargets = [header, dragHandle].filter(Boolean);
-    if (!dragTargets.length) return;
+    if (!panel) return;
 
     let dragging = false;
     let startX = 0;
     let startY = 0;
     let originLeft = 0;
     let originTop = 0;
-    let captureEl = null;
 
     const onPointerDown = (e) => {
         if (e.button !== 0) return;
-        if (e.target.closest('button, input, textarea, a, .btn')) return;
-        if (e.target.closest('.card-act') && !e.target.closest('.media-lib-panel__drag')) return;
+        if (!panel.contains(e.target)) return;
+        if (isPanelDragBlocked(e.target)) return;
         e.preventDefault();
         dragging = true;
-        captureEl = e.currentTarget;
         startX = e.clientX;
         startY = e.clientY;
         originLeft = panel.offsetLeft;
         originTop = panel.offsetTop;
-        captureEl.setPointerCapture(e.pointerId);
+        try {
+            panel.setPointerCapture(e.pointerId);
+        } catch {
+            /* ignore */
+        }
         panel.classList.add('is-dragging');
         bringPanelFront();
     };
@@ -389,20 +414,17 @@ function bindPanelDrag() {
         dragging = false;
         panel.classList.remove('is-dragging');
         try {
-            captureEl?.releasePointerCapture(e.pointerId);
+            panel.releasePointerCapture(e.pointerId);
         } catch {
             /* ignore */
         }
-        captureEl = null;
         savePanelGeom();
     };
 
-    dragTargets.forEach((el) => {
-        el.addEventListener('pointerdown', onPointerDown);
-        el.addEventListener('pointermove', onPointerMove);
-        el.addEventListener('pointerup', endDrag);
-        el.addEventListener('pointercancel', endDrag);
-    });
+    panel.addEventListener('pointerdown', onPointerDown);
+    panel.addEventListener('pointermove', onPointerMove);
+    panel.addEventListener('pointerup', endDrag);
+    panel.addEventListener('pointercancel', endDrag);
 }
 
 function setupFloatingChrome() {
