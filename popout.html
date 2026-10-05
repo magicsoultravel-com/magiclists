@@ -52,6 +52,10 @@
                 <button type="button" class="card-act media-lib-sort-btn" data-media-lib-sort="date" title="Sort by date" aria-label="Sort by date" aria-pressed="false"></button>
                 <button type="button" class="card-act media-lib-sort-btn" data-media-lib-sort="alpha" title="Sort alphabetically" aria-label="Sort alphabetically" aria-pressed="false"></button>
             </span>
+            <span class="media-lib-panel__view" role="group" aria-label="Gallery view" data-media-lib-view-group>
+                <button type="button" class="card-act media-lib-view-btn" data-media-lib-view="tiles" title="Tiles view" aria-label="Tiles view" aria-pressed="false"></button>
+                <button type="button" class="card-act media-lib-view-btn" data-media-lib-view="list" title="List view" aria-label="List view" aria-pressed="false"></button>
+            </span>
             <span class="media-lib-panel__drag card-act card-act--drag" data-media-lib-drag title="Drag to move" aria-label="Drag to move"></span>
             <button type="button" class="card-act media-lib-panel__close" data-media-lib-close title="Close" aria-label="Close"></button>
         </div>
@@ -61,6 +65,7 @@
             <div class="media-lib-drop" data-media-lib-drop>
                 <p class="media-lib-empty is-hidden" data-media-lib-empty>No media yet. Upload, paste (Ctrl+V), or drop files here.</p>
                 <div class="media-lib-grid" data-media-lib-grid></div>
+                <p class="media-lib-drop-hint is-hidden" data-media-lib-drop-hint>Drop files here to add</p>
             </div>
             <div class="media-lib-detail" data-media-lib-detail></div>
         </div>

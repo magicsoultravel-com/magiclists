@@ -70,7 +70,10 @@ export function buildMediaQuickActionsHtml(opts) {
         : '';
 
     if (layout === 'inline-row') {
-        return `<div class="step-row-actions note-attachment__actions">${reorderBtn}${expandInNoteBtn}${downloadBtn}${viewBtn}${attachBtn}${saveBtn}${removeBtn}</div>`;
+        const wrapClass = isNote
+            ? 'step-row-actions note-attachment__actions'
+            : 'media-lib-list-actions';
+        return `<div class="${wrapClass}">${reorderBtn}${expandInNoteBtn}${downloadBtn}${viewBtn}${optimizeBtn}${scaleBtn}${attachBtn}${saveBtn}${removeBtn}</div>`;
     }
 
     const removeBlock = showRemove

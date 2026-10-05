@@ -1,6 +1,6 @@
 /** @module {"owns":"media library overlay gallery browser", "related":["mediaLibrary.js","mediaStagingDialog.js","noteQuickActions.js","mediaAttachments.js"]} */
 import { escapeAttr, escapeHTML } from './domEscape.js';
-import { ACTION_ICONS, CARD_ICONS } from './icons.js';
+import { ACTION_ICONS, CARD_ICONS, FORMAT_ICONS } from './icons.js';
 import {
     getObjectUrl,
     listMedia,
@@ -42,6 +42,7 @@ import { raiseDesktopElement } from './desktopStack.js';
 const PANEL_STORAGE_KEY = 'matrix_media_lib_panel';
 const SORT_MODE_KEY = 'matrix_media_lib_sort';
 const SORT_DIR_KEY = 'matrix_media_lib_sort_dir';
+const VIEW_MODE_KEY = 'matrix_media_lib_view';
 const DEFAULT_W = 720;
 const DEFAULT_H = 520;
 const MIN_W = 420;
@@ -55,6 +56,16 @@ const SORT_ICONS = Object.freeze({
 const SORT_TITLES = Object.freeze({
     date: 'Sort by date',
     alpha: 'Sort alphabetically'
+});
+
+const VIEW_ICONS = Object.freeze({
+    tiles: ACTION_ICONS.category,
+    list: FORMAT_ICONS.toNotes
+});
+
+const VIEW_TITLES = Object.freeze({
+    tiles: 'Tiles view',
+    list: 'List view'
 });
 
 let panel = null;
@@ -97,6 +108,26 @@ function saveSortPrefs(mode, dir) {
     try {
         localStorage.setItem(SORT_MODE_KEY, normalizeSortMode(mode));
         localStorage.setItem(SORT_DIR_KEY, normalizeSortDir(dir));
+    } catch {
+        /* ignore quota */
+    }
+}
+
+function normalizeViewMode(value) {
+    return value === 'list' ? 'list' : 'tiles';
+}
+
+function loadViewMode() {
+    try {
+        return normalizeViewMode(localStorage.getItem(VIEW_MODE_KEY));
+    } catch {
+        return 'tiles';
+    }
+}
+
+function saveViewMode(mode) {
+    try {
+        localStorage.setItem(VIEW_MODE_KEY, normalizeViewMode(mode));
     } catch {
         /* ignore quota */
     }
@@ -147,6 +178,36 @@ function syncSortButtons() {
     });
 }
 
+function syncViewButtons() {
+    if (!panel) return;
+    const mode = loadViewMode();
+    panel.querySelectorAll('[data-media-lib-view]').forEach((btn) => {
+        const btnMode = normalizeViewMode(btn.dataset.mediaLibView);
+        const active = btnMode === mode;
+        const title = VIEW_TITLES[btnMode] || 'View';
+        btn.classList.toggle('is-active', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+        btn.title = title;
+        btn.setAttribute('aria-label', title);
+        if (!btn.innerHTML.trim()) {
+            btn.innerHTML = VIEW_ICONS[btnMode] || '';
+        }
+    });
+    const dropZone = panel.querySelector('[data-media-lib-drop]');
+    dropZone?.classList.toggle('is-list-view', mode === 'list');
+    dropZone?.classList.toggle('is-tiles-view', mode !== 'list');
+}
+
+function formatListDate(item) {
+    const ts = Number(item?.createdAt || item?.updatedAt || 0);
+    if (!ts) return '';
+    try {
+        return new Date(ts * 1000).toLocaleDateString();
+    } catch {
+        return '';
+    }
+}
+
 /**
  * @param {object[]|undefined} items  When provided, refresh total size; export times always refresh.
  */
@@ -171,6 +232,14 @@ function syncFooterStats(items) {
         zipEl.textContent = `ZIP ${at}`;
         zipEl.title = `Last media ZIP export: ${at}`;
     }
+}
+
+function dataTransferHasFiles(dataTransfer) {
+    if (!dataTransfer) return false;
+    const types = dataTransfer.types;
+    if (!types) return false;
+    if (typeof types.includes === 'function') return types.includes('Files');
+    return Array.from(types).includes('Files');
 }
 
 function liveItem(id) {
@@ -380,14 +449,19 @@ export const MediaLibraryOverlay = {
         if (dropZone) {
             ['dragenter', 'dragover'].forEach((type) => {
                 dropZone.addEventListener(type, (e) => {
+                    if (!dataTransferHasFiles(e.dataTransfer)) return;
                     e.preventDefault();
                     dropZone.classList.add('is-dragover');
                 });
             });
-            dropZone.addEventListener('dragleave', () => dropZone.classList.remove('is-dragover'));
+            dropZone.addEventListener('dragleave', (e) => {
+                if (e.relatedTarget && dropZone.contains(e.relatedTarget)) return;
+                dropZone.classList.remove('is-dragover');
+            });
             dropZone.addEventListener('drop', (e) => {
                 e.preventDefault();
                 dropZone.classList.remove('is-dragover');
+                if (!dataTransferHasFiles(e.dataTransfer)) return;
                 const files = filesFromDataTransfer(e.dataTransfer);
                 if (files.length) openMediaStaging(files, { source: 'upload' });
             });
@@ -447,6 +521,7 @@ export const MediaLibraryOverlay = {
         }
 
         syncSortButtons();
+        syncViewButtons();
 
         if (footer) {
             footer.innerHTML = `
@@ -488,6 +563,17 @@ export const MediaLibraryOverlay = {
                 saveSortPrefs(nextMode, defaultDirForMode(nextMode));
             }
             syncSortButtons();
+            this.refresh();
+        });
+        panel.querySelector('[data-media-lib-view-group]')?.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-media-lib-view]');
+            if (!btn || !panel.contains(btn)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const next = normalizeViewMode(btn.dataset.mediaLibView);
+            if (next === loadViewMode()) return;
+            saveViewMode(next);
+            syncViewButtons();
             this.refresh();
         });
         panel.querySelector('[data-media-lib-upload]')?.addEventListener('click', () => {
@@ -703,6 +789,7 @@ export const MediaLibraryOverlay = {
         const items = sortMediaItems(await listMedia(), mode, dir);
         const grid = panel.querySelector('[data-media-lib-grid]');
         const empty = panel.querySelector('[data-media-lib-empty]');
+        const dropHint = panel.querySelector('[data-media-lib-drop-hint]');
         const titleEl = panel.querySelector('[data-media-lib-title]');
         if (titleEl) {
             titleEl.textContent = items.length
@@ -710,21 +797,25 @@ export const MediaLibraryOverlay = {
                 : 'Media library';
         }
         syncSortButtons();
+        syncViewButtons();
         syncFooterStats(items);
 
         if (!items.length) {
             if (grid) grid.innerHTML = '';
             empty?.classList.remove('is-hidden');
+            dropHint?.classList.add('is-hidden');
             this.renderDetail(null);
             return;
         }
         empty?.classList.add('is-hidden');
+        dropHint?.classList.remove('is-hidden');
 
         if (!selectedId || !items.some((i) => i.id === selectedId)) {
             selectedId = items[0].id;
         }
         this.syncAttachControls();
 
+        const viewMode = loadViewMode();
         const tiles = await Promise.all(items.map(async (item) => {
             let thumbSrc = '';
             if (!item.blobMissing && String(item.mime || '').startsWith('image/')) {
@@ -735,18 +826,43 @@ export const MediaLibraryOverlay = {
             const selected = item.id === selectedId ? ' is-selected' : '';
             const linked = findNotesForMedia(getItems?.() || [], item.id);
             const preview = thumbSrc
-                ? `<img src="${escapeAttr(thumbSrc)}" alt="">`
+                ? `<img src="${escapeAttr(thumbSrc)}" alt="" draggable="false">`
                 : `<span class="media-lib-tile__icon">${escapeHTML((item.mime || 'file').split('/').pop() || 'file')}</span>`;
             const alreadyOnTarget = attachNoteId
                 && normalizeAttachments(liveItem(attachNoteId)?.attachments).some((a) => a.mediaId === item.id);
+            const isImage = String(item.mime || '').startsWith('image/');
             const actions = buildMediaQuickActionsHtml({
                 mediaId: item.id,
                 context: 'library-tile',
                 attachNoteId,
                 alreadyAttached: !!alreadyOnTarget,
                 blobMissing: !!item.blobMissing,
-                isImage: String(item.mime || '').startsWith('image/')
+                isImage,
+                layout: viewMode === 'list' ? 'inline-row' : 'overlay'
             });
+
+            if (viewMode === 'list') {
+                const title = item.title || item.filename || 'Untitled';
+                const subParts = [
+                    formatByteSize(item.byteSize || 0),
+                    formatListDate(item),
+                    item.mime || '',
+                    linked.length ? `${linked.length} note${linked.length === 1 ? '' : 's'}` : ''
+                ].filter(Boolean);
+                return `
+                    <div class="media-lib-list-row${selected}${missing}" data-media-id="${escapeAttr(item.id)}" title="${escapeAttr(title)}">
+                        <button type="button" class="media-lib-list-row__select" data-media-select title="Select">
+                            <span class="media-lib-list-row__thumb">${preview}</span>
+                            <span class="media-lib-list-row__meta">
+                                <span class="media-lib-list-row__title">${escapeHTML(title)}</span>
+                                <span class="media-lib-list-row__sub">${escapeHTML(subParts.join(' · '))}</span>
+                            </span>
+                        </button>
+                        ${actions}
+                    </div>
+                `;
+            }
+
             return `
                 <div class="media-lib-tile${selected}${missing}" data-media-id="${escapeAttr(item.id)}" title="${escapeAttr(item.title || item.filename)}">
                     <div class="media-lib-tile__preview-wrap">
@@ -762,6 +878,7 @@ export const MediaLibraryOverlay = {
         }));
 
         if (grid) {
+            grid.classList.toggle('media-lib-grid--list', viewMode === 'list');
             grid.innerHTML = tiles.join('');
             grid.querySelectorAll('[data-media-select]').forEach((btn) => {
                 btn.addEventListener('click', () => {
@@ -771,8 +888,11 @@ export const MediaLibraryOverlay = {
                     this.refresh();
                 });
             });
-            grid.querySelectorAll('.media-lib-tile__preview-wrap').forEach((wrap) => {
-                const tile = wrap.closest('[data-media-id]');
+            const actionRoots = viewMode === 'list'
+                ? grid.querySelectorAll('.media-lib-list-row')
+                : grid.querySelectorAll('.media-lib-tile__preview-wrap');
+            actionRoots.forEach((wrap) => {
+                const tile = wrap.closest('[data-media-id]') || wrap;
                 const mediaId = tile?.dataset.mediaId;
                 if (!mediaId) return;
                 bindMediaQuickActions(wrap, {
