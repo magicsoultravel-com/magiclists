@@ -181,18 +181,19 @@ function syncSortButtons() {
 function syncViewButtons() {
     if (!panel) return;
     const mode = loadViewMode();
-    panel.querySelectorAll('[data-media-lib-view]').forEach((btn) => {
-        const btnMode = normalizeViewMode(btn.dataset.mediaLibView);
-        const active = btnMode === mode;
-        const title = VIEW_TITLES[btnMode] || 'View';
-        btn.classList.toggle('is-active', active);
-        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    const btn = panel.querySelector('[data-media-lib-view-toggle]');
+    if (btn) {
+        const title = mode === 'list'
+            ? 'List view (click for tiles)'
+            : 'Tiles view (click for list)';
+        btn.innerHTML = VIEW_ICONS[mode] || '';
+        btn.dataset.viewMode = mode;
+        btn.setAttribute('aria-pressed', 'true');
         btn.title = title;
         btn.setAttribute('aria-label', title);
-        if (!btn.innerHTML.trim()) {
-            btn.innerHTML = VIEW_ICONS[btnMode] || '';
-        }
-    });
+        btn.classList.toggle('is-list', mode === 'list');
+        btn.classList.toggle('is-tiles', mode !== 'list');
+    }
     const dropZone = panel.querySelector('[data-media-lib-drop]');
     dropZone?.classList.toggle('is-list-view', mode === 'list');
     dropZone?.classList.toggle('is-tiles-view', mode !== 'list');
@@ -565,13 +566,10 @@ export const MediaLibraryOverlay = {
             syncSortButtons();
             this.refresh();
         });
-        panel.querySelector('[data-media-lib-view-group]')?.addEventListener('click', (e) => {
-            const btn = e.target.closest('[data-media-lib-view]');
-            if (!btn || !panel.contains(btn)) return;
+        panel.querySelector('[data-media-lib-view-toggle]')?.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            const next = normalizeViewMode(btn.dataset.mediaLibView);
-            if (next === loadViewMode()) return;
+            const next = loadViewMode() === 'list' ? 'tiles' : 'list';
             saveViewMode(next);
             syncViewButtons();
             this.refresh();
@@ -969,8 +967,7 @@ export const MediaLibraryOverlay = {
             alreadyAttached: !!alreadyOnTarget,
             blobMissing: !!item.blobMissing,
             isImage: String(item.mime || '').startsWith('image/'),
-            showSave: true,
-            saveHidden: true
+            showSave: false
         });
 
         const { added, modified } = formatMediaDetailDates(item);
@@ -987,6 +984,10 @@ export const MediaLibraryOverlay = {
                 <div class="media-lib-detail__preview-actions">
                     ${quickActions}
                 </div>
+                <button type="button" class="media-lib-detail__save is-hidden" data-media-detail-save data-media-id="${escapeAttr(item.id)}" title="Save" aria-label="Save">
+                    <span class="media-lib-detail__save-icon">${CARD_ICONS.save}</span>
+                    <span class="media-lib-detail__save-label">Save</span>
+                </button>
             </div>
             ${dateLineHtml}
             <label class="media-staging__label">Title
@@ -1000,13 +1001,34 @@ export const MediaLibraryOverlay = {
         `;
 
         const previewActions = detail.querySelector('.media-lib-detail__preview-actions');
+        const saveOverlayBtn = detail.querySelector('[data-media-detail-save]');
         let savedTitle = item.title || '';
         let savedDesc = item.description || '';
         const syncSaveBtn = () => {
             const title = detail.querySelector('[data-detail-title]')?.value ?? '';
             const desc = detail.querySelector('[data-detail-desc]')?.value ?? '';
             const dirty = title !== savedTitle || desc !== savedDesc;
-            detail.querySelector('[data-media-action-save]')?.classList.toggle('is-hidden', !dirty);
+            saveOverlayBtn?.classList.toggle('is-hidden', !dirty);
+            detail.querySelector('[data-media-detail-preview]')?.classList.toggle('is-dirty', dirty);
+        };
+
+        const commitDetailSave = async () => {
+            const title = detail.querySelector('[data-detail-title]')?.value || '';
+            const description = detail.querySelector('[data-detail-desc]')?.value || '';
+            if (title === savedTitle && description === savedDesc) return;
+            await updateMediaMeta(item.id, { title, description });
+            savedTitle = title;
+            savedDesc = description;
+            item.title = title;
+            item.description = description;
+            showAppToast('Saved');
+            syncSaveBtn();
+            const row = panel.querySelector(`[data-media-id="${CSS.escape(item.id)}"]`);
+            if (row) {
+                row.title = title || item.filename || 'Untitled';
+                const listTitle = row.querySelector('.media-lib-list-row__title');
+                if (listTitle) listTitle.textContent = title || item.filename || 'Untitled';
+            }
         };
 
         bindMediaQuickActions(previewActions, {
@@ -1017,22 +1039,6 @@ export const MediaLibraryOverlay = {
                 this.refresh();
             },
             onAttach: () => this.attachSelectedToNote(),
-            onSave: async () => {
-                const title = detail.querySelector('[data-detail-title]')?.value || '';
-                const description = detail.querySelector('[data-detail-desc]')?.value || '';
-                if (title === savedTitle && description === savedDesc) return;
-                await updateMediaMeta(item.id, { title, description });
-                savedTitle = title;
-                savedDesc = description;
-                item.title = title;
-                item.description = description;
-                showAppToast('Saved');
-                syncSaveBtn();
-                const tile = panel.querySelector(`.media-lib-tile[data-media-id="${CSS.escape(item.id)}"]`);
-                if (tile) {
-                    tile.title = title || item.filename || 'Untitled';
-                }
-            },
             onRemove: async () => {
                 if (!confirm('Remove this item from the media library?')) return;
                 await removeMedia(item.id);
@@ -1042,12 +1048,19 @@ export const MediaLibraryOverlay = {
             }
         });
 
+        saveOverlayBtn?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            commitDetailSave().catch(() => showAppToast('Save failed'));
+        });
+
         const previewEl = detail.querySelector('[data-media-detail-preview]');
         if (previewEl && !item.blobMissing && String(item.mime || '').startsWith('image/')) {
             previewEl.classList.add('is-clickable');
             previewEl.title = 'View full size';
             previewEl.addEventListener('click', (e) => {
-                if (e.target.closest('.card-act, .media-quick-actions')) return;
+                if (e.target.closest('.card-act, .media-quick-actions, [data-media-detail-save]')) return;
+                if (previewEl.classList.contains('is-dirty')) return;
                 viewMediaFullSize(item.id, { attachNoteId }).catch(() => {});
             });
         }
