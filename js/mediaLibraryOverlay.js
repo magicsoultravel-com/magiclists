@@ -20,6 +20,13 @@ import {
     importMediaZipFile
 } from './mediaBackup.js';
 import {
+    formatExportTimestamp,
+    readLastMediaMetaExportAt,
+    readLastMediaZipExportAt,
+    writeLastMediaMetaExportAt,
+    writeLastMediaZipExportAt
+} from './backup.js';
+import {
     attachMediaToNote,
     detachMediaFromNote,
     findNotesForMedia,
@@ -138,6 +145,32 @@ function syncSortButtons() {
             btn.innerHTML = SORT_ICONS[btnMode] || '';
         }
     });
+}
+
+/**
+ * @param {object[]|undefined} items  When provided, refresh total size; export times always refresh.
+ */
+function syncFooterStats(items) {
+    if (!panel) return;
+    const sizeEl = panel.querySelector('[data-media-lib-total-size]');
+    const metaEl = panel.querySelector('[data-media-lib-export-meta]');
+    const zipEl = panel.querySelector('[data-media-lib-export-zip]');
+    if (sizeEl && Array.isArray(items)) {
+        const totalBytes = items.reduce((sum, it) => sum + (Number(it?.byteSize) || 0), 0);
+        const label = formatByteSize(totalBytes);
+        sizeEl.textContent = label;
+        sizeEl.title = `Total media library size (${items.length} item${items.length === 1 ? '' : 's'})`;
+    }
+    if (metaEl) {
+        const at = formatExportTimestamp(readLastMediaMetaExportAt());
+        metaEl.textContent = `Meta ${at}`;
+        metaEl.title = `Last media metadata export: ${at}`;
+    }
+    if (zipEl) {
+        const at = formatExportTimestamp(readLastMediaZipExportAt());
+        zipEl.textContent = `ZIP ${at}`;
+        zipEl.title = `Last media ZIP export: ${at}`;
+    }
 }
 
 function liveItem(id) {
@@ -417,14 +450,21 @@ export const MediaLibraryOverlay = {
 
         if (footer) {
             footer.innerHTML = `
-                <button type="button" class="btn btn--compact btn--icon" data-media-lib-upload title="Upload files" aria-label="Upload files">${ACTION_ICONS.upload}</button>
-                <button type="button" class="btn btn--compact btn--icon" data-media-lib-clipboard title="Add from clipboard" aria-label="Add from clipboard">${ACTION_ICONS.mediaPaste}</button>
-                <button type="button" class="btn btn--compact btn--icon" data-media-lib-select-note title="Select note to attach" aria-label="Select note to attach">${ACTION_ICONS.selectNote}</button>
-                <button type="button" class="btn btn--compact btn--icon is-hidden" data-media-lib-attach title="Attach selected media to note" aria-label="Attach to note" disabled>${CARD_ICONS.attach}</button>
-                <button type="button" class="btn btn--compact btn--icon" data-media-export-meta title="Export media metadata" aria-label="Export media metadata">${ACTION_ICONS.export}</button>
-                <button type="button" class="btn btn--compact btn--icon" data-media-export-zip title="Export media ZIP" aria-label="Export media ZIP">${ACTION_ICONS.cloudExport}</button>
-                <button type="button" class="btn btn--compact btn--icon" data-media-import-meta title="Import media metadata" aria-label="Import media metadata">${ACTION_ICONS.import}</button>
-                <button type="button" class="btn btn--compact btn--icon" data-media-import-zip title="Import media ZIP" aria-label="Import media ZIP">${ACTION_ICONS.cloudImport}</button>
+                <div class="media-lib-panel__footer-actions">
+                    <button type="button" class="btn btn--compact btn--icon" data-media-lib-upload title="Upload files" aria-label="Upload files">${ACTION_ICONS.upload}</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-media-lib-clipboard title="Add from clipboard" aria-label="Add from clipboard">${ACTION_ICONS.mediaPaste}</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-media-lib-select-note title="Select note to attach" aria-label="Select note to attach">${ACTION_ICONS.selectNote}</button>
+                    <button type="button" class="btn btn--compact btn--icon is-hidden" data-media-lib-attach title="Attach selected media to note" aria-label="Attach to note" disabled>${CARD_ICONS.attach}</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-media-export-meta title="Export media metadata" aria-label="Export media metadata">${ACTION_ICONS.export}</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-media-export-zip title="Export media ZIP" aria-label="Export media ZIP">${ACTION_ICONS.cloudExport}</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-media-import-meta title="Import media metadata" aria-label="Import media metadata">${ACTION_ICONS.import}</button>
+                    <button type="button" class="btn btn--compact btn--icon" data-media-import-zip title="Import media ZIP" aria-label="Import media ZIP">${ACTION_ICONS.cloudImport}</button>
+                </div>
+                <div class="media-lib-panel__footer-stats" data-media-lib-stats>
+                    <span class="media-lib-panel__stat" data-media-lib-export-meta>Meta Never</span>
+                    <span class="media-lib-panel__stat" data-media-lib-export-zip>ZIP Never</span>
+                    <span class="media-lib-panel__stat" data-media-lib-total-size>0 B</span>
+                </div>
             `;
         }
 
@@ -463,10 +503,20 @@ export const MediaLibraryOverlay = {
             this.attachSelectedToNote();
         });
         panel.querySelector('[data-media-export-meta]')?.addEventListener('click', () => {
-            downloadMediaMetaJson().catch((err) => showAppToast(err?.message || 'Export failed'));
+            downloadMediaMetaJson()
+                .then((payload) => {
+                    writeLastMediaMetaExportAt(payload?.timestamp || Math.floor(Date.now() / 1000));
+                    syncFooterStats();
+                })
+                .catch((err) => showAppToast(err?.message || 'Export failed'));
         });
         panel.querySelector('[data-media-export-zip]')?.addEventListener('click', () => {
-            downloadMediaZip().catch((err) => showAppToast(err?.message || 'Export failed'));
+            downloadMediaZip()
+                .then((payload) => {
+                    writeLastMediaZipExportAt(payload?.timestamp || Math.floor(Date.now() / 1000));
+                    syncFooterStats();
+                })
+                .catch((err) => showAppToast(err?.message || 'Export failed'));
         });
         panel.querySelector('[data-media-import-meta]')?.addEventListener('click', () => {
             document.getElementById('media-meta-import-picker')?.click();
@@ -660,6 +710,7 @@ export const MediaLibraryOverlay = {
                 : 'Media library';
         }
         syncSortButtons();
+        syncFooterStats(items);
 
         if (!items.length) {
             if (grid) grid.innerHTML = '';

@@ -178,6 +178,7 @@ export async function buildMediaMetaExportPayload() {
 export async function downloadMediaMetaJson() {
     const payload = await buildMediaMetaExportPayload();
     triggerDownload(payload.blob, payload.filename);
+    return payload;
 }
 
 /**
@@ -450,6 +451,7 @@ export async function downloadMediaZip() {
     if (payload.blob && payload.filename) {
         triggerDownload(payload.blob, payload.filename);
     }
+    return payload;
 }
 
 /**
