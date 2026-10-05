@@ -99,6 +99,9 @@ describe('planner model', () => {
         assert.equal(planner.sheet.rows, 3);
         assert.deepEqual(planner.categoryColors, {});
         assert.equal(planner.kanbanCollapsed, false);
+        assert.equal(planner.chartHidden, false);
+        assert.equal(planner.kanbanHidden, false);
+        assert.equal(planner.wbsHidden, false);
         assert.equal(planner.kanbanSort, 'row');
         assert.equal(planner.kanbanSortDir, 'asc');
         assert.deepEqual(planner.kanbanStageById, {});
@@ -113,6 +116,7 @@ describe('planner model', () => {
         assert.deepEqual(planner.wbsPhaseLabels, [...WBS_DEFAULT_PHASE_LABELS]);
         assert.equal(getPlannerField(planner.sheet, 0, 'name'), '');
         assert.equal(plannerHasContent(planner), false);
+        assert.deepEqual(planner.sheet.colWidths.slice(2, 4), [92, 92]);
     });
 
     it('normalizes labelWidth; todayLine lives in Display Options', () => {
@@ -267,6 +271,9 @@ describe('planner model', () => {
         assert.ok(!html.includes('>ID<'));
         assert.ok(html.includes('data-planner-summary'));
         assert.ok(html.includes('data-planner-table-toggle'));
+        assert.ok(html.includes('data-planner-module-toggle="chart"'));
+        assert.ok(html.includes('data-planner-module-toggle="kanban"'));
+        assert.ok(html.includes('data-planner-module-toggle="wbs"'));
         assert.ok(html.includes('data-planner-chart-toggle'));
         assert.ok(html.includes('data-planner-kanban-toggle'));
         assert.ok(html.includes('Table</button>') || html.includes('>Table'));
@@ -297,6 +304,29 @@ describe('planner model', () => {
         assert.ok(!html.includes('data-planner-today-settings-toggle'));
         assert.ok(html.includes('planner-gantt__today') || html.includes('data-planner-gantt'));
         assert.ok(html.includes('data-planner-kanban'));
+    });
+
+    it('buildNotePlannerSectionHtml omits hidden modules; table always present', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'Keep');
+        planner.chartHidden = true;
+        planner.kanbanHidden = true;
+        planner.wbsHidden = true;
+        const html = buildNotePlannerSectionHtml({ id: 'n-hide', planner }, { canEdit: true });
+        assert.ok(html.includes('data-planner-table'));
+        assert.ok(html.includes('data-planner-table-toggle'));
+        assert.ok(html.includes('data-planner-module-toggle="chart"'));
+        assert.ok(html.includes('data-planner-module-toggle="kanban"'));
+        assert.ok(html.includes('data-planner-module-toggle="wbs"'));
+        assert.ok(html.includes('aria-pressed="false"'));
+        assert.ok(!html.includes('data-planner-gantt'));
+        assert.ok(!html.includes('data-planner-chart-toggle'));
+        assert.ok(!html.includes('data-planner-kanban'));
+        assert.ok(!html.includes('data-planner-wbs'));
+        const normalized = normalizePlanner(planner);
+        assert.equal(normalized.chartHidden, true);
+        assert.equal(normalized.kanbanHidden, true);
+        assert.equal(normalized.wbsHidden, true);
     });
 
     it('kanban inline fields only when canEdit; flyout stays read-only spans', () => {

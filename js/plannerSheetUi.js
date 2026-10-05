@@ -87,9 +87,11 @@ function renderDatetimeCell(value, row, col, canEdit, { minDate = '' } = {}) {
     const minAttr = minDate ? ` min="${escapeAttr(minDate)}"` : '';
     return `<td class="sheet-grid__cell planner-cell planner-cell--datetime">
         <div class="planner-datetime" data-planner-datetime data-row="${row}" data-col="${col}">
+            <div class="planner-datetime__picks" role="group" aria-label="Date and time">
+                <button type="button" class="card-act planner-datetime__pick" data-planner-pick="date" title="Set date" aria-label="Set date">${CARD_ICONS.calendar}</button>
+                <button type="button" class="card-act planner-datetime__pick" data-planner-pick="time" title="Set time" aria-label="Set time">${CARD_ICONS.clock}</button>
+            </div>
             <span class="planner-datetime__value${label ? '' : ' is-empty'}" data-planner-datetime-value>${escapeHTML(display)}</span>
-            <button type="button" class="card-act planner-datetime__pick" data-planner-pick="date" title="Set date" aria-label="Set date">${CARD_ICONS.calendar}</button>
-            <button type="button" class="card-act planner-datetime__pick" data-planner-pick="time" title="Set time" aria-label="Set time">${CARD_ICONS.clock}</button>
             <input type="date" class="planner-datetime__native" data-planner-date tabindex="-1" value="${escapeAttr(parts.date || '')}"${minAttr} aria-hidden="true">
             <input type="time" class="planner-datetime__native" data-planner-time tabindex="-1" value="${escapeAttr(parts.time || '')}" step="60" aria-hidden="true">
         </div>
@@ -339,6 +341,97 @@ function openPlannerNativePicker(input) {
     input.click();
 }
 
+function closePlannerTimePanels(root = document) {
+    root.querySelectorAll?.('[data-planner-time-pop]').forEach((pop) => {
+        pop.hidden = true;
+    });
+    if (closePlannerTimePanels._onPointer) {
+        document.removeEventListener('pointerdown', closePlannerTimePanels._onPointer, true);
+        closePlannerTimePanels._onPointer = null;
+    }
+}
+
+/**
+ * In-cell time popover (time field + Clear). Stays under the cell — no body portal / board-zoom drift.
+ * @param {HTMLElement} wrap
+ * @param {{ commitDatetimeWrap: Function }} opts
+ */
+function openPlannerTimePanel(wrap, { commitDatetimeWrap } = {}) {
+    if (!wrap) return;
+    const timeInput = wrap.querySelector('[data-planner-time]');
+    if (!timeInput) return;
+
+    let pop = wrap.querySelector('[data-planner-time-pop]');
+    if (pop && !pop.hidden) {
+        closePlannerTimePanels();
+        return;
+    }
+
+    closePlannerTimePanels();
+    closePlannerCategoryMenus();
+
+    if (!pop) {
+        pop = document.createElement('div');
+        pop.className = 'planner-datetime__time-pop';
+        pop.setAttribute('data-planner-time-pop', '1');
+        pop.innerHTML = `
+            <input type="time" class="planner-datetime__time-pop-input" data-planner-time-pop-input step="60" value="">
+            <button type="button" class="planner-datetime__time-pop-clear" data-planner-time-pop-clear>Clear</button>
+        `;
+        wrap.appendChild(pop);
+
+        const panelInput = pop.querySelector('[data-planner-time-pop-input]');
+        const clearBtn = pop.querySelector('[data-planner-time-pop-clear]');
+
+        const applyFromPanel = () => {
+            const hostTime = wrap.querySelector('[data-planner-time]');
+            if (hostTime) hostTime.value = panelInput?.value || '';
+            commitDatetimeWrap?.(wrap);
+        };
+
+        panelInput?.addEventListener('change', () => {
+            applyFromPanel();
+            closePlannerTimePanels();
+        });
+        panelInput?.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                applyFromPanel();
+                closePlannerTimePanels();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                closePlannerTimePanels();
+            }
+        });
+        clearBtn?.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (panelInput) panelInput.value = '';
+            const hostTime = wrap.querySelector('[data-planner-time]');
+            if (hostTime) hostTime.value = '';
+            commitDatetimeWrap?.(wrap);
+            closePlannerTimePanels();
+        });
+        pop.addEventListener('mousedown', (e) => e.stopPropagation());
+        pop.addEventListener('click', (e) => e.stopPropagation());
+    }
+
+    const panelInput = pop.querySelector('[data-planner-time-pop-input]');
+    if (panelInput) panelInput.value = timeInput.value || '';
+    pop.hidden = false;
+
+    const onPointer = (e) => {
+        if (wrap.contains(e.target)) return;
+        closePlannerTimePanels();
+    };
+    closePlannerTimePanels._onPointer = onPointer;
+    document.addEventListener('pointerdown', onPointer, true);
+
+    requestAnimationFrame(() => {
+        panelInput?.focus();
+    });
+}
+
 function closePlannerCategoryMenus() {
     document.querySelectorAll('[data-planner-category-panel]').forEach((panel) => {
         panel.remove();
@@ -580,7 +673,6 @@ export function handleSheetClick(ctx, e) {
         if (!wrap) return true;
         const kind = pickBtn.dataset.plannerPick;
         const dateInput = wrap.querySelector('[data-planner-date]');
-        const timeInput = wrap.querySelector('[data-planner-time]');
         const col = Number(wrap.dataset.col);
         const row = Number(wrap.dataset.row);
         if (dateInput && col === PLANNER_STOP_COL) {
@@ -600,7 +692,11 @@ export function handleSheetClick(ctx, e) {
                 || todayLocalDate();
             commitDatetimeWrap(wrap);
         }
-        openPlannerNativePicker(kind === 'time' ? timeInput : dateInput);
+        if (kind === 'time') {
+            openPlannerTimePanel(wrap, { commitDatetimeWrap });
+            return true;
+        }
+        openPlannerNativePicker(dateInput);
         return true;
     }
 

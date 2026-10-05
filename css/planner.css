@@ -23,6 +23,96 @@
     display: none !important;
 }
 
+.note-body-section--planner > .note-section-header.collapsable-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+}
+
+.note-body-section--planner > .note-section-header .collapsable-heading {
+    min-width: 0;
+}
+
+.planner-section__modules {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.08rem;
+    flex: 0 0 auto;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+.note-body-section--planner > .note-section-header:hover .planner-section__modules,
+.note-body-section--planner > .note-section-header:focus-within .planner-section__modules {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.planner-section__module-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.2rem;
+    height: 1.2rem;
+    padding: 0;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-muted);
+    opacity: 0.42;
+    cursor: pointer;
+    transition: opacity 0.12s ease, color 0.12s ease, background-color 0.12s ease;
+}
+
+.planner-section__module-btn--kana {
+    width: 1.2rem;
+    height: 1.2rem;
+    padding: 0;
+    font-size: 0.52rem;
+    font-weight: 700;
+    letter-spacing: -0.06em;
+    line-height: 1;
+    overflow: hidden;
+}
+
+.planner-section__module-btn--kana > span {
+    display: block;
+    max-width: 100%;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.planner-section__module-btn:hover {
+    opacity: 0.85;
+    color: var(--accent, var(--text-color));
+    background: color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 12%, transparent);
+}
+
+.planner-section__module-btn[aria-pressed="true"] {
+    opacity: 0.9;
+    color: var(--text-color);
+}
+
+.planner-section__module-btn[aria-pressed="true"]:hover {
+    opacity: 1;
+    color: var(--accent, var(--text-color));
+}
+
+.planner-section__module-btn svg {
+    width: 0.78rem;
+    height: 0.78rem;
+}
+
+.has-custom-bg .planner-section__module-btn {
+    color: var(--card-muted);
+}
+
+.has-custom-bg .planner-section__module-btn[aria-pressed="true"] {
+    color: var(--card-text, var(--text-color));
+}
+
 .planner-sheet-block {
     margin-bottom: 0.28rem;
 }
@@ -54,23 +144,24 @@
     padding: 0.06rem 0.1rem;
 }
 
-.planner-cell--datetime {
+.planner-grid .sheet-grid__cell.planner-cell--datetime {
     vertical-align: middle;
+    overflow: visible;
 }
 
+/* Trailing cell actions — same pattern as pack-toggle / card-actions. */
 .planner-datetime {
     position: relative;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 0.08rem;
+    display: block;
     min-width: 0;
     padding: 0.02rem 0.04rem;
 }
 
 .planner-datetime__value {
-    flex: 1 1 auto;
+    display: block;
+    width: 100%;
     min-width: 0;
+    box-sizing: border-box;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -79,27 +170,123 @@
     padding: 0.04rem 0.06rem;
 }
 
+.planner-datetime:hover .planner-datetime__value,
+.planner-datetime:focus-within .planner-datetime__value {
+    padding-right: 2.35rem;
+}
+
 .planner-datetime__value.is-empty {
     color: var(--text-muted);
     opacity: 0.65;
 }
 
-.planner-datetime__pick {
-    flex: 0 0 auto;
+.planner-datetime__picks {
+    position: absolute;
+    top: 50%;
+    right: 0.02rem;
+    z-index: 2;
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1px;
+    transform: translateY(-50%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.planner-datetime:hover .planner-datetime__picks,
+.planner-datetime:focus-within .planner-datetime__picks {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.planner-datetime__pick.card-act {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 1.05rem;
     height: 1.05rem;
     padding: 0;
+    border: 0;
+    border-radius: 2px;
+    background: transparent;
+    color: var(--text-muted);
     opacity: 0.55;
+    flex: 0 0 auto;
 }
 
-.planner-datetime__pick:hover,
-.planner-datetime:focus-within .planner-datetime__pick {
+.planner-datetime__pick.card-act:hover {
     opacity: 1;
+    color: var(--text-main, var(--text-color));
+    background: rgba(255, 255, 255, 0.06);
 }
 
 .planner-datetime__pick svg {
+    display: block;
     width: 0.72rem;
     height: 0.72rem;
+}
+
+.has-custom-bg .planner-datetime__pick.card-act {
+    color: var(--card-muted, var(--card-action-fg));
+}
+
+.has-custom-bg .planner-datetime__pick.card-act:hover {
+    color: var(--card-fg, var(--card-action-fg));
+    background: transparent;
+}
+
+.planner-datetime__time-pop {
+    position: absolute;
+    top: calc(100% + 2px);
+    right: 0;
+    left: auto;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 0.28rem;
+    box-sizing: border-box;
+    padding: 0.22rem 0.28rem;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    background: var(--bg-card, #fff);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+    white-space: nowrap;
+}
+
+.planner-datetime__time-pop[hidden] {
+    display: none !important;
+}
+
+.planner-datetime__time-pop-input {
+    margin: 0;
+    padding: 0.1rem 0.16rem;
+    border: 1px solid color-mix(in srgb, var(--border-color) 55%, transparent);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-main, var(--text-color));
+    font: inherit;
+    font-size: 0.68rem;
+    line-height: 1.2;
+}
+
+.planner-datetime__time-pop-clear {
+    margin: 0;
+    padding: 0.1rem 0.3rem;
+    border: 0;
+    border-radius: 3px;
+    background: transparent;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.62rem;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.planner-datetime__time-pop-clear:hover {
+    color: var(--text-main, var(--text-color));
+    background: color-mix(in srgb, var(--border-color) 28%, transparent);
 }
 
 /* Keep natives in the DOM for showPicker; do not layout as fields. */

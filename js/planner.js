@@ -71,7 +71,7 @@ export const PLANNER_COL_COUNT = PLANNER_COLUMNS.length;
 /** Old v1 column keys (for migration). */
 const V1_COLUMNS = Object.freeze(['id', 'start', 'stop', 'name', 'category', 'comments', 'pred']);
 
-const DEFAULT_COL_WIDTHS = Object.freeze([90, 72, 108, 108, 44, 80]);
+const DEFAULT_COL_WIDTHS = Object.freeze([90, 72, 92, 92, 44, 80]);
 
 function clampColWidth(px) {
     const n = Number(px);
@@ -205,6 +205,9 @@ export function createEmptyPlanner(opts = {}) {
         chartCollapsed: false,
         tableCollapsed: false,
         kanbanCollapsed: false,
+        chartHidden: false,
+        kanbanHidden: false,
+        wbsHidden: false,
         kanbanSort: 'row',
         kanbanSortDir: 'asc',
         kanbanStageById: {},
@@ -905,6 +908,9 @@ export function normalizePlanner(raw) {
         kanbanCollapsed: Object.prototype.hasOwnProperty.call(raw, 'kanbanCollapsed')
             ? !!raw.kanbanCollapsed
             : !!raw.chartCollapsed,
+        chartHidden: !!raw.chartHidden,
+        kanbanHidden: !!raw.kanbanHidden,
+        wbsHidden: !!raw.wbsHidden,
         kanbanSort: normalizeKanbanSort(raw.kanbanSort),
         kanbanSortDir: normalizeKanbanSortDir(raw.kanbanSortDir),
         kanbanStageById: stageById,

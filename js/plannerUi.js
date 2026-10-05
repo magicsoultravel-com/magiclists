@@ -3,6 +3,7 @@ import { mutateItem, emitItemMutation } from './noteSurfaceMutations.js';
 import { UndoManager } from './undo.js';
 import { refreshNoteCanvasPreview } from './noteCanvasRenderer.js';
 import { combineDateTime } from './noteModel.js';
+import { CARD_ICONS } from './icons.js';
 import {
     createEmptyPlanner,
     normalizePlanner,
@@ -16,6 +17,23 @@ import {
 } from './planner.js';
 import { layoutPlannerGantt } from './plannerGantt.js';
 import { renderPlannerCalendarBoardHtml } from './plannerCalendar.js';
+
+const PLANNER_MODULE_TOGGLE_FIELDS = Object.freeze({
+    chart: 'chartHidden',
+    kanban: 'kanbanHidden',
+    wbs: 'wbsHidden'
+});
+
+function renderPlannerModuleTogglesHtml(planner) {
+    const chartOn = !planner.chartHidden;
+    const kanbanOn = !planner.kanbanHidden;
+    const wbsOn = !planner.wbsHidden;
+    return `<div class="planner-section__modules" role="group" aria-label="Plan modules">
+        <button type="button" class="card-act planner-section__module-btn" data-planner-module-toggle="chart" title="Chart" aria-label="${chartOn ? 'Hide Chart' : 'Show Chart'}" aria-pressed="${chartOn ? 'true' : 'false'}">${CARD_ICONS.plannerChart}</button>
+        <button type="button" class="card-act planner-section__module-btn planner-section__module-btn--kana" data-planner-module-toggle="kanban" title="Kanban" aria-label="${kanbanOn ? 'Hide Kanban' : 'Show Kanban'}" aria-pressed="${kanbanOn ? 'true' : 'false'}"><span aria-hidden="true">カン</span></button>
+        <button type="button" class="card-act planner-section__module-btn" data-planner-module-toggle="wbs" title="WBS" aria-label="${wbsOn ? 'Hide WBS' : 'Show WBS'}" aria-pressed="${wbsOn ? 'true' : 'false'}">${CARD_ICONS.plannerWbs}</button>
+    </div>`;
+}
 
 import {
     renderPlannerSheetHtml,
@@ -136,14 +154,22 @@ export function buildNotePlannerSectionHtml(item, { canEdit = false, startCollap
     }
     const edit = canEdit && isPlannerWritable(planner);
     const tableHtml = renderPlannerTableHtml(planner, { canEdit: edit });
-    const { html: ganttHtml } = renderPlannerGanttHtml(planner, { canEdit: edit });
-    const kanbanHtml = renderPlannerKanbanHtml(planner, { canEdit: edit });
-    const wbsHtml = renderPlannerWbsHtml(planner, { canEdit: edit });
+    const ganttHtml = planner.chartHidden
+        ? ''
+        : renderPlannerGanttHtml(planner, { canEdit: edit }).html;
+    const kanbanHtml = planner.kanbanHidden
+        ? ''
+        : renderPlannerKanbanHtml(planner, { canEdit: edit });
+    const wbsHtml = planner.wbsHidden
+        ? ''
+        : renderPlannerWbsHtml(planner, { canEdit: edit });
+    const moduleTogglesHtml = renderPlannerModuleTogglesHtml(planner);
 
     return `
             <div class="note-body-section note-body-section--planner" data-note-planner>
                 <div class="note-section-header collapsable-header">
                     <span class="collapsable-heading"><span class="collapsable-toggle${toggleCollapsed}">▼</span>Plan</span>
+                    ${moduleTogglesHtml}
                 </div>
                 <div class="note-section-body collapsable-section${collapsedClass}">
                     ${tableHtml}
@@ -154,12 +180,24 @@ export function buildNotePlannerSectionHtml(item, { canEdit = false, startCollap
             </div>`;
 }
 
-function bindPlannerSectionToggle(section) {
+/**
+ * @param {HTMLElement} section
+ * @param {{ onModuleToggle?: (moduleId: string) => void }} [opts]
+ */
+function bindPlannerSectionToggle(section, { onModuleToggle } = {}) {
     const header = section?.querySelector('.note-section-header');
     if (!header || header.dataset.plannerToggleBound === '1') return;
     header.dataset.plannerToggleBound = '1';
     header.addEventListener('click', (e) => {
         e.stopPropagation();
+        const modBtn = e.target.closest?.('[data-planner-module-toggle]');
+        if (modBtn && header.contains(modBtn)) {
+            const moduleId = modBtn.getAttribute('data-planner-module-toggle') || '';
+            if (moduleId && PLANNER_MODULE_TOGGLE_FIELDS[moduleId]) {
+                onModuleToggle?.(moduleId);
+            }
+            return;
+        }
         const body = header.nextElementSibling;
         const toggle = header.querySelector('.collapsable-toggle');
         body?.classList.toggle('collapsed');
@@ -314,8 +352,6 @@ export function attachPlannerInteractions(root, item, {
     const section = root?.querySelector?.('[data-note-planner]') || root?.closest?.('[data-note-planner]');
     if (!section || !item?.planner) return;
 
-    bindPlannerSectionToggle(section);
-
     const alreadyBound = section.dataset.plannerBound === '1';
     // Height thrash (0 → auto) only on first bind — rebind must not yank board scroll.
     // Board cards often bind before appendChild; re-grow next frame once connected.
@@ -443,6 +479,18 @@ export function attachPlannerInteractions(root, item, {
         growPlannerCell,
         mirrorBoardFieldToTableDom
     };
+
+    bindPlannerSectionToggle(section, {
+        onModuleToggle(moduleId) {
+            const field = PLANNER_MODULE_TOGGLE_FIELDS[moduleId];
+            if (!field) return;
+            mutate((it) => {
+                if (!it.planner) return;
+                it.planner[field] = !it.planner[field];
+            }, { skipRerender: true, refreshGantt: false });
+            refresh();
+        }
+    });
 
     bindSheet(ctx);
     bindChart(ctx);
