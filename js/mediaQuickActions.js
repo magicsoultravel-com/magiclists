@@ -79,13 +79,19 @@ export function buildMediaQuickActionsHtml(opts) {
         </div>`
         : '';
 
+    const transformBlock = showTransform
+        ? `<div class="media-quick-actions media-quick-actions--bottom-left">
+            ${optimizeBtn}
+            ${scaleBtn}
+        </div>`
+        : '';
+
     return `
         ${removeBlock}
+        ${transformBlock}
         <div class="media-quick-actions media-quick-actions--right">
             ${viewBtn}
             ${downloadBtn}
-            ${optimizeBtn}
-            ${scaleBtn}
             ${attachBtn}
             ${saveBtn}
         </div>`;
