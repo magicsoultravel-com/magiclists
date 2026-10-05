@@ -16,6 +16,10 @@ import { getSmallRect } from './tileGeometry.js';
 import { readTileSmallFootprint } from './tileFootprint.js';
 import { normalizeViewMode } from './viewSession.js';
 import { syncCabinetSplitter, syncFileCabinetShutChrome, refreshFileCabinetUiScale } from './shellResize.js';
+import {
+    beginFcExpandTransition,
+    isUiTransitionsEnabled
+} from './uiTransitions.js';
 import { BoardOperations } from './boardOperations.js';
 import { createCardComponent } from './noteSurfaceHtml.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
@@ -1347,13 +1351,30 @@ function flashFileCabinetDropRejected(card) {
     window.setTimeout(() => card.classList.remove('is-drop-rejected'), 180);
 }
 
+function captureClientRect(el) {
+    if (!el?.getBoundingClientRect) return null;
+    const r = el.getBoundingClientRect();
+    if (!Number.isFinite(r.width) || r.width <= 0) return null;
+    return { left: r.left, top: r.top, width: r.width, height: r.height, x: r.x, y: r.y };
+}
+
+function dispatchBoardVisibility({ flushLayout = false, transition = null } = {}) {
+    if (transition?.kind === 'fc-expand' && transition.itemId && isUiTransitionsEnabled()) {
+        beginFcExpandTransition(transition.itemId);
+    }
+    window.dispatchEvent(new CustomEvent('board:visibility_changed', {
+        detail: { flushLayout, ...(transition ? { transition } : {}) }
+    }));
+}
+
 /**
  * Expand a filed note onto the board at drop coords (or remembered position).
  * Preserves item.categories.
  * @param {{ silent?: boolean }} [opts] - When silent, skip board:visibility_changed (for bulk).
  */
-export function expandFileCabinetItemToBoard({ item, dropX, dropY, UI, card = null, silent = false }) {
+export function expandFileCabinetItemToBoard({ item, dropX, dropY, UI, card = null, silent = false, sourceRect = null }) {
     if (!item?.id || !UI) return false;
+    const fromRect = sourceRect || (!silent ? captureClientRect(card) : null);
     removeFromFileCabinetOrder(item.id);
 
     const canvas = document.getElementById('app-canvas');
@@ -1391,7 +1412,10 @@ export function expandFileCabinetItemToBoard({ item, dropX, dropY, UI, card = nu
     }
 
     if (!silent) {
-        window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
+        const transition = fromRect
+            ? { kind: 'fc-expand', itemId: item.id, sourceRect: fromRect }
+            : null;
+        dispatchBoardVisibility({ flushLayout: false, transition });
     }
     return true;
 }
@@ -2580,6 +2604,10 @@ export function initFileCabinetDrag(mount, currentItemsOrGetter = [], UI, signal
 
         // FC tab → board
         if (target?.kind === 'board') {
+            const sourceRect = captureClientRect(state.card)
+                || (Number.isFinite(e.clientX)
+                    ? { left: e.clientX - 40, top: e.clientY - 16, width: 80, height: 32, x: e.clientX - 40, y: e.clientY - 16 }
+                    : null);
             endFileCabinetDragGhost(state.card, state.placeholder);
             resetDraggedTabStyles(state.card, state.sourceStack);
             expandFileCabinetItemToBoard({
@@ -2587,7 +2615,8 @@ export function initFileCabinetDrag(mount, currentItemsOrGetter = [], UI, signal
                 dropX: e.clientX,
                 dropY: e.clientY,
                 UI,
-                card: state.card
+                card: state.card,
+                sourceRect
             });
             return;
         }
@@ -2784,8 +2813,10 @@ export function getFileCabinetToggleLabels(inFileCabinetStrip, atLabel) {
 export function applyFileCabinetZoneToggle(card, item, ctx = {}, UI) {
     if (!UI) return;
     const inFileCabinet = !!card.closest('#file-cabinet');
+    let transition = null;
 
     if (inFileCabinet) {
+        const sourceRect = captureClientRect(card);
         removeFromFileCabinetOrder(item.id);
         let rect = UI.resolveBoardExpandRect(card, item);
         const savedGrid = UI.getGridLayout()[item.id];
@@ -2794,6 +2825,9 @@ export function applyFileCabinetZoneToggle(card, item, ctx = {}, UI) {
         const y = savedGrid?.y ?? savedPos?.y ?? 8;
         rect = { x, y, w: rect.w, h: rect.h };
         UI.saveGridLayout(item.id, rect, { updateRemembered: true });
+        if (sourceRect && item?.id) {
+            transition = { kind: 'fc-expand', itemId: item.id, sourceRect };
+        }
     } else {
         const pos = UI.readNoteRect(card);
         fileItemToCabinet(item, UI.activeBoardViewMode, UI, {
@@ -2804,7 +2838,7 @@ export function applyFileCabinetZoneToggle(card, item, ctx = {}, UI) {
         });
     }
 
-    window.dispatchEvent(new CustomEvent('board:visibility_changed', { detail: { flushLayout: false } }));
+    dispatchBoardVisibility({ flushLayout: false, transition });
 }
 
 /**

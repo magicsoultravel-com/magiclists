@@ -1,0 +1,91 @@
+/** @css {"owns":"Smooth UI transitions — morph chrome, FC fly overlay, FC expand flash guard", "js":["uiTransitions.js","displayOptions.js","magicFocus.js","fileCabinet.js","app.js"]} */
+
+html[data-ui-transitions="smooth"] {
+    --ui-transition-ms: 180ms;
+    --ui-transition-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Chrome morph (FAB, dock, canvas/focus during Focus takeover) */
+html[data-ui-transitions="smooth"] .ui-morph-hidden {
+    opacity: 0 !important;
+    visibility: hidden;
+    pointer-events: none !important;
+    transition:
+        opacity var(--ui-transition-ms) var(--ui-transition-ease),
+        visibility var(--ui-transition-ms) var(--ui-transition-ease);
+}
+
+html[data-ui-transitions="smooth"] #fab-create,
+html[data-ui-transitions="smooth"] #fab-focus-exit,
+html[data-ui-transitions="smooth"] #desktop-dock,
+html[data-ui-transitions="smooth"] #app-canvas,
+html[data-ui-transitions="smooth"] #magic-focus,
+html[data-ui-transitions="smooth"] #file-cabinet,
+html[data-ui-transitions="smooth"] #shell-splitter-h,
+html[data-ui-transitions="smooth"] #file-cabinet-toggle-fab {
+    transition:
+        opacity var(--ui-transition-ms) var(--ui-transition-ease),
+        visibility var(--ui-transition-ms) var(--ui-transition-ease);
+}
+
+/* During Focus morph, keep canvas/FC in the layout so opacity can fade
+   (magic-focus.css uses display:none while data-magic-focus is set;
+   base .is-hidden is also display:none — both must yield during morph). */
+html[data-ui-transitions="smooth"] body.is-focus-morphing #workspace-shell[data-magic-focus] #app-canvas,
+html[data-ui-transitions="smooth"] body.is-focus-morphing #workspace-shell[data-magic-focus] #file-cabinet,
+html[data-ui-transitions="smooth"] body.is-focus-morphing #workspace-shell[data-magic-focus] #shell-splitter-h,
+html[data-ui-transitions="smooth"] body.is-focus-morphing #workspace-shell[data-magic-focus] #file-cabinet-toggle-fab,
+html[data-ui-transitions="smooth"] body.is-focus-morphing #app-canvas.is-hidden,
+html[data-ui-transitions="smooth"] body.is-focus-morphing #fab-create.is-hidden,
+html[data-ui-transitions="smooth"] body.is-focus-morphing #fab-focus-exit.is-hidden,
+html[data-ui-transitions="smooth"] body.is-focus-morphing #desktop-dock.is-suppressed {
+    display: block !important;
+}
+
+html[data-ui-transitions="smooth"] body.is-focus-morphing #workspace-shell[data-magic-focus] #drawing-board:not(.magic-focus-canvas-board) {
+    display: block !important;
+}
+
+html[data-ui-transitions="smooth"] body.is-focus-morphing #desktop-dock.is-single-desktop {
+    display: none !important;
+}
+
+/* FC expand: hide target board card until fly lands */
+html[data-ui-transitions="smooth"] .mini-card.ui-fc-expand-pending {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+html[data-ui-transitions="smooth"] body.is-fc-transitioning {
+    /* Marker class for JS/CSS coordination */
+}
+
+.ui-transition-fly {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 10000;
+    pointer-events: none;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--accent-color, var(--accent, #6b8cae)) 35%, var(--bg-secondary, #1e1e24));
+    border: 1px solid color-mix(in srgb, var(--accent-color, var(--accent, #6b8cae)) 55%, transparent);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+    will-change: transform;
+    transition: transform var(--ui-transition-ms, 180ms) var(--ui-transition-ease, cubic-bezier(0.2, 0, 0, 1));
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html[data-ui-transitions="smooth"] .ui-morph-hidden,
+    html[data-ui-transitions="smooth"] #fab-create,
+    html[data-ui-transitions="smooth"] #fab-focus-exit,
+    html[data-ui-transitions="smooth"] #desktop-dock,
+    html[data-ui-transitions="smooth"] #app-canvas,
+    html[data-ui-transitions="smooth"] #magic-focus,
+    html[data-ui-transitions="smooth"] #file-cabinet,
+    html[data-ui-transitions="smooth"] #shell-splitter-h,
+    html[data-ui-transitions="smooth"] #file-cabinet-toggle-fab,
+    .ui-transition-fly {
+        transition: none !important;
+    }
+}

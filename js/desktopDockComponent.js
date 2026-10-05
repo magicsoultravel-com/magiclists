@@ -320,9 +320,16 @@ export const DesktopDock = {
      * Hide/show the whole dock regardless of desktop count. Safe to call before
      * init(): the flag is applied by init()'s first updateDockVisibility().
      * @param {boolean} suppressed
+     * @param {{ apply?: boolean }} [opts] - When apply=false, only set the flag (Focus morph).
      */
-    setSuppressed(suppressed) {
+    setSuppressed(suppressed, opts = {}) {
         _suppressed = !!suppressed;
+        if (opts.apply === false) return;
+        updateDockVisibility();
+    },
+
+    /** Apply visibility from current suppressed flag (after deferred Focus morph). */
+    applySuppressedVisibility() {
         updateDockVisibility();
     },
 

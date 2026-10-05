@@ -43,6 +43,7 @@ const DISPLAY_DEFAULTS = {
     desktopDockOpacity: 1,
     popoutMode: 'pip',
     fileCabinetBg: 'smooth',
+    transitionsMode: 'smooth',
     plannerTodayLine: { color: '#e11d48', style: 'dashed', thickness: 1.25 },
     plannerKanbanFlavour: 'release'
 };

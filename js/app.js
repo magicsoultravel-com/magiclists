@@ -884,14 +884,29 @@ renderQuickActions() {
         }
     }
 
-    updateFabVisibility() {
+    updateFabVisibility({ instant = false } = {}) {
         const fab = document.getElementById('fab-create');
         const scribbleFab = document.getElementById('fab-scribble');
         const inDrawing = AppState.workspaceMode === 'drawing';
         const inFocus = MagicFocus.isOpen();
         const hideBoardFabs = inDrawing || inFocus;
+        const useMorph = !instant && document.documentElement.dataset.uiTransitions !== 'off';
+
         if (fab) {
-            fab.classList.toggle('is-hidden', hideBoardFabs);
+            if (useMorph) {
+                import('./uiTransitions.js').then(({ setChromeVisible, isUiTransitionsEnabled }) => {
+                    if (!isUiTransitionsEnabled()) {
+                        fab.classList.toggle('is-hidden', hideBoardFabs);
+                        return;
+                    }
+                    setChromeVisible(fab, !hideBoardFabs, { instant });
+                }).catch(() => {
+                    fab.classList.toggle('is-hidden', hideBoardFabs);
+                });
+            } else {
+                fab.classList.remove('ui-morph-hidden');
+                fab.classList.toggle('is-hidden', hideBoardFabs);
+            }
             if (!hideBoardFabs) {
                 const needsLogin = !AppState.user.isLoggedIn;
                 fab.title = needsLogin ? 'New note (login required)' : 'New note';
@@ -900,30 +915,43 @@ renderQuickActions() {
         }
         if (scribbleFab) {
             // Keep scribble available in Focus; only hide during workspace drawing.
+            scribbleFab.classList.remove('ui-morph-hidden');
             scribbleFab.classList.toggle('is-hidden', inDrawing);
         }
-        MagicFocus.syncExitFabVisibility({ inDrawing });
+        MagicFocus.syncExitFabVisibility({ inDrawing, instant: instant || !useMorph });
     }
 
-    onMagicFocusEnter() {
+    onMagicFocusEnter({ deferChrome = false } = {}) {
         AppState.workspaceMode = 'focus';
-        DesktopDock.setSuppressed(true);
+        DesktopDock.setSuppressed(true, { apply: !deferChrome });
         DesktopZoom.apply({ enabled: false });
-        this.updateFabVisibility();
+        if (!deferChrome) {
+            this.updateFabVisibility({ instant: true });
+        }
         this.updateLayoutResetVisibility();
         this.updateViewToggleState();
     }
 
-    async onMagicFocusLeave() {
-        AppState.workspaceMode = 'notes';
+    applyDesktopDockAfterFocusEnter() {
+        DesktopDock.applySuppressedVisibility();
+    }
+
+    applyDesktopDockAfterFocusLeave() {
         DesktopDock.setSuppressed(false);
+    }
+
+    async onMagicFocusLeave({ deferChrome = false } = {}) {
+        AppState.workspaceMode = 'notes';
+        DesktopDock.setSuppressed(false, { apply: !deferChrome });
         this.updateDesktopZoomVisibility();
         if (AppState.items.length) {
             const canvas = document.getElementById('app-canvas');
             UI.render(canvas, AppState.items, AppState.viewSettings.sortBy, AppState.hiddenCategories);
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
         }
-        this.updateFabVisibility();
+        if (!deferChrome) {
+            this.updateFabVisibility({ instant: true });
+        }
         this.updateLayoutResetVisibility();
         this.updateViewToggleState();
     }
@@ -1732,6 +1760,13 @@ renderQuickActions() {
         window.addEventListener('board:visibility_changed', async (e) => {
             const canvas = document.getElementById('app-canvas');
             const skipFlush = e.detail?.flushLayout === false;
+            const transition = e.detail?.transition;
+
+            // Concurrent non-FC render while an FC expand is in flight → abort fly.
+            if (transition?.kind !== 'fc-expand' && document.body.classList.contains('is-fc-transitioning')) {
+                import('./uiTransitions.js').then(({ cancelAll }) => cancelAll()).catch(() => {});
+            }
+
             if (canvas && !skipFlush) {
                 UI.flushLayoutFromCanvas(canvas, AppState.viewSettings.sortBy);
             }
@@ -1740,6 +1775,21 @@ renderQuickActions() {
             });
             this.updateWorkspaceCounter();
             DragDropEngine.init(AppState.user, AppState.items, () => this.syncDataStore());
+
+            if (transition?.kind === 'fc-expand' && transition.itemId && transition.sourceRect) {
+                const itemId = transition.itemId;
+                const pendingCard = canvas?.querySelector(`.mini-card[data-id="${CSS.escape(itemId)}"]`);
+                pendingCard?.classList.add('ui-fc-expand-pending');
+                requestAnimationFrame(() => {
+                    import('./uiTransitions.js').then(({ runFcExpandAfterRender, clearFcExpandTransition }) => {
+                        runFcExpandAfterRender({
+                            itemId,
+                            sourceRect: transition.sourceRect,
+                            UI
+                        }).catch(() => clearFcExpandTransition());
+                    }).catch(() => {});
+                });
+            }
         });
 
         window.addEventListener('filecabinet:layout_changed', async (e) => {

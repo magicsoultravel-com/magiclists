@@ -52,6 +52,10 @@ const STORAGE_KEY = 'matrix_display_options';
 
 const FILE_CABINET_BG_OPTIONS = ['none', 'smooth', 'striped', 'dots', 'polished-metal', 'carbon-fiber', 'wood', 'stone', 'bricks', 'gradient', 'sunset'];
 
+function normalizeTransitionsMode(value) {
+    return value === 'off' ? 'off' : 'smooth';
+}
+
 const DEFAULTS = {
     showCategoryBand: true,
     showCategoryName: true,
@@ -69,6 +73,7 @@ const DEFAULTS = {
     desktopDockOpacity: 1,
     popoutMode: 'pip',
     fileCabinetBg: 'smooth',
+    transitionsMode: 'smooth',
     plannerTodayLine: { ...PLANNER_DEFAULT_TODAY_LINE },
     plannerKanbanFlavour: KANBAN_DEFAULT_FLAVOUR
 };
@@ -96,6 +101,7 @@ export function readDisplayOptions() {
             desktopDockOpacity: Math.min(1, Math.max(0.1, Number(raw.desktopDockOpacity) || 1)),
             popoutMode: raw.popoutMode === 'window' ? 'window' : 'pip',
             fileCabinetBg: FILE_CABINET_BG_OPTIONS.includes(raw.fileCabinetBg) ? raw.fileCabinetBg : 'smooth',
+            transitionsMode: normalizeTransitionsMode(raw.transitionsMode),
             plannerTodayLine: normalizeTodayLine(raw.plannerTodayLine),
             plannerKanbanFlavour: normalizeKanbanFlavour(raw.plannerKanbanFlavour)
         };
@@ -130,6 +136,9 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     root.dataset.showRulerV = options.showRulerVertical ? '1' : '0';
     root.dataset.useCategoryColors = options.useCategoryColors ? '1' : '0';
     root.dataset.fileCabinetBg = root.dataset.themeSkin === '1' ? 'none' : (options.fileCabinetBg || 'smooth');
+    const prevTransitions = root.dataset.uiTransitions;
+    const nextTransitions = normalizeTransitionsMode(options.transitionsMode);
+    root.dataset.uiTransitions = nextTransitions;
     root.style.setProperty('--sidebar-undock-opacity', String(options.undockedModuleOpacity ?? 1));
     root.style.setProperty('--desktop-dock-opacity', String(options.desktopDockOpacity ?? 1));
     applyNoteFont(options.noteFontId);
@@ -138,6 +147,11 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     /* Apply user theme tokens */
     const userTheme = readUserTheme();
     applyUserTheme(userTheme);
+
+    /* Mid-animation Off (this tab or cross-tab): cancel instantly. */
+    if (prevTransitions === 'smooth' && nextTransitions === 'off') {
+        import('./uiTransitions.js').then(({ cancelAll }) => cancelAll()).catch(() => {});
+    }
 }
 
 function isCustomized(options) {
@@ -160,6 +174,7 @@ function isCustomized(options) {
         || Math.abs((options.desktopDockOpacity ?? 1) - 1) > 0.001
         || options.popoutMode !== 'pip'
         || options.fileCabinetBg !== 'smooth'
+        || normalizeTransitionsMode(options.transitionsMode) !== 'smooth'
         || todayCustom
         || normalizeKanbanFlavour(options.plannerKanbanFlavour) !== KANBAN_DEFAULT_FLAVOUR
         || isNoteFontCustomized(options.noteFontId)
@@ -452,6 +467,8 @@ export const DisplayOptions = {
                 dockOpacityLabel.textContent = `${Math.round((this.options.desktopDockOpacity ?? 1) * 100)}%`;
             }
         }
+
+        this.setSelectSelection(root, '#display-opt-transitions', normalizeTransitionsMode(this.options.transitionsMode));
 
         const today = normalizeTodayLine(this.options.plannerTodayLine);
         const todayColorBtn = root.querySelector('#display-opt-planner-today-color');
@@ -803,6 +820,14 @@ export const DisplayOptions = {
                                 max: 1,
                                 step: 0.05
                             })}
+                            <p class="display-options-subheading">Transitions</p>
+                            <div class="file-cabinet-bg-select-wrapper">
+                                <select id="display-opt-transitions" class="file-cabinet-bg-select" aria-label="UI transitions">
+                                    <option value="smooth"${normalizeTransitionsMode(opts.transitionsMode) === 'smooth' ? ' selected' : ''}>Smooth</option>
+                                    <option value="off"${normalizeTransitionsMode(opts.transitionsMode) === 'off' ? ' selected' : ''}>Off</option>
+                                </select>
+                            </div>
+                            <p class="display-options-row-hint">Smooth morphs File Cabinet expand and Focus enter/exit. System reduced-motion always disables animations.</p>
                         </div>
                     </div>
                 </div>
@@ -874,6 +899,14 @@ export const DisplayOptions = {
             };
             dockOpacityInput.addEventListener('input', updateDockOpacity);
             dockOpacityInput.addEventListener('change', updateDockOpacity);
+        }
+
+        const transitionsSelect = root.querySelector('#display-opt-transitions');
+        if (transitionsSelect) {
+            transitionsSelect.addEventListener('change', (e) => {
+                e.stopPropagation();
+                this.setOptions({ transitionsMode: normalizeTransitionsMode(transitionsSelect.value) });
+            });
         }
 
         const todayStyle = root.querySelector('#display-opt-planner-today-style');

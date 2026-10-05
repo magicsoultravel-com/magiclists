@@ -10,6 +10,30 @@ import { focusInlineEdit } from './noteSurfaceEditing.js';
 import { applyCardTheme } from './cardTheme.js';
 import { resolveNoteColor } from './colorPicker.js';
 import { Editor } from './editor.js';
+import {
+    isUiTransitionsEnabled,
+    morphElements,
+    setChromeVisible,
+    UI_TRANSITION_MS
+} from './uiTransitions.js';
+
+const MORPH_CLASS = 'ui-morph-hidden';
+const FOCUS_MORPH_BODY = 'is-focus-morphing';
+
+function forceReflow(el) {
+    void el?.offsetWidth;
+}
+
+function boardChromeEls() {
+    return [
+        document.getElementById('fab-create'),
+        document.getElementById('desktop-dock'),
+        document.getElementById('app-canvas'),
+        document.getElementById('file-cabinet'),
+        document.getElementById('shell-splitter-h'),
+        document.getElementById('file-cabinet-toggle-fab')
+    ].filter(Boolean);
+}
 
 const BLOCKS = [
     { id: 'text', label: 'Text' },
@@ -355,10 +379,16 @@ export const MagicFocus = {
         });
     },
 
-    syncExitFabVisibility({ inDrawing = false } = {}) {
+    syncExitFabVisibility({ inDrawing = false, instant = false } = {}) {
         const fab = this._exitFab || document.getElementById('fab-focus-exit');
         if (!fab) return;
-        fab.classList.toggle('is-hidden', inDrawing || !this.isOpen());
+        const visible = !inDrawing && this.isOpen();
+        if (isUiTransitionsEnabled() && !instant) {
+            setChromeVisible(fab, visible);
+            return;
+        }
+        fab.classList.toggle('is-hidden', !visible);
+        fab.classList.remove(MORPH_CLASS);
     },
 
     isOpen() {
@@ -482,14 +512,78 @@ export const MagicFocus = {
         this.flushPendingEdits();
         // Release host ownership synchronously so modal open / busy guards /
         // skip lists see Focus as closed without awaiting unhost/teardown.
+        const wasOpen = this.isOpen();
         this.activeItemId = null;
         this.setupDraft = null;
         this.setupStep = 'layout';
         this.showingSetup = false;
         this.expandedPaneId = null;
+
+        const useMorph = wasOpen && isUiTransitionsEnabled() && this.root;
+        const focusRoot = this.root;
+        const exitFab = this._exitFab || document.getElementById('fab-focus-exit');
+        const canvas = document.getElementById('app-canvas');
+        const fab = document.getElementById('fab-create');
+        const dock = document.getElementById('desktop-dock');
+        const shell = document.getElementById('workspace-shell');
+
+        if (useMorph) {
+            document.body.classList.add(FOCUS_MORPH_BODY);
+            // 1) Fade out focus chrome
+            [focusRoot, exitFab].filter(Boolean).forEach((el) => {
+                el.classList.remove(MORPH_CLASS);
+                forceReflow(el);
+                el.classList.add(MORPH_CLASS);
+            });
+            await new Promise((r) => window.setTimeout(r, UI_TRANSITION_MS));
+
+            // 2) Teardown while returning board chrome stays opacity 0
+            const returning = [
+                canvas,
+                fab,
+                dock,
+                document.getElementById('file-cabinet'),
+                document.getElementById('shell-splitter-h'),
+                document.getElementById('file-cabinet-toggle-fab')
+            ].filter(Boolean);
+            // Pre-arm opacity 0 before clearing data-magic-focus (avoids FC/canvas pop).
+            returning.forEach((el) => el.classList.add(MORPH_CLASS));
+
+            focusRoot.classList.add('is-hidden');
+            focusRoot.setAttribute('aria-hidden', 'true');
+            shell?.removeAttribute('data-magic-focus');
+            await this._unhostDrawingBoard();
+            if (this.bodyEl) this.bodyEl.innerHTML = '';
+            if (this.headerEl) this.headerEl.innerHTML = '';
+            this.applyNoteTheme(null);
+
+            returning.forEach((el) => {
+                el.classList.remove('is-hidden');
+                el.classList.remove('is-suppressed');
+            });
+            canvas?.classList.remove('is-hidden');
+
+            await this._app?.onMagicFocusLeave?.({ deferChrome: true });
+
+            // 3) Fade canvas + chrome in together
+            forceReflow(canvas || document.body);
+            returning.forEach((el) => el.classList.remove(MORPH_CLASS));
+            await new Promise((r) => window.setTimeout(r, UI_TRANSITION_MS));
+
+            document.body.classList.remove(FOCUS_MORPH_BODY);
+            focusRoot.classList.remove(MORPH_CLASS);
+            exitFab?.classList.remove(MORPH_CLASS);
+            this._app?.updateFabVisibility?.({ instant: true });
+            this._app?.applyDesktopDockAfterFocusLeave?.();
+            this._unbindEsc();
+            this._syncFocusButtons();
+            this.syncExitFabVisibility({ instant: true });
+            return;
+        }
+
         this.root?.classList.add('is-hidden');
         this.root?.setAttribute('aria-hidden', 'true');
-        document.getElementById('workspace-shell')?.removeAttribute('data-magic-focus');
+        shell?.removeAttribute('data-magic-focus');
         await this._unhostDrawingBoard();
         if (this.bodyEl) this.bodyEl.innerHTML = '';
         if (this.headerEl) this.headerEl.innerHTML = '';
@@ -497,7 +591,7 @@ export const MagicFocus = {
         await this._leaveShell();
         this._unbindEsc();
         this._syncFocusButtons();
-        this.syncExitFabVisibility();
+        this.syncExitFabVisibility({ instant: true });
     },
 
     async toggle(item) {
@@ -511,12 +605,37 @@ export const MagicFocus = {
     async _enterShell() {
         const shell = document.getElementById('workspace-shell');
         const canvas = document.getElementById('app-canvas');
-        shell?.setAttribute('data-magic-focus', '');
-        canvas?.classList.add('is-hidden');
-        this.root.classList.remove('is-hidden');
-        this.root.setAttribute('aria-hidden', 'false');
-        this._app?.onMagicFocusEnter?.();
-        this.syncExitFabVisibility();
+        const exitFab = this._exitFab || document.getElementById('fab-focus-exit');
+
+        if (!isUiTransitionsEnabled()) {
+            shell?.setAttribute('data-magic-focus', '');
+            canvas?.classList.add('is-hidden');
+            this.root.classList.remove('is-hidden');
+            this.root.setAttribute('aria-hidden', 'false');
+            this._app?.onMagicFocusEnter?.();
+            this.syncExitFabVisibility({ instant: true });
+            return;
+        }
+
+        const hide = boardChromeEls();
+        await morphElements({
+            hide,
+            show: [this.root, exitFab].filter(Boolean),
+            mutate: () => {
+                shell?.setAttribute('data-magic-focus', '');
+                canvas?.classList.add('is-hidden');
+                this.root.classList.remove('is-hidden');
+                this.root.setAttribute('aria-hidden', 'false');
+                exitFab?.classList.remove('is-hidden');
+                this._app?.onMagicFocusEnter?.({ deferChrome: true });
+            }
+        });
+
+        // Steady-state hard hide for board chrome (strip morph class after hard hide)
+        this._app?.updateFabVisibility?.({ instant: true });
+        this._app?.applyDesktopDockAfterFocusEnter?.();
+        hide.forEach((el) => el.classList.remove(MORPH_CLASS));
+        this.syncExitFabVisibility({ instant: true });
     },
 
     async _leaveShell() {
@@ -525,7 +644,7 @@ export const MagicFocus = {
         shell?.removeAttribute('data-magic-focus');
         canvas?.classList.remove('is-hidden');
         await this._app?.onMagicFocusLeave?.();
-        this.syncExitFabVisibility();
+        this.syncExitFabVisibility({ instant: true });
     },
 
     _bindEsc() {
