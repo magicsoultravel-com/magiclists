@@ -381,7 +381,10 @@ export async function generateThumbnail(blob, maxEdge = 240, orientation = null)
         }
         ctx.translate(targetW / 2, targetH / 2);
         applyExifOrientation(ctx, orientation);
-        ctx.drawImage(bitmap, -w / 2, -h / 2);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        // Must pass dest w/h — 2-arg drawImage paints at natural pixel size (center crop).
+        ctx.drawImage(bitmap, -w / 2, -h / 2, w, h);
         bitmap.close?.();
         const thumb = await new Promise((resolve) => {
             canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.72);

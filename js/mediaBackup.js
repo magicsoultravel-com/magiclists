@@ -1,6 +1,7 @@
 /** @module {"owns":"media library backup export/import (meta JSON, embeds, ZIP)", "related":["mediaLibrary.js","backup.js"]} */
 import {
     MEDIA_EMBED_CAP,
+    MEDIA_THUMB_GEN,
     getMediaRecord,
     listMedia,
     putMediaRecords,
@@ -127,6 +128,7 @@ export async function applyMediaLibraryBackupSection(section) {
         }
 
         const ts = nowSeconds();
+        const madeThumb = !!entry.dataBase64 && !!thumbBlob && thumbBlob !== existing?.thumbBlob;
         records.push({
             id,
             filename: entry.filename || existing?.filename || 'file',
@@ -148,6 +150,7 @@ export async function applyMediaLibraryBackupSection(section) {
             gps: entry.gps ?? existing?.gps ?? null,
             blob,
             thumbBlob,
+            thumbGen: madeThumb ? MEDIA_THUMB_GEN : (existing?.thumbGen ?? 0),
             blobMissing
         });
     }
@@ -514,6 +517,7 @@ export async function applyMediaFromZipMap(files, opts = {}) {
             gps: entry.gps || null,
             blob,
             thumbBlob,
+            thumbGen: thumbBlob ? MEDIA_THUMB_GEN : 0,
             blobMissing: !blob
         });
     }

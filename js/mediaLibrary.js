@@ -5,6 +5,8 @@ import { buildMediaMetadata, generateThumbnail } from './mediaMetadata.js';
 export const MEDIA_MAX_BYTES = 25 * 1024 * 1024;
 export const MEDIA_EMBED_CAP = 256 * 1024;
 export const MEDIA_LIBRARY_CHANGED = 'media:library_changed';
+/** Bump when thumbnail encode algo changes so stored thumbs are rebuilt. */
+export const MEDIA_THUMB_GEN = 2;
 
 const objectUrls = new Map(); // key -> { url, refs }
 
@@ -80,6 +82,7 @@ export async function commitMediaItem(blob, opts = {}) {
         updatedAt: ts,
         blob,
         thumbBlob: thumbBlob || null,
+        thumbGen: MEDIA_THUMB_GEN,
         blobMissing: false
     };
 
@@ -174,18 +177,56 @@ export async function countMedia() {
 }
 
 /**
+ * Rebuild thumbnail if missing or from an older encode (v1 center-cropped).
+ * @param {object} record
+ * @returns {Promise<object>}
+ */
+async function ensureCurrentThumb(record) {
+    if (!record?.id) return record;
+    if (record.thumbGen === MEDIA_THUMB_GEN && record.thumbBlob) return record;
+    const src = record.blob;
+    if (!src || record.blobMissing) return record;
+    if (!String(record.mime || src.type || '').startsWith('image/')) {
+        if (record.thumbGen !== MEDIA_THUMB_GEN) {
+            record.thumbGen = MEDIA_THUMB_GEN;
+            await IndexedDBMediaStore.put(record);
+        }
+        return record;
+    }
+    try {
+        const thumbBlob = await generateThumbnail(src, 240, record.orientation);
+        record.thumbBlob = thumbBlob || record.thumbBlob || null;
+        record.thumbGen = MEDIA_THUMB_GEN;
+        await IndexedDBMediaStore.put(record);
+        const key = `thumb:${record.id}`;
+        const entry = objectUrls.get(key);
+        if (entry) {
+            URL.revokeObjectURL(entry.url);
+            objectUrls.delete(key);
+        }
+    } catch {
+        /* keep prior thumb if regen fails */
+    }
+    return record;
+}
+
+/**
  * @param {string} id
  * @param {'blob'|'thumb'} [which]
  */
 export async function getObjectUrl(id, which = 'blob') {
+    let record = await IndexedDBMediaStore.get(id);
+    if (!record) return null;
+    if (which === 'thumb') {
+        record = await ensureCurrentThumb(record);
+    }
+
     const key = `${which}:${id}`;
     if (objectUrls.has(key)) {
         const entry = objectUrls.get(key);
         entry.refs += 1;
         return entry.url;
     }
-    const record = await IndexedDBMediaStore.get(id);
-    if (!record) return null;
     const blob = which === 'thumb' ? (record.thumbBlob || record.blob) : record.blob;
     if (!blob) return null;
     const url = URL.createObjectURL(blob);
@@ -240,6 +281,7 @@ function stripExt(name) {
 export const MediaLibrary = {
     MEDIA_MAX_BYTES,
     MEDIA_EMBED_CAP,
+    MEDIA_THUMB_GEN,
     createMediaId,
     commitMediaItem,
     commitMediaItems,

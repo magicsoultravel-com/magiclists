@@ -458,7 +458,7 @@
 .media-lib-tile__preview img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .media-lib-tile__icon {
@@ -1464,7 +1464,7 @@
 .media-staging__preview {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .media-staging__file-icon {
