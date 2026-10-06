@@ -254,6 +254,62 @@ export function derivePlannerWbsCards(planner) {
 }
 
 /**
+ * Walk sheet order upward from a child leaf to its pack root.
+ * @param {object|null|undefined} planner
+ * @param {string} rowId
+ * @returns {string|null}
+ */
+export function resolveWbsPackParentId(planner, rowId) {
+    const id = String(rowId || '');
+    if (!id || !planner?.rowIds) return null;
+    if (!(Number(planner.rowLevelById?.[id]) > 0)) return null;
+    const idx = planner.rowIds.indexOf(id);
+    if (idx < 0) return null;
+    for (let i = idx - 1; i >= 0; i--) {
+        const pid = String(planner.rowIds[i] || '');
+        if (!pid) continue;
+        if (planner.rowPackById?.[pid]) return pid;
+        if (Number(planner.rowLevelById?.[pid]) > 0) continue;
+        break;
+    }
+    return null;
+}
+
+/**
+ * Contiguous pack runs for in-column tree chrome (presentation only).
+ * @param {object|null|undefined} planner
+ * @param {Array<object>} cards
+ * @returns {Array<{ type: 'root', card: object } | { type: 'pack', packId: string, packRow: number, packName: string, cards: object[] }>}
+ */
+export function groupWbsColumnCards(planner, cards) {
+    const list = Array.isArray(cards) ? cards : [];
+    /** @type {Array<{ type: 'root', card: object } | { type: 'pack', packId: string, packRow: number, packName: string, cards: object[] }>} */
+    const groups = [];
+    for (const card of list) {
+        const packId = resolveWbsPackParentId(planner, card.rowId);
+        const last = groups[groups.length - 1];
+        if (packId && last?.type === 'pack' && last.packId === packId) {
+            last.cards.push(card);
+            continue;
+        }
+        if (packId) {
+            const packRow = planner?.rowIds?.indexOf(packId) ?? -1;
+            const packName = packRow >= 0 ? cellTrim(planner.sheet, packRow, NAME_COL) : '';
+            groups.push({
+                type: 'pack',
+                packId,
+                packRow,
+                packName,
+                cards: [card]
+            });
+            continue;
+        }
+        groups.push({ type: 'root', card });
+    }
+    return groups;
+}
+
+/**
  * @param {object|null|undefined} planner
  * @param {{ mode?: string }} [opts]
  */
@@ -265,7 +321,8 @@ export function layoutPlannerWbs(planner, { mode } = {}) {
         key: String(bucket),
         bucket,
         label,
-        cards: []
+        cards: [],
+        groups: []
     }));
     const byKey = new Map(columns.map((c) => [c.key, c]));
 
@@ -288,6 +345,7 @@ export function layoutPlannerWbs(planner, { mode } = {}) {
             if (ra !== rb) return ra - rb;
             return a.row - b.row;
         });
+        col.groups = groupWbsColumnCards(planner, col.cards);
         col.collapsed = isWbsBucketCollapsed(planner, col.key);
     }
 

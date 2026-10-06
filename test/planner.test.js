@@ -39,6 +39,8 @@ import {
 import {
     derivePlannerWbsCards,
     layoutPlannerWbs,
+    groupWbsColumnCards,
+    resolveWbsPackParentId,
     moveWbsCard,
     resetWbsArrangement,
     resetWbsLabels,
@@ -1015,6 +1017,71 @@ describe('planner WBS and work packs', () => {
         // Missing assignment lands in first column.
         const phaseLayout = layoutPlannerWbs(planner, { mode: 'phase' });
         assert.equal(phaseLayout.columns[0].cards[0]?.name, 'Task');
+    });
+
+    it('WBS in-column tree groups contiguous pack siblings', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'Design Pack');
+        togglePlannerWorkPack(planner, 0);
+        addPlannerPackChild(planner, 0);
+        setPlannerField(planner.sheet, 1, 'name', 'Wireframes');
+        addPlannerPackChild(planner, 0);
+        setPlannerField(planner.sheet, 2, 'name', 'Mockups');
+        setPlannerField(planner.sheet, 3, 'name', 'Solo Root');
+
+        const packId = planner.rowIds[0];
+        const childA = planner.rowIds[1];
+        const childB = planner.rowIds[2];
+        const soloId = planner.rowIds[3];
+
+        assert.equal(resolveWbsPackParentId(planner, childA), packId);
+        assert.equal(resolveWbsPackParentId(planner, childB), packId);
+        assert.equal(resolveWbsPackParentId(planner, soloId), null);
+        assert.equal(resolveWbsPackParentId(planner, packId), null);
+
+        const leaves = derivePlannerWbsCards(planner);
+        assert.deepEqual(leaves.map((c) => c.name).sort(), ['Mockups', 'Solo Root', 'Wireframes']);
+        assert.ok(!leaves.some((c) => c.rowId === packId));
+
+        const layout = layoutPlannerWbs(planner, { mode: 'phase' });
+        const col0 = layout.columns[0];
+        assert.equal(col0.cards.length, 3);
+        assert.ok(Array.isArray(col0.groups));
+        assert.equal(col0.groups[0]?.type, 'pack');
+        assert.equal(col0.groups[0]?.packName, 'Design Pack');
+        assert.deepEqual(col0.groups[0]?.cards.map((c) => c.name), ['Wireframes', 'Mockups']);
+        assert.equal(col0.groups[1]?.type, 'root');
+        assert.equal(col0.groups[1]?.card?.name, 'Solo Root');
+
+        const html = renderPlannerWbsHtml(planner, { canEdit: false });
+        assert.ok(html.includes('data-planner-wbs-tree'));
+        assert.ok(html.includes('data-planner-wbs-pack'));
+        assert.ok(html.includes('Design Pack'));
+        assert.ok(html.includes('is-wbs-child'));
+        assert.ok(html.includes('is-wbs-child-last'));
+        assert.ok(html.includes('Wireframes'));
+        assert.ok(html.includes('Solo Root'));
+        // Pack itself is header-only, not a draggable card.
+        assert.ok(!html.includes(`data-planner-row-id="${packId}"`));
+
+        // Split children across buckets → local tree fragment per column.
+        moveWbsCard(planner, childB, 2);
+        const split = layoutPlannerWbs(planner, { mode: 'phase' });
+        assert.equal(split.columns[0].groups.filter((g) => g.type === 'pack').length, 1);
+        assert.equal(split.columns[0].groups.find((g) => g.type === 'pack')?.cards.length, 1);
+        assert.equal(split.columns[2].groups.filter((g) => g.type === 'pack').length, 1);
+        assert.equal(split.columns[2].groups.find((g) => g.type === 'pack')?.cards[0]?.name, 'Mockups');
+
+        const splitHtml = renderPlannerWbsHtml(planner, { canEdit: false });
+        assert.equal((splitHtml.match(/data-planner-wbs-tree/g) || []).length, 2);
+
+        // Contiguous-only: foreign card between siblings splits the run.
+        moveWbsCard(planner, childB, 0, { beforeId: null });
+        moveWbsCard(planner, soloId, 0, { beforeId: childB });
+        const fragmented = groupWbsColumnCards(planner, layoutPlannerWbs(planner, { mode: 'phase' }).columns[0].cards);
+        const packRuns = fragmented.filter((g) => g.type === 'pack');
+        assert.ok(packRuns.length >= 1);
+        assert.ok(fragmented.some((g) => g.type === 'root' && g.card?.name === 'Solo Root'));
     });
 
     it('refuses unsupported newer planner version', () => {

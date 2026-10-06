@@ -31,6 +31,9 @@ import {
     collapseAllWbsCards
 } from './plannerWbs.js';
 
+/** Pointer lift threshold — local copy (Kanban defines its own). */
+const WBS_DRAG_THRESHOLD = 4;
+
 /** Same pattern as checklist: keep #app-canvas from jumping on DOM surgery. */
 function captureCanvasScroll() {
     const canvas = document.getElementById('app-canvas');
@@ -100,6 +103,106 @@ const KANBAN_MUTED_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focus
 /** Phase/deliverable mode swap. */
 const WBS_MODE_ICON = '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false" aria-hidden="true"><path d="M2.4 3.2h7.2M2.4 6h7.2M2.4 8.8h4.4" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/><path d="M8.2 7.4l1.6 1.6 1.6-1.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
+/**
+ * @param {object} planner
+ * @param {object} card
+ * @param {{ canEdit?: boolean, childClass?: string }} [opts]
+ */
+function renderWbsCardHtml(planner, card, { canEdit = false, childClass = '' } = {}) {
+    const editClass = canEdit ? ' is-editable' : '';
+    const startLabel = formatKanbanCardDate(card.start);
+    const stopLabel = formatKanbanCardDate(card.stop);
+    const rowLabel = getPlannerOutlineLabel(planner, card.row);
+    const startHtml = startLabel
+        ? `<span class="planner-wbs__card-date planner-wbs__card-date--start" title="Start ${escapeAttr(startLabel)}">${escapeHTML(startLabel)}</span>`
+        : '';
+    const stopHtml = stopLabel
+        ? `<span class="planner-wbs__card-date planner-wbs__card-date--stop" title="Stop ${escapeAttr(stopLabel)}">${escapeHTML(stopLabel)}</span>`
+        : '';
+    const rowHtml = `<span class="planner-wbs__card-row" title="Row ${escapeAttr(rowLabel)}">${escapeHTML(rowLabel)}</span>`;
+    const commentRaw = String(card.comments || '');
+    const comment = commentRaw.trim();
+    const nameText = String(card.name || '');
+    const emphasis = card.emphasis === 'urgent' || card.emphasis === 'muted' ? card.emphasis : '';
+    const emphasisClass = emphasis ? ` is-${emphasis}` : '';
+    const cardCollapsed = !!card.collapsed;
+    const collapsedClass = cardCollapsed ? ' is-collapsed' : '';
+    const urgentActive = emphasis === 'urgent' ? ' is-active' : '';
+    const mutedActive = emphasis === 'muted' ? ' is-active' : '';
+    const densityTitle = cardCollapsed ? 'Expand card' : 'Collapse card';
+    const densityIcon = cardCollapsed ? CARD_ICONS.expand : CARD_ICONS.collapse;
+    const actionsHtml = canEdit
+        ? `<span class="planner-wbs__card-actions">
+            <span class="planner-wbs__card-actions-tray">
+                <button type="button" class="planner-wbs__card-density" data-planner-wbs-density title="${escapeAttr(densityTitle)}" aria-label="${escapeAttr(densityTitle)}" aria-pressed="${cardCollapsed ? 'true' : 'false'}">${densityIcon}</button>
+                <button type="button" class="planner-wbs__card-emphasis${urgentActive}" data-planner-wbs-emphasis="urgent" title="Mark urgent" aria-label="Mark urgent" aria-pressed="${emphasis === 'urgent' ? 'true' : 'false'}">${KANBAN_URGENT_ICON}</button>
+                <button type="button" class="planner-wbs__card-emphasis${mutedActive}" data-planner-wbs-emphasis="muted" title="Mark non-urgent" aria-label="Mark non-urgent" aria-pressed="${emphasis === 'muted' ? 'true' : 'false'}">${KANBAN_MUTED_ICON}</button>
+                <button type="button" class="planner-wbs__card-color" data-planner-wbs-color title="Card color" aria-label="Card color">${CARD_ICONS.color}</button>
+                <button type="button" class="planner-wbs__card-reset" data-planner-wbs-reset-card title="Reset card styles" aria-label="Reset card styles">${ACTION_ICONS.resetCustomization}</button>
+            </span>
+            <button type="button" class="planner-wbs__card-more" data-planner-wbs-more title="More actions" aria-label="More actions" aria-expanded="false">${CARD_ICONS.more}</button>
+            <span class="planner-wbs__card-grab" title="Drag to move" aria-hidden="true">${CARD_ICONS.drag}</span>
+        </span>`
+        : '';
+    const slotNameHtml = canEdit
+        ? `<div class="planner-wbs__card-name card-inline-edit" contenteditable="plaintext-only" data-planner-wbs-field="name" data-planner-row="${card.row}" spellcheck="false" role="textbox" aria-label="Name">${escapeHTML(nameText)}</div>`
+        : `<span class="planner-wbs__card-name">${escapeHTML(nameText)}</span>`;
+    const slotCommentHtml = canEdit
+        ? `<textarea class="planner-wbs__card-comment card-inline-edit" data-planner-wbs-field="comments" data-planner-row="${card.row}" rows="1" spellcheck="false" aria-label="Comments">${escapeHTML(commentRaw)}</textarea>`
+        : (comment ? `<span class="planner-wbs__card-comment">${escapeHTML(comment)}</span>` : '');
+    const flyoutNameHtml = `<span class="planner-wbs__card-name">${escapeHTML(nameText)}</span>`;
+    const flyoutCommentHtml = comment
+        ? `<span class="planner-wbs__card-comment">${escapeHTML(comment)}</span>`
+        : '';
+    const metaHtml = `${rowHtml}${startHtml}${stopHtml}`;
+    const slotBody = `${metaHtml}
+        <div class="planner-wbs__card-top">${slotNameHtml}</div>
+        ${slotCommentHtml}`;
+    const flyoutBody = `${metaHtml}
+        <div class="planner-wbs__card-top">${flyoutNameHtml}</div>
+        ${flyoutCommentHtml}`;
+    const surface = surfaceThemeInline(card.cardColor);
+    const colorClass = card.cardColor ? ` has-color${surface.className}` : '';
+    return `<article class="planner-wbs__card${colorClass}${emphasisClass}${collapsedClass}${editClass}${childClass}" data-planner-wbs-card data-planner-row="${card.row}" data-planner-row-id="${escapeAttr(card.rowId)}" data-wbs-emphasis="${escapeAttr(emphasis)}" data-wbs-collapsed="${cardCollapsed ? '1' : '0'}"${surface.style}>
+        <div class="planner-wbs__card-slot">${slotBody}</div>
+        <div class="planner-wbs__card-flyout" aria-hidden="true">${flyoutBody}</div>
+        ${actionsHtml}
+    </article>`;
+}
+
+/**
+ * @param {object} planner
+ * @param {Array<{ type: string, card?: object, packId?: string, packRow?: number, packName?: string, cards?: object[] }>} groups
+ * @param {{ canEdit?: boolean }} [opts]
+ */
+function renderWbsColumnBodyHtml(planner, groups, { canEdit = false } = {}) {
+    if (!groups?.length) return '<div class="planner-wbs__empty-col" aria-hidden="true"></div>';
+    return groups.map((group) => {
+        if (group.type === 'pack' && Array.isArray(group.cards) && group.cards.length) {
+            const outline = group.packRow >= 0
+                ? getPlannerOutlineLabel(planner, group.packRow)
+                : '';
+            const packName = String(group.packName || 'Pack');
+            const kidsHtml = group.cards.map((card, i) => {
+                const last = i === group.cards.length - 1;
+                const childClass = last ? ' is-wbs-child is-wbs-child-last' : ' is-wbs-child';
+                return renderWbsCardHtml(planner, card, { canEdit, childClass });
+            }).join('');
+            return `<div class="planner-wbs__tree" data-planner-wbs-tree data-planner-wbs-pack-id="${escapeAttr(group.packId)}">
+                <div class="planner-wbs__tree-pack" data-planner-wbs-pack>
+                    <span class="planner-wbs__tree-pack-row" title="Row ${escapeAttr(outline)}">${escapeHTML(outline)}</span>
+                    <span class="planner-wbs__tree-pack-name">${escapeHTML(packName)}</span>
+                </div>
+                <div class="planner-wbs__tree-kids">${kidsHtml}</div>
+            </div>`;
+        }
+        if (group.type === 'root' && group.card) {
+            return renderWbsCardHtml(planner, group.card, { canEdit });
+        }
+        return '';
+    }).join('');
+}
+
 export function renderPlannerWbsHtml(planner, { canEdit = false } = {}) {
     const wbsCollapsed = !!planner?.wbsCollapsed;
     const mode = getWbsMode(planner);
@@ -119,69 +222,7 @@ export function renderPlannerWbsHtml(planner, { canEdit = false } = {}) {
         const colClass = collapsed ? ' is-collapsed' : '';
         const collapseTitle = collapsed ? 'Expand column' : 'Collapse column';
         const collapseIcon = collapsed ? CARD_ICONS.collapse : CARD_ICONS.expand;
-        const cardsHtml = col.cards.length
-            ? col.cards.map((card) => {
-                const editClass = canEdit ? ' is-editable' : '';
-                const startLabel = formatKanbanCardDate(card.start);
-                const stopLabel = formatKanbanCardDate(card.stop);
-                const rowLabel = getPlannerOutlineLabel(planner, card.row);
-                const startHtml = startLabel
-                    ? `<span class="planner-wbs__card-date planner-wbs__card-date--start" title="Start ${escapeAttr(startLabel)}">${escapeHTML(startLabel)}</span>`
-                    : '';
-                const stopHtml = stopLabel
-                    ? `<span class="planner-wbs__card-date planner-wbs__card-date--stop" title="Stop ${escapeAttr(stopLabel)}">${escapeHTML(stopLabel)}</span>`
-                    : '';
-                const rowHtml = `<span class="planner-wbs__card-row" title="Row ${escapeAttr(rowLabel)}">${escapeHTML(rowLabel)}</span>`;
-                const commentRaw = String(card.comments || '');
-                const comment = commentRaw.trim();
-                const nameText = String(card.name || '');
-                const emphasis = card.emphasis === 'urgent' || card.emphasis === 'muted' ? card.emphasis : '';
-                const emphasisClass = emphasis ? ` is-${emphasis}` : '';
-                const cardCollapsed = !!card.collapsed;
-                const collapsedClass = cardCollapsed ? ' is-collapsed' : '';
-                const urgentActive = emphasis === 'urgent' ? ' is-active' : '';
-                const mutedActive = emphasis === 'muted' ? ' is-active' : '';
-                const densityTitle = cardCollapsed ? 'Expand card' : 'Collapse card';
-                const densityIcon = cardCollapsed ? CARD_ICONS.expand : CARD_ICONS.collapse;
-                const actionsHtml = canEdit
-                    ? `<span class="planner-wbs__card-actions">
-                        <span class="planner-wbs__card-actions-tray">
-                            <button type="button" class="planner-wbs__card-density" data-planner-wbs-density title="${escapeAttr(densityTitle)}" aria-label="${escapeAttr(densityTitle)}" aria-pressed="${cardCollapsed ? 'true' : 'false'}">${densityIcon}</button>
-                            <button type="button" class="planner-wbs__card-emphasis${urgentActive}" data-planner-wbs-emphasis="urgent" title="Mark urgent" aria-label="Mark urgent" aria-pressed="${emphasis === 'urgent' ? 'true' : 'false'}">${KANBAN_URGENT_ICON}</button>
-                            <button type="button" class="planner-wbs__card-emphasis${mutedActive}" data-planner-wbs-emphasis="muted" title="Mark non-urgent" aria-label="Mark non-urgent" aria-pressed="${emphasis === 'muted' ? 'true' : 'false'}">${KANBAN_MUTED_ICON}</button>
-                            <button type="button" class="planner-wbs__card-color" data-planner-wbs-color title="Card color" aria-label="Card color">${CARD_ICONS.color}</button>
-                            <button type="button" class="planner-wbs__card-reset" data-planner-wbs-reset-card title="Reset card styles" aria-label="Reset card styles">${ACTION_ICONS.resetCustomization}</button>
-                        </span>
-                        <button type="button" class="planner-wbs__card-more" data-planner-wbs-more title="More actions" aria-label="More actions" aria-expanded="false">${CARD_ICONS.more}</button>
-                        <span class="planner-wbs__card-grab" title="Drag to move" aria-hidden="true">${CARD_ICONS.drag}</span>
-                    </span>`
-                    : '';
-                const slotNameHtml = canEdit
-                    ? `<div class="planner-wbs__card-name card-inline-edit" contenteditable="plaintext-only" data-planner-wbs-field="name" data-planner-row="${card.row}" spellcheck="false" role="textbox" aria-label="Name">${escapeHTML(nameText)}</div>`
-                    : `<span class="planner-wbs__card-name">${escapeHTML(nameText)}</span>`;
-                const slotCommentHtml = canEdit
-                    ? `<textarea class="planner-wbs__card-comment card-inline-edit" data-planner-wbs-field="comments" data-planner-row="${card.row}" rows="1" spellcheck="false" aria-label="Comments">${escapeHTML(commentRaw)}</textarea>`
-                    : (comment ? `<span class="planner-wbs__card-comment">${escapeHTML(comment)}</span>` : '');
-                const flyoutNameHtml = `<span class="planner-wbs__card-name">${escapeHTML(nameText)}</span>`;
-                const flyoutCommentHtml = comment
-                    ? `<span class="planner-wbs__card-comment">${escapeHTML(comment)}</span>`
-                    : '';
-                const metaHtml = `${rowHtml}${startHtml}${stopHtml}`;
-                const slotBody = `${metaHtml}
-                    <div class="planner-wbs__card-top">${slotNameHtml}</div>
-                    ${slotCommentHtml}`;
-                const flyoutBody = `${metaHtml}
-                    <div class="planner-wbs__card-top">${flyoutNameHtml}</div>
-                    ${flyoutCommentHtml}`;
-                const surface = surfaceThemeInline(card.cardColor);
-                const colorClass = card.cardColor ? ` has-color${surface.className}` : '';
-                return `<article class="planner-wbs__card${colorClass}${emphasisClass}${collapsedClass}${editClass}" data-planner-wbs-card data-planner-row="${card.row}" data-planner-row-id="${escapeAttr(card.rowId)}" data-wbs-emphasis="${escapeAttr(emphasis)}" data-wbs-collapsed="${cardCollapsed ? '1' : '0'}"${surface.style}>
-                    <div class="planner-wbs__card-slot">${slotBody}</div>
-                    <div class="planner-wbs__card-flyout" aria-hidden="true">${flyoutBody}</div>
-                    ${actionsHtml}
-                </article>`;
-            }).join('')
-            : '<div class="planner-wbs__empty-col" aria-hidden="true"></div>';
+        const cardsHtml = renderWbsColumnBodyHtml(planner, col.groups, { canEdit });
         // Collapsed strips need a plain title for sideways text; edit when open.
         const labelHtml = canEdit && !collapsed && col.bucket != null
             ? `<input type="text" class="planner-wbs__column-title planner-wbs__column-title-input" data-planner-wbs-label data-bucket="${col.bucket}" value="${escapeAttr(col.label)}" spellcheck="false" aria-label="Bucket label">`
@@ -544,6 +585,58 @@ export function bindWbs(ctx) {
         });
     };
 
+    /** Next leaf id after a placeholder, walking past pack tree wrappers. */
+    const nextWbsLeafIdAfter = (slot, excludeId) => {
+        if (!slot) return null;
+        const leafFrom = (node) => {
+            if (!node) return null;
+            if (node.matches?.('[data-planner-wbs-card]')) {
+                const id = node.dataset.plannerRowId;
+                return id && id !== excludeId ? id : null;
+            }
+            if (node.matches?.('[data-planner-wbs-tree]')) {
+                const first = node.querySelector('[data-planner-wbs-card]');
+                const id = first?.dataset?.plannerRowId;
+                return id && id !== excludeId ? id : null;
+            }
+            return null;
+        };
+        let el = slot.nextElementSibling;
+        while (el) {
+            const id = leafFrom(el);
+            if (id) return id;
+            el = el.nextElementSibling;
+        }
+        const tree = slot.closest('[data-planner-wbs-tree]');
+        if (tree) {
+            let after = tree.nextElementSibling;
+            while (after) {
+                const id = leafFrom(after);
+                if (id) return id;
+                after = after.nextElementSibling;
+            }
+        }
+        return null;
+    };
+
+    /** Insert placeholder before a leaf without breaking pack tree DOM. */
+    const insertWbsSlotBeforeCard = (slot, card, body) => {
+        const tree = card.closest?.('[data-planner-wbs-tree]');
+        if (tree && body?.contains(tree)) {
+            const kids = tree.querySelector('.planner-wbs__tree-kids');
+            const firstCard = kids?.querySelector('[data-planner-wbs-card]');
+            if (firstCard === card) {
+                body.insertBefore(slot, tree);
+                return;
+            }
+            if (kids?.contains(card)) {
+                kids.insertBefore(slot, card);
+                return;
+            }
+        }
+        card.parentNode?.insertBefore(slot, card);
+    };
+
     const endWbsPointerDrag = ({ commit = false } = {}) => {
         const state = wbsPtr;
         wbsPtr = null;
@@ -555,18 +648,7 @@ export function bindWbs(ctx) {
         if (commit && slot?.isConnected) {
             const body = slot.closest('[data-planner-wbs-drop]');
             const bucketKey = body?.dataset?.plannerWbsDrop;
-            let beforeId = null;
-            let el = slot.nextElementSibling;
-            while (el) {
-                if (el.matches?.('[data-planner-wbs-card]')) {
-                    const id = el.dataset.plannerRowId;
-                    if (id && id !== rowId) {
-                        beforeId = id;
-                        break;
-                    }
-                }
-                el = el.nextElementSibling;
-            }
+            const beforeId = nextWbsLeafIdAfter(slot, rowId);
             const n = Number(bucketKey);
             const toBucket = Number.isFinite(n) ? n : 0;
             if (bucketKey != null) target = { toBucket, beforeId };
@@ -639,7 +721,7 @@ export function bindWbs(ctx) {
         for (const card of cards) {
             const rect = card.getBoundingClientRect();
             if (clientY < rect.top + rect.height / 2) {
-                body.insertBefore(slot, card);
+                insertWbsSlotBeforeCard(slot, card, body);
                 return;
             }
         }
@@ -678,7 +760,7 @@ export function bindWbs(ctx) {
         const dx = e.clientX - state.startX;
         const dy = e.clientY - state.startY;
         if (!state.lifted) {
-            if ((dx * dx + dy * dy) < KANBAN_DRAG_THRESHOLD * KANBAN_DRAG_THRESHOLD) return;
+            if ((dx * dx + dy * dy) < WBS_DRAG_THRESHOLD * WBS_DRAG_THRESHOLD) return;
             e.preventDefault();
             liftWbsCard(state, e.clientX, e.clientY);
         }
