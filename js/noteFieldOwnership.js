@@ -40,7 +40,11 @@ export const SHARED_FIELDS = Object.freeze([
     'plannerHidden',
     'focus',
     'textCollapsed',
-    'checklistCollapsed'
+    'checklistCollapsed',
+    'contentCollapsed',
+    'plannerCollapsed',
+    'attachmentsCollapsed',
+    'canvasCollapsed'
 ]);
 
 /**

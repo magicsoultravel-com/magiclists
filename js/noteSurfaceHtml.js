@@ -248,15 +248,15 @@ export function resolveNoteBodyVisibility(item, { canEdit = false, inModalEditor
 }
 
 function mediaSectionStartCollapsed(item) {
-    return normalizeAttachments(item?.attachments).length === 0;
+    return !!item?.attachmentsCollapsed;
 }
 
 function canvasSectionStartCollapsed(item) {
-    return !(item?.canvas && !item?.canvasHidden);
+    return !!item?.canvasCollapsed;
 }
 
 function plannerSectionStartCollapsed(item) {
-    return !(item?.planner && !item?.plannerHidden);
+    return !!item?.plannerCollapsed;
 }
 
 function appendPlannerAndMediaSections(item, html, { canEdit = false } = {}) {
@@ -358,12 +358,15 @@ function buildNoteContentSectionHtml(item, {
             </div>
         </div>`;
     }
+    const contentCollapsed = !!item.contentCollapsed;
+    const collapsedClass = contentCollapsed ? ' collapsed' : '';
+    const toggleCollapsed = contentCollapsed ? ' collapsed' : '';
     return `
             <div class="note-body-section note-body-section--content" data-note-content>
                 <div class="note-section-header collapsable-header">
-                    <span class="collapsable-heading"><span class="collapsable-toggle">▼</span>Content</span>
+                    <span class="collapsable-heading"><span class="collapsable-toggle${toggleCollapsed}">▼</span>Content</span>
                 </div>
-                <div class="note-section-body collapsable-section">
+                <div class="note-section-body collapsable-section${collapsedClass}">
                     ${inner}
                 </div>
             </div>`;
@@ -399,7 +402,14 @@ function buildNoteBodySection(title, innerHtml) {
             </div>`;
 }
 
-function bindNoteBodySections(root) {
+/**
+ * Bind outer note-body section collapse toggles.
+ * Content ([data-note-content]) persists via item.contentCollapsed.
+ * Plan/Media/Canvas are owned by their own binders; meeting/sheet headers stay DOM-only.
+ * @param {HTMLElement} root
+ * @param {object} [item]
+ */
+function bindNoteBodySections(root, item) {
     if (!root || root.dataset.noteSectionsBound === '1') return;
     root.dataset.noteSectionsBound = '1';
     root.querySelectorAll('.note-body-section .note-section-header').forEach((header) => {
@@ -410,6 +420,16 @@ function bindNoteBodySections(root) {
             e.stopPropagation();
             const body = header.nextElementSibling;
             const toggle = header.querySelector('.collapsable-toggle');
+            const contentSection = header.closest('[data-note-content]');
+            if (contentSection && item) {
+                const nextCollapsed = !item.contentCollapsed;
+                mutateItem(item, (it) => {
+                    it.contentCollapsed = nextCollapsed;
+                }, { preserveView: true, skipRerender: true });
+                body?.classList.toggle('collapsed', nextCollapsed);
+                toggle?.classList.toggle('collapsed', nextCollapsed);
+                return;
+            }
             const collapsed = body?.classList.toggle('collapsed');
             toggle?.classList.toggle('collapsed');
             if (!collapsed) {

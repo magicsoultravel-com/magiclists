@@ -456,19 +456,6 @@ function insertCanvasHtml(body, html) {
     else body.insertAdjacentHTML('beforeend', html);
 }
 
-function restoreSectionCollapse(section, wasCollapsed) {
-    if (!section || wasCollapsed === undefined) return;
-    const sectionBody = section.querySelector('.note-section-body');
-    const toggle = section.querySelector('.collapsable-toggle');
-    if (wasCollapsed) {
-        sectionBody?.classList.add('collapsed');
-        toggle?.classList.add('collapsed');
-    } else {
-        sectionBody?.classList.remove('collapsed');
-        toggle?.classList.remove('collapsed');
-    }
-}
-
 /**
  * Rebuild Media section for a note in the live DOM (board + modal).
  * @param {object} item
@@ -478,8 +465,7 @@ export function syncNoteAttachmentsDom(item) {
 
     for (const body of noteBodiesForItem(item.id)) {
         const canEdit = bodyCanEdit(body);
-        const hasAttachments = normalizeAttachments(item?.attachments).length > 0;
-        const startCollapsed = !hasAttachments;
+        const startCollapsed = !!item.attachmentsCollapsed;
         const html = buildNoteAttachmentsSectionHtml(item, { canEdit, startCollapsed });
         const existing = mediaSectionForBody(body);
         if (!html) {
@@ -489,10 +475,7 @@ export function syncNoteAttachmentsDom(item) {
         }
         if (existing) {
             releaseSectionUrls(existing);
-            const wasCollapsed = existing.querySelector('.note-section-body')?.classList.contains('collapsed');
             existing.outerHTML = html;
-            const next = mediaSectionForBody(body);
-            restoreSectionCollapse(next, wasCollapsed);
         } else {
             const canvas = canvasSectionForBody(body);
             if (canvas) canvas.insertAdjacentHTML('beforebegin', html);
@@ -512,7 +495,7 @@ export function syncNoteCanvasDom(item) {
     for (const body of noteBodiesForItem(item.id)) {
         // Focus canvas panes host live DrawingBoard — don't inject preview sections.
         if (body.closest?.('#magic-focus')) continue;
-        const startCollapsed = !noteHasVisibleCanvas(item);
+        const startCollapsed = !!item.canvasCollapsed;
         const html = buildNoteCanvasSectionHtml(item, { startCollapsed });
         const existing = canvasSectionForBody(body);
 
@@ -522,24 +505,21 @@ export function syncNoteCanvasDom(item) {
         }
 
         if (existing) {
-            const wasCollapsed = existing.querySelector('.note-section-body')?.classList.contains('collapsed');
             existing.outerHTML = html;
-            const next = canvasSectionForBody(body);
-            restoreSectionCollapse(next, wasCollapsed);
         } else {
             insertCanvasHtml(body, html);
         }
 
         const section = canvasSectionForBody(body);
         bindNoteCanvas(body, item);
-        if (section && noteHasVisibleCanvas(item)) {
+        if (section && noteHasVisibleCanvas(item) && !item.canvasCollapsed) {
             sizeCanvasViewport(section);
             paintNoteCanvasPreview(section, item);
         }
     }
 }
 
-function bindMediaSectionToggle(section) {
+function bindMediaSectionToggle(section, item) {
     const header = section?.querySelector('.note-section-header');
     if (!header || header.dataset.bound === '1') return;
     header.dataset.bound = '1';
@@ -547,8 +527,14 @@ function bindMediaSectionToggle(section) {
         e.stopPropagation();
         const bodyEl = header.nextElementSibling;
         const toggle = header.querySelector('.collapsable-toggle');
-        bodyEl?.classList.toggle('collapsed');
-        toggle?.classList.toggle('collapsed');
+        const nextCollapsed = !item?.attachmentsCollapsed;
+        if (item) {
+            mutateItem(item, (it) => {
+                it.attachmentsCollapsed = nextCollapsed;
+            }, { preserveView: true, skipRerender: true });
+        }
+        bodyEl?.classList.toggle('collapsed', nextCollapsed);
+        toggle?.classList.toggle('collapsed', nextCollapsed);
     });
 }
 
@@ -560,9 +546,15 @@ function bindCanvasSectionToggle(section, item) {
         e.stopPropagation();
         const bodyEl = header.nextElementSibling;
         const toggle = header.querySelector('.collapsable-toggle');
-        const collapsed = bodyEl?.classList.toggle('collapsed');
-        toggle?.classList.toggle('collapsed');
-        if (!collapsed) {
+        const nextCollapsed = !item?.canvasCollapsed;
+        if (item) {
+            mutateItem(item, (it) => {
+                it.canvasCollapsed = nextCollapsed;
+            }, { preserveView: true, skipRerender: true });
+        }
+        bodyEl?.classList.toggle('collapsed', nextCollapsed);
+        toggle?.classList.toggle('collapsed', nextCollapsed);
+        if (!nextCollapsed) {
             sizeCanvasViewport(section);
             paintNoteCanvasPreview(section, item);
         }
@@ -1722,7 +1714,7 @@ export function bindNoteAttachments(root, item) {
     const section = root.querySelector('[data-note-attachments]');
     if (!section) return;
 
-    bindMediaSectionToggle(section);
+    bindMediaSectionToggle(section, item);
     bindAttachmentListReorder(section, item);
 
     section.querySelectorAll('.note-attachment[data-media-id]').forEach((row) => {
@@ -1801,7 +1793,9 @@ export function bindNoteCanvas(root, item) {
     if (!section) return;
 
     bindCanvasSectionToggle(section, item);
-    paintNoteCanvasPreview(section, item);
+    if (!item.canvasCollapsed) {
+        paintNoteCanvasPreview(section, item);
+    }
 
     if (section.dataset.canvasControlsBound === '1') return;
     section.dataset.canvasControlsBound = '1';

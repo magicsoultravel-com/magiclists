@@ -589,7 +589,7 @@ export function bindNoteEditorShell(root, item, {
     if (header) attachNoteBodyInteractions(header, item, interactionOptions);
     if (body) {
         attachNoteBodyInteractions(body, item, interactionOptions);
-        bindNoteBodySections(body);
+        bindNoteBodySections(body, item);
         bindNoteContentSubToggles(body, item);
         bindNoteAttachments(body, item);
         bindNoteCanvas(body, item);

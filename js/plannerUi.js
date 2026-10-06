@@ -182,9 +182,10 @@ export function buildNotePlannerSectionHtml(item, { canEdit = false, startCollap
 
 /**
  * @param {HTMLElement} section
+ * @param {object} item
  * @param {{ onModuleToggle?: (moduleId: string) => void }} [opts]
  */
-function bindPlannerSectionToggle(section, { onModuleToggle } = {}) {
+function bindPlannerSectionToggle(section, item, { onModuleToggle } = {}) {
     const header = section?.querySelector('.note-section-header');
     if (!header || header.dataset.plannerToggleBound === '1') return;
     header.dataset.plannerToggleBound = '1';
@@ -200,8 +201,15 @@ function bindPlannerSectionToggle(section, { onModuleToggle } = {}) {
         }
         const body = header.nextElementSibling;
         const toggle = header.querySelector('.collapsable-toggle');
-        body?.classList.toggle('collapsed');
-        toggle?.classList.toggle('collapsed');
+        // Persist via mutateItem directly — local mutate() refreshes Gantt/derived views.
+        const nextCollapsed = !item?.plannerCollapsed;
+        if (item) {
+            mutateItem(item, (it) => {
+                it.plannerCollapsed = nextCollapsed;
+            }, { preserveView: true, skipRerender: true });
+        }
+        body?.classList.toggle('collapsed', nextCollapsed);
+        toggle?.classList.toggle('collapsed', nextCollapsed);
     });
 }
 
@@ -480,7 +488,7 @@ export function attachPlannerInteractions(root, item, {
         mirrorBoardFieldToTableDom
     };
 
-    bindPlannerSectionToggle(section, {
+    bindPlannerSectionToggle(section, item, {
         onModuleToggle(moduleId) {
             const field = PLANNER_MODULE_TOGGLE_FIELDS[moduleId];
             if (!field) return;
@@ -569,7 +577,7 @@ export function syncNotePlannerDom(item) {
             continue;
         }
         const canEdit = bodyCanEdit(body);
-        const startCollapsed = false;
+        const startCollapsed = !!item.plannerCollapsed;
         const html = buildNotePlannerSectionHtml(item, { canEdit, startCollapsed });
         const existing = body.querySelector('[data-note-planner]');
 
