@@ -87,7 +87,7 @@ export function flushOpenPlannerCommits() {
 function refreshItemNoteCanvas(item) {
     if (!item?.id || !item?.canvas) return;
     for (const body of noteBodiesForItem(item.id)) {
-        const section = body.querySelector('[data-note-attachments]');
+        const section = body.querySelector('[data-note-canvas]');
         if (section) refreshNoteCanvasPreview(section, item);
     }
 }

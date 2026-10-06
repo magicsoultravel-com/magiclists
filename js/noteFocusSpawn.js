@@ -11,6 +11,7 @@ const SPAWN_LABELS = Object.freeze({
     chart: 'Chart',
     kanban: 'Kanban',
     wbs: 'WBS',
+    media: 'Media',
     canvas: 'Canvas'
 });
 
@@ -65,6 +66,8 @@ export function resolveFocusSpawnBlocks(spawnKey, item, contextEl = null) {
             return ['kanban'];
         case 'wbs':
             return ['wbs'];
+        case 'media':
+            return ['media'];
         case 'canvas':
             return ['canvas'];
         // Parent sections always spawn every subsection in one expanded pane.

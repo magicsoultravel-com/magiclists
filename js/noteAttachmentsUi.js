@@ -382,6 +382,7 @@ export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCo
             <div class="note-body-section note-body-section--media" data-note-attachments>
                 <div class="note-section-header collapsable-header">
                     <span class="collapsable-heading"><span class="collapsable-toggle${toggleCollapsed}">▼</span>${escapeHTML(title)}</span>
+                    ${renderFocusSpawnTrayHtml('media', 'Media')}
                 </div>
                 <div class="note-section-body collapsable-section${collapsedClass}">
                     <div class="note-attachments__list">${rows}</div>
@@ -526,6 +527,8 @@ function bindMediaSectionToggle(section, item) {
     if (!header || header.dataset.bound === '1') return;
     header.dataset.bound = '1';
     header.addEventListener('click', (e) => {
+        // Let Focus-spawn bubble to bindFocusSpawnButtons (do not stopPropagation).
+        if (e.target.closest?.('[data-focus-spawn]')) return;
         e.stopPropagation();
         const bodyEl = header.nextElementSibling;
         const toggle = header.querySelector('.collapsable-toggle');
@@ -1715,7 +1718,9 @@ function bindAttachmentListReorder(section, item) {
  */
 export function bindNoteAttachments(root, item) {
     if (!root || !item) return;
-    const section = root.querySelector('[data-note-attachments]');
+    const section = root.matches?.('[data-note-attachments]')
+        ? root
+        : root.querySelector?.('[data-note-attachments]');
     if (!section) return;
 
     bindMediaSectionToggle(section, item);

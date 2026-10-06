@@ -260,7 +260,8 @@ function plannerSectionStartCollapsed(item) {
     return !!item?.plannerCollapsed;
 }
 
-function appendPlannerAndMediaSections(item, html, { canEdit = false } = {}) {
+/** Append peer side sections: Plan → Media → Canvas. */
+function appendNoteSideSections(item, html, { canEdit = false } = {}) {
     let out = html;
     out += buildNotePlannerSectionHtml(item, {
         canEdit,
@@ -282,7 +283,7 @@ export function buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false
     if (template === 'sheet') {
         ensureItemSheet(item, defaultSheetDimsForTemplate('sheet'));
         let sheetHtml = renderSheetHtml(item.sheet, { canEdit, inModalEditor });
-        return appendPlannerAndMediaSections(item, sheetHtml, { canEdit });
+        return appendNoteSideSections(item, sheetHtml, { canEdit });
     }
 
     if (template === 'meeting') {
@@ -309,7 +310,7 @@ export function buildNoteBodyHtml(item, { canEdit = false, inModalEditor = false
             html += buildExpandedChecklistHtml(item, canEdit, { richEdit });
         }
     }
-    return appendPlannerAndMediaSections(item, html, { canEdit });
+    return appendNoteSideSections(item, html, { canEdit });
 }
 
 export function buildNoteContentFieldHtml(item, { canEdit = false, richEdit = false } = {}) {
@@ -538,18 +539,7 @@ function buildMeetingBodyHtml(item, { canEdit = false, inModalEditor = false, ri
         actionHtml += `<p class="meeting-datetime meeting-datetime--body">${escapeHTML(meetingWhen)}</p>`;
     }
     html += buildNoteBodySection('Action items', actionHtml);
-    html += buildNotePlannerSectionHtml(item, {
-        canEdit,
-        startCollapsed: plannerSectionStartCollapsed(item)
-    });
-    html += buildNoteAttachmentsSectionHtml(item, {
-        canEdit,
-        startCollapsed: mediaSectionStartCollapsed(item)
-    });
-    html += buildNoteCanvasSectionHtml(item, {
-        startCollapsed: canvasSectionStartCollapsed(item)
-    });
-    return html;
+    return appendNoteSideSections(item, html, { canEdit });
 }
 
 function formatMeetingDateTimeBadge(timestamp) {

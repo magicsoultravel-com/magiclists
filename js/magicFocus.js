@@ -42,6 +42,7 @@ const BLOCKS = [
     { id: 'chart', label: 'Chart' },
     { id: 'kanban', label: 'Kanban' },
     { id: 'wbs', label: 'WBS' },
+    { id: 'media', label: 'Media' },
     { id: 'canvas', label: 'Canvas' }
 ];
 
@@ -62,6 +63,7 @@ const BLOCK_ICONS = {
     chart: '<svg viewBox="0 0 16 16" width="16" height="16" focusable="false"><path d="M2.5 13V3M2.5 13h11" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><rect x="4.2" y="7" width="2" height="4.5" rx="0.3" fill="none" stroke="currentColor" stroke-width="1.1"/><rect x="7.2" y="4.5" width="2" height="7" rx="0.3" fill="none" stroke="currentColor" stroke-width="1.1"/><rect x="10.2" y="6" width="2" height="5.5" rx="0.3" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>',
     kanban: '<svg viewBox="0 0 16 16" width="16" height="16" focusable="false"><rect x="2" y="2.5" width="3.2" height="11" rx="0.6" fill="none" stroke="currentColor" stroke-width="1.15"/><rect x="6.4" y="2.5" width="3.2" height="11" rx="0.6" fill="none" stroke="currentColor" stroke-width="1.15"/><rect x="10.8" y="2.5" width="3.2" height="11" rx="0.6" fill="none" stroke="currentColor" stroke-width="1.15"/><path d="M2.7 5.2h1.8M6.1 5.2h1.8M11.5 5.2h1.8M2.7 8h1.8M6.1 8h1.8" fill="none" stroke="currentColor" stroke-width="1.05" stroke-linecap="round"/></svg>',
     wbs: '<svg viewBox="0 0 16 16" width="16" height="16" focusable="false"><path d="M8 2.5v3.5M4 6h8M4 6v7.5M8 6v7.5M12 6v7.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><rect x="2.4" y="11" width="3.2" height="2.5" rx="0.4" fill="none" stroke="currentColor" stroke-width="1.1"/><rect x="6.4" y="9.5" width="3.2" height="4" rx="0.4" fill="none" stroke="currentColor" stroke-width="1.1"/><rect x="10.4" y="10.2" width="3.2" height="3.3" rx="0.4" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>',
+    media: '<svg viewBox="0 0 16 16" width="16" height="16" focusable="false"><rect x="2" y="3.5" width="12" height="9" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="5.5" cy="6.8" r="1.1" fill="none" stroke="currentColor" stroke-width="1.1"/><path d="M2.8 11.2 6.2 8.2l2.2 2 2-1.6 2.8 2.6" fill="none" stroke="currentColor" stroke-width="1.15" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     canvas: '<svg viewBox="0 0 16 16" width="16" height="16" focusable="false"><path d="M10.5 2.5 13.5 5.5 6 13H3v-3L10.5 2.5z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M9 4l3 3" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>'
 };
 
@@ -323,6 +325,16 @@ async function buildWbsPaneHtml(item) {
     const planner = { ...item.planner, wbsCollapsed: false };
     const html = renderPlannerWbsHtml(planner, { canEdit: true });
     return `<div data-note-planner data-focus-wbs-only="1">${html}</div>`;
+}
+
+async function buildMediaPaneHtml(item) {
+    const { buildNoteAttachmentsSectionHtml } = await import('./noteAttachmentsUi.js');
+    const html = buildNoteAttachmentsSectionHtml(item, { canEdit: true, startCollapsed: false });
+    if (!html) return '<p class="magic-focus__empty">No media</p>';
+    return html.replace(
+        'data-note-attachments',
+        'data-note-attachments data-focus-media-only="1"'
+    );
 }
 
 function presetGlyphHtml(presetId) {
@@ -1355,6 +1367,7 @@ export const MagicFocus = {
         if (block === 'chart') return buildChartPaneHtml(item);
         if (block === 'kanban') return buildKanbanPaneHtml(item);
         if (block === 'wbs') return buildWbsPaneHtml(item);
+        if (block === 'media') return buildMediaPaneHtml(item);
         if (block === 'canvas') {
             if (!item.canvas) {
                 NoteSurface.mutateItem(item, (it) => {
@@ -1469,6 +1482,12 @@ export const MagicFocus = {
                         this.refreshPlannerPanes?.(item);
                     }
                 });
+            });
+        }).catch(() => {});
+
+        import('./noteAttachmentsUi.js').then(({ bindNoteAttachments }) => {
+            body.querySelectorAll('[data-note-attachments]').forEach((sec) => {
+                bindNoteAttachments(sec, item);
             });
         }).catch(() => {});
     },

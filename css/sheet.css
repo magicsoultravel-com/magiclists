@@ -246,9 +246,11 @@
     min-width: 0;
 }
 
-/* Content / Canvas reuse Plan’s modules tray for Focus spawn. */
+/* Content / Media / Canvas reuse Plan’s modules tray for Focus spawn. */
 .note-body-section--content > .note-section-header:hover .planner-section__modules,
 .note-body-section--content > .note-section-header:focus-within .planner-section__modules,
+.note-body-section--media > .note-section-header:hover .planner-section__modules,
+.note-body-section--media > .note-section-header:focus-within .planner-section__modules,
 .note-body-section--canvas > .note-section-header:hover .planner-section__modules,
 .note-body-section--canvas > .note-section-header:focus-within .planner-section__modules {
     opacity: 1;
