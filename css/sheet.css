@@ -251,6 +251,18 @@
     margin-top: 0;
 }
 
+/* Note body sections expand fully; scroll lives on .editor-note-body.
+   Global .collapsable-section caps at 1000px — that clips tall Content/Plan. */
+.note-body-section > .note-section-body.collapsable-section {
+    max-height: none;
+    overflow: visible;
+}
+
+.note-body-section > .note-section-body.collapsable-section.collapsed {
+    max-height: 0;
+    overflow: hidden;
+}
+
 .has-custom-bg .note-body-section .note-section-header {
     color: var(--card-muted);
 }
