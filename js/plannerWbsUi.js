@@ -23,6 +23,8 @@ import {
     resetWbsLabels,
     setWbsBucketCollapsed,
     setWbsBucketLabel,
+    setWbsBucketColor,
+    getWbsBucketColor,
     getWbsMode,
     setWbsCardColor,
     setWbsCardEmphasis,
@@ -240,10 +242,17 @@ export function renderPlannerWbsHtml(planner, { canEdit = false } = {}) {
         const labelHtml = canEdit && !collapsed && col.bucket != null
             ? `<input type="text" class="planner-wbs__column-title planner-wbs__column-title-input" data-planner-wbs-label data-bucket="${col.bucket}" value="${escapeAttr(col.label)}" spellcheck="false" aria-label="Bucket label">`
             : `<span class="planner-wbs__column-title">${escapeHTML(col.label)}</span>`;
+        const headColor = String(col.color || '').trim();
+        const headSurface = surfaceThemeInline(headColor);
+        const headColorClass = headColor ? ` has-color${headSurface.className}` : '';
+        const colorBtnHtml = canEdit && !collapsed && col.bucket != null
+            ? `<button type="button" class="planner-wbs__column-color" data-planner-wbs-bucket-color data-bucket="${col.bucket}" title="Column color" aria-label="Column color">${CARD_ICONS.color}</button>`
+            : '';
         return `<section class="planner-wbs__column${colClass}" data-planner-wbs-column data-planner-wbs-bucket="${escapeAttr(col.key)}" data-wbs-bucket-collapsed="${collapsed ? '1' : '0'}">
-            <header class="planner-wbs__column-head">
+            <header class="planner-wbs__column-head${headColorClass}"${headSurface.style}>
                 ${labelHtml}
                 <span class="planner-wbs__column-count">${col.cards.length}</span>
+                ${colorBtnHtml}
                 <button type="button" class="planner-wbs__column-collapse" data-planner-wbs-bucket-collapse title="${escapeAttr(collapseTitle)}" aria-label="${escapeAttr(collapseTitle)}" aria-expanded="${collapsed ? 'false' : 'true'}">${collapseIcon}</button>
             </header>
             <div class="planner-wbs__column-body" data-planner-wbs-drop="${escapeAttr(col.key)}">${cardsHtml}</div>
@@ -476,6 +485,27 @@ export function handleWbsClick(ctx, e) {
                     const hex = resolveNoteColor(color);
                     mutate((it) => {
                         setWbsCardColor(it.planner, row, hex);
+                    }, { skipRerender: true, refreshGantt: true });
+                }
+            });
+            return true;
+        }
+
+        const wbsBucketColorBtn = e.target.closest('[data-planner-wbs-bucket-color]');
+        if (wbsBucketColorBtn && section.contains(wbsBucketColorBtn)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const bucket = Number(wbsBucketColorBtn.dataset.bucket);
+            if (!Number.isFinite(bucket)) return true;
+            const current = resolveNoteColor(getWbsBucketColor(item.planner, bucket) || '');
+            ColorPicker.open({
+                anchor: wbsBucketColorBtn,
+                presets: PALETTE_NOTE,
+                value: current,
+                onSelect: (color) => {
+                    const hex = resolveNoteColor(color);
+                    mutate((it) => {
+                        setWbsBucketColor(it.planner, bucket, hex);
                     }, { skipRerender: true, refreshGantt: true });
                 }
             });

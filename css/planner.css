@@ -2013,9 +2013,10 @@ textarea.planner-kanban__card-comment:focus {
 }
 
 .planner-wbs__column {
+    /* Compact tile column so header → parent → child indents still read cleanly. */
     flex: 1 1 0;
-    min-width: 6.75rem;
-    max-width: 11rem;
+    min-width: 5.5rem;
+    max-width: 9rem;
     display: flex;
     flex-direction: column;
     gap: 0.28rem;
@@ -2085,7 +2086,7 @@ textarea.planner-kanban__card-comment:focus {
     align-items: center;
     justify-content: space-between;
     gap: 0.35rem;
-    padding: 0.45rem 1.15rem 0.45rem 0.5rem;
+    padding: 0.45rem 2.15rem 0.45rem 0.5rem;
     border-radius: 4px;
     border: 1px solid color-mix(in srgb, var(--border-color, #ccc) 65%, transparent);
     background: var(--surface, var(--bg-color, #fff));
@@ -2125,10 +2126,10 @@ textarea.planner-kanban__card-comment:focus {
     opacity: 0.9;
 }
 
+.planner-wbs__column-color,
 .planner-wbs__column-collapse {
     position: absolute;
     top: 0.22rem;
-    right: 0.22rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -2144,21 +2145,66 @@ textarea.planner-kanban__card-comment:focus {
     opacity: 0;
 }
 
+.planner-wbs__column-collapse {
+    right: 0.22rem;
+}
+
+.planner-wbs__column-color {
+    right: 1.2rem;
+}
+
 .planner-wbs__column:hover .planner-wbs__column-collapse,
 .planner-wbs__column:focus-within .planner-wbs__column-collapse,
-.planner-wbs__column.is-collapsed .planner-wbs__column-collapse {
+.planner-wbs__column.is-collapsed .planner-wbs__column-collapse,
+.planner-wbs__column:hover .planner-wbs__column-color,
+.planner-wbs__column:focus-within .planner-wbs__column-color {
     opacity: 1;
 }
 
 .planner-wbs__column-collapse:hover,
-.planner-wbs__column-collapse:focus-visible {
+.planner-wbs__column-collapse:focus-visible,
+.planner-wbs__column-color:hover,
+.planner-wbs__column-color:focus-visible {
     background: color-mix(in srgb, var(--border-color) 22%, transparent);
     color: var(--text-color, inherit);
 }
 
-.planner-wbs__column-collapse svg {
+.planner-wbs__column-collapse svg,
+.planner-wbs__column-color svg {
     width: 0.7rem;
     height: 0.7rem;
+}
+
+/* Colored column header — solid fill + contrast tokens from surfaceThemeInline. */
+.planner-wbs__column-head.has-color {
+    box-shadow: none;
+}
+
+.planner-wbs__column-head.has-color .planner-wbs__column-title,
+.planner-wbs__column-head.has-color .planner-wbs__column-title-input {
+    color: var(--card-fg, inherit);
+}
+
+.planner-wbs__column-head.has-color .planner-wbs__column-count {
+    color: var(--card-muted, inherit);
+    opacity: 1;
+}
+
+.planner-wbs__column-head.has-color .planner-wbs__column-collapse,
+.planner-wbs__column-head.has-color .planner-wbs__column-color {
+    color: var(--card-action-fg, var(--card-fg, inherit));
+}
+
+.planner-wbs__column-head.has-color .planner-wbs__column-collapse:hover,
+.planner-wbs__column-head.has-color .planner-wbs__column-collapse:focus-visible,
+.planner-wbs__column-head.has-color .planner-wbs__column-color:hover,
+.planner-wbs__column-head.has-color .planner-wbs__column-color:focus-visible {
+    background: var(--card-action-bg, color-mix(in srgb, #000 12%, transparent));
+    color: var(--card-action-fg, var(--card-fg, inherit));
+}
+
+.planner-wbs__column-head.has-color .planner-wbs__column-title-input:focus {
+    outline-color: var(--card-focus-ring, color-mix(in srgb, var(--accent, #5b8def) 55%, transparent));
 }
 
 .planner-wbs__column-body {
@@ -2176,11 +2222,13 @@ textarea.planner-kanban__card-comment:focus {
 }
 
 /*
- * Column header tile → item tiles L-tree.
- * Header stays full-width (no indent); body items sit in the gutter.
+ * Column header → parent → children L-tree (max 2 nest steps).
+ * Header stays full-width; body/parent and pack children step in via gutters.
+ * Compact column max-width keeps child tiles usable after both indents.
  */
 .planner-wbs__column:not(.is-collapsed) {
-    --wbs-col-gutter: 0.72rem;
+    --wbs-col-gutter: 0.62rem;
+    --wbs-tree-gutter: 0.62rem;
     --wbs-tree-line: color-mix(in srgb, var(--text-color, #1f2937) 28%, transparent);
 }
 
@@ -2197,18 +2245,19 @@ textarea.planner-kanban__card-comment:focus {
 }
 
 .planner-wbs__column-body:has(> .is-wbs-branch) {
-    padding-left: calc(var(--wbs-col-gutter) + 0.25rem);
+    padding-left: calc(var(--wbs-col-gutter) + 0.2rem);
 }
 
 .planner-wbs__column-body > .is-wbs-branch {
     position: relative;
+    min-width: 0;
 }
 
 /* Vertical spine through each column branch (cut at mid for last). */
 .planner-wbs__column-body > .is-wbs-branch::after {
     content: '';
     position: absolute;
-    left: calc(-1 * (var(--wbs-col-gutter) + 0.25rem) + var(--wbs-col-gutter) * 0.42);
+    left: calc(-1 * (var(--wbs-col-gutter) + 0.2rem) + var(--wbs-col-gutter) * 0.42);
     top: -0.14rem;
     bottom: -0.14rem;
     width: 1px;
@@ -2229,9 +2278,9 @@ textarea.planner-kanban__card-comment:focus {
 .planner-wbs__column-body > .is-wbs-branch::before {
     content: '';
     position: absolute;
-    left: calc(-1 * (var(--wbs-col-gutter) + 0.25rem) + var(--wbs-col-gutter) * 0.42);
+    left: calc(-1 * (var(--wbs-col-gutter) + 0.2rem) + var(--wbs-col-gutter) * 0.42);
     top: 50%;
-    width: calc(var(--wbs-col-gutter) * 0.58 + 0.12rem);
+    width: calc(var(--wbs-col-gutter) * 0.58 + 0.1rem);
     height: 1px;
     background: var(--wbs-tree-line);
     pointer-events: none;
@@ -2304,25 +2353,24 @@ textarea.planner-kanban__card-comment:focus {
 }
 
 .planner-wbs__tree-kids {
-    --wbs-tree-gutter: 0.75rem;
-    --wbs-tree-line: color-mix(in srgb, var(--text-color, #1f2937) 28%, transparent);
     display: flex;
     flex-direction: column;
     gap: 0.28rem;
     position: relative;
-    padding-left: calc(var(--wbs-tree-gutter) + 0.3rem);
+    padding-left: calc(var(--wbs-tree-gutter) + 0.2rem);
     min-width: 0;
 }
 
 .planner-wbs__card.is-wbs-child {
     position: relative;
+    min-width: 0;
 }
 
 /* Vertical spine segment through each child (cut at mid for last). */
 .planner-wbs__card.is-wbs-child::after {
     content: '';
     position: absolute;
-    left: calc(-1 * (var(--wbs-tree-gutter) + 0.3rem) + var(--wbs-tree-gutter) * 0.42);
+    left: calc(-1 * (var(--wbs-tree-gutter) + 0.2rem) + var(--wbs-tree-gutter) * 0.42);
     top: -0.14rem;
     bottom: -0.14rem;
     width: 1px;
@@ -2343,9 +2391,9 @@ textarea.planner-kanban__card-comment:focus {
 .planner-wbs__card.is-wbs-child::before {
     content: '';
     position: absolute;
-    left: calc(-1 * (var(--wbs-tree-gutter) + 0.3rem) + var(--wbs-tree-gutter) * 0.42);
+    left: calc(-1 * (var(--wbs-tree-gutter) + 0.2rem) + var(--wbs-tree-gutter) * 0.42);
     top: 50%;
-    width: calc(var(--wbs-tree-gutter) * 0.58 + 0.15rem);
+    width: calc(var(--wbs-tree-gutter) * 0.58 + 0.1rem);
     height: 1px;
     background: var(--wbs-tree-line);
     pointer-events: none;

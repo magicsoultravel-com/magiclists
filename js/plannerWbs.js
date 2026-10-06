@@ -120,6 +120,21 @@ export function normalizeWbsCollapsedByBucket(raw) {
 }
 
 /**
+ * Sparse bucket → #rrggbb map for column header fills.
+ * @param {unknown} raw
+ * @returns {Record<string, string>}
+ */
+export function normalizeWbsBucketColors(raw) {
+    if (!raw || typeof raw !== 'object') return {};
+    const out = {};
+    for (const key of WBS_BUCKET_KEYS) {
+        const color = String(raw[key] || '').trim().toLowerCase();
+        if (/^#[0-9a-f]{6}$/.test(color)) out[key] = color;
+    }
+    return out;
+}
+
+/**
  * @param {object|null|undefined} planner
  * @returns {'phase'|'deliverable'}
  */
@@ -173,6 +188,42 @@ export function wbsBucketKey(bucket) {
 export function isWbsBucketCollapsed(planner, bucketKey) {
     const key = String(bucketKey || '');
     return !!(planner?.wbsCollapsedByBucket?.[key]);
+}
+
+/**
+ * @param {object|null|undefined} planner
+ * @param {number|string} bucket
+ * @param {'phase'|'deliverable'} [mode]
+ * @returns {string} #rrggbb or ''
+ */
+export function getWbsBucketColor(planner, bucket, mode) {
+    const key = wbsBucketKey(bucket);
+    const m = normalizeWbsMode(mode || planner?.wbsMode);
+    const map = m === 'deliverable'
+        ? planner?.wbsDeliverableColorsByBucket
+        : planner?.wbsPhaseColorsByBucket;
+    const color = String(map?.[key] || '').trim().toLowerCase();
+    return /^#[0-9a-f]{6}$/.test(color) ? color : '';
+}
+
+/**
+ * @param {object} planner
+ * @param {number|string} bucket
+ * @param {string} hex - empty clears
+ * @param {'phase'|'deliverable'} [mode]
+ */
+export function setWbsBucketColor(planner, bucket, hex, mode) {
+    if (!planner) return;
+    const key = wbsBucketKey(bucket);
+    const m = normalizeWbsMode(mode || planner.wbsMode);
+    const mapKey = m === 'deliverable' ? 'wbsDeliverableColorsByBucket' : 'wbsPhaseColorsByBucket';
+    if (!planner[mapKey] || typeof planner[mapKey] !== 'object') planner[mapKey] = {};
+    const color = String(hex || '').trim().toLowerCase();
+    if (!/^#[0-9a-f]{6}$/.test(color)) {
+        delete planner[mapKey][key];
+        return;
+    }
+    planner[mapKey][key] = color;
 }
 
 /**
@@ -434,6 +485,7 @@ export function layoutPlannerWbs(planner, { mode } = {}) {
         key: String(bucket),
         bucket,
         label,
+        color: getWbsBucketColor(planner, bucket, m),
         cards: [],
         groups: []
     }));
@@ -572,8 +624,10 @@ export function resetWbsLabels(planner, mode) {
     const m = normalizeWbsMode(mode || planner.wbsMode);
     if (m === 'deliverable') {
         planner.wbsDeliverableLabels = [...WBS_DEFAULT_DELIVERABLE_LABELS];
+        planner.wbsDeliverableColorsByBucket = {};
     } else {
         planner.wbsPhaseLabels = [...WBS_DEFAULT_PHASE_LABELS];
+        planner.wbsPhaseColorsByBucket = {};
     }
 }
 

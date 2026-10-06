@@ -44,6 +44,8 @@ import {
     moveWbsCard,
     resetWbsArrangement,
     resetWbsLabels,
+    setWbsBucketColor,
+    getWbsBucketColor,
     setWbsCardColor,
     setWbsCardEmphasis,
     setWbsCardCollapsed,
@@ -1013,17 +1015,33 @@ describe('planner WBS and work packs', () => {
         assert.equal(planner.wbsDeliverableById[id0], 4);
 
         planner.wbsPhaseLabels = ['A', 'B', 'C', 'D', 'E'];
+        setWbsBucketColor(planner, 0, '#336699');
+        setWbsBucketColor(planner, 1, '#ffaa00', 'deliverable');
+        assert.equal(getWbsBucketColor(planner, 0), '#336699');
+        assert.equal(getWbsBucketColor(planner, 1, 'deliverable'), '#ffaa00');
         resetWbsLabels(planner);
         assert.deepEqual(planner.wbsPhaseLabels, [...WBS_DEFAULT_PHASE_LABELS]);
         assert.deepEqual(planner.wbsDeliverableLabels, [...WBS_DEFAULT_DELIVERABLE_LABELS]);
+        assert.equal(getWbsBucketColor(planner, 0), '');
+        assert.equal(getWbsBucketColor(planner, 1, 'deliverable'), '#ffaa00');
 
         const layout = layoutPlannerWbs(planner, { mode: 'deliverable' });
         assert.equal(layout.columns.length, 5);
         assert.equal(layout.columns[0].key, '0');
         assert.equal(layout.columns[4].cards[0]?.name, 'Task');
+        assert.equal(layout.columns[1].color, '#ffaa00');
         // Missing assignment lands in first column.
         const phaseLayout = layoutPlannerWbs(planner, { mode: 'phase' });
         assert.equal(phaseLayout.columns[0].cards[0]?.name, 'Task');
+
+        setWbsBucketColor(planner, 2, '#aabbcc');
+        const coloredHtml = renderPlannerWbsHtml(planner, { canEdit: true });
+        assert.ok(coloredHtml.includes('data-planner-wbs-bucket-color'));
+        assert.ok(coloredHtml.includes('planner-wbs__column-head has-color'));
+        assert.ok(coloredHtml.includes('#aabbcc'));
+        const again = normalizePlanner(planner);
+        assert.equal(again.wbsPhaseColorsByBucket['2'], '#aabbcc');
+        assert.equal(again.wbsDeliverableColorsByBucket['1'], '#ffaa00');
     });
 
     it('WBS move to Planning survives normalize (no bucket wipe)', () => {
