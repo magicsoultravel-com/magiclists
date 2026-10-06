@@ -16,10 +16,7 @@ import { getSmallRect } from './tileGeometry.js';
 import { readTileSmallFootprint } from './tileFootprint.js';
 import { normalizeViewMode } from './viewSession.js';
 import { syncCabinetSplitter, syncFileCabinetShutChrome, refreshFileCabinetUiScale } from './shellResize.js';
-import {
-    beginFcExpandTransition,
-    isUiTransitionsEnabled
-} from './uiTransitions.js';
+import { beginFcExpandTransition } from './uiTransitions.js';
 import { BoardOperations } from './boardOperations.js';
 import { createCardComponent } from './noteSurfaceHtml.js';
 import { ACTION_ICONS, CARD_ICONS } from './icons.js';
@@ -1359,7 +1356,8 @@ function captureClientRect(el) {
 }
 
 function dispatchBoardVisibility({ flushLayout = false, transition = null } = {}) {
-    if (transition?.kind === 'fc-expand' && transition.itemId && isUiTransitionsEnabled()) {
+    // Always bump fcGen (Smooth on or off) so post-expand bento push can cancel safely.
+    if (transition?.kind === 'fc-expand' && transition.itemId) {
         beginFcExpandTransition(transition.itemId);
     }
     window.dispatchEvent(new CustomEvent('board:visibility_changed', {

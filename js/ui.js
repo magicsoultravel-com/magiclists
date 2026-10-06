@@ -482,8 +482,8 @@ export const UI = {
         if (ctx.scheduleExtents) {
             this.scheduleBoardCanvasExtents(canvas);
         }
-        if (canvas?.classList.contains('view-grid') && !isBoardOverlayEnabled()) {
-            // Only reflow on expand, never on collapse — collapsing must not rearrange neighbors
+        // Compose: expand-only + bento. Allow-overlap and collapse never push neighbors.
+        if (canvas?.classList.contains('view-grid') && isBoardOverlayEnabled()) {
             if (!isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(item))) {
                 const reflowOpts = { animate: true };
                 if (ctx.actorRect) reflowOpts.actorRect = ctx.actorRect;
@@ -1010,10 +1010,14 @@ reapplySmallFootprintOnBoard() {
 
         this.finalizeDesktopCard(card);
 
-        if (canvas) {
-            requestAnimationFrame(() => {
-                this.reflowGridBoard(canvas, item.id, { animate: true });
-            });
+        // Bento-only push; skip when Allow-overlap or spatially collapsed.
+        if (canvas?.classList.contains('view-grid') && isBoardOverlayEnabled()) {
+            const rect = this.readNoteRect(card);
+            if (!isCollapsedSpatialSize(rect.w, rect.h, resolveTileSize(item))) {
+                requestAnimationFrame(() => {
+                    this.reflowGridBoard(canvas, item.id, { animate: true });
+                });
+            }
         }
     },
 

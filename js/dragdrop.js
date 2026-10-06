@@ -111,8 +111,6 @@ function finishSnapPanelGesture(card, {
     getBounds,
     saveLayout,
     reflow,
-    onExpandFromResize,
-    onCollapseFromResize,
     clearPreview,
     endScrollPolicy,
     cleanupActive,
@@ -141,7 +139,10 @@ function finishSnapPanelGesture(card, {
     saveLayout(card, rect, {
         updateRemembered: !isCollapsedSpatialSize(rect.w, rect.h, tileSize)
     });
-    reflow(card, { animate });
+    // Collapse never rearranges neighbors; mode gate lives in the reflow callback (bento only).
+    if (!isCollapsedSpatialSize(rect.w, rect.h, tileSize)) {
+        reflow(card, { animate });
+    }
     if (isDesktopCard(card)) {
         UI.finalizeDesktopCard(card);
     }
@@ -300,7 +301,8 @@ export const DragDropEngine = {
         };
 
         const runLayoutPreview = (actorCard) => {
-            if (!snapEnabled || overlayMode || !actorCard?.dataset?.id) return;
+            // Live push preview only in bento (overlayMode); Allow-overlap leaves neighbors still.
+            if (!snapEnabled || !overlayMode || !actorCard?.dataset?.id) return;
             if (previewFrame) return;
             previewFrame = requestAnimationFrame(() => {
                 previewFrame = null;
@@ -353,25 +355,10 @@ export const DragDropEngine = {
                     UI.saveGridLayout(c.dataset.id, rect, { updateRemembered });
                 },
                 reflow: overlayMode
-                    ? () => {}
-                    : (c, { animate }) => {
+                    ? (c, { animate }) => {
                         UI.reflowGridBoard(canvas, c.dataset.id, { animate });
-                    },
-                onExpandFromResize: () => {},
-                onCollapseFromResize: (c, item, rect, { animate, bounds }) => {
-                    UI.collapseSnapPanelCard(c, item);
-                    const tileSize = UI.getCardTileSize(c, item);
-                    const sized = UI.gridTileRect(tileSize, rect, rect);
-                    const finalRect = UI.snapNoteRect(
-                        { ...sized, x: rect.x, y: rect.y },
-                        { maxW: bounds.packW, maxH: bounds.maxH }
-                    );
-                    UI.applyNoteRect(c, finalRect, { settling: animate });
-                    UI.saveGridLayout(c.dataset.id, finalRect, {
-                        updateRemembered: !isCollapsedSpatialSize(finalRect.w, finalRect.h, tileSize)
-                    });
-                    UI.reflowGridBoard(canvas, c.dataset.id, { animate });
-                },
+                    }
+                    : () => {},
                 clearPreview: clearLayoutPreview,
                 endScrollPolicy: () => UI.updateGridScrollPolicy(canvas, { forcing: false }),
                 cleanupActive: () => {

@@ -6,6 +6,8 @@
  * cancelAll() clears morph/fly state then applies the intended final hard state.
  */
 
+import { isBoardOverlayEnabled } from './boardOverlay.js';
+
 export const UI_TRANSITION_MS = 180;
 export const UI_TRANSITION_EASING = 'cubic-bezier(0.2, 0, 0, 1)';
 
@@ -219,14 +221,16 @@ export function flyFromTo(opts) {
 }
 
 /**
- * Mark FC expand in flight so CSS/post-hook can suppress flash.
+ * Mark FC expand in flight. Always advances fcGen for cancel safety;
+ * body chrome only when Smooth fly is enabled.
  * @param {string} itemId
  */
 export function beginFcExpandTransition(itemId) {
-    if (!itemId || !isUiTransitionsEnabled()) return;
+    if (!itemId) return;
+    fcGen += 1;
+    if (!isUiTransitionsEnabled()) return;
     document.body.classList.add(FC_BODY_CLASS);
     document.body.dataset.fcTransitionId = itemId;
-    fcGen += 1;
 }
 
 export function clearFcExpandTransition() {
@@ -238,8 +242,29 @@ export function clearFcExpandTransition() {
 }
 
 /**
+ * Bento-only neighbor push after FC expand. Allow-overlap leaves neighbors alone.
+ * @param {{ itemId: string, UI: object, actorRect?: object|null, gen: number }} opts
+ */
+function scheduleFcExpandPushIfBento({ itemId, UI, actorRect = null, gen }) {
+    if (!itemId || !UI || !isBoardOverlayEnabled()) return;
+    const canvas = document.getElementById('app-canvas');
+    if (!canvas?.classList.contains('view-grid')) return;
+    const card = canvas.querySelector(`.mini-card[data-id="${CSS.escape(itemId)}"]`);
+    if (!card) return;
+    const resolvedRect = actorRect || UI.readNoteRect?.(card);
+    requestAnimationFrame(() => {
+        if (fcGen !== gen || !card.isConnected) return;
+        UI.reflowGridBoard?.(canvas, itemId, {
+            animate: true,
+            ...(resolvedRect ? { actorRect: resolvedRect } : {})
+        });
+    });
+}
+
+/**
  * Post-render FC expand: hide flash → fly small → expand with layout-settling.
  * UI.render must already have completed at full size.
+ * When Smooth is off, skip the fly and still schedule bento push if needed.
  * @param {{ itemId: string, sourceRect: object, UI: object }} opts
  */
 export async function runFcExpandAfterRender({ itemId, sourceRect, UI }) {
@@ -248,7 +273,13 @@ export async function runFcExpandAfterRender({ itemId, sourceRect, UI }) {
         if (fcGen === gen) clearFcExpandTransition();
     };
 
-    if (!itemId || !UI || !isUiTransitionsEnabled()) {
+    if (!itemId || !UI) {
+        clear();
+        return;
+    }
+
+    if (!isUiTransitionsEnabled()) {
+        scheduleFcExpandPushIfBento({ itemId, UI, gen });
         clear();
         return;
     }
@@ -256,6 +287,7 @@ export async function runFcExpandAfterRender({ itemId, sourceRect, UI }) {
     const canvas = document.getElementById('app-canvas');
     const card = canvas?.querySelector(`.mini-card[data-id="${CSS.escape(itemId)}"]`);
     if (!card || !sourceRect) {
+        scheduleFcExpandPushIfBento({ itemId, UI, gen });
         clear();
         return;
     }
@@ -293,13 +325,7 @@ export async function runFcExpandAfterRender({ itemId, sourceRect, UI }) {
         card.classList.remove('layout-settling');
     }, 160);
 
-    if (canvas?.classList.contains('view-grid')) {
-        requestAnimationFrame(() => {
-            if (fcGen !== gen || !card.isConnected) return;
-            UI.reflowGridBoard?.(canvas, itemId, { animate: true, actorRect: full });
-        });
-    }
-
+    scheduleFcExpandPushIfBento({ itemId, UI, actorRect: full, gen });
     clear();
 }
 
