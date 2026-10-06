@@ -177,7 +177,9 @@ function renderWbsCardHtml(planner, card, { canEdit = false, childClass = '' } =
  */
 function renderWbsColumnBodyHtml(planner, groups, { canEdit = false } = {}) {
     if (!groups?.length) return '<div class="planner-wbs__empty-col" aria-hidden="true"></div>';
-    return groups.map((group) => {
+    const lastIdx = groups.length - 1;
+    return groups.map((group, gi) => {
+        const branchClass = gi === lastIdx ? ' is-wbs-branch is-wbs-branch-last' : ' is-wbs-branch';
         if (group.type === 'pack' && Array.isArray(group.cards) && group.cards.length) {
             const outline = group.packRow >= 0
                 ? getPlannerOutlineLabel(planner, group.packRow)
@@ -188,7 +190,7 @@ function renderWbsColumnBodyHtml(planner, groups, { canEdit = false } = {}) {
                 const childClass = last ? ' is-wbs-child is-wbs-child-last' : ' is-wbs-child';
                 return renderWbsCardHtml(planner, card, { canEdit, childClass });
             }).join('');
-            return `<div class="planner-wbs__tree" data-planner-wbs-tree data-planner-wbs-pack-id="${escapeAttr(group.packId)}">
+            return `<div class="planner-wbs__tree${branchClass}" data-planner-wbs-tree data-planner-wbs-pack-id="${escapeAttr(group.packId)}">
                 <div class="planner-wbs__tree-pack" data-planner-wbs-pack>
                     <span class="planner-wbs__tree-pack-row" title="Row ${escapeAttr(outline)}">${escapeHTML(outline)}</span>
                     <span class="planner-wbs__tree-pack-name">${escapeHTML(packName)}</span>
@@ -197,7 +199,7 @@ function renderWbsColumnBodyHtml(planner, groups, { canEdit = false } = {}) {
             </div>`;
         }
         if (group.type === 'root' && group.card) {
-            return renderWbsCardHtml(planner, group.card, { canEdit });
+            return renderWbsCardHtml(planner, group.card, { canEdit, childClass: branchClass });
         }
         return '';
     }).join('');

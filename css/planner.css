@@ -2166,6 +2166,88 @@ textarea.planner-kanban__card-comment:focus {
     background: color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 10%, transparent);
 }
 
+/*
+ * Column header → items L-tree (phase/deliverable bucket as parent).
+ * Direct children of the body (.planner-wbs__card / .planner-wbs__tree) get
+ * branch stubs; pack trees keep their own nested child spine inside.
+ */
+.planner-wbs__column:not(.is-collapsed) {
+    --wbs-col-gutter: 0.72rem;
+    --wbs-tree-line: color-mix(in srgb, var(--text-color, #1f2937) 28%, transparent);
+}
+
+.planner-wbs__column:not(.is-collapsed):has(.is-wbs-branch) .planner-wbs__column-head {
+    padding-left: calc(0.4rem + var(--wbs-col-gutter) + 0.15rem);
+}
+
+.planner-wbs__column:not(.is-collapsed):has(.is-wbs-branch) .planner-wbs__column-head::before {
+    content: '';
+    position: absolute;
+    left: calc(0.4rem + var(--wbs-col-gutter) * 0.42);
+    bottom: -1px;
+    width: 1px;
+    height: 0.55rem;
+    background: var(--wbs-tree-line);
+    pointer-events: none;
+}
+
+.planner-wbs__column-body:has(> .is-wbs-branch) {
+    padding-left: calc(0.35rem + var(--wbs-col-gutter) + 0.25rem);
+}
+
+.planner-wbs__column-body > .is-wbs-branch {
+    position: relative;
+}
+
+/* Vertical spine through each column branch (cut at mid for last). */
+.planner-wbs__column-body > .is-wbs-branch::after {
+    content: '';
+    position: absolute;
+    left: calc(-1 * (var(--wbs-col-gutter) + 0.25rem) + var(--wbs-col-gutter) * 0.42);
+    top: -0.14rem;
+    bottom: -0.14rem;
+    width: 1px;
+    background: var(--wbs-tree-line);
+    pointer-events: none;
+    z-index: 0;
+}
+
+.planner-wbs__column-body > .is-wbs-branch:first-child::after {
+    top: -0.45rem;
+}
+
+.planner-wbs__column-body > .is-wbs-branch-last::after {
+    bottom: 50%;
+}
+
+/* Horizontal stub into the card / pack block. */
+.planner-wbs__column-body > .is-wbs-branch::before {
+    content: '';
+    position: absolute;
+    left: calc(-1 * (var(--wbs-col-gutter) + 0.25rem) + var(--wbs-col-gutter) * 0.42);
+    top: 50%;
+    width: calc(var(--wbs-col-gutter) * 0.58 + 0.12rem);
+    height: 1px;
+    background: var(--wbs-tree-line);
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* Pack block: stub aims at the pack label, not mid-block. */
+.planner-wbs__column-body > .planner-wbs__tree.is-wbs-branch::before {
+    top: 0.55rem;
+}
+
+.planner-wbs__column-body > .planner-wbs__tree.is-wbs-branch-last::after {
+    bottom: calc(100% - 0.55rem);
+}
+
+.planner-wbs__column.is-collapsed .planner-wbs__column-head::before,
+.planner-wbs__column.is-collapsed .is-wbs-branch::before,
+.planner-wbs__column.is-collapsed .is-wbs-branch::after {
+    display: none;
+}
+
 /* In-column pack tree (presentation over flat leaf cards) */
 .planner-wbs__tree {
     display: flex;

@@ -1055,8 +1055,11 @@ describe('planner WBS and work packs', () => {
         assert.ok(html.includes('is-editable'));
         assert.ok(html.includes(`data-planner-row-id="${id0}"`));
         assert.ok(html.includes(`data-planner-row-id="${id1}"`));
-        // Flat roots — no pack tree chrome for this note shape.
+        // Flat roots — column-header→item branches, no pack tree chrome.
+        assert.ok(html.includes('is-wbs-branch'));
+        assert.ok(html.includes('is-wbs-branch-last'));
         assert.ok(!html.includes('data-planner-wbs-tree'));
+        assert.ok(!html.includes('is-wbs-child'));
     });
 
     it('WBS in-column tree groups contiguous pack siblings', () => {
@@ -1099,6 +1102,7 @@ describe('planner WBS and work packs', () => {
         assert.ok(html.includes('Design Pack'));
         assert.ok(html.includes('is-wbs-child'));
         assert.ok(html.includes('is-wbs-child-last'));
+        assert.ok(html.includes('is-wbs-branch'));
         assert.ok(html.includes('Wireframes'));
         assert.ok(html.includes('Solo Root'));
         // Pack itself is header-only, not a draggable card.
