@@ -16,6 +16,7 @@ import { contentHasConvertibleText, stepsHaveConvertibleText, convertContentToCh
 import { attachSheetInteractions } from './sheet.js';
 import { attachPlannerInteractions } from './plannerUi.js';
 import { bindChecklistInteractions, attachChecklistDrag } from './noteSurfaceChecklist.js';
+import { bindFocusSpawnButtons } from './noteFocusSpawn.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -615,6 +616,7 @@ export function bindNoteEditorShell(root, item, {
             localOnly,
             onChange
         });
+        bindFocusSpawnButtons(body, item);
     }
 
     // For modal editor (localOnly=true), add blur handler to flush immediately

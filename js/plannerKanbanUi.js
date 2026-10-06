@@ -1,6 +1,7 @@
 /** @module {"owns":"magicPlanner Kanban subsection UI — board render, card chrome, pointer drag, field edit", "related":["plannerUi.js","plannerSheetUi.js","plannerChartUi.js","plannerWbsUi.js","planner.js","plannerKanban.js"]} */
 import { escapeHTML, escapeAttr } from './domEscape.js';
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
+import { renderFocusSpawnBtnHtml } from './noteFocusSpawn.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor } from './colorPicker.js';
 import { surfaceThemeInline } from './cardTheme.js';
 import { readDisplayOptions } from './displayOptions.js';
@@ -234,6 +235,7 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
                 <span class="collapsable-toggle${toggleCollapsed}" aria-hidden="true">▼</span>Kanban
             </button>
             <div class="planner-kanban__tools${kanbanCollapsed ? ' is-collapsed' : ''}" role="group" aria-label="Kanban tools"${kanbanCollapsed ? ' hidden' : ''}>
+                ${renderFocusSpawnBtnHtml('kanban', 'Kanban', { className: 'card-act planner-kanban-module-btn' })}
                 <span class="planner-kanban__sort" role="group" aria-label="Kanban sort">${sortBtns}</span>
                 ${moduleResetHtml}
             </div>

@@ -1,6 +1,7 @@
 /** @module {"owns":"magicPlanner chart subsection UI — Gantt/calendar board, rail measure, pan, zoom, today line", "related":["plannerUi.js","plannerSheetUi.js","plannerKanbanUi.js","plannerWbsUi.js","planner.js","plannerGantt.js","plannerCalendar.js"]} */
 import { escapeHTML, escapeAttr } from './domEscape.js';
 import { CARD_ICONS } from './icons.js';
+import { renderFocusSpawnBtnHtml } from './noteFocusSpawn.js';
 import { surfaceThemeInline } from './cardTheme.js';
 import { resolveNoteColor } from './colorPicker.js';
 import { readDisplayOptions } from './displayOptions.js';
@@ -544,7 +545,7 @@ export function renderPlannerGanttHtml(planner, { canEdit = false } = {}) {
             <button type="button" class="planner-gantt__title planner-sub__title" data-planner-chart-toggle aria-expanded="${chartCollapsed ? 'false' : 'true'}">
                 <span class="collapsable-toggle${toggleCollapsed}" aria-hidden="true">▼</span>Chart
             </button>
-            <div class="planner-gantt__zoom${toolsDimmed}${chartCollapsed ? ' is-collapsed' : ''}" role="group" aria-label="Chart view"${chartCollapsed ? ' hidden' : ''}>${zoomBtns}${calBtn}</div>
+            <div class="planner-gantt__zoom${toolsDimmed}${chartCollapsed ? ' is-collapsed' : ''}" role="group" aria-label="Chart view"${chartCollapsed ? ' hidden' : ''}>${renderFocusSpawnBtnHtml('chart', 'Chart', { className: 'card-act planner-chart-view-btn' })}${zoomBtns}${calBtn}</div>
         </div>
         <div class="planner-gantt__board${boardCollapsed}" data-planner-chart-board>
             ${boardInner}

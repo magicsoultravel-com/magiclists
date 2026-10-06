@@ -1,6 +1,7 @@
 /** @module {"owns":"magicPlanner WBS subsection UI — board render, card chrome, pointer drag, field edit, bucket labels", "related":["plannerUi.js","plannerSheetUi.js","plannerChartUi.js","plannerKanbanUi.js","planner.js","plannerWbs.js"]} */
 import { escapeHTML, escapeAttr } from './domEscape.js';
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
+import { renderFocusSpawnBtnHtml } from './noteFocusSpawn.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor } from './colorPicker.js';
 import { surfaceThemeInline } from './cardTheme.js';
 import {
@@ -276,6 +277,7 @@ export function renderPlannerWbsHtml(planner, { canEdit = false } = {}) {
                 <span class="collapsable-toggle${toggleCollapsed}" aria-hidden="true">▼</span>WBS
             </button>
             <div class="planner-wbs__tools${wbsCollapsed ? ' is-collapsed' : ''}" role="group" aria-label="WBS tools"${wbsCollapsed ? ' hidden' : ''}>
+                ${renderFocusSpawnBtnHtml('wbs', 'WBS', { className: 'card-act planner-wbs-module-btn' })}
                 ${tools}
             </div>
         </div>

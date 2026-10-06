@@ -348,6 +348,9 @@ export const MagicFocus = {
     setupStep: 'layout', // 'layout' | 'assign'
     showingSetup: false,
     expandedPaneId: null,
+    /** @type {string[]|null} Ephemeral single-pane spawn; does not mutate item.focus */
+    sessionSpawnBlocks: null,
+    sessionSpawnZoom: FOCUS_ZOOM_DEFAULT,
     drawingHomeParent: null,
     drawingHosted: false,
     _escHandler: null,
@@ -444,6 +447,7 @@ export const MagicFocus = {
             Editor.close();
         }
 
+        this._clearSessionSpawn();
         this.activeItemId = item.id;
         const live = this.resolveItem() || item;
         const configured = focusIsConfigured(live.focus);
@@ -465,11 +469,60 @@ export const MagicFocus = {
         }
 
         this._bindEsc();
+        this._syncFocusButtons();
+    },
+
+    /**
+     * Open Focus with an ephemeral single expanded pane for the given blocks.
+     * Does not rewrite saved item.focus zones/preset/ratios.
+     * @param {object} item
+     * @param {string|string[]} blocks
+     */
+    async openExpandedBlocks(item, blocks) {
+        if (!item?.id || !this.root) return;
+        const list = asBlockList(blocks);
+        if (!list.length) return;
+
+        if (this._app?.stateWorkspaceMode?.() === 'drawing' || this._app?.isDrawingMode?.()) {
+            await this._app.exitDrawingForFocus?.();
+        }
+
+        const modalOpen = Editor.activeItem?.id === item.id
+            && Editor.overlay
+            && !Editor.overlay.classList.contains('is-hidden');
+        if (modalOpen) {
+            Editor.persistNote({ force: true, normalize: true });
+            Editor.close();
+        }
+
+        const alreadyOpenForItem = this.isOpen() && this.activeItemId === item.id;
+        this.activeItemId = item.id;
+        this.sessionSpawnBlocks = list;
+        this.sessionSpawnZoom = FOCUS_ZOOM_DEFAULT;
+        this.showingSetup = false;
+        this.setupDraft = null;
+        this.setupStep = 'layout';
+        this.expandedPaneId = null;
+
+        const live = this.resolveItem() || item;
+        if (!alreadyOpenForItem) {
+            await this._enterShell();
+        }
+        this.applyNoteTheme(live);
+        await this.renderWork(live);
+        this._bindEsc();
+        this._syncFocusButtons();
+    },
+
+    _clearSessionSpawn() {
+        this.sessionSpawnBlocks = null;
+        this.sessionSpawnZoom = FOCUS_ZOOM_DEFAULT;
     },
 
     async openSettings() {
         const item = this.resolveItem();
         if (!item) return;
+        this._clearSessionSpawn();
         this.clearExpandedPane();
         this.showingSetup = true;
         const existing = normalizeFocus(item.focus);
@@ -518,6 +571,7 @@ export const MagicFocus = {
         this.setupStep = 'layout';
         this.showingSetup = false;
         this.expandedPaneId = null;
+        this._clearSessionSpawn();
 
         const useMorph = wasOpen && isUiTransitionsEnabled() && this.root;
         const focusRoot = this.root;
@@ -663,6 +717,12 @@ export const MagicFocus = {
                     this.renderWork(this.resolveItem());
                     return;
                 }
+                this.close();
+                return;
+            }
+            // Spawn session is already a single pane — Esc exits Focus.
+            if (this.sessionSpawnBlocks?.length) {
+                e.preventDefault();
                 this.close();
                 return;
             }
@@ -1017,6 +1077,12 @@ export const MagicFocus = {
         if (!this.bodyEl || !item) return;
         this.expandedPaneId = null;
         await this._unhostDrawingBoard();
+
+        if (this.sessionSpawnBlocks?.length) {
+            await this._renderSpawnWork(item);
+            return;
+        }
+
         const focus = normalizeFocus(item.focus) || createDefaultFocus();
         const layout = layoutForFocus(focus);
         const count = PRESET_ZONE_COUNTS[focus.preset] || 2;
@@ -1077,6 +1143,59 @@ export const MagicFocus = {
         this.renderHeader(item);
     },
 
+    /**
+     * Ephemeral single full-bleed pane for section/subsection spawn.
+     * @param {object} item
+     */
+    async _renderSpawnWork(item) {
+        const zid = 'z0';
+        const blocks = asBlockList(this.sessionSpawnBlocks);
+        const empty = blocks.length === 0;
+        const hasCanvas = blocks.includes('canvas');
+        const zoomPct = clampFocusZoom(this.sessionSpawnZoom ?? FOCUS_ZOOM_DEFAULT);
+        const zoomFactor = zoomPct / 100;
+        const zoomOutDisabled = zoomPct <= FOCUS_ZOOM_MIN ? ' disabled' : '';
+        const zoomInDisabled = zoomPct >= FOCUS_ZOOM_MAX ? ' disabled' : '';
+
+        this.bodyEl.innerHTML = `
+            <div class="magic-focus__work is-pane-expanded is-focus-spawn" data-magic-focus-work data-focus-spawn-work>
+                <section class="magic-focus__pane${empty ? ' magic-focus__pane--empty' : ''}${hasCanvas ? ' magic-focus__pane--canvas' : ''} is-expanded"
+                    data-focus-pane="${zid}" style="grid-area: 1 / 1 / -1 / -1; --focus-pane-zoom: ${zoomFactor}">
+                    <div class="magic-focus__pane-chrome">
+                        <button type="button" class="card-act" data-focus-pane-zoom-out
+                            title="Zoom out" aria-label="Zoom out"${zoomOutDisabled}>${ACTION_ICONS.minus}</button>
+                        <span class="magic-focus__pane-zoom-label" data-focus-pane-zoom-label>${zoomPct}%</span>
+                        <button type="button" class="card-act" data-focus-pane-zoom-in
+                            title="Zoom in" aria-label="Zoom in"${zoomInDisabled}>${ACTION_ICONS.plus}</button>
+                        <button type="button" class="card-act magic-focus__pane-expand" data-focus-pane-expand
+                            title="Restore pane" aria-label="Restore pane" aria-pressed="true">${CARD_ICONS.collapseMedia}</button>
+                    </div>
+                    <div class="magic-focus__pane-body editor-note-body" data-focus-pane-body="${zid}"></div>
+                </section>
+            </div>
+        `;
+        const workEl = this.bodyEl.querySelector('[data-magic-focus-work]');
+        if (workEl) {
+            workEl.style.gridTemplateColumns = '1fr';
+            workEl.style.gridTemplateRows = '1fr';
+            workEl.style.gridTemplateAreas = '"z0"';
+        }
+
+        const body = this.bodyEl.querySelector(`[data-focus-pane-body="${zid}"]`);
+        if (body) {
+            if (!blocks.length) {
+                body.innerHTML = `<div class="magic-focus__pane-empty-msg">Empty</div>`;
+            } else {
+                await this._fillPane(body, item, blocks, zid);
+            }
+        }
+
+        this.expandedPaneId = zid;
+        this._bindPaneChromeControls();
+        this._syncPaneExpandButtons();
+        this.renderHeader(item);
+    },
+
     _bindPaneChromeControls() {
         const work = this.bodyEl?.querySelector('[data-magic-focus-work]');
         if (!work) return;
@@ -1114,8 +1233,16 @@ export const MagicFocus = {
     },
 
     _nudgePaneZoom(zoneId, delta) {
+        if (!zoneId) return;
+        if (this.sessionSpawnBlocks?.length) {
+            const next = clampFocusZoom((this.sessionSpawnZoom ?? FOCUS_ZOOM_DEFAULT) + delta);
+            this.sessionSpawnZoom = next;
+            this._applyPaneZoom(zoneId, next);
+            this._refitHostedCanvas();
+            return;
+        }
         const item = this.resolveItem();
-        if (!item || !zoneId) return;
+        if (!item) return;
         const focus = normalizeFocus(item.focus) || createDefaultFocus();
         const next = clampFocusZoom((focus.zoom?.[zoneId] ?? FOCUS_ZOOM_DEFAULT) + delta);
         const zoom = { ...focus.zoom, [zoneId]: next };
@@ -1360,9 +1487,9 @@ export const MagicFocus = {
         const zoneId = body.getAttribute('data-focus-pane-body');
         const item = this.resolveItem();
         if (!zoneId || !item) return;
-        const focus = normalizeFocus(item.focus);
-        if (!focus) return;
-        const blocks = asBlockList(focus.zones[zoneId]);
+        const blocks = this.sessionSpawnBlocks?.length
+            ? asBlockList(this.sessionSpawnBlocks)
+            : asBlockList(normalizeFocus(item.focus)?.zones?.[zoneId]);
         if (!blocks.length) return;
         await this._fillPane(body, item, blocks, zoneId);
     },
@@ -1553,16 +1680,26 @@ export const MagicFocus = {
     async refreshPlannerPanes(item) {
         if (!this.isOpen() || !item || this.showingSetup) return;
         const live = this.resolveItem() || item;
-        const focus = normalizeFocus(live.focus);
-        if (!focus) return;
-        const count = PRESET_ZONE_COUNTS[focus.preset] || 2;
         const { renderPlannerTableHtml, refreshPlannerDerivedViews } = await import('./plannerUi.js');
         const { normalizePlanner } = await import('./planner.js');
         if (live.planner) live.planner = normalizePlanner(live.planner) || live.planner;
 
-        for (let i = 0; i < count; i += 1) {
-            const zid = `z${i}`;
-            const blocks = asBlockList(focus.zones[zid]);
+        /** @type {{ zid: string, blocks: string[] }[]} */
+        let paneSpecs;
+        if (this.sessionSpawnBlocks?.length) {
+            paneSpecs = [{ zid: 'z0', blocks: asBlockList(this.sessionSpawnBlocks) }];
+        } else {
+            const focus = normalizeFocus(live.focus);
+            if (!focus) return;
+            const count = PRESET_ZONE_COUNTS[focus.preset] || 2;
+            paneSpecs = [];
+            for (let i = 0; i < count; i += 1) {
+                const zid = `z${i}`;
+                paneSpecs.push({ zid, blocks: asBlockList(focus.zones[zid]) });
+            }
+        }
+
+        for (const { zid, blocks } of paneSpecs) {
             if (!blocks.includes('table') && !blocks.includes('chart') && !blocks.includes('kanban') && !blocks.includes('wbs')) continue;
             const body = this.bodyEl.querySelector(`[data-focus-pane-body="${zid}"]`);
             if (!body) continue;

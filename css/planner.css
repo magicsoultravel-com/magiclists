@@ -365,6 +365,22 @@
     transition: background-color 0.15s ease;
 }
 
+/* Text / Checklist / Table — same hover tray pattern as Kanban/WBS tools. */
+.planner-sub__tools {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.12rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+.planner-sub:hover > .planner-sub__toolbar > .planner-sub__tools,
+.planner-sub:focus-within > .planner-sub__toolbar > .planner-sub__tools {
+    opacity: 1;
+    pointer-events: auto;
+}
+
 .planner-sub__toolbar:has(.planner-sub__title:hover) {
     background: color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 12%, transparent);
 }

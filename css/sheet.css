@@ -235,6 +235,31 @@
     color: var(--text-muted);
 }
 
+.note-body-section > .note-section-header.collapsable-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+}
+
+.note-body-section > .note-section-header .collapsable-heading {
+    min-width: 0;
+}
+
+/* Content / Canvas reuse Plan’s modules tray for Focus spawn. */
+.note-body-section--content > .note-section-header:hover .planner-section__modules,
+.note-body-section--content > .note-section-header:focus-within .planner-section__modules,
+.note-body-section--canvas > .note-section-header:hover .planner-section__modules,
+.note-body-section--canvas > .note-section-header:focus-within .planner-section__modules {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Focus panes already have expand chrome — hide tray spawn icons there. */
+.magic-focus__pane [data-focus-spawn] {
+    display: none !important;
+}
+
 .note-body-section .note-section-header.collapsable-header:hover {
     color: var(--accent);
 }

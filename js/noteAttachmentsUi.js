@@ -14,6 +14,7 @@ import { createEmptyNoteCanvas } from './noteModel.js';
 import { renderNoteCanvas, refreshNoteCanvasPreview } from './noteCanvasRenderer.js';
 import { initialImageSize } from './canvasImages.js';
 import { mutateItem } from './noteSurfaceMutations.js';
+import { renderFocusSpawnTrayHtml } from './noteFocusSpawn.js';
 import { ColorPicker, PALETTE_UNIFIED } from './colorPicker.js';
 import {
     SCRIBBLE_COLORS,
@@ -404,6 +405,7 @@ export function buildNoteCanvasSectionHtml(item, { startCollapsed = true } = {})
             <div class="note-body-section note-body-section--canvas" data-note-canvas>
                 <div class="note-section-header collapsable-header">
                     <span class="collapsable-heading"><span class="collapsable-toggle${toggleCollapsed}">▼</span>Canvas</span>
+                    ${renderFocusSpawnTrayHtml('canvas', 'Canvas')}
                 </div>
                 <div class="note-section-body collapsable-section${collapsedClass}">
                     <div class="note-media-canvas" data-note-media-canvas>
@@ -543,6 +545,8 @@ function bindCanvasSectionToggle(section, item) {
     if (!header || header.dataset.bound === '1') return;
     header.dataset.bound = '1';
     header.addEventListener('click', (e) => {
+        // Let Focus-spawn bubble to bindFocusSpawnButtons (do not stopPropagation).
+        if (e.target.closest?.('[data-focus-spawn]')) return;
         e.stopPropagation();
         const bodyEl = header.nextElementSibling;
         const toggle = header.querySelector('.collapsable-toggle');

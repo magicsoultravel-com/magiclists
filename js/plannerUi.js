@@ -4,6 +4,7 @@ import { UndoManager } from './undo.js';
 import { refreshNoteCanvasPreview } from './noteCanvasRenderer.js';
 import { combineDateTime } from './noteModel.js';
 import { CARD_ICONS } from './icons.js';
+import { renderFocusSpawnBtnHtml } from './noteFocusSpawn.js';
 import {
     createEmptyPlanner,
     normalizePlanner,
@@ -29,6 +30,7 @@ function renderPlannerModuleTogglesHtml(planner) {
     const kanbanOn = !planner.kanbanHidden;
     const wbsOn = !planner.wbsHidden;
     return `<div class="planner-section__modules" role="group" aria-label="Plan modules">
+        ${renderFocusSpawnBtnHtml('planner', 'Plan')}
         <button type="button" class="card-act planner-section__module-btn" data-planner-module-toggle="chart" title="Chart" aria-label="${chartOn ? 'Hide Chart' : 'Show Chart'}" aria-pressed="${chartOn ? 'true' : 'false'}">${CARD_ICONS.plannerChart}</button>
         <button type="button" class="card-act planner-section__module-btn planner-section__module-btn--kana" data-planner-module-toggle="kanban" title="Kanban" aria-label="${kanbanOn ? 'Hide Kanban' : 'Show Kanban'}" aria-pressed="${kanbanOn ? 'true' : 'false'}"><span aria-hidden="true">カン</span></button>
         <button type="button" class="card-act planner-section__module-btn" data-planner-module-toggle="wbs" title="WBS" aria-label="${wbsOn ? 'Hide WBS' : 'Show WBS'}" aria-pressed="${wbsOn ? 'true' : 'false'}">${CARD_ICONS.plannerWbs}</button>
@@ -190,6 +192,8 @@ function bindPlannerSectionToggle(section, item, { onModuleToggle } = {}) {
     if (!header || header.dataset.plannerToggleBound === '1') return;
     header.dataset.plannerToggleBound = '1';
     header.addEventListener('click', (e) => {
+        // Let Focus-spawn bubble to bindFocusSpawnButtons (do not stopPropagation).
+        if (e.target.closest?.('[data-focus-spawn]')) return;
         e.stopPropagation();
         const modBtn = e.target.closest?.('[data-planner-module-toggle]');
         if (modBtn && header.contains(modBtn)) {

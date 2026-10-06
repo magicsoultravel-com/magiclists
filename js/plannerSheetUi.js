@@ -1,6 +1,7 @@
 /** @module {"owns":"magicPlanner sheet/table subsection UI — typed sheet, summary, datetime/category, row DnD, col resize, pack chrome", "related":["plannerUi.js","plannerChartUi.js","plannerKanbanUi.js","plannerWbsUi.js","planner.js"]} */
 import { escapeHTML, escapeAttr } from './domEscape.js';
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
+import { renderFocusSpawnSubTrayHtml } from './noteFocusSpawn.js';
 import { parseStoredDateTime, combineDateTime } from './noteModel.js';
 import { mutateItem } from './noteSurfaceMutations.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor } from './colorPicker.js';
@@ -263,6 +264,7 @@ export function renderPlannerTableHtml(planner, { canEdit = false } = {}) {
             <button type="button" class="planner-sub__title" data-planner-table-toggle aria-expanded="${tableCollapsed ? 'false' : 'true'}">
                 <span class="collapsable-toggle${toggleCollapsed}" aria-hidden="true">▼</span>Table
             </button>
+            ${renderFocusSpawnSubTrayHtml('table', 'Table')}
         </div>
         <div class="planner-sub__body${bodyCollapsed}" data-planner-table-body>
             ${sheetHtml}

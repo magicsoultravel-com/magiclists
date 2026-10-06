@@ -21,6 +21,7 @@ import { flushDesktopAutoSave, mutateItem } from './noteSurfaceMutations.js';
 import { buildNoteAttachmentsSectionHtml, buildNoteCanvasSectionHtml } from './noteAttachmentsUi.js';
 import { buildNotePlannerSectionHtml } from './plannerUi.js';
 import { normalizeAttachments } from './mediaAttachments.js';
+import { renderFocusSpawnTrayHtml, renderFocusSpawnSubTrayHtml } from './noteFocusSpawn.js';
 
 const EDITOR_ZOOM_KEY = 'matrix_editor_zoom';
 const EDITOR_ZOOM_MIN = 0.85;
@@ -339,6 +340,7 @@ function buildNoteContentSectionHtml(item, {
                 <button type="button" class="planner-sub__title" data-note-text-toggle aria-expanded="${textCollapsed ? 'false' : 'true'}">
                     <span class="collapsable-toggle${textCollapsed ? ' collapsed' : ''}" aria-hidden="true">▼</span>Text
                 </button>
+                ${renderFocusSpawnSubTrayHtml('text', 'Text')}
             </div>
             <div class="planner-sub__body${textCollapsed ? ' is-collapsed' : ''}" data-note-text-body>
                 ${buildNoteContentFieldHtml(item, { canEdit, richEdit })}
@@ -352,6 +354,7 @@ function buildNoteContentSectionHtml(item, {
                 <button type="button" class="planner-sub__title" data-note-checklist-toggle aria-expanded="${checklistCollapsed ? 'false' : 'true'}">
                     <span class="collapsable-toggle${checklistCollapsed ? ' collapsed' : ''}" aria-hidden="true">▼</span>Checklist
                 </button>
+                ${renderFocusSpawnSubTrayHtml('checklist', 'Checklist')}
             </div>
             <div class="planner-sub__body${checklistCollapsed ? ' is-collapsed' : ''}" data-note-checklist-body>
                 ${buildExpandedChecklistHtml(item, canEdit, { richEdit })}
@@ -365,6 +368,7 @@ function buildNoteContentSectionHtml(item, {
             <div class="note-body-section note-body-section--content" data-note-content>
                 <div class="note-section-header collapsable-header">
                     <span class="collapsable-heading"><span class="collapsable-toggle${toggleCollapsed}">▼</span>Content</span>
+                    ${renderFocusSpawnTrayHtml('content', 'Content')}
                 </div>
                 <div class="note-section-body collapsable-section${collapsedClass}">
                     ${inner}
@@ -417,6 +421,8 @@ function bindNoteBodySections(root, item) {
         // so expand can re-paint the canvas preview. Planner owns its own toggle too.
         if (header.closest('[data-note-attachments], [data-note-planner], [data-note-canvas]')) return;
         header.addEventListener('click', (e) => {
+            // Let Focus-spawn bubble to bindFocusSpawnButtons (do not stopPropagation).
+            if (e.target.closest?.('[data-focus-spawn]')) return;
             e.stopPropagation();
             const body = header.nextElementSibling;
             const toggle = header.querySelector('.collapsable-toggle');
