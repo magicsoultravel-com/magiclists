@@ -1019,6 +1019,46 @@ describe('planner WBS and work packs', () => {
         assert.equal(phaseLayout.columns[0].cards[0]?.name, 'Task');
     });
 
+    it('WBS move to Planning survives normalize (no bucket wipe)', () => {
+        const planner = createEmptyPlanner();
+        // Mirror the stuck-note shape: many named roots defaulting to Initiation.
+        const names = [
+            'GWC hiring', 'GWC induction', 'NLDH enablement', 'Access / clearance',
+            'OJT readiness', 'OJT1', 'OJT2', 'OJT3', 'Wrap-up', 'Buffer'
+        ];
+        while (planner.sheet.rows < names.length) addPlannerRow(planner);
+        for (let i = 0; i < names.length; i++) {
+            setPlannerField(planner.sheet, i, 'name', names[i]);
+        }
+        const id0 = planner.rowIds[0];
+        const id1 = planner.rowIds[1];
+        assert.equal(layoutPlannerWbs(planner, { mode: 'phase' }).columns[0].cards.length, names.length);
+
+        moveWbsCard(planner, id0, 1);
+        moveWbsCard(planner, id1, 2, { beforeId: null });
+        assert.equal(planner.wbsPhaseById[id0], 1);
+        assert.equal(planner.wbsPhaseById[id1], 2);
+
+        const again = normalizePlanner(planner);
+        assert.ok(again);
+        assert.equal(again.wbsPhaseById[id0], 1);
+        assert.equal(again.wbsPhaseById[id1], 2);
+
+        const layout = layoutPlannerWbs(again, { mode: 'phase' });
+        assert.equal(layout.columns[0].cards.length, names.length - 2);
+        assert.equal(layout.columns[1].cards[0]?.rowId, id0);
+        assert.equal(layout.columns[1].cards[0]?.name, 'GWC hiring');
+        assert.equal(layout.columns[2].cards[0]?.rowId, id1);
+        assert.equal(layout.columns[2].cards[0]?.name, 'GWC induction');
+
+        const html = renderPlannerWbsHtml(again, { canEdit: true });
+        assert.ok(html.includes('is-editable'));
+        assert.ok(html.includes(`data-planner-row-id="${id0}"`));
+        assert.ok(html.includes(`data-planner-row-id="${id1}"`));
+        // Flat roots — no pack tree chrome for this note shape.
+        assert.ok(!html.includes('data-planner-wbs-tree'));
+    });
+
     it('WBS in-column tree groups contiguous pack siblings', () => {
         const planner = createEmptyPlanner();
         setPlannerField(planner.sheet, 0, 'name', 'Design Pack');

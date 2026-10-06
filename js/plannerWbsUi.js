@@ -619,27 +619,73 @@ export function bindWbs(ctx) {
         return null;
     };
 
-    /** Insert placeholder before a leaf without breaking pack tree DOM. */
+    /** Drop empty pack shells left behind when the placeholder leaves mid-drag. */
+    const pruneEmptyWbsTrees = (root) => {
+        root?.querySelectorAll?.('[data-planner-wbs-tree]').forEach((tree) => {
+            if (tree.querySelector('[data-planner-wbs-card], .planner-wbs__placeholder')) return;
+            tree.remove();
+        });
+    };
+
+    /**
+     * Insert placeholder before a leaf. Flat cards: Kanban-identical body.insertBefore.
+     * Pack trees: body-level before the tree for the first child; kids insert for mid-pack.
+     */
     const insertWbsSlotBeforeCard = (slot, card, body) => {
-        const tree = card.closest?.('[data-planner-wbs-tree]');
-        if (tree && body?.contains(tree)) {
-            const kids = tree.querySelector('.planner-wbs__tree-kids');
-            const firstCard = kids?.querySelector('[data-planner-wbs-card]');
-            if (firstCard === card) {
-                body.insertBefore(slot, tree);
-                return;
+        if (!slot || !card || !body) return;
+        try {
+            const tree = card.closest?.('[data-planner-wbs-tree]');
+            if (tree && body.contains(tree)) {
+                const kids = tree.querySelector('.planner-wbs__tree-kids');
+                const cardsInTree = [...(kids?.querySelectorAll('[data-planner-wbs-card]') || [])];
+                if (cardsInTree[0] === card) {
+                    body.insertBefore(slot, tree);
+                    pruneEmptyWbsTrees(body);
+                    return;
+                }
+                if (kids && cardsInTree.includes(card)) {
+                    kids.insertBefore(slot, card);
+                    return;
+                }
             }
-            if (kids?.contains(card)) {
-                kids.insertBefore(slot, card);
-                return;
+            // Flat Kanban parity: card is a direct child of the column body.
+            if (card.parentNode === body) {
+                body.insertBefore(slot, card);
+            } else {
+                body.appendChild(slot);
+            }
+            pruneEmptyWbsTrees(section);
+        } catch {
+            try {
+                body.appendChild(slot);
+                pruneEmptyWbsTrees(section);
+            } catch {
+                /* ignore — next move retries */
             }
         }
-        card.parentNode?.insertBefore(slot, card);
+    };
+
+    const resetWbsCardDragStyles = (card) => {
+        if (!card) return;
+        card.classList.remove('is-planner-wbs-dragging');
+        card.style.position = '';
+        card.style.left = '';
+        card.style.top = '';
+        card.style.width = '';
+        card.style.height = '';
+        card.style.zIndex = '';
+        card.style.pointerEvents = '';
+        card.style.margin = '';
     };
 
     const endWbsPointerDrag = ({ commit = false } = {}) => {
         const state = wbsPtr;
         wbsPtr = null;
+        // Parity with Kanban: always detach doc listeners here so a stalled
+        // pointerup / re-entrant pointerdown cannot leave move handlers stuck.
+        document.removeEventListener('pointermove', onWbsDocPointerMove);
+        document.removeEventListener('pointerup', onWbsDocPointerUp);
+        document.removeEventListener('pointercancel', onWbsDocPointerUp);
         document.body.classList.remove('is-planner-wbs-drag-active');
         clearWbsColumnOver();
         if (!state) return;
@@ -648,28 +694,20 @@ export function bindWbs(ctx) {
         if (commit && slot?.isConnected) {
             const body = slot.closest('[data-planner-wbs-drop]');
             const bucketKey = body?.dataset?.plannerWbsDrop;
-            const beforeId = nextWbsLeafIdAfter(slot, rowId);
-            const n = Number(bucketKey);
-            const toBucket = Number.isFinite(n) ? n : 0;
-            if (bucketKey != null) target = { toBucket, beforeId };
+            if (bucketKey != null && bucketKey !== '') {
+                const n = Number(bucketKey);
+                const toBucket = Number.isFinite(n) ? n : 0;
+                target = { toBucket, beforeId: nextWbsLeafIdAfter(slot, rowId) };
+            }
         }
         if (slot?.parentNode) {
             slot.parentNode.insertBefore(card, slot);
             slot.remove();
-        } else if (card && !card.isConnected) {
+        } else if (card && !card.isConnected && section.isConnected) {
             section.querySelector('[data-planner-wbs-drop]')?.appendChild(card);
         }
-        if (card) {
-            card.classList.remove('is-planner-wbs-dragging');
-            card.style.position = '';
-            card.style.left = '';
-            card.style.top = '';
-            card.style.width = '';
-            card.style.height = '';
-            card.style.zIndex = '';
-            card.style.pointerEvents = '';
-            card.style.margin = '';
-        }
+        resetWbsCardDragStyles(card);
+        pruneEmptyWbsTrees(section);
         if (commit && target) {
             mutate((it) => {
                 moveWbsCard(it.planner, rowId, target.toBucket, { beforeId: target.beforeId });
@@ -691,6 +729,7 @@ export function bindWbs(ctx) {
             }
         }
         if (!column) {
+            // Nearest column by horizontal distance when pointer is between/above columns.
             let best = null;
             let bestDist = Infinity;
             for (const col of columns) {
@@ -708,24 +747,36 @@ export function bindWbs(ctx) {
         if (!body) return;
         clearWbsColumnOver();
         body.classList.add('is-drag-over');
-        if (column.classList.contains('is-collapsed')) {
-            body.appendChild(slot);
-            return;
-        }
-        const cards = [...body.querySelectorAll('[data-planner-wbs-card]')]
-            .filter((c) => c.dataset.plannerRowId !== draggedId);
-        if (!cards.length) {
-            body.appendChild(slot);
-            return;
-        }
-        for (const card of cards) {
-            const rect = card.getBoundingClientRect();
-            if (clientY < rect.top + rect.height / 2) {
-                insertWbsSlotBeforeCard(slot, card, body);
+        try {
+            if (column.classList.contains('is-collapsed')) {
+                body.appendChild(slot);
+                pruneEmptyWbsTrees(section);
                 return;
             }
+            const cards = [...body.querySelectorAll('[data-planner-wbs-card]')]
+                .filter((c) => String(c.dataset.plannerRowId || '') !== String(draggedId || ''));
+            if (!cards.length) {
+                body.appendChild(slot);
+                pruneEmptyWbsTrees(section);
+                return;
+            }
+            for (const card of cards) {
+                const rect = card.getBoundingClientRect();
+                if (clientY < rect.top + rect.height / 2) {
+                    insertWbsSlotBeforeCard(slot, card, body);
+                    return;
+                }
+            }
+            body.appendChild(slot);
+            pruneEmptyWbsTrees(section);
+        } catch {
+            try {
+                body.appendChild(slot);
+                pruneEmptyWbsTrees(section);
+            } catch {
+                /* ignore */
+            }
         }
-        body.appendChild(slot);
     };
 
     const liftWbsCard = (state, clientX, clientY) => {
@@ -738,7 +789,23 @@ export function bindWbs(ctx) {
         slot.className = 'planner-wbs__placeholder';
         slot.setAttribute('aria-hidden', 'true');
         slot.style.height = `${rect.height}px`;
-        card.parentNode?.insertBefore(slot, card);
+        // Prefer column-body as placeholder parent (Kanban parity) so cross-column
+        // moves never start nested under a pack tree shell.
+        const homeBody = card.closest('[data-planner-wbs-drop]');
+        if (homeBody && homeBody.contains(card)) {
+            const tree = card.closest('[data-planner-wbs-tree]');
+            if (tree && homeBody.contains(tree)) {
+                const kids = tree.querySelector('.planner-wbs__tree-kids');
+                const first = kids?.querySelector('[data-planner-wbs-card]');
+                if (first === card) homeBody.insertBefore(slot, tree);
+                else if (kids?.contains(card)) kids.insertBefore(slot, card);
+                else homeBody.insertBefore(slot, tree);
+            } else {
+                homeBody.insertBefore(slot, card);
+            }
+        } else {
+            card.parentNode?.insertBefore(slot, card);
+        }
         state.slot = slot;
         document.body.appendChild(card);
         card.classList.add('is-planner-wbs-dragging');
@@ -774,9 +841,6 @@ export function bindWbs(ctx) {
     const onWbsDocPointerUp = (e) => {
         const state = wbsPtr;
         if (!state || (e.pointerId != null && state.pointerId !== e.pointerId)) return;
-        document.removeEventListener('pointermove', onWbsDocPointerMove);
-        document.removeEventListener('pointerup', onWbsDocPointerUp);
-        document.removeEventListener('pointercancel', onWbsDocPointerUp);
         endWbsPointerDrag({ commit: state.lifted });
     };
 

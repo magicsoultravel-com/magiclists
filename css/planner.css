@@ -2000,6 +2000,7 @@ textarea.planner-kanban__card-comment:focus {
 
 .planner-wbs__board {
     display: flex;
+    align-items: stretch;
     gap: 0.4rem;
     overflow-x: auto;
     overflow-y: visible;
@@ -2154,6 +2155,7 @@ textarea.planner-kanban__card-comment:focus {
 
 .planner-wbs__column-body {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
     gap: 0.28rem;
     padding: 0.35rem;
