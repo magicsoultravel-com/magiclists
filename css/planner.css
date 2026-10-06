@@ -2024,6 +2024,7 @@ textarea.planner-kanban__card-comment:focus {
     background: transparent;
     min-height: 5.5rem;
     overflow: visible;
+    box-sizing: border-box;
 }
 
 /* Collapsed bucket: narrow vertical strip, grouped left of open columns (Kanban parity). */
@@ -2237,13 +2238,21 @@ textarea.planner-kanban__card-comment:focus {
     z-index: 0;
 }
 
-/* Pack block: stub aims at the pack label, not mid-block. */
+/* Pack block: stub aims at the pack parent card mid-line. */
 .planner-wbs__column-body > .planner-wbs__tree.is-wbs-branch::before {
-    top: 0.55rem;
+    top: 1.35rem;
 }
 
 .planner-wbs__column-body > .planner-wbs__tree.is-wbs-branch-last::after {
-    bottom: calc(100% - 0.55rem);
+    bottom: calc(100% - 1.35rem);
+}
+
+.planner-wbs__column-body > .planner-wbs__tree.is-wbs-branch.is-pack-collapsed::before {
+    top: 50%;
+}
+
+.planner-wbs__column-body > .planner-wbs__tree.is-wbs-branch.is-pack-collapsed.is-wbs-branch-last::after {
+    bottom: 50%;
 }
 
 .planner-wbs__column.is-collapsed .planner-wbs__column-head::after,
@@ -2256,37 +2265,42 @@ textarea.planner-kanban__card-comment:focus {
 .planner-wbs__tree {
     display: flex;
     flex-direction: column;
-    gap: 0.12rem;
+    gap: 0.28rem;
     min-width: 0;
 }
 
-.planner-wbs__tree-pack {
+/* Pack parent — same item-card chrome; chevron toggles children. */
+.planner-wbs__pack-card .planner-wbs__card-top {
     display: flex;
-    align-items: baseline;
-    gap: 0.35rem;
-    padding: 0.12rem 0.2rem 0.08rem 0.15rem;
+    align-items: center;
+    gap: 0.28rem;
     min-width: 0;
-    color: color-mix(in srgb, var(--text-color, #1f2937) 72%, transparent);
-    font-size: 0.72rem;
-    font-weight: 600;
-    line-height: 1.25;
-    letter-spacing: 0.01em;
-    pointer-events: none;
-    user-select: none;
 }
 
-.planner-wbs__tree-pack-row {
+.planner-wbs__pack-toggle {
     flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    padding: 0.05rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 0.55rem;
+    line-height: 1;
     opacity: 0.75;
-    font-variant-numeric: tabular-nums;
+    cursor: pointer;
 }
 
-.planner-wbs__tree-pack-name {
+.planner-wbs__pack-toggle:hover,
+.planner-wbs__pack-toggle:focus-visible {
+    opacity: 1;
+}
+
+.planner-wbs__pack-card .planner-wbs__card-name {
     flex: 1 1 auto;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
 }
 
 .planner-wbs__tree-kids {
@@ -2338,8 +2352,10 @@ textarea.planner-kanban__card-comment:focus {
     z-index: 0;
 }
 
-.has-custom-bg .planner-wbs__tree-pack {
-    color: color-mix(in srgb, var(--text-color, #1f2937) 78%, transparent);
+.has-custom-bg .planner-wbs__pack-card:not(.has-color) .planner-wbs__card-slot {
+    border-color: var(--card-border-subtle);
+    background: color-mix(in srgb, var(--card-border-subtle) 12%, transparent);
+    color: var(--card-fg, currentColor);
 }
 
 /* WBS card chrome — 1:1 Kanban port */

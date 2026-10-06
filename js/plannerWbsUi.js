@@ -11,7 +11,9 @@ import {
     getPlannerRowId,
     getPlannerOutlineLabel,
     createEmptyPlanner,
-    isPlannerUnsupportedNewer
+    isPlannerUnsupportedNewer,
+    setPlannerPackCollapsed,
+    isPlannerPackCollapsed
 } from './planner.js';
 import {
     layoutPlannerWbs,
@@ -106,9 +108,9 @@ const WBS_MODE_ICON = '<svg viewBox="0 0 12 12" width="12" height="12" focusable
 /**
  * @param {object} planner
  * @param {object} card
- * @param {{ canEdit?: boolean, childClass?: string }} [opts]
+ * @param {{ canEdit?: boolean, childClass?: string, isPack?: boolean, packCollapsed?: boolean }} [opts]
  */
-function renderWbsCardHtml(planner, card, { canEdit = false, childClass = '' } = {}) {
+function renderWbsCardHtml(planner, card, { canEdit = false, childClass = '', isPack = false, packCollapsed = false } = {}) {
     const editClass = canEdit ? ' is-editable' : '';
     const startLabel = formatKanbanCardDate(card.start);
     const stopLabel = formatKanbanCardDate(card.stop);
@@ -131,6 +133,11 @@ function renderWbsCardHtml(planner, card, { canEdit = false, childClass = '' } =
     const mutedActive = emphasis === 'muted' ? ' is-active' : '';
     const densityTitle = cardCollapsed ? 'Expand card' : 'Collapse card';
     const densityIcon = cardCollapsed ? CARD_ICONS.expand : CARD_ICONS.collapse;
+    const packToggleTitle = packCollapsed ? 'Expand work pack' : 'Collapse work pack';
+    const packToggleClass = packCollapsed ? ' collapsed' : '';
+    const packToggleHtml = isPack
+        ? `<button type="button" class="planner-wbs__pack-toggle collapsable-toggle${packToggleClass}" data-planner-wbs-pack-toggle title="${escapeAttr(packToggleTitle)}" aria-label="${escapeAttr(packToggleTitle)}" aria-expanded="${packCollapsed ? 'false' : 'true'}">▼</button>`
+        : '';
     const actionsHtml = canEdit
         ? `<span class="planner-wbs__card-actions">
             <span class="planner-wbs__card-actions-tray">
@@ -156,14 +163,18 @@ function renderWbsCardHtml(planner, card, { canEdit = false, childClass = '' } =
         : '';
     const metaHtml = `${rowHtml}${startHtml}${stopHtml}`;
     const slotBody = `${metaHtml}
-        <div class="planner-wbs__card-top">${slotNameHtml}</div>
+        <div class="planner-wbs__card-top">${packToggleHtml}${slotNameHtml}</div>
         ${slotCommentHtml}`;
     const flyoutBody = `${metaHtml}
         <div class="planner-wbs__card-top">${flyoutNameHtml}</div>
         ${flyoutCommentHtml}`;
     const surface = surfaceThemeInline(card.cardColor);
     const colorClass = card.cardColor ? ` has-color${surface.className}` : '';
-    return `<article class="planner-wbs__card${colorClass}${emphasisClass}${collapsedClass}${editClass}${childClass}" data-planner-wbs-card data-planner-row="${card.row}" data-planner-row-id="${escapeAttr(card.rowId)}" data-wbs-emphasis="${escapeAttr(emphasis)}" data-wbs-collapsed="${cardCollapsed ? '1' : '0'}"${surface.style}>
+    const packClass = isPack ? ' planner-wbs__pack-card' : '';
+    const packAttrs = isPack
+        ? ` data-planner-wbs-pack data-wbs-pack-collapsed="${packCollapsed ? '1' : '0'}"`
+        : '';
+    return `<article class="planner-wbs__card${packClass}${colorClass}${emphasisClass}${collapsedClass}${editClass}${childClass}" data-planner-wbs-card data-planner-row="${card.row}" data-planner-row-id="${escapeAttr(card.rowId)}" data-wbs-emphasis="${escapeAttr(emphasis)}" data-wbs-collapsed="${cardCollapsed ? '1' : '0'}"${packAttrs}${surface.style}>
         <div class="planner-wbs__card-slot">${slotBody}</div>
         <div class="planner-wbs__card-flyout" aria-hidden="true">${flyoutBody}</div>
         ${actionsHtml}
@@ -172,7 +183,7 @@ function renderWbsCardHtml(planner, card, { canEdit = false, childClass = '' } =
 
 /**
  * @param {object} planner
- * @param {Array<{ type: string, card?: object, packId?: string, packRow?: number, packName?: string, cards?: object[] }>} groups
+ * @param {Array<{ type: string, card?: object, packId?: string, packRow?: number, packCard?: object, collapsed?: boolean, cards?: object[] }>} groups
  * @param {{ canEdit?: boolean }} [opts]
  */
 function renderWbsColumnBodyHtml(planner, groups, { canEdit = false } = {}) {
@@ -180,22 +191,22 @@ function renderWbsColumnBodyHtml(planner, groups, { canEdit = false } = {}) {
     const lastIdx = groups.length - 1;
     return groups.map((group, gi) => {
         const branchClass = gi === lastIdx ? ' is-wbs-branch is-wbs-branch-last' : ' is-wbs-branch';
-        if (group.type === 'pack' && Array.isArray(group.cards) && group.cards.length) {
-            const outline = group.packRow >= 0
-                ? getPlannerOutlineLabel(planner, group.packRow)
+        if (group.type === 'pack' && group.packCard) {
+            const packCollapsed = !!group.collapsed;
+            const collapsedClass = packCollapsed ? ' is-pack-collapsed' : '';
+            const kidsHtml = packCollapsed
+                ? ''
+                : (group.cards || []).map((card, i) => {
+                    const last = i === group.cards.length - 1;
+                    const childClass = last ? ' is-wbs-child is-wbs-child-last' : ' is-wbs-child';
+                    return renderWbsCardHtml(planner, card, { canEdit, childClass });
+                }).join('');
+            const kidsBlock = kidsHtml
+                ? `<div class="planner-wbs__tree-kids">${kidsHtml}</div>`
                 : '';
-            const packName = String(group.packName || 'Pack');
-            const kidsHtml = group.cards.map((card, i) => {
-                const last = i === group.cards.length - 1;
-                const childClass = last ? ' is-wbs-child is-wbs-child-last' : ' is-wbs-child';
-                return renderWbsCardHtml(planner, card, { canEdit, childClass });
-            }).join('');
-            return `<div class="planner-wbs__tree${branchClass}" data-planner-wbs-tree data-planner-wbs-pack-id="${escapeAttr(group.packId)}">
-                <div class="planner-wbs__tree-pack" data-planner-wbs-pack>
-                    <span class="planner-wbs__tree-pack-row" title="Row ${escapeAttr(outline)}">${escapeHTML(outline)}</span>
-                    <span class="planner-wbs__tree-pack-name">${escapeHTML(packName)}</span>
-                </div>
-                <div class="planner-wbs__tree-kids">${kidsHtml}</div>
+            return `<div class="planner-wbs__tree${branchClass}${collapsedClass}" data-planner-wbs-tree data-planner-wbs-pack-id="${escapeAttr(group.packId)}" data-wbs-pack-collapsed="${packCollapsed ? '1' : '0'}">
+                ${renderWbsCardHtml(planner, group.packCard, { canEdit, isPack: true, packCollapsed })}
+                ${kidsBlock}
             </div>`;
         }
         if (group.type === 'root' && group.card) {
@@ -330,6 +341,18 @@ export function handleWbsClick(ctx, e) {
                 title?.setAttribute('aria-expanded', nextCollapsed ? 'false' : 'true');
                 title?.querySelector('.collapsable-toggle')?.classList.toggle('collapsed', nextCollapsed);
             }
+            return true;
+        }
+
+        const wbsPackToggle = e.target.closest('[data-planner-wbs-pack-toggle]');
+        if (wbsPackToggle && section.contains(wbsPackToggle)) {
+            e.preventDefault();
+            e.stopPropagation();
+            const pack = wbsPackToggle.closest('[data-planner-wbs-pack]');
+            const row = Number(pack?.dataset?.plannerRow);
+            if (!Number.isFinite(row)) return true;
+            const next = !isPlannerPackCollapsed(item.planner, row);
+            mutate((it) => setPlannerPackCollapsed(it.planner, row, next), { skipRerender: true, refreshGantt: true });
             return true;
         }
 
@@ -631,21 +654,21 @@ export function bindWbs(ctx) {
 
     /**
      * Insert placeholder before a leaf. Flat cards: Kanban-identical body.insertBefore.
-     * Pack trees: body-level before the tree for the first child; kids insert for mid-pack.
+     * Pack trees: before pack → before whole tree; mid-kids → inside tree-kids.
      */
     const insertWbsSlotBeforeCard = (slot, card, body) => {
         if (!slot || !card || !body) return;
         try {
             const tree = card.closest?.('[data-planner-wbs-tree]');
             if (tree && body.contains(tree)) {
-                const kids = tree.querySelector('.planner-wbs__tree-kids');
-                const cardsInTree = [...(kids?.querySelectorAll('[data-planner-wbs-card]') || [])];
-                if (cardsInTree[0] === card) {
+                // Pack parent tile is a direct child of the tree wrapper.
+                if (card.parentNode === tree) {
                     body.insertBefore(slot, tree);
                     pruneEmptyWbsTrees(body);
                     return;
                 }
-                if (kids && cardsInTree.includes(card)) {
+                const kids = tree.querySelector('.planner-wbs__tree-kids');
+                if (kids?.contains(card)) {
                     kids.insertBefore(slot, card);
                     return;
                 }
@@ -703,7 +726,21 @@ export function bindWbs(ctx) {
             }
         }
         if (slot?.parentNode) {
-            slot.parentNode.insertBefore(card, slot);
+            // Pack lifts leave children in the tree; put the pack back as the
+            // tree's first child when the placeholder still sits before that tree.
+            const treeAfter = slot.nextElementSibling;
+            const packId = card?.hasAttribute?.('data-planner-wbs-pack')
+                ? String(card.dataset.plannerRowId || '')
+                : '';
+            if (
+                packId
+                && treeAfter?.matches?.('[data-planner-wbs-tree]')
+                && treeAfter.dataset.plannerWbsPackId === packId
+            ) {
+                treeAfter.insertBefore(card, treeAfter.firstChild);
+            } else {
+                slot.parentNode.insertBefore(card, slot);
+            }
             slot.remove();
         } else if (card && !card.isConnected && section.isConnected) {
             section.querySelector('[data-planner-wbs-drop]')?.appendChild(card);
@@ -797,11 +834,15 @@ export function bindWbs(ctx) {
         if (homeBody && homeBody.contains(card)) {
             const tree = card.closest('[data-planner-wbs-tree]');
             if (tree && homeBody.contains(tree)) {
-                const kids = tree.querySelector('.planner-wbs__tree-kids');
-                const first = kids?.querySelector('[data-planner-wbs-card]');
-                if (first === card) homeBody.insertBefore(slot, tree);
-                else if (kids?.contains(card)) kids.insertBefore(slot, card);
-                else homeBody.insertBefore(slot, tree);
+                if (card.parentNode === tree) {
+                    // Pack parent — leave the placeholder before the whole tree
+                    // (children stay nested under the tree while the pack floats).
+                    homeBody.insertBefore(slot, tree);
+                } else {
+                    const kids = tree.querySelector('.planner-wbs__tree-kids');
+                    if (kids?.contains(card)) kids.insertBefore(slot, card);
+                    else homeBody.insertBefore(slot, tree);
+                }
             } else {
                 homeBody.insertBefore(slot, card);
             }
@@ -884,7 +925,7 @@ export function bindWbs(ctx) {
 
     section.addEventListener('pointerdown', (e) => {
         if (e.button != null && e.button !== 0) return;
-        if (e.target.closest?.('[data-planner-wbs-color], [data-planner-wbs-emphasis], [data-planner-wbs-reset-card], [data-planner-wbs-density], [data-planner-wbs-more], [data-planner-wbs-field], textarea, input, [contenteditable]')) return;
+        if (e.target.closest?.('[data-planner-wbs-color], [data-planner-wbs-emphasis], [data-planner-wbs-reset-card], [data-planner-wbs-density], [data-planner-wbs-more], [data-planner-wbs-pack-toggle], [data-planner-wbs-field], textarea, input, [contenteditable]')) return;
         const card = e.target.closest('[data-planner-wbs-card]');
         if (!card || !section.contains(card) || !card.classList.contains('is-editable')) return;
         if (wbsFlyoutEditAt(e.clientX, e.clientY)) return;
@@ -905,5 +946,17 @@ export function bindWbs(ctx) {
         document.addEventListener('pointermove', onWbsDocPointerMove, { passive: false });
         document.addEventListener('pointerup', onWbsDocPointerUp);
         document.addEventListener('pointercancel', onWbsDocPointerUp);
+    });
+
+    section.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const toggle = e.target.closest?.('[data-planner-wbs-pack-toggle]');
+        if (!toggle || !section.contains(toggle)) return;
+        e.preventDefault();
+        const pack = toggle.closest('[data-planner-wbs-pack]');
+        const row = Number(pack?.dataset?.plannerRow);
+        if (!Number.isFinite(row)) return;
+        const next = !isPlannerPackCollapsed(item.planner, row);
+        mutate((it) => setPlannerPackCollapsed(it.planner, row, next), { skipRerender: true, refreshGantt: true });
     });
 }

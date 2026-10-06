@@ -925,8 +925,10 @@ describe('planner WBS and work packs', () => {
         assert.equal(planner.rowIds[1], neighborId);
         assert.equal(getPlannerField(planner.sheet, 1, 'name'), 'Neighbor');
         assert.equal(isPlannerRowHidden(planner, 1), false);
-        const leafCards = derivePlannerWbsCards(planner);
-        assert.deepEqual(leafCards.map((c) => c.name).sort(), ['Neighbor']);
+        const cards = derivePlannerWbsCards(planner);
+        assert.deepEqual(cards.map((c) => c.name).sort(), ['Neighbor', 'PackMe']);
+        assert.equal(cards.find((c) => c.name === 'PackMe')?.isPack, true);
+        assert.equal(cards.find((c) => c.name === 'Neighbor')?.isPack, false);
     });
 
     it('pack-scoped +/− adds and removes child lines under parent', () => {
@@ -949,7 +951,7 @@ describe('planner WBS and work packs', () => {
         assert.equal(isPlannerRowPack(planner, 0), true);
     });
 
-    it('pack collapse hides children in sheet derive path; WBS leaves only', () => {
+    it('pack collapse hides children in sheet derive path; WBS keeps pack + child cards', () => {
         const planner = createEmptyPlanner();
         setPlannerField(planner.sheet, 0, 'name', 'Pack');
         togglePlannerWorkPack(planner, 0);
@@ -961,8 +963,13 @@ describe('planner WBS and work packs', () => {
         assert.ok(html.includes('data-planner-pack-head="1"'));
         assert.ok(!html.includes('data-planner-row-index="1"')); // sheet omits collapsed children
         assert.ok(html.includes('data-planner-pack-add'));
-        const leaves = derivePlannerWbsCards(planner);
-        assert.deepEqual(leaves.map((c) => c.name), ['Child']);
+        const cards = derivePlannerWbsCards(planner);
+        assert.deepEqual(cards.map((c) => c.name), ['Pack', 'Child']);
+        assert.equal(cards[0].isPack, true);
+        // Collapsed pack still hides children in WBS HTML.
+        const wbsHtml = renderPlannerWbsHtml(planner, { canEdit: false });
+        assert.ok(wbsHtml.includes('Pack'));
+        assert.ok(!wbsHtml.includes('Child'));
     });
 
     it('WBS card styles set/prune and editable HTML', () => {
@@ -1065,6 +1072,8 @@ describe('planner WBS and work packs', () => {
     it('WBS in-column tree groups contiguous pack siblings', () => {
         const planner = createEmptyPlanner();
         setPlannerField(planner.sheet, 0, 'name', 'Design Pack');
+        setPlannerField(planner.sheet, 0, 'category', 'Design');
+        setCategoryColor(planner, 'Design', '#336699');
         togglePlannerWorkPack(planner, 0);
         addPlannerPackChild(planner, 0);
         setPlannerField(planner.sheet, 1, 'name', 'Wireframes');
@@ -1082,31 +1091,47 @@ describe('planner WBS and work packs', () => {
         assert.equal(resolveWbsPackParentId(planner, soloId), null);
         assert.equal(resolveWbsPackParentId(planner, packId), null);
 
-        const leaves = derivePlannerWbsCards(planner);
-        assert.deepEqual(leaves.map((c) => c.name).sort(), ['Mockups', 'Solo Root', 'Wireframes']);
-        assert.ok(!leaves.some((c) => c.rowId === packId));
+        const cards = derivePlannerWbsCards(planner);
+        assert.deepEqual(cards.map((c) => c.name).sort(), ['Design Pack', 'Mockups', 'Solo Root', 'Wireframes']);
+        assert.equal(cards.find((c) => c.rowId === packId)?.isPack, true);
 
         const layout = layoutPlannerWbs(planner, { mode: 'phase' });
         const col0 = layout.columns[0];
-        assert.equal(col0.cards.length, 3);
+        assert.equal(col0.cards.length, 4);
         assert.ok(Array.isArray(col0.groups));
         assert.equal(col0.groups[0]?.type, 'pack');
         assert.equal(col0.groups[0]?.packName, 'Design Pack');
+        assert.equal(col0.groups[0]?.packCard?.rowId, packId);
         assert.deepEqual(col0.groups[0]?.cards.map((c) => c.name), ['Wireframes', 'Mockups']);
         assert.equal(col0.groups[1]?.type, 'root');
         assert.equal(col0.groups[1]?.card?.name, 'Solo Root');
 
-        const html = renderPlannerWbsHtml(planner, { canEdit: false });
+        const html = renderPlannerWbsHtml(planner, { canEdit: true });
         assert.ok(html.includes('data-planner-wbs-tree'));
         assert.ok(html.includes('data-planner-wbs-pack'));
+        assert.ok(html.includes('planner-wbs__pack-card'));
+        assert.ok(html.includes('data-planner-wbs-pack-toggle'));
+        assert.ok(html.includes('has-color'));
         assert.ok(html.includes('Design Pack'));
         assert.ok(html.includes('is-wbs-child'));
         assert.ok(html.includes('is-wbs-child-last'));
         assert.ok(html.includes('is-wbs-branch'));
         assert.ok(html.includes('Wireframes'));
         assert.ok(html.includes('Solo Root'));
-        // Pack itself is header-only, not a draggable card.
-        assert.ok(!html.includes(`data-planner-row-id="${packId}"`));
+        // Pack parent is a full editable/draggable card like other tiles.
+        assert.match(html, new RegExp(`data-planner-wbs-card[^>]*data-planner-row-id="${packId}"`));
+        assert.match(html, new RegExp(`data-planner-wbs-pack[^>]*data-planner-row-id="${packId}"|data-planner-row-id="${packId}"[^>]*data-planner-wbs-pack`));
+        assert.ok(html.includes('data-planner-wbs-field="name"'));
+        assert.ok(html.includes('data-planner-wbs-field="comments"'));
+
+        setPlannerPackCollapsed(planner, 0, true);
+        const collapsedHtml = renderPlannerWbsHtml(planner, { canEdit: false });
+        assert.ok(collapsedHtml.includes('is-pack-collapsed'));
+        assert.ok(collapsedHtml.includes('data-wbs-pack-collapsed="1"'));
+        assert.ok(!collapsedHtml.includes('Wireframes'));
+        assert.ok(collapsedHtml.includes('Design Pack'));
+        assert.ok(collapsedHtml.includes('Solo Root'));
+        assert.equal(layoutPlannerWbs(planner, { mode: 'phase' }).columns[0].groups[0]?.collapsed, true);
 
         // Split children across buckets → local tree fragment per column.
         moveWbsCard(planner, childB, 2);
@@ -1126,6 +1151,15 @@ describe('planner WBS and work packs', () => {
         const packRuns = fragmented.filter((g) => g.type === 'pack');
         assert.ok(packRuns.length >= 1);
         assert.ok(fragmented.some((g) => g.type === 'root' && g.card?.name === 'Solo Root'));
+
+        // Pack drag takes same-bucket children along.
+        moveWbsCard(planner, packId, 1);
+        assert.equal(planner.wbsPhaseById[packId], 1);
+        assert.equal(planner.wbsPhaseById[childA], 1);
+        // childB was split earlier then returned; after pack move only same-bucket kids follow.
+        const afterPackMove = layoutPlannerWbs(planner, { mode: 'phase' });
+        assert.ok(afterPackMove.columns[1].cards.some((c) => c.rowId === packId));
+        assert.ok(afterPackMove.columns[1].cards.some((c) => c.rowId === childA));
     });
 
     it('refuses unsupported newer planner version', () => {

@@ -216,9 +216,9 @@ function isHiddenId(planner, rowId) {
 }
 
 /**
- * Leaf cards only: named, non-hidden, non-pack.
+ * Leaf + pack cards: named, non-hidden. Packs are first-class WBS tiles.
  * @param {object|null|undefined} planner
- * @returns {Array<{ row: number, rowId: string, id: string, name: string, start: string, stop: string, category: string, comments: string, categoryColor: string, cardColor: string, emphasis: string, collapsed: boolean }>}
+ * @returns {Array<{ row: number, rowId: string, id: string, name: string, start: string, stop: string, category: string, comments: string, categoryColor: string, cardColor: string, emphasis: string, collapsed: boolean, isPack: boolean }>}
  */
 export function derivePlannerWbsCards(planner) {
     const sheet = planner?.sheet;
@@ -228,7 +228,7 @@ export function derivePlannerWbsCards(planner) {
     for (let r = 0; r < (sheet.rows || 0); r++) {
         const rowId = String(rowIds[r] || '');
         if (!rowId) continue;
-        if (isPackId(planner, rowId) || isHiddenId(planner, rowId)) continue;
+        if (isHiddenId(planner, rowId)) continue;
         const name = cellTrim(sheet, r, NAME_COL);
         if (!name) continue;
         const category = cellTrim(sheet, r, CATEGORY_COL);
@@ -247,10 +247,33 @@ export function derivePlannerWbsCards(planner) {
             categoryColor,
             cardColor,
             emphasis: getWbsEmphasisForRow(planner, rowId),
-            collapsed: isWbsCardCollapsed(planner, rowId)
+            collapsed: isWbsCardCollapsed(planner, rowId),
+            isPack: isPackId(planner, rowId)
         });
     }
     return cards;
+}
+
+/**
+ * Child row ids under a pack (contiguous sheet block).
+ * @param {object|null|undefined} planner
+ * @param {string} packId
+ * @returns {string[]}
+ */
+export function listWbsPackChildIds(planner, packId) {
+    const id = String(packId || '');
+    if (!id || !isPackId(planner, id) || !planner?.rowIds) return [];
+    const idx = planner.rowIds.indexOf(id);
+    if (idx < 0) return [];
+    const out = [];
+    for (let i = idx + 1; i < planner.rowIds.length; i++) {
+        const cid = String(planner.rowIds[i] || '');
+        if (!cid) continue;
+        if (!(Number(planner.rowLevelById?.[cid]) > 0)) break;
+        if (resolveWbsPackParentId(planner, cid) !== id) break;
+        out.push(cid);
+    }
+    return out;
 }
 
 /**
@@ -276,32 +299,122 @@ export function resolveWbsPackParentId(planner, rowId) {
 }
 
 /**
+ * Keep packs ahead of their children in column order for tree grouping.
+ * @param {object|null|undefined} planner
+ * @param {Array<object>} cards
+ * @returns {Array<object>}
+ */
+function orderWbsPacksBeforeChildren(planner, cards) {
+    const list = Array.isArray(cards) ? cards : [];
+    if (list.length < 2) return list;
+    const byId = new Map(list.map((c) => [c.rowId, c]));
+    const childToPack = new Map();
+    for (const c of list) {
+        if (c.isPack) continue;
+        const pid = resolveWbsPackParentId(planner, c.rowId);
+        if (pid && byId.has(pid)) childToPack.set(c.rowId, pid);
+    }
+    const seen = new Set();
+    const out = [];
+    for (const c of list) {
+        if (seen.has(c.rowId)) continue;
+        const packId = c.isPack ? c.rowId : childToPack.get(c.rowId);
+        if (packId && byId.has(packId) && !seen.has(packId)) {
+            seen.add(packId);
+            out.push(byId.get(packId));
+            for (const x of list) {
+                if (childToPack.get(x.rowId) === packId && !seen.has(x.rowId)) {
+                    seen.add(x.rowId);
+                    out.push(x);
+                }
+            }
+            continue;
+        }
+        seen.add(c.rowId);
+        out.push(c);
+    }
+    return out;
+}
+
+/**
  * Contiguous pack runs for in-column tree chrome (presentation only).
  * @param {object|null|undefined} planner
  * @param {Array<object>} cards
- * @returns {Array<{ type: 'root', card: object } | { type: 'pack', packId: string, packRow: number, packName: string, cards: object[] }>}
+ * @returns {Array<{ type: 'root', card: object } | { type: 'pack', packId: string, packRow: number, packName: string, packStart: string, packStop: string, category: string, categoryColor: string, cardColor: string, collapsed: boolean, packCard: object, cards: object[] }>}
  */
 export function groupWbsColumnCards(planner, cards) {
-    const list = Array.isArray(cards) ? cards : [];
-    /** @type {Array<{ type: 'root', card: object } | { type: 'pack', packId: string, packRow: number, packName: string, cards: object[] }>} */
+    const list = orderWbsPacksBeforeChildren(planner, cards);
+    /** @type {Array<{ type: 'root', card: object } | { type: 'pack', packId: string, packRow: number, packName: string, packStart: string, packStop: string, category: string, categoryColor: string, cardColor: string, collapsed: boolean, packCard: object, cards: object[] }>} */
     const groups = [];
+    const packGroupById = new Map();
+
+    const makePackMeta = (packCard, packId, packRow) => ({
+        type: /** @type {'pack'} */ ('pack'),
+        packId,
+        packRow,
+        packName: String(packCard?.name || ''),
+        packStart: String(packCard?.start || ''),
+        packStop: String(packCard?.stop || ''),
+        category: String(packCard?.category || ''),
+        categoryColor: String(packCard?.categoryColor || ''),
+        cardColor: String(packCard?.cardColor || ''),
+        collapsed: !!(packId && planner?.rowCollapsedById?.[packId]),
+        packCard,
+        cards: /** @type {object[]} */ ([])
+    });
+
     for (const card of list) {
+        if (card.isPack || isPackId(planner, card.rowId)) {
+            const packId = card.rowId;
+            let g = packGroupById.get(packId);
+            if (g) {
+                g.packCard = card;
+                g.packRow = card.row;
+                g.packName = card.name;
+                g.packStart = card.start;
+                g.packStop = card.stop;
+                g.category = card.category;
+                g.categoryColor = card.categoryColor;
+                g.cardColor = card.cardColor;
+                g.collapsed = !!(planner?.rowCollapsedById?.[packId]);
+            } else {
+                g = makePackMeta(card, packId, card.row);
+                groups.push(g);
+                packGroupById.set(packId, g);
+            }
+            continue;
+        }
         const packId = resolveWbsPackParentId(planner, card.rowId);
-        const last = groups[groups.length - 1];
-        if (packId && last?.type === 'pack' && last.packId === packId) {
-            last.cards.push(card);
+        if (packId && packGroupById.has(packId)) {
+            packGroupById.get(packId).cards.push(card);
             continue;
         }
         if (packId) {
             const packRow = planner?.rowIds?.indexOf(packId) ?? -1;
             const packName = packRow >= 0 ? cellTrim(planner.sheet, packRow, NAME_COL) : '';
-            groups.push({
-                type: 'pack',
-                packId,
-                packRow,
-                packName,
-                cards: [card]
-            });
+            const category = packRow >= 0 ? cellTrim(planner.sheet, packRow, CATEGORY_COL) : '';
+            const categoryColor = categoryColorLookup(planner, category);
+            const override = planner?.wbsCardColors?.[packId] || '';
+            const cardColor = /^#[0-9a-fA-F]{6}$/.test(override) ? override : categoryColor;
+            const synthetic = {
+                row: packRow,
+                rowId: packId,
+                id: packId,
+                name: packName,
+                start: packRow >= 0 ? cellTrim(planner.sheet, packRow, START_COL) : '',
+                stop: packRow >= 0 ? cellTrim(planner.sheet, packRow, STOP_COL) : '',
+                category,
+                comments: packRow >= 0 ? cellTrim(planner.sheet, packRow, COMMENTS_COL) : '',
+                categoryColor,
+                cardColor,
+                emphasis: getWbsEmphasisForRow(planner, packId),
+                collapsed: isWbsCardCollapsed(planner, packId),
+                isPack: true
+            };
+            const g = makePackMeta(synthetic, packId, packRow);
+            g.cards.push(card);
+            groups.push(g);
+            packGroupById.set(packId, g);
             continue;
         }
         groups.push({ type: 'root', card });
@@ -358,7 +471,7 @@ export function layoutPlannerWbs(planner, { mode } = {}) {
  * @param {number|null|undefined} toBucket - null/invalid → first column (0)
  * @param {{ beforeId?: string|null, mode?: string }} [opts]
  */
-export function moveWbsCard(planner, rowId, toBucket, { beforeId = null, mode } = {}) {
+function moveWbsCardSingle(planner, rowId, toBucket, { beforeId = null, mode } = {}) {
     if (!planner || !rowId) return;
     const m = normalizeWbsMode(mode || planner.wbsMode);
     const id = String(rowId);
@@ -406,6 +519,30 @@ export function moveWbsCard(planner, rowId, toBucket, { beforeId = null, mode } 
         list.push(id);
     }
     order[destKey] = list;
+}
+
+/**
+ * Move a WBS card. Packs take same-bucket children with them.
+ * @param {object} planner
+ * @param {string} rowId
+ * @param {number|null|undefined} toBucket - null/invalid → first column (0)
+ * @param {{ beforeId?: string|null, mode?: string }} [opts]
+ */
+export function moveWbsCard(planner, rowId, toBucket, { beforeId = null, mode } = {}) {
+    if (!planner || !rowId) return;
+    const m = normalizeWbsMode(mode || planner.wbsMode);
+    const id = String(rowId);
+    const fromBucket = getWbsBucketForId(planner, id, m);
+    const childIds = isPackId(planner, id)
+        ? listWbsPackChildIds(planner, id)
+            .filter((cid) => getWbsBucketForId(planner, cid, m) === fromBucket)
+        : [];
+
+    moveWbsCardSingle(planner, id, toBucket, { beforeId, mode: m });
+    // Children follow the pack (each insert before the same beforeId preserves order).
+    for (const cid of childIds) {
+        moveWbsCardSingle(planner, cid, toBucket, { beforeId, mode: m });
+    }
 }
 
 /**
