@@ -1892,23 +1892,30 @@ textarea.planner-kanban__card-comment:focus {
     background: color-mix(in srgb, var(--border-color) 35%, transparent);
 }
 
-/*
- * Leading pack chevron in the name cell — absolute so we never set display:flex
- * on a <td> (that broke table layout into a nested “double cell”).
- * Visual matches WBS .planner-wbs__pack-toggle (▼ + .collapsable-toggle.collapsed).
- */
+/* Name + leading pack chevron — flex on an inner wrapper, never on the <td>. */
+.planner-name-cell {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.12rem;
+    min-width: 0;
+    width: 100%;
+}
+
+.planner-name-cell > .sheet-cell-input,
+.planner-name-cell > .sheet-cell-read {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* Matches WBS .planner-wbs__pack-toggle (▼ + .collapsable-toggle.collapsed → ▶). */
 .planner-pack-collapse {
-    position: absolute;
-    left: 0.08rem;
-    top: 50%;
-    z-index: 2;
-    transform: translateY(-50%);
+    flex: 0 0 auto;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 12px;
     height: 12px;
-    margin: 0;
+    margin: 0.12rem 0 0;
     padding: 0.05rem;
     border: 0;
     background: transparent;
@@ -1919,20 +1926,10 @@ textarea.planner-kanban__card-comment:focus {
     cursor: pointer;
 }
 
-.planner-pack-collapse.collapsable-toggle.collapsed {
-    /* Keep vertical centering while rotating to ▶ */
-    transform: translateY(-50%) rotate(-90deg);
-}
-
 .planner-pack-collapse:hover,
 .planner-pack-collapse:focus-visible {
     opacity: 1;
     color: var(--accent, #5b8def);
-}
-
-.planner-cell--name.has-pack-leading > .sheet-cell-input,
-.planner-cell--name.has-pack-leading > .sheet-cell-read {
-    padding-left: 1.05rem;
 }
 
 .planner-pack-lines {

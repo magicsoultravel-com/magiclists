@@ -27,6 +27,8 @@ import {
     isPlannerRowHidden,
     isPlannerPackCollapsed,
     setPlannerPackCollapsed,
+    isPlannerTablePackCollapsed,
+    setPlannerTablePackCollapsed,
     getPlannerPackParentRow,
     syncPlannerPackChildCategories,
     getPlannerRowId,
@@ -955,27 +957,43 @@ describe('planner WBS and work packs', () => {
         assert.equal(isPlannerRowPack(planner, 0), true);
     });
 
-    it('pack collapse hides children in sheet derive path; WBS keeps pack + child cards', () => {
+    it('table pack collapse is independent from WBS/chart pack collapse', () => {
         const planner = createEmptyPlanner();
         setPlannerField(planner.sheet, 0, 'name', 'Pack');
         togglePlannerWorkPack(planner, 0);
         addPlannerPackChild(planner, 0);
         setPlannerField(planner.sheet, 1, 'name', 'Child');
+
+        // Table fold hides sheet children but leaves WBS expanded.
+        setPlannerTablePackCollapsed(planner, 0, true);
+        assert.equal(isPlannerTablePackCollapsed(planner, 0), true);
+        assert.equal(isPlannerPackCollapsed(planner, 0), false);
+        const tableHtml = buildNotePlannerSectionHtml({ id: 'n', planner }, { canEdit: true });
+        assert.ok(tableHtml.includes('data-planner-pack-collapse'));
+        assert.ok(tableHtml.includes('data-collapsed="1"'));
+        assert.ok(tableHtml.includes('data-planner-pack-head="1"'));
+        assert.ok(!tableHtml.includes('data-planner-row-index="1"'));
+        assert.ok(tableHtml.includes('data-planner-pack-add'));
+        let wbsHtml = renderPlannerWbsHtml(planner, { canEdit: false });
+        assert.ok(wbsHtml.includes('Pack'));
+        assert.ok(wbsHtml.includes('Child'));
+
+        // WBS fold hides WBS children but does not hide sheet children.
+        setPlannerTablePackCollapsed(planner, 0, false);
         setPlannerPackCollapsed(planner, 0, true);
         assert.equal(isPlannerPackCollapsed(planner, 0), true);
-        const html = buildNotePlannerSectionHtml({ id: 'n', planner }, { canEdit: true });
-        assert.ok(html.includes('data-planner-pack-collapse'));
-        assert.ok(html.includes('data-collapsed="1"'));
-        assert.ok(html.includes('data-planner-pack-head="1"'));
-        assert.ok(!html.includes('data-planner-row-index="1"')); // sheet omits collapsed children
-        assert.ok(html.includes('data-planner-pack-add'));
+        assert.equal(isPlannerTablePackCollapsed(planner, 0), false);
+        const openTableHtml = buildNotePlannerSectionHtml({ id: 'n2', planner }, { canEdit: true });
+        assert.ok(openTableHtml.includes('data-planner-row-index="1"'));
+        assert.ok(openTableHtml.includes('data-collapsed="0"'));
+        wbsHtml = renderPlannerWbsHtml(planner, { canEdit: false });
+        assert.ok(wbsHtml.includes('Pack'));
+        assert.ok(!wbsHtml.includes('Child'));
+        assert.ok(wbsHtml.includes('is-pack-collapsed'));
+
         const cards = derivePlannerWbsCards(planner);
         assert.deepEqual(cards.map((c) => c.name), ['Pack', 'Child']);
         assert.equal(cards[0].isPack, true);
-        // Collapsed pack still hides children in WBS HTML.
-        const wbsHtml = renderPlannerWbsHtml(planner, { canEdit: false });
-        assert.ok(wbsHtml.includes('Pack'));
-        assert.ok(!wbsHtml.includes('Child'));
     });
 
     it('pack children inherit parent category and render locked in sheet', () => {

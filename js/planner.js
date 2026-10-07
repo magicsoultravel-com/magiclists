@@ -169,9 +169,20 @@ function emptyHierarchyMaps() {
         rowLevelById: {},
         rowPackById: {},
         rowHiddenById: {},
-        rowCollapsedById: {}
+        rowCollapsedById: {},
+        /** Table-only pack fold — independent of WBS/chart `rowCollapsedById`. */
+        tablePackCollapsedById: {}
     };
 }
+
+/** Hierarchy id→truthy maps pruned together when rows are removed. */
+const PLANNER_HIERARCHY_ID_MAPS = [
+    'rowLevelById',
+    'rowPackById',
+    'rowHiddenById',
+    'rowCollapsedById',
+    'tablePackCollapsedById'
+];
 
 function emptyWbsFields() {
     return {
@@ -375,6 +386,7 @@ export function repairPlannerHierarchy(planner) {
     if (!planner.rowPackById) planner.rowPackById = {};
     if (!planner.rowHiddenById) planner.rowHiddenById = {};
     if (!planner.rowCollapsedById) planner.rowCollapsedById = {};
+    if (!planner.tablePackCollapsedById) planner.tablePackCollapsedById = {};
 
     for (let r = 0; r < rows; r++) {
         const id = String(rowIds[r] || '');
@@ -437,7 +449,8 @@ export function assertPlannerRowIdInvariant(planner) {
     pruneWbsAfterRowRemove(planner, []);
     // prune hierarchy orphans
     const idSet = new Set(planner.rowIds.map(String));
-    for (const map of [planner.rowLevelById, planner.rowPackById, planner.rowHiddenById, planner.rowCollapsedById]) {
+    for (const mapKey of PLANNER_HIERARCHY_ID_MAPS) {
+        const map = planner[mapKey];
         if (!map || typeof map !== 'object') continue;
         for (const key of Object.keys(map)) {
             if (!idSet.has(key)) delete map[key];
@@ -670,6 +683,7 @@ export function togglePlannerWorkPack(planner, row) {
         }
         delete planner.rowPackById[id];
         delete planner.rowCollapsedById?.[id];
+        delete planner.tablePackCollapsedById?.[id];
         assertPlannerRowIdInvariant(planner);
         return true;
     }
@@ -695,8 +709,9 @@ export function addPlannerPackChild(planner, packRow) {
     if (!childId) return '';
     if (!planner.rowLevelById) planner.rowLevelById = {};
     planner.rowLevelById[childId] = 1;
-    // Expanding to add a line — clear pack collapse so the new child is visible.
-    delete planner.rowCollapsedById?.[getPlannerRowId(planner, packRow)];
+    // Expanding to add a line — clear table fold so the new child is visible in the sheet.
+    // (WBS/chart pack collapse is independent and left alone.)
+    delete planner.tablePackCollapsedById?.[getPlannerRowId(planner, packRow)];
     // Children inherit the pack parent's category.
     const childRow = end;
     setPlannerField(planner.sheet, childRow, 'category', getPlannerField(planner.sheet, packRow, 'category'));
@@ -747,7 +762,8 @@ export function removePlannerPackChild(planner, packRow) {
     if (removedId) {
         pruneKanbanAfterRowRemove(planner, [removedId]);
         pruneWbsAfterRowRemove(planner, [removedId]);
-        for (const map of [planner.rowLevelById, planner.rowPackById, planner.rowHiddenById, planner.rowCollapsedById]) {
+        for (const mapKey of PLANNER_HIERARCHY_ID_MAPS) {
+            const map = planner[mapKey];
             if (map) delete map[removedId];
         }
     }
@@ -758,6 +774,7 @@ export function removePlannerPackChild(planner, packRow) {
 }
 
 /**
+ * WBS / chart pack fold (not the table).
  * @param {object} planner
  * @param {number} row
  * @param {boolean} collapsed
@@ -779,6 +796,31 @@ export function setPlannerPackCollapsed(planner, row, collapsed) {
 export function isPlannerPackCollapsed(planner, row) {
     const id = getPlannerRowId(planner, row);
     return !!(id && planner?.rowCollapsedById?.[id]);
+}
+
+/**
+ * Table-only pack fold — independent of WBS/chart.
+ * @param {object} planner
+ * @param {number} row
+ * @param {boolean} collapsed
+ */
+export function setPlannerTablePackCollapsed(planner, row, collapsed) {
+    if (!planner || !isPlannerRowPack(planner, row)) return;
+    const id = getPlannerRowId(planner, row);
+    if (!id) return;
+    if (!planner.tablePackCollapsedById) planner.tablePackCollapsedById = {};
+    if (collapsed) planner.tablePackCollapsedById[id] = true;
+    else delete planner.tablePackCollapsedById[id];
+}
+
+/**
+ * @param {object|null|undefined} planner
+ * @param {number} row
+ * @returns {boolean}
+ */
+export function isPlannerTablePackCollapsed(planner, row) {
+    const id = getPlannerRowId(planner, row);
+    return !!(id && planner?.tablePackCollapsedById?.[id]);
 }
 
 /**
@@ -930,6 +972,7 @@ export function normalizePlanner(raw) {
     const rowPackById = normalizeTruthyIdMap(raw.rowPackById, rowIds);
     const rowHiddenById = normalizeTruthyIdMap(raw.rowHiddenById, rowIds);
     const rowCollapsedById = normalizeTruthyIdMap(raw.rowCollapsedById, rowIds);
+    const tablePackCollapsedById = normalizeTruthyIdMap(raw.tablePackCollapsedById, rowIds);
 
     const wbsCardColors = normalizeKanbanCardColors(raw.wbsCardColors, rowIds, mapOpts);
     const wbsEmphasisById = normalizeKanbanEmphasisById(raw.wbsEmphasisById, rowIds, mapOpts);
@@ -966,6 +1009,7 @@ export function normalizePlanner(raw) {
         rowPackById,
         rowHiddenById,
         rowCollapsedById,
+        tablePackCollapsedById,
         wbsMode: normalizeWbsMode(raw.wbsMode),
         wbsPhaseLabels: normalizeWbsLabels(raw.wbsPhaseLabels, WBS_DEFAULT_PHASE_LABELS),
         wbsDeliverableLabels: normalizeWbsLabels(raw.wbsDeliverableLabels, WBS_DEFAULT_DELIVERABLE_LABELS),
@@ -1055,7 +1099,8 @@ export function removePlannerRow(planner) {
     if (removedId) {
         pruneKanbanAfterRowRemove(planner, [removedId]);
         pruneWbsAfterRowRemove(planner, [removedId]);
-        for (const map of [planner.rowLevelById, planner.rowPackById, planner.rowHiddenById, planner.rowCollapsedById]) {
+        for (const mapKey of PLANNER_HIERARCHY_ID_MAPS) {
+            const map = planner[mapKey];
             if (map) delete map[removedId];
         }
     }

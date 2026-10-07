@@ -26,8 +26,8 @@ import {
     getPlannerRowLevel,
     isPlannerRowPack,
     isPlannerRowHidden,
-    isPlannerPackCollapsed,
-    setPlannerPackCollapsed,
+    isPlannerTablePackCollapsed,
+    setPlannerTablePackCollapsed,
     togglePlannerWorkPack,
     unhidePlannerRow,
     getPlannerRowId,
@@ -100,15 +100,14 @@ function renderDatetimeCell(value, row, col, canEdit, { minDate = '' } = {}) {
 
 function renderTextCell(value, row, col, canEdit, { key = '', packToggle = '', packLeading = '' } = {}) {
     const nameClass = key === 'name' ? ' planner-cell--name' : '';
-    const leadingClass = packLeading ? ' has-pack-leading' : '';
-    if (!canEdit) {
-        return `<td class="sheet-grid__cell planner-cell${nameClass}${leadingClass}">
-            ${packLeading}<span class="sheet-cell-read">${escapeHTML(value)}</span>${packToggle}
-        </td>`;
-    }
-    return `<td class="sheet-grid__cell planner-cell${nameClass}${leadingClass}">
-        ${packLeading}<textarea class="sheet-cell-input form-input planner-cell-input" data-planner-cell data-row="${row}" data-col="${col}" data-col-key="${escapeAttr(key)}" rows="1" spellcheck="false">${escapeHTML(value)}</textarea>${packToggle}
-    </td>`;
+    const body = canEdit
+        ? `<textarea class="sheet-cell-input form-input planner-cell-input" data-planner-cell data-row="${row}" data-col="${col}" data-col-key="${escapeAttr(key)}" rows="1" spellcheck="false">${escapeHTML(value)}</textarea>`
+        : `<span class="sheet-cell-read">${escapeHTML(value)}</span>`;
+    // Inner flex wrapper keeps the chevron in flow (pushes text) without display:flex on <td>.
+    const content = packLeading
+        ? `<div class="planner-name-cell">${packLeading}${body}</div>`
+        : body;
+    return `<td class="sheet-grid__cell planner-cell${nameClass}">${content}${packToggle}</td>`;
 }
 
 function renderCategoryCell(value, row, col, canEdit, planner, { inherited = false } = {}) {
@@ -167,11 +166,11 @@ export function renderPlannerSheetHtml(planner, { canEdit = false } = {}) {
         const level = getPlannerRowLevel(planner, r);
         const isPack = isPlannerRowPack(planner, r);
         const hidden = isPlannerRowHidden(planner, r);
-        const collapsed = isPack && isPlannerPackCollapsed(planner, r);
-        // Hide collapsed children from the sheet body
+        const collapsed = isPack && isPlannerTablePackCollapsed(planner, r);
+        // Hide table-collapsed children from the sheet body (WBS/chart fold is separate).
         if (level === 1) {
             const packParent = getPlannerPackParentRow(planner, r);
-            if (packParent >= 0 && isPlannerPackCollapsed(planner, packParent)) continue;
+            if (packParent >= 0 && isPlannerTablePackCollapsed(planner, packParent)) continue;
         }
         const levelClass = level === 1 ? ' is-child' : (isPack ? ' is-pack' : '');
         const hiddenClass = hidden ? ' is-row-hidden' : '';
@@ -770,8 +769,8 @@ export function handleSheetClick(ctx, e) {
         if (!Number.isFinite(row)) return true;
         const collapsed = packCollapse.dataset.collapsed === '1';
         mutate((it) => {
-            setPlannerPackCollapsed(it.planner, row, !collapsed);
-        }, { skipRerender: true, refreshGantt: true });
+            setPlannerTablePackCollapsed(it.planner, row, !collapsed);
+        }, { skipRerender: true, refreshGantt: false });
         refresh();
         return true;
     }
