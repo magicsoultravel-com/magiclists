@@ -577,6 +577,39 @@ export function getPlannerRowBlock(planner, row) {
 }
 
 /**
+ * Walk back from a level-1 child to its pack parent row index.
+ * @param {object|null|undefined} planner
+ * @param {number} row
+ * @returns {number} pack parent row, or -1 if not a child under a pack
+ */
+export function getPlannerPackParentRow(planner, row) {
+    if (!planner || !Number.isFinite(row) || row < 0) return -1;
+    if (getPlannerRowLevel(planner, row) !== 1) return -1;
+    let packRow = row - 1;
+    while (packRow >= 0 && getPlannerRowLevel(planner, packRow) === 1) packRow -= 1;
+    if (packRow < 0 || !isPlannerRowPack(planner, packRow)) return -1;
+    return packRow;
+}
+
+/**
+ * Copy pack parent category onto every child in the pack block.
+ * @param {object} planner
+ * @param {number} packRow
+ * @returns {boolean}
+ */
+export function syncPlannerPackChildCategories(planner, packRow) {
+    if (!planner?.sheet || !isPlannerRowPack(planner, packRow)) return false;
+    if (getPlannerRowLevel(planner, packRow) === 1) return false;
+    const { start, end } = getPlannerRowBlock(planner, packRow);
+    if (end <= start + 1) return false;
+    const category = getPlannerField(planner.sheet, packRow, 'category');
+    for (let r = start + 1; r < end; r++) {
+        setPlannerField(planner.sheet, r, 'category', category);
+    }
+    return true;
+}
+
+/**
  * Insert a blank row at index, shifting later rows down. Returns new row id.
  * @param {object} planner
  * @param {number} index
@@ -664,6 +697,9 @@ export function addPlannerPackChild(planner, packRow) {
     planner.rowLevelById[childId] = 1;
     // Expanding to add a line — clear pack collapse so the new child is visible.
     delete planner.rowCollapsedById?.[getPlannerRowId(planner, packRow)];
+    // Children inherit the pack parent's category.
+    const childRow = end;
+    setPlannerField(planner.sheet, childRow, 'category', getPlannerField(planner.sheet, packRow, 'category'));
     assertPlannerRowIdInvariant(planner);
     return childId;
 }

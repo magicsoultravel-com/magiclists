@@ -34,6 +34,8 @@ import {
     addPlannerPackChild,
     removePlannerPackChild,
     getPlannerRowBlock,
+    getPlannerPackParentRow,
+    syncPlannerPackChildCategories,
     addPlannerRow,
     removePlannerRow,
     movePlannerRow
@@ -57,9 +59,6 @@ function restoreCanvasScroll(scrollPos) {
 
 /** Work-pack toggle — nested lines. */
 const PLANNER_PACK_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false" aria-hidden="true"><path d="M2 3.2h8M2 6h8M4.2 8.8H10" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>';
-
-/** Suppress pack-head click after HTML5 row drag (shared by bindSheet + handleSheetClick). */
-let suppressPackHeadClick = false;
 
 const PLANNER_START_COL = PLANNER_COLUMNS.findIndex((c) => c.key === 'start');
 const PLANNER_STOP_COL = PLANNER_COLUMNS.findIndex((c) => c.key === 'stop');
@@ -99,23 +98,27 @@ function renderDatetimeCell(value, row, col, canEdit, { minDate = '' } = {}) {
     </td>`;
 }
 
-function renderTextCell(value, row, col, canEdit, { key = '', packToggle = '' } = {}) {
+function renderTextCell(value, row, col, canEdit, { key = '', packToggle = '', packLeading = '' } = {}) {
+    const nameClass = key === 'name' ? ' planner-cell--name' : '';
+    const leadingClass = packLeading ? ' has-pack-leading' : '';
     if (!canEdit) {
-        return `<td class="sheet-grid__cell planner-cell${key === 'name' ? ' planner-cell--name' : ''}">
-            ${packToggle}<span class="sheet-cell-read">${escapeHTML(value)}</span>
+        return `<td class="sheet-grid__cell planner-cell${nameClass}${leadingClass}">
+            ${packLeading}<span class="sheet-cell-read">${escapeHTML(value)}</span>${packToggle}
         </td>`;
     }
-    return `<td class="sheet-grid__cell planner-cell${key === 'name' ? ' planner-cell--name' : ''}">
-        ${packToggle}<textarea class="sheet-cell-input form-input planner-cell-input" data-planner-cell data-row="${row}" data-col="${col}" data-col-key="${escapeAttr(key)}" rows="1" spellcheck="false">${escapeHTML(value)}</textarea>
+    return `<td class="sheet-grid__cell planner-cell${nameClass}${leadingClass}">
+        ${packLeading}<textarea class="sheet-cell-input form-input planner-cell-input" data-planner-cell data-row="${row}" data-col="${col}" data-col-key="${escapeAttr(key)}" rows="1" spellcheck="false">${escapeHTML(value)}</textarea>${packToggle}
     </td>`;
 }
 
-function renderCategoryCell(value, row, col, canEdit, planner) {
+function renderCategoryCell(value, row, col, canEdit, planner, { inherited = false } = {}) {
     const color = getCategoryColor(planner, value) || '';
     const swatchStyle = color ? ` style="background:${escapeAttr(color)}"` : '';
-    if (!canEdit) {
+    if (!canEdit || inherited) {
+        const inheritedClass = inherited ? ' planner-category--inherited' : '';
+        const title = inherited ? ' title="Inherited from work pack"' : '';
         return `<td class="sheet-grid__cell planner-cell planner-cell--category">
-            <div class="planner-category">
+            <div class="planner-category${inheritedClass}"${title}>
                 <span class="planner-category__swatch"${swatchStyle} aria-hidden="true"></span>
                 <span class="sheet-cell-read">${escapeHTML(value)}</span>
             </div>
@@ -167,20 +170,16 @@ export function renderPlannerSheetHtml(planner, { canEdit = false } = {}) {
         const collapsed = isPack && isPlannerPackCollapsed(planner, r);
         // Hide collapsed children from the sheet body
         if (level === 1) {
-            let packRow = r - 1;
-            while (packRow >= 0 && getPlannerRowLevel(planner, packRow) === 1) packRow -= 1;
-            if (packRow >= 0 && isPlannerPackCollapsed(planner, packRow)) continue;
+            const packParent = getPlannerPackParentRow(planner, r);
+            if (packParent >= 0 && isPlannerPackCollapsed(planner, packParent)) continue;
         }
         const levelClass = level === 1 ? ' is-child' : (isPack ? ' is-pack' : '');
         const hiddenClass = hidden ? ' is-row-hidden' : '';
         const packHeadAttr = isPack
             ? ` data-planner-pack-head="${collapsed ? '1' : '0'}"`
             : '';
-        const headTitle = isPack
-            ? (collapsed ? 'Expand work pack' : 'Collapse work pack / drag to reorder')
-            : 'Drag to reorder';
         const rowHead = canEdit
-            ? `<th class="sheet-grid__row-head planner-row-head${levelClass}" scope="row" draggable="true" data-planner-row="${r}" title="${escapeAttr(headTitle)}"${packHeadAttr}>${escapeHTML(outline)}</th>`
+            ? `<th class="sheet-grid__row-head planner-row-head${levelClass}" scope="row" draggable="true" data-planner-row="${r}" title="Drag to reorder"${packHeadAttr}>${escapeHTML(outline)}</th>`
             : `<th class="sheet-grid__row-head${levelClass}" scope="row">${escapeHTML(outline)}</th>`;
         body += `<tr class="planner-grid__row${levelClass}${hiddenClass}" data-planner-row-index="${r}" data-planner-row-id="${escapeAttr(getPlannerRowId(planner, r))}">${rowHead}`;
         const rowStartDate = parseStoredDateTime(getPlannerField(sheet, r, 'start')).date || '';
@@ -191,19 +190,40 @@ export function renderPlannerSheetHtml(planner, { canEdit = false } = {}) {
                 const minDate = colDef.key === 'stop' ? rowStartDate : '';
                 body += renderDatetimeCell(value, r, c, canEdit, { minDate });
             } else if (colDef.type === 'category') {
-                body += renderCategoryCell(value, r, c, canEdit, planner);
-            } else if (colDef.key === 'name' && canEdit && level === 0) {
-                const pressed = isPack ? 'true' : 'false';
-                const packToggle = `<button type="button" class="planner-pack-toggle" data-planner-pack-toggle data-row="${r}" title="${isPack ? 'Convert to single task' : 'Convert to work pack'}" aria-label="${isPack ? 'Convert to single task' : 'Convert to work pack'}" aria-pressed="${pressed}">${PLANNER_PACK_ICON}</button>`;
+                if (level === 1) {
+                    const packParent = getPlannerPackParentRow(planner, r);
+                    const inherited = packParent >= 0
+                        ? getPlannerField(sheet, packParent, 'category')
+                        : value;
+                    body += renderCategoryCell(inherited, r, c, canEdit, planner, { inherited: true });
+                } else {
+                    body += renderCategoryCell(value, r, c, canEdit, planner);
+                }
+            } else if (colDef.key === 'name' && level === 0) {
                 const { end } = isPack ? getPlannerRowBlock(planner, r) : { end: r + 1 };
                 const childCount = isPack ? Math.max(0, end - r - 1) : 0;
-                const packLines = isPack
-                    ? `<span class="planner-pack-lines" role="group" aria-label="Work pack lines">
-                        <button type="button" class="planner-pack-line-btn" data-planner-pack-add data-row="${r}" title="Add line" aria-label="Add line">${ACTION_ICONS.plus}</button>
-                        <button type="button" class="planner-pack-line-btn" data-planner-pack-remove data-row="${r}" title="Remove last line" aria-label="Remove last line"${childCount ? '' : ' disabled'}>${ACTION_ICONS.minus}</button>
-                    </span>`
+                const collapseTitle = collapsed ? 'Expand work pack' : 'Collapse work pack';
+                // Same ▼ / rotate chevron as WBS pack cards — always visible in the name title.
+                const packLeading = isPack && childCount
+                    ? `<button type="button" class="planner-pack-collapse collapsable-toggle${collapsed ? ' collapsed' : ''}" data-planner-pack-collapse data-row="${r}" data-collapsed="${collapsed ? '1' : '0'}" title="${escapeAttr(collapseTitle)}" aria-label="${escapeAttr(collapseTitle)}" aria-expanded="${collapsed ? 'false' : 'true'}">▼</button>`
                     : '';
-                body += renderTextCell(value, r, c, canEdit, { key: colDef.key, packToggle: packToggle + packLines });
+                if (canEdit) {
+                    const pressed = isPack ? 'true' : 'false';
+                    const packToggle = `<button type="button" class="planner-pack-toggle" data-planner-pack-toggle data-row="${r}" title="${isPack ? 'Convert to single task' : 'Convert to work pack'}" aria-label="${isPack ? 'Convert to single task' : 'Convert to work pack'}" aria-pressed="${pressed}">${PLANNER_PACK_ICON}</button>`;
+                    const packLines = isPack
+                        ? `<span class="planner-pack-lines" role="group" aria-label="Work pack lines">
+                            <button type="button" class="planner-pack-line-btn" data-planner-pack-add data-row="${r}" title="Add line" aria-label="Add line">${ACTION_ICONS.plus}</button>
+                            <button type="button" class="planner-pack-line-btn" data-planner-pack-remove data-row="${r}" title="Remove last line" aria-label="Remove last line"${childCount ? '' : ' disabled'}>${ACTION_ICONS.minus}</button>
+                        </span>`
+                        : '';
+                    body += renderTextCell(value, r, c, canEdit, {
+                        key: colDef.key,
+                        packLeading,
+                        packToggle: packToggle + packLines
+                    });
+                } else {
+                    body += renderTextCell(value, r, c, canEdit, { key: colDef.key, packLeading });
+                }
             } else {
                 body += renderTextCell(value, r, c, canEdit, { key: colDef.key });
             }
@@ -474,7 +494,7 @@ function positionPlannerCategoryMenu(panel, wrap) {
     }
 }
 
-function openPlannerCategoryMenu(wrap, item, { mutate } = {}) {
+function openPlannerCategoryMenu(wrap, item, { mutate, refresh } = {}) {
     if (!wrap) return;
     const input = wrap.querySelector('[data-col-key="category"]');
     const chevron = wrap.querySelector('[data-planner-category-menu]');
@@ -536,16 +556,25 @@ function openPlannerCategoryMenu(wrap, item, { mutate } = {}) {
         const row = Number(wrap.dataset.row);
         const col = Number(wrap.dataset.col);
         input.value = name;
+        let syncedPack = false;
         mutate?.((it) => {
             if (!it.planner) it.planner = createEmptyPlanner();
             if (Number.isFinite(row) && Number.isFinite(col)) {
                 setCellValue(it.planner.sheet, row, col, name);
+                if (isPlannerRowPack(it.planner, row)) {
+                    syncPlannerPackChildCategories(it.planner, row);
+                    syncedPack = true;
+                }
             }
         }, { refreshGantt: true });
         const known = getCategoryColor(item.planner, name);
         const swatch = wrap.querySelector('[data-planner-category-color]');
         if (swatch) swatch.style.background = known || '';
         closePlannerCategoryMenus();
+        if (syncedPack && refresh) {
+            refresh();
+            return;
+        }
         input.focus();
         // Do not call syncNotePlannerDom — mutate already refreshes Gantt.
     });
@@ -634,7 +663,7 @@ export function handleSheetClick(ctx, e) {
         e.preventDefault();
         e.stopPropagation();
         const wrap = catMenuBtn.closest('[data-planner-category]');
-        openPlannerCategoryMenu(wrap, item, { mutate });
+        openPlannerCategoryMenu(wrap, item, { mutate, refresh });
         return true;
     }
 
@@ -733,6 +762,20 @@ export function handleSheetClick(ctx, e) {
         return true;
     }
 
+    const packCollapse = e.target.closest('[data-planner-pack-collapse]');
+    if (packCollapse && section.contains(packCollapse)) {
+        e.preventDefault();
+        e.stopPropagation();
+        const row = Number(packCollapse.dataset.row);
+        if (!Number.isFinite(row)) return true;
+        const collapsed = packCollapse.dataset.collapsed === '1';
+        mutate((it) => {
+            setPlannerPackCollapsed(it.planner, row, !collapsed);
+        }, { skipRerender: true, refreshGantt: true });
+        refresh();
+        return true;
+    }
+
     const packAdd = e.target.closest('[data-planner-pack-add]');
     if (packAdd && section.contains(packAdd)) {
         e.preventDefault();
@@ -754,22 +797,6 @@ export function handleSheetClick(ctx, e) {
         if (!Number.isFinite(row)) return true;
         mutate((it) => {
             removePlannerPackChild(it.planner, row);
-        }, { skipRerender: true, refreshGantt: true });
-        refresh();
-        return true;
-    }
-
-    const packHead = e.target.closest('.planner-row-head[data-planner-pack-head]');
-    if (packHead && section.contains(packHead) && !e.target.closest('[data-planner-pack-toggle], [data-planner-pack-add], [data-planner-pack-remove]')) {
-        if (suppressPackHeadClick) {
-            suppressPackHeadClick = false;
-            return true;
-        }
-        const row = Number(packHead.dataset.plannerRow);
-        if (!Number.isFinite(row)) return true;
-        const collapsed = packHead.dataset.plannerPackHead === '1';
-        mutate((it) => {
-            setPlannerPackCollapsed(it.planner, row, !collapsed);
         }, { skipRerender: true, refreshGantt: true });
         refresh();
         return true;
@@ -813,10 +840,14 @@ export function bindSheet(ctx) {
         const row = Number(cell.dataset.row);
         const col = Number(cell.dataset.col);
         if (!Number.isFinite(row) || !Number.isFinite(col)) return;
-        if (cell.dataset.colKey === 'name' && item.planner && isPlannerRowHidden(item.planner, row)) {
+        const key = cell.dataset.colKey || '';
+        // Child categories are inherited from the pack parent — ignore edits.
+        if (key === 'category' && item.planner && getPlannerRowLevel(item.planner, row) === 1) {
+            return;
+        }
+        if (key === 'name' && item.planner && isPlannerRowHidden(item.planner, row)) {
             unhidePlannerRow(item.planner, row);
         }
-        const key = cell.dataset.colKey || '';
         schedulePlannerCommit({ refreshGantt: true });
         if (!item.planner) item.planner = createEmptyPlanner();
         setCellValue(item.planner.sheet, row, col, cell.value);
@@ -825,6 +856,19 @@ export function bindSheet(ctx) {
             const wrap = cell.closest('[data-planner-category]');
             const swatch = wrap?.querySelector?.('[data-planner-category-color]');
             if (swatch) swatch.style.background = known || '';
+            if (isPlannerRowPack(item.planner, row)) {
+                syncPlannerPackChildCategories(item.planner, row);
+                const { end } = getPlannerRowBlock(item.planner, row);
+                for (let r = row + 1; r < end; r++) {
+                    const tr = section.querySelector(`tr[data-planner-row-index="${r}"]`);
+                    const inherited = tr?.querySelector?.('.planner-category--inherited');
+                    if (!inherited) continue;
+                    const read = inherited.querySelector('.sheet-cell-read');
+                    const childSwatch = inherited.querySelector('.planner-category__swatch');
+                    if (read) read.textContent = cell.value;
+                    if (childSwatch) childSwatch.style.background = known || '';
+                }
+            }
         }
         growPlannerCell?.(cell);
     });
@@ -846,7 +890,7 @@ export function bindSheet(ctx) {
                 && openPanel.dataset.ownerRow === String(wrap?.dataset?.row ?? '')
                 && openPanel.dataset.ownerCol === String(wrap?.dataset?.col ?? '');
             if (!ownsOpen) {
-                openPlannerCategoryMenu(wrap, item, { mutate });
+                openPlannerCategoryMenu(wrap, item, { mutate, refresh });
             }
         }
     });
@@ -868,7 +912,6 @@ export function bindSheet(ctx) {
         }
         const head = e.target.closest('.planner-row-head[data-planner-row]');
         if (!head || !section.contains(head)) return;
-        if (head.hasAttribute('data-planner-pack-head')) suppressPackHeadClick = true;
         dragFrom = Number(head.dataset.plannerRow);
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', String(dragFrom));

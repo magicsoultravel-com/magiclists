@@ -27,6 +27,8 @@ import {
     isPlannerRowHidden,
     isPlannerPackCollapsed,
     setPlannerPackCollapsed,
+    getPlannerPackParentRow,
+    syncPlannerPackChildCategories,
     getPlannerRowId,
     getPlannerRowLevel,
     PLANNER_COL_COUNT,
@@ -962,6 +964,8 @@ describe('planner WBS and work packs', () => {
         setPlannerPackCollapsed(planner, 0, true);
         assert.equal(isPlannerPackCollapsed(planner, 0), true);
         const html = buildNotePlannerSectionHtml({ id: 'n', planner }, { canEdit: true });
+        assert.ok(html.includes('data-planner-pack-collapse'));
+        assert.ok(html.includes('data-collapsed="1"'));
         assert.ok(html.includes('data-planner-pack-head="1"'));
         assert.ok(!html.includes('data-planner-row-index="1"')); // sheet omits collapsed children
         assert.ok(html.includes('data-planner-pack-add'));
@@ -972,6 +976,31 @@ describe('planner WBS and work packs', () => {
         const wbsHtml = renderPlannerWbsHtml(planner, { canEdit: false });
         assert.ok(wbsHtml.includes('Pack'));
         assert.ok(!wbsHtml.includes('Child'));
+    });
+
+    it('pack children inherit parent category and render locked in sheet', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'Pack');
+        setPlannerField(planner.sheet, 0, 'category', 'Ops');
+        togglePlannerWorkPack(planner, 0);
+        addPlannerPackChild(planner, 0);
+        setPlannerField(planner.sheet, 1, 'name', 'Child');
+        assert.equal(getPlannerPackParentRow(planner, 1), 0);
+        assert.equal(getPlannerField(planner.sheet, 1, 'category'), 'Ops');
+
+        setPlannerField(planner.sheet, 0, 'category', 'Design');
+        assert.equal(syncPlannerPackChildCategories(planner, 0), true);
+        assert.equal(getPlannerField(planner.sheet, 1, 'category'), 'Design');
+
+        const html = buildNotePlannerSectionHtml({ id: 'n-cat', planner }, { canEdit: true });
+        assert.ok(html.includes('planner-category--inherited'));
+        assert.ok(html.includes('Inherited from work pack'));
+        // Child row has no interactive category controls.
+        const childRowMatch = html.match(/data-planner-row-index="1"[\s\S]*?<\/tr>/);
+        assert.ok(childRowMatch);
+        assert.ok(!childRowMatch[0].includes('data-planner-category'));
+        assert.ok(!childRowMatch[0].includes('planner-category__input'));
+        assert.ok(childRowMatch[0].includes('Design'));
     });
 
     it('WBS card styles set/prune and editable HTML', () => {
