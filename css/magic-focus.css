@@ -516,6 +516,11 @@
     color: var(--card-muted, var(--text-muted));
 }
 
+/* Pane chrome stays muted; editor content (planner table cells, etc.) matches board --card-fg. */
+#magic-focus.has-custom-bg .magic-focus__pane-body.editor-note-body {
+    color: var(--card-fg, var(--text-main));
+}
+
 #magic-focus.has-custom-bg .magic-focus__setup-heading,
 #magic-focus.has-custom-bg .magic-focus__zone-placeholder,
 #magic-focus.has-custom-bg .magic-focus__change-layout {
