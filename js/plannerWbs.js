@@ -134,6 +134,33 @@ export function normalizeWbsBucketColors(raw) {
     return out;
 }
 
+/** Default column display order (identity). */
+export const WBS_DEFAULT_BUCKET_ORDER = Object.freeze(
+    Array.from({ length: WBS_BUCKET_COUNT }, (_, i) => i)
+);
+
+/**
+ * Display permutation of bucket ids 0..4 (dedupe + fill missing ascending).
+ * @param {unknown} raw
+ * @returns {number[]}
+ */
+export function normalizeWbsBucketOrder(raw) {
+    const identity = [...WBS_DEFAULT_BUCKET_ORDER];
+    if (!Array.isArray(raw)) return identity;
+    const seen = new Set();
+    const out = [];
+    for (const item of raw) {
+        const n = Math.floor(Number(item));
+        if (!Number.isFinite(n) || n < 0 || n >= WBS_BUCKET_COUNT || seen.has(n)) continue;
+        seen.add(n);
+        out.push(n);
+    }
+    for (const n of identity) {
+        if (!seen.has(n)) out.push(n);
+    }
+    return out;
+}
+
 /**
  * @param {object|null|undefined} planner
  * @returns {'phase'|'deliverable'}
@@ -224,6 +251,48 @@ export function setWbsBucketColor(planner, bucket, hex, mode) {
         return;
     }
     planner[mapKey][key] = color;
+}
+
+/**
+ * @param {object|null|undefined} planner
+ * @param {'phase'|'deliverable'} [mode]
+ * @returns {number[]}
+ */
+export function getWbsBucketOrder(planner, mode) {
+    const m = normalizeWbsMode(mode || planner?.wbsMode);
+    const raw = m === 'deliverable'
+        ? planner?.wbsDeliverableBucketOrder
+        : planner?.wbsPhaseBucketOrder;
+    return normalizeWbsBucketOrder(raw);
+}
+
+/**
+ * Reorder display permutation only — card bucket ids stay unchanged.
+ * @param {object} planner
+ * @param {number|string} fromBucket
+ * @param {{ beforeBucket?: number|string|null, mode?: string }} [opts]
+ */
+export function moveWbsBucket(planner, fromBucket, { beforeBucket = null, mode } = {}) {
+    if (!planner) return;
+    const m = normalizeWbsMode(mode || planner.wbsMode);
+    const from = Math.floor(Number(fromBucket));
+    if (!Number.isFinite(from) || from < 0 || from >= WBS_BUCKET_COUNT) return;
+    const orderKey = m === 'deliverable' ? 'wbsDeliverableBucketOrder' : 'wbsPhaseBucketOrder';
+    const order = normalizeWbsBucketOrder(planner[orderKey]);
+    const fromIdx = order.indexOf(from);
+    if (fromIdx < 0) return;
+    order.splice(fromIdx, 1);
+    const before = beforeBucket == null || beforeBucket === ''
+        ? null
+        : Math.floor(Number(beforeBucket));
+    if (before != null && Number.isFinite(before) && before >= 0 && before < WBS_BUCKET_COUNT) {
+        const beforeIdx = order.indexOf(before);
+        if (beforeIdx >= 0) order.splice(beforeIdx, 0, from);
+        else order.push(from);
+    } else {
+        order.push(from);
+    }
+    planner[orderKey] = order;
 }
 
 /**
@@ -480,28 +549,31 @@ export function groupWbsColumnCards(planner, cards) {
 export function layoutPlannerWbs(planner, { mode } = {}) {
     const m = normalizeWbsMode(mode || planner?.wbsMode);
     const labels = getWbsLabels(planner, m);
+    const bucketOrder = getWbsBucketOrder(planner, m);
     const cards = derivePlannerWbsCards(planner);
-    const columns = labels.map((label, bucket) => ({
-        key: String(bucket),
-        bucket,
-        label,
-        color: getWbsBucketColor(planner, bucket, m),
-        cards: [],
-        groups: []
-    }));
-    const byKey = new Map(columns.map((c) => [c.key, c]));
+    const byBucket = new Map();
+    for (let bucket = 0; bucket < WBS_BUCKET_COUNT; bucket++) {
+        byBucket.set(bucket, {
+            key: String(bucket),
+            bucket,
+            label: labels[bucket],
+            color: getWbsBucketColor(planner, bucket, m),
+            cards: [],
+            groups: []
+        });
+    }
 
     for (const card of cards) {
         const bucket = getWbsBucketForId(planner, card.rowId, m);
-        const key = wbsBucketKey(bucket);
-        byKey.get(key)?.cards.push(card);
+        byBucket.get(bucket)?.cards.push(card);
     }
 
     const orderMap = m === 'deliverable'
         ? (planner?.wbsDeliverableOrderByBucket || {})
         : (planner?.wbsPhaseOrderByBucket || {});
 
-    for (const col of columns) {
+    const columns = bucketOrder.map((bucket) => {
+        const col = byBucket.get(bucket);
         const order = Array.isArray(orderMap[col.key]) ? orderMap[col.key] : [];
         const rank = new Map(order.map((id, i) => [String(id), i]));
         col.cards.sort((a, b) => {
@@ -512,9 +584,10 @@ export function layoutPlannerWbs(planner, { mode } = {}) {
         });
         col.groups = groupWbsColumnCards(planner, col.cards);
         col.collapsed = isWbsBucketCollapsed(planner, col.key);
-    }
+        return col;
+    });
 
-    return { mode: m, labels, columns };
+    return { mode: m, labels, bucketOrder, columns };
 }
 
 /**
@@ -608,9 +681,11 @@ export function resetWbsArrangement(planner, mode) {
     if (m === 'deliverable') {
         planner.wbsDeliverableById = {};
         planner.wbsDeliverableOrderByBucket = {};
+        planner.wbsDeliverableBucketOrder = [...WBS_DEFAULT_BUCKET_ORDER];
     } else {
         planner.wbsPhaseById = {};
         planner.wbsPhaseOrderByBucket = {};
+        planner.wbsPhaseBucketOrder = [...WBS_DEFAULT_BUCKET_ORDER];
     }
 }
 

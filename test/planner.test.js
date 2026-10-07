@@ -47,6 +47,9 @@ import {
     groupWbsColumnCards,
     resolveWbsPackParentId,
     moveWbsCard,
+    moveWbsBucket,
+    normalizeWbsBucketOrder,
+    getWbsBucketOrder,
     resetWbsArrangement,
     resetWbsLabels,
     setWbsBucketColor,
@@ -57,7 +60,8 @@ import {
     resetWbsCardStyles,
     pruneWbsAfterRowRemove,
     WBS_DEFAULT_PHASE_LABELS,
-    WBS_DEFAULT_DELIVERABLE_LABELS
+    WBS_DEFAULT_DELIVERABLE_LABELS,
+    WBS_DEFAULT_BUCKET_ORDER
 } from '../js/plannerWbs.js';
 import { layoutPlannerGantt, parsePlannerDateTime, zoomPxPerDay, buildGanttAxis, padGanttRange, isoWeekNumber } from '../js/plannerGantt.js';
 import {
@@ -1090,8 +1094,10 @@ describe('planner WBS and work packs', () => {
         assert.equal(planner.wbsDeliverableById[id0], 4);
 
         planner.wbsMode = 'phase';
+        planner.wbsPhaseBucketOrder = [2, 0, 1, 3, 4];
         resetWbsArrangement(planner);
         assert.deepEqual(planner.wbsPhaseById, {});
+        assert.deepEqual(planner.wbsPhaseBucketOrder, [...WBS_DEFAULT_BUCKET_ORDER]);
         assert.equal(planner.wbsDeliverableById[id0], 4);
 
         planner.wbsPhaseLabels = ['A', 'B', 'C', 'D', 'E'];
@@ -1122,6 +1128,42 @@ describe('planner WBS and work packs', () => {
         const again = normalizePlanner(planner);
         assert.equal(again.wbsPhaseColorsByBucket['2'], '#aabbcc');
         assert.equal(again.wbsDeliverableColorsByBucket['1'], '#ffaa00');
+    });
+
+    it('WBS column bucket order rearranges display without remapping cards', () => {
+        assert.deepEqual(normalizeWbsBucketOrder(null), [...WBS_DEFAULT_BUCKET_ORDER]);
+        assert.deepEqual(normalizeWbsBucketOrder([2, 2, 0, 9, 1]), [2, 0, 1, 3, 4]);
+
+        const planner = createEmptyPlanner();
+        const id0 = planner.rowIds[0];
+        setPlannerField(planner.sheet, 0, 'name', 'Task');
+        moveWbsCard(planner, id0, 2);
+        setWbsBucketColor(planner, 2, '#112233');
+        setPlannerField(planner.sheet, 0, 'name', 'InExecution');
+
+        moveWbsBucket(planner, 2, { beforeBucket: 0 });
+        assert.deepEqual(getWbsBucketOrder(planner), [2, 0, 1, 3, 4]);
+        assert.equal(planner.wbsPhaseById[id0], 2);
+
+        const layout = layoutPlannerWbs(planner, { mode: 'phase' });
+        assert.deepEqual(layout.columns.map((c) => c.bucket), [2, 0, 1, 3, 4]);
+        assert.equal(layout.columns[0].label, WBS_DEFAULT_PHASE_LABELS[2]);
+        assert.equal(layout.columns[0].color, '#112233');
+        assert.equal(layout.columns[0].cards[0]?.rowId, id0);
+
+        planner.wbsMode = 'deliverable';
+        moveWbsBucket(planner, 4, { beforeBucket: 1 });
+        assert.deepEqual(getWbsBucketOrder(planner, 'deliverable'), [0, 4, 1, 2, 3]);
+        assert.deepEqual(getWbsBucketOrder(planner, 'phase'), [2, 0, 1, 3, 4]);
+
+        const roundTrip = normalizePlanner(planner);
+        assert.deepEqual(roundTrip.wbsPhaseBucketOrder, [2, 0, 1, 3, 4]);
+        assert.deepEqual(roundTrip.wbsDeliverableBucketOrder, [0, 4, 1, 2, 3]);
+        assert.equal(roundTrip.wbsPhaseById[id0], 2);
+
+        planner.wbsMode = 'phase';
+        resetWbsArrangement(planner);
+        assert.deepEqual(getWbsBucketOrder(planner), [...WBS_DEFAULT_BUCKET_ORDER]);
     });
 
     it('WBS move to Planning survives normalize (no bucket wipe)', () => {

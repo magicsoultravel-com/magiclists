@@ -35,6 +35,7 @@ import {
     normalizeWbsOrderByBucket,
     normalizeWbsCollapsedByBucket,
     normalizeWbsBucketColors,
+    normalizeWbsBucketOrder,
     pruneWbsAfterRowRemove
 } from './plannerWbs.js';
 
@@ -193,6 +194,8 @@ function emptyWbsFields() {
         wbsDeliverableById: {},
         wbsPhaseOrderByBucket: {},
         wbsDeliverableOrderByBucket: {},
+        wbsPhaseBucketOrder: normalizeWbsBucketOrder(null),
+        wbsDeliverableBucketOrder: normalizeWbsBucketOrder(null),
         wbsPhaseColorsByBucket: {},
         wbsDeliverableColorsByBucket: {},
         wbsCollapsed: false,
@@ -1113,6 +1116,8 @@ export function normalizePlanner(raw) {
         wbsDeliverableById: normalizeWbsBucketById(raw.wbsDeliverableById, idSet),
         wbsPhaseOrderByBucket: normalizeWbsOrderByBucket(raw.wbsPhaseOrderByBucket, idSet),
         wbsDeliverableOrderByBucket: normalizeWbsOrderByBucket(raw.wbsDeliverableOrderByBucket, idSet),
+        wbsPhaseBucketOrder: normalizeWbsBucketOrder(raw.wbsPhaseBucketOrder),
+        wbsDeliverableBucketOrder: normalizeWbsBucketOrder(raw.wbsDeliverableBucketOrder),
         wbsCollapsed: !!raw.wbsCollapsed,
         wbsCollapsedByBucket: normalizeWbsCollapsedByBucket(raw.wbsCollapsedByBucket),
         wbsPhaseColorsByBucket: normalizeWbsBucketColors(raw.wbsPhaseColorsByBucket),

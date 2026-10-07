@@ -26,6 +26,7 @@ import {
     setWbsBucketLabel,
     setWbsBucketColor,
     getWbsBucketColor,
+    moveWbsBucket,
     getWbsMode,
     setWbsCardColor,
     setWbsCardEmphasis,
@@ -249,11 +250,15 @@ export function renderPlannerWbsHtml(planner, { canEdit = false } = {}) {
         const colorBtnHtml = canEdit && !collapsed && col.bucket != null
             ? `<button type="button" class="planner-wbs__column-color" data-planner-wbs-bucket-color data-bucket="${col.bucket}" title="Column color" aria-label="Column color">${CARD_ICONS.color}</button>`
             : '';
+        const grabHtml = canEdit && !collapsed && col.bucket != null
+            ? `<span class="planner-wbs__column-grab" data-planner-wbs-bucket-grab title="Drag to reorder column" aria-hidden="true">${CARD_ICONS.drag}</span>`
+            : '';
         return `<section class="planner-wbs__column${colClass}" data-planner-wbs-column data-planner-wbs-bucket="${escapeAttr(col.key)}" data-wbs-bucket-collapsed="${collapsed ? '1' : '0'}">
             <header class="planner-wbs__column-head${headColorClass}"${headSurface.style}>
                 ${labelHtml}
                 <span class="planner-wbs__column-count">${col.cards.length}</span>
                 ${colorBtnHtml}
+                ${grabHtml}
                 <button type="button" class="planner-wbs__column-collapse" data-planner-wbs-bucket-collapse title="${escapeAttr(collapseTitle)}" aria-label="${escapeAttr(collapseTitle)}" aria-expanded="${collapsed ? 'false' : 'true'}">${collapseIcon}</button>
             </header>
             <div class="planner-wbs__column-body" data-planner-wbs-drop="${escapeAttr(col.key)}">${cardsHtml}</div>
@@ -636,6 +641,19 @@ export function bindWbs(ctx) {
      * } | null} */
     let wbsPtr = null;
 
+    /** @type {{
+     *   column: HTMLElement,
+     *   bucket: number,
+     *   slot: HTMLElement|null,
+     *   offsetX: number,
+     *   offsetY: number,
+     *   lifted: boolean,
+     *   startX: number,
+     *   startY: number,
+     *   pointerId: number
+     * } | null} */
+    let wbsColPtr = null;
+
     const clearWbsColumnOver = () => {
         section.querySelectorAll('.planner-wbs__column-body.is-drag-over').forEach((el) => {
             el.classList.remove('is-drag-over');
@@ -955,12 +973,164 @@ export function bindWbs(ctx) {
         });
     }, true);
 
+    const resetWbsColDragStyles = (column) => {
+        if (!column) return;
+        column.classList.remove('is-planner-wbs-col-dragging');
+        column.style.position = '';
+        column.style.left = '';
+        column.style.top = '';
+        column.style.width = '';
+        column.style.height = '';
+        column.style.zIndex = '';
+        column.style.pointerEvents = '';
+        column.style.margin = '';
+        column.style.flex = '';
+        column.style.maxWidth = '';
+        column.style.minWidth = '';
+    };
+
+    const endWbsColPointerDrag = ({ commit = false } = {}) => {
+        const state = wbsColPtr;
+        wbsColPtr = null;
+        document.removeEventListener('pointermove', onWbsColDocPointerMove);
+        document.removeEventListener('pointerup', onWbsColDocPointerUp);
+        document.removeEventListener('pointercancel', onWbsColDocPointerUp);
+        document.body.classList.remove('is-planner-wbs-col-drag-active');
+        if (!state) return;
+        const { column, slot, bucket } = state;
+        let beforeBucket = null;
+        if (commit && slot?.isConnected) {
+            const nextCol = slot.nextElementSibling;
+            if (nextCol?.matches?.('[data-planner-wbs-column]')) {
+                const n = Number(nextCol.dataset.plannerWbsBucket);
+                if (Number.isFinite(n)) beforeBucket = n;
+            }
+        }
+        if (slot?.parentNode) {
+            slot.parentNode.insertBefore(column, slot);
+            slot.remove();
+        } else if (column && !column.isConnected && section.isConnected) {
+            section.querySelector('[data-planner-wbs-board]')?.appendChild(column);
+        }
+        resetWbsColDragStyles(column);
+        if (commit && state.lifted) {
+            mutate((it) => {
+                moveWbsBucket(it.planner, bucket, { beforeBucket });
+            }, { skipRerender: true, refreshGantt: true });
+        }
+    };
+
+    const placeWbsColSlot = (clientX, clientY, slot, draggedBucket) => {
+        if (!slot) return;
+        const board = section.querySelector('[data-planner-wbs-board]');
+        if (!board) return;
+        const columns = [...board.querySelectorAll('.planner-wbs__column[data-planner-wbs-bucket]')]
+            .filter((c) => Number(c.dataset.plannerWbsBucket) !== draggedBucket);
+        if (!columns.length) {
+            board.appendChild(slot);
+            return;
+        }
+        for (const col of columns) {
+            const rect = col.getBoundingClientRect();
+            const mid = (rect.left + rect.right) / 2;
+            if (clientX < mid) {
+                board.insertBefore(slot, col);
+                return;
+            }
+        }
+        board.appendChild(slot);
+    };
+
+    const liftWbsColumn = (state, clientX, clientY) => {
+        if (state.lifted) return;
+        const { column } = state;
+        const board = column.closest('[data-planner-wbs-board]');
+        if (!board) return;
+        const rect = column.getBoundingClientRect();
+        state.offsetX = clientX - rect.left;
+        state.offsetY = clientY - rect.top;
+        const slot = document.createElement('div');
+        slot.className = 'planner-wbs__column-placeholder';
+        slot.setAttribute('aria-hidden', 'true');
+        slot.style.width = `${rect.width}px`;
+        slot.style.minHeight = `${rect.height}px`;
+        board.insertBefore(slot, column);
+        state.slot = slot;
+        document.body.appendChild(column);
+        column.classList.add('is-planner-wbs-col-dragging');
+        column.style.position = 'fixed';
+        column.style.width = `${rect.width}px`;
+        column.style.height = `${rect.height}px`;
+        column.style.left = `${rect.left}px`;
+        column.style.top = `${rect.top}px`;
+        column.style.zIndex = '9999';
+        column.style.pointerEvents = 'none';
+        column.style.margin = '0';
+        column.style.flex = 'none';
+        column.style.maxWidth = 'none';
+        column.style.minWidth = '0';
+        document.body.classList.add('is-planner-wbs-col-drag-active');
+        state.lifted = true;
+    };
+
+    const onWbsColDocPointerMove = (e) => {
+        const state = wbsColPtr;
+        if (!state || state.pointerId !== e.pointerId) return;
+        const dx = e.clientX - state.startX;
+        const dy = e.clientY - state.startY;
+        if (!state.lifted) {
+            if ((dx * dx + dy * dy) < WBS_DRAG_THRESHOLD * WBS_DRAG_THRESHOLD) return;
+            e.preventDefault();
+            liftWbsColumn(state, e.clientX, e.clientY);
+        }
+        if (!state.lifted) return;
+        e.preventDefault();
+        state.column.style.left = `${e.clientX - state.offsetX}px`;
+        state.column.style.top = `${e.clientY - state.offsetY}px`;
+        placeWbsColSlot(e.clientX, e.clientY, state.slot, state.bucket);
+    };
+
+    const onWbsColDocPointerUp = (e) => {
+        const state = wbsColPtr;
+        if (!state || (e.pointerId != null && state.pointerId !== e.pointerId)) return;
+        endWbsColPointerDrag({ commit: state.lifted });
+    };
+
+    section.addEventListener('pointerdown', (e) => {
+        if (e.button != null && e.button !== 0) return;
+        if (!plannerSectionCanEdit(section)) return;
+        if (e.target.closest?.('[data-planner-wbs-bucket-color], [data-planner-wbs-bucket-collapse], [data-planner-wbs-label], input, textarea, [contenteditable], button')) return;
+        const head = e.target.closest('.planner-wbs__column-head');
+        if (!head || !section.contains(head)) return;
+        const column = head.closest('[data-planner-wbs-column]');
+        if (!column || !section.contains(column)) return;
+        const bucket = Number(column.dataset.plannerWbsBucket);
+        if (!Number.isFinite(bucket)) return;
+        if (wbsPtr) endWbsPointerDrag({ commit: false });
+        if (wbsColPtr) endWbsColPointerDrag({ commit: false });
+        wbsColPtr = {
+            column,
+            bucket,
+            slot: null,
+            offsetX: 0,
+            offsetY: 0,
+            lifted: false,
+            startX: e.clientX,
+            startY: e.clientY,
+            pointerId: e.pointerId
+        };
+        document.addEventListener('pointermove', onWbsColDocPointerMove, { passive: false });
+        document.addEventListener('pointerup', onWbsColDocPointerUp);
+        document.addEventListener('pointercancel', onWbsColDocPointerUp);
+    });
+
     section.addEventListener('pointerdown', (e) => {
         if (e.button != null && e.button !== 0) return;
         if (e.target.closest?.('[data-planner-wbs-color], [data-planner-wbs-emphasis], [data-planner-wbs-reset-card], [data-planner-wbs-density], [data-planner-wbs-more], [data-planner-wbs-pack-toggle], [data-planner-wbs-field], textarea, input, [contenteditable]')) return;
         const card = e.target.closest('[data-planner-wbs-card]');
         if (!card || !section.contains(card) || !card.classList.contains('is-editable')) return;
         if (wbsFlyoutEditAt(e.clientX, e.clientY)) return;
+        if (wbsColPtr) endWbsColPointerDrag({ commit: false });
         const rowId = String(card.dataset.plannerRowId || '');
         if (!rowId) return;
         if (wbsPtr) endWbsPointerDrag({ commit: false });

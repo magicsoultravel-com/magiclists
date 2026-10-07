@@ -2163,7 +2163,7 @@ textarea.planner-kanban__card-comment:focus {
     align-items: center;
     justify-content: space-between;
     gap: 0.35rem;
-    padding: 0.45rem 2.15rem 0.45rem 0.5rem;
+    padding: 0.45rem 3.1rem 0.45rem 0.5rem;
     border-radius: 4px;
     border: 1px solid color-mix(in srgb, var(--border-color, #ccc) 65%, transparent);
     background: var(--surface, var(--bg-color, #fff));
@@ -2204,6 +2204,7 @@ textarea.planner-kanban__card-comment:focus {
 }
 
 .planner-wbs__column-color,
+.planner-wbs__column-grab,
 .planner-wbs__column-collapse {
     position: absolute;
     top: 0.22rem;
@@ -2226,28 +2227,38 @@ textarea.planner-kanban__card-comment:focus {
     right: 0.22rem;
 }
 
-.planner-wbs__column-color {
+/* Tray order from right: collapse · grab · color */
+.planner-wbs__column-grab {
     right: 1.2rem;
+    cursor: grab;
+}
+
+.planner-wbs__column-color {
+    right: 2.18rem;
 }
 
 .planner-wbs__column:hover .planner-wbs__column-collapse,
 .planner-wbs__column:focus-within .planner-wbs__column-collapse,
 .planner-wbs__column.is-collapsed .planner-wbs__column-collapse,
 .planner-wbs__column:hover .planner-wbs__column-color,
-.planner-wbs__column:focus-within .planner-wbs__column-color {
+.planner-wbs__column:focus-within .planner-wbs__column-color,
+.planner-wbs__column:hover .planner-wbs__column-grab,
+.planner-wbs__column:focus-within .planner-wbs__column-grab {
     opacity: 1;
 }
 
 .planner-wbs__column-collapse:hover,
 .planner-wbs__column-collapse:focus-visible,
 .planner-wbs__column-color:hover,
-.planner-wbs__column-color:focus-visible {
+.planner-wbs__column-color:focus-visible,
+.planner-wbs__column-grab:hover {
     background: color-mix(in srgb, var(--border-color) 22%, transparent);
     color: var(--text-color, inherit);
 }
 
 .planner-wbs__column-collapse svg,
-.planner-wbs__column-color svg {
+.planner-wbs__column-color svg,
+.planner-wbs__column-grab svg {
     width: 0.7rem;
     height: 0.7rem;
 }
@@ -2268,14 +2279,16 @@ textarea.planner-kanban__card-comment:focus {
 }
 
 .planner-wbs__column-head.has-color .planner-wbs__column-collapse,
-.planner-wbs__column-head.has-color .planner-wbs__column-color {
+.planner-wbs__column-head.has-color .planner-wbs__column-color,
+.planner-wbs__column-head.has-color .planner-wbs__column-grab {
     color: var(--card-action-fg, var(--card-fg, inherit));
 }
 
 .planner-wbs__column-head.has-color .planner-wbs__column-collapse:hover,
 .planner-wbs__column-head.has-color .planner-wbs__column-collapse:focus-visible,
 .planner-wbs__column-head.has-color .planner-wbs__column-color:hover,
-.planner-wbs__column-head.has-color .planner-wbs__column-color:focus-visible {
+.planner-wbs__column-head.has-color .planner-wbs__column-color:focus-visible,
+.planner-wbs__column-head.has-color .planner-wbs__column-grab:hover {
     background: var(--card-action-bg, color-mix(in srgb, #000 12%, transparent));
     color: var(--card-action-fg, var(--card-fg, inherit));
 }
@@ -3088,6 +3101,37 @@ body.is-planner-wbs-drag-active {
 .planner-wbs__card.is-planner-wbs-dragging {
     box-shadow: 0 6px 18px color-mix(in srgb, #000 22%, transparent);
     opacity: 0.95;
+}
+
+/* Column header rearrange */
+.planner-wbs:has(.planner-wbs__card.is-editable) .planner-wbs__column-head {
+    cursor: grab;
+}
+
+body.is-planner-wbs-col-drag-active {
+    cursor: grabbing;
+    user-select: none;
+}
+
+body.is-planner-wbs-col-drag-active .planner-wbs__column-head,
+body.is-planner-wbs-col-drag-active .planner-wbs__column-grab {
+    cursor: grabbing;
+}
+
+.planner-wbs__column.is-planner-wbs-col-dragging {
+    box-shadow: 0 8px 22px color-mix(in srgb, #000 20%, transparent);
+    opacity: 0.94;
+    background: transparent;
+}
+
+.planner-wbs__column-placeholder {
+    flex: 0 0 auto;
+    align-self: stretch;
+    border-radius: 4px;
+    border: 1.5px dashed color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 65%, transparent);
+    background: color-mix(in srgb, var(--accent-color, var(--accent, #6366f1)) 10%, transparent);
+    pointer-events: none;
+    box-sizing: border-box;
 }
 
 .has-custom-bg .planner-wbs__column {
