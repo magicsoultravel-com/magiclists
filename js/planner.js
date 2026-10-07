@@ -623,6 +623,102 @@ export function syncPlannerPackChildCategories(planner, packRow) {
 }
 
 /**
+ * Move a row (or pack block) under a work-pack parent as child line(s).
+ * Dropping a pack flattens it: former pack + its children become siblings under the target.
+ * @param {object} planner
+ * @param {number} fromRow
+ * @param {number} packRow
+ * @returns {boolean}
+ */
+export function adoptPlannerRowIntoPack(planner, fromRow, packRow) {
+    if (!isPlannerWritable(planner)) return false;
+    const sheet = planner.sheet;
+    const rows = sheet.rows || 0;
+    if (!Number.isFinite(fromRow) || !Number.isFinite(packRow)) return false;
+    if (fromRow < 0 || fromRow >= rows || packRow < 0 || packRow >= rows) return false;
+    if (!isPlannerRowPack(planner, packRow) || getPlannerRowLevel(planner, packRow) === 1) return false;
+
+    const packId = getPlannerRowId(planner, packRow);
+    if (!packId) return false;
+
+    const src = getPlannerRowBlock(planner, fromRow);
+    if (src.end <= src.start) return false;
+    // Cannot adopt a block that includes the target pack.
+    if (packRow >= src.start && packRow < src.end) return false;
+    // Already a child of this pack.
+    if (getPlannerPackParentRow(planner, fromRow) === packRow) return false;
+
+    const movedIds = planner.rowIds.slice(src.start, src.end).map(String);
+    const oldLabels = buildPlannerOutlineLabels(planner);
+    const idToOldRow = new Map(planner.rowIds.map((id, i) => [String(id), i]));
+
+    const orderIds = planner.rowIds.map(String).filter((id) => !movedIds.includes(id));
+    const packIdx = orderIds.indexOf(packId);
+    if (packIdx < 0) return false;
+
+    // Insert after the pack and any of its remaining children.
+    let insertAt = packIdx + 1;
+    while (insertAt < orderIds.length) {
+        const id = orderIds[insertAt];
+        if ((Number(planner.rowLevelById?.[id]) || 0) !== 1) break;
+        insertAt += 1;
+    }
+    orderIds.splice(insertAt, 0, ...movedIds);
+
+    const order = orderIds.map((id) => idToOldRow.get(id));
+    if (order.some((v) => v == null)) return false;
+
+    const oldToNew = new Map();
+    order.forEach((oldRow, newRow) => oldToNew.set(oldRow, newRow));
+
+    const nextCells = {};
+    const predCol = PLANNER_COLUMNS.findIndex((c) => c.key === 'pred');
+    for (let newRow = 0; newRow < rows; newRow++) {
+        const oldRow = order[newRow];
+        for (let c = 0; c < PLANNER_COL_COUNT; c++) {
+            const val = getCellValue(sheet, oldRow, c);
+            if (String(val || '').trim()) nextCells[`${newRow}:${c}`] = { v: String(val) };
+        }
+    }
+    sheet.cells = nextCells;
+    planner.rowIds = orderIds;
+
+    if (!planner.rowLevelById) planner.rowLevelById = {};
+    if (!planner.rowPackById) planner.rowPackById = {};
+    for (const mid of movedIds) {
+        delete planner.rowPackById[mid];
+        delete planner.rowCollapsedById?.[mid];
+        delete planner.tablePackCollapsedById?.[mid];
+        delete planner.rowHiddenById?.[mid];
+        planner.rowLevelById[mid] = 1;
+    }
+
+    const newLabels = buildPlannerOutlineLabels(planner);
+    const oldLabelToNewLabel = new Map();
+    for (let oldRow = 0; oldRow < oldLabels.length; oldRow++) {
+        const newRow = oldToNew.get(oldRow);
+        if (newRow == null) continue;
+        oldLabelToNewLabel.set(String(oldLabels[oldRow]).toLowerCase(), newLabels[newRow]);
+    }
+    for (let r = 0; r < rows; r++) {
+        const raw = getCellValue(sheet, r, predCol);
+        if (!raw) continue;
+        const next = parsePredecessorIds(raw)
+            .map((tok) => oldLabelToNewLabel.get(String(tok).toLowerCase()) || tok)
+            .join(', ');
+        setCellValue(sheet, r, predCol, next);
+    }
+
+    const newPackRow = planner.rowIds.indexOf(packId);
+    delete planner.tablePackCollapsedById?.[packId];
+    syncPlannerPackChildCategories(planner, newPackRow);
+    pruneKanbanOrphanKeys(planner);
+    repairPlannerHierarchy(planner);
+    assertPlannerRowIdInvariant(planner);
+    return true;
+}
+
+/**
  * Insert a blank row at index, shifting later rows down. Returns new row id.
  * @param {object} planner
  * @param {number} index

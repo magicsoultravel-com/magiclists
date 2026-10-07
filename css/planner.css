@@ -837,6 +837,12 @@
     outline-offset: -1px;
 }
 
+.planner-grid tr.is-drag-over-pack {
+    outline: 2px solid color-mix(in srgb, var(--accent, #5b8def) 75%, transparent);
+    outline-offset: -1px;
+    background: color-mix(in srgb, var(--accent, #5b8def) 12%, transparent);
+}
+
 .planner-gantt__board {
     display: flex;
     align-items: stretch;

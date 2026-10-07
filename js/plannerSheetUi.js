@@ -38,7 +38,8 @@ import {
     syncPlannerPackChildCategories,
     addPlannerRow,
     removePlannerRow,
-    movePlannerRow
+    movePlannerRow,
+    adoptPlannerRowIntoPack
 } from './planner.js';
 
 /** Same pattern as checklist: keep #app-canvas from jumping on DOM surgery. */
@@ -921,29 +922,53 @@ export function bindSheet(ctx) {
         if (!row || !section.contains(row) || dragFrom == null) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
-        section.querySelectorAll('tr.is-drag-over').forEach((el) => el.classList.remove('is-drag-over'));
+        section.querySelectorAll('tr.is-drag-over, tr.is-drag-over-pack').forEach((el) => {
+            el.classList.remove('is-drag-over', 'is-drag-over-pack');
+        });
         row.classList.add('is-drag-over');
+        const toIndex = Number(row.dataset.plannerRowIndex);
+        if (
+            Number.isFinite(toIndex)
+            && item.planner
+            && isPlannerRowPack(item.planner, toIndex)
+            && getPlannerRowLevel(item.planner, toIndex) === 0
+            && toIndex !== dragFrom
+            && getPlannerPackParentRow(item.planner, dragFrom) !== toIndex
+        ) {
+            row.classList.add('is-drag-over-pack');
+        }
     });
     section.addEventListener('drop', (e) => {
         const row = e.target.closest('tr[data-planner-row-index]');
         if (!row || !section.contains(row) || dragFrom == null) return;
         e.preventDefault();
         const toIndex = Number(row.dataset.plannerRowIndex);
-        section.querySelectorAll('tr.is-drag-over, tr.is-dragging').forEach((el) => {
-            el.classList.remove('is-drag-over', 'is-dragging');
+        section.querySelectorAll('tr.is-drag-over, tr.is-drag-over-pack, tr.is-dragging').forEach((el) => {
+            el.classList.remove('is-drag-over', 'is-drag-over-pack', 'is-dragging');
         });
         if (!Number.isFinite(toIndex) || toIndex === dragFrom) {
             dragFrom = null;
             return;
         }
-        mutate((it) => movePlannerRow(it.planner, dragFrom, toIndex), { skipRerender: true, refreshGantt: true });
+        const from = dragFrom;
         dragFrom = null;
+        mutate((it) => {
+            const packDrop = isPlannerRowPack(it.planner, toIndex)
+                && getPlannerRowLevel(it.planner, toIndex) === 0;
+            if (packDrop) {
+                if (!adoptPlannerRowIntoPack(it.planner, from, toIndex)) {
+                    // Already a child of this pack (or invalid) — leave order alone.
+                }
+            } else {
+                movePlannerRow(it.planner, from, toIndex);
+            }
+        }, { skipRerender: true, refreshGantt: true });
         refresh();
     });
     section.addEventListener('dragend', () => {
         dragFrom = null;
-        section.querySelectorAll('tr.is-drag-over, tr.is-dragging').forEach((el) => {
-            el.classList.remove('is-drag-over', 'is-dragging');
+        section.querySelectorAll('tr.is-drag-over, tr.is-drag-over-pack, tr.is-dragging').forEach((el) => {
+            el.classList.remove('is-drag-over', 'is-drag-over-pack', 'is-dragging');
         });
     });
 

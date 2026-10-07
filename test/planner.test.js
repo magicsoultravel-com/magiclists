@@ -11,6 +11,7 @@ import {
     addPlannerRow,
     removePlannerRow,
     movePlannerRow,
+    adoptPlannerRowIntoPack,
     parsePredecessorIds,
     getPlannerField,
     setPlannerField,
@@ -994,6 +995,38 @@ describe('planner WBS and work packs', () => {
         const cards = derivePlannerWbsCards(planner);
         assert.deepEqual(cards.map((c) => c.name), ['Pack', 'Child']);
         assert.equal(cards[0].isPack, true);
+    });
+
+    it('adoptPlannerRowIntoPack morphs a root into a pack child', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'Pack');
+        setPlannerField(planner.sheet, 0, 'category', 'Ops');
+        togglePlannerWorkPack(planner, 0);
+        setPlannerField(planner.sheet, 1, 'name', 'Solo');
+        setPlannerField(planner.sheet, 1, 'category', 'Other');
+        assert.equal(adoptPlannerRowIntoPack(planner, 1, 0), true);
+        assert.equal(getPlannerRowLevel(planner, 1), 1);
+        assert.equal(getPlannerPackParentRow(planner, 1), 0);
+        assert.equal(getPlannerField(planner.sheet, 1, 'category'), 'Ops');
+        assert.equal(adoptPlannerRowIntoPack(planner, 1, 0), false); // already a child
+    });
+
+    it('adoptPlannerRowIntoPack flattens a dragged pack under the target', () => {
+        const planner = createEmptyPlanner();
+        setPlannerField(planner.sheet, 0, 'name', 'Host');
+        togglePlannerWorkPack(planner, 0);
+        setPlannerField(planner.sheet, 1, 'name', 'Guest');
+        togglePlannerWorkPack(planner, 1);
+        addPlannerPackChild(planner, 1);
+        setPlannerField(planner.sheet, 2, 'name', 'GuestKid');
+        assert.equal(adoptPlannerRowIntoPack(planner, 1, 0), true);
+        assert.equal(isPlannerRowPack(planner, 0), true);
+        assert.equal(isPlannerRowPack(planner, 1), false);
+        assert.equal(getPlannerRowLevel(planner, 1), 1);
+        assert.equal(getPlannerRowLevel(planner, 2), 1);
+        assert.equal(getPlannerField(planner.sheet, 1, 'name'), 'Guest');
+        assert.equal(getPlannerField(planner.sheet, 2, 'name'), 'GuestKid');
+        assert.deepEqual(buildPlannerOutlineLabels(planner).slice(0, 3), ['1', '1a', '1b']);
     });
 
     it('pack children inherit parent category and render locked in sheet', () => {
