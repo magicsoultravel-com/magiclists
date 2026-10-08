@@ -1699,7 +1699,7 @@ export const MagicFocus = {
     async refreshPlannerPanes(item) {
         if (!this.isOpen() || !item || this.showingSetup) return;
         const live = this.resolveItem() || item;
-        const { renderPlannerTableHtml, refreshPlannerDerivedViews } = await import('./plannerUi.js');
+        const { renderPlannerTableHtml, refreshPlannerDerivedViews, growPlannerTextareas } = await import('./plannerUi.js');
         const { normalizePlanner } = await import('./planner.js');
         if (live.planner) live.planner = normalizePlanner(live.planner) || live.planner;
 
@@ -1733,6 +1733,11 @@ export const MagicFocus = {
             }
             if (tableSec && live.planner) {
                 tableSec.innerHTML = renderPlannerTableHtml(live.planner, { canEdit: true });
+                // Host stays bound; re-measure textareas so multi-line Comments/Name keep height.
+                growPlannerTextareas(tableSec);
+                requestAnimationFrame(() => {
+                    if (tableSec.isConnected) growPlannerTextareas(tableSec);
+                });
             }
         }
         // Gantt + kanban + wbs + summary refresh, in place across every host (board/modal/focus).

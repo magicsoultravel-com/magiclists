@@ -323,7 +323,8 @@ export function refreshAllPlannerKanbans(items = []) {
     }
 }
 
-function growPlannerTextareas(section) {
+/** Re-measure planner textareas after DOM rebuild (Focus table, first bind, etc.). */
+export function growPlannerTextareas(section) {
     const canvasScroll = captureCanvasScroll();
     section?.querySelectorAll('.planner-cell-input, textarea.planner-kanban__card-comment').forEach((el) => {
         growPlannerCell(el);
