@@ -496,7 +496,9 @@ html:not([data-theme-skin="1"])[data-file-cabinet-bg="none"] .file-cabinet-categ
 .file-cabinet-row {
     display: flex;
     flex-direction: row;
-    align-items: flex-start;
+    /* Stretch so every open drawer's background matches the tallest one
+       (stack heights still vary per note count; the shelf box equalizes). */
+    align-items: stretch;
     gap: 0.65rem;
     min-width: 0;
 }
