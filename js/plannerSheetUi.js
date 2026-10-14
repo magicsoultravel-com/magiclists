@@ -42,21 +42,7 @@ import {
     adoptPlannerRowIntoPack
 } from './planner.js';
 
-/** Same pattern as checklist: keep #app-canvas from jumping on DOM surgery. */
-function captureCanvasScroll() {
-    const canvas = document.getElementById('app-canvas');
-    return {
-        scrollTop: canvas?.scrollTop ?? 0,
-        scrollLeft: canvas?.scrollLeft ?? 0
-    };
-}
-
-function restoreCanvasScroll(scrollPos) {
-    const canvas = document.getElementById('app-canvas');
-    if (!canvas || !scrollPos) return;
-    canvas.scrollTop = scrollPos.scrollTop;
-    canvas.scrollLeft = scrollPos.scrollLeft;
-}
+import { captureCanvasScroll, restoreCanvasScroll } from './plannerSharedUi.js';
 
 /** Work-pack toggle — nested lines. */
 const PLANNER_PACK_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false" aria-hidden="true"><path d="M2 3.2h8M2 6h8M4.2 8.8H10" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/></svg>';
@@ -594,8 +580,6 @@ export function refreshPlannerSummaryInSection(section, item) {
     if (next) host.replaceWith(next);
     restoreCanvasScroll(canvasScroll);
 }
-
-export { captureCanvasScroll, restoreCanvasScroll };
 
 /**
  * Build datetime commit helpers closed over ctx.mutate / section.

@@ -8,10 +8,8 @@ import {
     normalizePlanner,
     getCategoryColor,
     getPlannerField,
-    setPlannerField,
     getPlannerRowId,
     getPlannerOutlineLabel,
-    createEmptyPlanner,
     isPlannerUnsupportedNewer,
     setPlannerPackCollapsed,
     isPlannerPackCollapsed
@@ -36,75 +34,12 @@ import {
     expandAllWbsCards,
     collapseAllWbsCards
 } from './plannerWbs.js';
-
-/** Pointer lift threshold — local copy (Kanban defines its own). */
-const WBS_DRAG_THRESHOLD = 4;
-
-/** Same pattern as checklist: keep #app-canvas from jumping on DOM surgery. */
-function captureCanvasScroll() {
-    const canvas = document.getElementById('app-canvas');
-    return {
-        scrollTop: canvas?.scrollTop ?? 0,
-        scrollLeft: canvas?.scrollLeft ?? 0
-    };
-}
-
-function restoreCanvasScroll(scrollPos) {
-    const canvas = document.getElementById('app-canvas');
-    if (!canvas || !scrollPos) return;
-    canvas.scrollTop = scrollPos.scrollTop;
-    canvas.scrollLeft = scrollPos.scrollLeft;
-}
-
-function bodyCanEdit(body) {
-    return !!(body?.querySelector?.('.card-inline-edit, .sheet-cell-input, .planner-cell-input, .expanded-checklist-add-btn'));
-}
-
-function plannerSectionCanEdit(section) {
-    if (!section) return false;
-    if (section.closest?.('.magic-focus__pane')) return true;
-    if (section.matches?.('[data-focus-table-only], [data-focus-chart-only], [data-focus-kanban-only], [data-focus-wbs-only]')) return true;
-    if (section.querySelector?.('.planner-cell-input, [data-planner-rail-resize], .planner-kanban__card.is-editable, [data-planner-kanban-field], .planner-wbs__card.is-editable, [data-planner-wbs-field]')) {
-        return true;
-    }
-    return bodyCanEdit(section.closest('.editor-note-body') || section);
-}
-
-function growPlannerCellLocal(el) {
-    if (!el || !el.style) return;
-    el.style.height = '0';
-    const next = Math.max(el.scrollHeight, 18);
-    if (el.matches?.('textarea.planner-kanban__card-comment') && document.activeElement !== el) {
-        const lh = Number.parseFloat(getComputedStyle(el).lineHeight) || 14;
-        const hasText = String(el.value || '').trim().length > 0;
-        el.style.height = `${Math.min(next, Math.round(lh * (hasText ? 3 : 1)))}px`;
-        return;
-    }
-    el.style.height = `${next}px`;
-}
-
-function growPlannerTextareasLocal(section) {
-    const canvasScroll = captureCanvasScroll();
-    section?.querySelectorAll('.planner-cell-input, textarea.planner-kanban__card-comment').forEach((el) => {
-        growPlannerCellLocal(el);
-    });
-    restoreCanvasScroll(canvasScroll);
-}
-
-
-/** Compact date for WBS corner overlays. */
-function formatKanbanCardDate(value) {
-    const raw = String(value || '').trim();
-    if (!raw) return '';
-    const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
-    return m ? m[1] : '';
-}
-
-/** Warning triangle with exclamation — urgent / focus. */
-const KANBAN_URGENT_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false" aria-hidden="true"><path d="M6 1.8 10.6 10.2H1.4Z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M6 4.4v2.6" fill="none" stroke="currentColor" stroke-width="1.05" stroke-linecap="round"/><circle cx="6" cy="8.55" r="0.55" fill="currentColor"/></svg>';
-
-/** Soft circle — non-urgent / muted. */
-const KANBAN_MUTED_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false" aria-hidden="true"><circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M3.6 6h4.8" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>';
+import {
+    plannerSectionCanEdit,
+    growPlannerTextareas,
+    PLANNER_CARD_DRAG_THRESHOLD
+} from './plannerSharedUi.js';
+import { renderPlannerCardHtml, bindPlannerCardFields, closeOpenPlannerCardActions } from './plannerCardUi.js';
 
 /** Phase/deliverable mode swap. */
 const WBS_MODE_ICON = '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false" aria-hidden="true"><path d="M2.4 3.2h7.2M2.4 6h7.2M2.4 8.8h4.4" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linecap="round"/><path d="M8.2 7.4l1.6 1.6 1.6-1.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -115,74 +50,16 @@ const WBS_MODE_ICON = '<svg viewBox="0 0 12 12" width="12" height="12" focusable
  * @param {{ canEdit?: boolean, childClass?: string, isPack?: boolean, packCollapsed?: boolean }} [opts]
  */
 function renderWbsCardHtml(planner, card, { canEdit = false, childClass = '', isPack = false, packCollapsed = false } = {}) {
-    const editClass = canEdit ? ' is-editable' : '';
-    const startLabel = formatKanbanCardDate(card.start);
-    const stopLabel = formatKanbanCardDate(card.stop);
-    const rowLabel = getPlannerOutlineLabel(planner, card.row);
-    const startHtml = startLabel
-        ? `<span class="planner-wbs__card-date planner-wbs__card-date--start" title="Start ${escapeAttr(startLabel)}">${escapeHTML(startLabel)}</span>`
-        : '';
-    const stopHtml = stopLabel
-        ? `<span class="planner-wbs__card-date planner-wbs__card-date--stop" title="Stop ${escapeAttr(stopLabel)}">${escapeHTML(stopLabel)}</span>`
-        : '';
-    const rowHtml = `<span class="planner-wbs__card-row" title="Row ${escapeAttr(rowLabel)}">${escapeHTML(rowLabel)}</span>`;
-    const commentRaw = String(card.comments || '');
-    const comment = commentRaw.trim();
-    const nameText = String(card.name || '');
-    const emphasis = card.emphasis === 'urgent' || card.emphasis === 'muted' ? card.emphasis : '';
-    const emphasisClass = emphasis ? ` is-${emphasis}` : '';
-    const cardCollapsed = !!card.collapsed;
-    const collapsedClass = cardCollapsed ? ' is-collapsed' : '';
-    const urgentActive = emphasis === 'urgent' ? ' is-active' : '';
-    const mutedActive = emphasis === 'muted' ? ' is-active' : '';
-    const densityTitle = cardCollapsed ? 'Expand card' : 'Collapse card';
-    const densityIcon = cardCollapsed ? CARD_ICONS.expand : CARD_ICONS.collapse;
-    const packToggleTitle = packCollapsed ? 'Expand work pack' : 'Collapse work pack';
-    const packToggleClass = packCollapsed ? ' collapsed' : '';
-    const packToggleHtml = isPack
-        ? `<button type="button" class="planner-wbs__pack-toggle collapsable-toggle${packToggleClass}" data-planner-wbs-pack-toggle title="${escapeAttr(packToggleTitle)}" aria-label="${escapeAttr(packToggleTitle)}" aria-expanded="${packCollapsed ? 'false' : 'true'}">▼</button>`
-        : '';
-    const actionsHtml = canEdit
-        ? `<span class="planner-wbs__card-actions">
-            <span class="planner-wbs__card-actions-tray">
-                <button type="button" class="planner-wbs__card-density" data-planner-wbs-density title="${escapeAttr(densityTitle)}" aria-label="${escapeAttr(densityTitle)}" aria-pressed="${cardCollapsed ? 'true' : 'false'}">${densityIcon}</button>
-                <button type="button" class="planner-wbs__card-emphasis${urgentActive}" data-planner-wbs-emphasis="urgent" title="Mark urgent" aria-label="Mark urgent" aria-pressed="${emphasis === 'urgent' ? 'true' : 'false'}">${KANBAN_URGENT_ICON}</button>
-                <button type="button" class="planner-wbs__card-emphasis${mutedActive}" data-planner-wbs-emphasis="muted" title="Mark non-urgent" aria-label="Mark non-urgent" aria-pressed="${emphasis === 'muted' ? 'true' : 'false'}">${KANBAN_MUTED_ICON}</button>
-                <button type="button" class="planner-wbs__card-color" data-planner-wbs-color title="Card color" aria-label="Card color">${CARD_ICONS.color}</button>
-                <button type="button" class="planner-wbs__card-reset" data-planner-wbs-reset-card title="Reset card styles" aria-label="Reset card styles">${ACTION_ICONS.resetCustomization}</button>
-            </span>
-            <button type="button" class="planner-wbs__card-more" data-planner-wbs-more title="More actions" aria-label="More actions" aria-expanded="false">${CARD_ICONS.more}</button>
-            <span class="planner-wbs__card-grab" title="Drag to move" aria-hidden="true">${CARD_ICONS.drag}</span>
-        </span>`
-        : '';
-    const slotNameHtml = canEdit
-        ? `<div class="planner-wbs__card-name card-inline-edit" contenteditable="plaintext-only" data-planner-wbs-field="name" data-planner-row="${card.row}" spellcheck="false" role="textbox" aria-label="Name">${escapeHTML(nameText)}</div>`
-        : `<span class="planner-wbs__card-name">${escapeHTML(nameText)}</span>`;
-    const slotCommentHtml = canEdit
-        ? `<textarea class="planner-wbs__card-comment card-inline-edit" data-planner-wbs-field="comments" data-planner-row="${card.row}" rows="1" spellcheck="false" aria-label="Comments">${escapeHTML(commentRaw)}</textarea>`
-        : (comment ? `<span class="planner-wbs__card-comment">${escapeHTML(comment)}</span>` : '');
-    const flyoutNameHtml = `<span class="planner-wbs__card-name">${escapeHTML(nameText)}</span>`;
-    const flyoutCommentHtml = comment
-        ? `<span class="planner-wbs__card-comment">${escapeHTML(comment)}</span>`
-        : '';
-    const metaHtml = `${rowHtml}${startHtml}${stopHtml}`;
-    const slotBody = `${metaHtml}
-        <div class="planner-wbs__card-top">${packToggleHtml}${slotNameHtml}</div>
-        ${slotCommentHtml}`;
-    const flyoutBody = `${metaHtml}
-        <div class="planner-wbs__card-top">${flyoutNameHtml}</div>
-        ${flyoutCommentHtml}`;
-    const surface = surfaceThemeInline(card.cardColor);
-    const colorClass = card.cardColor ? ` has-color${surface.className}` : '';
-    const packClass = isPack ? ' planner-wbs__pack-card' : '';
-    const packAttrs = isPack
-        ? ` data-planner-wbs-pack data-wbs-pack-collapsed="${packCollapsed ? '1' : '0'}"`
-        : '';
-    return `<article class="planner-wbs__card${packClass}${colorClass}${emphasisClass}${collapsedClass}${editClass}${childClass}" data-planner-wbs-card data-planner-row="${card.row}" data-planner-row-id="${escapeAttr(card.rowId)}" data-wbs-emphasis="${escapeAttr(emphasis)}" data-wbs-collapsed="${cardCollapsed ? '1' : '0'}"${packAttrs}${surface.style}>
-        <div class="planner-wbs__card-slot">${slotBody}</div>
-        <div class="planner-wbs__card-flyout" aria-hidden="true">${flyoutBody}</div>
-        ${actionsHtml}
-    </article>`;
+    return renderPlannerCardHtml(planner, card, {
+        mode: 'wbs',
+        canEdit,
+        childClass,
+        isPack,
+        packCollapsed,
+        includeRowId: true,
+        indent: '        ',
+        rowLabel: (p, c) => getPlannerOutlineLabel(p, c.row)
+    });
 }
 
 /**
@@ -313,19 +190,14 @@ export function refreshWbsInSection(section, item) {
     host.replaceWith(next);
     const nextBoard = next.querySelector('[data-planner-wbs-board]');
     if (nextBoard && preserveScrollLeft != null) nextBoard.scrollLeft = preserveScrollLeft;
-    growPlannerTextareasLocal(next);
+    growPlannerTextareas(next);
 }
 /**
  * @param {HTMLElement} section
  * @param {HTMLElement|null} [except]
  */
 export function closeOpenWbsCardActions(section, except = null) {
-    section.querySelectorAll('.planner-wbs__card-actions.is-actions-open').forEach((el) => {
-        if (except && el === except) return;
-        el.classList.remove('is-actions-open');
-        const more = el.querySelector('[data-planner-wbs-more]');
-        if (more) more.setAttribute('aria-expanded', 'false');
-    });
+    closeOpenPlannerCardActions(section, 'wbs', except);
 }
 
 /**
@@ -541,25 +413,11 @@ export function handleWbsClick(ctx, e) {
 export function bindWbs(ctx) {
     const {
         section, item, mutate, schedulePlannerCommit, flushPlannerCommit,
-        growPlannerCell, mirrorBoardFieldToTableDom
+        mirrorBoardFieldToTableDom
     } = ctx;
-    const grow = growPlannerCell || growPlannerCellLocal;
 
-    section.addEventListener('input', (e) => {
-        const wbsField = e.target.closest('[data-planner-wbs-field]');
-        if (wbsField && section.contains(wbsField)) {
-            const row = Number(wbsField.dataset.plannerRow);
-            const key = String(wbsField.dataset.plannerWbsField || '');
-            if (!Number.isFinite(row) || (key !== 'name' && key !== 'comments')) return;
-            schedulePlannerCommit({ refreshGantt: true });
-            if (!item.planner) item.planner = createEmptyPlanner();
-            const value = key === 'name'
-                ? String(wbsField.textContent || '')
-                : String(wbsField.value ?? '');
-            setPlannerField(item.planner.sheet, row, key, value);
-            mirrorBoardFieldToTableDom?.(item.id, row, key, value);
-            if (key === 'comments') grow(wbsField);
-        }
+    bindPlannerCardFields(section, 'wbs', {
+        item, schedulePlannerCommit, flushPlannerCommit, mirrorBoardFieldToTableDom
     });
 
     section.addEventListener('change', (e) => {
@@ -570,61 +428,6 @@ export function bindWbs(ctx) {
             mutate((it) => {
                 setWbsBucketLabel(it.planner, bucket, labelInput.value);
             }, { skipRerender: true, refreshGantt: true });
-        }
-    });
-
-    section.addEventListener('focusin', (e) => {
-        const wbsField = e.target.closest?.('[data-planner-wbs-field]');
-        if (wbsField && section.contains(wbsField)) {
-            const card = wbsField.closest('[data-planner-wbs-card]');
-            card?.classList.add('is-wbs-editing');
-            if (wbsField.dataset.plannerWbsField === 'name') {
-                wbsField.dataset.wbsNamePrev = String(wbsField.textContent || '');
-            }
-            if (wbsField.dataset.plannerWbsField === 'comments') {
-                grow(wbsField);
-            }
-        }
-    });
-
-    section.addEventListener('focusout', (e) => {
-        const wbsField = e.target.closest?.('[data-planner-wbs-field]');
-        if (wbsField && section.contains(wbsField)) {
-            const card = wbsField.closest('[data-planner-wbs-card]');
-            const related = e.relatedTarget;
-            const stayingOnCard = related && card?.contains(related);
-            if (!stayingOnCard) card?.classList.remove('is-wbs-editing');
-
-            if (wbsField.dataset.plannerWbsField === 'name') {
-                const row = Number(wbsField.dataset.plannerRow);
-                const trimmed = String(wbsField.textContent || '').trim();
-                if (!trimmed) {
-                    const prev = String(wbsField.dataset.wbsNamePrev || '').trim()
-                        || (Number.isFinite(row) ? getPlannerField(item.planner?.sheet, row, 'name') : '');
-                    wbsField.textContent = prev;
-                    if (Number.isFinite(row) && item.planner?.sheet) {
-                        setPlannerField(item.planner.sheet, row, 'name', prev);
-                        mirrorBoardFieldToTableDom?.(item.id, row, 'name', prev);
-                    }
-                } else if (String(wbsField.textContent || '') !== trimmed) {
-                    wbsField.textContent = trimmed;
-                    const rowNum = Number(wbsField.dataset.plannerRow);
-                    if (Number.isFinite(rowNum) && item.planner?.sheet) {
-                        setPlannerField(item.planner.sheet, rowNum, 'name', trimmed);
-                        mirrorBoardFieldToTableDom?.(item.id, rowNum, 'name', trimmed);
-                    }
-                } else if (Number.isFinite(row)) {
-                    mirrorBoardFieldToTableDom?.(item.id, row, 'name', trimmed);
-                }
-            }
-            if (wbsField.dataset.plannerWbsField === 'comments') {
-                const row = Number(wbsField.dataset.plannerRow);
-                if (Number.isFinite(row)) {
-                    mirrorBoardFieldToTableDom?.(item.id, row, 'comments', String(wbsField.value ?? ''));
-                }
-                requestAnimationFrame(() => grow(wbsField));
-            }
-            flushPlannerCommit();
         }
     });
 
@@ -920,7 +723,7 @@ export function bindWbs(ctx) {
         const dx = e.clientX - state.startX;
         const dy = e.clientY - state.startY;
         if (!state.lifted) {
-            if ((dx * dx + dy * dy) < WBS_DRAG_THRESHOLD * WBS_DRAG_THRESHOLD) return;
+            if ((dx * dx + dy * dy) < PLANNER_CARD_DRAG_THRESHOLD * PLANNER_CARD_DRAG_THRESHOLD) return;
             e.preventDefault();
             liftWbsCard(state, e.clientX, e.clientY);
         }
@@ -1079,7 +882,7 @@ export function bindWbs(ctx) {
         const dx = e.clientX - state.startX;
         const dy = e.clientY - state.startY;
         if (!state.lifted) {
-            if ((dx * dx + dy * dy) < WBS_DRAG_THRESHOLD * WBS_DRAG_THRESHOLD) return;
+            if ((dx * dx + dy * dy) < PLANNER_CARD_DRAG_THRESHOLD * PLANNER_CARD_DRAG_THRESHOLD) return;
             e.preventDefault();
             liftWbsColumn(state, e.clientX, e.clientY);
         }

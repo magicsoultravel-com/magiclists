@@ -2,7 +2,6 @@
 import { mutateItem, emitItemMutation } from './noteSurfaceMutations.js';
 import { UndoManager } from './undo.js';
 import { refreshNoteCanvasPreview } from './noteCanvasRenderer.js';
-import { combineDateTime } from './noteModel.js';
 import { CARD_ICONS } from './icons.js';
 import { renderFocusSpawnBtnHtml } from './noteFocusSpawn.js';
 import {
@@ -12,8 +11,6 @@ import {
     plannerHasContent,
     isPlannerUnsupportedNewer,
     isPlannerWritable,
-    setCellValue,
-    setPlannerField,
     derivePlannerTasks
 } from './planner.js';
 import { layoutPlannerGantt } from './plannerGantt.js';
@@ -42,10 +39,15 @@ import {
     renderPlannerSummaryHtml,
     renderPlannerTableHtml,
     handleSheetClick,
-    bindSheet,
-    captureCanvasScroll,
-    restoreCanvasScroll
+    bindSheet
 } from './plannerSheetUi.js';
+import {
+    captureCanvasScroll,
+    restoreCanvasScroll,
+    bodyCanEdit,
+    growPlannerCell,
+    growPlannerTextareas
+} from './plannerSharedUi.js';
 import {
     renderPlannerGanttHtml,
     measureGanttRailRowHeight,
@@ -109,21 +111,6 @@ function noteBodiesForItem(itemId) {
         });
     }
     return out;
-}
-
-function bodyCanEdit(body) {
-    return !!(body?.querySelector?.('.card-inline-edit, .sheet-cell-input, .planner-cell-input, .expanded-checklist-add-btn'));
-}
-
-function plannerSectionCanEdit(section) {
-    if (!section) return false;
-    if (section.closest?.('.magic-focus__pane')) return true;
-    if (section.matches?.('[data-focus-table-only], [data-focus-chart-only], [data-focus-kanban-only], [data-focus-wbs-only]')) return true;
-    // Require editable chrome — readonly cards also carry [data-planner-kanban-card].
-    if (section.querySelector?.('.planner-cell-input, [data-planner-rail-resize], .planner-kanban__card.is-editable, [data-planner-kanban-field], .planner-wbs__card.is-editable, [data-planner-wbs-field]')) {
-        return true;
-    }
-    return bodyCanEdit(section.closest('.editor-note-body') || section);
 }
 
 /**
@@ -218,43 +205,6 @@ function bindPlannerSectionToggle(section, item, { onModuleToggle } = {}) {
 }
 
 /**
- * Sync planner datetime/text inputs from DOM into item.planner.sheet.
- * @param {HTMLElement} section
- * @param {object} item
- */
-export function syncPlannerFromDom(section, item) {
-    if (!section || !item?.planner?.sheet) return;
-    const sheet = item.planner.sheet;
-
-    section.querySelectorAll('[data-planner-datetime]').forEach((wrap) => {
-        const row = Number(wrap.dataset.row);
-        const col = Number(wrap.dataset.col);
-        if (!Number.isFinite(row) || !Number.isFinite(col)) return;
-        const date = wrap.querySelector('[data-planner-date]')?.value || '';
-        const time = wrap.querySelector('[data-planner-time]')?.value || '';
-        setCellValue(sheet, row, col, combineDateTime(date, time));
-    });
-
-    section.querySelectorAll('[data-planner-cell]').forEach((el) => {
-        const row = Number(el.dataset.row);
-        const col = Number(el.dataset.col);
-        if (!Number.isFinite(row) || !Number.isFinite(col)) return;
-        setCellValue(sheet, row, col, el.value);
-    });
-
-    // After table cells so live kanban/wbs edits win over stale sheet inputs.
-    section.querySelectorAll('[data-planner-kanban-field], [data-planner-wbs-field]').forEach((el) => {
-        const row = Number(el.dataset.plannerRow);
-        const key = String(el.dataset.plannerKanbanField || el.dataset.plannerWbsField || '');
-        if (!Number.isFinite(row) || (key !== 'name' && key !== 'comments')) return;
-        const value = key === 'name'
-            ? String(el.textContent || '')
-            : String(el.value ?? '');
-        setPlannerField(sheet, row, key, value);
-    });
-}
-
-/**
  * Keep table name/comments inputs aligned with a kanban/wbs field edit (same note hosts).
  * Prevents stale table DOM from overwriting the sheet on the next body sync.
  * @param {string} itemId
@@ -272,11 +222,6 @@ function mirrorBoardFieldToTableDom(itemId, row, key, value) {
             growPlannerCell(cell);
         });
     }
-}
-
-/** @deprecated alias — same as mirrorBoardFieldToTableDom */
-function mirrorKanbanFieldToTableDom(itemId, row, key, value) {
-    mirrorBoardFieldToTableDom(itemId, row, key, value);
 }
 
 /**
@@ -323,29 +268,8 @@ export function refreshAllPlannerKanbans(items = []) {
     }
 }
 
-/** Re-measure planner textareas after DOM rebuild (Focus table, first bind, etc.). */
-export function growPlannerTextareas(section) {
-    const canvasScroll = captureCanvasScroll();
-    section?.querySelectorAll('.planner-cell-input, textarea.planner-kanban__card-comment').forEach((el) => {
-        growPlannerCell(el);
-    });
-    restoreCanvasScroll(canvasScroll);
-}
-
-/** Auto-size a single planner cell — cheap enough for per-keystroke use. */
-function growPlannerCell(el) {
-    if (!el || !el.style) return;
-    el.style.height = '0';
-    const next = Math.max(el.scrollHeight, 18);
-    // Kanban comments: empty stays 1 line; content caps at ~3 unless focused.
-    if (el.matches?.('textarea.planner-kanban__card-comment') && document.activeElement !== el) {
-        const lh = Number.parseFloat(getComputedStyle(el).lineHeight) || 14;
-        const hasText = String(el.value || '').trim().length > 0;
-        el.style.height = `${Math.min(next, Math.round(lh * (hasText ? 3 : 1)))}px`;
-        return;
-    }
-    el.style.height = `${next}px`;
-}
+/** Re-measure planner textareas after DOM rebuild — shared with the card boards. */
+export { growPlannerCell, growPlannerTextareas };
 
 const PLANNER_COMMIT_MS = 380;
 

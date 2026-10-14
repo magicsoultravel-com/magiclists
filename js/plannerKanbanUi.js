@@ -3,15 +3,13 @@ import { escapeHTML, escapeAttr } from './domEscape.js';
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
 import { renderFocusSpawnBtnHtml } from './noteFocusSpawn.js';
 import { ColorPicker, PALETTE_NOTE, resolveNoteColor } from './colorPicker.js';
-import { surfaceThemeInline } from './cardTheme.js';
+import {  } from './cardTheme.js';
 import { readDisplayOptions } from './displayOptions.js';
 import {
     normalizePlanner,
     getCategoryColor,
     getPlannerField,
-    setPlannerField,
     getPlannerRowId,
-    createEmptyPlanner,
     isPlannerUnsupportedNewer
 } from './planner.js';
 import {
@@ -31,57 +29,12 @@ import {
     resetAllKanbanCardStyles,
     resetKanbanArrangement
 } from './plannerKanban.js';
-
-/** Same pattern as checklist: keep #app-canvas from jumping on DOM surgery. */
-function captureCanvasScroll() {
-    const canvas = document.getElementById('app-canvas');
-    return {
-        scrollTop: canvas?.scrollTop ?? 0,
-        scrollLeft: canvas?.scrollLeft ?? 0
-    };
-}
-
-function restoreCanvasScroll(scrollPos) {
-    const canvas = document.getElementById('app-canvas');
-    if (!canvas || !scrollPos) return;
-    canvas.scrollTop = scrollPos.scrollTop;
-    canvas.scrollLeft = scrollPos.scrollLeft;
-}
-
-function bodyCanEdit(body) {
-    return !!(body?.querySelector?.('.card-inline-edit, .sheet-cell-input, .planner-cell-input, .expanded-checklist-add-btn'));
-}
-
-function plannerSectionCanEdit(section) {
-    if (!section) return false;
-    if (section.closest?.('.magic-focus__pane')) return true;
-    if (section.matches?.('[data-focus-table-only], [data-focus-chart-only], [data-focus-kanban-only], [data-focus-wbs-only]')) return true;
-    if (section.querySelector?.('.planner-cell-input, [data-planner-rail-resize], .planner-kanban__card.is-editable, [data-planner-kanban-field], .planner-wbs__card.is-editable, [data-planner-wbs-field]')) {
-        return true;
-    }
-    return bodyCanEdit(section.closest('.editor-note-body') || section);
-}
-
-function growPlannerCellLocal(el) {
-    if (!el || !el.style) return;
-    el.style.height = '0';
-    const next = Math.max(el.scrollHeight, 18);
-    if (el.matches?.('textarea.planner-kanban__card-comment') && document.activeElement !== el) {
-        const lh = Number.parseFloat(getComputedStyle(el).lineHeight) || 14;
-        const hasText = String(el.value || '').trim().length > 0;
-        el.style.height = `${Math.min(next, Math.round(lh * (hasText ? 3 : 1)))}px`;
-        return;
-    }
-    el.style.height = `${next}px`;
-}
-
-function growPlannerTextareasLocal(section) {
-    const canvasScroll = captureCanvasScroll();
-    section?.querySelectorAll('.planner-cell-input, textarea.planner-kanban__card-comment').forEach((el) => {
-        growPlannerCellLocal(el);
-    });
-    restoreCanvasScroll(canvasScroll);
-}
+import {
+    plannerSectionCanEdit,
+    growPlannerTextareas,
+    PLANNER_CARD_DRAG_THRESHOLD
+} from './plannerSharedUi.js';
+import { renderPlannerCardHtml, bindPlannerCardFields, closeOpenPlannerCardActions } from './plannerCardUi.js';
 
 /** Row-number sort chip (hash + up/down). */
 const KANBAN_SORT_ROW_ICON = '<svg viewBox="0 0 12 12" width="12" height="12" focusable="false" aria-hidden="true"><path d="M1.8 3.2h2.6M1.8 6h2.6M1.8 8.8h2.6" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/><path d="M8.4 3v6M7.5 4.1l0.9-1.1 0.9 1.1M7.5 7.9l0.9 1.1 0.9-1.1" fill="none" stroke="currentColor" stroke-width="0.85" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -97,20 +50,6 @@ const KANBAN_SORT_TITLES = Object.freeze({
     date: 'Sort by date',
     alpha: 'Sort alphabetically'
 });
-
-/** Warning triangle with exclamation — urgent / focus. */
-const KANBAN_URGENT_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false" aria-hidden="true"><path d="M6 1.8 10.6 10.2H1.4Z" fill="none" stroke="currentColor" stroke-width="0.95" stroke-linejoin="round"/><path d="M6 4.4v2.6" fill="none" stroke="currentColor" stroke-width="1.05" stroke-linecap="round"/><circle cx="6" cy="8.55" r="0.55" fill="currentColor"/></svg>';
-
-/** Soft circle — non-urgent / muted. */
-const KANBAN_MUTED_ICON = '<svg viewBox="0 0 12 12" width="11" height="11" focusable="false" aria-hidden="true"><circle cx="6" cy="6" r="4.2" fill="none" stroke="currentColor" stroke-width="0.95"/><path d="M3.6 6h4.8" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"/></svg>';
-
-/** Compact date for kanban corner overlays. */
-function formatKanbanCardDate(value) {
-    const raw = String(value || '').trim();
-    if (!raw) return '';
-    const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
-    return m ? m[1] : '';
-}
 
 export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = {}) {
     const flavourId = normalizeKanbanFlavour(
@@ -146,68 +85,12 @@ export function renderPlannerKanbanHtml(planner, { canEdit = false, flavour } = 
         // Collapse = chevron down; expand = chevron up (CARD_ICONS names are inverted for this chrome).
         const stageCollapseIcon = stageCollapsed ? CARD_ICONS.collapse : CARD_ICONS.expand;
         const cardsHtml = col.cards.length
-            ? col.cards.map((card) => {
-                const editClass = canEdit ? ' is-editable' : '';
-                const startLabel = formatKanbanCardDate(card.start);
-                const stopLabel = formatKanbanCardDate(card.stop);
-                const rowLabel = String(card.id || card.row + 1);
-                const startHtml = startLabel
-                    ? `<span class="planner-kanban__card-date planner-kanban__card-date--start" title="Start ${escapeAttr(startLabel)}">${escapeHTML(startLabel)}</span>`
-                    : '';
-                const stopHtml = stopLabel
-                    ? `<span class="planner-kanban__card-date planner-kanban__card-date--stop" title="Stop ${escapeAttr(stopLabel)}">${escapeHTML(stopLabel)}</span>`
-                    : '';
-                const rowHtml = `<span class="planner-kanban__card-row" title="Row ${escapeAttr(rowLabel)}">${escapeHTML(rowLabel)}</span>`;
-                const commentRaw = String(card.comments || '');
-                const comment = commentRaw.trim();
-                const nameText = String(card.name || '');
-                const emphasis = card.emphasis === 'urgent' || card.emphasis === 'muted' ? card.emphasis : '';
-                const emphasisClass = emphasis ? ` is-${emphasis}` : '';
-                const collapsed = !!card.collapsed;
-                const collapsedClass = collapsed ? ' is-collapsed' : '';
-                const urgentActive = emphasis === 'urgent' ? ' is-active' : '';
-                const mutedActive = emphasis === 'muted' ? ' is-active' : '';
-                const densityTitle = collapsed ? 'Expand card' : 'Collapse card';
-                const densityIcon = collapsed ? CARD_ICONS.expand : CARD_ICONS.collapse;
-                const actionsHtml = canEdit
-                    ? `<span class="planner-kanban__card-actions">
-                        <span class="planner-kanban__card-actions-tray">
-                            <button type="button" class="planner-kanban__card-density" data-planner-kanban-density title="${escapeAttr(densityTitle)}" aria-label="${escapeAttr(densityTitle)}" aria-pressed="${collapsed ? 'true' : 'false'}">${densityIcon}</button>
-                            <button type="button" class="planner-kanban__card-emphasis${urgentActive}" data-planner-kanban-emphasis="urgent" title="Mark urgent" aria-label="Mark urgent" aria-pressed="${emphasis === 'urgent' ? 'true' : 'false'}">${KANBAN_URGENT_ICON}</button>
-                            <button type="button" class="planner-kanban__card-emphasis${mutedActive}" data-planner-kanban-emphasis="muted" title="Mark non-urgent" aria-label="Mark non-urgent" aria-pressed="${emphasis === 'muted' ? 'true' : 'false'}">${KANBAN_MUTED_ICON}</button>
-                            <button type="button" class="planner-kanban__card-color" data-planner-kanban-color title="Card color" aria-label="Card color">${CARD_ICONS.color}</button>
-                            <button type="button" class="planner-kanban__card-reset" data-planner-kanban-reset-card title="Reset card styles" aria-label="Reset card styles">${ACTION_ICONS.resetCustomization}</button>
-                        </span>
-                        <button type="button" class="planner-kanban__card-more" data-planner-kanban-more title="More actions" aria-label="More actions" aria-expanded="false">${CARD_ICONS.more}</button>
-                        <span class="planner-kanban__card-grab" title="Drag to move" aria-hidden="true">${CARD_ICONS.drag}</span>
-                    </span>`
-                    : '';
-                // Slot: editable when canEdit. Flyout: read-only full-content overlay (no layout push).
-                const slotNameHtml = canEdit
-                    ? `<div class="planner-kanban__card-name card-inline-edit" contenteditable="plaintext-only" data-planner-kanban-field="name" data-planner-row="${card.row}" spellcheck="false" role="textbox" aria-label="Name">${escapeHTML(nameText)}</div>`
-                    : `<span class="planner-kanban__card-name">${escapeHTML(nameText)}</span>`;
-                const slotCommentHtml = canEdit
-                    ? `<textarea class="planner-kanban__card-comment card-inline-edit" data-planner-kanban-field="comments" data-planner-row="${card.row}" rows="1" spellcheck="false" aria-label="Comments">${escapeHTML(commentRaw)}</textarea>`
-                    : (comment ? `<span class="planner-kanban__card-comment">${escapeHTML(comment)}</span>` : '');
-                const flyoutNameHtml = `<span class="planner-kanban__card-name">${escapeHTML(nameText)}</span>`;
-                const flyoutCommentHtml = comment
-                    ? `<span class="planner-kanban__card-comment">${escapeHTML(comment)}</span>`
-                    : '';
-                const metaHtml = `${rowHtml}${startHtml}${stopHtml}`;
-                const slotBody = `${metaHtml}
-                    <div class="planner-kanban__card-top">${slotNameHtml}</div>
-                    ${slotCommentHtml}`;
-                const flyoutBody = `${metaHtml}
-                    <div class="planner-kanban__card-top">${flyoutNameHtml}</div>
-                    ${flyoutCommentHtml}`;
-                const surface = surfaceThemeInline(card.cardColor);
-                const colorClass = card.cardColor ? ` has-color${surface.className}` : '';
-                return `<article class="planner-kanban__card${colorClass}${emphasisClass}${collapsedClass}${editClass}" data-planner-kanban-card data-planner-row="${card.row}" data-kanban-emphasis="${escapeAttr(emphasis)}" data-kanban-collapsed="${collapsed ? '1' : '0'}"${surface.style}>
-                    <div class="planner-kanban__card-slot">${slotBody}</div>
-                    <div class="planner-kanban__card-flyout" aria-hidden="true">${flyoutBody}</div>
-                    ${actionsHtml}
-                </article>`;
-            }).join('')
+            ? col.cards.map((card) => renderPlannerCardHtml(planner, card, {
+                mode: 'kanban',
+                canEdit,
+                indent: '                    ',
+                rowLabel: (_planner, c) => String(c.id || c.row + 1)
+            })).join('')
             : '<div class="planner-kanban__empty-col" aria-hidden="true"></div>';
         return `<div class="planner-kanban__column${stageCollapsedClass}" data-planner-kanban-stage="${col.stage}" data-kanban-stage-collapsed="${stageCollapsed ? '1' : '0'}">
             <div class="planner-kanban__column-head">
@@ -270,19 +153,14 @@ export function refreshKanbanInSection(section, item) {
     const nextBoard = next.querySelector('[data-planner-kanban-board]');
     if (nextBoard && preserveScrollLeft != null) nextBoard.scrollLeft = preserveScrollLeft;
     // Host swap skips re-bind; re-measure comments now that nodes are connected.
-    growPlannerTextareasLocal(next);
+    growPlannerTextareas(next);
 }
 /**
  * @param {HTMLElement} section
  * @param {HTMLElement|null} [except]
  */
 export function closeOpenKanbanCardActions(section, except = null) {
-    section.querySelectorAll('.planner-kanban__card-actions.is-actions-open').forEach((el) => {
-        if (except && el === except) return;
-        el.classList.remove('is-actions-open');
-        const more = el.querySelector('[data-planner-kanban-more]');
-        if (more) more.setAttribute('aria-expanded', 'false');
-    });
+    closeOpenPlannerCardActions(section, 'kanban', except);
 }
 
 /**
@@ -480,83 +358,12 @@ export function handleKanbanClick(ctx, e) {
 export function bindKanban(ctx) {
     const {
         section, item, mutate, schedulePlannerCommit, flushPlannerCommit,
-        growPlannerCell, mirrorBoardFieldToTableDom
+        mirrorBoardFieldToTableDom
     } = ctx;
-    const grow = growPlannerCell || growPlannerCellLocal;
-
-    section.addEventListener('input', (e) => {
-        const kanbanField = e.target.closest('[data-planner-kanban-field]');
-        if (kanbanField && section.contains(kanbanField)) {
-            const row = Number(kanbanField.dataset.plannerRow);
-            const key = String(kanbanField.dataset.plannerKanbanField || '');
-            if (!Number.isFinite(row) || (key !== 'name' && key !== 'comments')) return;
-            schedulePlannerCommit({ refreshGantt: true });
-            if (!item.planner) item.planner = createEmptyPlanner();
-            const value = key === 'name'
-                ? String(kanbanField.textContent || '')
-                : String(kanbanField.value ?? '');
-            setPlannerField(item.planner.sheet, row, key, value);
-            mirrorBoardFieldToTableDom?.(item.id, row, key, value);
-            if (key === 'comments') grow(kanbanField);
-        }
+    bindPlannerCardFields(section, 'kanban', {
+        item, schedulePlannerCommit, flushPlannerCommit, mirrorBoardFieldToTableDom
     });
 
-    section.addEventListener('focusin', (e) => {
-        const kanbanField = e.target.closest?.('[data-planner-kanban-field]');
-        if (kanbanField && section.contains(kanbanField)) {
-            const card = kanbanField.closest('[data-planner-kanban-card]');
-            card?.classList.add('is-kanban-editing');
-            if (kanbanField.dataset.plannerKanbanField === 'name') {
-                kanbanField.dataset.kanbanNamePrev = String(kanbanField.textContent || '');
-            }
-            if (kanbanField.dataset.plannerKanbanField === 'comments') {
-                grow(kanbanField);
-            }
-        }
-    });
-
-    section.addEventListener('focusout', (e) => {
-        const kanbanField = e.target.closest?.('[data-planner-kanban-field]');
-        if (kanbanField && section.contains(kanbanField)) {
-            const card = kanbanField.closest('[data-planner-kanban-card]');
-            const related = e.relatedTarget;
-            const stayingOnCard = related && card?.contains(related);
-            if (!stayingOnCard) card?.classList.remove('is-kanban-editing');
-
-            if (kanbanField.dataset.plannerKanbanField === 'name') {
-                const row = Number(kanbanField.dataset.plannerRow);
-                const trimmed = String(kanbanField.textContent || '').trim();
-                if (!trimmed) {
-                    const prev = String(kanbanField.dataset.kanbanNamePrev || '').trim()
-                        || (Number.isFinite(row) ? getPlannerField(item.planner?.sheet, row, 'name') : '');
-                    kanbanField.textContent = prev;
-                    if (Number.isFinite(row) && item.planner?.sheet) {
-                        setPlannerField(item.planner.sheet, row, 'name', prev);
-                        mirrorBoardFieldToTableDom?.(item.id, row, 'name', prev);
-                    }
-                } else if (String(kanbanField.textContent || '') !== trimmed) {
-                    kanbanField.textContent = trimmed;
-                    const rowNum = Number(kanbanField.dataset.plannerRow);
-                    if (Number.isFinite(rowNum) && item.planner?.sheet) {
-                        setPlannerField(item.planner.sheet, rowNum, 'name', trimmed);
-                        mirrorBoardFieldToTableDom?.(item.id, rowNum, 'name', trimmed);
-                    }
-                } else if (Number.isFinite(row)) {
-                    mirrorBoardFieldToTableDom?.(item.id, row, 'name', trimmed);
-                }
-            }
-            if (kanbanField.dataset.plannerKanbanField === 'comments') {
-                const row = Number(kanbanField.dataset.plannerRow);
-                if (Number.isFinite(row)) {
-                    mirrorBoardFieldToTableDom?.(item.id, row, 'comments', String(kanbanField.value ?? ''));
-                }
-                requestAnimationFrame(() => grow(kanbanField));
-            }
-            flushPlannerCommit();
-        }
-    });
-
-    const KANBAN_DRAG_THRESHOLD = 4;
     /** @type {{
      *   card: HTMLElement,
      *   row: number,
@@ -732,7 +539,7 @@ export function bindKanban(ctx) {
         const dx = e.clientX - state.startX;
         const dy = e.clientY - state.startY;
         if (!state.lifted) {
-            if ((dx * dx + dy * dy) < KANBAN_DRAG_THRESHOLD * KANBAN_DRAG_THRESHOLD) return;
+            if ((dx * dx + dy * dy) < PLANNER_CARD_DRAG_THRESHOLD * PLANNER_CARD_DRAG_THRESHOLD) return;
             e.preventDefault();
             liftKanbanCard(state, e.clientX, e.clientY);
         }

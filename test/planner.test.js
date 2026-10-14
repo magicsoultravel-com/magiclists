@@ -82,7 +82,6 @@ import {
     moveKanbanCard,
     normalizeKanbanFlavour,
     kanbanLabelsForFlavour,
-    clipKanbanComment,
     setKanbanCardEmphasis,
     setKanbanCardCollapsed,
     setKanbanStageCollapsed,
@@ -97,7 +96,7 @@ import {
 } from '../js/plannerKanban.js';
 import { SHARED_FIELDS } from '../js/noteFieldOwnership.js';
 import { reconcileItemPlanner } from '../js/api.js';
-import { buildNotePlannerSectionHtml, renderPlannerGanttHtml, renderPlannerKanbanHtml, renderPlannerWbsHtml } from '../js/plannerUi.js';
+import { buildNotePlannerSectionHtml, renderPlannerGanttHtml, renderPlannerKanbanHtml, renderPlannerWbsHtml, growPlannerTextareas } from '../js/plannerUi.js';
 import { readDisplayOptions } from '../js/displayOptions.js';
 
 describe('planner model', () => {
@@ -689,7 +688,6 @@ describe('planner Kanban', () => {
         const cards = derivePlannerKanbanCards(planner);
         assert.equal(cards[0].cardColor, '#aabbcc');
         assert.equal(cards[0].comments.length, 120);
-        assert.ok(clipKanbanComment(cards[0].comments).endsWith('…'));
 
         planner.kanbanCardColors = { [id0]: '#112233' };
         const overridden = derivePlannerKanbanCards(planner);
@@ -1341,6 +1339,79 @@ describe('planner WBS and work packs', () => {
         assert.ok(html.includes('Initiation'));
         assert.ok(!html.includes('Unmapped'));
         assert.equal(item.planner.wbsCardColors && typeof item.planner.wbsCardColors, 'object');
+    });
+});
+
+describe('planner comment textarea auto-grow', () => {
+    function selectorParts(sel) {
+        return String(sel || '').split(',').map((s) => s.trim()).filter(Boolean);
+    }
+
+    /**
+     * Fakes of card/sheet comment textareas. querySelectorAll + matches resolve
+     * the real selector parts, so a grow selector that misses a comment class
+     * genuinely returns nothing (the pre-fix behaviour for WBS).
+     */
+    function fakeTextarea(cls, { scrollHeight = 100, value = '' } = {}) {
+        return {
+            cls,
+            style: {},
+            value,
+            scrollHeight,
+            matches(sel) {
+                return selectorParts(sel).includes(`textarea.${cls}`);
+            }
+        };
+    }
+
+    function fakeSection(textareas) {
+        return {
+            querySelectorAll(sel) {
+                const parts = selectorParts(sel);
+                return textareas.filter((t) => parts.includes(`textarea.${t.cls}`) || parts.includes(`.${t.cls}`));
+            }
+        };
+    }
+
+    function withStubbedDom(fn) {
+        const prevDocument = globalThis.document;
+        const prevGetComputedStyle = globalThis.getComputedStyle;
+        globalThis.document = { getElementById: () => null, activeElement: null };
+        globalThis.getComputedStyle = () => ({ lineHeight: '14px' });
+        try {
+            fn();
+        } finally {
+            if (prevDocument === undefined) delete globalThis.document;
+            else globalThis.document = prevDocument;
+            if (prevGetComputedStyle === undefined) delete globalThis.getComputedStyle;
+            else globalThis.getComputedStyle = prevGetComputedStyle;
+        }
+    }
+
+    it('grows WBS comment textareas to the 3-line rest cap (Kanban parity)', () => {
+        withStubbedDom(() => {
+            const wbs = fakeTextarea('planner-wbs__card-comment', { value: 'hello' });
+            const kanban = fakeTextarea('planner-kanban__card-comment', { value: 'hello' });
+            growPlannerTextareas(fakeSection([wbs, kanban]));
+            assert.equal(wbs.style.height, '42px');
+            assert.equal(kanban.style.height, '42px');
+        });
+    });
+
+    it('keeps empty card comments at one line', () => {
+        withStubbedDom(() => {
+            const wbs = fakeTextarea('planner-wbs__card-comment', { value: '   ' });
+            growPlannerTextareas(fakeSection([wbs]));
+            assert.equal(wbs.style.height, '14px');
+        });
+    });
+
+    it('leaves sheet .planner-cell-input textareas unbounded', () => {
+        withStubbedDom(() => {
+            const cell = fakeTextarea('planner-cell-input', { scrollHeight: 200, value: 'x' });
+            growPlannerTextareas(fakeSection([cell]));
+            assert.equal(cell.style.height, '200px');
+        });
     });
 });
 

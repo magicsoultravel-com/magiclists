@@ -17,42 +17,12 @@ import { layoutPlannerGantt, parsePlannerDateTime } from './plannerGantt.js';
 import { renderPlannerCalendarBoardHtml } from './plannerCalendar.js';
 import { refreshPlannerSummaryInSection } from './plannerSheetUi.js';
 
-/** Same pattern as checklist: keep #app-canvas from jumping on DOM surgery. */
-function captureCanvasScroll() {
-    const canvas = document.getElementById('app-canvas');
-    return {
-        scrollTop: canvas?.scrollTop ?? 0,
-        scrollLeft: canvas?.scrollLeft ?? 0
-    };
-}
-
-function restoreCanvasScroll(scrollPos) {
-    const canvas = document.getElementById('app-canvas');
-    if (!canvas || !scrollPos) return;
-    canvas.scrollTop = scrollPos.scrollTop;
-    canvas.scrollLeft = scrollPos.scrollLeft;
-}
-
-function bodyCanEdit(body) {
-    return !!(body?.querySelector?.('.card-inline-edit, .sheet-cell-input, .planner-cell-input, .expanded-checklist-add-btn'));
-}
-
-function plannerSectionCanEdit(section) {
-    if (!section) return false;
-    if (section.closest?.('.magic-focus__pane')) return true;
-    if (section.matches?.('[data-focus-table-only], [data-focus-chart-only], [data-focus-kanban-only], [data-focus-wbs-only]')) return true;
-    if (section.querySelector?.('.planner-cell-input, [data-planner-rail-resize], .planner-kanban__card.is-editable, [data-planner-kanban-field], .planner-wbs__card.is-editable, [data-planner-wbs-field]')) {
-        return true;
-    }
-    return bodyCanEdit(section.closest('.editor-note-body') || section);
-}
-
-function formatKanbanCardDate(value) {
-    const raw = String(value || '').trim();
-    if (!raw) return '';
-    const m = raw.match(/^(\d{4}-\d{2}-\d{2})/);
-    return m ? m[1] : '';
-}
+import {
+    captureCanvasScroll,
+    restoreCanvasScroll,
+    plannerSectionCanEdit,
+    formatPlannerCardDate
+} from './plannerSharedUi.js';
 
 /**
  * Read-only Kanban-like HTML for a calendar bar hover preview.
@@ -64,8 +34,8 @@ function buildCalendarTaskPreviewHtml(planner, row) {
     if (!planner || !Number.isFinite(row)) return '';
     const task = derivePlannerTasks(planner).find((t) => t.row === row);
     if (!task) return '';
-    const startLabel = formatKanbanCardDate(task.start);
-    const stopLabel = formatKanbanCardDate(task.stop);
+    const startLabel = formatPlannerCardDate(task.start);
+    const stopLabel = formatPlannerCardDate(task.stop);
     const rowLabel = String(task.id || row + 1);
     const startHtml = startLabel
         ? `<span class="planner-kanban__card-date planner-kanban__card-date--start" title="Start ${escapeAttr(startLabel)}">${escapeHTML(startLabel)}</span>`
@@ -621,7 +591,7 @@ export function refreshGanttInSection(section, item, { refocus = false } = {}) {
     refreshPlannerSummaryInSection(section, item);
 }
 
-export { ganttLayoutOpts, captureCanvasScroll, restoreCanvasScroll };
+export { ganttLayoutOpts };
 
 /**
  * Chart click handler (toggle, chart-view, zoom).

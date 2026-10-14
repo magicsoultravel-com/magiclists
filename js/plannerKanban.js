@@ -10,8 +10,6 @@ export const KANBAN_DEFAULT_SORT = 'row';
 export const KANBAN_SORT_DIRS = Object.freeze(['asc', 'desc']);
 export const KANBAN_DEFAULT_SORT_DIR = 'asc';
 
-export const KANBAN_COMMENT_CLIP = 90;
-
 export const KANBAN_EMPHASIS_MODES = Object.freeze(['urgent', 'muted']);
 
 export const KANBAN_FLAVOURS = Object.freeze({
@@ -109,12 +107,6 @@ export function normalizeKanbanStageById(raw, rowIds = [], opts = {}) {
     return out;
 }
 
-/** @deprecated use normalizeKanbanStageById */
-export function normalizeKanbanStageByRow(raw, rowCount = 0) {
-    const rowIds = Array.from({ length: Math.max(0, Number(rowCount) || 0) }, (_, i) => String(i));
-    return normalizeKanbanStageById(raw, rowIds);
-}
-
 /**
  * @param {unknown} raw
  * @param {string[]} rowIds
@@ -181,12 +173,6 @@ export function normalizeKanbanEmphasisById(raw, rowIds = [], opts = {}) {
     return out;
 }
 
-/** @deprecated use normalizeKanbanEmphasisById */
-export function normalizeKanbanEmphasisByRow(raw, rowCount = 0) {
-    const rowIds = Array.from({ length: Math.max(0, Number(rowCount) || 0) }, (_, i) => String(i));
-    return normalizeKanbanEmphasisById(raw, rowIds);
-}
-
 /**
  * @param {object|null|undefined} planner
  * @param {number|string} rowOrId
@@ -215,12 +201,6 @@ export function normalizeKanbanCollapsedById(raw, rowIds = [], opts = {}) {
         out[id] = true;
     }
     return out;
-}
-
-/** @deprecated use normalizeKanbanCollapsedById */
-export function normalizeKanbanCollapsedByRow(raw, rowCount = 0) {
-    const rowIds = Array.from({ length: Math.max(0, Number(rowCount) || 0) }, (_, i) => String(i));
-    return normalizeKanbanCollapsedById(raw, rowIds);
 }
 
 /**
@@ -286,18 +266,6 @@ export function setKanbanStageCollapsed(planner, stage, collapsed) {
 export function kanbanLabelsForFlavour(flavourId) {
     const id = normalizeKanbanFlavour(flavourId);
     return KANBAN_FLAVOURS[id] || KANBAN_FLAVOURS[KANBAN_DEFAULT_FLAVOUR];
-}
-
-/**
- * @param {string} text
- * @param {number} [max]
- * @returns {string}
- */
-export function clipKanbanComment(text, max = KANBAN_COMMENT_CLIP) {
-    const s = String(text || '').replace(/\s+/g, ' ').trim();
-    if (!s) return '';
-    if (s.length <= max) return s;
-    return `${s.slice(0, Math.max(1, max - 1)).trimEnd()}…`;
 }
 
 function cellTrim(sheet, row, col) {
@@ -457,16 +425,6 @@ export function layoutPlannerKanban(planner, { flavour } = {}) {
             collapsed: isKanbanStageCollapsed(planner, stage)
         }))
     };
-}
-
-/**
- * Id-keyed maps do not remap on row reorder — only prune orphans.
- * Kept for call-site compatibility.
- * @param {object} planner
- * @param {number[]} [_order]
- */
-export function remapKanbanAfterRowMove(planner, _order) {
-    pruneKanbanOrphanKeys(planner);
 }
 
 /**

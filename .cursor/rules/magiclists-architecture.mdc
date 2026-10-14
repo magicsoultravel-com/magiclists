@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-05T17:19:30.231Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-14T06:16:24.900Z
 
 ## CSS load order
 
@@ -96,6 +96,7 @@ alwaysApply: true
 | js/noteCanvasRenderer.js | inline note canvas rendering from item.canvas | noteAttachmentsUi.js, drawingBoard.js, canvasDocument.js | — | — |
 | js/noteCanvasTextOverlay.js | non-editable note text overlay for note-canvas bg / preview | drawingBoard.js, noteCanvasRenderer.js, noteBodyConversion.js, noteCanvasPlannerOverlay.js | — | — |
 | js/noteFieldOwnership.js | note field ownership contract and modal draft reconciliation | noteModel.js, editor.js, app.js, mediaAttachments.js | — | — |
+| js/noteFocusSpawn.js | section/subsection Focus-spawn tray button HTML and click binding | magicFocus.js, noteSurfaceHtml.js, plannerUi.js, noteAttachmentsUi.js, noteSurfaceEditing.js | — | — |
 | js/noteModel.js | note item schema, normalizeItemForSave, createNoteId | richText.js, sheet.js | — | — |
 | js/notePackage.js | single-note ZIP export/import (item + media + layout slice) | backup.js, mediaBackup.js, layoutStorage.js, noteQuickActions.js | — | — |
 | js/notePasteContext.js | note paste target resolution for clipboard media attach | mediaPasteCatcher.js, mediaStagingDialog.js, mediaAttachments.js | — | — |
@@ -108,10 +109,12 @@ alwaysApply: true
 | js/noteSurfaceMutations.js | note item mutation functions | noteSurface.js, noteSurfaceEditing.js, noteSurfaceChecklist.js, noteModel.js, sheet.js, undo.js | item:mutation_requested | — |
 | js/planner.js | magicPlanner model — schema-bound schedule sheet + zoom prefs | plannerUi.js, plannerGantt.js, plannerKanban.js, plannerWbs.js, plannerCalendar.js, sheet.js, noteModel.js | — | — |
 | js/plannerCalendar.js | magicPlanner calendar chart view — month-strip layout + task bars | planner.js, plannerGantt.js, plannerUi.js | — | — |
+| js/plannerCardUi.js | shared planner card anatomy — card HTML, field editing bind, action-tray close | plannerSharedUi.js, plannerKanbanUi.js, plannerWbsUi.js, plannerUi.js, planner.js, icons.js, cardTheme.js | — | — |
 | js/plannerChartUi.js | magicPlanner chart subsection UI — Gantt/calendar board, rail measure, pan, zoom, today line | plannerUi.js, plannerSheetUi.js, plannerKanbanUi.js, plannerWbsUi.js, planner.js, plannerGantt.js, plannerCalendar.js | — | — |
 | js/plannerGantt.js | magicPlanner Gantt layout math (display-only) | planner.js, plannerUi.js | — | — |
 | js/plannerKanban.js | magicPlanner Kanban layout — stages, sort, column flavours (display + drag meta) | planner.js, plannerUi.js, displayOptions.js | — | — |
 | js/plannerKanbanUi.js | magicPlanner Kanban subsection UI — board render, card chrome, pointer drag, field edit | plannerUi.js, plannerSheetUi.js, plannerChartUi.js, plannerWbsUi.js, planner.js, plannerKanban.js | — | — |
+| js/plannerSharedUi.js | magicPlanner shared UI helpers — canvas scroll guard, edit-state probes, card comment auto-grow, card date label | plannerUi.js, plannerSheetUi.js, plannerChartUi.js, plannerKanbanUi.js, plannerWbsUi.js, icons.js | — | — |
 | js/plannerSheetUi.js | magicPlanner sheet/table subsection UI — typed sheet, summary, datetime/category, row DnD, col resize, pack chrome | plannerUi.js, plannerChartUi.js, plannerKanbanUi.js, plannerWbsUi.js, planner.js | — | — |
 | js/plannerUi.js | magicPlanner note subsection UI facade — section HTML, commit flush, interaction orchestration across sheet/chart/kanban/wbs | plannerSheetUi.js, plannerChartUi.js, plannerKanbanUi.js, plannerWbsUi.js, planner.js, plannerGantt.js, plannerKanban.js, plannerWbs.js, plannerCalendar.js, noteSurfaceMutations.js, noteQuickActions.js | — | — |
 | js/plannerWbs.js | magicPlanner WBS layout — phase/deliverable buckets, drag meta | planner.js, plannerUi.js, plannerKanban.js | — | — |
