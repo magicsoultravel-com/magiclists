@@ -532,9 +532,8 @@ export function syncNotePlannerDom(item) {
         if (existing) {
             existing.replaceWith(next);
         } else {
-            const media = body.querySelector('[data-note-attachments]');
-            if (media) body.insertBefore(next, media);
-            else body.appendChild(next);
+            // Order: Content → Media → Canvas → Plan. Plan always goes last.
+            body.appendChild(next);
         }
 
         attachPlannerInteractions(body, item, {

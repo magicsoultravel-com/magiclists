@@ -260,19 +260,19 @@ function plannerSectionStartCollapsed(item) {
     return !!item?.plannerCollapsed;
 }
 
-/** Append peer side sections: Plan → Media → Canvas. */
+/** Append peer side sections: Media → Canvas → Plan. */
 function appendNoteSideSections(item, html, { canEdit = false } = {}) {
     let out = html;
-    out += buildNotePlannerSectionHtml(item, {
-        canEdit,
-        startCollapsed: plannerSectionStartCollapsed(item)
-    });
     out += buildNoteAttachmentsSectionHtml(item, {
         canEdit,
         startCollapsed: mediaSectionStartCollapsed(item)
     });
     out += buildNoteCanvasSectionHtml(item, {
         startCollapsed: canvasSectionStartCollapsed(item)
+    });
+    out += buildNotePlannerSectionHtml(item, {
+        canEdit,
+        startCollapsed: plannerSectionStartCollapsed(item)
     });
     return out;
 }

@@ -453,9 +453,18 @@ function mediaSectionForBody(body) {
     return body?.querySelector?.('[data-note-attachments]') || null;
 }
 
+function plannerSectionForBody(body) {
+    return body?.querySelector?.('[data-note-planner]') || null;
+}
+
 function insertCanvasHtml(body, html) {
     const media = mediaSectionForBody(body);
-    if (media) media.insertAdjacentHTML('afterend', html);
+    if (media) {
+        media.insertAdjacentHTML('afterend', html);
+        return;
+    }
+    const planner = plannerSectionForBody(body);
+    if (planner) planner.insertAdjacentHTML('beforebegin', html);
     else body.insertAdjacentHTML('beforeend', html);
 }
 
@@ -480,9 +489,14 @@ export function syncNoteAttachmentsDom(item) {
             releaseSectionUrls(existing);
             existing.outerHTML = html;
         } else {
+            // Order: Content → Media → Canvas → Plan.
             const canvas = canvasSectionForBody(body);
             if (canvas) canvas.insertAdjacentHTML('beforebegin', html);
-            else body.insertAdjacentHTML('beforeend', html);
+            else {
+                const planner = plannerSectionForBody(body);
+                if (planner) planner.insertAdjacentHTML('beforebegin', html);
+                else body.insertAdjacentHTML('beforeend', html);
+            }
         }
         bindNoteAttachments(body, item);
     }
