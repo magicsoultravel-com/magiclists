@@ -18,34 +18,15 @@ import { CanvasViewport } from './canvasViewport.js';
 import { DrawingToolbarChrome } from './drawingToolbarChrome.js';
 import * as FlowSession from './drawingBoardFlowchart.js';
 import * as CropSession from './drawingBoardCrop.js';
-import {
-    itemIntersectsRect,
-    getStrokesBounds,
-    clampStrokesToBounds,
-    translateStrokes,
-    getPageBounds,
-    getImageBounds,
-    resolveBoxSelection,
-    boxSelectThresholdWorld,
-    findTopmostItemAt,
-    raiseItemInLayer,
-    BOX_SELECT_CLICK_THRESHOLD
-} from './lassoGeometry.js';
+import * as SelectSession from './drawingBoardSelection.js';
+import { getStrokesBounds } from './lassoGeometry.js';
 import {
     loadImage,
     clearImageCache,
     ensureImagesLoaded,
     initialImageSize,
-    cropMetrics,
-    cropLimitRect,
-    normalizeCropBox,
-    resizeCropBox,
-    moveCropBox,
-    boxToCropPatch,
     drawImageObject,
-    drawImageGhost,
-    getImageSourceWindow,
-    MIN_IMAGE_SIDE
+    drawImageGhost
 } from './canvasImages.js';
 import { listMedia } from './mediaLibrary.js';
 import { showAppToast } from './toast.js';
@@ -1405,50 +1386,12 @@ export const DrawingBoard = {
     },
 
     // Pointer / lasso shared rectangle marquee methods
-    beginBoxSelect(x, y) {
-        this.isBoxSelecting = true;
-        this.boxSelectStart = { x, y };
-        this.boxSelectCurrent = { x, y };
-        this.requestRedraw();
-    },
 
-    updateBoxSelect(x, y) {
-        this.boxSelectCurrent = { x, y };
-    },
+    beginBoxSelect(x, y) { return SelectSession.beginBoxSelect(this, x, y); },
 
-    endBoxSelect() {
-        if (!this.boxSelectStart || !this.boxSelectCurrent) {
-            this.isBoxSelecting = false;
-            this.boxSelectStart = null;
-            this.boxSelectCurrent = null;
-            return;
-        }
+    updateBoxSelect(x, y) { return SelectSession.updateBoxSelect(this, x, y); },
 
-        const { x: x0, y: y0 } = this.boxSelectStart;
-        const { x: x1, y: y1 } = this.boxSelectCurrent;
-        const threshold = boxSelectThresholdWorld(
-            BOX_SELECT_CLICK_THRESHOLD,
-            CanvasViewport.scale,
-            window.devicePixelRatio || 1
-        );
-        const result = resolveBoxSelection(x0, y0, x1, y1, threshold);
-
-        // Single click (no drag): select + raise the topmost object under the
-        // cursor. Raising is per-layer — images over images, strokes over
-        // strokes, texts over texts — so the last clicked object is on top of
-        // its own layer without disturbing the paint order between layers.
-        if (result.kind === 'click') {
-            this.selectAndRaiseAtPoint(x0, y0, threshold / 2);
-        } else if (result.rect) {
-            // Commit selection in one shot (replaces any prior selection)
-            this.selectedStrokes.clear();
-            this.selectStrokesInRect(result.rect);
-        }
-
-        this.isBoxSelecting = false;
-        this.boxSelectStart = null;
-        this.boxSelectCurrent = null;
-    },
+    endBoxSelect() { return SelectSession.endBoxSelect(this); },
 
     /**
      * Click-select: pick the visually topmost item at the point and raise it to
@@ -1457,139 +1400,20 @@ export const DrawingBoard = {
      * @param {number} y
      * @param {number} [radius=0]
      */
-    selectAndRaiseAtPoint(x, y, radius = 0) {
-        const item = findTopmostItemAt(x, y, {
-            texts: getActiveTexts(this.doc),
-            strokes: this.strokes(),
-            images: this.images()
-        }, radius);
+    selectAndRaiseAtPoint(x, y, radius = 0) { return SelectSession.selectAndRaiseAtPoint(this, x, y, radius); },
 
-        this.selectedStrokes.clear();
-        if (!item) return;
+    selectStrokesInRect(rect) { return SelectSession.selectStrokesInRect(this, rect); },
 
-        const raised = raiseItemInLayer(item, {
-            strokes: this.strokes(),
-            texts: getActiveTexts(this.doc),
-            images: this.images()
-        });
+    placeTextBox(x, y) { return SelectSession.placeTextBox(this, x, y); },
 
-        if (raised) {
-            // Snapshot before assigning so Ctrl+Z restores the previous order.
-            this.pushLayerHistory();
-            if (raised.kind === 'images') this.setImages(raised.items);
-            else if (raised.kind === 'texts') setActiveTexts(this.doc, raised.items);
-            else this.setStrokes(raised.items);
-            this.scheduleSave();
-        }
+    eraseAt(x, y, radius = 14) { return SelectSession.eraseAt(this, x, y, radius); },
 
-        this.selectedStrokes.add(item);
-    },
+    hitImage(img, x, y, radius) { return SelectSession.hitImage(this, img, x, y, radius); },
 
-    selectStrokesInRect(rect) {
-        if (!rect) return;
-
-        const strokes = this.strokes();
-        const texts = getActiveTexts(this.doc);
-        const images = this.images();
-        this.selectedStrokes.clear();
-
-        for (const stroke of strokes) {
-            if (itemIntersectsRect(stroke, rect)) {
-                this.selectedStrokes.add(stroke);
-            }
-        }
-        for (const text of texts) {
-            if (itemIntersectsRect(text, rect)) {
-                this.selectedStrokes.add(text);
-            }
-        }
-        for (const image of images) {
-            if (itemIntersectsRect(image, rect)) {
-                this.selectedStrokes.add(image);
-            }
-        }
-        // Select-only must not push undo history
-    },
-
-    placeTextBox(x, y) {
-        const brush = this.currentBrush();
-        const dpr = window.devicePixelRatio || 1;
-        const el = document.createElement('div');
-        el.className = 'canvas-text-box';
-        el.contentEditable = 'true';
-        el.dataset.placeholder = 'Type…';
-        el.style.left = (x / dpr) + 'px';
-        el.style.top = (y / dpr) + 'px';
-        el.style.color = brush.color;
-        el.style.fontSize = Math.max(16, brush.width * 4) + 'px';
-        this.textLayer.appendChild(el);
-        el.focus();
-
-        const commit = () => {
-            const text = el.innerText.trim();
-            el.remove();
-            if (!text) return;
-            this.pushLayerHistory();
-            const texts = getActiveTexts(this.doc);
-            texts.push({
-                id: createId('text'),
-                tool: 'text',
-                x, y,
-                text,
-                fontSize: Math.max(16, brush.width * 4) * dpr,
-                color: brush.color,
-                fontFamily: 'Inter, sans-serif'
-            });
-            setActiveTexts(this.doc, texts);
-            this.scheduleSave();
-            this.redraw();
-        };
-        el.addEventListener('blur', commit, { once: true });
-        el.addEventListener('keydown', (ev) => {
-            if (ev.key === 'Escape') { el.innerText = ''; el.blur(); }
-        });
-    },
-
-    eraseAt(x, y, radius = 14) {
-        const strokes = this.strokes().filter((stroke) => !this.hitStroke(stroke, x, y, radius));
-        if (strokes.length !== this.strokes().length) {
-            this.setStrokes(strokes);
-            this.scheduleSave();
-        }
-        // Eraser skips media/images — remove those via Clear or selection tooling.
-    },
-
-    hitImage(img, x, y, radius) {
-        if (!img) return false;
-        const b = getImageBounds(img);
-        return x >= b.minX - radius && x <= b.maxX + radius && y >= b.minY - radius && y <= b.maxY + radius;
-    },
-
-    hitStroke(stroke, x, y, radius) {
-        if (stroke.tool === 'brush' && stroke.points?.length) {
-            return stroke.points.some((pt) => Math.hypot(pt.x - x, pt.y - y) <= radius + (stroke.width || 3));
-        }
-        if (stroke.tool === 'text') {
-            return x >= stroke.x - radius && x <= stroke.x + 200 && y >= stroke.y - radius && y <= stroke.y + 60;
-        }
-        if (stroke.tool === 'image') {
-            return this.hitImage(stroke, x, y, radius);
-        }
-        const x0 = Math.min(stroke.x0, stroke.x1);
-        const x1 = Math.max(stroke.x0, stroke.x1);
-        const y0 = Math.min(stroke.y0, stroke.y1);
-        const y1 = Math.max(stroke.y0, stroke.y1);
-        return x >= x0 - radius && x <= x1 + radius && y >= y0 - radius && y <= y1 + radius;
-    },
+    hitStroke(stroke, x, y, radius) { return SelectSession.hitStroke(this, stroke, x, y, radius); },
 
     /** Topmost image (last painted) under the pointer, or null. */
-    findTopmostImageAt(x, y) {
-        const images = this.images();
-        for (let i = images.length - 1; i >= 0; i -= 1) {
-            if (this.hitImage(images[i], x, y, 0)) return images[i];
-        }
-        return null;
-    },
+    findTopmostImageAt(x, y) { return SelectSession.findTopmostImageAt(this, x, y); },
 
 
     cropBoxBounds(box) { return CropSession.cropBoxBounds(this, box); },
@@ -2561,332 +2385,36 @@ export const DrawingBoard = {
     },
 
     // Marquee (lasso button) methods — rectangle select mode
-    toggleLassoMode() {
-        if (this.isLassoActive) {
-            this.clearLassoSelection();
-        } else {
-            this.startLassoMode();
-        }
-    },
+    toggleLassoMode() { return SelectSession.toggleLassoMode(this); },
 
-    startLassoMode() {
-        this.isLassoActive = true;
-        this.selectedStrokes.clear();
-        this.isDraggingLasso = false;
-        this.lassoDragMoved = false;
-        this.lassoHistoryPushed = false;
-        this.isBoxSelecting = false;
-        this.boxSelectStart = null;
-        this.boxSelectCurrent = null;
-        // Marquee mode uses pointer-style selection; keep activeTool as pointer for prefs
-        this.activeTool = 'pointer';
-        this.prefs.activeTool = 'pointer';
-        writePrefs(this.prefs);
-        if (this.canvas) this.canvas.dataset.tool = 'lasso';
-        this.renderToolbar();
-        this.redraw();
-    },
+    startLassoMode() { return SelectSession.startLassoMode(this); },
 
-    clearLassoSelection() {
-        this.isLassoActive = false;
-        this.selectedStrokes.clear();
-        this.isDraggingLasso = false;
-        this.lassoDragStart = null;
-        this.lassoDragMoved = false;
-        this.lassoHistoryPushed = false;
-        this.isBoxSelecting = false;
-        this.boxSelectStart = null;
-        this.boxSelectCurrent = null;
-        // Do not wipe textLayer here — it may contain active contentEditable boxes.
-        if (this.canvas) {
-            this.canvas.dataset.tool = this.activeTool;
-            this.canvas.style.cursor = '';
-            this.lastHoverCursor = null;
-        }
-        this.renderToolbar();
-        this.redraw();
-    },
+    clearLassoSelection() { return SelectSession.clearLassoSelection(this); },
 
-    getSelectedStrokesArray() {
-        return Array.from(this.selectedStrokes);
-    },
+    getSelectedStrokesArray() { return SelectSession.getSelectedStrokesArray(this); },
 
-    startLassoDrag(x, y) {
-        if (this.selectedStrokes.size === 0) return;
+    startLassoDrag(x, y) { return SelectSession.startLassoDrag(this, x, y); },
 
-        this.isDraggingLasso = true;
-        this.lassoDragStart = { x, y };
-        this.lassoDragMoved = false;
-        this.lassoHistoryPushed = false;
-    },
+    dragLassoSelection(dx, dy) { return SelectSession.dragLassoSelection(this, dx, dy); },
 
-    dragLassoSelection(dx, dy) {
-        if (!this.isDraggingLasso || this.selectedStrokes.size === 0) return;
-        if (!dx && !dy) return;
+    finishLassoDrag() { return SelectSession.finishLassoDrag(this); },
 
-        if (!this.lassoHistoryPushed) {
-            this.pushLayerHistory();
-            this.lassoHistoryPushed = true;
-        }
-        this.lassoDragMoved = true;
-
-        translateStrokes(this.getSelectedStrokesArray(), dx, dy);
-
-        // Clamp to page bounds for fixed page modes
-        const dims = getPageDimensions(this.doc);
-        const pageBounds = getPageBounds(this.doc, dims);
-        clampStrokesToBounds(this.getSelectedStrokesArray(), pageBounds);
-
-        // Connectors follow their shapes so links survive the move.
-        this.flowReroute(this.getSelectedStrokesArray().map((s) => s.id));
-
-        this.requestRedraw();
-    },
-
-    finishLassoDrag() {
-        if (!this.isDraggingLasso) return;
-
-        const moved = this.lassoDragMoved;
-        this.isDraggingLasso = false;
-        this.lassoDragStart = null;
-        this.lassoDragMoved = false;
-        this.lassoHistoryPushed = false;
-        if (moved) this.scheduleSave();
-    },
-
-    renderLassoOverlay() {
-        if (!this.ctx || !this.canvas) return;
-
-        // Dashed blue rectangle marquee while dragging
-        if (this.isBoxSelecting && this.boxSelectStart && this.boxSelectCurrent) {
-            const x0 = Math.min(this.boxSelectStart.x, this.boxSelectCurrent.x);
-            const y0 = Math.min(this.boxSelectStart.y, this.boxSelectCurrent.y);
-            const x1 = Math.max(this.boxSelectStart.x, this.boxSelectCurrent.x);
-            const y1 = Math.max(this.boxSelectStart.y, this.boxSelectCurrent.y);
-
-            this.ctx.save();
-            this.ctx.strokeStyle = 'rgba(59, 130, 246, 0.8)';
-            this.ctx.fillStyle = 'rgba(59, 130, 246, 0.15)';
-            this.ctx.lineWidth = 1.5;
-            this.ctx.setLineDash([4, 2]);
-            this.ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
-            this.ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
-            this.ctx.restore();
-        }
-
-        // Selection bounding box + resize handles. The frame only makes sense for
-        // pointer/lasso selection — the eraser is destructive and a leftover
-        // frame over the eraser stroke is the ghost users reported.
-        const selectionToolActive = this.activeTool === 'pointer'
-            || this.activeTool === 'crop' || this.isLassoActive;
-        if (this.selectedStrokes.size > 0 && selectionToolActive) {
-            const bounds = getStrokesBounds(this.getSelectedStrokesArray());
-            this.ctx.save();
-            this.ctx.strokeStyle = '#3b82f6';
-            this.ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
-            this.ctx.lineWidth = 1.5;
-            this.ctx.setLineDash([4, 2]);
-            this.ctx.strokeRect(bounds.minX, bounds.minY, bounds.width, bounds.height);
-            this.ctx.setLineDash([]);
-            this.ctx.restore();
-
-            // Center move handle
-            const centerX = bounds.minX + bounds.width / 2;
-            const centerY = bounds.minY + bounds.height / 2;
-            this.ctx.save();
-            this.ctx.fillStyle = '#3b82f6';
-            this.ctx.beginPath();
-            this.ctx.arc(centerX, centerY, 6, 0, Math.PI * 2);
-            this.ctx.fill();
-            this.ctx.restore();
-
-            // Corner/edge resize handles
-            this.getResizeHandles(bounds).forEach((h) => {
-                this.ctx.save();
-                this.ctx.fillStyle = '#ffffff';
-                this.ctx.strokeStyle = '#3b82f6';
-                this.ctx.lineWidth = 1.5;
-                this.ctx.fillRect(h.x - RESIZE_HANDLE_SIZE / 2, h.y - RESIZE_HANDLE_SIZE / 2, RESIZE_HANDLE_SIZE, RESIZE_HANDLE_SIZE);
-                this.ctx.strokeRect(h.x - RESIZE_HANDLE_SIZE / 2, h.y - RESIZE_HANDLE_SIZE / 2, RESIZE_HANDLE_SIZE, RESIZE_HANDLE_SIZE);
-                this.ctx.restore();
-            });
-        }
-    },
+    renderLassoOverlay() { return SelectSession.renderLassoOverlay(this); },
 
     /** Crop frame overlay: veil over the discarded band, thirds, edge handles. */
     renderCropOverlay() { return CropSession.renderCropOverlay(this); },
 
-    getResizeHandles(bounds) {
-        if (!bounds) return [];
-        const { minX, minY, maxX, maxY } = bounds;
-        const midX = (minX + maxX) / 2;
-        const midY = (minY + maxY) / 2;
-        return [
-            { id: 'nw', x: minX, y: minY, cursor: 'nwse-resize' },
-            { id: 'n', x: midX, y: minY, cursor: 'ns-resize' },
-            { id: 'ne', x: maxX, y: minY, cursor: 'nesw-resize' },
-            { id: 'e', x: maxX, y: midY, cursor: 'ew-resize' },
-            { id: 'se', x: maxX, y: maxY, cursor: 'nwse-resize' },
-            { id: 's', x: midX, y: maxY, cursor: 'ns-resize' },
-            { id: 'sw', x: minX, y: maxY, cursor: 'nesw-resize' },
-            { id: 'w', x: minX, y: midY, cursor: 'ew-resize' }
-        ];
-    },
+    getResizeHandles(bounds) { return SelectSession.getResizeHandles(this, bounds); },
 
-    hitResizeHandle(x, y) {
-        if (this.selectedStrokes.size === 0) return null;
-        const bounds = getStrokesBounds(this.getSelectedStrokesArray());
-        const handles = this.getResizeHandles(bounds);
-        for (const h of handles) {
-            if (Math.abs(x - h.x) <= RESIZE_HANDLE_HIT / 2 && Math.abs(y - h.y) <= RESIZE_HANDLE_HIT / 2) {
-                return h;
-            }
-        }
-        return null;
-    },
+    hitResizeHandle(x, y) { return SelectSession.hitResizeHandle(this, x, y); },
 
-    startResize(handle, x, y) {
-        const selected = this.getSelectedStrokesArray();
-        if (!selected.length) return;
-        const bounds = getStrokesBounds(selected);
-        this.pushLayerHistory();
-        this.resizeHandle = handle.id;
-        this.resizeStart = {
-            x,
-            y,
-            bounds: { ...bounds },
-            // Snapshot each selected item's geometry so we can scale from original
-            items: selected.map((item) => ({
-                ref: item,
-                x: item.x,
-                y: item.y,
-                width: item.width,
-                height: item.height,
-                x0: item.x0,
-                y0: item.y0,
-                x1: item.x1,
-                y1: item.y1,
-                points: item.points ? item.points.map((p) => ({ ...p })) : null
-            }))
-        };
-    },
+    startResize(handle, x, y) { return SelectSession.startResize(this, handle, x, y); },
 
-    applyResize(x, y) {
-        if (!this.resizeHandle || !this.resizeStart) return;
-        const start = this.resizeStart.bounds;
-        const handle = this.resizeHandle;
-        let newMinX = start.minX;
-        let newMinY = start.minY;
-        let newMaxX = start.maxX;
-        let newMaxY = start.maxY;
+    applyResize(x, y) { return SelectSession.applyResize(this, x, y); },
 
-        if (handle.includes('w')) newMinX = Math.min(x, start.maxX - MIN_IMAGE_SIDE);
-        if (handle.includes('e')) newMaxX = Math.max(x, start.minX + MIN_IMAGE_SIDE);
-        if (handle.includes('n')) newMinY = Math.min(y, start.maxY - MIN_IMAGE_SIDE);
-        if (handle.includes('s')) newMaxY = Math.max(y, start.minY + MIN_IMAGE_SIDE);
+    finishResize() { return SelectSession.finishResize(this); },
 
-        // Maintain aspect ratio for corner handles
-        const isCorner = handle.length === 2;
-        if (isCorner && start.width > 0 && start.height > 0) {
-            const aspect = start.width / start.height;
-            let w = newMaxX - newMinX;
-            let h = newMaxY - newMinY;
-            if (w / h > aspect) {
-                h = w / aspect;
-            } else {
-                w = h * aspect;
-            }
-            if (handle.includes('w')) newMinX = newMaxX - w;
-            else newMaxX = newMinX + w;
-            if (handle.includes('n')) newMinY = newMaxY - h;
-            else newMaxY = newMinY + h;
-        }
-
-        const newW = Math.max(MIN_IMAGE_SIDE, newMaxX - newMinX);
-        const newH = Math.max(MIN_IMAGE_SIDE, newMaxY - newMinY);
-        const scaleX = start.width > 0 ? newW / start.width : 1;
-        const scaleY = start.height > 0 ? newH / start.height : 1;
-
-        for (const snap of this.resizeStart.items) {
-            const item = snap.ref;
-            if (!item) continue;
-            if (item.tool === 'image' || (item.mediaId && snap.width != null)) {
-                item.x = newMinX + (snap.x - start.minX) * scaleX;
-                item.y = newMinY + (snap.y - start.minY) * scaleY;
-                item.width = Math.max(MIN_IMAGE_SIDE, snap.width * scaleX);
-                item.height = Math.max(MIN_IMAGE_SIDE, snap.height * scaleY);
-            } else if (Array.isArray(item.points) && snap.points) {
-                for (let i = 0; i < item.points.length; i++) {
-                    item.points[i].x = newMinX + (snap.points[i].x - start.minX) * scaleX;
-                    item.points[i].y = newMinY + (snap.points[i].y - start.minY) * scaleY;
-                }
-            } else if (item.tool === 'text') {
-                item.x = newMinX + (snap.x - start.minX) * scaleX;
-                item.y = newMinY + (snap.y - start.minY) * scaleY;
-                if (item.fontSize) item.fontSize = Math.max(8, (snap.height || item.fontSize) * scaleY);
-            } else if (snap.x0 != null) {
-                item.x0 = newMinX + (snap.x0 - start.minX) * scaleX;
-                item.y0 = newMinY + (snap.y0 - start.minY) * scaleY;
-                item.x1 = newMinX + (snap.x1 - start.minX) * scaleX;
-                item.y1 = newMinY + (snap.y1 - start.minY) * scaleY;
-            }
-        }
-
-        const dims = getPageDimensions(this.doc);
-        const pageBounds = getPageBounds(this.doc, dims);
-        clampStrokesToBounds(this.getSelectedStrokesArray(), pageBounds);
-
-        this.flowReroute(this.resizeStart.items.map((s) => s.ref?.id));
-
-        this.redraw();
-    },
-
-    finishResize() {
-        if (!this.resizeHandle) return;
-        this.resizeHandle = null;
-        this.resizeStart = null;
-        this.scheduleSave();
-    },
-
-    updateHoverCursor(x, y) {
-        if (!this.canvas) return;
-        let next = '';
-        const cropBox = this.cropState?.box;
-        if (cropBox && (this.activeTool === 'crop' || !this.selectedStrokes.size)) {
-            const handle = this.hitCropHandle(x, y);
-            if (handle) {
-                this.hoverHandle = null;
-                next = handle.cursor;
-            } else if (this.isPointInCropBox(x, y)) {
-                this.hoverHandle = null;
-                next = 'move';
-            } else {
-                this.hoverHandle = null;
-                next = '';
-            }
-        } else if (this.selectedStrokes.size > 0) {
-            const handle = this.hitResizeHandle(x, y);
-            if (handle) {
-                this.hoverHandle = handle.id;
-                next = handle.cursor;
-            } else {
-                const bounds = getStrokesBounds(this.getSelectedStrokesArray());
-                if (x >= bounds.minX && x <= bounds.maxX && y >= bounds.minY && y <= bounds.maxY) {
-                    this.hoverHandle = null;
-                    next = 'move';
-                } else {
-                    this.hoverHandle = null;
-                    next = '';
-                }
-            }
-        } else {
-            this.hoverHandle = null;
-            next = '';
-        }
-        if (this.lastHoverCursor === next) return;
-        this.lastHoverCursor = next;
-        this.canvas.style.cursor = next;
-    },
+    updateHoverCursor(x, y) { return SelectSession.updateHoverCursor(this, x, y); },
 
     async openImageInsertMenu(anchor) {
         let items;
