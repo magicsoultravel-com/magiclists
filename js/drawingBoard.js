@@ -15,7 +15,9 @@ import { BRUSH_STYLES, DRAG_SHAPE_TOOLS, drawBrushStroke, drawShapeStroke, drawT
 import {
     FLOWCHART_SHAPE_TOOLS, FLOWCHART_CONNECTOR_TOOL, FLOWCHART_ROUTINGS,
     FLOW_LABEL_DEFAULT, FLOW_LABEL_MIN, FLOW_LABEL_MAX, FLOW_LABEL_STEP,
-    createFlowchartShape, createFlowchartConnector, normalizeFlowLabelSize
+    FLOWCHART_DEFAULT_COLOR, FLOWCHART_DEFAULT_WIDTH, FLOWCHART_WIDTH_STEPS,
+    createFlowchartShape, createFlowchartConnector, normalizeFlowLabelSize, clampFlowchartWidth,
+    routeFlowchartConnector
 } from './flowchart.js';
 import {
     shapeBounds, nearestPort, portPointFor, snapEndpointToShapes, routeConnector,
@@ -322,6 +324,10 @@ export const DrawingBoard = {
     isFlowchartMode: false,
     flowchartItem: null,
     flowchartRouting: 'straight',
+    flowchartColorOpen: false,
+    flowLabelColorOpen: false,
+    /** Live connector endpoint drag: { conn, end:'from'|'to', moved:false } */
+    flowEndpointDrag: null,
     /** Live connector drag: { x, y, from: {shapeId,port}|null, hover: {...}|null } */
     flowConnect: null,
     /** Double-click label editor overlay + the stroke it edits. */
@@ -457,6 +463,7 @@ export const DrawingBoard = {
         this.resize();
         this.redrawBackground();
         this.redraw();
+        if (this.isFlowchartMode) this.bindFlowBendEvents();
     },
 
     /**
@@ -530,6 +537,124 @@ export const DrawingBoard = {
             snap: g.snap !== false,
             visible: g.visible !== false
         };
+    },
+
+    /** Active flowchart stroke color, persisted per diagram. */
+    flowchartColor() {
+        const c = this.flowchartItem?.flowchart?.flowchartColor;
+        return typeof c === 'string' && c ? c : FLOWCHART_DEFAULT_COLOR;
+    },
+
+    /** Active flowchart stroke width, persisted per diagram. */
+    flowchartWidth() {
+        const w = Number(this.flowchartItem?.flowchart?.flowchartWidth);
+        return clampFlowchartWidth(w);
+    },
+
+    /** Set the flowchart stroke color on the live item + the toolbar chip. */
+    persistFlowchartColor(color) {
+        if (typeof color !== 'string' || !color) return;
+        this.flowchartItem.flowchart.flowchartColor = color;
+        this.persistFlowchartPref({ flowchartColor: color });
+    },
+
+    /** Set the flowchart stroke width on the live item + the toolbar readout. */
+    persistFlowchartWidth(width) {
+        const w = clampFlowchartWidth(width);
+        this.flowchartItem.flowchart.flowchartWidth = w;
+        this.persistFlowchartPref({ flowchartWidth: w });
+    },
+
+    /** Shared persist helper for flowchart prefs that live on item.flowchart. */
+    persistFlowchartPref(patch) {
+        if (!this.flowchartItem?.flowchart) return;
+        Object.assign(this.flowchartItem.flowchart, patch || {});
+        // Mirror persistFlowchartGrid: mutateItem is fire-and-forget here so the
+        // live item is updated immediately and the board re-render picks it up.
+        import('./noteSurfaceMutations.js').then(({ mutateItem }) => {
+            mutateItem(this.flowchartItem, (it) => {
+                if (!it.flowchart) return;
+                Object.assign(it.flowchart, patch || {});
+            }, { preserveView: true, skipRerender: true, localOnly: true });
+        }).catch(() => {});
+        this.scheduleSave();
+    },
+
+    /**
+     * Flowchart stroke color picker. Same chrome as the brush color rollout but
+     * persists to item.flowchart.flowchartColor so every shape and connector
+     * repaints consistently.
+     */
+    openFlowchartColorPicker(anchor) {
+        if (this.flowchartColorOpen) { ColorPicker.close(); return; }
+        ColorPicker.close();
+        this.flowLabelColorOpen = false;
+        ColorPicker.open({
+            anchor,
+            presets: PALETTE_UNIFIED,
+            value: this.flowchartColor(),
+            align: 'end',
+            onSelect: (c) => {
+                this.persistFlowchartColor(c);
+                this.redraw();
+                this.renderToolbar();
+            },
+            onClose: () => { this.flowchartColorOpen = false; }
+        });
+        this.flowchartColorOpen = true;
+        anchor?.setAttribute('aria-expanded', 'true');
+    },
+
+    /**
+     * Label color picker. Persists to the selected shape/connector's label so a
+     * label can be tinted independently of the stroke.
+     */
+    openFlowLabelColorPicker(anchor) {
+        const target = this.flowLabelTargetShape();
+        if (!target) { showAppToast('Select a shape or connector first'); return; }
+        if (this.flowLabelColorOpen) { ColorPicker.close(); return; }
+        ColorPicker.close();
+        this.flowchartColorOpen = false;
+        ColorPicker.open({
+            anchor,
+            presets: PALETTE_UNIFIED,
+            value: target.label?.color || this.flowchartColor(),
+            align: 'end',
+            onSelect: (c) => {
+                this.pushLayerHistory();
+                target.label = { ...(target.label || { text: '', fontSize: FLOW_LABEL_DEFAULT, color: '' }), color: c };
+                this.scheduleSave();
+                this.redraw();
+                this.renderToolbar();
+            },
+            onClose: () => { this.flowLabelColorOpen = false; }
+        });
+        this.flowLabelColorOpen = true;
+        anchor?.setAttribute('aria-expanded', 'true');
+    },
+
+    /**
+     * Adjust the flowchart stroke width (1-16px, snapped to the allowed steps).
+     * @param {number} delta
+     */
+    adjustFlowchartWidth(delta) {
+        const steps = FLOWCHART_WIDTH_STEPS;
+        const cur = this.flowchartWidth();
+        let idx = steps.indexOf(cur);
+        if (idx < 0) {
+            let best = 0;
+            let bestD = Infinity;
+            steps.forEach(function (s, i) {
+                const d = Math.abs(s - cur);
+                if (d < bestD) { bestD = d; best = i; }
+            });
+            idx = best;
+        }
+        const next = steps[Math.max(0, Math.min(steps.length - 1, idx + delta))];
+        if (next === cur) return;
+        this.persistFlowchartWidth(next);
+        this.redraw();
+        this.renderToolbar();
     },
 
     async persistFlowchartGrid(patch) {
@@ -659,27 +784,204 @@ export const DrawingBoard = {
     },
 
     /**
+     * Which endpoint ('from' or 'to') of a connector the pointer is on, or null.
+     * Hit radius scales with zoom so the grab target stays a comfortable size.
+     * @param {object} conn
+     * @param {number} x
+     * @param {number} y
+     * @returns {string|null}
+     */
+    hitFlowEndpoint(conn, x, y) {
+        if (!conn) return null;
+        const scale = CanvasViewport.scale || 1;
+        const r = 8 / scale;
+        const ends = [
+            { name: 'from', x: conn.x0, y: conn.y0 },
+            { name: 'to', x: conn.x1, y: conn.y1 }
+        ];
+        for (const e of ends) {
+            if (Math.hypot(e.x - x, e.y - y) <= r) return e.name;
+        }
+        return null;
+    },
+
+    /**
      * Flowchart overlay: live connector drag with its port magnet, plus port dots
      * on every shape while connecting so targets are discoverable.
      */
-    renderFlowchartOverlay() {
-        const ctx = this.ctx;
-        if (!ctx) return;
-        const st = this.flowConnect;
-        if (!st) return;
+    
+    /**
+     * Test if pointer is over a connector elbow bend point (within tolerance).
+     * Returns { kind: 'bend', connector, point: {x,y} } or null.
+     */
+    flowConnectorBendHit(conn, x, y, tol) {
+        if (conn.routing !== 'elbow') return null;
+        const bend = { x: conn.midX ?? (conn.x0 + conn.x1) / 2, y: conn.midY ?? (conn.y0 + conn.y1) / 2 };
+        const dx = x - bend.x;
+        const dy = y - bend.y;
+        return Math.hypot(dx, dy) <= tol ? { kind: 'bend', connector: conn, point: bend } : null;
+    },
 
+    /**
+     * Live bend-drag state while pointer moves over a connector.
+     */
+    flowBendDrag: null,
+
+    /**
+     * Render live bend preview while dragging a connector elbow.
+     */
+    renderFlowBendPreview() {
+        if (!this.flowBendDrag || !this.isFlowchartMode) return;
+        const { connector, startX, startY, startMidX, startMidY } = this.flowBendDrag;
         const scale = CanvasViewport.scale || 1;
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 2 * scale;
+        ctx.globalAlpha = 0.6;
+        ctx.setTransform(scale, 0, 0, scale, 0, 0);
+        ctx.beginPath();
+        ctx.moveTo(connector.x0, connector.y0);
+        ctx.lineTo(startMidX, startMidY);
+        ctx.lineTo(connector.x1, connector.y1);
+        ctx.stroke();
+        ctx.restore();
+    },
+
+    /**
+     * Clear the live bend preview state.
+     */
+    clearFlowBendPreview() {
+        if (!this.isFlowchartMode) return;
+        this.flowBendDrag = null;
+    },
+
+    /**
+     * Called on pointerdown over a connector bend: start the drag capture.
+     */
+    startFlowBendDrag(x, y) {
+        if (!this.isFlowchartMode) return;
+        const conn = this.flowHit(x, y);
+        if (!conn || conn.flowchartKind !== 'connector') return;
+        const bend = this.flowConnectorBendHit(conn, x, y, 12 / Math.max(0.1, CanvasViewport.scale || 1));
+        if (!bend) return;
+        this.flowBendDrag = {
+            connector: conn,
+            startX: x,
+            startY: y,
+            startMidX: bend.connector.midX ?? (bend.connector.x0 + bend.connector.x1) / 2,
+            startMidY: bend.connector.midY ?? (bend.connector.y0 + bend.connector.y1) / 2,
+        };
+        this.requestRedraw();
+    },
+
+    /**
+     * Called on pointerup after starting a bend drag: commit the new midpoint.
+     */
+    finishFlowBendDrag() {
+        if (!this.flowBendDrag) return;
+        const { connector, startX, startY } = this.flowBendDrag;
+        const grid = this.flowchartGrid();
+        const snap = grid?.snap !== false;
+        const size = grid?.size > 0 ? grid.size : 24;
+        let newMidX = Math.round((startX) / size) * size;
+        let newMidY = Math.round((startY) / size) * size;
+        if (!snap) {
+            newMidX = startX;
+            newMidY = startY;
+        }
+        connector.midX = Math.max(connector.x0, Math.min(connector.x1, newMidX));
+        connector.midY = Math.max(connector.y0, Math.min(connector.y1, newMidY));
+        this.flowReroute([connector.id]);
+        this.flowBendDrag = null;
+        this.scheduleSave();
+        this.redraw();
+    },
+
+    /**
+     * Bind bend-drag pointer events into the canvas overlay.
+     */
+    bindFlowBendEvents() {
+        if (!this.toolbarEl) return;
+        const overlay = this.canvas?.parentElement?.querySelector?.('[data-flow-overlay]');
+        if (!overlay) return;
+
+        const onBendDown = (e) => {
+            e.stopPropagation();
+            const { x, y } = this.clientToCanvas(e.clientX, e.clientY);
+            this.startFlowBendDrag(x, y);
+        };
+
+        const onMove = (e) => {
+            if (!this.flowBendDrag) return;
+            e.stopPropagation();
+            const { x, y } = this.clientToCanvas(e.clientX, e.clientY);
+            this.flowBendDrag.x = x;
+            this.flowBendDrag.y = y;
+            this.requestRedraw();
+        };
+
+        const onUp = (e) => {
+            e.stopPropagation();
+            this.finishFlowBendDrag();
+            this.flowBendDrag = null;
+        };
+
+        overlay.addEventListener('pointerdown', onBendDown, { capture: true });
+        document.addEventListener('pointermove', onMove, { capture: true });
+        document.addEventListener('pointerup', onUp, { capture: true });
+        document.addEventListener('pointercancel', onUp, { capture: true });
+    },
+
+    /**
+     * Called each render to draw live bend preview and update bend-hit state.
+     */
+    renderFlowchartOverlays() {
+        if (!this.isFlowchartMode) return;
+        this.renderFlowBendPreview();
+        this.clearFlowBendPreview();
+    },
+
+renderFlowchartOverlay() {
+        const ctx = this.ctx;
+        if (!ctx || !this.isFlowchartMode) return;
+        const st = this.flowConnect;
+        const scale = CanvasViewport.scale || 1;
+        const dotR = 4 / scale;
+        const shapes = this.flowchartShapes();
+        if (!shapes.length) return;
+
+        ctx.save();
+        ctx.lineWidth = 1 / scale;
+
+        // --- Connector tool selected, no drag in flight: show every port so the
+        //     user knows where they can start drawing from. -------------------
+        if (!st && this.activeTool === FLOWCHART_CONNECTOR_TOOL) {
+            for (const shape of shapes) {
+                for (const port of ['n', 'e', 's', 'w']) {
+                    const p = portPointFor(shape, port);
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, dotR, 0, Math.PI * 2);
+                    ctx.fillStyle = 'rgba(148, 163, 184, 0.55)';
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(15, 23, 42, 0.6)';
+                    ctx.stroke();
+                }
+            }
+            ctx.restore();
+            return;
+        }
+
+        // No drag in flight and the tool is not the connector: nothing to draw.
+        if (!st) { ctx.restore(); return; }
+
         const brush = this.currentBrush();
         const start = st.fromPt || { x: st.x, y: st.y };
 
         // Port dots on all candidate shapes (skip the one we started from).
-        const dotR = 4 / scale;
-        ctx.save();
-        ctx.lineWidth = 1 / scale;
-        for (const shape of this.flowchartShapes()) {
+        for (const shape of shapes) {
             if (shape.id === st.from?.shapeId) continue;
-            const ports = ['n', 'e', 's', 'w'];
-            for (const port of ports) {
+            for (const port of ['n', 'e', 's', 'w']) {
                 const p = portPointFor(shape, port);
                 const isTarget = st.hover && st.hover.shapeId === shape.id && st.hover.port === port;
                 ctx.beginPath();
@@ -712,7 +1014,104 @@ export const DrawingBoard = {
         ctx.stroke();
         ctx.restore();
     },
+
     /**
+     * When a connector is selected, draw grabbable handles on its two endpoints
+     * so the user can re-attach an origin/terminus to a different port.
+     * Runs in redraw() after the flowchart overlay; a no-op unless exactly one
+     * connector is selected.
+     */
+    renderFlowchartEndpointHandles() {
+        const ctx = this.ctx;
+        if (!ctx || !this.isFlowchartMode) return;
+        const sel = this.getSelectedStrokesArray();
+        if (sel.length !== 1) return;
+        const target = sel[0];
+        if (!target || target.flowchartKind !== 'connector') return;
+
+        const scale = CanvasViewport.scale || 1;
+        const r = 6 / scale;
+        const ends = [
+            { name: 'from', x: target.x0, y: target.y0, port: target.from?.port },
+            { name: 'to', x: target.x1, y: target.y1, port: target.to?.port }
+        ];
+        ctx.save();
+        ctx.lineWidth = 1.5 / scale;
+        for (const e of ends) {
+            const active = this.flowEndpointDrag && this.flowEndpointDrag.end === e.name;
+            ctx.beginPath();
+            ctx.arc(e.x, e.y, active ? r * 1.4 : r, 0, Math.PI * 2);
+            ctx.fillStyle = active ? '#fde047' : '#60a5fa';
+            ctx.fill();
+            ctx.strokeStyle = 'rgba(15, 23, 42, 0.7)';
+            ctx.stroke();
+            // Tiny port label so the user knows which side they are grabbing.
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `${Math.max(9, 10 / scale)}px Inter, system-ui, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'bottom';
+            ctx.fillText(e.port || 'c', e.x, e.y - r - 1 / scale);
+        }
+        ctx.restore();
+    },
+
+    /**
+     * Start dragging an endpoint of the selected connector.
+     * @param {object} conn
+     * @param {'from'|'to'} end
+     * @param {number} x
+     * @param {number} y
+     */
+    startFlowEndpointDrag(conn, end, x, y) {
+        this.flowEndpointDrag = { conn, end, moved: false, startX: x, startY: y };
+    },
+
+    /**
+     * Move the dragged endpoint, snapping to the grid and magnetising onto a
+     * shape port when one is close enough. Reroutes the connector live.
+     * @param {number} x
+     * @param {number} y
+     */
+    applyFlowEndpointDrag(x, y) {
+        const st = this.flowEndpointDrag;
+        if (!st) return;
+        const conn = st.conn;
+        if (!conn) return;
+
+        const snapped = this.flowSnapPoint(x, y, false);
+        const anchor = this.flowResolveEndpoint(snapped.x, snapped.y, null);
+        const end = st.end;
+
+        if (end === 'from') {
+            conn.x0 = snapped.x;
+            conn.y0 = snapped.y;
+            conn.from = anchor ? { shapeId: anchor.shapeId, port: anchor.port } : null;
+        } else {
+            conn.x1 = snapped.x;
+            conn.y1 = snapped.y;
+            conn.to = anchor ? { shapeId: anchor.shapeId, port: anchor.port } : null;
+        }
+        routeFlowchartConnector(conn);
+        st.moved = true;
+        this.requestRedraw();
+    },
+
+    /**
+     * Finish the endpoint drag, pushing one undo step if anything moved.
+     */
+    finishFlowEndpointDrag() {
+        const st = this.flowEndpointDrag;
+        this.flowEndpointDrag = null;
+        if (!st) return;
+        if (st.moved) {
+            this.pushLayerHistory();
+            this.scheduleSave();
+        }
+        this.redraw();
+    },
+
+    /**
+     * Commit the in-flight connector drag.    /**
      * Commit the in-flight connector drag.
      * Attached-to-port when the pointer lands inside the magnet radius, otherwise
      * a free-floating straight arrow. Self-loops are rejected; tiny drags dropped.
@@ -745,8 +1144,8 @@ export const DrawingBoard = {
             x0: startPt.x, y0: startPt.y,
             x1: endPt.x, y1: endPt.y,
             routing: (st.from && endAnchor) ? this.flowchartRouting : 'straight',
-            color: this.currentBrush().color,
-            width: this.currentBrush().width
+            color: this.flowchartColor(),
+            width: this.flowchartWidth()
         });
 
         this.pushLayerHistory();
@@ -1115,6 +1514,11 @@ export const DrawingBoard = {
 
     setTool(tool) {
         this.activeTool = tool;
+        // Switching to the eraser is destructive — drop the selection frame so
+        // it cannot linger as a ghost over the eraser stroke.
+        if (tool === 'eraser' && this.selectedStrokes.size > 0) {
+            this.selectedStrokes.clear();
+        }
         this.prefs.activeTool = tool;
         this.cropState = null;
         CanvasViewport.setHandMode(tool === 'pan');
@@ -1261,6 +1665,22 @@ export const DrawingBoard = {
             return;
         }
 
+        // Connector endpoint grab: when exactly one connector is selected and the
+        // pointer lands on one of its endpoints, start dragging that endpoint so
+        // the origin/terminus can be re-attached to a different port. Takes
+        // priority over the lasso drag that would otherwise start for any click
+        // inside the connector's bounding box.
+        if (this.isFlowchartMode && this.selectedStrokes.size === 1) {
+            const only = this.getSelectedStrokesArray()[0];
+            if (only && only.flowchartKind === 'connector') {
+                const hitEnd = this.hitFlowEndpoint(only, x, y);
+                if (hitEnd) {
+                    this.startFlowEndpointDrag(only, hitEnd, x, y);
+                    return;
+                }
+            }
+        }
+
         // Resize handles take priority when something is selected
         if (this.selectedStrokes.size > 0) {
             const handle = this.hitResizeHandle(x, y);
@@ -1360,6 +1780,10 @@ export const DrawingBoard = {
             };
             if (this.isFlowShape(this.activeTool)) {
                 preview.flowchartKind = 'shape';
+                // Flowchart strokes use the diagram's own color/width so a palette
+                // change repaints every shape and connector consistently.
+                preview.color = this.flowchartColor();
+                preview.width = this.flowchartWidth();
                 // No label yet: drawFlowchartLabel skips empty labels, so text only
                 // appears once the user actually types something.
                 preview.label = null;
@@ -1429,6 +1853,13 @@ export const DrawingBoard = {
             if (added) this.requestRedraw();
             return;
         }
+        // Live connector endpoint drag
+        if (this.flowEndpointDrag) {
+            const pt = this.clientToCanvas(e.clientX, e.clientY);
+            this.applyFlowEndpointDrag(pt.x, pt.y);
+            return;
+        }
+
         if (this.flowConnect) {
             const pt = this.clientToCanvas(e.clientX, e.clientY);
             const snapped = this.flowSnapPoint(pt.x, pt.y, e.shiftKey);
@@ -1469,6 +1900,12 @@ export const DrawingBoard = {
         // Commit the flowchart connector drag
         if (this.flowConnect) {
             this.commitFlowConnect();
+            return;
+        }
+
+        // Finish connector endpoint drag
+        if (this.flowEndpointDrag) {
+            this.finishFlowEndpointDrag();
             return;
         }
 
@@ -1952,7 +2389,7 @@ export const DrawingBoard = {
         if (this.draftStroke) drawBrushStroke(this.ctx, this.draftStroke);
         if (this.shapePreview) drawShapeStroke(this.ctx, this.shapePreview);
 
-        if (this.isFlowchartMode) this.renderFlowchartOverlay();
+        if (this.isFlowchartMode) this.renderFlowchartOverlays();
 
         // Render lasso overlay (path, box selection, selection box, resize handles)
         if (this.isLassoActive || this.selectedStrokes.size > 0 || this.isBoxSelecting) {
@@ -2417,6 +2854,8 @@ export const DrawingBoard = {
         const grid = this.flowchartGrid();
         const snapOn = grid.snap !== false;
         const routing = this.flowchartRouting === 'elbow' ? 'elbow' : 'straight';
+        const fcColor = this.flowchartColor();
+        const fcWidth = this.flowchartWidth();
         const tools = [
             ['rect', 'Process', 'rect'],
             ['rounded_rect', 'Rounded', 'rounded_rect'],
@@ -2433,12 +2872,18 @@ export const DrawingBoard = {
             + toolBtns
             + '<button type="button" class="btn btn--compact btn--icon' + (this.activeTool === 'connector' ? ' active' : '') + '" data-flow-tool="connector" title="Connector (drag shape to shape)" aria-label="Connector">' + DRAWING_ICONS.arrow + '</button>'
             + '<button type="button" class="btn btn--compact btn--icon' + (routing === 'elbow' ? ' active' : '') + '" id="draw-flow-routing" title="Toggle elbow routing" aria-label="Toggle elbow routing" aria-pressed="' + (routing === 'elbow' ? 'true' : 'false') + '">' + (DRAWING_ICONS.connectorElbow || DRAWING_ICONS.arrow) + '</button>'
+            + '<span class="drawing-toolbar-group" data-flow-connector-group>'
+            + '<button type="button" class="btn btn--compact btn--icon drawing-color-chip-btn" id="draw-flow-connector-color" title="Stroke color" aria-label="Stroke color" aria-expanded="false" style="--chip-color:' + fcColor + '"><span class="drawing-color-chip" style="background:' + fcColor + '"></span></button>'
+            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-connector-smaller" title="Thinner stroke" aria-label="Thinner stroke">' + ACTION_ICONS.minus + '</button>'
+            + '<span class="drawing-brush-size__value" id="draw-flow-connector-width" aria-live="polite">' + fcWidth + 'px</span>'
+            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-connector-larger" title="Thicker stroke" aria-label="Thicker stroke">' + ACTION_ICONS.plus + '</button>'
+            + '</span>'
             + '<span class="format-toolbar-sep" aria-hidden="true"></span>'
             + '<span class="drawing-toolbar-group" data-flow-label-group>'
             + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-label-edit" title="Edit shape text" aria-label="Edit shape text">' + DRAWING_ICONS.text + '</button>'
+            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-label-color" title="Label color" aria-label="Label color" aria-expanded="false" style="--chip-color:' + (this.flowLabelTargetShape()?.label?.color || fcColor) + '"><span class="drawing-color-chip" style="background:' + (this.flowLabelTargetShape()?.label?.color || fcColor) + '"></span></button>'
             + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-label-smaller" title="Smaller label text" aria-label="Smaller label text">' + ACTION_ICONS.minus + '</button>'
-            + '<span class="drawing-brush-size__value" id="draw-flow-label-size" aria-live="polite">'
-                + this.flowLabelFontSize() + 'px</span>'
+            + '<span class="drawing-brush-size__value" id="draw-flow-label-size" aria-live="polite">' + this.flowLabelFontSize() + 'px</span>'
             + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-label-larger" title="Larger label text" aria-label="Larger label text">' + ACTION_ICONS.plus + '</button>'
             + '</span>'
             + '<span class="format-toolbar-sep" aria-hidden="true"></span>'
@@ -2729,6 +3174,25 @@ export const DrawingBoard = {
             e.stopPropagation();
             this.nudgeSelectedFlowchartLabel(2);
         });
+
+        // Connector stroke color — opens the shared color picker, persists to the diagram.
+        q('#draw-flow-connector-color')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.openFlowchartColorPicker(e.currentTarget);
+        });
+        q('#draw-flow-connector-smaller')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.adjustFlowchartWidth(-1);
+        });
+        q('#draw-flow-connector-larger')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.adjustFlowchartWidth(1);
+        });
+        // Label color — opens the shared color picker, persists to the selected label.
+        q('#draw-flow-label-color')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this.openFlowLabelColorPicker(e.currentTarget);
+        });
     },
 
     updateToolbarState() {
@@ -2755,6 +3219,18 @@ export const DrawingBoard = {
         group.querySelector('#draw-flow-label-larger')?.toggleAttribute('disabled', !hasTarget || size >= FLOW_LABEL_MAX);
         const readout = group.querySelector('#draw-flow-label-size');
         if (readout) readout.textContent = size + 'px';
+        // Label color chip reflects the selected label (or the diagram default).
+        const labelChip = group.querySelector('#draw-flow-label-color');
+        if (labelChip) {
+            const color = (target?.label?.color || this.flowchartColor());
+            labelChip.style.setProperty('--chip-color', color);
+            const swatch = labelChip.querySelector('.drawing-color-chip');
+            if (swatch) swatch.style.background = color;
+            labelChip.toggleAttribute('disabled', !hasTarget);
+        }
+        // Connector width readout always reflects the diagram setting.
+        const connWidth = this.toolbarEl.querySelector('#draw-flow-connector-width');
+        if (connWidth) connWidth.textContent = this.flowchartWidth() + 'px';
     },
 
     handleKeydown(e) {
@@ -2766,6 +3242,7 @@ export const DrawingBoard = {
 
         // Escape: revert an in-flight crop drag first, else drop the crop session
         if (e.key === 'Escape') {
+            if (this.flowEndpointDrag) { this.flowEndpointDrag = null; this.redraw(); return true; }
             if (this.flowConnect) { this.flowConnect = null; this.redraw(); return true; }
             if (this.flowLabelEl) return false;
             if (this.revertCropGesture()) return true;
@@ -2920,8 +3397,12 @@ export const DrawingBoard = {
             this.ctx.restore();
         }
 
-        // Selection bounding box + resize handles
-        if (this.selectedStrokes.size > 0) {
+        // Selection bounding box + resize handles. The frame only makes sense for
+        // pointer/lasso selection — the eraser is destructive and a leftover
+        // frame over the eraser stroke is the ghost users reported.
+        const selectionToolActive = this.activeTool === 'pointer'
+            || this.activeTool === 'crop' || this.isLassoActive;
+        if (this.selectedStrokes.size > 0 && selectionToolActive) {
             const bounds = getStrokesBounds(this.getSelectedStrokesArray());
             this.ctx.save();
             this.ctx.strokeStyle = '#3b82f6';

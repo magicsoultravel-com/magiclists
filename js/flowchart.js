@@ -6,6 +6,31 @@ export const FLOWCHART_VERSION = 1;
 export const FLOWCHART_GRID_STEPS = Object.freeze([8, 12, 16, 24, 32, 48]);
 export const FLOWCHART_DEFAULT_GRID_SIZE = 24;
 export const FLOWCHART_DEFAULT_GRID_TYPE = 'dots';
+/** Connector / shape stroke width (separate from the freehand brush so flowchart lines stay crisp). */
+export const FLOWCHART_DEFAULT_WIDTH = 3;
+export const FLOWCHART_WIDTH_MIN = 1;
+export const FLOWCHART_WIDTH_MAX = 16;
+export const FLOWCHART_WIDTH_STEPS = Object.freeze([1, 2, 3, 4, 6, 8, 12, 16]);
+
+/** Default flowchart stroke color, matching the drawing board's pen. */
+export const FLOWCHART_DEFAULT_COLOR = '#f8fafc';
+
+/**
+ * Clamp a flowchart stroke width to the nearest allowed step.
+ * @param {number} raw
+ * @returns {number}
+ */
+export function clampFlowchartWidth(raw) {
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return FLOWCHART_DEFAULT_WIDTH;
+    let best = FLOWCHART_WIDTH_STEPS[0];
+    let bestDist = Math.abs(n - best);
+    for (const step of FLOWCHART_WIDTH_STEPS) {
+        const d = Math.abs(n - step);
+        if (d <= bestDist) { bestDist = d; best = step; }
+    }
+    return Math.max(FLOWCHART_WIDTH_MIN, Math.min(FLOWCHART_WIDTH_MAX, best));
+}
 
 export const FLOWCHART_SHAPE_TOOLS = Object.freeze([
     'rect',
@@ -87,6 +112,8 @@ export function createEmptyFlowchart() {
             snap: true,
             visible: true
         },
+        flowchartColor: FLOWCHART_DEFAULT_COLOR,
+        flowchartWidth: FLOWCHART_DEFAULT_WIDTH,
         collapsed: false
     };
 }
@@ -100,7 +127,14 @@ export function normalizeFlowchart(raw) {
     const grid = normalizeFlowchartGrid(raw.grid);
     const page = (doc.pages || []).find((p) => p.id === doc.activePageId) || doc.pages[0];
     if (page && !page.background) page.background = grid.type;
-    return { version: FLOWCHART_VERSION, doc, grid, collapsed: !!raw.collapsed };
+    return {
+        version: FLOWCHART_VERSION,
+        doc,
+        grid,
+        flowchartColor: typeof raw.flowchartColor === 'string' && raw.flowchartColor ? raw.flowchartColor : FLOWCHART_DEFAULT_COLOR,
+        flowchartWidth: clampFlowchartWidth(raw.flowchartWidth),
+        collapsed: !!raw.collapsed
+    };
 }
 
 function isFlowStroke(s) {

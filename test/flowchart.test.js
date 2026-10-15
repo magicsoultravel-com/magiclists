@@ -351,3 +351,32 @@ describe('flowchart note section markup', () => {
         assert.ok(!html.includes('data-flowchart-edit'), 'read-only sections get no edit button');
     });
 });
+
+describe('flowchart stroke color / width controls', () => {
+    it('createEmptyFlowchart exposes the default color and width', async () => {
+        const { createEmptyFlowchart, FLOWCHART_DEFAULT_COLOR, FLOWCHART_DEFAULT_WIDTH } = await import('../js/flowchart.js');
+        const fc = createEmptyFlowchart();
+        assert.strictEqual(fc.flowchartColor, FLOWCHART_DEFAULT_COLOR);
+        assert.strictEqual(fc.flowchartWidth, FLOWCHART_DEFAULT_WIDTH);
+    });
+
+    it('normalizeFlowchart carries color/width through and clamps width', async () => {
+        const { normalizeFlowchart, createEmptyFlowchart } = await import('../js/flowchart.js');
+        const base = createEmptyFlowchart();
+        const out = normalizeFlowchart({ ...base, flowchartColor: '#ff0000', flowchartWidth: 99 });
+        assert.strictEqual(out.flowchartColor, '#ff0000');
+        assert.strictEqual(out.flowchartWidth, 16);
+        const out2 = normalizeFlowchart({ ...base, flowchartColor: 123, flowchartWidth: 'x' });
+        assert.strictEqual(out2.flowchartColor, '#f8fafc');
+        assert.strictEqual(out2.flowchartWidth, 3);
+    });
+
+    it('clampFlowchartWidth snaps to the nearest allowed step', async () => {
+        const { clampFlowchartWidth, FLOWCHART_WIDTH_STEPS } = await import('../js/flowchart.js');
+        assert.strictEqual(clampFlowchartWidth(5), 6);
+        assert.strictEqual(clampFlowchartWidth(1), 1);
+        assert.strictEqual(clampFlowchartWidth(100), 16);
+        assert.strictEqual(clampFlowchartWidth(NaN), 3);
+        FLOWCHART_WIDTH_STEPS.forEach((s) => assert.strictEqual(clampFlowchartWidth(s), s));
+    });
+});
