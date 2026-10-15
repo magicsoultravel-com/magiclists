@@ -20,6 +20,7 @@ import { DesktopManager } from './desktopManager.js';
 import { flushDesktopAutoSave, mutateItem } from './noteSurfaceMutations.js';
 import { buildNoteAttachmentsSectionHtml, buildNoteCanvasSectionHtml } from './noteAttachmentsUi.js';
 import { buildNotePlannerSectionHtml } from './plannerUi.js';
+import { buildNoteFlowchartSectionHtml } from './flowchartUi.js';
 import { normalizeAttachments } from './mediaAttachments.js';
 import { renderFocusSpawnTrayHtml, renderFocusSpawnSubTrayHtml } from './noteFocusSpawn.js';
 
@@ -128,6 +129,11 @@ export function buildNoteQuickActionsHtml(item, {
     const plannerBtn = isPopout
         ? ''
         : `<button type="button" class="card-act card-act--planner${plannerActive ? ' is-active' : ''}" data-note-id="${escapeAttr(item?.id || '')}" title="${escapeAttr(plannerTitle)}" aria-label="${escapeAttr(plannerTitle)}" aria-pressed="${plannerActive ? 'true' : 'false'}">${CARD_ICONS.planner}</button>`;
+    const flowchartActive = !!(item?.flowchart && !item?.flowchartHidden);
+    const flowchartTitle = flowchartActive ? 'Hide flowchart' : 'Show flowchart';
+    const flowchartBtn = isPopout
+        ? ''
+        : `<button type="button" class="card-act card-act--flowchart${flowchartActive ? ' is-active' : ''}" data-note-id="${escapeAttr(item?.id || '')}" title="${escapeAttr(flowchartTitle)}" aria-label="${escapeAttr(flowchartTitle)}" aria-pressed="${flowchartActive ? 'true' : 'false'}">${CARD_ICONS.flowchart}</button>`;
     const isFocusSurface = surface === 'focus';
     let focusActive = false;
     try {
@@ -188,6 +194,7 @@ export function buildNoteQuickActionsHtml(item, {
             ${popBtn}
             ${drawBtn}
             ${plannerBtn}
+            ${flowchartBtn}
             ${focusBtn}
             ${calBtn}
             ${closeBtn}
@@ -260,7 +267,11 @@ function plannerSectionStartCollapsed(item) {
     return !!item?.plannerCollapsed;
 }
 
-/** Append peer side sections: Media → Canvas → Plan. */
+function flowchartSectionStartCollapsed(item) {
+    return !!(item?.flowchartCollapsed ?? item?.flowchart?.collapsed);
+}
+
+/** Append peer side sections: Media → Canvas → Plan → Flowchart. */
 function appendNoteSideSections(item, html, { canEdit = false } = {}) {
     let out = html;
     out += buildNoteAttachmentsSectionHtml(item, {
@@ -273,6 +284,10 @@ function appendNoteSideSections(item, html, { canEdit = false } = {}) {
     out += buildNotePlannerSectionHtml(item, {
         canEdit,
         startCollapsed: plannerSectionStartCollapsed(item)
+    });
+    out += buildNoteFlowchartSectionHtml(item, {
+        canEdit,
+        startCollapsed: flowchartSectionStartCollapsed(item)
     });
     return out;
 }
@@ -420,7 +435,7 @@ function bindNoteBodySections(root, item) {
     root.querySelectorAll('.note-body-section .note-section-header').forEach((header) => {
         // Media/canvas section collapse is owned by noteAttachmentsUi.bindMediaSectionToggle
         // so expand can re-paint the canvas preview. Planner owns its own toggle too.
-        if (header.closest('[data-note-attachments], [data-note-planner], [data-note-canvas]')) return;
+        if (header.closest('[data-note-attachments], [data-note-planner], [data-note-canvas], [data-note-flowchart]')) return;
         header.addEventListener('click', (e) => {
             // Let Focus-spawn bubble to bindFocusSpawnButtons (do not stopPropagation).
             if (e.target.closest?.('[data-focus-spawn]')) return;

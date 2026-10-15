@@ -11,6 +11,7 @@ import {
 } from './noteFieldOwnership.js';
 import { normalizeAttachments } from './mediaAttachments.js';
 import { normalizePlanner, plannerHasContent, isPlannerUnsupportedNewer } from './planner.js';
+import { normalizeFlowchart, flowchartHasContent } from './flowchart.js';
 
 function normalizeItemTileSize(tileSize) {
     return normalizeTileSize(tileSize);
@@ -18,6 +19,62 @@ function normalizeItemTileSize(tileSize) {
 
 function nowSeconds() {
     return Math.floor(Date.now() / 1000);
+}
+
+/**
+ * Force-adapt stale note flowchart state:
+ * - keep null flowchart as null
+ * - normalize real flowchart docs; drop empty shells
+ * - keep flowchartHidden sticky even when content exists
+ * @param {object} item
+ * @returns {boolean} whether the item was mutated
+ */
+export function reconcileItemFlowchart(item) {
+    if (!item || typeof item !== 'object') return false;
+    let changed = false;
+
+    if (item.flowchart == null) {
+        if (item.flowchartHidden != null) {
+            delete item.flowchartHidden;
+            changed = true;
+        }
+        if (item.flowchartCollapsed != null) {
+            delete item.flowchartCollapsed;
+            changed = true;
+        }
+        return changed;
+    }
+
+    if (typeof item.flowchart !== 'object') {
+        item.flowchart = null;
+        delete item.flowchartHidden;
+        delete item.flowchartCollapsed;
+        return true;
+    }
+
+    const normalized = normalizeFlowchart(item.flowchart);
+    if (!normalized) {
+        item.flowchart = null;
+        delete item.flowchartHidden;
+        return true;
+    }
+
+    if (JSON.stringify(normalized) !== JSON.stringify(item.flowchart)) {
+        item.flowchart = normalized;
+        changed = true;
+    } else {
+        item.flowchart = normalized;
+    }
+
+    if (!flowchartHasContent(item.flowchart)) {
+        item.flowchart = null;
+        if (item.flowchartHidden != null) delete item.flowchartHidden;
+        if (item.flowchartCollapsed != null) delete item.flowchartCollapsed;
+        return true;
+    }
+
+    // Keep flowchartHidden sticky even when content exists.
+    return changed;
 }
 
 /**
@@ -180,7 +237,8 @@ const SCHEMA_CORE_DEFAULTS = {
     hiddenFromBoard: false,
     attachments: [],
     canvas: null,
-    planner: null
+    planner: null,
+    flowchart: null
 };
 
 function itemStepIdSet(item) {
@@ -403,13 +461,16 @@ function runDatabaseRepair(db) {
         if (mediaCanvasChanged) itemChanged = true;
         const plannerChanged = reconcileItemPlanner(canvasItem);
         if (plannerChanged) itemChanged = true;
+        const flowchartChanged = reconcileItemFlowchart(canvasItem);
+        if (flowchartChanged) itemChanged = true;
 
         if (!itemChanged
             && base.tileSize === tileSize
             && base.created_at === createdAt
             && base.updated_at === updatedAt
             && !mediaCanvasChanged
-            && !plannerChanged) {
+            && !plannerChanged
+            && !flowchartChanged) {
             return base;
         }
 
@@ -431,6 +492,13 @@ function runDatabaseRepair(db) {
             next.planner = canvasItem.planner ?? null;
             if ('plannerHidden' in canvasItem) next.plannerHidden = canvasItem.plannerHidden;
             else delete next.plannerHidden;
+        }
+        if (flowchartChanged) {
+            next.flowchart = canvasItem.flowchart ?? null;
+            if ('flowchartHidden' in canvasItem) next.flowchartHidden = canvasItem.flowchartHidden;
+            else delete next.flowchartHidden;
+            if ('flowchartCollapsed' in canvasItem) next.flowchartCollapsed = canvasItem.flowchartCollapsed;
+            else delete next.flowchartCollapsed;
         }
         if (base.tileSize !== tileSize) next.tileSize = tileSize;
         if (base.created_at !== createdAt) next.created_at = createdAt;

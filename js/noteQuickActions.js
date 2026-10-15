@@ -21,6 +21,7 @@ import { MediaLibraryOverlay } from './mediaLibraryOverlay.js';
 import { attachmentCount } from './mediaAttachments.js';
 import { createEmptyNoteCanvas } from './noteModel.js';
 import { createEmptyPlanner } from './planner.js';
+import { createEmptyFlowchart } from './flowchart.js';
 import {
     buildNotePackageZip,
     downloadNotePackageBlob,
@@ -112,6 +113,7 @@ function queryActionButtons(root) {
         popoutBtn: actions.querySelector('.card-act--popout'),
         drawBtn: actions.querySelector('.card-act--draw'),
         plannerBtn: actions.querySelector('.card-act--planner'),
+        flowchartBtn: actions.querySelector('.card-act--flowchart'),
         focusBtn: actions.querySelector('.card-act--focus'),
         popinBtn: actions.querySelector('.card-act--popin'),
         closeBtn: actions.querySelector('.card-act--close'),
@@ -183,7 +185,7 @@ export async function importNotePackageFromPicker() {
 }
 
 function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
-    const { copyBtn, notePackageBtn, pinBtn, dragBtn, colorBtn, attachBtn, iconBtn, hideBtn, calBtn, popoutBtn, popinBtn, drawBtn, plannerBtn, focusBtn } = buttons;
+    const { copyBtn, notePackageBtn, pinBtn, dragBtn, colorBtn, attachBtn, iconBtn, hideBtn, calBtn, popoutBtn, popinBtn, drawBtn, plannerBtn, flowchartBtn, focusBtn } = buttons;
     const iconRoot = surface === 'board'
         ? (card?.querySelector('.editor-note-shell') || card)
         : surface === 'focus'
@@ -388,6 +390,28 @@ function wireSharedActions(buttons, item, { ui, surface, card, editor } = {}) {
                     }
                 }).catch(() => {});
             }
+        }, { commit: boardCommit || modalCommit });
+    }
+
+    if (flowchartBtn) {
+        attachCardActionButton(flowchartBtn, () => {
+            const hadFlowchart = !!item.flowchart;
+            const nextHidden = hadFlowchart ? !item.flowchartHidden : false;
+            NoteSurface.mutateItem(item, (it) => {
+                if (!it.flowchart) {
+                    it.flowchart = createEmptyFlowchart();
+                    it.flowchartHidden = false;
+                } else {
+                    it.flowchartHidden = nextHidden;
+                }
+            }, { preserveView: true, skipRerender: true });
+            flowchartBtn.classList.toggle('is-active', !nextHidden);
+            flowchartBtn.setAttribute('aria-pressed', !nextHidden ? 'true' : 'false');
+            flowchartBtn.setAttribute('title', nextHidden ? 'Show flowchart' : 'Hide flowchart');
+            flowchartBtn.setAttribute('aria-label', nextHidden ? 'Show flowchart' : 'Hide flowchart');
+            import('./flowchartUi.js').then(({ syncNoteFlowchartDom }) => {
+                syncNoteFlowchartDom(item);
+            }).catch(() => {});
         }, { commit: boardCommit || modalCommit });
     }
 

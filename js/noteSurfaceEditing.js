@@ -594,6 +594,11 @@ export function bindNoteEditorShell(root, item, {
         bindNoteContentSubToggles(body, item);
         bindNoteAttachments(body, item);
         bindNoteCanvas(body, item);
+        // Flowchart owns its own collapse + pencil button; bind on first paint too,
+        // not just after a tray toggle, otherwise the pencil is inert on reload.
+        import('./flowchartUi.js').then(({ attachFlowchartInteractions }) => {
+            attachFlowchartInteractions(body, item);
+        }).catch(() => {});
         attachSheetInteractions(body, item, buildSheetInteractionOptions(shell, item, {
             localOnly,
             onChange,

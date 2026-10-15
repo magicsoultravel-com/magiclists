@@ -1050,6 +1050,23 @@ renderQuickActions() {
         this.updateFabVisibility();
     }
 
+    async enterFlowchartMode(item) {
+        if (!item?.id) return;
+        // Bind to the live AppState note (Shared SoT) like enterNoteCanvasMode.
+        const live = AppState.items.find((i) => i.id === item.id) || item;
+        AppState.workspaceMode = 'drawing';
+        DesktopDock.setSuppressed(true);
+        const shell = document.getElementById('workspace-shell');
+        const canvas = document.getElementById('app-canvas');
+        const drawBtn = document.getElementById('btn-drawing-mode');
+        shell?.setAttribute('data-drawing-mode', '');
+        canvas?.classList.add('is-hidden');
+        drawBtn?.classList.add('active');
+        DesktopZoom.apply({ enabled: false });
+        await DrawingBoard.openNoteFlowchart(live);
+        this.updateFabVisibility();
+    }
+
     async exitNoteCanvasMode(item) {
         // Focus hosts note-canvas in-pane — don't tear down the Focus shell.
         if (MagicFocus.isOpen()) {
@@ -1611,6 +1628,12 @@ renderQuickActions() {
             const item = e.detail?.item;
             if (!item?.id) return;
             this.enterNoteCanvasMode(item);
+        });
+
+        window.addEventListener('note:flowchart_draw_requested', (e) => {
+            const item = e.detail?.item;
+            if (!item?.id) return;
+            this.enterFlowchartMode(item);
         });
 
         window.addEventListener('note:canvas_draw_exited', (e) => {

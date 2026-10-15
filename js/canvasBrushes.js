@@ -3,7 +3,8 @@ export const BRUSH_STYLES = ['pen', 'marker', 'highlighter', 'pencil', 'spray', 
 /** Drag-to-place geometric tools shared by the drawing board and note-canvas preview. */
 export const DRAG_SHAPE_TOOLS = [
     'line', 'arrow', 'rect', 'rounded_rect', 'ellipse', 'triangle', 'diamond',
-    'star', 'chevron', 'trapezoid', 'parallelogram', 'cube', 'pyramid', 'cylinder', 'sphere'
+    'star', 'chevron', 'trapezoid', 'parallelogram', 'cube', 'pyramid', 'cylinder', 'sphere',
+    'connector'
 ];
 
 export const STYLE_CONFIG = {
@@ -242,6 +243,18 @@ function shapeBBox(stroke) {
     return { left, top, right: left + w, bottom: top + h, w, h, cx: left + w / 2, cy: top + h / 2 };
 }
 
+function drawArrowHead(ctx, x, y, ang, size, color) {
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - size * Math.cos(ang - 0.45), y - size * Math.sin(ang - 0.45));
+    ctx.lineTo(x - size * Math.cos(ang + 0.45), y - size * Math.sin(ang + 0.45));
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
 function drawArrow(ctx, stroke) {
     const { x0, y0, x1, y1 } = stroke;
     const head = Math.max(8, (stroke.width || 2) * 3);
@@ -250,14 +263,105 @@ function drawArrow(ctx, stroke) {
     ctx.moveTo(x0, y0);
     ctx.lineTo(x1, y1);
     ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x1 - head * Math.cos(ang - 0.45), y1 - head * Math.sin(ang - 0.45));
-    ctx.lineTo(x1 - head * Math.cos(ang + 0.45), y1 - head * Math.sin(ang + 0.45));
-    ctx.closePath();
-    ctx.fillStyle = stroke.color;
-    ctx.fill();
+    drawArrowHead(ctx, x1, y1, ang, head, stroke.color);
 }
+
+/**
+ * Flowchart connector: straight line or single-bend elbow, always with arrowhead.
+ * Mid point falls back to the dominant-axis bend when only endpoints exist.
+ */
+export function drawConnectorStroke(ctx, stroke) {
+    const cfg = STYLE_CONFIG[stroke.style] || STYLE_CONFIG.pen;
+    ctx.save();
+    ctx.strokeStyle = stroke.color;
+    ctx.fillStyle = stroke.color;
+    ctx.lineWidth = (stroke.width || 2) * cfg.widthMul;
+    ctx.globalAlpha = cfg.alpha;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const head = Math.max(8, (stroke.width || 2) * 3);
+    if (stroke.routing === 'elbow') {
+        const dx = Math.abs((stroke.x1 ?? 0) - (stroke.x0 ?? 0));
+        const dy = Math.abs((stroke.y1 ?? 0) - (stroke.y0 ?? 0));
+        let mx = stroke.midX;
+        let my = stroke.midY;
+        if (!Number.isFinite(mx) || !Number.isFinite(my)) {
+            if (dx >= dy) { mx = stroke.x1; my = stroke.y0; }
+            else { mx = stroke.x0; my = stroke.y1; }
+        }
+        ctx.beginPath();
+        ctx.moveTo(stroke.x0, stroke.y0);
+        ctx.lineTo(mx, my);
+        ctx.lineTo(stroke.x1, stroke.y1);
+        ctx.stroke();
+        const tailDx = (stroke.x1 ?? 0) - mx;
+        const tailDy = (stroke.y1 ?? 0) - my;
+        const ang = Math.atan2(tailDy, tailDx);
+        ctx.restore();
+        drawArrowHead(ctx, stroke.x1, stroke.y1, ang, head, stroke.color);
+        return;
+    }
+    const ang = Math.atan2((stroke.y1 ?? 0) - (stroke.y0 ?? 0), (stroke.x1 ?? 0) - (stroke.x0 ?? 0));
+    ctx.beginPath();
+    ctx.moveTo(stroke.x0, stroke.y0);
+    ctx.lineTo(stroke.x1, stroke.y1);
+    ctx.stroke();
+    ctx.restore();
+    drawArrowHead(ctx, stroke.x1, stroke.y1, ang, head, stroke.color);
+}
+
+/**
+ * Centered, word-wrapped label painted inside a shape bbox.
+ * Pure canvas — same wrap idiom as the planner overlay.
+ */
+export function drawFlowchartLabel(ctx, stroke) {
+    const label = stroke && stroke.label;
+    if (!label || !String(label.text || '').trim()) return;
+    const left = Math.min(stroke.x0, stroke.x1);
+    const top = Math.min(stroke.y0, stroke.y1);
+    const w = Math.abs(stroke.x1 - stroke.x0);
+    const h = Math.abs(stroke.y1 - stroke.y0);
+    // Connector labels anchor on the bend midpoint, not a bounding box.
+    if (stroke.tool === 'connector') {
+        const fontSize = Math.max(8, Number(label.fontSize) || 20);
+        ctx.save();
+        ctx.fillStyle = label.color || stroke.color || '#f1f5f9';
+        ctx.font = fontSize + 'px Inter, system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(label.text), Number(stroke.midX) || (left + w / 2), Number(stroke.midY) || (top + h / 2));
+        ctx.restore();
+        return;
+    }
+    if (!(w > 8) || !(h > 8)) return;
+    const fontSize = Math.max(8, Number(label.fontSize) || 20);
+    ctx.save();
+    ctx.fillStyle = label.color || stroke.color || '#f1f5f9';
+    ctx.font = fontSize + 'px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const pad = 6;
+    const maxW = Math.max(10, w - pad * 2);
+    const words = String(label.text).split(/\s+/).filter(Boolean);
+    const lines = [];
+    let cur = '';
+    for (const word of words) {
+        const next = cur ? cur + ' ' + word : word;
+        if (ctx.measureText(next).width <= maxW || !cur) cur = next;
+        else { lines.push(cur); cur = word; }
+    }
+    if (cur) lines.push(cur);
+    const lineH = fontSize * 1.2;
+    const totalH = lines.length * lineH;
+    let y = top + h / 2 - totalH / 2 + lineH / 2;
+    const cx = left + w / 2;
+    for (const line of lines.slice(0, 8)) {
+        ctx.fillText(line, cx, y);
+        y += lineH;
+    }
+    ctx.restore();
+}
+
 
 function drawTriangle(ctx, b) {
     ctx.beginPath();
@@ -454,7 +558,13 @@ export function drawShapeStroke(ctx, stroke) {
         drawCylinder(ctx, b);
     } else if (tool === 'sphere') {
         drawSphere(ctx, b);
+    } else if (tool === 'connector') {
+        ctx.restore();
+        drawConnectorStroke(ctx, stroke);
+        drawFlowchartLabel(ctx, stroke);
+        return;
     }
+    drawFlowchartLabel(ctx, stroke);
     ctx.restore();
 }
 

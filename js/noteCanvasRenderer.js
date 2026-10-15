@@ -12,7 +12,7 @@ import {
 } from './noteCanvasTextOverlay.js';
 import { resolveNoteColor } from './colorPicker.js';
 
-const IS_DRAG_SHAPE = new Set(DRAG_SHAPE_TOOLS);
+const IS_DRAG_SHAPE = new Set([...DRAG_SHAPE_TOOLS, 'connector']);
 
 function getActiveLayer(doc) {
     if (!doc || typeof doc !== 'object') return null;

@@ -528,6 +528,34 @@ function rectContainsPoint(rect, x, y, radius = 0) {
  * @param {number} [radius=0] extra world-space tolerance
  * @returns {boolean}
  */
+/** Extra slack so connectors stay grabbable at low zoom. */
+const CONNECTOR_HIT_PAD = 6;
+
+/**
+ * Point-to-polyline distance test for a straight or single-bend elbow connector.
+ * @param {Object} conn
+ * @param {number} x
+ * @param {number} y
+ * @param {number} tol
+ * @returns {boolean}
+ */
+export function pointOnConnectorPath(conn, x, y, tol = 6) {
+    if (!conn) return false;
+    const midX = Number(conn.midX);
+    const midY = Number(conn.midY);
+    const legs = (conn.routing === 'elbow' && Number.isFinite(midX) && Number.isFinite(midY))
+        ? [[conn.x0, conn.y0, midX, midY], [midX, midY, conn.x1, conn.y1]]
+        : [[conn.x0, conn.y0, conn.x1, conn.y1]];
+    return legs.some(([ax, ay, bx, by]) => {
+        const dx = bx - ax;
+        const dy = by - ay;
+        const len2 = dx * dx + dy * dy;
+        let t = len2 > 0 ? ((x - ax) * dx + (y - ay) * dy) / len2 : 0;
+        t = Math.max(0, Math.min(1, t));
+        return Math.hypot(x - (ax + t * dx), y - (ay + t * dy)) <= tol;
+    });
+}
+
 export function itemContainsPoint(item, x, y, radius = 0) {
     if (!item) return false;
 
@@ -542,6 +570,12 @@ export function itemContainsPoint(item, x, y, radius = 0) {
 
     if (item.tool === 'text') {
         return rectContainsPoint(getTextBounds(item), x, y, radius);
+    }
+
+    if (item.flowchartKind === 'connector') {
+        // Connectors are thin lines: test the actual path, not the bounding box,
+        // otherwise an empty bbox area would select the connector.
+        return pointOnConnectorPath(item, x, y, radius + CONNECTOR_HIT_PAD);
     }
 
     if (item.x0 != null && item.y0 != null && item.x1 != null && item.y1 != null) {

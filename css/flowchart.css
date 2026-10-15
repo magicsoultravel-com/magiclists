@@ -1,0 +1,127 @@
+/* Flowchart note subsection + magicCanvas flowchart toolbar row. */
+
+/* --- Note section ------------------------------------------------------- */
+
+/* Mirrors .note-body-section--canvas so the two peer sections read alike. */
+.note-body-section--flowchart .note-flowchart {
+    margin-top: 0;
+    min-width: 0;
+    border-top: 0;
+    padding-top: 0;
+}
+
+.note-flowchart__toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-bottom: 0.3rem;
+    min-height: 1.4rem;
+}
+
+/* Pencil stays dim until hovered, but is always present and clickable. */
+.note-flowchart__enter-drawing {
+    flex-shrink: 0;
+    opacity: 0.75;
+    color: inherit;
+}
+
+.note-flowchart__enter-drawing:hover,
+.note-flowchart__enter-drawing:focus-visible {
+    opacity: 1;
+    color: var(--accent, #60a5fa);
+}
+
+/* Preview frame: same box as the canvas section. */
+.note-flowchart__viewport {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    height: 180px;
+    overflow: hidden;
+    border-radius: 6px;
+    background: transparent;
+}
+
+.note-flowchart__viewport > canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+/* Empty state hint under the preview. */
+.note-flowchart__empty {
+    position: absolute;
+    inset: auto 0 0.35rem 0;
+    text-align: center;
+    font-size: calc(0.58rem * var(--note-font-scale, 1));
+    opacity: 0.45;
+    pointer-events: none;
+}
+
+/* --- Inline label editor (magicCanvas) ---------------------------------- */
+
+.flow-label-editor {
+    position: absolute;
+    z-index: 3;
+    min-width: 4rem;
+    min-height: 1.2em;
+    padding: 0.15rem 0.25rem;
+    pointer-events: auto;
+    outline: 1px dashed rgba(96, 165, 250, 0.8);
+    background: rgba(0, 0, 0, 0.35);
+    border-radius: 0.2rem;
+    color: #f8fafc;
+    text-align: center;
+    line-height: 1.2;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.flow-label-editor:empty::before {
+    content: attr(data-placeholder);
+    color: var(--text-muted, #94a3b8);
+    opacity: 0.7;
+}
+
+.flow-label-editor:focus {
+    outline: 1px solid rgba(96, 165, 250, 0.95);
+}
+
+/* --- Flowchart toolbar row (magicCanvas) -------------------------------- */
+
+.drawing-toolbar-row--flowchart {
+    gap: 0.15rem;
+    padding-top: 0.25rem;
+    border-top: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+}
+
+/* Group separators keep the row scannable: shapes | connectors | text | grid. */
+.drawing-toolbar-row--flowchart .drawing-toolbar-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1rem;
+}
+
+.drawing-toolbar-row--flowchart .drawing-toolbar-sep {
+    width: 1px;
+    align-self: stretch;
+    margin: 0 0.2rem;
+    background: color-mix(in srgb, var(--border-color) 70%, transparent);
+}
+
+.drawing-toolbar-row--flowchart .btn--icon.active {
+    color: var(--accent, #60a5fa);
+    background: color-mix(in srgb, var(--accent, #60a5fa) 18%, transparent);
+}
+
+/* Grid density readout: same rhythm as the brush width label. */
+.drawing-toolbar-row--flowchart .drawing-brush-size__value {
+    min-width: 2.6rem;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Snap off reads as muted so state is legible at a glance. */
+#draw-flow-snap:not(.active) {
+    opacity: 0.55;
+}

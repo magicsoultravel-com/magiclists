@@ -1490,6 +1490,12 @@ export const MagicFocus = {
                 bindNoteAttachments(sec, item);
             });
         }).catch(() => {});
+
+        import('./flowchartUi.js').then(({ attachFlowchartInteractions }) => {
+            body.querySelectorAll('[data-note-flowchart]').forEach((sec) => {
+                attachFlowchartInteractions(sec.closest('.editor-note-body') || sec.parentElement, item);
+            });
+        }).catch(() => {});
     },
 
     /**
