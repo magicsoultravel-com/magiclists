@@ -12,20 +12,11 @@ import {
     PAGE_FORMATS
 } from './canvasDocument.js';
 import { BRUSH_STYLES, DRAG_SHAPE_TOOLS, drawBrushStroke, drawShapeStroke, drawTextObject } from './canvasBrushes.js';
-import {
-    FLOWCHART_SHAPE_TOOLS, FLOWCHART_CONNECTOR_TOOL, FLOWCHART_ROUTINGS,
-    FLOW_LABEL_DEFAULT, FLOW_LABEL_MIN, FLOW_LABEL_MAX, FLOW_LABEL_STEP,
-    FLOWCHART_DEFAULT_COLOR, FLOWCHART_DEFAULT_WIDTH, FLOWCHART_WIDTH_STEPS,
-    createFlowchartShape, createFlowchartConnector, normalizeFlowLabelSize, clampFlowchartWidth,
-    routeFlowchartConnector
-} from './flowchart.js';
-import {
-    shapeBounds, nearestPort, portPointFor, snapEndpointToShapes, routeConnector,
-    rerouteAttachedConnectors
-} from './flowchartGeometry.js';
+import { FLOW_LABEL_MIN, FLOW_LABEL_MAX } from './flowchart.js';
 import { renderBackground } from './canvasBackgrounds.js';
 import { CanvasViewport } from './canvasViewport.js';
 import { DrawingToolbarChrome } from './drawingToolbarChrome.js';
+import * as FlowSession from './drawingBoardFlowchart.js';
 import {
     itemIntersectsRect,
     getStrokesBounds,
@@ -527,183 +518,60 @@ export const DrawingBoard = {
         this.redraw();
     },
 
-    flowchartGrid() {
-        const fallback = { type: 'dots', size: 24, snap: true, visible: true };
-        const g = this.flowchartItem?.flowchart?.grid;
-        if (!g || typeof g !== 'object') return fallback;
-        return {
-            type: typeof g.type === 'string' ? g.type : fallback.type,
-            size: Number.isFinite(Number(g.size)) ? Number(g.size) : fallback.size,
-            snap: g.snap !== false,
-            visible: g.visible !== false
-        };
-    },
+    flowchartGrid() { return FlowSession.flowchartGrid(this); },
 
     /** Active flowchart stroke color, persisted per diagram. */
-    flowchartColor() {
-        const c = this.flowchartItem?.flowchart?.flowchartColor;
-        return typeof c === 'string' && c ? c : FLOWCHART_DEFAULT_COLOR;
-    },
+    flowchartColor() { return FlowSession.flowchartColor(this); },
 
     /** Active flowchart stroke width, persisted per diagram. */
-    flowchartWidth() {
-        const w = Number(this.flowchartItem?.flowchart?.flowchartWidth);
-        return clampFlowchartWidth(w);
-    },
+    flowchartWidth() { return FlowSession.flowchartWidth(this); },
 
     /** Set the flowchart stroke color on the live item + the toolbar chip. */
-    persistFlowchartColor(color) {
-        if (typeof color !== 'string' || !color) return;
-        this.flowchartItem.flowchart.flowchartColor = color;
-        this.persistFlowchartPref({ flowchartColor: color });
-    },
+    persistFlowchartColor(color) { return FlowSession.persistFlowchartColor(this, color); },
 
     /** Set the flowchart stroke width on the live item + the toolbar readout. */
-    persistFlowchartWidth(width) {
-        const w = clampFlowchartWidth(width);
-        this.flowchartItem.flowchart.flowchartWidth = w;
-        this.persistFlowchartPref({ flowchartWidth: w });
-    },
+    persistFlowchartWidth(width) { return FlowSession.persistFlowchartWidth(this, width); },
 
     /** Shared persist helper for flowchart prefs that live on item.flowchart. */
-    persistFlowchartPref(patch) {
-        if (!this.flowchartItem?.flowchart) return;
-        Object.assign(this.flowchartItem.flowchart, patch || {});
-        // Mirror persistFlowchartGrid: mutateItem is fire-and-forget here so the
-        // live item is updated immediately and the board re-render picks it up.
-        import('./noteSurfaceMutations.js').then(({ mutateItem }) => {
-            mutateItem(this.flowchartItem, (it) => {
-                if (!it.flowchart) return;
-                Object.assign(it.flowchart, patch || {});
-            }, { preserveView: true, skipRerender: true, localOnly: true });
-        }).catch(() => {});
-        this.scheduleSave();
-    },
+    persistFlowchartPref(patch) { return FlowSession.persistFlowchartPref(this, patch); },
 
     /**
      * Flowchart stroke color picker. Same chrome as the brush color rollout but
      * persists to item.flowchart.flowchartColor so every shape and connector
      * repaints consistently.
      */
-    openFlowchartColorPicker(anchor) {
-        if (this.flowchartColorOpen) { ColorPicker.close(); return; }
-        ColorPicker.close();
-        this.flowLabelColorOpen = false;
-        ColorPicker.open({
-            anchor,
-            presets: PALETTE_UNIFIED,
-            value: this.flowchartColor(),
-            align: 'end',
-            onSelect: (c) => {
-                this.persistFlowchartColor(c);
-                this.redraw();
-                this.renderToolbar();
-            },
-            onClose: () => { this.flowchartColorOpen = false; }
-        });
-        this.flowchartColorOpen = true;
-        anchor?.setAttribute('aria-expanded', 'true');
-    },
+    openFlowchartColorPicker(anchor) { return FlowSession.openFlowchartColorPicker(this, anchor); },
 
     /**
      * Label color picker. Persists to the selected shape/connector's label so a
      * label can be tinted independently of the stroke.
      */
-    openFlowLabelColorPicker(anchor) {
-        const target = this.flowLabelTargetShape();
-        if (!target) { showAppToast('Select a shape or connector first'); return; }
-        if (this.flowLabelColorOpen) { ColorPicker.close(); return; }
-        ColorPicker.close();
-        this.flowchartColorOpen = false;
-        ColorPicker.open({
-            anchor,
-            presets: PALETTE_UNIFIED,
-            value: target.label?.color || this.flowchartColor(),
-            align: 'end',
-            onSelect: (c) => {
-                this.pushLayerHistory();
-                target.label = { ...(target.label || { text: '', fontSize: FLOW_LABEL_DEFAULT, color: '' }), color: c };
-                this.scheduleSave();
-                this.redraw();
-                this.renderToolbar();
-            },
-            onClose: () => { this.flowLabelColorOpen = false; }
-        });
-        this.flowLabelColorOpen = true;
-        anchor?.setAttribute('aria-expanded', 'true');
-    },
+    openFlowLabelColorPicker(anchor) { return FlowSession.openFlowLabelColorPicker(this, anchor); },
 
     /**
      * Adjust the flowchart stroke width (1-16px, snapped to the allowed steps).
      * @param {number} delta
      */
-    adjustFlowchartWidth(delta) {
-        const steps = FLOWCHART_WIDTH_STEPS;
-        const cur = this.flowchartWidth();
-        let idx = steps.indexOf(cur);
-        if (idx < 0) {
-            let best = 0;
-            let bestD = Infinity;
-            steps.forEach(function (s, i) {
-                const d = Math.abs(s - cur);
-                if (d < bestD) { bestD = d; best = i; }
-            });
-            idx = best;
-        }
-        const next = steps[Math.max(0, Math.min(steps.length - 1, idx + delta))];
-        if (next === cur) return;
-        this.persistFlowchartWidth(next);
-        this.redraw();
-        this.renderToolbar();
-    },
+    adjustFlowchartWidth(delta) { return FlowSession.adjustFlowchartWidth(this, delta); },
 
-    async persistFlowchartGrid(patch) {
-        const item = this.flowchartItem;
-        if (!item?.flowchart) return;
-        Object.assign(item.flowchart.grid, patch || {});
-        try {
-            const { mutateItem } = await import('./noteSurfaceMutations.js');
-            mutateItem(item, (it) => {
-                if (!it.flowchart) return;
-                if (!it.flowchart.grid) it.flowchart.grid = {};
-                Object.assign(it.flowchart.grid, patch || {});
-            }, { preserveView: true, skipRerender: true, localOnly: true });
-        } catch { /* grid already set on live item */ }
-        this.scheduleSave();
-    },
+    async persistFlowchartGrid(patch) { return FlowSession.persistFlowchartGrid(this, patch); },
 
     /** True when the given tool draws a flowchart shape. */
-    isFlowShape(tool) {
-        return FLOWCHART_SHAPE_TOOLS.includes(tool);
-    },
+    isFlowShape(tool) { return FlowSession.isFlowShape(this, tool); },
 
     /** True when the given tool drags a flowchart connector. */
-    isFlowConnector(tool) {
-        return tool === FLOWCHART_CONNECTOR_TOOL;
-    },
+    isFlowConnector(tool) { return FlowSession.isFlowConnector(this, tool); },
 
     /**
      * Shape strokes on the active layer (connector endpoints magnet to these).
      * Ports only bind to shapes, never to other connectors.
      */
-    flowchartShapes() {
-        if (!this.isFlowchartMode) return [];
-        return this.strokes().filter((s) => s && s.flowchartKind === 'shape');
-    },
+    flowchartShapes() { return FlowSession.flowchartShapes(this); },
 
-    flowchartShapesById() {
-        const map = new Map();
-        for (const s of this.flowchartShapes()) {
-            if (s.id != null) map.set(s.id, s);
-        }
-        return map;
-    },
+    flowchartShapesById() { return FlowSession.flowchartShapesById(this); },
 
     /** World-space port magnet radius (constant on screen regardless of zoom). */
-    flowchartMagnetRadius() {
-        const scale = CanvasViewport.scale || 1;
-        return 18 / Math.max(0.1, scale);
-    },
+    flowchartMagnetRadius() { return FlowSession.flowchartMagnetRadius(this); },
 
     /**
      * Snap a world point to the grid unless Shift is held or snap is off.
@@ -711,77 +579,19 @@ export const DrawingBoard = {
      * @param {number} y
      * @param {boolean} bypass Shift-key override
      */
-    flowSnapPoint(x, y, bypass = false) {
-        if (!this.isFlowchartMode) return { x, y };
-        const grid = this.flowchartGrid();
-        if (bypass || !grid.snap) return { x, y };
-        const size = grid.size > 0 ? grid.size : 24;
-        return { x: Math.round(x / size) * size, y: Math.round(y / size) * size };
-    },
+    flowSnapPoint(x, y, bypass = false) { return FlowSession.flowSnapPoint(this, x, y, bypass); },
 
     /** Resolve a free connector end to a port when it lands inside the magnet. */
-    flowResolveEndpoint(x, y, excludeShapeId) {
-        const shapes = this.flowchartShapes().filter((s) => s.id !== excludeShapeId);
-        return snapEndpointToShapes(x, y, shapes, this.flowchartMagnetRadius());
-    },
+    flowResolveEndpoint(x, y, excludeShapeId) { return FlowSession.flowResolveEndpoint(this, x, y, excludeShapeId); },
 
     /** Recompute cached endpoints for every connector attached to the moved shapes. */
-    flowReroute(movedShapeIds) {
-        if (!this.isFlowchartMode) return false;
-        const byId = this.flowchartShapesById();
-        const connectors = this.strokes().filter((s) => s && s.flowchartKind === 'connector');
-        const moved = new Set(movedShapeIds || []);
-        const changed = rerouteAttachedConnectors(connectors, byId);
-        // Ports on moved shapes must follow the shape, otherwise an elbow loses
-        // its H/V orientation and collapses to the centre port.
-        if (moved.size) {
-            for (const c of connectors) {
-                if (!c.from || !c.to) continue;
-                const a = byId.get(c.from.shapeId);
-                const b = byId.get(c.to.shapeId);
-                if (a && moved.has(a.id)) c.from.port = nearestPort(a, c.x0, c.y0).port;
-                if (b && moved.has(b.id)) c.to.port = nearestPort(b, c.x1, c.y1).port;
-            }
-            rerouteAttachedConnectors(connectors, byId);
-            return true;
-        }
-        return changed;
-    },
+    flowReroute(movedShapeIds) { return FlowSession.flowReroute(this, movedShapeIds); },
 
     /** Topmost flowchart stroke under the pointer (shapes and connectors). */
-    flowHit(x, y) {
-        const tol = 10 / Math.max(0.1, CanvasViewport.scale || 1);
-        const all = this.strokes();
-        for (let i = all.length - 1; i >= 0; i -= 1) {
-            const s = all[i];
-            if (!s) continue;
-            if (s.flowchartKind === 'connector') {
-                if (this.flowConnectorHit(s, x, y, tol)) return s;
-            } else if (s.flowchartKind === 'shape') {
-                const b = shapeBounds(s);
-                if (b && x >= b.minX - tol && x <= b.maxX + tol && y >= b.minY - tol && y <= b.maxY + tol) return s;
-            }
-        }
-        return null;
-    },
+    flowHit(x, y) { return FlowSession.flowHit(this, x, y); },
 
     /** Point-to-segment hit test across a straight or single-bend elbow path. */
-    flowConnectorHit(conn, x, y, tol) {
-        const midX = Number(conn.midX);
-        const midY = Number(conn.midY);
-        const legs = conn.routing === 'elbow' && Number.isFinite(midX) && Number.isFinite(midY)
-            ? [[{ x: conn.x0, y: conn.y0 }, { x: midX, y: midY }],
-               [{ x: midX, y: midY }, { x: conn.x1, y: conn.y1 }]]
-            : [[{ x: conn.x0, y: conn.y0 }, { x: conn.x1, y: conn.y1 }]];
-        return legs.some(([a, b]) => {
-            const dx = b.x - a.x;
-            const dy = b.y - a.y;
-            const len2 = dx * dx + dy * dy;
-            let t = len2 > 0 ? ((x - a.x) * dx + (y - a.y) * dy) / len2 : 0;
-            t = Math.max(0, Math.min(1, t));
-            return Math.hypot(x - (a.x + t * dx), y - (a.y + t * dy)) <= tol;
-        });
-    },
+    flowConnectorHit(conn, x, y, tol) { return FlowSession.flowConnectorHit(this, conn, x, y, tol); },
 
     /**
      * Which endpoint ('from' or 'to') of a connector the pointer is on, or null.
@@ -791,19 +601,7 @@ export const DrawingBoard = {
      * @param {number} y
      * @returns {string|null}
      */
-    hitFlowEndpoint(conn, x, y) {
-        if (!conn) return null;
-        const scale = CanvasViewport.scale || 1;
-        const r = 8 / scale;
-        const ends = [
-            { name: 'from', x: conn.x0, y: conn.y0 },
-            { name: 'to', x: conn.x1, y: conn.y1 }
-        ];
-        for (const e of ends) {
-            if (Math.hypot(e.x - x, e.y - y) <= r) return e.name;
-        }
-        return null;
-    },
+    hitFlowEndpoint(conn, x, y) { return FlowSession.hitFlowEndpoint(this, conn, x, y); },
 
     /**
      * Flowchart overlay: live connector drag with its port magnet, plus port dots
@@ -814,206 +612,43 @@ export const DrawingBoard = {
      * Test if pointer is over a connector elbow bend point (within tolerance).
      * Returns { kind: 'bend', connector, point: {x,y} } or null.
      */
-    flowConnectorBendHit(conn, x, y, tol) {
-        if (conn.routing !== 'elbow') return null;
-        const bend = { x: conn.midX ?? (conn.x0 + conn.x1) / 2, y: conn.midY ?? (conn.y0 + conn.y1) / 2 };
-        const dx = x - bend.x;
-        const dy = y - bend.y;
-        return Math.hypot(dx, dy) <= tol ? { kind: 'bend', connector: conn, point: bend } : null;
-    },
+    flowConnectorBendHit(conn, x, y, tol) { return FlowSession.flowConnectorBendHit(this, conn, x, y, tol); },
 
-    /**
-     * Live bend-drag state while pointer moves over a connector.
-     */
+
+    /** Live bend-drag state while pointer moves over a connector. */
     flowBendDrag: null,
 
     /**
      * Render live bend preview while dragging a connector elbow.
      */
-    renderFlowBendPreview() {
-        if (!this.flowBendDrag || !this.isFlowchartMode) return;
-        const { connector, startX, startY, startMidX, startMidY } = this.flowBendDrag;
-        const scale = CanvasViewport.scale || 1;
-        const ctx = this.ctx;
-        ctx.save();
-        ctx.strokeStyle = '#3b82f6';
-        ctx.lineWidth = 2 * scale;
-        ctx.globalAlpha = 0.6;
-        ctx.setTransform(scale, 0, 0, scale, 0, 0);
-        ctx.beginPath();
-        ctx.moveTo(connector.x0, connector.y0);
-        ctx.lineTo(startMidX, startMidY);
-        ctx.lineTo(connector.x1, connector.y1);
-        ctx.stroke();
-        ctx.restore();
-    },
+    renderFlowBendPreview() { return FlowSession.renderFlowBendPreview(this); },
 
     /**
      * Clear the live bend preview state.
      */
-    clearFlowBendPreview() {
-        if (!this.isFlowchartMode) return;
-        this.flowBendDrag = null;
-    },
+    clearFlowBendPreview() { return FlowSession.clearFlowBendPreview(this); },
 
     /**
      * Called on pointerdown over a connector bend: start the drag capture.
      */
-    startFlowBendDrag(x, y) {
-        if (!this.isFlowchartMode) return;
-        const conn = this.flowHit(x, y);
-        if (!conn || conn.flowchartKind !== 'connector') return;
-        const bend = this.flowConnectorBendHit(conn, x, y, 12 / Math.max(0.1, CanvasViewport.scale || 1));
-        if (!bend) return;
-        this.flowBendDrag = {
-            connector: conn,
-            startX: x,
-            startY: y,
-            startMidX: bend.connector.midX ?? (bend.connector.x0 + bend.connector.x1) / 2,
-            startMidY: bend.connector.midY ?? (bend.connector.y0 + bend.connector.y1) / 2,
-        };
-        this.requestRedraw();
-    },
+    startFlowBendDrag(x, y) { return FlowSession.startFlowBendDrag(this, x, y); },
 
     /**
      * Called on pointerup after starting a bend drag: commit the new midpoint.
      */
-    finishFlowBendDrag() {
-        if (!this.flowBendDrag) return;
-        const { connector, startX, startY } = this.flowBendDrag;
-        const grid = this.flowchartGrid();
-        const snap = grid?.snap !== false;
-        const size = grid?.size > 0 ? grid.size : 24;
-        let newMidX = Math.round((startX) / size) * size;
-        let newMidY = Math.round((startY) / size) * size;
-        if (!snap) {
-            newMidX = startX;
-            newMidY = startY;
-        }
-        connector.midX = Math.max(connector.x0, Math.min(connector.x1, newMidX));
-        connector.midY = Math.max(connector.y0, Math.min(connector.y1, newMidY));
-        this.flowReroute([connector.id]);
-        this.flowBendDrag = null;
-        this.scheduleSave();
-        this.redraw();
-    },
+    finishFlowBendDrag() { return FlowSession.finishFlowBendDrag(this); },
 
     /**
      * Bind bend-drag pointer events into the canvas overlay.
      */
-    bindFlowBendEvents() {
-        if (!this.toolbarEl) return;
-        const overlay = this.canvas?.parentElement?.querySelector?.('[data-flow-overlay]');
-        if (!overlay) return;
-
-        const onBendDown = (e) => {
-            e.stopPropagation();
-            const { x, y } = this.clientToCanvas(e.clientX, e.clientY);
-            this.startFlowBendDrag(x, y);
-        };
-
-        const onMove = (e) => {
-            if (!this.flowBendDrag) return;
-            e.stopPropagation();
-            const { x, y } = this.clientToCanvas(e.clientX, e.clientY);
-            this.flowBendDrag.x = x;
-            this.flowBendDrag.y = y;
-            this.requestRedraw();
-        };
-
-        const onUp = (e) => {
-            e.stopPropagation();
-            this.finishFlowBendDrag();
-            this.flowBendDrag = null;
-        };
-
-        overlay.addEventListener('pointerdown', onBendDown, { capture: true });
-        document.addEventListener('pointermove', onMove, { capture: true });
-        document.addEventListener('pointerup', onUp, { capture: true });
-        document.addEventListener('pointercancel', onUp, { capture: true });
-    },
+    bindFlowBendEvents() { return FlowSession.bindFlowBendEvents(this); },
 
     /**
      * Called each render to draw live bend preview and update bend-hit state.
      */
-    renderFlowchartOverlays() {
-        if (!this.isFlowchartMode) return;
-        this.renderFlowBendPreview();
-        this.clearFlowBendPreview();
-    },
+    renderFlowchartOverlays() { return FlowSession.renderFlowchartOverlays(this); },
 
-renderFlowchartOverlay() {
-        const ctx = this.ctx;
-        if (!ctx || !this.isFlowchartMode) return;
-        const st = this.flowConnect;
-        const scale = CanvasViewport.scale || 1;
-        const dotR = 4 / scale;
-        const shapes = this.flowchartShapes();
-        if (!shapes.length) return;
-
-        ctx.save();
-        ctx.lineWidth = 1 / scale;
-
-        // --- Connector tool selected, no drag in flight: show every port so the
-        //     user knows where they can start drawing from. -------------------
-        if (!st && this.activeTool === FLOWCHART_CONNECTOR_TOOL) {
-            for (const shape of shapes) {
-                for (const port of ['n', 'e', 's', 'w']) {
-                    const p = portPointFor(shape, port);
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, dotR, 0, Math.PI * 2);
-                    ctx.fillStyle = 'rgba(148, 163, 184, 0.55)';
-                    ctx.fill();
-                    ctx.strokeStyle = 'rgba(15, 23, 42, 0.6)';
-                    ctx.stroke();
-                }
-            }
-            ctx.restore();
-            return;
-        }
-
-        // No drag in flight and the tool is not the connector: nothing to draw.
-        if (!st) { ctx.restore(); return; }
-
-        const brush = this.currentBrush();
-        const start = st.fromPt || { x: st.x, y: st.y };
-
-        // Port dots on all candidate shapes (skip the one we started from).
-        for (const shape of shapes) {
-            if (shape.id === st.from?.shapeId) continue;
-            for (const port of ['n', 'e', 's', 'w']) {
-                const p = portPointFor(shape, port);
-                const isTarget = st.hover && st.hover.shapeId === shape.id && st.hover.port === port;
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, isTarget ? dotR * 1.6 : dotR, 0, Math.PI * 2);
-                ctx.fillStyle = isTarget ? '#60a5fa' : 'rgba(148, 163, 184, 0.55)';
-                ctx.fill();
-                ctx.strokeStyle = 'rgba(15, 23, 42, 0.6)';
-                ctx.stroke();
-            }
-        }
-
-        // Live rubber band from the anchor port to the cursor (or target port).
-        const end = st.hover ? { x: st.hover.x, y: st.hover.y } : { x: st.x, y: st.y };
-        const attached = !!(st.from && st.hover);
-        const routed = attached && this.flowchartRouting === 'elbow'
-            ? routeConnector(
-                { x: start.x, y: start.y, port: st.from.port },
-                { x: end.x, y: end.y, port: st.hover.port },
-                'elbow'
-            )
-            : null;
-
-        ctx.strokeStyle = brush.color;
-        ctx.lineWidth = Math.max(1, brush.width);
-        ctx.setLineDash([8 / scale, 6 / scale]);
-        ctx.beginPath();
-        ctx.moveTo(start.x, start.y);
-        if (routed && routed.midX != null) ctx.lineTo(routed.midX, routed.midY);
-        ctx.lineTo(end.x, end.y);
-        ctx.stroke();
-        ctx.restore();
-    },
+    renderFlowchartOverlay() { return FlowSession.renderFlowchartOverlay(this); },
 
     /**
      * When a connector is selected, draw grabbable handles on its two endpoints
@@ -1021,39 +656,7 @@ renderFlowchartOverlay() {
      * Runs in redraw() after the flowchart overlay; a no-op unless exactly one
      * connector is selected.
      */
-    renderFlowchartEndpointHandles() {
-        const ctx = this.ctx;
-        if (!ctx || !this.isFlowchartMode) return;
-        const sel = this.getSelectedStrokesArray();
-        if (sel.length !== 1) return;
-        const target = sel[0];
-        if (!target || target.flowchartKind !== 'connector') return;
-
-        const scale = CanvasViewport.scale || 1;
-        const r = 6 / scale;
-        const ends = [
-            { name: 'from', x: target.x0, y: target.y0, port: target.from?.port },
-            { name: 'to', x: target.x1, y: target.y1, port: target.to?.port }
-        ];
-        ctx.save();
-        ctx.lineWidth = 1.5 / scale;
-        for (const e of ends) {
-            const active = this.flowEndpointDrag && this.flowEndpointDrag.end === e.name;
-            ctx.beginPath();
-            ctx.arc(e.x, e.y, active ? r * 1.4 : r, 0, Math.PI * 2);
-            ctx.fillStyle = active ? '#fde047' : '#60a5fa';
-            ctx.fill();
-            ctx.strokeStyle = 'rgba(15, 23, 42, 0.7)';
-            ctx.stroke();
-            // Tiny port label so the user knows which side they are grabbing.
-            ctx.fillStyle = '#ffffff';
-            ctx.font = `${Math.max(9, 10 / scale)}px Inter, system-ui, sans-serif`;
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'bottom';
-            ctx.fillText(e.port || 'c', e.x, e.y - r - 1 / scale);
-        }
-        ctx.restore();
-    },
+    renderFlowchartEndpointHandles() { return FlowSession.renderFlowchartEndpointHandles(this); },
 
     /**
      * Start dragging an endpoint of the selected connector.
@@ -1062,9 +665,7 @@ renderFlowchartOverlay() {
      * @param {number} x
      * @param {number} y
      */
-    startFlowEndpointDrag(conn, end, x, y) {
-        this.flowEndpointDrag = { conn, end, moved: false, startX: x, startY: y };
-    },
+    startFlowEndpointDrag(conn, end, x, y) { return FlowSession.startFlowEndpointDrag(this, conn, end, x, y); },
 
     /**
      * Move the dragged endpoint, snapping to the grid and magnetising onto a
@@ -1072,43 +673,12 @@ renderFlowchartOverlay() {
      * @param {number} x
      * @param {number} y
      */
-    applyFlowEndpointDrag(x, y) {
-        const st = this.flowEndpointDrag;
-        if (!st) return;
-        const conn = st.conn;
-        if (!conn) return;
-
-        const snapped = this.flowSnapPoint(x, y, false);
-        const anchor = this.flowResolveEndpoint(snapped.x, snapped.y, null);
-        const end = st.end;
-
-        if (end === 'from') {
-            conn.x0 = snapped.x;
-            conn.y0 = snapped.y;
-            conn.from = anchor ? { shapeId: anchor.shapeId, port: anchor.port } : null;
-        } else {
-            conn.x1 = snapped.x;
-            conn.y1 = snapped.y;
-            conn.to = anchor ? { shapeId: anchor.shapeId, port: anchor.port } : null;
-        }
-        routeFlowchartConnector(conn);
-        st.moved = true;
-        this.requestRedraw();
-    },
+    applyFlowEndpointDrag(x, y) { return FlowSession.applyFlowEndpointDrag(this, x, y); },
 
     /**
      * Finish the endpoint drag, pushing one undo step if anything moved.
      */
-    finishFlowEndpointDrag() {
-        const st = this.flowEndpointDrag;
-        this.flowEndpointDrag = null;
-        if (!st) return;
-        if (st.moved) {
-            this.pushLayerHistory();
-            this.scheduleSave();
-        }
-        this.redraw();
-    },
+    finishFlowEndpointDrag() { return FlowSession.finishFlowEndpointDrag(this); },
 
     /**
      * Commit the in-flight connector drag.    /**
@@ -1116,158 +686,30 @@ renderFlowchartOverlay() {
      * Attached-to-port when the pointer lands inside the magnet radius, otherwise
      * a free-floating straight arrow. Self-loops are rejected; tiny drags dropped.
      */
-    commitFlowConnect() {
-        const st = this.flowConnect;
-        this.flowConnect = null;
-        if (!st) return;
-
-        const endAnchor = this.flowResolveEndpoint(st.x, st.y, st.from?.shapeId);
-        const endPt = endAnchor ? { x: endAnchor.point.x, y: endAnchor.point.y } : { x: st.x, y: st.y };
-        const startPt = st.fromPt || { x: st.x, y: st.y };
-
-        // Degenerate drag (a click) is not a connector.
-        if (Math.hypot(endPt.x - startPt.x, endPt.y - startPt.y) < 4) {
-            this.redraw();
-            return;
-        }
-        // A connector must never attach to the same shape on both ends.
-        if (st.from && endAnchor && st.from.shapeId === endAnchor.shapeId) {
-            showAppToast('Connect two different shapes');
-            this.redraw();
-            return;
-        }
-
-        const conn = createFlowchartConnector({
-            id: createId('stroke'),
-            from: st.from ? { shapeId: st.from.shapeId, port: st.from.port } : null,
-            to: endAnchor ? { shapeId: endAnchor.shapeId, port: endAnchor.port } : null,
-            x0: startPt.x, y0: startPt.y,
-            x1: endPt.x, y1: endPt.y,
-            routing: (st.from && endAnchor) ? this.flowchartRouting : 'straight',
-            color: this.flowchartColor(),
-            width: this.flowchartWidth()
-        });
-
-        this.pushLayerHistory();
-        const strokes = this.strokes();
-        strokes.push(conn);
-        this.setStrokes(strokes);
-        this.scheduleSave();
-        this.redraw();
-    },
+    commitFlowConnect() { return FlowSession.commitFlowConnect(this); },
     /**
      * Inline contentEditable editor for the label of a shape/connector.
      * Commits on blur or Enter, clears on Escape, and pushes a single undo step
      * so label edits never tear the shape and its text apart.
      */
-    flowEditLabel(target) {
-        if (!this.isFlowchartMode || !target) return;
-        this.flowCloseLabel();
-        // CanvasViewport has no worldToScreen — position like placeTextBox():
-        // world coords are dpr-scaled, innerEl's CSS transform carries the zoom.
-        const dpr = window.devicePixelRatio || 1;
-        const isConnector = target.flowchartKind === 'connector';
-        const cx = isConnector
-            ? (Number.isFinite(Number(target.midX)) ? Number(target.midX) : (target.x0 + target.x1) / 2)
-            : (Math.min(target.x0, target.x1) + Math.abs(target.x1 - target.x0) / 2);
-        const cy = isConnector
-            ? (Number.isFinite(Number(target.midY)) ? Number(target.midY) : (target.y0 + target.y1) / 2)
-            : (Math.min(target.y0, target.y1) + Math.abs(target.y1 - target.y0) / 2);
-        const existing = target.label && target.label.text ? String(target.label.text) : '';
-        const fontSize = Math.max(10, Number(target.label?.fontSize) || FLOW_LABEL_DEFAULT);
+    flowEditLabel(target) { return FlowSession.flowEditLabel(this, target); },
 
-        const el = document.createElement('div');
-        el.className = 'flow-label-editor';
-        el.contentEditable = 'true';
-        el.spellcheck = false;
-        el.dataset.placeholder = 'Label\u2026';
-        const cssFont = Math.max(11, fontSize / dpr);
-        const boxW = isConnector
-            ? Math.max(90, cssFont * 6)
-            : Math.max(60, Math.abs(target.x1 - target.x0) / dpr);
-        el.style.left = (cx / dpr - boxW / 2) + 'px';
-        el.style.top = (cy / dpr - cssFont * 0.75) + 'px';
-        el.style.width = boxW + 'px';
-        el.style.fontSize = cssFont + 'px';
-        el.textContent = existing;
-        this.textLayer.appendChild(el);
-        el.focus();
-        const sel = window.getSelection();
-        const range = document.createRange();
-        range.selectNodeContents(el);
-        sel?.removeAllRanges();
-        sel?.addRange(range);
-
-        this.flowLabelEl = el;
-        this.flowLabelTarget = target;
-        this.selectedStrokes.clear();
-        this.selectedStrokes.add(target);
-        this.renderToolbar();
-
-        const commit = () => {
-            const text = String(el.innerText || '').replace(/\u00a0/g, ' ').trim();
-            const prevLabel = target.label || null;
-            const prevJson = JSON.stringify(prevLabel);
-            const nextLabel = text ? { text, fontSize, color: prevLabel?.color || '' } : null;
-            el.remove();
-            if (this.flowLabelEl === el) { this.flowLabelEl = null; this.flowLabelTarget = null; }
-            if (JSON.stringify(nextLabel) !== prevJson) {
-                this.pushLayerHistory();
-                target.label = nextLabel;
-                this.scheduleSave();
-            }
-            this.redraw();
-            this.renderToolbar();
-        };
-        el.addEventListener('blur', commit, { once: true });
-        el.addEventListener('keydown', (ev) => {
-            if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); el.innerText = ''; el.blur(); }
-            else if (ev.key === 'Enter') { ev.preventDefault(); ev.stopPropagation(); el.blur(); }
-            else ev.stopPropagation();
-        });
-    },
-
-    flowCloseLabel() {
-        if (this.flowLabelEl) this.flowLabelEl.blur();
-    },
+    flowCloseLabel() { return FlowSession.flowCloseLabel(this); },
 
     /**
      * The stroke the label toolbar acts on: the open editor's target, else the
      * current selection when it is a flowchart shape/connector.
      */
-    flowLabelTargetShape() {
-        if (!this.isFlowchartMode) return null;
-        const t = this.flowLabelTarget || this.getSelectedStrokesArray()[0];
-        if (!t) return null;
-        return (t.flowchartKind === 'shape' || t.flowchartKind === 'connector') ? t : null;
-    },
+    flowLabelTargetShape() { return FlowSession.flowLabelTargetShape(this); },
 
     /** Current label size of the toolbar target, clamped to the allowed range. */
-    flowLabelFontSize() {
-        const n = Number(this.flowLabelTargetShape()?.label?.fontSize) || FLOW_LABEL_DEFAULT;
-        return Math.min(FLOW_LABEL_MAX, Math.max(FLOW_LABEL_MIN, Math.round(n)));
-    },
+    flowLabelFontSize() { return FlowSession.flowLabelFontSize(this); },
 
     /** Toolbar "text" action: open the label editor on the selection. */
-    editSelectedFlowchartLabel() {
-        const target = this.flowLabelTargetShape();
-        if (!target) { showAppToast('Select a shape or connector first'); return; }
-        this.flowEditLabel(target);
-    },
+    editSelectedFlowchartLabel() { return FlowSession.editSelectedFlowchartLabel(this); },
 
     /** Toolbar A- / A+: resize the selected shape's label as one undo step. */
-    nudgeSelectedFlowchartLabel(delta) {
-        const target = this.flowLabelTargetShape();
-        if (!target) { showAppToast('Select a shape or connector first'); return; }
-        const cur = target.label || { text: '', fontSize: FLOW_LABEL_DEFAULT, color: '' };
-        const next = normalizeFlowLabelSize((Number(cur.fontSize) || FLOW_LABEL_DEFAULT) + delta);
-        if (next === (Number(cur.fontSize) || FLOW_LABEL_DEFAULT)) return;
-        this.pushLayerHistory();
-        target.label = { ...cur, fontSize: next };
-        this.scheduleSave();
-        this.redraw();
-        this.renderToolbar();
-    },
+    nudgeSelectedFlowchartLabel(delta) { return FlowSession.nudgeSelectedFlowchartLabel(this, delta); },
 
     /**
      * Request exit from note-canvas. App owns deactivate via note:canvas_draw_exited
@@ -3746,75 +3188,5 @@ renderFlowchartOverlay() {
 
 };
 
-const TOOLBAR_STATE_KEY = 'matrix_drawing_toolbar';
-
-/**
- * Canvas stream payload: the magicCanvas document plus its own prefs/toolbar.
- * Kept in drawingBoard.js next to readDocument()/writeDocument() because the
- * document is big — reading it eagerly on every export tick would re-download
- * the canvas on each unrelated board move.
- */
-export async function getCanvasDocumentBackupKeys() {
-    // IndexedDB is the primary store; read the persisted document directly.
-    let matrix_global_drawing = null;
-    let referencedMediaIds = [];
-    try {
-        const doc = await readDocument();
-        matrix_global_drawing = JSON.stringify(doc);
-        // Which media files the drawing points at — lets a canvas-only restore
-        // warn about images that still need the media ZIP instead of failing
-        // silently with blank placeholders.
-        const { collectNoteCanvasMediaIds } = await import('./noteFieldOwnership.js');
-        referencedMediaIds = collectNoteCanvasMediaIds(doc);
-    } catch (e) {
-        matrix_global_drawing = localStorage.getItem(STORAGE_KEY);
-    }
-
-    return {
-        matrix_global_drawing,
-        referencedMediaIds,
-        matrix_drawing_prefs: localStorage.getItem(PREFS_KEY),
-        matrix_drawing_toolbar: localStorage.getItem(TOOLBAR_STATE_KEY)
-    };
-}
-
-export async function applyDrawingBackupKeys(backup) {
-    const { applyCanvasBackupKeys } = await import('./layoutStorage.js');
-    await applyCanvasBackupKeys(backup);
-    if (backup.matrix_global_drawing != null) {
-        let doc = backup.matrix_global_drawing;
-        if (typeof doc === 'string') {
-            try {
-                doc = JSON.parse(doc);
-            } catch {
-                // Leave as raw string; writeDocument will fail gracefully below.
-            }
-        }
-        try {
-            await writeDocument(doc);
-        } catch (e) {
-            // Fallback to localStorage only if IndexedDB write fails.
-        }
-        try {
-            localStorage.setItem(STORAGE_KEY, typeof doc === 'string' ? doc : JSON.stringify(doc));
-        } catch (e) {
-            // Ignore quota errors.
-        }
-    }
-    if (backup.matrix_drawing_prefs != null) {
-        const prefs = typeof backup.matrix_drawing_prefs === 'string'
-            ? backup.matrix_drawing_prefs : JSON.stringify(backup.matrix_drawing_prefs);
-        localStorage.setItem(PREFS_KEY, prefs);
-    }
-    const toolbarState = backup.matrix_drawing_toolbar;
-    if (toolbarState != null) {
-        if (typeof toolbarState === 'string' && toolbarState === 'true') {
-            localStorage.setItem(TOOLBAR_STATE_KEY, JSON.stringify({ collapsed: true }));
-        } else if (typeof toolbarState === 'string' && toolbarState === 'false') {
-            localStorage.setItem(TOOLBAR_STATE_KEY, JSON.stringify({ collapsed: false }));
-        } else {
-            localStorage.setItem(TOOLBAR_STATE_KEY, typeof toolbarState === 'string'
-                ? toolbarState : JSON.stringify(toolbarState));
-        }
-    }
-}
+export { getCanvasDocumentBackupKeys, applyDrawingBackupKeys } from './drawingBoardBackup.js';
+export { DRAWING_TOOLBAR_STATE_KEY as TOOLBAR_STATE_KEY } from './drawingBoardBackup.js';
