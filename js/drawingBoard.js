@@ -1,8 +1,8 @@
 /** @module {"owns":"magicCanvas drawing board, workspace drawing mode", "related":["canvasDocument.js","drawingToolbarMenu.js","layoutStorage.js"]} */
-import { ACTION_ICONS, CARD_ICONS, DRAWING_ICONS, FORMAT_ICONS } from './icons.js';
+import { DRAWING_ICONS } from './icons.js';
 import { ColorPicker, PALETTE_UNIFIED, resolveNoteColor } from './colorPicker.js';
-import { DrawingToolbarMenu, CHEVRON } from './drawingToolbarMenu.js';
-import { Fullscreen } from './fullscreen.js';
+import { DrawingToolbarMenu } from './drawingToolbarMenu.js';
+import { CanvasViewport } from './canvasViewport.js';
 import {
     readDocument, writeDocument, getActiveStrokes, getActiveTexts, setActiveStrokes, setActiveTexts,
     getActiveImages, setActiveImages,
@@ -12,13 +12,17 @@ import {
     PAGE_FORMATS
 } from './canvasDocument.js';
 import { BRUSH_STYLES, DRAG_SHAPE_TOOLS, drawBrushStroke, drawShapeStroke, drawTextObject } from './canvasBrushes.js';
-import { FLOW_LABEL_MIN, FLOW_LABEL_MAX } from './flowchart.js';
+import {
+    WIDTH_MIN, WIDTH_MAX, DEFAULT_WIDTH, HIGHLIGHTER_WIDTH, HISTORY_MAX, SAVE_DEBOUNCE_MS,
+    RESIZE_HANDLE_SIZE, RESIZE_HANDLE_HIT, POINT_SPACING, THIN_MIN_DIST, THIN_COLLINEAR_EPS,
+    defaultWidthForStyle, pointSpacingForStyle
+} from './drawingBoardCore.js';
 import { renderBackground } from './canvasBackgrounds.js';
-import { CanvasViewport } from './canvasViewport.js';
 import { DrawingToolbarChrome } from './drawingToolbarChrome.js';
 import * as FlowSession from './drawingBoardFlowchart.js';
 import * as CropSession from './drawingBoardCrop.js';
 import * as SelectSession from './drawingBoardSelection.js';
+import * as ToolbarSession from './drawingBoardToolbar.js';
 import { getStrokesBounds } from './lassoGeometry.js';
 import {
     loadImage,
@@ -45,95 +49,6 @@ import {
 } from './noteCanvasTextOverlay.js';
 
 const PREFS_KEY = 'matrix_drawing_prefs';
-const WIDTH_MIN = 1;
-const WIDTH_MAX = 48;
-const DEFAULT_WIDTH = 10;
-const HIGHLIGHTER_WIDTH = 14;
-const HISTORY_MAX = 50;
-const SAVE_DEBOUNCE_MS = 400;
-const RESIZE_HANDLE_SIZE = 10;
-const RESIZE_HANDLE_HIT = 14;
-
-/** Minimum world-space distance between recorded stroke points, by brush style. */
-const POINT_SPACING = {
-    pen: 1.5,
-    marker: 1.5,
-    highlighter: 2,
-    pencil: 3.5,
-    spray: 4,
-    calligraphy: 2,
-    brush: 2.5
-};
-
-/** Minimum distance used when simplifying a finished stroke (drop near-collinear points). */
-const THIN_MIN_DIST = 2;
-const THIN_COLLINEAR_EPS = 0.35;
-
-const POINTER_ITEMS = [
-    { id: 'pen', label: 'Pen' },
-    { id: 'marker', label: 'Marker' },
-    { id: 'highlighter', label: 'Highlighter' },
-    { id: 'pencil', label: 'Pencil' },
-    { id: 'spray', label: 'Spray' },
-    { id: 'calligraphy', label: 'Broad nib' },
-    { id: 'brush', label: 'Ink brush' }
-];
-
-const SHAPE_ITEMS = [
-    { id: 'line', label: 'Line' },
-    { id: 'arrow', label: 'Arrow' },
-    { id: 'rect', label: 'Rectangle' },
-    { id: 'rounded_rect', label: 'Rounded rectangle' },
-    { id: 'ellipse', label: 'Ellipse' },
-    { id: 'triangle', label: 'Triangle' },
-    { id: 'diamond', label: 'Diamond' },
-    { id: 'star', label: 'Star' },
-    { id: 'chevron', label: 'Chevron' },
-    { id: 'trapezoid', label: 'Trapezoid' },
-    { id: 'parallelogram', label: 'Parallelogram' },
-    { id: 'cube', label: 'Cube' },
-    { id: 'pyramid', label: 'Pyramid' },
-    { id: 'cylinder', label: 'Cylinder' },
-    { id: 'sphere', label: 'Sphere' },
-    { id: 'text', label: 'Text' }
-];
-
-const GRID_BACKGROUNDS = [
-    { id: 'grid', label: 'Grid' },
-    { id: 'dots', label: 'Dot grid' },
-    { id: 'graph', label: 'Graph paper' },
-    { id: 'coarse', label: 'Coarse grid' },
-    { id: 'isometric', label: 'Isometric' },
-    { id: 'hex', label: 'Hex grid' }
-];
-
-const WRITING_BACKGROUNDS = [
-    { id: 'ruled', label: 'Ruled' },
-    { id: 'notebook', label: 'Notebook' },
-    { id: 'staff', label: 'Staff' },
-    { id: 'football', label: 'Football' }
-];
-
-function isDragShape(tool) {
-    return DRAG_SHAPE_TOOLS.includes(tool);
-}
-
-const FORMAT_ITEMS = [
-    { id: 'a2', label: 'A2 page' },
-    { id: 'a3', label: 'A3 page' },
-    { id: 'a4', label: 'A4 page' },
-    { id: 'a5', label: 'A5 page' },
-    { id: 'a6', label: 'A6 page' },
-    { id: 'infinite', label: 'Infinite canvas' }
-];
-
-function defaultWidthForStyle(style) {
-    return style === 'highlighter' ? HIGHLIGHTER_WIDTH : DEFAULT_WIDTH;
-}
-
-function pointSpacingForStyle(style) {
-    return POINT_SPACING[style] ?? 2;
-}
 
 function dist2(a, b) {
     const dx = a.x - b.x;
@@ -1024,19 +939,10 @@ export const DrawingBoard = {
         }
     },
 
-    updatePointerWidthLabel() {
-        this.updateBrushSizeControls();
-    },
 
-    updateBrushSizeControls() {
-        const width = this.currentBrush().width;
-        const label = this.toolbarEl?.querySelector('#draw-brush-width');
-        if (label) label.textContent = width + 'px';
-        const smaller = this.toolbarEl?.querySelector('#draw-brush-smaller');
-        const larger = this.toolbarEl?.querySelector('#draw-brush-larger');
-        if (smaller) smaller.disabled = width <= WIDTH_MIN;
-        if (larger) larger.disabled = width >= WIDTH_MAX;
-    },
+    updatePointerWidthLabel() { return ToolbarSession.updatePointerWidthLabel(this); },
+
+    updateBrushSizeControls() { return ToolbarSession.updateBrushSizeControls(this); },
 
     setColor(color, { rerender = true } = {}) {
         this.prefs.styles[this.activeStyle].color = color;
@@ -1045,32 +951,9 @@ export const DrawingBoard = {
         else this.updateColorChip(color);
     },
 
-    updateColorChip(color) {
-        const chip = this.toolbarEl?.querySelector('.drawing-color-chip');
-        const btn = this.toolbarEl?.querySelector('#draw-color-btn');
-        if (chip) chip.style.background = color;
-        if (btn) btn.style.setProperty('--chip-color', color);
-    },
+    updateColorChip(color) { return ToolbarSession.updateColorChip(this, color); },
 
-    toggleColorRollout(anchor) {
-        if (this.colorRolloutOpen) {
-            ColorPicker.close();
-            return;
-        }
-        ColorPicker.close();
-        this.bgColorRolloutOpen = false;
-        const brush = this.currentBrush();
-        ColorPicker.open({
-            anchor,
-            presets: PALETTE_UNIFIED,
-            value: brush.color,
-            align: 'end',
-            onSelect: (c) => this.setColor(c, { rerender: false }),
-            onClose: () => { this.colorRolloutOpen = false; }
-        });
-        this.colorRolloutOpen = true;
-        anchor?.setAttribute('aria-expanded', 'true');
-    },
+    toggleColorRollout(anchor) { return ToolbarSession.toggleColorRollout(this, anchor); },
 
     onPointerDown(e) {
         if (!this.active || e.button > 0) return;
@@ -1607,189 +1490,12 @@ export const DrawingBoard = {
         return (idx + 1) + ' / ' + this.doc.pages.length;
     },
 
-    currentToolEcho() {
-        if (this.isLassoActive) {
-            return { id: 'lasso', label: 'Select', icon: DRAWING_ICONS.lasso };
-        }
-        const tool = this.activeTool;
-        if (tool === 'pan') {
-            return { id: 'pan', label: 'Hand', icon: DRAWING_ICONS.hand };
-        }
-        if (tool === 'eraser') {
-            return { id: 'eraser', label: 'Eraser', icon: DRAWING_ICONS.eraser };
-        }
-        if (tool === 'pointer') {
-            return { id: 'pointer', label: 'Pointer', icon: DRAWING_ICONS.pointer };
-        }
-        if (tool === 'text') {
-            return { id: 'text', label: 'Text', icon: DRAWING_ICONS.text };
-        }
-        if (tool === 'crop') {
-            return { id: 'crop', label: 'Crop', icon: DRAWING_ICONS.crop };
-        }
-        if (isDragShape(tool)) {
-            const shape = SHAPE_ITEMS.find((item) => item.id === tool);
-            return {
-                id: tool,
-                label: shape?.label || 'Shape',
-                icon: DRAWING_ICONS[tool] || DRAWING_ICONS.shapes
-            };
-        }
-        if (tool === 'brush') {
-            const style = POINTER_ITEMS.find((item) => item.id === this.activeStyle);
-            return {
-                id: this.activeStyle,
-                label: style?.label || 'Brush',
-                icon: DRAWING_ICONS[this.activeStyle] || DRAWING_ICONS.pen
-            };
-        }
-        return {
-            id: tool || 'pointer',
-            label: tool || 'Pointer',
-            icon: DRAWING_ICONS[tool] || DRAWING_ICONS.pointer
-        };
-    },
 
-    updateToolEcho() {
-        const echo = this.currentToolEcho();
-        const root = document.getElementById('draw-tool-echo');
-        const iconEl = document.getElementById('draw-tool-echo-icon');
-        const labelEl = document.getElementById('draw-tool-echo-label');
-        if (!root || !iconEl || !labelEl) return;
-        iconEl.innerHTML = echo.icon || '';
-        labelEl.textContent = echo.label;
-        root.dataset.tool = echo.id;
-        root.setAttribute('aria-label', `Current tool: ${echo.label}`);
-        root.title = `Current tool: ${echo.label}`;
-    },
+    currentToolEcho() { return ToolbarSession.currentToolEcho(this); },
 
-    updateNoteToolbarChrome() {
-        const titleEl = document.getElementById('draw-note-title');
-        const contentBtn = document.getElementById('draw-note-show-content');
-        const checklistBtn = document.getElementById('draw-note-show-checklist');
-        const plannerTableBtn = document.getElementById('draw-note-show-planner-table');
-        const plannerChartBtn = document.getElementById('draw-note-show-planner-chart');
-        const sizeGroup = document.getElementById('draw-note-overlay-size-group');
-        const sizeLabel = document.getElementById('draw-note-overlay-size');
-        const smallerBtn = document.getElementById('draw-note-overlay-smaller');
-        const largerBtn = document.getElementById('draw-note-overlay-larger');
-        const noteMode = !!(this.isNoteCanvasMode && this.noteCanvasItem);
-        const plannerActive = !!(this.noteCanvasItem?.planner && !this.noteCanvasItem?.plannerHidden);
-        if (this.noteCanvasItem) migrateNoteCanvasTextFlags(this.noteCanvasItem);
+    updateToolEcho() { return ToolbarSession.updateToolEcho(this); },
 
-        if (titleEl) {
-            if (noteMode) {
-                const full = stripRichText(this.noteCanvasItem.title || '').trim() || 'Untitled';
-                titleEl.textContent = full;
-                titleEl.title = full;
-                titleEl.setAttribute('aria-label', full);
-                titleEl.hidden = false;
-                titleEl.classList.remove('is-hidden');
-            } else {
-                titleEl.textContent = '';
-                titleEl.removeAttribute('title');
-                titleEl.removeAttribute('aria-label');
-                titleEl.hidden = true;
-                titleEl.classList.add('is-hidden');
-            }
-        }
-
-        const bindToggle = (btn, { on, titleOn, titleOff, icon, flag, visible = noteMode }) => {
-            if (!btn) return;
-            if (visible) {
-                btn.hidden = false;
-                btn.classList.remove('is-hidden');
-                btn.classList.toggle('active', on);
-                btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-                btn.title = on ? titleOn : titleOff;
-                btn.setAttribute('aria-label', on ? titleOn : titleOff);
-                if (!btn.dataset.bound) {
-                    btn.dataset.bound = '1';
-                    btn.innerHTML = icon;
-                    btn.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                        this.toggleNoteTextOverlayLayer(flag);
-                    });
-                }
-            } else {
-                btn.hidden = true;
-                btn.classList.add('is-hidden');
-                btn.classList.remove('active');
-                btn.setAttribute('aria-pressed', 'false');
-            }
-        };
-
-        bindToggle(contentBtn, {
-            on: !!this.noteCanvasItem?.canvasShowNoteContent,
-            titleOn: 'Hide note content',
-            titleOff: 'Show note content',
-            icon: DRAWING_ICONS.text,
-            flag: 'content'
-        });
-        bindToggle(checklistBtn, {
-            on: !!this.noteCanvasItem?.canvasShowNoteChecklist,
-            titleOn: 'Hide checklist',
-            titleOff: 'Show checklist',
-            icon: FORMAT_ICONS.toChecklist,
-            flag: 'checklist'
-        });
-        bindToggle(plannerTableBtn, {
-            on: !!this.noteCanvasItem?.canvasShowNotePlannerTable,
-            titleOn: 'Hide planner table',
-            titleOff: 'Show planner table',
-            icon: CARD_ICONS.plannerTable,
-            flag: 'plannerTable',
-            visible: noteMode && plannerActive
-        });
-        bindToggle(plannerChartBtn, {
-            on: !!this.noteCanvasItem?.canvasShowNotePlannerChart,
-            titleOn: 'Hide planner chart',
-            titleOff: 'Show planner chart',
-            icon: CARD_ICONS.plannerChart,
-            flag: 'plannerChart',
-            visible: noteMode && plannerActive
-        });
-
-        if (sizeGroup) {
-            if (noteMode) {
-                sizeGroup.hidden = false;
-                sizeGroup.classList.remove('is-hidden');
-                const size = resolveOverlayFontSize(this.noteCanvasItem);
-                const percent = overlayFontSizeToPercent(size);
-                if (sizeLabel) {
-                    sizeLabel.textContent = `${percent}%`;
-                    sizeLabel.title = `Text height ${size} (canvas units)`;
-                }
-                if (smallerBtn) {
-                    smallerBtn.disabled = size <= OVERLAY_FONT_MIN;
-                    smallerBtn.title = 'Smaller overlay text';
-                    smallerBtn.setAttribute('aria-label', 'Smaller overlay text');
-                    if (!smallerBtn.dataset.bound) {
-                        smallerBtn.dataset.bound = '1';
-                        smallerBtn.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            this.nudgeNoteOverlayFontSize(-OVERLAY_FONT_STEP);
-                        });
-                    }
-                }
-                if (largerBtn) {
-                    largerBtn.disabled = size >= OVERLAY_FONT_MAX;
-                    largerBtn.title = 'Larger overlay text';
-                    largerBtn.setAttribute('aria-label', 'Larger overlay text');
-                    if (!largerBtn.dataset.bound) {
-                        largerBtn.dataset.bound = '1';
-                        largerBtn.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            this.nudgeNoteOverlayFontSize(OVERLAY_FONT_STEP);
-                        });
-                    }
-                }
-            } else {
-                sizeGroup.hidden = true;
-                sizeGroup.classList.add('is-hidden');
-            }
-        }
-    },
+    updateNoteToolbarChrome() { return ToolbarSession.updateNoteToolbarChrome(this); },
 
     async nudgeNoteOverlayFontSize(delta) {
         const item = this.noteCanvasItem;
@@ -1861,478 +1567,48 @@ export const DrawingBoard = {
         this.scheduleSave();
     },
 
-    pointerSelected() {
-        return this.activeStyle;
-    },
 
-    pointerTriggerIcon() {
-        return DRAWING_ICONS[this.activeStyle] || DRAWING_ICONS.pen;
-    },
+    pointerSelected() { return ToolbarSession.pointerSelected(this); },
 
-    shapeTriggerIcon() {
-        return DRAWING_ICONS.shapes || DRAWING_ICONS.line;
-    },
+    pointerTriggerIcon() { return ToolbarSession.pointerTriggerIcon(this); },
 
-    pointerMenuItems() {
-        return this.menuItemsWithIcons(POINTER_ITEMS);
-    },
+    shapeTriggerIcon() { return ToolbarSession.shapeTriggerIcon(this); },
 
-    openPointerMenu(anchor) {
-        DrawingToolbarMenu.toggle({
-            anchor,
-            ariaLabel: 'Pointer tools',
-            items: this.pointerMenuItems(),
-            selected: this.pointerSelected(),
-            onSelect: (id) => {
-                this.setStyle(id);
-                this.renderToolbar();
-            }
-        });
-    },
+    pointerMenuItems() { return ToolbarSession.pointerMenuItems(this); },
 
-    formatTriggerLabel() {
-        if (this.doc.canvasMode === 'infinite') return '∞';
-        return this.doc.canvasMode.toUpperCase();
-    },
+    openPointerMenu(anchor) { return ToolbarSession.openPointerMenu(this, anchor); },
 
-    typeTriggerIcon() {
-        const bg = getActiveBackground(this.doc);
-        return DRAWING_ICONS[bg === 'blank' ? 'rect' : bg] || DRAWING_ICONS.grid;
-    },
+    formatTriggerLabel() { return ToolbarSession.formatTriggerLabel(this); },
 
-    menuItemsWithIcons(items) {
-        return items.map((item) => {
-            if (item.heading || item.divider || item.stepper) return { ...item };
-            return {
-                ...item,
-                icon: item.icon || DRAWING_ICONS[item.id] || DRAWING_ICONS[item.iconKey || item.id] || ''
-            };
-        });
-    },
+    typeTriggerIcon() { return ToolbarSession.typeTriggerIcon(this); },
 
-    formatMenuItems() {
-        return this.menuItemsWithIcons(FORMAT_ITEMS.map((item) => {
-            const fmt = PAGE_FORMATS[item.id];
-            const meta = fmt
-                ? `(${fmt.mmW}×${fmt.mmH} mm · ${fmt.width}×${fmt.height} px)`
-                : '';
-            return {
-                ...item,
-                meta,
-                selected: item.id === this.doc.canvasMode
-            };
-        }));
-    },
+    menuItemsWithIcons(items) { return ToolbarSession.menuItemsWithIcons(this, items); },
 
-    backgroundMenuItems(bg = getActiveBackground(this.doc)) {
-        const withSel = (list) => this.menuItemsWithIcons(list.map((item) => ({
-            ...item,
-            iconKey: item.iconKey || item.id,
-            selected: item.id === bg
-        })));
-        const items = [];
-        items.push(...withSel([{ id: 'blank', label: 'Blank', iconKey: 'blank' }]));
-        items.push({ heading: 'Grids' });
-        items.push(...withSel(GRID_BACKGROUNDS));
-        items.push({ heading: 'Writing' });
-        items.push(...withSel(WRITING_BACKGROUNDS));
-        return items;
-    },
+    formatMenuItems() { return ToolbarSession.formatMenuItems(this); },
 
-    handleFormatMenu(id) {
-        if (FORMAT_ITEMS.some((item) => item.id === id)) {
-            this.setCanvasMode(id);
-        }
-    },
+    backgroundMenuItems(bg = getActiveBackground(this.doc)) { return ToolbarSession.backgroundMenuItems(this, bg); },
 
-    handleBackgroundMenu(id) {
-        if (BACKGROUNDS.includes(id)) {
-            this.setBackground(id);
-        }
-    },
+    handleFormatMenu(id) { return ToolbarSession.handleFormatMenu(this, id); },
 
-    flowchartToolbarRowHtml() {
-        const grid = this.flowchartGrid();
-        const snapOn = grid.snap !== false;
-        const routing = this.flowchartRouting === 'elbow' ? 'elbow' : 'straight';
-        const fcColor = this.flowchartColor();
-        const fcWidth = this.flowchartWidth();
-        const tools = [
-            ['rect', 'Process', 'rect'],
-            ['rounded_rect', 'Rounded', 'rounded_rect'],
-            ['diamond', 'Decision', 'diamond'],
-            ['ellipse', 'Terminator', 'ellipse'],
-            ['parallelogram', 'Input', 'parallelogram'],
-            ['triangle', 'Triangle', 'triangle']
-        ];
-        const toolBtns = tools.map(function (t) {
-            return '<button type="button" class="btn btn--compact btn--icon" data-flow-tool="' + t[0] + '" title="' + t[1] + '" aria-label="' + t[1] + '">' + (DRAWING_ICONS[t[2]] || DRAWING_ICONS.shapes) + '</button>';
-        }).join('');
-        return '<div class="drawing-toolbar-row drawing-toolbar-row--flowchart" aria-label="Flowchart tools">'
-            + '<span class="drawing-toolbar-row__label">Flow</span>'
-            + toolBtns
-            + '<button type="button" class="btn btn--compact btn--icon' + (this.activeTool === 'connector' ? ' active' : '') + '" data-flow-tool="connector" title="Connector (drag shape to shape)" aria-label="Connector">' + DRAWING_ICONS.arrow + '</button>'
-            + '<button type="button" class="btn btn--compact btn--icon' + (routing === 'elbow' ? ' active' : '') + '" id="draw-flow-routing" title="Toggle elbow routing" aria-label="Toggle elbow routing" aria-pressed="' + (routing === 'elbow' ? 'true' : 'false') + '">' + (DRAWING_ICONS.connectorElbow || DRAWING_ICONS.arrow) + '</button>'
-            + '<span class="drawing-toolbar-group" data-flow-connector-group>'
-            + '<button type="button" class="btn btn--compact btn--icon drawing-color-chip-btn" id="draw-flow-connector-color" title="Stroke color" aria-label="Stroke color" aria-expanded="false" style="--chip-color:' + fcColor + '"><span class="drawing-color-chip" style="background:' + fcColor + '"></span></button>'
-            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-connector-smaller" title="Thinner stroke" aria-label="Thinner stroke">' + ACTION_ICONS.minus + '</button>'
-            + '<span class="drawing-brush-size__value" id="draw-flow-connector-width" aria-live="polite">' + fcWidth + 'px</span>'
-            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-connector-larger" title="Thicker stroke" aria-label="Thicker stroke">' + ACTION_ICONS.plus + '</button>'
-            + '</span>'
-            + '<span class="format-toolbar-sep" aria-hidden="true"></span>'
-            + '<span class="drawing-toolbar-group" data-flow-label-group>'
-            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-label-edit" title="Edit shape text" aria-label="Edit shape text">' + DRAWING_ICONS.text + '</button>'
-            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-label-color" title="Label color" aria-label="Label color" aria-expanded="false" style="--chip-color:' + (this.flowLabelTargetShape()?.label?.color || fcColor) + '"><span class="drawing-color-chip" style="background:' + (this.flowLabelTargetShape()?.label?.color || fcColor) + '"></span></button>'
-            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-label-smaller" title="Smaller label text" aria-label="Smaller label text">' + ACTION_ICONS.minus + '</button>'
-            + '<span class="drawing-brush-size__value" id="draw-flow-label-size" aria-live="polite">' + this.flowLabelFontSize() + 'px</span>'
-            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-label-larger" title="Larger label text" aria-label="Larger label text">' + ACTION_ICONS.plus + '</button>'
-            + '</span>'
-            + '<span class="format-toolbar-sep" aria-hidden="true"></span>'
-            + '<button type="button" class="btn btn--compact btn--icon' + (snapOn ? ' active' : '') + '" id="draw-flow-snap" title="Snap to grid" aria-label="Snap to grid" aria-pressed="' + (snapOn ? 'true' : 'false') + '">' + DRAWING_ICONS.gridSnap + '</button>'
-            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-grid-minus" title="Coarser grid" aria-label="Coarser grid">' + ACTION_ICONS.minus + '</button>'
-            + '<span class="drawing-brush-size__value" id="draw-flow-grid-size" aria-live="polite">' + grid.size + 'px</span>'
-            + '<button type="button" class="btn btn--compact btn--icon" id="draw-flow-grid-plus" title="Finer grid" aria-label="Finer grid">' + ACTION_ICONS.plus + '</button>'
-            + '<button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-flow-grid-type" title="Grid style" aria-label="Grid style"><span class="drawing-dropdown-label">' + grid.type + '</span><span class="drawing-dropdown-chevron">' + CHEVRON + '</span></button>'
-            + '</div>';
-    },
+    handleBackgroundMenu(id) { return ToolbarSession.handleBackgroundMenu(this, id); },
 
-    stepFlowchartGrid(delta) {
-        const steps = [8, 12, 16, 24, 32, 48];
-        const grid = this.flowchartGrid();
-        let idx = steps.indexOf(grid.size);
-        if (idx < 0) {
-            let best = 0;
-            let bestD = Infinity;
-            steps.forEach(function (s, i) {
-                const d = Math.abs(s - grid.size);
-                if (d < bestD) { bestD = d; best = i; }
-            });
-            idx = best;
-        }
-        const next = steps[Math.max(0, Math.min(steps.length - 1, idx + delta))];
-        if (next === grid.size) return;
-        this.persistFlowchartGrid({ size: next });
-        this.redrawBackground();
-        this.renderToolbar();
-    },
+    flowchartToolbarRowHtml() { return ToolbarSession.flowchartToolbarRowHtml(this); },
 
-    renderToolbar() {
-        if (!this.toolbarEl) return;
-        const wasColorOpen = this.colorRolloutOpen;
-        const wasBgColorOpen = this.bgColorRolloutOpen;
-        DrawingToolbarMenu.close();
-        const brush = this.currentBrush();
-        const bgSwatch = this.pageBackgroundSwatch();
-        const isPointerActive = this.activeTool === 'pointer' || this.activeTool === 'brush';
-        const isEraserActive = this.activeTool === 'eraser';
-        const isPanActive = this.activeTool === 'pan';
-        const isCropActive = this.activeTool === 'crop';
-        const pageIdx = this.doc.pages.findIndex((p) => p.id === this.doc.activePageId);
-        const pageCount = this.doc.pages.length;
-        const canPrev = pageIdx > 0;
-        const canNext = pageIdx >= 0 && pageIdx < pageCount - 1;
-        const exitBtn = (this.isNoteCanvasMode || this.isFlowchartMode)
-            ? `<button type="button" class="btn btn--compact btn--icon" id="draw-back-to-note" title="Back to note" aria-label="Back to note">${ACTION_ICONS.viewFree}</button>`
-            : `<button type="button" class="btn btn--compact btn--icon" id="draw-exit-drawing" title="Exit drawing mode" aria-label="Exit drawing mode">${ACTION_ICONS.viewFree}</button>`;
-        const flowchartRow = this.isFlowchartMode ? this.flowchartToolbarRowHtml() : '';
+    stepFlowchartGrid(delta) { return ToolbarSession.stepFlowchartGrid(this, delta); },
 
-        this.toolbarEl.innerHTML = `
-            <div class="drawing-toolbar-row">
-                <button type="button" class="btn btn--compact drawing-toolbar-dropdown ${isPointerActive ? 'active' : ''}" id="draw-menu-pointer" aria-haspopup="menu" aria-expanded="false" title="Pointer tools" aria-label="Pointer tools">
-                    <span class="drawing-dropdown-icon">${this.pointerTriggerIcon()}</span>
-                    <span class="drawing-dropdown-chevron">${CHEVRON}</span>
-                </button>
-                <span class="drawing-brush-size" id="draw-brush-size-group" aria-label="Brush size">
-                    <button type="button" class="btn btn--compact btn--icon drawing-brush-size__btn" id="draw-brush-smaller" title="Decrease brush size" aria-label="Decrease brush size">${ACTION_ICONS.minus}</button>
-                    <span class="drawing-brush-size__value" id="draw-brush-width" aria-live="polite">${brush.width}px</span>
-                    <button type="button" class="btn btn--compact btn--icon drawing-brush-size__btn" id="draw-brush-larger" title="Increase brush size" aria-label="Increase brush size">${ACTION_ICONS.plus}</button>
-                </span>
-                <button type="button" class="btn btn--compact btn--icon ${isEraserActive ? 'active' : ''}" id="draw-eraser" title="Eraser" aria-label="Eraser" aria-pressed="${isEraserActive ? 'true' : 'false'}">${DRAWING_ICONS.eraser}</button>
-                <span class="format-toolbar-sep" aria-hidden="true"></span>
-                <div class="drawing-color-group" id="draw-color-group">
-                    <button type="button" class="btn btn--compact btn--icon drawing-color-chip-btn" id="draw-color-btn" title="Color" aria-label="Color" aria-expanded="false" style="--chip-color:${brush.color}">
-                        <span class="drawing-color-chip" style="background:${brush.color}"></span>
-                    </button>
-                </div>
-                <span class="format-toolbar-sep" aria-hidden="true"></span>
-                <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-shapes" aria-haspopup="menu" aria-expanded="false" title="Shapes" aria-label="Shapes">
-                    <span class="drawing-dropdown-icon">${this.shapeTriggerIcon()}</span>
-                    <span class="drawing-dropdown-chevron">${CHEVRON}</span>
-                </button>
-                <button type="button" class="btn btn--compact btn--icon" id="draw-insert-image" title="Insert image" aria-label="Insert image" aria-haspopup="menu">${DRAWING_ICONS.image}</button>
-                <button type="button" class="btn btn--compact btn--icon ${isCropActive ? 'active' : ''}" id="draw-crop" title="Crop image — drag the frame edges, drag back out to restore" aria-label="Crop image" aria-pressed="${isCropActive ? 'true' : 'false'}">${DRAWING_ICONS.crop}</button>
-                <button type="button" class="btn btn--compact btn--icon ${this.isLassoActive ? 'active' : ''}" id="draw-lasso" title="Rectangle select" aria-label="Rectangle select" aria-pressed="${this.isLassoActive ? 'true' : 'false'}">${DRAWING_ICONS.lasso}</button>
-                <button type="button" class="btn btn--compact btn--icon" id="draw-fullscreen" title="Full screen" aria-label="Full screen" aria-pressed="false">${ACTION_ICONS.fullscreenEnter}</button>
-                <span class="format-toolbar-sep" aria-hidden="true"></span>
-                <button type="button" class="btn btn--compact btn--icon ${isPanActive ? 'active' : ''}" id="draw-pan" title="Hand tool — pan canvas. Scroll also pans; Ctrl+scroll zooms; Space+drag pans." aria-label="Hand tool" aria-pressed="${isPanActive ? 'true' : 'false'}">${DRAWING_ICONS.hand}</button>
-                <button type="button" class="btn btn--compact btn--icon" id="draw-zoom-out" title="Zoom out" aria-label="Zoom out">${DRAWING_ICONS.zoomOut}</button>
-                <span class="drawing-zoom-level" id="draw-zoom-level" title="Zoom level" aria-label="Zoom level">100%</span>
-                <button type="button" class="btn btn--compact btn--icon" id="draw-zoom-in" title="Zoom in" aria-label="Zoom in">${DRAWING_ICONS.zoomIn}</button>
-                <span class="format-toolbar-sep" aria-hidden="true"></span>
-                <button type="button" class="btn btn--compact btn--icon" id="draw-undo" title="Undo" aria-label="Undo" ${this.history.canUndo ? '' : 'disabled'}>${ACTION_ICONS.undo}</button>
-                <button type="button" class="btn btn--compact btn--icon" id="draw-redo" title="Redo" aria-label="Redo" ${this.history.canRedo ? '' : 'disabled'}>${ACTION_ICONS.redo}</button>
-                <button type="button" class="btn btn--compact btn--icon" id="draw-clear" title="Clear" aria-label="Clear">${ACTION_ICONS.layoutReset}</button>
-                <button type="button" class="btn btn--compact btn--icon" id="draw-toolbar-hide" title="Hide toolbar" aria-label="Hide toolbar">${ACTION_ICONS.collapseAll}</button>
-                ${exitBtn}
-            </div>
-            <div class="drawing-toolbar-row drawing-toolbar-row--meta">
-                <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-format" aria-haspopup="menu" aria-expanded="false" title="Page format" aria-label="Page format">
-                    <span class="drawing-dropdown-label">${this.formatTriggerLabel()}</span>
-                    <span class="drawing-dropdown-chevron">${CHEVRON}</span>
-                </button>
-                <button type="button" class="btn btn--compact drawing-toolbar-dropdown" id="draw-menu-background" aria-haspopup="menu" aria-expanded="false" title="Background" aria-label="Background">
-                    <span class="drawing-dropdown-icon">${this.typeTriggerIcon()}</span>
-                    <span class="drawing-dropdown-label">BG</span>
-                    <span class="drawing-dropdown-chevron">${CHEVRON}</span>
-                </button>
-                <button type="button" class="btn btn--compact btn--icon drawing-color-chip-btn" id="draw-bg-color-btn" title="Background fill color" aria-label="Background fill color" aria-expanded="false" style="--chip-color:${bgSwatch}">
-                    <span class="drawing-bg-color-chip drawing-color-chip" style="background:${bgSwatch}"></span>
-                </button>
-                <span class="drawing-page-nav" aria-label="Page navigation">
-                    <button type="button" class="btn btn--compact btn--icon" id="draw-page-prev" title="Previous page" aria-label="Previous page" ${canPrev ? '' : 'disabled'}>${DRAWING_ICONS.pagePrev}</button>
-                    <span class="drawing-page-label" id="draw-page-label" title="Current page">${this.pageLabel()}</span>
-                    <button type="button" class="btn btn--compact btn--icon" id="draw-page-next" title="Next page" aria-label="Next page" ${canNext ? '' : 'disabled'}>${DRAWING_ICONS.pageNext}</button>
-                    <button type="button" class="btn btn--compact btn--icon" id="draw-page-add" title="Add page" aria-label="Add page">${DRAWING_ICONS.pageAdd}</button>
-                </span>
-            </div>
-            ${flowchartRow}
-        `;
-        this.bindToolbar();
-        this.updateZoomLevel();
-        this.updateToolEcho();
-        this.updateNoteToolbarChrome();
-        this.updateBrushSizeControls();
-        if (wasColorOpen) {
-            this.colorRolloutOpen = false;
-            const btn = this.toolbarEl.querySelector('#draw-color-btn');
-            if (btn) this.toggleColorRollout(btn);
-        } else if (wasBgColorOpen) {
-            this.bgColorRolloutOpen = false;
-            const btn = this.toolbarEl.querySelector('#draw-bg-color-btn');
-            if (btn) this.openPageBackgroundPicker(btn);
-        }
-    },
+    renderToolbar() { return ToolbarSession.renderToolbar(this); },
 
-    updateZoomLevel() {
-        const el = this.toolbarEl?.querySelector('#draw-zoom-level');
-        if (!el) return;
-        el.textContent = `${Math.round(CanvasViewport.scale * 100)}%`;
-    },
+    updateZoomLevel() { return ToolbarSession.updateZoomLevel(this); },
 
-    bindToolbar() {
-        if (!this.toolbarEl) return;
-        const q = (sel) => this.toolbarEl.querySelector(sel);
+    bindToolbar() { return ToolbarSession.bindToolbar(this); },
 
-        q('#draw-toolbar-hide')?.addEventListener('click', () => this.hideToolbar());
-        q('#draw-exit-drawing')?.addEventListener('click', () => { this.app.switchWorkspaceMode('notes'); });
-        q('#draw-back-to-note')?.addEventListener('click', () => { this.exitFromToolbar(); });
-        q('#draw-undo')?.addEventListener('click', () => this.undo());
-        q('#draw-redo')?.addEventListener('click', () => this.redo());
-        q('#draw-clear')?.addEventListener('click', () => this.clearAll());
-        q('#draw-color-btn')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.toggleColorRollout(e.currentTarget);
-        });
-        q('#draw-bg-color-btn')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.openPageBackgroundPicker(e.currentTarget);
-        });
-        q('#draw-zoom-in')?.addEventListener('click', () => { CanvasViewport.stepZoom(0.1); this.persistViewport(); });
-        q('#draw-zoom-out')?.addEventListener('click', () => { CanvasViewport.stepZoom(-0.1); this.persistViewport(); });
-        q('#draw-pan')?.addEventListener('click', () => {
-            if (this.activeTool === 'pan') this.setStyle(this.activeStyle || 'pen');
-            else this.setTool('pan');
-        });
-        const fsBtn = q('#draw-fullscreen');
-        if (fsBtn) Fullscreen.registerButton(fsBtn);
-
-        q('#draw-menu-pointer')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.openPointerMenu(e.currentTarget);
-        });
-
-        q('#draw-brush-smaller')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.adjustWidth(-1);
-        });
-        q('#draw-brush-larger')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.adjustWidth(1);
-        });
-
-        q('#draw-eraser')?.addEventListener('click', () => {
-            this.setTool('eraser');
-        });
-
-        q('#draw-menu-shapes')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const selected = SHAPE_ITEMS.some((item) => item.id === this.activeTool) ? this.activeTool : 'line';
-            DrawingToolbarMenu.toggle({
-                anchor: e.currentTarget,
-                ariaLabel: 'Shapes',
-                items: this.menuItemsWithIcons(SHAPE_ITEMS),
-                selected,
-                onSelect: (id) => {
-                    this.setTool(id);
-                    this.renderToolbar();
-                }
-            });
-        });
-
-        q('#draw-insert-image')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.openImageInsertMenu(e.currentTarget);
-        });
-
-        q('#draw-crop')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            if (this.activeTool === 'crop') {
-                this.setTool('pointer');
-            } else {
-                this.selectedStrokes.clear();
-                this.setTool('crop');
-                showAppToast('Crop: drag the frame edges — the dimmed area gets discarded');
-            }
-        });
-
-        q('#draw-menu-format')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            DrawingToolbarMenu.toggle({
-                anchor: e.currentTarget,
-                ariaLabel: 'Page format',
-                items: this.formatMenuItems(),
-                selected: this.doc.canvasMode,
-                onSelect: (id) => this.handleFormatMenu(id)
-            });
-        });
-
-        q('#draw-menu-background')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            DrawingToolbarMenu.toggle({
-                anchor: e.currentTarget,
-                ariaLabel: 'Background',
-                items: this.backgroundMenuItems(),
-                selected: getActiveBackground(this.doc),
-                onSelect: (id) => this.handleBackgroundMenu(id)
-            });
-        });
-
-        q('#draw-page-prev')?.addEventListener('click', () => this.goToPrevPage());
-        q('#draw-page-next')?.addEventListener('click', () => this.goToNextPage());
-        q('#draw-page-add')?.addEventListener('click', () => this.addCanvasPage());
-
-        // Lasso button click handler
-        q('#draw-lasso')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.toggleLassoMode();
-        });
-
-        // Flowchart row: shape tools, connector routing, labels, snap + grid density
-        this.toolbarEl.querySelectorAll('[data-flow-tool]')?.forEach((btn) => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.setTool(btn.dataset.flowTool);
-            });
-        });
-        q('#draw-flow-routing')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.flowchartRouting = this.flowchartRouting === 'elbow' ? 'straight' : 'elbow';
-            if (this.activeTool === 'connector') this.renderToolbar();
-            else this.renderToolbar();
-            showAppToast(this.flowchartRouting === 'elbow' ? 'Connectors: elbow routing' : 'Connectors: straight routing');
-        });
-        q('#draw-flow-snap')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const grid = this.flowchartGrid();
-            this.persistFlowchartGrid({ snap: !(grid.snap !== false) });
-            this.renderToolbar();
-        });
-        q('#draw-flow-grid-minus')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.stepFlowchartGrid(-1);
-        });
-        q('#draw-flow-grid-plus')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.stepFlowchartGrid(1);
-        });
-        q('#draw-flow-grid-type')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const order = ['dots', 'grid', 'graph'];
-            const grid = this.flowchartGrid();
-            const next = order[(order.indexOf(grid.type) + 1) % order.length];
-            this.persistFlowchartGrid({ type: next });
-            this.setBackground(next);
-        });
-        q('#draw-flow-label-edit')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.editSelectedFlowchartLabel();
-        });
-        q('#draw-flow-label-smaller')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.nudgeSelectedFlowchartLabel(-2);
-        });
-        q('#draw-flow-label-larger')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.nudgeSelectedFlowchartLabel(2);
-        });
-
-        // Connector stroke color — opens the shared color picker, persists to the diagram.
-        q('#draw-flow-connector-color')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.openFlowchartColorPicker(e.currentTarget);
-        });
-        q('#draw-flow-connector-smaller')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.adjustFlowchartWidth(-1);
-        });
-        q('#draw-flow-connector-larger')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.adjustFlowchartWidth(1);
-        });
-        // Label color — opens the shared color picker, persists to the selected label.
-        q('#draw-flow-label-color')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.openFlowLabelColorPicker(e.currentTarget);
-        });
-    },
-
-    updateToolbarState() {
-        if (!this.toolbarEl) return;
-        this.toolbarEl.querySelector('#draw-undo')?.toggleAttribute('disabled', !this.history.canUndo);
-        this.toolbarEl.querySelector('#draw-redo')?.toggleAttribute('disabled', !this.history.canRedo);
-        this.updatePointerWidthLabel();
-        this.updateFlowLabelControls();
-    },
+    updateToolbarState() { return ToolbarSession.updateToolbarState(this); },
 
     /**
      * Keep the flowchart label group honest: text actions need a selected shape
      * or connector, and A-/A+ clamp at the label size bounds.
      */
-    updateFlowLabelControls() {
-        if (!this.toolbarEl) return;
-        const group = this.toolbarEl.querySelector('[data-flow-label-group]');
-        if (!group) return;
-        const target = this.flowLabelTargetShape();
-        const hasTarget = !!target;
-        const size = this.flowLabelFontSize();
-        group.querySelector('#draw-flow-label-edit')?.toggleAttribute('disabled', !hasTarget);
-        group.querySelector('#draw-flow-label-smaller')?.toggleAttribute('disabled', !hasTarget || size <= FLOW_LABEL_MIN);
-        group.querySelector('#draw-flow-label-larger')?.toggleAttribute('disabled', !hasTarget || size >= FLOW_LABEL_MAX);
-        const readout = group.querySelector('#draw-flow-label-size');
-        if (readout) readout.textContent = size + 'px';
-        // Label color chip reflects the selected label (or the diagram default).
-        const labelChip = group.querySelector('#draw-flow-label-color');
-        if (labelChip) {
-            const color = (target?.label?.color || this.flowchartColor());
-            labelChip.style.setProperty('--chip-color', color);
-            const swatch = labelChip.querySelector('.drawing-color-chip');
-            if (swatch) swatch.style.background = color;
-            labelChip.toggleAttribute('disabled', !hasTarget);
-        }
-        // Connector width readout always reflects the diagram setting.
-        const connWidth = this.toolbarEl.querySelector('#draw-flow-connector-width');
-        if (connWidth) connWidth.textContent = this.flowchartWidth() + 'px';
-    },
+    updateFlowLabelControls() { return ToolbarSession.updateFlowLabelControls(this); },
 
     handleKeydown(e) {
         if (!this.active) return false;
