@@ -6,8 +6,10 @@ import {
     moveCropBox,
     normalizeCropBox,
     boxToCropPatch,
-    getImageSourceWindow
+    getImageSourceWindow,
+    MIN_IMAGE_SIDE
 } from './canvasImages.js';
+import { RESIZE_HANDLE_SIZE, RESIZE_HANDLE_HIT } from './drawingBoardCore.js';
 import { getActiveStrokes, getActiveTexts } from './canvasDocument.js';
 import { showAppToast } from './toast.js';
 

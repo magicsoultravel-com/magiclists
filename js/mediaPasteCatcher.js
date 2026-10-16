@@ -5,6 +5,7 @@ import {
     resolveNotePasteTarget
 } from './notePasteContext.js';
 import { showAppToast } from './toast.js';
+import { eventHasBoardMime, peekBoardPasteArmed } from './drawingBoardClipboard.js';
 
 /**
  * Collect File/Blob items from a ClipboardEvent or ClipboardItem list.
@@ -87,6 +88,11 @@ async function stageFiles(files, opts = {}) {
 }
 
 function onPaste(e) {
+    // Yield to the drawing board: an armed Ctrl+V carrying a board payload is
+    // not media. Peek (non-consuming) — the board's own paste listener owns
+    // the token; when the board isn't armed this never triggers, so notes-mode
+    // pastes behave exactly as before.
+    if (peekBoardPasteArmed() && eventHasBoardMime(e)) return;
     const files = filesFromDataTransfer(e.clipboardData);
     if (!files.length) return; // text-only: leave alone
     e.preventDefault();

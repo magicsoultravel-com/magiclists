@@ -10,7 +10,8 @@ import {
     writeLastLocalExportAt,
     writeLastLocalTxtExportAt,
     writeLastMediaMetaExportAt,
-    writeLastMediaZipExportAt
+    writeLastMediaZipExportAt,
+    buildNotesExportPayload
 } from './backup.js';
 import { buildCheckpointExportPayload } from './checkpointBundle.js';
 import { itemToTxtExportText, sortItemsForTxtExport } from './noteBodyConversion.js';

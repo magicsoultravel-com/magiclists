@@ -13,6 +13,7 @@ import {
 } from './flowchartGeometry.js';
 import { CanvasViewport } from './canvasViewport.js';
 import { showAppToast } from './toast.js';
+import { createId } from './canvasDocument.js';
 export function flowchartGrid(board) {
         const fallback = { type: 'dots', size: 24, snap: true, visible: true };
         const g = board.flowchartItem?.flowchart?.grid;

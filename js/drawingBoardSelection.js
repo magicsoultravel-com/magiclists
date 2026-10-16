@@ -19,6 +19,8 @@ import {
 } from './canvasDocument.js';
 import { CanvasViewport } from './canvasViewport.js';
 import { DRAWING_PREFS_KEY } from './drawingBoardBackup.js';
+import { RESIZE_HANDLE_SIZE, RESIZE_HANDLE_HIT } from './drawingBoardCore.js';
+import { MIN_IMAGE_SIDE } from './canvasImages.js';
 
 function writePrefs(prefs) {
     try { localStorage.setItem(DRAWING_PREFS_KEY, JSON.stringify(prefs)); } catch { /* ignore quota */ }

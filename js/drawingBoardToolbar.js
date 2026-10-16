@@ -9,6 +9,7 @@ import {
 } from './canvasDocument.js';
 import { CanvasViewport } from './canvasViewport.js';
 import { DrawingToolbarChrome } from './drawingToolbarChrome.js';
+import { showAppToast } from './toast.js';
 import { FLOW_LABEL_MIN, FLOW_LABEL_MAX } from './flowchart.js';
 import { stripRichText } from './richText.js';
 import {

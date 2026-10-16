@@ -15,7 +15,7 @@ import { BRUSH_STYLES, DRAG_SHAPE_TOOLS, drawBrushStroke, drawShapeStroke, drawT
 import {
     WIDTH_MIN, WIDTH_MAX, DEFAULT_WIDTH, HIGHLIGHTER_WIDTH, HISTORY_MAX, SAVE_DEBOUNCE_MS,
     RESIZE_HANDLE_SIZE, RESIZE_HANDLE_HIT, POINT_SPACING, THIN_MIN_DIST, THIN_COLLINEAR_EPS,
-    defaultWidthForStyle, pointSpacingForStyle
+    defaultWidthForStyle, pointSpacingForStyle, isDragShape
 } from './drawingBoardCore.js';
 import { renderBackground } from './canvasBackgrounds.js';
 import { DrawingToolbarChrome } from './drawingToolbarChrome.js';
@@ -23,6 +23,7 @@ import * as FlowSession from './drawingBoardFlowchart.js';
 import * as CropSession from './drawingBoardCrop.js';
 import * as SelectSession from './drawingBoardSelection.js';
 import * as ToolbarSession from './drawingBoardToolbar.js';
+import * as ClipboardSession from './drawingBoardClipboard.js';
 import { getStrokesBounds } from './lassoGeometry.js';
 import {
     loadImage,
@@ -30,7 +31,8 @@ import {
     ensureImagesLoaded,
     initialImageSize,
     drawImageObject,
-    drawImageGhost
+    drawImageGhost,
+    cropLimitRect
 } from './canvasImages.js';
 import { listMedia } from './mediaLibrary.js';
 import { showAppToast } from './toast.js';
@@ -707,6 +709,8 @@ export const DrawingBoard = {
         } else {
             this.doc = JSON.parse(JSON.stringify(snapshot));
         }
+        // Layers are fresh deep clones — re-point selection by id or drop orphans.
+        ClipboardSession.pruneSelection(this);
         this.redraw();
         this.scheduleSave();
         this.updateToolbarState();
@@ -1615,6 +1619,13 @@ export const DrawingBoard = {
         if (e.ctrlKey || e.metaKey) {
             if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); this.undo(); return true; }
             if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); this.redo(); return true; }
+            if (e.key === 'c') return ClipboardSession.handleCopyKey(this, e);
+            if (e.key === 'x') return ClipboardSession.handleCutKey(this, e);
+            // Ctrl+V arms only — never preventDefault (would suppress the paste event itself).
+            if (e.key === 'v') return ClipboardSession.handlePasteKey(this, e);
+        }
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            return ClipboardSession.handleDeleteKey(this, e);
         }
 
         // Escape: revert an in-flight crop drag first, else drop the crop session
@@ -1779,6 +1790,8 @@ export const DrawingBoard = {
     },
 
 };
+
+ClipboardSession.bindBoard(DrawingBoard);
 
 export { getCanvasDocumentBackupKeys, applyDrawingBackupKeys } from './drawingBoardBackup.js';
 export { DRAWING_TOOLBAR_STATE_KEY as TOOLBAR_STATE_KEY } from './drawingBoardBackup.js';

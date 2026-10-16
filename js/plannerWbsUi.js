@@ -37,6 +37,7 @@ import {
 import {
     plannerSectionCanEdit,
     growPlannerTextareas,
+    growPlannerCell,
     PLANNER_CARD_DRAG_THRESHOLD
 } from './plannerSharedUi.js';
 import { renderPlannerCardHtml, bindPlannerCardFields, closeOpenPlannerCardActions } from './plannerCardUi.js';
@@ -772,7 +773,7 @@ export function bindWbs(ctx) {
         const field = hit.card.querySelector(`[data-planner-wbs-field="${hit.fieldKey}"]`);
         requestAnimationFrame(() => {
             field?.focus?.();
-            if (hit.fieldKey === 'comments' && field) grow(field);
+            if (hit.fieldKey === 'comments' && field) growPlannerCell(field);
         });
     }, true);
 
