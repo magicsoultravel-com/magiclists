@@ -328,13 +328,27 @@ async function buildWbsPaneHtml(item) {
 }
 
 async function buildMediaPaneHtml(item) {
-    const { buildNoteAttachmentsSectionHtml } = await import('./noteAttachmentsUi.js');
-    const html = buildNoteAttachmentsSectionHtml(item, { canEdit: true, startCollapsed: false });
-    if (!html) return '<p class="magic-focus__empty">No media</p>';
-    return html.replace(
-        'data-note-attachments',
-        'data-note-attachments data-focus-media-only="1"'
-    );
+    const { buildNoteAttachmentsListHtml } = await import('./noteAttachmentsUi.js');
+    const { normalizeAttachments } = await import('./mediaAttachments.js');
+    const count = normalizeAttachments(item?.attachments).length;
+    const listHtml = buildNoteAttachmentsListHtml(item, { canEdit: true });
+    const bodyInner = count
+        ? listHtml
+        : `<p class="magic-focus__empty">No media yet</p>
+            <p class="magic-focus__empty-cta"><button type="button" class="btn btn--compact" data-focus-media-add>Add media</button></p>`;
+    // planner-sub shell matches Text/Checklist/Canvas panes. data-focus-media-sub
+    // is the structural/CSS hook; data-focus-media-only on the inner host keeps
+    // pane-identity parity with the table/chart/kanban/wbs -only markers.
+    return `<div class="planner-sub magic-focus__media-sub" data-focus-media-sub data-media-collapsed="0">
+        <div class="planner-sub__toolbar">
+            <button type="button" class="planner-sub__title" data-focus-media-toggle aria-expanded="true">
+                <span class="collapsable-toggle" aria-hidden="true">▼</span>Media${count ? ` (${count})` : ''}
+            </button>
+        </div>
+        <div class="planner-sub__body" data-focus-media-body>
+            <div data-note-attachments data-focus-media-only="1">${bodyInner}</div>
+        </div>
+    </div>`;
 }
 
 function presetGlyphHtml(presetId) {
@@ -1486,8 +1500,43 @@ export const MagicFocus = {
         }).catch(() => {});
 
         import('./noteAttachmentsUi.js').then(({ bindNoteAttachments }) => {
-            body.querySelectorAll('[data-note-attachments]').forEach((sec) => {
-                bindNoteAttachments(sec, item);
+            body.querySelectorAll('[data-focus-media-sub]').forEach((sub) => {
+                // Focus-local collapse: toggle the planner-sub body only.
+                // Never writes item.attachmentsCollapsed (board state stays intact).
+                const toggle = sub.querySelector('[data-focus-media-toggle]');
+                const subBody = sub.querySelector('[data-focus-media-body]');
+                if (toggle && subBody && !toggle.dataset.focusMediaToggleBound) {
+                    toggle.dataset.focusMediaToggleBound = '1';
+                    toggle.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const collapsed = subBody.classList.toggle('is-collapsed');
+                        toggle.querySelector('.collapsable-toggle')?.classList.toggle('collapsed', !!collapsed);
+                        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+                        sub.dataset.mediaCollapsed = collapsed ? '1' : '0';
+                    });
+                }
+                // Add-media CTA routes to the board entry point (library overlay).
+                const addBtn = sub.querySelector('[data-focus-media-add]');
+                if (addBtn && !addBtn.dataset.focusMediaAddBound) {
+                    addBtn.dataset.focusMediaAddBound = '1';
+                    addBtn.addEventListener('click', () => {
+                        if (!localStorage.getItem('admin_token')) {
+                            import('./toast.js').then(({ showAppToast }) => {
+                                showAppToast('Login required to attach media');
+                            }).catch(() => {});
+                            return;
+                        }
+                        import('./mediaLibraryOverlay.js').then(({ MediaLibraryOverlay }) => {
+                            MediaLibraryOverlay.open({ attachNoteId: item.id });
+                        }).catch(() => {});
+                    });
+                }
+                // Row bindings (hydrate, reorder via mutateItem, quick-actions)
+                // attach to the inner host. bindNoteAttachments is idempotent
+                // per root (dataset flags), so a re-bind after refresh is safe.
+                const host = sub.querySelector('[data-note-attachments][data-focus-media-only]');
+                if (host) bindNoteAttachments(host, item);
             });
         }).catch(() => {});
 

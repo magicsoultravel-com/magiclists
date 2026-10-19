@@ -619,6 +619,44 @@
     background: var(--card-panel-bg, var(--bg-card, var(--bg-surface)));
 }
 
+/* --- Media pane: planner-sub shell around the shared attachments list --- */
+.magic-focus__media-sub .planner-sub__body {
+    min-width: 0;
+}
+
+.magic-focus__media-sub .note-attachments__list {
+    gap: 0.15rem;
+    padding: 0.1rem 0 0.15rem;
+}
+
+.magic-focus__media-sub .magic-focus__empty {
+    margin: 0.35rem 0 0.1rem;
+    font-size: calc(0.62rem * var(--note-font-scale, 1));
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.magic-focus__media-sub .magic-focus__empty-cta {
+    margin: 0 0 0.25rem;
+    text-align: center;
+}
+
+#magic-focus.has-custom-bg .magic-focus__media-sub .planner-sub__toolbar {
+    background: transparent;
+}
+
+#magic-focus.has-custom-bg .magic-focus__media-sub .magic-focus__empty {
+    color: var(--card-muted, var(--text-muted));
+}
+
+#magic-focus.has-custom-bg .magic-focus__media-sub .note-attachment__label {
+    color: var(--card-fg, var(--text-main));
+}
+
+#magic-focus.has-custom-bg .magic-focus__media-sub .note-attachment__meta {
+    color: var(--card-muted, var(--text-muted));
+}
+
 /* Canvas / chart in a multi-section scroll: fixed slab so absolute/flex hosts size. */
 .magic-focus__pane-body.editor-note-body:has(> :nth-child(2)) > .planner-sub.magic-focus__canvas-sub > .planner-sub__body:not(.is-collapsed) {
     flex: 0 0 auto;

@@ -341,18 +341,18 @@ function clearExpandedAttachmentRows(mediaSection) {
 }
 
 /**
- * Collapsible Media section (attachments list only).
+ * Media attachments list only (rows + optional list wrapper, no section
+ * shell). Focus panes use this; board/modal use SectionHtml below.
  * @param {object} item
- * @param {{ canEdit?: boolean, startCollapsed?: boolean }} [opts]
+ * @param {{ canEdit?: boolean }} [opts]
  */
-export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCollapsed = true } = {}) {
-    const list = normalizeAttachments(item?.attachments);
-    if (!list.length) return '';
+export function buildNoteAttachmentsListHtml(item, { canEdit = false } = {}) {
+    return buildNoteAttachmentsRowsHtml(item, { canEdit, wrapList: true });
+}
 
-    const count = list.length;
-    const title = count === 1 ? 'Media (1)' : `Media (${count})`;
-    const collapsedClass = startCollapsed ? ' collapsed' : '';
-    const toggleCollapsed = startCollapsed ? ' collapsed' : '';
+function buildNoteAttachmentsRowsHtml(item, { canEdit = false, wrapList = false } = {}) {
+    const list = normalizeAttachments(item?.attachments);
+    if (!list.length) return wrapList ? '<div class="note-attachments__list"></div>' : '';
 
     const rows = list.map((entry) => {
         const id = escapeAttr(entry.mediaId);
@@ -377,6 +377,26 @@ export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCo
                 </div>
             </div>`;
     }).join('');
+
+    if (wrapList) return `<div class="note-attachments__list">${rows}</div>`;
+    return rows;
+}
+
+/**
+ * Render the full Media card section (shell + list). Board/modal path —
+ * row markup lives in buildNoteAttachmentsRowsHtml (single template).
+ * @param {object} item
+ * @param {{ canEdit?: boolean, startCollapsed?: boolean }} [opts]
+ */
+export function buildNoteAttachmentsSectionHtml(item, { canEdit = false, startCollapsed = true } = {}) {
+    const list = normalizeAttachments(item?.attachments);
+    if (!list.length) return '';
+
+    const count = list.length;
+    const title = count === 1 ? 'Media (1)' : `Media (${count})`;
+    const collapsedClass = startCollapsed ? ' collapsed' : '';
+    const toggleCollapsed = startCollapsed ? ' collapsed' : '';
+    const rows = buildNoteAttachmentsRowsHtml(item, { canEdit });
 
     return `
             <div class="note-body-section note-body-section--media" data-note-attachments>
@@ -476,6 +496,10 @@ export function syncNoteAttachmentsDom(item) {
     if (!item?.id) return;
 
     for (const body of noteBodiesForItem(item.id)) {
+        // Focus Media panes own a planner-sub wrapper around the list host —
+        // board sync must not outerHTML-replace the inner out from under it
+        // (canvas sync already skips Focus the same way).
+        if (body.closest?.('#magic-focus')) continue;
         const canEdit = bodyCanEdit(body);
         const startCollapsed = !!item.attachmentsCollapsed;
         const html = buildNoteAttachmentsSectionHtml(item, { canEdit, startCollapsed });
