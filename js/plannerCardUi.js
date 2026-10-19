@@ -82,20 +82,23 @@ ${indent}</span>`
         : '';
     const metaHtml = `${rowHtml}${startHtml}${stopHtml}`;
     const slotBody = `${metaHtml}
-${indent}<div class="${block}card-top">${packToggleHtml}${slotNameHtml}</div>
+${indent}<div class="${block}card-top">${slotNameHtml}</div>
 ${indent}${slotCommentHtml}`;
     const flyoutBody = `${metaHtml}
 ${indent}<div class="${block}card-top">${flyoutNameHtml}</div>
 ${indent}${flyoutCommentHtml}`;
     const surface = surfaceThemeInline(card.cardColor);
     const colorClass = card.cardColor ? ` has-color${surface.className}` : '';
-    const packClass = isPack ? ` ${block}pack-card` : '';
+    const packClass = isPack ? ` ${block}pack-card has-pack-toggle` : '';
     const rowIdAttr = includeRowId ? ` data-planner-row-id="${escapeAttr(card.rowId)}"` : '';
     const packAttrs = isPack
         ? ` data-planner-${mode}-pack data-${mode}-pack-collapsed="${packCollapsed ? '1' : '0'}"`
         : '';
+    // Pack toggle lives at article level (first child) so it stays visible +
+    // clickable across slot/flyout swaps. Tab order: toggle → name → comment → actions.
+    const packToggleLine = packToggleHtml ? `${indent}${packToggleHtml}\n` : '';
     return `<article class="${block}card${packClass}${colorClass}${emphasisClass}${collapsedClass}${editClass}${childClass}" data-planner-${mode}-card data-planner-row="${card.row}"${rowIdAttr} data-${mode}-emphasis="${escapeAttr(emphasis)}" data-${mode}-collapsed="${collapsed ? '1' : '0'}"${packAttrs}${surface.style}>
-${indent}<div class="${block}card-slot">${slotBody}</div>
+${packToggleLine}${indent}<div class="${block}card-slot">${slotBody}</div>
 ${indent}<div class="${block}card-flyout" aria-hidden="true">${flyoutBody}</div>
 ${indent}${actionsHtml}
 ${indent.slice(0, -4)}</article>`;

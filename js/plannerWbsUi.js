@@ -37,7 +37,6 @@ import {
 import {
     plannerSectionCanEdit,
     growPlannerTextareas,
-    growPlannerCell,
     PLANNER_CARD_DRAG_THRESHOLD
 } from './plannerSharedUi.js';
 import { renderPlannerCardHtml, bindPlannerCardFields, closeOpenPlannerCardActions } from './plannerCardUi.js';
@@ -741,42 +740,6 @@ export function bindWbs(ctx) {
         endWbsPointerDrag({ commit: state.lifted });
     };
 
-    /**
-     * Flyout is pointer-events:none on editable cards (peek only). Detect
-     * name/comment under the cursor via elementsFromPoint so collapsed peeks
-     * can still enter inline edit (parity with Kanban HEAD flyout peek).
-     * @returns {{ card: HTMLElement, fieldKey: 'name'|'comments' } | null}
-     */
-    const wbsFlyoutEditAt = (clientX, clientY) => {
-        const stack = typeof document.elementsFromPoint === 'function'
-            ? document.elementsFromPoint(clientX, clientY)
-            : [];
-        for (const el of stack) {
-            if (!(el instanceof Element)) continue;
-            const flyout = el.closest?.('.planner-wbs__card-flyout');
-            if (!flyout) continue;
-            const card = flyout.closest('[data-planner-wbs-card]');
-            if (!card || !section.contains(card) || !card.classList.contains('is-editable')) continue;
-            if (el.closest?.('.planner-wbs__card-name')) return { card, fieldKey: 'name' };
-            if (el.closest?.('.planner-wbs__card-comment')) return { card, fieldKey: 'comments' };
-        }
-        return null;
-    };
-
-    section.addEventListener('pointerdown', (e) => {
-        if (e.button != null && e.button !== 0) return;
-        if (e.target.closest?.('[data-planner-wbs-field], textarea, [contenteditable]')) return;
-        if (e.target.closest?.('[data-planner-wbs-color], [data-planner-wbs-emphasis], [data-planner-wbs-reset-card], [data-planner-wbs-density], [data-planner-wbs-more]')) return;
-        const hit = wbsFlyoutEditAt(e.clientX, e.clientY);
-        if (!hit) return;
-        hit.card.classList.add('is-wbs-editing');
-        const field = hit.card.querySelector(`[data-planner-wbs-field="${hit.fieldKey}"]`);
-        requestAnimationFrame(() => {
-            field?.focus?.();
-            if (hit.fieldKey === 'comments' && field) growPlannerCell(field);
-        });
-    }, true);
-
     const resetWbsColDragStyles = (column) => {
         if (!column) return;
         column.classList.remove('is-planner-wbs-col-dragging');
@@ -933,7 +896,6 @@ export function bindWbs(ctx) {
         if (e.target.closest?.('[data-planner-wbs-color], [data-planner-wbs-emphasis], [data-planner-wbs-reset-card], [data-planner-wbs-density], [data-planner-wbs-more], [data-planner-wbs-pack-toggle], [data-planner-wbs-field], textarea, input, [contenteditable]')) return;
         const card = e.target.closest('[data-planner-wbs-card]');
         if (!card || !section.contains(card) || !card.classList.contains('is-editable')) return;
-        if (wbsFlyoutEditAt(e.clientX, e.clientY)) return;
         if (wbsColPtr) endWbsColPointerDrag({ commit: false });
         const rowId = String(card.dataset.plannerRowId || '');
         if (!rowId) return;

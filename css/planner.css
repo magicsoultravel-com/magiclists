@@ -1129,17 +1129,18 @@
 /*
  * Hover flyout must spill past the board / Plan section bottom (over content below).
  * :has() temporarily drops clipping ancestors; horizontal scroll pauses while peeking.
+ * Peek is read-only collapsed only — editable cards unclamp in place, expanded never peeks.
  */
-.planner-kanban__board:has(.planner-kanban__card:is(:hover, :focus-within):not(.is-kanban-editing)) {
+.planner-kanban__board:has(.planner-kanban__card.is-collapsed:not(.is-editable):is(:hover, :focus-within)) {
     overflow: visible;
 }
 
-.note-body-section--planner:has(.planner-kanban__card:is(:hover, :focus-within):not(.is-kanban-editing)) {
+.note-body-section--planner:has(.planner-kanban__card.is-collapsed:not(.is-editable):is(:hover, :focus-within)) {
     position: relative;
     z-index: 20;
 }
 
-.note-body-section--planner:has(.planner-kanban__card:is(:hover, :focus-within):not(.is-kanban-editing)) > .note-section-body.collapsable-section {
+.note-body-section--planner:has(.planner-kanban__card.is-collapsed:not(.is-editable):is(:hover, :focus-within)) > .note-section-body.collapsable-section {
     overflow: visible;
 }
 
@@ -1343,33 +1344,25 @@
     box-shadow: 0 8px 20px color-mix(in srgb, #000 20%, transparent);
 }
 
-.planner-kanban__card:hover .planner-kanban__card-flyout,
-.planner-kanban__card:focus-within .planner-kanban__card-flyout,
-.planner-wbs__card:hover .planner-wbs__card-flyout,
-.planner-wbs__card:focus-within .planner-wbs__card-flyout {
+/*
+ * Peek flyout: collapsed READ-ONLY cards only. Editable cards unclamp the slot
+ * in place (A1 — one layer, no hit-test tricks); expanded cards never peek.
+ */
+.planner-kanban__card.is-collapsed:not(.is-editable):hover .planner-kanban__card-flyout,
+.planner-kanban__card.is-collapsed:not(.is-editable):focus-within .planner-kanban__card-flyout,
+.planner-wbs__card.is-collapsed:not(.is-editable):hover .planner-wbs__card-flyout,
+.planner-wbs__card.is-collapsed:not(.is-editable):focus-within .planner-wbs__card-flyout {
     display: block;
 }
 
-.planner-kanban__card:hover .planner-kanban__card-slot,
-.planner-kanban__card:focus-within .planner-kanban__card-slot,
-.planner-wbs__card:hover .planner-wbs__card-slot,
-.planner-wbs__card:focus-within .planner-wbs__card-slot {
+.planner-kanban__card.is-collapsed:not(.is-editable):hover .planner-kanban__card-slot,
+.planner-kanban__card.is-collapsed:not(.is-editable):focus-within .planner-kanban__card-slot,
+.planner-wbs__card.is-collapsed:not(.is-editable):hover .planner-wbs__card-slot,
+.planner-wbs__card.is-collapsed:not(.is-editable):focus-within .planner-wbs__card-slot {
     /* Keep layout height; hide visuals under the flyout. */
     visibility: hidden;
-}/*
- * Editable cards: keep the slot hit-testable under the peek so editors
- * remain reachable once is-kanban-editing swaps the flyout away.
- */
-.planner-kanban__card.is-editable:hover .planner-kanban__card-slot,
-.planner-kanban__card.is-editable:focus-within .planner-kanban__card-slot,
-.planner-wbs__card.is-editable:hover .planner-wbs__card-slot,
-.planner-wbs__card.is-editable:focus-within .planner-wbs__card-slot {
-    visibility: visible;
-}/* Peek is visual-only on editable cards — clicks pass through to editors. */
-.planner-kanban__card.is-editable .planner-kanban__card-flyout,
-.planner-wbs__card.is-editable .planner-wbs__card-flyout {
-    pointer-events: none;
-}/* Inline edit: keep the editable slot visible; suppress flyout swap. */
+}
+/* Inline edit: keep the editable slot visible; suppress flyout swap. */
 .planner-kanban__card.is-kanban-editing .planner-kanban__card-flyout,
 .planner-wbs__card.is-wbs-editing .planner-wbs__card-flyout {
     display: none !important;
@@ -1574,7 +1567,8 @@ body.is-planner-wbs-drag-active .planner-wbs__card-slot {
 .planner-kanban__card-flyout .planner-kanban__card-date,
 .planner-wbs__card-flyout .planner-wbs__card-row,
 .planner-wbs__card-flyout .planner-wbs__card-date {
-    opacity: 0.18;
+/* Flyout meta shares the slot's quiet styling (was faded to 0.18, losing formatting). */
+    opacity: 0.7;
 }
 
 .planner-kanban__card-top,
@@ -1591,9 +1585,12 @@ body.is-planner-wbs-drag-active .planner-wbs__card-slot {
     min-width: 0;
     font-size: calc(0.68rem * var(--note-font-scale, 1));
     font-weight: 600;
+    line-height: 1.3;
+    color: inherit;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    word-break: break-word;
 }
 
 .planner-kanban__card-name[contenteditable],
@@ -1614,11 +1611,16 @@ body.is-planner-wbs-drag-active .planner-wbs__card-slot {
 }
 
 .planner-kanban__card-flyout .planner-kanban__card-name,
-.planner-wbs__card-flyout .planner-wbs__card-name {
+.planner-wbs__card-flyout .planner-wbs__card-name,
+/* Expanded cards show the full tile content, not a 3-row clamp. */
+.planner-kanban__card:not(.is-collapsed) .planner-kanban__card-slot .planner-kanban__card-name,
+.planner-wbs__card:not(.is-collapsed) .planner-wbs__card-slot .planner-wbs__card-name,
+/* Editable collapsed hover/focus unclamps in place (A1 — no flyout for editable). */
+.planner-kanban__card.is-collapsed.is-editable:is(:hover, :focus-within) .planner-kanban__card-slot .planner-kanban__card-name,
+.planner-wbs__card.is-collapsed.is-editable:is(:hover, :focus-within) .planner-wbs__card-slot .planner-wbs__card-name {
     white-space: normal;
     overflow: visible;
     text-overflow: unset;
-    word-break: break-word;
 }
 
 .planner-kanban__card-comment,
@@ -1635,7 +1637,8 @@ body.is-planner-wbs-drag-active .planner-wbs__card-slot {
     line-height: 1.25;
     color: var(--text-muted);
     word-break: break-word;
-}/* Expanded large format: ~3 comment lines at rest; grow on focus. */
+}/* Card textareas: cap at ~3 lines only for collapsed resting state.
+   Expanded, hovered/focused, and focused textareas grow to full content. */
 textarea.planner-kanban__card-comment,
 textarea.planner-wbs__card-comment {
     display: block;
@@ -1658,17 +1661,26 @@ textarea.planner-wbs__card-comment {
     line-clamp: unset;
 }
 
+.planner-kanban__card:not(.is-collapsed) textarea.planner-kanban__card-comment,
+.planner-wbs__card:not(.is-collapsed) textarea.planner-wbs__card-comment,
+.planner-kanban__card.is-collapsed.is-editable:is(:hover, :focus-within) textarea.planner-kanban__card-comment,
+.planner-wbs__card.is-collapsed.is-editable:is(:hover, :focus-within) textarea.planner-wbs__card-comment,
 textarea.planner-kanban__card-comment:focus,
 textarea.planner-wbs__card-comment:focus {
     max-height: none;
 }
 
+/* Flyout comment shares the slot's type (same size/leading/color, keeps formatting). */
 .planner-kanban__card-flyout .planner-kanban__card-comment,
-.planner-wbs__card-flyout .planner-wbs__card-comment {
+.planner-wbs__card-flyout .planner-wbs__card-comment,
+/* Expanded cards show full comment text, not a 3-row clamp. */
+.planner-kanban__card:not(.is-collapsed) .planner-kanban__card-slot .planner-kanban__card-comment,
+.planner-wbs__card:not(.is-collapsed) .planner-wbs__card-slot .planner-wbs__card-comment {
     display: block !important;
     -webkit-line-clamp: unset;
     line-clamp: unset;
     overflow: visible;
+    color: var(--text-muted);
 }/* Quick actions above title/content; footer grip stays below.
    Default chrome: more + grab. FC-style backdrop always hugs the visible strip. */
 .planner-kanban__card-actions,
@@ -1836,9 +1848,12 @@ textarea.planner-wbs__card-comment:focus {
 .planner-kanban__card.is-collapsed .planner-kanban__card-slot .planner-kanban__card-comment,
 .planner-wbs__card.is-collapsed .planner-wbs__card-slot .planner-wbs__card-comment {
     display: none;
-}/* While editing a collapsed card, reveal the comment textarea. */
-.planner-kanban__card.is-collapsed.is-kanban-editing .planner-kanban__card-slot .planner-kanban__card-comment,
-.planner-wbs__card.is-collapsed.is-wbs-editing .planner-wbs__card-slot .planner-wbs__card-comment {
+}
+/* While hovering/focusing/editing a collapsed card, reveal the comment. */
+.planner-kanban__card.is-collapsed.is-editable:is(:hover, :focus-within) .planner-kanban__card-slot .planner-kanban__card-comment,
+.planner-kanban__card.is-collapsed.is-editable.is-kanban-editing .planner-kanban__card-slot .planner-kanban__card-comment,
+.planner-wbs__card.is-collapsed.is-editable:is(:hover, :focus-within) .planner-wbs__card-slot .planner-wbs__card-comment,
+.planner-wbs__card.is-collapsed.is-editable.is-wbs-editing .planner-wbs__card-slot .planner-wbs__card-comment {
     display: block;
 }
 
@@ -2526,24 +2541,41 @@ textarea.planner-wbs__card-comment:focus {
 .planner-wbs__pack-card .planner-wbs__card-top {
     display: flex;
     align-items: center;
-    gap: 0.28rem;
     min-width: 0;
 }
 
+/*
+ * Pack toggle at article level (first child) so it stays visible + clickable
+ * across the slot/flyout swap. Left gutter, title indents past it.
+ */
+.planner-wbs__pack-card {
+    position: relative;
+}
+
 .planner-wbs__pack-toggle {
-    flex: 0 0 auto;
+    position: absolute;
+    top: 0.45rem;
+    left: 0.5rem;
+    z-index: 60;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     margin: 0;
     padding: 0.05rem;
     border: 0;
+    border-radius: 3px;
     background: transparent;
     color: inherit;
     font-size: 0.55rem;
     line-height: 1;
     opacity: 0.75;
     cursor: pointer;
+    pointer-events: auto;
+}
+
+.planner-wbs__pack-card.has-pack-toggle .planner-wbs__card-slot,
+.planner-wbs__pack-card.has-pack-toggle .planner-wbs__card-flyout {
+    padding-left: 1.35rem;
 }
 
 .planner-wbs__pack-toggle:hover,
@@ -2610,17 +2642,17 @@ textarea.planner-wbs__card-comment:focus {
     color: var(--card-fg, currentColor);
 }
 
-/* WBS card chrome — 1:1 Kanban port */
-.planner-wbs__board:has(.planner-wbs__card:is(:hover, :focus-within):not(.is-wbs-editing)) {
+/* WBS card chrome — 1:1 Kanban port (peek: collapsed read-only only). */
+.planner-wbs__board:has(.planner-wbs__card.is-collapsed:not(.is-editable):is(:hover, :focus-within)) {
     overflow: visible;
 }
 
-.note-body-section--planner:has(.planner-wbs__card:is(:hover, :focus-within):not(.is-wbs-editing)) {
+.note-body-section--planner:has(.planner-wbs__card.is-collapsed:not(.is-editable):is(:hover, :focus-within)) {
     position: relative;
     z-index: 20;
 }
 
-.note-body-section--planner:has(.planner-wbs__card:is(:hover, :focus-within):not(.is-wbs-editing)) > .note-section-body.collapsable-section {
+.note-body-section--planner:has(.planner-wbs__card.is-collapsed:not(.is-editable):is(:hover, :focus-within)) > .note-section-body.collapsable-section {
     overflow: visible;
 }
 
