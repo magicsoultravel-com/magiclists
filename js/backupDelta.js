@@ -55,7 +55,7 @@ export function buildItemRevisionMap(items = []) {
 /**
  * Coerce a stored/raw snapshot into the canonical shape.
  * @param {object} [raw]
- * @returns {{ baseAt: number|null, items: Record<string,string>, categories: string|null, desktops: string|null }}
+ * @returns {{ baseAt: number|null, items: Record<string,string>, categories: string|null, desktops: string|null, links: string|null }}
  */
 export function normalizeNotesSnapshot(raw) {
     const snapshot = raw && typeof raw === 'object' ? raw : {};
@@ -64,7 +64,8 @@ export function normalizeNotesSnapshot(raw) {
         baseAt: Number.isFinite(baseAt) && baseAt > 0 ? baseAt : null,
         items: snapshot.items && typeof snapshot.items === 'object' ? snapshot.items : {},
         categories: typeof snapshot.categories === 'string' ? snapshot.categories : null,
-        desktops: typeof snapshot.desktops === 'string' ? snapshot.desktops : null
+        desktops: typeof snapshot.desktops === 'string' ? snapshot.desktops : null,
+        links: typeof snapshot.links === 'string' ? snapshot.links : null
     };
 }
 
@@ -86,7 +87,7 @@ export function hasNotesBaseline(rawSnapshot) {
  *   changed: Array<object>,
  *   removed: Array<string>,
  *   revisions: Record<string,string>,
- *   snapshot: { baseAt: number|null, items: Record<string,string>, categories: string|null, desktops: string|null }
+ *   snapshot: { baseAt: number|null, items: Record<string,string>, categories: string|null, desktops: string|null, links: string|null }
  * }}
  */
 export function diffNotesAgainstSnapshot(items = [], rawSnapshot) {

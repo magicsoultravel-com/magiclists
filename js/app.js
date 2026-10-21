@@ -57,6 +57,8 @@ import { SidebarTv } from './sidebarTv.js';
 import { SidebarWeather } from './sidebarWeather.js';
 import { MediaLibraryOverlay, bindMediaFilePickers } from './mediaLibraryOverlay.js';
 import { CategoriesOverlay } from './categoriesOverlay.js';
+import { LinksOverlay } from './linksOverlay.js';
+import { SidebarLinks } from './sidebarLinks.js';
 import { MediaStagingDialog } from './mediaStagingDialog.js';
 import { MediaPasteCatcher } from './mediaPasteCatcher.js';
 import { QuickScribble } from './quickScribble.js';
@@ -197,6 +199,8 @@ BootProgress.set(85, 'Workspace…');
                 }),
                 getUI: () => UI
             });
+            LinksOverlay.init();
+            SidebarLinks.init();
             MediaPasteCatcher.init();
             bindMediaFilePickers();
             this.setupScribbleFab();
@@ -396,6 +400,13 @@ BootProgress.set(85, 'Workspace…');
     async refreshBoardFromSync(scopes, info) {
         const canvas = document.getElementById('app-canvas');
         if (!canvas) return;
+
+        // Links are lightweight text content and must not rebuild the board.
+        // A links-only batch is fully handled by the sidebar/manager refresh.
+        if (scopes.includes('links')) {
+            SidebarLinks.refresh();
+            if (scopes.length === 1 && scopes[0] === 'links') return;
+        }
 
         // Re-read the single source of truth (localStorage) into the cached state
         // so the UI paints whatever the other tab committed.
@@ -1909,6 +1920,10 @@ renderQuickActions() {
 
         window.addEventListener('categories:manage_requested', () => {
             CategoriesOverlay.open();
+        });
+
+        window.addEventListener('links:manage_requested', (e) => {
+            LinksOverlay.open({ focusAdd: !!e.detail?.focusAdd });
         });
 
         window.addEventListener('category:add_prompt', () => {

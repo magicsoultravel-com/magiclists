@@ -46,6 +46,7 @@ export const MAX_RETRIES = 5;
  *   'categories'  -> board + sidebar refresh (hidden/custom categories)
  *   'workspace'   -> full workspace re-render (mode / desktop layout)
  *   'media'       -> light media-module settings refresh (settings only)
+ *   'links'       -> light Links sidebar/manager refresh (no board rebuild)
  *   'theme'       -> CSS-only theme re-apply (non-destructive)
  *   'display'     -> attribute/CSS display-options re-apply (non-destructive)
  */
@@ -76,6 +77,8 @@ export const STORAGE_SCOPE_MAP = {
     matrix_board_sort: 'sidebar',
     matrix_sidebar_module_docks: 'sidebar',
     matrix_sidebar_width: 'sidebar',
+    // Saved links (small text content; preview opt-ins are device-local)
+    matrix_links: 'links',
     // Categories
     matrix_custom_categories: 'categories',
     matrix_hidden_categories: 'categories',

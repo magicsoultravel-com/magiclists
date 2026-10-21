@@ -1,0 +1,166 @@
+/** @css {"owns":"Links sidebar tile grid and shared layered link thumbnails","js":["sidebarLinks.js","linksModel.js"],"notes":"manager panel styling lives in links-library.css"} */
+
+/* Shared layered thumbnail: letter underneath, direct favicon, optional
+   thum.io screenshot overlay. Failed images are hidden so lower layers show. */
+.link-thumb {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--text-main, #eee) 14%, transparent);
+    border-radius: 6px;
+    background: linear-gradient(145deg,
+        color-mix(in srgb, var(--accent, #3b82f6) 12%, transparent),
+        rgba(255, 255, 255, 0.03));
+}
+
+.link-thumb__letter {
+    font-size: 0.86rem;
+    font-weight: 700;
+    line-height: 1;
+    color: color-mix(in srgb, var(--text-main, #eee) 78%, transparent);
+    user-select: none;
+}
+
+.link-thumb__favicon,
+.link-thumb__screenshot {
+    position: absolute;
+    display: block;
+}
+
+.link-thumb__favicon {
+    inset: 18%;
+    width: 64%;
+    height: 64%;
+    object-fit: contain;
+}
+
+.link-thumb__screenshot {
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.link-thumb img.is-failed {
+    display: none;
+}
+
+.sidebar-links__manage {
+    flex-shrink: 0;
+    opacity: 0.72;
+    line-height: 0;
+    transition: opacity 0.15s ease;
+}
+
+.sidebar-links__manage svg {
+    display: block;
+}
+
+.sidebar-module:hover .sidebar-links__manage,
+.sidebar-links__manage:focus-visible {
+    opacity: 1;
+}
+
+.sidebar-links__count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0.95rem;
+    padding: 0 0.18rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent, #3b82f6) 24%, transparent);
+    color: var(--text-main, #eee);
+    font-size: 0.48rem;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.sidebar-links__count.is-empty {
+    display: none;
+}
+
+.sidebar-links__list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+    gap: 0.28rem;
+    padding: 0.3rem 0.2rem 0.18rem;
+}
+
+.sidebar-links__list.is-hidden {
+    display: none;
+}
+
+.sidebar-links__tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.14rem;
+    min-width: 0;
+    padding: 0.2rem 0.16rem;
+    border-radius: 6px;
+    color: var(--text-main, #eee);
+    text-decoration: none;
+    transition: background 0.12s ease;
+}
+
+.sidebar-links__tile:hover,
+.sidebar-links__tile:focus-visible {
+    background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+}
+
+.sidebar-links__tile .link-thumb {
+    max-width: 52px;
+}
+
+.sidebar-links__tile-title {
+    width: 100%;
+    overflow: hidden;
+    color: var(--text-main, #eee);
+    font-size: 0.5rem;
+    line-height: 1.15;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sidebar-links__empty {
+    margin: 0;
+    padding: 0.35rem 0.3rem 0.4rem;
+    color: var(--text-muted);
+    font-size: 0.54rem;
+    font-style: italic;
+    line-height: 1.3;
+}
+
+.sidebar-links__empty.is-hidden {
+    display: none;
+}
+
+.sidebar-links__more-host {
+    padding: 0 0.2rem 0.25rem;
+}
+
+.sidebar-links__more {
+    width: 100%;
+    padding: 0.18rem 0.25rem;
+    border: 1px solid color-mix(in srgb, var(--text-main, #eee) 12%, transparent);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.52rem;
+    cursor: pointer;
+}
+
+.sidebar-links__more:hover {
+    color: var(--text-main, #eee);
+    background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+}
+
+.sidebar-module--undocked .sidebar-links__list {
+    grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
+}

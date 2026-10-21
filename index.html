@@ -40,6 +40,7 @@
     <link rel="stylesheet" href="./css/calendar.css?v=dev_1.1.1">
     <link rel="stylesheet" href="./css/cosmos.css?v=dev_1.0.1">
     <link rel="stylesheet" href="./css/sidebar-media.css?v=dev_1.0.3">
+    <link rel="stylesheet" href="./css/sidebar-links.css?v=dev_1.0.0">
     <link rel="stylesheet" href="./css/radio.css?v=dev_1.0.1">
     <link rel="stylesheet" href="./css/tv.css?v=dev_1.0.1">
     <link rel="stylesheet" href="./css/weather.css?v=dev_1.0.3">
@@ -50,6 +51,7 @@
     <link rel="stylesheet" href="./css/media-library.css?v=dev_1.0.0">
     <link rel="stylesheet" href="./css/flowchart.css?v=dev_1.0.0">
     <link rel="stylesheet" href="./css/categories-panel.css?v=dev_1.0.3">
+    <link rel="stylesheet" href="./css/links-library.css?v=dev_1.0.0">
     <style>
         #app-boot {
             position: fixed;
@@ -173,6 +175,22 @@
                 </div>
                 <div class="collapsable-section collapsed" id="tools-section">
                     <div id="toolbox-dropdown" class="quick-actions-grid"></div>
+                </div>
+            </div>
+
+            <div id="sidebar-links" class="sidebar-module sidebar-links">
+                <div class="collapsable-header" id="links-section-header">
+                    <span class="collapsable-heading"><span class="collapsable-toggle collapsed"><svg viewBox="0 0 12 12" width="9" height="9" focusable="false"><path d="M3.2 4.8 6 7.6 8.8 4.8" fill="none" stroke="currentColor" stroke-width="1.05" stroke-linecap="round" stroke-linejoin="round"/></svg></span>Links <span class="sidebar-links__count is-empty" data-links-count aria-hidden="true"></span></span>
+                    <span class="sidebar-module__chrome">
+                        <button type="button" class="card-act sidebar-links__manage" data-links-manage title="Manage links" aria-label="Manage links"><svg viewBox="0 0 12 12" width="12" height="12" focusable="false"><path d="M4.4 6.6c1.1-1.1 1.1-2.9 0-4M7.6 5.4c1.1 1.1 1.1 2.9 0 4" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/><path d="M4.4 6.6L3.2 5.4M7.8 7.2 8.8 8.2" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/></svg></button>
+                        <button type="button" class="card-act sidebar-module__popout" data-sidebar-popout title="Pop out module" aria-label="Pop out module"></button>
+                        <button type="button" class="card-act sidebar-module__dock" data-sidebar-dock title="Undock to canvas" aria-label="Undock to canvas"></button>
+                    </span>
+                </div>
+                <div class="collapsable-section collapsed" id="links-section">
+                    <div id="sidebar-links-list" class="sidebar-links__list" data-links-list></div>
+                    <p id="sidebar-links-empty" class="sidebar-links__empty" data-links-empty>No links yet. Click the link icon to manage.</p>
+                    <div id="sidebar-links-more" class="sidebar-links__more-host" data-links-more></div>
                 </div>
             </div>
 
@@ -420,6 +438,19 @@
         <div class="categories-panel__header" data-categories-header></div>
         <div class="categories-panel__body" data-categories-body></div>
         <div class="categories-panel__footer" data-categories-footer></div>
+    </div>
+
+    <div id="links-panel" class="links-panel is-hidden" role="dialog" aria-label="Links">
+        <div class="links-panel__top-actions">
+            <span class="links-panel__drag card-act card-act--drag" data-links-drag title="Drag to move" aria-label="Drag to move"></span>
+            <button type="button" class="card-act links-panel__close" data-links-close title="Close" aria-label="Close"></button>
+        </div>
+        <div class="links-panel__header" data-links-header></div>
+        <div class="links-panel__body">
+            <div class="links-panel__grid" data-links-grid></div>
+            <aside class="links-panel__detail" data-links-detail></aside>
+        </div>
+        <div class="links-panel__footer" data-links-footer></div>
     </div>
 
     <div id="template-picker-overlay" class="overlay template-picker-overlay is-hidden" role="dialog" aria-modal="true" aria-label="Choose note template">

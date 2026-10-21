@@ -40,6 +40,7 @@ const MODULE_LABELS = {
     tv: 'TV',
     weather: 'Weather',
     tools: 'Tools',
+    links: 'Links',
     'notes-list': 'Lists',
     history: 'History',
     stats: 'Stats'

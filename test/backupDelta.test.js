@@ -59,10 +59,12 @@ describe('backupDelta · snapshot diff', () => {
             baseAt: null,
             items: {},
             categories: null,
-            desktops: null
+            desktops: null,
+            links: null
         });
         assert.equal(hasNotesBaseline({}), false);
         assert.equal(hasNotesBaseline({ baseAt: 10 }), true);
+        assert.equal(normalizeNotesSnapshot({ links: 'links-fp' }).links, 'links-fp');
     });
 
     it('reports added, changed and removed notes', () => {

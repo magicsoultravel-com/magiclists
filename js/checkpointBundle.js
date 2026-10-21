@@ -60,6 +60,8 @@ export async function buildCheckpointExportPayload(config, extras = {}) {
     // ---- NOTES -------------------------------------------------------------
     if (config.notes?.enabled) {
         if (config.notes.format === 'txt') {
+            // TXT is a human-readable notes-only stream: links cannot be
+            // represented here. They ride the JSON stream and manual backups.
             const payload = extras.notesTxtPayload;
             const text = payload?.text ?? '';
             const fingerprint = hashExportFingerprint(payload?.textForFingerprint || text);

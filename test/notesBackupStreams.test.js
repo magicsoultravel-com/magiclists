@@ -43,6 +43,7 @@ const {
     resolveImportedPackage
 } = await import('../js/backup.js');
 const { NOTES_PATCH_KIND } = await import('../js/backupDelta.js');
+const { readLinks, writeLinksPayload } = await import('../js/linksStore.js');
 
 function note(overrides = {}) {
     return {
@@ -80,7 +81,7 @@ describe('backup streams · package scoping', () => {
         seed([note()]);
     });
 
-    it('content packages carry notes only (no media, layout or canvas)', async () => {
+    it('content packages carry notes/links only (no media, layout or canvas)', async () => {
         const pkg = await buildBackupPackage({ include: 'content' });
         assert.ok(pkg.matrix_database);
         assert.ok(Array.isArray(pkg.matrix_custom_categories));
@@ -89,6 +90,21 @@ describe('backup streams · package scoping', () => {
         assert.equal('matrix_global_drawing' in pkg, false);
         assert.equal('matrix_drawing_prefs' in pkg, false);
         assert.equal('matrix_workspace_mode' in pkg, false);
+    });
+
+    it('content packages carry links; board/canvas packages never do', async () => {
+        writeLinksPayload({
+            version: 1,
+            updatedAt: 10,
+            links: [{ id: 'link_a', url: 'https://example.com/A', title: 'A' }]
+        });
+        const content = await buildBackupPackage({ include: 'content' });
+        assert.deepEqual(content.links.links.map((link) => link.url), ['https://example.com/A']);
+
+        const board = await buildBoardBackupPackage();
+        assert.equal('links' in board, false);
+        const canvas = await buildCanvasBackupPackage();
+        assert.equal('links' in canvas, false);
     });
 
     it('board packages carry positions + chrome, never the canvas document', async () => {
@@ -166,6 +182,8 @@ describe('backup streams · incremental notes payload', () => {
         assert.deepEqual(parsed.delta.upserted, ['item_1_a']);
         assert.deepEqual(parsed.delta.removed, []);
         assert.equal(parsed.delta.itemCount, 2);
+        // Unchanged links stay out of note-only patches.
+        assert.equal('links' in parsed, false);
         // The baseline stays the anchor for every later patch.
         assert.equal(patch.nextSnapshot.baseAt, base.nextSnapshot.baseAt);
     });
@@ -194,6 +212,30 @@ describe('backup streams · incremental notes payload', () => {
         assert.equal(parsed.matrix_database.items.length, 0);
         // The new category is carried even though no note changed.
         assert.ok(parsed.matrix_custom_categories.some((cat) => cat.name === 'Later'));
+    });
+
+    it('exports and applies links-only patches through the notes stream', async () => {
+        const base = await buildNotesExportPayload({ incremental: true });
+        writeLinksPayload({
+            version: 1,
+            updatedAt: 20,
+            links: [{ id: 'link_a', url: 'https://example.com/A', title: 'A' }]
+        });
+
+        const patch = await buildNotesExportPayload({ incremental: true, snapshot: base.nextSnapshot });
+        assert.equal(patch.skipped, false);
+        const parsed = JSON.parse(patch.text);
+        assert.equal(parsed.kind, NOTES_PATCH_KIND);
+        assert.equal(parsed.matrix_database.items.length, 0);
+        assert.deepEqual(parsed.links.links.map((link) => link.id), ['link_a']);
+
+        localStorage.removeItem('matrix_links');
+        await applyBackupToStorage(parsed);
+        assert.deepEqual(readLinks().links.map((link) => link.url), ['https://example.com/A']);
+
+        const rebased = await buildNotesExportPayload({ incremental: false });
+        const again = await buildNotesExportPayload({ incremental: true, snapshot: rebased.nextSnapshot });
+        assert.equal(again.skipped, true);
     });
 
     it('always writes a full standalone file when incremental is off', async () => {
@@ -230,6 +272,18 @@ describe('backup streams · board payload', () => {
         assert.equal(localStorage.getItem('matrix_global_drawing'), null);
         const stored = readStored();
         assert.deepEqual(stored.items.map((item) => item.id), ['item_1_a']);
+    });
+
+    it('leaves links alone on a board-only restore', async () => {
+        const payload = await buildBoardExportPayload();
+        writeLinksPayload({
+            version: 1,
+            updatedAt: 30,
+            links: [{ id: 'link_live', url: 'https://example.com/Live', title: 'Live' }]
+        });
+
+        await applyBackupToStorage(parseBackupPackage(payload.text));
+        assert.deepEqual(readLinks().links.map((link) => link.id), ['link_live']);
     });
 });
 
@@ -289,6 +343,14 @@ describe('backup streams · scheduler config migration', () => {
         const off = normalizeConfig({ session: { enabled: false } });
         assert.equal(off.board.enabled, false);
         assert.equal(off.canvas.enabled, false);
+    });
+
+    it('keeps the links fingerprint inside the scheduled notes snapshot', async () => {
+        const { normalizeNotesSection } = await import('../js/scheduledBackupConfig.js');
+        const notes = normalizeNotesSection({
+            patchSnapshot: { baseAt: 1, items: {}, links: 'links-fp' }
+        });
+        assert.equal(notes.patchSnapshot.links, 'links-fp');
     });
 });
 

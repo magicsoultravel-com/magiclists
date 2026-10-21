@@ -9,6 +9,7 @@ import {
 import { applyBoardBackupKeys, applyCanvasBackupKeys, applyLayoutBackupKeys, getBoardBackupKeys, getCanvasBackupKeys, getLayoutBackupKeys, repairSpatialLayoutStorage } from './layoutStorage.js';
 import { applyDrawingBackupKeys, getCanvasDocumentBackupKeys } from './drawingBoard.js';
 import { getCreatedTimestamp, getUpdatedTimestamp } from './noteModel.js';
+import { applyLinksBackupSection, readLinks } from './linksStore.js';
 import { applyMediaLibraryBackupSection, buildMediaLibraryBackupSection, applyMediaFromZipMap, collectMediaZipEntries, buildZipStore, readZip } from './mediaBackup.js';
 import {
     NOTES_PATCH_KIND,
@@ -168,7 +169,7 @@ function readDesktopsConfig() {
     }
 }
 
-/** Notes content + categories + desktop config. No media, no layout/canvas. */
+/** Notes content + categories + desktop config + links. No media, no layout/canvas. */
 export async function buildContentBackupPackage() {
     return buildBackupPackage({ include: 'content' });
 }
@@ -189,7 +190,7 @@ export async function buildCanvasBackupPackage() {
  * `include` keeps the export concerns separate so the frequent (scheduled)
  * notes file never carries binaries, layout or canvas state:
  *   - `all`     (default, legacy) — notes + media_library + layout + canvas
- *   - `content` — notes db + categories + desktops only
+ *   - `content` — notes db + categories + desktops + links only
  *   - `board`   — note positions + board/sidebar chrome only
  *   - `canvas`  — magicCanvas document + its own prefs only
  *
@@ -232,6 +233,10 @@ export async function buildBackupPackage(opts = {}) {
         pkg.matrix_database = matrix_database;
         pkg.matrix_custom_categories = categories;
         pkg.desktopsConfig = readDesktopsConfig();
+        // Links are small, text-only workspace content and belong to the notes
+        // content stream — never the board stream (a board restore must not
+        // overwrite links, and a link edit must not dirty board geometry).
+        pkg.links = readLinks();
 
         // Media binaries belong to the media stream (meta JSON + ZIP), never to
         // the notes content file — embedding them here duplicated the library.
@@ -352,7 +357,10 @@ export async function buildNotesExportPayload(opts = {}) {
     const { changed, removed, revisions } = diffNotesAgainstSnapshot(items, snapshot);
     const categoriesFp = hashExportFingerprint(JSON.stringify(pkg.matrix_custom_categories || []));
     const desktopsFp = hashExportFingerprint(JSON.stringify(pkg.desktopsConfig ?? null));
-    const headerChanged = categoriesFp !== snapshot.categories || desktopsFp !== snapshot.desktops;
+    const linksFp = hashExportFingerprint(JSON.stringify(pkg.links ?? null));
+    const headerChanged = categoriesFp !== snapshot.categories
+        || desktopsFp !== snapshot.desktops
+        || linksFp !== snapshot.links;
 
     if (!incremental || !hasBaseline) {
         const text = serializeBackupPackage(pkg);
@@ -363,7 +371,8 @@ export async function buildNotesExportPayload(opts = {}) {
                 baseAt: timestamp,
                 items: revisions,
                 categories: categoriesFp,
-                desktops: desktopsFp
+                desktops: desktopsFp,
+                links: linksFp
             },
             text,
             textForFingerprint: stableBackupFingerprintText(pkg),
@@ -400,6 +409,9 @@ export async function buildNotesExportPayload(opts = {}) {
             itemCount: items.length
         }
     };
+    // Only ship links when they changed; an absent field leaves the live list
+    // untouched on import, so note-only patches stay as small as before.
+    if (linksFp !== snapshot.links) patch.links = pkg.links;
     const text = serializeBackupPackage(patch);
 
     return {
@@ -409,7 +421,8 @@ export async function buildNotesExportPayload(opts = {}) {
             baseAt: snapshot.baseAt,
             items: revisions,
             categories: categoriesFp,
-            desktops: desktopsFp
+            desktops: desktopsFp,
+            links: linksFp
         },
         text,
         textForFingerprint: stableBackupFingerprintText(patch),
@@ -871,6 +884,17 @@ export async function applyBackupToStorage(parsedBackup) {
             localStorage.setItem('magicnotes_desktops_config', JSON.stringify(incoming.desktopsConfig));
         } catch {
             // Ignore errors
+        }
+    }
+
+    // Links ride the notes/content stream. Apply before the board/canvas early
+    // returns so restoring a board-only file must leave them untouched (absent
+    // field) while a notes patch can update them without touching the board.
+    if (incoming.links !== undefined) {
+        try {
+            applyLinksBackupSection(incoming.links);
+        } catch (err) {
+            console.warn('[Backup] links restore failed', err);
         }
     }
 
