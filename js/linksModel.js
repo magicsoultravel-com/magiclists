@@ -1,5 +1,5 @@
 /**
- * @module {"owns":"pure link URL normalization, dedup keys, display/thumb helpers and sorting","related":["linksStore.js","linksOverlay.js","sidebarLinks.js","backupDelta.js"],"notes":"DOM-free except bindLinkThumbFallbacks; no storage access"}
+ * @module {"owns":"pure link URL normalization, dedup keys, display/thumb helpers, favicon cache-busting and manual/name/date sorting","related":["linksStore.js","linksOverlay.js","sidebarLinks.js","backupDelta.js"],"notes":"DOM-free except bindLinkThumbFallbacks; no storage access"}
  */
 import { escapeAttr, escapeHTML } from './domEscape.js';
 
@@ -16,7 +16,7 @@ export const LINKS_SIDEBAR_LIMIT = 60;
 export const LINK_SCREENSHOT_SERVICE = 'https://image.thum.io';
 
 const HTTP_PROTOCOLS = new Set(['http:', 'https:']);
-const LINK_SORT_MODES = new Set(['name-asc', 'name-desc', 'date-desc', 'date-asc']);
+const LINK_SORT_MODES = new Set(['manual', 'name-asc', 'name-desc', 'date-desc', 'date-asc']);
 
 function urlKeyFor(url) {
     // Host is already lowercased by the URL parser (including its port).
@@ -190,9 +190,12 @@ export function linkLetter(link) {
  * Direct-site favicon URL. No third-party favicon proxy: the browser requests
  * `<origin>/favicon.ico` from the linked site itself.
  */
-export function linkFaviconUrl(link) {
+export function linkFaviconUrl(link, opts = {}) {
     const normalized = normalizeLinkUrl(link?.url);
-    return normalized.ok ? `${normalized.origin}/favicon.ico` : '';
+    if (!normalized.ok) return '';
+    const token = opts.cacheBust == null ? '' : String(opts.cacheBust).trim();
+    const suffix = token ? `?v=${encodeURIComponent(token)}` : '';
+    return `${normalized.origin}/favicon.ico${suffix}`;
 }
 
 /**
@@ -222,12 +225,12 @@ export function linkScreenshotUrl(link, opts = {}) {
  * lower layer stays visible.
  *
  * @param {object} link
- * @param {{ showScreenshot?: boolean, modifier?: string }} [opts]
+ * @param {{ showScreenshot?: boolean, modifier?: string, faviconCacheBust?: string|number }} [opts]
  */
 export function buildLinkThumbHtml(link, opts = {}) {
     const modifier = opts.modifier ? ` link-thumb--${escapeAttr(String(opts.modifier))}` : '';
     const letter = escapeHTML(linkLetter(link));
-    const favicon = linkFaviconUrl(link);
+    const favicon = linkFaviconUrl(link, { cacheBust: opts.faviconCacheBust });
     const screenshot = opts.showScreenshot ? linkScreenshotUrl(link) : '';
 
     return `<span class="link-thumb${modifier}" aria-hidden="true">
@@ -268,6 +271,7 @@ export function normalizeLinkSort(mode) {
 export function sortLinks(links, mode) {
     const list = Array.isArray(links) ? links.slice() : [];
     const sortMode = normalizeLinkSort(mode);
+    if (sortMode === 'manual') return list;
     const [field, dir] = sortMode.split('-');
     const factor = dir === 'desc' ? -1 : 1;
 

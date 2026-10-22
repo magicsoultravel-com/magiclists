@@ -1,6 +1,6 @@
 // test/linksStore.test.js
 // Storage/CRUD guards for the Links module: normalization on write, duplicate
-// rejection, backup replacement, and device-local screenshot preview pruning.
+// rejection, manual ordering, backup replacement, and device-local preview pruning.
 //
 // Run with: npm test  (node --test)
 import { describe, it, beforeEach } from 'node:test';
@@ -45,6 +45,7 @@ const {
     readLinks,
     readPreviewIds,
     removeLink,
+    reorderLinks,
     setLinkPreviewEnabled,
     updateLink,
     writeLinksPayload,
@@ -131,6 +132,60 @@ describe('linksStore · add/update/delete', () => {
         clearAllLinks();
         assert.equal(readLinks().links.length, 0);
         assert.deepEqual(readPreviewIds(), []);
+    });
+});
+
+describe('linksStore · manual ordering', () => {
+    beforeEach(() => {
+        memory.clear();
+        events.length = 0;
+    });
+
+    it('reorders the full collection with an exact id set', () => {
+        const a = addLink({ url: 'example.com/A' }, { now: 10 }).link;
+        const b = addLink({ url: 'example.com/B' }, { now: 11 }).link;
+        const c = addLink({ url: 'example.com/C' }, { now: 12 }).link;
+        const before = new Map(readLinks().links.map((link) => [link.id, link]));
+
+        const result = reorderLinks([a.id, b.id, c.id], { now: 99 });
+        assert.deepEqual(result, { ok: true, changed: true });
+        const payload = readLinks();
+        assert.deepEqual(payload.links.map((link) => link.id), [a.id, b.id, c.id]);
+        assert.equal(payload.updatedAt, 99);
+        assert.equal(events.at(-1).type, 'links:changed');
+        assert.deepEqual(events.at(-1).detail.links.map((link) => link.id), [a.id, b.id, c.id]);
+
+        for (const link of payload.links) {
+            assert.equal(link.createdAt, before.get(link.id).createdAt);
+            assert.equal(link.updatedAt, before.get(link.id).updatedAt);
+        }
+    });
+
+    it('does not write or emit when the order is unchanged', () => {
+        const a = addLink({ url: 'example.com/A' }, { now: 10 }).link;
+        const b = addLink({ url: 'example.com/B' }, { now: 11 }).link;
+        reorderLinks([a.id, b.id], { now: 50 });
+        const eventCount = events.length;
+
+        assert.deepEqual(reorderLinks([a.id, b.id], { now: 60 }), { ok: true, changed: false });
+        assert.equal(events.length, eventCount);
+        assert.equal(readLinks().updatedAt, 50);
+    });
+
+    it('rejects partial, duplicate or unknown ids without writing', () => {
+        const a = addLink({ url: 'example.com/A' }, { now: 10 }).link;
+        const b = addLink({ url: 'example.com/B' }, { now: 11 }).link;
+        const c = addLink({ url: 'example.com/C' }, { now: 12 }).link;
+        const before = localStorage.getItem(LINKS_STORAGE_KEY);
+        const eventCount = events.length;
+
+        assert.equal(reorderLinks([a.id, b.id], { now: 90 }).ok, false);
+        assert.equal(reorderLinks([a.id, b.id, b.id], { now: 91 }).ok, false);
+        assert.equal(reorderLinks([a.id, b.id, 'link_missing'], { now: 92 }).ok, false);
+        assert.equal(reorderLinks('nope', { now: 93 }).ok, false);
+        assert.equal(localStorage.getItem(LINKS_STORAGE_KEY), before);
+        assert.equal(events.length, eventCount);
+        assert.deepEqual(readLinks().links.map((link) => link.id), [c.id, b.id, a.id]);
     });
 });
 

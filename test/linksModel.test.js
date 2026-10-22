@@ -125,6 +125,10 @@ describe('linksModel · display helpers', () => {
 
     it('builds direct favicon and thum.io screenshot URLs', () => {
         assert.equal(linkFaviconUrl(link), 'https://www.example.com/favicon.ico');
+        assert.equal(
+            linkFaviconUrl(link, { cacheBust: '1700000000000' }),
+            'https://www.example.com/favicon.ico?v=1700000000000'
+        );
         const shot = linkScreenshotUrl(link);
         assert.ok(shot.startsWith(`${LINK_SCREENSHOT_SERVICE}/get/width/640/crop/400/noanimate/`));
         assert.ok(shot.includes('https://www.example.com/Docs?Q=1'));
@@ -142,6 +146,9 @@ describe('linksModel · display helpers', () => {
         assert.ok(preview.includes('link-thumb--detail'));
         assert.ok(preview.includes('link-thumb__screenshot'));
         assert.ok(preview.includes('image.thum.io'));
+
+        const refreshed = buildLinkThumbHtml(link, { faviconCacheBust: 'refresh-1' });
+        assert.ok(refreshed.includes('favicon.ico?v=refresh-1'));
     });
 });
 
@@ -161,6 +168,11 @@ describe('linksModel · sorting', () => {
         assert.deepEqual(sortLinks(links, 'name-desc').map((link) => link.id), ['b', 'a']);
         assert.deepEqual(sortLinks(links, 'date-asc').map((link) => link.id), ['a', 'b']);
         assert.equal(links[0].id, 'b');
+    });
+
+    it('returns stored order for manual sorting', () => {
+        assert.equal(normalizeLinkSort('manual'), 'manual');
+        assert.deepEqual(sortLinks(links, 'manual').map((link) => link.id), ['b', 'a']);
     });
 
     it('keeps the documented sidebar cap', () => {

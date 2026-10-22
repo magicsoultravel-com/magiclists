@@ -1,4 +1,4 @@
-/** @css {"owns":"Links sidebar tile/list views and shared layered link thumbnails","js":["sidebarLinks.js","linksModel.js"],"notes":"manager panel styling lives in links-library.css"} */
+/** @css {"owns":"Links sidebar tile/list views, hover quick actions and shared layered link thumbnails","js":["sidebarLinks.js","linksModel.js"],"notes":"manager panel styling lives in links-library.css"} */
 
 /* Shared layered thumbnail: letter underneath, direct favicon, optional
    thum.io screenshot overlay. Failed images are hidden so lower layers show. */
@@ -102,25 +102,73 @@
 }
 
 .sidebar-links__tile {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.14rem;
+    position: relative;
     min-width: 0;
     padding: 0.2rem 0.16rem;
     border-radius: 6px;
     color: var(--text-main, #eee);
-    text-decoration: none;
     transition: background 0.12s ease;
 }
 
 .sidebar-links__tile:hover,
-.sidebar-links__tile:focus-visible {
+.sidebar-links__tile:focus-within {
     background: var(--bg-hover, rgba(255, 255, 255, 0.06));
 }
 
-.sidebar-links__tile .link-thumb {
+.sidebar-links__tile-main {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.14rem;
+    width: 100%;
+    min-width: 0;
+    border-radius: 4px;
+    color: inherit;
+    text-decoration: none;
+}
+
+.sidebar-links__tile-main:focus-visible {
+    outline: 1px solid color-mix(in srgb, var(--accent, #3b82f6) 60%, transparent);
+    outline-offset: 1px;
+}
+
+.sidebar-links__tile-main .link-thumb {
     max-width: 52px;
+}
+
+.sidebar-links__tile-actions {
+    position: absolute;
+    top: 0.04rem;
+    right: 0.04rem;
+    z-index: 2;
+    display: inline-flex;
+    gap: 0.02rem;
+    padding: 0.04rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--surface-elevated, #1a1a1e) 88%, transparent);
+    box-shadow: 0 1px 5px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+
+.sidebar-links__tile:hover .sidebar-links__tile-actions,
+.sidebar-links__tile:focus-within .sidebar-links__tile-actions {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.sidebar-links__tile-actions .card-act {
+    width: 14px;
+    height: 14px;
+    line-height: 0;
+}
+
+.sidebar-links__tile-actions .card-act svg {
+    width: 10px;
+    height: 10px;
 }
 
 .sidebar-links__tile-text {
@@ -186,7 +234,8 @@
     grid-template-columns: repeat(auto-fill, minmax(50px, 1fr));
 }
 
-/* List view: one link per row, favicon left, title/host stacked to its right. */
+/* List view: text-only rows. Thumbnail markup is omitted by JS so list mode
+   never requests favicons. */
 .sidebar-links[data-links-view="list"]:not([data-links-empty="true"]) .sidebar-links__list {
     display: flex;
     flex-direction: column;
@@ -194,29 +243,32 @@
 }
 
 .sidebar-links[data-links-view="list"] .sidebar-links__tile {
-    flex-direction: row;
+    display: flex;
     align-items: center;
-    gap: 0.38rem;
     width: 100%;
     padding: 0.16rem 0.28rem;
 }
 
-.sidebar-links[data-links-view="list"] .sidebar-links__tile .link-thumb {
-    flex: 0 0 22px;
-    width: 22px;
-    min-width: 22px;
-    max-width: 22px;
-    border-radius: 4px;
-}
-
-.sidebar-links[data-links-view="list"] .sidebar-links__tile .link-thumb__letter {
-    font-size: 0.6rem;
+.sidebar-links[data-links-view="list"] .sidebar-links__tile-main {
+    flex: 1 1 auto;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.38rem;
+    width: auto;
 }
 
 .sidebar-links[data-links-view="list"] .sidebar-links__tile-text {
     flex: 1 1 auto;
     align-items: stretch;
     gap: 0.02rem;
+}
+
+.sidebar-links[data-links-view="list"] .sidebar-links__tile-actions {
+    position: static;
+    flex: 0 0 auto;
+    margin-left: 0.18rem;
+    background: transparent;
+    box-shadow: none;
 }
 
 .sidebar-links[data-links-view="list"] .sidebar-links__tile-title {

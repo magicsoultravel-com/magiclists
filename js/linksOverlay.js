@@ -1,8 +1,8 @@
 /**
- * @module {"owns":"Links manager floating panel: add/edit/delete, preview tiles, opt-in thum.io screenshots","related":["linksStore.js","linksModel.js","sidebarLinks.js","desktopFloatChrome.js"],"events":["links:changed","links:previews_changed","links:manage_requested"]}
+ * @module {"owns":"Links manager floating panel: add/edit/delete, manual drag ordering, favicon refresh, tile/list views, opt-in thum.io screenshots","related":["linksStore.js","linksModel.js","sidebarLinks.js","desktopFloatChrome.js"],"events":["links:changed","links:previews_changed","links:manage_requested"]}
  */
 import { escapeAttr, escapeHTML } from './domEscape.js';
-import { ACTION_ICONS, CARD_ICONS } from './icons.js';
+import { ACTION_ICONS, CARD_ICONS, FORMAT_ICONS } from './icons.js';
 import { bindFloatResize, mountFloatChrome } from './desktopFloatChrome.js';
 import { raiseDesktopElement } from './desktopStack.js';
 import { showAppToast } from './toast.js';
@@ -27,12 +27,15 @@ import {
     readLinks,
     readPreviewIds,
     removeLink,
+    reorderLinks,
     setLinkPreviewEnabled,
     updateLink
 } from './linksStore.js';
 
 const PANEL_STORAGE_KEY = 'matrix_links_panel';
 const SORT_STORAGE_KEY = 'matrix_links_sort';
+const VIEW_STORAGE_KEY = 'matrix_links_view';
+const FAVICON_TOKENS_KEY = 'matrix_links_favicon_tokens';
 const DEFAULT_W = 760;
 const DEFAULT_H = 560;
 const MIN_W = 480;
@@ -42,13 +45,23 @@ const SORT_OPTIONS = [
     { value: 'date-desc', label: 'Newest' },
     { value: 'date-asc', label: 'Oldest' },
     { value: 'name-asc', label: 'Name A–Z' },
-    { value: 'name-desc', label: 'Name Z–A' }
+    { value: 'name-desc', label: 'Name Z–A' },
+    { value: 'manual', label: 'Manual' }
 ];
+
+const VIEW_ICONS = Object.freeze({
+    tiles: ACTION_ICONS.category,
+    list: FORMAT_ICONS.toNotes
+});
 
 let panel = null;
 let selectedId = null;
 let currentSort = 'date-desc';
+let currentView = 'tiles';
 let floatChromeBound = false;
+let tileDragBound = false;
+let draggedLinkId = null;
+let faviconTokenFallback = {};
 
 function clamp(n, min, max) {
     return Math.min(max, Math.max(min, n));
@@ -68,6 +81,81 @@ function saveSort(value) {
         localStorage.setItem(SORT_STORAGE_KEY, currentSort);
     } catch {
         /* ignore */
+    }
+}
+
+function normalizeView(value) {
+    return value === 'list' ? 'list' : 'tiles';
+}
+
+function loadView() {
+    try {
+        return normalizeView(localStorage.getItem(VIEW_STORAGE_KEY));
+    } catch {
+        return 'tiles';
+    }
+}
+
+function saveView(value) {
+    currentView = normalizeView(value);
+    try {
+        localStorage.setItem(VIEW_STORAGE_KEY, currentView);
+    } catch {
+        /* ignore */
+    }
+}
+
+function readFaviconTokens() {
+    try {
+        const raw = localStorage.getItem(FAVICON_TOKENS_KEY);
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            return { ...faviconTokenFallback };
+        }
+        const tokens = {};
+        for (const [id, value] of Object.entries(parsed)) {
+            if (!id || (typeof value !== 'string' && typeof value !== 'number')) continue;
+            const token = String(value).trim();
+            if (token) tokens[id] = token;
+        }
+        faviconTokenFallback = { ...tokens };
+        return tokens;
+    } catch {
+        return { ...faviconTokenFallback };
+    }
+}
+
+function writeFaviconTokens(tokens) {
+    faviconTokenFallback = { ...tokens };
+    try {
+        localStorage.setItem(FAVICON_TOKENS_KEY, JSON.stringify(faviconTokenFallback));
+    } catch {
+        /* ignore quota/unavailable storage; the in-memory fallback still works */
+    }
+}
+
+function setFaviconToken(id) {
+    if (!id) return;
+    const tokens = readFaviconTokens();
+    const previous = Number(tokens[id]) || 0;
+    tokens[id] = String(Math.max(Date.now(), previous + 1));
+    writeFaviconTokens(tokens);
+}
+
+function removeFaviconToken(id) {
+    if (!id) return;
+    const tokens = readFaviconTokens();
+    if (!(id in tokens)) return;
+    delete tokens[id];
+    writeFaviconTokens(tokens);
+}
+
+function clearFaviconTokens() {
+    faviconTokenFallback = {};
+    try {
+        localStorage.removeItem(FAVICON_TOKENS_KEY);
+    } catch {
+        /* ignore unavailable storage */
     }
 }
 
@@ -245,26 +333,145 @@ function formatSavedDate(ts) {
     }
 }
 
-function buildTileHtml(link, previewIds, isSelected) {
+function buildTileHtml(link, previewIds, isSelected, faviconTokens = {}) {
     const title = linkDisplayTitle(link);
+    const isManual = currentSort === 'manual';
+    const dragTitle = isManual ? 'Drag to reorder' : 'Switch sort to Manual to reorder';
     return `<div class="links-panel__tile${isSelected ? ' is-selected' : ''}" data-link-id="${escapeAttr(link.id)}">
+        <span class="card-act links-panel__tile-grip${isManual ? '' : ' is-disabled'}" data-link-drag-grip
+            draggable="${isManual ? 'true' : 'false'}" role="button" tabindex="-1"
+            title="${escapeAttr(dragTitle)}" aria-label="${escapeAttr(dragTitle)}"
+            aria-disabled="${isManual ? 'false' : 'true'}">${CARD_ICONS.drag}</span>
         <button type="button" class="links-panel__tile-select" data-link-select
             title="Select ${escapeAttr(title)}" aria-pressed="${isSelected ? 'true' : 'false'}">
-            ${buildLinkThumbHtml(link, { showScreenshot: previewIds.has(link.id) })}
-            <span class="links-panel__tile-title">${escapeHTML(title)}</span>
-            <span class="links-panel__tile-host">${escapeHTML(linkUrlLabel(link))}</span>
+            ${buildLinkThumbHtml(link, {
+                showScreenshot: previewIds.has(link.id),
+                faviconCacheBust: faviconTokens[link.id]
+            })}
+            <span class="links-panel__tile-text">
+                <span class="links-panel__tile-title">${escapeHTML(title)}</span>
+                <span class="links-panel__tile-host">${escapeHTML(linkUrlLabel(link))}</span>
+            </span>
         </button>
         <span class="links-panel__tile-actions">
             <a class="card-act" href="${escapeAttr(link.url)}" target="_blank" rel="noopener noreferrer"
                 data-link-open title="Open in new tab" aria-label="Open ${escapeAttr(title)} in new tab">${CARD_ICONS.externalLink}</a>
             <button type="button" class="card-act" data-link-edit title="Edit link" aria-label="Edit ${escapeAttr(title)}">${CARD_ICONS.edit}</button>
+            <button type="button" class="card-act" data-link-refresh-favicon title="Refresh favicon" aria-label="Refresh favicon for ${escapeAttr(title)}">${ACTION_ICONS.resetCustomization}</button>
             <button type="button" class="card-act" data-link-delete title="Delete link" aria-label="Delete ${escapeAttr(title)}">${CARD_ICONS.delete}</button>
         </span>
     </div>`;
 }
 
+function syncViewChrome() {
+    if (!panel) return;
+    const grid = panel.querySelector('[data-links-grid]');
+    if (grid) grid.dataset.linksView = currentView;
+    const btn = panel.querySelector('[data-links-view-toggle]');
+    if (!btn) return;
+    const label = currentView === 'list' ? 'Switch to tile view' : 'Switch to list view';
+    btn.innerHTML = VIEW_ICONS[currentView] || '';
+    btn.dataset.viewMode = currentView;
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.classList.toggle('is-list', currentView === 'list');
+    btn.classList.toggle('is-tiles', currentView !== 'list');
+}
 
-function buildDetailHtml(link, previewIds) {
+function clearDropMarkers() {
+    panel?.querySelectorAll('.links-panel__tile.is-drop-before, .links-panel__tile.is-drop-after').forEach((tile) => {
+        tile.classList.remove('is-drop-before', 'is-drop-after');
+    });
+}
+
+function clearTileDragState() {
+    panel?.querySelectorAll('.links-panel__tile.is-dragging, .links-panel__tile.is-drop-before, .links-panel__tile.is-drop-after').forEach((tile) => {
+        tile.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after');
+    });
+    draggedLinkId = null;
+}
+
+function isDropBefore(e, tile) {
+    const rect = tile.getBoundingClientRect();
+    return currentView === 'list'
+        ? e.clientY < rect.top + rect.height / 2
+        : e.clientX < rect.left + rect.width / 2;
+}
+
+function bindTileDrag() {
+    if (!panel || tileDragBound) return;
+    const grid = panel.querySelector('[data-links-grid]');
+    if (!grid) return;
+    tileDragBound = true;
+
+    grid.addEventListener('dragstart', (e) => {
+        const grip = e.target.closest?.('[data-link-drag-grip]');
+        const tile = grip?.closest('.links-panel__tile');
+        if (!grip || !tile || currentSort !== 'manual') {
+            e.preventDefault();
+            draggedLinkId = null;
+            return;
+        }
+        draggedLinkId = tile.dataset.linkId || null;
+        if (!draggedLinkId) return;
+        tile.classList.add('is-dragging');
+        if (e.dataTransfer) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', draggedLinkId);
+        }
+    });
+
+    grid.addEventListener('dragover', (e) => {
+        if (!draggedLinkId || currentSort !== 'manual') return;
+        const tile = e.target.closest?.('.links-panel__tile');
+        if (!tile || !grid.contains(tile)) return;
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+        clearDropMarkers();
+        if (tile.dataset.linkId === draggedLinkId) return;
+        tile.classList.add(isDropBefore(e, tile) ? 'is-drop-before' : 'is-drop-after');
+    });
+
+    grid.addEventListener('drop', (e) => {
+        if (!draggedLinkId || currentSort !== 'manual') {
+            clearTileDragState();
+            return;
+        }
+        const tile = e.target.closest?.('.links-panel__tile');
+        if (!tile || !grid.contains(tile)) {
+            clearTileDragState();
+            return;
+        }
+        e.preventDefault();
+        const draggedId = draggedLinkId;
+        const targetId = tile.dataset.linkId;
+        const before = isDropBefore(e, tile);
+        clearTileDragState();
+        if (!draggedId || !targetId || draggedId === targetId) return;
+
+        const ids = readLinks().links.map((link) => link.id);
+        const fromIndex = ids.indexOf(draggedId);
+        if (fromIndex < 0 || !ids.includes(targetId)) return;
+        ids.splice(fromIndex, 1);
+        let targetIndex = ids.indexOf(targetId);
+        if (targetIndex < 0) return;
+        if (!before) targetIndex += 1;
+        ids.splice(targetIndex, 0, draggedId);
+
+        const result = reorderLinks(ids);
+        if (!result.ok) {
+            showAppToast(result.error);
+            LinksOverlay.refresh();
+        }
+    });
+
+    grid.addEventListener('dragend', () => {
+        clearTileDragState();
+    });
+}
+
+
+function buildDetailHtml(link, previewIds, faviconTokens = {}) {
     if (!link) {
         return '<p class="links-panel__detail-empty">Select a link to edit it.</p>';
     }
@@ -278,7 +485,11 @@ function buildDetailHtml(link, previewIds) {
             target="_blank" rel="noopener noreferrer">Open ${CARD_ICONS.externalLink}</a>
     </div>
     <div class="links-panel__detail-preview">
-        ${buildLinkThumbHtml(link, { showScreenshot: previewOn, modifier: 'detail' })}
+        ${buildLinkThumbHtml(link, {
+            showScreenshot: previewOn,
+            modifier: 'detail',
+            faviconCacheBust: faviconTokens[link.id]
+        })}
     </div>
     <form class="links-panel__edit-form" data-link-edit-form data-link-id="${escapeAttr(link.id)}">
         <label class="links-panel__field">
@@ -294,6 +505,8 @@ function buildDetailHtml(link, previewIds) {
         <div class="links-panel__detail-actions">
             <button type="submit" class="btn btn--compact" data-link-save>${CARD_ICONS.save} Save</button>
             <button type="button" class="btn btn--compact" data-link-preview-toggle>${previewLabel}</button>
+            <button type="button" class="btn btn--compact" data-link-refresh-favicon
+                title="Reload this favicon from the site">${ACTION_ICONS.resetCustomization} Refresh favicon</button>
         </div>
     </form>
     <p class="links-panel__preview-note">
@@ -316,11 +529,13 @@ export const LinksOverlay = {
         panel = document.getElementById('links-panel');
         if (!panel) return;
         currentSort = loadSort();
+        currentView = loadView();
 
         applySavedGeometry();
         this.renderChrome();
         this.bindChrome();
         setupFloatingChrome();
+        bindTileDrag();
 
         document.addEventListener('keydown', (e) => {
             if (e.key !== 'Escape' || !this.isOpen()) return;
@@ -335,6 +550,15 @@ export const LinksOverlay = {
             if (this.isOpen()) this.refresh();
         });
         window.addEventListener('storage', (e) => {
+            if (e.key === VIEW_STORAGE_KEY) {
+                currentView = loadView();
+                if (this.isOpen()) this.refresh();
+                return;
+            }
+            if (e.key === FAVICON_TOKENS_KEY) {
+                if (this.isOpen()) this.refresh();
+                return;
+            }
             if (e.key !== LINKS_STORAGE_KEY && e.key !== LINKS_PREVIEW_IDS_KEY) return;
             if (this.isOpen()) this.refresh();
         });
@@ -359,15 +583,20 @@ export const LinksOverlay = {
             header.innerHTML = `
                 <h2 class="links-panel__title" data-links-title>Links</h2>
                 <p class="links-panel__summary" data-links-summary></p>
-                <label class="links-panel__sort">
-                    <span class="links-panel__sort-label">Sort</span>
-                    <select class="links-panel__sort-select" data-links-sort aria-label="Sort links">
-                        ${SORT_OPTIONS.map((o) => `<option value="${escapeAttr(o.value)}">${escapeHTML(o.label)}</option>`).join('')}
-                    </select>
-                </label>`;
+                <div class="links-panel__controls">
+                    <label class="links-panel__sort">
+                        <span class="links-panel__sort-label">Sort</span>
+                        <select class="links-panel__sort-select" data-links-sort aria-label="Sort links">
+                            ${SORT_OPTIONS.map((o) => `<option value="${escapeAttr(o.value)}">${escapeHTML(o.label)}</option>`).join('')}
+                        </select>
+                    </label>
+                    <button type="button" class="card-act links-panel__view-toggle" data-links-view-toggle
+                        title="Switch to list view" aria-label="Switch to list view"></button>
+                </div>`;
         }
         const sortSelect = panel.querySelector('[data-links-sort]');
         if (sortSelect) sortSelect.value = currentSort;
+        syncViewChrome();
 
         const drag = panel.querySelector('[data-links-drag]');
         if (drag) drag.innerHTML = CARD_ICONS.drag;
@@ -407,6 +636,13 @@ export const LinksOverlay = {
             this.refresh();
         });
 
+        panel.querySelector('[data-links-view-toggle]')?.addEventListener('click', (e) => {
+            e.preventDefault();
+            saveView(currentView === 'list' ? 'tiles' : 'list');
+            syncViewChrome();
+            this.refresh();
+        });
+
         panel.querySelector('[data-links-clear]')?.addEventListener('click', () => {
             this.clearAll();
         });
@@ -419,6 +655,15 @@ export const LinksOverlay = {
         });
 
         panel.addEventListener('click', (e) => {
+            const refreshFavicon = e.target.closest?.('[data-link-refresh-favicon]');
+            if (refreshFavicon) {
+                e.preventDefault();
+                const id = refreshFavicon.closest('[data-link-id]')?.dataset.linkId
+                    || panel.querySelector('[data-link-edit-form]')?.dataset.linkId;
+                if (id) this.refreshFavicon(id);
+                return;
+            }
+
             const previewToggle = e.target.closest?.('[data-link-preview-toggle]');
             if (previewToggle) {
                 e.preventDefault();
@@ -469,6 +714,8 @@ export const LinksOverlay = {
         const allLinks = readLinks().links;
         const links = sortLinks(allLinks, currentSort);
         const previewIds = new Set(readPreviewIds());
+        const faviconTokens = readFaviconTokens();
+        if (currentSort !== 'manual') clearTileDragState();
         if (!selectedId || !links.some((link) => link.id === selectedId)) {
             selectedId = links[0]?.id || null;
         }
@@ -482,17 +729,18 @@ export const LinksOverlay = {
         }
         const sortSelect = panel.querySelector('[data-links-sort]');
         if (sortSelect && sortSelect.value !== currentSort) sortSelect.value = currentSort;
+        syncViewChrome();
 
         const grid = panel.querySelector('[data-links-grid]');
         if (grid) {
             grid.innerHTML = links.length
-                ? links.map((link) => buildTileHtml(link, previewIds, link.id === selectedId)).join('')
+                ? links.map((link) => buildTileHtml(link, previewIds, link.id === selectedId, faviconTokens)).join('')
                 : '<p class="links-panel__empty">No links yet. Add a URL below to get started.</p>';
         }
 
         const selected = links.find((link) => link.id === selectedId) || null;
         const detail = panel.querySelector('[data-links-detail]');
-        if (detail) detail.innerHTML = buildDetailHtml(selected, previewIds);
+        if (detail) detail.innerHTML = buildDetailHtml(selected, previewIds, faviconTokens);
 
         bindLinkThumbFallbacks(panel);
 
@@ -549,6 +797,7 @@ export const LinksOverlay = {
             return;
         }
         if (selectedId === id) selectedId = null;
+        removeFaviconToken(id);
         this.refresh();
         showAppToast('Link deleted');
     },
@@ -563,8 +812,17 @@ export const LinksOverlay = {
             return;
         }
         selectedId = null;
+        clearFaviconTokens();
         this.refresh();
         showAppToast(`${removed} link${removed === 1 ? '' : 's'} cleared`);
+    },
+
+    refreshFavicon(id) {
+        const link = readLinks().links.find((entry) => entry.id === id);
+        if (!link) return;
+        setFaviconToken(id);
+        this.refresh();
+        showAppToast('Favicon refreshed');
     },
 
     togglePreview(id) {

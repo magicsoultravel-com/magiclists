@@ -1,5 +1,5 @@
 /**
- * @module {"owns":"links localStorage CRUD, dedup rejection, device-local preview ids, link change events","related":["linksModel.js","backup.js","sync.js","sidebarLinks.js","linksOverlay.js"],"events":["links:changed","links:previews_changed"]}
+ * @module {"owns":"links localStorage CRUD, manual reorder, dedup rejection, device-local preview ids, link change events","related":["linksModel.js","backup.js","sync.js","sidebarLinks.js","linksOverlay.js"],"events":["links:changed","links:previews_changed"]}
  */
 import {
     LINKS_SCHEMA_VERSION,
@@ -154,6 +154,53 @@ export function updateLink(id, patch = {}, opts = {}) {
         return { ok: false, error: 'Could not save the link (storage may be full).' };
     }
     return { ok: true, link: nextLink };
+}
+
+/**
+ * Persist a manual order for the full collection. This only reorders the
+ * existing records: per-link createdAt/updatedAt values are never touched, so
+ * Date sorts keep their real chronology.
+ *
+ * The caller must pass the complete set of current ids. Partial orders are
+ * rejected rather than merged, because a reorder can originate from a stale
+ * snapshot after another tab changed the collection.
+ *
+ * @param {string[]} orderedIds
+ * @param {{ now?: number }} [opts]
+ * @returns {{ ok: true, changed: boolean } | { ok: false, error: string }}
+ */
+export function reorderLinks(orderedIds, opts = {}) {
+    const payload = readLinks();
+    if (!Array.isArray(orderedIds)) {
+        return { ok: false, error: 'Link order is out of date. Refresh and try again.' };
+    }
+    const currentIds = payload.links.map((link) => link.id);
+    if (orderedIds.length !== currentIds.length) {
+        return { ok: false, error: 'Link order is out of date. Refresh and try again.' };
+    }
+    const known = new Set(currentIds);
+    const seen = new Set();
+    for (const id of orderedIds) {
+        if (typeof id !== 'string' || !known.has(id) || seen.has(id)) {
+            return { ok: false, error: 'Link order is out of date. Refresh and try again.' };
+        }
+        seen.add(id);
+    }
+    if (orderedIds.every((id, index) => id === currentIds[index])) {
+        return { ok: true, changed: false };
+    }
+
+    const byId = new Map(payload.links.map((link) => [link.id, link]));
+    const now = Number.isFinite(Number(opts.now)) ? Number(opts.now) : Date.now();
+    const next = {
+        version: LINKS_SCHEMA_VERSION,
+        updatedAt: now,
+        links: orderedIds.map((id) => byId.get(id))
+    };
+    if (!persistPayload(next)) {
+        return { ok: false, error: 'Could not save the link order (storage may be full).' };
+    }
+    return { ok: true, changed: true };
 }
 
 /**

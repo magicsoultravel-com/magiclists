@@ -1,7 +1,10 @@
 /**
- * @module {"owns":"Links sidebar module tile/list rendering and manage/view shortcuts","related":["linksStore.js","linksModel.js","linksOverlay.js","sidebarModules.js","sidebarPrefs.js"],"events":["links:changed","links:manage_requested"]}
+ * @module {"owns":"Links sidebar module tile/list rendering, hover quick actions and manage/view shortcuts","related":["linksStore.js","linksModel.js","linksOverlay.js","sidebarModules.js","sidebarPrefs.js"],"events":["links:changed","links:manage_requested"]}
  */
 import { escapeAttr, escapeHTML } from './domEscape.js';
+import { CARD_ICONS } from './icons.js';
+import { copyPlainTextToClipboard } from './clipboard.js';
+import { showAppToast } from './toast.js';
 import {
     LINKS_SIDEBAR_LIMIT,
     bindLinkThumbFallbacks,
@@ -24,21 +27,30 @@ let more = null;
 let viewToggle = null;
 let bound = false;
 
-function buildTileHtml(link) {
+function buildTileHtml(link, view) {
     const title = linkDisplayTitle(link);
     const host = linkHostLabel(link);
     const label = host && host !== title ? `${title} — ${host}` : title;
     const hostLine = host && host !== title
         ? `<span class="sidebar-links__tile-host">${escapeHTML(host)}</span>`
         : '';
-    return `<a class="sidebar-links__tile" href="${escapeAttr(link.url)}" data-link-id="${escapeAttr(link.id)}"
-        target="_blank" rel="noopener noreferrer" title="${escapeAttr(label)}" aria-label="${escapeAttr(label)}">
-        ${buildLinkThumbHtml(link)}
-        <span class="sidebar-links__tile-text">
-            <span class="sidebar-links__tile-title">${escapeHTML(title)}</span>
-            ${hostLine}
+    const thumb = view === LINKS_VIEW_LIST ? '' : buildLinkThumbHtml(link);
+    return `<div class="sidebar-links__tile" data-link-id="${escapeAttr(link.id)}">
+        <a class="sidebar-links__tile-main" href="${escapeAttr(link.url)}"
+            target="_blank" rel="noopener noreferrer" title="${escapeAttr(label)}" aria-label="${escapeAttr(label)}">
+            ${thumb}
+            <span class="sidebar-links__tile-text">
+                <span class="sidebar-links__tile-title">${escapeHTML(title)}</span>
+                ${hostLine}
+            </span>
+        </a>
+        <span class="sidebar-links__tile-actions">
+            <a class="card-act" href="${escapeAttr(link.url)}" target="_blank" rel="noopener noreferrer"
+                data-link-open title="Open in new tab" aria-label="Open ${escapeAttr(title)} in new tab">${CARD_ICONS.externalLink}</a>
+            <button type="button" class="card-act" data-link-copy
+                title="Copy link" aria-label="Copy ${escapeAttr(title)} link">${CARD_ICONS.copy}</button>
         </span>
-    </a>`;
+    </div>`;
 }
 
 function applyViewChrome() {
@@ -66,6 +78,21 @@ function bindEvents() {
     bound = true;
 
     root.addEventListener('click', (e) => {
+        const copyBtn = e.target.closest?.('[data-link-copy]');
+        if (copyBtn) {
+            e.preventDefault();
+            const id = copyBtn.closest('[data-link-id]')?.dataset.linkId;
+            const link = id ? readLinks().links.find((entry) => entry.id === id) : null;
+            if (!link) {
+                showAppToast('Link not found');
+                return;
+            }
+            void copyPlainTextToClipboard(link.url).then((ok) => {
+                showAppToast(ok ? 'Link copied' : 'Could not copy link');
+            });
+            return;
+        }
+
         const viewBtn = e.target.closest?.('[data-links-view-toggle]');
         if (viewBtn) {
             e.preventDefault();
@@ -113,7 +140,8 @@ export const SidebarLinks = {
         /* Attribute state, not classes: view and empty layout both branch from
            data-* so the list-view flex rule cannot override an is-hidden class. */
         root.dataset.linksEmpty = links.length ? 'false' : 'true';
-        list.innerHTML = visible.map(buildTileHtml).join('');
+        const view = readLinksSidebarView();
+        list.innerHTML = visible.map((link) => buildTileHtml(link, view)).join('');
         bindLinkThumbFallbacks(list);
 
         if (more) {

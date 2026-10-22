@@ -78,9 +78,10 @@ export const STORAGE_SCOPE_MAP = {
     matrix_sidebar_module_docks: 'sidebar',
     matrix_sidebar_width: 'sidebar',
     matrix_sidebar_detached: 'sidebar',
-    // Saved links (small text content; preview opt-ins are device-local).
-    // The tile/list pref uses the light links refresh (no board rebuild).
+    // Saved links (small text content; preview/favicon state is device-local).
+    // The tile/list prefs use the light links refresh (no board rebuild).
     matrix_links_sidebar_view: 'links',
+    matrix_links_view: 'links',
     matrix_links: 'links',
     // Categories
     matrix_custom_categories: 'categories',

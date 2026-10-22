@@ -116,7 +116,12 @@ describe('cross-tab sync storage scope map', () => {
         assert.equal(STORAGE_SCOPE_MAP['matrix_panel_collapsed'], 'sidebar');
         assert.equal(STORAGE_SCOPE_MAP['matrix_custom_categories'], 'categories');
         assert.equal(STORAGE_SCOPE_MAP['matrix_links'], 'links');
+        assert.equal(STORAGE_SCOPE_MAP['matrix_links_sidebar_view'], 'links');
+        assert.equal(STORAGE_SCOPE_MAP['matrix_links_view'], 'links');
         assert.equal(STORAGE_SCOPE_MAP['matrix_links_preview_ids'], undefined);
+        assert.equal(STORAGE_SCOPE_MAP['matrix_links_sort'], undefined);
+        assert.equal(STORAGE_SCOPE_MAP['matrix_links_panel'], undefined);
+        assert.equal(STORAGE_SCOPE_MAP['matrix_links_favicon_tokens'], undefined);
         assert.equal(STORAGE_SCOPE_MAP['matrix_display_options'], 'display');
         assert.equal(STORAGE_SCOPE_MAP['matrix_custom_theme_tokens'], 'theme');
         assert.equal(STORAGE_SCOPE_MAP['matrix_workspace_mode'], 'workspace');
