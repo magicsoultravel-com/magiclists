@@ -63,7 +63,7 @@ import { MediaStagingDialog } from './mediaStagingDialog.js';
 import { MediaPasteCatcher } from './mediaPasteCatcher.js';
 import { QuickScribble } from './quickScribble.js';
 import { registerLiveNoteSource, setModalEditorNoteIdResolver } from './notePasteContext.js';
-import { initAllSidebarModules } from './sidebarModules.js';
+import { dockSidebarModule, initAllSidebarModules } from './sidebarModules.js';
 import { SidebarStats } from './sidebarStats.js';
 import { SidebarHistory } from './sidebarHistory.js';
 import { CloudBackup } from './cloudBackup.js';
@@ -77,6 +77,13 @@ import { TemplatePicker } from './templatePicker.js';
 import { itemToTxtExportText, sortItemsForTxtExport } from './noteBodyConversion.js';
 import { initCrossTabSync, broadcastStateChange } from './sync.js';
 import { readDisplayOptions, applyDisplayOptions } from './displayOptions.js';
+import {
+    isSidebarModuleEnabled,
+    registerSidebarModuleLifecycle,
+    SIDEBAR_MODULE_IDS,
+    SIDEBAR_MODULES_CHANGED_EVENT,
+    syncSidebarModuleLifecycle
+} from './sidebarModulePrefs.js';
 import { showAppToast } from './toast.js';
 import {
     migrateItemsToFileCabinet,
@@ -178,9 +185,14 @@ BootProgress.set(85, 'Workspace…');
                     });
                 }
             });
-            SidebarRadio.init();
-            SidebarTv.init();
-            SidebarWeather.init();
+            /* Radio/TV/Weather always build their shell (header, drag, dock and
+               popout bindings need it) but only start playback / casting /
+               polling when enabled in Display Options → Sidebar → Modules. */
+            const sidebarModules = readDisplayOptions().sidebarModules;
+            const isModuleOn = (id) => isSidebarModuleEnabled(id, sidebarModules);
+            if (isModuleOn('radio')) SidebarRadio.init(); else SidebarRadio.initShell();
+            if (isModuleOn('tv')) SidebarTv.init(); else SidebarTv.initShell();
+            if (isModuleOn('weather')) SidebarWeather.init(); else SidebarWeather.initShell();
             MediaStagingDialog.init();
             registerLiveNoteSource((noteId) => AppState.items.find((i) => i.id === noteId) || null);
             registerLiveNoteSource((noteId) => (
@@ -209,6 +221,49 @@ BootProgress.set(85, 'Workspace…');
             SidebarHistory.init(AppState);
             SidebarStats.init();
             initAllSidebarModules();
+            /* A module disabled at boot was never re-docked (the change listener
+               registered below only sees later changes): pull any persisted
+               undocked panel back into the sidebar so disabling cannot leave an
+               empty floating frame behind. */
+            SIDEBAR_MODULE_IDS.forEach((id) => {
+                if (!isModuleOn(id)) dockSidebarModule(id);
+            });
+            /* Register lifecycles after initAllSidebarModules(): its
+               sidebar:modules_changed listener re-docks/pops-in a disabled
+               module first, so players stop with the root back in the sidebar.
+               `started` mirrors boot state, making the sync below a no-op. */
+            registerSidebarModuleLifecycle('radio', {
+                start: () => SidebarRadio.activate(),
+                stop: () => SidebarRadio.deactivate(),
+                started: isModuleOn('radio')
+            });
+            registerSidebarModuleLifecycle('tv', {
+                start: () => SidebarTv.activate(),
+                stop: () => SidebarTv.deactivate(),
+                started: isModuleOn('tv')
+            });
+            registerSidebarModuleLifecycle('weather', {
+                start: () => SidebarWeather.activate(),
+                stop: () => SidebarWeather.deactivate(),
+                started: isModuleOn('weather')
+            });
+            /* Pull-based modules keep their DOM but re-render on enable. */
+            registerSidebarModuleLifecycle('links', {
+                start: () => SidebarLinks.refresh(),
+                started: isModuleOn('links')
+            });
+            registerSidebarModuleLifecycle('history', {
+                start: () => SidebarHistory.renderPanel(),
+                started: isModuleOn('history')
+            });
+            registerSidebarModuleLifecycle('stats', {
+                start: () => SidebarStats.update(),
+                started: isModuleOn('stats')
+            });
+            window.addEventListener(SIDEBAR_MODULES_CHANGED_EVENT, (e) => {
+                syncSidebarModuleLifecycle(e.detail?.modules);
+            });
+            syncSidebarModuleLifecycle(sidebarModules);
             this.setupLayoutResetButton();
             SidebarHistory.renderPanel();
             ClockStyle.init();

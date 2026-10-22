@@ -1,7 +1,20 @@
-/** @css {"owns":"side panel, sidebar module undock chrome", "js":["hamburger.js","sidebarModules.js","sidebarPrefs.js"]} */
+/** @css {"owns":"side panel, sidebar module undock chrome, hidden sidebar modules", "js":["hamburger.js","sidebarModules.js","sidebarPrefs.js","sidebarModulePrefs.js"]} */
 /* ==========================================================================
    SHELL SIDEBAR - Side panel, sidebar module undock chrome
    ========================================================================== */
+
+/* Modules disabled in Display Options → Sidebar. The attribute lives on <html>
+   so one rule also hides the live root while it is undocked (moved to <body>)
+   or popped out (moved into a popout document's body, which inherits nothing —
+   which is why disabling re-docks/pops-in first). */
+html[data-sidebar-hidden~="radio"] [data-module-id="radio"],
+html[data-sidebar-hidden~="tv"] [data-module-id="tv"],
+html[data-sidebar-hidden~="weather"] [data-module-id="weather"],
+html[data-sidebar-hidden~="links"] [data-module-id="links"],
+html[data-sidebar-hidden~="history"] [data-module-id="history"],
+html[data-sidebar-hidden~="stats"] [data-module-id="stats"] {
+    display: none !important;
+}
 
 /* Side panel */
 .side-panel {

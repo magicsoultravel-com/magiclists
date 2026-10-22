@@ -43,13 +43,26 @@ export const SidebarRadio = {
     activeTab: 'browse',
     loadSeq: 0,
     onStateChanged: null,
+    onCastStateChanged: null,
+    shellBound: false,
+    active: false,
+    bootActivated: false,
 
     init() {
-        this.root = document.getElementById('sidebar-radio');
-        if (!this.root) return;
+        this.initShell();
+        this.activate();
+    },
 
-        RadioPlayer.init();
-        RadioCast.init().catch(() => {});
+    /**
+     * Always runs (module enabled or not): build the shell so the header,
+     * collapse, drag/undock and popout bindings exist. Must NOT be repeated —
+     * the popout/dock guards cache DOM node references, and re-rendering would
+     * leave those buttons dead after a disable → enable cycle.
+     */
+    initShell() {
+        this.root = document.getElementById('sidebar-radio');
+        if (!this.root || this.shellBound) return;
+
         this.renderShell();
         this.bindShellListeners();
 
@@ -57,6 +70,21 @@ export const SidebarRadio = {
             this.activeTab = tab;
             this.renderPanelContent(tab);
         };
+        this.shellBound = true;
+    },
+
+    /**
+     * Lifecycle start (Display Options → Sidebar → Modules, or boot). Owns all
+     * background work: audio element, cast SDK, state listeners and the
+     * boot-only restore/prefetch calls.
+     */
+    activate() {
+        this.initShell();
+        if (!this.root || this.active) return;
+        this.active = true;
+
+        RadioPlayer.init();
+        RadioCast.init().catch(() => {});
 
         this.onStateChanged = (e) => {
             this.updateTransport(e.detail);
@@ -68,12 +96,18 @@ export const SidebarRadio = {
                 this.updatePlayingTiles();
             }
         };
-        window.addEventListener('radio:state_changed', this.onStateChanged);
-        window.addEventListener('radio:cast_state_changed', () => {
+        this.onCastStateChanged = () => {
             this.syncCastActiveState();
             if (RadioPopover.mode === 'cast') this.renderCastPanel();
-        });
+        };
+        window.addEventListener('radio:state_changed', this.onStateChanged);
+        window.addEventListener('radio:cast_state_changed', this.onCastStateChanged);
         this.updateTransport();
+
+        /* Boot-only work: never repeated on re-enable. RadioPlayer.stop() cleared
+           wasPlaying, so a re-enabled module comes back paused (no auto-play). */
+        if (this.bootActivated) return;
+        this.bootActivated = true;
         requestAnimationFrame(() => {
             RadioVisualizer.restoreSession();
         });
@@ -82,6 +116,36 @@ export const SidebarRadio = {
             return RadioPlayer.resumeIfWasPlaying();
         }).catch(() => {});
         this.prefetchCountries().then(() => this.updateTransport());
+    },
+
+    /** Lifecycle stop: drop listeners, close popovers, kill playback/cast. */
+    deactivate() {
+        if (!this.active) return;
+        this.active = false;
+
+        /* Remove the state listener before stop(), which emits a final state. */
+        if (this.onStateChanged) {
+            window.removeEventListener('radio:state_changed', this.onStateChanged);
+            this.onStateChanged = null;
+        }
+        if (this.onCastStateChanged) {
+            window.removeEventListener('radio:cast_state_changed', this.onCastStateChanged);
+            this.onCastStateChanged = null;
+        }
+        RadioPopover.onTabChange = null;
+        RadioPopover.close();
+        this.disconnectBrowseScroll();
+
+        /* closeModal (not stop) also closes a popped-out visualizer and persists
+           prefs, but it rewrites stored settings — only safe once the modal (and
+           therefore loadStoredPrefs) has run at least once. */
+        if (RadioVisualizer.enabled || RadioVisualizer.modal) {
+            RadioVisualizer.closeModal();
+        } else {
+            RadioVisualizer.stop();
+        }
+
+        RadioPlayer.stop();
     },
 
     async restoreLastStationMeta() {

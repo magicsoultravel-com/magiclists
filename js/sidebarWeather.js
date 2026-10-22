@@ -12,14 +12,34 @@ export const SidebarWeather = {
     root: null,
     settingsOpen: false,
     onStateChanged: null,
+    shellBound: false,
+    active: false,
 
     init() {
+        this.initShell();
+        this.activate();
+    },
+
+    /**
+     * Always runs (enabled or not): render the header/body shell and bind the
+     * header refresh button. Never repeat — undock/popout bindings hold the
+     * first-render DOM nodes.
+     */
+    initShell() {
         this.root = document.getElementById('sidebar-weather');
-        if (!this.root) return;
+        if (!this.root || this.shellBound) return;
 
         this.renderShell();
         this.bindShellListeners();
         this.updateExtLink();
+        this.shellBound = true;
+    },
+
+    /** Lifecycle start: state listener + polling (which fetches immediately). */
+    activate() {
+        this.initShell();
+        if (!this.root || this.active) return;
+        this.active = true;
 
         this.onStateChanged = () => this.renderContent();
         window.addEventListener('weather:state_changed', this.onStateChanged);
@@ -28,11 +48,19 @@ export const SidebarWeather = {
         this.renderContent();
     },
 
-    destroy() {
+    /** Lifecycle stop: no polling, no in-flight fetch, no state listener. */
+    deactivate() {
+        if (!this.active) return;
+        this.active = false;
+
         WeatherApi.stopPolling();
         if (this.onStateChanged) {
             window.removeEventListener('weather:state_changed', this.onStateChanged);
+            this.onStateChanged = null;
         }
+        /* Re-opened settings should not survive a disable → enable cycle; the
+           next renderContent() applies this. */
+        this.settingsOpen = false;
     },
 
     renderShell() {

@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-21T23:49:33.853Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-22T18:51:49.805Z
 
 ## CSS load order
 
@@ -14,7 +14,7 @@ alwaysApply: true
 | css/base.css | :root tokens, tile/grid vars, .is-hidden | gridDensity.js, tileFootprint.js, appTheme.js | — | 1 |
 | css/shell-core.css | workspace shell, FAB, .btn, boot splash, shared utilities | hamburger.js, displayOptions.js, ui.js, bootProgress.js, fileCabinet.js, shellResize.js, sidebarModules.js, sidebarShell.js | — | 2 |
 | css/shell-filecabinet.css | file cabinet drawer-specific styles, filed chip rail | fileCabinet.js, shellResize.js | unique drawer/rollout styles; base file-cabinet styles moved to board.css | 3 |
-| css/shell-sidebar.css | side panel, sidebar module undock chrome | hamburger.js, sidebarModules.js, sidebarPrefs.js | — | 4 |
+| css/shell-sidebar.css | side panel, sidebar module undock chrome, hidden sidebar modules | hamburger.js, sidebarModules.js, sidebarPrefs.js, sidebarModulePrefs.js | — | 4 |
 | css/shell-display-options.css | display options modal | displayOptions.js, hamburger.js | — | 5 |
 | css/ui-transitions.css | Smooth UI transitions — morph chrome, FC fly overlay, FC expand flash guard | uiTransitions.js, displayOptions.js, magicFocus.js, fileCabinet.js, app.js | — | 6 |
 | css/shell-editor.css | note-editor typography, note footer, quick actions, checklist chrome | ui.js, noteSurface.js, displayOptions.js, hamburger.js | — | 7 |
@@ -148,6 +148,7 @@ alwaysApply: true
 | js/sidebarLinks.js | Links sidebar module tile grid, count and manage shortcut | linksStore.js, linksModel.js, linksOverlay.js, sidebarModules.js | links:changed, links:manage_requested | — |
 | js/sidebarModulePopout.js | sidebar module popout open/focus/pop-in, DOM portal | popoutWindows.js, sidebarModules.js, appDocuments.js | — | — |
 | js/sidebarModulePopoutShell.js | sidebar module popout placeholder shell state transfer | sidebarModulePopout.js | — | — |
+| js/sidebarModulePrefs.js | sidebar module enable/disable prefs, visibility DOM, lifecycle registry | displayOptions.js, sidebarModules.js, app.js, customizationReset.js | sidebar:modules_changed | — |
 | js/sidebarModules.js | sidebar module registry, undock wiring, re-dock slots | sidebarUndock.js, sidebarPrefs.js, desktopStack.js, hamburger.js, sidebarModulePopout.js | — | — |
 | js/sidebarNoteListHtml.js | shared sidebar note list row HTML | hamburger.js, mediaLibraryOverlay.js | — | — |
 | js/sidebarRadio.js | sidebar radio player and station browser | radioPlayer.js, radioProviders/registry.js, radioPopover.js, sidebarModules.js | — | — |

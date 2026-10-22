@@ -10,13 +10,17 @@ import {
 } from './backup.js';
 import { IndexedDBStore } from './storage/indexedDbStore.js';
 import { getAppElementById } from './appDocuments.js';
+import { isSidebarModuleEnabled } from './sidebarModulePrefs.js';
 
 export const SidebarStats = {
     init() {
+        if (!isSidebarModuleEnabled('stats')) return;
         this.update();
     },
 
     async update() {
+        /* Pull-based module: also guards refreshes triggered while hidden. */
+        if (!isSidebarModuleEnabled('stats')) return;
         const container = getAppElementById('sidebar-storage-stats');
         if (!container) return;
 

@@ -10,6 +10,7 @@ import {
     linkHostLabel
 } from './linksModel.js';
 import { LINKS_CHANGED_EVENT, readLinks } from './linksStore.js';
+import { isSidebarModuleEnabled } from './sidebarModulePrefs.js';
 
 let root = null;
 let list = null;
@@ -70,6 +71,9 @@ export const SidebarLinks = {
 
     refresh() {
         if (!root || !list) return;
+        /* Pull-based module: no tile rebuilds while hidden; the lifecycle start
+           hook refreshes once when it is re-enabled. */
+        if (!isSidebarModuleEnabled('links')) return;
         const links = readLinks().links;
         const visible = links.slice(0, LINKS_SIDEBAR_LIMIT);
 

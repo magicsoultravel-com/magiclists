@@ -3,6 +3,7 @@ import { escapeAttr, escapeHTML } from './domEscape.js';
 import { describeHistoryEntry, UndoManager } from './undo.js';
 import { positionPanelBelowElement } from './popoverPosition.js';
 import { getAppElementById, getAppBodyForElement } from './appDocuments.js';
+import { isSidebarModuleEnabled } from './sidebarModulePrefs.js';
 
 export const SidebarHistory = {
     appState: null,
@@ -101,6 +102,9 @@ export const SidebarHistory = {
     },
 
     renderPanel() {
+        /* Disabled in Display Options → skip the render entirely; the module is
+           refreshed by its lifecycle start hook when re-enabled. */
+        if (!isSidebarModuleEnabled('history')) return;
         const section = getAppElementById('sidebar-history-section');
         const undoList = getAppElementById('sidebar-history-undo-list');
         const redoList = getAppElementById('sidebar-history-redo-list');

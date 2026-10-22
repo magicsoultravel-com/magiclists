@@ -15,6 +15,12 @@ import { ClockStyle } from './clockStyle.js';
 import { CARD_ICONS } from './icons.js';
 import { getAppElementById } from './appDocuments.js';
 import { SidebarModulePopout, initAllModulePopouts } from './sidebarModulePopout.js';
+import {
+    normalizeSidebarModules,
+    readSidebarModules,
+    SIDEBAR_MODULES_CHANGED_EVENT,
+    SIDEBAR_MODULE_IDS
+} from './sidebarModulePrefs.js';
 
 export { SIDEBAR_MODULE_UNDOCKED, SIDEBAR_MODULE_DRAGGING, SIDEBAR_MODULE_DOCK_SEL };
 
@@ -312,6 +318,22 @@ export function updateReattachAllButton() {
     btn.disabled = !active;
 }
 
+/**
+ * Bring a module back into the sidebar when it is disabled in Display Options.
+ * Pop-in first: while popped out the live root lives in a popout document, so
+ * the `<html data-sidebar-hidden>` rule cannot reach it. Then re-dock an
+ * undocked root (which also persists `docked: true`, so re-enabling restores it
+ * in the sidebar rather than floating over the board).
+ */
+export function dockSidebarModule(id) {
+    if (!getModuleConfig(id)) return;
+    if (SidebarModulePopout.isPoppedOut(id)) SidebarModulePopout.popIn(id);
+    const undock = moduleUndockById.get(id);
+    if (undock?.isUndocked()) undock.applyDockedState();
+    undock?.updateDockButton();
+    updateReattachAllButton();
+}
+
 export function bindSidebarReattachAll() {
     const btn = document.getElementById('sidebar-reattach-all');
     if (!btn || btn.dataset.bound === 'true') return;
@@ -369,4 +391,12 @@ export function initAllSidebarModules() {
     SidebarModulePopout.syncAllPopoutButtons();
 
     bindSidebarReattachAll();
+
+    window.addEventListener(SIDEBAR_MODULES_CHANGED_EVENT, (e) => {
+        const modules = normalizeSidebarModules(e.detail?.modules || readSidebarModules());
+        SIDEBAR_MODULE_IDS.forEach((id) => {
+            if (modules[id] !== false) return;
+            dockSidebarModule(id);
+        });
+    });
 }

@@ -36,21 +36,43 @@ export const SidebarTv = {
     loadSeq: 0,
     highlightUuid: null,
     onStateChanged: null,
+    shellBound: false,
+    active: false,
+    bootActivated: false,
 
     init() {
-        this.root = document.getElementById('sidebar-tv');
-        if (!this.root) return;
+        this.initShell();
+        this.activate();
+    },
 
-        TvPlayer.init();
-        TvPip.init();
+    /**
+     * Always runs (enabled or not): shell markup + listeners so the header,
+     * collapse, drag/undock and popout controls work. Never repeat this after
+     * boot — popout/undock bindings cache DOM nodes from the first render.
+     */
+    initShell() {
+        this.root = document.getElementById('sidebar-tv');
+        if (!this.root || this.shellBound) return;
+
         this.renderShell();
         this.bindShellListeners();
 
-        TvPopover.onOpen = () => TvPopover.syncVideoMount();
         TvPopover.onTabChange = (tab) => {
             this.activeTab = tab;
             this.renderPanelContent(tab);
         };
+        this.shellBound = true;
+    },
+
+    /** Lifecycle start: video element, PiP wiring, state listener, first load. */
+    activate() {
+        this.initShell();
+        if (!this.root || this.active) return;
+        this.active = true;
+
+        TvPlayer.init();
+        TvPip.init();
+        TvPopover.onOpen = () => TvPopover.syncVideoMount();
 
         this.onStateChanged = (e) => {
             this.updateTransport(e.detail);
@@ -65,11 +87,34 @@ export const SidebarTv = {
         };
         window.addEventListener('tv:state_changed', this.onStateChanged);
         this.updateTransport();
+
+        /* Boot-only: restore the last channel + country list. TvPlayer.stop()
+           cleared wasPlaying, so re-enabling never auto-resumes playback. */
+        if (this.bootActivated) return;
+        this.bootActivated = true;
         this.restoreLastChannelMeta().then(() => {
             this.updateTransport();
             return TvPlayer.resumeIfWasPlaying();
         }).catch(() => {});
         this.prefetchCountries().then(() => this.updateTransport());
+    },
+
+    /** Lifecycle stop: close popover/PiP, drop listeners, stop the stream. */
+    deactivate() {
+        if (!this.active) return;
+        this.active = false;
+
+        if (this.onStateChanged) {
+            window.removeEventListener('tv:state_changed', this.onStateChanged);
+            this.onStateChanged = null;
+        }
+        TvPopover.onOpen = null;
+        TvPopover.onTabChange = null;
+        TvPopover.close();
+        this.disconnectBrowseScroll();
+        TvPip.exitIfActive();
+        /* stop() is async (exits PiP, destroys hls, unloads the video). */
+        TvPlayer.stop().catch(() => {});
     },
 
     async restoreLastChannelMeta() {

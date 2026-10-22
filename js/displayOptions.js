@@ -47,6 +47,14 @@ import {
     KANBAN_DEFAULT_FLAVOUR,
     KANBAN_FLAVOURS
 } from './plannerKanban.js';
+import {
+    applySidebarModuleVisibilityDom,
+    DEFAULT_SIDEBAR_MODULES,
+    normalizeSidebarModules,
+    readSidebarModules,
+    SIDEBAR_MODULES_CHANGED_EVENT,
+    SIDEBAR_MODULE_TOGGLES
+} from './sidebarModulePrefs.js';
 
 const STORAGE_KEY = 'matrix_display_options';
 
@@ -75,7 +83,8 @@ const DEFAULTS = {
     fileCabinetBg: 'smooth',
     transitionsMode: 'smooth',
     plannerTodayLine: { ...PLANNER_DEFAULT_TODAY_LINE },
-    plannerKanbanFlavour: KANBAN_DEFAULT_FLAVOUR
+    plannerKanbanFlavour: KANBAN_DEFAULT_FLAVOUR,
+    sidebarModules: { ...DEFAULT_SIDEBAR_MODULES }
 };
 
 export function readDisplayOptions() {
@@ -103,14 +112,16 @@ export function readDisplayOptions() {
             fileCabinetBg: FILE_CABINET_BG_OPTIONS.includes(raw.fileCabinetBg) ? raw.fileCabinetBg : 'smooth',
             transitionsMode: normalizeTransitionsMode(raw.transitionsMode),
             plannerTodayLine: normalizeTodayLine(raw.plannerTodayLine),
-            plannerKanbanFlavour: normalizeKanbanFlavour(raw.plannerKanbanFlavour)
+            plannerKanbanFlavour: normalizeKanbanFlavour(raw.plannerKanbanFlavour),
+            sidebarModules: normalizeSidebarModules(raw.sidebarModules)
         };
     } catch {
         return {
             ...DEFAULTS,
             noteFontId: readNoteFont(),
             plannerTodayLine: { ...PLANNER_DEFAULT_TODAY_LINE },
-            plannerKanbanFlavour: KANBAN_DEFAULT_FLAVOUR
+            plannerKanbanFlavour: KANBAN_DEFAULT_FLAVOUR,
+            sidebarModules: { ...DEFAULT_SIDEBAR_MODULES }
         };
     }
 }
@@ -143,6 +154,9 @@ export function applyDisplayOptions(options = readDisplayOptions()) {
     root.style.setProperty('--desktop-dock-opacity', String(options.desktopDockOpacity ?? 1));
     applyNoteFont(options.noteFontId);
     applyBrandIcon(options.brandIconId);
+
+    /* Sidebar module visibility (hides roots + wakes/stops module lifecycle). */
+    applySidebarModuleVisibilityDom(options.sidebarModules);
 
     /* Apply user theme tokens */
     const userTheme = readUserTheme();
@@ -177,6 +191,7 @@ function isCustomized(options) {
         || normalizeTransitionsMode(options.transitionsMode) !== 'smooth'
         || todayCustom
         || normalizeKanbanFlavour(options.plannerKanbanFlavour) !== KANBAN_DEFAULT_FLAVOUR
+        || SIDEBAR_MODULE_TOGGLES.some(({ id }) => options.sidebarModules?.[id] === false)
         || isNoteFontCustomized(options.noteFontId)
         || isAppThemeCustomized()
         || NoteFontScale.isCustomized()
@@ -230,6 +245,19 @@ export const DisplayOptions = {
             applyDisplayOptions(this.options);
             this.syncButtonState();
         });
+        window.addEventListener(SIDEBAR_MODULES_CHANGED_EVENT, (e) => {
+            /* Cheap targeted update: local toggles and cross-tab changes keep the
+               open modal's checkboxes honest without re-syncing the whole modal. */
+            if (!this.isOpen()) return;
+            const modules = normalizeSidebarModules(e.detail?.modules);
+            /* Keep cached options honest so a later partial toggle does not
+               merge on top of the pre-change map. */
+            this.options = { ...this.options, sidebarModules: modules };
+            SIDEBAR_MODULE_TOGGLES.forEach(({ id }) => {
+                const input = this.overlay?.querySelector(`#display-opt-module-${id}`);
+                if (input) input.checked = modules[id] !== false;
+            });
+        });
 
         this.syncButtonState();
     },
@@ -256,6 +284,16 @@ export const DisplayOptions = {
             nextPartial.plannerTodayLine = normalizeTodayLine({
                 ...normalizeTodayLine(this.options.plannerTodayLine),
                 ...partial.plannerTodayLine
+            });
+        }
+        if (partial.sidebarModules != null) {
+            /* Accept partial maps (e.g. a single toggle) and always persist the
+               complete, normalized set. Storage is the source of truth here so a
+               cross-tab change made while this modal was closed is not reverted
+               by the next local toggle. */
+            nextPartial.sidebarModules = normalizeSidebarModules({
+                ...readSidebarModules(),
+                ...partial.sidebarModules
             });
         }
         this.options = { ...this.options, ...nextPartial };
@@ -449,6 +487,15 @@ export const DisplayOptions = {
         NoteFontScale.updateLabels();
         DesktopZoom.updateButtons();
         this.syncDesktopTiles(root);
+
+        /* Module flags are read fresh: a cross-tab change while the modal was
+           closed must not render stale checkboxes. */
+        const sidebarModules = readSidebarModules();
+        this.options.sidebarModules = sidebarModules;
+        SIDEBAR_MODULE_TOGGLES.forEach(({ id }) => {
+            const input = root.querySelector(`#display-opt-module-${id}`);
+            if (input) input.checked = sidebarModules[id] !== false;
+        });
 
         const undockOpacityInput = root.querySelector('#display-opt-undock-opacity');
         if (undockOpacityInput) {
@@ -711,6 +758,10 @@ export const DisplayOptions = {
 
     buildModalHtml() {
         const opts = this.options;
+        /* Fresh read so cross-tab changes made while the modal was closed are
+           reflected the moment it reopens. */
+        const sidebarModules = readSidebarModules();
+        opts.sidebarModules = sidebarModules;
         const noteScalePct = `${Math.round(NoteFontScale.getScale() * 100)}%`;
         const desktopZoomPct = `${Math.round(DesktopZoom.getScale() * 100)}%`;
         const desktopZoomEnabled = this.isDesktopZoomEnabled();
@@ -804,6 +855,16 @@ export const DisplayOptions = {
                         </div>
                         <div class="display-options-section display-options-section--sidebar">
                             <h3 class="display-options-heading">Sidebar</h3>
+                            <p class="display-options-subheading">Modules</p>
+                            <div class="display-options-check-row">
+                                ${SIDEBAR_MODULE_TOGGLES.map(({ id, label }) => this.optionRow(
+                                    `display-opt-module-${id}`,
+                                    label,
+                                    sidebarModules[id] !== false
+                                )).join('\n                                ')}
+                            </div>
+                            <p class="display-options-row-hint">Off hides the module and stops its background work — radio/TV playback, casts and weather updates.</p>
+                            <p class="display-options-subheading">Opacity</p>
                             ${this.sliderRow({
                                 id: 'display-opt-undock-opacity',
                                 label: 'Undocked module opacity',
@@ -858,6 +919,13 @@ export const DisplayOptions = {
         bindToggle('display-opt-ruler-h', 'showRulerHorizontal');
         bindToggle('display-opt-ruler-v', 'showRulerVertical');
         bindToggle('display-opt-use-category-colors', 'useCategoryColors');
+
+        SIDEBAR_MODULE_TOGGLES.forEach(({ id }) => {
+            root.querySelector(`#display-opt-module-${id}`)?.addEventListener('change', (e) => {
+                e.stopPropagation();
+                this.setOptions({ sidebarModules: { [id]: e.target.checked } });
+            });
+        });
 
         root.querySelectorAll('input[name="display-opt-popout"]').forEach((radio) => {
             radio.addEventListener('change', (e) => {

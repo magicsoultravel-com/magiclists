@@ -7,6 +7,7 @@ import { DesktopZoom } from './desktopZoom.js';
 import { NoteFontScale } from './noteFontScale.js';
 import { applyTileSmallFootprint } from './tileFootprint.js';
 import { initGridMetrics } from './gridDensity.js';
+import { DEFAULT_SIDEBAR_MODULES } from './sidebarModulePrefs.js';
 
 const CUSTOMIZATION_KEYS = [
     'matrix_desktop_bg',
@@ -45,7 +46,8 @@ const DISPLAY_DEFAULTS = {
     fileCabinetBg: 'smooth',
     transitionsMode: 'smooth',
     plannerTodayLine: { color: '#e11d48', style: 'dashed', thickness: 1.25 },
-    plannerKanbanFlavour: 'release'
+    plannerKanbanFlavour: 'release',
+    sidebarModules: { ...DEFAULT_SIDEBAR_MODULES }
 };
 
 export function resetCustomizationToDefaults() {
