@@ -28,14 +28,19 @@ export function getStableBoardLayoutWidth() {
     // collapses to 0px (and is expanded by default), so subtracting the fixed
     // default width unconditionally would leave an invisible wall — a deadband
     // on the right of the board where notes can't be placed or expanded.
-    // Reflect the real sidebar footprint: 0px when collapsed, otherwise the
-    // persisted custom width (or the default).
+    // A detached panel floats above the board (position: fixed) and consumes no
+    // flex width, so it must count as a 0px footprint just like collapsed.
+    // Reflect the real sidebar footprint: 0px when collapsed or detached,
+    // otherwise the persisted custom width (or the default).
     let sidebarWidth = 0;
     const sidebarEl = typeof document !== 'undefined' ? document.getElementById('side-panel') : null;
     const isSidebarCollapsed = sidebarEl
         ? sidebarEl.classList.contains('is-collapsed')
         : readPanelCollapsed();
-    if (!isSidebarCollapsed) {
+    const isSidebarDetached = sidebarEl
+        ? sidebarEl.classList.contains('is-detached')
+        : false;
+    if (!isSidebarCollapsed && !isSidebarDetached) {
         sidebarWidth = readSidebarWidth() ?? SIDEBAR_DEFAULT_WIDTH;
     }
 

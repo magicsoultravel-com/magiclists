@@ -1,4 +1,4 @@
-/** @css {"owns":"side panel, sidebar module undock chrome, hidden sidebar modules", "js":["hamburger.js","sidebarModules.js","sidebarPrefs.js","sidebarModulePrefs.js"]} */
+/** @css {"owns":"side panel, detached (floating) sidebar chrome, sidebar module undock chrome, hidden sidebar modules", "js":["hamburger.js","sidebarModules.js","sidebarPrefs.js","sidebarModulePrefs.js","sidebarDetach.js"]} */
 /* ==========================================================================
    SHELL SIDEBAR - Side panel, sidebar module undock chrome
    ========================================================================== */
@@ -112,12 +112,21 @@ body.is-editor-modal-open .side-panel {
     width: 100%;
 }
 
+/* Brand row trailing actions (reattach-all + detach/attach). The wrapper owns
+   the right-hand push so both buttons stay grouped at the row end. */
+.sidebar-brand-actions {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1rem;
+    flex-shrink: 0;
+}
+
 .sidebar-reattach-all {
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    margin-left: auto;
     padding: 0.12rem;
     border: none;
     background: transparent;
@@ -127,6 +136,38 @@ body.is-editor-modal-open .side-panel {
     opacity: 0;
     transition: opacity 0.15s ease;
     cursor: pointer;
+}
+
+/* Detach/attach control. Hidden until the brand row is hovered (same
+   affordance as reattach-all) but always visible while detached so the
+   floating panel advertises how to get back. */
+.sidebar-detach-toggle {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.12rem;
+    border: none;
+    background: transparent;
+    border-radius: 3px;
+    line-height: 0;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity 0.15s ease, background 0.15s ease;
+    cursor: pointer;
+}
+
+.control-bar-brand.is-in-sidebar:hover .sidebar-detach-toggle,
+.sidebar-detach-toggle:focus-visible,
+.side-panel.is-detached .sidebar-detach-toggle {
+    opacity: 0.8;
+}
+
+.sidebar-detach-toggle:hover,
+.control-bar-brand.is-in-sidebar:hover .sidebar-detach-toggle:hover,
+.side-panel.is-detached .sidebar-detach-toggle:hover {
+    opacity: 1;
+    background: var(--bg-hover);
 }
 
 .control-bar-brand.is-in-sidebar:hover .sidebar-reattach-all:not(:disabled),
@@ -779,4 +820,141 @@ body.is-shell-resizing--h * {
 .schedule-export-btn.is-paused .schedule-export-btn__ring-progress {
     stroke: color-mix(in srgb, var(--accent) 55%, var(--border-color));
     transition: none;
+}
+
+/* ==========================================================================
+   DETACHED SIDEBAR — floating panel (js/sidebarDetach.js)
+
+   `#workspace-shell` establishes no containing block (no transform / filter /
+   contain / will-change), so `position: fixed` here is VIEWPORT-relative. The
+   JS module positions with inline left/top clamped to #desktop-surface.
+   Width still comes from --sidebar-width (single source of truth), so module
+   reflow on sidebar:width_changed keeps working in both modes.
+   ========================================================================== */
+.side-panel.is-detached {
+    position: fixed;
+    /* Above board cards (<=320) and the desktop dock (500); below
+       media-library (910) / overlays (1000). Kept in sync with the
+       editor-modal override below. */
+    z-index: 900;
+    align-self: auto;
+    height: auto;
+    max-height: calc(100vh - 16px);
+    padding: 0.55rem 0.1rem 0.45rem 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--text-muted) 35%, var(--border-color));
+    border-radius: 10px;
+    background: var(--chrome-bg, var(--bg-surface));
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.38), 0 2px 8px rgba(0, 0, 0, 0.24);
+    /* Resizing must track the pointer 1:1 — the docked width spring is off. */
+    transition: opacity 0.16s ease;
+}
+
+/* Auto-height: the panel hugs its modules (collapsed modules => short panel,
+   expanding them grows it). The scale-inner stays scrollable so a panel that
+   hits max-height degrades to an internal scrollbar instead of clipping. */
+.side-panel.is-detached .side-panel-scale-inner {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+}
+
+/* Explicit height override (corner-handle resize, or a restored geometry). */
+.side-panel.is-detached.is-detached--sized {
+    max-height: calc(100vh - 16px);
+}
+
+.side-panel.is-detached.is-detached--sized .side-panel-scale-inner {
+    flex: 1 1 auto;
+    min-height: 120px;
+    overflow-y: auto;
+}
+
+/* Keep the floating panel under the note editor modal's overlay instead of
+   inheriting the docked panel's 1100. Both properties are needed: `position`
+   because the modal rule forces `relative`. */
+body.is-editor-modal-open .side-panel.is-detached {
+    position: fixed;
+    z-index: 900;
+}
+
+/* One-frame width-transition kill for the detach mutation so the board has
+   already reclaimed the space before the panel paints at 220px. */
+body.is-sidebar-detaching .side-panel {
+    transition: none;
+}
+
+body.is-sidebar-detached-dragging,
+body.is-sidebar-detached-resizing {
+    user-select: none;
+}
+
+body.is-sidebar-detached-dragging .side-panel,
+body.is-sidebar-detached-resizing .side-panel {
+    transition: none;
+}
+
+/* Corner resize handles — only mounted (display) while detached. */
+.sidebar-detach-handle {
+    display: none;
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    z-index: 4;
+    opacity: 0;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: opacity 0.15s ease;
+}
+
+.side-panel.is-detached .sidebar-detach-handle {
+    display: block;
+}
+
+.sidebar-detach-handle--nw {
+    top: 2px;
+    left: 2px;
+    cursor: nw-resize;
+}
+
+.sidebar-detach-handle--ne {
+    top: 2px;
+    right: 2px;
+    cursor: ne-resize;
+}
+
+.sidebar-detach-handle--sw {
+    bottom: 2px;
+    left: 2px;
+    cursor: sw-resize;
+}
+
+.sidebar-detach-handle--se {
+    bottom: 2px;
+    right: 2px;
+    cursor: se-resize;
+}
+
+.side-panel.is-detached:hover .sidebar-detach-handle,
+.sidebar-detach-handle:hover,
+body.is-sidebar-detached-resizing .sidebar-detach-handle {
+    opacity: 0.62;
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.22);
+}
+
+.side-panel.is-detached.is-detached-dragging .control-bar-brand {
+    cursor: grabbing;
+}
+
+/* Drag affordance: the brand row is the panel's title bar while floating. */
+.side-panel.is-detached .control-bar-brand {
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+}
+
+.side-panel.is-detached .sidebar-detach-handle {
+    touch-action: none;
 }

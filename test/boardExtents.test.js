@@ -11,7 +11,7 @@ import { getStableBoardLayoutWidth, resetStableBoardLayoutWidth } from '../js/bo
 const VIEWPORT_W = 1920;
 
 /** Install minimal fake browser globals (window/document/localStorage). */
-function installGlobals({ sidebarCollapsed = true, sidebarWidth = null } = {}) {
+function installGlobals({ sidebarCollapsed = true, sidebarWidth = null, sidebarDetached = false } = {}) {
     const store = new Map();
     if (sidebarWidth != null) store.set('matrix_sidebar_width', String(sidebarWidth));
 
@@ -24,7 +24,13 @@ function installGlobals({ sidebarCollapsed = true, sidebarWidth = null } = {}) {
     globalThis.document = {
         getElementById: (id) =>
             id === 'side-panel'
-                ? { classList: { contains: (name) => name === 'is-collapsed' && sidebarCollapsed } }
+                ? {
+                    classList: {
+                        contains: (name) =>
+                            (name === 'is-collapsed' && sidebarCollapsed)
+                            || (name === 'is-detached' && sidebarDetached)
+                    }
+                }
                 : null
     };
 }
@@ -54,6 +60,11 @@ describe('board packing width (no invisible wall on the right)', () => {
     it('subtracts a persisted custom sidebar width when expanded', () => {
         installGlobals({ sidebarCollapsed: false, sidebarWidth: 300 });
         assert.equal(getStableBoardLayoutWidth(), VIEWPORT_W - 300);
+    });
+
+    it('uses the FULL viewport width when the sidebar is detached (floating, 0px in flow)', () => {
+        installGlobals({ sidebarCollapsed: false, sidebarDetached: true, sidebarWidth: 300 });
+        assert.equal(getStableBoardLayoutWidth(), VIEWPORT_W);
     });
 
     it('caches the stable width and refreshes it after invalidating', () => {

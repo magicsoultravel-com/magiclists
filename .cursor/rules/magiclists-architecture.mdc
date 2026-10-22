@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-22T20:27:25.134Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-22T22:01:23.665Z
 
 ## CSS load order
 
@@ -14,7 +14,7 @@ alwaysApply: true
 | css/base.css | :root tokens, tile/grid vars, .is-hidden | gridDensity.js, tileFootprint.js, appTheme.js | — | 1 |
 | css/shell-core.css | workspace shell, FAB, .btn, boot splash, shared utilities | hamburger.js, displayOptions.js, ui.js, bootProgress.js, fileCabinet.js, shellResize.js, sidebarModules.js, sidebarShell.js | — | 2 |
 | css/shell-filecabinet.css | file cabinet drawer-specific styles, filed chip rail | fileCabinet.js, shellResize.js | unique drawer/rollout styles; base file-cabinet styles moved to board.css | 3 |
-| css/shell-sidebar.css | side panel, sidebar module undock chrome, hidden sidebar modules | hamburger.js, sidebarModules.js, sidebarPrefs.js, sidebarModulePrefs.js | — | 4 |
+| css/shell-sidebar.css | side panel, detached (floating) sidebar chrome, sidebar module undock chrome, hidden sidebar modules | hamburger.js, sidebarModules.js, sidebarPrefs.js, sidebarModulePrefs.js, sidebarDetach.js | — | 4 |
 | css/shell-display-options.css | display options modal | displayOptions.js, hamburger.js | — | 5 |
 | css/ui-transitions.css | Smooth UI transitions — morph chrome, FC fly overlay, FC expand flash guard | uiTransitions.js, displayOptions.js, magicFocus.js, fileCabinet.js, app.js | — | 6 |
 | css/shell-editor.css | note-editor typography, note footer, quick actions, checklist chrome | ui.js, noteSurface.js, displayOptions.js, hamburger.js | — | 7 |
@@ -144,6 +144,7 @@ alwaysApply: true
 | js/scribbleInk.js | shared scribble palette, width, and stroke-hit erase helpers | noteAttachmentsUi.js, quickScribble.js, canvasBrushes.js | — | — |
 | js/searchBar.js | sidebar search bar and results panel | searchFilter.js, hamburger.js | — | — |
 | js/sheet.js | sheet-grid note template model and table interactions | noteSurface.js, editor.js | — | — |
+| js/sidebarDetach.js | detached (floating) sidebar mode: toggle, drag, corner resize, clamping, persisted geometry | shellResize.js, sidebarPrefs.js, hamburger.js, sync.js, board/boardExtents.js | sidebar:width_changed, tools:desktop_bounds_changed | — |
 | js/sidebarHistory.js | sidebar undo history module | undo.js, popoverPosition.js, sidebarModules.js | — | — |
 | js/sidebarLinks.js | Links sidebar module tile/list rendering and manage/view shortcuts | linksStore.js, linksModel.js, linksOverlay.js, sidebarModules.js, sidebarPrefs.js | links:changed, links:manage_requested | — |
 | js/sidebarModulePopout.js | sidebar module popout open/focus/pop-in, DOM portal | popoutWindows.js, sidebarModules.js, appDocuments.js | — | — |

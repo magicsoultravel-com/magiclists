@@ -4,6 +4,7 @@ export const NOTES_LIST_SORT_KEY = 'matrix_notes_list_sort';
 export const BOARD_SORT_KEY = 'matrix_board_sort';
 export const MODULE_DOCKS_KEY = 'matrix_sidebar_module_docks';
 export const SIDEBAR_WIDTH_KEY = 'matrix_sidebar_width';
+export const SIDEBAR_DETACHED_KEY = 'matrix_sidebar_detached';
 export const LINKS_SIDEBAR_VIEW_KEY = 'matrix_links_sidebar_view';
 export const LINKS_VIEW_TILES = 'tiles';
 export const LINKS_VIEW_LIST = 'list';
@@ -23,7 +24,8 @@ export const SIDEBAR_BACKUP_KEYS = [
     NOTES_LIST_SORT_KEY,
     BOARD_SORT_KEY,
     MODULE_DOCKS_KEY,
-    SIDEBAR_WIDTH_KEY
+    SIDEBAR_WIDTH_KEY,
+    SIDEBAR_DETACHED_KEY
 ];
 
 const DEFAULT_NOTES_LIST_SORT = { field: 'date', dir: 'desc' };
@@ -206,6 +208,54 @@ export function normalizeLinksSidebarView(value) {
     return value === LINKS_VIEW_LIST ? LINKS_VIEW_LIST : LINKS_VIEW_TILES;
 }
 
+/**
+ * Detached-sidebar geometry overrides. All-null means "auto": default width,
+ * content height, positioned at the top-left of the board surface.
+ * @param {unknown} raw
+ */
+export function normalizeDetachedGeometry(raw) {
+    const source = raw && typeof raw === 'object' ? raw : {};
+    const positive = (value) => (Number.isFinite(value) && value > 0 ? value : null);
+    return {
+        width: positive(source.width),
+        height: positive(source.height),
+        x: Number.isFinite(source.x) ? source.x : null,
+        y: Number.isFinite(source.y) ? source.y : null
+    };
+}
+
+/** @returns {{ detached: boolean, geometry: { width: number|null, height: number|null, x: number|null, y: number|null } }} */
+export function readSidebarDetach() {
+    try {
+        const raw = JSON.parse(localStorage.getItem(SIDEBAR_DETACHED_KEY) || 'null');
+        if (!raw || typeof raw !== 'object') {
+            return { detached: false, geometry: normalizeDetachedGeometry(null) };
+        }
+        return {
+            detached: raw.detached === true,
+            geometry: normalizeDetachedGeometry(raw.geometry)
+        };
+    } catch {
+        return { detached: false, geometry: normalizeDetachedGeometry(null) };
+    }
+}
+
+/**
+ * Persist detached mode + geometry. Reattaching removes the key entirely so the
+ * next detach starts from the 220px auto-height default (and so a persisted
+ * detach can never resurrect stale overrides).
+ */
+export function writeSidebarDetach(detached, geometry = null) {
+    if (!detached) {
+        localStorage.removeItem(SIDEBAR_DETACHED_KEY);
+        return;
+    }
+    localStorage.setItem(SIDEBAR_DETACHED_KEY, JSON.stringify({
+        detached: true,
+        geometry: normalizeDetachedGeometry(geometry)
+    }));
+}
+
 export function readLinksSidebarView() {
     try {
         return normalizeLinksSidebarView(localStorage.getItem(LINKS_SIDEBAR_VIEW_KEY));
@@ -226,6 +276,7 @@ export function readSidebarPrefs() {
         boardSort: readBoardSort(),
         moduleDocks: readAllModuleDocks(),
         sidebarWidth: readSidebarWidth(),
+        sidebarDetach: readSidebarDetach(),
         linksView: readLinksSidebarView()
     };
 }

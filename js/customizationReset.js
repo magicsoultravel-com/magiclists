@@ -22,6 +22,8 @@ const CUSTOMIZATION_KEYS = [
     'matrix_grid_fineness',
     'matrix_grid_fineness_migrated',
     'matrix_board_padding',
+    /* Floating (detached) sidebar state + geometry */
+    'matrix_sidebar_detached',
     /* Desktop dock pin state */
     'magicnotes_desktops_config',
     /* Consolidated theme tokens key */

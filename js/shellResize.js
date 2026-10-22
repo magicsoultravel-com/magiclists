@@ -1,4 +1,5 @@
-// js/shellResize.js — draggable sidebar / file-cabinet splitters
+// js/shellResize.js — draggable sidebar / file-cabinet splitters, plus the
+// sidebar width/scale metrics used by both docked and detached (floating) modes
 import {
     readSidebarWidth,
     writeSidebarWidth,
@@ -43,8 +44,15 @@ function isSidebarCollapsed() {
     return sidebarPanel?.classList.contains('is-collapsed') ?? true;
 }
 
+/** Detached mode floats the panel out of the flex flow (see sidebarDetach.js). */
+function isSidebarDetached() {
+    return sidebarPanel?.classList.contains('is-detached') ?? false;
+}
+
+/** In flow = docked AND expanded. Detached panels must never receive stored
+ *  width writes, splitter chrome or board-footprint accounting. */
 function isSidebarInFlow() {
-    return !isSidebarCollapsed();
+    return !isSidebarCollapsed() && !isSidebarDetached();
 }
 
 function getSidebarWidthBounds() {
@@ -63,7 +71,7 @@ function getSidebarScaleBounds() {
     };
 }
 
-function clampSidebarWidth(width) {
+export function clampSidebarWidth(width) {
     const { min, max } = getSidebarWidthBounds();
     return clamp(width, min, max);
 }
@@ -100,12 +108,6 @@ function cabinetScaleForHeight(height, mount) {
     return clamp(innerH / contentInner, FILE_CABINET_MIN_HEIGHT_RATIO, 1);
 }
 
-function applySidebarUiScale(width) {
-    if (!sidebarPanel || !isSidebarInFlow()) return;
-    const scale = sidebarScaleForWidth(width);
-    sidebarPanel.style.setProperty('--sidebar-ui-scale', String(scale));
-}
-
 function applyCabinetUiScale(mount, height) {
     if (!mount) return;
     const effectiveHeight = height ?? mount.offsetHeight;
@@ -127,13 +129,32 @@ function notifySidebarWidthChanged() {
     window.dispatchEvent(new CustomEvent('sidebar:width_changed'));
 }
 
-function applySidebarWidth(width) {
-    if (!sidebarPanel || !isSidebarInFlow()) return;
+/**
+ * Visual-only sidebar metrics: width, content zoom, and the reflow event that
+ * re-applies module widths. Deliberately does NO storage writes — persistence
+ * lives in applyStoredSidebarWidth() and the splitter's endResize() commit, so
+ * detached resizing can never clobber the docked width.
+ */
+function applySidebarMetrics(width) {
+    if (!sidebarPanel) return null;
     const clamped = clampSidebarWidth(width);
     sidebarPanel.style.setProperty('--sidebar-width', `${clamped}px`);
-    applySidebarUiScale(clamped);
+    // The scale is computed inline instead of via an in-flow-only helper:
+    // those early-return outside the flow, which would leave a detached
+    // panel's content unscaled.
+    sidebarPanel.style.setProperty('--sidebar-ui-scale', String(sidebarScaleForWidth(clamped)));
     notifySidebarWidthChanged();
     return clamped;
+}
+
+/** Detached-mode entry point: metrics only, never persisted (sidebarDetach.js). */
+export function applyDetachedSidebarMetrics(width) {
+    return applySidebarMetrics(width);
+}
+
+function applySidebarWidth(width) {
+    if (!isSidebarInFlow()) return null;
+    return applySidebarMetrics(width);
 }
 
 function clampCabinetHeight(height, mount) {
@@ -269,7 +290,7 @@ function removeHorizontalSplitter() {
 
 function updateVerticalSplitterVisibility() {
     if (!verticalSplitter) return;
-    const hidden = isSidebarCollapsed();
+    const hidden = !isSidebarInFlow();
     verticalSplitter.classList.toggle('is-hidden', hidden);
     verticalSplitter.setAttribute('aria-hidden', hidden ? 'true' : 'false');
 }

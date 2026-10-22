@@ -95,6 +95,7 @@ import {
 } from './fileCabinet.js';
 import { getItemCategoryName } from './focusFilter.js';
 import { initShellResize } from './shellResize.js';
+import { initSidebarDetach } from './sidebarDetach.js';
 import { initUndockedSidebarStacking } from './desktopStack.js';
 import { BoardRulers } from './boardRulers.js';
 
@@ -172,6 +173,7 @@ BootProgress.set(85, 'Workspace…');
             // Refresh desktop dock with note counts
             DesktopDock.refreshButtons(AppState.items);
             initShellResize();
+            initSidebarDetach();
             BoardRulers.init();
             initUndockedSidebarStacking();
             BoardSort.init({
