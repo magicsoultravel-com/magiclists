@@ -4,6 +4,9 @@ export const NOTES_LIST_SORT_KEY = 'matrix_notes_list_sort';
 export const BOARD_SORT_KEY = 'matrix_board_sort';
 export const MODULE_DOCKS_KEY = 'matrix_sidebar_module_docks';
 export const SIDEBAR_WIDTH_KEY = 'matrix_sidebar_width';
+export const LINKS_SIDEBAR_VIEW_KEY = 'matrix_links_sidebar_view';
+export const LINKS_VIEW_TILES = 'tiles';
+export const LINKS_VIEW_LIST = 'list';
 
 /** @deprecated migration read only */
 const LEGACY_QUICK_ACTIONS_DOCK_KEY = 'matrix_quick_actions_dock';
@@ -199,6 +202,22 @@ export function writeSidebarWidth(width) {
     localStorage.setItem(SIDEBAR_WIDTH_KEY, String(Math.round(width)));
 }
 
+export function normalizeLinksSidebarView(value) {
+    return value === LINKS_VIEW_LIST ? LINKS_VIEW_LIST : LINKS_VIEW_TILES;
+}
+
+export function readLinksSidebarView() {
+    try {
+        return normalizeLinksSidebarView(localStorage.getItem(LINKS_SIDEBAR_VIEW_KEY));
+    } catch {
+        return LINKS_VIEW_TILES;
+    }
+}
+
+export function writeLinksSidebarView(view) {
+    localStorage.setItem(LINKS_SIDEBAR_VIEW_KEY, normalizeLinksSidebarView(view));
+}
+
 export function readSidebarPrefs() {
     return {
         panelCollapsed: readPanelCollapsed(),
@@ -206,6 +225,7 @@ export function readSidebarPrefs() {
         notesListSort: readNotesListSort(),
         boardSort: readBoardSort(),
         moduleDocks: readAllModuleDocks(),
-        sidebarWidth: readSidebarWidth()
+        sidebarWidth: readSidebarWidth(),
+        linksView: readLinksSidebarView()
     };
 }

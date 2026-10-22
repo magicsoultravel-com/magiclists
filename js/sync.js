@@ -77,6 +77,7 @@ export const STORAGE_SCOPE_MAP = {
     matrix_board_sort: 'sidebar',
     matrix_sidebar_module_docks: 'sidebar',
     matrix_sidebar_width: 'sidebar',
+    matrix_links_sidebar_view: 'sidebar',
     // Saved links (small text content; preview opt-ins are device-local)
     matrix_links: 'links',
     // Categories

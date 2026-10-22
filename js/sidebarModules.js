@@ -39,7 +39,7 @@ export const SIDEBAR_MODULES = [
     { id: 'tv', rootId: 'sidebar-tv', headerId: 'tv-section-header', sectionId: 'tv-section', startCollapsed: true, collapseIgnoreExtra: '.sidebar-tv__compact', onPositionChange: () => TvPopover.reposition() },
     { id: 'weather', rootId: 'sidebar-weather', headerId: 'weather-section-header', sectionId: 'weather-section', startCollapsed: true, expandOnUndock: true, collapseIgnoreExtra: '[data-weather-refresh], [data-weather-extlink]' },
     { id: 'tools', rootId: 'sidebar-tools', headerId: 'tools-section-header', sectionId: 'tools-section', startCollapsed: true, expandOnUndock: true },
-    { id: 'links', rootId: 'sidebar-links', headerId: 'links-section-header', sectionId: 'links-section', startCollapsed: true, expandOnUndock: true, collapseIgnoreExtra: '[data-links-manage]' },
+    { id: 'links', rootId: 'sidebar-links', headerId: 'links-section-header', sectionId: 'links-section', startCollapsed: true, expandOnUndock: true, collapseIgnoreExtra: '[data-links-manage], [data-links-view-toggle]' },
     { id: 'notes-list', rootId: 'sidebar-notes-list', headerId: 'notes-list-section-header', sectionId: 'notes-list-section', startCollapsed: false, expandOnUndock: true },
     { id: 'history', rootId: 'sidebar-history-section', headerId: 'history-section-header', sectionId: 'history-section', startCollapsed: true, expandOnUndock: true },
     { id: 'stats', rootId: 'sidebar-stats-section', headerId: 'stats-section-header', sectionId: 'stats-section', startCollapsed: true, expandOnUndock: true }
