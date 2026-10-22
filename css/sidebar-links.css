@@ -52,7 +52,7 @@
 .sidebar-links__manage,
 .sidebar-links__view-toggle {
     flex-shrink: 0;
-    opacity: 0.72;
+    opacity: 0;
     line-height: 0;
     transition: opacity 0.15s ease;
 }
@@ -79,28 +79,15 @@
 }
 
 .sidebar-module:hover .sidebar-links__manage,
-.sidebar-module:hover .sidebar-links__view-toggle,
+.sidebar-module:hover .sidebar-links__view-toggle {
+    opacity: 0.8;
+}
+
+.sidebar-module:hover .sidebar-links__manage:hover,
+.sidebar-module:hover .sidebar-links__view-toggle:hover,
 .sidebar-links__manage:focus-visible,
 .sidebar-links__view-toggle:focus-visible {
     opacity: 1;
-}
-
-.sidebar-links__count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 0.95rem;
-    padding: 0 0.18rem;
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--accent, #3b82f6) 24%, transparent);
-    color: var(--text-main, #eee);
-    font-size: 0.48rem;
-    font-weight: 600;
-    line-height: 1.35;
-}
-
-.sidebar-links__count.is-empty {
-    display: none;
 }
 
 .sidebar-links__list {

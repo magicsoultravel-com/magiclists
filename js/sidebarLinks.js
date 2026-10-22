@@ -1,5 +1,5 @@
 /**
- * @module {"owns":"Links sidebar module tile/list rendering, count and manage/view shortcuts","related":["linksStore.js","linksModel.js","linksOverlay.js","sidebarModules.js","sidebarPrefs.js"],"events":["links:changed","links:manage_requested"]}
+ * @module {"owns":"Links sidebar module tile/list rendering and manage/view shortcuts","related":["linksStore.js","linksModel.js","linksOverlay.js","sidebarModules.js","sidebarPrefs.js"],"events":["links:changed","links:manage_requested"]}
  */
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import {
@@ -20,7 +20,6 @@ import {
 
 let root = null;
 let list = null;
-let countEl = null;
 let more = null;
 let viewToggle = null;
 let bound = false;
@@ -96,7 +95,6 @@ export const SidebarLinks = {
         root = document.getElementById('sidebar-links');
         if (!root) return;
         list = root.querySelector('[data-links-list]');
-        countEl = root.querySelector('[data-links-count]');
         more = root.querySelector('[data-links-more]');
         viewToggle = root.querySelector('[data-links-view-toggle]');
         bindEvents();
@@ -112,10 +110,6 @@ export const SidebarLinks = {
         const links = readLinks().links;
         const visible = links.slice(0, LINKS_SIDEBAR_LIMIT);
 
-        if (countEl) {
-            countEl.textContent = links.length ? String(links.length) : '';
-            countEl.classList.toggle('is-empty', links.length === 0);
-        }
         /* Attribute state, not classes: view and empty layout both branch from
            data-* so the list-view flex rule cannot override an is-hidden class. */
         root.dataset.linksEmpty = links.length ? 'false' : 'true';

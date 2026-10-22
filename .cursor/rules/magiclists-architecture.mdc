@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-22T20:01:18.953Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-22T20:27:25.134Z
 
 ## CSS load order
 
@@ -145,7 +145,7 @@ alwaysApply: true
 | js/searchBar.js | sidebar search bar and results panel | searchFilter.js, hamburger.js | — | — |
 | js/sheet.js | sheet-grid note template model and table interactions | noteSurface.js, editor.js | — | — |
 | js/sidebarHistory.js | sidebar undo history module | undo.js, popoverPosition.js, sidebarModules.js | — | — |
-| js/sidebarLinks.js | Links sidebar module tile/list rendering, count and manage/view shortcuts | linksStore.js, linksModel.js, linksOverlay.js, sidebarModules.js, sidebarPrefs.js | links:changed, links:manage_requested | — |
+| js/sidebarLinks.js | Links sidebar module tile/list rendering and manage/view shortcuts | linksStore.js, linksModel.js, linksOverlay.js, sidebarModules.js, sidebarPrefs.js | links:changed, links:manage_requested | — |
 | js/sidebarModulePopout.js | sidebar module popout open/focus/pop-in, DOM portal | popoutWindows.js, sidebarModules.js, appDocuments.js | — | — |
 | js/sidebarModulePopoutShell.js | sidebar module popout placeholder shell state transfer | sidebarModulePopout.js | — | — |
 | js/sidebarModulePrefs.js | sidebar module enable/disable prefs, visibility DOM, lifecycle registry | displayOptions.js, sidebarModules.js, app.js, customizationReset.js | sidebar:modules_changed | — |
