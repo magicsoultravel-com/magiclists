@@ -31,6 +31,7 @@ import {
 } from '../js/sidebarDetach.js';
 import { initShellResize } from '../js/shellResize.js';
 import { resetStableBoardLayoutWidth } from '../js/board/boardExtents.js';
+import { ToolsManager } from '../js/toolsManager.js';
 
 const SURFACE_RECT = { left: 260, top: 40, width: 1000, height: 700 };
 const MARGIN = 8;
@@ -48,16 +49,97 @@ globalThis.localStorage = {
     }
 };
 
-function makeClassList(initial = []) {
+/**
+ * Minimal MutationObserver stand-in with browser semantics for the one case the
+ * feedback loop needs: `class` attribute changes are queued and delivered in a
+ * single microtask, honouring attributeFilter. Without this the harness cannot
+ * reproduce the #side-panel ⇄ tools:desktop_bounds_changed cycle at all, which
+ * is why the suite stayed green while the app froze.
+ */
+const classObservers = new Set();
+const classMutationQueue = [];
+let classMutationFlushScheduled = false;
+let classMutationFlushes = 0;
+/** A real browser freezes here; the harness fails the test instead (see below). */
+const CLASS_MUTATION_FLUSH_LIMIT = 2000;
+
+function queueClassMutation(target, attributeName) {
+    classMutationQueue.push({ target, attributeName, type: 'attributes' });
+    if (classMutationFlushScheduled) return;
+    classMutationFlushScheduled = true;
+    queueMicrotask(() => {
+        classMutationFlushScheduled = false;
+        classMutationFlushes += 1;
+        if (classMutationFlushes > CLASS_MUTATION_FLUSH_LIMIT) {
+            // An observer that keeps re-arming itself starves the event loop and
+            // cannot be interrupted by the test runner's own timeout, so refuse to
+            // keep going: the throw unwinds the cycle and fails the test.
+            throw new Error(
+                `MutationObserver storm: ${classMutationFlushes} class-mutation batches — feedback loop`
+            );
+        }
+        const pending = classMutationQueue.splice(0, classMutationQueue.length);
+        [...classObservers].forEach((record) => {
+            const matches = pending.filter((mutation) => mutation.target === record.target
+                && (!record.options?.attributeFilter
+                    || record.options.attributeFilter.includes(mutation.attributeName)));
+            if (matches.length) record.callback(matches, record.observer);
+        });
+    });
+}
+
+class FakeMutationObserver {
+    constructor(callback) {
+        this.callback = callback;
+        this.record = null;
+    }
+
+    observe(target, options = {}) {
+        this.record = { observer: this, target, options, callback: this.callback };
+        classObservers.add(this.record);
+    }
+
+    disconnect() {
+        if (this.record) classObservers.delete(this.record);
+        this.record = null;
+    }
+
+    takeRecords() {
+        return [];
+    }
+}
+
+globalThis.MutationObserver = FakeMutationObserver;
+
+function makeClassList(initial = [], onMutate = null) {
     const set = new Set(initial);
+    const changed = () => {
+        if (onMutate) onMutate();
+    };
     return {
-        add(...names) { names.forEach((name) => set.add(name)); },
-        remove(...names) { names.forEach((name) => set.delete(name)); },
+        add(...names) {
+            let touched = false;
+            names.forEach((name) => {
+                if (set.has(name)) return;
+                set.add(name);
+                touched = true;
+            });
+            if (touched) changed();
+        },
+        remove(...names) {
+            let touched = false;
+            names.forEach((name) => {
+                if (set.delete(name)) touched = true;
+            });
+            if (touched) changed();
+        },
         contains(name) { return set.has(name); },
         toggle(name, force) {
-            const next = force === undefined ? !set.has(name) : force;
+            const had = set.has(name);
+            const next = force === undefined ? !had : force;
             if (next) set.add(name);
             else set.delete(name);
+            if (next !== had) changed();
             return next;
         }
     };
@@ -73,7 +155,7 @@ function makeStyle() {
     };
 }
 
-function makeEl({ id = '', classes = [] } = {}) {
+function makeEl({ id = '', classes = [], onClassMutation = null } = {}) {
     const el = {
         id,
         isConnected: true,
@@ -86,7 +168,7 @@ function makeEl({ id = '', classes = [] } = {}) {
         attrs: {},
         children: [],
         listeners: {},
-        classList: makeClassList(classes),
+        classList: makeClassList(classes, onClassMutation),
         getBoundingClientRect: () => ({ left: 0, top: 0, width: el.offsetWidth, height: el.offsetHeight }),
         setAttribute(name, value) { el.attrs[name] = String(value); },
         getAttribute(name) { return el.attrs[name] ?? null; },
@@ -112,7 +194,11 @@ function createEnv() {
 
     const scaleInner = makeEl({ classes: ['side-panel-scale-inner'] });
     const brandRow = makeEl({ classes: ['control-bar-brand', 'is-in-sidebar'] });
-    const panel = makeEl({ id: 'side-panel', classes: ['side-panel'] });
+    const panel = makeEl({
+        id: 'side-panel',
+        classes: ['side-panel'],
+        onClassMutation: () => queueClassMutation(panel, 'class')
+    });
     panel.getBoundingClientRect = () => ({
         left: Number.parseFloat(panel.style.getPropertyValue('left')) || 0,
         top: Number.parseFloat(panel.style.getPropertyValue('top')) || 0,
@@ -200,6 +286,14 @@ function resetPanelDom() {
 
 function resetEnv() {
     memory.clear();
+    // Drop observers before touching the DOM: resetPanelDom mutates classes and
+    // would otherwise queue records for the next test.
+    [...classObservers].forEach((record) => record.observer?.disconnect?.());
+    classObservers.clear();
+    classMutationQueue.length = 0;
+    classMutationFlushes = 0;
+    ToolsManager._desktopBoundsWatcher?.disconnect?.();
+    delete ToolsManager._desktopBoundsWatcher;
     resetStableBoardLayoutWidth();
     resetPanelDom();
     // Every test but the kill-switch block runs an enabled build.
@@ -208,6 +302,31 @@ function resetEnv() {
     env.toggle.style.display = '';
     delete env.toggle.attrs['aria-hidden'];
     delete env.toggle.attrs.tabindex;
+}
+
+/** Let queued microtasks and the coalesced setTimeout(0) broadcasts run. */
+function flushFrame() {
+    return new Promise((resolve) => setTimeout(resolve, 5));
+}
+
+/** Count tools:desktop_bounds_changed dispatches for the duration of a test. */
+function countBoundsBroadcasts({ limit = 200 } = {}) {
+    const counter = { count: 0, restore: () => {} };
+    const original = env.window.dispatchEvent;
+    env.window.dispatchEvent = (event) => {
+        if (event?.type === 'tools:desktop_bounds_changed') {
+            counter.count += 1;
+            if (counter.count > limit) {
+                counter.restore();
+                throw new Error(
+                    `tools:desktop_bounds_changed storm (>${limit}) — feedback loop`
+                );
+            }
+        }
+        return original(event);
+    };
+    counter.restore = () => { env.window.dispatchEvent = original; };
+    return counter;
 }
 
 /** Seed the docked width, then boot the shell + detach modules in app order. */
@@ -673,5 +792,124 @@ describe('sidebarDetach · kill-switch build', () => {
         assert.equal(initSidebarDetach(), sidebarDetach);
         assert.equal(detachSidebar(), true);
         assert.equal(isDetached(), true);
+    });
+});
+
+describe('sidebarDetach · bounds feedback loop (regression)', () => {
+    // #side-panel class mutation -> toolsManager broadcasts
+    // tools:desktop_bounds_changed -> sidebarDetach re-clamps -> writes back to
+    // #side-panel. A MutationObserver cycle like this runs in the microtask queue
+    // and never throws: the tab froze with a silent console. These tests fail by
+    // timeout (or by an unbounded counter) if the loop comes back.
+
+    it('detach terminates and the bounds broadcast stays bounded', { timeout: 2000 }, async () => {
+        const panel = boot({ dockedWidth: 400 });
+        ToolsManager.bindDesktopBoundsWatcher();
+        await flushFrame();
+        const counter = countBoundsBroadcasts();
+        try {
+            assert.equal(detachSidebar(), true);
+            await flushFrame();
+            await flushFrame();
+        } finally {
+            counter.restore();
+        }
+
+        assert.equal(isDetached(), true);
+        assert.ok(panel.classList.contains('is-detached'));
+        assert.ok(counter.count <= 3, `expected a bounded broadcast count, saw ${counter.count}`);
+    });
+
+    it('a handler rewriting a non-dock class cannot re-arm the broadcast', { timeout: 2000 }, async () => {
+        boot({ dockedWidth: 400 });
+        ToolsManager.bindDesktopBoundsWatcher();
+        await flushFrame();
+        const counter = countBoundsBroadcasts();
+        let flips = 0;
+        const flip = () => {
+            flips += 1;
+            // The old loop in one line: answer the broadcast with a class write.
+            env.panel.classList.toggle('is-detached--sized', flips % 2 === 0);
+        };
+        env.window.addEventListener('tools:desktop_bounds_changed', flip);
+        try {
+            detachSidebar({ geometry: { width: 320, height: 400 } });
+            await flushFrame();
+            await flushFrame();
+        } finally {
+            env.window.removeEventListener('tools:desktop_bounds_changed', flip);
+            counter.restore();
+        }
+
+        assert.equal(isDetached(), true);
+        assert.ok(counter.count <= 3, `broadcasts ran away: ${counter.count}`);
+        assert.ok(flips <= 4, `handler kept being re-armed: ${flips}`);
+    });
+
+    it('boots with a persisted detached state without hanging', { timeout: 2000 }, async () => {
+        memory.set(SIDEBAR_DETACHED_KEY, JSON.stringify({
+            detached: true,
+            geometry: { width: 300, height: null, x: 20, y: 30 }
+        }));
+        ToolsManager.bindDesktopBoundsWatcher();
+        const counter = countBoundsBroadcasts();
+        let panel;
+        try {
+            panel = reload();
+            await flushFrame();
+            await flushFrame();
+        } finally {
+            counter.restore();
+        }
+
+        assert.equal(isDetached(), true);
+        assert.equal(panel.style.getPropertyValue('--sidebar-width'), '300px');
+        assert.ok(counter.count <= 4, `broadcasts ran away during boot: ${counter.count}`);
+    });
+
+    it('re-applying the current geometry writes nothing (the terminator)', () => {
+        const panel = boot({ dockedWidth: 400 });
+        detachSidebar({ geometry: { width: 320, height: 420 } });
+
+        const writes = [];
+        const { setProperty, removeProperty } = panel.style;
+        const { add, remove } = panel.classList;
+        panel.style.setProperty = (key, value) => {
+            if (['height', 'left', 'top'].includes(key)) writes.push(`set ${key}=${value}`);
+            return setProperty(key, value);
+        };
+        panel.style.removeProperty = (key) => {
+            if (['height', 'left', 'top'].includes(key)) writes.push(`remove ${key}`);
+            return removeProperty(key);
+        };
+        panel.classList.add = (...names) => { writes.push(`add ${names.join(',')}`); return add(...names); };
+        panel.classList.remove = (...names) => { writes.push(`remove ${names.join(',')}`); return remove(...names); };
+        try {
+            applyDetachedGeometry(readDetachedGeometry());
+            applyDetachedGeometry(readDetachedGeometry());
+        } finally {
+            panel.style.setProperty = setProperty;
+            panel.style.removeProperty = removeProperty;
+            panel.classList.add = add;
+            panel.classList.remove = remove;
+        }
+
+        assert.deepEqual(writes, [], 'a re-clamp of unchanged geometry must not touch the DOM');
+    });
+
+    it('does not rebroadcast sidebar:width_changed for an unchanged width', () => {
+        boot({ dockedWidth: 400 });
+        detachSidebar({ geometry: { width: 320 } });
+        let events = 0;
+        const onWidth = () => { events += 1; };
+        env.window.addEventListener('sidebar:width_changed', onWidth);
+        try {
+            applyDetachedGeometry(readDetachedGeometry());
+            applyDetachedGeometry(readDetachedGeometry());
+        } finally {
+            env.window.removeEventListener('sidebar:width_changed', onWidth);
+        }
+
+        assert.equal(events, 0);
     });
 });

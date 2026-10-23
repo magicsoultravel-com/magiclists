@@ -44,3 +44,29 @@ If a user reports a stuck dark screen, the data is intact: a hard reload
 (`Ctrl`/`Cmd` + `Shift` + `R`) recovers, and storage-full profiles now see the
 "Storage almost full" prompt above the boot overlay instead of being stuck
 behind it.
+
+## Detached sidebar: the bounds feedback loop
+
+`#side-panel` sits in the middle of a broadcast chain: `js/toolsManager.js`
+observes its `class` attribute and dispatches `tools:desktop_bounds_changed`,
+and `js/sidebarDetach.js` answers that event by re-clamping the floating panel —
+which writes classes and inline geometry back onto the same element.
+MutationObserver callbacks run in the microtask queue and never throw, so a
+self-feeding cycle starves the main thread **silently**: the tab freezes with a
+clean console, and once `detached: true` is in `localStorage` it freezes during
+boot too, because the re-clamp then runs synchronously from
+`initSidebarDetach()`.
+
+The boot watchdog cannot catch that one — it is a `setTimeout`, and a
+synchronous `init()` never yields the timer queue. Fail-safes instead live in the
+modules:
+
+| Guard | Where |
+| --- | --- |
+| Re-applying unchanged geometry performs **no** DOM writes, so an echoed re-clamp is a no-op and the cycle terminates | `applyDetachedGeometry()` in `js/sidebarDetach.js` |
+| Broadcast only when the dock-relevant class signature (`is-collapsed` / `is-detached`) changes, coalesced into one frame | `bindDesktopBoundsWatcher()` in `js/toolsManager.js` |
+| Re-entrancy guard plus a per-frame budget on the re-clamp | `reclampDetachedPanel()` in `js/sidebarDetach.js` |
+| `sidebar:width_changed` only fires on a real width change | `applySidebarMetrics()` in `js/shellResize.js` |
+| Emergency off switch: `false` makes the init return before binding anything or re-applying a stored detached state (it also clears the persisted flag and hides the toggle) | `SIDEBAR_DETACH_ENABLED` in `js/sidebarDetach.js` |
+| Microtask-batched `MutationObserver` fake reproduces the loop in `node --test`; a storm guard turns a regression into a fast failure instead of a hung runner | `test/sidebarDetach.test.js` |
+
