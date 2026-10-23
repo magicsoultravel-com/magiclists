@@ -172,11 +172,20 @@ export function placeTextBox(board, x, y) {
 }
 
 export function eraseAt(board, x, y, radius = 14) {
-        const strokes = board.strokes().filter((stroke) => !board.hitStroke(stroke, x, y, radius));
-        if (strokes.length !== board.strokes().length) {
-            board.setStrokes(strokes);
-            board.scheduleSave();
+        const before = board.strokes();
+        const strokes = before.filter((stroke) => !board.hitStroke(stroke, x, y, radius));
+        if (strokes.length === before.length) return false;
+        // Snapshot at the mutation site, not at pointerdown: a misclick on empty
+        // canvas must not leave an entry that the next Ctrl+Z burns on a no-op.
+        // One entry per gesture mirrors the lasso drag (lassoHistoryPushed) so a
+        // drag erase undoes in a single step.
+        if (!board.eraseHistoryPushed) {
+            board.pushLayerHistory();
+            board.eraseHistoryPushed = true;
         }
+        board.setStrokes(strokes);
+        board.scheduleSave();
+        return true;
         // Eraser skips media/images — remove those via Clear or selection tooling.
 }
 

@@ -184,6 +184,15 @@
     gap: 0.25rem;
 }
 
+/* Undo/redo are data-driven: without a visual disabled state a stale attribute
+   is indistinguishable from a broken history, and a live-looking button that
+   silently no-ops reads as a bug. Hover styles already exclude :disabled
+   (shell-core.css), so opacity is all this needs. */
+.drawing-toolbar-panel .btn:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
 .drawing-toolbar-row--meta {
     padding-top: 0.1rem;
     border-top: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);

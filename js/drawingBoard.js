@@ -128,34 +128,59 @@ function trimDrawingStack(stack) {
     while (stack.length > HISTORY_MAX) stack.shift();
 }
 
-class DrawingHistory {
+export class DrawingHistory {
     constructor() {
         this.undoStack = [];
         this.redoStack = [];
+        this.onChange = null;
+    }
+    /** Fire after every stack move so the toolbar follows canUndo/canRedo. */
+    notifyChange() {
+        if (typeof this.onChange === 'function') this.onChange();
     }
     push(snapshot) {
-        this.undoStack.push(JSON.stringify(snapshot));
+        const serialized = JSON.stringify(snapshot);
+        // Defence in depth: a repeat of the newest entry means nothing changed,
+        // so it would only light up Undo for a step that cannot do anything.
+        if (this.undoStack[this.undoStack.length - 1] === serialized) return;
+        this.undoStack.push(serialized);
         trimDrawingStack(this.undoStack);
         this.redoStack = [];
+        this.notifyChange();
     }
     undo(current) {
         if (!this.undoStack.length) return null;
         this.redoStack.push(JSON.stringify(current));
         trimDrawingStack(this.redoStack);
-        return JSON.parse(this.undoStack.pop());
+        const snapshot = JSON.parse(this.undoStack.pop());
+        this.notifyChange();
+        return snapshot;
     }
     redo(current) {
         if (!this.redoStack.length) return null;
         this.undoStack.push(JSON.stringify(current));
         trimDrawingStack(this.undoStack);
-        return JSON.parse(this.redoStack.pop());
+        const snapshot = JSON.parse(this.redoStack.pop());
+        this.notifyChange();
+        return snapshot;
     }
     clear() {
+        const had = this.undoStack.length > 0 || this.redoStack.length > 0;
         this.undoStack = [];
         this.redoStack = [];
+        if (had) this.notifyChange();
     }
     get canUndo() { return this.undoStack.length > 0; }
     get canRedo() { return this.redoStack.length > 0; }
+}
+
+/**
+ * Bind a board's history stacks to its toolbar affordances. Every mutation path
+ * pushes through DrawingHistory, so this is the single place that keeps the
+ * undo/redo buttons honest between full toolbar renders.
+ */
+export function wireHistoryToolbar(board) {
+    board.history.onChange = () => board.updateToolbarState();
 }
 
 export const DrawingBoard = {
@@ -191,6 +216,9 @@ export const DrawingBoard = {
     lassoDragStart: null,
     lassoDragMoved: false,
     lassoHistoryPushed: false,
+    // One history entry per eraser gesture / background-picker session.
+    eraseHistoryPushed: false,
+    bgColorHistoryPushed: false,
 
     // Shared box-select state (pointer tool + lasso marquee)
     isBoxSelecting: false,
@@ -675,6 +703,9 @@ export const DrawingBoard = {
         this.doc = null;
         this.docOwner = null;
         this.history.clear();
+        // Gesture-scoped history flags must not leak into the next session.
+        this.eraseHistoryPushed = false;
+        this.bgColorHistoryPushed = false;
         this.updateNoteToolbarChrome();
     },
 
@@ -691,6 +722,8 @@ export const DrawingBoard = {
             kind: 'layer',
             canvasMode: this.doc.canvasMode,
             activePageId: this.doc.activePageId,
+            background: getActiveBackground(this.doc),
+            backgroundColor: getActiveBackgroundColor(this.doc),
             strokes: JSON.parse(JSON.stringify(getActiveStrokes(this.doc))),
             texts: JSON.parse(JSON.stringify(getActiveTexts(this.doc))),
             images: JSON.parse(JSON.stringify(getActiveImages(this.doc)))
@@ -703,17 +736,41 @@ export const DrawingBoard = {
 
     applySnapshot(snapshot) {
         if (snapshot?.kind === 'layer') {
+            // A layer snapshot belongs to the page it was taken on. Restore that
+            // page first: undoing from page 2 must not paste page 1's strokes
+            // into page 2 (the pages would silently swap content).
+            const switchedPage = this.restoreSnapshotPage(snapshot.activePageId);
             setActiveStrokes(this.doc, JSON.parse(JSON.stringify(snapshot.strokes || [])));
             setActiveTexts(this.doc, JSON.parse(JSON.stringify(snapshot.texts || [])));
             setActiveImages(this.doc, JSON.parse(JSON.stringify(snapshot.images || [])));
+            const hasBackground = snapshot.background !== undefined || snapshot.backgroundColor !== undefined;
+            if (snapshot.background !== undefined) setActiveBackground(this.doc, snapshot.background);
+            if (snapshot.backgroundColor !== undefined) setActiveBackgroundColor(this.doc, snapshot.backgroundColor);
+            if (hasBackground) this.redrawBackground();
+            if (switchedPage) this.resize();
         } else {
             this.doc = JSON.parse(JSON.stringify(snapshot));
+            this.resize();
+            if (this.doc.viewport) CanvasViewport.loadFromDoc(this.doc.viewport);
         }
         // Layers are fresh deep clones — re-point selection by id or drop orphans.
         ClipboardSession.pruneSelection(this);
         this.redraw();
         this.scheduleSave();
         this.updateToolbarState();
+    },
+
+    /**
+     * Point the board at the page a snapshot was captured on.
+     * @param {string} pageId
+     * @returns {boolean} true when the active page actually changed
+     */
+    restoreSnapshotPage(pageId) {
+        if (!pageId || !Array.isArray(this.doc?.pages)) return false;
+        if (pageId === this.doc.activePageId) return false;
+        if (!this.doc.pages.some((page) => page.id === pageId)) return false;
+        this.doc.activePageId = pageId;
+        return true;
     },
 
     strokes() {
@@ -803,6 +860,12 @@ export const DrawingBoard = {
     },
 
     setPageBackgroundColor(color, { rerender = true } = {}) {
+        // The picker streams onSelect while a slider is dragged — one entry per
+        // session keeps the history usable and makes the drag undo in one step.
+        if (!this.bgColorHistoryPushed) {
+            this.pushLayerHistory();
+            this.bgColorHistoryPushed = true;
+        }
         setActiveBackgroundColor(this.doc, color);
         this.redrawBackground();
         this.scheduleSave();
@@ -825,13 +888,16 @@ export const DrawingBoard = {
         }
         ColorPicker.close();
         this.colorRolloutOpen = false;
+        // Reset before opening: any onSelect the picker fires (including a
+        // preview during construction) must start a fresh undo entry.
+        this.bgColorHistoryPushed = false;
         ColorPicker.open({
             anchor,
             presets: PALETTE_UNIFIED,
             value: this.pageBackgroundFill() || this.pageBackgroundSwatch(),
             align: 'end',
             onSelect: (c) => this.setPageBackgroundColor(c, { rerender: false }),
-            onClose: () => { this.bgColorRolloutOpen = false; }
+            onClose: () => { this.bgColorRolloutOpen = false; this.bgColorHistoryPushed = false; }
         });
         this.bgColorRolloutOpen = true;
         anchor?.setAttribute('aria-expanded', 'true');
@@ -924,6 +990,8 @@ export const DrawingBoard = {
     },
 
     addCanvasPage() {
+        // Only a full-document snapshot can remove the new page again.
+        this.history.push(this.getSnapshot());
         addPage(this.doc);
         this.shrinkInfiniteIfNeeded();
         this.resize();
@@ -1057,9 +1125,10 @@ export const DrawingBoard = {
         }
 
         if (this.activeTool === 'eraser') {
-            this.pushLayerHistory();
+            // Every press starts a fresh gesture; eraseAt pushes history itself,
+            // and only once something is actually removed.
+            this.eraseHistoryPushed = false;
             this.eraseAt(x, y);
-            this.scheduleSave();
             this.redraw();
             return;
         }
@@ -1483,6 +1552,7 @@ export const DrawingBoard = {
 
     setBackground(bg) {
         if (!BACKGROUNDS.includes(bg)) return;
+        this.pushLayerHistory();
         setActiveBackground(this.doc, bg);
         this.redrawBackground();
         this.scheduleSave();
@@ -1616,9 +1686,15 @@ export const DrawingBoard = {
 
     handleKeydown(e) {
         if (!this.active) return false;
+        // The note UndoManager listens on document too. If it already claimed the
+        // chord, undoing here as well would swallow two steps per Ctrl+Z.
+        if (e.defaultPrevented) return false;
+        // Never touch canvas history while a text box (or any field) is being
+        // edited — Ctrl+Z there must undo typing, not delete strokes.
+        const typing = ClipboardSession.isTextEditingTarget();
         if (e.ctrlKey || e.metaKey) {
-            if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); this.undo(); return true; }
-            if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); this.redo(); return true; }
+            if (!typing && e.key === 'z' && !e.shiftKey) { e.preventDefault(); this.undo(); return true; }
+            if (!typing && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); this.redo(); return true; }
             if (e.key === 'c') return ClipboardSession.handleCopyKey(this, e);
             if (e.key === 'x') return ClipboardSession.handleCutKey(this, e);
             // Ctrl+V arms only — never preventDefault (would suppress the paste event itself).
@@ -1791,6 +1867,7 @@ export const DrawingBoard = {
 
 };
 
+wireHistoryToolbar(DrawingBoard);
 ClipboardSession.bindBoard(DrawingBoard);
 
 export { getCanvasDocumentBackupKeys, applyDrawingBackupKeys } from './drawingBoardBackup.js';

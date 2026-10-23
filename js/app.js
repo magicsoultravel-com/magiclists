@@ -305,7 +305,7 @@ BootProgress.set(85, 'Workspace…');
     setupUndo() {
         UndoManager.init({
             getToken: () => AppState.user.token,
-            isEnabled: () => AppState.user.isLoggedIn,
+            isEnabled: () => AppState.user.isLoggedIn && !DrawingBoard.active,
             onRestore: (item, { preserveView = false } = {}) => this.restoreItem(item, preserveView),
             onRemove: (itemId) => this.removeItemFromWorkspace(itemId),
             onBeforeUndoRedo: () => import('./plannerUi.js')
