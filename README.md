@@ -19,11 +19,19 @@ Guards now in place:
 | `npm run check:modules` | Links the real module graph with V8 (`vm.SourceTextModule`, nothing executed) and fails on any import whose target does not export that name. |
 | `npm test` | Full `node --test` suite (`test/assetVersions.test.js`, `test/moduleGraph.test.js`, `test/bootWatchdog.test.js` cover the guards above). |
 | `npm run verify` | All of the above in CI order. |
+| `npm run hooks:install` | Installs `.git/hooks/pre-commit` (also runs on `npm install`). Needed once per clone. |
 
 `scripts/git-hooks/pre-commit.mjs` restamps and re-stages the HTML and runs the
 module-graph check, so a commit cannot ship stale hashes or a broken import.
 GitHub Pages uses the same file names for every deploy, so never remove the
 `?v=` attributes by hand.
+
+Git silently skips a hook file that is not executable, so the guard is only real
+once installed: `npm run hooks:install` drops in a small `sh` shim
+(`scripts/git-hooks/install.mjs`) and marks it `0755`. The shim defers to the
+Node hook, so it works on Linux/macOS and Git for Windows alike; a hook that was
+already there is backed up rather than overwritten silently, and
+`MAGICLISTS_SKIP_HOOKS=1` opts out.
 
 Runtime fail-safe: `index.html` carries an inline classic-script watchdog. If the
 module graph fails, a local asset 404s, a dynamic import fails, or boot simply

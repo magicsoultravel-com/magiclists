@@ -8,6 +8,8 @@
     "assets:stamp": "node scripts/build-asset-versions.mjs",
     "check:assets": "node scripts/build-asset-versions.mjs --check",
     "check:modules": "node --experimental-vm-modules scripts/check-module-graph.mjs",
+    "hooks:install": "node scripts/git-hooks/install.mjs",
+    "prepare": "node scripts/git-hooks/install.mjs",
     "verify": "npm run check:assets && npm run check:modules && npm test"
   }
 }
