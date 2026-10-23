@@ -22,6 +22,16 @@ export const SIDEBAR_DETACH_TOGGLE_SEL = '[data-sidebar-detach-toggle]';
 export const SIDEBAR_DETACH_HANDLE_SEL = '[data-sidebar-detach-resize]';
 export const SIDEBAR_DETACHED_MIN_HEIGHT = 120;
 
+/**
+ * Build-time default for detached mode. `false` ships a build where the floating
+ * sidebar cannot be entered at all: the toggle is hidden, resize handles are
+ * dropped, no listeners are bound, and a persisted detached state is discarded
+ * on boot (re-applying it from init() is what re-enters the #side-panel class
+ * feedback loop and hangs the tab). Runtime-overridable via
+ * setSidebarDetachEnabled() so tests can exercise both builds.
+ */
+export const SIDEBAR_DETACH_ENABLED = false;
+
 const SURFACE_MARGIN = 8;
 const DRAG_THRESHOLD = 4;
 const DBLCLICK_GUARD_MS = 300;
@@ -33,6 +43,17 @@ const NAV_TOGGLE_SEL = '#nav-panel-toggle, #nav-panel-toggle-fab';
 let bound = false;
 let interacting = false;
 let lastDragEndAt = 0;
+let detachEnabled = SIDEBAR_DETACH_ENABLED;
+
+export function isSidebarDetachEnabled() {
+    return detachEnabled;
+}
+
+/** Runtime override of SIDEBAR_DETACH_ENABLED (tests, future settings switch). */
+export function setSidebarDetachEnabled(enabled) {
+    detachEnabled = enabled !== false;
+    return detachEnabled;
+}
 
 function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
@@ -180,8 +201,30 @@ export function applyDetachedGeometry(geometry = null) {
     return { ...next, width: appliedWidth, x, y };
 }
 
+/**
+ * Remove every entry point into detached mode (kill-switch builds). Safe to call
+ * repeatedly: it only touches the toggle button and any resize handles.
+ */
+function hideDetachAffordances() {
+    if (typeof document === 'undefined') return;
+    const btn = document.getElementById('sidebar-detach-toggle')
+        ?? document.querySelector?.(SIDEBAR_DETACH_TOGGLE_SEL);
+    if (btn) {
+        btn.hidden = true;
+        if (btn.style) btn.style.display = 'none';
+        btn.setAttribute?.('aria-hidden', 'true');
+        btn.setAttribute?.('tabindex', '-1');
+    }
+    const handles = getPanel()?.querySelectorAll?.(SIDEBAR_DETACH_HANDLE_SEL);
+    handles?.forEach?.((handle) => handle.remove?.());
+}
+
 export function syncSidebarDetachToggle() {
     if (typeof document === 'undefined') return;
+    if (!detachEnabled) {
+        hideDetachAffordances();
+        return;
+    }
     const btn = document.getElementById('sidebar-detach-toggle')
         ?? document.querySelector?.(SIDEBAR_DETACH_TOGGLE_SEL);
     if (!btn) return;
@@ -496,6 +539,16 @@ export const sidebarDetach = {
 /** Bound once after initShellResize(): the splitter + stored docked width exist. */
 export function initSidebarDetach() {
     if (!getPanel()) return null;
+    if (!detachEnabled) {
+        // Kill switch: never bind the affordances, and never re-apply a persisted
+        // detached state (that path runs synchronously from init() and re-clamps
+        // the panel on every bounds broadcast). Dropping the stored flag keeps the
+        // next boot clean even after a build with detached mode enabled.
+        if (isDetached()) reattachSidebar({ persist: false });
+        writeSidebarDetach(false);
+        hideDetachAffordances();
+        return null;
+    }
     bindBrandRow();
     bindResizeHandles();
     bindToggleButton();

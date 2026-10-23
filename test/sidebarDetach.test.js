@@ -17,13 +17,16 @@ import {
     writeSidebarDetach
 } from '../js/sidebarPrefs.js';
 import {
+    SIDEBAR_DETACH_ENABLED,
     SIDEBAR_DETACH_HANDLE_SEL,
     applyDetachedGeometry,
     detachSidebar,
     initSidebarDetach,
     isDetached,
+    isSidebarDetachEnabled,
     readDetachedGeometry,
     reattachSidebar,
+    setSidebarDetachEnabled,
     sidebarDetach
 } from '../js/sidebarDetach.js';
 import { initShellResize } from '../js/shellResize.js';
@@ -199,6 +202,12 @@ function resetEnv() {
     memory.clear();
     resetStableBoardLayoutWidth();
     resetPanelDom();
+    // Every test but the kill-switch block runs an enabled build.
+    setSidebarDetachEnabled(true);
+    env.toggle.hidden = false;
+    env.toggle.style.display = '';
+    delete env.toggle.attrs['aria-hidden'];
+    delete env.toggle.attrs.tabindex;
 }
 
 /** Seed the docked width, then boot the shell + detach modules in app order. */
@@ -604,5 +613,65 @@ describe('sidebarDetach · reload with a persisted detach', () => {
         assert.equal(isDetached(), true);
         assert.ok(panel.classList.contains('is-detached'));
         assert.equal(memory.has(SIDEBAR_DETACHED_KEY), false);
+    });
+});
+
+describe('sidebarDetach · kill-switch build', () => {
+    beforeEach(() => {
+        setSidebarDetachEnabled(false);
+        env.toggle.listeners = {};
+    });
+
+    it('records the build-time default in SIDEBAR_DETACH_ENABLED', () => {
+        assert.equal(SIDEBAR_DETACH_ENABLED, false, 'stopgap build ships detached mode off');
+    });
+
+    it('binds nothing, hides the toggle, and drops a persisted detached state', () => {
+        memory.set(SIDEBAR_DETACHED_KEY, JSON.stringify({
+            detached: true,
+            geometry: { width: 320, height: null, x: 10, y: 20 }
+        }));
+
+        const panel = boot({ dockedWidth: 400 });
+
+        assert.equal(isSidebarDetachEnabled(), false);
+        assert.equal(initSidebarDetach(), null);
+        assert.equal(isDetached(), false);
+        assert.equal(memory.has(SIDEBAR_DETACHED_KEY), false);
+        assert.equal(env.toggle.hidden, true);
+        assert.equal(env.toggle.style.display, 'none');
+        assert.equal((env.toggle.listeners.click || []).length, 0);
+        assert.equal(panel.style.getPropertyValue('left'), '');
+        assert.equal(panel.style.getPropertyValue('height'), '');
+    });
+
+    it('keeps the boundaries listener unbound so a broadcast cannot re-clamp', () => {
+        const panel = boot({ dockedWidth: 400 });
+
+        env.window.dispatch('tools:desktop_bounds_changed');
+
+        assert.equal(isDetached(), false);
+        assert.equal(panel.style.getPropertyValue('left'), '');
+        assert.equal(panel.style.getPropertyValue('height'), '');
+    });
+
+    it('boots docked (never enters the loop) when a detached state was persisted', () => {
+        memory.set(SIDEBAR_DETACHED_KEY, JSON.stringify({ detached: true, geometry: { width: 300 } }));
+
+        const panel = boot({ dockedWidth: 400 });
+
+        assert.equal(panel.classList.contains('is-detached'), false);
+        assert.equal(panel.classList.contains('is-detached--sized'), false);
+        assert.equal(globalThis.document.body.classList.contains('is-sidebar-detached'), false);
+        assert.equal(panel.style.getPropertyValue('--sidebar-width'), '400px');
+    });
+
+    it('re-enabling restores the normal bindings on the next init', () => {
+        boot({ dockedWidth: 400 });
+        setSidebarDetachEnabled(true);
+
+        assert.equal(initSidebarDetach(), sidebarDetach);
+        assert.equal(detachSidebar(), true);
+        assert.equal(isDetached(), true);
     });
 });
