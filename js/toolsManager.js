@@ -39,12 +39,40 @@ export const ToolsManager = {
         this.bindDesktopBoundsWatcher();
     },
 
+    /**
+     * Only the classes that actually move the panel's bounds may trigger a
+     * broadcast. Anything else (detached-mode sizing, drag markers) would make
+     * the observer answer the very handler that wrote the class — the handler
+     * being sidebarDetach's re-clamp, which writes back to #side-panel: a silent
+     * infinite loop (MutationObserver callbacks run in the microtask queue, so it
+     * freezes the tab without ever throwing). Signature is also used to skip
+     * no-op notifications, and the event itself is coalesced into one frame.
+     */
+    desktopBoundsSignature(sidePanel = document.getElementById('side-panel')) {
+        if (!sidePanel) return '';
+        return ['is-collapsed', 'is-detached']
+            .map((name) => (sidePanel.classList.contains(name) ? '1' : '0'))
+            .join('');
+    },
+
     bindDesktopBoundsWatcher() {
         if (this._desktopBoundsWatcher) return;
         const sidePanel = document.getElementById('side-panel');
         if (!sidePanel) return;
-        this._desktopBoundsWatcher = new MutationObserver(() => {
+        let lastSignature = this.desktopBoundsSignature(sidePanel);
+        let scheduled = false;
+        const flush = () => {
+            scheduled = false;
             window.dispatchEvent(new CustomEvent('tools:desktop_bounds_changed'));
+        };
+        this._desktopBoundsWatcher = new MutationObserver(() => {
+            const signature = this.desktopBoundsSignature(sidePanel);
+            if (signature === lastSignature) return;
+            lastSignature = signature;
+            if (scheduled) return;
+            scheduled = true;
+            if (typeof requestAnimationFrame === 'function') requestAnimationFrame(flush);
+            else setTimeout(flush, 0);
         });
         this._desktopBoundsWatcher.observe(sidePanel, { attributes: true, attributeFilter: ['class'] });
     },

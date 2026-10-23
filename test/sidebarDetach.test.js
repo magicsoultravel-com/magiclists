@@ -623,7 +623,7 @@ describe('sidebarDetach · kill-switch build', () => {
     });
 
     it('records the build-time default in SIDEBAR_DETACH_ENABLED', () => {
-        assert.equal(SIDEBAR_DETACH_ENABLED, false, 'stopgap build ships detached mode off');
+        assert.equal(SIDEBAR_DETACH_ENABLED, true, 'detached mode is enabled in this build');
     });
 
     it('binds nothing, hides the toggle, and drops a persisted detached state', () => {

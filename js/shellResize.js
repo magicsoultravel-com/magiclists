@@ -138,12 +138,17 @@ function notifySidebarWidthChanged() {
 function applySidebarMetrics(width) {
     if (!sidebarPanel) return null;
     const clamped = clampSidebarWidth(width);
+    const previous = parseFloat(sidebarPanel.style.getPropertyValue('--sidebar-width'));
+    const changed = !Number.isFinite(previous) || Math.abs(previous - clamped) > 0.01;
     sidebarPanel.style.setProperty('--sidebar-width', `${clamped}px`);
     // The scale is computed inline instead of via an in-flow-only helper:
     // those early-return outside the flow, which would leave a detached
     // panel's content unscaled.
     sidebarPanel.style.setProperty('--sidebar-ui-scale', String(sidebarScaleForWidth(clamped)));
-    notifySidebarWidthChanged();
+    // Reflow only on a real change: a redundant broadcast re-runs every module's
+    // width re-application, and detached mode re-applies metrics on each bounds
+    // event (see sidebarDetach.js — the loop guard).
+    if (changed) notifySidebarWidthChanged();
     return clamped;
 }
 

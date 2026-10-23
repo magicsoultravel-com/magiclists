@@ -29,8 +29,11 @@ export const SIDEBAR_DETACHED_MIN_HEIGHT = 120;
  * on boot (re-applying it from init() is what re-enters the #side-panel class
  * feedback loop and hangs the tab). Runtime-overridable via
  * setSidebarDetachEnabled() so tests can exercise both builds.
+ *
+ * Keep this as the emergency off switch: set it to false to ship detached mode
+ * disabled without touching the rest of the module.
  */
-export const SIDEBAR_DETACH_ENABLED = false;
+export const SIDEBAR_DETACH_ENABLED = true;
 
 const SURFACE_MARGIN = 8;
 const DRAG_THRESHOLD = 4;
@@ -39,11 +42,15 @@ const DBLCLICK_GUARD_MS = 300;
 const HANDLE_DIRECTIONS = { nw: [-1, -1], ne: [1, -1], sw: [-1, 1], se: [1, 1] };
 const HEADER_IGNORE_SEL = 'button, a, input, select, textarea, label';
 const NAV_TOGGLE_SEL = '#nav-panel-toggle, #nav-panel-toggle-fab';
+/** Upper bound on re-clamps per frame (see reclampDetachedPanel). */
+const RECLAMP_MAX_PER_FRAME = 8;
 
 let bound = false;
 let interacting = false;
 let lastDragEndAt = 0;
 let detachEnabled = SIDEBAR_DETACH_ENABLED;
+let reclamping = false;
+let reclampBudget = 0;
 
 export function isSidebarDetachEnabled() {
     return detachEnabled;
@@ -174,10 +181,24 @@ export function readDetachedGeometry() {
     return normalizeDetachedGeometry({ width, height, x, y });
 }
 
+/** Write-if-changed: a redundant write re-notifies #side-panel class observers. */
+function setStyleIfChanged(el, property, value) {
+    if (el.style.getPropertyValue(property) === value) return false;
+    el.style.setProperty(property, value);
+    return true;
+}
+
 /**
  * Apply width/height/position to the floating panel. Width goes through
  * shellResize's metrics path (which fires sidebar:width_changed so modules
  * reflow) and is never persisted here.
+ *
+ * Every DOM write is conditional: toolsManager broadcasts
+ * tools:desktop_bounds_changed on #side-panel class mutations, and this function
+ * is what that broadcast ends up calling (reclampDetachedPanel). Unconditional
+ * writes would let the broadcast re-arm itself forever — a silent freeze, since
+ * MutationObserver callbacks run in the microtask queue and never throw.
+ * Being idempotent makes the second pass a no-op and the cycle terminate.
  */
 export function applyDetachedGeometry(geometry = null) {
     const el = getPanel();
@@ -185,19 +206,20 @@ export function applyDetachedGeometry(geometry = null) {
     const next = clampDetachedGeometry(normalizeDetachedGeometry(geometry));
     const appliedWidth = applyDetachedSidebarMetrics(next.width) ?? next.width;
 
+    const sized = el.classList.contains(SIDEBAR_DETACHED_SIZED_CLASS);
     if (next.height) {
-        el.style.setProperty('height', `${Math.round(next.height)}px`);
-        el.classList.add(SIDEBAR_DETACHED_SIZED_CLASS);
+        setStyleIfChanged(el, 'height', `${Math.round(next.height)}px`);
+        if (!sized) el.classList.add(SIDEBAR_DETACHED_SIZED_CLASS);
     } else {
-        el.style.removeProperty('height');
-        el.classList.remove(SIDEBAR_DETACHED_SIZED_CLASS);
+        if (el.style.getPropertyValue('height')) el.style.removeProperty('height');
+        if (sized) el.classList.remove(SIDEBAR_DETACHED_SIZED_CLASS);
     }
 
     const bounds = getFloatingBounds();
     const x = next.x ?? bounds.left;
     const y = next.y ?? bounds.top;
-    el.style.setProperty('left', `${Math.round(x)}px`);
-    el.style.setProperty('top', `${Math.round(y)}px`);
+    setStyleIfChanged(el, 'left', `${Math.round(x)}px`);
+    setStyleIfChanged(el, 'top', `${Math.round(y)}px`);
     return { ...next, width: appliedWidth, x, y };
 }
 
@@ -519,9 +541,31 @@ function onCustomizationReset() {
     applyStoredDetachState();
 }
 
+/**
+ * Re-clamp the floating panel after any layout change.
+ *
+ * Guarded twice, because the observer chain that delivers this event is also
+ * driven by the writes we are about to make (`#side-panel` class mutations →
+ * toolsManager → tools:desktop_bounds_changed → here):
+ *   1. re-entrancy — a synchronous dispatch from inside applyDetachedGeometry
+ *      must not recurse;
+ *   2. a per-frame budget — even an unforeseen feedback loop can then only
+ *      waste a handful of frames, never starve the main thread into a freeze.
+ * The write-if-changed geometry apply is the real terminator; these are the
+ * belt and braces.
+ */
 function reclampDetachedPanel() {
     if (interacting || !isDetached()) return;
-    applyDetachedGeometry(readDetachedGeometry());
+    if (reclamping) return;
+    if (reclampBudget === 0) raf(() => { reclampBudget = 0; });
+    reclampBudget += 1;
+    if (reclampBudget > RECLAMP_MAX_PER_FRAME) return;
+    reclamping = true;
+    try {
+        applyDetachedGeometry(readDetachedGeometry());
+    } finally {
+        reclamping = false;
+    }
 }
 
 export const sidebarDetach = {
