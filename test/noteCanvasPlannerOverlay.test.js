@@ -134,11 +134,13 @@ describe('planner table overlay without stats', () => {
         assert.ok(summary);
         assert.ok(summary.calendarDays >= 1);
 
-        // Height is header + body rows only (no extra stats band).
-        assert.equal(
-            measured.height,
-            measured.geometry.rowHeight + measured.rows * measured.geometry.rowHeight
-        );
+        // Height is the header band + measured body rows only (no stats band).
+        // Body rows are content-derived (a wrapped cell grows its row), so sum the
+        // measured per-row heights instead of assuming every row is rowHeight.
+        assert.equal(measured.rowHeights.length, measured.rows);
+        assert.ok(measured.rowHeights.every((h) => h >= measured.geometry.rowHeight));
+        const bodyH = measured.rowHeights.reduce((sum, h) => sum + h, 0);
+        assert.equal(measured.height, measured.geometry.rowHeight + bodyH);
     });
 });
 
