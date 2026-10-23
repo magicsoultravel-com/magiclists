@@ -13,7 +13,8 @@ import {
     SIDEBAR_MIN_WIDTH,
     SIDEBAR_WIDTH_KEY,
     normalizeDetachedGeometry,
-    readSidebarDetach
+    readSidebarDetach,
+    writeSidebarDetach
 } from '../js/sidebarPrefs.js';
 import {
     SIDEBAR_DETACH_HANDLE_SEL,
@@ -175,10 +176,8 @@ const env = createEnv();
 globalThis.document = env.document;
 globalThis.window = env.window;
 
-function resetEnv() {
-    memory.clear();
-    resetStableBoardLayoutWidth();
-
+/** Fresh DOM for the same page — persisted storage is left untouched. */
+function resetPanelDom() {
     const { panel } = env;
     panel.classList.remove('is-detached', 'is-detached--sized', 'is-detached-dragging', 'is-collapsed');
     ['--sidebar-width', '--sidebar-ui-scale', 'left', 'top', 'height', 'width'].forEach((prop) => {
@@ -196,9 +195,23 @@ function resetEnv() {
     );
 }
 
+function resetEnv() {
+    memory.clear();
+    resetStableBoardLayoutWidth();
+    resetPanelDom();
+}
+
 /** Seed the docked width, then boot the shell + detach modules in app order. */
 function boot({ dockedWidth = null } = {}) {
     if (dockedWidth != null) memory.set(SIDEBAR_WIDTH_KEY, String(dockedWidth));
+    initShellResize();
+    initSidebarDetach();
+    return env.panel;
+}
+
+/** Simulate a page reload: same localStorage, fresh DOM, same init order. */
+function reload() {
+    resetPanelDom();
     initShellResize();
     initSidebarDetach();
     return env.panel;
@@ -521,5 +534,75 @@ describe('sidebarDetach · toggle button wiring', () => {
         assert.equal(panel.style.getPropertyValue('top'), '120px');
         assert.equal(panel.style.getPropertyValue('height'), '');
         assert.equal(env.toggle.attrs['aria-pressed'], 'true');
+    });
+});
+
+
+describe('sidebarDetach · reload with a persisted detach', () => {
+    it('restores the floating panel geometry across a reload', () => {
+        boot({ dockedWidth: 400 });
+        detachSidebar();
+        applyDetachedGeometry({
+            width: 300,
+            height: 420,
+            x: SURFACE_RECT.left + 40,
+            y: SURFACE_RECT.top + 60
+        });
+
+        // What the corner-resize handle commits on pointerup, then a reload.
+        writeSidebarDetach(true, readDetachedGeometry());
+
+        const panel = reload();
+
+        assert.equal(isDetached(), true);
+        assert.ok(panel.classList.contains('is-detached'));
+        assert.ok(panel.classList.contains('is-detached--sized'));
+        assert.equal(panel.style.getPropertyValue('--sidebar-width'), '300px');
+        assert.equal(panel.style.getPropertyValue('height'), '420px');
+        assert.equal(panel.style.getPropertyValue('left'), `${SURFACE_RECT.left + 40}px`);
+        assert.equal(panel.style.getPropertyValue('top'), `${SURFACE_RECT.top + 60}px`);
+        assert.equal(env.document.body.classList.contains('is-sidebar-detached'), true);
+        assert.equal(memory.get(SIDEBAR_WIDTH_KEY), '400');
+    });
+
+    it('ignores hostile persisted geometry instead of propagating it', () => {
+        memory.set(SIDEBAR_DETACHED_KEY, JSON.stringify({
+            detached: true,
+            geometry: { width: 'NaN', height: '9999px', x: null, y: {} }
+        }));
+        const panel = boot({ dockedWidth: 400 });
+
+        assert.equal(isDetached(), true);
+        assert.equal(panel.style.getPropertyValue('--sidebar-width'), `${SIDEBAR_DEFAULT_WIDTH}px`);
+        assert.equal(panel.style.getPropertyValue('height'), '');
+        assert.equal(panel.style.getPropertyValue('left'), `${SURFACE_RECT.left + MARGIN}px`);
+        assert.equal(panel.style.getPropertyValue('top'), `${SURFACE_RECT.top + MARGIN}px`);
+        assert.equal(readSidebarDetach().geometry.height, null);
+    });
+
+    it('boots docked when the persisted payload is corrupt JSON', () => {
+        memory.set(SIDEBAR_DETACHED_KEY, '{"detached":true,');
+        const panel = boot({ dockedWidth: 400 });
+
+        assert.equal(isDetached(), false);
+        assert.equal(panel.style.getPropertyValue('--sidebar-width'), '400px');
+    });
+
+    it('keeps working when storage rejects the write (quota full)', () => {
+        const panel = boot({ dockedWidth: 400 });
+        const originalSetItem = globalThis.localStorage.setItem;
+        const originalWarn = console.warn;
+        globalThis.localStorage.setItem = () => { throw new Error('QuotaExceededError'); };
+        console.warn = () => {};
+        try {
+            assert.equal(detachSidebar(), true);
+        } finally {
+            globalThis.localStorage.setItem = originalSetItem;
+            console.warn = originalWarn;
+        }
+
+        assert.equal(isDetached(), true);
+        assert.ok(panel.classList.contains('is-detached'));
+        assert.equal(memory.has(SIDEBAR_DETACHED_KEY), false);
     });
 });

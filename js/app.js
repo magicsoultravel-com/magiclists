@@ -160,10 +160,17 @@ class Application {
             Calendar.init();
             this.renderControlBar();
             this.loadCategoriesStore();
-            await reconcileLayoutStorage({
-                items: API._getLocalDB().items,
-                categories: AppState.categories
-            });
+            // Layout repair must never gate boot: a quota prompt or a corrupt
+            // layout key used to abort init() here, leaving a booted-but-empty
+            // workspace (no board render at all). Boot continues either way.
+            try {
+                await reconcileLayoutStorage({
+                    items: API._getLocalDB().items,
+                    categories: AppState.categories
+                });
+            } catch (error) {
+                console.warn('[app] layout reconcile skipped', error);
+            }
             this.migrateBoardOverlayFromFreeform();
             BootProgress.set(60, 'Layout…');
             await this.syncDataStore();

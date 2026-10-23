@@ -46,6 +46,16 @@ const needsTools = staged.some((f) =>
     f.startsWith('js/tools/') && f.endsWith('.js') && !f.endsWith('registry.js')
 );
 
+// Any module/stylesheet change invalidates the content hashes stamped into the
+// HTML. Restamping here is what keeps a deploy from mixing a new module with a
+// stale cached one (GitHub Pages sends Cache-Control: max-age=600).
+const needsAssets = staged.some((f) =>
+    (f.startsWith('js/') && f.endsWith('.js'))
+    || (f.startsWith('css/') && f.endsWith('.css'))
+    || f === 'index.html'
+    || f === 'popout.html'
+);
+
 try {
     if (needsArchitecture) {
         run('node scripts/build-architecture-map.mjs');
@@ -57,7 +67,17 @@ try {
         stageIfExists('api/tools-list.json');
         stageIfExists('api/code-manifest.json');
     }
+    if (needsAssets) {
+        run('node scripts/build-asset-versions.mjs');
+        stageIfExists('index.html');
+        stageIfExists('popout.html');
+    }
+    if (needsAssets || needsArchitecture) {
+        // A missing export breaks the whole module graph at link time — the app
+        // never evaluates and the boot overlay stays up. Never commit that.
+        run('node --experimental-vm-modules scripts/check-module-graph.mjs');
+    }
 } catch {
-    console.error('[pre-commit] Generator failed — commit aborted.');
+    console.error('[pre-commit] Generator/check failed — commit aborted.');
     process.exit(1);
 }

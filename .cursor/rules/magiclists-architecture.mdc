@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-23T21:39:39.394Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-23T22:23:54.965Z
 
 ## CSS load order
 
@@ -20,7 +20,7 @@ alwaysApply: true
 | css/shell-editor.css | note-editor typography, note footer, quick actions, checklist chrome | ui.js, noteSurface.js, displayOptions.js, hamburger.js | — | 7 |
 | css/sidebar.css | side panel, search, notes list, control bar | hamburger.js, searchBar.js, sidebarPrefs.js | — | 8 |
 | css/cards.css | #app-canvas, .mini-card*, color picker, custom backgrounds, checklist chrome | ui.js, colorPicker.js, cardTheme.js, noteSurface.js | desktop spatial overrides also in board.css | 9 |
-| css/overlays.css | .overlay, .modal, .collapsable-*, cloud backup popover, template picker | editor.js, editorModalChrome.js, cloudBackup.js, templatePicker.js | — | 10 |
+| css/overlays.css | .overlay, .modal, .collapsable-*, storage quota dialog, cloud backup popover, template picker | editor.js, editorModalChrome.js, cloudBackup.js, templatePicker.js, layoutStorage.js | — | 10 |
 | css/board.css | grid/freeform board, clock, drag/resize, desktop inline card spatial overrides, file cabinet mode | dragdrop.js, clockStyle.js, desktopZoom.js, boardSort.js, fileCabinet.js | note footer spatial overrides cross-cut shell-editor.css; file cabinet drawer mode integration | 11 |
 | css/themes.css | html[data-app-theme] overrides, theme picker swatches | appTheme.js, themePicker.js, themeSkins.js | — | 12 |
 | css/drawing.css | magicCanvas toolbar and drawing board surface | drawingBoard.js, drawingToolbarMenu.js, drawingToolbarChrome.js | — | 13 |

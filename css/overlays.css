@@ -1,4 +1,4 @@
-/** @css {"owns":".overlay, .modal, .collapsable-*, cloud backup popover, template picker", "js":["editor.js","editorModalChrome.js","cloudBackup.js","templatePicker.js"]} */
+/** @css {"owns":".overlay, .modal, .collapsable-*, storage quota dialog, cloud backup popover, template picker", "js":["editor.js","editorModalChrome.js","cloudBackup.js","templatePicker.js","layoutStorage.js"]} */
 /* ==========================================================================
    5. MODAL SYSTEM (shared overlay + panel)
    ========================================================================== */
@@ -11,6 +11,14 @@
     align-items: center;
     justify-content: center;
     z-index: 1000;
+}
+
+/* Storage-quota prompt (js/layoutStorage.js) is raised on demand — including
+   during boot, where #app-boot sits at z-index 9999 and would otherwise cover
+   the dialog, leaving the awaited user choice unreachable (boot hung on
+   "Loading workspace…" forever). Must stay above the boot overlay. */
+.overlay.storage-quota-overlay {
+    z-index: 10001;
 }
 
 .modal {

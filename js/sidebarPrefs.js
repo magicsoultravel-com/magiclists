@@ -244,16 +244,24 @@ export function readSidebarDetach() {
  * Persist detached mode + geometry. Reattaching removes the key entirely so the
  * next detach starts from the 220px auto-height default (and so a persisted
  * detach can never resurrect stale overrides).
+ *
+ * Storage writes are best-effort: a QuotaExceededError here must not escape the
+ * click handler (the panel is already floating by then) — the next boot asks
+ * the user to free space instead.
  */
 export function writeSidebarDetach(detached, geometry = null) {
-    if (!detached) {
-        localStorage.removeItem(SIDEBAR_DETACHED_KEY);
-        return;
+    try {
+        if (!detached) {
+            localStorage.removeItem(SIDEBAR_DETACHED_KEY);
+            return;
+        }
+        localStorage.setItem(SIDEBAR_DETACHED_KEY, JSON.stringify({
+            detached: true,
+            geometry: normalizeDetachedGeometry(geometry)
+        }));
+    } catch (error) {
+        console.warn('[sidebarPrefs] could not persist detach state', error);
     }
-    localStorage.setItem(SIDEBAR_DETACHED_KEY, JSON.stringify({
-        detached: true,
-        geometry: normalizeDetachedGeometry(geometry)
-    }));
 }
 
 export function readLinksSidebarView() {

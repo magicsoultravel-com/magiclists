@@ -3,14 +3,9 @@ import { NoteSurface } from './noteSurface.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
 import { mountFloatChrome } from './desktopFloatChrome.js';
 import { isDesktopCard } from './ui.js';
-import { isSnapLayoutMode, activeBoardViewMode } from './ui.js';
 import { getGridMetrics, cellsToSpanW as gridCellsToSpanW, cellsToSpanH as gridCellsToSpanH } from './gridDensity.js';
 import { FREEFORM_DEFAULT_W, FREEFORM_DEFAULT_H } from './tileGeometry.js';
 import { normalizeTileSize, resolveTileSize } from './tileGeometry.js';
-import { geoClampSpatialSize, geoGetTileDefaultRect, readTileSmallFootprint, getSmallRect } from './tileGeometry.js';
-import { isCollapsedSpatialSize } from './tileGeometry.js';
-import { geoReadRememberedSize as geoReadRememberedSizeCore, geoResolveExpandedDefaultRect } from './tileGeometry.js';
-import { geoResolveCollapsedTierRect, geoInferTileTier } from './tileGeometry.js';
 import { applyNoteRect as applyNoteRectCore } from './board/noteGeometry.js';
 
 /**

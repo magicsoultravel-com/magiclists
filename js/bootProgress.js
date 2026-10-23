@@ -33,6 +33,11 @@ export const BootProgress = {
     },
 
     async complete() {
+        // Boot watchdog flag (index.html): tells the inline fail-safe that the
+        // application reached a usable state, so a slow-but-healthy boot is
+        // never reported as a failure.
+        if (typeof window !== 'undefined') window.__magicnotesBooted = true;
+
         if (!root || !bar) {
             document.body?.removeAttribute('aria-busy');
             return;
