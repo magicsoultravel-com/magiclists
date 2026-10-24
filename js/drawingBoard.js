@@ -55,7 +55,6 @@ import {
     isDragShape
 } from './drawingBoardCore.js';
 
-import { DrawingToolbarChrome } from './drawingToolbarChrome.js';
 import * as FlowSession from './drawingBoardFlowchart.js';
 import * as CropSession from './drawingBoardCrop.js';
 import * as SelectSession from './drawingBoardSelection.js';
@@ -102,6 +101,7 @@ import {
     wireHistoryToolbar
 } from './drawingBoard/history.js';
 import * as InputSession from './drawingBoard/input.js';
+import * as LifecycleSession from './drawingBoard/lifecycle.js';
 import * as DocumentSession from './drawingBoard/document.js';
 import * as ViewSession from './drawingBoard/view.js';
 
@@ -176,196 +176,18 @@ export const DrawingBoard = {
     /** Session owner for flush routing: 'workspace' | 'note' | 'flowchart' | null when idle. */
     docOwner: null,
 
-    init(app) {
-        this.app = app;
-        this.boardEl = document.getElementById('drawing-board');
-        this.canvas = document.getElementById('drawing-canvas');
-        this.bgCanvas = document.getElementById('drawing-bg-canvas');
-        this.viewportEl = document.getElementById('canvas-viewport');
-        this.innerEl = document.getElementById('canvas-viewport-inner');
-        this.textLayer = document.getElementById('canvas-text-layer');
-        this.brandEl = document.getElementById('app-brand');
-        DrawingToolbarChrome.init();
-        DrawingToolbarChrome.onCollapse = () => {
-            ColorPicker.close();
-            DrawingToolbarMenu.close();
-            this.colorRolloutOpen = false;
-            this.bgColorRolloutOpen = false;
-            requestAnimationFrame(() => this.resize());
-        };
-        DrawingToolbarChrome.onExpand = () => {
-            this.renderToolbar();
-            requestAnimationFrame(() => this.resize());
-        };
-        if (this.brandEl) {
-            this.brandNotesText = this.brandEl.querySelector('.app-brand__text')?.textContent?.trim()
-                || this.brandEl.textContent?.trim()
-                || 'magicNotes';
-        }
+    init(app) { return LifecycleSession.init(this, app); },
 
-        if (!this.canvas || !this.boardEl) return;
-        this.ctx = this.canvas.getContext('2d');
-        this.bgCtx = this.bgCanvas?.getContext('2d');
+    async activate() { return LifecycleSession.activate(this); },
 
-        CanvasViewport.init(this.innerEl, this.viewportEl);
-        this.viewportEl?.addEventListener('canvas:zoom', () => {
-            this.updateZoomLevel();
-            this.persistViewport();
-            CanvasViewport.syncScrollbars();
-        });
-        this.viewportEl?.addEventListener('canvas:pan', () => {
-            this.persistViewport();
-            CanvasViewport.syncScrollbars();
-        });
-
-        this.canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
-        this.canvas.addEventListener('dblclick', (e) => {
-            if (!this.isFlowchartMode) return;
-            const pt = this.clientToCanvas(e.clientX, e.clientY);
-            const target = this.flowHit(pt.x, pt.y);
-            if (target) { e.preventDefault(); this.flowEditLabel(target); }
-        });
-        this.canvas.addEventListener('pointermove', (e) => this.onPointerMove(e));
-        this.canvas.addEventListener('pointerup', (e) => this.onPointerUp(e));
-        this.canvas.addEventListener('pointercancel', (e) => this.onPointerUp(e));
-        this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-
-        window.addEventListener('resize', () => { if (this.active) this.resize(); });
-    },
-
-    async activate() {
-        this.history.clear();
-        this.active = true;
-        this.docOwner = 'workspace';
-        DrawingToolbarChrome.show();
-        this.toolbarEl = DrawingToolbarChrome.getToolbarMount();
-        this.doc = await readDocument();
-        this.prefs = readPrefs();
-        this.activeTool = this.prefs.activeTool;
-        this.activeStyle = this.prefs.activeStyle;
-        this.isNoteCanvasMode = false;
-        this.activeNoteId = null;
-        this.noteCanvasItem = null;
-        this.cropState = null;
-
-        if (this.brandEl) this.brandEl.textContent = 'magicCanvas';
-        this.updateNoteToolbarChrome();
-
-        this.boardEl.classList.remove('is-hidden');
-        this.boardEl.setAttribute('aria-hidden', 'false');
-
-        CanvasViewport.loadFromDoc(this.doc.viewport);
-        CanvasViewport.setHandMode(this.activeTool === 'pan');
-        if (this.canvas) this.canvas.dataset.tool = this.activeTool;
-        this.shrinkInfiniteIfNeeded();
-        this.renderToolbar();
-        this.updateZoomLevel();
-        this.resize();
-        this.redraw();
-    },
-
-    async activateForNote(item) {
-        if (!item?.id) return;
-        const { normalizeNoteCanvas } = await import('./noteModel.js');
-        migrateNoteCanvasTextFlags(item);
-        this.history.clear();
-        this.active = true;
-        this.docOwner = 'note';
-        this.isNoteCanvasMode = true;
-        this.isFlowchartMode = false;
-        this.flowchartItem = null;
-        this.activeNoteId = item.id;
-        this.noteCanvasItem = item;
-        this.cropState = null;
-        this.doc = normalizeNoteCanvas(item.canvas);
-        this.prefs = readPrefs();
-        this.activeTool = this.prefs.activeTool;
-        this.activeStyle = this.prefs.activeStyle;
-
-        DrawingToolbarChrome.show();
-        this.toolbarEl = DrawingToolbarChrome.getToolbarMount();
-
-        if (this.brandEl) this.brandEl.textContent = 'magicCanvas';
-        this.updateNoteToolbarChrome();
-
-        this.boardEl.classList.remove('is-hidden');
-        this.boardEl.setAttribute('aria-hidden', 'false');
-
-        CanvasViewport.loadFromDoc(this.doc.viewport || { scale: 1, offsetX: 0, offsetY: 0 });
-        CanvasViewport.setHandMode(this.activeTool === 'pan');
-        if (this.canvas) this.canvas.dataset.tool = this.activeTool;
-        this.shrinkInfiniteIfNeeded();
-        if (noteHasTextOverlayEnabled(item)) {
-            ensureCanvasFitsNoteText(this.doc, item);
-        }
-        this.renderToolbar();
-        this.updateZoomLevel();
-        this.resize();
-        this.redrawBackground();
-        this.redraw();
-        if (this.isFlowchartMode) this.bindFlowBendEvents();
-    },
+    async activateForNote(item) { return LifecycleSession.activateForNote(this, item); },
 
     /**
      * Flowchart edit mode: per-note diagram on the same canvas engine.
      * Forces dot-square grid + snap on first open; keeps full magicCanvas suite.
      * @param {object} item note with item.flowchart
      */
-    async openNoteFlowchart(item) {
-        if (!item?.id) return;
-        const { normalizeFlowchart, createEmptyFlowchart } = await import('./flowchart.js');
-        if (!item.flowchart) {
-            item.flowchart = createEmptyFlowchart();
-            item.flowchartHidden = false;
-        }
-        const normalized = normalizeFlowchart(item.flowchart) || createEmptyFlowchart();
-        item.flowchart = normalized;
-        this.history.clear();
-        this.active = true;
-        this.docOwner = 'flowchart';
-        this.isNoteCanvasMode = false;
-        this.noteCanvasItem = null;
-        this.isFlowchartMode = true;
-        this.flowchartItem = item;
-        this.flowchartRouting = 'straight';
-        this.activeNoteId = item.id;
-        this.cropState = null;
-        this.doc = normalized.doc;
-        // Force the dot grid + snap on entry; the user can relax either afterwards.
-        normalized.grid = {
-            type: 'dots',
-            size: Number.isFinite(Number(normalized.grid?.size)) && Number(normalized.grid.size) > 0
-                ? Number(normalized.grid.size)
-                : 24,
-            snap: true,
-            visible: true
-        };
-        item.flowchart.grid = { ...normalized.grid };
-        setActiveBackground(this.doc, normalized.grid.type);
-        this.prefs = readPrefs();
-        // Keep the user's brush prefs; default new diagrams to a shape tool.
-        this.activeTool = 'rect';
-        this.activeStyle = this.prefs.activeStyle || 'pen';
-
-        DrawingToolbarChrome.show();
-        this.toolbarEl = DrawingToolbarChrome.getToolbarMount();
-
-        if (this.brandEl) this.brandEl.textContent = 'magicCanvas · Flowchart';
-        this.updateNoteToolbarChrome();
-
-        this.boardEl.classList.remove('is-hidden');
-        this.boardEl.setAttribute('aria-hidden', 'false');
-
-        CanvasViewport.loadFromDoc(this.doc.viewport || { scale: 1, offsetX: 0, offsetY: 0 });
-        CanvasViewport.setHandMode(false);
-        if (this.canvas) this.canvas.dataset.tool = this.activeTool;
-        this.shrinkInfiniteIfNeeded();
-        this.renderToolbar();
-        this.updateZoomLevel();
-        this.resize();
-        this.redrawBackground();
-        this.redraw();
-    },
+    async openNoteFlowchart(item) { return LifecycleSession.openNoteFlowchart(this, item); },
 
     flowchartGrid() { return FlowSession.flowchartGrid(this); },
 
@@ -563,76 +385,24 @@ export const DrawingBoard = {
      * Request exit from note-canvas. App owns deactivate via note:canvas_draw_exited
      * so we never double-flush (which used to write the note doc into workspace storage).
      */
-    exitNoteCanvas() {
-        if (!this.isNoteCanvasMode) return;
-        const item = this.noteCanvasItem;
-        if (!item) return;
-        window.dispatchEvent(new CustomEvent('note:canvas_draw_exited', { detail: { item } }));
-    },
+    exitNoteCanvas() { return LifecycleSession.exitNoteCanvas(this); },
 
     /**
      * Request exit from flowchart mode. Reuses note:canvas_draw_exited so the
      * app owns teardown exactly as it does for note-canvas (single flush path).
      */
-    exitFlowchart() {
-        if (!this.isFlowchartMode) return;
-        const item = this.flowchartItem;
-        if (!item) return;
-        window.dispatchEvent(new CustomEvent('note:canvas_draw_exited', { detail: { item } }));
-    },
+    exitFlowchart() { return LifecycleSession.exitFlowchart(this); },
 
     /**
      * Toolbar "Back to note" routing. Each mode has its own exit because the
      * guards differ (isNoteCanvasMode vs isFlowchartMode); calling the wrong one
      * early-returns and strands the user in drawing mode.
      */
-    exitFromToolbar() {
-        if (this.isFlowchartMode) { this.exitFlowchart(); return; }
-        if (this.isNoteCanvasMode) { this.exitNoteCanvas(); return; }
-    },
+    exitFromToolbar() { return LifecycleSession.exitFromToolbar(this); },
 
-    async deactivate() {
-        if (!this.active && !this.docOwner) return;
-        this.active = false;
-        await this.flushSave();
-        clearTimeout(this.saveTimer);
-        this.saveTimer = null;
-        ColorPicker.close();
-        DrawingToolbarMenu.close();
-        this.colorRolloutOpen = false;
-        this.bgColorRolloutOpen = false;
-        if (this.brandEl) this.brandEl.textContent = this.brandNotesText;
-        this.boardEl?.classList.add('is-hidden');
-        this.boardEl?.setAttribute('aria-hidden', 'true');
-        DrawingToolbarChrome.hide();
-        if (this.textLayer) this.textLayer.innerHTML = '';
-        this.toolbarEl = null;
-        this.draftStroke = null;
-        this.shapePreview = null;
-        this.resizeHandle = null;
-        this.resizeStart = null;
-        this.cropState = null;
-        this.hoverHandle = null;
-        this.selectedStrokes.clear();
-        CanvasViewport.setHandMode(false);
-        clearImageCache();
-        this.isNoteCanvasMode = false;
-        this.isFlowchartMode = false;
-        this.activeNoteId = null;
-        this.noteCanvasItem = null;
-        this.flowchartItem = null;
-        this.doc = null;
-        this.docOwner = null;
-        this.history.clear();
-        // Gesture-scoped history flags must not leak into the next session.
-        this.eraseHistoryPushed = false;
-        this.bgColorHistoryPushed = false;
-        this.updateNoteToolbarChrome();
-    },
+    async deactivate() { return LifecycleSession.deactivate(this); },
 
-    hideToolbar() {
-        DrawingToolbarChrome.collapse();
-    },
+    hideToolbar() { return LifecycleSession.hideToolbar(this); },
 
     getSnapshot() { return DocumentSession.getSnapshot(this); },
 
