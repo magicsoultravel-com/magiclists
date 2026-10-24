@@ -7,7 +7,7 @@ import {
     SIDEBAR_MODULE_CHROME_IGNORE
 } from './sidebarUndock.js';
 import { readModuleDock, writeModuleDock, writeSidebarSection } from './sidebarPrefs.js';
-import { bindToggleCollapsable } from './hamburger.js';
+import { bindToggleCollapsable, SidePanel } from './hamburger.js';
 import { resetDetachedSize, isDetached } from './sidebarDetach.js';
 import { resetSidebarWidthToDefault } from './shellResize.js';
 import { RadioPopover } from './radioPopover.js';
@@ -389,6 +389,31 @@ export function bindSidebarResetSize() {
     });
 }
 
+/** Collapse the entire sidebar panel into its compact collapsed state. */
+export function collapseSidebar() {
+    try { SidePanel?.setCollapsed?.(true); } catch (e) {}
+    return true;
+}
+export const collapseSidebarPanel = collapseSidebar;
+export const toggleSidebarCollapse = () => {
+    try {
+        const collapsed = !!document.getElementById('side-panel')?.classList.contains('is-collapsed');
+        SidePanel?.setCollapsed?.(!collapsed);
+    } catch (e) {}
+};
+
+export function bindSidebarCollapse() {
+    const btn = document.getElementById('sidebar-collapse')
+        ?? document.querySelector?.('[data-sidebar-collapse]');
+    if (!btn || btn.dataset?.bound === 'true') return;
+    btn.dataset.bound = 'true';
+    btn.innerHTML = CARD_ICONS.minimize ?? '';
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        collapseSidebar();
+    });
+}
+
 export function bindSidebarReattachAll() {
     const btn = document.getElementById('sidebar-reattach-all');
     if (!btn || btn.dataset.bound === 'true') return;
@@ -448,6 +473,7 @@ export function initAllSidebarModules() {
     bindSidebarReattachAll();
     bindSidebarCollapseAll();
     bindSidebarResetSize();
+    bindSidebarCollapse();
 
     window.addEventListener(SIDEBAR_MODULES_CHANGED_EVENT, (e) => {
         const modules = normalizeSidebarModules(e.detail?.modules || readSidebarModules());

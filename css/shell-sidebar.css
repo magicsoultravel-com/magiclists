@@ -233,6 +233,35 @@ body.is-editor-modal-open .side-panel {
     background: var(--bg-hover);
 }
 
+/* Collapse-sidebar tray control (hover-revealed). */
+.sidebar-collapse {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.12rem;
+    border: none;
+    background: transparent;
+    border-radius: 3px;
+    line-height: 0;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity 0.15s ease, background 0.15s ease;
+    cursor: pointer;
+}
+
+.control-bar-brand.is-in-sidebar:hover .sidebar-collapse,
+.sidebar-collapse:focus-visible,
+.side-panel:hover .sidebar-collapse {
+    opacity: 0.8;
+}
+.sidebar-collapse:hover,
+.control-bar-brand.is-in-sidebar:hover .sidebar-collapse:hover,
+.side-panel:hover .sidebar-collapse:hover {
+    opacity: 1;
+    background: var(--bg-hover);
+}
+
 .control-bar-brand.is-in-sidebar {
     display: flex;
     align-items: center;

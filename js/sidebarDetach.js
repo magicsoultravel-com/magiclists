@@ -16,6 +16,7 @@ import {
     resetSidebarWidthToDefault
 } from './shellResize.js';
 import { CARD_ICONS } from './icons.js';
+import { SidePanel } from './hamburger.js';
 
 export const SIDEBAR_DETACHED_CLASS = 'is-detached';
 export const SIDEBAR_DETACHED_SIZED_CLASS = 'is-detached--sized';
@@ -536,6 +537,20 @@ export function bindSidebarCollapseAll() {
     // Collapse-all is module-level; sidebarDetach only ensures binding hook exists.
 }
 
+export function bindSidebarCollapse() {
+    if (typeof document === 'undefined') return;
+    const btn = document.getElementById('sidebar-collapse')
+        ?? document.querySelector?.('[data-sidebar-collapse]');
+    if (!btn || btn.dataset?.sidebarCollapseBound === 'true') return;
+    if (btn.dataset) btn.dataset.sidebarCollapseBound = 'true';
+    btn.innerHTML = (typeof CARD_ICONS !== 'undefined' && CARD_ICONS.minimize) ? CARD_ICONS.minimize : '';
+    btn.addEventListener('click', (event) => {
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        try { SidePanel?.setCollapsed?.(true); } catch (e) {}
+    });
+}
+
 function bindBrandRow() {
     const el = getPanel();
     const header = el?.querySelector?.('.control-bar-brand');
@@ -634,6 +649,7 @@ export function initSidebarDetach() {
     bindResizeHandles();
     bindToggleButton();
     bindSidebarResetSize();
+    bindSidebarCollapse();
 
     if (!bound) {
         bound = true;
