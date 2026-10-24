@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T19:50:40.142Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T19:56:05.196Z
 
 ## CSS load order
 
@@ -108,8 +108,9 @@ alwaysApply: true
 | js/linksModel.js | pure link URL normalization, dedup keys, folder records/grouping, display/thumb helpers, favicon cache-busting and manual/name/date sorting | linksStore.js, linksOverlay.js, sidebarLinks.js, backupDelta.js | — | DOM-free except bindLinkThumbFallbacks; no storage access |
 | js/linksOverlay.js | Links manager floating panel: folders, add/edit/delete, drag reorder/move, favicon refresh, tile/list views, opt-in thum.io screenshots | linksStore.js, linksModel.js, sidebarLinks.js, desktopFloatChrome.js | links:changed, links:previews_changed, links:manage_requested | — |
 | js/linksStore.js | links localStorage CRUD, folder CRUD/moves, scoped manual reorder, dedup rejection, device-local preview ids, link change events | linksModel.js, backup.js, sync.js, sidebarLinks.js, linksOverlay.js | links:changed, links:previews_changed | — |
-| js/magicFocus.js | magic focus workspace mode — split panes, setup DnD, planner block hosting (table/chart/kanban/wbs) | app.js, noteQuickActions.js, drawingBoard.js, plannerUi.js, noteSurface.js | — | — |
+| js/magicFocus.js | magic focus workspace mode — split panes, setup DnD, planner block hosting (table/chart/kanban/wbs) | app.js, magicFocus/lifecycle.js, magicFocus/render.js, magicFocus/setup.js, magicFocus/panes.js, magicFocus/splitters.js, magicFocus/model.js | — | — |
 | js/magicFocus/layout.js | preset-to-grid translation - the CSS grid-template strings and the splitter descriptors each preset needs (columns, rows, areas, and where each handle sits) | magicFocus.js, magicFocus/model.js, magicFocus/splitters.js | — | — |
+| js/magicFocus/lifecycle.js | the focus session - open/close/toggle, the morph shell in and out, the escape key, item resolution and the pending-edit flush that must happen before the workspace tears down | magicFocus.js, magicFocus/render.js, magicFocus/setup.js, uiTransitions.js, noteSurface.js | — | — |
 | js/magicFocus/model.js | the focus layout model - block catalogue, preset tables, zone/ratio/zoom normalisation and the configured check; no DOM, no state | magicFocus.js, magicFocus/layout.js, magicFocus/setup.js | — | — |
 | js/magicFocus/paneMarkup.js | the body markup for one focus pane - checklist, planner table/chart/kanban/wbs, media, and the preset picker glyphs; the planner and attachment renderers are loaded lazily so focus never drags them into the boot graph | magicFocus.js, magicFocus/panes.js, noteSurfaceHtml.js, plannerUi.js | — | — |
 | js/magicFocus/panes.js | the pane surface - chrome controls, per-pane zoom, expand/collapse, filling a pane with its block body, the delegated pane interactions, and hosting the drawing board inside a pane | magicFocus.js, magicFocus/paneMarkup.js, magicFocus/model.js, magicFocus/splitters.js, drawingBoard.js | — | — |

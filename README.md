@@ -263,3 +263,62 @@ the last slice the facade must contain no `import` at all, not merely no
 `function`/`const` — a re-export block needs a local import only if something
 still uses the name, so a leftover `import` is the tell that code is trying to
 move back in.
+
+
+#### When the module owns a singleton instead of a set of builders
+
+`js/magicFocus.js` (1801 lines) was the other shape: 385 lines of pure helpers on
+top of one 1434-line object literal, `export const MagicFocus = { … }`. It went the
+same way, bottom-up, and ended as a 186-line facade — every method a one-line
+delegate to a session module.
+
+| module | owns | facade |
+| --- | --- | --- |
+| `magicFocus/model.js` | block catalogue, preset tables, zone/ratio/zoom normalisation | 1801 → 1660 |
+| `magicFocus/layout.js` | preset → CSS grid strings + splitter descriptors | 1660 → 1575 |
+| `magicFocus/paneMarkup.js` | the body markup one pane renders (checklist, planner, media) | 1575 → 1494 |
+| `magicFocus/setup.js` | the two-step setup wizard and the draft it edits | 1494 → 1270 |
+| `magicFocus/panes.js` | pane chrome, zoom, expand, fill, hosted drawing board | 1270 → 834 |
+| `magicFocus/splitters.js` | mounting, positioning and dragging the resize handles | 834 → 732 |
+| `magicFocus/render.js` | header, work surface, ephemeral spawn view | 732 → 538 |
+| `magicFocus/lifecycle.js` | open/close/toggle, shell morph, escape key, item resolution | 538 → 186 |
+
+The three helpers are plain moves. Everything from `setup.js` down is a **session**
+module in the `drawingBoard` sense — `export function open(magicFocus, item, opts)`,
+bodies de-indented with `this` → `magicFocus`, and a delegate left behind:
+
+```js
+async open(item, opts = {}) { return LifecycleSession.open(this, item, opts); },
+```
+
+Two details are worth copying and one is worth avoiding:
+
+- **Name the instance after the singleton.** The obvious `focus` collides: these
+  bodies already use `const focus = normalizeFocus(item.focus)` for the *layout
+  model* in several methods, and that only surfaces when those methods move
+  ("Identifier 'focus' has already been declared"). `magicFocus` can never collide,
+  which is also why the cabinet uses `board`.
+- **Cross-session calls go back through the facade.** Inside a moved body `this.foo()`
+  became `magicFocus.foo()`, which lands on the delegate and dispatches to whichever
+  session owns `foo`. No session imports another, so the graph stays a star and no
+  load-order cycle can appear as slices land; `test/magicFocusFacade.test.js` asserts
+  it.
+- ...and the trap: **destructured parameters cannot be forwarded positionally.**
+  `open(item, { forceSetup = false } = {})` needs the session to keep the original
+  destructuring (`(magicFocus, item, { forceSetup = false } = {})`) while the
+  delegate must give the argument a name (`opts = {}`) to pass it on. Getting this
+  wrong produces a delegate whose call site is a syntax error, or — worse — a
+  signature that parses but leaves `forceSetup` unresolved inside the body. The
+  first is caught by `check:modules`; the second only by
+  `test/freeIdentifierScan.test.js`, which is the reason that test exists.
+
+The lazy imports needed the same depth fix as `paneMarkup.js` and `panes.js`
+(`./plannerUi.js`, `./drawingBoard.js`, `./drawingToolbarChrome.js`,
+`./noteAttachmentsUi.js`, `./toast.js`, `./mediaLibraryOverlay.js`,
+`./flowchartUi.js`). Nine new suites came out of the split — `magicFocusModel`,
+`magicFocusLayout`, `magicFocusPaneMarkup`, `magicFocusSetup`, `magicFocusPanes`,
+`magicFocusSplitters`, `magicFocusRender`, `magicFocusLifecycle` and
+`magicFocusFacade` — taking the file from no coverage of its internals to 125 tests
+that need no browser: only the pointer gestures (drag, splitter drag) and anything
+that requires a real `<template>` stay browser-only.
+
