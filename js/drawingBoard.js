@@ -11,9 +11,9 @@ import {
     expandInfiniteBounds, shrinkInfiniteBounds, STORAGE_KEY, createId, CANVAS_MODES, BACKGROUNDS,
     PAGE_FORMATS
 } from './canvasDocument.js';
-import { BRUSH_STYLES, DRAG_SHAPE_TOOLS, drawBrushStroke, drawShapeStroke, drawTextObject } from './canvasBrushes.js';
+import { BRUSH_STYLES, drawBrushStroke, drawShapeStroke, drawTextObject } from './canvasBrushes.js';
 import {
-    WIDTH_MIN, WIDTH_MAX, DEFAULT_WIDTH, HIGHLIGHTER_WIDTH, HISTORY_MAX, SAVE_DEBOUNCE_MS,
+    WIDTH_MIN, WIDTH_MAX, DEFAULT_WIDTH, HIGHLIGHTER_WIDTH, SAVE_DEBOUNCE_MS,
     RESIZE_HANDLE_SIZE, RESIZE_HANDLE_HIT, POINT_SPACING, THIN_MIN_DIST, THIN_COLLINEAR_EPS,
     defaultWidthForStyle, pointSpacingForStyle, isDragShape
 } from './drawingBoardCore.js';
@@ -60,64 +60,7 @@ import {
     writePrefs
 } from './drawingBoard/prefs.js';
 
-function trimDrawingStack(stack) {
-    while (stack.length > HISTORY_MAX) stack.shift();
-}
-
-export class DrawingHistory {
-    constructor() {
-        this.undoStack = [];
-        this.redoStack = [];
-        this.onChange = null;
-    }
-    /** Fire after every stack move so the toolbar follows canUndo/canRedo. */
-    notifyChange() {
-        if (typeof this.onChange === 'function') this.onChange();
-    }
-    push(snapshot) {
-        const serialized = JSON.stringify(snapshot);
-        // Defence in depth: a repeat of the newest entry means nothing changed,
-        // so it would only light up Undo for a step that cannot do anything.
-        if (this.undoStack[this.undoStack.length - 1] === serialized) return;
-        this.undoStack.push(serialized);
-        trimDrawingStack(this.undoStack);
-        this.redoStack = [];
-        this.notifyChange();
-    }
-    undo(current) {
-        if (!this.undoStack.length) return null;
-        this.redoStack.push(JSON.stringify(current));
-        trimDrawingStack(this.redoStack);
-        const snapshot = JSON.parse(this.undoStack.pop());
-        this.notifyChange();
-        return snapshot;
-    }
-    redo(current) {
-        if (!this.redoStack.length) return null;
-        this.undoStack.push(JSON.stringify(current));
-        trimDrawingStack(this.undoStack);
-        const snapshot = JSON.parse(this.redoStack.pop());
-        this.notifyChange();
-        return snapshot;
-    }
-    clear() {
-        const had = this.undoStack.length > 0 || this.redoStack.length > 0;
-        this.undoStack = [];
-        this.redoStack = [];
-        if (had) this.notifyChange();
-    }
-    get canUndo() { return this.undoStack.length > 0; }
-    get canRedo() { return this.redoStack.length > 0; }
-}
-
-/**
- * Bind a board's history stacks to its toolbar affordances. Every mutation path
- * pushes through DrawingHistory, so this is the single place that keeps the
- * undo/redo buttons honest between full toolbar renders.
- */
-export function wireHistoryToolbar(board) {
-    board.history.onChange = () => board.updateToolbarState();
-}
+import { DrawingHistory, wireHistoryToolbar } from './drawingBoard/history.js';
 
 export const DrawingBoard = {
     active: false,
@@ -1807,4 +1750,5 @@ wireHistoryToolbar(DrawingBoard);
 ClipboardSession.bindBoard(DrawingBoard);
 
 export { getCanvasDocumentBackupKeys, applyDrawingBackupKeys } from './drawingBoardBackup.js';
+export { DrawingHistory, wireHistoryToolbar } from './drawingBoard/history.js';
 export { DRAWING_TOOLBAR_STATE_KEY as TOOLBAR_STATE_KEY } from './drawingBoardBackup.js';
