@@ -34,10 +34,10 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const JS_DIR = path.join(ROOT, 'js');
 
 /** Families covered by the session-module splits so far. */
-const SCOPE_DIRS = ['drawingBoard', 'ui'];
+const SCOPE_DIRS = ['drawingBoard', 'ui', 'app'];
 const SCOPE_PREFIXES = ['drawingBoard', 'canvas', 'noteCanvas', 'flowchart'];
 /** Single files a split touched without owning a directory. */
-const SCOPE_FILES = ['ui.js'];
+const SCOPE_FILES = ['ui.js', 'app.js'];
 
 function inScope(rel) {
     if (SCOPE_FILES.includes(rel)) return true;
