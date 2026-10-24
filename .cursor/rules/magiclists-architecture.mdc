@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T15:55:19.322Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T15:56:31.033Z
 
 ## CSS load order
 
@@ -105,8 +105,9 @@ alwaysApply: true
 | js/mediaStagingDialog.js | media staging upload dialogue before library commit | mediaLibrary.js, mediaPasteCatcher.js, mediaLibraryOverlay.js, notePasteContext.js, mediaAttachments.js | — | — |
 | js/mediaTransform.js | image optimize/resample helpers for media library | mediaMetadata.js, mediaLibrary.js, mediaTransformUi.js | — | — |
 | js/mediaTransformUi.js | media library optimize/scale confirm popover | mediaTransform.js, mediaLibrary.js, mediaQuickActions.js, popoverPosition.js | — | — |
-| js/noteAttachmentsUi.js | note card attached-media section HTML and hydrate | noteAttachmentsUi/media.js, noteAttachmentsUi/canvas.js, noteAttachmentsUi/shared.js, noteAttachmentsUi/lightboxMath.js, mediaAttachments.js, mediaLibrary.js, noteSurfaceHtml.js, mediaLibraryOverlay.js, mediaQuickActions.js, scribbleInk.js | — | — |
+| js/noteAttachmentsUi.js | note card attached-media section HTML and hydrate | noteAttachmentsUi/lightbox.js, noteAttachmentsUi/lightboxMath.js, noteAttachmentsUi/media.js, noteAttachmentsUi/canvas.js, noteAttachmentsUi/shared.js, mediaAttachments.js, mediaLibrary.js, noteSurfaceHtml.js, mediaLibraryOverlay.js, mediaQuickActions.js, scribbleInk.js | — | — |
 | js/noteAttachmentsUi/canvas.js | note card Canvas section HTML, live DOM sync, and canvas image membership | noteAttachmentsUi.js, noteAttachmentsUi/shared.js, noteCanvasRenderer.js, noteModel.js, canvasImages.js, noteSurfaceMutations.js, noteFocusSpawn.js, icons.js | — | — |
+| js/noteAttachmentsUi/lightbox.js | note media lightbox preview — zoom/pan/rotate, scribble overlay, and chrome wiring | noteAttachmentsUi.js, noteAttachmentsUi/lightboxMath.js, mediaLibrary.js, scribbleInk.js, canvasBrushes.js, colorPicker.js | — | — |
 | js/noteAttachmentsUi/lightboxMath.js | lightbox zoom/rotation/doodle coordinate math for note media preview | noteAttachmentsUi.js, scribbleInk.js | — | — |
 | js/noteAttachmentsUi/media.js | note card Media section HTML, attachment row hydrate, rename/detach/reorder and expand-to-canvas wiring | noteAttachmentsUi.js, noteAttachmentsUi/shared.js, noteAttachmentsUi/canvas.js, mediaAttachments.js, mediaLibrary.js, mediaQuickActions.js | — | — |
 | js/noteAttachmentsUi/shared.js | note body/section DOM lookups and object-URL release shared by media and canvas sections | noteAttachmentsUi.js, noteAttachmentsUi/media.js, noteAttachmentsUi/canvas.js, mediaLibrary.js | — | — |
