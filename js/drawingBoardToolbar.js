@@ -5,10 +5,9 @@ import { DrawingToolbarMenu, CHEVRON } from './drawingToolbarMenu.js';
 import { Fullscreen } from './fullscreen.js';
 import {
     getActiveBackground,
-    PAGE_FORMATS, BACKGROUNDS, CANVAS_MODES
+    PAGE_FORMATS, BACKGROUNDS
 } from './canvasDocument.js';
 import { CanvasViewport } from './canvasViewport.js';
-import { DrawingToolbarChrome } from './drawingToolbarChrome.js';
 import { showAppToast } from './toast.js';
 import { FLOW_LABEL_MIN, FLOW_LABEL_MAX } from './flowchart.js';
 import { stripRichText } from './richText.js';

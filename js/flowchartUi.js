@@ -1,5 +1,4 @@
 /** flowchart note subsection UI */
-import { escapeAttr } from './domEscape.js';
 import { CARD_ICONS } from './icons.js';
 import { createEmptyFlowchart, normalizeFlowchart, flowchartHasContent } from './flowchart.js';
 import { renderFocusSpawnTrayHtml } from './noteFocusSpawn.js';

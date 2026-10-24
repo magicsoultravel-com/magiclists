@@ -4,7 +4,7 @@ import {
     FLOWCHART_SHAPE_TOOLS, FLOWCHART_CONNECTOR_TOOL,
     FLOW_LABEL_DEFAULT, FLOW_LABEL_MIN, FLOW_LABEL_MAX,
     FLOWCHART_DEFAULT_COLOR, FLOWCHART_WIDTH_STEPS,
-    createFlowchartShape, createFlowchartConnector, normalizeFlowLabelSize, clampFlowchartWidth,
+    createFlowchartConnector, normalizeFlowLabelSize, clampFlowchartWidth,
     routeFlowchartConnector
 } from './flowchart.js';
 import {

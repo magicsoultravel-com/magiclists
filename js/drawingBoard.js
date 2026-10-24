@@ -2,23 +2,17 @@
 import { DRAWING_ICONS } from './icons.js';
 import {
     ColorPicker,
-    PALETTE_UNIFIED,
-    resolveNoteColor
+    PALETTE_UNIFIED
 } from './colorPicker.js';
 import { DrawingToolbarMenu } from './drawingToolbarMenu.js';
 import { CanvasViewport } from './canvasViewport.js';
 import {
-    readDocument,
-    writeDocument,
     getActiveStrokes,
-    getActiveTexts,
     setActiveStrokes,
-    setActiveTexts,
     getActiveImages,
     setActiveImages,
     getActiveBackground,
     setActiveBackground,
-    getActiveBackgroundColor,
     setActiveBackgroundColor,
     getPageDimensions,
     addPage,
@@ -27,32 +21,15 @@ import {
     switchCanvasMode,
     expandInfiniteBounds,
     shrinkInfiniteBounds,
-    STORAGE_KEY,
     createId,
     CANVAS_MODES,
-    BACKGROUNDS,
-    PAGE_FORMATS
+    BACKGROUNDS
 } from './canvasDocument.js';
-import {
-    BRUSH_STYLES,
-    drawBrushStroke,
-    drawShapeStroke,
-    drawTextObject
-} from './canvasBrushes.js';
+import { BRUSH_STYLES } from './canvasBrushes.js';
 import {
     WIDTH_MIN,
     WIDTH_MAX,
-    DEFAULT_WIDTH,
-    HIGHLIGHTER_WIDTH,
-    SAVE_DEBOUNCE_MS,
-    RESIZE_HANDLE_SIZE,
-    RESIZE_HANDLE_HIT,
-    POINT_SPACING,
-    THIN_MIN_DIST,
-    THIN_COLLINEAR_EPS,
-    defaultWidthForStyle,
-    pointSpacingForStyle,
-    isDragShape
+    DEFAULT_WIDTH
 } from './drawingBoardCore.js';
 
 import * as FlowSession from './drawingBoardFlowchart.js';
@@ -63,34 +40,17 @@ import * as ClipboardSession from './drawingBoardClipboard.js';
 
 import {
     loadImage,
-    clearImageCache,
-    ensureImagesLoaded,
-    initialImageSize,
-    drawImageObject,
-    drawImageGhost,
-    cropLimitRect
+    initialImageSize
 } from './canvasImages.js';
 import { listMedia } from './mediaLibrary.js';
 import { showAppToast } from './toast.js';
-import { stripRichText } from './richText.js';
 import {
-    paintNoteTextOverlay,
     ensureCanvasFitsNoteText,
     noteHasTextOverlayEnabled,
-    activePageIndex,
     migrateNoteCanvasTextFlags,
-    resolveOverlayFontSize,
-    overlayFontSizeToPercent,
-    OVERLAY_FONT_MIN,
-    OVERLAY_FONT_MAX,
-    OVERLAY_FONT_STEP
+    resolveOverlayFontSize
 } from './noteCanvasTextOverlay.js';
 
-import {
-    dist2,
-    thinStrokePoints,
-    readPressure
-} from './drawingBoard/geometry.js';
 import {
     readPrefs,
     writePrefs

@@ -1,5 +1,5 @@
 /** @module {"owns":"magicCanvas shared board constants (brush widths, menu items)", "related":["drawingBoard.js","drawingBoardToolbar.js","canvasBrushes.js"]} */
-import { BRUSH_STYLES, DRAG_SHAPE_TOOLS } from './canvasBrushes.js';
+import { DRAG_SHAPE_TOOLS } from './canvasBrushes.js';
 
 export const WIDTH_MIN = 1;
 export const WIDTH_MAX = 48;
