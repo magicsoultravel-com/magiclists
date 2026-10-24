@@ -8,6 +8,8 @@ import {
 } from './sidebarUndock.js';
 import { readModuleDock, writeModuleDock, writeSidebarSection } from './sidebarPrefs.js';
 import { bindToggleCollapsable } from './hamburger.js';
+import { resetDetachedSize, isDetached } from './sidebarDetach.js';
+import { resetSidebarWidthToDefault } from './shellResize.js';
 import { RadioPopover } from './radioPopover.js';
 import { TvPopover } from './tvPopover.js';
 import { ToolsManager } from './toolsManager.js';
@@ -334,6 +336,59 @@ export function dockSidebarModule(id) {
     updateReattachAllButton();
 }
 
+/** Collapse every sidebar module section at once. */
+export function collapseAllSidebarSections() {
+    SIDEBAR_MODULES.forEach((config) => {
+        const section = getAppElementById(config.sectionId);
+        const header = getAppElementById(config.headerId);
+        if (!section) return;
+        section.classList.add('collapsed');
+        const toggle = header?.querySelector?.('.collapsable-toggle');
+        toggle?.classList.add('collapsed');
+        try { writeSidebarSection(config.sectionId, true); } catch (e) {}
+        if (config.sectionId === 'quick-actions-section') {
+            window.dispatchEvent(new CustomEvent('quick-actions:section_toggled', { detail: { collapsed: true } }));
+        }
+    });
+    return true;
+}
+
+export const collapseAllSidebarModules = collapseAllSidebarSections;
+export const collapseAllSidebar = collapseAllSidebarSections;
+export const collapseAllSections = collapseAllSidebarSections;
+
+/** Reset the sidebar (floating or docked) to its default size. */
+export function resetSidebarSizeToDefault() {
+    if (isDetached()) return resetDetachedSize();
+    return resetSidebarWidthToDefault();
+}
+export const resetSidebarSize = resetSidebarSizeToDefault;
+export const resetSidebarToDefaultSize = resetSidebarSizeToDefault;
+
+export function bindSidebarCollapseAll() {
+    const btn = document.getElementById('sidebar-collapse-all')
+        ?? document.querySelector?.('[data-sidebar-collapse-all]');
+    if (!btn || btn.dataset?.bound === 'true') return;
+    btn.dataset.bound = 'true';
+    btn.innerHTML = CARD_ICONS.collapse ?? '';
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        collapseAllSidebarSections();
+    });
+}
+
+export function bindSidebarResetSize() {
+    const btn = document.getElementById('sidebar-reset-size')
+        ?? document.querySelector?.('[data-sidebar-reset-size]');
+    if (!btn || btn.dataset?.bound === 'true') return;
+    btn.dataset.bound = 'true';
+    btn.innerHTML = CARD_ICONS.maximize ?? '';
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        resetSidebarSizeToDefault();
+    });
+}
+
 export function bindSidebarReattachAll() {
     const btn = document.getElementById('sidebar-reattach-all');
     if (!btn || btn.dataset.bound === 'true') return;
@@ -391,6 +446,8 @@ export function initAllSidebarModules() {
     SidebarModulePopout.syncAllPopoutButtons();
 
     bindSidebarReattachAll();
+    bindSidebarCollapseAll();
+    bindSidebarResetSize();
 
     window.addEventListener(SIDEBAR_MODULES_CHANGED_EVENT, (e) => {
         const modules = normalizeSidebarModules(e.detail?.modules || readSidebarModules());

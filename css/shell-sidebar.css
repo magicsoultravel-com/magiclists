@@ -159,13 +159,15 @@ body.is-editor-modal-open .side-panel {
 
 .control-bar-brand.is-in-sidebar:hover .sidebar-detach-toggle,
 .sidebar-detach-toggle:focus-visible,
-.side-panel.is-detached .sidebar-detach-toggle {
+.side-panel.is-detached:hover .sidebar-detach-toggle,
+.side-panel:hover .sidebar-detach-toggle {
     opacity: 0.8;
 }
 
 .sidebar-detach-toggle:hover,
 .control-bar-brand.is-in-sidebar:hover .sidebar-detach-toggle:hover,
-.side-panel.is-detached .sidebar-detach-toggle:hover {
+.side-panel.is-detached:hover .sidebar-detach-toggle:hover,
+.side-panel:hover .sidebar-detach-toggle:hover {
     opacity: 1;
     background: var(--bg-hover);
 }
@@ -182,6 +184,53 @@ body.is-editor-modal-open .side-panel {
 
 .sidebar-reattach-all:disabled {
     cursor: default;
+}
+
+/* Collapse-all and reset-size tray controls (hover-revealed, like detach). */
+.sidebar-collapse-all,
+.sidebar-reset-size {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.12rem;
+    border: none;
+    background: transparent;
+    border-radius: 3px;
+    line-height: 0;
+    color: var(--text-muted);
+    opacity: 0;
+    transition: opacity 0.15s ease, background 0.15s ease;
+    cursor: pointer;
+}
+
+/* Collapse-all is detached-mode only. */
+.side-panel:not(.is-detached) .sidebar-collapse-all {
+    display: none;
+}
+
+.control-bar-brand.is-in-sidebar:hover .sidebar-collapse-all,
+.sidebar-collapse-all:focus-visible,
+.side-panel:hover .sidebar-collapse-all {
+    opacity: 0.8;
+}
+.sidebar-collapse-all:hover,
+.control-bar-brand.is-in-sidebar:hover .sidebar-collapse-all:hover,
+.side-panel:hover .sidebar-collapse-all:hover {
+    opacity: 1;
+    background: var(--bg-hover);
+}
+
+.control-bar-brand.is-in-sidebar:hover .sidebar-reset-size,
+.sidebar-reset-size:focus-visible,
+.side-panel:hover .sidebar-reset-size {
+    opacity: 0.8;
+}
+.sidebar-reset-size:hover,
+.control-bar-brand.is-in-sidebar:hover .sidebar-reset-size:hover,
+.side-panel:hover .sidebar-reset-size:hover {
+    opacity: 1;
+    background: var(--bg-hover);
 }
 
 .control-bar-brand.is-in-sidebar {

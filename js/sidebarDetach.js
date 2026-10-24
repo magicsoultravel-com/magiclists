@@ -12,7 +12,8 @@ import {
 import {
     applyDetachedSidebarMetrics,
     clampSidebarWidth,
-    onShellDockChanged
+    onShellDockChanged,
+    resetSidebarWidthToDefault
 } from './shellResize.js';
 import { CARD_ICONS } from './icons.js';
 
@@ -222,6 +223,23 @@ export function applyDetachedGeometry(geometry = null) {
     setStyleIfChanged(el, 'top', `${Math.round(y)}px`);
     return { ...next, width: appliedWidth, x, y };
 }
+
+/** Reset the floating sidebar's width and height to their defaults. */
+export function resetDetachedSize() {
+    if (!isDetached()) return false;
+    const current = readDetachedGeometry();
+    const applied = applyDetachedGeometry({
+        width: SIDEBAR_DEFAULT_WIDTH,
+        height: null,
+        x: current.x,
+        y: current.y
+    });
+    writeSidebarDetach(true, applied ?? current);
+    return true;
+}
+
+export const resetDetachedSizeToDefault = resetDetachedSize;
+export const resetFloatingSidebarSize = resetDetachedSize;
 
 /**
  * Remove every entry point into detached mode (kill-switch builds). Safe to call
@@ -499,6 +517,25 @@ function bindToggleButton() {
     });
 }
 
+export function bindSidebarResetSize() {
+    if (typeof document === 'undefined') return;
+    const btn = document.getElementById('sidebar-reset-size')
+        ?? document.querySelector?.('[data-sidebar-reset-size]');
+    if (!btn || btn.dataset?.sidebarResetSizeBound === 'true') return;
+    if (btn.dataset) btn.dataset.sidebarResetSizeBound = 'true';
+    btn.innerHTML = CARD_ICONS.maximize ?? '';
+    btn.addEventListener('click', (event) => {
+        event.preventDefault?.();
+        event.stopPropagation?.();
+        if (isDetached()) resetDetachedSize();
+        else resetSidebarWidthToDefault();
+    });
+}
+
+export function bindSidebarCollapseAll() {
+    // Collapse-all is module-level; sidebarDetach only ensures binding hook exists.
+}
+
 function bindBrandRow() {
     const el = getPanel();
     const header = el?.querySelector?.('.control-bar-brand');
@@ -596,6 +633,7 @@ export function initSidebarDetach() {
     bindBrandRow();
     bindResizeHandles();
     bindToggleButton();
+    bindSidebarResetSize();
 
     if (!bound) {
         bound = true;

@@ -553,6 +553,17 @@ export function onSidebarCollapseChanged() {
     dispatchDesktopBoundsChanged();
 }
 
+/** Reset the docked sidebar width to its default (220px). */
+export function resetSidebarWidthToDefault() {
+    writeSidebarWidth(SIDEBAR_DEFAULT_WIDTH);
+    if (isSidebarInFlow()) {
+        applySidebarWidth(SIDEBAR_DEFAULT_WIDTH);
+        resetStableBoardLayoutWidth();
+        dispatchDesktopBoundsChanged();
+    }
+    return SIDEBAR_DEFAULT_WIDTH;
+}
+
 export function initShellResize() {
     sidebarPanel = document.getElementById('side-panel');
     if (!sidebarPanel) return;
