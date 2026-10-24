@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T20:33:41.014Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T20:37:45.387Z
 
 ## CSS load order
 
@@ -212,6 +212,7 @@ alwaysApply: true
 | js/toolPanelPopout.js | tool panel popout open/focus/pop-in, DOM portal | toolPanelChrome.js, toolsManager.js, popoutWindows.js, appDocuments.js | — | — |
 | js/ui/boardState.js | the two pieces of board state the ui sessions read - the id->item lookup that render fills and the mutations update, plus the view mode the spatial layer falls back to; accessors only, so no session reaches into another session's closure | ui.js, ui/spatial.js, ui/render.js | — | — |
 | js/ui/gridPack.js | the grid packer - expansion classification, item sizing, the deterministic zero-gap rect solver behind sort/reset, and the spatial sort both the packer and the legacy migration use; no DOM writes, no state | ui.js, ui/spatial.js, ui/render.js | — | — |
+| js/ui/render.js | the board render pass - canvas prep, view state, item partitioning, layout and card creation, plus the post-render finalize; the only ui module that paints | ui.js, ui/spatial.js, ui/gridPack.js | — | — |
 | js/ui/spatial.js | spatial card geometry and chrome - rect resolution, expansion tiers, collapse/expand commits, the resize and toggle wiring, and the per-card update path; talks to storage through the facade and to the board lookup through boardState | ui.js, ui/gridPack.js, ui/render.js, ui/boardState.js | — | — |
 | js/uiTransitions.js | site-wide UI transition helpers — Smooth morph, FC fly/expand, chrome visibility | displayOptions.js, fileCabinet.js, magicFocus.js, app.js | — | — |
 | js/viewportCapture.js | best-effort viewport PNG capture for scribble copy | quickScribble.js, clipboard.js | — | — |

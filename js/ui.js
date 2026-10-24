@@ -154,6 +154,7 @@ import {
     writeActiveBoardViewMode
 } from './ui/boardState.js';
 import * as Spatial from './ui/spatial.js';
+import * as Render from './ui/render.js';
 
 export const UI = {
     flushAllInlineEditsFromCanvas(canvas, items, opts = {}) {
@@ -271,219 +272,48 @@ export const UI = {
     },
 
     render(canvas, items, viewMode, hiddenCategories = [], renderOptions = {}) {
-        if (!canvas) return;
-        // Clear stale map references before destroying DOM elements
-        clearBoardItems();
-        this.prepareCanvas(canvas);
-         
-        const safeItems = Array.isArray(items) ? items : [];
-        const visibleItems = BoardOperations.getVisibleItems(safeItems);
-        replaceBoardItemsMap(new Map(visibleItems.map((item) => [item.id, item])));
-
-        const activeCategories = this.getActiveCategories(hiddenCategories);
-         
-        const { resolvedMode, fileCabinetActive } = this.getViewState();
-        this.applyCanvasClasses(canvas, fileCabinetActive);
-
-        // Always refresh FC for the active desktop before empty-state.
-        // FC lives outside #app-canvas; skipping this left the previous desktop's tabs.
-        const { boardItems } = this.prepareBoardItems(
-            visibleItems,
-            fileCabinetActive,
-            resolvedMode,
-            activeCategories,
-            safeItems
-        );
-
-        if (boardItems.length === 0) {
-            this.renderEmptyState(canvas, fileCabinetActive, visibleItems, safeItems);
-            return;
-        }
-
-        const { boardPane } = this.layoutBoard(canvas, boardItems, activeCategories);
-        this.finalizeRender(canvas, boardPane, renderOptions);
+        return Render.render(this, canvas, items, viewMode, hiddenCategories, renderOptions);
     },
 
-    prepareCanvas(canvas) {
-        // Clean up document-level event listeners from checklist drag operations
-        // before wiping the DOM to prevent memory leaks and orphaned handlers
-        canvas.querySelectorAll('[data-checklistdrag-bound]').forEach((root) => {
-            if (root._checklistDragData) {
-                const { onMove, onUp } = root._checklistDragData;
-                if (onMove) document.removeEventListener('pointermove', onMove);
-                if (onUp) {
-                    document.removeEventListener('pointerup', onUp);
-                    document.removeEventListener('pointercancel', onUp);
-                }
-                document.body.classList.remove('is-checklist-dragging');
-                delete root._checklistDragData;
-            }
-        });
-        canvas.innerHTML = '';
-    },
+    prepareCanvas(canvas) { return Render.prepareCanvas(this, canvas); },
 
-    getActiveCategories(hiddenCategories) {
-        let activeCategories = readStoredCategories();
-        return activeCategories.filter(cat => !hiddenCategories.includes(cat.name));
-    },
+    getActiveCategories(hiddenCategories) { return Render.getActiveCategories(this, hiddenCategories); },
 
-    getViewState() {
-        const resolvedMode = 'grid';
-        const snapLayout = true;
-        const fileCabinetActive = isFileCabinetActive();
-        const activeBoardViewMode = 'grid';
-        return { resolvedMode, snapLayout, fileCabinetActive, activeBoardViewMode };
-    },
+    getViewState() { return Render.getViewState(this); },
 
     applyCanvasClasses(canvas, fileCabinetActive) {
-        canvas.className = 'view-grid';
-        if (fileCabinetActive) canvas.classList.add('file-cabinet-bottom');
-        delete canvas.dataset.focusActive;
+        return Render.applyCanvasClasses(this, canvas, fileCabinetActive);
     },
 
     prepareBoardItems(visibleItems, fileCabinetActive, resolvedMode, activeCategories, allItems = null) {
-        let boardItems = visibleItems;
-        let fileCabinetMount = null;
-         
-        if (fileCabinetActive) {
-            const { filed, expanded } = partitionItemsForFileCabinet(visibleItems, resolvedMode, this);
-            seedFileCabinetOrderFromItems(filed);
-            fileCabinetMount = ensureFileCabinetMount(true);
-            renderFileCabinet(fileCabinetMount, filed, activeCategories, this, {
-                allItems: allItems || visibleItems
-            });
-            syncCabinetSplitter();
-            boardItems = expanded;
-        } else {
-            ensureFileCabinetMount(false);
-            syncCabinetSplitter();
-        }
-         
-        return { boardItems, fileCabinetMount };
+        return Render.prepareBoardItems(this, visibleItems, fileCabinetActive, resolvedMode, activeCategories, allItems);
     },
 
     renderEmptyState(canvas, fileCabinetActive, visibleItems, safeItems) {
-        if (fileCabinetActive && visibleItems.length > 0) {
-            return;
-        }
-        const hiddenCount = safeItems.length - BoardOperations.getVisibleItems(safeItems).length;
-        if (safeItems.length > 0 && hiddenCount === safeItems.length) {
-            canvas.innerHTML = `<div class="system-status-msg">Add new note</div>`;
-        } else {
-            canvas.innerHTML = `<div class="system-status-msg">Workspace clean. Click "+ New" to commit an entity.</div>`;
-        }
+        return Render.renderEmptyState(this, canvas, fileCabinetActive, visibleItems, safeItems);
     },
 
     layoutBoard(canvas, boardItems, activeCategories) {
-        const bounds = this.getGridBoardBounds(canvas);
-        const boardPane = document.createElement('div');
-        boardPane.className = DESKTOP_BOARD_PANE_CLASS;
-        canvas.appendChild(boardPane);
-
-        // Compute layout using pure function
-        const { layout, placed, placedById } = computeBoardLayout(this, boardItems, bounds, {
-            getLayout: () => this.getGridLayout(),
-            isExpanded: (id) => this.isSavedLayoutExpanded(id),
-            resolveSpatialSize: (card, item) => this.resolveRememberedSpatialSize(card, item),
-            getTileDefaultRect: geoGetTileDefaultRect,
-            resolveTileSize,
-            findSlot: findFirstCanvasSlotCore,
-            snapRect: (rect, opts) => this.snapNoteRect(
-                this.gridBoardRectForCard(null, rect, this.isSavedLayoutExpanded(opts.itemId), opts.itemId),
-                opts
-            ),
-            clampRect: (rect) => this.preserveSavedBoardRect(rect)
-        });
-
-        // Apply layout to DOM — look up by id, never by list index.
-        // `placed` is spatially sorted; `boardItems` is not, so zipping them
-        // would swap every card the moment the item list order diverged
-        // (e.g. dragging a note in from the File Cabinet).
-        boardItems.forEach((item, index) => {
-            const card = createCardComponent(this, item, activeCategories);
-            const rect = placedById.get(item.id) ?? placed[index];
-            const saved = layout[item.id];
-
-            this.applyNoteRect(card, rect, { settling: false });
-            if (!saved) {
-                this.saveGridLayout(item.id, rect);
-            }
-
-            card.removeAttribute('draggable');
-            this.finalizeDesktopCard(card);
-            this.initDesktopCardStack(card, index);
-            this.syncBoardPinClass(card);
-            boardPane.appendChild(card);
-        });
-
-        return { layout, placed, boardPane };
+        return Render.layoutBoard(this, canvas, boardItems, activeCategories);
     },
 
     renderCards(boardItems, activeCategories, layout, placed, boardPane) {
-        // This is handled in layoutBoard now
+        return Render.renderCards(this, boardItems, activeCategories, layout, placed, boardPane);
     },
 
     finalizeRender(canvas, boardPane, renderOptions) {
-        this.updateBoardCanvasExtents(canvas);
-        // Cards are already placed at their saved positions by layoutBoard.
-        // Do NOT run the push-resolution reflow here: with actorId=null it
-        // re-packs every card and re-saves, clobbering the user's saved
-        // positions on every reload. Only update scroll policy (non-destructive).
-        if (!renderOptions.skipGridReflow && !isBoardOverlayEnabled()) {
-            this.updateGridScrollPolicy(canvas, { forcing: false });
-        }
+        return Render.finalizeRender(this, canvas, boardPane, renderOptions);
     },
 
     buildCardActionsHtml(item, isExpanded = false, options = {}) {
-        return NoteSurface.buildNoteQuickActionsHtml(item, {
-            surface: 'board',
-            isExpanded,
-            calHidden: BoardOperations.isHiddenFromCalendar(item),
-            poppedOut: NotePopoutBridge.isPoppedOut(item?.id),
-            ...options
-        });
+        return Render.buildCardActionsHtml(this, item, isExpanded, options);
     },
 
-    syncCalendarButtonUI(item, btn) {
-        if (!btn || !item) return;
-        const hidden = BoardOperations.isHiddenFromCalendar(item);
-        btn.innerHTML = CARD_ICONS.calendar;
-        const title = hidden
-            ? 'Hidden from calendar — click to show'
-            : 'Shown on calendar — click to hide';
-        btn.title = title;
-        btn.setAttribute('aria-label', title);
-        btn.classList.toggle('is-off', hidden);
-        btn.classList.toggle('is-on', !hidden);
-    },
+    syncCalendarButtonUI(item, btn) { return Render.syncCalendarButtonUI(this, item, btn); },
 
-    getCardActionsOptions(card) {
-        const hasSession = !!localStorage.getItem('admin_token');
-        const spatial = isDesktopCard(card);
-        const opts = {
-            pinned: this.isBoardPinned(card?.dataset?.id),
-            showDrag: hasSession && spatial
-        };
-        if (spatial && card) {
-            opts.spatialTile = true;
-            const item = this.resolveBoardItem(card.dataset.id);
-            let { w, h } = this.readNoteRect(card);
-            opts.tileSize = this.getCardTileSize(card, item);
-            if (!(w > 0 && h > 0)) {
-                const saved = this.getSavedLayoutRect(card, item);
-                w = saved?.w ?? 0;
-                h = saved?.h ?? 0;
-            }
-            opts.tileW = w;
-            opts.tileH = h;
-        }
-        return opts;
-    },
+    getCardActionsOptions(card) { return Render.getCardActionsOptions(this, card); },
 
-    syncBoardPinClass(card) {
-        if (!card?.dataset?.id) return;
-        card.classList.toggle('is-board-pinned', this.isBoardPinned(card.dataset.id));
-    },
+    syncBoardPinClass(card) { return Render.syncBoardPinClass(this, card); },
 
     setupFreeformChrome(card) { return Spatial.setupFreeformChrome(this, card); },
 
