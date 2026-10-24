@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T16:05:05.683Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T16:06:37.321Z
 
 ## CSS load order
 
@@ -79,6 +79,7 @@ alwaysApply: true
 | js/drawingBoard/history.js | magicCanvas undo/redo stacks and their toolbar wiring | drawingBoard.js, drawingBoardCore.js, drawingBoard/document.js | — | — |
 | js/drawingBoard/input.js | magicCanvas pointer and keyboard input - press routing, stroke drafting, gesture end and shortcuts | drawingBoard.js, drawingBoard/geometry.js, drawingBoardSelection.js, drawingBoardCrop.js, drawingBoardFlowchart.js, drawingBoardClipboard.js, canvasViewport.js, lassoGeometry.js | — | — |
 | js/drawingBoard/prefs.js | magicCanvas brush style and tool preferences in localStorage (matrix_drawing_prefs) | drawingBoard.js, drawingBoardCore.js, canvasBrushes.js | — | — |
+| js/drawingBoard/view.js | magicCanvas rendering - redraw loop, viewport sizing, page background fill/swatch, note overlay fit | drawingBoard.js, canvasViewport.js, canvasDocument.js, canvasBrushes.js, canvasBackgrounds.js, canvasImages.js, noteCanvasTextOverlay.js, colorPicker.js | — | — |
 | js/drawingBoardBackup.js | magicCanvas backup/restore payload (document + prefs + toolbar) | drawingBoard.js, canvasDocument.js, layoutStorage.js | — | — |
 | js/drawingBoardClipboard.js | magicCanvas clipboard session (Ctrl+C/X/V, Delete, selection serialization) | drawingBoard.js, mediaPasteCatcher.js, canvasDocument.js, flowchart.js | — | — |
 | js/drawingBoardCore.js | magicCanvas shared board constants (brush widths, menu items) | drawingBoard.js, drawingBoardToolbar.js, canvasBrushes.js | — | — |

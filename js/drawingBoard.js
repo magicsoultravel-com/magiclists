@@ -54,7 +54,7 @@ import {
     pointSpacingForStyle,
     isDragShape
 } from './drawingBoardCore.js';
-import { renderBackground } from './canvasBackgrounds.js';
+
 import { DrawingToolbarChrome } from './drawingToolbarChrome.js';
 import * as FlowSession from './drawingBoardFlowchart.js';
 import * as CropSession from './drawingBoardCrop.js';
@@ -102,6 +102,7 @@ import {
     wireHistoryToolbar
 } from './drawingBoard/history.js';
 import * as InputSession from './drawingBoard/input.js';
+import * as ViewSession from './drawingBoard/view.js';
 
 export const DrawingBoard = {
     active: false,
@@ -708,75 +709,17 @@ export const DrawingBoard = {
         setActiveImages(this.doc, images);
     },
 
-    clientToCanvas(clientX, clientY) {
-        return CanvasViewport.screenToWorld(clientX, clientY, this.canvas);
-    },
+    clientToCanvas(clientX, clientY) { return ViewSession.clientToCanvas(this, clientX, clientY); },
 
-    resize() {
-        if (!this.canvas || !this.boardEl) return;
-        const dims = getPageDimensions(this.doc);
-        const dpr = window.devicePixelRatio || 1;
-        const cssW = dims.width / dpr;
-        const cssH = dims.height / dpr;
+    resize() { return ViewSession.resize(this); },
 
-        [this.canvas, this.bgCanvas].forEach((c) => {
-            if (!c) return;
-            c.width = dims.width;
-            c.height = dims.height;
-            c.style.width = cssW + 'px';
-            c.style.height = cssH + 'px';
-        });
-        if (this.innerEl) {
-            this.innerEl.style.width = cssW + 'px';
-            this.innerEl.style.height = cssH + 'px';
-            this.innerEl.classList.toggle('is-paged-canvas', this.doc.canvasMode !== 'infinite');
-            this.innerEl.classList.toggle('is-infinite-canvas', this.doc.canvasMode === 'infinite');
-        }
-        CanvasViewport.setContentSize(cssW, cssH);
-        this.redrawBackground();
-        this.redraw();
-    },
+    pageBackgroundFill() { return ViewSession.pageBackgroundFill(this); },
 
-    pageBackgroundFill() {
-        const custom = getActiveBackgroundColor(this.doc);
-        if (custom) return custom;
-        if (this.isNoteCanvasMode && this.noteCanvasItem) {
-            return resolveNoteColor(this.noteCanvasItem.backgroundColor) || '';
-        }
-        return '';
-    },
+    pageBackgroundSwatch() { return ViewSession.pageBackgroundSwatch(this); },
 
-    pageBackgroundSwatch() {
-        const custom = this.pageBackgroundFill();
-        if (custom) return custom;
-        return getComputedStyle(document.documentElement).getPropertyValue('--desktop-bg').trim() || '#121214';
-    },
+    redrawBackground() { return ViewSession.redrawBackground(this); },
 
-    redrawBackground() {
-        if (!this.bgCtx || !this.bgCanvas) return;
-        const fillColor = this.pageBackgroundFill();
-        // In flowchart mode the visible grid must match the snap size exactly,
-        // otherwise the +/- stepper changes behaviour with no visual feedback.
-        const spacing = this.isFlowchartMode ? (this.flowchartGrid().size || 24) : 24;
-        renderBackground(this.bgCtx, getActiveBackground(this.doc), this.bgCanvas.width, this.bgCanvas.height, {
-            fillColor,
-            spacing
-        });
-        // Note text overlay is painted in redraw() on the main canvas (under strokes).
-    },
-
-    adaptNoteTextOverlayToCanvas() {
-        if (!this.isNoteCanvasMode || !this.noteCanvasItem || !this.doc) return false;
-        migrateNoteCanvasTextFlags(this.noteCanvasItem);
-        if (!noteHasTextOverlayEnabled(this.noteCanvasItem)) return false;
-        const grew = ensureCanvasFitsNoteText(this.doc, this.noteCanvasItem);
-        if (grew) this.resize();
-        else {
-            this.redrawBackground();
-            this.redraw();
-        }
-        return grew;
-    },
+    adaptNoteTextOverlayToCanvas() { return ViewSession.adaptNoteTextOverlayToCanvas(this); },
 
     setPageBackgroundColor(color, { rerender = true } = {}) {
         // The picker streams onSelect while a slider is dragged — one entry per
@@ -1016,55 +959,9 @@ export const DrawingBoard = {
     /** Escape with no in-flight crop drag: drop the session entirely. */
     clearCropSession() { return CropSession.clearCropSession(this); },
 
-    requestRedraw() {
-        if (this.rafId) return;
-        this.rafId = requestAnimationFrame(() => { this.rafId = null; this.redraw(); });
-    },
+    requestRedraw() { return ViewSession.requestRedraw(this); },
 
-    redraw() {
-        if (!this.ctx || !this.canvas) return;
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-        // Copy-paper note text under strokes (same world coords as drawing).
-        if (this.isNoteCanvasMode && noteHasTextOverlayEnabled(this.noteCanvasItem)) {
-            paintNoteTextOverlay(this.ctx, this.noteCanvasItem, {
-                fillColor: this.pageBackgroundFill(),
-                doc: this.doc,
-                pageIndex: activePageIndex(this.doc)
-            });
-        }
-
-        const images = this.images();
-        ensureImagesLoaded(images, () => { if (this.active) this.requestRedraw(); });
-        const cropTarget = this.cropState?.target;
-        images.forEach((img) => {
-            // Dimmed full-frame ghost under the live crop target only.
-            if (img === cropTarget && this.cropState) {
-                drawImageGhost(this.ctx, img, {
-                    limitRect: cropLimitRect(this.cropState.metrics)
-                });
-            }
-            drawImageObject(this.ctx, img);
-        });
-
-        this.strokes().forEach((stroke) => {
-            if (stroke.tool === 'brush') drawBrushStroke(this.ctx, stroke);
-            else drawShapeStroke(this.ctx, stroke);
-        });
-        getActiveTexts(this.doc).forEach((t) => drawTextObject(this.ctx, t));
-        if (this.draftStroke) drawBrushStroke(this.ctx, this.draftStroke);
-        if (this.shapePreview) drawShapeStroke(this.ctx, this.shapePreview);
-
-        if (this.isFlowchartMode) this.renderFlowchartOverlays();
-
-        // Render lasso overlay (path, box selection, selection box, resize handles)
-        if (this.isLassoActive || this.selectedStrokes.size > 0 || this.isBoxSelecting) {
-            this.renderLassoOverlay();
-        }
-
-        // Crop tool overlay (active drag box)
-        if (this.cropState) this.renderCropOverlay();
-    },
+    redraw() { return ViewSession.redraw(this); },
 
     undo() {
         this.clearCropSession();
@@ -1168,10 +1065,7 @@ export const DrawingBoard = {
         this.renderToolbar();
     },
 
-    pageLabel() {
-        const idx = this.doc.pages.findIndex((p) => p.id === this.doc.activePageId);
-        return (idx + 1) + ' / ' + this.doc.pages.length;
-    },
+    pageLabel() { return ViewSession.pageLabel(this); },
 
     currentToolEcho() { return ToolbarSession.currentToolEcho(this); },
 
