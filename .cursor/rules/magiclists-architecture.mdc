@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T16:06:37.321Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T16:08:41.534Z
 
 ## CSS load order
 
@@ -75,6 +75,7 @@ alwaysApply: true
 | js/desktopManager.js | multi-desktop state management, desktop assignment, persistence | — | — | — |
 | js/dragdrop.js | board drag-drop, resize, grid snap | layoutStorage.js, ui.js, fileCabinet.js | board:visibility_changed | — |
 | js/drawingBoard.js | magicCanvas drawing board, workspace drawing mode | canvasDocument.js, drawingToolbarMenu.js, layoutStorage.js | — | — |
+| js/drawingBoard/document.js | magicCanvas document persistence and undo application - snapshots, layer history, debounced save | drawingBoard.js, drawingBoard/history.js, canvasDocument.js, drawingBoardClipboard.js, canvasViewport.js | — | — |
 | js/drawingBoard/geometry.js | magicCanvas stroke geometry - point thinning, squared distance, pointer pressure | drawingBoard.js, drawingBoardCore.js | — | — |
 | js/drawingBoard/history.js | magicCanvas undo/redo stacks and their toolbar wiring | drawingBoard.js, drawingBoardCore.js, drawingBoard/document.js | — | — |
 | js/drawingBoard/input.js | magicCanvas pointer and keyboard input - press routing, stroke drafting, gesture end and shortcuts | drawingBoard.js, drawingBoard/geometry.js, drawingBoardSelection.js, drawingBoardCrop.js, drawingBoardFlowchart.js, drawingBoardClipboard.js, canvasViewport.js, lassoGeometry.js | — | — |

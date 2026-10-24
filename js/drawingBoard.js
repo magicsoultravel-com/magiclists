@@ -102,6 +102,7 @@ import {
     wireHistoryToolbar
 } from './drawingBoard/history.js';
 import * as InputSession from './drawingBoard/input.js';
+import * as DocumentSession from './drawingBoard/document.js';
 import * as ViewSession from './drawingBoard/view.js';
 
 export const DrawingBoard = {
@@ -633,65 +634,20 @@ export const DrawingBoard = {
         DrawingToolbarChrome.collapse();
     },
 
-    getSnapshot() {
-        return JSON.parse(JSON.stringify(this.doc));
-    },
+    getSnapshot() { return DocumentSession.getSnapshot(this); },
 
-    getLayerUndoSlice() {
-        return {
-            kind: 'layer',
-            canvasMode: this.doc.canvasMode,
-            activePageId: this.doc.activePageId,
-            background: getActiveBackground(this.doc),
-            backgroundColor: getActiveBackgroundColor(this.doc),
-            strokes: JSON.parse(JSON.stringify(getActiveStrokes(this.doc))),
-            texts: JSON.parse(JSON.stringify(getActiveTexts(this.doc))),
-            images: JSON.parse(JSON.stringify(getActiveImages(this.doc)))
-        };
-    },
+    getLayerUndoSlice() { return DocumentSession.getLayerUndoSlice(this); },
 
-    pushLayerHistory() {
-        this.history.push(this.getLayerUndoSlice());
-    },
+    pushLayerHistory() { return DocumentSession.pushLayerHistory(this); },
 
-    applySnapshot(snapshot) {
-        if (snapshot?.kind === 'layer') {
-            // A layer snapshot belongs to the page it was taken on. Restore that
-            // page first: undoing from page 2 must not paste page 1's strokes
-            // into page 2 (the pages would silently swap content).
-            const switchedPage = this.restoreSnapshotPage(snapshot.activePageId);
-            setActiveStrokes(this.doc, JSON.parse(JSON.stringify(snapshot.strokes || [])));
-            setActiveTexts(this.doc, JSON.parse(JSON.stringify(snapshot.texts || [])));
-            setActiveImages(this.doc, JSON.parse(JSON.stringify(snapshot.images || [])));
-            const hasBackground = snapshot.background !== undefined || snapshot.backgroundColor !== undefined;
-            if (snapshot.background !== undefined) setActiveBackground(this.doc, snapshot.background);
-            if (snapshot.backgroundColor !== undefined) setActiveBackgroundColor(this.doc, snapshot.backgroundColor);
-            if (hasBackground) this.redrawBackground();
-            if (switchedPage) this.resize();
-        } else {
-            this.doc = JSON.parse(JSON.stringify(snapshot));
-            this.resize();
-            if (this.doc.viewport) CanvasViewport.loadFromDoc(this.doc.viewport);
-        }
-        // Layers are fresh deep clones — re-point selection by id or drop orphans.
-        ClipboardSession.pruneSelection(this);
-        this.redraw();
-        this.scheduleSave();
-        this.updateToolbarState();
-    },
+    applySnapshot(snapshot) { return DocumentSession.applySnapshot(this, snapshot); },
 
     /**
      * Point the board at the page a snapshot was captured on.
      * @param {string} pageId
      * @returns {boolean} true when the active page actually changed
      */
-    restoreSnapshotPage(pageId) {
-        if (!pageId || !Array.isArray(this.doc?.pages)) return false;
-        if (pageId === this.doc.activePageId) return false;
-        if (!this.doc.pages.some((page) => page.id === pageId)) return false;
-        this.doc.activePageId = pageId;
-        return true;
-    },
+    restoreSnapshotPage(pageId) { return DocumentSession.restoreSnapshotPage(this, pageId); },
 
     strokes() {
         return getActiveStrokes(this.doc);
@@ -963,77 +919,15 @@ export const DrawingBoard = {
 
     redraw() { return ViewSession.redraw(this); },
 
-    undo() {
-        this.clearCropSession();
-        const prev = this.history.undo(this.getSnapshot());
-        if (prev) { this.applySnapshot(prev); this.renderToolbar(); }
-    },
+    undo() { return DocumentSession.undo(this); },
 
-    redo() {
-        this.clearCropSession();
-        const next = this.history.redo(this.getSnapshot());
-        if (next) { this.applySnapshot(next); this.renderToolbar(); }
-    },
+    redo() { return DocumentSession.redo(this); },
 
-    clearAll() {
-        if (!this.strokes().length && !getActiveTexts(this.doc).length && !this.images().length) return;
-        if (!confirm('Clear the current canvas page?')) return;
-        this.pushLayerHistory();
-        this.setStrokes([]);
-        this.setImages([]);
-        setActiveTexts(this.doc, []);
-        this.selectedStrokes.clear();
-        this.shrinkInfiniteIfNeeded();
-        this.redraw();
-        this.scheduleSave();
-    },
+    clearAll() { return DocumentSession.clearAll(this); },
 
-    scheduleSave() {
-        if (!this.active || !this.doc || !this.docOwner) return;
-        clearTimeout(this.saveTimer);
-        this.saveTimer = setTimeout(() => this.flushSave(), SAVE_DEBOUNCE_MS);
-    },
+    scheduleSave() { return DocumentSession.scheduleSave(this); },
 
-    async flushSave() {
-        clearTimeout(this.saveTimer);
-        this.saveTimer = null;
-        if (!this.doc || !this.docOwner) return;
-        this.doc.viewport = CanvasViewport.toDoc();
-        if (this.docOwner === 'note') {
-            const item = this.noteCanvasItem;
-            if (!item) return;
-            const doc = JSON.parse(JSON.stringify(this.doc));
-            const { mutateItem } = await import('./noteSurfaceMutations.js');
-            mutateItem(item, (it) => {
-                it.canvas = doc;
-                // Drawing implies the note canvas should be visible on board/modal.
-                it.canvasHidden = false;
-            }, { preserveView: true, skipRerender: true });
-            import('./noteAttachmentsUi.js').then(({ syncNoteCanvasDom }) => {
-                syncNoteCanvasDom(item);
-            }).catch(() => {});
-            return;
-        }
-        if (this.docOwner === 'flowchart') {
-            const item = this.flowchartItem;
-            if (!item) return;
-            const doc = JSON.parse(JSON.stringify(this.doc));
-            const { mutateItem } = await import('./noteSurfaceMutations.js');
-            mutateItem(item, (it) => {
-                if (!it.flowchart) return;
-                it.flowchart.doc = doc;
-                // Drawing implies the flowchart should be visible on board/modal.
-                it.flowchartHidden = false;
-            }, { preserveView: true, skipRerender: true });
-            import('./flowchartUi.js').then(({ syncNoteFlowchartDom }) => {
-                syncNoteFlowchartDom(item);
-            }).catch(() => {});
-            return;
-        }
-        if (this.docOwner === 'workspace') {
-            await writeDocument(this.doc);
-        }
-    },
+    async flushSave() { return DocumentSession.flushSave(this); },
 
     setCanvasMode(mode) {
         if (!CANVAS_MODES.includes(mode)) return;
