@@ -144,22 +144,24 @@ import {
     computeBoardLayout
 } from './board/gridEngine.js';
 import * as GridPack from './ui/gridPack.js';
-
-// Global state for board items lookup
-let boardItemsById = new Map();
-let activeBoardViewMode = 'grid';
+import {
+    clearBoardItems,
+    getBoardItem,
+    readActiveBoardViewMode,
+    replaceBoardItemsMap,
+    setBoardItem,
+    writeActiveBoardViewMode
+} from './ui/boardState.js';
 
 function ensureSmallTile(item) {
     if (!NoteSurface.canEditInline() || resolveTileSize(item) === 'small') return;
     NoteSurface.mutateItem(item, (it) => { it.tileSize = 'small'; }, { preserveView: true, skipRerender: true });
     item.tileSize = 'small';
-    boardItemsById.set(item.id, item);
+    setBoardItem(item);
 }
 
 function updateBoardItemsMap(item) {
-    if (item?.id) {
-        boardItemsById.set(item.id, item);
-    }
+    setBoardItem(item);
 }
 
 function createGridDeps(ui) {
@@ -225,7 +227,7 @@ export const UI = {
     },
 
     getActiveBoardViewMode() {
-        return activeBoardViewMode;
+        return readActiveBoardViewMode();
     },
 
     persistViewSessionForMode(mode, canvas = document.getElementById('app-canvas')) {
@@ -240,8 +242,7 @@ export const UI = {
     },
 
     resolveBoardItem(itemId) {
-        if (!itemId) return null;
-        return boardItemsById.get(itemId) || null;
+        return getBoardItem(itemId);
     },
 
     getSavedLayoutRect(card, item) {
@@ -458,7 +459,7 @@ export const UI = {
                 it.tileSize = normalizedTier;
             }, { preserveView: true, skipRerender: true });
             item.tileSize = normalizedTier;
-            boardItemsById.set(item.id, item);
+            setBoardItem(item);
         }
 
         this.applyNoteRect(card, rect, { settling: false });
@@ -699,12 +700,12 @@ reapplySmallFootprintOnBoard() {
     render(canvas, items, viewMode, hiddenCategories = [], renderOptions = {}) {
         if (!canvas) return;
         // Clear stale map references before destroying DOM elements
-        boardItemsById.clear();
+        clearBoardItems();
         this.prepareCanvas(canvas);
          
         const safeItems = Array.isArray(items) ? items : [];
         const visibleItems = BoardOperations.getVisibleItems(safeItems);
-        boardItemsById = new Map(visibleItems.map((item) => [item.id, item]));
+        replaceBoardItemsMap(new Map(visibleItems.map((item) => [item.id, item])));
 
         const activeCategories = this.getActiveCategories(hiddenCategories);
          
@@ -1150,7 +1151,7 @@ reapplySmallFootprintOnBoard() {
 
     applyDesktopLayoutModeSwitch(canvas) {
         if (!canvas) return;
-        activeBoardViewMode = 'grid';
+        writeActiveBoardViewMode('grid');
         canvas.classList.add('view-grid');
         canvas.classList.remove('view-freeform');
         canvas.querySelectorAll('.mini-card[data-desktop="1"]').forEach((card) => {
@@ -1407,7 +1408,7 @@ reapplySmallFootprintOnBoard() {
 findDesktopCenterSlot(w, h, canvas, viewMode, { excludeId = null } = {}) {
         const host = canvas || document.getElementById('app-canvas');
         if (!host) return { x: 8, y: 8, w, h };
-        const mode = viewMode || activeBoardViewMode;
+        const mode = viewMode || readActiveBoardViewMode();
 
         const { origin, packW, maxH, edgePad } = this.getGridBoardBounds(host);
         const { viewportH, scrollY } = getGridViewportBounds(host);
