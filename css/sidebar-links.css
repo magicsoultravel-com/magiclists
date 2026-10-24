@@ -1,4 +1,4 @@
-/** @css {"owns":"Links sidebar folder rows/tiles, inline drawers, tile/list views, hover quick actions and shared layered link thumbnails","js":["sidebarLinks.js","linksModel.js"],"notes":"manager panel styling lives in links-library.css"} */
+/** @css {"owns":"Links sidebar folder rows/tiles, floating tile-mode folder popovers, list accordions, tile/list views, hover quick actions and shared layered link thumbnails","js":["sidebarLinks.js","linksModel.js"],"notes":"manager panel styling lives in links-library.css"} */
 
 /* Shared layered thumbnail: letter underneath, direct favicon, optional
    thum.io screenshot overlay. Failed images are hidden so lower layers show. */
@@ -101,21 +101,27 @@
     display: none;
 }
 
+/* Tile mode: a folder is one tile in the same grid stream as links. Its drawer
+   is layered on top and never consumes a grid row. */
 .sidebar-links__folder-group {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
-    align-items: start;
-    gap: 0.28rem;
+    position: relative;
+    min-width: 0;
+    z-index: 1;
+}
+
+.sidebar-links__folder-group:hover,
+.sidebar-links__folder-group:focus-within,
+.sidebar-links__folder-group.is-expanded {
+    z-index: 30;
 }
 
 .sidebar-links__folder-tile {
     position: relative;
-    grid-column: span 1;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 0.14rem;
+    width: 100%;
     min-width: 0;
     padding: 0.2rem 0.16rem;
     border: 0;
@@ -167,6 +173,13 @@
 }
 
 .sidebar-links__folder-count {
+    position: absolute;
+    top: 0.18rem;
+    left: 0.14rem;
+    z-index: 2;
+    padding: 0.05rem 0.16rem;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--surface-elevated, #1a1a1e) 82%, transparent);
     color: var(--text-muted);
     font-size: 0.42rem;
     line-height: 1;
@@ -187,16 +200,28 @@
     transform: rotate(180deg);
 }
 
+/* Tile-mode popover: hover/focus peeks, click pins it across rebuilds. */
 .sidebar-links__folder-drawer {
+    position: absolute;
+    top: calc(100% - 1px);
+    left: var(--folder-drawer-left, 0);
+    z-index: 30;
     display: none;
-    grid-column: 1 / -1;
     grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
     gap: 0.28rem;
-    padding: 0.12rem 0 0.1rem 0.35rem;
-    border-left: 2px solid color-mix(in srgb, var(--accent, #3b82f6) 28%, transparent);
+    width: var(--folder-drawer-width, 12rem);
+    max-width: min(15rem, calc(100vw - 1rem));
+    max-height: min(50vh, 20rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 0.28rem 0.3rem;
+    border: 1px solid color-mix(in srgb, var(--text-main, #eee) 14%, transparent);
+    border-top: 2px solid color-mix(in srgb, var(--accent, #3b82f6) 54%, transparent);
+    border-radius: 8px;
+    background: var(--surface-elevated, var(--bg-surface, #1a1a1e));
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42), 0 2px 8px rgba(0, 0, 0, 0.28);
 }
 
-/* Inline drawer: hover/focus peeks, click pins it open across rebuilds. */
 .sidebar-links__folder-group:hover .sidebar-links__folder-drawer,
 .sidebar-links__folder-group:focus-within .sidebar-links__folder-drawer,
 .sidebar-links__folder-group.is-expanded .sidebar-links__folder-drawer {
@@ -430,22 +455,6 @@
     transform: rotate(0deg);
 }
 
-.sidebar-links[data-links-view="list"] .sidebar-links__folder-icon {
-    flex: 0 0 auto;
-    width: 18px;
-    max-width: none;
-    height: 18px;
-    aspect-ratio: auto;
-    border: 0;
-    border-radius: 4px;
-    background: color-mix(in srgb, var(--accent, #3b82f6) 9%, transparent);
-}
-
-.sidebar-links[data-links-view="list"] .sidebar-links__folder-icon svg {
-    width: 13px;
-    height: 13px;
-}
-
 .sidebar-links[data-links-view="list"] .sidebar-links__folder-name {
     flex: 1 1 auto;
     font-size: 0.55rem;
@@ -453,16 +462,30 @@
 }
 
 .sidebar-links[data-links-view="list"] .sidebar-links__folder-count {
+    position: static;
     flex: 0 0 auto;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
     font-size: 0.48rem;
 }
 
 .sidebar-links[data-links-view="list"] .sidebar-links__folder-drawer {
+    position: static;
+    z-index: auto;
     display: none;
     grid-template-columns: minmax(0, 1fr);
     width: 100%;
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+    overscroll-behavior: auto;
     padding: 0.08rem 0 0.12rem 0.9rem;
+    border: 0;
     border-left: 1px solid color-mix(in srgb, var(--accent, #3b82f6) 24%, transparent);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
 }
 
 .sidebar-links[data-links-view="list"] .sidebar-links__folder-group:hover:not(.is-expanded):not(:focus-within) .sidebar-links__folder-drawer {

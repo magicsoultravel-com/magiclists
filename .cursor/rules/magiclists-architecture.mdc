@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T10:10:38.405Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T10:38:25.552Z
 
 ## CSS load order
 
@@ -36,7 +36,7 @@ alwaysApply: true
 | css/calendar.css | calendar tool panel month grid and hour notes | js/tools/calendar.js, calendar.js | — | 23 |
 | css/cosmos.css | cosmos tool viewport and star map chrome | js/tools/cosmos.js | — | 24 |
 | css/sidebar-media.css | shared sidebar radio/tv player and popover chrome | sidebarRadio.js, sidebarTv.js, radioPopover.js, tvPopover.js | domain-specific rules stay in radio.css and tv.css | 25 |
-| css/sidebar-links.css | Links sidebar folder rows/tiles, inline drawers, tile/list views, hover quick actions and shared layered link thumbnails | sidebarLinks.js, linksModel.js | manager panel styling lives in links-library.css | 26 |
+| css/sidebar-links.css | Links sidebar folder rows/tiles, floating tile-mode folder popovers, list accordions, tile/list views, hover quick actions and shared layered link thumbnails | sidebarLinks.js, linksModel.js | manager panel styling lives in links-library.css | 26 |
 | css/radio.css | (unknown) | — | — | 27 |
 | css/tv.css | sidebar TV player, now playing, popover browser | sidebarTv.js, tvPlayer.js, tvPopover.js | shared chrome in sidebar-media.css; undocked module chrome in shell-sidebar.css | 28 |
 | css/weather.css | sidebar weather glance + expanded forecast panel | sidebarWeather.js, weatherApi.js | — | 29 |
@@ -146,7 +146,7 @@ alwaysApply: true
 | js/sheet.js | sheet-grid note template model and table interactions | noteSurface.js, editor.js | — | — |
 | js/sidebarDetach.js | detached (floating) sidebar mode: toggle, drag, corner resize, clamping, persisted geometry | shellResize.js, sidebarPrefs.js, hamburger.js, sync.js, board/boardExtents.js | sidebar:width_changed, tools:desktop_bounds_changed | — |
 | js/sidebarHistory.js | sidebar undo history module | undo.js, popoverPosition.js, sidebarModules.js | — | — |
-| js/sidebarLinks.js | Links sidebar folder groups, tile/list rendering, hover quick actions and manage/view shortcuts | linksStore.js, linksModel.js, linksOverlay.js, sidebarModules.js, sidebarPrefs.js | links:changed, links:manage_requested | — |
+| js/sidebarLinks.js | Links sidebar folder groups, floating folder popovers, tile/list rendering, hover quick actions and manage/view shortcuts | linksStore.js, linksModel.js, linksOverlay.js, sidebarModules.js, sidebarPrefs.js | links:changed, links:manage_requested, sidebar:width_changed | — |
 | js/sidebarModulePopout.js | sidebar module popout open/focus/pop-in, DOM portal | popoutWindows.js, sidebarModules.js, appDocuments.js | — | — |
 | js/sidebarModulePopoutShell.js | sidebar module popout placeholder shell state transfer | sidebarModulePopout.js | — | — |
 | js/sidebarModulePrefs.js | sidebar module enable/disable prefs, visibility DOM, lifecycle registry | displayOptions.js, sidebarModules.js, app.js, customizationReset.js | sidebar:modules_changed | — |

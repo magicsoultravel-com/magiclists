@@ -1,5 +1,5 @@
 /**
- * @module {"owns":"Links sidebar folder groups, tile/list rendering, hover quick actions and manage/view shortcuts","related":["linksStore.js","linksModel.js","linksOverlay.js","sidebarModules.js","sidebarPrefs.js"],"events":["links:changed","links:manage_requested"]}
+ * @module {"owns":"Links sidebar folder groups, floating folder popovers, tile/list rendering, hover quick actions and manage/view shortcuts","related":["linksStore.js","linksModel.js","linksOverlay.js","sidebarModules.js","sidebarPrefs.js"],"events":["links:changed","links:manage_requested","sidebar:width_changed"]}
  */
 import { escapeAttr, escapeHTML } from './domEscape.js';
 import { CARD_ICONS } from './icons.js';
@@ -63,6 +63,10 @@ function buildFolderGroupHtml(folder, folderLinks, view) {
     const count = folderLinks.length;
     const meta = `${count} link${count === 1 ? '' : 's'}`;
     const linksHtml = folderLinks.map((link) => buildTileHtml(link, view)).join('');
+    /* List mode is a compact accordion row: chevron + name + count is enough. */
+    const iconHtml = view === LINKS_VIEW_LIST
+        ? ''
+        : `<span class="sidebar-links__folder-icon" aria-hidden="true">${CARD_ICONS.folder}</span>`;
     return `<div class="sidebar-links__folder-group${expanded ? ' is-expanded' : ''}"
         data-folder-id="${escapeAttr(folder.id)}">
         <button type="button" class="sidebar-links__folder-tile" data-folder-toggle
@@ -70,7 +74,7 @@ function buildFolderGroupHtml(folder, folderLinks, view) {
             title="${escapeAttr(`${folder.name} — ${meta}`)}"
             aria-label="${escapeAttr(`${folder.name}, ${meta}`)}">
             <span class="sidebar-links__folder-chevron" aria-hidden="true">${CARD_ICONS.chevronDown}</span>
-            <span class="sidebar-links__folder-icon" aria-hidden="true">${CARD_ICONS.folder}</span>
+            ${iconHtml}
             <span class="sidebar-links__folder-name">${escapeHTML(folder.name)}</span>
             <span class="sidebar-links__folder-count">${count}</span>
         </button>
@@ -78,6 +82,33 @@ function buildFolderGroupHtml(folder, folderLinks, view) {
             ${linksHtml || '<p class="sidebar-links__folder-empty">No links in this folder.</p>'}
         </div>
     </div>`;
+}
+
+/**
+ * Tile popovers are absolute children of a small grid cell. Measure against the
+ * list so folders near the right edge still open fully inside the sidebar.
+ * clientWidth/offsetWidth stay in layout pixels while getBoundingClientRect is
+ * scaled by the sidebar zoom, hence the scale conversion.
+ */
+function positionFolderDrawer(group) {
+    if (!list || readLinksSidebarView() !== LINKS_VIEW_TILES) return;
+    const listRect = list.getBoundingClientRect?.();
+    const groupRect = group?.getBoundingClientRect?.();
+    if (!listRect?.width || !groupRect) return;
+    const scale = list.offsetWidth ? listRect.width / list.offsetWidth : 1;
+    const listWidth = list.clientWidth || (listRect.width / (scale || 1));
+    const width = Math.min(240, listWidth - 8);
+    if (width <= 0) return;
+    const groupLeft = (groupRect.left - listRect.left) / (scale || 1);
+    const maxLeft = Math.max(0, listWidth - width - 4);
+    const left = Math.min(Math.max(groupLeft, 0), maxLeft);
+    group.style.setProperty('--folder-drawer-left', `${left}px`);
+    group.style.setProperty('--folder-drawer-width', `${width}px`);
+}
+
+function positionFolderDrawers() {
+    if (!list || readLinksSidebarView() !== LINKS_VIEW_TILES) return;
+    list.querySelectorAll?.('.sidebar-links__folder-group')?.forEach(positionFolderDrawer);
 }
 
 function applyViewChrome() {
@@ -155,6 +186,18 @@ function bindEvents() {
         }
     });
 
+    root.addEventListener('pointerover', (e) => {
+        const group = e.target.closest?.('[data-folder-id]');
+        if (!group) return;
+        if (e.relatedTarget?.nodeType && group.contains(e.relatedTarget)) return;
+        positionFolderDrawer(group);
+    });
+
+    root.addEventListener('focusin', (e) => {
+        const group = e.target.closest?.('[data-folder-id]');
+        if (group) positionFolderDrawer(group);
+    });
+
     window.addEventListener(LINKS_CHANGED_EVENT, () => {
         SidebarLinks.refresh();
     });
@@ -164,6 +207,9 @@ function bindEvents() {
         expandedFolderIds = new Set(readLinksSidebarExpanded());
         SidebarLinks.refresh();
     });
+
+    window.addEventListener('resize', positionFolderDrawers);
+    window.addEventListener('sidebar:width_changed', positionFolderDrawers);
 }
 
 export const SidebarLinks = {
@@ -209,6 +255,7 @@ export const SidebarLinks = {
         const rootHtml = visibleRootLinks.map((link) => buildTileHtml(link, view)).join('');
         list.innerHTML = folderHtml + rootHtml;
         bindLinkThumbFallbacks(list);
+        positionFolderDrawers();
 
         if (more) {
             const hiddenCount = Math.max(0, rootLinks.length - visibleRootLinks.length);

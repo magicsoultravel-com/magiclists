@@ -95,6 +95,7 @@ describe('sidebarLinks · folders', () => {
         assert.equal(root.dataset.linksEmpty, 'false');
         assert.match(list.innerHTML, /sidebar-links__folder-group is-expanded/);
         assert.match(list.innerHTML, /sidebar-links__folder-name">Work</);
+        assert.match(list.innerHTML, /sidebar-links__folder-icon/);
         assert.match(list.innerHTML, /Inside/);
         assert.match(list.innerHTML, /At root/);
         assert.ok(list.innerHTML.indexOf('sidebar-links__folder-group') < list.innerHTML.indexOf('At root'));
@@ -129,7 +130,37 @@ describe('sidebarLinks · folders', () => {
         SidebarLinks.init();
         assert.match(list.innerHTML, /sidebar-links__folder-group/);
         assert.match(list.innerHTML, /sidebar-links__folder-name">Work</);
+        assert.equal(list.innerHTML.includes('sidebar-links__folder-icon'), false);
         assert.equal(list.innerHTML.includes('class="link-thumb'), false);
+    });
+
+    it('clamps the tile folder popover inside the sidebar width', () => {
+        writeLinksPayload({
+            version: 2,
+            updatedAt: 1,
+            folders: [{ id: 'folder_work', name: 'Work' }],
+            links: [{ id: 'link_folder', url: 'https://example.com/folder', title: 'Inside', folderId: 'folder_work' }]
+        });
+
+        const vars = {};
+        const group = {
+            getBoundingClientRect: () => ({ left: 150, width: 44 }),
+            style: {
+                setProperty(name, value) {
+                    vars[name] = value;
+                }
+            }
+        };
+        list.clientWidth = 204;
+        list.offsetWidth = 204;
+        list.getBoundingClientRect = () => ({ left: 0, width: 204 });
+        list.querySelectorAll = (selector) => (
+            selector === '.sidebar-links__folder-group' ? [group] : []
+        );
+
+        SidebarLinks.init();
+        assert.equal(vars['--folder-drawer-width'], '196px');
+        assert.equal(vars['--folder-drawer-left'], '4px');
     });
 
     it('caps only root links, never folder contents', () => {
