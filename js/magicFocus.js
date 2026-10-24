@@ -1,12 +1,9 @@
 /** @module {"owns":"magic focus workspace mode — split panes, setup DnD, planner block hosting (table/chart/kanban/wbs)", "related":["app.js","noteQuickActions.js","drawingBoard.js","plannerUi.js","noteSurface.js"]} */
 
 import { CARD_ICONS, ACTION_ICONS } from './icons.js';
-import { buildNoteQuickActionsHtml, buildNoteTitleHtml, buildNoteContentFieldHtml } from './noteSurfaceHtml.js';
+import { buildNoteQuickActionsHtml, buildNoteTitleHtml } from './noteSurfaceHtml.js';
 import { bindNoteQuickActions } from './noteQuickActions.js';
-import { NoteSurface, clearDesktopAutoSaveTimer, flushDesktopAutoSave } from './noteSurface.js';
-import { escapeAttr } from './domEscape.js';
-import { createEmptyNoteCanvas } from './noteModel.js';
-import { focusInlineEdit } from './noteSurfaceEditing.js';
+import { NoteSurface, flushDesktopAutoSave } from './noteSurface.js';
 import { applyCardTheme } from './cardTheme.js';
 import { resolveNoteColor } from './colorPicker.js';
 import { Editor } from './editor.js';
@@ -16,10 +13,10 @@ import {
     setChromeVisible,
     UI_TRANSITION_MS
 } from './uiTransitions.js';
-import { PRESET_ZONE_COUNTS, FOCUS_ZOOM_MIN, FOCUS_ZOOM_MAX, FOCUS_ZOOM_STEP, FOCUS_ZOOM_DEFAULT, clampFocusZoom, defaultRatios, asBlockList, createDefaultFocus, normalizeFocus, focusIsConfigured } from './magicFocus/model.js';
+import { PRESET_ZONE_COUNTS, FOCUS_ZOOM_MIN, FOCUS_ZOOM_MAX, FOCUS_ZOOM_DEFAULT, clampFocusZoom, defaultRatios, asBlockList, createDefaultFocus, normalizeFocus, focusIsConfigured } from './magicFocus/model.js';
 import { layoutForFocus } from './magicFocus/layout.js';
-import { buildChecklistPaneHtml, buildTablePaneHtml, buildChartPaneHtml, buildKanbanPaneHtml, buildWbsPaneHtml, buildMediaPaneHtml } from './magicFocus/paneMarkup.js';
 import * as SetupSession from './magicFocus/setup.js';
+import * as PaneSession from './magicFocus/panes.js';
 export { createDefaultFocus, normalizeFocus, focusIsConfigured };
 
 const MORPH_CLASS = 'ui-morph-hidden';
@@ -664,330 +661,27 @@ export const MagicFocus = {
         this.renderHeader(item);
     },
 
-    _bindPaneChromeControls() {
-        const work = this.bodyEl?.querySelector('[data-magic-focus-work]');
-        if (!work) return;
-        work.querySelectorAll('[data-focus-pane-expand]').forEach((btn) => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const pane = btn.closest('[data-focus-pane]');
-                const zid = pane?.getAttribute('data-focus-pane');
-                if (!zid) return;
-                if (this.expandedPaneId === zid) this.clearExpandedPane();
-                else this.setExpandedPane(zid);
-            });
-        });
-        work.querySelectorAll('[data-focus-pane-zoom-out]').forEach((btn) => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const pane = btn.closest('[data-focus-pane]');
-                const zid = pane?.getAttribute('data-focus-pane');
-                if (!zid) return;
-                this._nudgePaneZoom(zid, -FOCUS_ZOOM_STEP);
-            });
-        });
-        work.querySelectorAll('[data-focus-pane-zoom-in]').forEach((btn) => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const pane = btn.closest('[data-focus-pane]');
-                const zid = pane?.getAttribute('data-focus-pane');
-                if (!zid) return;
-                this._nudgePaneZoom(zid, FOCUS_ZOOM_STEP);
-            });
-        });
-    },
+    _bindPaneChromeControls() { return PaneSession._bindPaneChromeControls(this); },
 
-    _nudgePaneZoom(zoneId, delta) {
-        if (!zoneId) return;
-        if (this.sessionSpawnBlocks?.length) {
-            const next = clampFocusZoom((this.sessionSpawnZoom ?? FOCUS_ZOOM_DEFAULT) + delta);
-            this.sessionSpawnZoom = next;
-            this._applyPaneZoom(zoneId, next);
-            this._refitHostedCanvas();
-            return;
-        }
-        const item = this.resolveItem();
-        if (!item) return;
-        const focus = normalizeFocus(item.focus) || createDefaultFocus();
-        const next = clampFocusZoom((focus.zoom?.[zoneId] ?? FOCUS_ZOOM_DEFAULT) + delta);
-        const zoom = { ...focus.zoom, [zoneId]: next };
-        NoteSurface.mutateItem(item, (it) => {
-            if (!it.focus) it.focus = createDefaultFocus(focus.preset);
-            it.focus = normalizeFocus({
-                ...it.focus,
-                ratios: focus.ratios,
-                preset: focus.preset,
-                zones: focus.zones,
-                zoom
-            });
-        }, { preserveView: true, skipRerender: true });
-        this._applyPaneZoom(zoneId, next);
-        this._refitHostedCanvas();
-    },
+    _nudgePaneZoom(zoneId, delta) { return PaneSession._nudgePaneZoom(this, zoneId, delta); },
 
-    _applyPaneZoom(zoneId, zoomPct) {
-        const pane = this.bodyEl?.querySelector(`[data-focus-pane="${CSS.escape(zoneId)}"]`);
-        if (!pane) return;
-        const pct = clampFocusZoom(zoomPct);
-        pane.style.setProperty('--focus-pane-zoom', String(pct / 100));
-        const label = pane.querySelector('[data-focus-pane-zoom-label]');
-        if (label) label.textContent = `${pct}%`;
-        const outBtn = pane.querySelector('[data-focus-pane-zoom-out]');
-        const inBtn = pane.querySelector('[data-focus-pane-zoom-in]');
-        if (outBtn) outBtn.disabled = pct <= FOCUS_ZOOM_MIN;
-        if (inBtn) inBtn.disabled = pct >= FOCUS_ZOOM_MAX;
-    },
+    _applyPaneZoom(zoneId, zoomPct) { return PaneSession._applyPaneZoom(this, zoneId, zoomPct); },
 
-    setExpandedPane(zoneId) {
-        const work = this.bodyEl?.querySelector('[data-magic-focus-work]');
-        if (!work || !zoneId) return;
-        this.expandedPaneId = zoneId;
-        work.classList.add('is-pane-expanded');
-        work.querySelectorAll('[data-focus-pane]').forEach((pane) => {
-            const id = pane.getAttribute('data-focus-pane');
-            pane.classList.toggle('is-expanded', id === zoneId);
-        });
-        this._syncPaneExpandButtons();
-        this._refitHostedCanvas();
-    },
+    setExpandedPane(zoneId) { return PaneSession.setExpandedPane(this, zoneId); },
 
-    clearExpandedPane() {
-        const work = this.bodyEl?.querySelector('[data-magic-focus-work]');
-        this.expandedPaneId = null;
-        if (work) {
-            work.classList.remove('is-pane-expanded');
-            work.querySelectorAll('[data-focus-pane].is-expanded').forEach((pane) => {
-                pane.classList.remove('is-expanded');
-            });
-        }
-        this._syncPaneExpandButtons();
-        this._refitHostedCanvas();
-    },
+    clearExpandedPane() { return PaneSession.clearExpandedPane(this); },
 
-    _syncPaneExpandButtons() {
-        const work = this.bodyEl?.querySelector('[data-magic-focus-work]');
-        if (!work) return;
-        work.querySelectorAll('[data-focus-pane]').forEach((pane) => {
-            const btn = pane.querySelector('[data-focus-pane-expand]');
-            if (!btn) return;
-            const zid = pane.getAttribute('data-focus-pane');
-            const expanded = this.expandedPaneId === zid;
-            btn.innerHTML = expanded ? CARD_ICONS.collapseMedia : CARD_ICONS.expandMedia;
-            const label = expanded ? 'Restore pane' : 'Expand pane';
-            btn.title = label;
-            btn.setAttribute('aria-label', label);
-            btn.setAttribute('aria-pressed', expanded ? 'true' : 'false');
-        });
-    },
+    _syncPaneExpandButtons() { return PaneSession._syncPaneExpandButtons(this); },
 
-    _refitHostedCanvas() {
-        if (!this.drawingHosted) return;
-        import('./drawingBoard.js').then(({ DrawingBoard }) => {
-            if (DrawingBoard.active) DrawingBoard.resize?.();
-        }).catch(() => {});
-    },
+    _refitHostedCanvas() { return PaneSession._refitHostedCanvas(this); },
 
-    async _blockHtml(item, block, zoneId) {
-        if (block === 'text') {
-            const textCollapsed = !!item.textCollapsed;
-            // Reuse the canonical content-field builder so Focus renders text
-            // exactly like the board/modal (rich edit, links, <br> line breaks).
-            const field = buildNoteContentFieldHtml(item, { canEdit: true, richEdit: true });
-            return `<div class="planner-sub" data-note-text data-text-collapsed="${textCollapsed ? '1' : '0'}">
-                <div class="planner-sub__toolbar">
-                    <button type="button" class="planner-sub__title" data-note-text-toggle aria-expanded="${textCollapsed ? 'false' : 'true'}">
-                        <span class="collapsable-toggle${textCollapsed ? ' collapsed' : ''}" aria-hidden="true">▼</span>Text
-                    </button>
-                </div>
-                <div class="planner-sub__body${textCollapsed ? ' is-collapsed' : ''}" data-note-text-body>${field}</div>
-            </div>`;
-        }
-        if (block === 'checklist') {
-            const checklistCollapsed = !!item.checklistCollapsed;
-            if (!item.steps) item.steps = [];
-            return `<div class="planner-sub" data-note-checklist-sub data-checklist-collapsed="${checklistCollapsed ? '1' : '0'}">
-                <div class="planner-sub__toolbar">
-                    <button type="button" class="planner-sub__title" data-note-checklist-toggle aria-expanded="${checklistCollapsed ? 'false' : 'true'}">
-                        <span class="collapsable-toggle${checklistCollapsed ? ' collapsed' : ''}" aria-hidden="true">▼</span>Checklist
-                    </button>
-                </div>
-                <div class="planner-sub__body${checklistCollapsed ? ' is-collapsed' : ''}" data-note-checklist-body>
-                    ${buildChecklistPaneHtml(item)}
-                </div>
-            </div>`;
-        }
-        if (block === 'table') return buildTablePaneHtml(item);
-        if (block === 'chart') return buildChartPaneHtml(item);
-        if (block === 'kanban') return buildKanbanPaneHtml(item);
-        if (block === 'wbs') return buildWbsPaneHtml(item);
-        if (block === 'media') return buildMediaPaneHtml(item);
-        if (block === 'canvas') {
-            if (!item.canvas) {
-                NoteSurface.mutateItem(item, (it) => {
-                    it.canvas = createEmptyNoteCanvas();
-                    it.canvasHidden = false;
-                }, { preserveView: true, skipRerender: true });
-            }
-            return `<div class="planner-sub magic-focus__canvas-sub" data-focus-canvas-sub>
-                <div class="planner-sub__toolbar">
-                    <button type="button" class="planner-sub__title" data-focus-canvas-toggle aria-expanded="true">
-                        <span class="collapsable-toggle" aria-hidden="true">▼</span>Canvas
-                    </button>
-                </div>
-                <div class="planner-sub__body" data-focus-canvas-body>
-                    <div class="magic-focus__canvas-host" data-focus-canvas-host="${escapeAttr(zoneId)}"></div>
-                </div>
-            </div>`;
-        }
-        return '';
-    },
+    async _blockHtml(item, block, zoneId) { return PaneSession._blockHtml(this, item, block, zoneId); },
 
-    async _fillPane(body, item, blocks, zoneId) {
-        const list = Array.isArray(blocks) ? blocks : asBlockList(blocks);
-        // Board checklist refresh syncs before rebuild; match that so collapse/
-        // expand paths do not drop in-flight step/text edits.
-        const pane = body.closest?.('.magic-focus__pane');
-        const live = this.resolveItem() || item;
-        if (pane && live && pane.querySelector('.card-inline-edit, .expanded-checklist, [data-note-text]')) {
-            flushDesktopAutoSave(pane, live, { mergeWindow: false });
-        } else {
-            // No editable DOM yet (first mount) — still cancel any orphan timer.
-            clearDesktopAutoSaveTimer();
-        }
-        // Checklist structural ops (indent/outdent/delete/drag) stash the step to
-        // refocus; re-apply it once the fresh rows exist.
-        const pendingStepId = body.dataset.pendingFocusStepId || '';
-        const pendingEdge = body.dataset.pendingFocusEdge || 'end';
-        if (pendingStepId) {
-            delete body.dataset.pendingFocusStepId;
-            delete body.dataset.pendingFocusEdge;
-        }
-        const parts = [];
-        for (const block of list) {
-            parts.push(await this._blockHtml(live || item, block, zoneId));
-        }
-        body.innerHTML = parts.join('');
-        this._bindPaneInteractions(body, live || item);
-        if (pendingStepId) {
-            const stepTextEl = body.querySelector(`.step-text.card-inline-edit[data-step-id="${CSS.escape(pendingStepId)}"]`);
-            if (stepTextEl) focusInlineEdit(stepTextEl, pendingEdge === 'start' ? 'start' : 'end');
-        }
+    async _fillPane(body, item, blocks, zoneId) { return PaneSession._fillPane(this, body, item, blocks, zoneId); },
 
-        const canvasHost = body.querySelector('[data-focus-canvas-host]');
-        if (canvasHost) {
-            await this._hostDrawingBoard(canvasHost, item);
-            const toggle = body.querySelector('[data-focus-canvas-toggle]');
-            toggle?.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                const sub = body.querySelector('[data-focus-canvas-sub]');
-                const subBody = sub?.querySelector('[data-focus-canvas-body]');
-                const chevron = toggle.querySelector('.collapsable-toggle');
-                const collapsed = subBody?.classList.toggle('is-collapsed');
-                chevron?.classList.toggle('collapsed', !!collapsed);
-                toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-                if (!collapsed) this._relayoutFocusCanvas();
-            });
-        }
-    },
+    _relayoutFocusCanvas() { return PaneSession._relayoutFocusCanvas(this); },
 
-    _relayoutFocusCanvas() {
-        if (!this.drawingHosted) return;
-        requestAnimationFrame(() => {
-            import('./drawingBoard.js').then(({ DrawingBoard }) => {
-                if (DrawingBoard.active) DrawingBoard.resize?.();
-            });
-            import('./drawingToolbarChrome.js').then(({ DrawingToolbarChrome }) => {
-                if (DrawingToolbarChrome.collapsed) {
-                    DrawingToolbarChrome.positionChip?.(false);
-                    DrawingToolbarChrome.chip?.classList.remove('is-hidden');
-                }
-            });
-        });
-    },
-
-    _bindPaneInteractions(body, item) {
-        const { bindNoteEditorShell } = NoteSurface;
-        const pane = body.closest('.magic-focus__pane');
-        if (!pane) return;
-        if (!pane.classList.contains('editor-note-shell')) {
-            pane.classList.add('editor-note-shell');
-        }
-        try {
-            bindNoteEditorShell(pane, item, {
-                richEdit: true,
-                localOnly: false,
-                stopMousedownPropagation: true,
-                // Checklist structural ops call refresh() (delete/indent/outdent/
-                // collapse/done). Focus owns the pane, so rebuild it in place.
-                refresh: () => this.refreshChecklistPane(body),
-                onChange: () => {}
-            });
-        } catch { /* ignore */ }
-
-        // Each table/chart/kanban block is its own [data-note-planner] — bind every one.
-        import('./plannerUi.js').then(({ attachPlannerInteractions }) => {
-            body.querySelectorAll('[data-note-planner]').forEach((sec) => {
-                attachPlannerInteractions(sec, item, {
-                    localOnly: false,
-                    onChange: () => {},
-                    refresh: () => {
-                        this.refreshPlannerPanes?.(item);
-                    }
-                });
-            });
-        }).catch(() => {});
-
-        import('./noteAttachmentsUi.js').then(({ bindNoteAttachments }) => {
-            body.querySelectorAll('[data-focus-media-sub]').forEach((sub) => {
-                // Focus-local collapse: toggle the planner-sub body only.
-                // Never writes item.attachmentsCollapsed (board state stays intact).
-                const toggle = sub.querySelector('[data-focus-media-toggle]');
-                const subBody = sub.querySelector('[data-focus-media-body]');
-                if (toggle && subBody && !toggle.dataset.focusMediaToggleBound) {
-                    toggle.dataset.focusMediaToggleBound = '1';
-                    toggle.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        const collapsed = subBody.classList.toggle('is-collapsed');
-                        toggle.querySelector('.collapsable-toggle')?.classList.toggle('collapsed', !!collapsed);
-                        toggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
-                        sub.dataset.mediaCollapsed = collapsed ? '1' : '0';
-                    });
-                }
-                // Add-media CTA routes to the board entry point (library overlay).
-                const addBtn = sub.querySelector('[data-focus-media-add]');
-                if (addBtn && !addBtn.dataset.focusMediaAddBound) {
-                    addBtn.dataset.focusMediaAddBound = '1';
-                    addBtn.addEventListener('click', () => {
-                        if (!localStorage.getItem('admin_token')) {
-                            import('./toast.js').then(({ showAppToast }) => {
-                                showAppToast('Login required to attach media');
-                            }).catch(() => {});
-                            return;
-                        }
-                        import('./mediaLibraryOverlay.js').then(({ MediaLibraryOverlay }) => {
-                            MediaLibraryOverlay.open({ attachNoteId: item.id });
-                        }).catch(() => {});
-                    });
-                }
-                // Row bindings (hydrate, reorder via mutateItem, quick-actions)
-                // attach to the inner host. bindNoteAttachments is idempotent
-                // per root (dataset flags), so a re-bind after refresh is safe.
-                const host = sub.querySelector('[data-note-attachments][data-focus-media-only]');
-                if (host) bindNoteAttachments(host, item);
-            });
-        }).catch(() => {});
-
-        import('./flowchartUi.js').then(({ attachFlowchartInteractions }) => {
-            body.querySelectorAll('[data-note-flowchart]').forEach((sec) => {
-                attachFlowchartInteractions(sec.closest('.editor-note-body') || sec.parentElement, item);
-            });
-        }).catch(() => {});
-    },
+    _bindPaneInteractions(body, item) { return PaneSession._bindPaneInteractions(this, body, item); },
 
     /**
      * Rebuild a Focus pane after a checklist structural mutation.
@@ -998,17 +692,7 @@ export const MagicFocus = {
      * clears any pending autosave, so a full pane rebuild is safe here.
      * @param {HTMLElement} body - the pane's .editor-note-body element
      */
-    async refreshChecklistPane(body) {
-        if (!this.isOpen() || this.showingSetup || !body?.isConnected) return;
-        const zoneId = body.getAttribute('data-focus-pane-body');
-        const item = this.resolveItem();
-        if (!zoneId || !item) return;
-        const blocks = this.sessionSpawnBlocks?.length
-            ? asBlockList(this.sessionSpawnBlocks)
-            : asBlockList(normalizeFocus(item.focus)?.zones?.[zoneId]);
-        if (!blocks.length) return;
-        await this._fillPane(body, item, blocks, zoneId);
-    },
+    async refreshChecklistPane(body) { return PaneSession.refreshChecklistPane(this, body); },
 
     _mountSplitters(focus, layout) {
         const work = this.bodyEl?.querySelector('[data-magic-focus-work]');
@@ -1119,56 +803,9 @@ export const MagicFocus = {
         });
     },
 
-    async _hostDrawingBoard(hostEl, item) {
-        const board = document.getElementById('drawing-board');
-        if (!board || !hostEl) return;
-        const { DrawingBoard } = await import('./drawingBoard.js');
-        const { DrawingToolbarChrome } = await import('./drawingToolbarChrome.js');
+    async _hostDrawingBoard(hostEl, item) { return PaneSession._hostDrawingBoard(this, hostEl, item); },
 
-        if (!this.drawingHomeParent) {
-            this.drawingHomeParent = board.parentElement;
-        }
-        hostEl.appendChild(board);
-        board.classList.add('magic-focus-canvas-board');
-        board.classList.remove('is-hidden');
-        board.setAttribute('aria-hidden', 'false');
-        this.drawingHosted = true;
-
-        DrawingToolbarChrome.setHostBounds?.(board, {
-            storageKey: 'matrix_focus_drawing_toolbar',
-            defaultCollapsed: true
-        });
-
-        // Activate note canvas without leaving focus / setting data-drawing-mode
-        await DrawingBoard.activateForNote(item);
-        // Force collapsed toolbar for focus default
-        if (!DrawingToolbarChrome.collapsed) {
-            DrawingToolbarChrome.collapse?.();
-        }
-        // Layout may still be settling (multi-section flex); resize + re-seat chip.
-        this._relayoutFocusCanvas();
-    },
-
-    async _unhostDrawingBoard() {
-        if (!this.drawingHosted) return;
-        const board = document.getElementById('drawing-board');
-        const { DrawingBoard } = await import('./drawingBoard.js');
-        const { DrawingToolbarChrome } = await import('./drawingToolbarChrome.js');
-
-        if (DrawingBoard.active || DrawingBoard.isNoteCanvasMode || DrawingBoard.docOwner) {
-            await DrawingBoard.deactivate();
-        }
-
-        DrawingToolbarChrome.clearHostBounds?.();
-
-        if (board && this.drawingHomeParent) {
-            board.classList.remove('magic-focus-canvas-board');
-            board.classList.add('is-hidden');
-            board.setAttribute('aria-hidden', 'true');
-            this.drawingHomeParent.appendChild(board);
-        }
-        this.drawingHosted = false;
-    },
+    async _unhostDrawingBoard() { return PaneSession._unhostDrawingBoard(this); },
 
     _syncFocusButtons() {
         document.querySelectorAll('.card-act--focus').forEach((btn) => {
@@ -1193,51 +830,5 @@ export const MagicFocus = {
      * plannerUi's in-place refresh, so text/checklist are never clobbered.
      * @param {object} item
      */
-    async refreshPlannerPanes(item) {
-        if (!this.isOpen() || !item || this.showingSetup) return;
-        const live = this.resolveItem() || item;
-        const { renderPlannerTableHtml, refreshPlannerDerivedViews, growPlannerTextareas } = await import('./plannerUi.js');
-        const { normalizePlanner } = await import('./planner.js');
-        if (live.planner) live.planner = normalizePlanner(live.planner) || live.planner;
-
-        /** @type {{ zid: string, blocks: string[] }[]} */
-        let paneSpecs;
-        if (this.sessionSpawnBlocks?.length) {
-            paneSpecs = [{ zid: 'z0', blocks: asBlockList(this.sessionSpawnBlocks) }];
-        } else {
-            const focus = normalizeFocus(live.focus);
-            if (!focus) return;
-            const count = PRESET_ZONE_COUNTS[focus.preset] || 2;
-            paneSpecs = [];
-            for (let i = 0; i < count; i += 1) {
-                const zid = `z${i}`;
-                paneSpecs.push({ zid, blocks: asBlockList(focus.zones[zid]) });
-            }
-        }
-
-        for (const { zid, blocks } of paneSpecs) {
-            if (!blocks.includes('table') && !blocks.includes('chart') && !blocks.includes('kanban') && !blocks.includes('wbs')) continue;
-            const body = this.bodyEl.querySelector(`[data-focus-pane-body="${zid}"]`);
-            if (!body) continue;
-            const tableSec = body.querySelector('[data-note-planner][data-focus-table-only]');
-            const chartSec = body.querySelector('[data-note-planner][data-focus-chart-only]');
-            const kanbanSec = body.querySelector('[data-note-planner][data-focus-kanban-only]');
-            const wbsSec = body.querySelector('[data-note-planner][data-focus-wbs-only]');
-            if (!tableSec && !chartSec && !kanbanSec && !wbsSec) {
-                // Planner section not mounted yet — render the pane from scratch.
-                await this._fillPane(body, live, blocks, zid);
-                continue;
-            }
-            if (tableSec && live.planner) {
-                tableSec.innerHTML = renderPlannerTableHtml(live.planner, { canEdit: true });
-                // Host stays bound; re-measure textareas so multi-line Comments/Name keep height.
-                growPlannerTextareas(tableSec);
-                requestAnimationFrame(() => {
-                    if (tableSec.isConnected) growPlannerTextareas(tableSec);
-                });
-            }
-        }
-        // Gantt + kanban + wbs + summary refresh, in place across every host (board/modal/focus).
-        refreshPlannerDerivedViews(live);
-    }
+    async refreshPlannerPanes(item) { return PaneSession.refreshPlannerPanes(this, item); },
 };

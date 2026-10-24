@@ -43,7 +43,7 @@ for (const name of names) {
         .map((l) => l.replace(/\bthis\b/g, 'SELF'))
         .filter((l) => l.trim() !== '').join('\n');
     const newBody = newLines.slice(nf.body.loc.start.line, nf.body.loc.end.line - 1)
-        .map((l) => l.replace(/\bmagicFocus\b/g, 'SELF'))
+        .map((l) => l.replace(/\bmagicFocus\b/g, 'SELF').replace(/import\('\.\.\//g, "import('./"))
         .filter((l) => l.trim() !== '').join('\n');
     if (oldBody !== newBody) bad.push(name);
 }

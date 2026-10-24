@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Architecture map (generated)
 
-> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T19:46:25.535Z
+> Regenerate: `node scripts/build-architecture-map.mjs` — built 2026-10-24T19:48:13.218Z
 
 ## CSS load order
 
@@ -112,6 +112,7 @@ alwaysApply: true
 | js/magicFocus/layout.js | preset-to-grid translation - the CSS grid-template strings and the splitter descriptors each preset needs (columns, rows, areas, and where each handle sits) | magicFocus.js, magicFocus/model.js, magicFocus/splitters.js | — | — |
 | js/magicFocus/model.js | the focus layout model - block catalogue, preset tables, zone/ratio/zoom normalisation and the configured check; no DOM, no state | magicFocus.js, magicFocus/layout.js, magicFocus/setup.js | — | — |
 | js/magicFocus/paneMarkup.js | the body markup for one focus pane - checklist, planner table/chart/kanban/wbs, media, and the preset picker glyphs; the planner and attachment renderers are loaded lazily so focus never drags them into the boot graph | magicFocus.js, magicFocus/panes.js, noteSurfaceHtml.js, plannerUi.js | — | — |
+| js/magicFocus/panes.js | the pane surface - chrome controls, per-pane zoom, expand/collapse, filling a pane with its block body, the delegated pane interactions, and hosting the drawing board inside a pane | magicFocus.js, magicFocus/paneMarkup.js, magicFocus/model.js, magicFocus/splitters.js, drawingBoard.js | — | — |
 | js/magicFocus/setup.js | the two-step setup wizard - preset picker, block assignment with drag and drop, the reset control, and the draft it edits before anything is committed to the note | magicFocus.js, magicFocus/model.js, magicFocus/layout.js, magicFocus/paneMarkup.js | — | — |
 | js/mediaAttachments.js | note↔media attachment helpers | mediaLibrary.js, noteSurface.js, mediaLibraryOverlay.js | — | — |
 | js/mediaBackup.js | media library backup export/import (meta JSON, embeds, ZIP) | mediaLibrary.js, backup.js | — | — |
