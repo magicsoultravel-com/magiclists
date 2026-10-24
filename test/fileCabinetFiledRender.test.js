@@ -170,3 +170,102 @@ describe('renderFileCabinet fold-state idempotence', () => {
         assert.equal(after, seededFiled);
     });
 });
+
+describe('renderFileCabinet rail structure', () => {
+    it('splits the rail into folded chips and an EMPTY group, and leaves the row empty', async () => {
+        const { storage, mount } = installGlobals();
+        storage.setItem(FILED_KEY, JSON.stringify(['Folded']));
+        storage.setItem(ORDER_KEY, JSON.stringify(['Folded', 'EmptyA', 'EmptyB']));
+        storage.setItem(EMPTY_COLLAPSED_KEY, 'false');
+        const { renderFileCabinet } = await loadFileCabinet('rail-structure');
+
+        const filedItems = [{ id: 'n1', categories: ['Folded'], desktopId: 1, status: 'active' }];
+        const activeCategories = [
+            { id: 'c1', name: 'Folded', color: '#abc' },
+            { id: 'c2', name: 'EmptyA', color: '#def' },
+            { id: 'c3', name: 'EmptyB', color: '#123' }
+        ];
+
+        renderFileCabinet(mount, filedItems, activeCategories, null, { allItems: filedItems });
+
+        const inner = mount.children[0];
+        assert.equal(inner.className, 'file-cabinet-inner');
+        const [rail, row] = inner.children;
+        assert.equal(rail.className, 'file-cabinet-filed-rail');
+        assert.equal(row.className, 'file-cabinet-row');
+        assert.equal(row.children.length, 0, 'no open drawers: every note-bearing category is folded');
+
+        const [foldedSlot, emptyGroup, addBtn] = rail.children;
+        assert.equal(foldedSlot.dataset.category, 'Folded');
+        assert.equal(foldedSlot.children[0].dataset.category, 'Folded');
+        assert.match(foldedSlot.children[0].innerHTML, /Folded \(1\)/, 'chip carries the note count');
+        assert.equal(addBtn.className, 'file-cabinet-add-category-btn');
+
+        assert.equal(emptyGroup.dataset.emptyShelves, '1');
+        const emptyBody = emptyGroup.children[1];
+        assert.deepEqual(
+            emptyBody.children.map((slot) => slot.dataset.category),
+            ['EmptyA', 'EmptyB'],
+            'empty shelves are listed in category order'
+        );
+        assert.ok(emptyBody.children.every((slot) => slot.dataset.emptyShelf === '1'));
+    });
+
+    it('publishes the preview context the hover/drag layers read', async () => {
+        const { storage, mount } = installGlobals();
+        storage.setItem(FILED_KEY, JSON.stringify(['Folded']));
+        const { renderFileCabinet } = await loadFileCabinet('preview-context');
+
+        const filedItems = [{ id: 'n1', categories: ['Folded'], desktopId: 1, status: 'active' }];
+        const UI = { marker: 'ui' };
+        renderFileCabinet(mount, filedItems, [{ name: 'Folded', color: '#abc' }], UI);
+
+        const ctx = mount.__fcPreviewContext;
+        assert.deepEqual([...ctx.byCategory.keys()], ['Folded']);
+        assert.deepEqual(ctx.byCategory.get('Folded').map((item) => item.id), ['n1']);
+        assert.equal(ctx.UI, UI);
+        assert.equal(typeof ctx.order, 'object');
+    });
+
+    it('shows the empty-cabinet hint and clears the preview context', async () => {
+        const { mount } = installGlobals();
+        const { renderFileCabinet } = await loadFileCabinet('empty');
+        mount.__fcPreviewContext = { stale: true };
+
+        renderFileCabinet(mount, [], [], null);
+
+        assert.match(mount.innerHTML, /file-cabinet-empty/);
+        assert.equal(mount.__fcPreviewContext, undefined);
+    });
+});
+
+// The renderer moved to js/fileCabinet/render.js. prepareBoardItems (still in the
+// facade) and ui.js render through the facade, so renderFileCabinet has to be the
+// same function object there; the builders it leans on stay internal, because the
+// rail markup is an implementation detail of this module.
+describe('file cabinet render · module boundary', () => {
+    const NOT_PUBLIC = [
+        'buildFileCabinetCategoryColumn', 'buildFileCabinetCategoryNames',
+        'buildFileCabinetCategoryActionButtons', 'wrapFileCabinetCategoryActions',
+        'ensureFileCabinetTabDragHandle', 'FOLD_ICON', 'EXPAND_ICON'
+    ];
+
+    it('re-exports renderFileCabinet as the very same object', async () => {
+        installGlobals();
+        const facade = await loadFileCabinet('render-boundary');
+        // no cache-buster: the facade imports this exact instance
+        const render = await import('../js/fileCabinet/render.js');
+
+        assert.equal(typeof render.renderFileCabinet, 'function');
+        assert.equal(facade.renderFileCabinet, render.renderFileCabinet);
+    });
+
+    it('keeps the render internals out of the facade surface', async () => {
+        installGlobals();
+        const facade = await loadFileCabinet('render-internals');
+
+        for (const name of NOT_PUBLIC) {
+            assert.equal(facade[name], undefined, `${name} leaked into the fileCabinet.js surface`);
+        }
+    });
+});
